@@ -4308,7 +4308,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       console should not include ("<form method=\"post\"")
     }
 
-    "filter Web HTML app entries by WebDescriptor apps" in {
+    "keep system manual and console available while filtering component app entries by WebDescriptor apps" in {
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       val descriptor = WebDescriptor(
         apps = Vector(WebDescriptor.App("manual", "/web/manual", "manual"))
@@ -4316,9 +4316,13 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
 
       val manual = StaticFormAppRenderer.render(subsystem, "manual", webDescriptor = descriptor)
       val console = StaticFormAppRenderer.render(subsystem, "console", webDescriptor = descriptor)
+      val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
+      val componentPath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)
+      val componentForms = StaticFormAppRenderer.render(subsystem, componentPath, webDescriptor = descriptor)
 
       manual.map(_.body).getOrElse(fail("manual is missing")) should include ("System Manual")
-      console shouldBe None
+      console.map(_.body).getOrElse(fail("console is missing")) should include ("System Console")
+      componentForms shouldBe None
     }
 
     "allow component dashboard app entries by descriptor path" in {

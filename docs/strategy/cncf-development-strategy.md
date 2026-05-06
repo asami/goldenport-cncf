@@ -704,7 +704,11 @@ Active in Phase 21.
   - WN-05 CNCF admin/runtime driver pages are implemented for Blob admin,
     generic Association admin, result action rows, and destructive detach
     confirmation surfaces
-  - WN-06 is the next active slice for selected `textus-blog` driver pages
+  - WN-06 `textus-blog` driver pages are implemented for user post
+    list/results, editor/fallback edit Bootstrap cards, selected tag filter
+    parity, and modal-style image/import surfaces
+  - WN-07 is the next active slice for verification, documentation, and Phase
+    21 closure
   - application-level job UX baseline is implemented for Form-launched
     asynchronous Command jobs through `/web/{app}/jobs` and
     `/web/{app}/jobs/{jobId}`
@@ -1061,6 +1065,40 @@ Future distributed-system development item.
 ### 8.17 Job Management
 Future platform development item.
 
+- Define Command execution policy before broadening Job usage. CQRS makes
+  state-changing operations Commands, but application UX and runtime cost still
+  decide whether a Command is executed synchronously or as a Job.
+- Default policy should be synchronous for ordinary CRUD-style Commands that
+  create or update one Entity in one transaction. Creating a Job Entity has
+  runtime and storage overhead, so simple one-Entity create/update/delete
+  operations should not become Jobs by default.
+- Heavy Commands should opt into Job execution explicitly. Examples include
+  import/export, bulk operations, long-running transforms, external
+  `ServiceCall` continuations, retry/compensation-heavy flows, and one-Entity
+  operations whose domain work is known to be expensive.
+- Add Command definition metadata for:
+  - `commandKind`: CRUD, import/export, bulk, workflow step, maintenance,
+    repair, or another stable command classification;
+  - `commandExecutionProperties`: expected duration, idempotency, retryability,
+    compensation requirement, external-call usage, progress reporting, and
+    result visibility;
+  - `commandExecutionPolicy`: sync, async Job, sync-with-Job fallback, or
+    fire-and-forget where explicitly allowed.
+- Use the Command execution policy to drive Form/Web UX. Synchronous Commands
+  return the ordinary result page, while async Job Commands return the standard
+  application job result and “My jobs” navigation.
+- Add user notification support before relying on async Jobs for ordinary
+  application operations. Users need completion, failure, retry/exhausted, and
+  recovery-required notifications tied to the application Job result page, not
+  only operator/admin diagnostics.
+- Notification policy should distinguish in-page Job result polling, application
+  notification center entries, optional email/message delivery, and admin-only
+  operational alerts. The Command/Job definition should declare which
+  user-facing notifications are expected.
+- Align this policy with JCL-based Job behavior. A Job-started Command should
+  be able to supply or derive a JCL profile, while synchronous Commands remain
+  normal transaction-scoped operation execution unless their definition opts
+  into Job execution.
 - Manage Job as a first-class Entity rather than only as an engine-local runtime
   record. Job state, result, diagnostics, CallTree, tasks, and lifecycle should
   be visible through ordinary Entity/admin/user-facing management surfaces where

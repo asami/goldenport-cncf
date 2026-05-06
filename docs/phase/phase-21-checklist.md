@@ -200,7 +200,7 @@ Apply the Phase 21 primitives to targeted CNCF admin/runtime pages.
 
 ## WN-06: `textus-blog` Driver Pages
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
@@ -209,11 +209,11 @@ domain behavior.
 
 ### Detailed Tasks
 
-- [ ] Apply primitives only to selected public/editor/user pages that already
+- [x] Apply primitives only to selected public/editor/user pages that already
       use Static Form/App patterns.
-- [ ] Preserve routes, form fields, operation inputs, and response shape.
-- [ ] Keep no-JS behavior available for forms and results.
-- [ ] Add or maintain focused `ComponentFactorySpec` coverage when Blog files
+- [x] Preserve routes, form fields, operation inputs, and response shape.
+- [x] Keep no-JS behavior available for forms and results.
+- [x] Add or maintain focused `ComponentFactorySpec` coverage when Blog files
       are touched.
 
 ### Expected Output
@@ -221,11 +221,20 @@ domain behavior.
 - `textus-blog` remains the application driver for Bootstrap/Textus widget
   usability without becoming the owner of CNCF generic UI behavior.
 
+### Completion Notes
+
+- User post list/result pages and editor/fallback edit pages use Bootstrap
+  cards, grid forms, selected-tag alerts, and existing Textus widgets.
+- Image picker and import surfaces use Bootstrap modal markup while preserving
+  the existing Blog form actions, field names, and JavaScript data hooks.
+- Public Blog pages remain regression-covered and unchanged except through
+  shared asset behavior.
+
 ---
 
 ## WN-07: Verification, Documentation, and Phase Closure
 
-Status: TODO
+Status: ACTIVE
 
 ### Objective
 

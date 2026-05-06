@@ -56,13 +56,14 @@ Final semantic direction:
 - C (DONE): WN-03 — Expand Textus widget card/list/feedback surfaces.
 - D (DONE): WN-04 — Add reusable dialog-style action surfaces.
 - E (DONE): WN-05 — Apply UI primitives to CNCF admin/runtime pages.
-- F (ACTIVE): WN-06 — Apply selected improvements to `textus-blog`.
-- G (TODO): WN-07 — Verification, documentation, and phase closure.
+- F (DONE): WN-06 — Apply selected improvements to `textus-blog`.
+- G (ACTIVE): WN-07 — Verification, documentation, and phase closure.
 
 Resume hint:
 
-- Continue with WN-06 `textus-blog` driver pages. Keep CNCF generic renderer
-  behavior stable and use the WN-02/WN-03/WN-04/WN-05 baseline as the UI base.
+- Continue with WN-07 verification, documentation, and phase closure. Keep the
+  WN-02 through WN-06 implementation record stable unless a validation issue is
+  found.
 
 ## 5. Development Items
 
@@ -71,7 +72,7 @@ Resume hint:
 - [x] WN-03: Expand Textus widget card/list/feedback surfaces.
 - [x] WN-04: Add reusable dialog-style action surfaces.
 - [x] WN-05: Apply UI primitives to CNCF admin/runtime pages.
-- [ ] WN-06: Apply selected improvements to `textus-blog`.
+- [x] WN-06: Apply selected improvements to `textus-blog`.
 - [ ] WN-07: Verification, documentation, and phase closure.
 
 Detailed task breakdown and progress tracking are recorded in

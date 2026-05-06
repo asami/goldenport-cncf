@@ -277,13 +277,13 @@ object StaticFormAppRenderer {
     page: Vector[String] = Vector.empty,
     webDescriptor: WebDescriptor = WebDescriptor.empty
   ): Option[Page] = {
-    if (!webDescriptor.isAppEnabled(app, page))
-      return None
     page match {
       case Vector() if app == "manual" =>
         Some(renderSystemManual(subsystem))
       case Vector() if app == "console" =>
         Some(renderSystemConsole(subsystem))
+      case _ if !webDescriptor.isAppEnabled(app, page) =>
+        None
       case Vector("dashboard") =>
         _find_component(subsystem, app).map(renderComponentDashboard(_, NamingConventions.toNormalizedSegment(app)))
       case Vector() =>
