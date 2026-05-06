@@ -57,13 +57,20 @@ Final semantic direction:
 - D (DONE): WN-04 — Add reusable dialog-style action surfaces.
 - E (DONE): WN-05 — Apply UI primitives to CNCF admin/runtime pages.
 - F (DONE): WN-06 — Apply selected improvements to `textus-blog`.
-- G (ACTIVE): WN-07 — Verification, documentation, and phase closure.
+- G (DONE): WN-07 — Phase 21 backlog / status synchronization.
+- H (ACTIVE): WN-08 — Search UI / Query / Semantic Search Alignment.
+- I (TODO): WN-09 — Web/UI Generation and Static Form Layout Composition.
+- J (TODO): WN-10 — Reusable Header/Footer/Nav/Sidebar/Layout Partials.
+- K (TODO): WN-11 — Broader Bootstrap 5 Admin/App Polish.
+- L (TODO): WN-12 — Component-Owned Web Admin Page Integration.
+- M (TODO): WN-13 — Island Architecture Progressive Enhancement.
+- N (TODO): WN-14 — SPA Hosting / API Gateway Boundary Design.
+- O (TODO): WN-15 — Application Developer Documentation Completion.
 
 Resume hint:
 
-- Continue with WN-07 verification, documentation, and phase closure. Keep the
-  WN-02 through WN-06 implementation record stable unless a validation issue is
-  found.
+- Continue with WN-08 Search UI / Query / Semantic Search Alignment. Phase 21
+  is not ready to close while WN-08 through WN-15 remain active or TODO.
 
 ## 5. Development Items
 
@@ -73,14 +80,22 @@ Resume hint:
 - [x] WN-04: Add reusable dialog-style action surfaces.
 - [x] WN-05: Apply UI primitives to CNCF admin/runtime pages.
 - [x] WN-06: Apply selected improvements to `textus-blog`.
-- [ ] WN-07: Verification, documentation, and phase closure.
+- [x] WN-07: Phase 21 backlog / status synchronization.
+- [ ] WN-08: Search UI / Query / Semantic Search Alignment.
+- [ ] WN-09: Web/UI Generation and Static Form Layout Composition.
+- [ ] WN-10: Reusable Header/Footer/Nav/Sidebar/Layout Partials.
+- [ ] WN-11: Broader Bootstrap 5 Admin/App Polish.
+- [ ] WN-12: Component-Owned Web Admin Page Integration.
+- [ ] WN-13: Island Architecture Progressive Enhancement.
+- [ ] WN-14: SPA Hosting / API Gateway Boundary Design.
+- [ ] WN-15: Application Developer Documentation Completion.
 
 Detailed task breakdown and progress tracking are recorded in
 `phase-21-checklist.md`.
 
 ## 6. Completion Conditions
 
-Phase 21 can close when:
+Phase 21 can close only when:
 
 - Strategy and phase documents identify Phase 21 as the active Web Next Stage.
 - CNCF generated/admin/runtime pages use a documented Bootstrap 5 primitive
@@ -92,7 +107,9 @@ Phase 21 can close when:
   have no-JS fallbacks.
 - At least one CNCF admin/runtime page group and one selected application page
   group validate the new UI primitives.
+- Search UI, UI generation, reusable layout partials, broader Bootstrap polish,
+  component-owned admin integration, Island Architecture, SPA/API gateway
+  boundary design, and developer documentation are completed or explicitly
+  moved out of Phase 21 by decision.
 - Tests cover renderer/widget behavior and targeted driver pages.
-- Island Architecture, SPA hosting, API gateway, broad UI generation, and
-  component-owned admin integration remain explicitly deferred unless moved
-  into a later phase.
+- No Phase 21 work item remains implicitly untracked.

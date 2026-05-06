@@ -93,8 +93,8 @@ Consolidate common CNCF Web rendering patterns around Bootstrap 5 primitives.
   job/admin result, and create/update result pages preserve existing routes
   while using Bootstrap 5 primitives.
 - Focused `StaticFormAppRendererSpec`, `Test/compile`, and full CNCF
-  `sbt --batch test` passed during the implementation slice. WN-07 keeps final
-  phase-level verification and closure checks.
+  `sbt --batch test` passed during the implementation slice. WN-07 now keeps
+  the remaining Phase 21 backlog visible instead of closing the phase.
 
 ---
 
@@ -232,25 +232,271 @@ domain behavior.
 
 ---
 
-## WN-07: Verification, Documentation, and Phase Closure
+## WN-07: Phase 21 Backlog / Status Synchronization
+
+Status: DONE
+
+### Objective
+
+Re-expand the Phase 21 backlog so the remaining Web Next Stage development
+items are visible and Phase 21 does not close prematurely.
+
+### Detailed Tasks
+
+- [x] Rename the previous closure item to status synchronization.
+- [x] List all remaining Phase 21 Web Next Stage items as explicit WN items.
+- [x] Update strategy so WN-01 through WN-06 are completed slices, not the
+      whole phase.
+- [x] Remove wording that implies Phase 21 should close before WN-08 through
+      WN-15 are completed or explicitly moved out of Phase 21.
+- [x] Keep Phase 21 status active.
+
+### Expected Output
+
+- Phase 21 remains the active Web Next Stage phase.
+- No remaining Web Next Stage item is hidden under a generic closure task.
+
+### Completion Notes
+
+- WN-08 through WN-15 are now explicit Phase 21 backlog items.
+- Phase 21 closure is blocked until all WN items are DONE or explicitly moved
+  out of Phase 21 by decision.
+
+---
+
+## WN-08: Search UI / Query / Semantic Search Alignment
 
 Status: ACTIVE
 
 ### Objective
 
-Verify Phase 21 behavior, update developer-facing documentation, and close the
-phase when the selected UI slices are complete.
+Design and implement the Web-facing search layer for Static Form UI.
 
 ### Detailed Tasks
 
-- [ ] Update `docs/spec/textus-widget.md`.
+- [ ] Define the full-text search planning layer for Web forms and result pages.
+- [ ] Align CML, View, Query, and Web metadata for search-facing fields.
+- [ ] Define how semantic/embedding-backed search appears in generated and
+      hand-written Static Form pages.
+- [ ] Add result ranking, filter, and pagination UI patterns that remain usable
+      without JavaScript.
+
+### Expected Output
+
+- Search forms and results can be generated or authored consistently across
+  admin/runtime and application pages.
+
+### Guardrails
+
+- Do not require a semantic search backend for ordinary full-text search.
+- Do not introduce SPA-only search behavior.
+
+---
+
+## WN-09: Web/UI Generation and Static Form Layout Composition
+
+Status: TODO
+
+### Objective
+
+Define the generation layer above Static Form primitives without replacing the
+server-rendered baseline.
+
+### Detailed Tasks
+
+- [ ] Define wireframe/UI generation strategy above Bootstrap/Textus primitives.
+- [ ] Clarify responsibility split between generated UI and hand-written static
+      pages.
+- [ ] Define page layout composition rules for generated list, detail, form,
+      result, and dashboard pages.
+- [ ] Keep generated UI output as ordinary Bootstrap/Textus server-rendered
+      markup.
+
+### Expected Output
+
+- Component/application developers can choose generated UI or hand-written
+  static pages without changing runtime contracts.
+
+### Guardrails
+
+- Do not introduce a separate visual DSL that bypasses Bootstrap/Textus output.
+
+---
+
+## WN-10: Reusable Header/Footer/Nav/Sidebar/Layout Partials
+
+Status: TODO
+
+### Objective
+
+Provide reusable page composition primitives for common Static Form App shells.
+
+### Detailed Tasks
+
+- [ ] Define reusable header, footer, navigation, sidebar, and layout partials.
+- [ ] Support component-owned and application-owned page shells.
+- [ ] Preserve local asset completion and no-CDN deployment.
+- [ ] Keep partials usable from both generated pages and hand-written static
+      pages.
+
+### Expected Output
+
+- Static Form Apps can share consistent shell/navigation structure without
+  copy-pasting full HTML layouts.
+
+### Guardrails
+
+- Do not make JavaScript mandatory for navigation or layout.
+
+---
+
+## WN-11: Broader Bootstrap 5 Admin/App Polish
+
+Status: TODO
+
+### Objective
+
+Continue aligning CNCF admin/runtime and application driver pages with
+Bootstrap 5 standards.
+
+### Detailed Tasks
+
+- [ ] Identify remaining ad hoc layout CSS in CNCF admin/runtime pages.
+- [ ] Identify selected app pages that still need Bootstrap/Textus polish.
+- [ ] Normalize dense admin surfaces around cards, list groups, responsive
+      tables, forms, alerts, badges, and action rows.
+- [ ] Preserve existing routes, operation inputs, response shapes, and no-JS
+      behavior.
+
+### Expected Output
+
+- Admin and app pages remain consistent with the Bootstrap 5 guidance.
+
+### Guardrails
+
+- Do not perform broad visual redesign without a concrete driver page.
+
+---
+
+## WN-12: Component-Owned Web Admin Page Integration
+
+Status: TODO
+
+### Objective
+
+Allow component CARs to contribute component-specific admin pages while CNCF
+keeps the system-level admin shell and authorization boundary.
+
+### Detailed Tasks
+
+- [ ] Define the descriptor contract for component-owned admin pages.
+- [ ] Let the system admin console discover and link component admin pages.
+- [ ] Keep CNCF responsible for admin authorization, navigation composition,
+      and system-level framing.
+- [ ] Keep component CARs responsible for component-specific admin content and
+      local admin routes.
+
+### Expected Output
+
+- Component-specific admin functions can appear in the CNCF admin surface
+  without hard-coding them into the core renderer.
+
+### Guardrails
+
+- Do not let component pages bypass CNCF admin authorization.
+
+---
+
+## WN-13: Island Architecture Progressive Enhancement
+
+Status: TODO
+
+### Objective
+
+Define and implement the progressive-enhancement layer for interactive page
+regions while preserving server-rendered Static Form behavior.
+
+### Detailed Tasks
+
+- [ ] Define the Island Architecture contract for scoped interactive regions.
+- [ ] Define how islands receive data, actions, and assets from Static Form
+      pages.
+- [ ] Keep no-JS fallback behavior authoritative.
+- [ ] Add one concrete admin or application driver only after the contract is
+      stable.
+
+### Expected Output
+
+- Interactive enhancements can be added incrementally without turning Static
+  Form pages into a SPA.
+
+### Guardrails
+
+- Do not introduce a global client-side app shell.
+
+---
+
+## WN-14: SPA Hosting / API Gateway Boundary Design
+
+Status: TODO
+
+### Objective
+
+Define SPA hosting and API gateway as explicit deployment modes, separate from
+the Static Form baseline.
+
+### Detailed Tasks
+
+- [ ] Define when a separate SPA hosting mode is appropriate.
+- [ ] Define API gateway boundaries for Form API, REST API, auth/session, assets,
+      and admin operations.
+- [ ] Record compatibility with existing Static Form App routes.
+- [ ] Keep Static Form UI as the default CNCF Web mode.
+
+### Expected Output
+
+- SPA/API gateway support can be planned without weakening the server-rendered
+  baseline.
+
+### Guardrails
+
+- Do not make SPA hosting an implicit extension of every Static Form App.
+
+---
+
+## WN-15: Application Developer Documentation Completion
+
+Status: TODO
+
+### Objective
+
+Complete developer-facing documentation for the Web Next Stage.
+
+### Detailed Tasks
+
+- [ ] Update `docs/spec/textus-widget.md` for all implemented widgets and
+      attributes.
 - [ ] Update `docs/notes/static-form-web-app-bootstrap-guide.md`.
 - [ ] Update Static Form App contract docs when routes/widgets/properties
       change.
-- [ ] Run focused renderer/widget specs.
-- [ ] Run CNCF `sbt --batch test`.
-- [ ] Run `textus-blog` focused/full validation if Blog is touched.
-- [ ] Run `git diff --check` in touched repos.
-- [ ] Record deferred Island Architecture, SPA hosting, API gateway, broad UI
-      generation, and component-owned admin integration work.
-- [ ] Mark Phase 21 items DONE or explicitly deferred before closure.
+- [ ] Add an index or cross-reference path for component/application developers.
+- [ ] Record examples for Bootstrap markup, Textus widgets, job UX, debug
+      panels, and no-JS fallbacks.
+
+### Expected Output
+
+- Component/application developers can find the correct Web guidance without
+  reading phase history.
+
+### Guardrails
+
+- Do not bury active developer guidance only in phase/checklist documents.
+
+---
+
+## Phase 21 Closure Gate
+
+Status: BLOCKED
+
+Phase 21 must not close until all WN items are DONE or explicitly moved out of
+Phase 21 by decision.

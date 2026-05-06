@@ -616,18 +616,23 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
   and provide no-JS fallbacks.
 - Completed so far:
 - Phase 21 work documents are opened and the Static Form UI scope is selected.
-- Remaining:
 - Bootstrap primitive normalization, Textus widget expansion, dialog-style
   action surfaces, targeted CNCF admin/runtime driver pages, selected
-  `textus-blog` driver pages, verification, documentation, and closure.
+  `textus-blog` driver pages, and application-level Job UX baseline are
+  implemented as partial Phase 21 slices.
+- Remaining:
+- Phase 21 continues with backlog/status synchronization, Search UI, Web/UI
+  generation, reusable layout partials, broader Bootstrap polish,
+  component-owned admin integration, Island Architecture, SPA/API gateway
+  boundary design, and application developer documentation completion.
 - Non-goals:
-- No SPA framework adoption in this phase.
-- No API gateway or separate SPA hosting mode.
+- No SPA framework adoption before WN-14 defines the explicit hosting boundary.
+- No implicit API gateway or separate SPA hosting mode.
 - No visual design system separate from Bootstrap 5.
-- No broad UI generation or wireframe DSL implementation beyond the Static
-  Form primitives needed in this phase.
-- No component-owned admin page discovery/integration unless a concrete Phase
-  21 UI slice needs it.
+- No broad UI generation or wireframe DSL implementation before WN-09 defines
+  the Static Form layout composition contract.
+- No component-owned admin page discovery/integration before WN-12 defines the
+  descriptor and admin shell contract.
 - Artifact (work): `docs/phase/phase-21.md`.
 
 ## 4. Relationship Between Phases
@@ -692,7 +697,7 @@ Active in Phase 21.
 - Phase 21 work documents:
   - dashboard: `docs/phase/phase-21.md`
   - checklist: `docs/phase/phase-21-checklist.md`
-- Static Form Web App next step:
+- Phase 21 completed slices so far:
   - WN-02 Bootstrap 5 primitive normalization is implemented for targeted
     CNCF admin/runtime, system console, job/admin result, and shared result
     sections
@@ -707,40 +712,37 @@ Active in Phase 21.
   - WN-06 `textus-blog` driver pages are implemented for user post
     list/results, editor/fallback edit Bootstrap cards, selected tag filter
     parity, and modal-style image/import surfaces
-  - WN-07 is the next active slice for verification, documentation, and Phase
-    21 closure
+  - WN-07 Phase 21 backlog / status synchronization is complete; WN-08 through
+    WN-15 are explicit Phase 21 backlog items and Phase 21 remains active
   - application-level job UX baseline is implemented for Form-launched
     asynchronous Command jobs through `/web/{app}/jobs` and
     `/web/{app}/jobs/{jobId}`
-  - Island Architecture remains progressive enhancement and future work rather
-    than the primary Phase 21 implementation surface
-- Search:
-  - full-text search planning layer
-  - embedding / semantic search backend strategy
-  - CML / View / Query alignment for search-facing metadata
-- Web/UI generation:
-  - wireframe/UI generation strategy above Static Form primitives
-  - clarify responsibility split between generated UI and hand-written static pages
-  - ui building
-    - header, footer, navigation, sidebar partials
-    - layout
-    - widget
-  - Bootstrap 5
-    - Polish the admin and app to align with Bootstrap standards
-    - Enhance the documentation for application developers
-- Web admin integration:
-  - allow component CARs to provide component-owned Web admin pages
-  - let the CNCF system admin console discover and integrate those component
-    admin pages into its navigation and management surface
-  - keep CNCF responsible for admin authorization, navigation composition, and
-    system-level framing
-  - keep component CARs responsible for component-specific admin content and
-    local admin routes
-- SPA hosting and API gateway remain separate modes, not implicit extensions of
-  the current Static Form baseline.
 - In develop mode, Form/HTML operation result pages can show collapsed
   observability and debugging information, including execution result metadata
   and CallTree, at the end of the web page.
+- Phase 21 active/future backlog:
+  - WN-08 Search UI / Query / Semantic Search Alignment (active)
+  - WN-09 Web/UI Generation and Static Form Layout Composition
+  - WN-10 Reusable Header/Footer/Nav/Sidebar/Layout Partials
+  - WN-11 Broader Bootstrap 5 Admin/App Polish
+  - WN-12 Component-Owned Web Admin Page Integration
+  - WN-13 Island Architecture Progressive Enhancement
+  - WN-14 SPA Hosting / API Gateway Boundary Design
+  - WN-15 Application Developer Documentation Completion
+- Phase 21 remains active. WN-01 through WN-07 are completed slices, not the
+  whole phase.
+- Search work includes full-text search planning, embedding/semantic search
+  backend strategy, and CML / View / Query alignment for search-facing metadata.
+- Web/UI generation work includes wireframe/UI generation strategy above Static
+  Form primitives, responsibility split between generated UI and hand-written
+  static pages, and reusable header/footer/navigation/sidebar/layout/widget
+  composition.
+- Web admin integration work allows component CARs to provide component-owned
+  admin pages while CNCF keeps admin authorization, navigation composition, and
+  system-level framing.
+- Island Architecture, SPA hosting, and API gateway are Phase 21 backlog items
+  to define explicitly, not implicit extensions of the current Static Form
+  baseline.
 - Source references:
   - `docs/phase/phase-12.md`
   - `docs/phase/phase-12-checklist.md`
