@@ -61,17 +61,17 @@ Final semantic direction:
 - H (DONE): WN-08 — Search UI / Query / Semantic Search Alignment.
 - I (DONE): WN-09 — Web/UI Generation and Static Form Layout Composition.
 - J (DONE): WN-10 — Reusable Header/Footer/Nav/Sidebar/Layout Partials.
-- K (ACTIVE): WN-11 — Broader Bootstrap 5 Admin/App Polish.
+- K (DONE): WN-11 — Broader Bootstrap 5 Admin/App Polish.
 - L (DONE): WN-12 — Subsystem Web App Composition From Component Web,
   including the `textus-blog` WN-12B driver.
-- M (TODO): WN-13 — Island Architecture Progressive Enhancement.
+- M (ACTIVE): WN-13 — Island Architecture Progressive Enhancement.
 - N (TODO): WN-14 — SPA Hosting / API Gateway Boundary Design.
 - O (TODO): WN-15 — Application Developer Documentation Completion.
 
 Resume hint:
 
-- Continue with WN-11 Broader Bootstrap 5 Admin/App Polish.
-  Phase 21 is not ready to close while WN-11 through WN-15 remain active or
+- Continue with WN-13 Island Architecture Progressive Enhancement.
+  Phase 21 is not ready to close while WN-13 through WN-15 remain active or
   TODO.
 
 ## 5. Development Items
@@ -86,7 +86,7 @@ Resume hint:
 - [x] WN-08: Search UI / Query / Semantic Search Alignment.
 - [x] WN-09: Web/UI Generation and Static Form Layout Composition.
 - [x] WN-10: Reusable Header/Footer/Nav/Sidebar/Layout Partials.
-- [ ] WN-11: Broader Bootstrap 5 Admin/App Polish.
+- [x] WN-11: Broader Bootstrap 5 Admin/App Polish.
 - [x] WN-12: Subsystem Web App Composition From Component Web.
   `textus-blog` validates the deemed-subsystem article composition path.
 - [ ] WN-13: Island Architecture Progressive Enhancement.

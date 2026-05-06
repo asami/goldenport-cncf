@@ -384,7 +384,7 @@ Provide reusable page composition primitives for common Static Form App shells.
 
 ## WN-11: Broader Bootstrap 5 Admin/App Polish
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
@@ -393,16 +393,19 @@ Bootstrap 5 standards.
 
 ### Detailed Tasks
 
-- [ ] Identify remaining ad hoc layout CSS in CNCF admin/runtime pages.
-- [ ] Identify selected app pages that still need Bootstrap/Textus polish.
-- [ ] Normalize dense admin surfaces around cards, list groups, responsive
+- [x] Identify remaining ad hoc layout CSS in CNCF admin/runtime pages.
+- [x] Identify selected app pages that still need Bootstrap/Textus polish.
+- [x] Normalize dense admin surfaces around cards, list groups, responsive
       tables, forms, alerts, badges, and action rows.
-- [ ] Preserve existing routes, operation inputs, response shapes, and no-JS
+- [x] Preserve existing routes, operation inputs, response shapes, and no-JS
       behavior.
 
 ### Expected Output
 
 - Admin and app pages remain consistent with the Bootstrap 5 guidance.
+- Performance diagnostics, form operation pages, default form result pages,
+  and Web Descriptor detail pages use Bootstrap cards/action rows/list groups
+  while preserving existing routes and anchors.
 
 ### Guardrails
 
@@ -454,7 +457,7 @@ and account flows.
 
 ## WN-13: Island Architecture Progressive Enhancement
 
-Status: TODO
+Status: ACTIVE
 
 ### Objective
 

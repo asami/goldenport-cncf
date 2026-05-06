@@ -28,7 +28,7 @@ import io.circe.parser.parse
 /*
  * @since   Apr. 12, 2026
  *  version Apr. 30, 2026
- * @version May.  6, 2026
+ * @version May.  7, 2026
  * @author  ASAMI, Tomoharu
  */
 object StaticFormAppRenderer {
@@ -336,19 +336,34 @@ object StaticFormAppRenderer {
           webDescriptor.isFormEnabled(_operation_selector(component.name, service.name, operation.name))
         }.map { operation =>
           val path = s"/form/${componentPath}/${NamingConventions.toNormalizedSegment(service.name)}/${NamingConventions.toNormalizedSegment(operation.name)}"
-          s"""<li><a href="${_escape(path)}">${_escape(operation.name)}</a></li>"""
+          s"""<a class="list-group-item list-group-item-action d-flex justify-content-between align-items-center" href="${_escape(path)}"><span>${_escape(operation.name)}</span><span class="badge text-bg-secondary">operation</span></a>"""
         }.mkString("\n")
-        s"""<section><h2>${_escape(service.name)}</h2><ul>${operations}</ul></section>"""
+        val body =
+          if (operations.isEmpty)
+            _admin_empty_state("No form operations are enabled for this service.")
+          else
+            s"""<div class="list-group">${operations}</div>"""
+        s"""<div class="col-12 col-lg-6">
+           |  <article class="card admin-card h-100">
+           |    <div class="card-body">
+           |      <h2 class="card-title h5">${_escape(service.name)}</h2>
+           |      ${body}
+           |    </div>
+           |  </article>
+           |</div>""".stripMargin
       }.mkString("\n")
+      val navigation = _admin_nav_card(Vector(
+        "Dashboard" -> s"/web/${componentPath}/dashboard",
+        "Admin configuration" -> s"/web/${componentPath}/admin"
+      ))
       Page(_simple_page(
         title = s"${_escape(component.name)} Forms",
         subtitle = "HTML form operations",
         body =
-          s"""<article>
-             |  <h2>Navigation</h2>
-             |  <p><a href="/web/${componentPath}/dashboard">Dashboard</a> · <a href="/web/${componentPath}/admin">Admin configuration</a></p>
-             |</article>
-             |${services}""".stripMargin,
+          s"""${navigation}
+             |<section class="row g-3 mt-1">
+             |  ${services}
+             |</section>""".stripMargin,
         assetCompletion = StaticFormAppLayout.AssetCompletionOptions(
           declaredCss = webDescriptor.assets.merge(webDescriptor.appAssets(component.name)).css,
           declaredJs = webDescriptor.assets.merge(webDescriptor.appAssets(component.name)).js
@@ -377,14 +392,20 @@ object StaticFormAppRenderer {
         title = s"${_escape(context.component.name)}.${_escape(context.serviceName)}.${_escape(context.operationName)}",
         subtitle = "HTML form operation",
         body =
-          s"""<article>
-             |  ${errorPanel}
-             |  <form method="post" action="${_escape(action)}"${enctype}>
-             |    ${controls}
-             |    ${hiddenContext}
-             |    <button type="submit" class="btn btn-primary">Run</button>
-             |    <a class="btn btn-outline-secondary" href="/form/${context.componentPath}">Operations</a>
-             |  </form>
+          s"""<article class="card admin-card">
+             |  <div class="card-body">
+             |    ${errorPanel}
+             |    <form method="post" action="${_escape(action)}"${enctype}>
+             |      <div class="row g-3">
+             |        <div class="col-12">${controls}</div>
+             |      </div>
+             |      ${hiddenContext}
+             |      <div class="admin-action-row d-flex flex-wrap gap-2 mt-3">
+             |        <button type="submit" class="btn btn-primary">Run</button>
+             |        <a class="btn btn-outline-secondary" href="/form/${context.componentPath}">Operations</a>
+             |      </div>
+             |    </form>
+             |  </div>
              |</article>""".stripMargin,
         assetCompletion = StaticFormAppLayout.AssetCompletionOptions(
           declaredCss = webDescriptor.resultAssets(context.component.name, context.serviceName, context.operationName).css,
@@ -1960,8 +1981,9 @@ object StaticFormAppRenderer {
     template: Option[String]
   ): Page = {
     val effectiveTemplate = template.getOrElse(
-      s"""<article>
-         |  <h2>$${operation.label} Result</h2>
+      s"""<article class="card admin-card">
+         |  <div class="card-body">
+         |  <h2 class="card-title">$${operation.label} Result</h2>
          |  <p>Content-Type $${result.contentType}</p>
          |  <textus:job-ticket></textus:job-ticket>
          |  <textus-error-panel source="error"></textus-error-panel>
@@ -1971,7 +1993,11 @@ object StaticFormAppRenderer {
          |  <textus-property-list source="result"></textus-property-list>
          |  <h3>Submitted Values</h3>
          |  <textus-property-list source="form"></textus-property-list>
-         |  <p><a href="/form/${_escape(NamingConventions.toNormalizedSegment(properties.componentName))}/${_escape(NamingConventions.toNormalizedSegment(properties.serviceName))}/${_escape(NamingConventions.toNormalizedSegment(properties.operationName))}">Run again</a> · <a href="/form/${_escape(NamingConventions.toNormalizedSegment(properties.componentName))}">Operations</a></p>
+         |  <div class="admin-action-row d-flex flex-wrap gap-2 mt-3">
+         |    <a class="btn btn-primary" href="/form/${_escape(NamingConventions.toNormalizedSegment(properties.componentName))}/${_escape(NamingConventions.toNormalizedSegment(properties.serviceName))}/${_escape(NamingConventions.toNormalizedSegment(properties.operationName))}">Run again</a>
+         |    <a class="btn btn-outline-secondary" href="/form/${_escape(NamingConventions.toNormalizedSegment(properties.componentName))}">Operations</a>
+         |  </div>
+         |  </div>
          |</article>""".stripMargin
     )
     renderFormResultTemplate(properties, effectiveTemplate)
@@ -5149,14 +5175,17 @@ object StaticFormAppRenderer {
 
   private def _admin_card(
     title: String,
-    body: String
-  ): String =
-    s"""<article class="card admin-card">
+    body: String,
+    id: Option[String] = None
+  ): String = {
+    val idAttr = id.map(x => s""" id="${_escape(x)}"""").getOrElse("")
+    s"""<article${idAttr} class="card admin-card">
        |  <div class="card-body">
        |    <h2 class="card-title">${_escape(title)}</h2>
        |    ${body}
        |  </div>
        |</article>""".stripMargin
+  }
 
   private def _admin_data_record_table(
     subsystem: Subsystem,
@@ -7314,28 +7343,28 @@ object StaticFormAppRenderer {
     descriptor: WebDescriptor,
     componentSegment: Option[String] = None
   ): String = {
-    s"""<article>
-       |  <h2 id="descriptor-controls">Descriptor Controls <a class="btn btn-sm btn-outline-secondary ms-2" href="#completed-descriptor">Completed JSON</a></h2>
-       |  <p>Completed apps, routes, form access, authorization, and admin surfaces.</p>
-       |  ${_web_descriptor_filter_control}
-       |  ${_web_descriptor_apps_table(descriptor, componentSegment)}
-       |  ${_web_descriptor_routes_table(descriptor, componentSegment)}
-       |  ${_web_descriptor_form_controls_table(descriptor, componentSegment)}
-       |  ${_web_descriptor_admin_surfaces_table(descriptor, componentSegment)}
-       |  ${_web_descriptor_filter_script}
-       |</article>""".stripMargin
+    val body =
+      s"""<p>Completed apps, routes, form access, authorization, and admin surfaces.</p>
+         |${_admin_action_row(Vector("Completed JSON" -> "#completed-descriptor"), primary = false)}
+         |${_web_descriptor_filter_control}
+         |${_web_descriptor_apps_table(descriptor, componentSegment)}
+         |${_web_descriptor_routes_table(descriptor, componentSegment)}
+         |${_web_descriptor_form_controls_table(descriptor, componentSegment)}
+         |${_web_descriptor_admin_surfaces_table(descriptor, componentSegment)}
+         |${_web_descriptor_filter_script}""".stripMargin
+    _admin_card("Descriptor Controls", body, Some("descriptor-controls"))
   }
 
   private def _web_descriptor_section_nav: String =
-    """<article class="descriptor-section-nav">
-      |  <h2>Descriptor Sections</h2>
-      |  <nav class="nav nav-pills flex-column flex-sm-row gap-2">
-      |    <a class="nav-link border" href="#descriptor-controls">Descriptor Controls</a>
-      |    <a class="nav-link border" href="#asset-composition">Asset Composition</a>
-      |    <a class="nav-link border" href="#completed-descriptor">Completed JSON</a>
-      |    <a class="nav-link border" href="#configured-descriptor">Configured JSON</a>
-      |  </nav>
-      |</article>""".stripMargin
+    _admin_card(
+      "Descriptor Sections",
+      """<nav class="nav nav-pills flex-column flex-sm-row gap-2 descriptor-section-nav">
+        |  <a class="nav-link border" href="#descriptor-controls">Descriptor Controls</a>
+        |  <a class="nav-link border" href="#asset-composition">Asset Composition</a>
+        |  <a class="nav-link border" href="#completed-descriptor">Completed JSON</a>
+        |  <a class="nav-link border" href="#configured-descriptor">Configured JSON</a>
+        |</nav>""".stripMargin
+    )
 
   private def _web_descriptor_json_panel(
     id: String,
@@ -7343,13 +7372,15 @@ object StaticFormAppRenderer {
     description: String,
     json: String
   ): String =
-    s"""<article id="${_escape(id)}">
-       |  <details class="descriptor-json-details">
-       |    <summary class="h2 mb-3">${_escape(title)}</summary>
-       |    <p>${_escape(description)}</p>
-       |    ${_raw_format_tabs(json, _json_to_yaml(json), "descriptor")}
-       |  </details>
-       |</article>""".stripMargin
+    _admin_card(
+      title,
+      s"""<details class="descriptor-json-details">
+         |  <summary class="h5 mb-3">${_escape(title)}</summary>
+         |  <p>${_escape(description)}</p>
+         |  ${_raw_format_tabs(json, _json_to_yaml(json), "descriptor")}
+         |</details>""".stripMargin,
+      Some(id)
+    )
 
   private def _web_descriptor_filter_control: String =
     """<div class="mb-3">
@@ -7944,77 +7975,89 @@ object StaticFormAppRenderer {
     val blobOperations = RuntimeDashboardMetrics.blobOperationSnapshot
     val blobDiagnostics = RuntimeDashboardMetrics.blobDiagnosticCounts
     val jobs = _job_metrics(subsystem)
+    def card(title: String, body: String, id: Option[String] = None): String =
+      s"""<div class="col-12">${_admin_card(title, body, id)}</div>"""
+    val navigationCard = card(
+      "Navigation",
+      """<nav class="nav nav-pills flex-column flex-sm-row gap-2">
+        |  <a class="nav-link border" href="/web/system/dashboard">System dashboard</a>
+        |  <a class="nav-link border" href="/web/system/admin">Admin configuration</a>
+        |  <a class="nav-link border" href="/web/system/manual">Manual</a>
+        |  <a class="nav-link border" href="/web/console">Console</a>
+        |</nav>""".stripMargin,
+      Some("performance-navigation")
+    )
+    val assemblyActions = _admin_action_row(Vector(
+      "Warning detail" -> "/web/system/admin/assembly/warnings",
+      "Assembly report" -> "/web/system/admin/assembly/report"
+    ), primary = false)
+    val assemblyCard = card(
+      "Assembly warnings",
+      s"""<p><span class="badge text-bg-secondary">${_assembly_warning_count(subsystem)}</span> warning(s).</p>
+         |${assemblyActions}""".stripMargin
+    )
+    val recentErrorsCard = card(
+      "Recent errors",
+      s"""<p class="text-secondary">HTTP 4xx/5xx entries shown as Dashboard recent failures. They are diagnostics and do not change runtime Health.</p>
+         |${_recent_errors_table(htmlRequests.recent)}""".stripMargin,
+      Some("recent-errors")
+    )
+    val actionCallActions = _admin_action_row(Vector(
+      "Execution history" -> "/form/admin/execution/history",
+      "Latest calltree" -> "/form/admin/execution/calltree"
+    ), primary = false)
+    val actionCallCard = card(
+      "ActionCall",
+      s"""${_summary_table(actionCalls.summary)}
+         |${actionCallActions}""".stripMargin
+    )
+    val authorizationCard = card(
+      "Authorization",
+      s"""${_summary_table(authorizationDecisions.summary)}
+         |<h3 class="h6 mt-3">Diagnostic</h3>
+         |${_diagnostics_table(authorizationDiagnostics)}""".stripMargin,
+      Some("authorization")
+    )
+    val validationCard = card(
+      "Validation",
+      s"""${_summary_table(validation.summary)}
+         |<h3 class="h6 mt-3">Diagnostic</h3>
+         |${_diagnostics_table(validationDiagnostics)}""".stripMargin
+    )
+    val operationRequestValidationCard = card(
+      "Operation Request Validation",
+      s"""${_summary_table(operationRequestValidation.summary)}
+         |<h3 class="h6 mt-3">Diagnostic</h3>
+         |${_diagnostics_table(operationRequestValidationDiagnostics)}""".stripMargin
+    )
+    val blobOperationsCard = card(
+      "Blob operations",
+      s"""${_summary_table(blobOperations.summary)}
+         |<h3 class="h6 mt-3">Diagnostic</h3>
+         |${_diagnostics_table(blobDiagnostics)}""".stripMargin
+    )
+    val cards = Vector(
+      navigationCard,
+      assemblyCard,
+      card("HTML request", _summary_table(htmlRequests.summary), Some("html-requests")),
+      card("Latency", _latency_table(htmlRequests.recent)),
+      card("Recent requests", _recent_requests_table(htmlRequests.recent)),
+      recentErrorsCard,
+      actionCallCard,
+      authorizationCard,
+      card("DSL Chokepoints", _summary_table(dslChokepoints.summary)),
+      validationCard,
+      operationRequestValidationCard,
+      blobOperationsCard,
+      card("Jobs", _jobs_table(jobs), Some("jobs"))
+    ).mkString("\n")
     _simple_page(
       title = "System Performance",
       subtitle = "HTML request, ActionCall, authorization, and Jobs detail",
       body =
-        s"""<article id="performance-navigation">
-           |  <h2>Navigation</h2>
-           |  <nav class="nav nav-pills flex-column flex-sm-row gap-2">
-           |    <a class="nav-link" href="/web/system/dashboard">System dashboard</a>
-           |    <a class="nav-link" href="/web/system/admin">Admin configuration</a>
-           |    <a class="nav-link" href="/web/system/manual">Manual</a>
-           |    <a class="nav-link" href="/web/console">Console</a>
-           |  </nav>
-           |</article>
-           |<article>
-           |  <h2>Assembly warnings</h2>
-           |  <p>${_assembly_warning_count(subsystem)} warning(s). <a href="/web/system/admin/assembly/warnings">Warning detail</a> · <a href="/web/system/admin/assembly/report">Assembly report</a></p>
-           |</article>
-           |<article id="html-requests">
-           |  <h2>HTML request</h2>
-           |  ${_summary_table(htmlRequests.summary)}
-           |</article>
-           |<article>
-           |  <h2>Latency</h2>
-           |  ${_latency_table(htmlRequests.recent)}
-           |</article>
-           |<article>
-           |  <h2>Recent requests</h2>
-           |  ${_recent_requests_table(htmlRequests.recent)}
-           |</article>
-           |<article id="recent-errors">
-           |  <h2>Recent errors</h2>
-           |  <p class="text-secondary">HTTP 4xx/5xx entries shown as Dashboard recent failures. They are diagnostics and do not change runtime Health.</p>
-           |  ${_recent_errors_table(htmlRequests.recent)}
-           |</article>
-           |<article>
-           |  <h2>ActionCall</h2>
-           |  ${_summary_table(actionCalls.summary)}
-           |  <p class="mt-3"><a href="/form/admin/execution/history">Execution history</a> · <a href="/form/admin/execution/calltree">Latest calltree</a></p>
-           |</article>
-           |<article id="authorization">
-           |  <h2>Authorization</h2>
-           |  ${_summary_table(authorizationDecisions.summary)}
-           |  <h3 class="h6 mt-3">Diagnostic</h3>
-           |  ${_diagnostics_table(authorizationDiagnostics)}
-           |</article>
-           |<article>
-           |  <h2>DSL Chokepoints</h2>
-           |  ${_summary_table(dslChokepoints.summary)}
-           |</article>
-           |<article>
-           |  <h2>Validation</h2>
-           |  ${_summary_table(validation.summary)}
-           |  <h3 class="h6 mt-3">Diagnostic</h3>
-           |  ${_diagnostics_table(validationDiagnostics)}
-           |</article>
-           |<article>
-           |  <h2>Operation Request Validation</h2>
-           |  ${_summary_table(operationRequestValidation.summary)}
-           |  <h3 class="h6 mt-3">Diagnostic</h3>
-           |  ${_diagnostics_table(operationRequestValidationDiagnostics)}
-           |</article>
-           |<article>
-           |  <h2>Blob operations</h2>
-           |  ${_summary_table(blobOperations.summary)}
-           |  <h3 class="h6 mt-3">Diagnostic</h3>
-           |  ${_diagnostics_table(blobDiagnostics)}
-           |</article>
-           |<article id="jobs">
-           |  <h2>Jobs</h2>
-           |  ${_jobs_table(jobs)}
-           |</article>""".stripMargin
+        s"""<section class="row g-3">
+           |${cards}
+           |</section>""".stripMargin
     )
   }
 

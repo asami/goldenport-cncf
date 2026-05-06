@@ -726,13 +726,16 @@ Active in Phase 21.
   observability and debugging information, including execution result metadata
   and CallTree, at the end of the web page.
 - Phase 21 active/future backlog:
-  - WN-11 Broader Bootstrap 5 Admin/App Polish (active)
+  - WN-11 Broader Bootstrap 5 Admin/App Polish (done)
   - WN-12 Subsystem Web App Composition From Component Web (done)
-  - WN-13 Island Architecture Progressive Enhancement
+  - WN-13 Island Architecture Progressive Enhancement (active)
   - WN-14 SPA Hosting / API Gateway Boundary Design
   - WN-15 Application Developer Documentation Completion
-- Phase 21 remains active. WN-01 through WN-10 are completed slices, not the
+- Phase 21 remains active. WN-01 through WN-12 are completed slices, not the
   whole phase.
+- WN-11 completed a CNCF renderer-owned admin/runtime polish pass for
+  performance diagnostics, form operation pages, default form results, and Web
+  Descriptor detail pages.
 - Search work now has a full-text planning and no-JS Bootstrap UI baseline.
   Semantic/hybrid mode is exposed as a capability surface, but embedding/vector
   backend integration remains deferred.
