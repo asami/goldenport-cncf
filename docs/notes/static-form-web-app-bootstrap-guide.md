@@ -376,6 +376,12 @@ Use this ownership split:
 - Component CAR: page content, local content partials, component assets, and
   component-specific form/result fragments.
 
+The same composition rule applies to form result templates. The selected
+`textus.form.page` / `cncf.form.page` page name determines whether the result
+is article-mode or screen-mode. `textus-blog` uses this path as the first
+deemed-subsystem driver: Blog layouts own the shell, while public/my/editor
+static and result templates provide only the article content.
+
 ## Responsive Rules
 
 Static Form Web App pages should work at desktop, tablet, and phone widths.

@@ -743,7 +743,9 @@ Active in Phase 21.
   composition.
 - Subsystem Web composition work allows Component CARs to contribute Web
   pages that render as articles inside Subsystem/deemed-subsystem shells, while
-  login/logout/account-style pages can opt out with screen mode.
+  login/logout/account-style pages can opt out with screen mode. The
+  `textus-blog` driver validates the deemed-subsystem path for both static
+  pages and form result templates.
 - Island Architecture, SPA hosting, and API gateway are Phase 21 backlog items
   to define explicitly, not implicit extensions of the current Static Form
   baseline.

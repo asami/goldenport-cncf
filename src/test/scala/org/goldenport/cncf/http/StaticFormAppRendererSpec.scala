@@ -57,7 +57,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr. 12, 2026
- * @version May.  6, 2026
+ * @version May.  7, 2026
  * @author  ASAMI, Tomoharu
  */
 final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
@@ -2520,6 +2520,98 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       app.assets.js should contain ("/web/blog/assets/blog.js")
       app.layout shouldBe Some("reader")
       app.composition shouldBe WebDescriptor.ComponentWebComposition.Article
+    }
+
+    "limit deemed-subsystem shell fallback to a single component Web root" in {
+      val singleRoot = Files.createTempDirectory("cncf-single-component-shell-")
+      val firstRoot = Files.createTempDirectory("cncf-first-component-shell-")
+      val secondRoot = Files.createTempDirectory("cncf-second-component-shell-")
+      Files.createDirectories(singleRoot.resolve("src").resolve("main").resolve("web"))
+      Files.createDirectories(firstRoot.resolve("src").resolve("main").resolve("web"))
+      Files.createDirectories(secondRoot.resolve("src").resolve("main").resolve("web"))
+      val singleSubsystem = _management_console_fixture_subsystem()
+        .add(Vector(TestComponentFactory.create("single_shell", Protocol.empty)))
+      singleSubsystem.components.find(_.name == "single_shell").getOrElse(fail("single component missing")).withArtifactMetadata(
+        org.goldenport.cncf.component.Component.ArtifactMetadata("test", "single-shell", "0.1.0", archivePath = Some(singleRoot.toString))
+      )
+      val multiSubsystem = _management_console_fixture_subsystem()
+        .add(Vector(
+          TestComponentFactory.create("first_shell", Protocol.empty),
+          TestComponentFactory.create("second_shell", Protocol.empty)
+        ))
+      multiSubsystem.components.find(_.name == "first_shell").getOrElse(fail("first component missing")).withArtifactMetadata(
+        org.goldenport.cncf.component.Component.ArtifactMetadata("test", "first-shell", "0.1.0", archivePath = Some(firstRoot.toString))
+      )
+      multiSubsystem.components.find(_.name == "second_shell").getOrElse(fail("second component missing")).withArtifactMetadata(
+        org.goldenport.cncf.component.Component.ArtifactMetadata("test", "second-shell", "0.1.0", archivePath = Some(secondRoot.toString))
+      )
+
+      val singleServer = new Http4sHttpServer(new HttpExecutionEngine(singleSubsystem))
+      val multiServer = new Http4sHttpServer(new HttpExecutionEngine(multiSubsystem))
+
+      singleServer._subsystem_shell_web_roots().map(_.name) should contain (singleRoot.resolve("src").resolve("main").resolve("web").toString)
+      multiServer._subsystem_shell_web_roots().map(_.name) should not contain firstRoot.resolve("src").resolve("main").resolve("web").toString
+      multiServer._subsystem_shell_web_roots().map(_.name) should not contain secondRoot.resolve("src").resolve("main").resolve("web").toString
+    }
+
+    "compose form result templates into a subsystem shell when app composition is article" in {
+      val root = Files.createTempDirectory("cncf-web-form-composition-root-")
+      Files.writeString(
+        root.resolve("web-descriptor.yaml"),
+        """web:
+          |  apps:
+          |    - name: notice-board
+          |      composition: article
+          |  pages:
+          |    login:
+          |      mode: screen
+          |  form:
+          |    notice-board.notice.post-notice:
+          |      layout: default
+          |    notice-board.notice.login-notice:
+          |      layout: login
+          |""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+      Files.createDirectories(root.resolve("WEB-INF").resolve("layouts"))
+      Files.createDirectories(root.resolve("WEB-INF").resolve("partials"))
+      Files.writeString(
+        root.resolve("WEB-INF").resolve("layouts").resolve("default.html"),
+        """<!doctype html><html><body>${partial.header}<article>${content}</article>${partial.footer}</body></html>""",
+        StandardCharsets.UTF_8
+      )
+      Files.writeString(
+        root.resolve("WEB-INF").resolve("layouts").resolve("login.html"),
+        """<!doctype html><html><body><main class="login-screen">${content}</main></body></html>""",
+        StandardCharsets.UTF_8
+      )
+      Files.writeString(root.resolve("WEB-INF").resolve("partials").resolve("header.html"), "<header>Subsystem Header</header>", StandardCharsets.UTF_8)
+      Files.writeString(root.resolve("WEB-INF").resolve("partials").resolve("footer.html"), "<footer>Subsystem Footer</footer>", StandardCharsets.UTF_8)
+      Files.writeString(root.resolve("post-notice__200.html"), "<section>Posted</section>", StandardCharsets.UTF_8)
+      Files.writeString(root.resolve("login-notice__200.html"), "<section>Login Result</section>", StandardCharsets.UTF_8)
+      val subsystem = _management_console_fixture_subsystem(
+        Configuration(Map(
+          RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web-descriptor.yaml").toString)
+        ))
+      )
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+
+      val articleHtml = server._prepared_form_result_template("notice-board", "notice", "post-notice", 200).toOption.flatten.getOrElse(fail("article result is missing"))
+      val screenHtml = server._prepared_form_result_template(
+        "notice-board",
+        "notice",
+        "login-notice",
+        200,
+        Map("textus.form.page" -> "login")
+      ).toOption.flatten.getOrElse(fail("screen result is missing"))
+
+      articleHtml should include ("Subsystem Header")
+      articleHtml should include ("<article><section>Posted</section></article>")
+      articleHtml should include ("Subsystem Footer")
+      screenHtml should include ("login-screen")
+      screenHtml should include ("Login Result")
+      screenHtml should not include ("Subsystem Header")
+      screenHtml should not include ("<article>")
     }
 
     "reject invalid Web app composition and page mode values" in {

@@ -44,11 +44,15 @@ Subsystem Web composition is provided by the WN-12 component-Web contract:
 - Component Web apps opt in with `apps[].composition: article`.
 - `pages.*.mode: article` embeds the Component page as `${content}` in the
   Subsystem shell.
+- Form result templates follow the same article composition rule when the
+  selected result page is article-mode.
 - `pages.*.mode: screen` lets login/logout/account-style pages own the full
   screen and bypass article embedding.
 - Subsystem/deemed-subsystem `WEB-INF` layouts and shell partials provide the
   shared header, footer, sidebar, and navigation. Component pages may still use
   their own local includes inside the article content.
+- `textus-blog` is the first driver: its CAR acts as a deemed-subsystem, Blog
+  layouts own the shell, and Blog static/result fragments stay article content.
 
 ## Page Kinds
 

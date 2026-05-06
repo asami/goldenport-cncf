@@ -426,6 +426,10 @@ and account flows.
 - [x] Add `pages.*.mode` with `article` and `screen` semantics.
 - [x] Resolve Subsystem/deemed-subsystem `WEB-INF` layouts and shell partials
       for article-composed Component pages.
+- [x] Apply article composition to form result templates as well as static
+      pages.
+- [x] Use `textus-blog` as the first deemed-subsystem driver for article
+      composition.
 - [x] Keep screen-mode pages on the Component/app/page layout path.
 - [x] Keep existing `/web/{app}` and `/web/{component}/{app}` routes stable.
 
@@ -433,6 +437,9 @@ and account flows.
 
 - Component Web content can be embedded as article content inside a Subsystem
   Web shell without hard-coding the Component into the core renderer.
+- Static pages and form result templates can share the same Subsystem shell.
+- `textus-blog` runs with `apps.blog.composition: article` and its Blog pages
+  remain ordinary Component article content inside Blog shell layouts.
 - Login/logout/account pages can opt out of article embedding with
   `mode: screen`.
 

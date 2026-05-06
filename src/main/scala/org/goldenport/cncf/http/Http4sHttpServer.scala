@@ -45,7 +45,7 @@ import org.goldenport.datatype.{ContentType, MimeBody, MimeType}
  *  version Jan. 21, 2026
  *  version Mar. 29, 2026
  *  version Apr. 30, 2026
- * @version May.  6, 2026
+ * @version May.  7, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Http4sHttpServer(
@@ -2272,8 +2272,12 @@ final class Http4sHttpServer(
     status: Int,
     values: Map[String, String] = Map.empty
   ): Consequence[Option[String]] = {
+    val page = _form_result_template_page(service, operation, values)
+    val composeSubsystemArticle = _compose_subsystem_article(app, page)
+    val contentScope =
+      if (composeSubsystemArticle) WebTemplatePartScope.ComponentContent else WebTemplatePartScope.Default
     val candidates = for {
-      root <- _web_resource_roots()
+      root <- _web_resource_roots(contentScope)
       candidate <- _form_result_template_candidates(app, service, operation, status, values)
       content <- root.readText(candidate).toVector
     } yield content
@@ -2281,10 +2285,12 @@ final class Http4sHttpServer(
       case Some(content) =>
         _compose_web_template(
           app,
-          _form_result_template_page(service, operation, values),
+          page,
           content,
           _form_layout(app, service, operation),
-          allowImplicitDefault = true
+          allowImplicitDefault = true,
+          subsystemShell = composeSubsystemArticle,
+          requireLayout = composeSubsystemArticle
         ).map(x => Some(x.html))
       case None =>
         Consequence.success(None)
@@ -2304,12 +2310,16 @@ final class Http4sHttpServer(
       case None =>
         _form_descriptor(app, service, operation).flatMap(_.resultTemplate) match {
           case Some(template) =>
+            val page = _form_result_template_page(service, operation, values)
+            val composeSubsystemArticle = _compose_subsystem_article(app, page)
             _compose_web_template(
               app,
-              _form_result_template_page(service, operation, values),
+              page,
               template,
               _form_layout(app, service, operation),
-              allowImplicitDefault = true
+              allowImplicitDefault = true,
+              subsystemShell = composeSubsystemArticle,
+              requireLayout = composeSubsystemArticle
             ).map(x => Some(x.html))
           case None =>
             Consequence.success(None)
@@ -2444,7 +2454,13 @@ final class Http4sHttpServer(
 
   private[http] def _subsystem_shell_web_roots(): Vector[WebResourceRoot] =
     _web_descriptor_config_root().toVector ++
-      _subsystem_descriptor_web_root().toVector
+      _subsystem_descriptor_web_root().toVector ++
+      _single_component_web_root_for_deemed_subsystem()
+
+  private def _single_component_web_root_for_deemed_subsystem(): Vector[WebResourceRoot] = {
+    val roots = _component_web_roots()
+    if (roots.size == 1) roots else Vector.empty
+  }
 
   private[http] def _component_web_roots(): Vector[WebResourceRoot] =
     engine.runtimeSubsystem.components
@@ -2520,10 +2536,7 @@ final class Http4sHttpServer(
     page: Vector[String],
     content: String
   ): Consequence[StaticFormAppRenderer.Page] = {
-    val composition = engine.webDescriptor.appComposition(webAppName)
-    val pageMode = engine.webDescriptor.staticPageMode(webAppName, page)
-    val composeSubsystemArticle =
-      composition.isArticle && pageMode == WebDescriptor.PageMode.Article
+    val composeSubsystemArticle = _compose_subsystem_article(webAppName, page)
     _compose_web_template(
       webAppName,
       page,
@@ -2549,6 +2562,13 @@ final class Http4sHttpServer(
         StaticFormAppRenderer.Page(composed.html)
     }
   }
+
+  private def _compose_subsystem_article(
+    webAppName: String,
+    page: Vector[String]
+  ): Boolean =
+    engine.webDescriptor.appComposition(webAppName).isArticle &&
+      engine.webDescriptor.staticPageMode(webAppName, page) == WebDescriptor.PageMode.Article
 
   private[http] def _web_app_static_html_candidates(
     webAppName: String,
