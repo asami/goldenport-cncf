@@ -1160,6 +1160,12 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       val edit = StaticFormAppRenderer.renderComponentAdminEntityEdit(subsystem, componentName, entityPath, recordId).map(_.body).getOrElse(fail("component entity edit admin is missing"))
 
       list should include ("Storage shape")
+      list should include ("admin-search-card")
+      list should include ("name=\"q\"")
+      list should include ("name=\"searchMode\"")
+      list should include ("<option value=\"full-text\" selected>")
+      list should include ("<option value=\"semantic\"")
+      list should include ("name=\"sort\"")
       list should include ("simple_entity_default")
       list should include ("admin-storage-shape-fields")
       list should include ("short_id")
@@ -1206,6 +1212,35 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       edit should include ("name=\"title\"")
       edit should include ("value=\"board update\"")
       edit should include (s"/form/${componentPath}/admin/entities/${entityPath}/${recordShortid}/update")
+
+      val searched = StaticFormAppRenderer.renderComponentAdminEntityType(
+        subsystem,
+        componentName,
+        entityPath,
+        StaticFormAppRenderer.PageRequest(page = 1, pageSize = 20),
+        pageContext = Map("q" -> "board", "author" -> "alice", "sort" -> "title", "direction" -> "desc")
+      ).map(_.body).getOrElse(fail("component entity searched admin is missing"))
+      searched should include ("Active filters")
+      searched should include ("q: board")
+      searched should include ("author: alice")
+      searched should include ("sort: title")
+      searched should include ("value=\"board\"")
+      searched should include ("value=\"alice\"")
+      searched should include ("<option value=\"title\" selected>")
+      searched should include ("<option value=\"desc\" selected>")
+      searched should include ("board update")
+      searched should not include ("No records are currently available")
+
+      val semantic = StaticFormAppRenderer.renderComponentAdminEntityType(
+        subsystem,
+        componentName,
+        entityPath,
+        pageContext = Map("q" -> "board", "searchMode" -> "semantic")
+      ).map(_.body).getOrElse(fail("component entity semantic admin is missing"))
+      semantic should include ("admin-search-feedback")
+      semantic should include ("Semantic or hybrid search is not configured")
+      semantic should include ("No records are currently available")
+      semantic should not include ("board update")
     }
 
     "render generic non-image Associations on entity detail pages" in {

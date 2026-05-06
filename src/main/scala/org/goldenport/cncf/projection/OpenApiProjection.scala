@@ -7,7 +7,7 @@ import org.goldenport.protocol.spec.{ServiceDefinition, OperationDefinition}
 
 /*
  * @since   Mar.  5, 2026
- * @version Apr.  2, 2026
+ * @version May.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 object OpenApiProjection {
@@ -69,8 +69,12 @@ object OpenApiProjection {
         s"""{"name":"${_escape(q.name)}","expression":"${expr}"}"""
       }.mkString("[", ",", "]")
       val sourceEvents = _json_array_strings(x.sourceEvents)
+      val searchableFields = _json_array_strings(x.searchableFields)
+      val filterFields = _json_array_strings(x.filterFields)
+      val sortableFields = _json_array_strings(x.sortableFields)
+      val searchModes = _json_array_strings(x.searchModes)
       val rebuildable = x.rebuildable.getOrElse(false)
-      s"""{"name":"${_escape(x.name)}","entityName":"${_escape(x.entityName)}","viewNames":${names},"queries":${queries},"sourceEvents":${sourceEvents},"rebuildable":${rebuildable}}"""
+      s"""{"name":"${_escape(x.name)}","entityName":"${_escape(x.entityName)}","viewNames":${names},"queries":${queries},"searchableFields":${searchableFields},"filterFields":${filterFields},"sortableFields":${sortableFields},"searchModes":${searchModes},"defaultSearchMode":"${_escape(x.defaultSearchMode)}","sourceEvents":${sourceEvents},"rebuildable":${rebuildable}}"""
     }
     entries.mkString("[", ",", "]")
   }

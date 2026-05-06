@@ -11,7 +11,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr. 18, 2026
- * @version Apr. 18, 2026
+ * @version May.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EntityQueryFieldResolverSpec extends AnyWordSpec with Matchers {
@@ -44,8 +44,10 @@ final class EntityQueryFieldResolverSpec extends AnyWordSpec with Matchers {
     "resolve view fields from component view metadata and keep schema names" in {
       val resolver = EntityQueryFieldResolver(_component_with_schema_and_view(), "notice")
 
-      resolver.viewFields("summary") shouldBe Vector("id", "recipientName", "subject")
+      resolver.viewFields("summary") shouldBe Vector("id", "recipientName", "subject", "count")
       resolver.defaultSearchFields("summary") shouldBe Vector("recipientName", "subject")
+      resolver.filterFields("summary") shouldBe Vector("recipientName", "subject", "count")
+      resolver.sortableFields("summary") shouldBe Vector("recipientName", "subject", "count")
     }
 
     "fall back to the requested name when schema metadata is not available" in {
@@ -68,7 +70,7 @@ final class EntityQueryFieldResolverSpec extends AnyWordSpec with Matchers {
           ViewDefinition(
             name = "notice_view",
             entityName = "notice",
-            viewFields = Map("summary" -> Vector("id", "recipient_name", "subject"))
+            viewFields = Map("summary" -> Vector("id", "recipient_name", "subject", "count"))
           )
         )
     }
@@ -97,6 +99,7 @@ final class EntityQueryFieldResolverSpec extends AnyWordSpec with Matchers {
       Column(BaseContent.simple("senderName"), ValueDomain(datatype = XString, multiplicity = Multiplicity.One)),
       Column(BaseContent.simple("recipientName"), ValueDomain(datatype = XString, multiplicity = Multiplicity.ZeroOne)),
       Column(BaseContent.simple("subject"), ValueDomain(datatype = XString, multiplicity = Multiplicity.One)),
-      Column(BaseContent.simple("body"), ValueDomain(datatype = XString, multiplicity = Multiplicity.One))
+      Column(BaseContent.simple("body"), ValueDomain(datatype = XString, multiplicity = Multiplicity.One)),
+      Column(BaseContent.simple("count"), ValueDomain(datatype = org.goldenport.schema.XInt, multiplicity = Multiplicity.ZeroOne))
     ))
 }

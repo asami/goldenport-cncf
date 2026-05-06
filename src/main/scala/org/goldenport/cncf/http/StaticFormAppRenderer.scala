@@ -13,6 +13,7 @@ import org.goldenport.cncf.CncfVersion
 import org.goldenport.cncf.config.{OperationMode, RuntimeConfig}
 import org.goldenport.cncf.operation.{AssociationBindingOperationDefinition, CmlEntityRelationshipDefinition, CmlOperationAssociationBinding, CmlOperationImageBinding, ImageBindingOperationDefinition}
 import org.goldenport.cncf.projection.{AuthorizationPolicyProjection, DescribeProjection, HelpProjection, SchemaProjection}
+import org.goldenport.cncf.search.{SearchMode, SearchPlanningProfile, WebSearchQueryPlanner}
 import org.goldenport.configuration.{ConfigurationValue, ResolvedConfiguration}
 import org.goldenport.protocol.{Argument, Property, Request as ProtocolRequest}
 import org.goldenport.protocol.spec.ParameterDefinition
@@ -4213,15 +4214,52 @@ object StaticFormAppRenderer {
         WebTableColumnResolver.defaultViewName,
         webSchema.fieldNames
       )
-      val result = _admin_entity_list(subsystem, componentPath, entityPath, effectivePageRequest)
+      val searchContext =
+        if (effectivePageRequest.effectiveIncludeTotal)
+          pageContext + ("includeTotal" -> "true")
+        else
+          pageContext
+      val searchFields = _admin_entity_searchable_fields(component, entityPath, WebTableColumnResolver.defaultViewName)
+      val filterFields = displayFields
+      val searchProfile = SearchPlanningProfile(
+        searchableFields = searchFields,
+        filterFields = filterFields,
+        sortableFields = displayFields
+      )
+      val semanticUnsupported = _admin_search_mode(searchContext).exists(_ != SearchMode.FullText)
+      val searchValues =
+        if (semanticUnsupported)
+          Map.empty[String, String]
+        else
+          _admin_search_values(searchContext, searchProfile)
+      val result =
+        if (semanticUnsupported)
+          _AdminListResult(Vector.empty, 1, effectivePageRequest.pageSize, false, Some(0), Vector.empty)
+        else
+          _admin_entity_list(subsystem, componentPath, entityPath, effectivePageRequest, searchValues)
       val warningHtml = _admin_warnings(result.warnings)
+      val searchFeedback =
+        if (semanticUnsupported)
+          """<div class="alert alert-warning admin-search-feedback" role="alert">Semantic or hybrid search is not configured for this Static Form page.</div>"""
+        else
+          ""
+      val searchHref = _admin_search_href(basePath, searchContext, searchProfile)
+      val searchControls = _admin_search_card(
+        basePath,
+        searchContext,
+        searchProfile,
+        filterFields,
+        displayFields,
+        result.total,
+        result.items.size
+      )
       val table = _admin_read_result_list_table(
         result.items,
         displayFields,
         basePath,
         "No records are currently available for this entity.",
         includeEdit = true,
-        linkContext = pageContext ++ Map(
+        linkContext = searchContext ++ Map(
           "paging.page" -> result.page.toString,
           "paging.pageSize" -> result.pageSize.toString
         )
@@ -4237,6 +4275,8 @@ object StaticFormAppRenderer {
         body =
           s"""${nav}
              |${_admin_storage_shape_section(component, Some(entityPath), detailed = true)}
+             |${searchControls}
+             |${searchFeedback}
              |<article class="card admin-card">
              |  <div class="card-body">
              |    <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-3">
@@ -4248,7 +4288,7 @@ object StaticFormAppRenderer {
              |    </div>
              |    ${warningHtml}
              |    ${table}
-             |    ${_paging_nav(result.page, result.pageSize, result.total, effectivePageRequest.href(basePath), Some(result.hasNext))}
+             |    ${_paging_nav(result.page, result.pageSize, result.total, searchHref, Some(result.hasNext))}
              |  </div>
              |</article>""".stripMargin
       ))
@@ -4612,13 +4652,150 @@ object StaticFormAppRenderer {
     subsystem: Subsystem,
     componentPath: String,
     entityPath: String,
-    pageRequest: PageRequest
+    pageRequest: PageRequest,
+    searchValues: Map[String, String] = Map.empty
   ): _AdminListResult =
     _admin_list_result(
       subsystem,
       "/admin/entity/list",
-      Record.create(Vector("component" -> componentPath, "entity" -> entityPath, "view" -> WebTableColumnResolver.defaultViewName) ++ pageRequest.toPairs)
+      Record.create(Vector("component" -> componentPath, "entity" -> entityPath, "view" -> WebTableColumnResolver.defaultViewName) ++ pageRequest.toPairs ++ searchValues.toVector)
     )
+
+  private def _admin_entity_searchable_fields(
+    component: Component,
+    entityPath: String,
+    view: String
+  ): Vector[String] =
+    org.goldenport.cncf.entity.runtime.EntityQueryFieldResolver(component, entityPath)
+      .defaultSearchFields(view)
+
+  private def _admin_search_mode(
+    values: Map[String, String]
+  ): Option[SearchMode] =
+    values.get("searchMode").orElse(values.get("search_mode")).flatMap(SearchMode.parse)
+
+  private def _admin_search_values(
+    values: Map[String, String],
+    profile: SearchPlanningProfile
+  ): Map[String, String] = {
+    val knownFilters = profile.filterFields.map(x => NamingConventions.toNormalizedSegment(x).replace("-", "") -> x).toMap
+    values.collect {
+      case (key, value) if _admin_search_control_key(key) && value.trim.nonEmpty => key -> value
+      case (key, value) if value.trim.nonEmpty && knownFilters.contains(NamingConventions.toNormalizedSegment(key).replace("-", "")) => key -> value
+    }
+  }
+
+  private def _admin_search_control_key(key: String): Boolean =
+    Set("q", "text", "sort", "sortBy", "sort_by", "direction", "order", "searchMode", "search_mode", "includeTotal", "include_total").contains(key)
+
+  private def _admin_search_card(
+    action: String,
+    values: Map[String, String],
+    profile: SearchPlanningProfile,
+    filterFields: Vector[String],
+    sortFields: Vector[String],
+    total: Option[Int],
+    fetched: Int
+  ): String = {
+    val q = values.get("q").orElse(values.get("text")).getOrElse("")
+    val selectedMode = _admin_search_mode(values).getOrElse(SearchMode.FullText)
+    val selectedSort = values.get("sort").orElse(values.get("sortBy")).orElse(values.get("sort_by")).getOrElse("")
+    val selectedDirection = values.get("direction").orElse(values.get("order")).getOrElse("asc")
+    val filterControls = filterFields.filterNot(x => x == "id").take(6).map { field =>
+      val value = values.get(field).getOrElse("")
+      s"""<div class="col-12 col-md-4 col-xl-2">
+         |  <label class="form-label" for="adminSearchFilter${_escape(field)}">${_escape(_title_label(field))}</label>
+         |  <input class="form-control" id="adminSearchFilter${_escape(field)}" name="${_escape(field)}" value="${_escape(value)}">
+         |</div>""".stripMargin
+    }.mkString("\n")
+    val sortOptions = ("", "Default") +: sortFields.map(x => x -> _title_label(x))
+    val sortHtml = sortOptions.map { case (value, label) =>
+      val selected = if (value == selectedSort) " selected" else ""
+      s"""<option value="${_escape(value)}"${selected}>${_escape(label)}</option>"""
+    }.mkString("\n")
+    val chips = _admin_search_chips(values, profile, action)
+    val summary =
+      total.map(t => s"${t} total records").getOrElse(s"${fetched} records on this page")
+    s"""<article class="card admin-card admin-search-card">
+       |  <div class="card-body">
+       |    <div class="d-flex flex-column flex-md-row justify-content-between gap-2 mb-3">
+       |      <div>
+       |        <h2 class="card-title h5 mb-1">Search</h2>
+       |        <p class="card-text text-body-secondary mb-0">Full-text search uses <code>q</code>; <code>text</code> is accepted as a compatibility alias. ${_escape(summary)}</p>
+       |      </div>
+       |      <a class="btn btn-sm btn-outline-secondary align-self-start" href="${_escape(action)}">Clear search</a>
+       |    </div>
+       |    ${chips}
+       |    <form method="get" action="${_escape(action)}" class="row g-2 align-items-end">
+       |      <div class="col-12 col-md-5">
+       |        <label class="form-label" for="adminSearchQ">Search text</label>
+       |        <input class="form-control" id="adminSearchQ" name="q" value="${_escape(q)}" placeholder="Search visible text fields">
+       |      </div>
+       |      <div class="col-12 col-md-2">
+       |        <label class="form-label" for="adminSearchMode">Mode</label>
+       |        <select class="form-select" id="adminSearchMode" name="searchMode">
+       |          ${_search_mode_option(SearchMode.FullText, selectedMode)}
+       |          ${_search_mode_option(SearchMode.Semantic, selectedMode)}
+       |          ${_search_mode_option(SearchMode.Hybrid, selectedMode)}
+       |        </select>
+       |      </div>
+       |      <div class="col-12 col-md-3">
+       |        <label class="form-label" for="adminSearchSort">Sort</label>
+       |        <select class="form-select" id="adminSearchSort" name="sort">${sortHtml}</select>
+       |      </div>
+       |      <div class="col-12 col-md-2">
+       |        <label class="form-label" for="adminSearchDirection">Order</label>
+       |        <select class="form-select" id="adminSearchDirection" name="direction">
+       |          <option value="asc"${if (selectedDirection != "desc") " selected" else ""}>Ascending</option>
+       |          <option value="desc"${if (selectedDirection == "desc") " selected" else ""}>Descending</option>
+       |        </select>
+       |      </div>
+       |      ${filterControls}
+       |      <div class="col-12 d-flex flex-wrap gap-2 justify-content-end">
+       |        <input type="hidden" name="includeTotal" value="${_escape(values.getOrElse("includeTotal", "false"))}">
+       |        <button class="btn btn-primary" type="submit">Search</button>
+       |      </div>
+       |    </form>
+       |  </div>
+       |</article>""".stripMargin
+  }
+
+  private def _search_mode_option(
+    mode: SearchMode,
+    selected: SearchMode
+  ): String = {
+    val selectedAttr = if (mode == selected) " selected" else ""
+    s"""<option value="${_escape(mode.name)}"${selectedAttr}>${_escape(_title_label(mode.name))}</option>"""
+  }
+
+  private def _admin_search_chips(
+    values: Map[String, String],
+    profile: SearchPlanningProfile,
+    clearHref: String
+  ): String = {
+    val searchValues = _admin_search_values(values, profile)
+    val chips = searchValues.toVector.sortBy(_._1).map { case (key, value) =>
+      s"""<span class="badge rounded-pill text-bg-light border">${_escape(key)}: ${_escape(value)}</span>"""
+    }
+    if (chips.isEmpty)
+      ""
+    else
+      s"""<div class="d-flex flex-wrap gap-2 align-items-center mb-3 admin-search-active-filters"><span class="text-body-secondary small">Active filters</span>${chips.mkString}<a class="btn btn-sm btn-outline-secondary" href="${_escape(clearHref)}">Clear</a></div>"""
+  }
+
+  private def _admin_search_href(
+    basePath: String,
+    values: Map[String, String],
+    profile: SearchPlanningProfile
+  ): String = {
+    val pairs = _admin_search_values(values, profile).toVector
+    val suffix =
+      if (pairs.isEmpty)
+        "?page={page}&pageSize={pageSize}"
+      else
+        pairs.map { case (key, value) => s"${_escape_query(key)}=${_escape_query(value)}" }.mkString("?", "&", "&page={page}&pageSize={pageSize}")
+    s"${basePath}${suffix}"
+  }
 
   private def _admin_entity_record_table(
     subsystem: Subsystem,

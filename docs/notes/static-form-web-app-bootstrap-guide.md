@@ -213,6 +213,45 @@ Rules:
 - Put row actions in a wrapping flex group.
 - Use `list-group` or `card` rows when the content is not naturally tabular.
 
+## Search Forms And Results
+
+Generated and hand-written Static Form search pages should use the CNCF Web
+search convention:
+
+- `q` is the canonical full-text search parameter.
+- Existing application-specific `text` inputs remain compatibility aliases.
+- Filter inputs should be generated only from visible/search-facing fields.
+- Sort controls should expose only configured or visible sortable fields.
+- Semantic and hybrid search modes may be shown as capabilities, but they must
+  return deterministic unsupported/configuration feedback unless a semantic
+  backend is configured.
+
+Use Bootstrap cards and rows for the search controls:
+
+```html
+<section class="card mb-3">
+  <div class="card-body">
+    <form method="get" class="row g-2 align-items-end">
+      <div class="col-12 col-md-5">
+        <label class="form-label" for="q">Search</label>
+        <input class="form-control" id="q" name="q" value="">
+      </div>
+      <div class="col-6 col-md-3">
+        <label class="form-label" for="sort">Sort</label>
+        <select class="form-select" id="sort" name="sort">...</select>
+      </div>
+      <div class="col-6 col-md-2">
+        <button class="btn btn-primary w-100" type="submit">Search</button>
+      </div>
+    </form>
+  </div>
+</section>
+```
+
+Show active filters as compact badges or chips and provide a clear-search link.
+Result summaries, pagination, and empty states should stay server-rendered so
+the same page works without JavaScript.
+
 ## Result And Status Feedback
 
 Use Bootstrap feedback components:

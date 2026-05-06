@@ -266,7 +266,7 @@ items are visible and Phase 21 does not close prematurely.
 
 ## WN-08: Search UI / Query / Semantic Search Alignment
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
@@ -274,17 +274,30 @@ Design and implement the Web-facing search layer for Static Form UI.
 
 ### Detailed Tasks
 
-- [ ] Define the full-text search planning layer for Web forms and result pages.
-- [ ] Align CML, View, Query, and Web metadata for search-facing fields.
-- [ ] Define how semantic/embedding-backed search appears in generated and
+- [x] Define the full-text search planning layer for Web forms and result pages.
+- [x] Align CML, View, Query, and Web metadata for search-facing fields.
+- [x] Define how semantic/embedding-backed search appears in generated and
       hand-written Static Form pages.
-- [ ] Add result ranking, filter, and pagination UI patterns that remain usable
-      without JavaScript.
+- [x] Add result summary, filter, sort, and pagination UI patterns that remain
+      usable without JavaScript.
 
 ### Expected Output
 
 - Search forms and results can be generated or authored consistently across
   admin/runtime and application pages.
+- `WebSearchQueryPlanner` maps Web form input into existing `Query` /
+  `EntityQuery` planning, including `q`, filters, sort, limit/offset, and
+  include-total.
+- Admin entity list pages expose a Bootstrap search card, active filter chips,
+  clear links, pagination links that preserve query state, and deterministic
+  empty/unsupported feedback.
+- View metadata exposes searchable, filterable, sortable fields and supported
+  search modes.
+- `q` is the canonical generic search text parameter; `text` remains a
+  compatibility alias.
+- Ordinary full-text search uses existing `Query` / `EntityQuery` planning.
+  Semantic and hybrid search modes are surfaced as capability choices and fail
+  deterministically until a semantic backend is configured.
 
 ### Guardrails
 
@@ -295,7 +308,7 @@ Design and implement the Web-facing search layer for Static Form UI.
 
 ## WN-09: Web/UI Generation and Static Form Layout Composition
 
-Status: TODO
+Status: ACTIVE
 
 ### Objective
 

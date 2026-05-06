@@ -27,11 +27,12 @@ import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.datastore.{DataStore, Query as DataStoreQuery, QueryDirective, QueryLimit, TotalCountCapability}
 import org.goldenport.cncf.directive.{Query as EntityQuery}
 import org.goldenport.cncf.entity.{EntityPersistable, EntityPersistent, EntityQuery as StoreEntityQuery, EntitySearchScope}
-import org.goldenport.cncf.entity.runtime.EntityCollection
+import org.goldenport.cncf.entity.runtime.{EntityCollection, EntityQueryFieldResolver}
 import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.cncf.observability.ObservabilityEngine
 import org.goldenport.cncf.operation.{AssociationBindingOperationDefinition, CmlOperationAssociationBinding}
 import org.goldenport.cncf.projection.{SecurityDeploymentMarkdownProjection, SecurityDeploymentProjection}
+import org.goldenport.cncf.search.{SearchPlanningProfile, WebSearchQueryPlanner}
 import org.goldenport.cncf.security.{AdminAuthorizationPolicy, EntityAccessMode, OperationAuthorizationProvider, OperationAuthorizationRule}
 import org.goldenport.cncf.subsystem.{GenericSubsystemAssemblyDescriptorSource, Subsystem}
 import org.goldenport.cncf.unitofwork.{UnitOfWorkAuthorization, UnitOfWorkOp}
@@ -1971,7 +1972,7 @@ object AdminComponent {
       )
       view = args.get("view").map(_.toString).getOrElse("summary")
       fields = _entity_view_fields(component, entityName, view)
-      result <- _admin_entity_search(core, collection, effectivePaging)
+      result <- _admin_entity_search(core, collection, component, entityName, view, effectivePaging, args)
     } yield OperationResponse.RecordResponse(
       _list_response_record(
         "entity",
@@ -1986,21 +1987,35 @@ object AdminComponent {
   private def _admin_entity_search[A](
     core: ActionCall.Core,
     collection: EntityCollection[A],
-    paging: _Paging
+    component: Component,
+    entityName: String,
+    view: String,
+    paging: _Paging,
+    args: Map[String, Any]
   ): Consequence[org.goldenport.cncf.directive.SearchResult[A]] = {
     given org.goldenport.cncf.context.ExecutionContext = core.executionContext
-    val query = EntityQuery.plan(
-      Record.empty,
-      limit = Some(paging.fetchPageSize),
-      offset = Some(paging.offset),
-      includeTotal = paging.wantsTotal
+    val resolver = EntityQueryFieldResolver(component, entityName)
+    val searchInput = Record.create(
+      args.toVector.map { case (key, value) => key -> value } ++
+        Vector(
+          "limit" -> paging.fetchPageSize,
+          "offset" -> paging.offset,
+          "includeTotal" -> paging.wantsTotal
+        )
     )
-    core.executionContext.entityStoreSpace.search(
-      org.goldenport.cncf.unitofwork.UnitOfWorkOp.EntityStoreSearch(
-        query = org.goldenport.cncf.entity.EntityQuery(collection.descriptor.collectionId, query),
-        tc = collection.descriptor.persistent
+    val profile = SearchPlanningProfile(
+      searchableFields = resolver.defaultSearchFields(view),
+      filterFields = resolver.filterFields(view),
+      sortableFields = resolver.sortableFields(view)
+    )
+    WebSearchQueryPlanner.plan(searchInput, profile).flatMap { planned =>
+      core.executionContext.entityStoreSpace.search(
+        org.goldenport.cncf.unitofwork.UnitOfWorkOp.EntityStoreSearch(
+          query = org.goldenport.cncf.entity.EntityQuery(collection.descriptor.collectionId, planned.query),
+          tc = collection.descriptor.persistent
+        )
       )
-    )
+    }
   }
 
   private def _admin_entity_read(
@@ -2376,7 +2391,7 @@ object AdminComponent {
   ): Consequence[Vector[Any]] =
     _aggregate_entity_collection(component, aggregateName) match {
       case Some((_, collection)) =>
-        _admin_entity_search(core, collection, paging).map { result =>
+        _admin_entity_search(core, collection, component, aggregateName, "summary", paging, _action_values(core)).map { result =>
           val values =
             if (result.data.nonEmpty)
               result.data

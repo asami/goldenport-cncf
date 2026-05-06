@@ -5,7 +5,7 @@ import org.goldenport.cncf.component.Component
 
 /*
  * @since   Mar.  5, 2026
- * @version May.  2, 2026
+ * @version May.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 object DescribeProjection {
@@ -48,6 +48,11 @@ object DescribeProjection {
             "entityName" -> x.entityName,
             "viewNames" -> x.viewNames,
             "queries" -> x.queries.map(q => Record.data("name" -> q.name, "expression" -> q.expression.getOrElse(""))),
+            "searchableFields" -> x.searchableFields,
+            "filterFields" -> x.filterFields,
+            "sortableFields" -> x.sortableFields,
+            "searchModes" -> x.searchModes,
+            "defaultSearchMode" -> x.defaultSearchMode,
             "sourceEvents" -> x.sourceEvents,
             "rebuildable" -> x.rebuildable.getOrElse(false)
           )

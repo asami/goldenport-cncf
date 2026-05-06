@@ -6,13 +6,14 @@ import org.goldenport.protocol.spec.{OperationDefinition, ParameterDefinition, S
 import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.component.ComponentOriginLabel
 import org.goldenport.cncf.entity.SimpleEntityStorageShapePolicy
+import org.goldenport.cncf.entity.runtime.EntityQueryFieldResolver
 import org.goldenport.cncf.entity.runtime.EntityRuntimeDescriptor
 import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.cncf.operation.{AssociationBindingOperationDefinition, ChildEntityBindingOperationDefinition, CmlEntityRelationshipDefinition, CmlOperationAssociationBinding, CmlOperationChildEntityBinding, CmlOperationImageBinding, ImageBindingOperationDefinition}
 
 /*
  * @since   Mar.  5, 2026
- * @version May.  4, 2026
+ * @version May.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 private[projection] object MetaProjectionSupport {
@@ -29,6 +30,11 @@ private[projection] object MetaProjectionSupport {
     entityName: String,
     viewNames: Vector[String],
     queries: Vector[ViewQueryMeta],
+    searchableFields: Vector[String],
+    filterFields: Vector[String],
+    sortableFields: Vector[String],
+    searchModes: Vector[String],
+    defaultSearchMode: String,
     sourceEvents: Vector[String],
     rebuildable: Option[Boolean]
   )
@@ -340,11 +346,17 @@ private[projection] object MetaProjectionSupport {
     component.viewDefinitions
       .sortBy(_.name)
       .map { x =>
+        val resolver = EntityQueryFieldResolver(component, x.entityName)
         ViewMeta(
           x.name,
           x.entityName,
           x.viewNames.distinct.sorted,
           x.queries.sortBy(_.name).map(q => ViewQueryMeta(q.name, q.expression)),
+          resolver.defaultSearchFields("summary"),
+          resolver.filterFields("summary"),
+          resolver.sortableFields("summary"),
+          Vector("full-text", "semantic", "hybrid"),
+          "full-text",
           x.sourceEvents.distinct.sorted,
           x.rebuildable
         )

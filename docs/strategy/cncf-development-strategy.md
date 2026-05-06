@@ -618,13 +618,14 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Phase 21 work documents are opened and the Static Form UI scope is selected.
 - Bootstrap primitive normalization, Textus widget expansion, dialog-style
   action surfaces, targeted CNCF admin/runtime driver pages, selected
-  `textus-blog` driver pages, and application-level Job UX baseline are
-  implemented as partial Phase 21 slices.
+  `textus-blog` driver pages, application-level Job UX baseline, and the
+  Web-facing full-text search planning/UI baseline are implemented as partial
+  Phase 21 slices.
 - Remaining:
-- Phase 21 continues with backlog/status synchronization, Search UI, Web/UI
-  generation, reusable layout partials, broader Bootstrap polish,
-  component-owned admin integration, Island Architecture, SPA/API gateway
-  boundary design, and application developer documentation completion.
+- Phase 21 continues with Web/UI generation, reusable layout partials,
+  broader Bootstrap polish, component-owned admin integration, Island
+  Architecture, SPA/API gateway boundary design, and application developer
+  documentation completion.
 - Non-goals:
 - No SPA framework adoption before WN-14 defines the explicit hosting boundary.
 - No implicit API gateway or separate SPA hosting mode.
@@ -714,6 +715,10 @@ Active in Phase 21.
     parity, and modal-style image/import surfaces
   - WN-07 Phase 21 backlog / status synchronization is complete; WN-08 through
     WN-15 are explicit Phase 21 backlog items and Phase 21 remains active
+  - WN-08 Search UI / Query / Semantic Search Alignment is implemented through
+    `WebSearchQueryPlanner`, admin entity search cards, View search metadata,
+    and deterministic unsupported feedback for semantic/hybrid modes without a
+    backend
   - application-level job UX baseline is implemented for Form-launched
     asynchronous Command jobs through `/web/{app}/jobs` and
     `/web/{app}/jobs/{jobId}`
@@ -721,18 +726,18 @@ Active in Phase 21.
   observability and debugging information, including execution result metadata
   and CallTree, at the end of the web page.
 - Phase 21 active/future backlog:
-  - WN-08 Search UI / Query / Semantic Search Alignment (active)
-  - WN-09 Web/UI Generation and Static Form Layout Composition
+  - WN-09 Web/UI Generation and Static Form Layout Composition (active)
   - WN-10 Reusable Header/Footer/Nav/Sidebar/Layout Partials
   - WN-11 Broader Bootstrap 5 Admin/App Polish
   - WN-12 Component-Owned Web Admin Page Integration
   - WN-13 Island Architecture Progressive Enhancement
   - WN-14 SPA Hosting / API Gateway Boundary Design
   - WN-15 Application Developer Documentation Completion
-- Phase 21 remains active. WN-01 through WN-07 are completed slices, not the
+- Phase 21 remains active. WN-01 through WN-08 are completed slices, not the
   whole phase.
-- Search work includes full-text search planning, embedding/semantic search
-  backend strategy, and CML / View / Query alignment for search-facing metadata.
+- Search work now has a full-text planning and no-JS Bootstrap UI baseline.
+  Semantic/hybrid mode is exposed as a capability surface, but embedding/vector
+  backend integration remains deferred.
 - Web/UI generation work includes wireframe/UI generation strategy above Static
   Form primitives, responsibility split between generated UI and hand-written
   static pages, and reusable header/footer/navigation/sidebar/layout/widget

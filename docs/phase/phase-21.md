@@ -58,8 +58,8 @@ Final semantic direction:
 - E (DONE): WN-05 — Apply UI primitives to CNCF admin/runtime pages.
 - F (DONE): WN-06 — Apply selected improvements to `textus-blog`.
 - G (DONE): WN-07 — Phase 21 backlog / status synchronization.
-- H (ACTIVE): WN-08 — Search UI / Query / Semantic Search Alignment.
-- I (TODO): WN-09 — Web/UI Generation and Static Form Layout Composition.
+- H (DONE): WN-08 — Search UI / Query / Semantic Search Alignment.
+- I (ACTIVE): WN-09 — Web/UI Generation and Static Form Layout Composition.
 - J (TODO): WN-10 — Reusable Header/Footer/Nav/Sidebar/Layout Partials.
 - K (TODO): WN-11 — Broader Bootstrap 5 Admin/App Polish.
 - L (TODO): WN-12 — Component-Owned Web Admin Page Integration.
@@ -69,8 +69,9 @@ Final semantic direction:
 
 Resume hint:
 
-- Continue with WN-08 Search UI / Query / Semantic Search Alignment. Phase 21
-  is not ready to close while WN-08 through WN-15 remain active or TODO.
+- Continue with WN-09 Web/UI Generation and Static Form Layout Composition.
+  Phase 21 is not ready to close while WN-09 through WN-15 remain active or
+  TODO.
 
 ## 5. Development Items
 
@@ -81,7 +82,7 @@ Resume hint:
 - [x] WN-05: Apply UI primitives to CNCF admin/runtime pages.
 - [x] WN-06: Apply selected improvements to `textus-blog`.
 - [x] WN-07: Phase 21 backlog / status synchronization.
-- [ ] WN-08: Search UI / Query / Semantic Search Alignment.
+- [x] WN-08: Search UI / Query / Semantic Search Alignment.
 - [ ] WN-09: Web/UI Generation and Static Form Layout Composition.
 - [ ] WN-10: Reusable Header/Footer/Nav/Sidebar/Layout Partials.
 - [ ] WN-11: Broader Bootstrap 5 Admin/App Polish.
