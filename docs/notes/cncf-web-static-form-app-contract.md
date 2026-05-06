@@ -7,9 +7,22 @@ status = implemented
 This note defines the first WEB-02 contract for REST/Form API exposure and the
 Static Form App mechanism.
 
-It is intentionally small. The first runtime hook must support the read-only
-Dashboard validation path for `textus-sample-app` without hard-coding Dashboard
-as a special server feature.
+The basic Web application line is REST-first: the CNCF application tier exposes
+Component / Service / Operation behavior through REST, and a Web-tier
+application may use any suitable Web technology to build the user interface on
+top of those REST APIs. CNCF does not require application Web UIs to be built
+with Static Form.
+
+Static Form Web UI is the lightweight CNCF-provided Web UI path. It exists for:
+
+- the CNCF management console foundation;
+- development-time checking and debugging;
+- development-time prototypes;
+- simple internal-use Web UIs.
+
+It is intentionally small. Static Form should support useful framework and
+application validation screens without becoming a general Web application
+framework.
 
 ## Path Model
 
@@ -324,6 +337,15 @@ cleanly as static files. If an application still needs programming-style
 routing rules, conditional page flow, rich client state management, or other
 advanced Web behavior, it should be implemented with a normal Web framework and
 integrated with CNCF through REST or `/form-api`.
+
+SPA and API gateway integration use that same conservative boundary. A
+separately hosted SPA may call `/rest/v1/...` for operation execution and
+`/form-api/...` for schema/validation preparation, but Static Form remains the
+default CNCF Web mode. CNCF does not implicitly add a SPA catch-all route,
+client-side router, API gateway runtime, or alternate authorization path for
+ordinary Static Form Apps. If CNCF-hosted SPA bundles are introduced later, they
+must be explicitly scoped to a named app/deployment boundary and kept separate
+from Static Form and component app asset packaging.
 
 The initial app registry is conceptual:
 

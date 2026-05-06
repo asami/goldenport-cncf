@@ -115,10 +115,28 @@ descriptors as authored intent.
 
 Use these when exposing a component through Web/Form/admin surfaces:
 
+The primary CNCF Web application strategy is a split between the application
+tier and the Web tier. CNCF components expose application behavior through REST
+operations, and a Web-tier application may use any suitable Web technology to
+build the user interface on top of those REST APIs.
+
+Static Form Web UI is the CNCF-provided lightweight Web UI path. Use it for:
+
+- the CNCF management console foundation;
+- development-time checking and debugging;
+- development-time prototypes;
+- simple internal-use Web UIs.
+
+Static Form pages can also be composed from Component-provided Web fragments
+inside a Subsystem/deemed-subsystem shell. That makes Static Form useful for
+internal application screens during development, even though full production
+Web applications should normally be designed as Web-tier applications over REST.
+
 - `docs/design/web-layer.md`
-  - CNCF Web layer, Static Form App, local assets, routing, and UI baseline.
+  - CNCF Web layer, REST/Form API boundaries, Static Form App, local assets,
+    routing, SPA boundary, and UI baseline.
 - `docs/notes/cncf-web-static-form-app-contract.md`
-  - Static Form App contract and result conventions.
+  - Static Form App contract, result conventions, and lightweight UI role.
 - `docs/notes/cncf-web-descriptor-minimum-schema.md`
   - Minimum Web descriptor schema.
 - `docs/design/web-form-api-schema.md`
@@ -135,6 +153,8 @@ Use these when exposing a component through Web/Form/admin surfaces:
   - Textus widget design notes.
 - `docs/notes/web-application-theme-and-provider-page-customization-note.md`
   - Theme and provider page customization notes.
+- `docs/notes/cncf-hosted-spa-boundary-note.md`
+  - CNCF-hosted minimal SPA boundary and production SPA-mode gaps.
 
 Static Form Web Apps should use the local Bootstrap/Textus asset baseline and
 ordinary Bootstrap layout primitives before adding application CSS.

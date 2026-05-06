@@ -1,11 +1,12 @@
 # Phase 21 — Web Next Stage / Static Form UI
 
-status = active
+status = closed
 
 ## 1. Purpose of This Document
 
-This work document records the active stack of work items for Phase 21.
-It is authoritative for current scope, explicit deferrals, and closure status.
+This work document records the completed stack of work items for Phase 21.
+It is authoritative for the completed scope, explicit deferrals, and closure
+status.
 
 This document is a phase dashboard, not a design journal.
 
@@ -40,8 +41,8 @@ Final semantic direction:
 
 ## 3. Non-Goals
 
-- No SPA framework adoption.
-- No API gateway or separate SPA hosting mode.
+- No SPA framework adoption as the default CNCF Web mode.
+- No API gateway runtime or separate SPA hosting implementation in Phase 21.
 - No visual design system separate from Bootstrap 5.
 - No broad UI generation, file generation, standalone wireframe DSL, or new
   runtime renderer outside the Static Form UI generation contract.
@@ -49,7 +50,7 @@ Final semantic direction:
   21 UI slice needs it.
 - No JavaScript-only behavior without a server-rendered fallback.
 
-## 4. Active Work Stack
+## 4. Completed Work Stack
 
 - A (DONE): WN-01 — Open Phase 21 and freeze Static Form UI scope.
 - B (DONE): WN-02 — Normalize Bootstrap 5 page primitives.
@@ -64,15 +65,14 @@ Final semantic direction:
 - K (DONE): WN-11 — Broader Bootstrap 5 Admin/App Polish.
 - L (DONE): WN-12 — Subsystem Web App Composition From Component Web,
   including the `textus-blog` WN-12B driver.
-- M (ACTIVE): WN-13 — Island Architecture Progressive Enhancement.
-- N (TODO): WN-14 — SPA Hosting / API Gateway Boundary Design.
-- O (TODO): WN-15 — Application Developer Documentation Completion.
+- M (DONE): WN-13 — Progressive Enhancement / Island Boundary Contract.
+- N (DONE): WN-14 — SPA Hosting / API Gateway Boundary Design.
+- O (DONE): WN-15 — Application Developer Documentation Completion.
 
 Resume hint:
 
-- Continue with WN-13 Island Architecture Progressive Enhancement.
-  Phase 21 is not ready to close while WN-13 through WN-15 remain active or
-  TODO.
+- Phase 21 Web Next Stage work is closed. Next work should select the next
+  post-Phase 21 development item.
 
 ## 5. Development Items
 
@@ -89,18 +89,19 @@ Resume hint:
 - [x] WN-11: Broader Bootstrap 5 Admin/App Polish.
 - [x] WN-12: Subsystem Web App Composition From Component Web.
   `textus-blog` validates the deemed-subsystem article composition path.
-- [ ] WN-13: Island Architecture Progressive Enhancement.
-- [ ] WN-14: SPA Hosting / API Gateway Boundary Design.
-- [ ] WN-15: Application Developer Documentation Completion.
+- [x] WN-13: Progressive Enhancement / Island Boundary Contract.
+- [x] WN-14: SPA Hosting / API Gateway Boundary Design.
+- [x] WN-15: Application Developer Documentation Completion.
 
 Detailed task breakdown and progress tracking are recorded in
 `phase-21-checklist.md`.
 
 ## 6. Completion Conditions
 
-Phase 21 can close only when:
+Phase 21 closure conditions:
 
-- Strategy and phase documents identify Phase 21 as the active Web Next Stage.
+- Strategy and phase documents identify Phase 21 Web Next Stage scope and
+  closed status.
 - CNCF generated/admin/runtime pages use a documented Bootstrap 5 primitive
   set for page shell, navigation, forms, tables, cards, alerts, empty states,
   job panels, and debug panels.

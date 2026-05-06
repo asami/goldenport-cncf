@@ -97,6 +97,52 @@ confirmation, picker, refresh, or future Island Architecture behavior, but it
 must not be required for navigation, form submission, search, or result
 inspection.
 
+## Progressive Enhancement Boundary
+
+Static Form Web App keeps server-rendered HTML as the authoritative behavior.
+Application-local JavaScript may enhance a page when the same page remains
+usable through ordinary links, forms, and rendered results without JavaScript.
+This includes scripts such as `textus-blog`'s `blog.js`, which looks for
+application `data-*` hooks and improves tag suggestions, picker dialogs, and
+list/detail switching.
+
+This page-local enhancement is not the same as CNCF Island Architecture:
+
+- page-local JavaScript is owned by the app or component, loaded as an app
+  asset, and is not interpreted by CNCF core;
+- future Island Architecture would define explicit island names, props,
+  lifecycle, asset dependencies, duplicate-initialization rules, and fallback
+  policy for reusable JavaScript components;
+- SPA hosting gives navigation, state, and primary rendering control to a
+  client application and is a separate WN-14 deployment boundary.
+
+WN-13 does not add `data-textus-island`, a core island loader, a registry,
+WebDescriptor island schema, or island dependency resolution. Those remain
+deferred until a real reusable JavaScript component contract is needed. Until
+then, app-local progressive enhancement is the preferred extension point.
+
+## SPA And API Gateway Boundary
+
+WN-14 keeps SPA hosting and API gateway behavior outside the Static Form UI
+generation contract. Generated UI still targets server-rendered
+Bootstrap/Textus pages with no-JS links, forms, result pages, and optional
+page-local enhancement.
+
+When an application needs a full SPA, the SPA should be treated as a separate
+frontend or future explicit hosting mode that calls CNCF through REST and Form
+API. The generated UI contract does not add a client router, application-wide
+state store, SPA catch-all route, gateway runtime, or WebDescriptor SPA schema.
+
+The boundary is:
+
+- generated/list/detail/form/result pages stay Static Form by default;
+- REST API is the execution surface for domain operations;
+- Form API is the schema and validation preparation surface;
+- auth/session/UoW/authorization stay on CNCF runtime paths;
+- admin/system endpoints keep their existing protected surface;
+- future SPA assets must be scoped separately from Static Form and component
+  app assets.
+
 ## Boundaries
 
 WN-09 explicitly does not implement:
@@ -108,7 +154,9 @@ WN-09 explicitly does not implement:
   the `WEB-INF` layout/partial contract;
 - component-owned admin page discovery beyond the WN-12 article/screen
   composition contract;
-- Island Architecture or SPA/API gateway hosting, which are WN-13 and WN-14.
+- Island Architecture runtime or SPA/API gateway hosting. WN-13 defines only
+  the progressive-enhancement boundary, and WN-14 covers SPA/API gateway
+  deployment modes.
 
 The older wireframe DSL notes remain historical draft references for future
 generation work. Future generators must emit this Bootstrap/Textus contract

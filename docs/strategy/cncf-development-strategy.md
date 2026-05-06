@@ -601,7 +601,7 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Goal: advance the CNCF Web layer after the Phase 12 Static Form baseline by
   standardizing Bootstrap 5 UI primitives, expanding Textus widgets, and adding
   reusable dialog-style action surfaces.
-- Status: active; Phase 21 is opened with Static Form UI as the primary driver.
+- Status: closed.
 - Scope:
 - Use CNCF admin/runtime pages, Static Form App pages, and selected
   `textus-blog` pages as concrete drivers.
@@ -614,20 +614,21 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
   existing property/result/action metadata model.
 - Add reusable dialog-style action surfaces that reuse existing action metadata
   and provide no-JS fallbacks.
-- Completed so far:
+- Completed:
 - Phase 21 work documents are opened and the Static Form UI scope is selected.
 - Bootstrap primitive normalization, Textus widget expansion, dialog-style
   action surfaces, targeted CNCF admin/runtime driver pages, selected
   `textus-blog` driver pages, application-level Job UX baseline, the Web-facing
   full-text search planning/UI baseline, and the Static Form UI generation
-  composition contract are implemented as partial Phase 21 slices.
+  composition contract are implemented as partial Phase 21 slices. WN-14 also
+  defines SPA hosting and API gateway as explicit deployment boundaries without
+  adding a SPA runtime, and WN-15 completes the developer-facing Web
+  documentation path.
 - Remaining:
-- Phase 21 continues with broader Bootstrap polish, Island Architecture,
-  SPA/API gateway boundary design, and application developer documentation
-  completion.
+- None. Post-Phase 21 work should select the next development item explicitly.
 - Non-goals:
-- No SPA framework adoption before WN-14 defines the explicit hosting boundary.
-- No implicit API gateway or separate SPA hosting mode.
+- No SPA framework adoption as the default CNCF Web mode.
+- No API gateway runtime or implicit separate SPA hosting mode.
 - No visual design system separate from Bootstrap 5.
 - No broad UI generation, file generation, or standalone wireframe DSL outside
   the Static Form layout composition contract.
@@ -648,11 +649,9 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Notes contain execution details and results for each phase.
 
 ## Process Status Pointers
-- Current phase selection: Phase 21 — Web Next Stage / Static Form UI.
-- Latest active phase dashboard: `docs/phase/phase-21.md`
-- Latest active phase checklist: `docs/phase/phase-21-checklist.md`
-- Latest closed phase dashboard: `docs/phase/phase-20.md`
-- Latest closed phase checklist: `docs/phase/phase-20-checklist.md`
+- Current phase selection: none selected after Phase 21 closure.
+- Latest closed phase dashboard: `docs/phase/phase-21.md`
+- Latest closed phase checklist: `docs/phase/phase-21-checklist.md`
 - Candidate next phase areas after Phase 21: AwsComponent/S3 BlobStore
   provider; Error Model / Consequence-Conclusion Realignment; Search/index
   planning; DB migration tooling.
@@ -683,7 +682,7 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Phase 18: closed (`docs/phase/phase-18.md`)
 - Phase 19: closed (`docs/phase/phase-19.md`)
 - Phase 20: closed (`docs/phase/phase-20.md`)
-- Phase 21: active (`docs/phase/phase-21.md`)
+- Phase 21: closed (`docs/phase/phase-21.md`)
 
 ## 8. Development Item Status
 
@@ -691,7 +690,7 @@ This section lists active and future development areas. Once a work area is
 completed, it moves to the completed development item history below.
 
 ### 8.1 Web Next Stage / Static Form UI
-Active in Phase 21.
+Closed in Phase 21.
 
 - Phase 21 work documents:
   - dashboard: `docs/phase/phase-21.md`
@@ -712,7 +711,7 @@ Active in Phase 21.
     list/results, editor/fallback edit Bootstrap cards, selected tag filter
     parity, and modal-style image/import surfaces
   - WN-07 Phase 21 backlog / status synchronization is complete; WN-08 through
-    WN-15 are explicit Phase 21 backlog items and Phase 21 remains active
+    WN-15 are explicit Phase 21 backlog items
   - WN-08 Search UI / Query / Semantic Search Alignment is implemented through
     `WebSearchQueryPlanner`, admin entity search cards, View search metadata,
     and deterministic unsupported feedback for semantic/hybrid modes without a
@@ -725,14 +724,13 @@ Active in Phase 21.
 - In develop mode, Form/HTML operation result pages can show collapsed
   observability and debugging information, including execution result metadata
   and CallTree, at the end of the web page.
-- Phase 21 active/future backlog:
+- Phase 21 work items:
   - WN-11 Broader Bootstrap 5 Admin/App Polish (done)
   - WN-12 Subsystem Web App Composition From Component Web (done)
-  - WN-13 Island Architecture Progressive Enhancement (active)
-  - WN-14 SPA Hosting / API Gateway Boundary Design
-  - WN-15 Application Developer Documentation Completion
-- Phase 21 remains active. WN-01 through WN-12 are completed slices, not the
-  whole phase.
+  - WN-13 Progressive Enhancement / Island Boundary Contract (done)
+  - WN-14 SPA Hosting / API Gateway Boundary Design (done)
+  - WN-15 Application Developer Documentation Completion (done)
+- Phase 21 is closed.
 - WN-11 completed a CNCF renderer-owned admin/runtime polish pass for
   performance diagnostics, form operation pages, default form results, and Web
   Descriptor detail pages.
@@ -749,9 +747,25 @@ Active in Phase 21.
   login/logout/account-style pages can opt out with screen mode. The
   `textus-blog` driver validates the deemed-subsystem path for both static
   pages and form result templates.
-- Island Architecture, SPA hosting, and API gateway are Phase 21 backlog items
-  to define explicitly, not implicit extensions of the current Static Form
-  baseline.
+- WN-13 defines app-local JavaScript as valid Static Form progressive
+  enhancement when no-JS links/forms/results remain authoritative. It does not
+  add a `data-textus-island` attribute, core island loader, registry,
+  WebDescriptor island schema, or island asset dependency resolution.
+- WN-14 defines SPA hosting and API gateway as explicit deployment boundaries,
+  not implicit extensions of the current Static Form baseline. It does not add
+  a SPA framework, catch-all router, API gateway runtime, WebDescriptor SPA
+  schema, or alternate authorization path. CNCF can host a minimal same-origin
+  static SPA for internal/prototype use, but production-grade CNCF-hosted SPA
+  mode still requires app-scoped fallback routing, SPA asset lifecycle,
+  auth/session/CSRF policy, REST exposure policy, and a dedicated SPA-mode
+  developer guide.
+- WN-15 completes the developer-facing Web documentation path. The basic Web
+  application line is REST-first: CNCF exposes application-tier operations and
+  a Web-tier application may use any Web technology over those REST APIs.
+  Static Form Web UI is CNCF's lightweight built-in path for the management
+  console, development-time checking and debugging, prototypes, and simple
+  internal-use application screens, including component Web composition inside
+  subsystem shells.
 - Source references:
   - `docs/phase/phase-12.md`
   - `docs/phase/phase-12-checklist.md`

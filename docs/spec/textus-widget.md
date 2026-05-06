@@ -12,8 +12,11 @@ template programming language.
 ## Status
 
 This spec defines the widget contract and implemented widget vocabulary.
-Implemented widgets are normative compatibility requirements. Dialog-style
-action surfaces and broader layout widgets remain later expansion work.
+Implemented widgets are normative compatibility requirements. The Phase 21
+implemented vocabulary includes card/list/summary/action widgets, feedback
+widgets, navigation lists, and dialog-style confirmation actions. Future widgets
+may extend this vocabulary, but implemented widget output is part of the Static
+Form Bootstrap/Textus compatibility contract.
 
 ## Notation
 

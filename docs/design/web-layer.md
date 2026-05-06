@@ -9,6 +9,13 @@ does not introduce a separate application API layer between Web clients and
 CNCF Component / Service / Operation metadata. Operations remain the source of
 truth for execution, authorization, observability, and domain behavior.
 
+The primary application Web strategy is REST-first. CNCF provides the
+application tier through Component / Service / Operation execution, and a
+separate Web tier may use any suitable Web technology to build a production
+user interface over REST. Static Form Web UI is the lightweight built-in path
+for management, development-time checking and debugging, prototypes, and simple
+internal-use screens.
+
 ## Product And Runtime Naming
 
 CozyTextus is the product-facing name. CNCF remains the implementation name.
@@ -97,6 +104,50 @@ the source of truth.
 Island assets should be local and scoped. The first-class baseline remains
 Bootstrap 5 plus server-rendered HTML; a broad SPA framework or application-wide
 client router is outside the Static Form Web App baseline.
+
+## SPA Hosting And API Gateway Boundary
+
+SPA hosting and API gateway support are separate deployment concerns, not an
+implicit extension of every Static Form Web App. Static Form remains the default
+CNCF Web mode for generated/admin/runtime pages and for convention-first
+component Web apps.
+
+The supported conceptual Web modes are:
+
+- Static Form: server-rendered HTML, ordinary links/forms, no-JS fallback, and
+  operation/result pages rendered by CNCF.
+- Page-local JavaScript enhancement: app-owned scripts improve an existing
+  Static Form page through `data-*` hooks while preserving links/forms/results.
+- External SPA: a separately hosted frontend calls CNCF REST and Form API
+  endpoints. CNCF acts as the operation/API provider.
+- SPA hosted by CNCF: a future explicit deployment mode where CNCF may serve a
+  SPA bundle and static assets for a named app scope. This is not implemented by
+  WN-14.
+
+CNCF can already serve a minimal same-origin static SPA using ordinary Web page
+and app-local asset hosting. That shape is practical for internal tests,
+prototypes, and hash-routing clients that call `/rest/v1/...` directly. It is
+not yet a production SPA mode because app-scoped History API fallback,
+SPA-specific asset lifecycle, auth/session/CSRF policy, API exposure policy,
+and SPA developer guidance remain explicit follow-up work. See
+`docs/notes/cncf-hosted-spa-boundary-note.md`.
+
+The API boundary is operation-centric:
+
+- REST API executes domain operations and returns canonical execution envelopes.
+- Form API prepares schema, default values, validation metadata, and admission
+  checks for Web/form clients. It must not execute business logic.
+- Auth, session, UnitOfWork, and authorization stay on the existing CNCF
+  runtime paths. A SPA or gateway must not bypass operation authorization.
+- Admin and system APIs remain separate protected surfaces and keep the
+  existing Management Console authorization policy.
+- Static Form assets, component app assets, and any future SPA bundle assets are
+  distinct packaging concerns.
+
+Existing route families remain stable: `/web/...`, `/form/...`, `/form-api/...`,
+and `/rest/v1/...`. A SPA catch-all route must not be applied to `/web` as a
+whole. If SPA hosting is introduced later, it must be explicitly scoped to a
+configured app or deployment boundary.
 
 ## Web App Packaging
 

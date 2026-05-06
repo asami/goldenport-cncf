@@ -6,6 +6,12 @@ This note is a practical screen-construction guide for CNCF Static Form Web
 Apps and framework-generated admin pages that use the local Bootstrap 5
 baseline.
 
+The primary Web application strategy remains REST-first: CNCF's application
+tier exposes operations through REST, and the Web tier may choose any suitable
+Web technology. Static Form Web UI is CNCF's lightweight built-in UI path for
+the management console, development-time checking and debugging, prototypes,
+and simple internal-use application screens.
+
 The goal is not to create a new visual system. Static Form Web Apps should use
 ordinary Bootstrap 5 layout and components first, then add small application CSS
 only for domain-specific details that Bootstrap does not cover.
@@ -36,6 +42,62 @@ intranet deployments.
 Fragment templates are normally wrapped by the built-in Bootstrap page shell.
 Full document templates that opt out of that shell are responsible for
 including equivalent local assets.
+
+## JavaScript Enhancement Boundary
+
+Static Form Web Apps may use application-local JavaScript to improve the user
+experience, but JavaScript must enhance ordinary server-rendered HTML rather
+than replace it as the primary behavior.
+
+Use this pattern for app-local scripts:
+
+- keep the page usable through links, forms, and server-rendered results without
+  JavaScript;
+- attach behavior through app-owned `data-*` hooks and keep selectors scoped to
+  the relevant page region where practical;
+- load the script as a normal app/component asset through the descriptor or
+  layout/partial contract;
+- treat failures as a fallback to the no-JS behavior.
+
+Do not require CNCF to understand page-local JavaScript. A script such as
+`textus-blog`'s `blog.js` is still a Static Form App enhancement when it
+improves tag suggestions, image pickers, upload modals, or list/detail
+navigation while preserving server-rendered forms and links.
+
+Island Architecture is a later reusable JavaScript component contract. It would
+need explicit island names, props, lifecycle, asset dependencies, and duplicate
+initialization rules. CNCF does not currently provide a `data-textus-island`
+standard attribute, island loader, island registry, or WebDescriptor island
+schema. SPA hosting and API gateway boundaries are separate deployment concerns.
+
+## SPA / API Gateway Boundary
+
+Static Form Web App screens should not be designed as hidden SPA shells. The
+Bootstrap/Textus page must remain useful as server-rendered HTML, and any
+JavaScript should be local enhancement rather than the owner of navigation,
+state, authorization, or operation execution.
+
+Use an external SPA or future explicit SPA hosting mode only when the
+application really needs client-owned routing or rich client state. In that
+case CNCF remains the operation/API provider:
+
+- REST API executes domain operations.
+- Form API supplies schema, validation, and input preparation.
+- Web/session/UoW/authorization are not bypassed.
+- Admin/system routes remain protected management surfaces.
+- SPA bundles and assets are separately scoped and are not mixed into ordinary
+  Static Form asset completion.
+
+Do not add a global `/web` catch-all route for SPA fallback pages. A future
+CNCF-hosted SPA mode must be explicit for the selected app or deployment
+boundary.
+
+The current CNCF Web host is still enough for a minimal same-origin SPA when
+the app can live with one entry page and hash routing. That is useful for
+internal tests and prototypes, but production SPA mode still needs explicit
+fallback routing, asset lifecycle, auth/session/CSRF, API exposure, and
+developer guidance. The detailed boundary is recorded in
+`docs/notes/cncf-hosted-spa-boundary-note.md`.
 
 ## Page Structure
 

@@ -455,38 +455,44 @@ and account flows.
 
 ---
 
-## WN-13: Island Architecture Progressive Enhancement
+## WN-13: Progressive Enhancement / Island Boundary Contract
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
-Define and implement the progressive-enhancement layer for interactive page
-regions while preserving server-rendered Static Form behavior.
+Define the boundary between app-local progressive enhancement, future Island
+Architecture, and SPA hosting while preserving server-rendered Static Form
+behavior.
 
 ### Detailed Tasks
 
-- [ ] Define the Island Architecture contract for scoped interactive regions.
-- [ ] Define how islands receive data, actions, and assets from Static Form
-      pages.
-- [ ] Keep no-JS fallback behavior authoritative.
-- [ ] Add one concrete admin or application driver only after the contract is
-      stable.
+- [x] Define app-local JavaScript enhancement as a valid Static Form pattern
+      when links, forms, and server-rendered results remain authoritative.
+- [x] Define future Island Architecture as a reusable JavaScript component
+      contract with explicit names, props, lifecycle, assets, and fallback
+      policy.
+- [x] Keep no-JS fallback behavior authoritative.
+- [x] Defer `data-textus-island`, core island loader, island registry,
+      WebDescriptor island schema, and island asset dependency resolution.
 
 ### Expected Output
 
-- Interactive enhancements can be added incrementally without turning Static
-  Form pages into a SPA.
+- Application pages can use page-local JavaScript for user-experience polish
+  without turning Static Form pages into a SPA or adding CNCF core island
+  runtime concepts.
 
 ### Guardrails
 
 - Do not introduce a global client-side app shell.
+- Do not make Island Architecture a required concept for ordinary Static Form
+  Web Apps.
 
 ---
 
 ## WN-14: SPA Hosting / API Gateway Boundary Design
 
-Status: TODO
+Status: DONE
 
 ### Objective
 
@@ -495,11 +501,11 @@ the Static Form baseline.
 
 ### Detailed Tasks
 
-- [ ] Define when a separate SPA hosting mode is appropriate.
-- [ ] Define API gateway boundaries for Form API, REST API, auth/session, assets,
+- [x] Define when a separate SPA hosting mode is appropriate.
+- [x] Define API gateway boundaries for Form API, REST API, auth/session, assets,
       and admin operations.
-- [ ] Record compatibility with existing Static Form App routes.
-- [ ] Keep Static Form UI as the default CNCF Web mode.
+- [x] Record compatibility with existing Static Form App routes.
+- [x] Keep Static Form UI as the default CNCF Web mode.
 
 ### Expected Output
 
@@ -514,7 +520,7 @@ the Static Form baseline.
 
 ## WN-15: Application Developer Documentation Completion
 
-Status: TODO
+Status: DONE
 
 ### Objective
 
@@ -522,13 +528,13 @@ Complete developer-facing documentation for the Web Next Stage.
 
 ### Detailed Tasks
 
-- [ ] Update `docs/spec/textus-widget.md` for all implemented widgets and
+- [x] Update `docs/spec/textus-widget.md` for all implemented widgets and
       attributes.
-- [ ] Update `docs/notes/static-form-web-app-bootstrap-guide.md`.
-- [ ] Update Static Form App contract docs when routes/widgets/properties
+- [x] Update `docs/notes/static-form-web-app-bootstrap-guide.md`.
+- [x] Update Static Form App contract docs when routes/widgets/properties
       change.
-- [ ] Add an index or cross-reference path for component/application developers.
-- [ ] Record examples for Bootstrap markup, Textus widgets, job UX, debug
+- [x] Add an index or cross-reference path for component/application developers.
+- [x] Record examples for Bootstrap markup, Textus widgets, job UX, debug
       panels, and no-JS fallbacks.
 
 ### Expected Output
@@ -544,7 +550,6 @@ Complete developer-facing documentation for the Web Next Stage.
 
 ## Phase 21 Closure Gate
 
-Status: BLOCKED
+Status: CLOSED
 
-Phase 21 must not close until all WN items are DONE or explicitly moved out of
-Phase 21 by decision.
+All WN items are DONE. Phase 21 is closed.
