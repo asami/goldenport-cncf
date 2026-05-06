@@ -297,6 +297,8 @@ The following widgets are the baseline compatibility set:
 - `textus-action-form`
 - `textus:action-group`
 - `textus-action-group`
+- `textus:confirm-action`
+- `textus-confirm-action`
 - `textus:hidden-context`
 - `textus-hidden-context`
 - `textus:pagination`
@@ -312,8 +314,10 @@ paging conventions where applicable.
 `textus:action-link`, `textus-action-link`, `textus:action-form`, and
 `textus-action-form` are the single-action widgets. `textus:action-group` and
 `textus-action-group` render a set of operation/result actions with the same
-metadata model. Other widgets should compose with these rather than introduce a
-separate action model.
+metadata model. `textus:confirm-action` and `textus-confirm-action` wrap one
+resolved action in a Bootstrap confirmation modal while preserving the same
+server-rendered link/form fallback. Other widgets should compose with these
+rather than introduce a separate action model.
 
 Action rendering rules:
 
@@ -324,6 +328,8 @@ Action rendering rules:
 - form-rendered action widgets include standard hidden page context by default.
   Set `context="false"` to suppress hidden context.
 - missing or unauthorized `href` renders nothing.
+- confirmation actions render a Bootstrap modal trigger plus a `<noscript>`
+  fallback containing the same normal action.
 
 Example:
 
@@ -333,6 +339,10 @@ Example:
 </textus:record-card>
 <textus:action-form source="result.action.await"></textus:action-form>
 <textus:action-group actions="await,detail"></textus:action-group>
+<textus:confirm-action source="result.action.delete"
+                       title="Delete record"
+                       message="This cannot be undone."
+                       confirm-label="Delete"></textus:confirm-action>
 ```
 
 `textus:action-group` baseline attributes:
@@ -357,6 +367,26 @@ Action metadata normalization:
   fallback values.
 - application-provided actions with the same property keys override
   framework-generated defaults.
+
+`textus:confirm-action` baseline attributes:
+
+- `source`: action metadata source. Defaults to `result.action.primary`.
+- `title`: modal title. Defaults to `Confirm action`.
+- `message`: modal body text. Defaults to a message derived from the resolved
+  action label.
+- `label`: trigger label override and fallback confirm label when
+  `confirm-label` is omitted.
+- `class`: trigger and confirm button class. Defaults to
+  `btn btn-outline-danger`.
+- `confirm-label`: modal confirm action label. Defaults to the resolved action
+  label.
+- `cancel-label`: modal cancel label. Defaults to `Cancel`.
+- `variant`: Bootstrap contextual variant for modal emphasis. `error` maps to
+  `danger`; unknown values fall back to `secondary`.
+- `id`: optional modal id. If omitted, the renderer assigns a unique id per
+  rendered widget.
+- `context`: defaults to `true`. When enabled, non-GET confirm actions include
+  standard hidden page context.
 
 ## Job Widgets
 

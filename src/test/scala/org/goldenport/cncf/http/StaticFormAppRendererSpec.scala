@@ -6951,6 +6951,80 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should not include ("<textus-action-form")
     }
 
+    "render confirm-action widgets with Bootstrap modal and no-JS fallback" in {
+      val properties = StaticFormAppRenderer.FormResultProperties(
+        StaticFormAppRenderer.FormPageProperties(
+          "notice-board",
+          "notice",
+          "post-notice",
+          Map(
+            "crud.origin.href" -> "/web/notice-board/admin/entities/notice?page=2",
+            "paging.page" -> "2",
+            "paging.pageSize" -> "20",
+            "csrf" -> "token-1"
+          )
+        ),
+        201,
+        "application/json",
+        """{"actions":[{"name":"detail","label":"Open detail","href":"/web/notice-board/admin/entities/notice/notice_1","method":"GET"},{"name":"delete","label":"Delete","href":"/form/notice-board/notice/delete","method":"POST"}]}"""
+      )
+
+      val html = StaticFormAppRenderer.renderFormResult(
+        properties,
+        """<article>
+          |  <textus:confirm-action source="result.action.detail" title="Open notice" message="Open the notice detail?" label="Open" confirm-label="Open detail" cancel-label="Stay" variant="unknown" class="btn btn-outline-primary" id="open-confirm"></textus:confirm-action>
+          |  <textus-confirm-action source="result.action.delete" title="Delete notice" message="This cannot be undone." confirm-label="Delete now" variant="error"></textus-confirm-action>
+          |  <textus:confirm-action source="result.action.missing"></textus:confirm-action>
+          |</article>""".stripMargin
+      ).body
+
+      html should include ("""class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#open-confirm">Open</button>""")
+      html should include ("""class="modal fade" id="open-confirm"""")
+      html should include ("""class="modal-header border-secondary"""")
+      html should include ("""id="open-confirm-label">Open notice</h2>""")
+      html should include ("Open the notice detail?")
+      html should include ("""<a class="btn btn-outline-primary" href="/web/notice-board/admin/entities/notice/notice_1">Open detail</a>""")
+      html should include ("""<noscript><a class="btn btn-outline-primary" href="/web/notice-board/admin/entities/notice/notice_1">Open detail</a></noscript>""")
+      html should include ("""class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#textus-confirm-action-2">Delete</button>""")
+      html should include ("""class="modal fade" id="textus-confirm-action-2"""")
+      html should include ("""class="modal-header border-danger"""")
+      html should include ("""method="post" action="/form/notice-board/notice/delete" class="d-inline"><input type="hidden" name="crud.origin.href" value="/web/notice-board/admin/entities/notice?page=2">""")
+      html should include ("""<input type="hidden" name="paging.page" value="2">""")
+      html should include ("""<input type="hidden" name="csrf" value="token-1">""")
+      html should include ("""<button type="submit" class="btn btn-outline-danger">Delete now</button>""")
+      html should include ("""<noscript><form method="post" action="/form/notice-board/notice/delete" class="d-inline">""")
+      html should not include ("<textus:confirm-action")
+      html should not include ("<textus-confirm-action")
+      html should not include ("result.action.missing")
+    }
+
+    "render confirm-action widgets without hidden context when disabled" in {
+      val properties = StaticFormAppRenderer.FormResultProperties(
+        StaticFormAppRenderer.FormPageProperties(
+          "notice-board",
+          "notice",
+          "post-notice",
+          Map(
+            "paging.page" -> "2",
+            "csrf" -> "token-1"
+          )
+        ),
+        201,
+        "application/json",
+        """{"actions":[{"name":"delete","label":"Delete","href":"/form/notice-board/notice/delete","method":"POST"}]}"""
+      )
+
+      val html = StaticFormAppRenderer.renderFormResult(
+        properties,
+        """<article><textus:confirm-action source="result.action.delete" context="false"></textus:confirm-action></article>"""
+      ).body
+
+      html should include ("""method="post" action="/form/notice-board/notice/delete" class="d-inline"><button type="submit" class="btn btn-outline-danger">Delete</button></form>""")
+      html should not include ("""name="paging.page"""")
+      html should not include ("""name="csrf"""")
+      html should not include ("<textus:confirm-action")
+    }
+
     "render textus hidden context inputs from page context without operation values" in {
       val properties = StaticFormAppRenderer.FormResultProperties(
         StaticFormAppRenderer.FormPageProperties(

@@ -699,7 +699,9 @@ Active in Phase 21.
   - WN-03 Textus widget card/list/feedback surfaces are implemented for
     card-list layout, empty-state actions, source-driven nav lists, and
     conservative Bootstrap feedback/status variants
-  - WN-04 is the next active slice for stronger dialog-style reusable surfaces
+  - WN-04 reusable dialog-style action surfaces are implemented through
+    `textus:confirm-action` Bootstrap modal markup with no-JS link/form fallback
+  - WN-05 is the next active slice for CNCF admin/runtime driver pages
   - application-level job UX baseline is implemented for Form-launched
     asynchronous Command jobs through `/web/{app}/jobs` and
     `/web/{app}/jobs/{jobId}`

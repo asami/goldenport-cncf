@@ -8747,6 +8747,7 @@ object StaticFormAppRenderer {
     val summaryCard = """<textus(?::summary-card|-summary-card)\b([^>]*)></textus(?::summary-card|-summary-card)>""".r
     val actionCard = """<textus(?::action-card|-action-card)\b([^>]*)></textus(?::action-card|-action-card)>""".r
     val actionGroup = """<textus(?::action-group|-action-group)\b([^>]*)></textus(?::action-group|-action-group)>""".r
+    val confirmAction = """<textus(?::confirm-action|-confirm-action)\b([^>]*)></textus(?::confirm-action|-confirm-action)>""".r
     val jobPanel = """<textus(?::job-panel|-job-panel)\b([^>]*)></textus(?::job-panel|-job-panel)>""".r
     val jobTicket = """<textus(?::job-ticket|-job-ticket)\b([^>]*)></textus(?::job-ticket|-job-ticket)>""".r
     val jobActions = """<textus(?::job-actions|-job-actions)\b([^>]*)></textus(?::job-actions|-job-actions)>""".r
@@ -8794,7 +8795,13 @@ object StaticFormAppRenderer {
       val attrs = _widget_attrs(m.group(1))
       java.util.regex.Matcher.quoteReplacement(_render_action_group(attrs, properties))
     })
-    val e2 = jobPanel.replaceAllIn(e1a, m => {
+    var confirmActionIndex = 0
+    val e1b = confirmAction.replaceAllIn(e1a, m => {
+      confirmActionIndex = confirmActionIndex + 1
+      val attrs = _widget_attrs(m.group(1))
+      java.util.regex.Matcher.quoteReplacement(_render_confirm_action(attrs, properties, confirmActionIndex))
+    })
+    val e2 = jobPanel.replaceAllIn(e1b, m => {
       val attrs = _widget_attrs(m.group(1))
       java.util.regex.Matcher.quoteReplacement(_render_job_panel(attrs, properties))
     })
@@ -8937,6 +8944,37 @@ object StaticFormAppRenderer {
       val css = attrs.getOrElse("class", "d-flex flex-wrap gap-2 mt-3 textus-action-group")
       s"""<div class="${_escape(css)}">${buttons.mkString}</div>"""
     }
+  }
+
+  private def _render_confirm_action(
+    attrs: Map[String, String],
+    properties: FormPageProperties,
+    index: Int
+  ): String = {
+    val actionAttrs =
+      if (attrs.contains("class"))
+        attrs
+      else
+        attrs + ("class" -> "btn btn-outline-danger")
+    _resolve_action(actionAttrs, properties).map {
+      case ActionWidgetValue(href, label, css, method) =>
+        val modalId = attrs.get("id").filter(_.trim.nonEmpty)
+          .getOrElse(s"textus-confirm-action-${index}")
+        val title = _attr_value(attrs, "title", properties).getOrElse("Confirm action")
+        val message = _attr_value(attrs, "message", properties)
+          .getOrElse(s"Please confirm ${label}.")
+        val variant = _bootstrap_variant(attrs.getOrElse("variant", "danger"))
+        val confirmLabel = _attr_value(attrs, "confirm-label", properties).getOrElse(label)
+        val cancelLabel = _attr_value(attrs, "cancel-label", properties).getOrElse("Cancel")
+        val context =
+          if (_widget_bool(attrs, "context", default = true))
+            _render_hidden_context(Map.empty, properties)
+          else
+            ""
+        val confirm = _action_html(ActionWidgetValue(href, confirmLabel, css, method), context)
+        val fallback = confirm
+        s"""<span class="textus-confirm-action"><button type="button" class="${_escape(css)}" data-bs-toggle="modal" data-bs-target="#${_escape(modalId)}">${_escape(label)}</button></span><div class="modal fade" id="${_escape(modalId)}" tabindex="-1" aria-labelledby="${_escape(modalId)}-label" aria-hidden="true"><div class="modal-dialog"><div class="modal-content"><div class="modal-header border-${_escape(variant)}"><h2 class="modal-title h5" id="${_escape(modalId)}-label">${_escape(title)}</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="${_escape(cancelLabel)}"></button></div><div class="modal-body">${_escape(message)}</div><div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">${_escape(cancelLabel)}</button>${confirm}</div></div></div></div><noscript>${fallback}</noscript>"""
+    }.getOrElse("")
   }
 
   private def _action_group_names(

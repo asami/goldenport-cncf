@@ -136,7 +136,7 @@ Add or harden reusable Textus widgets for common Static Form UI surfaces.
 
 ## WN-04: Reusable Dialog-Style Action Surfaces
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
@@ -145,22 +145,30 @@ introducing a separate client-side action model.
 
 ### Detailed Tasks
 
-- [ ] Add a minimal confirmation action widget or renderer primitive.
-- [ ] Bind dialog actions to existing action metadata: source, href, method,
+- [x] Add a minimal confirmation action widget or renderer primitive.
+- [x] Bind dialog actions to existing action metadata: source, href, method,
       label, hidden context, and result page context.
-- [ ] Use Bootstrap modal markup when JavaScript is available.
-- [ ] Render a normal link/form fallback when JavaScript is unavailable.
+- [x] Use Bootstrap modal markup when JavaScript is available.
+- [x] Render a normal link/form fallback when JavaScript is unavailable.
 
 ### Expected Output
 
 - Applications and admin pages can add confirmation dialogs while preserving
   server-rendered behavior and existing authorization/operation dispatch.
 
+### Completion Notes
+
+- `textus:confirm-action` / `textus-confirm-action` renders a Bootstrap modal
+  confirmation surface over the existing action metadata model.
+- GET actions render anchors and non-GET actions render forms in both modal
+  confirm controls and no-JS fallback.
+- Applying the widget to concrete admin/runtime pages is left to WN-05.
+
 ---
 
 ## WN-05: CNCF Admin/Runtime Driver Pages
 
-Status: TODO
+Status: ACTIVE
 
 ### Objective
 

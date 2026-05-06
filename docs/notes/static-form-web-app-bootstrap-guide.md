@@ -268,6 +268,8 @@ expresses the required shape:
 - `textus:property-list` for detail/property display.
 - `textus:error-panel` for error projection.
 - `textus:action-group` for related actions.
+- `textus:confirm-action` for destructive or important actions that need a
+  Bootstrap modal with a no-JS fallback.
 - `textus:nav-list` for simple navigation.
 - `textus:card`, `textus:record-card`, and `textus:card-list` for repeated
   summaries and detail cards.
