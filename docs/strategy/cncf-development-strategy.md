@@ -618,19 +618,18 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Phase 21 work documents are opened and the Static Form UI scope is selected.
 - Bootstrap primitive normalization, Textus widget expansion, dialog-style
   action surfaces, targeted CNCF admin/runtime driver pages, selected
-  `textus-blog` driver pages, application-level Job UX baseline, and the
-  Web-facing full-text search planning/UI baseline are implemented as partial
-  Phase 21 slices.
+  `textus-blog` driver pages, application-level Job UX baseline, the Web-facing
+  full-text search planning/UI baseline, and the Static Form UI generation
+  composition contract are implemented as partial Phase 21 slices.
 - Remaining:
-- Phase 21 continues with Web/UI generation, reusable layout partials,
-  broader Bootstrap polish, component-owned admin integration, Island
-  Architecture, SPA/API gateway boundary design, and application developer
-  documentation completion.
+- Phase 21 continues with reusable layout partials, broader Bootstrap polish,
+  component-owned admin integration, Island Architecture, SPA/API gateway
+  boundary design, and application developer documentation completion.
 - Non-goals:
 - No SPA framework adoption before WN-14 defines the explicit hosting boundary.
 - No implicit API gateway or separate SPA hosting mode.
 - No visual design system separate from Bootstrap 5.
-- No broad UI generation or wireframe DSL implementation before WN-09 defines
+- No broad UI generation, file generation, or standalone wireframe DSL outside
   the Static Form layout composition contract.
 - No component-owned admin page discovery/integration before WN-12 defines the
   descriptor and admin shell contract.
@@ -719,6 +718,8 @@ Active in Phase 21.
     `WebSearchQueryPlanner`, admin entity search cards, View search metadata,
     and deterministic unsupported feedback for semantic/hybrid modes without a
     backend
+  - WN-09 Web/UI Generation and Static Form Layout Composition is completed as
+    a contract-only slice through `docs/design/static-form-ui-generation-contract.md`
   - application-level job UX baseline is implemented for Form-launched
     asynchronous Command jobs through `/web/{app}/jobs` and
     `/web/{app}/jobs/{jobId}`
@@ -726,21 +727,20 @@ Active in Phase 21.
   observability and debugging information, including execution result metadata
   and CallTree, at the end of the web page.
 - Phase 21 active/future backlog:
-  - WN-09 Web/UI Generation and Static Form Layout Composition (active)
-  - WN-10 Reusable Header/Footer/Nav/Sidebar/Layout Partials
-  - WN-11 Broader Bootstrap 5 Admin/App Polish
+  - WN-11 Broader Bootstrap 5 Admin/App Polish (active)
   - WN-12 Component-Owned Web Admin Page Integration
   - WN-13 Island Architecture Progressive Enhancement
   - WN-14 SPA Hosting / API Gateway Boundary Design
   - WN-15 Application Developer Documentation Completion
-- Phase 21 remains active. WN-01 through WN-08 are completed slices, not the
+- Phase 21 remains active. WN-01 through WN-10 are completed slices, not the
   whole phase.
 - Search work now has a full-text planning and no-JS Bootstrap UI baseline.
   Semantic/hybrid mode is exposed as a capability surface, but embedding/vector
   backend integration remains deferred.
-- Web/UI generation work includes wireframe/UI generation strategy above Static
-  Form primitives, responsibility split between generated UI and hand-written
-  static pages, and reusable header/footer/navigation/sidebar/layout/widget
+- Web/UI generation work defines the composition contract above Static Form
+  primitives and the split between generated fallback/scaffold UI and
+  hand-written static pages. WN-10 adds the `WEB-INF` layout/partial runtime
+  contract for reusable header, footer, navigation, sidebar, and page shell
   composition.
 - Web admin integration work allows component CARs to provide component-owned
   admin pages while CNCF keeps admin authorization, navigation composition, and

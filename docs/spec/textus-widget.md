@@ -200,6 +200,52 @@ that layout.
 If a full HTML document contains no Textus widget, asset completion must leave
 the document unchanged.
 
+## WEB-INF Layout And Partial Composition
+
+Static Form Apps may define private reusable HTML parts under `WEB-INF`.
+
+Canonical locations:
+
+- `WEB-INF/layouts/default.html`
+- `WEB-INF/partials/header.html`
+- `WEB-INF/partials/navigation.html`
+- `WEB-INF/partials/sidebar.html`
+- `WEB-INF/partials/footer.html`
+- `WEB-INF/partials/{page}/{name}.html` for page-local partial overrides
+- `WEB-INF/widgets/*.html` is reserved for reusable snippet conventions
+
+`WEB-INF` files are private template resources and must not be served as static
+Web pages or assets.
+
+Fragment templates are wrapped by `WEB-INF/layouts/default.html` when that
+layout exists. Explicit `layout` settings on app, page, or form descriptor
+entries select a named `WEB-INF/layouts/{name}.html`; `layout: none` disables
+wrapping. Full HTML document templates are not wrapped unless layout is
+explicitly selected.
+
+Layouts use `${content}` as the content slot. Layouts and templates may use
+`${partial.name}` to include `WEB-INF/partials/{name}.html`; page-local
+partials override app/global partials. Hand-written templates may use
+`textus:include` or `textus-include` with `name="header"` style attributes to
+include the same partials.
+
+Partial expansion happens before ordinary property expansion and Textus widget
+rendering. v1 supports HTML layout/partial files only; Jade/Pug compatibility
+is not part of this contract.
+
+## Generation Target Surface
+
+Textus widgets are the target surface for generated Static Form UI, not a
+general template programming language. A generator may emit Bootstrap 5 markup
+and supported Textus widgets for list, detail, form, result, dashboard,
+job-result, and error pages, but the final output remains ordinary
+server-rendered HTML.
+
+Hand-written static templates remain first-class and override generated
+fallback/scaffold pages by normal Static Form template lookup. Generated UI
+must not depend on loops, conditionals, arbitrary script execution, or a visual
+DSL that bypasses Bootstrap/Textus output.
+
 ## Data Binding
 
 Widgets use the same property and result binding model as existing Static Form

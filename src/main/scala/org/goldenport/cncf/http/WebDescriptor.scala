@@ -13,7 +13,7 @@ import org.goldenport.record.Record
 /*
  * @since   Apr. 14, 2026
  *  version Apr. 25, 2026
- * @version May.  1, 2026
+ * @version May.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class WebDescriptor(
@@ -102,6 +102,12 @@ final case class WebDescriptor(
         app.normalizedName == org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(name)
     ).map(_.effectiveKind)
 
+  def appLayout(name: String): Option[String] =
+    apps.find(app =>
+      app.matches(name, Vector.empty) ||
+        app.normalizedName == org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(name)
+    ).flatMap(_.layoutName)
+
   def themeFor(appName: Option[String] = None): WebDescriptor.Theme =
     appName
       .flatMap(name => apps.find(app =>
@@ -123,6 +129,21 @@ final case class WebDescriptor(
         a <- app.toVector
       } yield s"${c}.${a}") ++ app.toVector
     candidates.collectFirst(Function.unlift(pages.get))
+  }
+
+  def staticPageCustomization(
+    appName: String,
+    page: Vector[String]
+  ): Option[WebDescriptor.PageCustomization] = {
+    val app = WebDescriptor.normalizeSelector(appName)
+    val pageName =
+      if (page.isEmpty) "index"
+      else page.map(_.stripSuffix(".html")).map(WebDescriptor.normalizeSelector).mkString(".")
+    Vector(
+      s"${app}.${pageName}",
+      pageName,
+      app
+    ).collectFirst(Function.unlift(pages.get))
   }
 
   def formAssets(
@@ -297,6 +318,7 @@ object WebDescriptor {
     failureRedirect: Option[String] = None,
     stayOnError: Boolean = false,
     resultTemplate: Option[String] = None,
+    layout: Option[String] = None,
     assets: Assets = Assets(),
     controls: Map[String, FormControl] = Map.empty
   )
@@ -320,6 +342,7 @@ object WebDescriptor {
     title: Option[String] = None,
     heading: Option[String] = None,
     subtitle: Option[String] = None,
+    layout: Option[String] = None,
     submitLabel: Option[String] = None,
     fields: Vector[String] = Vector.empty,
     controls: Map[String, FormControl] = Map.empty
@@ -368,7 +391,8 @@ object WebDescriptor {
     root: Option[String] = None,
     route: Option[String] = None,
     assets: Assets = Assets(),
-    theme: Theme = Theme()
+    theme: Theme = Theme(),
+    layout: Option[String] = None
   ) {
     def normalizedName: String =
       _normalize_app_segment(name)
@@ -381,6 +405,9 @@ object WebDescriptor {
 
     def effectiveRoute: String =
       route.map(_.trim).filter(_.nonEmpty).getOrElse(s"/web/{component}/${normalizedName}")
+
+    def layoutName: Option[String] =
+      layout.map(_.trim).filter(_.nonEmpty)
 
     def effectivePath: String =
       Option(path).map(_.trim).filter(_.nonEmpty).getOrElse(effectiveRoot)
@@ -659,6 +686,7 @@ object WebDescriptor {
               failureRedirect = _string(r, "failureRedirect").orElse(_string(r, "failure-redirect")),
               stayOnError = _boolean(r, "stayOnError").orElse(_boolean(r, "stay-on-error")).getOrElse(false),
               resultTemplate = _string(r, "resultTemplate").orElse(_string(r, "result-template")),
+              layout = _string(r, "layout"),
               assets = _assets(r),
               controls = _form_controls(r)
             )
@@ -702,6 +730,7 @@ object WebDescriptor {
       title = _string(record, "title"),
       heading = _string(record, "heading"),
       subtitle = _string(record, "subtitle").orElse(_string(record, "description")),
+      layout = _string(record, "layout"),
       submitLabel = _string(record, "submitLabel").orElse(_string(record, "submit-label")),
       fields = _string_vector(record, "fields"),
       controls = _form_controls(record)
@@ -726,7 +755,8 @@ object WebDescriptor {
         root = root,
         route = record.getString("route").map(_.trim).filter(_.nonEmpty),
         theme = _theme(record),
-        assets = _assets(record)
+        assets = _assets(record),
+        layout = _string(record, "layout")
       )
     }
 

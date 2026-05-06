@@ -1,8 +1,16 @@
-CNCF Wireframe DSL Specification (Draft v0)
+CNCF Wireframe DSL Specification (Historical Draft v0)
 ===========================================
 
-status=draft
+status=historical-draft
 category=web / wireframe / dsl
+
+Phase 21 note:
+--------------
+
+This note is a historical draft and future reference. WN-09 does not implement
+this standalone Wireframe DSL. The canonical Phase 21 generation contract is
+`docs/design/static-form-ui-generation-contract.md`, and generated UI must emit
+ordinary Bootstrap/Textus Static Form markup.
 
 Overview
 --------

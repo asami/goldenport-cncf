@@ -2225,6 +2225,39 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       server._form_result_static_template("notice-board", "notice", "post-notice", 200) shouldBe Some("SERVICE OPERATION")
     }
 
+    "compose Static Form Web App result templates with WEB-INF layouts" in {
+      val root = Files.createTempDirectory("cncf-web-result-layout-root-")
+      Files.writeString(
+        root.resolve("web-descriptor.yaml"),
+        """web:
+          |  apps:
+          |    - name: notice-board
+          |      layout: default
+          |""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+      Files.createDirectories(root.resolve("WEB-INF").resolve("layouts"))
+      Files.createDirectories(root.resolve("WEB-INF").resolve("partials"))
+      Files.writeString(
+        root.resolve("WEB-INF").resolve("layouts").resolve("default.html"),
+        """<!doctype html><html><body>${partial.header}<main>${content}</main></body></html>""",
+        StandardCharsets.UTF_8
+      )
+      Files.writeString(root.resolve("WEB-INF").resolve("partials").resolve("header.html"), "<header>Result Header</header>", StandardCharsets.UTF_8)
+      Files.writeString(root.resolve("post-notice__200.html"), "<section>${operation}</section>", StandardCharsets.UTF_8)
+      val subsystem = _management_console_fixture_subsystem(
+        Configuration(Map(
+          RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web-descriptor.yaml").toString)
+        ))
+      )
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+
+      val template = server._form_result_static_template("notice-board", "notice", "post-notice", 200).getOrElse(fail("template is missing"))
+
+      template should include ("Result Header")
+      template should include ("<main><section>${operation}</section></main>")
+    }
+
     "serve app-local assets from the canonical component Web app route" in {
       val root = Files.createTempDirectory("cncf-web-asset-root-")
       Files.writeString(root.resolve("web-descriptor.yaml"), "web:\n  apps:\n    - name: notice-board\n", StandardCharsets.UTF_8)
@@ -2292,6 +2325,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       Files.createDirectories(root.resolve("notice-board"))
       Files.writeString(root.resolve("index.html"), "<h1>Flat Notice Board</h1>", StandardCharsets.UTF_8)
       Files.writeString(root.resolve("publicblogs.html"), "<h1>Flat Public Blogs</h1>", StandardCharsets.UTF_8)
+      Files.writeString(root.resolve("status.html"), "<h1>${app}</h1>", StandardCharsets.UTF_8)
       Files.writeString(root.resolve("assets").resolve("app.css"), ".flat-notice-board { color: #14532d; }\n", StandardCharsets.UTF_8)
       Files.writeString(root.resolve("notice-board").resolve("index.html"), "<h1>Fallback Notice Board</h1>", StandardCharsets.UTF_8)
       val subsystem = _management_console_fixture_subsystem(
@@ -2304,6 +2338,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       val index = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/board"))).unsafeRunSync()
       val page = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/board/publicblogs"))).unsafeRunSync()
       val pageHtml = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/board/publicblogs.html"))).unsafeRunSync()
+      val status = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/board/status"))).unsafeRunSync()
       val asset = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/board/assets/app.css"))).unsafeRunSync()
 
       index.status.code shouldBe 200
@@ -2312,8 +2347,140 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       page.as[String].unsafeRunSync() should include ("Flat Public Blogs")
       pageHtml.status.code shouldBe 200
       pageHtml.as[String].unsafeRunSync() should include ("Flat Public Blogs")
+      status.status.code shouldBe 200
+      status.as[String].unsafeRunSync() should include ("<h1>notice-board</h1>")
       asset.status.code shouldBe 200
       asset.as[String].unsafeRunSync() should include ("flat-notice-board")
+    }
+
+    "compose Static Form Web App pages with WEB-INF layouts and partials" in {
+      val root = Files.createTempDirectory("cncf-web-layout-root-")
+      Files.writeString(
+        root.resolve("web-descriptor.yaml"),
+        """web:
+          |  apps:
+          |    - name: notice-board
+          |  routes:
+          |    - path: /web/board
+          |      kind: alias
+          |      target:
+          |        component: notice-board
+          |        app: notice-board
+          |""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+      Files.createDirectories(root.resolve("WEB-INF").resolve("layouts"))
+      Files.createDirectories(root.resolve("WEB-INF").resolve("partials").resolve("publicblogs"))
+      Files.writeString(
+        root.resolve("WEB-INF").resolve("layouts").resolve("default.html"),
+        """<!doctype html>
+          |<html><head><title>${app}</title></head><body>
+          |${partial.header}
+          |<main class="container">${content}</main>
+          |${partial.footer}
+          |</body></html>""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+      Files.writeString(root.resolve("WEB-INF").resolve("layouts").resolve("lower-private.html"), "<h1>lowercase private</h1>", StandardCharsets.UTF_8)
+      Files.writeString(root.resolve("WEB-INF").resolve("partials").resolve("header.html"), "<header>Global Header</header>", StandardCharsets.UTF_8)
+      Files.writeString(root.resolve("WEB-INF").resolve("partials").resolve("publicblogs").resolve("header.html"), "<header>Public Blogs Header</header>", StandardCharsets.UTF_8)
+      Files.writeString(root.resolve("WEB-INF").resolve("partials").resolve("navigation.html"), "<nav>Shared Navigation</nav>", StandardCharsets.UTF_8)
+      Files.writeString(root.resolve("WEB-INF").resolve("partials").resolve("footer.html"), "<footer>Shared Footer</footer>", StandardCharsets.UTF_8)
+      Files.writeString(
+        root.resolve("publicblogs.html"),
+        """<section>
+          |  <textus-include name="navigation"></textus-include>
+          |  <h1>${app}</h1>
+          |</section>""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+      val subsystem = _management_console_fixture_subsystem(
+        Configuration(Map(
+          RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web-descriptor.yaml").toString)
+        ))
+      )
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+
+      val response = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/board/publicblogs"))).unsafeRunSync()
+      val html = response.as[String].unsafeRunSync()
+      val webInf = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/board/WEB-INF/layouts/default.html"))).unsafeRunSync()
+      val lowerWebInf = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/board/web-inf/layouts/lower-private.html"))).unsafeRunSync()
+
+      withClue(html) {
+        response.status.code shouldBe 200
+      }
+      html should include ("Public Blogs Header")
+      html should not include ("Global Header")
+      html should include ("Shared Navigation")
+      html should include ("Shared Footer")
+      html should include ("<main class=\"container\">")
+      html should include ("<h1>notice-board</h1>")
+      html should not include ("<textus-include")
+      html should not include ("${content}")
+      webInf.status.code shouldBe 404
+      lowerWebInf.status.code shouldBe 404
+    }
+
+    "fail deterministically when an explicit Static Form layout is missing" in {
+      val root = Files.createTempDirectory("cncf-web-missing-layout-root-")
+      Files.writeString(
+        root.resolve("web-descriptor.yaml"),
+        """web:
+          |  apps:
+          |    - name: notice-board
+          |  pages:
+          |    publicblogs:
+          |      layout: missing
+          |  routes:
+          |    - path: /web/board
+          |      kind: alias
+          |      target:
+          |        component: notice-board
+          |        app: notice-board
+          |""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+      Files.writeString(root.resolve("publicblogs.html"), "<h1>Public Blogs</h1>", StandardCharsets.UTF_8)
+      val subsystem = _management_console_fixture_subsystem(
+        Configuration(Map(
+          RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web-descriptor.yaml").toString)
+        ))
+      )
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+
+      val response = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/board/publicblogs"))).unsafeRunSync()
+      val html = response.as[String].unsafeRunSync()
+
+      response.status.code shouldBe 500
+      html should include ("Static Form layout not found: missing")
+    }
+
+    "fail form result layout composition as a Consequence failure" in {
+      val root = Files.createTempDirectory("cncf-web-form-missing-layout-root-")
+      Files.writeString(
+        root.resolve("web-descriptor.yaml"),
+        """web:
+          |  apps:
+          |    - name: notice-board
+          |  form:
+          |    notice-board.notice.post-notice:
+          |      layout: missing
+          |""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+      Files.writeString(root.resolve("post-notice__200.html"), "<section>Result</section>", StandardCharsets.UTF_8)
+      val subsystem = _management_console_fixture_subsystem(
+        Configuration(Map(
+          RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web-descriptor.yaml").toString)
+        ))
+      )
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+
+      server._prepared_form_result_template("notice-board", "notice", "post-notice", 200) match {
+        case Consequence.Success(_) => fail("missing explicit layout should fail")
+        case Consequence.Failure(conclusion) =>
+          conclusion.toString should include ("Static Form layout not found: missing")
+      }
     }
 
     "prefer app-named pages when multiple static-form apps are declared" in {

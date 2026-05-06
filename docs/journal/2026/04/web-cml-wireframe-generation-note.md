@@ -1,8 +1,16 @@
-CNCF CML → Wireframe Generation Specification (Draft)
+CNCF CML → Wireframe Generation Specification (Historical Draft)
 =====================================================
 
-status=draft
+status=historical-draft
 category=web / wireframe / generation
+
+Phase 21 note:
+--------------
+
+This note is a historical draft and future reference. WN-09 does not implement
+CML-to-wireframe file generation. The canonical Phase 21 generation contract is
+`docs/design/static-form-ui-generation-contract.md`, and future generators must
+emit ordinary Bootstrap/Textus Static Form markup.
 
 Overview
 --------

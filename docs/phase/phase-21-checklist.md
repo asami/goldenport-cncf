@@ -308,7 +308,7 @@ Design and implement the Web-facing search layer for Static Form UI.
 
 ## WN-09: Web/UI Generation and Static Form Layout Composition
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
@@ -317,18 +317,23 @@ server-rendered baseline.
 
 ### Detailed Tasks
 
-- [ ] Define wireframe/UI generation strategy above Bootstrap/Textus primitives.
-- [ ] Clarify responsibility split between generated UI and hand-written static
+- [x] Define wireframe/UI generation strategy above Bootstrap/Textus primitives.
+- [x] Clarify responsibility split between generated UI and hand-written static
       pages.
-- [ ] Define page layout composition rules for generated list, detail, form,
+- [x] Define page layout composition rules for generated list, detail, form,
       result, and dashboard pages.
-- [ ] Keep generated UI output as ordinary Bootstrap/Textus server-rendered
+- [x] Keep generated UI output as ordinary Bootstrap/Textus server-rendered
       markup.
 
 ### Expected Output
 
 - Component/application developers can choose generated UI or hand-written
   static pages without changing runtime contracts.
+- `docs/design/static-form-ui-generation-contract.md` defines the WN-09 page
+  kinds, metadata inputs, Bootstrap/Textus output vocabulary, and hand-written
+  template override rule.
+- Older wireframe DSL notes remain historical/future references, not the Phase
+  21 implementation target.
 
 ### Guardrails
 
@@ -338,7 +343,7 @@ server-rendered baseline.
 
 ## WN-10: Reusable Header/Footer/Nav/Sidebar/Layout Partials
 
-Status: TODO
+Status: DONE
 
 ### Objective
 
@@ -346,16 +351,30 @@ Provide reusable page composition primitives for common Static Form App shells.
 
 ### Detailed Tasks
 
-- [ ] Define reusable header, footer, navigation, sidebar, and layout partials.
-- [ ] Support component-owned and application-owned page shells.
-- [ ] Preserve local asset completion and no-CDN deployment.
-- [ ] Keep partials usable from both generated pages and hand-written static
+- [x] Define reusable header, footer, navigation, sidebar, and layout partials.
+- [x] Support component-owned and application-owned page shells.
+- [x] Preserve local asset completion and no-CDN deployment.
+- [x] Keep partials usable from both generated pages and hand-written static
       pages.
 
 ### Expected Output
 
 - Static Form Apps can share consistent shell/navigation structure without
   copy-pasting full HTML layouts.
+
+### Completion Notes
+
+- Static Form Apps can place private reusable parts under `WEB-INF`.
+- `WEB-INF/layouts/default.html` is used as the implicit fragment shell when
+  present; explicit `apps[].layout`, `pages.*.layout`, and `form.*.layout`
+  select named layouts, and `layout: none` disables wrapping.
+- Layouts use `${content}` as the content slot and `${partial.name}` for
+  reusable header, navigation, sidebar, footer, or other partials.
+- Hand-written templates can include partials with `textus:include` /
+  `textus-include`.
+- `WEB-INF` is private and is not served as a static Web path.
+- v1 supports HTML layout/partial files only; Jade/Pug compatibility remains
+  out of scope.
 
 ### Guardrails
 
@@ -365,7 +384,7 @@ Provide reusable page composition primitives for common Static Form App shells.
 
 ## WN-11: Broader Bootstrap 5 Admin/App Polish
 
-Status: TODO
+Status: ACTIVE
 
 ### Objective
 

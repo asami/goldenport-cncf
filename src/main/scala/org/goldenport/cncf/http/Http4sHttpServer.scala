@@ -58,6 +58,10 @@ final class Http4sHttpServer(
   private val _operation_dispatcher =
     operationDispatcherOption.getOrElse(WebOperationDispatcher.create(engine))
   private val _mcp = new McpJsonRpcAdapter(engine.runtimeSubsystem)
+  private final case class WebTemplateComposition(
+    html: String,
+    appliedLayout: Boolean
+  )
 
   def start(args: Array[String] = Array.empty): Unit = {
     val _ = args
@@ -1025,7 +1029,17 @@ final class Http4sHttpServer(
     else
       _web_app_static_html_content(webAppName, page) match {
         case Some(content) =>
-          _html_content(content, Some(webAppName), Some(componentName))
+          _web_app_static_page(webAppName, page, content) match {
+            case Consequence.Success(page) =>
+              _html_content(page.body, Some(webAppName), Some(componentName))
+            case Consequence.Failure(conclusion) =>
+              _web_error_response(
+                Some(webAppName),
+                HStatus.InternalServerError,
+                conclusion,
+                s"/web/${componentName}/${webAppName}${page.map(p => s"/${p}").mkString}"
+              )
+          }
         case None =>
           _web_error_response(
             Some(webAppName),
@@ -1527,19 +1541,23 @@ final class Http4sHttpServer(
             _continuation_values(continuation)
         val pageValues = _form_result_page_values(continuation.form)
         val values = continuationValues ++ pageValues ++ pagingValues.map { case (k, v) => s"paging.${k}" -> v }
-        val page = StaticFormAppRenderer.renderFormResult(
-          _form_result_properties(app, service, operation, res, values),
-          _form_result_static_template(app, service, operation, res.code, values)
-            .orElse(_form_descriptor(app, service, operation).flatMap(_.resultTemplate))
-        )
-        _html(page, Some(app)).map { html =>
-          RuntimeDashboardMetrics.recordHtmlRequest(
-            req.method.name,
-            req.uri.path.renderString,
-            res.code,
-            (System.nanoTime() - started) / 1000000L
-          )
-          html
+        _prepared_form_result_template(app, service, operation, res.code, values) match {
+          case Consequence.Success(template) =>
+            val page = StaticFormAppRenderer.renderFormResult(
+              _form_result_properties(app, service, operation, res, values),
+              template
+            )
+            _html(page, Some(app)).map { html =>
+              RuntimeDashboardMetrics.recordHtmlRequest(
+                req.method.name,
+                req.uri.path.renderString,
+                res.code,
+                (System.nanoTime() - started) / 1000000L
+              )
+              html
+            }
+          case Consequence.Failure(conclusion) =>
+            _web_error_response(Some(app), HStatus.InternalServerError, conclusion, req.uri.path.renderString, req.method.name)
         }
       case _ =>
         IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Form continuation not found"))
@@ -1975,19 +1993,23 @@ final class Http4sHttpServer(
     )
     _annotate_application_job(result, app, service, operation)
     val res = result.response
-    val page = StaticFormAppRenderer.renderFormResult(
-      _form_result_properties(app, service, operation, result, values),
-      _form_result_static_template(app, service, operation, res.code, values)
-        .orElse(_form_descriptor(app, service, operation).flatMap(_.resultTemplate))
-    )
-    _html(page, Some(app)).map { html =>
-      RuntimeDashboardMetrics.recordHtmlRequest(
-        req.method.name,
-        req.uri.path.renderString,
-        res.code,
-        (System.nanoTime() - started) / 1000000L
-      )
-      html
+    _prepared_form_result_template(app, service, operation, res.code, values) match {
+      case Consequence.Success(template) =>
+        val page = StaticFormAppRenderer.renderFormResult(
+          _form_result_properties(app, service, operation, result, values),
+          template
+        )
+        _html(page, Some(app)).map { html =>
+          RuntimeDashboardMetrics.recordHtmlRequest(
+            req.method.name,
+            req.uri.path.renderString,
+            res.code,
+            (System.nanoTime() - started) / 1000000L
+          )
+          html
+        }
+      case Consequence.Failure(conclusion) =>
+        _web_error_response(Some(app), HStatus.InternalServerError, conclusion, req.uri.path.renderString, req.method.name)
     }
   }
 
@@ -2008,12 +2030,11 @@ final class Http4sHttpServer(
         "result.job.id" -> jobId,
         "result.job.href" -> s"/form/${app}/${service}/${operation}/jobs/${jobId}/await"
       )
-      for {
-        form <- _to_plain_form_record(req)
-        dispatchForm = Record.create(
+      _to_plain_form_record(req).flatMap { form =>
+        val dispatchForm = Record.create(
           (_operation_dispatch_form(form).asMap + ("id" -> jobId)).toVector
         )
-        result = _dispatch_operation_result(
+        val result = _dispatch_operation_result(
           "job_control",
           "job",
           "await_job_result",
@@ -2025,21 +2046,25 @@ final class Http4sHttpServer(
             form = dispatchForm
           )
         )
-        res = result.response
-        page = StaticFormAppRenderer.renderFormResult(
-          _form_result_properties(app, service, operation, result, values),
-          _form_result_static_template(app, service, operation, res.code, values)
-            .orElse(_form_descriptor(app, service, operation).flatMap(_.resultTemplate))
-        )
-        html <- _html(page, Some(app))
-      } yield {
-        RuntimeDashboardMetrics.recordHtmlRequest(
-          req.method.name,
-          req.uri.path.renderString,
-          res.code,
-          (System.nanoTime() - started) / 1000000L
-        )
-        html
+        val res = result.response
+        _prepared_form_result_template(app, service, operation, res.code, values) match {
+          case Consequence.Success(template) =>
+            val page = StaticFormAppRenderer.renderFormResult(
+              _form_result_properties(app, service, operation, result, values),
+              template
+            )
+            _html(page, Some(app)).map { html =>
+              RuntimeDashboardMetrics.recordHtmlRequest(
+                req.method.name,
+                req.uri.path.renderString,
+                res.code,
+                (System.nanoTime() - started) / 1000000L
+              )
+              html
+            }
+          case Consequence.Failure(conclusion) =>
+            _web_error_response(Some(app), HStatus.InternalServerError, conclusion, req.uri.path.renderString, req.method.name)
+        }
       }
     }
 
@@ -2214,10 +2239,15 @@ final class Http4sHttpServer(
             _operation_form_values(form) ++ _error_values(response)
           ).getOrElse(StaticFormAppRenderer.renderFormResult(properties)), Some(app))
         else
-          _html(StaticFormAppRenderer.renderFormResult(
-            properties,
-            _form_result_static_template(app, service, operation, response.code, properties.page.values).orElse(descriptor.flatMap(_.resultTemplate))
-          ), Some(app))
+          _prepared_form_result_template(app, service, operation, response.code, properties.page.values) match {
+            case Consequence.Success(template) =>
+              _html(StaticFormAppRenderer.renderFormResult(
+                properties,
+                template
+              ), Some(app))
+            case Consequence.Failure(conclusion) =>
+              _web_error_response(Some(app), HStatus.InternalServerError, conclusion, s"/form/${app}/${service}/${operation}")
+          }
     }
   }
 
@@ -2228,11 +2258,58 @@ final class Http4sHttpServer(
     status: Int,
     values: Map[String, String] = Map.empty
   ): Option[String] =
-    _web_resource_roots().view.flatMap { root =>
-      _form_result_template_candidates(app, service, operation, status, values).flatMap { candidate =>
-        root.readText(candidate)
-      }
-    }.headOption
+    _form_result_static_templateC(app, service, operation, status, values).toOption.flatten
+
+  private def _form_result_static_templateC(
+    app: String,
+    service: String,
+    operation: String,
+    status: Int,
+    values: Map[String, String] = Map.empty
+  ): Consequence[Option[String]] = {
+    val candidates = for {
+      root <- _web_resource_roots()
+      candidate <- _form_result_template_candidates(app, service, operation, status, values)
+      content <- root.readText(candidate).toVector
+    } yield content
+    candidates.headOption match {
+      case Some(content) =>
+        _compose_web_template(
+          app,
+          _form_result_template_page(service, operation, values),
+          content,
+          _form_layout(app, service, operation),
+          allowImplicitDefault = true
+        ).map(x => Some(x.html))
+      case None =>
+        Consequence.success(None)
+    }
+  }
+
+  private[http] def _prepared_form_result_template(
+    app: String,
+    service: String,
+    operation: String,
+    status: Int,
+    values: Map[String, String] = Map.empty
+  ): Consequence[Option[String]] =
+    _form_result_static_templateC(app, service, operation, status, values).flatMap {
+      case Some(template) =>
+        Consequence.success(Some(template))
+      case None =>
+        _form_descriptor(app, service, operation).flatMap(_.resultTemplate) match {
+          case Some(template) =>
+            _compose_web_template(
+              app,
+              _form_result_template_page(service, operation, values),
+              template,
+              _form_layout(app, service, operation),
+              allowImplicitDefault = true
+            ).map(x => Some(x.html))
+          case None =>
+            Consequence.success(None)
+        }
+    }
 
   private[http] def _form_result_template_candidates(
     app: String,
@@ -2292,6 +2369,18 @@ final class Http4sHttpServer(
       .map(_.stripSuffix(".html"))
       .filter(_safe_form_result_page_name)
       .map(org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment)
+
+  private def _form_result_template_page(
+    service: String,
+    operation: String,
+    values: Map[String, String]
+  ): Vector[String] =
+    _form_result_page(values)
+      .map(Vector(_))
+      .getOrElse(Vector(
+        org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(service),
+        org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(operation)
+      ))
 
   private def _safe_form_result_page_name(
     name: String
@@ -2403,6 +2492,34 @@ final class Http4sHttpServer(
         _web_resource_roots().view.flatMap(_.readText(path))
       }.headOption
 
+  private[http] def _web_app_static_page(
+    webAppName: String,
+    page: Vector[String],
+    content: String
+  ): Consequence[StaticFormAppRenderer.Page] =
+    _compose_web_template(
+      webAppName,
+      page,
+      content,
+      _static_page_layout(webAppName, page),
+      allowImplicitDefault = true
+    ).map { composed =>
+      val needsTemplateRendering =
+        composed.appliedLayout ||
+          StaticFormAppRenderer.hasTextusMarkup(composed.html) ||
+          _has_textus_include(composed.html) ||
+          (!StaticFormAppRenderer.isHtmlDocumentTemplate(composed.html) && _has_property_placeholder(composed.html))
+      if (needsTemplateRendering)
+        StaticFormAppRenderer.renderStaticTemplate(
+          webAppName,
+          page,
+          composed.html,
+          _web_app_asset_completion(webAppName)
+        )
+      else
+        StaticFormAppRenderer.Page(composed.html)
+    }
+
   private[http] def _web_app_static_html_candidates(
     webAppName: String,
     page: Vector[String]
@@ -2441,6 +2558,205 @@ final class Http4sHttpServer(
     }
   }
 
+  private def _compose_web_template(
+    webAppName: String,
+    page: Vector[String],
+    content: String,
+    explicitLayout: Option[String],
+    allowImplicitDefault: Boolean
+  ): Consequence[WebTemplateComposition] = {
+    val normalizedLayout = explicitLayout.map(_.trim).filter(_.nonEmpty)
+    val layoutName =
+      normalizedLayout.filterNot(_.equalsIgnoreCase("none"))
+    val noLayout = normalizedLayout.exists(_.equalsIgnoreCase("none"))
+    val withIncludes = _expand_template_partials(webAppName, page, content)
+    if (noLayout || (StaticFormAppRenderer.isHtmlDocumentTemplate(content) && layoutName.isEmpty))
+      Consequence.success(WebTemplateComposition(withIncludes, appliedLayout = false))
+    else {
+      layoutName match {
+        case Some(name) =>
+          _layout_content(webAppName, name) match {
+            case Some(layout) =>
+              _apply_layout(webAppName, page, name, layout, withIncludes).map(WebTemplateComposition(_, appliedLayout = true))
+            case None =>
+              Consequence.resourceInvalid(s"Static Form layout not found: ${name}")
+          }
+        case None =>
+          if (!allowImplicitDefault)
+            Consequence.success(WebTemplateComposition(withIncludes, appliedLayout = false))
+          else
+            _layout_content(webAppName, "default") match {
+              case Some(layout) =>
+                _apply_layout(webAppName, page, "default", layout, withIncludes).map(WebTemplateComposition(_, appliedLayout = true))
+              case None =>
+                Consequence.success(WebTemplateComposition(withIncludes, appliedLayout = false))
+            }
+      }
+    }
+  }
+
+  private def _apply_layout(
+    webAppName: String,
+    page: Vector[String],
+    layoutName: String,
+    layout: String,
+    content: String
+  ): Consequence[String] =
+    if (!layout.contains("${content}"))
+      Consequence.resourceInvalid(s"Static Form layout lacks $${content} slot: ${layoutName}")
+    else {
+      val withContent = layout.replace("${content}", content)
+      Consequence.success(_expand_template_partials(webAppName, page, withContent))
+    }
+
+  private def _expand_template_partials(
+    webAppName: String,
+    page: Vector[String],
+    template: String
+  ): String = {
+    @annotation.tailrec
+    def loop(value: String, remaining: Int): String =
+      if (remaining <= 0)
+        value
+      else {
+        val next = _expand_textus_includes(webAppName, page, _expand_partial_placeholders(webAppName, page, value))
+        if (next == value) next else loop(next, remaining - 1)
+      }
+    loop(template, 8)
+  }
+
+  private def _expand_partial_placeholders(
+    webAppName: String,
+    page: Vector[String],
+    template: String
+  ): String =
+    """\$\{partial\.([A-Za-z0-9_.-]+)\}""".r.replaceAllIn(template, m =>
+      java.util.regex.Matcher.quoteReplacement(_partial_content(webAppName, page, m.group(1)).getOrElse(""))
+    )
+
+  private def _expand_textus_includes(
+    webAppName: String,
+    page: Vector[String],
+    template: String
+  ): String = {
+    val include = """<textus(?::include|-include)\b([^>]*)></textus(?::include|-include)>""".r
+    include.replaceAllIn(template, m => {
+      val attrs = _template_attrs(m.group(1))
+      java.util.regex.Matcher.quoteReplacement(
+        attrs.get("name").flatMap(_partial_content(webAppName, page, _)).getOrElse("")
+      )
+    })
+  }
+
+  private def _has_textus_include(template: String): Boolean =
+    """<textus(?::include|-include)\b""".r.findFirstIn(template).nonEmpty
+
+  private def _has_property_placeholder(template: String): Boolean =
+    """\$\{[A-Za-z0-9_.-]+\}""".r.findFirstIn(template).nonEmpty
+
+  private def _layout_content(
+    webAppName: String,
+    name: String
+  ): Option[String] =
+    if (!_safe_template_part_name(name))
+      None
+    else
+      _web_resource_roots().view.flatMap { root =>
+        _web_inf_layout_candidates(webAppName, name).view.flatMap(root.readText)
+      }.headOption
+
+  private def _partial_content(
+    webAppName: String,
+    page: Vector[String],
+    name: String
+  ): Option[String] =
+    if (!_safe_template_part_name(name))
+      None
+    else
+      _web_resource_roots().view.flatMap { root =>
+        _web_inf_partial_candidates(webAppName, page, name).view.flatMap(root.readText)
+      }.headOption
+
+  private def _web_inf_layout_candidates(
+    webAppName: String,
+    name: String
+  ): Vector[Path] = {
+    val webAppPath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(webAppName)
+    _flat_or_app_named_candidates(webAppName, Vector(
+      Paths.get("WEB-INF", "layouts", s"${name}.html"),
+      Paths.get(webAppPath, "WEB-INF", "layouts", s"${name}.html")
+    ))
+  }
+
+  private def _web_inf_partial_candidates(
+    webAppName: String,
+    page: Vector[String],
+    name: String
+  ): Vector[Path] = {
+    val webAppPath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(webAppName)
+    val localPage = _web_inf_page_path(page)
+    val localFlat = localPage.toVector.map { pagePath =>
+      _relative_path(Vector("WEB-INF", "partials") ++ pagePath :+ s"${name}.html")
+    }
+    val localApp = localPage.toVector.map { pagePath =>
+      _relative_path(webAppPath +: (Vector("WEB-INF", "partials") ++ pagePath :+ s"${name}.html"))
+    }
+    val globalFlat = Vector(Paths.get("WEB-INF", "partials", s"${name}.html"))
+    val globalApp = Vector(Paths.get(webAppPath, "WEB-INF", "partials", s"${name}.html"))
+    if (_is_flat_web_root_app(webAppName))
+      localFlat ++ localApp ++ globalFlat ++ globalApp
+    else
+      localApp ++ localFlat ++ globalApp ++ globalFlat
+  }
+
+  private def _web_inf_page_path(
+    page: Vector[String]
+  ): Option[Vector[String]] = {
+    val normalized =
+      if (page.isEmpty) Vector("index")
+      else page.map(_normalize_web_page_segment).map(_.stripSuffix(".html"))
+    Option.when(normalized.nonEmpty && normalized.forall(_safe_template_part_name))(normalized)
+  }
+
+  private def _static_page_layout(
+    webAppName: String,
+    page: Vector[String]
+  ): Option[String] =
+    engine.webDescriptor.staticPageCustomization(webAppName, page).flatMap(_.layout)
+      .orElse(engine.webDescriptor.appLayout(webAppName))
+
+  private def _form_layout(
+    app: String,
+    service: String,
+    operation: String
+  ): Option[String] =
+    _form_descriptor(app, service, operation).flatMap(_.layout)
+      .orElse(engine.webDescriptor.appLayout(app))
+
+  private def _web_app_asset_completion(
+    webAppName: String
+  ): StaticFormAppLayout.AssetCompletionOptions = {
+    val assets = engine.webDescriptor.assets.merge(engine.webDescriptor.appAssets(webAppName))
+    StaticFormAppLayout.AssetCompletionOptions(
+      declaredCss = assets.css,
+      declaredJs = assets.js
+    )
+  }
+
+  private def _safe_template_part_name(
+    value: String
+  ): Boolean =
+    value.nonEmpty && value.forall { c =>
+      c.isLetterOrDigit || c == '-' || c == '_' || c == '.'
+    }
+
+  private def _template_attrs(
+    text: String
+  ): Map[String, String] = {
+    val attr = """([A-Za-z0-9_.:-]+)\s*=\s*"([^"]*)"""".r
+    attr.findAllMatchIn(text).map(m => m.group(1) -> m.group(2)).toMap
+  }
+
   private def _flat_or_app_named_candidates(
     webAppName: String,
     flatFirst: Vector[Path]
@@ -2470,7 +2786,8 @@ final class Http4sHttpServer(
       segment.nonEmpty &&
         !segment.contains("..") &&
         !segment.contains("/") &&
-        !segment.contains("\\")
+        !segment.contains("\\") &&
+        org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(segment) != "web-inf"
     }
 
   private def _component_exists(

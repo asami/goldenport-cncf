@@ -13,6 +13,7 @@ only for domain-specific details that Bootstrap does not cover.
 Related formal/background documents:
 
 - `docs/design/web-layer.md`
+- `docs/design/static-form-ui-generation-contract.md`
 - `docs/spec/textus-widget.md`
 - `docs/notes/web-bootstrap-ui-polish-design.md`
 - `docs/notes/cncf-web-static-form-app-contract.md`
@@ -252,6 +253,29 @@ Show active filters as compact badges or chips and provide a clear-search link.
 Result summaries, pagination, and empty states should stay server-rendered so
 the same page works without JavaScript.
 
+## Generated Page Composition
+
+Generated Static Form UI uses the same Bootstrap/Textus output as hand-written
+templates. Generation is a fallback or scaffold path; a hand-written static
+template with the same route/result convention remains authoritative.
+
+The standard generated page kinds are:
+
+- list: search card, active filter chips, result table or card list,
+  pagination, empty state, detail/create actions.
+- detail: breadcrumb/nav, record or description card, action row, return
+  context, and runtime-provided relationship sections.
+- form: schema-driven Bootstrap controls, validation summary, field validation,
+  hidden context, submit/cancel actions.
+- result: status alert, result/submitted summary, action group, job panel when
+  a job is returned, and development debug panel when enabled.
+- dashboard: summary cards, nav/list groups, diagnostics cards, badges, alerts,
+  and responsive tables.
+
+Generated UI may use CML schema/operation metadata, `WebDescriptor` page/form
+and admin controls, View/search metadata, and operation result actions. It must
+not introduce a separate visual DSL or JavaScript-only behavior.
+
 ## Result And Status Feedback
 
 Use Bootstrap feedback components:
@@ -318,6 +342,25 @@ expresses the required shape:
 Widgets must render ordinary Bootstrap-compatible HTML. If a widget cannot
 produce the expected Bootstrap structure, improve the shared widget rather than
 adding a one-off application layout convention.
+
+## Reusable Shell Parts
+
+Use `WEB-INF` for shared page shell parts that should not be directly served as
+static files:
+
+- `WEB-INF/layouts/default.html` for the app shell.
+- `WEB-INF/partials/header.html`, `navigation.html`, `sidebar.html`, and
+  `footer.html` for reusable page regions.
+- `WEB-INF/partials/{page}/{name}.html` when one page needs a local override.
+
+Layouts should stay ordinary Bootstrap 5 HTML. Use `${content}` for the page
+content slot and `${partial.header}` / `${partial.navigation}` /
+`${partial.sidebar}` / `${partial.footer}` for shell parts. Hand-written pages
+can include the same parts with `textus:include name="navigation"` or the
+HTML-compatible `textus-include` notation.
+
+Prefer HTML partials in v1. Older Jade/Pug-style layouts are historical
+reference material, not the Static Form runtime contract.
 
 ## Responsive Rules
 

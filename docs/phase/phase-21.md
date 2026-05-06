@@ -43,8 +43,8 @@ Final semantic direction:
 - No SPA framework adoption.
 - No API gateway or separate SPA hosting mode.
 - No visual design system separate from Bootstrap 5.
-- No broad UI generation or wireframe DSL implementation beyond the Static
-  Form primitives needed in this phase.
+- No broad UI generation, file generation, standalone wireframe DSL, or new
+  runtime renderer outside the Static Form UI generation contract.
 - No component-owned admin page discovery/integration unless a concrete Phase
   21 UI slice needs it.
 - No JavaScript-only behavior without a server-rendered fallback.
@@ -59,9 +59,9 @@ Final semantic direction:
 - F (DONE): WN-06 — Apply selected improvements to `textus-blog`.
 - G (DONE): WN-07 — Phase 21 backlog / status synchronization.
 - H (DONE): WN-08 — Search UI / Query / Semantic Search Alignment.
-- I (ACTIVE): WN-09 — Web/UI Generation and Static Form Layout Composition.
-- J (TODO): WN-10 — Reusable Header/Footer/Nav/Sidebar/Layout Partials.
-- K (TODO): WN-11 — Broader Bootstrap 5 Admin/App Polish.
+- I (DONE): WN-09 — Web/UI Generation and Static Form Layout Composition.
+- J (DONE): WN-10 — Reusable Header/Footer/Nav/Sidebar/Layout Partials.
+- K (ACTIVE): WN-11 — Broader Bootstrap 5 Admin/App Polish.
 - L (TODO): WN-12 — Component-Owned Web Admin Page Integration.
 - M (TODO): WN-13 — Island Architecture Progressive Enhancement.
 - N (TODO): WN-14 — SPA Hosting / API Gateway Boundary Design.
@@ -69,8 +69,8 @@ Final semantic direction:
 
 Resume hint:
 
-- Continue with WN-09 Web/UI Generation and Static Form Layout Composition.
-  Phase 21 is not ready to close while WN-09 through WN-15 remain active or
+- Continue with WN-11 Broader Bootstrap 5 Admin/App Polish.
+  Phase 21 is not ready to close while WN-11 through WN-15 remain active or
   TODO.
 
 ## 5. Development Items
@@ -83,8 +83,8 @@ Resume hint:
 - [x] WN-06: Apply selected improvements to `textus-blog`.
 - [x] WN-07: Phase 21 backlog / status synchronization.
 - [x] WN-08: Search UI / Query / Semantic Search Alignment.
-- [ ] WN-09: Web/UI Generation and Static Form Layout Composition.
-- [ ] WN-10: Reusable Header/Footer/Nav/Sidebar/Layout Partials.
+- [x] WN-09: Web/UI Generation and Static Form Layout Composition.
+- [x] WN-10: Reusable Header/Footer/Nav/Sidebar/Layout Partials.
 - [ ] WN-11: Broader Bootstrap 5 Admin/App Polish.
 - [ ] WN-12: Component-Owned Web Admin Page Integration.
 - [ ] WN-13: Island Architecture Progressive Enhancement.

@@ -294,6 +294,36 @@ object StaticFormAppRenderer {
     }
   }
 
+  def renderStaticTemplate(
+    app: String,
+    page: Vector[String],
+    template: String,
+    assetCompletion: StaticFormAppLayout.AssetCompletionOptions =
+      StaticFormAppLayout.AssetCompletionOptions()
+  ): Page = {
+    val pageName =
+      if (page.isEmpty) "index"
+      else page.mkString("/")
+    val properties = FormPageProperties(
+      app,
+      "web",
+      pageName,
+      Map(
+        "app" -> app,
+        "page.name" -> pageName,
+        "page.path" -> ("/web/" + (app +: page).mkString("/"))
+      )
+    )
+    val rendered = _render_template(template, properties, Map.empty)
+    Page(_complete_widget_assets(template, rendered, assetCompletion))
+  }
+
+  def isHtmlDocumentTemplate(template: String): Boolean =
+    _is_html_document(template)
+
+  def hasTextusMarkup(template: String): Boolean =
+    _has_textus_widgets(template)
+
   def renderFormIndex(
     subsystem: Subsystem,
     componentName: String,
