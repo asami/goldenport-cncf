@@ -231,7 +231,9 @@ final case class JobSubmitOption(
   scheduledStartAt: Option[Instant] = None,
   requestSummary: Option[String] = None,
   parameters: Map[String, String] = Map.empty,
-  executionNotes: Vector[String] = Vector.empty
+  executionNotes: Vector[String] = Vector.empty,
+  declaredProfile: Option[JobDeclaredProfile] = None,
+  jobDefinitionSnapshot: Option[JobDefinitionSnapshot] = None
 )
 
 enum JobRunMode {
@@ -298,6 +300,8 @@ final case class JobDebugInfo(
   requestSummary: Option[String],
   parameters: Map[String, String],
   executionNotes: Vector[String],
+  declaredProfile: Option[JobDeclaredProfile] = None,
+  jobDefinitionSnapshot: Option[JobDefinitionSnapshot] = None,
   calltree: Option[Record] = None,
   calltreeJson: Option[String] = None,
   calltreeClob: Option[String] = None,
@@ -479,6 +483,7 @@ trait JobEngine {
   def queryTimeline(jobId: JobId, offset: Int = 0, limit: Int = 100): Option[JobTimelinePage]
   def metrics: Option[JobMetrics] = None
   def annotateJob(jobId: JobId, parameters: Map[String, String], executionNotes: Vector[String] = Vector.empty): Unit = ()
+  def annotateJobProfile(jobId: JobId, profile: JobDeclaredProfile): Unit = ()
   def runTaskInJobSync(jobId: JobId, task: JobTask, ctx: ExecutionContext): Consequence[TaskOutcome] =
     Consequence.operationInvalid("job.same-job.sync-task")
   def enqueueTaskInJob(jobId: JobId, task: JobTask, ctx: ExecutionContext): Consequence[TaskId] =
@@ -604,8 +609,12 @@ final class InMemoryJobEngine(
     val now = _now_()
     val initialdebug = JobDebugInfo(
       requestSummary = option.requestSummary.orElse(_request_summary(tasks)),
-      parameters = if (option.parameters.nonEmpty) option.parameters else _request_parameters(tasks),
-      executionNotes = option.executionNotes
+      parameters =
+        (if (option.parameters.nonEmpty) option.parameters else _request_parameters(tasks)) ++
+          option.jobDefinitionSnapshot.map(_.toParameters).getOrElse(Map.empty),
+      executionNotes = option.executionNotes,
+      declaredProfile = option.declaredProfile.orElse(option.jobDefinitionSnapshot.flatMap(_.profile)),
+      jobDefinitionSnapshot = option.jobDefinitionSnapshot
     )
     val record = JobRecord(
       id = jobid,
@@ -723,6 +732,24 @@ final class InMemoryJobEngine(
         debug = record.debug.copy(
           parameters = record.debug.parameters ++ parameters,
           executionNotes = record.debug.executionNotes ++ executionNotes
+        ),
+        updatedAt = _now_()
+      )
+    }
+
+  override def annotateJobProfile(
+    jobId: JobId,
+    profile: JobDeclaredProfile
+  ): Unit =
+    _mutate_record(jobId) { record =>
+      record.copy(
+        debug = record.debug.copy(
+          declaredProfile = Some(profile),
+          executionNotes =
+            if (record.debug.executionNotes.contains("jcl declared profile attached"))
+              record.debug.executionNotes
+            else
+              record.debug.executionNotes :+ "jcl declared profile attached"
         ),
         updatedAt = _now_()
       )

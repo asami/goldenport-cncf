@@ -13,7 +13,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Apr. 13, 2026
  *  version Apr. 16, 2026
  *  version Apr. 24, 2026
- * @version May.  4, 2026
+ * @version May.  7, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentDescriptorSpec extends AnyWordSpec with Matchers {
@@ -79,6 +79,7 @@ final class ComponentDescriptorSpec extends AnyWordSpec with Matchers {
       EntityKind.parse("task") shouldBe EntityKind.Task
       EntityKind.parse("actor") shouldBe EntityKind.Actor
       EntityKind.parse("asset") shouldBe EntityKind.Asset
+      EntityKind.parse("system") shouldBe EntityKind.System
     }
 
     "centralize entity kind runtime policy defaults" in {
@@ -95,6 +96,8 @@ final class ComponentDescriptorSpec extends AnyWordSpec with Matchers {
       EntityKindRuntimePolicy.forKind(EntityKind.Actor).defaultWorkingSetPolicy shouldBe Some(WorkingSetPolicy.Disabled)
       EntityKindRuntimePolicy.forKind(EntityKind.Asset).legacyOperationKind shouldBe EntityOperationKind.Resource
       EntityKindRuntimePolicy.forKind(EntityKind.Asset).defaultWorkingSetPolicy shouldBe Some(WorkingSetPolicy.Disabled)
+      EntityKindRuntimePolicy.forKind(EntityKind.System).legacyOperationKind shouldBe EntityOperationKind.Resource
+      EntityKindRuntimePolicy.forKind(EntityKind.System).defaultWorkingSetPolicy shouldBe Some(WorkingSetPolicy.Disabled)
     }
 
     "reject unknown explicit entityKind" in {
@@ -133,6 +136,10 @@ final class ComponentDescriptorSpec extends AnyWordSpec with Matchers {
         "entity" -> "Image",
         "entityKind" -> "asset"
       )).toOption.get
+      val system = summon[RecordDecoder[EntityRuntimeDescriptor]].fromRecord(Record.data(
+        "entity" -> "Job",
+        "entityKind" -> "system"
+      )).toOption.get
 
       product.toPlan.workingSetPolicy shouldBe Some(WorkingSetPolicy.ResidentAll)
       blogPost.toPlan.workingSetPolicy shouldBe Some(WorkingSetPolicy.Disabled)
@@ -140,6 +147,7 @@ final class ComponentDescriptorSpec extends AnyWordSpec with Matchers {
       task.toPlan.workingSetPolicy shouldBe Some(WorkingSetPolicy.Disabled)
       actor.toPlan.workingSetPolicy shouldBe Some(WorkingSetPolicy.Disabled)
       asset.toPlan.workingSetPolicy shouldBe Some(WorkingSetPolicy.Disabled)
+      system.toPlan.workingSetPolicy shouldBe Some(WorkingSetPolicy.Disabled)
       salesOrder.effectiveOperationKind shouldBe EntityOperationKind.Task
     }
 

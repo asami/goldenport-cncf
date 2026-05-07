@@ -7,7 +7,7 @@ import org.goldenport.cncf.security.EntityOperationKind
  * Canonical runtime/modeling kind for CNCF Entities.
  *
  * @since   May.  4, 2026
- * @version May.  4, 2026
+ * @version May.  7, 2026
  * @author  ASAMI, Tomoharu
  */
 enum EntityKind(val label: String) {
@@ -17,6 +17,7 @@ enum EntityKind(val label: String) {
   case Task extends EntityKind("task")
   case Actor extends EntityKind("actor")
   case Asset extends EntityKind("asset")
+  case System extends EntityKind("system")
 
   override def toString: String = label
 
@@ -60,6 +61,8 @@ object EntityKind {
         Some(Actor)
       case "asset" | "media" | "blob" | "image" | "video" | "audio" | "attachment" =>
         Some(Asset)
+      case "system" | "runtime" | "runtime-system" | "system-management" =>
+        Some(System)
       case _ =>
         None
     }

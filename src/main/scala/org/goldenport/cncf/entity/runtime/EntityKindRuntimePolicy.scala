@@ -6,7 +6,7 @@ import org.goldenport.cncf.security.EntityOperationKind
  * Runtime defaults derived from canonical EntityKind.
  *
  * @since   May.  4, 2026
- * @version May.  4, 2026
+ * @version May.  7, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class EntityKindRuntimePolicy(
@@ -35,6 +35,8 @@ object EntityKindRuntimePolicy {
       case EntityKind.Actor =>
         EntityKindRuntimePolicy(kind, EntityOperationKind.Resource, Some(WorkingSetPolicy.Disabled))
       case EntityKind.Asset =>
+        EntityKindRuntimePolicy(kind, EntityOperationKind.Resource, Some(WorkingSetPolicy.Disabled))
+      case EntityKind.System =>
         EntityKindRuntimePolicy(kind, EntityOperationKind.Resource, Some(WorkingSetPolicy.Disabled))
     }
 }

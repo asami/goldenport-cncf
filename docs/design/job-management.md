@@ -48,6 +48,14 @@ A Job:
 A Job is not a domain concept.
 It is an operational construct.
 
+In CNCF runtime management, a Job instance is also projected as a Job Entity.
+This Job Entity is a `system` Entity and is the management/search/inspection
+record for one execution lifecycle. It is not the reusable definition of how
+Jobs should be launched.
+
+Reusable Job definitions are managed separately as `system` JobDefinition
+Entities.
+
 
 ----------------------------------------------------------------------
 3. What a Job Is Not
@@ -59,13 +67,62 @@ A Job is NOT:
     - a business transaction
     - an event
     - a workflow definition
+    - a reusable Job definition
 
 Jobs exist to manage execution,
 not to model business meaning.
 
 
 ----------------------------------------------------------------------
-4. Relationship to Command and Event
+4. Job Instance and JobDefinition
+----------------------------------------------------------------------
+
+CNCF distinguishes:
+
+    - Job instance
+    - JobDefinition
+
+A Job instance is the concrete execution record. It has status, submitter,
+runtime target, result summary, timeline summary, retry state, and control
+state. The Job instance is represented by the Job Entity management projection.
+
+A JobDefinition is a reusable definition record. It describes how a managed Job
+may be launched and what behavior is intended.
+
+JobDefinition should carry:
+
+    - JCL source
+    - normalized diagnostics profile
+    - reserved future executable flow
+    - reserved future executable events / onEvent section
+    - version / revision / hash
+    - draft / active / retired lifecycle state
+    - target Action / Command binding metadata
+    - owner / visibility / authorization metadata
+
+Command, Action, or Operation metadata may bind to JobDefinition through a
+future `jobDefinitionRef`. Inline JCL submission remains useful for
+compatibility, debugging, and one-off operation, but it is not the normal
+registry for reusable definitions.
+
+When a Job is launched from a JobDefinition, the Job instance should retain:
+
+    - jobDefinitionId
+    - jobDefinitionVersion
+    - jobDefinitionHash
+    - declared profile snapshot
+    - optional normalized JCL/source snapshot
+
+This preserves auditability even when the reusable JobDefinition later changes.
+
+Runtime residency is explicit for these system Entities. Active Jobs and Jobs
+completed within the one-day operational confirmation window are Working Set
+candidates. Active JobDefinitions are Working Set candidates so launch-time
+definition lookup does not require store access in the common path.
+
+
+----------------------------------------------------------------------
+5. Relationship to Command and Event
 ----------------------------------------------------------------------
 
 Command and Event execution
@@ -84,7 +141,7 @@ regardless of trigger type.
 
 
 ----------------------------------------------------------------------
-5. Asynchronous Scheduling Boundary
+6. Asynchronous Scheduling Boundary
 ----------------------------------------------------------------------
 
 Built-in asynchronous execution is owned by Job management.
@@ -129,7 +186,7 @@ The normative allowed/disallowed timing split is fixed in:
 
 
 ----------------------------------------------------------------------
-6. Job Lifecycle
+7. Job Lifecycle
 ----------------------------------------------------------------------
 
 A Job has a lifecycle.
@@ -150,7 +207,7 @@ it must not resume execution.
 
 
 ----------------------------------------------------------------------
-7. Failure Semantics
+8. Failure Semantics
 ----------------------------------------------------------------------
 
 Failures are first-class outcomes.
@@ -172,7 +229,7 @@ Failure handling policy is not defined here.
 
 
 ----------------------------------------------------------------------
-8. Retry Semantics
+9. Retry Semantics
 ----------------------------------------------------------------------
 
 Retries are an operational concern.
@@ -194,7 +251,7 @@ linked to the same logical Job.
 
 
 ----------------------------------------------------------------------
-9. Compensation and Abort
+10. Compensation and Abort
 ----------------------------------------------------------------------
 
 Abort represents intentional termination.
@@ -216,7 +273,7 @@ not business compensation logic.
 
 
 ----------------------------------------------------------------------
-10. Relationship to ExecutionContext
+11. Relationship to ExecutionContext
 ----------------------------------------------------------------------
 
 Each Job is associated with an ExecutionContext.
@@ -232,7 +289,7 @@ must coordinate with ExecutionContext lifecycle.
 
 
 ----------------------------------------------------------------------
-11. Persistence and Storage
+12. Persistence and Storage
 ----------------------------------------------------------------------
 
 Job persistence is implementation-dependent.
@@ -251,9 +308,39 @@ Requirements:
 
 Persistence strategy must not leak into domain logic.
 
+Job Entity is a lightweight management projection. It should keep fields needed
+for ordinary search, inspection, and control:
+
+    - status
+    - result summary
+    - submitter
+    - target component / service / operation
+    - JobDefinition linkage
+    - retry summary
+    - task count
+    - timeline summary
+    - calltree reference or summary
+
+Large or highly structured execution data should be stored separately:
+
+    - full timeline
+    - Task Execution Tree
+    - task-local calltree
+    - large result body
+    - raw event history
+
+Task Execution Tree is the canonical diagnostic structure for parent-child
+execution relationships inside a Job. It records roots, subtasks, Event-driven
+continuations, retries, compensation tasks, and causation metadata.
+
+Task-local calltree is distinct from Job-level summary diagnostics. A task-local
+calltree explains what happened inside one Task, such as ActionCall, UnitOfWork,
+EntityStore, Event emission, external call, and compensation steps. Job Entity
+should reference or summarize these records rather than embed every full tree.
+
 
 ----------------------------------------------------------------------
-12. Observability and Metrics
+13. Observability and Metrics
 ----------------------------------------------------------------------
 
 Job management enables observability.
@@ -305,7 +392,7 @@ state.
 
 
 ----------------------------------------------------------------------
-13. Product Boundary
+14. Product Boundary
 ----------------------------------------------------------------------
 
 Job management is part of the CNCF built-in execution layer and follows
@@ -321,17 +408,25 @@ of operational needs:
     - retry/cancel/suspend/resume
     - sequential batch submission support
 
-Job management must not grow into a workflow/orchestration platform.
+Job management must not accidentally grow into an unbounded workflow product.
 
-JCL is treated as a submission language, not a workflow language.
-Workflow progression belongs to the workflow layer, not to Job management.
+JCL is the CNCF Job language. Its current implemented `profile` section is
+diagnostics-only and is used for declared/observed comparison. Future executable
+JCL may add procedural `flow` and Event-driven `events` / `onEvent` sections.
+Those future sections are intended to express subtask launch, conditional Event
+emission, Event reception, and Action chains while staying inside the Job
+management boundary.
+
+Executable JCL must remain distinct from the distributed Saga language.
+Distributed, multi-subsystem, multi-machine, long-running coordination belongs
+to Saga management.
 
 For the execution-platform boundary, see:
 
     - `docs/design/execution-platform-boundary.md`
 
 ----------------------------------------------------------------------
-14. Relationship to Consumers (e.g. SIE)
+15. Relationship to Consumers (e.g. SIE)
 ----------------------------------------------------------------------
 
 Consumers such as Semantic Integration Engine:
@@ -350,7 +445,7 @@ Job management is shared infrastructure.
 
 
 ----------------------------------------------------------------------
-14. Final Note
+16. Final Note
 ----------------------------------------------------------------------
 
 Job management exists to make execution failures

@@ -196,7 +196,8 @@ object HelpProjection {
           "commandKind" -> x.commandKind,
           "commandExecutionProperties" -> x.commandExecutionProperties,
           "commandExecutionPolicy" -> x.commandExecutionPolicyRecord,
-          "effectiveCommandExecutionMode" -> x.effectiveCommandExecutionPolicy.legacyModeLabel
+          "effectiveCommandExecutionMode" -> x.effectiveCommandExecutionPolicy.legacyModeLabel,
+          "jobDefinitionRef" -> x.jobDefinitionRef
         )
       }
 

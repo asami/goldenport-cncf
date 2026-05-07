@@ -71,6 +71,7 @@ object DescribeProjection {
             "commandExecutionPolicy" -> x.commandExecutionPolicy,
             "effectiveCommandExecutionMode" -> x.effectiveCommandExecutionMode,
             "commandExecutionPolicySource" -> x.commandExecutionPolicySource,
+            "jobDefinitionRef" -> x.jobDefinitionRef,
             "parameters" -> x.parameters,
             "childEntityBindings" -> x.childEntityBindings,
             "associationBinding" -> x.associationBinding,
@@ -118,7 +119,8 @@ object DescribeProjection {
               "commandKind" -> x.commandKind,
               "commandExecutionProperties" -> x.commandExecutionProperties,
               "commandExecutionPolicy" -> x.commandExecutionPolicyRecord,
-              "effectiveCommandExecutionMode" -> x.effectiveCommandExecutionPolicy.legacyModeLabel
+              "effectiveCommandExecutionMode" -> x.effectiveCommandExecutionPolicy.legacyModeLabel,
+              "jobDefinitionRef" -> x.jobDefinitionRef
             )),
           "childEntityBindings" -> childentitybindings,
           "associationBinding" -> associationbinding,

@@ -7,9 +7,11 @@ status = active
 This work document opens Phase 22 and makes `9.14 Job Management` the
 current development item.
 
-Phase 22 started by normalizing Command execution policy and then made Job a
-store-backed SimpleEntity management projection. JCL, Task transaction,
-compensation, and user notification work is tracked in later JM slices.
+Phase 22 started by normalizing Command execution policy, made Job a
+store-backed SimpleEntity management projection, and added JCL diagnostics for
+declared Event/Action chains, and added JobDefinition binding / execution
+record policy. Task transaction and compensation is now the active follow-up;
+user notification work is tracked in a later JM slice.
 
 This document is a phase dashboard, not a design journal.
 
@@ -24,8 +26,15 @@ This document is a phase dashboard, not a design journal.
   override.
 - Manage Job as a first-class SimpleEntity management record synchronized from
   JobEngine lifecycle snapshots.
-- Make Job behavior definable by JCL, allow Job launch with an intended JCL
-  profile, and compare declared JCL with observed execution profiles.
+- Make Job behavior definable by canonical single-Job JCL, allow Job launch
+  with an intended Event/Action chain profile, and compare declared JCL with
+  observed execution profiles.
+- Define JobDefinition Entity management, Command/Action/Operation binding,
+  Job instance definition snapshots, execution-state storage, Task Execution
+  Tree, and task-local calltree boundaries before Task compensation work.
+- Classify Job and JobDefinition as `entityKind = system`; keep active
+  JobDefinitions resident and keep active/recently completed Jobs resident for
+  completion confirmation.
 - Treat Task as the transaction unit inside a Job and define compensation
   boundaries between Tasks.
 - Add application user notification policy before async Jobs become ordinary
@@ -39,8 +48,14 @@ Final semantic direction:
   synchronously or as a Job.
 - Job execution is explicit platform behavior, not the default path for simple
   CRUD-style Commands.
-- JCL describes intended Job behavior; observed execution profiles record what
-  actually happened.
+- JCL describes intended Job behavior as a visible Event/Action chain; observed
+  execution profiles record what actually happened.
+- JobDefinition is distinct from Job instance. A Job instance is a Job Entity;
+  a reusable Job definition is a separate JobDefinition Entity.
+- Both are CNCF runtime/system management entities, not business workflow
+  entities.
+- JCL diagnostics use `profile`; future executable JCL uses separate
+  procedural `flow` and Event-driven `events` / `onEvent` sections.
 - Job state and state transitions are part of Job control.
 - Task boundaries are the natural place to define transactional success,
   failure, and compensation inside a Job.
@@ -51,7 +66,8 @@ Final semantic direction:
 - No broadening of Job usage before Command execution policy is normalized.
 - Job Entity management is limited to the synchronized management/search record;
   JobEngine remains the execution authority.
-- No JCL profile difference checking or reconstruction in JM-01.
+- JM-03 profile difference checking is diagnostics-only; it does not control or
+  fail Job execution.
 - No Task compensation implementation in JM-01.
 - No user notification runtime in JM-01.
 - No distributed Saga management in Phase 22; Saga is a separate future item.
@@ -60,23 +76,26 @@ Final semantic direction:
 
 - A (DONE): JM-01 — Command Execution Policy Normalization.
 - B (DONE): JM-02 — Job Entity Management.
-- C (ACTIVE): JM-03 — JCL Profile / Execution Profile Difference Checking.
-- D (TODO): JM-04 — Task Transaction and Compensation Boundary.
-- E (TODO): JM-05 — User Job Notification Policy.
-- F (TODO): JM-06 — Phase 22 verification and closure.
+- C (DONE): JM-03 — JCL Profile / Execution Profile Difference Checking.
+- D (DONE): JM-03B — JobDefinition Entity / Binding / Execution Record Policy.
+- E (ACTIVE): JM-04 — Task Transaction and Compensation Boundary.
+- F (TODO): JM-05 — User Job Notification Policy.
+- G (TODO): JM-06 — Phase 22 verification and closure.
 
 Resume hint:
 
-- Continue with JM-03. Job is now exposed as a store-backed SimpleEntity
-  management record synchronized from JobEngine lifecycle state; do not pull
-  Task compensation, user notification, or distributed Saga work into JCL
-  profile checking unless explicitly selected.
+- Continue with JM-04. Job and JobDefinition are `system` Entities; reusable
+  JobDefinitions can be created, activated, retired, and submitted by
+  `jobDefinitionRef`; Jobs keep definition snapshots and lightweight execution
+  record references. JM-04 should define Task transaction and compensation
+  boundaries.
 
 ## 5. Development Items
 
 - [x] JM-01: Command Execution Policy Normalization.
 - [x] JM-02: Job Entity Management.
-- [ ] JM-03: JCL Profile / Execution Profile Difference Checking.
+- [x] JM-03: JCL Profile / Execution Profile Difference Checking.
+- [x] JM-03B: JobDefinition Entity / Binding / Execution Record Policy.
 - [ ] JM-04: Task Transaction and Compensation Boundary.
 - [ ] JM-05: User Job Notification Policy.
 - [ ] JM-06: Phase 22 verification and closure.
@@ -100,6 +119,10 @@ Phase 22 closure conditions:
 - JCL declared profile, observed execution profile, difference checking, and
   reconstruction policy are completed or explicitly deferred with remaining
   work named.
+- JobDefinition Entity management, binding, definition snapshots, execution
+  state record storage, Task Execution Tree, task-local calltree, and JCL
+  language boundaries are completed or explicitly deferred with remaining work
+  named.
 - Task transaction and compensation boundaries are completed or explicitly
   deferred with remaining work named.
 - User job notification policy is completed or explicitly deferred with

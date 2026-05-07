@@ -60,6 +60,7 @@ private[projection] object MetaProjectionSupport {
     commandExecutionPolicy: Record,
     effectiveCommandExecutionMode: String,
     commandExecutionPolicySource: String,
+    jobDefinitionRef: Option[String],
     parameters: Vector[Record],
     childEntityBindings: Vector[Record] = Vector.empty,
     associationBinding: Option[Record] = None,
@@ -405,6 +406,7 @@ private[projection] object MetaProjectionSupport {
             .map(_ => "typed-policy")
             .orElse(x.execution.map(_ => "legacy-execution"))
             .getOrElse("default"),
+          jobDefinitionRef = x.jobDefinitionRef,
           parameters = x.parameters.map { p =>
             Record.data(
               "name" -> p.name,

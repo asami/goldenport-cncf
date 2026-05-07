@@ -82,6 +82,18 @@ Examples:
 Default runtime policy: Working Set disabled. Payloads remain in Blob/media
 storage, not in the main Entity record.
 
+`system` is CNCF runtime/system management data.
+
+Examples:
+
+- `Job`
+- `JobDefinition`
+
+Default runtime policy: Working Set disabled. Individual built-in system
+Entities may opt into narrower explicit policies. `Job` keeps active Jobs and
+recently completed Jobs resident for operational confirmation, while
+`JobDefinition` keeps active definitions resident.
+
 ## Compatibility Axes
 
 `entityKind` is separate from:
@@ -105,6 +117,7 @@ Legacy mapping:
 | `document` | `resource` |
 | `actor` | `resource` |
 | `asset` | `resource` |
+| `system` | `resource` |
 | `workflow` | `task` |
 | `task` | `task` |
 
@@ -132,6 +145,8 @@ Recommended defaults:
 | ImportTask | `task` | disabled |
 | ExternalAccount | `actor` | disabled unless explicit |
 | Image | `asset` | disabled |
+| Job | `system` | active and one-day recent completion window |
+| JobDefinition | `system` | active definitions resident |
 
 `BlogPost = document + store-backed canonical + workingSet disabled default`
 because article bodies, references, media links, and publication history grow

@@ -59,6 +59,7 @@ object SchemaProjection {
             "commandExecutionPolicy" -> x.commandExecutionPolicy,
             "effectiveCommandExecutionMode" -> x.effectiveCommandExecutionMode,
             "commandExecutionPolicySource" -> x.commandExecutionPolicySource,
+            "jobDefinitionRef" -> x.jobDefinitionRef,
             "parameters" -> x.parameters
           )
         }

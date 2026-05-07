@@ -20,13 +20,17 @@ import org.scalatest.wordspec.AnyWordSpec
  */
 final class JobControlComponentSpec extends AnyWordSpec with Matchers with JobEngineTestFixture {
   "JobControlComponent" should {
-    "expose Job as a workflow SimpleEntity management descriptor" in {
+    "expose Job and JobDefinition as system SimpleEntity management descriptors" in {
       val descriptors = JobControlComponent.componentDescriptors.flatMap(_.entityRuntimeDescriptors)
       val job = descriptors.find(_.entityName == "job").get
+      val definition = descriptors.find(_.entityName == "jobDefinition").get
 
-      job.entityKind shouldBe EntityKind.Workflow
-      job.workingSetPolicy shouldBe Some(WorkingSetPolicy.Disabled)
+      job.entityKind shouldBe EntityKind.System
+      job.workingSetPolicy.map(_.label) shouldBe Some("recent(1d on updatedAt)")
       job.collectionId.name shouldBe "job"
+      definition.entityKind shouldBe EntityKind.System
+      definition.workingSetPolicy.map(_.label) shouldBe Some("active-job-definition")
+      definition.collectionId.name shouldBe "jobDefinition"
     }
 
     "expose event-triggered lineage and policy source on job inspection surfaces" in {

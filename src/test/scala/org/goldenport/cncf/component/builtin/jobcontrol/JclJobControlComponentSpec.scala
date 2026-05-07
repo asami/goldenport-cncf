@@ -28,7 +28,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 
 /*
  * @since   Apr. 22, 2026
- * @version May.  4, 2026
+ * @version May.  7, 2026
  * @author  ASAMI, Tomoharu
  */
 final class JclJobControlComponentSpec
@@ -76,12 +76,60 @@ final class JclJobControlComponentSpec
       }
     }
 
+    "describe canonical job YAML with event/action profile" in {
+      Given("a canonical single-job JCL definition")
+      _with_fixture() { fixture =>
+      val body =
+        """job:
+          |  name: profile-job
+          |  target:
+          |    action: jcl_fixture.command.ok
+          |  profile:
+          |    expectedStatus: succeeded
+          |    eventChain:
+          |      - action: jcl_fixture.command.ok
+          |        emits:
+          |          - event: order.accepted
+          |            occurrence: possible
+          |            receivers:
+          |              - action: jcl_fixture.command.hook
+          |                guard: order.hasHook
+          |                occurrence: possible
+          |""".stripMargin
+
+      When("job_control.job.describe_job_definition is invoked")
+      val response = _execute(
+        fixture.subsystem,
+        "job_control.job.describe_job_definition",
+        arguments = List(Argument("body", body))
+      )
+
+      Then("the normalized record uses canonical job shape and preserves eventChain")
+      val record = _record(response)
+      val job = record.getRecord("job").getOrElse(fail("job record missing"))
+      job.getString("name") shouldBe Some("profile-job")
+      val profile = job.getRecord("profile").getOrElse(fail("profile missing"))
+      profile.getString("expectedStatus") shouldBe Some("Succeeded")
+      val chain = _records(profile.asMap("eventChain"))
+      chain.size shouldBe 1
+      chain.head.getString("action") shouldBe Some("jcl_fixture.command.ok")
+      val emits = _records(chain.head.asMap("emits"))
+      emits.head.getString("event") shouldBe Some("order.accepted")
+      _records(emits.head.asMap("receivers")).head.getString("guard") shouldBe Some("order.hasHook")
+      }
+    }
+
     "reject invalid workflow-like or malformed YAML shapes" in {
       Given("invalid JCL payloads")
       _with_fixture() { fixture =>
       val missingJobs =
         """job:
           |  name: invalid
+          |""".stripMargin
+      val bothRoots =
+        """job:
+          |  name: invalid
+          |jobs: []
           |""".stripMargin
       val bothTargetKinds =
         """jobs:
@@ -106,30 +154,222 @@ final class JclJobControlComponentSpec
           |      action: jcl_fixture.command.ok
           |      branch: x
           |""".stripMargin
+      val invalidProfile =
+        """job:
+          |  name: invalid
+          |  target:
+          |    action: jcl_fixture.command.ok
+          |  profile:
+          |    eventChain:
+          |      - action: jcl_fixture.command.ok
+          |        emits:
+          |          - event: order.accepted
+          |            occurrence: always
+          |""".stripMargin
 
       When("describe is invoked with unsupported payloads")
       val r1 = _executeResult(fixture.subsystem, "job_control.job.describe_job_definition", missingJobs)
       val r2 = _executeResult(fixture.subsystem, "job_control.job.describe_job_definition", bothTargetKinds)
       val r3 = _executeResult(fixture.subsystem, "job_control.job.describe_job_definition", branchShape)
       val r4 = _executeResult(fixture.subsystem, "job_control.job.describe_job_definition", workflowMissingRegistration)
+      val r5 = _executeResult(fixture.subsystem, "job_control.job.describe_job_definition", bothRoots)
+      val r6 = _executeResult(fixture.subsystem, "job_control.job.describe_job_definition", invalidProfile)
 
       Then("the payloads fail deterministically")
-      r1 match {
+      Vector(r1, r2, r3, r4, r5, r6).foreach {
         case Consequence.Failure(_) => succeed
         case other => fail(s"expected failure but got $other")
       }
-      r2 match {
-        case Consequence.Failure(_) => succeed
-        case other => fail(s"expected failure but got $other")
       }
-      r3 match {
-        case Consequence.Failure(_) => succeed
-        case other => fail(s"expected failure but got $other")
+    }
+
+    "manage JobDefinition entity lifecycle and submit by reference with snapshots" in {
+      Given("a reusable JobDefinition with inert future JCL sections")
+      _with_fixture() { fixture =>
+      given ExecutionContext = ExecutionContext.test(SecurityContext.Privilege.ApplicationContentManager)
+      val body =
+        """job:
+          |  name: reusable-ok
+          |  target:
+          |    action: jcl_fixture.command.ok
+          |  parameters:
+          |    orderId: reusable-1
+          |  profile:
+          |    expectedStatus: succeeded
+          |    eventChain:
+          |      - action: jcl_fixture.command.ok
+          |  flow:
+          |    steps:
+          |      - action: jcl_fixture.command.ok
+          |  onEvent:
+          |    receivers: []
+          |""".stripMargin
+
+      When("the definition is created, searched, and submitted by ref")
+      val created = _execute(
+        fixture.subsystem,
+        "job_control.job.create_job_definition",
+        arguments = List(
+          Argument("key", "nightly-ok"),
+          Argument("status", "active"),
+          Argument("body", body)
+        )
+      )
+      val searched = _execute(
+        fixture.subsystem,
+        "job_control.job.search_job_definitions",
+        arguments = Nil
+      )
+      val submitted = _execute(
+        fixture.subsystem,
+        "job_control.job.submit_job_definition",
+        arguments = List(Argument("body", "jobDefinitionRef: nightly-ok"))
+      )
+
+      Then("the definition is a versioned active management record")
+      val createdRecord = _record(created)
+      createdRecord.getString("key") shouldBe Some("nightly-ok")
+      createdRecord.getString("definitionStatus") shouldBe Some("active")
+      createdRecord.getInt("version") shouldBe Some(1)
+      createdRecord.getString("hash").exists(_.nonEmpty) shouldBe true
+      createdRecord.getString("flow").exists(_.nonEmpty) shouldBe true
+      createdRecord.getString("onEvent").exists(_.nonEmpty) shouldBe true
+      _records(_record(searched).asMap("jobDefinitions")).map(_.getString("key")) should contain (Some("nightly-ok"))
+
+      And("the submitted Job keeps an immutable definition snapshot")
+      val jobId = _strings(_record(submitted), "submitted-job-ids").head
+      val model = fixture.subsystem.jobEngine.queryVisible(org.goldenport.cncf.job.JobId.parse(jobId).toOption.get).toOption.flatten.getOrElse(fail("job missing"))
+      model.debug.jobDefinitionSnapshot.map(_.key) shouldBe Some("nightly-ok")
+      model.debug.jobDefinitionSnapshot.map(_.version) shouldBe Some(1)
+      model.debug.parameters.get("jcl.jobDefinition.key") shouldBe Some("nightly-ok")
+      model.debug.declaredProfile.flatMap(_.expectedStatus).map(_.toString) shouldBe Some("Succeeded")
       }
-      r4 match {
-        case Consequence.Failure(_) => succeed
-        case other => fail(s"expected failure but got $other")
+    }
+
+    "attach operation JobDefinition snapshots during normal Command launch" in {
+      Given("an operation bound to an active JobDefinition")
+      _with_fixture(
+        operationExecution = Map("ok" -> "sync-job"),
+        operationJobDefinitionRefs = Map("ok" -> "op-bound-ok")
+      ) { fixture =>
+      val body =
+        """job:
+          |  name: operation-bound-ok
+          |  target:
+          |    action: jcl_fixture.command.ok
+          |  profile:
+          |    expectedStatus: succeeded
+          |""".stripMargin
+      _execute(
+        fixture.subsystem,
+        "job_control.job.create_job_definition",
+        arguments = List(
+          Argument("key", "op-bound-ok"),
+          Argument("status", "active"),
+          Argument("body", body)
+        )
+      )
+
+      When("the operation is executed through ComponentLogic")
+      val component = _component_for(fixture.subsystem, "jcl_fixture.command.ok")
+      val request = _build_request(fixture.subsystem.resolver, "jcl_fixture.command.ok", Nil)
+      val action = component.logic.makeOperationRequest(request).toOption.collect {
+        case action: Action => action
+      }.getOrElse(fail("action missing"))
+      val ctx = component.logic.executionContext()
+      val response = component.logic.executeAction(action, ctx)
+      given ExecutionContext = ctx
+
+      Then("the managed Job carries the JobDefinition snapshot")
+      response shouldBe Consequence.success(OperationResponse.Scalar("ok"))
+      val jobId = ctx.runtime.executionMetadata.responseJobId.getOrElse(fail("response job id missing"))
+      val model = component.jobEngine.queryVisible(org.goldenport.cncf.job.JobId.parse(jobId).toOption.get).toOption.flatten.getOrElse(fail("job missing"))
+      model.debug.jobDefinitionSnapshot.map(_.key) shouldBe Some("op-bound-ok")
+      model.debug.declaredProfile.flatMap(_.expectedStatus).map(_.toString) shouldBe Some("Succeeded")
       }
+    }
+
+    "submit canonical JCL and compare declared and observed profile diagnostics" in {
+      Given("a canonical JCL profile whose required action succeeds")
+      _with_fixture() { fixture =>
+      given ExecutionContext = ExecutionContext.test(SecurityContext.Privilege.ApplicationContentManager)
+      val body =
+        """job:
+          |  name: compare-ok
+          |  target:
+          |    action: jcl_fixture.command.ok
+          |  parameters:
+          |    orderId: profile-1
+          |  profile:
+          |    expectedStatus: succeeded
+          |    eventChain:
+          |      - action: jcl_fixture.command.ok
+          |""".stripMargin
+
+      When("the job is submitted and compared")
+      val response = _execute(
+        fixture.subsystem,
+        "job_control.job.submit_job_definition",
+        arguments = List(Argument("body", body))
+      )
+      val jobId = _strings(_record(response), "submitted-job-ids").head
+      val comparison = _execute(
+        fixture.subsystem,
+        "job_control.job.compare_job_profile",
+        arguments = List(Argument("id", jobId))
+      )
+
+      Then("the declared profile is attached and no error difference is reported")
+      val record = _record(comparison)
+      record.getString("summarySeverity") shouldBe Some("ok")
+      record.getBoolean("accepted") shouldBe Some(true)
+      record.getRecord("declared").flatMap(_.getString("expectedStatus")) shouldBe Some("Succeeded")
+      _records(record.asMap("differences")) shouldBe empty
+      }
+    }
+
+    "report profile contradictions and reconstruct canonical job JCL" in {
+      Given("a canonical JCL profile whose declared status is wrong")
+      _with_fixture() { fixture =>
+      given ExecutionContext = ExecutionContext.test(SecurityContext.Privilege.ApplicationContentManager)
+      val body =
+        """job:
+          |  name: compare-status-mismatch
+          |  target:
+          |    action: jcl_fixture.command.ok
+          |  profile:
+          |    expectedStatus: failed
+          |    eventChain:
+          |      - action: jcl_fixture.command.ok
+          |""".stripMargin
+
+      When("the job is submitted, compared, and reconstructed")
+      val response = _execute(
+        fixture.subsystem,
+        "job_control.job.submit_job_definition",
+        arguments = List(Argument("body", body))
+      )
+      val jobId = _strings(_record(response), "submitted-job-ids").head
+      val comparison = _execute(
+        fixture.subsystem,
+        "job_control.job.compare_job_profile",
+        arguments = List(Argument("id", jobId))
+      )
+      val reconstructed = _execute(
+        fixture.subsystem,
+        "job_control.job.reconstruct_job_profile",
+        arguments = List(Argument("id", jobId))
+      )
+
+      Then("comparison reports an error-level status mismatch")
+      val differences = _records(_record(comparison).asMap("differences"))
+      differences.exists(_.getString("kind").contains("status-mismatch")) shouldBe true
+      _record(comparison).getString("summarySeverity") shouldBe Some("error")
+
+      And("reconstruction emits canonical single-job shape")
+      val job = _record(reconstructed).getRecord("job").getOrElse(fail("canonical job missing"))
+      job.getString("name") shouldBe Some("compare-status-mismatch")
+      job.getRecord("profile").flatMap(_.getString("expectedStatus")) shouldBe Some("Succeeded")
       }
     }
 
@@ -381,12 +621,14 @@ final class JclJobControlComponentSpec
 
   private def _with_fixture[A](
     definitions: Vector[WorkflowDefinition] = Vector.empty,
-    entities: Vector[_SalesOrder] = Vector.empty
+    entities: Vector[_SalesOrder] = Vector.empty,
+    operationExecution: Map[String, String] = Map.empty,
+    operationJobDefinitionRefs: Map[String, String] = Map.empty
   )(body: _Fixture => A): A =
     SubsystemTestFixture.withSubsystem(SubsystemTestFixture.Startup.Default(Some("command"))) { subsystem =>
       given EntityPersistent[_SalesOrder] = _persistent
       val trace = ArrayBuffer.empty[String]
-      val component = _component(subsystem, trace, definitions, entities)
+      val component = _component(subsystem, trace, definitions, entities, operationExecution, operationJobDefinitionRefs)
       val bootstrapped = new ComponentFactory().bootstrap(component)
       subsystem.add(bootstrapped)
       body(_Fixture(subsystem, bootstrapped, trace))
@@ -396,7 +638,9 @@ final class JclJobControlComponentSpec
     subsystem: org.goldenport.cncf.subsystem.Subsystem,
     trace: ArrayBuffer[String],
     definitions: Vector[WorkflowDefinition],
-    entities: Vector[_SalesOrder]
+    entities: Vector[_SalesOrder],
+    operationExecution: Map[String, String],
+    operationJobDefinitionRefs: Map[String, String]
   ): Component = {
     given EntityPersistent[_SalesOrder] = _persistent
     val component = new Component() {
@@ -406,6 +650,8 @@ final class JclJobControlComponentSpec
           CmlOperationDefinition(
             name = name,
             kind = "COMMAND",
+            execution = operationExecution.get(name),
+            jobDefinitionRef = operationJobDefinitionRefs.get(name),
             inputType = s"${name}Input",
             outputType = s"${name}Result",
             inputValueKind = "COMMAND_VALUE"

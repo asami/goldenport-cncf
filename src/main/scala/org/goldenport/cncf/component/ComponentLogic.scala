@@ -13,9 +13,10 @@ import org.goldenport.cncf.context.{DataStoreContext, EntitySpaceContext, Entity
 import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.backend.collaborator.Collaborator
 import org.goldenport.cncf.datastore.DataStore
+import org.goldenport.cncf.entity.EntityStore
 import org.goldenport.cncf.event.{EventEngine, EventStore, ReceptionInput}
 import org.goldenport.cncf.http.HttpDriver
-import org.goldenport.cncf.job.{ActionId, ActionTask, JobControlPolicy, JobControlRequest, JobControlResponse, JobEngine, JobId, JobPersistencePolicy, JobResult, JobRunMode, JobStatus, JobSubmitOption, JobTask}
+import org.goldenport.cncf.job.{ActionId, ActionTask, JobControlPolicy, JobControlRequest, JobControlResponse, JobDefinitionEntity, JobDefinitionSnapshot, JobEngine, JobId, JobPersistencePolicy, JobResult, JobRunMode, JobStatus, JobSubmitOption, JobTask}
 import org.goldenport.cncf.unitofwork.UnitOfWork
 import org.goldenport.cncf.unitofwork.UnitOfWorkOp
 import org.goldenport.cncf.unitofwork.UnitOfWorkInterpreter
@@ -195,14 +196,16 @@ case class ComponentLogic(
         case CommandJobRunMode.Sync => JobRunMode.Sync
         case CommandJobRunMode.Async => JobRunMode.Async
       }
-      val option = _default_submit_option(List(task)).copy(runMode = runmode)
-      submitJob(List(task), ctx, option).flatMap { jobid =>
-        _note_job_response(ctx, jobid)
-        policy.interfaceMode match {
-          case CommandInterfaceMode.Async =>
-            Consequence.success(OperationResponse.Scalar(jobid.value))
-          case CommandInterfaceMode.Sync =>
-            awaitJobResult(jobid)
+      val option0 = _default_submit_option(List(task)).copy(runMode = runmode)
+      _job_definition_submit_option(action, option0, ctx).flatMap { option =>
+        submitJob(List(task), ctx, option).flatMap { jobid =>
+          _note_job_response(ctx, jobid)
+          policy.interfaceMode match {
+            case CommandInterfaceMode.Async =>
+              Consequence.success(OperationResponse.Scalar(jobid.value))
+            case CommandInterfaceMode.Sync =>
+              awaitJobResult(jobid)
+          }
         }
       }
     }
@@ -241,10 +244,79 @@ case class ComponentLogic(
   private def _operation_execution_policy(
     operationname: String
   ): Option[CommandExecutionPolicy] =
-    component.operationDefinitions.find(_.name == operationname).flatMap { definition =>
+    _operation_definition(operationname).flatMap { definition =>
       definition.commandExecutionPolicy
         .orElse(definition.execution.flatMap(CommandExecutionPolicy.fromLegacyExecution))
     }
+
+  private def _operation_definition(
+    operationname: String
+  ): Option[CmlOperationDefinition] =
+    component.operationDefinitions.find(_.name == operationname)
+
+  private def _job_definition_submit_option(
+    action: Action,
+    base: JobSubmitOption,
+    ctx: ExecutionContext
+  ): Consequence[JobSubmitOption] =
+    _job_definition_ref(action) match {
+      case None => Consequence.success(base)
+      case Some(ref) =>
+        given ExecutionContext = ctx
+        _load_job_definition(ref, ctx).flatMap {
+          case Some(entity) if entity.isActive =>
+            val snapshot = JobDefinitionSnapshot.from(entity)
+            Consequence.success(
+              base.copy(
+                declaredProfile = base.declaredProfile.orElse(snapshot.profile),
+                jobDefinitionSnapshot = Some(snapshot)
+              )
+            )
+          case Some(entity) =>
+            Consequence.argumentInvalid(s"JobDefinition is not active: ${entity.key}")
+          case None =>
+            Consequence.operationNotFound(s"JobDefinition:$ref")
+        }
+    }
+
+  private def _load_job_definition(
+    ref: String,
+    ctx: ExecutionContext
+  ): Consequence[Option[JobDefinitionEntity]] = {
+    given ExecutionContext = ctx
+    EntityStore.standard().load[JobDefinitionEntity](JobDefinitionEntity.entityId(ref))(using JobDefinitionEntity.entityPersistent, ctx).flatMap {
+      case some @ Some(_) => Consequence.success(some)
+      case None => _load_job_definition_from_job_control(ref, ctx)
+    }
+  }
+
+  private def _load_job_definition_from_job_control(
+    ref: String,
+    ctx: ExecutionContext
+  ): Consequence[Option[JobDefinitionEntity]] =
+    component.subsystem
+      .flatMap(_.components.find(_.name == org.goldenport.cncf.component.builtin.jobcontrol.JobControlComponent.name))
+      .flatMap(_.port.get[org.goldenport.cncf.component.builtin.jobcontrol.JobControlComponent.JobService]) match {
+        case Some(service) =>
+          given ExecutionContext = ctx
+          service.getJobDefinition(ref).flatMap(JobDefinitionEntity.fromRecord).map(Some(_))
+        case None =>
+          Consequence.success(None)
+      }
+
+  private def _job_definition_ref(
+    action: Action
+  ): Option[String] =
+    _request_job_definition_ref(action)
+      .orElse(_operation_definition(action.request.operation).flatMap(_.jobDefinitionRef))
+
+  private def _request_job_definition_ref(
+    action: Action
+  ): Option[String] =
+    action.arguments.find(_.name == "jobDefinitionRef").map(_.value.toString)
+      .orElse(action.properties.find(_.name == "jobDefinitionRef").map(_.value.toString))
+      .map(_.trim)
+      .filter(_.nonEmpty)
 
   private def _is_command_script_combo(action: Action): Boolean = {
     val isscriptcomponent = action.request.component.exists(_.equalsIgnoreCase("SCRIPT"))

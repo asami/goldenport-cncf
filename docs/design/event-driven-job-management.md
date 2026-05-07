@@ -1,5 +1,11 @@
 # Event-Driven Job Management (Phase 1–2)
 
+This document is a historical/provisional foundation for event-driven Job
+management. Current Phase 22 Job and JCL direction is defined in:
+
+- `docs/design/job-management.md`
+- `docs/design/jcl-language.md`
+
 ----------------------------------------------------------------------
 1. Purpose
 ----------------------------------------------------------------------

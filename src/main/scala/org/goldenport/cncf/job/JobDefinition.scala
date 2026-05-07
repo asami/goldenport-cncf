@@ -7,7 +7,7 @@ import org.yaml.snakeyaml.Yaml
 
 /*
  * @since   Apr. 22, 2026
- * @version Apr. 22, 2026
+ * @version May.  7, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class JobWorkflowTarget(
@@ -61,7 +61,12 @@ final case class JobDefinition(
   target: JobTarget,
   parameters: Map[String, String] = Map.empty,
   submit: JobSubmitSpec = JobSubmitSpec(),
-  onFailure: Option[JobFailureHook] = None
+  onFailure: Option[JobFailureHook] = None,
+  profile: Option[JobDeclaredProfile] = None,
+  flow: Option[Record] = None,
+  events: Option[Record] = None,
+  onEvent: Option[Record] = None,
+  jobDefinitionRef: Option[String] = None
 ) {
   def toRecord: Record =
     Record.data(
@@ -71,17 +76,31 @@ final case class JobDefinition(
         Record.data(k -> v)
       },
       "submit" -> submit.toRecord,
-      "on-failure" -> onFailure.map(_.toRecord).getOrElse(Record.empty)
+      "on-failure" -> onFailure.map(_.toRecord).getOrElse(Record.empty),
+      "profile" -> profile.map(_.toRecord).getOrElse(Record.empty),
+      "flow" -> flow.getOrElse(Record.empty),
+      "events" -> events.getOrElse(Record.empty),
+      "onEvent" -> onEvent.getOrElse(Record.empty),
+      "jobDefinitionRef" -> jobDefinitionRef.getOrElse("")
     )
 }
 
+enum JobJclRootKind {
+  case SingleJob
+  case Jobs
+}
+
 final case class JobBatchDefinition(
-  jobs: Vector[JobDefinition]
+  jobs: Vector[JobDefinition],
+  rootKind: JobJclRootKind = JobJclRootKind.Jobs
 ) {
   def toRecord: Record =
-    Record.data(
-      "jobs" -> jobs.map(_.toRecord)
-    )
+    rootKind match {
+      case JobJclRootKind.SingleJob =>
+        Record.data("job" -> jobs.headOption.map(_.toRecord).getOrElse(Record.empty))
+      case JobJclRootKind.Jobs =>
+        Record.data("jobs" -> jobs.map(_.toRecord))
+    }
 }
 
 final case class JobBatchSubmissionResult(
@@ -119,10 +138,14 @@ object JobBatchDefinition {
   private def _parse_root(p: Any): Consequence[JobBatchDefinition] =
     _object_map(p, "JCL root").flatMap { m =>
       val keys = m.keySet
-      if (keys != Set("jobs"))
-        Consequence.argumentInvalid("JCL root must contain only jobs")
+      if (keys == Set("job"))
+        _job(m("job"), 0, "job").map(job => JobBatchDefinition(Vector(job), JobJclRootKind.SingleJob))
+      else if (keys == Set("jobs"))
+        _jobs(m("jobs")).map(jobs => JobBatchDefinition(jobs, JobJclRootKind.Jobs))
+      else if (keys.contains("job") && keys.contains("jobs"))
+        Consequence.argumentInvalid("JCL root must not contain both job and jobs")
       else
-        _jobs(m("jobs")).map(JobBatchDefinition.apply)
+        Consequence.argumentInvalid("JCL root must contain only job or jobs")
     }
 
   private def _jobs(p: Any): Consequence[Vector[JobDefinition]] =
@@ -134,16 +157,24 @@ object JobBatchDefinition {
     }
 
   private def _job(p: Any, index: Int): Consequence[JobDefinition] =
-    _object_map(p, s"jobs[$index]").flatMap { m =>
-      val allowed = Set("name", "target", "parameters", "submit", "onFailure")
-      _reject_unknown_keys(m.keySet, allowed, s"jobs[$index]").flatMap { _ =>
+    _job(p, index, s"jobs[$index]")
+
+  private def _job(p: Any, index: Int, path: String): Consequence[JobDefinition] =
+        _object_map(p, path).flatMap { m =>
+      val allowed = Set("name", "target", "parameters", "submit", "onFailure", "profile", "flow", "events", "onEvent", "jobDefinitionRef")
+      _reject_unknown_keys(m.keySet, allowed, path).flatMap { _ =>
         for {
-          name <- _required_string(m, "name", s"jobs[$index]")
-          target <- _target(m.get("target"), s"jobs[$index].target")
-          params <- _string_map(m.get("parameters"), s"jobs[$index].parameters")
-          submit <- _submit(m.get("submit"), s"jobs[$index].submit")
-          onFailure <- _failure_hook(m.get("onFailure"), s"jobs[$index].onFailure")
-        } yield JobDefinition(name, target, params, submit, onFailure)
+          name <- _required_string(m, "name", path)
+          target <- _target(m.get("target"), s"$path.target")
+          params <- _string_map(m.get("parameters"), s"$path.parameters")
+          submit <- _submit(m.get("submit"), s"$path.submit")
+          onFailure <- _failure_hook(m.get("onFailure"), s"$path.onFailure")
+          profile <- _profile(m.get("profile"), s"$path.profile")
+          flow <- _inert_record(m.get("flow"), s"$path.flow")
+          events <- _inert_record(m.get("events"), s"$path.events")
+          onEvent <- _inert_record(m.get("onEvent"), s"$path.onEvent")
+          ref <- _optional_string(m.get("jobDefinitionRef"), s"$path.jobDefinitionRef")
+        } yield JobDefinition(name, target, params, submit, onFailure, profile, flow, events, onEvent, ref)
       }
     }
 
@@ -217,6 +248,175 @@ object JobBatchDefinition {
             } yield Some(JobFailureHook(action, parameters))
           }
         }
+    }
+
+  private def _profile(
+    p: Option[Any],
+    path: String
+  ): Consequence[Option[JobDeclaredProfile]] =
+    p match {
+      case None => Consequence.success(None)
+      case Some(value) =>
+        _object_map(value, path).flatMap { m =>
+          val allowed = Set("expectedStatus", "eventChain")
+          _reject_unknown_keys(m.keySet, allowed, path).flatMap { _ =>
+            for {
+              status <- _optional_status(m.get("expectedStatus"), s"$path.expectedStatus")
+              chain <- _event_chain(m.get("eventChain"), s"$path.eventChain")
+            } yield Some(JobDeclaredProfile(status, chain))
+          }
+        }
+    }
+
+  private def _optional_status(
+    p: Option[Any],
+    path: String
+  ): Consequence[Option[JobStatus]] =
+    p match {
+      case None => Consequence.success(None)
+      case Some(value) =>
+        _string(value, path).flatMap { s =>
+          s.trim.toLowerCase(java.util.Locale.ROOT) match {
+            case "submitted" => Consequence.success(Some(JobStatus.Submitted))
+            case "running" => Consequence.success(Some(JobStatus.Running))
+            case "suspended" => Consequence.success(Some(JobStatus.Suspended))
+            case "cancelled" | "canceled" => Consequence.success(Some(JobStatus.Cancelled))
+            case "succeeded" | "success" => Consequence.success(Some(JobStatus.Succeeded))
+            case "failed" | "failure" => Consequence.success(Some(JobStatus.Failed))
+            case other => Consequence.argumentInvalid(s"$path is not a supported Job status: $other")
+          }
+        }
+    }
+
+  private def _event_chain(
+    p: Option[Any],
+    path: String
+  ): Consequence[Vector[JobProfileChainNode]] =
+    p match {
+      case None => Consequence.success(Vector.empty)
+      case Some(value) =>
+        _vector(value, path).flatMap { xs =>
+          _sequence(xs.zipWithIndex.toVector.map { case (x, i) =>
+            _chain_node(x, s"$path[$i]")
+          })
+        }
+    }
+
+  private def _chain_node(
+    p: Any,
+    path: String
+  ): Consequence[JobProfileChainNode] =
+    _object_map(p, path).flatMap { m =>
+      val allowed = Set("action", "emits")
+      _reject_unknown_keys(m.keySet, allowed, path).flatMap { _ =>
+        for {
+          action <- _required_string(m, "action", path)
+          emits <- _events(m.get("emits"), s"$path.emits")
+        } yield JobProfileChainNode(action, emits)
+      }
+    }
+
+  private def _events(
+    p: Option[Any],
+    path: String
+  ): Consequence[Vector[JobProfileEvent]] =
+    p match {
+      case None => Consequence.success(Vector.empty)
+      case Some(value) =>
+        _vector(value, path).flatMap { xs =>
+          _sequence(xs.zipWithIndex.toVector.map { case (x, i) =>
+            _event(x, s"$path[$i]")
+          })
+        }
+    }
+
+  private def _event(
+    p: Any,
+    path: String
+  ): Consequence[JobProfileEvent] =
+    _object_map(p, path).flatMap { m =>
+      val allowed = Set("event", "occurrence", "receivers")
+      _reject_unknown_keys(m.keySet, allowed, path).flatMap { _ =>
+        for {
+          event <- _required_string(m, "event", path)
+          occurrence <- _occurrence(m.get("occurrence"), s"$path.occurrence", JobProfileOccurrence.Required)
+          receivers <- _receivers(m.get("receivers"), s"$path.receivers")
+        } yield JobProfileEvent(event, occurrence, receivers)
+      }
+    }
+
+  private def _receivers(
+    p: Option[Any],
+    path: String
+  ): Consequence[Vector[JobProfileReceiver]] =
+    p match {
+      case None => Consequence.success(Vector.empty)
+      case Some(value) =>
+        _vector(value, path).flatMap { xs =>
+          _sequence(xs.zipWithIndex.toVector.map { case (x, i) =>
+            _receiver(x, s"$path[$i]")
+          })
+        }
+    }
+
+  private def _receiver(
+    p: Any,
+    path: String
+  ): Consequence[JobProfileReceiver] =
+    _object_map(p, path).flatMap { m =>
+      val allowed = Set("action", "guard", "occurrence")
+      _reject_unknown_keys(m.keySet, allowed, path).flatMap { _ =>
+        for {
+          action <- _required_string(m, "action", path)
+          guard <- _optional_string(m.get("guard"), s"$path.guard")
+          occurrence <- _occurrence(m.get("occurrence"), s"$path.occurrence", JobProfileOccurrence.Required)
+        } yield JobProfileReceiver(action, guard, occurrence)
+      }
+    }
+
+  private def _occurrence(
+    p: Option[Any],
+    path: String,
+    default: JobProfileOccurrence
+  ): Consequence[JobProfileOccurrence] =
+    p match {
+      case None => Consequence.success(default)
+      case Some(value) => _string(value, path).flatMap(JobProfileOccurrence.parse(_, path))
+    }
+
+  private def _optional_string(
+    p: Option[Any],
+    path: String
+  ): Consequence[Option[String]] =
+    p match {
+      case None => Consequence.success(None)
+      case Some(value) => _string(value, path).map(Some(_))
+    }
+
+  private def _inert_record(
+    p: Option[Any],
+    path: String
+  ): Consequence[Option[Record]] =
+    p match {
+      case None => Consequence.success(None)
+      case Some(value) => _any_to_record(value, path).map(Some(_))
+    }
+
+  private def _any_to_record(
+    p: Any,
+    path: String
+  ): Consequence[Record] =
+    p match {
+      case m: java.util.Map[?, ?] =>
+        _object_map(m, path).map(m => Record.data(m.toVector.sortBy(_._1)*))
+      case m: Map[?, ?] =>
+        _object_map(m, path).map(m => Record.data(m.toVector.sortBy(_._1)*))
+      case xs: java.util.List[?] =>
+        Consequence.success(Record.data("items" -> xs.asScala.toVector.map(_.toString)))
+      case xs: Seq[?] =>
+        Consequence.success(Record.data("items" -> xs.toVector.map(_.toString)))
+      case other =>
+        Consequence.success(Record.data("value" -> other.toString))
     }
 
   private def _reject_unknown_keys(

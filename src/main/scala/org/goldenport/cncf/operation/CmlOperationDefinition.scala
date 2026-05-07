@@ -157,6 +157,7 @@ final case class CmlOperationDefinition(
   commandKind: Option[String] = None,
   commandExecutionProperties: Record = Record.empty,
   commandExecutionPolicy: Option[CommandExecutionPolicy] = None,
+  jobDefinitionRef: Option[String] = None,
   implementation: Option[String] = None,
   entityName: Option[String] = None,
   entityNames: Vector[String] = Vector.empty,

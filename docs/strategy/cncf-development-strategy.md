@@ -530,7 +530,7 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
   isolated in the timing-tagged `JobRetryTimingSpec` instead of ordinary
   `sbt test`. Entity kind and Working Set runtime policy is documented outside
   the authorization model: canonical `entityKind` values are `master`,
-  `document`, `workflow`, `task`, `actor`, and `asset`; `BlogPost` is a CMS
+  `document`, `workflow`, `task`, `actor`, `asset`, and `system`; `BlogPost` is a CMS
   public-content document with a store-backed canonical record, Working Set
   disabled by default, and view/index/cache projections as the
   read-optimization path. The first
@@ -986,9 +986,10 @@ remove its completion record from this section and add or update the
 corresponding completed-history entry.
 
 Phase 22 is active. `9.14 Job Management` is the selected development item.
-JM-01 Command Execution Policy Normalization and JM-02 Job Entity Management
-are complete; JM-03 JCL Profile / Execution Profile Difference Checking is
-the active slice.
+JM-01 Command Execution Policy Normalization, JM-02 Job Entity Management,
+JM-03 JCL Profile / Execution Profile Difference Checking, and JM-03B
+JobDefinition Entity / Binding / Execution Record Policy are complete; JM-04
+Task Transaction and Compensation Boundary is the active slice.
 
 ### 9.1 Web Next Stage Follow-ups
 Future Web/platform development item.
@@ -1186,8 +1187,9 @@ Active stack:
 
 - JM-01: Command Execution Policy Normalization. DONE.
 - JM-02: Job Entity Management. DONE.
-- JM-03: JCL Profile / Execution Profile Difference Checking. ACTIVE.
-- JM-04: Task Transaction and Compensation Boundary.
+- JM-03: JCL Profile / Execution Profile Difference Checking. DONE.
+- JM-03B: JobDefinition Entity / Binding / Execution Record Policy. DONE.
+- JM-04: Task Transaction and Compensation Boundary. ACTIVE.
 - JM-05: User Job Notification Policy.
 - JM-06: Phase 22 verification and closure.
 
@@ -1206,10 +1208,31 @@ Active stack:
   application operations.
 - Manage Job as a first-class SimpleEntity management record synchronized from
   JobEngine lifecycle snapshots while keeping JobEngine as execution authority.
-- Make Job behavior definable by JCL, allow Job launch with an intended JCL
-  profile, and record the actual execution profile for inspection.
-- Add difference checking between declared JCL and observed execution, plus a
-  reconstruction path from execution profiles back into JCL.
+- Make Job behavior definable by canonical single-Job `job:` JCL, allow Job
+  launch with an intended Event/Action chain profile, and record the actual
+  execution profile for inspection.
+- Add diagnostics-only difference checking between declared JCL and observed
+  execution, plus a reconstruction path from execution profiles back into
+  canonical `job:` JCL.
+- Add JobDefinition Entity management as the reusable definition registry
+  separate from Job instances. Command / Action / Operation metadata should be
+  able to bind to JobDefinition through `jobDefinitionRef`; inline JCL submit
+  remains compatibility/debug input.
+- Add `entityKind = system` for CNCF runtime/system management Entities. Job
+  and JobDefinition use `system`; `workflow` remains for business state-machine
+  Entities.
+- Keep active JobDefinitions resident. Keep active Jobs and Jobs completed
+  within the one-day operational confirmation window resident.
+- Define Job instance definition snapshots (`jobDefinitionId`, version, hash,
+  declared profile, optional normalized JCL/source snapshot) and the execution
+  record storage policy before Task compensation work.
+- Treat Task Execution Tree and task-local calltree as distinct diagnostic
+  storage surfaces. Job Entity keeps summaries/references; full timeline, task
+  tree, task calltrees, large results, and raw event history are managed
+  outside the lightweight Job Entity body.
+- Reserve JCL `profile` for diagnostics-only declared/observed comparison.
+  Future executable JCL orchestration should use separate `flow` and `events` /
+  `onEvent` sections for procedural subtask flow and Event-driven behavior.
 - Jobs have state and state transitions; Job control operations should be
   state-aware.
 - Treat Task as the transaction unit inside a Job. Aggregate execution is a
