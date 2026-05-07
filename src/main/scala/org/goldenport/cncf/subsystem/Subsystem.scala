@@ -29,6 +29,7 @@ import org.goldenport.cncf.http.{HttpDriver, HttpExecutionResult}
 import org.goldenport.cncf.job.{InMemoryJobEngine, JobEngine}
 import org.goldenport.cncf.datastore.DataStore
 import org.goldenport.cncf.event.{EventBus, EventEngine, EventReception, EventStore}
+import org.goldenport.cncf.usernotification.UserNotificationEventForwarder
 import org.goldenport.cncf.workflow.WorkflowEngine
 import org.goldenport.configuration.ResolvedConfiguration
 import org.goldenport.protocol.{Property, Request, Response}
@@ -51,7 +52,7 @@ import org.goldenport.cncf.metrics.EntityAccessMetricsRegistry
  *  version Jan. 31, 2026
  *  version Feb.  4, 2026
  *  version Apr. 30, 2026
- * @version May.  6, 2026
+ * @version May.  7, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Subsystem(
@@ -92,6 +93,7 @@ final class Subsystem(
   )
   private var _descriptor: Option[GenericSubsystemDescriptor] = None
   private var _resolved_security_wiring: ResolvedSecurityWiring = ResolvedSecurityWiring.empty
+  private var _user_notification_forwarding_registered: Boolean = false
 
   def globalRuntimeContext: GlobalRuntimeContext = {
     val a = _find_global_runtime_context(scopeContext)
@@ -127,6 +129,7 @@ final class Subsystem(
   def withDescriptor(descriptor: GenericSubsystemDescriptor): Subsystem = {
     _descriptor = Some(descriptor)
     _resolved_security_wiring = ResolvedSecurityWiring.resolve(_descriptor, components)
+    _ensure_user_notification_event_forwarding()
     this
   }
 
@@ -187,7 +190,7 @@ final class Subsystem(
     val _ = component.withEventStore(_event_store)
     component.jobEngine match {
       case m: InMemoryJobEngine =>
-        m.withEventStore(_event_store)
+        m.withEventStore(_event_store).withEventBus(_event_bus)
       case _ =>
         ()
     }
@@ -239,9 +242,17 @@ final class Subsystem(
   def configurationOrEmpty: org.goldenport.configuration.Configuration =
     configuration.configuration
 
-  private def _rebuildResolver(): Unit =
+  private def _rebuildResolver(): Unit = {
     _resolver = OperationResolver.build(_component_space.components)
     _resolved_security_wiring = ResolvedSecurityWiring.resolve(_descriptor, _component_space.components)
+    _ensure_user_notification_event_forwarding()
+  }
+
+  private def _ensure_user_notification_event_forwarding(): Unit =
+    if (!_user_notification_forwarding_registered) {
+      _event_bus.register(UserNotificationEventForwarder.subscription(this))
+      _user_notification_forwarding_registered = true
+    }
 
   def executeHttp(req: HttpRequest): HttpResponse =
     executeHttpWithMetadata(req).response

@@ -11,7 +11,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr.  8, 2026
- * @version Apr. 28, 2026
+ *  version Apr. 28, 2026
+ * @version May.  7, 2026
  * @author  ASAMI, Tomoharu
  */
 final class GenericSubsystemDescriptorSpec extends AnyWordSpec with Matchers {
@@ -251,6 +252,31 @@ final class GenericSubsystemDescriptorSpec extends AnyWordSpec with Matchers {
           |  authorization:
           |    roles:
           |      blob_user: invalid-scalar-role-definition
+          |""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+
+      GenericSubsystemDescriptor.load(path) shouldBe a[Consequence.Failure[_]]
+    }
+
+    "reject invalid user notification event forwarding rules" in {
+      val path = Files.createTempFile("generic-subsystem-user-notification-event-forwarding-invalid", ".yaml")
+      Files.writeString(
+        path,
+        """subsystem: textus-notify
+          |version: 0.1.0-SNAPSHOT
+          |components:
+          |  - name: textus-user-notification
+          |    version: 0.1.0-SNAPSHOT
+          |runtime:
+          |  userNotification:
+          |    providers:
+          |      - name: textus-user-notification
+          |        component: textus-user-notification
+          |        enabled: true
+          |    eventForwarding:
+          |      - provider: textus-user-notification
+          |        appVisibleOnly: true
           |""".stripMargin,
         StandardCharsets.UTF_8
       )

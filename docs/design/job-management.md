@@ -420,9 +420,13 @@ state.
 14. User Notification Provider
 ----------------------------------------------------------------------
 
-Application user notifications are delivered through a CNCF service-provider
-boundary. CNCF defines `UserNotificationProvider` and resolves it from
-subsystem runtime wiring:
+Application user notifications are delivered through CNCF Event routing and a
+service-provider boundary. JobEngine does not know user notification. It emits
+ordinary Job lifecycle/recovery events, and a forwarding bridge converts
+matching events to `UserNotificationProvider` requests.
+
+CNCF defines `UserNotificationProvider` and resolves it from subsystem runtime
+wiring:
 
     runtime:
       userNotification:
@@ -430,17 +434,21 @@ subsystem runtime wiring:
           - name: textus-user-notification
             component: textus-user-notification
             channel: in-app
+        eventForwarding:
+          - event: job.succeeded
+          - event: job.failed
+          - event: job.cancelled
+          - event: job.recovery-required
 
 This provider is separate from `messageDelivery`. `messageDelivery` sends
 external email/SMS-style messages. `userNotification` creates user-addressed
 domain notifications, such as in-app notification records owned by
 `textus-user-notification`.
 
-JobEngine uses this provider for user-visible async managed Job feedback.
-The default policy treats a Job as user-visible only when application Web
-context such as `web.app` is present in Job submit metadata. System/admin or
-background async Jobs do not notify by default, though a submitter can still
-explicitly opt in with a `JobNotificationPolicy`.
+The default forwarding policy treats a Job event as user-visible only when
+application Web context such as `web.app` is present in Job event metadata.
+System/admin or background async Jobs do not notify by default, though a
+subsystem can explicitly opt in with an Event forwarding rule.
 
     - succeeded
     - failed
@@ -459,9 +467,9 @@ The notification request includes:
     - application Job detail URL such as `/web/{app}/jobs/{jobId}`
 
 Provider absence or provider failure is non-fatal. Job status and result remain
-authoritative. JobEngine records notification failure as diagnostic metadata and
-timeline entries so operators can see that the management notification
-projection is missing or stale.
+authoritative. The Event forwarding bridge records forwarding diagnostics so
+operators can see that the management notification projection is missing or
+stale.
 
 Duplicate terminal updates must not send duplicate notifications for the same
 `(jobId, trigger)`.

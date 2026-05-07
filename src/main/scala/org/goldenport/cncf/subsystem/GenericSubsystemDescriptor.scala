@@ -56,8 +56,21 @@ final case class GenericSubsystemUserNotificationProviderBinding(
   isDefault: Option[Boolean] = None
 )
 
+final case class GenericSubsystemUserNotificationEventForwardingBinding(
+  event: String,
+  provider: Option[String] = None,
+  channel: Option[String] = None,
+  enabled: Option[Boolean] = None,
+  appVisibleOnly: Option[Boolean] = None,
+  asyncOnly: Option[Boolean] = None,
+  notificationType: Option[String] = None,
+  priority: Option[String] = None,
+  dedupeKey: Option[String] = None
+)
+
 final case class GenericSubsystemUserNotificationBinding(
-  providers: Vector[GenericSubsystemUserNotificationProviderBinding] = Vector.empty
+  providers: Vector[GenericSubsystemUserNotificationProviderBinding] = Vector.empty,
+  eventForwarding: Vector[GenericSubsystemUserNotificationEventForwardingBinding] = Vector.empty
 )
 
 final case class GenericSubsystemRuntimeBinding(
@@ -414,7 +427,9 @@ object GenericSubsystemDescriptor {
       case (None, Some(x)) => Some(x)
       case (Some(a), Some(b)) =>
         Some(GenericSubsystemUserNotificationBinding(
-          providers = _merge_user_notification_providers(a.providers, b.providers)
+          providers = _merge_user_notification_providers(a.providers, b.providers),
+          eventForwarding =
+            if (b.eventForwarding.nonEmpty) b.eventForwarding else a.eventForwarding
         ))
     }
 
@@ -1223,6 +1238,29 @@ object GenericSubsystemDescriptor {
       }
     }
 
+  given RecordDecoder[GenericSubsystemUserNotificationEventForwardingBinding] with
+    def fromRecord(rec: Record): Consequence[GenericSubsystemUserNotificationEventForwardingBinding] = {
+      val event = _string(rec, "event").orElse(_string(rec, "name"))
+      event match {
+        case Some(e) =>
+          Consequence.success(
+            GenericSubsystemUserNotificationEventForwardingBinding(
+              event = e,
+              provider = _string(rec, "provider"),
+              channel = _string(rec, "channel"),
+              enabled = _boolean(rec, "enabled"),
+              appVisibleOnly = _boolean(rec, "appVisibleOnly", "app_visible_only"),
+              asyncOnly = _boolean(rec, "asyncOnly", "async_only"),
+              notificationType = _string(rec, "notificationType", "notification_type"),
+              priority = _string(rec, "priority"),
+              dedupeKey = _string(rec, "dedupeKey", "dedupe_key")
+            )
+          )
+        case None =>
+          Consequence.argumentMissing("user-notification event-forwarding event")
+      }
+    }
+
   given RecordDecoder[GenericSubsystemUserNotificationBinding] with
     def fromRecord(rec: Record): Consequence[GenericSubsystemUserNotificationBinding] = {
       val providers = rec.getAny("providers") match {
@@ -1231,21 +1269,41 @@ object GenericSubsystemDescriptor {
         case _ =>
           Vector.empty
       }
-      Consequence.success(
+      val eventForwarding = rec.getAny("eventForwarding").orElse(rec.getAny("event_forwarding")) match {
+        case Some(xs: Seq[?]) =>
+          _sequence(xs.toVector.map { x =>
+            _any_to_record(x) match {
+              case Some(r) =>
+                summon[RecordDecoder[GenericSubsystemUserNotificationEventForwardingBinding]].fromRecord(r)
+              case None =>
+                Consequence.argumentInvalid(s"user-notification event-forwarding entry must be a mapping: ${x}")
+            }
+          })
+        case Some(x) =>
+          Consequence.argumentInvalid(s"user-notification eventForwarding must be a list: ${x}")
+        case None =>
+          Consequence.success(Vector.empty)
+      }
+      eventForwarding.map { eventForwarding =>
         GenericSubsystemUserNotificationBinding(
-          providers = providers
+          providers = providers,
+          eventForwarding = eventForwarding
         )
-      )
+      }
     }
 
   given RecordDecoder[GenericSubsystemRuntimeBinding] with
     def fromRecord(rec: Record): Consequence[GenericSubsystemRuntimeBinding] =
-      Consequence.success(
+      (_record_value(rec, List("user_notification", "userNotification")) match {
+        case Some(r) =>
+          summon[RecordDecoder[GenericSubsystemUserNotificationBinding]].fromRecord(r).map(Some(_))
+        case None =>
+          Consequence.success(None)
+      }).map { userNotification =>
         GenericSubsystemRuntimeBinding(
-          userNotification = _record_value(rec, List("user_notification", "userNotification"))
-            .flatMap(r => summon[RecordDecoder[GenericSubsystemUserNotificationBinding]].fromRecord(r).toOption)
+          userNotification = userNotification
         )
-      )
+      }
 
   given RecordDecoder[SecurityRoleDefinition] with
     def fromRecord(rec: Record): Consequence[SecurityRoleDefinition] = {
@@ -1401,7 +1459,13 @@ object GenericSubsystemDescriptor {
           if (bindings.isEmpty)
             Consequence.argumentMissing("component bindings")
           else
-            _security_value(rec).map { security =>
+            for {
+              runtime <- _record_value(rec, List("runtime")) match {
+                case Some(r) => summon[RecordDecoder[GenericSubsystemRuntimeBinding]].fromRecord(r).map(Some(_))
+                case None => Consequence.success(None)
+              }
+              security <- _security_value(rec)
+            } yield {
               Shape(
                 subsystemName = name,
                 version = _string(rec, "version"),
@@ -1409,7 +1473,7 @@ object GenericSubsystemDescriptor {
                 extensions = _string_map_value(rec, List("extension", "extensions")),
                 config = _string_map_value(rec, List("config")),
                 wiring = _wiring_value(rec),
-                runtime = _record_value(rec, List("runtime")).flatMap(r => summon[RecordDecoder[GenericSubsystemRuntimeBinding]].fromRecord(r).toOption),
+                runtime = runtime,
                 security = security,
                 builtin = _record_value(rec, List("builtin", "builtins")).flatMap(r => summon[RecordDecoder[GenericSubsystemBuiltinBinding]].fromRecord(r).toOption),
                 operationAuthorization = _operation_authorization_value(rec)

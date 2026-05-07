@@ -39,7 +39,7 @@ import scala.util.Try
  *  version Mar. 31, 2026
  *  version Apr. 25, 2026
  *  version Apr. 26, 2026
- * @version May.  1, 2026
+ * @version May.  7, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactory(
@@ -207,7 +207,7 @@ final class ComponentFactory(
     val _ = component.withEventStore(store)
     component.jobEngine match {
       case m: org.goldenport.cncf.job.InMemoryJobEngine =>
-        m.withEventStore(store)
+        m.withEventStore(store).withEventBus(_shared_event_bus(component, store))
       case _ =>
         ()
     }

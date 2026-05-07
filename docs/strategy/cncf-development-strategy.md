@@ -1243,8 +1243,9 @@ Active stack:
   recovery-required events and human recovery diagnostics.
 - Expose Task Execution Tree and Task detail diagnostics through `job_control`;
   compensation is explicit and no business undo is inferred automatically.
-- Next: define application/user notification policy for async Job completion,
-  failure, and recovery-required states before broad application use.
+- Application/user notification for async Job completion, failure, and
+  recovery-required states is handled by Event-based forwarding to the
+  `UserNotificationProvider` SPI. JobEngine itself remains notification-agnostic.
 
 ### 9.15 Saga Management
 Future distributed-collaboration development item.

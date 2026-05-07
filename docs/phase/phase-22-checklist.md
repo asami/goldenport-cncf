@@ -309,9 +309,10 @@ application operations.
 - CNCF provides `UserNotificationProvider` as the runtime SPI for application
   user notifications.
 - User-visible async managed Job success/failure/cancel/recovery-required
-  outcomes notify the submitter when a provider is configured.
+  outcomes are eligible for user notification when Event forwarding is
+  configured and a provider is available.
 - System/admin/background Jobs without application Web context do not notify by
-  default unless an explicit Job notification policy opts in.
+  default unless an explicit Event forwarding rule opts in.
 - `textus-user-notification` can implement the provider to create actual
   in-app notification records.
 
@@ -320,6 +321,42 @@ application operations.
 - Do not make notification infrastructure a prerequisite for synchronous
   Command execution.
 - Do not expose global admin Job details to ordinary application users.
+
+---
+
+## JM-05B: Event-Based User Notification Forwarding
+
+Status: DONE
+
+### Objective
+
+Keep JobEngine independent of user notification. Jobs emit lifecycle/recovery
+events; a CNCF Event routing bridge forwards matching events to
+`UserNotificationProvider`.
+
+### Detailed Tasks
+
+- [x] Remove direct provider invocation and notification policy state from
+      JobEngine / JobSubmitOption / JobRecord.
+- [x] Publish Job lifecycle/recovery facts through EventBus/EventEngine
+      routing with payload needed for notification decisions.
+- [x] Add `runtime.userNotification.eventForwarding` rules for event-to-user
+      notification conversion.
+- [x] Keep default forwarding restricted to application-visible Job events.
+- [x] Move deduplication and provider-failure diagnostics into the forwarding
+      bridge.
+
+### Expected Output
+
+- JobEngine has no direct dependency on the user notification provider runtime.
+- `UserNotificationProvider` remains the SPI used by forwarding rules.
+- Provider absence or failure never changes Job state or result.
+
+### Guardrails
+
+- Do not treat EventStore append as the routing surface; use EventBus /
+  EventEngine routing.
+- Do not make user notification part of the Job core model.
 
 ---
 
@@ -335,7 +372,7 @@ scope.
 ### Detailed Tasks
 
 - [ ] Confirm Phase 22 docs and strategy status match implemented behavior.
-- [ ] Confirm JM-01 through JM-05 are DONE or explicitly deferred.
+- [ ] Confirm JM-01 through JM-05B are DONE or explicitly deferred.
 - [ ] Run focused and full validations required by touched implementation
       slices.
 - [ ] Record closure notes and next development candidates.

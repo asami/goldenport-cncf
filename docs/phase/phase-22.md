@@ -11,7 +11,7 @@ Phase 22 started by normalizing Command execution policy, made Job a
 store-backed SimpleEntity management projection, and added JCL diagnostics for
 declared Event/Action chains, and added JobDefinition binding / execution
 record policy. Task transaction and compensation boundaries are now complete;
-user notification policy is the active follow-up.
+user notification now uses Event routing and provider forwarding.
 
 This document is a phase dashboard, not a design journal.
 
@@ -80,13 +80,14 @@ Final semantic direction:
 - D (DONE): JM-03B — JobDefinition Entity / Binding / Execution Record Policy.
 - E (DONE): JM-04 — Task Transaction and Compensation Boundary.
 - F (DONE): JM-05 — User Job Notification Policy.
-- G (ACTIVE): JM-06 — Phase 22 verification and closure.
+- G (DONE): JM-05B — Event-Based User Notification Forwarding.
+- H (ACTIVE): JM-06 — Phase 22 verification and closure.
 
 Resume hint:
 
-- Continue with JM-06. User-visible async managed Jobs now use the CNCF
-  `UserNotificationProvider` SPI for terminal/recovery notifications when a
-  provider such as `textus-user-notification` is deployed and wired.
+- Continue with JM-06. JobEngine emits Job lifecycle/recovery events only;
+  configured Event forwarding rules translate matching user-visible Job events
+  into `UserNotificationProvider` requests.
 
 ## 5. Development Items
 
@@ -96,6 +97,7 @@ Resume hint:
 - [x] JM-03B: JobDefinition Entity / Binding / Execution Record Policy.
 - [x] JM-04: Task Transaction and Compensation Boundary.
 - [x] JM-05: User Job Notification Policy.
+- [x] JM-05B: Event-Based User Notification Forwarding.
 - [ ] JM-06: Phase 22 verification and closure.
 
 Detailed task breakdown and progress tracking are recorded in
@@ -123,6 +125,6 @@ Phase 22 closure conditions:
   named.
 - Task transaction and compensation boundaries are completed or explicitly
   deferred with remaining work named.
-- User job notification policy is completed or explicitly deferred with
-  remaining work named.
+- User job notification policy and Event-based forwarding are completed or
+  explicitly deferred with remaining work named.
 - No Phase 22 work item remains implicitly untracked.
