@@ -287,7 +287,7 @@ boundaries between Tasks.
 
 ## JM-05: User Job Notification Policy
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
@@ -296,17 +296,24 @@ application operations.
 
 ### Detailed Tasks
 
-- [ ] Define notification triggers for async Job completion, failure, and
+- [x] Define notification triggers for async Job completion, failure, and
       recovery-required conditions.
-- [ ] Separate application user notifications from system/admin diagnostics.
-- [ ] Preserve application job result and “My jobs” navigation.
-- [ ] Define how notification delivery is configured per application.
-- [ ] Keep ordinary synchronous CRUD-style operations outside notification
+- [x] Separate application user notifications from system/admin diagnostics.
+- [x] Preserve application job result and “My jobs” navigation.
+- [x] Define how notification delivery is configured per application.
+- [x] Keep ordinary synchronous CRUD-style operations outside notification
       overhead.
 
 ### Expected Output
 
-- Async Job usage has a clear user feedback path beyond polling result pages.
+- CNCF provides `UserNotificationProvider` as the runtime SPI for application
+  user notifications.
+- User-visible async managed Job success/failure/cancel/recovery-required
+  outcomes notify the submitter when a provider is configured.
+- System/admin/background Jobs without application Web context do not notify by
+  default unless an explicit Job notification policy opts in.
+- `textus-user-notification` can implement the provider to create actual
+  in-app notification records.
 
 ### Guardrails
 
@@ -318,7 +325,7 @@ application operations.
 
 ## JM-06: Phase 22 Verification and Closure
 
-Status: TODO
+Status: ACTIVE
 
 ### Objective
 

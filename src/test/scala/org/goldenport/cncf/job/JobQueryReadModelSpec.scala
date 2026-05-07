@@ -1,11 +1,17 @@
 package org.goldenport.cncf.job
 
 import java.time.Instant
+import scala.collection.mutable.ArrayBuffer
 import org.goldenport.{Conclusion, Consequence}
 import org.goldenport.protocol.Request
 import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.cncf.action.{Action, ActionCall, ActionEngine, CommandAction}
+import org.goldenport.cncf.component.{Component, ComponentId, ComponentInit, ComponentInstanceId, ComponentOrigin}
 import org.goldenport.cncf.context.{ExecutionContext, SecurityContext}
+import org.goldenport.cncf.subsystem.Subsystem
+import org.goldenport.cncf.usernotification.{UserNotificationProvider, UserNotificationRequest, UserNotificationResult}
+import org.goldenport.configuration.{Configuration, ConfigurationTrace, ResolvedConfiguration}
+import org.goldenport.protocol.Protocol
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -317,6 +323,97 @@ final class JobQueryReadModelSpec
       read.lineage.failureDisposition shouldBe AsyncFailureDisposition.Terminal
     }
 
+    "notify configured user-notification provider once for async Job success" in {
+      Given("an async managed Job submitted under a component with a user-notification provider")
+      val engine = createJobEngine(InMemoryJobEngine.SchedulerConfig(workerCount = 1, autoStartWorkers = false))
+      val sink = ArrayBuffer.empty[UserNotificationRequest]
+      val component = _component_with_user_notification(engine, sink)
+      val task = ActionTask(ActionId.generate(), _success_action("notifySuccess", "ok"), ActionEngine.create(), Some(component))
+      val option = JobSubmitOption(parameters = Map(
+        "web.app" -> "blog",
+        "web.service" -> "post",
+        "web.operation" -> "publish"
+      ))
+
+      When("the job succeeds")
+      val jobid = _jobid(engine.submit(List(task), component.logic.executionContext(), option))
+      engine.drainAll()
+      val read = awaitQuery(engine, jobid, statuses = Set(JobStatus.Succeeded)).get
+
+      Then("one user notification is sent with application job metadata")
+      sink.size shouldBe 1
+      sink.head.recipientUserId shouldBe "test-user-principal"
+      sink.head.notificationType shouldBe "cncf.job"
+      sink.head.actionUrl shouldBe Some(s"/web/blog/jobs/${jobid.value}")
+      sink.head.metadata.get("jobId") shouldBe Some(jobid.value)
+      read.debug.parameters.get("cncf.job.notification.succeeded") shouldBe Some("sent")
+
+      When("the same terminal notification path is invoked again")
+      engine.annotateJob(jobid, Map("noop" -> "noop"))
+
+      Then("the provider is not called again for the same trigger")
+      sink.size shouldBe 1
+    }
+
+    "record notification diagnostics without failing the Job when provider is missing" in {
+      Given("an application-visible async managed Job with no configured provider")
+      val engine = createJobEngine(InMemoryJobEngine.SchedulerConfig(workerCount = 1, autoStartWorkers = false))
+      val task = ActionTask(ActionId.generate(), _success_action("notifyMissing", "ok"), ActionEngine.create(), None)
+      val option = JobSubmitOption(parameters = Map(
+        "web.app" -> "blog",
+        "web.service" -> "post",
+        "web.operation" -> "publish"
+      ))
+
+      When("the job succeeds")
+      val jobid = _jobid(engine.submit(List(task), ExecutionContext.test(), option))
+      engine.drainAll()
+      val read = awaitQuery(engine, jobid, statuses = Set(JobStatus.Succeeded)).get
+
+      Then("the Job remains successful and carries a diagnostic note")
+      read.status shouldBe JobStatus.Succeeded
+      read.debug.parameters.get("cncf.job.notification.succeeded") shouldBe Some("failed")
+      read.debug.executionNotes.exists(_.startsWith("job-notification-failed: succeeded:")) shouldBe true
+      read.timeline.events.exists(_.kind == "job.notification.failed") shouldBe true
+    }
+
+    "skip user notification for internal async Jobs without application context" in {
+      Given("an internal async managed Job under a component with a user-notification provider")
+      val engine = createJobEngine(InMemoryJobEngine.SchedulerConfig(workerCount = 1, autoStartWorkers = false))
+      val sink = ArrayBuffer.empty[UserNotificationRequest]
+      val component = _component_with_user_notification(engine, sink)
+      val task = ActionTask(ActionId.generate(), _success_action("notifyInternal", "ok"), ActionEngine.create(), Some(component))
+
+      When("the job succeeds without web.app metadata")
+      val jobid = _jobid(engine.submit(List(task), component.logic.executionContext(), JobSubmitOption()))
+      engine.drainAll()
+      val read = awaitQuery(engine, jobid, statuses = Set(JobStatus.Succeeded)).get
+
+      Then("no user notification is sent and no notification diagnostic is recorded")
+      sink shouldBe empty
+      read.debug.parameters.keys.exists(_.startsWith("cncf.job.notification.")) shouldBe false
+      read.timeline.events.exists(_.kind.startsWith("job.notification.")) shouldBe false
+    }
+
+    "allow explicit notification opt-in for internal async Jobs" in {
+      Given("an internal async managed Job with an explicit notification policy")
+      val engine = createJobEngine(InMemoryJobEngine.SchedulerConfig(workerCount = 1, autoStartWorkers = false))
+      val sink = ArrayBuffer.empty[UserNotificationRequest]
+      val component = _component_with_user_notification(engine, sink)
+      val task = ActionTask(ActionId.generate(), _success_action("notifyInternalOptIn", "ok"), ActionEngine.create(), Some(component))
+
+      When("the job succeeds without web.app metadata")
+      val option = JobSubmitOption(notificationPolicy = Some(JobNotificationPolicy()))
+      val jobid = _jobid(engine.submit(List(task), component.logic.executionContext(), option))
+      engine.drainAll()
+      val read = awaitQuery(engine, jobid, statuses = Set(JobStatus.Succeeded)).get
+
+      Then("notification is sent, but no application job URL is invented")
+      sink.size shouldBe 1
+      sink.head.actionUrl shouldBe None
+      read.debug.parameters.get("cncf.job.notification.succeeded") shouldBe Some("sent")
+    }
+
     "enforce policy visibility on query surfaces" in {
       Given("a completed job")
       val engine = createJobEngine()
@@ -406,5 +503,45 @@ final class JobQueryReadModelSpec
 
   private def _contains_compensation_node(node: JobTraceTaskNode): Boolean =
     node.relation.contains("compensation") || node.children.exists(_contains_compensation_node)
+
+  private def _component_with_user_notification(
+    engine: JobEngine,
+    sink: ArrayBuffer[UserNotificationRequest]
+  ): Component = {
+    val subsystem = Subsystem(
+      name = "job-notification-spec",
+      configuration = ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty)
+    )
+    val component = new Component() {
+      override def userNotificationProviders: Vector[UserNotificationProvider] =
+        Vector(new UserNotificationProvider {
+          val name: String = "spec-user-notification"
+
+          def notify(request: UserNotificationRequest)(using ExecutionContext): Consequence[UserNotificationResult] = {
+            sink += request
+            Consequence.success(UserNotificationResult(notificationId = Some(s"notification-${sink.size}")))
+          }
+        })
+    }
+    val id = ComponentId("job_notification_spec")
+    val core = Component.Core.create(
+      name = "job_notification_spec",
+      componentid = id,
+      instanceid = ComponentInstanceId.default(id),
+      protocol = Protocol.empty,
+      jobEngine = engine
+    )
+    val initialized = component.initialize(ComponentInit(subsystem, core, ComponentOrigin.Builtin))
+      .withArtifactMetadata(
+        Component.ArtifactMetadata(
+          sourceType = "spec",
+          name = "JobNotificationSpec",
+          version = "0.0.0",
+          component = Some("job-notification-spec")
+        )
+      )
+    subsystem.add(Vector(initialized))
+    initialized
+  }
 
 }

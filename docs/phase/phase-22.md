@@ -79,16 +79,14 @@ Final semantic direction:
 - C (DONE): JM-03 — JCL Profile / Execution Profile Difference Checking.
 - D (DONE): JM-03B — JobDefinition Entity / Binding / Execution Record Policy.
 - E (DONE): JM-04 — Task Transaction and Compensation Boundary.
-- F (ACTIVE): JM-05 — User Job Notification Policy.
-- G (TODO): JM-06 — Phase 22 verification and closure.
+- F (DONE): JM-05 — User Job Notification Policy.
+- G (ACTIVE): JM-06 — Phase 22 verification and closure.
 
 Resume hint:
 
-- Continue with JM-05. Job Tasks now expose transaction/compensation boundaries,
-  Task Execution Tree and task detail diagnostics are available through
-  `job_control`, and recovery-required is recorded when cleanup cannot complete.
-  JM-05 should define user notification policy for async Job completion,
-  failure, and recovery-required states.
+- Continue with JM-06. User-visible async managed Jobs now use the CNCF
+  `UserNotificationProvider` SPI for terminal/recovery notifications when a
+  provider such as `textus-user-notification` is deployed and wired.
 
 ## 5. Development Items
 
@@ -97,7 +95,7 @@ Resume hint:
 - [x] JM-03: JCL Profile / Execution Profile Difference Checking.
 - [x] JM-03B: JobDefinition Entity / Binding / Execution Record Policy.
 - [x] JM-04: Task Transaction and Compensation Boundary.
-- [ ] JM-05: User Job Notification Policy.
+- [x] JM-05: User Job Notification Policy.
 - [ ] JM-06: Phase 22 verification and closure.
 
 Detailed task breakdown and progress tracking are recorded in

@@ -15,7 +15,7 @@ import org.goldenport.cncf.security.{AuthorizationResourcePolicies, Authorizatio
 /*
  * @since   Apr.  7, 2026
  *  version Apr. 28, 2026
- * @version May.  1, 2026
+ * @version May.  7, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class GenericSubsystemAuthenticationProviderBinding(
@@ -45,6 +45,23 @@ final case class GenericSubsystemMessageDeliveryProviderBinding(
 
 final case class GenericSubsystemMessageDeliveryBinding(
   providers: Vector[GenericSubsystemMessageDeliveryProviderBinding] = Vector.empty
+)
+
+final case class GenericSubsystemUserNotificationProviderBinding(
+  name: String,
+  component: String,
+  channel: Option[String] = None,
+  enabled: Option[Boolean] = None,
+  priority: Option[Int] = None,
+  isDefault: Option[Boolean] = None
+)
+
+final case class GenericSubsystemUserNotificationBinding(
+  providers: Vector[GenericSubsystemUserNotificationProviderBinding] = Vector.empty
+)
+
+final case class GenericSubsystemRuntimeBinding(
+  userNotification: Option[GenericSubsystemUserNotificationBinding] = None
 )
 
 final case class GenericSubsystemAuthorizationBinding(
@@ -151,6 +168,7 @@ final case class GenericSubsystemDescriptor(
   config: Map[String, String] = Map.empty,
   wiring: Record = Record.empty,
   assemblyDescriptor: Option[GenericSubsystemAssemblyDescriptorSource] = None,
+  runtime: Option[GenericSubsystemRuntimeBinding] = None,
   security: Option[GenericSubsystemSecurityBinding] = None,
   builtin: Option[GenericSubsystemBuiltinBinding] = None,
   operationAuthorization: Map[String, OperationAuthorizationRule] = Map.empty
@@ -203,6 +221,7 @@ object GenericSubsystemDescriptor {
     extensions: Map[String, String],
     config: Map[String, String],
     wiring: Record,
+    runtime: Option[GenericSubsystemRuntimeBinding],
     security: Option[GenericSubsystemSecurityBinding],
     builtin: Option[GenericSubsystemBuiltinBinding],
     operationAuthorization: Map[String, OperationAuthorizationRule]
@@ -242,6 +261,7 @@ object GenericSubsystemDescriptor {
       extensions = defaults.extensions ++ overrideDescriptor.extensions,
       config = defaults.config ++ overrideDescriptor.config,
       wiring = _merge_record(defaults.wiring, overrideDescriptor.wiring),
+      runtime = _merge_runtime(defaults.runtime, overrideDescriptor.runtime),
       security = _merge_security(defaults.security, overrideDescriptor.security),
       builtin = overrideDescriptor.builtin.orElse(defaults.builtin),
       operationAuthorization = defaults.operationAuthorization ++ overrideDescriptor.operationAuthorization,
@@ -261,6 +281,10 @@ object GenericSubsystemDescriptor {
       extensions = descriptor.extensions ++ _string_map_value(rec, List("extension", "extensions")),
       config = descriptor.config ++ _string_map_value(rec, List("config")),
       wiring = _merge_record(descriptor.wiring, _wiring_value(rec)),
+      runtime = _merge_runtime(
+        descriptor.runtime,
+        _record_value(rec, List("runtime")).flatMap(r => summon[RecordDecoder[GenericSubsystemRuntimeBinding]].fromRecord(r).toOption)
+      ),
       security = _merge_security(
         descriptor.security,
         _record_value(rec, List("security")).flatMap(r => summon[RecordDecoder[GenericSubsystemSecurityBinding]].fromRecord(r).toOption)
@@ -366,6 +390,34 @@ object GenericSubsystemDescriptor {
         ))
     }
 
+  private def _merge_runtime(
+    defaults: Option[GenericSubsystemRuntimeBinding],
+    overrides: Option[GenericSubsystemRuntimeBinding]
+  ): Option[GenericSubsystemRuntimeBinding] =
+    (defaults, overrides) match {
+      case (None, None) => None
+      case (Some(x), None) => Some(x)
+      case (None, Some(x)) => Some(x)
+      case (Some(a), Some(b)) =>
+        Some(GenericSubsystemRuntimeBinding(
+          userNotification = _merge_user_notification(a.userNotification, b.userNotification)
+        ))
+    }
+
+  private def _merge_user_notification(
+    defaults: Option[GenericSubsystemUserNotificationBinding],
+    overrides: Option[GenericSubsystemUserNotificationBinding]
+  ): Option[GenericSubsystemUserNotificationBinding] =
+    (defaults, overrides) match {
+      case (None, None) => None
+      case (Some(x), None) => Some(x)
+      case (None, Some(x)) => Some(x)
+      case (Some(a), Some(b)) =>
+        Some(GenericSubsystemUserNotificationBinding(
+          providers = _merge_user_notification_providers(a.providers, b.providers)
+        ))
+    }
+
   private def _merge_authorization(
     defaults: Option[GenericSubsystemAuthorizationBinding],
     overrides: Option[GenericSubsystemAuthorizationBinding]
@@ -423,6 +475,12 @@ object GenericSubsystemDescriptor {
     defaults: Vector[GenericSubsystemMessageDeliveryProviderBinding],
     overrides: Vector[GenericSubsystemMessageDeliveryProviderBinding]
   ): Vector[GenericSubsystemMessageDeliveryProviderBinding] =
+    _merge_by_name(defaults, overrides)(_.name)
+
+  private def _merge_user_notification_providers(
+    defaults: Vector[GenericSubsystemUserNotificationProviderBinding],
+    overrides: Vector[GenericSubsystemUserNotificationProviderBinding]
+  ): Vector[GenericSubsystemUserNotificationProviderBinding] =
     _merge_by_name(defaults, overrides)(_.name)
 
   private def _merge_by_name[A](
@@ -483,6 +541,7 @@ object GenericSubsystemDescriptor {
           config = descriptor.config ++ shape.map(_.config).getOrElse(Map.empty),
           wiring = shape.map(_.wiring).getOrElse(Record.empty),
           assemblyDescriptor = assembly,
+          runtime = shape.flatMap(_.runtime),
           security = shape.flatMap(_.security),
           builtin = shape.flatMap(_.builtin),
           operationAuthorization = shape.map(_.operationAuthorization).getOrElse(Map.empty)
@@ -690,6 +749,7 @@ object GenericSubsystemDescriptor {
         config = s.config,
         wiring = s.wiring,
         assemblyDescriptor = assemblyDescriptor0,
+        runtime = s.runtime,
         security = s.security,
         builtin = s.builtin,
         operationAuthorization = s.operationAuthorization
@@ -1142,6 +1202,51 @@ object GenericSubsystemDescriptor {
       )
     }
 
+  given RecordDecoder[GenericSubsystemUserNotificationProviderBinding] with
+    def fromRecord(rec: Record): Consequence[GenericSubsystemUserNotificationProviderBinding] = {
+      val name = _string(rec, "name")
+      val component = _string(rec, "component")
+      (name, component) match {
+        case (Some(n), Some(c)) =>
+          Consequence.success(
+            GenericSubsystemUserNotificationProviderBinding(
+              name = n,
+              component = c,
+              channel = _string(rec, "channel"),
+              enabled = _boolean(rec, "enabled"),
+              priority = _int(rec, "priority"),
+              isDefault = _boolean(rec, "default", "isDefault")
+            )
+          )
+        case _ =>
+          Consequence.argumentMissing("user-notification provider name/component")
+      }
+    }
+
+  given RecordDecoder[GenericSubsystemUserNotificationBinding] with
+    def fromRecord(rec: Record): Consequence[GenericSubsystemUserNotificationBinding] = {
+      val providers = rec.getAny("providers") match {
+        case Some(xs: Seq[?]) =>
+          xs.toVector.flatMap(_any_to_record).flatMap(r => summon[RecordDecoder[GenericSubsystemUserNotificationProviderBinding]].fromRecord(r).toOption)
+        case _ =>
+          Vector.empty
+      }
+      Consequence.success(
+        GenericSubsystemUserNotificationBinding(
+          providers = providers
+        )
+      )
+    }
+
+  given RecordDecoder[GenericSubsystemRuntimeBinding] with
+    def fromRecord(rec: Record): Consequence[GenericSubsystemRuntimeBinding] =
+      Consequence.success(
+        GenericSubsystemRuntimeBinding(
+          userNotification = _record_value(rec, List("user_notification", "userNotification"))
+            .flatMap(r => summon[RecordDecoder[GenericSubsystemUserNotificationBinding]].fromRecord(r).toOption)
+        )
+      )
+
   given RecordDecoder[SecurityRoleDefinition] with
     def fromRecord(rec: Record): Consequence[SecurityRoleDefinition] = {
       val name = _string(rec, "name")
@@ -1304,6 +1409,7 @@ object GenericSubsystemDescriptor {
                 extensions = _string_map_value(rec, List("extension", "extensions")),
                 config = _string_map_value(rec, List("config")),
                 wiring = _wiring_value(rec),
+                runtime = _record_value(rec, List("runtime")).flatMap(r => summon[RecordDecoder[GenericSubsystemRuntimeBinding]].fromRecord(r).toOption),
                 security = security,
                 builtin = _record_value(rec, List("builtin", "builtins")).flatMap(r => summon[RecordDecoder[GenericSubsystemBuiltinBinding]].fromRecord(r).toOption),
                 operationAuthorization = _operation_authorization_value(rec)

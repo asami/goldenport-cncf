@@ -95,6 +95,7 @@ Merge rules are field-oriented, not whole-document replacement:
 - `extensions` and `config` merge by key.
 - `security.authentication.providers` merge by provider name.
 - `security.message_delivery.providers` merge by provider name.
+- `runtime.userNotification.providers` merge by provider name.
 - `operationAuthorization` merges by operation selector.
 - `wiring` merges by binding selector: `from.component`, `from.service`, `from.operation`, and optional `from.api`.
 

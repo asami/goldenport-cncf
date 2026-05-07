@@ -5,13 +5,15 @@ import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.messagedelivery.{UnifiedMessage, MessageDeliveryProvider, MessageDeliveryResult}
 import org.goldenport.cncf.security.{AuthenticationProvider, AuthenticationRequest, AuthenticationResult}
+import org.goldenport.cncf.usernotification.{UserNotificationProvider, UserNotificationRequest, UserNotificationResult}
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr.  9, 2026
  *  version Apr. 23, 2026
- * @version Apr. 24, 2026
+ *  version Apr. 24, 2026
+ * @version May.  7, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ResolvedSecurityWiringSpec extends AnyWordSpec with Matchers {
@@ -147,6 +149,49 @@ final class ResolvedSecurityWiringSpec extends AnyWordSpec with Matchers {
       wiring.messageDelivery.providers.head.isDefault shouldBe true
       wiring.messageDelivery.providers.head.provider.map(_.name) shouldBe Some("textus-message-delivery-stub")
     }
+
+    "resolve user-notification providers from runtime wiring with descriptor precedence" in {
+      val descriptor = GenericSubsystemDescriptor(
+        path = java.nio.file.Path.of("<memory>"),
+        subsystemName = "textus-notify",
+        componentBindings = Vector(
+          GenericSubsystemComponentBinding("textus-user-notification")
+        ),
+        runtime = Some(
+          GenericSubsystemRuntimeBinding(
+            userNotification = Some(
+              GenericSubsystemUserNotificationBinding(
+                providers = Vector(
+                  GenericSubsystemUserNotificationProviderBinding(
+                    name = "textus-user-notification",
+                    component = "textus-user-notification",
+                    channel = Some("in-app"),
+                    enabled = Some(true),
+                    priority = Some(100),
+                    isDefault = Some(true)
+                  )
+                )
+              )
+            )
+          )
+        )
+      )
+      val component = _userNotificationComponent(
+        "UserNotification",
+        "textus-user-notification",
+        Vector(_userNotificationProvider("textus-user-notification"), _userNotificationProvider("other-user-notification"))
+      )
+
+      val wiring = ResolvedSecurityWiring.resolve(Some(descriptor), Vector(component))
+
+      wiring.userNotification.providers.map(x => (x.componentName, x.name, x.source.toString)) shouldBe Vector(
+        ("textus-user-notification", "textus-user-notification", "Descriptor"),
+        ("textus-user-notification", "other-user-notification", "Convention")
+      )
+      wiring.userNotification.providers.head.priority shouldBe 100
+      wiring.userNotification.providers.head.isDefault shouldBe true
+      wiring.userNotification.providers.head.provider.map(_.name) shouldBe Some("textus-user-notification")
+    }
   }
 
   private def _component(
@@ -194,5 +239,28 @@ final class ResolvedSecurityWiringSpec extends AnyWordSpec with Matchers {
       override val name: String = pname
       def send(message: UnifiedMessage)(using ExecutionContext): Consequence[MessageDeliveryResult] =
         Consequence.success(MessageDeliveryResult())
+    }
+
+  private def _userNotificationComponent(
+    name: String,
+    descriptorComponent: String,
+    providers: Vector[UserNotificationProvider]
+  ): Component =
+    new Component() {
+      override def userNotificationProviders: Vector[UserNotificationProvider] = providers
+    }.withArtifactMetadata(
+      Component.ArtifactMetadata(
+        sourceType = "spec",
+        name = name,
+        version = "0.0.0",
+        component = Some(descriptorComponent)
+      )
+    )
+
+  private def _userNotificationProvider(pname: String): UserNotificationProvider =
+    new UserNotificationProvider {
+      override val name: String = pname
+      def notify(request: UserNotificationRequest)(using ExecutionContext): Consequence[UserNotificationResult] =
+        Consequence.success(UserNotificationResult())
     }
 }

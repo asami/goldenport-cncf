@@ -35,6 +35,7 @@ import org.goldenport.cncf.statemachine.{CmlStateMachineDefinition, StateMachine
 import org.goldenport.cncf.event.{CmlEventDefinition, CmlRoutingDefinition, CmlSubscriptionDefinition, EventReception, EventReceptionRule, EventStore}
 import org.goldenport.cncf.security.AuthenticationProvider
 import org.goldenport.cncf.messagedelivery.MessageDeliveryProvider
+import org.goldenport.cncf.usernotification.UserNotificationProvider
 import org.goldenport.cncf.projection.{HelpProjection, DescribeProjection, SchemaProjection, OpenApiProjection, McpProjection, TreeProjection, StateMachineProjection}
 import org.goldenport.cncf.workflow.WorkflowDefinition
 import cats.data.NonEmptyVector
@@ -50,7 +51,8 @@ import org.goldenport.schema.{DataType, XString}
  *  version Jan. 22, 2026
  *  version Feb. 17, 2026
  *  version Mar. 30, 2026
- * @version Apr. 30, 2026
+ *  version Apr. 30, 2026
+ * @version May.  7, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class Component() extends Component.Core.Holder {
@@ -277,6 +279,7 @@ abstract class Component() extends Component.Core.Holder {
   def subsystemDefinitionRecords: Vector[Record] = Vector.empty
   def authenticationProviders: Vector[AuthenticationProvider] = Vector.empty
   def messageDeliveryProviders: Vector[MessageDeliveryProvider] = Vector.empty
+  def userNotificationProviders: Vector[UserNotificationProvider] = Vector.empty
 
   def artifactMetadata: Option[Component.ArtifactMetadata] =
     _artifact_metadata

@@ -416,9 +416,59 @@ job record. `job_control.job.get_job_calltree` returns the saved CallTree state
 for a specific job and must not fall back to process-global "latest execution"
 state.
 
+----------------------------------------------------------------------
+14. User Notification Provider
+----------------------------------------------------------------------
+
+Application user notifications are delivered through a CNCF service-provider
+boundary. CNCF defines `UserNotificationProvider` and resolves it from
+subsystem runtime wiring:
+
+    runtime:
+      userNotification:
+        providers:
+          - name: textus-user-notification
+            component: textus-user-notification
+            channel: in-app
+
+This provider is separate from `messageDelivery`. `messageDelivery` sends
+external email/SMS-style messages. `userNotification` creates user-addressed
+domain notifications, such as in-app notification records owned by
+`textus-user-notification`.
+
+JobEngine uses this provider for user-visible async managed Job feedback.
+The default policy treats a Job as user-visible only when application Web
+context such as `web.app` is present in Job submit metadata. System/admin or
+background async Jobs do not notify by default, though a submitter can still
+explicitly opt in with a `JobNotificationPolicy`.
+
+    - succeeded
+    - failed
+    - cancelled
+    - recovery-required
+
+Ordinary synchronous direct/no-Job Commands do not create user notifications.
+
+The notification request includes:
+
+    - recipient user id from the Job submitter subject/principal
+    - Job id and status
+    - application component/service/operation when available
+    - result or failure summary
+    - recovery-required flag
+    - application Job detail URL such as `/web/{app}/jobs/{jobId}`
+
+Provider absence or provider failure is non-fatal. Job status and result remain
+authoritative. JobEngine records notification failure as diagnostic metadata and
+timeline entries so operators can see that the management notification
+projection is missing or stale.
+
+Duplicate terminal updates must not send duplicate notifications for the same
+`(jobId, trigger)`.
+
 
 ----------------------------------------------------------------------
-14. Product Boundary
+15. Product Boundary
 ----------------------------------------------------------------------
 
 Job management is part of the CNCF built-in execution layer and follows
@@ -452,7 +502,7 @@ For the execution-platform boundary, see:
     - `docs/design/execution-platform-boundary.md`
 
 ----------------------------------------------------------------------
-15. Relationship to Consumers (e.g. SIE)
+16. Relationship to Consumers (e.g. SIE)
 ----------------------------------------------------------------------
 
 Consumers such as Semantic Integration Engine:
@@ -471,7 +521,7 @@ Job management is shared infrastructure.
 
 
 ----------------------------------------------------------------------
-16. Final Note
+17. Final Note
 ----------------------------------------------------------------------
 
 Job management exists to make execution failures

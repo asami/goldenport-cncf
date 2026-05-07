@@ -989,8 +989,8 @@ Phase 22 is active. `9.14 Job Management` is the selected development item.
 JM-01 Command Execution Policy Normalization, JM-02 Job Entity Management,
 JM-03 JCL Profile / Execution Profile Difference Checking, JM-03B
 JobDefinition Entity / Binding / Execution Record Policy, and JM-04 Task
-Transaction and Compensation Boundary are complete; JM-05 User Job Notification
-Policy is the active slice.
+Transaction and Compensation Boundary, and JM-05 User Job Notification Policy
+are complete; JM-06 verification and closure is the active slice.
 
 ### 9.1 Web Next Stage Follow-ups
 Future Web/platform development item.
@@ -1191,8 +1191,8 @@ Active stack:
 - JM-03: JCL Profile / Execution Profile Difference Checking. DONE.
 - JM-03B: JobDefinition Entity / Binding / Execution Record Policy. DONE.
 - JM-04: Task Transaction and Compensation Boundary. DONE.
-- JM-05: User Job Notification Policy. ACTIVE.
-- JM-06: Phase 22 verification and closure.
+- JM-05: User Job Notification Policy. DONE.
+- JM-06: Phase 22 verification and closure. ACTIVE.
 
 - Define Command execution policy before broadening Job usage. CQRS makes
   state-changing operations Commands, but application UX and runtime cost still

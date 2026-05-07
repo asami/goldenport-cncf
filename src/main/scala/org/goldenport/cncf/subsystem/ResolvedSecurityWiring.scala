@@ -3,6 +3,7 @@ package org.goldenport.cncf.subsystem
 import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.security.AuthenticationProvider
 import org.goldenport.cncf.messagedelivery.MessageDeliveryProvider
+import org.goldenport.cncf.usernotification.UserNotificationProvider
 
 /*
  * Runtime-resolved security wiring for a subsystem.
@@ -13,7 +14,8 @@ import org.goldenport.cncf.messagedelivery.MessageDeliveryProvider
  *   projection source for deployment diagrams/specifications.
  *
  * @since   Apr.  9, 2026
- * @version Apr. 24, 2026
+ *  version Apr. 24, 2026
+ * @version May.  7, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ResolvedAuthenticationProviderBinding(
@@ -67,9 +69,34 @@ final case class ResolvedMessageDeliveryWiring(
     providers.filter(_.enabled)
 }
 
+final case class ResolvedUserNotificationProviderBinding(
+  name: String,
+  componentName: String,
+  channel: Option[String] = None,
+  enabled: Boolean = true,
+  priority: Int = 0,
+  isDefault: Boolean = false,
+  source: ResolvedUserNotificationProviderBinding.Source = ResolvedUserNotificationProviderBinding.Source.Convention,
+  provider: Option[UserNotificationProvider] = None
+)
+
+object ResolvedUserNotificationProviderBinding {
+  enum Source {
+    case Descriptor, Convention
+  }
+}
+
+final case class ResolvedUserNotificationWiring(
+  providers: Vector[ResolvedUserNotificationProviderBinding] = Vector.empty
+) {
+  def enabledProviders: Vector[ResolvedUserNotificationProviderBinding] =
+    providers.filter(_.enabled)
+}
+
 final case class ResolvedSecurityWiring(
   authentication: ResolvedAuthenticationWiring = ResolvedAuthenticationWiring(),
-  messageDelivery: ResolvedMessageDeliveryWiring = ResolvedMessageDeliveryWiring()
+  messageDelivery: ResolvedMessageDeliveryWiring = ResolvedMessageDeliveryWiring(),
+  userNotification: ResolvedUserNotificationWiring = ResolvedUserNotificationWiring()
 )
 
 object ResolvedSecurityWiring {
@@ -139,6 +166,35 @@ object ResolvedSecurityWiring {
       explicitMessageDeliveryKeys.contains((_normalize(x.componentName), _normalize(x.name))) ||
         explicitMessageDeliveryProviderNames.contains(_normalize(x.name))
     }
+    val explicitUserNotification = descriptor.toVector.flatMap(_.runtime.toVector).flatMap(_.userNotification.toVector).flatMap { notification =>
+      notification.providers.map { p =>
+        ResolvedUserNotificationProviderBinding(
+          name = p.name,
+          componentName = GenericSubsystemDescriptor.runtimeComponentName(p.component),
+          channel = p.channel,
+          enabled = p.enabled.getOrElse(true),
+          priority = p.priority.getOrElse(0),
+          isDefault = p.isDefault.getOrElse(false),
+          source = ResolvedUserNotificationProviderBinding.Source.Descriptor,
+          provider = _find_user_notification_provider(components, GenericSubsystemDescriptor.runtimeComponentName(p.component), p.name)
+        )
+      }
+    }
+    val explicitUserNotificationKeys = explicitUserNotification.map(x => (_normalize(x.componentName), _normalize(x.name))).toSet
+    val explicitUserNotificationProviderNames = explicitUserNotification.map(x => _normalize(x.name)).toSet
+    val conventionUserNotification = components.flatMap { component =>
+      component.userNotificationProviders.map { provider =>
+        ResolvedUserNotificationProviderBinding(
+          name = provider.name,
+          componentName = _component_runtime_name(component),
+          source = ResolvedUserNotificationProviderBinding.Source.Convention,
+          provider = Some(provider)
+        )
+      }
+    }.filterNot { x =>
+      explicitUserNotificationKeys.contains((_normalize(x.componentName), _normalize(x.name))) ||
+        explicitUserNotificationProviderNames.contains(_normalize(x.name))
+    }
     ResolvedSecurityWiring(
       authentication = ResolvedAuthenticationWiring(
         conventionEnabled = conventionEnabled,
@@ -147,6 +203,10 @@ object ResolvedSecurityWiring {
       ),
       messageDelivery = ResolvedMessageDeliveryWiring(
         providers = (explicitMessageDelivery ++ conventionMessageDelivery)
+          .sortBy(x => (-x.priority, _normalize(x.componentName), _normalize(x.name)))
+      ),
+      userNotification = ResolvedUserNotificationWiring(
+        providers = (explicitUserNotification ++ conventionUserNotification)
           .sortBy(x => (-x.priority, _normalize(x.componentName), _normalize(x.name)))
       )
     )
@@ -175,6 +235,17 @@ object ResolvedSecurityWiring {
       flatMap(_.messageDeliveryProviders.find(p => _normalize(p.name) == _normalize(providerName))).
       orElse {
         components.iterator.flatMap(_.messageDeliveryProviders).find(p => _normalize(p.name) == _normalize(providerName))
+      }
+
+  private def _find_user_notification_provider(
+    components: Vector[Component],
+    componentName: String,
+    providerName: String
+  ): Option[UserNotificationProvider] =
+    components.find(c => _normalize(_component_runtime_name(c)) == _normalize(componentName)).
+      flatMap(_.userNotificationProviders.find(p => _normalize(p.name) == _normalize(providerName))).
+      orElse {
+        components.iterator.flatMap(_.userNotificationProviders).find(p => _normalize(p.name) == _normalize(providerName))
       }
 
   private def _is_enabled(value: String): Boolean =

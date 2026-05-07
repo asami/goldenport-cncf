@@ -20,6 +20,7 @@ import org.goldenport.cncf.entity.EntityStore
 import org.goldenport.cncf.event.{EventId, EventLane, EventRecord, EventStore}
 import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.cncf.observability.ObservabilityEngine
+import org.goldenport.cncf.usernotification.{UserNotificationProviderRuntime, UserNotificationRequest}
 
 /*
  * @since   Jan.  4, 2026
@@ -253,12 +254,39 @@ final case class JobSubmitOption(
   parameters: Map[String, String] = Map.empty,
   executionNotes: Vector[String] = Vector.empty,
   declaredProfile: Option[JobDeclaredProfile] = None,
-  jobDefinitionSnapshot: Option[JobDefinitionSnapshot] = None
+  jobDefinitionSnapshot: Option[JobDefinitionSnapshot] = None,
+  notificationPolicy: Option[JobNotificationPolicy] = None
 )
 
 enum JobRunMode {
   case Async
   case Sync
+}
+
+final case class JobNotificationPolicy(
+  enabled: Boolean = true,
+  triggers: Set[String] = JobNotificationPolicy.DefaultTriggers
+) {
+  def isEnabledFor(trigger: String): Boolean =
+    enabled && triggers.contains(JobNotificationPolicy.normalizeTrigger(trigger))
+}
+
+object JobNotificationPolicy {
+  val DefaultTriggers: Set[String] = Set("succeeded", "failed", "cancelled", "recovery-required")
+  val disabled: JobNotificationPolicy = JobNotificationPolicy(enabled = false)
+
+  def forSubmitOption(option: JobSubmitOption): JobNotificationPolicy =
+    if (
+      option.runMode == JobRunMode.Async &&
+        option.persistence == JobPersistencePolicy.Persistent &&
+        option.parameters.get("web.app").exists(_.trim.nonEmpty)
+    )
+      JobNotificationPolicy()
+    else
+      disabled
+
+  def normalizeTrigger(value: String): String =
+    Option(value).getOrElse("").trim.toLowerCase(java.util.Locale.ROOT).replace("_", "-")
 }
 
 enum JobDataOrigin {
@@ -692,6 +720,7 @@ final class InMemoryJobEngine(
       declaredProfile = option.declaredProfile.orElse(option.jobDefinitionSnapshot.flatMap(_.profile)),
       jobDefinitionSnapshot = option.jobDefinitionSnapshot
     )
+    val notificationPolicy = option.notificationPolicy.getOrElse(JobNotificationPolicy.forSubmitOption(option))
     val record = JobRecord(
       id = jobid,
       tasks = tasks,
@@ -714,7 +743,8 @@ final class InMemoryJobEngine(
           note = None
         )
       ),
-      debug = initialdebug
+      debug = initialdebug,
+      notificationPolicy = notificationPolicy
     )
     _put_record(record)
     _append_event_(
@@ -972,6 +1002,7 @@ final class InMemoryJobEngine(
         "message" -> conclusion.show
       )
     )
+    _notify_job_if_needed_(jobid, "failed")
   }
 
   private def _enqueue_work_(work: SchedulerWorkItem): Unit =
@@ -1009,6 +1040,7 @@ final class InMemoryJobEngine(
             "status" -> JobStatus.Succeeded.toString
           )
         )
+        _notify_job_if_needed_(jobid, "succeeded")
       case _ =>
         var previous: Option[TaskId] = None
         var failure: Option[Conclusion] = None
@@ -1226,6 +1258,8 @@ final class InMemoryJobEngine(
               _append_timeline_for_control_(jobid, request.command, target)
               _update_record_(jobid, target, _control_result_for(target))
               _append_event_for_control_(jobid, request.command, target)
+              if (target == JobStatus.Cancelled)
+                _notify_job_if_needed_(jobid, "cancelled")
           }
           request.option.mode match {
             case JobCommandMode.Async =>
@@ -1556,6 +1590,7 @@ final class InMemoryJobEngine(
               ),
               attributes = _retry_event_attributes_(record.retry)
             )
+            _notify_job_if_needed_(jobid, "failed")
           case Some(success @ JobResult.Success(_)) =>
             _append_timeline_(jobid, "job.succeeded", None, None, None)
             _update_record_(jobid, JobStatus.Succeeded, Some(success))
@@ -1566,6 +1601,7 @@ final class InMemoryJobEngine(
                 "status" -> JobStatus.Succeeded.toString
               )
             )
+            _notify_job_if_needed_(jobid, "succeeded")
           case None =>
             ()
         }
@@ -1727,6 +1763,102 @@ final class InMemoryJobEngine(
         "message" -> message
       ),
       attributes = Map("cncf.job.recoveryRequired" -> "true")
+    )
+    _notify_job_if_needed_(jobid, "recovery-required")
+  }
+
+  private def _notify_job_if_needed_(
+    jobid: JobId,
+    trigger: String
+  ): Unit =
+    _mark_notification_attempt_(jobid, trigger).foreach { record =>
+      val normalized = JobNotificationPolicy.normalizeTrigger(trigger)
+      val request = _user_notification_request(record, normalized)
+      UserNotificationProviderRuntime.notify(record.submittedContext, request) match {
+        case Consequence.Success(result) =>
+          val note = s"job-notification-sent: $normalized ${result.notificationId.orElse(result.providerNotificationId).getOrElse("")}".trim
+          _append_timeline_(jobid, "job.notification.sent", None, None, Some(normalized))
+          _mutate_record(jobid) { current =>
+            current.copy(
+              debug = current.debug.copy(
+                parameters = current.debug.parameters ++ Map(
+                  s"cncf.job.notification.$normalized" -> "sent"
+                ) ++ result.notificationId.map(id => s"cncf.job.notification.$normalized.id" -> id),
+                executionNotes =
+                  if (current.debug.executionNotes.contains(note)) current.debug.executionNotes
+                  else current.debug.executionNotes :+ note
+              ),
+              updatedAt = _now_()
+            )
+          }
+        case Consequence.Failure(conclusion) =>
+          val message = s"job-notification-failed: $normalized: ${conclusion.show}"
+          _append_timeline_(jobid, "job.notification.failed", None, None, Some(message))
+          _mutate_record(jobid) { current =>
+            current.copy(
+              debug = current.debug.copy(
+                parameters = current.debug.parameters + (s"cncf.job.notification.$normalized" -> "failed"),
+                executionNotes =
+                  if (current.debug.executionNotes.contains(message)) current.debug.executionNotes
+                  else current.debug.executionNotes :+ message
+              ),
+              updatedAt = _now_()
+            )
+          }
+      }
+    }
+
+  private def _mark_notification_attempt_(
+    jobid: JobId,
+    trigger: String
+  ): Option[JobRecord] = {
+    val normalized = JobNotificationPolicy.normalizeTrigger(trigger)
+    _get_record(jobid).flatMap { record =>
+      if (!record.notificationPolicy.isEnabledFor(normalized) || record.notificationTriggers.contains(normalized)) {
+        None
+      } else {
+        val next = record.copy(
+          notificationTriggers = record.notificationTriggers + normalized,
+          updatedAt = _now_()
+        )
+        _put_record(next)
+        Some(next)
+      }
+    }
+  }
+
+  private def _user_notification_request(
+    record: JobRecord,
+    trigger: String
+  ): UserNotificationRequest = {
+    val model = _read_model(record)
+    val app = record.debug.parameters.get("web.app")
+    val service = record.debug.parameters.get("web.service")
+    val operation = record.debug.parameters.get("web.operation")
+    val target = Vector(app, service, operation).flatten.filter(_.nonEmpty).mkString(".")
+    val status = if (trigger == "recovery-required") "recoveryRequired" else model.status.toString
+    val titleTarget = if (target.nonEmpty) s": $target" else ""
+    val message = model.resultSummary.message.getOrElse(status)
+    UserNotificationRequest(
+      recipientUserId = model.submitter.principalId,
+      notificationType = "cncf.job",
+      channel = "in-app",
+      title = s"Job $status$titleTarget",
+      body = s"Job ${model.jobId.value} is $status. $message".trim,
+      priority = if (trigger == "failed" || trigger == "recovery-required") Some("high") else None,
+      status = "Queued",
+      dedupeKey = Some(s"cncf.job:${model.jobId.value}:$trigger"),
+      actionUrl = app.map(a => s"/web/$a/jobs/${model.jobId.value}"),
+      metadata = Map(
+        "jobId" -> model.jobId.value,
+        "trigger" -> trigger,
+        "jobStatus" -> model.status.toString,
+        "recoveryRequired" -> model.retry.recoveryRequired.toString
+      ) ++ app.map("app" -> _) ++
+        service.map("service" -> _) ++
+        operation.map("operation" -> _) ++
+        model.resultSummary.message.map("message" -> _),
+      correlationId = record.submittedContext.observability.correlationId.map(_.print)
     )
   }
 
@@ -2072,6 +2204,7 @@ final class InMemoryJobEngine(
         _append_timeline_(jobid, "job.failed", None, None, conclusion.observation.getEffectiveMessage)
         _update_record_with_retry_(jobid, JobStatus.Failed, Some(JobResult.Failure(conclusion)), retry)
         _append_failure_event_(jobid, conclusion, retry)
+        _notify_job_if_needed_(jobid, "failed")
       case RetryPolicy.Immediate(nextAttempt, maxAttempts) =>
         _append_timeline_(jobid, "job.retry.immediate.submitted", None, None, Some(s"$nextAttempt/$maxAttempts"))
         _update_record_for_retry_(jobid, record, JobRetryKind.Immediate, nextAttempt, None, conclusion)
@@ -2112,6 +2245,7 @@ final class InMemoryJobEngine(
         _append_timeline_(jobid, "job.failed", None, None, conclusion.observation.getEffectiveMessage)
         _update_record_with_retry_(jobid, JobStatus.Failed, Some(JobResult.Failure(conclusion)), retry)
         _append_failure_event_(jobid, conclusion, retry)
+        _notify_job_if_needed_(jobid, "failed")
     }
 
   private def _update_record_for_retry_(
@@ -2522,5 +2656,7 @@ final case class JobRecord(
   retry: JobRetryState = JobRetryState(),
   deferredResult: Option[JobResult] = None,
   activeTaskCount: Int = 0,
-  baseTasksCompleted: Boolean = false
+  baseTasksCompleted: Boolean = false,
+  notificationPolicy: JobNotificationPolicy = JobNotificationPolicy.disabled,
+  notificationTriggers: Set[String] = Set.empty
 )
