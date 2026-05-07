@@ -10,8 +10,8 @@ current development item.
 Phase 22 started by normalizing Command execution policy, made Job a
 store-backed SimpleEntity management projection, and added JCL diagnostics for
 declared Event/Action chains, and added JobDefinition binding / execution
-record policy. Task transaction and compensation is now the active follow-up;
-user notification work is tracked in a later JM slice.
+record policy. Task transaction and compensation boundaries are now complete;
+user notification policy is the active follow-up.
 
 This document is a phase dashboard, not a design journal.
 
@@ -78,17 +78,17 @@ Final semantic direction:
 - B (DONE): JM-02 — Job Entity Management.
 - C (DONE): JM-03 — JCL Profile / Execution Profile Difference Checking.
 - D (DONE): JM-03B — JobDefinition Entity / Binding / Execution Record Policy.
-- E (ACTIVE): JM-04 — Task Transaction and Compensation Boundary.
-- F (TODO): JM-05 — User Job Notification Policy.
+- E (DONE): JM-04 — Task Transaction and Compensation Boundary.
+- F (ACTIVE): JM-05 — User Job Notification Policy.
 - G (TODO): JM-06 — Phase 22 verification and closure.
 
 Resume hint:
 
-- Continue with JM-04. Job and JobDefinition are `system` Entities; reusable
-  JobDefinitions can be created, activated, retired, and submitted by
-  `jobDefinitionRef`; Jobs keep definition snapshots and lightweight execution
-  record references. JM-04 should define Task transaction and compensation
-  boundaries.
+- Continue with JM-05. Job Tasks now expose transaction/compensation boundaries,
+  Task Execution Tree and task detail diagnostics are available through
+  `job_control`, and recovery-required is recorded when cleanup cannot complete.
+  JM-05 should define user notification policy for async Job completion,
+  failure, and recovery-required states.
 
 ## 5. Development Items
 
@@ -96,7 +96,7 @@ Resume hint:
 - [x] JM-02: Job Entity Management.
 - [x] JM-03: JCL Profile / Execution Profile Difference Checking.
 - [x] JM-03B: JobDefinition Entity / Binding / Execution Record Policy.
-- [ ] JM-04: Task Transaction and Compensation Boundary.
+- [x] JM-04: Task Transaction and Compensation Boundary.
 - [ ] JM-05: User Job Notification Policy.
 - [ ] JM-06: Phase 22 verification and closure.
 

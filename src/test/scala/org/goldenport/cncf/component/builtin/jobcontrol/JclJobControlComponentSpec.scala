@@ -4,7 +4,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import scala.collection.mutable.ArrayBuffer
 import cats.data.NonEmptyVector
 import cats.effect.Ref
-import org.goldenport.Consequence
+import org.goldenport.{Conclusion, Consequence}
 import org.goldenport.cncf.action.{Action, ActionCall, CommandAction, ProcedureActionCall}
 import org.goldenport.cncf.component.{Component, ComponentFactory, ComponentId, ComponentInit, ComponentInstanceId, ComponentOrigin}
 import org.goldenport.cncf.context.{ExecutionContext, SecurityContext}
@@ -52,11 +52,15 @@ final class JclJobControlComponentSpec
           |    submit:
           |      persistence: ephemeral
           |      requestSummary: first-run
-          |    onFailure:
-          |      action: jcl_fixture.command.hook
-          |      parameters:
-          |        reason: fail
-          |""".stripMargin
+	          |    onFailure:
+	          |      action: jcl_fixture.command.hook
+	          |      parameters:
+	          |        reason: fail
+	          |    compensation:
+	          |      action: jcl_fixture.command.compensate
+	          |      parameters:
+	          |        step: first
+	          |""".stripMargin
 
       When("job_control.job.describe_job_definition is invoked")
       val response = _execute(
@@ -73,6 +77,7 @@ final class JclJobControlComponentSpec
       jobs.head.getRecord("target").flatMap(_.getString("action")) shouldBe Some("jcl_fixture.command.ok")
       jobs.head.getRecord("submit").flatMap(_.getString("persistence")) shouldBe Some("Ephemeral")
       jobs.head.getRecord("on-failure").flatMap(_.getString("action")) shouldBe Some("jcl_fixture.command.hook")
+      jobs.head.getRecord("compensation").flatMap(_.getString("action")) shouldBe Some("jcl_fixture.command.compensate")
       }
     }
 
@@ -286,6 +291,58 @@ final class JclJobControlComponentSpec
       val model = component.jobEngine.queryVisible(org.goldenport.cncf.job.JobId.parse(jobId).toOption.get).toOption.flatten.getOrElse(fail("job missing"))
       model.debug.jobDefinitionSnapshot.map(_.key) shouldBe Some("op-bound-ok")
       model.debug.declaredProfile.flatMap(_.expectedStatus).map(_.toString) shouldBe Some("Succeeded")
+      }
+    }
+
+    "apply operation JobDefinition compensation during normal Command launch" in {
+      Given("an operation bound to a JobDefinition with explicit compensation")
+      _with_fixture(
+        operationExecution = Map("ok" -> "sync-job"),
+        operationJobDefinitionRefs = Map("ok" -> "op-bound-compensation")
+      ) { fixture =>
+      val body =
+        """job:
+          |  name: operation-bound-compensation
+          |  target:
+          |    action: jcl_fixture.command.ok
+          |  compensation:
+          |    action: jcl_fixture.command.compensate
+          |""".stripMargin
+      _execute(
+        fixture.subsystem,
+        "job_control.job.create_job_definition",
+        arguments = List(
+          Argument("key", "op-bound-compensation"),
+          Argument("status", "active"),
+          Argument("body", body)
+        )
+      )
+
+      When("the operation completes and a later same-job continuation fails")
+      val component = _component_for(fixture.subsystem, "jcl_fixture.command.ok")
+      val request = _build_request(fixture.subsystem.resolver, "jcl_fixture.command.ok", Nil)
+      val action = component.logic.makeOperationRequest(request).toOption.collect {
+        case action: Action => action
+      }.getOrElse(fail("action missing"))
+      val ctx = component.logic.executionContext()
+      val response = component.logic.executeAction(action, ctx)
+      val jobId = org.goldenport.cncf.job.JobId.parse(ctx.runtime.executionMetadata.responseJobId.getOrElse(fail("response job id missing"))).toOption.get
+      val failed = new org.goldenport.cncf.job.JobTask {
+        val actionId = org.goldenport.cncf.job.ActionId.generate()
+        override def operationName: Option[String] = Some("same-job-failure")
+        def run(ctx: ExecutionContext): org.goldenport.cncf.job.TaskOutcome =
+          org.goldenport.cncf.job.TaskFailed(Conclusion.simple("same-job-failure: forced"))
+      }
+      val _ = component.jobEngine.runTaskInJobSync(jobId, failed, ctx)
+      val model = component.jobEngine.queryVisible(jobId)(using ctx).toOption.flatten.getOrElse(fail("job missing"))
+
+      Then("the root task carries and runs the JobDefinition compensation action")
+      response shouldBe Consequence.success(OperationResponse.Scalar("ok"))
+      val root = model.tasks.tasks.find(_.operation.exists(_.endsWith(".ok"))).getOrElse(fail("root task missing"))
+      root.compensationActionRef shouldBe Some("jcl_fixture.command.compensate")
+      model.tasks.tasks.exists(_.operation.exists(_.endsWith(".compensate"))) shouldBe true
+      root.compensationStatus shouldBe Some("succeeded")
+      fixture.trace.exists(_.startsWith("compensate:")) shouldBe true
       }
     }
 
@@ -646,7 +703,7 @@ final class JclJobControlComponentSpec
     val component = new Component() {
       override def workflowDefinitions: Vector[WorkflowDefinition] = definitions
       override def operationDefinitions: Vector[CmlOperationDefinition] =
-        Vector("ok", "fail", "hook", "advanceOrder").map { name =>
+        Vector("ok", "fail", "hook", "compensate", "advanceOrder").map { name =>
           CmlOperationDefinition(
             name = name,
             kind = "COMMAND",
@@ -667,7 +724,8 @@ final class JclJobControlComponentSpec
               operations = NonEmptyVector.of(
                 _Operation("ok", trace, fail = false),
                 _Operation("fail", trace, fail = true),
-                _Operation("hook", trace, fail = false)
+                _Operation("hook", trace, fail = false),
+                _Operation("compensate", trace, fail = false)
               )
             )
           ),

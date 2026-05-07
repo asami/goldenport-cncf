@@ -13,7 +13,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Mar. 21, 2026
  *  version Apr. 22, 2026
- * @version May.  4, 2026
+ * @version May.  7, 2026
  * @author  ASAMI, Tomoharu
  */
 final class JobQueryReadModelSpec
@@ -117,6 +117,87 @@ final class JobQueryReadModelSpec
       read.debug.executionNotes should contain("note-1")
       read.traceTree.roots.nonEmpty shouldBe true
       read.submitter.principalId shouldBe "test-user-principal"
+    }
+
+    "record Task transaction metadata for managed Action execution" in {
+      Given("a managed Action task")
+      val engine = createJobEngine()
+      val action = _success_action("taskBoundary", "done")
+      val task = ActionTask(ActionId.generate(), action, ActionEngine.create(), None)
+      val jobid = _jobid(engine.submit(List(task), ExecutionContext.test()))
+      val _ = awaitResult(engine, jobid)
+
+      When("querying the task read model")
+      val read = engine.query(jobid).get
+      val model = read.tasks.tasks.head
+
+      Then("the task exposes transaction boundary metadata")
+      model.taskKind shouldBe "action"
+      model.targetKind shouldBe Some("action")
+      model.transactionOutcome shouldBe Some("committed")
+      read.timeline.events.exists(_.kind == "task.transaction.committed") shouldBe true
+    }
+
+    "run explicit compensation tasks for previously committed Tasks on failure" in {
+      Given("a two-task job where the first task declares explicit compensation")
+      val engine = createJobEngine()
+      val compensator = _success_task("compensate-first")
+      val first = _success_task("first", compensation = Some(compensator), compensationRef = Some("fixture.compensate-first"))
+      val second = _failed_task("second")
+
+      When("the second task fails")
+      val jobid = _jobid(engine.submit(List(first, second), ExecutionContext.test(), JobSubmitOption(runMode = JobRunMode.Sync)))
+      val _ = awaitResult(engine, jobid)
+      val read = engine.query(jobid).get
+
+      Then("a compensation task is recorded in the Task Execution Tree")
+      read.tasks.tasks.size shouldBe 3
+      read.tasks.tasks.find(_.operation.contains("first")).flatMap(_.compensationStatus) shouldBe Some("succeeded")
+      val compensation = read.tasks.tasks.find(_.relation.contains("compensation")).get
+      compensation.compensatesTaskId should not be empty
+      compensation.transactionOutcome shouldBe Some("compensation-committed")
+      read.traceTree.roots.exists(_contains_compensation_node) shouldBe true
+      read.timeline.events.exists(_.kind == "task.compensation.succeeded") shouldBe true
+    }
+
+    "mark recovery-required when a committed Task has no compensation" in {
+      Given("a two-task job where the first task has no compensation")
+      val engine = createJobEngine()
+      val first = _success_task("first-no-comp")
+      val second = _failed_task("second-no-comp")
+
+      When("the second task fails")
+      val jobid = _jobid(engine.submit(List(first, second), ExecutionContext.test(), JobSubmitOption(runMode = JobRunMode.Sync)))
+      val _ = awaitResult(engine, jobid)
+      val read = engine.query(jobid).get
+
+      Then("the committed task and Job carry recovery-required diagnostics")
+      val committed = read.tasks.tasks.find(_.operation.contains("first-no-comp")).get
+      committed.compensationStatus shouldBe Some("missing")
+      committed.recoveryRequired shouldBe true
+      read.retry.recoveryRequired shouldBe true
+      read.debug.executionNotes.exists(_.startsWith("recovery-required:")) shouldBe true
+      read.timeline.events.exists(_.kind == "job.recovery-required") shouldBe true
+    }
+
+    "run compensation when a same-job continuation Task fails" in {
+      Given("a base job with a committed compensatable Task")
+      val engine = createJobEngine()
+      val compensator = _success_task("compensate-root")
+      val root = _success_task("root", compensation = Some(compensator), compensationRef = Some("fixture.compensate-root"))
+      val jobid = _jobid(engine.submit(List(root), ExecutionContext.test(), JobSubmitOption(runMode = JobRunMode.Sync)))
+      val _ = awaitResult(engine, jobid)
+
+      When("a same-job continuation fails")
+      val failed = _failed_task("event-continuation")
+      val outcome = engine.runTaskInJobSync(jobid, failed, ExecutionContext.test())
+      val read = engine.query(jobid).get
+
+      Then("the committed base Task is compensated and appears in the Task Execution Tree")
+      outcome shouldBe a[Consequence.Failure[_]]
+      read.tasks.tasks.find(_.operation.contains("root")).flatMap(_.compensationStatus) shouldBe Some("succeeded")
+      read.tasks.tasks.exists(_.relation.contains("compensation")) shouldBe true
+      read.timeline.events.exists(_.kind == "task.compensation.succeeded") shouldBe true
     }
 
     "expose scheduled start time for delayed job submission" in {
@@ -302,9 +383,28 @@ final class JobQueryReadModelSpec
       }
     }
 
+  private def _success_task(
+    actionname: String,
+    compensation: Option[JobTask] = None,
+    compensationRef: Option[String] = None
+  ): JobTask =
+    new JobTask {
+      val actionId: ActionId = ActionId.generate()
+      override def operationName: Option[String] = Some(actionname)
+      override def compensationTask: Option[JobTask] = compensation
+      override def compensationActionRef: Option[String] = compensationRef
+      def run(ctx: ExecutionContext): TaskOutcome = {
+        val _ = ctx
+        TaskSucceeded(OperationResponse.Scalar(actionname))
+      }
+    }
+
   private def _operation_invalid(name: String): Conclusion =
     Consequence.operationInvalid(name, "forced failure") match {
       case Consequence.Failure(conclusion) => conclusion
     }
+
+  private def _contains_compensation_node(node: JobTraceTaskNode): Boolean =
+    node.relation.contains("compensation") || node.children.exists(_contains_compensation_node)
 
 }

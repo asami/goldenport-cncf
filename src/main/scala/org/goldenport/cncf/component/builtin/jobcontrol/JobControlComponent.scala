@@ -8,7 +8,7 @@ import org.goldenport.cncf.action.{Action, ActionCall, ActionEngine, CommandActi
 import org.goldenport.cncf.component.{Component, ComponentCreate, ComponentDescriptor, ComponentId, ComponentInstanceId}
 import org.goldenport.cncf.entity.EntityStore
 import org.goldenport.cncf.entity.runtime.{EntityKind, EntityMemoryPolicy, EntityRuntimeDescriptor, PartitionStrategy, WorkingSetPolicy, WorkingSetPolicyEvaluator, WorkingSetPolicySource}
-import org.goldenport.cncf.job.{ActionId, ActionTask, JobBatchDefinition, JobBatchSubmissionResult, JobControlCommand, JobControlRequest, JobDefinition, JobDefinitionEntity, JobDefinitionSnapshot, JobDefinitionStatus, JobFailureHook, JobId, JobPersistencePolicy, JobProfileComparison, JobProfileReconstructor, JobResult, JobSubmitOption}
+import org.goldenport.cncf.job.{ActionId, ActionTask, JobBatchDefinition, JobBatchSubmissionResult, JobControlCommand, JobControlRequest, JobDefinition, JobDefinitionEntity, JobDefinitionSnapshot, JobDefinitionStatus, JobFailureHook, JobId, JobPersistencePolicy, JobProfileComparison, JobProfileReconstructor, JobResult, JobSubmitOption, JobTaskDetail, JobTraceTree, TaskId}
 import org.goldenport.cncf.job.{JobEntityCollections, JobQueryReadModel, JobTimelinePage}
 import org.goldenport.cncf.event.ReceptionDomainEvent
 import org.goldenport.cncf.subsystem.resolver.OperationResolver
@@ -40,6 +40,8 @@ object JobControlComponent {
     def getJobStatus(jobId: JobId)(using org.goldenport.cncf.context.ExecutionContext): Consequence[JobQueryReadModel]
     def loadJobHistory(jobId: JobId)(using org.goldenport.cncf.context.ExecutionContext): Consequence[JobTimelinePage]
     def getJobCalltree(jobId: JobId)(using org.goldenport.cncf.context.ExecutionContext): Consequence[Record]
+    def getTaskExecutionTree(jobId: JobId)(using org.goldenport.cncf.context.ExecutionContext): Consequence[JobTraceTree]
+    def getTaskDetail(jobId: JobId, taskId: TaskId)(using org.goldenport.cncf.context.ExecutionContext): Consequence[JobTaskDetail]
     def getJobResult(jobId: JobId)(using org.goldenport.cncf.context.ExecutionContext): Consequence[JobResult]
     def awaitJobResult(jobId: JobId)(using org.goldenport.cncf.context.ExecutionContext): Consequence[OperationResponse]
     def describeJobDefinition(body: String): Consequence[JobBatchDefinition]
@@ -119,6 +121,8 @@ object JobControlComponent {
       val getJobStatus = new GetJobStatusOperationDefinition(request = idrequest, response = spec.ResponseDefinition(result = List(DataType.Named("JobQueryReadModel"))))
       val loadJobHistory = new LoadJobHistoryOperationDefinition(request = idrequest, response = spec.ResponseDefinition(result = List(DataType.Named("JobTimelinePage"))))
       val getJobCalltree = new GetJobCalltreeOperationDefinition(request = idrequest, response = spec.ResponseDefinition(result = List(DataType.Named("Record"))))
+      val getTaskExecutionTree = new GetTaskExecutionTreeOperationDefinition(request = idrequest, response = spec.ResponseDefinition(result = List(DataType.Named("Record"))))
+      val getTaskDetail = new GetTaskDetailOperationDefinition(request = _job_task_request, response = spec.ResponseDefinition(result = List(DataType.Named("Record"))))
       val getJobResult = new GetJobResultOperationDefinition(request = idrequest, response = spec.ResponseDefinition(result = List(DataType.Named("JobResult"))))
       val awaitJobResult = new AwaitJobResultOperationDefinition(request = idrequest, response = spec.ResponseDefinition(result = List(DataType.Named("OperationResponse"))))
       val bodyrequest = _body_request
@@ -161,6 +165,8 @@ object JobControlComponent {
             getJobStatus,
             loadJobHistory,
             getJobCalltree,
+            getTaskExecutionTree,
+            getTaskDetail,
             getJobResult,
             awaitJobResult,
             describeJobDefinition,
@@ -211,6 +217,14 @@ object JobControlComponent {
         parameters = List(spec.ParameterDefinition(content = BaseContent.simple("body"), kind = spec.ParameterDefinition.Kind.Argument))
       )
 
+    private def _job_task_request: spec.RequestDefinition =
+      spec.RequestDefinition(
+        parameters = List(
+          spec.ParameterDefinition(content = BaseContent.simple("id"), kind = spec.ParameterDefinition.Kind.Argument),
+          spec.ParameterDefinition(content = BaseContent.simple("taskId"), kind = spec.ParameterDefinition.Kind.Argument)
+        )
+      )
+
     private def _job_definition_request: spec.RequestDefinition =
       spec.RequestDefinition(
         parameters = List(
@@ -257,6 +271,26 @@ object JobControlComponent {
           _job_calltree_record(model)
         case None =>
           _job_calltree_not_found_record(jobId)
+      }
+
+    def getTaskExecutionTree(jobId: JobId)(using org.goldenport.cncf.context.ExecutionContext): Consequence[JobTraceTree] =
+      component.jobEngine.queryVisible(jobId).flatMap {
+        case Some(_) =>
+          component.jobEngine.queryTaskExecutionTree(jobId) match {
+            case Some(tree) => Consequence.success(tree)
+            case None => Consequence.operationNotFound(s"job task tree:${jobId.value}")
+          }
+        case None => Consequence.operationNotFound(s"job:${jobId.value}")
+      }
+
+    def getTaskDetail(jobId: JobId, taskId: TaskId)(using org.goldenport.cncf.context.ExecutionContext): Consequence[JobTaskDetail] =
+      component.jobEngine.queryVisible(jobId).flatMap {
+        case Some(_) =>
+          component.jobEngine.queryTaskDetail(jobId, taskId) match {
+            case Some(detail) => Consequence.success(detail)
+            case None => Consequence.operationNotFound(s"job task:${jobId.value}/${taskId.value}")
+          }
+        case None => Consequence.operationNotFound(s"job:${jobId.value}")
       }
 
     def getJobResult(jobId: JobId)(using org.goldenport.cncf.context.ExecutionContext): Consequence[JobResult] =
@@ -432,7 +466,8 @@ object JobControlComponent {
             requestSummary = job.submit.requestSummary.orElse(Some(job.name)),
             persistence = job.submit.persistence,
             declaredProfile = job.profile,
-            definitionSnapshot = snapshot
+            definitionSnapshot = snapshot,
+            compensation = job.compensation
           ).map { case (jobid, response) =>
             _Submission(Vector(jobid), response)
           }
@@ -454,21 +489,43 @@ object JobControlComponent {
       requestSummary: Option[String],
       persistence: JobPersistencePolicy,
       declaredProfile: Option[org.goldenport.cncf.job.JobDeclaredProfile],
-      definitionSnapshot: Option[JobDefinitionSnapshot] = None
+      definitionSnapshot: Option[JobDefinitionSnapshot] = None,
+      compensation: Option[JobFailureHook] = None
     )(using org.goldenport.cncf.context.ExecutionContext): Consequence[(JobId, Consequence[OperationResponse])] =
       _resolve_target_action(selector, parameters).flatMap { case (target, action) =>
-        val task = ActionTask(ActionId.generate(), action, target.actionEngine, Some(target))
-        val option = JobSubmitOption(
-          persistence = persistence,
-          requestSummary = requestSummary,
-          parameters = parameters ++ Map("jcl.target.action" -> selector),
-          executionNotes = Vector("jcl submission"),
-          declaredProfile = declaredProfile,
-          jobDefinitionSnapshot = definitionSnapshot
-        )
-        component.jobEngine.submit(List(task), summon[org.goldenport.cncf.context.ExecutionContext], option).map { jobid =>
-          (jobid, component.logic.awaitJobResult(jobid))
+        _resolve_compensation_task(compensation, parameters).flatMap { comp =>
+          val task = ActionTask(
+            ActionId.generate(),
+            action,
+            target.actionEngine,
+            Some(target),
+            compensationActionRef = compensation.map(_.action),
+            compensationTask = comp
+          )
+          val option = JobSubmitOption(
+            persistence = persistence,
+            requestSummary = requestSummary,
+            parameters = parameters ++ Map("jcl.target.action" -> selector) ++ compensation.map(h => "jcl.compensation.action" -> h.action),
+            executionNotes = Vector("jcl submission"),
+            declaredProfile = declaredProfile,
+            jobDefinitionSnapshot = definitionSnapshot
+          )
+          component.jobEngine.submit(List(task), summon[org.goldenport.cncf.context.ExecutionContext], option).map { jobid =>
+            (jobid, component.logic.awaitJobResult(jobid))
+          }
         }
+      }
+
+    private def _resolve_compensation_task(
+      compensation: Option[JobFailureHook],
+      parameters: Map[String, String]
+    ): Consequence[Option[ActionTask]] =
+      compensation match {
+        case None => Consequence.success(None)
+        case Some(hook) =>
+          _resolve_target_action(hook.action, parameters ++ hook.parameters).map { case (target, action) =>
+            Some(ActionTask(ActionId.generate(), action, target.actionEngine, Some(target)))
+          }
       }
 
     private def _submit_workflow(
@@ -753,6 +810,41 @@ object JobControlComponent {
       }
   }
 
+  private final class GetTaskExecutionTreeOperationDefinition(
+    request: spec.RequestDefinition,
+    response: spec.ResponseDefinition
+  ) extends spec.OperationDefinition {
+    val specification: spec.OperationDefinition.Specification =
+        spec.OperationDefinition.Specification(
+        name = "get_task_execution_tree",
+        request = request,
+        response = response
+      )
+
+    def createOperationRequest(req: Request): Consequence[OperationRequest] =
+      _job_id(req).map { jobid =>
+        GetTaskExecutionTreeAction(req, jobid)
+      }
+  }
+
+  private final class GetTaskDetailOperationDefinition(
+    request: spec.RequestDefinition,
+    response: spec.ResponseDefinition
+  ) extends spec.OperationDefinition {
+    val specification: spec.OperationDefinition.Specification =
+        spec.OperationDefinition.Specification(
+        name = "get_task_detail",
+        request = request,
+        response = response
+      )
+
+    def createOperationRequest(req: Request): Consequence[OperationRequest] =
+      for {
+        jobid <- _job_id(req)
+        taskid <- _task_id(req)
+      } yield GetTaskDetailAction(req, jobid, taskid)
+  }
+
   private final class GetJobResultOperationDefinition(
     request: spec.RequestDefinition,
     response: spec.ResponseDefinition
@@ -1018,6 +1110,23 @@ object JobControlComponent {
       GetJobCalltreeCall(core, jobId)
   }
 
+  private final case class GetTaskExecutionTreeAction(
+    request: Request,
+    jobId: JobId
+  ) extends SyncJobAction {
+    def createCall(core: ActionCall.Core): ActionCall =
+      GetTaskExecutionTreeCall(core, jobId)
+  }
+
+  private final case class GetTaskDetailAction(
+    request: Request,
+    jobId: JobId,
+    taskId: TaskId
+  ) extends SyncJobAction {
+    def createCall(core: ActionCall.Core): ActionCall =
+      GetTaskDetailCall(core, jobId, taskId)
+  }
+
   private final case class GetJobResultAction(
     request: Request,
     jobId: JobId
@@ -1188,6 +1297,39 @@ object JobControlComponent {
         case Some(component) =>
           component.port.get[JobService].map(_.getJobCalltree(jobId)(using core.executionContext)) match {
             case Some(result) => result.map(OperationResponse.RecordResponse.apply)
+            case None => Consequence.serviceUnavailable("job service is not available")
+          }
+        case None =>
+          Consequence.serviceUnavailable("component is not initialized")
+      }
+  }
+
+  private final case class GetTaskExecutionTreeCall(
+    core: ActionCall.Core,
+    jobId: JobId
+  ) extends ProcedureActionCall {
+    def execute(): Consequence[OperationResponse] =
+      core.component match {
+        case Some(component) =>
+          component.port.get[JobService].map(_.getTaskExecutionTree(jobId)(using core.executionContext)) match {
+            case Some(result) => result.map(tree => OperationResponse.RecordResponse(_task_tree_record(tree)))
+            case None => Consequence.serviceUnavailable("job service is not available")
+          }
+        case None =>
+          Consequence.serviceUnavailable("component is not initialized")
+      }
+  }
+
+  private final case class GetTaskDetailCall(
+    core: ActionCall.Core,
+    jobId: JobId,
+    taskId: TaskId
+  ) extends ProcedureActionCall {
+    def execute(): Consequence[OperationResponse] =
+      core.component match {
+        case Some(component) =>
+          component.port.get[JobService].map(_.getTaskDetail(jobId, taskId)(using core.executionContext)) match {
+            case Some(result) => result.map(detail => OperationResponse.RecordResponse(_task_detail_record(detail)))
             case None => Consequence.serviceUnavailable("job service is not available")
           }
         case None =>
@@ -1437,6 +1579,13 @@ object JobControlComponent {
         }
     }
 
+  private def _task_id(req: Request): Consequence[TaskId] =
+    _string_argument(req, "taskId")
+      .orElse(_string_argument(req, "task-id")) match {
+        case Some(value) => TaskId.parse(value)
+        case None => Consequence.argumentMissing("taskId")
+      }
+
   private def _body(req: Request): Consequence[String] =
     req.arguments.find(_.name == "body").map(_.value.toString).filter(_.trim.nonEmpty)
       .orElse(req.properties.find(_.name == "body").map(_.value.toString).filter(_.trim.nonEmpty))
@@ -1518,18 +1667,7 @@ object JobControlComponent {
       "calltree-drop-reason" -> model.debug.calltreeDropReason.getOrElse(""),
       "task-count" -> model.tasks.totalCount,
       "tasks" -> model.tasks.tasks.map { task =>
-        Record.data(
-          "task-id" -> task.taskId.value,
-          "parent-task-id" -> task.parentTaskId.map(_.value).getOrElse(""),
-          "status" -> task.status.toString,
-          "success" -> task.result.success,
-          "message" -> task.result.message.getOrElse(""),
-          "component" -> task.component.getOrElse(""),
-          "service" -> task.service.getOrElse(""),
-          "operation" -> task.operation.getOrElse(""),
-          "started-at" -> task.startedAt.toString,
-          "finished-at" -> task.finishedAt.map(_.toString).getOrElse("")
-        )
+        _task_record(task)
       },
       "timeline" -> model.timeline.events.map(_timeline_event_record),
       "debug-request-summary" -> model.debug.requestSummary.getOrElse(""),
@@ -1572,6 +1710,65 @@ object JobControlComponent {
       "calltree-saved" -> false,
       "calltree-drop-reason" -> "job_not_found",
       "calltree" -> Record.empty
+    )
+
+  private def _task_tree_record(
+    tree: JobTraceTree
+  ): Record =
+    Record.data(
+      "job-id" -> tree.jobId.value,
+      "roots" -> tree.roots.map(_task_node_record)
+    )
+
+  private def _task_detail_record(
+    detail: JobTaskDetail
+  ): Record =
+    Record.data(
+      "job-id" -> detail.jobId.value,
+      "task" -> _task_record(detail.task),
+      "events" -> detail.events.map(_timeline_event_record),
+      "children" -> detail.children.map(_task_node_record)
+    )
+
+  private def _task_node_record(
+    node: org.goldenport.cncf.job.JobTraceTaskNode
+  ): Record =
+    Record.data(
+      "task-id" -> node.taskId.value,
+      "parent-task-id" -> node.parentTaskId.map(_.value).getOrElse(""),
+      "task-kind" -> node.taskKind,
+      "relation" -> node.relation.getOrElse(""),
+      "status" -> node.status.toString,
+      "transaction-outcome" -> node.transactionOutcome.getOrElse(""),
+      "compensation-status" -> node.compensationStatus.getOrElse(""),
+      "recovery-required" -> node.recoveryRequired,
+      "events" -> node.events.map(_timeline_event_record),
+      "children" -> node.children.map(_task_node_record)
+    )
+
+  private def _task_record(
+    task: org.goldenport.cncf.job.JobTaskReadModel
+  ): Record =
+    Record.data(
+      "task-id" -> task.taskId.value,
+      "parent-task-id" -> task.parentTaskId.map(_.value).getOrElse(""),
+      "status" -> task.status.toString,
+      "success" -> task.result.success,
+      "message" -> task.result.message.getOrElse(""),
+      "component" -> task.component.getOrElse(""),
+      "service" -> task.service.getOrElse(""),
+      "operation" -> task.operation.getOrElse(""),
+      "task-kind" -> task.taskKind,
+      "target-kind" -> task.targetKind.getOrElse(""),
+      "relation" -> task.relation.getOrElse(""),
+      "transaction-outcome" -> task.transactionOutcome.getOrElse(""),
+      "compensation-action-ref" -> task.compensationActionRef.getOrElse(""),
+      "compensates-task-id" -> task.compensatesTaskId.map(_.value).getOrElse(""),
+      "compensation-status" -> task.compensationStatus.getOrElse(""),
+      "compensation-failure-summary" -> task.compensationFailureSummary.getOrElse(""),
+      "recovery-required" -> task.recoveryRequired,
+      "started-at" -> task.startedAt.toString,
+      "finished-at" -> task.finishedAt.map(_.toString).getOrElse("")
     )
 
   private def _timeline_event_record(

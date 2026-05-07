@@ -987,9 +987,10 @@ corresponding completed-history entry.
 
 Phase 22 is active. `9.14 Job Management` is the selected development item.
 JM-01 Command Execution Policy Normalization, JM-02 Job Entity Management,
-JM-03 JCL Profile / Execution Profile Difference Checking, and JM-03B
-JobDefinition Entity / Binding / Execution Record Policy are complete; JM-04
-Task Transaction and Compensation Boundary is the active slice.
+JM-03 JCL Profile / Execution Profile Difference Checking, JM-03B
+JobDefinition Entity / Binding / Execution Record Policy, and JM-04 Task
+Transaction and Compensation Boundary are complete; JM-05 User Job Notification
+Policy is the active slice.
 
 ### 9.1 Web Next Stage Follow-ups
 Future Web/platform development item.
@@ -1189,8 +1190,8 @@ Active stack:
 - JM-02: Job Entity Management. DONE.
 - JM-03: JCL Profile / Execution Profile Difference Checking. DONE.
 - JM-03B: JobDefinition Entity / Binding / Execution Record Policy. DONE.
-- JM-04: Task Transaction and Compensation Boundary. ACTIVE.
-- JM-05: User Job Notification Policy.
+- JM-04: Task Transaction and Compensation Boundary. DONE.
+- JM-05: User Job Notification Policy. ACTIVE.
 - JM-06: Phase 22 verification and closure.
 
 - Define Command execution policy before broadening Job usage. CQRS makes
@@ -1240,6 +1241,10 @@ Active stack:
   success/failure and compensation.
 - Support compensation between Tasks and integrate incomplete cleanup with
   recovery-required events and human recovery diagnostics.
+- Expose Task Execution Tree and Task detail diagnostics through `job_control`;
+  compensation is explicit and no business undo is inferred automatically.
+- Next: define application/user notification policy for async Job completion,
+  failure, and recovery-required states before broad application use.
 
 ### 9.15 Saga Management
 Future distributed-collaboration development item.

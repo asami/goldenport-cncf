@@ -3,7 +3,7 @@ package org.goldenport.cncf.component
 import org.goldenport.Consequence
 import org.goldenport.Conclusion
 import org.goldenport.http.{HttpRequest, HttpResponse}
-import org.goldenport.protocol.Request
+import org.goldenport.protocol.{Argument, Request}
 import org.goldenport.protocol.Response
 import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
 import org.goldenport.record.Record
@@ -16,7 +16,8 @@ import org.goldenport.cncf.datastore.DataStore
 import org.goldenport.cncf.entity.EntityStore
 import org.goldenport.cncf.event.{EventEngine, EventStore, ReceptionInput}
 import org.goldenport.cncf.http.HttpDriver
-import org.goldenport.cncf.job.{ActionId, ActionTask, JobControlPolicy, JobControlRequest, JobControlResponse, JobDefinitionEntity, JobDefinitionSnapshot, JobEngine, JobId, JobPersistencePolicy, JobResult, JobRunMode, JobStatus, JobSubmitOption, JobTask}
+import org.goldenport.cncf.job.{ActionId, ActionTask, JobBatchDefinition, JobControlPolicy, JobControlRequest, JobControlResponse, JobDefinitionEntity, JobDefinitionSnapshot, JobEngine, JobFailureHook, JobId, JobPersistencePolicy, JobResult, JobRunMode, JobStatus, JobSubmitOption, JobTask}
+import org.goldenport.cncf.subsystem.resolver.OperationResolver
 import org.goldenport.cncf.unitofwork.UnitOfWork
 import org.goldenport.cncf.unitofwork.UnitOfWorkOp
 import org.goldenport.cncf.unitofwork.UnitOfWorkInterpreter
@@ -197,14 +198,16 @@ case class ComponentLogic(
         case CommandJobRunMode.Async => JobRunMode.Async
       }
       val option0 = _default_submit_option(List(task)).copy(runMode = runmode)
-      _job_definition_submit_option(action, option0, ctx).flatMap { option =>
-        submitJob(List(task), ctx, option).flatMap { jobid =>
-          _note_job_response(ctx, jobid)
-          policy.interfaceMode match {
-            case CommandInterfaceMode.Async =>
-              Consequence.success(OperationResponse.Scalar(jobid.value))
-            case CommandInterfaceMode.Sync =>
-              awaitJobResult(jobid)
+      _job_definition_submit_binding(action, option0, ctx).flatMap { binding =>
+        _task_with_compensation(task, binding.compensation, action, ctx).flatMap { task1 =>
+          submitJob(List(task1), ctx, binding.option).flatMap { jobid =>
+            _note_job_response(ctx, jobid)
+            policy.interfaceMode match {
+              case CommandInterfaceMode.Async =>
+                Consequence.success(OperationResponse.Scalar(jobid.value))
+              case CommandInterfaceMode.Sync =>
+                awaitJobResult(jobid)
+            }
           }
         }
       }
@@ -254,29 +257,51 @@ case class ComponentLogic(
   ): Option[CmlOperationDefinition] =
     component.operationDefinitions.find(_.name == operationname)
 
-  private def _job_definition_submit_option(
+  private final case class _JobDefinitionBinding(
+    option: JobSubmitOption,
+    compensation: Option[JobFailureHook]
+  )
+
+  private def _job_definition_submit_binding(
     action: Action,
     base: JobSubmitOption,
     ctx: ExecutionContext
-  ): Consequence[JobSubmitOption] =
+  ): Consequence[_JobDefinitionBinding] =
     _job_definition_ref(action) match {
-      case None => Consequence.success(base)
+      case None => Consequence.success(_JobDefinitionBinding(base, None))
       case Some(ref) =>
         given ExecutionContext = ctx
         _load_job_definition(ref, ctx).flatMap {
           case Some(entity) if entity.isActive =>
             val snapshot = JobDefinitionSnapshot.from(entity)
-            Consequence.success(
-              base.copy(
-                declaredProfile = base.declaredProfile.orElse(snapshot.profile),
-                jobDefinitionSnapshot = Some(snapshot)
+            _job_definition_compensation(entity).map { compensation =>
+              _JobDefinitionBinding(
+                base.copy(
+                  declaredProfile = base.declaredProfile.orElse(snapshot.profile),
+                  jobDefinitionSnapshot = Some(snapshot)
+                ),
+                compensation
               )
-            )
+            }
           case Some(entity) =>
             Consequence.argumentInvalid(s"JobDefinition is not active: ${entity.key}")
           case None =>
             Consequence.operationNotFound(s"JobDefinition:$ref")
         }
+    }
+
+  private def _job_definition_compensation(
+    entity: JobDefinitionEntity
+  ): Consequence[Option[JobFailureHook]] =
+    JobBatchDefinition.parseYaml(entity.jclSource).flatMap { batch =>
+      batch.jobs.headOption match {
+        case Some(job) if batch.jobs.size == 1 =>
+          Consequence.success(job.compensation)
+        case Some(_) =>
+          Consequence.argumentInvalid(s"JobDefinition must contain exactly one job: ${entity.key}")
+        case None =>
+          Consequence.argumentInvalid(s"JobDefinition has no job: ${entity.key}")
+      }
     }
 
   private def _load_job_definition(
@@ -303,6 +328,59 @@ case class ComponentLogic(
         case None =>
           Consequence.success(None)
       }
+
+  private def _task_with_compensation(
+    task: ActionTask,
+    compensation: Option[JobFailureHook],
+    action: Action,
+    ctx: ExecutionContext
+  ): Consequence[ActionTask] =
+    compensation match {
+      case None => Consequence.success(task)
+      case Some(hook) =>
+        _resolve_action(hook.action, _action_parameters(action) ++ hook.parameters, ctx).map { case (target, compensationAction) =>
+          task.copy(
+            compensationActionRef = Some(hook.action),
+            compensationTask = Some(ActionTask(ActionId.generate(), compensationAction, target.actionEngine, Some(target)))
+          )
+        }
+    }
+
+  private def _resolve_action(
+    selector: String,
+    parameters: Map[String, String],
+    ctx: ExecutionContext
+  ): Consequence[(Component, Action)] =
+    component.subsystem.map(_.operationResolver.resolve(selector)).getOrElse(OperationResolver.ResolutionResult.Invalid("subsystem is not available")) match {
+      case OperationResolver.ResolutionResult.Resolved(_, componentName, serviceName, operationName) =>
+        component.subsystem.flatMap(_.findComponent(componentName)) match {
+          case Some(target) =>
+            val request = Request.of(
+              component = componentName,
+              service = serviceName,
+              operation = operationName,
+              arguments = parameters.toVector.sortBy(_._1).map { case (k, v) => Argument(k, v) }.toList
+            )
+            target.logic.makeOperationRequest(request).flatMap {
+              case action: Action => Consequence.success((target, action))
+              case _: OperationRequest => Consequence.argumentInvalid(s"JobDefinition compensation target is not action: $selector")
+            }
+          case None =>
+            Consequence.operationNotFound(s"JobDefinition compensation component: $componentName")
+        }
+      case OperationResolver.ResolutionResult.NotFound(_, s) =>
+        Consequence.operationNotFound(s"JobDefinition compensation action: $s")
+      case OperationResolver.ResolutionResult.Ambiguous(s, candidates) =>
+        Consequence.argumentInvalid(s"ambiguous JobDefinition compensation action: $s => ${candidates.mkString(",")}")
+      case OperationResolver.ResolutionResult.Invalid(message) =>
+        Consequence.argumentInvalid(message)
+    }
+
+  private def _action_parameters(
+    action: Action
+  ): Map[String, String] =
+    (action.arguments.map(x => x.name -> x.value.toString) ++
+      action.properties.map(x => x.name -> x.value.toString)).toMap
 
   private def _job_definition_ref(
     action: Action
@@ -397,7 +475,7 @@ case class ComponentLogic(
 
   private def _default_submit_option(tasks: List[JobTask]): JobSubmitOption =
     tasks.headOption match {
-      case Some(ActionTask(_, _: QueryAction, _, _)) =>
+      case Some(ActionTask(_, _: QueryAction, _, _, _, _)) =>
         JobSubmitOption(persistence = JobPersistencePolicy.Ephemeral)
       case _ =>
         JobSubmitOption(persistence = JobPersistencePolicy.Persistent)

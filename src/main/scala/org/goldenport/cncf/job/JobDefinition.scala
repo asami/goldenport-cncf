@@ -62,6 +62,7 @@ final case class JobDefinition(
   parameters: Map[String, String] = Map.empty,
   submit: JobSubmitSpec = JobSubmitSpec(),
   onFailure: Option[JobFailureHook] = None,
+  compensation: Option[JobFailureHook] = None,
   profile: Option[JobDeclaredProfile] = None,
   flow: Option[Record] = None,
   events: Option[Record] = None,
@@ -77,6 +78,7 @@ final case class JobDefinition(
       },
       "submit" -> submit.toRecord,
       "on-failure" -> onFailure.map(_.toRecord).getOrElse(Record.empty),
+      "compensation" -> compensation.map(_.toRecord).getOrElse(Record.empty),
       "profile" -> profile.map(_.toRecord).getOrElse(Record.empty),
       "flow" -> flow.getOrElse(Record.empty),
       "events" -> events.getOrElse(Record.empty),
@@ -161,7 +163,7 @@ object JobBatchDefinition {
 
   private def _job(p: Any, index: Int, path: String): Consequence[JobDefinition] =
         _object_map(p, path).flatMap { m =>
-      val allowed = Set("name", "target", "parameters", "submit", "onFailure", "profile", "flow", "events", "onEvent", "jobDefinitionRef")
+      val allowed = Set("name", "target", "parameters", "submit", "onFailure", "compensation", "profile", "flow", "events", "onEvent", "jobDefinitionRef")
       _reject_unknown_keys(m.keySet, allowed, path).flatMap { _ =>
         for {
           name <- _required_string(m, "name", path)
@@ -169,12 +171,13 @@ object JobBatchDefinition {
           params <- _string_map(m.get("parameters"), s"$path.parameters")
           submit <- _submit(m.get("submit"), s"$path.submit")
           onFailure <- _failure_hook(m.get("onFailure"), s"$path.onFailure")
+          compensation <- _failure_hook(m.get("compensation"), s"$path.compensation")
           profile <- _profile(m.get("profile"), s"$path.profile")
           flow <- _inert_record(m.get("flow"), s"$path.flow")
           events <- _inert_record(m.get("events"), s"$path.events")
           onEvent <- _inert_record(m.get("onEvent"), s"$path.onEvent")
           ref <- _optional_string(m.get("jobDefinitionRef"), s"$path.jobDefinitionRef")
-        } yield JobDefinition(name, target, params, submit, onFailure, profile, flow, events, onEvent, ref)
+        } yield JobDefinition(name, target, params, submit, onFailure, compensation, profile, flow, events, onEvent, ref)
       }
     }
 

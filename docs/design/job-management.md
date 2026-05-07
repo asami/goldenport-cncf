@@ -271,6 +271,27 @@ Compensation:
 Job management coordinates execution state,
 not business compensation logic.
 
+JM-04 fixes the Task boundary as the transaction boundary inside a managed Job.
+For CNCF runtime purposes, an ActionTask or Aggregate execution is recorded as
+one Task. The ActionEngine / UnitOfWork path still owns the actual commit and
+abort mechanics; JobEngine records the transaction outcome as Task diagnostics:
+
+    - `committed` when the Task completed successfully;
+    - `failed` when the Task failed;
+    - `compensation-committed` when an explicit compensation Task succeeded;
+    - `compensation-failed` when explicit compensation failed.
+
+Compensation between Tasks is explicit. A Task is compensatable only when its
+JobTask / JobDefinition metadata names a compensation Action. When a later Task
+fails after earlier Tasks have committed, JobEngine runs available compensation
+Tasks in reverse committed order and records them as children in the Task
+Execution Tree. CNCF does not infer business undo logic from Entity changes.
+
+If a committed Task has no compensation action, or if compensation itself fails,
+the Job is marked `recoveryRequired`, a `job.recovery-required` diagnostic event
+is emitted, and the failure is preserved for human recovery. Compensation failure
+is never hidden behind the original Task failure.
+
 
 ----------------------------------------------------------------------
 11. Relationship to ExecutionContext
@@ -332,6 +353,11 @@ Large or highly structured execution data should be stored separately:
 Task Execution Tree is the canonical diagnostic structure for parent-child
 execution relationships inside a Job. It records roots, subtasks, Event-driven
 continuations, retries, compensation tasks, and causation metadata.
+
+JM-04 exposes this tree through `job_control.get_task_execution_tree(jobId)` and
+individual Task diagnostics through `job_control.get_task_detail(jobId, taskId)`.
+These are inspection surfaces over JobEngine records; Job Entity remains a
+lightweight management projection.
 
 Task-local calltree is distinct from Job-level summary diagnostics. A task-local
 calltree explains what happened inside one Task, such as ActionCall, UnitOfWork,

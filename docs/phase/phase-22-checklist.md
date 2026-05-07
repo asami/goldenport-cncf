@@ -253,7 +253,7 @@ recording boundary before Task transaction and compensation work begins.
 
 ## JM-04: Task Transaction and Compensation Boundary
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
@@ -262,29 +262,32 @@ boundaries between Tasks.
 
 ### Detailed Tasks
 
-- [ ] Treat Aggregate execution as a Task.
-- [ ] Define Task transactional success and failure semantics.
-- [ ] Define compensation between Tasks.
-- [ ] Connect incomplete cleanup with recovery-required events and human
+- [x] Treat Aggregate execution as a Task target in Job task metadata.
+- [x] Define Task transactional success and failure semantics.
+- [x] Define explicit compensation between Tasks.
+- [x] Connect incomplete cleanup with recovery-required events and human
       recovery diagnostics.
-- [ ] Align Task compensation with transaction success/failure event lanes.
+- [x] Align Task compensation with transaction success/failure diagnostic lanes.
 
 ### Expected Output
 
 - Job internals have explicit transactional boundaries.
 - Compensation behavior is inspectable and recoverable when automated cleanup
   cannot complete.
+- `job_control` exposes Task Execution Tree and Task detail diagnostics.
 
 ### Guardrails
 
 - Do not implement distributed Saga compensation here.
 - Do not hide compensation-of-compensation failures.
+- Do not infer business compensation when no explicit compensation action is
+  declared.
 
 ---
 
 ## JM-05: User Job Notification Policy
 
-Status: TODO
+Status: ACTIVE
 
 ### Objective
 

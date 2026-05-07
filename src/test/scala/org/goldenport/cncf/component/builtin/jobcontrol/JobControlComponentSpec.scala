@@ -147,6 +147,42 @@ final class JobControlComponentSpec extends AnyWordSpec with Matchers with JobEn
         }
       }
     }
+
+    "expose Task Execution Tree and Task detail through job_control operations" in {
+      SubsystemTestFixture.withSubsystem(SubsystemTestFixture.Startup.Default(Some("command"))) { subsystem =>
+        val admin = subsystem.components.find(_.name == "admin").get
+        val jobControl = subsystem.components.find(_.name == "job_control").get
+        val service = jobControl.port.get[JobControlComponent.JobService].get
+        val jobId = admin.logic.submitJob(
+          List(_ImmediateTask(ActionId.generate())),
+          ExecutionContext.create(),
+          JobSubmitOption(
+            persistence = JobPersistencePolicy.Persistent,
+            requestSummary = Some("jm-04-task-tree")
+          )
+        ).toOption.get
+        given ExecutionContext = ExecutionContext.test()
+
+        awaitServiceTerminalStatus(service, jobId)
+        val status = service.getJobStatus(jobId).toOption.get
+        val taskId = status.tasks.tasks.head.taskId
+
+        service.getTaskExecutionTree(jobId) match {
+          case Consequence.Success(tree) =>
+            tree.jobId shouldBe jobId
+            tree.roots.exists(_.taskId == taskId) shouldBe true
+          case Consequence.Failure(conclusion) =>
+            fail(conclusion.show)
+        }
+        service.getTaskDetail(jobId, taskId) match {
+          case Consequence.Success(detail) =>
+            detail.task.taskId shouldBe taskId
+            detail.events.exists(_.kind == "task.succeeded") shouldBe true
+          case Consequence.Failure(conclusion) =>
+            fail(conclusion.show)
+        }
+      }
+    }
   }
 
   private final case class _ImmediateTask(

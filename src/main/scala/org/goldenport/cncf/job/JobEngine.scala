@@ -18,6 +18,7 @@ import org.goldenport.cncf.component.{Component, ComponentLogic}
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.entity.EntityStore
 import org.goldenport.cncf.event.{EventId, EventLane, EventRecord, EventStore}
+import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.cncf.observability.ObservabilityEngine
 
 /*
@@ -183,6 +184,11 @@ final case class TaskFailed(
 
 trait JobTask {
   def actionId: ActionId
+  def taskKind: String = "action"
+  def targetKind: Option[String] = None
+  def relation: Option[String] = None
+  def compensationActionRef: Option[String] = None
+  def compensationTask: Option[JobTask] = None
   def componentName: Option[String] = None
   def serviceName: Option[String] = None
   def operationName: Option[String] = None
@@ -193,8 +199,22 @@ final case class ActionTask(
   actionId: ActionId,
   action: Action,
   actionEngine: ActionEngine,
-  component: Option[Component]
+  component: Option[Component],
+  override val compensationActionRef: Option[String] = None,
+  override val compensationTask: Option[JobTask] = None
 ) extends JobTask {
+  override def targetKind: Option[String] =
+    if (_is_aggregate_target) Some("aggregate") else Some("action")
+
+  private def _is_aggregate_target: Boolean =
+    component.exists { c =>
+      val operation = action.request.operation
+      c.aggregateDefinitions.exists { definition =>
+        definition.creates.exists(x => NamingConventions.equivalentByNormalized(x.name, operation)) ||
+          definition.commands.exists(x => NamingConventions.equivalentByNormalized(x.name, operation))
+      }
+    }
+
   override def componentName: Option[String] =
     component.map(_.name)
 
@@ -264,6 +284,22 @@ enum JobTaskStatus {
   case Failed
 }
 
+enum JobTaskTransactionOutcome {
+  case Running
+  case Committed
+  case Failed
+  case CompensationCommitted
+  case CompensationFailed
+
+  def print: String = this match {
+    case JobTaskTransactionOutcome.Running => "running"
+    case JobTaskTransactionOutcome.Committed => "committed"
+    case JobTaskTransactionOutcome.Failed => "failed"
+    case JobTaskTransactionOutcome.CompensationCommitted => "compensation-committed"
+    case JobTaskTransactionOutcome.CompensationFailed => "compensation-failed"
+  }
+}
+
 final case class JobResultSummary(
   status: JobStatus,
   success: Boolean,
@@ -284,7 +320,16 @@ final case class JobTaskReadModel(
   result: JobTaskResultSummary,
   component: Option[String] = None,
   service: Option[String] = None,
-  operation: Option[String] = None
+  operation: Option[String] = None,
+  taskKind: String = "action",
+  targetKind: Option[String] = None,
+  relation: Option[String] = None,
+  transactionOutcome: Option[String] = None,
+  compensationActionRef: Option[String] = None,
+  compensatesTaskId: Option[TaskId] = None,
+  compensationStatus: Option[String] = None,
+  compensationFailureSummary: Option[String] = None,
+  recoveryRequired: Boolean = false
 )
 
 final case class JobTimelineEvent(
@@ -355,6 +400,12 @@ final case class JobTaskPage(
 final case class JobTraceTaskNode(
   taskId: TaskId,
   parentTaskId: Option[TaskId],
+  taskKind: String,
+  relation: Option[String],
+  status: JobTaskStatus,
+  transactionOutcome: Option[String],
+  compensationStatus: Option[String],
+  recoveryRequired: Boolean,
   events: Vector[JobTimelineEvent],
   children: Vector[JobTraceTaskNode]
 )
@@ -362,6 +413,13 @@ final case class JobTraceTaskNode(
 final case class JobTraceTree(
   jobId: JobId,
   roots: Vector[JobTraceTaskNode]
+)
+
+final case class JobTaskDetail(
+  jobId: JobId,
+  task: JobTaskReadModel,
+  events: Vector[JobTimelineEvent],
+  children: Vector[JobTraceTaskNode]
 )
 
 enum JobRetryKind {
@@ -481,6 +539,20 @@ trait JobEngine {
   def listJobs(limit: Int = 100, persistentOnly: Boolean = true): Vector[JobQueryReadModel] = Vector.empty
   def queryTasks(jobId: JobId, offset: Int = 0, limit: Int = 100): Option[JobTaskPage]
   def queryTimeline(jobId: JobId, offset: Int = 0, limit: Int = 100): Option[JobTimelinePage]
+  def queryTaskExecutionTree(jobId: JobId): Option[JobTraceTree] =
+    query(jobId).map(_.traceTree)
+  def queryTaskDetail(jobId: JobId, taskId: TaskId): Option[JobTaskDetail] =
+    query(jobId).flatMap { model =>
+      model.tasks.tasks.find(_.taskId == taskId).map { task =>
+        val children = model.traceTree.roots.flatMap(_find_children(_, taskId))
+        JobTaskDetail(
+          jobId = jobId,
+          task = task,
+          events = model.timeline.events.filter(_.taskId.contains(taskId)),
+          children = children
+        )
+      }
+    }
   def metrics: Option[JobMetrics] = None
   def annotateJob(jobId: JobId, parameters: Map[String, String], executionNotes: Vector[String] = Vector.empty): Unit = ()
   def annotateJobProfile(jobId: JobId, profile: JobDeclaredProfile): Unit = ()
@@ -498,6 +570,10 @@ trait JobEngine {
       case None => Consequence.success(None)
     }
 }
+
+private def _find_children(node: JobTraceTaskNode, taskId: TaskId): Vector[JobTraceTaskNode] =
+  if (node.taskId == taskId) node.children
+  else node.children.flatMap(_find_children(_, taskId))
 
 trait JobTimeSource {
   def now(): Instant
@@ -712,6 +788,22 @@ final class InMemoryJobEngine(
   def queryTimeline(jobId: JobId, offset: Int = 0, limit: Int = 100): Option[JobTimelinePage] =
     _get_record(jobId).map(_timeline_page(_, offset, limit))
 
+  override def queryTaskExecutionTree(jobId: JobId): Option[JobTraceTree] =
+    _get_record(jobId).map(_trace_tree)
+
+  override def queryTaskDetail(jobId: JobId, taskId: TaskId): Option[JobTaskDetail] =
+    _get_record(jobId).flatMap { record =>
+      record.taskReadModels.find(_.taskId == taskId).map { task =>
+        val tree = _trace_tree(record)
+        JobTaskDetail(
+          jobId = jobId,
+          task = task,
+          events = record.timeline.filter(_.taskId.contains(taskId)).sortBy(_.sequence),
+          children = tree.roots.flatMap(_find_children(_, taskId))
+        )
+      }
+    }
+
   override def metrics: Option[JobMetrics] = {
     val records = _durable_jobs.values().toArray(new Array[JobRecord](0)).toVector ++
       _runtime_jobs.values().toArray(new Array[JobRecord](0)).toVector
@@ -920,6 +1012,8 @@ final class InMemoryJobEngine(
       case _ =>
         var previous: Option[TaskId] = None
         var failure: Option[Conclusion] = None
+        var failedTaskId: Option[TaskId] = None
+        var committedTasks = Vector.empty[(TaskId, JobTask)]
         var successResponse: Option[OperationResponse] = None
         tasks.foreach { task =>
           if (failure.isEmpty && _can_run_next_task(jobid)) {
@@ -952,10 +1046,13 @@ final class InMemoryJobEngine(
                     JobTaskResultSummary(success = true, message = Some("ok")),
                     _now_()
                   )
+                  _append_timeline_(jobid, "task.transaction.committed", Some(taskid), previous, None)
+                  committedTasks = committedTasks :+ (taskid -> task)
                   previous = Some(taskid)
                 case TaskFailed(c) =>
                   _capture_calltree_if_needed_(jobid, executioncontext, failed = true, startedat)
                   failure = Some(c)
+                  failedTaskId = Some(taskid)
                   _append_task_finished_(
                     jobid,
                     taskid,
@@ -964,10 +1061,13 @@ final class InMemoryJobEngine(
                     JobTaskResultSummary(success = false, message = c.observation.getEffectiveMessage),
                     _now_()
                   )
+                  _append_timeline_(jobid, "task.transaction.failed", Some(taskid), previous, c.observation.getEffectiveMessage)
               }
             }
           }
         }
+        if (failure.nonEmpty)
+          _run_compensations_(jobid, failedTaskId, committedTasks.reverse)
         val deferred = _get_record(jobid).map(_.status) match {
           case Some(JobStatus.Cancelled) =>
             Some(JobResult.Failure(Conclusion.simple("job cancelled")))
@@ -1012,6 +1112,7 @@ final class InMemoryJobEngine(
           JobTaskResultSummary(success = true, message = Some("ok")),
           _now_()
         )
+        _append_timeline_(jobid, "task.transaction.committed", Some(taskid), parent, None)
       case TaskFailed(c) =>
         _capture_calltree_if_needed_(jobid, executioncontext, failed = true, startedat)
         _append_task_finished_(
@@ -1022,6 +1123,8 @@ final class InMemoryJobEngine(
           JobTaskResultSummary(success = false, message = c.observation.getEffectiveMessage),
           _now_()
         )
+        _append_timeline_(jobid, "task.transaction.failed", Some(taskid), parent, c.observation.getEffectiveMessage)
+        _run_same_job_compensations_(jobid, Some(taskid))
         _update_deferred_result_(jobid, Some(JobResult.Failure(c)))
     }
     _settle_if_ready_(jobid)
@@ -1321,7 +1424,9 @@ final class InMemoryJobEngine(
     taskid: TaskId,
     parent: Option[TaskId],
     startedat: Instant,
-    taskdef: JobTask
+    taskdef: JobTask,
+    relation: Option[String] = None,
+    compensatesTaskId: Option[TaskId] = None
   ): Unit =
     _mutate_record(jobid) { record =>
       val task = JobTaskReadModel(
@@ -1333,7 +1438,13 @@ final class InMemoryJobEngine(
         result = JobTaskResultSummary(success = true, message = None),
         component = taskdef.componentName,
         service = taskdef.serviceName,
-        operation = taskdef.operationName
+        operation = taskdef.operationName,
+        taskKind = taskdef.taskKind,
+        targetKind = taskdef.targetKind,
+        relation = relation.orElse(taskdef.relation),
+        transactionOutcome = Some(JobTaskTransactionOutcome.Running.print),
+        compensationActionRef = taskdef.compensationActionRef,
+        compensatesTaskId = compensatesTaskId
       )
       val timeline = _next_timeline(
         record.timeline,
@@ -1346,6 +1457,7 @@ final class InMemoryJobEngine(
         status = JobStatus.Running,
         activeTaskCount = record.activeTaskCount + 1,
         taskReadModels = record.taskReadModels :+ task,
+        taskDefinitions = record.taskDefinitions.updated(taskid, taskdef),
         timeline = timeline,
         updatedAt = _now_()
       )
@@ -1357,7 +1469,11 @@ final class InMemoryJobEngine(
     parent: Option[TaskId],
     status: JobTaskStatus,
     summary: JobTaskResultSummary,
-    finishedat: Instant
+    finishedat: Instant,
+    transactionOutcome: Option[String] = None,
+    compensationStatus: Option[String] = None,
+    compensationFailureSummary: Option[String] = None,
+    recoveryRequired: Boolean = false
   ): Unit =
     _mutate_record(jobid) { record =>
       val tasks = record.taskReadModels.map { task =>
@@ -1365,7 +1481,15 @@ final class InMemoryJobEngine(
           task.copy(
             status = status,
             finishedAt = Some(finishedat),
-            result = summary
+            result = summary,
+            transactionOutcome = transactionOutcome.orElse(status match {
+              case JobTaskStatus.Succeeded => Some(JobTaskTransactionOutcome.Committed.print)
+              case JobTaskStatus.Failed => Some(JobTaskTransactionOutcome.Failed.print)
+              case JobTaskStatus.Running => Some(JobTaskTransactionOutcome.Running.print)
+            }),
+            compensationStatus = compensationStatus.orElse(task.compensationStatus),
+            compensationFailureSummary = compensationFailureSummary.orElse(task.compensationFailureSummary),
+            recoveryRequired = task.recoveryRequired || recoveryRequired
           )
         else
           task
@@ -1449,6 +1573,163 @@ final class InMemoryJobEngine(
       }
     }
 
+  private def _run_compensations_(
+    jobid: JobId,
+    failureTaskId: Option[TaskId],
+    committedTasks: Vector[(TaskId, JobTask)]
+  ): Unit =
+    if (committedTasks.nonEmpty) {
+      _append_timeline_(jobid, "job.compensation.started", failureTaskId, None, Some(committedTasks.size.toString))
+      committedTasks.foreach { case (originalTaskId, originalTask) =>
+        originalTask.compensationTask match {
+          case Some(compensation) =>
+            val compensationTaskId = TaskId.generate()
+            val startedat = _now_()
+            val parent = failureTaskId.orElse(Some(originalTaskId))
+            _mark_task_compensation_(jobid, originalTaskId, Some("running"), None, recoveryRequired = false)
+            _append_timeline_(jobid, "task.compensation.started", Some(originalTaskId), parent, originalTask.compensationActionRef)
+            _append_task_running_(
+              jobid,
+              compensationTaskId,
+              parent,
+              startedat,
+              compensation,
+              relation = Some("compensation"),
+              compensatesTaskId = Some(originalTaskId)
+            )
+            val ctx = _get_record(jobid).map(_.submittedContext).getOrElse(ExecutionContext.test())
+            val jobcontext = JobContext(
+              jobId = Some(jobid),
+              taskId = Some(compensationTaskId),
+              actionId = Some(compensation.actionId),
+              parentJobId = ctx.jobContext.jobId,
+              currentTask = Some(compensationTaskId),
+              taskStack = ctx.jobContext.taskStack :+ compensationTaskId,
+              causationId = ctx.observability.correlationId.map(_.print),
+              traceMetadata = Map("traceId" -> ctx.observability.traceId.print) ++
+                ctx.observability.correlationId.map(x => "correlationId" -> x.print)
+            )
+            val executioncontext = _job_execution_context(jobid, ctx, jobcontext)
+            compensation.run(executioncontext) match {
+              case TaskSucceeded(_) =>
+                _capture_calltree_if_needed_(jobid, executioncontext, failed = false, startedat)
+                _append_task_finished_(
+                  jobid,
+                  compensationTaskId,
+                  parent,
+                  JobTaskStatus.Succeeded,
+                  JobTaskResultSummary(success = true, message = Some("compensated")),
+                  _now_(),
+                  transactionOutcome = Some(JobTaskTransactionOutcome.CompensationCommitted.print),
+                  compensationStatus = Some("succeeded")
+                )
+                _mark_task_compensation_(jobid, originalTaskId, Some("succeeded"), None, recoveryRequired = false)
+                _append_timeline_(jobid, "task.compensation.succeeded", Some(originalTaskId), parent, None)
+              case TaskFailed(c) =>
+                val message = c.observation.getEffectiveMessage
+                _capture_calltree_if_needed_(jobid, executioncontext, failed = true, startedat)
+                _append_task_finished_(
+                  jobid,
+                  compensationTaskId,
+                  parent,
+                  JobTaskStatus.Failed,
+                  JobTaskResultSummary(success = false, message = message),
+                  _now_(),
+                  transactionOutcome = Some(JobTaskTransactionOutcome.CompensationFailed.print),
+                  compensationStatus = Some("failed"),
+                  compensationFailureSummary = message,
+                  recoveryRequired = true
+                )
+                _mark_task_compensation_(jobid, originalTaskId, Some("failed"), message, recoveryRequired = true)
+                _mark_recovery_required_(jobid, s"compensation failed for task ${originalTaskId.value}: ${message.getOrElse(c.show)}")
+                _append_timeline_(jobid, "task.compensation.failed", Some(originalTaskId), parent, message)
+            }
+          case None =>
+            val message = s"no compensation action for task ${originalTaskId.value}"
+            _mark_task_compensation_(jobid, originalTaskId, Some("missing"), Some(message), recoveryRequired = true)
+            _mark_recovery_required_(jobid, message)
+            _append_timeline_(jobid, "task.compensation.missing", Some(originalTaskId), failureTaskId, Some(message))
+        }
+      }
+      _append_timeline_(jobid, "job.compensation.finished", failureTaskId, None, None)
+    }
+
+  private def _run_same_job_compensations_(
+    jobid: JobId,
+    failureTaskId: Option[TaskId]
+  ): Unit = {
+    val committed = _committed_tasks_for_compensation_(jobid, failureTaskId)
+    if (committed.nonEmpty)
+      _run_compensations_(jobid, failureTaskId, committed)
+  }
+
+  private def _committed_tasks_for_compensation_(
+    jobid: JobId,
+    failureTaskId: Option[TaskId]
+  ): Vector[(TaskId, JobTask)] =
+    _get_record(jobid).toVector.flatMap { record =>
+      record.taskReadModels.reverseIterator.toVector.flatMap { task =>
+        val compensatable =
+          task.status == JobTaskStatus.Succeeded &&
+            task.relation.forall(_ != "compensation") &&
+            !failureTaskId.contains(task.taskId) &&
+            task.compensationStatus.isEmpty
+        if (compensatable)
+          record.taskDefinitions.get(task.taskId).map(task.taskId -> _)
+        else
+          None
+      }
+    }
+
+  private def _mark_task_compensation_(
+    jobid: JobId,
+    taskid: TaskId,
+    status: Option[String],
+    failureSummary: Option[String],
+    recoveryRequired: Boolean
+  ): Unit =
+    _mutate_record(jobid) { record =>
+      val tasks = record.taskReadModels.map { task =>
+        if (task.taskId == taskid)
+          task.copy(
+            compensationStatus = status.orElse(task.compensationStatus),
+            compensationFailureSummary = failureSummary.orElse(task.compensationFailureSummary),
+            recoveryRequired = task.recoveryRequired || recoveryRequired
+          )
+        else
+          task
+      }
+      record.copy(taskReadModels = tasks, updatedAt = _now_())
+    }
+
+  private def _mark_recovery_required_(
+    jobid: JobId,
+    message: String
+  ): Unit = {
+    _mutate_record(jobid) { record =>
+      record.copy(
+        retry = record.retry.copy(
+          recoveryRequired = true,
+          lastFailureMessage = Some(message)
+        ),
+        debug = record.debug.copy(
+          executionNotes = record.debug.executionNotes :+ s"recovery-required: $message"
+        ),
+        updatedAt = _now_()
+      )
+    }
+    _append_timeline_(jobid, "job.recovery-required", None, None, Some(message))
+    _append_event_(
+      name = "job.recovery-required",
+      payload = Map(
+        "job-id" -> jobid.value,
+        "status" -> JobStatus.Failed.toString,
+        "message" -> message
+      ),
+      attributes = Map("cncf.job.recoveryRequired" -> "true")
+    )
+  }
+
   private def _append_timeline_(
     jobid: JobId,
     kind: String,
@@ -1528,6 +1809,12 @@ final class InMemoryJobEngine(
           JobTraceTaskNode(
             taskId = task.taskId,
             parentTaskId = task.parentTaskId,
+            taskKind = task.taskKind,
+            relation = task.relation,
+            status = task.status,
+            transactionOutcome = task.transactionOutcome,
+            compensationStatus = task.compensationStatus,
+            recoveryRequired = task.recoveryRequired,
             events = eventsbytask.getOrElse(task.taskId, Vector.empty).sortBy(_.sequence),
             children = build(Some(task.taskId))
           )
@@ -1744,7 +2031,7 @@ final class InMemoryJobEngine(
 
   private def _default_submit_option(tasks: List[JobTask]): JobSubmitOption =
     tasks.headOption match {
-      case Some(ActionTask(_, _: QueryAction, _, _)) =>
+      case Some(ActionTask(_, _: QueryAction, _, _, _, _)) =>
         JobSubmitOption(persistence = JobPersistencePolicy.Ephemeral)
       case _ =>
         JobSubmitOption(persistence = JobPersistencePolicy.Persistent)
@@ -2229,6 +2516,7 @@ final case class JobRecord(
   createdAt: Instant,
   updatedAt: Instant,
   taskReadModels: Vector[JobTaskReadModel],
+  taskDefinitions: Map[TaskId, JobTask] = Map.empty,
   timeline: Vector[JobTimelineEvent],
   debug: JobDebugInfo,
   retry: JobRetryState = JobRetryState(),

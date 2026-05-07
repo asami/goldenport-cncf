@@ -95,7 +95,23 @@ job:
     steps: []
 ```
 
-JM-03B does not implement executable `flow`.
+JM-03B does not implement executable `flow`. JM-04 adds only the limited
+explicit compensation metadata needed to bind a Task to a compensation Action;
+general procedural `flow` execution remains deferred.
+
+Example compensation metadata:
+
+```yaml
+job:
+  name: import-feed
+  target:
+    action: feed.import
+  compensation:
+    action: feed.import.compensate
+```
+
+This compensation declaration does not make the whole JCL flow executable. It is
+used as a Task-level cleanup hook when a later committed Task must be cleaned up.
 
 ----------------------------------------------------------------------
 4. Future Event-Driven Flow
