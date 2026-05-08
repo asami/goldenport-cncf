@@ -30,7 +30,7 @@ import org.goldenport.record.Record
  *  version Feb. 25, 2026
  *  version Mar. 29, 2026
  *  version Apr. 29, 2026
- * @version May.  4, 2026
+ * @version May.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkInterpreter(uow: UnitOfWork) {
@@ -130,7 +130,7 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
       }
 
     case m: (UnitOfWorkOp.EntityStoreLoad[t] @unchecked) =>
-      withCallTree("uow:entityspace:load") {
+      withCallTree("uow:entityspace:load", _entity_calltree_attributes(m.id, "entity-space", realIo = !_working_set_enabled)) {
         _authorize(m.authorization, Some(() => _load_record(m.id))).flatMap { _ =>
           val loaded =
             if (_working_set_enabled)
@@ -148,7 +148,7 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
       }
 
     case m: (UnitOfWorkOp.EntityStoreLoadDirect[t] @unchecked) =>
-      withCallTree("uow:entitystore:load:direct") {
+      withCallTree("uow:entitystore:load:direct", _entity_calltree_attributes(m.id, "entity-store", realIo = true)) {
         _entity_store_space.load(UnitOfWorkOp.EntityStoreLoad(m.id, m.tc))
       }
 
@@ -218,7 +218,7 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
       }
 
     case m: (UnitOfWorkOp.EntityStoreSearch[t] @unchecked) =>
-      withCallTree("uow:entityspace:search") {
+      withCallTree("uow:entityspace:search", _entity_search_calltree_attributes(m.query, "entity-space", realIo = !_working_set_enabled)) {
         _authorize(m.authorization).flatMap { _ =>
           if (_working_set_enabled)
             _entity_space_search(m)
@@ -228,7 +228,7 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
       }
 
     case m: (UnitOfWorkOp.EntityStoreSearchDirect[t] @unchecked) =>
-      withCallTree("uow:entitystore:search:direct") {
+      withCallTree("uow:entitystore:search:direct", _entity_search_calltree_attributes(m.query, "entity-store", realIo = true)) {
         val op = UnitOfWorkOp.EntityStoreSearch(m.query, m.tc, m.authorization)
         _authorize(m.authorization).flatMap { _ =>
           _entity_store_space.search(UnitOfWorkOp.EntityStoreSearch(m.query, m.tc)).flatMap(_filter_search_result(op, _))
@@ -236,7 +236,7 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
       }
 
     case m: (UnitOfWorkOp.EntityStoreSearchInternal[t] @unchecked) =>
-      withCallTree("uow:entitystore:search:internal") {
+      withCallTree("uow:entitystore:search:internal", _entity_search_calltree_attributes(m.query, "entity-store", realIo = true)) {
         _entity_store_space.searchInternal(m)
       }
 
@@ -593,9 +593,44 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
   private def callTreeContext: CallTreeContext =
     uow.executionContext.observability.callTreeContext
 
-  private def withCallTree[A](label: String)(body: => Consequence[A]): Consequence[A] = {
+  private def _entity_calltree_attributes(
+    id: EntityId,
+    layer: String,
+    realIo: Boolean
+  ): Map[String, String] =
+    Map(
+      "entity" -> id.collection.name,
+      "id" -> id.value,
+      "cache_layer" -> layer,
+      "real_io" -> realIo.toString,
+      "working_set_enabled" -> _working_set_enabled.toString
+    )
+
+  private def _entity_search_calltree_attributes(
+    query: EntityQuery[?],
+    layer: String,
+    realIo: Boolean
+  ): Map[String, String] =
+    Map(
+      "entity" -> query.collection.name,
+      "cache_layer" -> layer,
+      "real_io" -> realIo.toString,
+      "working_set_enabled" -> _working_set_enabled.toString,
+      "query" -> _truncate_calltree_text(query.query.toString, 2000)
+    )
+
+  private def _truncate_calltree_text(
+    value: String,
+    limit: Int
+  ): String =
+    if (value.length <= limit) value else value.take(limit) + "..."
+
+  private def withCallTree[A](
+    label: String,
+    attributes: Map[String, String] = Map.empty
+  )(body: => Consequence[A]): Consequence[A] = {
     val ctx = callTreeContext
-    ctx.enter(label)
+    ctx.enter(label, attributes)
     try {
       body
     } finally {

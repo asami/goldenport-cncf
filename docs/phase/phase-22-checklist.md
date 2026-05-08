@@ -345,12 +345,17 @@ events; a CNCF Event routing bridge forwards matching events to
 - [x] Keep default forwarding restricted to application-visible Job events.
 - [x] Move deduplication and provider-failure diagnostics into the forwarding
       bridge.
+- [x] Use `textus-blog` as the first application driver by wiring
+      `textus-user-notification` into the deemed Subsystem and exposing an
+      unconfirmed notification badge in the Blog header.
 
 ### Expected Output
 
 - JobEngine has no direct dependency on the user notification provider runtime.
 - `UserNotificationProvider` remains the SPI used by forwarding rules.
 - Provider absence or failure never changes Job state or result.
+- `textus-blog` can opt into the provider and forwarding rules without binding
+  Blog domain logic directly to notification persistence.
 
 ### Guardrails
 

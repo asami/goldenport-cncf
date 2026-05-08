@@ -52,7 +52,7 @@ import org.goldenport.cncf.metrics.EntityAccessMetricsRegistry
  *  version Jan. 31, 2026
  *  version Feb.  4, 2026
  *  version Apr. 30, 2026
- * @version May.  7, 2026
+ * @version May.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Subsystem(
@@ -806,27 +806,37 @@ final class Subsystem(
   private def _is_framework_or_query_property(
     name: String
   ): Boolean =
-    name != null && (
+    if (name == null)
+      false
+    else {
+      val lower = name.toLowerCase(java.util.Locale.ROOT)
       name.startsWith("textus.") ||
-      name.startsWith("cncf.")
-    )
+        name.startsWith("cncf.") ||
+        lower == "x-textus-session" ||
+        lower.startsWith("x-textus-debug-")
+    }
 
   private def _is_framework_or_security_argument(
     name: String
   ): Boolean =
-    name != null && (
+    if (name == null)
+      false
+    else {
+      val lower = name.toLowerCase(java.util.Locale.ROOT)
       name.startsWith("textus.") ||
-      name.startsWith("cncf.") ||
-      name.startsWith("security.") ||
-      name.startsWith("crud.") ||
-      name == "principalId" ||
-      name == "principal_id" ||
-      name == "subjectId" ||
-      name == "subject_id" ||
-      name == "privilege" ||
-      name == "capability" ||
-      name == "capabilities"
-    )
+        name.startsWith("cncf.") ||
+        lower == "x-textus-session" ||
+        lower.startsWith("x-textus-debug-") ||
+        name.startsWith("security.") ||
+        name.startsWith("crud.") ||
+        name == "principalId" ||
+        name == "principal_id" ||
+        name == "subjectId" ||
+        name == "subject_id" ||
+        name == "privilege" ||
+        name == "capability" ||
+        name == "capabilities"
+    }
 
   private def _resolve_route(
     req: HttpRequest
@@ -1082,6 +1092,8 @@ final class Subsystem(
         Property("x-textus-debug-trace-job", value.toString, None)
       case (name, value) if name.equalsIgnoreCase("x-textus-debug-save-calltree") =>
         Property("x-textus-debug-save-calltree", value.toString, None)
+      case (name, value) if name.equalsIgnoreCase("x-textus-debug-calltree-sql") =>
+        Property("x-textus-debug-calltree-sql", value.toString, None)
       case (name, value) if name.equalsIgnoreCase("x-textus-session") =>
         Property("x-textus-session", value.toString, None)
     }

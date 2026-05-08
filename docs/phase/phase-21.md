@@ -64,7 +64,8 @@ Final semantic direction:
 - J (DONE): WN-10 — Reusable Header/Footer/Nav/Sidebar/Layout Partials.
 - K (DONE): WN-11 — Broader Bootstrap 5 Admin/App Polish.
 - L (DONE): WN-12 — Subsystem Web App Composition From Component Web,
-  including the `textus-blog` WN-12B driver.
+  including the `textus-blog` WN-12B driver and WN-12C descriptor-driven shell
+  owner composition.
 - M (DONE): WN-13 — Progressive Enhancement / Island Boundary Contract.
 - N (DONE): WN-14 — SPA Hosting / API Gateway Boundary Design.
 - O (DONE): WN-15 — Application Developer Documentation Completion.
@@ -88,7 +89,8 @@ Resume hint:
 - [x] WN-10: Reusable Header/Footer/Nav/Sidebar/Layout Partials.
 - [x] WN-11: Broader Bootstrap 5 Admin/App Polish.
 - [x] WN-12: Subsystem Web App Composition From Component Web.
-  `textus-blog` validates the deemed-subsystem article composition path.
+  `textus-blog` validates descriptor-driven deemed-subsystem shell owner
+  composition.
 - [x] WN-13: Progressive Enhancement / Island Boundary Contract.
 - [x] WN-14: SPA Hosting / API Gateway Boundary Design.
 - [x] WN-15: Application Developer Documentation Completion.

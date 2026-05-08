@@ -31,7 +31,7 @@ import org.goldenport.cncf.directive.{Query as EntityQuery}
  * @since   Mar. 12, 2026
  *  version Mar. 19, 2026
  *  version Mar. 31, 2026
- * @version May.  2, 2026
+ * @version May.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 class SqlDataStore(
@@ -144,6 +144,18 @@ class SqlDataStore(
 
   override def totalCountCapability(collection: CollectionId): TotalCountCapability =
     TotalCountCapability.Supported
+
+  def debugSearchSql(
+    collection: CollectionId,
+    directive: QueryDirective
+  ): SqlDataStore.SqlStatement =
+    _search_sql(collection, directive)
+
+  def debugCountSql(
+    collection: CollectionId,
+    directive: QueryDirective
+  ): SqlDataStore.SqlStatement =
+    _count_sql(collection, directive)
 
   def prepare(tx: TransactionContext): PrepareResult =
     record_prepare(recorder)

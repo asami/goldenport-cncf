@@ -13,7 +13,7 @@ import org.goldenport.cncf.operation.{AssociationBindingOperationDefinition, Chi
 
 /*
  * @since   Mar.  5, 2026
- * @version May.  7, 2026
+ * @version May.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 private[projection] object MetaProjectionSupport {
@@ -173,7 +173,8 @@ private[projection] object MetaProjectionSupport {
       "name" -> param.name,
       "kind" -> param.kind.toString,
       "type" -> datatype,
-      "multiplicity" -> multiplicity
+      "multiplicity" -> multiplicity,
+      "confidentiality" -> param.confidentiality.label
     )
   }
 
@@ -411,7 +412,8 @@ private[projection] object MetaProjectionSupport {
             Record.data(
               "name" -> p.name,
               "datatype" -> p.datatype,
-              "multiplicity" -> p.multiplicity
+              "multiplicity" -> p.multiplicity,
+              "confidentiality" -> p.effectiveConfidentiality.label
             )
           },
           childEntityBindings = x.childEntityBindings.map(child_entity_binding_record),

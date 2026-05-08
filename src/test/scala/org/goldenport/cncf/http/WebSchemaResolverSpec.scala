@@ -1,7 +1,7 @@
 package org.goldenport.cncf.http
 
 import org.goldenport.protocol.spec.ParameterDefinition
-import org.goldenport.schema.{Column, Multiplicity, Schema, ValueDomain, WebColumn, WebValidationHints, XBoolean, XString}
+import org.goldenport.schema.{Column, DataConfidentiality, Multiplicity, Schema, ValueDomain, WebColumn, WebValidationHints, XBoolean, XString}
 import org.goldenport.value.BaseContent
 import org.goldenport.cncf.component.ComponentDescriptor
 import org.goldenport.cncf.entity.runtime.{EntityMemoryPolicy, EntityRuntimeDescriptor, PartitionStrategy}
@@ -13,7 +13,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr. 16, 2026
- * @version Apr. 19, 2026
+ *  version Apr. 19, 2026
+ * @version May.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 final class WebSchemaResolverSpec extends AnyWordSpec with Matchers {
@@ -100,6 +101,24 @@ final class WebSchemaResolverSpec extends AnyWordSpec with Matchers {
       status.asControl.required shouldBe Some(true)
       status.placeholder shouldBe Some("Descriptor placeholder")
       status.help shouldBe Some("Schema help")
+    }
+
+    "use confidentiality metadata for secret web controls" in {
+      val schema = Schema(Vector(
+        Column(
+          BaseContent.simple("credentialValue"),
+          ValueDomain(datatype = XString, multiplicity = Multiplicity.One),
+          confidentiality = DataConfidentiality.Secret
+        )
+      ))
+      val component = _component_with_schema(schema)
+
+      val resolved = WebSchemaResolver.resolveEntity(component, "notice-board", "notice", WebDescriptor.empty)
+      val field = resolved.fields.find(_.name == "credentialValue").getOrElse(fail("credentialValue field is missing"))
+
+      field.confidentiality shouldBe DataConfidentiality.Secret
+      field.controlType shouldBe "password"
+      field.asControl.controlType shouldBe Some("password")
     }
 
     "merge validation hints conservatively from Schema and WebDescriptor" in {

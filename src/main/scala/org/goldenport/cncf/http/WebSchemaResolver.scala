@@ -3,7 +3,7 @@ package org.goldenport.cncf.http
 import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.protocol.spec.ParameterDefinition
-import org.goldenport.schema.{Schema, WebValidationHints}
+import org.goldenport.schema.{DataConfidentiality, Schema, WebValidationHints}
 import scala.util.Try
 
 /*
@@ -12,7 +12,8 @@ import scala.util.Try
  *
  * @since   Apr. 16, 2026
  *  version Apr. 17, 2026
- * @version Apr. 27, 2026
+ *  version Apr. 27, 2026
+ * @version May.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 object WebSchemaResolver {
@@ -68,6 +69,7 @@ object WebSchemaResolver {
     placeholder: Option[String] = None,
     help: Option[String] = None,
     validation: WebValidationHints = WebValidationHints.empty,
+    confidentiality: DataConfidentiality = DataConfidentiality.Public,
     source: Source = Source.Empty
   ) {
     def controlType: String =
@@ -80,7 +82,7 @@ object WebSchemaResolver {
       dataType.map(_.toLowerCase(java.util.Locale.ROOT)) match {
         case Some(x) if x.contains("bool") => "checkbox"
         case Some(x) if _is_multiline(name, x) => "textarea"
-        case _ if _is_secret(name) => "password"
+        case _ if confidentiality == DataConfidentiality.Secret || _is_secret(name) => "password"
         case Some(x) if x.contains("int") || x.contains("long") || x.contains("decimal") || x.contains("number") => "number"
         case Some(x) if x.contains("datetime") || x.contains("timestamp") => "datetime-local"
         case Some(x) if x.contains("date") => "date"
@@ -229,6 +231,7 @@ object WebSchemaResolver {
         placeholder = column.web.placeholder,
         help = column.web.help,
         validation = column.web.validation,
+        confidentiality = _effective_confidentiality(column.confidentiality, column.web.confidentiality),
         source = Source.Schema
       )
     }
@@ -370,8 +373,15 @@ object WebSchemaResolver {
       placeholder = parameter.web.placeholder,
       help = parameter.web.help,
       validation = parameter.web.validation,
+      confidentiality = _effective_confidentiality(parameter.confidentiality, parameter.web.confidentiality),
       source = Source.Schema
     )
+
+  private def _effective_confidentiality(
+    primary: DataConfidentiality,
+    secondary: DataConfidentiality
+  ): DataConfidentiality =
+    if (primary != DataConfidentiality.Public) primary else secondary
 
   private def _generated_entity_module(
     component: Component,

@@ -971,7 +971,8 @@ Completed in Phase 21.
     unsupported feedback for semantic/hybrid modes without a backend
   - Static Form UI generation contract and `WEB-INF` layout/partial contract
   - Subsystem Web app composition from Component Web, including the
-    `textus-blog` deemed-subsystem driver
+    `textus-blog` deemed-subsystem driver and descriptor-driven shell owner
+    selection for multi-Component deemed-Subsystems
   - Progressive Enhancement / Island boundary contract
   - SPA hosting / API gateway boundary design, including CNCF-hosted minimal SPA
     boundary note
@@ -1192,6 +1193,8 @@ Active stack:
 - JM-03B: JobDefinition Entity / Binding / Execution Record Policy. DONE.
 - JM-04: Task Transaction and Compensation Boundary. DONE.
 - JM-05: User Job Notification Policy. DONE.
+- JM-05B: Event-Based User Notification Forwarding and textus-blog driver
+  integration. DONE.
 - JM-06: Phase 22 verification and closure. ACTIVE.
 
 - Define Command execution policy before broadening Job usage. CQRS makes

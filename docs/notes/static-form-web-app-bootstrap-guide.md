@@ -169,6 +169,32 @@ Example:
 Keep navigation and mutation actions visually separate. A tab, nav pill, or
 breadcrumb should not look like a destructive command.
 
+## Document Pages
+
+Use `Document` as the top-level label for component documentation. Do not use
+`Manual` as the generated CNCF metadata surface label; it is too easily
+confused with user guides or reference manuals.
+
+Recommended structure:
+
+- `Documents`: landing page for all component/system documentation.
+- `Generated Specification`: CNCF-generated technical contract from component,
+  service, operation, schema, and projection metadata.
+- `User Guide`: component-packaged task guide for people using the feature.
+- `Reference Manual`: component-packaged detailed human-authored reference.
+
+Canonical routes:
+
+- `/web/{component}/document`
+- `/web/{component}/document/specification`
+- `/web/system/document`
+- `/web/system/document/specification`
+
+Component packages may place documents in the private Web resource root under
+`docs/` or `documents/`, for example `docs/user-guide.md` and
+`docs/reference-manual.md`. The Document landing page should link to those
+documents alongside the generated Specification.
+
 ## Job Results And Development Debugging
 
 Asynchronous Command results should use the framework job UX instead of custom
@@ -430,6 +456,20 @@ ordinary Component pages are rendered as article content inside the Subsystem
 layout and shell partials. Pages such as login, logout, or account flows should
 declare `pages.<name>.mode: screen` when they need to own the full page rather
 than appear inside the shared article region.
+
+For a multi-Component Subsystem or deemed-Subsystem, declare the shell owner in
+the Web descriptor instead of relying on component order:
+
+```yaml
+shell:
+  component: blog-component
+  app: blog
+  layout: default
+```
+
+Without an explicit shell owner, CNCF may use a SAR/config shell or the single
+Component fallback, but it must not pick another Component's `WEB-INF` shell in
+a multi-Component runtime.
 
 Use this ownership split:
 

@@ -88,6 +88,9 @@ Resume hint:
 - Continue with JM-06. JobEngine emits Job lifecycle/recovery events only;
   configured Event forwarding rules translate matching user-visible Job events
   into `UserNotificationProvider` requests.
+- `textus-blog` is the JM-05B application driver: its deemed-subsystem assembly
+  includes `textus-user-notification`, explicit Job event forwarding rules, and
+  a header badge that reads the current user's unconfirmed notification count.
 
 ## 5. Development Items
 

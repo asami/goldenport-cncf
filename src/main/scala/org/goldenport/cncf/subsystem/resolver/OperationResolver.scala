@@ -11,7 +11,8 @@ import OperationResolver._
  * @since   Jan. 15, 2026
  *  version Jan. 16, 2026
  *  version Mar. 28, 2026
- * @version Apr. 11, 2026
+ *  version Apr. 11, 2026
+ * @version May.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 final class OperationResolver private (
@@ -261,10 +262,14 @@ object OperationResolver {
 
   def build(components: Seq[Component]): OperationResolver = {
     val entries = components.toVector.flatMap { component =>
+      val componentAliases =
+        component.artifactMetadata.toVector.flatMap(metadata =>
+          Vector(Some(metadata.name), metadata.component).flatten
+        ).filter(_.trim.nonEmpty).distinct.filterNot(NamingConventions.equivalentByNormalized(_, component.name))
       component.protocol.services.services.flatMap { service =>
         service.operations.operations.toVector.map { operation =>
           OperationEntry(
-            component = NameEntry(component.name),
+            component = NameEntry(component.name, componentAliases),
             service = NameEntry(service.name),
             operation = NameEntry(operation.name),
             origin = component.origin,

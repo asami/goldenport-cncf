@@ -16,6 +16,8 @@ import org.goldenport.cncf.CncfVersion
 import org.goldenport.configuration.{Configuration, ConfigurationValue}
 import org.goldenport.protocol.Request
 import org.goldenport.protocol.operation.OperationResponse
+import org.goldenport.record.Record
+import org.goldenport.schema.DataConfidentiality
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
@@ -24,7 +26,8 @@ import org.scalatest.wordspec.AnyWordSpec
  *  version Feb.  1, 2026
  *  version Mar. 28, 2026
  *  version Apr. 11, 2026
- * @version Apr. 14, 2026
+ *  version Apr. 14, 2026
+ * @version May.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 final class AdminSystemPingExecutionSpec
@@ -127,6 +130,41 @@ final class AdminSystemPingExecutionSpec
             fail(s"expected execution calltree record but got $other")
         }
       }
+    }
+
+    "redact sensitive scalar result summaries in execution history" in {
+      ObservabilityEngine.clearExecutionHistory()
+
+      ObservabilityEngine.recordActionExecution(
+        operation = "test.secret.scalar",
+        parameters = Record.data("name" -> "ok"),
+        parametersText = "",
+        outcome = Right(OperationResponse.Scalar("token=secret-token password=plain-secret")),
+        calltree = None
+      )
+
+      val entry = ObservabilityEngine.latestExecution.getOrElse(fail("execution history missing"))
+      entry.resultSummary should include ("***")
+      entry.resultSummary should not include ("secret-token")
+      entry.resultSummary should not include ("plain-secret")
+    }
+
+    "redact metadata-sensitive record result summaries in execution history" in {
+      ObservabilityEngine.clearExecutionHistory()
+
+      ObservabilityEngine.recordActionExecution(
+        operation = "test.secret.record",
+        parameters = Record.data("name" -> "ok"),
+        parametersText = "",
+        outcome = Right(OperationResponse.RecordResponse(Record.data("proof" -> "123456", "status" -> "ok"))),
+        resultConfidentiality = Map("proof" -> DataConfidentiality.Secret),
+        calltree = None
+      )
+
+      val entry = ObservabilityEngine.latestExecution.getOrElse(fail("execution history missing"))
+      entry.resultSummary should include ("***")
+      entry.resultSummary should include ("status")
+      entry.resultSummary should not include ("123456")
     }
   }
 

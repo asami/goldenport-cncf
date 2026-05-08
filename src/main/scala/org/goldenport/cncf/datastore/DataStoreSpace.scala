@@ -6,13 +6,14 @@ import org.goldenport.observation.Descriptor
 import org.goldenport.id.UniversalId
 import org.goldenport.configuration.ResolvedConfiguration
 import org.goldenport.cncf.datastore.sql.SqlDataStore
-import org.goldenport.cncf.config.ConfigurationAccess
+import org.goldenport.cncf.config.{ConfigurationAccess, ResolvedParameter}
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.record.Record
 
 /*
  * @since   Feb. 25, 2026
- * @version Apr. 15, 2026
+ *  version Apr. 15, 2026
+ * @version May.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 class DataStoreSpace {
@@ -32,9 +33,10 @@ class DataStoreSpace {
   def search(
     cid: DataStore.CollectionId,
     directive: QueryDirective
-  ): Consequence[SearchResult] =
+  )(using ctx: ExecutionContext): Consequence[SearchResult] =
     dataStore(cid).flatMap {
       case m: SearchableDataStore =>
+        _record_search_calltree("search", cid, directive, m)
         m.search(cid, directive)
       case _ =>
         Consequence.dataStoreUnavailable(s"datastore is not searchable: ${cid.print}")
@@ -43,9 +45,10 @@ class DataStoreSpace {
   def count(
     cid: DataStore.CollectionId,
     directive: QueryDirective
-  ): Consequence[Int] =
+  )(using ctx: ExecutionContext): Consequence[Int] =
     dataStore(cid).flatMap {
       case m: SearchableDataStore =>
+        _record_search_calltree("count", cid, directive, m)
         m.count(cid, directive)
       case _ =>
         Consequence.dataStoreUnavailable(s"datastore is not countable: ${cid.print}")
@@ -101,6 +104,88 @@ class DataStoreSpace {
         val seq = s"n${_inject_sequence.incrementAndGet()}"
         DataStore.DataStoreEntryId("sys", seq, cid.collectionName)
     }
+
+  private def _record_search_calltree(
+    kind: String,
+    cid: DataStore.CollectionId,
+    directive: QueryDirective,
+    store: SearchableDataStore
+  )(using ctx: ExecutionContext): Unit = {
+    val calltree = ctx.observability.callTreeContext
+    if (calltree.isEnabled) {
+      calltree.mark(
+        s"metrics:datastore.$kind",
+        _datastore_calltree_attributes(kind, cid, directive, store)
+      )
+    }
+  }
+
+  private def _datastore_calltree_attributes(
+    kind: String,
+    cid: DataStore.CollectionId,
+    directive: QueryDirective,
+    store: SearchableDataStore
+  )(using ctx: ExecutionContext): Map[String, String] = {
+    val base = Map(
+      "collection" -> cid.print,
+      "source" -> "data-store",
+      "datastore" -> store.getClass.getSimpleName.stripSuffix("$"),
+      "operation" -> kind,
+      "real_io" -> "true",
+      "query" -> _truncate_calltree_text(directive.query.toString, 2000),
+      "limit" -> directive.limit.toString,
+      "offset" -> directive.offset.toString
+    )
+    if (_calltree_sql_enabled) {
+      store match {
+        case m: SqlDataStore =>
+          val sql =
+            if (kind == "count")
+              m.debugCountSql(cid, directive)
+            else
+              m.debugSearchSql(cid, directive)
+          base ++ Map(
+            "sql" -> _truncate_calltree_text(sql.sql, 8000),
+            "sql_params" -> _truncate_calltree_text(sql.params.map(_.toString).mkString("[", ", ", "]"), 4000)
+          )
+        case _ =>
+          base ++ Map("sql" -> "unavailable")
+      }
+    } else {
+      base ++ Map("sql" -> "disabled")
+    }
+  }
+
+  private def _calltree_sql_enabled(
+    using ctx: ExecutionContext
+  ): Boolean = {
+    val keys = Vector(
+      "textus.debug.calltree.sql",
+      "textus.runtime.debug.calltree.sql",
+      "cncf.debug.calltree.sql",
+      "cncf.runtime.debug.calltree.sql",
+      "x-textus-debug-calltree-sql"
+    )
+    keys.exists { key =>
+      ctx.runtime.resolvedParameters.get(key).exists { param =>
+        _truthy(ResolvedParameter.format_value(param.value))
+      }
+    }
+  }
+
+  private def _truthy(
+    value: String
+  ): Boolean =
+    value.trim.toLowerCase(java.util.Locale.ROOT) match {
+      case "true" | "1" | "yes" | "on" => true
+      case _ => false
+    }
+
+  private def _truncate_calltree_text(
+    value: String,
+    limit: Int
+  ): String =
+    if (value.length <= limit) value else value.take(limit) + "..."
 }
 
 object DataStoreSpace {

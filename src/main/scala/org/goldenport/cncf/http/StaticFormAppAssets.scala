@@ -4,7 +4,8 @@ import scala.io.Source
 
 /*
  * @since   Apr. 12, 2026
- * @version Apr. 20, 2026
+ *  version Apr. 20, 2026
+ * @version May.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 object StaticFormAppAssets {
@@ -21,6 +22,12 @@ object StaticFormAppAssets {
 
   val textusWidgetsJs: String =
     _resource_text("org/goldenport/cncf/http/assets/textus-widgets.js")
+
+  val textusCalltreeJs: String =
+    _resource_text("org/goldenport/cncf/http/assets/textus-calltree.js")
+
+  val textusFormDebugJs: String =
+    _resource_text("org/goldenport/cncf/http/assets/textus-form-debug.js")
 
   private def _resource_text(path: String): String = {
     val stream = Option(Thread.currentThread.getContextClassLoader.getResourceAsStream(path))

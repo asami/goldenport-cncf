@@ -7,7 +7,7 @@ import org.goldenport.protocol.spec.{ServiceDefinition, OperationDefinition}
 
 /*
  * @since   Mar.  5, 2026
- * @version May.  6, 2026
+ * @version May.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 object OpenApiProjection {
@@ -82,7 +82,7 @@ object OpenApiProjection {
   private def _json_array_operations(xs: Vector[OperationMeta]): String = {
     val entries = xs.map { x =>
       val parameters = x.parameters.map { p =>
-        s"""{"name":"${_escape(p.getString("name").getOrElse(""))}","datatype":"${_escape(p.getString("datatype").getOrElse(""))}","multiplicity":"${_escape(p.getString("multiplicity").getOrElse(""))}"}"""
+        s"""{"name":"${_escape(p.getString("name").getOrElse(""))}","datatype":"${_escape(p.getString("datatype").getOrElse(""))}","multiplicity":"${_escape(p.getString("multiplicity").getOrElse(""))}","x-textus-confidentiality":"${_escape(p.getString("confidentiality").getOrElse("public"))}"}"""
       }.mkString("[", ",", "]")
       s"""{"name":"${_escape(x.name)}","kind":"${_escape(x.kind)}","inputType":"${_escape(x.inputType)}","outputType":"${_escape(x.outputType)}","inputValueKind":"${_escape(x.inputValueKind)}","parameters":${parameters}}"""
     }

@@ -20,7 +20,7 @@ import org.goldenport.protocol.spec.ParameterDefinition
 import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.record.Record
 import org.goldenport.value.BaseContent
-import org.goldenport.schema.{Multiplicity, ValueDomain, XBoolean, XDateTime, XInt, XString}
+import org.goldenport.schema.{DataConfidentiality, Multiplicity, ValueDomain, XBoolean, XDateTime, XInt, XString}
 import org.simplemodeling.model.datatype.EntityId
 import io.circe.{Json, JsonObject}
 import io.circe.parser.parse
@@ -28,10 +28,12 @@ import io.circe.parser.parse
 /*
  * @since   Apr. 12, 2026
  *  version Apr. 30, 2026
- * @version May.  7, 2026
+ * @version May.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 object StaticFormAppRenderer {
+  private val CallTreeJsAsset = "/web/assets/textus-calltree.js"
+
   final case class Page(body: String)
   final case class PageRequest(
     page: Int = 1,
@@ -96,7 +98,8 @@ object StaticFormAppRenderer {
       StaticFormAppLayout.AssetCompletionOptions(),
     executionMetadata: RuntimeContext.ExecutionMetadata =
       RuntimeContext.ExecutionMetadata.empty,
-    operationMode: OperationMode = RuntimeConfig.DefaultOperationMode
+    operationMode: OperationMode = RuntimeConfig.DefaultOperationMode,
+    fieldConfidentiality: Map[String, DataConfidentiality] = Map.empty
   ) {
     def componentName: String = page.componentName
     def serviceName: String = page.serviceName
@@ -271,6 +274,10 @@ object StaticFormAppRenderer {
     code: String,
     message: String
   )
+  final case class DocumentLink(
+    title: String,
+    href: String
+  )
 
   def render(
     subsystem: Subsystem,
@@ -279,7 +286,9 @@ object StaticFormAppRenderer {
     webDescriptor: WebDescriptor = WebDescriptor.empty
   ): Option[Page] = {
     page match {
-      case Vector() if app == "manual" =>
+      case Vector() if app == "document" =>
+        Some(renderSystemDocument(subsystem))
+      case Vector("specification") if app == "document" =>
         Some(renderSystemManual(subsystem))
       case Vector() if app == "console" =>
         Some(renderSystemConsole(subsystem))
@@ -378,7 +387,9 @@ object StaticFormAppRenderer {
     operationName: String,
     webDescriptor: WebDescriptor = WebDescriptor.empty,
     values: Map[String, String] = Map.empty,
-    validation: Option[FormValidationResult] = None
+    validation: Option[FormValidationResult] = None,
+    operationMode: OperationMode = RuntimeConfig.DefaultOperationMode,
+    showExecutionDebugPanel: Boolean = false
   ): Option[Page] =
     _resolve_operation_web_schema_context(subsystem, componentName, serviceName, operationName, webDescriptor).map { context =>
       val action = s"/form/${context.componentPath}/${context.servicePath}/${context.operationPath}"
@@ -388,6 +399,7 @@ object StaticFormAppRenderer {
       val hiddenContext = _hidden_form_context_inputs(effectiveValues)
       val errorPanel = _form_error_panel(effectiveValues) + _form_validation_panel(effectiveValidation)
       val enctype = _operation_form_enctype(context.webSchema, context.imageBinding)
+      val debugPanel = _operation_form_debug_panel(context, values, operationMode, showExecutionDebugPanel)
       Page(_simple_page(
         title = s"${_escape(context.component.name)}.${_escape(context.serviceName)}.${_escape(context.operationName)}",
         subtitle = "HTML form operation",
@@ -406,7 +418,8 @@ object StaticFormAppRenderer {
              |      </div>
              |    </form>
              |  </div>
-             |</article>""".stripMargin,
+             |</article>
+             |${debugPanel}""".stripMargin,
         assetCompletion = StaticFormAppLayout.AssetCompletionOptions(
           declaredCss = webDescriptor.resultAssets(context.component.name, context.serviceName, context.operationName).css,
           declaredJs = webDescriptor.resultAssets(context.component.name, context.serviceName, context.operationName).js
@@ -764,6 +777,41 @@ object StaticFormAppRenderer {
       case _ =>
         ""
     }
+
+  private def _operation_form_debug_panel(
+    context: OperationWebSchemaContext,
+    values: Map[String, String],
+    operationMode: OperationMode,
+    enabled: Boolean
+  ): String =
+    if (!enabled || !_is_development_operation_mode(operationMode))
+      ""
+    else {
+      val status =
+        values.get("error.status")
+          .flatMap(x => scala.util.Try(x.trim.toInt).toOption)
+          .getOrElse(400)
+      val body = values.getOrElse("error.body", "")
+      val pageProperties = FormPageProperties(
+        context.component.name,
+        context.serviceName,
+        context.operationName,
+        values
+      )
+      _execution_debug_panel(FormResultProperties(
+        pageProperties,
+        status,
+        "text/plain",
+        body,
+        operationMode = operationMode,
+        fieldConfidentiality = _field_confidentiality(context.webSchema)
+      ), pageProperties)
+    }
+
+  private def _field_confidentiality(
+    schema: WebSchemaResolver.ResolvedWebSchema
+  ): Map[String, DataConfidentiality] =
+    schema.fields.map(field => field.name -> field.confidentiality).toMap
 
   private def _admin_form_fields(
     defaults: Vector[(String, String)],
@@ -1784,6 +1832,7 @@ object StaticFormAppRenderer {
       "multiple" -> Json.fromBoolean(control.multiple),
       "placeholder" -> field.placeholder.map(Json.fromString).getOrElse(Json.Null),
       "help" -> field.help.map(Json.fromString).getOrElse(Json.Null),
+      "confidentiality" -> Json.fromString(field.confidentiality.label),
       "validation" -> _web_validation_hints_json(field.validation),
       "source" -> Json.fromString(field.source.toString)
     )
@@ -1871,10 +1920,21 @@ object StaticFormAppRenderer {
     } else if (inputType == "select" || descriptor.exists(_.values.nonEmpty)) {
       val multiple = if (descriptor.exists(_.multiple)) " multiple" else ""
       val disabled = if (readonly) " disabled" else ""
-      val options = descriptor.toVector.flatMap(_.values).map { candidate =>
+      val values = descriptor.toVector.flatMap(_.values)
+      val placeholderOption =
+        descriptor
+          .flatMap(_.placeholder)
+          .filter(_.nonEmpty)
+          .filter(_ => required.trim.isEmpty && !values.contains(""))
+          .map { label =>
+            val selected = if (value.isEmpty) " selected" else ""
+            s"""<option value=""${selected}>${_escape(label)}</option>"""
+          }
+          .toVector
+      val options = (placeholderOption ++ values.map { candidate =>
         val selected = if (candidate == value) " selected" else ""
         s"""<option value="${_escape(candidate)}"${selected}>${_escape(candidate)}</option>"""
-      }.mkString("\n")
+      }).mkString("\n")
       s"""<div class="mb-3">
          |  <label class="form-label" for="${_escape(id)}">${_escape(displayLabel)}</label>
          |  <select class="form-select${invalidClass}" id="${_escape(id)}" name="${_escape(name)}"${required}${multiple}${disabled}${validationAttr}>
@@ -2016,8 +2076,9 @@ object StaticFormAppRenderer {
     )
     val withJobPanel = _append_default_job_panel(rendered, pageProperties)
     val withDebug = _append_execution_debug_panel(withJobPanel, properties, pageProperties)
+    val assetCompletion = _execution_debug_asset_completion(properties, pageProperties)
     if (_is_html_document(template))
-      Page(_complete_widget_assets(template, withDebug, properties.assetCompletion))
+      Page(_complete_widget_assets(template, withDebug, assetCompletion))
     else
       Page(StaticFormAppLayout.completeDeclaredAssets(
         _simple_page(
@@ -2025,7 +2086,7 @@ object StaticFormAppRenderer {
           subtitle = s"HTTP ${properties.status}",
           body = withDebug
         ),
-        properties.assetCompletion
+        assetCompletion
       ))
   }
 
@@ -2172,11 +2233,11 @@ object StaticFormAppRenderer {
     properties: FormResultProperties,
     pageProperties: FormPageProperties
   ): String =
-    if (!_is_development_operation_mode(properties.operationMode) || _execution_metadata_empty(properties.executionMetadata))
+    if (!_is_development_operation_mode(properties.operationMode) || !_execution_debug_panel_enabled(properties, pageProperties))
       ""
     else {
       val metadata = properties.executionMetadata
-      val calltree = metadata.inlineCallTree.map(_.show).getOrElse("")
+      val calltreeHtml = metadata.inlineCallTree.map(_debug_calltree_html).getOrElse("")
       val jobid = metadata.responseJobId.orElse(metadata.debugJobId)
       val joblinks = jobid.map { id =>
         val appHref = pageProperties.value("result.job.href")
@@ -2184,11 +2245,22 @@ object StaticFormAppRenderer {
         val app = if (appHref.nonEmpty) s"""<a class="btn btn-sm btn-outline-primary" href="${_escape(appHref)}">Application job</a>""" else ""
         s"""<div class="d-flex flex-wrap gap-2 mt-2">${app}<a class="btn btn-sm btn-outline-secondary" href="${_escape(systemHref)}">System debug job</a></div>"""
       }.getOrElse("")
-      val calltreeHtml =
-        if (calltree.nonEmpty)
-          s"""<pre class="bg-light border rounded p-3 mb-0"><code>${_escape(calltree)}</code></pre>"""
+      val arguments = _debug_operation_arguments(pageProperties, properties.fieldConfidentiality)
+      val argumentsHtml =
+        if (arguments.nonEmpty)
+          s"""<pre class="bg-light border rounded p-3"><code>${_escape(_debug_record_pretty(Record.dataAuto(arguments.toVector.sortBy(_._1)*)))}</code></pre>"""
+        else
+          """<p class="text-secondary mb-0">No operation arguments were captured for this response.</p>"""
+      val effectiveCalltreeHtml =
+        if (calltreeHtml.nonEmpty)
+          calltreeHtml
         else
           """<p class="text-secondary mb-0">CallTree was not captured for this response.</p>"""
+      val debugVariant =
+        if (properties.status >= 200 && properties.status < 400)
+          ("success", "text-success-emphasis")
+        else
+          ("danger", "text-danger-emphasis")
       val summary =
         s"""<dl class="row mb-3">
            |  <dt class="col-sm-3">Operation</dt><dd class="col-sm-9"><code>${_escape(properties.operationLabel)}</code></dd>
@@ -2197,15 +2269,17 @@ object StaticFormAppRenderer {
            |  <dt class="col-sm-3">Job ID</dt><dd class="col-sm-9"><code>${_escape(jobid.getOrElse(""))}</code></dd>
            |</dl>""".stripMargin
       s"""<section class="container my-4 textus-execution-debug-panel">
-         |  <details class="border rounded bg-white">
-         |    <summary class="p-3 fw-semibold">Development execution result</summary>
-         |    <div class="border-top p-3">
+         |  <details class="border border-${debugVariant._1} border-2 border-start border-start-4 rounded bg-${debugVariant._1}-subtle shadow-sm">
+         |    <summary class="p-3 fw-semibold ${debugVariant._2}">Development execution diagnostics</summary>
+         |    <div class="border-top border-${debugVariant._1} p-3 bg-${debugVariant._1}-subtle">
          |      ${summary}
          |      ${joblinks}
+         |      <h3 class="h6 mt-3">Operation arguments</h3>
+         |      ${argumentsHtml}
          |      <h3 class="h6 mt-3">Result body</h3>
-         |      <pre class="bg-light border rounded p-3"><code>${_escape(properties.body.take(12000))}</code></pre>
+         |      <pre class="bg-light border rounded p-3"><code>${_escape(_debug_body_pretty(properties.body, properties.fieldConfidentiality).take(12000))}</code></pre>
          |      <h3 class="h6 mt-3">CallTree</h3>
-         |      ${calltreeHtml}
+         |      ${effectiveCalltreeHtml}
          |    </div>
          |  </details>
          |</section>""".stripMargin
@@ -2216,12 +2290,537 @@ object StaticFormAppRenderer {
   ): Boolean =
     mode == OperationMode.Develop || mode == OperationMode.Test
 
+  private def _execution_debug_panel_enabled(
+    properties: FormResultProperties,
+    pageProperties: FormPageProperties
+  ): Boolean =
+    pageProperties.value("textus.debug.executionPanel").equalsIgnoreCase("true") ||
+      !_execution_metadata_empty(properties.executionMetadata)
+
+  private def _execution_debug_asset_completion(
+    properties: FormResultProperties,
+    pageProperties: FormPageProperties
+  ): StaticFormAppLayout.AssetCompletionOptions = {
+    val base = properties.assetCompletion
+    if (_execution_debug_calltree_asset_required(properties, pageProperties) &&
+        !base.declaredJs.contains(CallTreeJsAsset))
+      base.copy(declaredJs = base.declaredJs :+ CallTreeJsAsset)
+    else
+      base
+  }
+
+  private def _execution_debug_calltree_asset_required(
+    properties: FormResultProperties,
+    pageProperties: FormPageProperties
+  ): Boolean =
+    _is_development_operation_mode(properties.operationMode) &&
+      _execution_debug_panel_enabled(properties, pageProperties) &&
+      properties.executionMetadata.inlineCallTree.nonEmpty
+
   private def _execution_metadata_empty(
     metadata: RuntimeContext.ExecutionMetadata
   ): Boolean =
     metadata.responseJobId.isEmpty &&
       metadata.debugJobId.isEmpty &&
       metadata.inlineCallTree.isEmpty
+
+  private def _debug_body_pretty(
+    body: String,
+    confidentiality: Map[String, DataConfidentiality] = Map.empty
+  ): String = {
+    val trimmed = body.trim
+    if (trimmed.isEmpty)
+      body
+    else
+      io.circe.parser.parse(trimmed).toOption
+      .map(_debug_redact_json(_, confidentiality).spaces2)
+      .getOrElse(_debug_redact_text(body, confidentiality))
+  }
+
+  private def _debug_operation_arguments(
+    pageProperties: FormPageProperties,
+    confidentiality: Map[String, DataConfidentiality] = Map.empty
+  ): Map[String, String] = {
+    val formvalues = pageProperties.values.toVector.collect {
+      case (key, value) if key.startsWith("form.") => key.stripPrefix("form.") -> value
+    }.toMap
+    val rawvalues =
+      if (formvalues.nonEmpty)
+        formvalues
+      else
+        pageProperties.values.filterNot { case (key, _) =>
+          key.contains(".") ||
+            key == "component" ||
+            key == "service" ||
+            key == "operation"
+        }
+    _visible_form_values(rawvalues).filterNot { case (key, _) =>
+      key == "fields" ||
+        key == "component" ||
+        key == "service" ||
+        key == "operation" ||
+        key == "textus.debug.executionPanel" ||
+        key.startsWith("textus.debug.")
+    }.map { case (key, value) => key -> _debug_display_value(key, value, confidentiality) }
+  }
+
+  private def _debug_record_pretty(
+    record: Record
+  ): String =
+    _manual_raw_json(_debug_redact_record(record))
+      .map(_.spaces2)
+      .getOrElse(_debug_redact_record(record).show)
+
+  private def _debug_display_value(
+    key: String,
+    value: String,
+    confidentiality: Map[String, DataConfidentiality] = Map.empty
+  ): String =
+    if (_is_sensitive_debug_key(key, confidentiality)) "[redacted]" else value
+
+  private def _debug_redact_record(
+    record: Record,
+    confidentiality: Map[String, DataConfidentiality] = Map.empty
+  ): Record =
+    Record.dataAuto(
+      record.asMap.toVector
+        .sortBy(_._1)
+        .map { case (key, value) => key -> _debug_redact_value(key, value, confidentiality) }*
+    )
+
+  private def _debug_redact_value(
+    key: String,
+    value: Any,
+    confidentiality: Map[String, DataConfidentiality] = Map.empty
+  ): Any =
+    if (_is_sensitive_debug_key(key, confidentiality))
+      "[redacted]"
+    else
+      value match {
+        case r: Record =>
+          _debug_redact_record(r, confidentiality)
+        case xs: Seq[?] =>
+          xs.map(_debug_redact_nested_value(_, confidentiality))
+        case xs: Array[?] =>
+          xs.toVector.map(_debug_redact_nested_value(_, confidentiality))
+        case m: scala.collection.Map[?, ?] =>
+          m.toVector.map {
+            case (k, v) =>
+              val childKey = Option(k).map(_.toString).getOrElse("")
+              childKey -> _debug_redact_value(childKey, v, confidentiality)
+          }.toMap
+        case _ =>
+          value
+      }
+
+  private def _debug_redact_nested_value(
+    value: Any,
+    confidentiality: Map[String, DataConfidentiality] = Map.empty
+  ): Any =
+    value match {
+      case r: Record =>
+        _debug_redact_record(r, confidentiality)
+      case xs: Seq[?] =>
+        xs.map(_debug_redact_nested_value(_, confidentiality))
+      case xs: Array[?] =>
+        xs.toVector.map(_debug_redact_nested_value(_, confidentiality))
+      case m: scala.collection.Map[?, ?] =>
+        m.toVector.map {
+          case (k, v) =>
+            val childKey = Option(k).map(_.toString).getOrElse("")
+            childKey -> _debug_redact_value(childKey, v, confidentiality)
+        }.toMap
+      case _ =>
+        value
+    }
+
+  private def _debug_redact_json(
+    json: Json,
+    confidentiality: Map[String, DataConfidentiality] = Map.empty
+  ): Json =
+    json.arrayOrObject(
+      json,
+      xs => Json.arr(xs.map(_debug_redact_json(_, confidentiality))*),
+      obj => Json.fromJsonObject(JsonObject.fromIterable(
+        obj.toIterable.map {
+          case (key, value) =>
+            key -> (if (_is_sensitive_debug_key(key, confidentiality)) Json.fromString("[redacted]") else _debug_redact_json(value, confidentiality))
+        }
+      ))
+    )
+
+  private def _is_sensitive_debug_key(
+    key: String,
+    confidentiality: Map[String, DataConfidentiality] = Map.empty
+  ): Boolean = {
+    confidentiality.get(key)
+      .orElse(confidentiality.find { case (k, _) => NamingConventions.equivalentByNormalized(k, key) }.map(_._2))
+      .exists(_.shouldRedactByDefault) ||
+    {
+    val normalized = key.toLowerCase(java.util.Locale.ROOT).replaceAll("[^a-z0-9]", "")
+    normalized.contains("password") ||
+      normalized.contains("passwd") ||
+      normalized.contains("secret") ||
+      normalized.contains("token") ||
+      normalized.contains("session") ||
+      normalized.contains("authorization") ||
+      normalized.contains("cookie") ||
+      normalized.contains("credential") ||
+      normalized.contains("apikey") ||
+      normalized.contains("privatekey")
+    }
+  }
+
+  private def _debug_redact_text(
+    value: String,
+    confidentiality: Map[String, DataConfidentiality] = Map.empty
+  ): String = {
+    val metadataSensitive = confidentiality.collect {
+      case (key, level) if level.shouldRedactByDefault => java.util.regex.Pattern.quote(key)
+    }.mkString("|")
+    val sensitiveBase = """password|passwd|secret|token|access[-_]?session[-_]?id|refresh[-_]?session[-_]?id|session[-_]?id|session|authorization|cookie|credential|api[-_]?key|private[-_]?key"""
+    val sensitive = if (metadataSensitive.isEmpty) sensitiveBase else s"$sensitiveBase|$metadataSensitive"
+    val jsonLike = s"""(?i)("(?:$sensitive)"\\s*:\\s*)"[^"]*"""".r
+    val formLike = s"""(?i)(^|[?&\\s,;])($sensitive)(\\s*[=:]\\s*)([^&\\s,;]+)""".r
+    val jsonRedacted = jsonLike.replaceAllIn(value, m => s"""${m.group(1)}"[redacted]"""")
+    formLike.replaceAllIn(jsonRedacted, m => s"${m.group(1)}${m.group(2)}${m.group(3)}[redacted]")
+  }
+
+  private final case class DebugCallTreeEvent(
+    kind: String,
+    label: String,
+    attributes: Map[String, String],
+    startedAtNanos: Long,
+    endedAtNanos: Option[Long]
+  )
+
+  private final case class DebugCallTreeNode(
+    label: String,
+    attributes: Map[String, String],
+    startedAtNanos: Long,
+    endedAtNanos: Option[Long],
+    children: Vector[DebugCallTreeNode]
+  )
+
+  private def _debug_calltree_html(
+    record: Record
+  ): String =
+    _debug_calltree_nodes(record) match {
+      case Some(nodes) if nodes.nonEmpty =>
+        s"""<div class="textus-calltree-tree" data-textus-calltree>
+           |  ${_debug_calltree_node_list(nodes, 0)}
+           |</div>""".stripMargin
+      case _ =>
+        _debug_calltree_legacy_html(record)
+    }
+
+  private def _debug_calltree_legacy_html(
+    record: Record
+  ): String = {
+    val label = record.getString("name")
+      .orElse(record.getString("label"))
+      .getOrElse("CallTree")
+    val attrs = record.asMap
+      .filterNot { case (key, _) => key == "name" || key == "label" || key == "children" }
+      .map { case (key, value) => key -> value.toString }
+    val children = record.asMap.get("children") match {
+      case Some(xs: Seq[?]) =>
+        xs.toVector.map {
+          case r: Record =>
+            val childLabel = r.getString("name").orElse(r.getString("label")).getOrElse("node")
+            DebugCallTreeNode(childLabel, r.asMap.filterNot { case (key, _) => key == "name" || key == "label" || key == "children" }.map { case (key, value) => key -> value.toString }, 0L, None, Vector.empty)
+          case x =>
+            DebugCallTreeNode(x.toString, Map.empty, 0L, None, Vector.empty)
+        }
+      case _ =>
+        Vector.empty
+    }
+    val node = DebugCallTreeNode(label, attrs, 0L, None, children)
+    s"""<div class="textus-calltree-tree" data-textus-calltree>
+       |  ${_debug_calltree_node_list(Vector(node), 0)}
+       |</div>""".stripMargin
+  }
+
+  private def _debug_calltree_nodes(
+  record: Record
+  ): Option[Vector[DebugCallTreeNode]] = {
+    val structured = _debug_calltree_structured_nodes(record)
+    if (structured.exists(_.nonEmpty))
+      return structured
+    val events = _debug_calltree_events(record)
+    if (events.isEmpty)
+      None
+    else {
+      val leaves = events.filter(_is_debug_leave_event).groupBy(x => (x.label, x.startedAtNanos))
+      val spanNodes = events.zipWithIndex.collect { case (entry, index) if entry.kind == "enter" =>
+        val leave = leaves.get((entry.label, entry.startedAtNanos)).flatMap(_.headOption)
+        index -> DebugCallTreeNode(
+          entry.label,
+          entry.attributes ++ leave.map(_.attributes).getOrElse(Map.empty),
+          entry.startedAtNanos,
+          leave.flatMap(_.endedAtNanos).orElse(entry.endedAtNanos),
+          Vector.empty
+        )
+      }
+      val markerNodes = events.zipWithIndex.collect {
+        case (event, index) if event.kind != "enter" && !_is_debug_leave_event(event) =>
+          index -> DebugCallTreeNode(
+            event.label,
+            event.attributes,
+            event.startedAtNanos,
+            event.endedAtNanos.orElse(Some(event.startedAtNanos)),
+            Vector.empty
+          )
+      }
+      val nodes = spanNodes ++ markerNodes
+      val byindex = nodes.toMap
+      val parentCandidates = spanNodes.toMap
+      val parentByIndex = nodes.map { case (index, node) =>
+        index -> parentCandidates.collect {
+          case (parentIndex, parent) if parentIndex != index && _debug_calltree_contains(parent, node) =>
+            val span = parent.endedAtNanos.getOrElse(Long.MaxValue) - parent.startedAtNanos
+            (parentIndex, span, parent.startedAtNanos)
+        }.toVector.sortBy { case (_, span, start) => (span, -start) }.headOption.map(_._1)
+      }.toMap
+      def build(index: Int): DebugCallTreeNode = {
+        val node = byindex(index)
+        val children = parentByIndex.collect { case (childIndex, Some(parentIndex)) if parentIndex == index => childIndex }
+          .toVector
+          .sortBy(child => byindex(child).startedAtNanos)
+          .map(build)
+        node.copy(children = children)
+      }
+      Some(parentByIndex.collect { case (index, None) => index }
+        .toVector
+        .sortBy(index => byindex(index).startedAtNanos)
+        .map(build))
+    }
+  }
+
+  private def _is_debug_leave_event(
+    event: DebugCallTreeEvent
+  ): Boolean =
+    event.kind == "leave" || event.kind == "exit"
+
+  private def _debug_calltree_structured_nodes(
+    record: Record
+  ): Option[Vector[DebugCallTreeNode]] =
+    record.asMap.get("calltree") match {
+      case Some(xs: Seq[?]) =>
+        val nodes = xs.toVector.collect { case r: Record => _debug_calltree_structured_node(r) }.flatten
+        if (nodes.nonEmpty) Some(nodes) else None
+      case _ =>
+        None
+    }
+
+  private def _debug_calltree_structured_node(
+    record: Record
+  ): Option[DebugCallTreeNode] = {
+    val label = record.getString("label").orElse(record.getString("name"))
+    label.map { label =>
+      val attrs = _debug_calltree_attributes(record.asMap.get("attributes"))
+      val children = record.asMap.get("children") match {
+        case Some(xs: Seq[?]) =>
+          xs.toVector.collect { case r: Record => _debug_calltree_structured_node(r) }.flatten
+        case _ =>
+          Vector.empty
+      }
+      DebugCallTreeNode(
+        label,
+        attrs,
+        attrs.get("started_at_nanos").flatMap(_to_long_option).getOrElse(0L),
+        attrs.get("ended_at_nanos").flatMap(_to_long_option),
+        children
+      )
+    }
+  }
+
+  private def _debug_calltree_contains(
+    parent: DebugCallTreeNode,
+    child: DebugCallTreeNode
+  ): Boolean = {
+    val parentEnd = parent.endedAtNanos.getOrElse(Long.MaxValue)
+    val childEnd = child.endedAtNanos.getOrElse(child.startedAtNanos)
+    parent.startedAtNanos <= child.startedAtNanos && childEnd <= parentEnd &&
+      (parent.startedAtNanos < child.startedAtNanos || parentEnd > childEnd)
+  }
+
+  private def _debug_calltree_events(
+    record: Record
+  ): Vector[DebugCallTreeEvent] =
+    record.asMap.get("calltree") match {
+      case Some(xs: Seq[?]) =>
+        xs.toVector.collect { case r: Record => _debug_calltree_event(r) }.flatten
+      case _ =>
+        Vector.empty
+    }
+
+  private def _debug_calltree_event(
+    record: Record
+  ): Option[DebugCallTreeEvent] = {
+    val attrs = _debug_calltree_attributes(record.asMap.get("attributes")) ++
+      record.asMap.get("message").map(x => Map("message" -> x.toString)).getOrElse(Map.empty)
+    for {
+      kind <- _debug_record_string(record, "kind").map(_.toLowerCase(java.util.Locale.ROOT))
+      label <- _debug_record_string(record, "label").filter(_.nonEmpty)
+      start <- attrs.get("started_at_nanos")
+        .orElse(attrs.get("ended_at_nanos"))
+        .orElse(attrs.get("failed_at_nanos"))
+        .orElse(attrs.get("sampled_at_nanos"))
+        .flatMap(_to_long_option)
+    } yield DebugCallTreeEvent(
+      kind,
+      label,
+      attrs,
+      start,
+      attrs.get("ended_at_nanos")
+        .orElse(attrs.get("failed_at_nanos"))
+        .orElse(attrs.get("sampled_at_nanos"))
+        .flatMap(_to_long_option)
+    )
+  }
+
+  private def _debug_calltree_attributes(
+    value: Option[Any]
+  ): Map[String, String] =
+    value match {
+      case Some(r: Record) => r.asMap.map { case (k, v) => k -> v.toString }
+      case Some(m: Map[?, ?]) => m.map { case (k, v) => k.toString -> v.toString }
+      case _ => Map.empty
+    }
+
+  private def _debug_record_string(
+    record: Record,
+    key: String
+  ): Option[String] =
+    record.asMap.get(key).map(_.toString)
+
+  private def _to_long_option(
+    value: String
+  ): Option[Long] =
+    scala.util.Try(value.toLong).toOption
+
+  private def _debug_calltree_node_list(
+    nodes: Vector[DebugCallTreeNode],
+    depth: Int
+  ): String =
+    s"""<ul class="${if (depth == 0) "list-group border rounded bg-white" else "list-unstyled border-start border-2 ms-3 ps-3 mt-2"}" data-calltree-node-list>
+       |${nodes.map(_debug_calltree_node_html(_, depth)).mkString}
+       |</ul>""".stripMargin
+
+  private def _debug_calltree_node_html(
+    node: DebugCallTreeNode,
+    depth: Int
+  ): String = {
+    val attrs = _debug_calltree_attributes_html(node.attributes)
+    val children =
+      if (node.children.isEmpty)
+        ""
+      else
+        _debug_calltree_node_list(node.children, depth + 1)
+    val badges = _debug_calltree_badges(node)
+    val open = if (depth <= 1) " open" else ""
+    val itemClass =
+      if (depth == 0)
+        "list-group-item py-2"
+      else
+        "position-relative py-2 ps-2"
+    val kind = _debug_calltree_node_kind(node)
+    val realIo = node.attributes.getOrElse("real_io", "")
+    val source = node.attributes
+      .get("source")
+      .orElse(node.attributes.get("cache_layer"))
+      .orElse(node.attributes.get("datastore"))
+      .getOrElse("")
+    val marker =
+      if (depth == 0)
+        ""
+      else
+        """<span class="position-absolute top-0 start-0 translate-middle-x mt-3 bg-body border rounded-circle" style="width:.55rem;height:.55rem"></span>"""
+    s"""<li class="${itemClass}" data-calltree-node data-calltree-kind="${_escape(kind)}" data-calltree-real-io="${_escape(realIo)}" data-calltree-source="${_escape(source)}">
+       |  ${marker}
+       |  <details${open}>
+       |    <summary class="d-flex flex-wrap align-items-center gap-1"><code data-calltree-label>${_escape(node.label)}</code>${badges}</summary>
+       |    <div class="mt-2">
+       |      ${attrs}
+       |      ${children}
+       |    </div>
+       |  </details>
+       |</li>""".stripMargin
+  }
+
+  private def _debug_calltree_node_kind(
+    node: DebugCallTreeNode
+  ): String = {
+    val label = node.label.toLowerCase(java.util.Locale.ROOT)
+    if (label.contains("io:error"))
+      "io-error"
+    else if (label.startsWith("io:") || label.contains(":io:"))
+      "io"
+    else if (label.startsWith("metrics:datastore") || node.attributes.contains("sql"))
+      "datastore"
+    else if (label.startsWith("metrics:"))
+      "metrics"
+    else if (label.startsWith("uow:"))
+      "uow"
+    else
+      "operation"
+  }
+
+  private def _debug_calltree_badges(
+    node: DebugCallTreeNode
+  ): String = {
+    val keys = Vector("duration_millis", "real_io", "cache_layer", "source", "datastore")
+    val badges = keys.flatMap { key =>
+      node.attributes.get(key).filter(_.nonEmpty).map { value =>
+        val variant =
+          key match {
+            case "real_io" if value == "true" => "text-bg-warning"
+            case "real_io" => "text-bg-secondary"
+            case "cache_layer" => "text-bg-info"
+            case "duration_millis" => "text-bg-light"
+            case _ => "text-bg-secondary"
+          }
+        val label = if (key == "duration_millis") s"${value}ms" else s"${key}=${value}"
+        s"""<span class="badge ${variant} ms-2" data-calltree-badge>${_escape(label)}</span>"""
+      }
+    }
+    badges.mkString
+  }
+
+  private def _debug_calltree_attributes_html(
+    attributes: Map[String, String]
+  ): String = {
+    val visible = attributes.toVector
+      .filterNot { case (key, _) => key == "started_at_nanos" || key == "ended_at_nanos" }
+      .sortBy(_._1)
+    if (visible.isEmpty)
+      ""
+    else
+      s"""<dl class="row small mb-2" data-calltree-attributes>
+         |${visible.map { case (key, value) =>
+           val long = _debug_calltree_multiline_attribute(key, value)
+           val body =
+             if (long)
+               s"""<pre class="bg-light border rounded p-2 mb-1"><code>${_escape(value)}</code></pre>"""
+             else
+               s"""<code>${_escape(value)}</code>"""
+           val longAttr = if (long) """ data-calltree-long-attribute="true"""" else ""
+           s"""<dt class="col-sm-3" data-calltree-attribute-key="${_escape(key)}">${_escape(key)}</dt><dd class="col-sm-9" data-calltree-attribute data-calltree-attribute-key="${_escape(key)}"${longAttr}>${body}</dd>"""
+         }.mkString}
+         |</dl>""".stripMargin
+  }
+
+  private def _debug_calltree_multiline_attribute(
+    key: String,
+    value: String
+  ): Boolean =
+    value.length > 120 ||
+      key == "sql" ||
+      key == "query" ||
+      key == "request" ||
+      key == "resolved_parameters" ||
+      key == "response"
 
   def renderSystemJobTicket(
     jobId: String
@@ -2621,7 +3220,7 @@ object StaticFormAppRenderer {
                |  <li><code>association:blob_attachment:create/delete/search/list</code> controls Blob attachment operations.</li>
                |  <li><code>store:blobstore:status</code> controls BlobStore status diagnostics.</li>
                |</ul>
-               |<p class="mb-0"><a href="/web/system/manual#authorization-policies">View effective authorization policies</a></p>""".stripMargin
+               |<p class="mb-0"><a href="/web/system/document/specification#authorization-policies">View effective authorization policies</a></p>""".stripMargin
            )}""".stripMargin
     ))
 
@@ -4067,14 +4666,33 @@ object StaticFormAppRenderer {
         Page(_system_manual_page(subsystem, component))
       case None =>
         Page(_simple_page(
-          title = "System Manual",
-          subtitle = "Read-only runtime reference",
+          title = "System Specification",
+          subtitle = "Generated runtime specification",
           body = _admin_card("No components", "<p>No component reference entries are available.</p>")
         ))
     }
 
-  def renderRuntimeLanding(
+  def renderSystemDocument(
     subsystem: Subsystem
+  ): Page = {
+    val body =
+      s"""${_manual_card("Generated documents",
+           s"""<p>CNCF-generated runtime documents expose implementation-facing specifications and machine-readable interface descriptions.</p>
+              |${_admin_link_list_group(Vector(
+                "Generated Specification" -> "/web/system/document/specification",
+                "OpenAPI JSON" -> "/web/system/document/specification/openapi.json",
+                "MCP endpoint" -> "/mcp",
+                "System dashboard" -> "/web/system/dashboard",
+                "Console" -> "/web/console"
+              ))}""".stripMargin)}
+         |${_manual_card("Component documents", _manual_component_document_links(subsystem.components))}
+         |${_manual_card("Document model", """<p class="mb-0">Use <strong>Specification</strong> for generated CNCF metadata. Component-packaged <strong>User Guide</strong> and <strong>Reference Manual</strong> documents remain product documents owned by each component.</p>""")}""".stripMargin
+    Page(_simple_page("System Documents", "Specifications and component-packaged documents", body))
+  }
+
+  def renderRuntimeLanding(
+    subsystem: Subsystem,
+    webDescriptor: WebDescriptor = WebDescriptor()
   ): Page = {
     val runtime = RuntimeConfig.from(subsystem.configuration)
     val appComponents = subsystem.components.filterNot(_.origin == ComponentOrigin.Builtin)
@@ -4083,13 +4701,20 @@ object StaticFormAppRenderer {
       else subsystem.components
     val componentLinks = effectiveComponents.map { component =>
       val path = NamingConventions.toNormalizedSegment(component.name)
+      val appLinks = webDescriptor.routeAppsForComponent(component.name) match {
+        case Vector() =>
+          Vector("App" -> s"/web/${_escape(path)}")
+        case Vector(app) =>
+          Vector("App" -> s"/web/${_escape(app)}")
+        case apps =>
+          apps.map(app => s"App: ${app}" -> s"/web/${_escape(app)}")
+      }
       s"""<div class="list-group-item">
          |  <div class="d-flex flex-wrap justify-content-between gap-2 align-items-center">
          |    <strong>${_escape(component.name)}</strong>
-         |    ${_admin_action_row(Vector(
-           "App" -> s"/web/${_escape(path)}",
+         |    ${_admin_action_row(appLinks ++ Vector(
            "Admin" -> s"/web/${_escape(path)}/admin",
-           "Manual" -> s"/web/${_escape(path)}/manual"
+           "Document" -> s"/web/${_escape(path)}/document"
          ), primary = false)}
          |  </div>
          |</div>""".stripMargin
@@ -4099,7 +4724,7 @@ object StaticFormAppRenderer {
         _admin_card(
           "Recommended Links",
           _admin_link_list_group(Vector(
-            "System manual" -> "/web/system/manual",
+            "System documents" -> "/web/system/document",
             "System admin" -> "/web/system/admin",
             "System dashboard" -> "/web/system/dashboard",
             "Performance" -> "/web/system/performance"
@@ -4109,7 +4734,7 @@ object StaticFormAppRenderer {
         _admin_card(
           "Recommended Links",
           s"""${_admin_link_list_group(Vector(
-               "System manual" -> "/web/system/manual",
+               "System documents" -> "/web/system/document",
                "System admin" -> "/web/system/admin",
                "System dashboard" -> "/web/system/dashboard",
                "Performance" -> "/web/system/performance"
@@ -4143,13 +4768,51 @@ object StaticFormAppRenderer {
     for {
       component <- _find_component(subsystem, componentName)
     } yield Page(_manual_page(
-      title = s"${_escape(component.name)} Manual",
-      subtitle = "Component reference",
+      title = s"${_escape(component.name)} Specification",
+      subtitle = "Generated component specification",
       component = component,
       selector = Some(component.name),
-      currentPath = s"/web/${NamingConventions.toNormalizedSegment(componentName)}/manual",
+      currentPath = s"/web/${NamingConventions.toNormalizedSegment(componentName)}/document/specification",
       childNames = component.protocol.services.services.map(_.name).toVector
     ))
+
+  def renderComponentDocument(
+    subsystem: Subsystem,
+    componentName: String,
+    documents: Vector[DocumentLink] = Vector.empty
+  ): Option[Page] =
+    for {
+      component <- _find_component(subsystem, componentName)
+    } yield {
+      val componentPath = NamingConventions.toNormalizedSegment(componentName)
+      val generated =
+        Vector(
+          "Generated Specification" -> s"/web/${_escape(componentPath)}/document/specification",
+          "OpenAPI JSON" -> "/web/system/document/specification/openapi.json",
+          "MCP endpoint" -> "/mcp"
+        )
+      val packaged =
+        if (documents.isEmpty)
+          _web_empty_state("No packaged User Guide, Reference Manual, or component Specification documents were found.")
+        else
+          _admin_link_list_group(documents.map(x => x.title -> x.href))
+      val body =
+        s"""${_manual_card("Generated specification",
+             s"""<p>CNCF generates this read-only specification from component, service, operation, schema, and projection metadata.</p>
+                |${_admin_link_list_group(generated)}""".stripMargin)}
+           |${_manual_card("Packaged component documents", packaged)}
+           |${_manual_card("Document roles",
+             """<div class="table-responsive">
+                |  <table class="table table-sm table-hover align-middle mb-0">
+                |    <tbody>
+                |      <tr><th>Specification</th><td>Generated or component-packaged technical contract for developers and operators.</td></tr>
+                |      <tr><th>User Guide</th><td>Task-oriented guide for people using the component or application feature.</td></tr>
+                |      <tr><th>Reference Manual</th><td>Human-authored detailed reference that complements generated metadata.</td></tr>
+                |    </tbody>
+                |  </table>
+                |</div>""".stripMargin)}""".stripMargin
+      Page(_simple_page(s"${_escape(component.name)} Documents", "Specifications, user guides, and reference manuals", body))
+    }
 
   def renderComponentManualService(
     subsystem: Subsystem,
@@ -4160,11 +4823,11 @@ object StaticFormAppRenderer {
       component <- _find_component(subsystem, componentName)
       service <- component.protocol.services.services.find(s => NamingConventions.equivalentByNormalized(s.name, serviceName))
     } yield Page(_manual_page(
-      title = s"${_escape(component.name)}.${_escape(service.name)} Manual",
-      subtitle = "Service reference",
+      title = s"${_escape(component.name)}.${_escape(service.name)} Specification",
+      subtitle = "Generated service specification",
       component = component,
       selector = Some(s"${component.name}.${service.name}"),
-      currentPath = s"/web/${NamingConventions.toNormalizedSegment(componentName)}/manual/${NamingConventions.toNormalizedSegment(service.name)}",
+      currentPath = s"/web/${NamingConventions.toNormalizedSegment(componentName)}/document/specification/${NamingConventions.toNormalizedSegment(service.name)}",
       childNames = service.operations.operations.map(_.name).toVector
     ))
 
@@ -4179,11 +4842,11 @@ object StaticFormAppRenderer {
       service <- component.protocol.services.services.find(s => NamingConventions.equivalentByNormalized(s.name, serviceName))
       operation <- service.operations.operations.find(o => NamingConventions.equivalentByNormalized(o.name, operationName))
     } yield Page(_manual_page(
-      title = s"${_escape(component.name)}.${_escape(service.name)}.${_escape(operation.name)} Manual",
-      subtitle = "Operation reference",
+      title = s"${_escape(component.name)}.${_escape(service.name)}.${_escape(operation.name)} Specification",
+      subtitle = "Generated operation specification",
       component = component,
       selector = Some(s"${component.name}.${service.name}.${operation.name}"),
-      currentPath = s"/web/${NamingConventions.toNormalizedSegment(componentName)}/manual/${NamingConventions.toNormalizedSegment(service.name)}/${NamingConventions.toNormalizedSegment(operation.name)}",
+      currentPath = s"/web/${NamingConventions.toNormalizedSegment(componentName)}/document/specification/${NamingConventions.toNormalizedSegment(service.name)}/${NamingConventions.toNormalizedSegment(operation.name)}",
       childNames = Vector.empty
     ))
 
@@ -6502,7 +7165,7 @@ object StaticFormAppRenderer {
              "System dashboard" -> "/web/system/dashboard",
              "Admin configuration" -> "/web/system/admin",
              "Performance details" -> "/web/system/performance",
-             "Manual" -> "/web/system/manual"
+             "Documents" -> "/web/system/document"
            ))}
            |${_admin_card(
              "Operation forms",
@@ -6555,7 +7218,7 @@ object StaticFormAppRenderer {
        |    <section class="row g-3 mb-3">
        |      <div class="col-12 col-lg-4"><article id="healthPanel" class="card h-100 shadow-sm border-success"><div class="card-body"><h2 class="h5 card-title">Health</h2><div class="big"><span id="healthText" class="badge text-bg-success">UP</span></div><p class="text-secondary mb-0 mt-2" id="healthNote">Starting</p></div></article></div>
        |      <div class="col-12 col-lg-4"><article class="card h-100 shadow-sm"><div class="card-body"><h2 class="h5 card-title">Subsystem</h2><p class="mb-1"><strong id="subsystemName">-</strong></p><p class="text-secondary mb-0" id="subsystemVersion">-</p></div></article></div>
-       |      <div class="col-12 col-lg-4"><article class="card h-100 shadow-sm"><div class="card-body"><h2 class="h5 card-title">CNCF</h2><p class="mb-1"><strong id="cncfVersion">-</strong></p><p class="mb-0"><a id="detailsLink" href="/web/system/admin">Admin details</a> · <a id="performanceLink" href="/web/system/performance">Performance details</a> · <a id="manualLink" href="/web/system/manual">Manual</a> · <a id="consoleLink" href="/web/console">Console</a></p></div></article></div>
+       |      <div class="col-12 col-lg-4"><article class="card h-100 shadow-sm"><div class="card-body"><h2 class="h5 card-title">CNCF</h2><p class="mb-1"><strong id="cncfVersion">-</strong></p><p class="mb-0"><a id="detailsLink" href="/web/system/admin">Admin details</a> · <a id="performanceLink" href="/web/system/performance">Performance details</a> · <a id="manualLink" href="/web/system/document">Documents</a> · <a id="consoleLink" href="/web/console">Console</a></p></div></article></div>
        |    </section>
        |    <section class="row g-3 mb-3">
        |      <div class="col-12"><article class="card shadow-sm"><div class="card-body">
@@ -6894,7 +7557,7 @@ object StaticFormAppRenderer {
            |${_admin_nav_card(Vector(
              "Dashboard" -> dashboardPath,
              "Performance details" -> performancePath,
-             "Manual" -> "/web/system/manual",
+             "Documents" -> "/web/system/document",
              "Console" -> "/web/console"
            ))}
            |${componentInventory}
@@ -7982,7 +8645,7 @@ object StaticFormAppRenderer {
       """<nav class="nav nav-pills flex-column flex-sm-row gap-2">
         |  <a class="nav-link border" href="/web/system/dashboard">System dashboard</a>
         |  <a class="nav-link border" href="/web/system/admin">Admin configuration</a>
-        |  <a class="nav-link border" href="/web/system/manual">Manual</a>
+        |  <a class="nav-link border" href="/web/system/document">Documents</a>
         |  <a class="nav-link border" href="/web/console">Console</a>
         |</nav>""".stripMargin,
       Some("performance-navigation")
@@ -8092,13 +8755,13 @@ object StaticFormAppRenderer {
       else
         ""
     val body =
-      s"""${_manual_card("Reference navigation",
-         s"""<p>This manual is read-only. Use it to inspect help, describe, schema, OpenAPI, and MCP entry points.</p>
+      s"""${_manual_card("Specification navigation",
+         s"""<p>This generated specification is read-only. Use it to inspect help, describe, schema, OpenAPI, and MCP entry points.</p>
             |<div class="d-flex flex-wrap gap-2 mt-3">
             |  <a class="btn btn-outline-primary" href="${_escape(currentPath)}#help">Help</a>
             |  <a class="btn btn-outline-primary" href="${_escape(currentPath)}#describe">Describe</a>
             |  <a class="btn btn-outline-primary" href="${_escape(currentPath)}#schema">Schema</a>
-            |  <a class="btn btn-outline-secondary" href="/web/system/manual/openapi.json">OpenAPI JSON</a>
+            |  <a class="btn btn-outline-secondary" href="/web/system/document/specification/openapi.json">OpenAPI JSON</a>
             |  <a class="btn btn-outline-secondary" href="/mcp">MCP endpoint</a>
             |  <a class="btn btn-outline-secondary" href="/web/console">Console</a>
             |</div>""".stripMargin)}
@@ -8121,23 +8784,23 @@ object StaticFormAppRenderer {
     val schema = SchemaProjection.project(component, None)
     val componentLinks = _manual_component_links(subsystem.components)
     val body =
-      s"""${_manual_card("Reference navigation",
-         s"""<p>This manual is read-only. Use it to inspect help, describe, schema, OpenAPI, and MCP entry points.</p>
+      s"""${_manual_card("Specification navigation",
+         s"""<p>This generated specification is read-only. Use it to inspect help, describe, schema, OpenAPI, and MCP entry points.</p>
             |<div class="d-flex flex-wrap gap-2 mt-3">
             |  <a class="btn btn-outline-primary" href="/web/system/dashboard">System dashboard</a>
             |  <a class="btn btn-outline-primary" href="/web/system/admin">Admin configuration</a>
             |  <a class="btn btn-outline-primary" href="/web/system/performance">Performance details</a>
-            |  <a class="btn btn-outline-secondary" href="/web/system/manual/openapi.json">OpenAPI JSON</a>
+            |  <a class="btn btn-outline-secondary" href="/web/system/document/specification/openapi.json">OpenAPI JSON</a>
             |  <a class="btn btn-outline-secondary" href="/mcp">MCP endpoint</a>
             |  <a class="btn btn-outline-secondary" href="/web/console">Console</a>
             |</div>""".stripMargin)}
          |${_manual_card("Components", componentLinks)}
-         |${_manual_card("Console handoff", """<p class="mb-0">Use <a href="/web/console">System Console</a> for controlled operation entry. Manual pages remain read-only and do not inline operation actions.</p>""")}
+         |${_manual_card("Console handoff", """<p class="mb-0">Use <a href="/web/console">System Console</a> for controlled operation entry. Specification pages remain read-only and do not inline operation actions.</p>""")}
          |${_manual_authorization_policy_section(describe)}
-         |${_manual_projection_card("Help", "/web/system/manual", help, Some("help"))}
-         |${_manual_projection_card("Describe", "/web/system/manual", describe, Some("describe"))}
-         |${_manual_projection_card("Schema", "/web/system/manual", schema, Some("schema"))}""".stripMargin
-    _simple_page("System Manual", "Read-only runtime reference", body)
+         |${_manual_projection_card("Help", "/web/system/document/specification", help, Some("help"))}
+         |${_manual_projection_card("Describe", "/web/system/document/specification", describe, Some("describe"))}
+         |${_manual_projection_card("Schema", "/web/system/document/specification", schema, Some("schema"))}""".stripMargin
+    _simple_page("System Specification", "Generated runtime specification", body)
   }
 
   private def _manual_component_links(
@@ -8148,7 +8811,18 @@ object StaticFormAppRenderer {
     else
       components.sortBy(_.name).map { component =>
         val segment = NamingConventions.toNormalizedSegment(component.name)
-        s"""<a class="btn btn-sm btn-outline-primary" href="/web/${_escape(segment)}/manual">${_escape(component.name)}</a>"""
+        s"""<a class="btn btn-sm btn-outline-primary" href="/web/${_escape(segment)}/document/specification">${_escape(component.name)}</a>"""
+      }.mkString("""<div class="d-flex flex-wrap gap-2">""", "\n", "</div>")
+
+  private def _manual_component_document_links(
+    components: Vector[Component]
+  ): String =
+    if (components.isEmpty)
+      _web_empty_state("No component document entries.")
+    else
+      components.sortBy(_.name).map { component =>
+        val segment = NamingConventions.toNormalizedSegment(component.name)
+        s"""<a class="btn btn-sm btn-outline-primary" href="/web/${_escape(segment)}/document">${_escape(component.name)}</a>"""
       }.mkString("""<div class="d-flex flex-wrap gap-2">""", "\n", "</div>")
 
   private def _manual_child_links(
@@ -8494,11 +9168,11 @@ object StaticFormAppRenderer {
          "Returns" -> returns.mkString(", ")
        ))}
        |${_manual_link_group(Vector(
-         "Web manual" -> currentPath,
+         "Web specification" -> currentPath,
          "REST" -> restPath,
          "Form" -> formPath,
          "Form API" -> formApiPath,
-       "OpenAPI JSON" -> "/web/system/manual/openapi.json"
+       "OpenAPI JSON" -> "/web/system/document/specification/openapi.json"
       ))}
        |${_manual_child_entity_binding_summary(record)}
        |${_manual_association_binding_summary(record)}
@@ -10251,8 +10925,8 @@ object StaticFormAppRenderer {
       if (scope == "component") s"/web/${NamingConventions.toNormalizedSegment(name)}/admin"
       else "/web/system/admin"
     val manualPath =
-      if (scope == "component") s"/web/${NamingConventions.toNormalizedSegment(name)}/manual"
-      else "/web/system/manual"
+      if (scope == "component") s"/web/${NamingConventions.toNormalizedSegment(name)}/document"
+      else "/web/system/document"
     s"""{"scope":"${_json(scope)}","name":"${_json(name)}","version":${version.map(v => "\"" + _json(v) + "\"").getOrElse("null")},"observedAt":"${java.time.Instant.now.toString}","status":"UP","cncf":{"version":"${_json(CncfVersion.current)}"},"subsystem":{"name":"${_json(subsystemName)}","version":${subsystemVersion.map(v => "\"" + _json(v) + "\"").getOrElse("null")}},"componentCount":${components.size},"serviceCount":${serviceCount},"operationCount":${operationCount},"actions":{"actionCalls":${_snapshot_json(actionCalls, includeRecent = false)},"jobs":${_jobs_json(running, queued, completed, failed)}},"dsl":{"chokepoints":${_snapshot_json(dslChokepoints, includeRecent = false)},"validation":${_snapshot_json(validation, includeRecent = false)},"validationDiagnostics":${_string_long_map_json(validationDiagnostics)},"operationRequestValidation":${_snapshot_json(operationRequestValidation, includeRecent = false)},"operationRequestValidationDiagnostics":${_string_long_map_json(operationRequestValidationDiagnostics)}},"authorization":{"decisions":${_snapshot_json(authorizationDecisions, includeRecent = false)},"diagnostics":${_string_long_map_json(authorizationDiagnostics)}},"blob":{"operations":${_snapshot_json(blobOperations, includeRecent = false)},"diagnostics":${_string_long_map_json(blobDiagnostics)}},"assembly":{"warnings":{"count":${assemblyWarningCount}}},"html":{"requests":${_snapshot_json(htmlRequests, includeRecent = true, Some(avgMillis))}},"links":{"admin":"${_json(adminPath)}","performance":"/web/system/performance","manual":"${_json(manualPath)}","console":"/web/console","assemblyWarnings":"/web/system/admin/assembly/warnings"},"components":${componentJson}}"""
   }
 

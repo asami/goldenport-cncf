@@ -4,13 +4,17 @@ import org.goldenport.observation.calltree.{CallTree, CallTreeBuilder}
 
 /*
  * @since   Feb.  7, 2026
- * @version Feb.  7, 2026
+ * @version May.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 trait CallTreeContext {
   def isEnabled: Boolean
-  def enter(label: String): Unit
+  def enter(label: String): Unit =
+    enter(label, Map.empty)
+  def enter(label: String, attributes: Map[String, String]): Unit
   def leave(): Unit
+  def mark(label: String, attributes: Map[String, String] = Map.empty): Unit
+  def failure(label: String, message: String, attributes: Map[String, String] = Map.empty): Unit
   def build(): Option[CallTree]
   def clear(): Unit
 }
@@ -18,8 +22,10 @@ trait CallTreeContext {
 object CallTreeContext {
   object Disabled extends CallTreeContext {
     def isEnabled: Boolean = false
-    def enter(label: String): Unit = ()
+    def enter(label: String, attributes: Map[String, String]): Unit = ()
     def leave(): Unit = ()
+    def mark(label: String, attributes: Map[String, String]): Unit = ()
+    def failure(label: String, message: String, attributes: Map[String, String]): Unit = ()
     def build(): Option[CallTree] = None
     def clear(): Unit = ()
   }
@@ -30,17 +36,25 @@ object CallTreeContext {
 
     def isEnabled: Boolean = true
 
-    def enter(label: String): Unit = {
+    def enter(label: String, attributes: Map[String, String]): Unit = {
       _stack.push(label)
-      _builder.enter(label)
+      _builder.enter(label, attributes)
     }
 
     def leave(): Unit = {
       if (_stack.nonEmpty) {
         val label = _stack.pop()
-        _builder.exit(label)
+        _builder.leave(label)
       }
     }
+
+    def mark(label: String, attributes: Map[String, String]): Unit = {
+      enter(label, attributes)
+      leave()
+    }
+
+    def failure(label: String, message: String, attributes: Map[String, String]): Unit =
+      _builder.failure(label, message, attributes)
 
     def build(): Option[CallTree] = Some(_builder.build())
 

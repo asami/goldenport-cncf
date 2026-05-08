@@ -429,6 +429,8 @@ and account flows.
 - [x] Add `pages.*.mode` with `article` and `screen` semantics.
 - [x] Resolve Subsystem/deemed-subsystem `WEB-INF` layouts and shell partials
       for article-composed Component pages.
+- [x] Add descriptor-driven shell owner selection with `shell.component`,
+      optional `shell.app`, and optional `shell.layout`.
 - [x] Apply article composition to form result templates as well as static
       pages.
 - [x] Use `textus-blog` as the first deemed-subsystem driver for article
@@ -440,6 +442,8 @@ and account flows.
 
 - Component Web content can be embedded as article content inside a Subsystem
   Web shell without hard-coding the Component into the core renderer.
+- Multi-Component deemed-Subsystems can safely compose child Component article
+  pages when the shell owner Component is declared in the Web descriptor.
 - Static pages and form result templates can share the same Subsystem shell.
 - `textus-blog` runs with `apps.blog.composition: article` and its Blog pages
   remain ordinary Component article content inside Blog shell layouts.
@@ -452,6 +456,8 @@ and account flows.
   by default.
 - Component-local `WEB-INF` partials must not override Subsystem shell
   header/footer/sidebar partials.
+- CNCF must not guess the shell from an unrelated Component Web root in a
+  multi-Component deemed-Subsystem.
 
 ---
 

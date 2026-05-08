@@ -45,7 +45,7 @@ import org.goldenport.configuration.ConfigurationValue
  *  version Feb. 25, 2026
  *  version Mar. 30, 2026
  *  version Apr. 29, 2026
- * @version May.  4, 2026
+ * @version May.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 trait ActionCallFeaturePart { self: ActionCall.Core.Holder =>
@@ -796,12 +796,51 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
     attributes: Record
   ): Unit = {
     component.flatMap(_.subsystem).map(_.entityAccessMetrics).getOrElse(EntityAccessMetricsRegistry.shared).record(name, attributes)
+    execution_context.observability.callTreeContext.mark(
+      s"metrics:$name",
+      _calltree_metric_attributes(name, attributes)
+    )
     val _ = execution_context.observability.emitInfo(
       execution_context.cncfCore.scope,
       name,
       attributes
     )
   }
+
+  private def _calltree_metric_attributes(
+    name: String,
+    attributes: Record
+  ): Map[String, String] =
+    (Vector("metric" -> name) ++
+      attributes.asMap.toVector
+        .sortBy(_._1)
+        .map { case (key, value) =>
+          key -> _truncate_calltree_metric_text(_sanitize_calltree_metric_value(key, value).toString, 1000)
+        }).toMap
+
+  private def _sanitize_calltree_metric_value(
+    key: String,
+    value: Any
+  ): Any =
+    if (_is_sensitive_calltree_metric_key(key)) "***" else value
+
+  private def _is_sensitive_calltree_metric_key(
+    key: String
+  ): Boolean = {
+    val normalized = key.toLowerCase(java.util.Locale.ROOT)
+    normalized.contains("password") ||
+      normalized.contains("secret") ||
+      normalized.contains("token") ||
+      normalized.contains("session") ||
+      normalized.contains("authorization") ||
+      normalized.contains("cookie")
+  }
+
+  private def _truncate_calltree_metric_text(
+    value: String,
+    limit: Int
+  ): String =
+    if (value.length <= limit) value else value.take(limit) + "..."
 
   private def _entity_load_attributes(
     id: EntityId,

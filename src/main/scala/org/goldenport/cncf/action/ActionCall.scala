@@ -5,6 +5,7 @@ import org.goldenport.protocol.*
 import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.datatype.PathName
 import org.goldenport.record.Record
+import org.goldenport.schema.DataConfidentiality
 import org.goldenport.text.Presentable
 import org.goldenport.util.StringUtils.objectToSnakeName
 import org.goldenport.cncf.context.{CorrelationId, ExecutionContext}
@@ -13,6 +14,7 @@ import org.goldenport.cncf.unitofwork.UnitOfWork
 import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.component.CollaboratorComponent
 import org.goldenport.cncf.backend.collaborator.Collaborator
+import org.goldenport.cncf.operation.OperationConfidentiality
 import org.goldenport.cncf.security.SecuritySubject
 
 /*
@@ -23,7 +25,8 @@ import org.goldenport.cncf.security.SecuritySubject
  *  version Jan.  2, 2026
  *  version Jan. 22, 2026
  *  version Feb. 21, 2026
- * @version Apr. 28, 2026
+ *  version Apr. 28, 2026
+ * @version May.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class ActionCall()
@@ -71,14 +74,29 @@ abstract class ActionCall()
   def switches: List[Switch] = action.switches
   def properties: List[Property] = action.properties
   def args: List[String] = action.args
+  def fieldConfidentiality: Map[String, DataConfidentiality] =
+    component
+      .map(OperationConfidentiality.request(_, action.name))
+      .getOrElse(Map.empty)
+
+  def resultFieldConfidentiality: Map[String, DataConfidentiality] =
+    component
+      .map(OperationConfidentiality.response(_, action.name))
+      .getOrElse(Map.empty)
+
+  def allFieldConfidentiality: Map[String, DataConfidentiality] =
+    fieldConfidentiality ++ resultFieldConfidentiality
 
   private def _declared_access =
-    component.flatMap(_.operationDefinitions.find(x => _normalize_name(x.name) == _normalize_name(action.name))).flatMap(_.access)
+    _declared_operation.flatMap(_.access)
 
   private def _declared_entities =
-    component.flatMap(_.operationDefinitions.find(x => _normalize_name(x.name) == _normalize_name(action.name))).map { op =>
+    _declared_operation.map { op =>
       if (op.entityNames.nonEmpty) op.entityNames else op.entityName.toVector
     }.getOrElse(Vector.empty)
+
+  private def _declared_operation =
+    component.flatMap(_.operationDefinitions.find(x => _normalize_name(x.name) == _normalize_name(action.name)))
 
   private def _normalize_name(p: String): String =
     Option(p).getOrElse("").toLowerCase(java.util.Locale.ROOT).replaceAll("[^a-z0-9]", "")

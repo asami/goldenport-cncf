@@ -10,7 +10,8 @@ import org.goldenport.cncf.datastore.DataStoreSpace
  * @since   Jan.  6, 2026
  *  version Jan. 10, 2026
  *  version Feb. 21, 2026
- * @version Mar. 11, 2026
+ *  version Mar. 11, 2026
+ * @version May.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 trait RepositorySupport {
@@ -28,8 +29,10 @@ trait RepositorySupport {
   protected final def searchRecords(
     collection: DataStore.CollectionId,
     directive: QueryDirective
-  ): Consequence[SearchResult] =
+  ): Consequence[SearchResult] = {
+    given ExecutionContext = executionContext
     datastore.search(collection, directive)
+  }
 
   protected final def searchForView(
     collection: DataStore.CollectionId,

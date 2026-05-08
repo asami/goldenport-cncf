@@ -18,7 +18,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Mar. 22, 2026
  *  version Apr. 25, 2026
- * @version May.  7, 2026
+ * @version May.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentLogicOperationDefinitionSemanticsSpec
@@ -124,7 +124,13 @@ final class ComponentLogicOperationDefinitionSemanticsSpec
       result.toOption.map(_.print) shouldBe Some("fetch-ok")
       val job = component.jobEngine.listJobs().headOption.getOrElse(fail("debug job missing"))
       job.calltree should not be empty
-      job.calltree.map(_.show).getOrElse("") should include ("action:operation_definition_semantics_spec.entity.fetchPerson")
+      val calltree = job.calltree.map(_.show).getOrElse("")
+      calltree should include ("action:operation_definition_semantics_spec.entity.fetchPerson")
+      calltree should include ("children")
+      calltree should not include ("kind")
+      calltree should include ("io:input")
+      calltree should include ("io:output")
+      calltree should include ("fetch-ok")
       job.debug.calltreeSaved shouldBe true
       job.debug.calltreeStorage shouldBe Some("calltree")
       job.debug.calltreeSerializedBytes.exists(_ > 0) shouldBe true
@@ -155,6 +161,11 @@ final class ComponentLogicOperationDefinitionSemanticsSpec
       job.debug.calltreeSaved shouldBe true
       job.debug.calltreeStorage shouldBe Some("calltree")
       job.calltree should not be empty
+      val calltree = job.calltree.map(_.show).getOrElse("")
+      calltree should include ("children")
+      calltree should include ("io:error")
+      calltree should include ("debug trace query failure")
+      calltree should not include ("kind")
     }
 
     "validate request values while building a generated VO before action execution" in {

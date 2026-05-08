@@ -6,7 +6,7 @@ import org.goldenport.Consequence
 import org.goldenport.cncf.action.{ActionCall, CommandAction, QueryAction}
 import org.goldenport.cncf.component.{Component, ComponentCreate, ComponentId, ComponentInstanceId}
 import org.goldenport.cncf.context.{ExecutionContext, SecurityContext, SubjectKind}
-import org.goldenport.cncf.security.{AuthenticationProviderRuntime, AuthenticationRequest, AuthenticationResult}
+import org.goldenport.cncf.security.{AuthenticationProviderRuntime, AuthenticationRequest, AuthenticationResult, SecuritySubject}
 import org.goldenport.protocol.Protocol
 import org.goldenport.protocol.Request
 import org.goldenport.protocol.handler.ProtocolHandler
@@ -17,7 +17,8 @@ import org.goldenport.schema.DataType
 
 /*
  * @since   Apr. 23, 2026
- * @version Apr. 24, 2026
+ *  version Apr. 24, 2026
+ * @version May.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 final class AuthComponent() extends Component {
@@ -109,7 +110,7 @@ object AuthComponent {
 
   private final class DefaultAuthService(component: Component) extends AuthService {
     def login(request: AuthenticationRequest)(using ExecutionContext): Consequence[SessionSummary] =
-      AuthenticationProviderRuntime.login(component.logic.executionContext(), request).flatMap {
+      _with_auth_provider_(ctx => AuthenticationProviderRuntime.login(ctx, request)).flatMap {
         case Some(result) =>
           result.session.flatMap(_.sessionId) match {
             case Some(_) => Consequence.success(_session_summary_(result))
@@ -120,15 +121,39 @@ object AuthComponent {
       }
 
     def logout(request: AuthenticationRequest)(using ExecutionContext): Consequence[LogoutSummary] =
-      AuthenticationProviderRuntime.logout(component.logic.executionContext(), request).map {
+      _with_auth_provider_(ctx => AuthenticationProviderRuntime.logout(ctx, request)).map {
         case Some(session) => LogoutSummary(loggedOut = true, sessionId = session.sessionId.orElse(request.sessionId))
         case None => LogoutSummary(loggedOut = false, sessionId = request.sessionId)
       }
 
     def currentSession(request: AuthenticationRequest)(using ExecutionContext): Consequence[SessionSummary] =
-      AuthenticationProviderRuntime.current_session(component.logic.executionContext(), request).map {
-        case Some(result) => _session_summary_(result)
-        case None => _anonymous_summary_
+      _with_auth_provider_(ctx => AuthenticationProviderRuntime.current_session(ctx, request)).flatMap {
+        case Some(result) =>
+          Consequence.success(_session_summary_(result))
+        case None =>
+          _provider_session_request_ match {
+            case Some(sessionrequest) =>
+              _with_auth_provider_(ctx => AuthenticationProviderRuntime.current_session(ctx, sessionrequest)).map {
+                case Some(result) => _session_summary_(result)
+                case None => _security_summary_.getOrElse(_anonymous_summary_)
+              }
+            case None =>
+              Consequence.success(_security_summary_.getOrElse(_anonymous_summary_))
+          }
+      }
+
+    private def _with_auth_provider_[A](
+      f: ExecutionContext => Consequence[Option[A]]
+    )(using ctx: ExecutionContext): Consequence[Option[A]] =
+      f(ctx).flatMap {
+        case Some(result) =>
+          Consequence.success(Some(result))
+        case None =>
+          val fallback = component.logic.executionContext()
+          if (fallback eq ctx)
+            Consequence.success(None)
+          else
+            f(fallback)
       }
 
     private def _session_summary_(
@@ -143,6 +168,43 @@ object AuthComponent {
         authenticated = true,
         attributes = _session_attributes_(result.attributes)
       )
+
+    private def _security_summary_(using ctx: ExecutionContext): Option[SessionSummary] = {
+      val security = ctx.security
+      val providerAuthenticated = security.principal.attributes
+        .get(SecuritySubject.AuthenticationProvenanceAttribute)
+        .exists(x => SecuritySubject.normalize(x) == SecuritySubject.ProviderAuthenticationProvenance)
+      if (!providerAuthenticated || security.subjectKind == SubjectKind.Anonymous || security.principal.id.value == "anonymous")
+        None
+      else
+        Some(
+          SessionSummary(
+            sessionId = security.session.flatMap(_.sessionId).orElse(security.session.flatMap(_.tokenId)),
+            principalId = Some(security.principal.id.value),
+            subjectKind = security.subjectKind.toString,
+            securityLevel = security.level.value,
+            capabilities = security.capabilities.toVector.map(_.name).sorted,
+            authenticated = true,
+            attributes = _session_attributes_(
+              security.principal.attributes ++ security.session.map(_.attributes).getOrElse(Map.empty)
+            )
+          )
+        )
+    }
+
+    private def _provider_session_request_(using ctx: ExecutionContext): Option[AuthenticationRequest] =
+      _provider_session_id_.map(sessionid => AuthenticationRequest(Map("x-textus-session" -> sessionid)))
+
+    private def _provider_session_id_(using ctx: ExecutionContext): Option[String] = {
+      val security = ctx.security
+      val providerAuthenticated = security.principal.attributes
+        .get(SecuritySubject.AuthenticationProvenanceAttribute)
+        .exists(x => SecuritySubject.normalize(x) == SecuritySubject.ProviderAuthenticationProvenance)
+      if (providerAuthenticated)
+        security.session.flatMap(_.sessionId).orElse(security.session.flatMap(_.tokenId))
+      else
+        None
+    }
 
     private lazy val _anonymous_summary_ =
       SessionSummary(

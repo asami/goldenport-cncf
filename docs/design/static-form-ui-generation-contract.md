@@ -48,11 +48,42 @@ Subsystem Web composition is provided by the WN-12 component-Web contract:
   selected result page is article-mode.
 - `pages.*.mode: screen` lets login/logout/account-style pages own the full
   screen and bypass article embedding.
+- In multi-Component Subsystems and deemed-Subsystems, the shared shell owner is
+  explicit descriptor state:
+  `shell.component`, optional `shell.app`, and optional `shell.layout`.
+  CNCF must not guess a shell from an unrelated Component Web root.
 - Subsystem/deemed-subsystem `WEB-INF` layouts and shell partials provide the
   shared header, footer, sidebar, and navigation. Component pages may still use
   their own local includes inside the article content.
 - `textus-blog` is the first driver: its CAR acts as a deemed-subsystem, Blog
   layouts own the shell, and Blog static/result fragments stay article content.
+
+## Document Surface
+
+Static Form Web exposes component documentation through a `document` surface.
+This surface separates generated technical metadata from human-authored
+component documents:
+
+- `Document` is the top-level Web page for a component or system.
+- `Specification` is the generated CNCF view derived from component, service,
+  operation, schema, OpenAPI, and projection metadata.
+- `User Guide` is a component-packaged task-oriented document for users.
+- `Reference Manual` is a component-packaged human-authored reference that
+  complements the generated specification.
+
+Canonical routes are:
+
+- `/web/system/document`
+- `/web/system/document/specification`
+- `/web/system/document/specification/openapi.json`
+- `/web/{component}/document`
+- `/web/{component}/document/specification`
+
+Component-packaged documents are discovered from private component Web roots
+under `docs/` or `documents/`. Typical files are `user-guide.md`,
+`reference-manual.md`, and optional packaged `specification.md` or HTML/PDF
+variants. The older term `manual` is not the canonical Web surface name; it is
+reserved for human-authored packaged manuals such as a Reference Manual.
 
 ## Page Kinds
 

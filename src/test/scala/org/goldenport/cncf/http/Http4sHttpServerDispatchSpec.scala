@@ -22,7 +22,8 @@ import org.typelevel.ci.CIStringSyntax
 
 /*
  * @since   Apr. 24, 2026
- * @version Apr. 25, 2026
+ *  version Apr. 25, 2026
+ * @version May.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers {
@@ -118,7 +119,8 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers {
             "/form-api/textus-user-account/http/echo",
             "body=hello"
           ).putHeaders(
-            org.http4s.Header.Raw(ci"x-textus-session", "session-1")
+            org.http4s.Header.Raw(ci"x-textus-session", "session-1"),
+            org.http4s.Header.Raw(ci"x-textus-debug-display", "always")
           ),
           "textus-user-account",
           "http",
@@ -129,9 +131,99 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers {
       response.status.code shouldBe 200
       val body = response.as[String].unsafeRunSync()
       body should include("x-textus-session")
+      body should not include ("name: \"x-textus-session\"")
+      body should not include ("name: \"x-textus-debug-display\"")
+      body should not include ("x_textus_debug_display")
       body should not include ("principalId")
       body should not include ("principal_id")
       body should not include ("authenticated")
+    }
+
+    "treat empty multipart form-api submits as an empty form record" in {
+      val root = Files.createTempDirectory("http4s-http-server-empty-multipart-spec")
+      val web = root.resolve("web.yaml")
+      Files.writeString(
+        web,
+        """expose:
+          |  debug.http.echo: public
+          |form:
+          |  debug.http.echo:
+          |    enabled: true
+          |""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+      val configuration = ResolvedConfiguration(
+        Configuration(
+          Map(
+            RuntimeConfig.WebDescriptorKey ->
+              ConfigurationValue.StringValue(web.toString)
+          )
+        ),
+        ConfigurationTrace.empty
+      )
+      val subsystem = DefaultSubsystemFactory.default(None, configuration)
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val boundary = "----WebKitFormBoundaryEmptySpec"
+      val request = HRequest[IO](method = Method.POST, uri = Uri.unsafeFromString("/form-api/debug/http/echo"))
+        .withEntity(s"--${boundary}--\r\n")
+        .withContentType(`Content-Type`.parse(s"multipart/form-data; boundary=${boundary}").toOption.get)
+
+      val response = server
+        ._submit_operation_form_api(request, "debug", "http", "echo")
+        .unsafeRunSync()
+
+      response.status.code shouldBe 200
+      val body = response.as[String].unsafeRunSync()
+      body should include("path: \"/debug/http/echo\"")
+      body should include("method: \"POST\"")
+    }
+
+    "enforce protected exposure before dispatching form submits" in {
+      val root = Files.createTempDirectory("http4s-http-server-protected-exposure-spec")
+      val web = root.resolve("web.yaml")
+      Files.writeString(
+        web,
+        """expose:
+          |  debug.http.echo: protected
+          |form:
+          |  debug.http.echo:
+          |    enabled: true
+          |""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+      val configuration = ResolvedConfiguration(
+        Configuration(
+          Map(
+            RuntimeConfig.WebDescriptorKey ->
+              ConfigurationValue.StringValue(web.toString)
+          )
+        ),
+        ConfigurationTrace.empty
+      )
+      val subsystem = DefaultSubsystemFactory.default(None, configuration)
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+
+      val htmlResponse = server
+        ._submit_operation_form(
+          _post_form_request("/form/debug/http/echo", "body=hello"),
+          "debug",
+          "http",
+          "echo"
+        )
+        .unsafeRunSync()
+      val apiResponse = server
+        ._submit_operation_form_api(
+          _post_form_request("/form-api/debug/http/echo", "body=hello"),
+          "debug",
+          "http",
+          "echo"
+        )
+        .unsafeRunSync()
+
+      htmlResponse.status.code shouldBe 403
+      apiResponse.status.code shouldBe 403
+      htmlResponse.as[String].unsafeRunSync() should include ("Forbidden")
+      apiResponse.as[String].unsafeRunSync() should include ("Forbidden")
     }
 
     "return debug job id header for debug trace-job form-api requests" in {
@@ -266,6 +358,25 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers {
       nestedAppAsset.status.code shouldBe 200
       generatedPage.status.code shouldBe 200
       generatedBody should include ("/web/assets/console-theme.css")
+      body should include ("/web/assets/textus-form-debug.js")
+      StaticFormAppAssets.textusFormDebugJs should include ("x-textus-debug-request-kind")
+      StaticFormAppAssets.textusFormDebugJs should include ("x-textus-debug-display")
+      StaticFormAppAssets.textusFormDebugJs should include ("function shouldShowSuccess")
+      StaticFormAppAssets.textusFormDebugJs should include ("function shouldInspect")
+      StaticFormAppAssets.textusFormDebugJs should include ("function shouldRender")
+      StaticFormAppAssets.textusFormDebugJs should include ("function isSensitiveKey")
+      StaticFormAppAssets.textusFormDebugJs should include ("function redactText")
+      StaticFormAppAssets.textusFormDebugJs should include ("url.searchParams.set")
+      StaticFormAppAssets.textusFormDebugJs should include ("[redacted]")
+      StaticFormAppAssets.textusFormDebugJs should include ("data-debug-events")
+      StaticFormAppAssets.textusFormDebugJs should include ("Request label")
+      StaticFormAppAssets.textusFormDebugJs should include ("Optional")
+      StaticFormAppAssets.textusFormDebugJs should include ("Timestamp")
+      StaticFormAppAssets.textusFormDebugJs should include ("sessionStorage")
+      StaticFormAppAssets.textusFormDebugJs should include ("textus.form.debug.carryover.v1")
+      StaticFormAppAssets.textusFormDebugJs should include ("function takeCarryover")
+      StaticFormAppAssets.textusFormDebugJs should include ("<details class=\"card border-secondary-subtle bg-body-tertiary\">")
+      StaticFormAppAssets.textusFormDebugJs should not include ("<details class=\"card border-secondary-subtle bg-body-tertiary\" open>")
     }
   }
 

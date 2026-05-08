@@ -57,7 +57,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr. 12, 2026
- * @version May.  7, 2026
+ * @version May.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
@@ -93,7 +93,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       c.downField("assembly").downField("warnings").get[Int]("count").isRight shouldBe true
       c.downField("links").get[String]("admin") shouldBe Right("/web/system/admin")
       c.downField("links").get[String]("performance") shouldBe Right("/web/system/performance")
-      c.downField("links").get[String]("manual") shouldBe Right("/web/system/manual")
+      c.downField("links").get[String]("manual") shouldBe Right("/web/system/document")
       c.downField("links").get[String]("console") shouldBe Right("/web/console")
       c.downField("links").get[String]("assemblyWarnings") shouldBe Right("/web/system/admin/assembly/warnings")
     }
@@ -114,7 +114,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       c.downField("authorization").downField("decisions").downField("summary").downField("hour").get[Long]("errors").isRight shouldBe true
       c.downField("dsl").downField("chokepoints").downField("summary").downField("hour").get[Long]("errors").isRight shouldBe true
       c.downField("links").get[String]("admin") shouldBe Right(s"/web/${org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(componentName)}/admin")
-      c.downField("links").get[String]("manual") shouldBe Right(s"/web/${org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(componentName)}/manual")
+      c.downField("links").get[String]("manual") shouldBe Right(s"/web/${org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(componentName)}/document")
     }
 
     "render dashboard pages with Bootstrap health hierarchy without changing links" in {
@@ -141,7 +141,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should not include (".bars { display: grid")
       html should include ("/web/system/admin")
       html should include ("/web/system/performance")
-      html should include ("/web/system/manual")
+      html should include ("/web/system/document")
     }
 
     "render system admin configuration detail page" in {
@@ -163,7 +163,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("Subsystem")
       html should include ("/web/system/dashboard")
       html should include ("/web/system/performance")
-      html should include ("/web/system/manual")
+      html should include ("/web/system/document")
       html should include ("/web/console")
       html should include ("Component Management Console")
       html should include ("Component admin")
@@ -666,8 +666,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("configured")
       html should include ("notice-board.notice.search-notices")
       html should include ("public")
-      html should include ("manual")
-      html should include ("/web/system/manual")
+      html should include ("document")
+      html should include ("/web/system/document")
       html should include ("Admin entries")
       html should include ("Management Console Controls")
       html should include ("Deferred or unsupported")
@@ -820,7 +820,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include (component.name)
       html should include (s"/web/${org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)}/dashboard")
       html should include ("/web/system/performance")
-      html should include ("/web/system/manual")
+      html should include ("/web/system/document")
       html should include ("/web/console")
       html should include ("Management Console Home")
       html should include (s"/form/${org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)}")
@@ -943,17 +943,27 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         )
       }
 
+      val systemDocumentHtml = StaticFormAppRenderer.renderSystemDocument(subsystem).body
       val systemHtml = StaticFormAppRenderer.renderSystemManual(subsystem).body
-      val componentHtml = StaticFormAppRenderer.renderComponentManual(subsystem, "notice-board").map(_.body).getOrElse(fail("component manual is missing"))
-      val serviceHtml = StaticFormAppRenderer.renderComponentManualService(subsystem, "notice-board", "notice-aggregate").map(_.body).getOrElse(fail("service manual is missing"))
-      val operationHtml = StaticFormAppRenderer.renderComponentManualOperation(subsystem, "notice-board", "notice-aggregate", "approve-notice-aggregate").map(_.body).getOrElse(fail("operation manual is missing"))
+      val componentDocumentHtml = StaticFormAppRenderer.renderComponentDocument(subsystem, "notice-board").map(_.body).getOrElse(fail("component document is missing"))
+      val componentHtml = StaticFormAppRenderer.renderComponentManual(subsystem, "notice-board").map(_.body).getOrElse(fail("component specification is missing"))
+      val serviceHtml = StaticFormAppRenderer.renderComponentManualService(subsystem, "notice-board", "notice-aggregate").map(_.body).getOrElse(fail("service specification is missing"))
+      val operationHtml = StaticFormAppRenderer.renderComponentManualOperation(subsystem, "notice-board", "notice-aggregate", "approve-notice-aggregate").map(_.body).getOrElse(fail("operation specification is missing"))
 
-      systemHtml should include ("System Manual")
+      systemDocumentHtml should include ("System Documents")
+      systemDocumentHtml should include ("Generated Specification")
+      systemDocumentHtml should include ("/web/system/document/specification")
+      systemDocumentHtml should include ("User Guide")
+      componentDocumentHtml should include ("notice_board Documents")
+      componentDocumentHtml should include ("Generated Specification")
+      componentDocumentHtml should include ("/web/notice-board/document/specification")
+      componentDocumentHtml should include ("Reference Manual")
+      systemHtml should include ("System Specification")
       systemHtml should include ("OpenAPI JSON")
       systemHtml should include ("MCP endpoint")
-      systemHtml should include ("/web/notice-board/manual")
+      systemHtml should include ("/web/notice-board/document/specification")
       systemHtml should include ("class=\"card manual-card shadow-sm\"")
-      componentHtml should include ("notice_board Manual")
+      componentHtml should include ("notice_board Specification")
       componentHtml should include ("Help")
       componentHtml should include ("Describe")
       componentHtml should include ("Schema")
@@ -976,11 +986,11 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       componentHtml should include ("scalar_attribute")
       componentHtml should include ("delegated_collection")
       componentHtml should not include ("<td><code>securityAttributes</code></td>")
-      componentHtml should include ("/web/notice-board/manual/notice-aggregate")
+      componentHtml should include ("/web/notice-board/document/specification/notice-aggregate")
       componentHtml should include ("manual-summary-table")
-      serviceHtml should include ("Service reference")
-      serviceHtml should include ("/web/notice-board/manual/notice-aggregate/approve-notice-aggregate")
-      operationHtml should include ("Operation reference")
+      serviceHtml should include ("Generated service specification")
+      serviceHtml should include ("/web/notice-board/document/specification/notice-aggregate/approve-notice-aggregate")
+      operationHtml should include ("Generated operation specification")
       operationHtml should include ("/rest/v1/notice-board/notice-aggregate/approve-notice-aggregate")
       operationHtml should include ("Parameters")
       operationHtml should include ("Raw Help")
@@ -991,14 +1001,14 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       operationHtml should not include ("method=\"post\"")
 
       val blobSubsystem = DefaultSubsystemFactory.default(Some("server"))
-      val blobAttachHtml = StaticFormAppRenderer.renderComponentManualOperation(blobSubsystem, "blob", "blob", "admin-attach-blob-to-entity").map(_.body).getOrElse(fail("blob attach manual is missing"))
+      val blobAttachHtml = StaticFormAppRenderer.renderComponentManualOperation(blobSubsystem, "blob", "blob", "admin-attach-blob-to-entity").map(_.body).getOrElse(fail("blob attach specification is missing"))
       blobAttachHtml should include ("Image Binding")
       blobAttachHtml should include ("existing Blob id")
       blobAttachHtml should include ("attach")
       blobAttachHtml should include ("primary, cover, thumbnail, gallery, inline")
       blobAttachHtml should include ("sourceEntityId")
       blobAttachHtml should include ("sortOrder")
-      val associationAttachHtml = StaticFormAppRenderer.renderComponentManualOperation(blobSubsystem, "admin", "association", "admin-attach-association").map(_.body).getOrElse(fail("association attach manual is missing"))
+      val associationAttachHtml = StaticFormAppRenderer.renderComponentManualOperation(blobSubsystem, "admin", "association", "admin-attach-association").map(_.body).getOrElse(fail("association attach specification is missing"))
       associationAttachHtml should include ("Association Binding")
       associationAttachHtml should include ("create")
       associationAttachHtml should include ("sourceEntityId")
@@ -1006,14 +1016,14 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       associationAttachHtml should include ("sortOrder")
     }
 
-    "preserve real componentlet path in rendered manual admin and form links" in {
+    "preserve real componentlet path in rendered specification admin and form links" in {
       val subsystem = _aggregate_http_fixture_subsystem_with_componentlets()
 
-      val manualHtml = StaticFormAppRenderer.renderComponentManual(subsystem, "notice-admin").map(_.body).getOrElse(fail("component manual is missing"))
+      val manualHtml = StaticFormAppRenderer.renderComponentManual(subsystem, "notice-admin").map(_.body).getOrElse(fail("component specification is missing"))
       val adminHtml = StaticFormAppRenderer.renderComponentAdmin(subsystem, "notice-admin").map(_.body).getOrElse(fail("component admin is missing"))
       val formHtml = StaticFormAppRenderer.renderFormIndex(subsystem, "notice-admin").map(_.body).getOrElse(fail("form index is missing"))
 
-      manualHtml should include ("/web/notice-admin/manual/notice-aggregate")
+      manualHtml should include ("/web/notice-admin/document/specification/notice-aggregate")
       adminHtml should include ("/web/notice-admin/dashboard")
       adminHtml should include ("/form/notice-admin")
       formHtml should include ("/web/notice-admin/dashboard")
@@ -1029,35 +1039,35 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       StaticFormAppRenderer.renderFormIndex(subsystem, "notice-admin") shouldBe None
     }
 
-    "serve manual routes and OpenAPI JSON through Web HTML paths" in {
+    "serve document specification routes and OpenAPI JSON through Web HTML paths" in {
       val subsystem = _aggregate_http_fixture_subsystem_with_componentlets()
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
 
       val manualResponse = server
         .routes(null)
         .orNotFound
-        .run(_get_request("/web/notice-board/manual/notice-aggregate/approve-notice-aggregate"))
+        .run(_get_request("/web/notice-board/document/specification/notice-aggregate/approve-notice-aggregate"))
         .unsafeRunSync()
       val manualHtml = manualResponse.as[String].unsafeRunSync()
       val aliasManualResponse = server
         .routes(null)
         .orNotFound
-        .run(_get_request("/web/notice-admin/manual/notice-aggregate/approve-notice-aggregate"))
+        .run(_get_request("/web/notice-admin/document/specification/notice-aggregate/approve-notice-aggregate"))
         .unsafeRunSync()
       val aliasManualHtml = aliasManualResponse.as[String].unsafeRunSync()
       val openApiResponse = server
         .routes(null)
         .orNotFound
-        .run(_get_request("/web/system/manual/openapi.json"))
+        .run(_get_request("/web/system/document/specification/openapi.json"))
         .unsafeRunSync()
       val openApiJson = openApiResponse.as[String].unsafeRunSync()
 
       manualResponse.status.code shouldBe 200
-      manualHtml should include ("Operation reference")
+      manualHtml should include ("Generated operation specification")
       manualHtml should include ("approve-notice-aggregate")
       manualHtml should include ("/mcp")
       aliasManualResponse.status.code shouldBe 200
-      aliasManualHtml should include ("Operation reference")
+      aliasManualHtml should include ("Generated operation specification")
       aliasManualHtml should include ("approve-notice-aggregate")
       openApiResponse.status.code shouldBe 200
       openApiJson should include (""""openapi"""")
@@ -2467,6 +2477,11 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         """<section><textus-include name="navigation"></textus-include><h1>Public notices</h1></section>""",
         StandardCharsets.UTF_8
       )
+      Files.writeString(
+        root.resolve("notice-board").resolve("standalone.html"),
+        """<!doctype html><html><body><main class="standalone-screen">Standalone Screen</main></body></html>""",
+        StandardCharsets.UTF_8
+      )
       Files.writeString(root.resolve("notice-board").resolve("login.html"), "<section>Login Screen</section>", StandardCharsets.UTF_8)
       val subsystem = _management_console_fixture_subsystem(
         Configuration(Map(
@@ -2479,6 +2494,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       val articleHtml = articleResponse.as[String].unsafeRunSync()
       val screenResponse = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/board/login"))).unsafeRunSync()
       val screenHtml = screenResponse.as[String].unsafeRunSync()
+      val standaloneResponse = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/board/standalone"))).unsafeRunSync()
+      val standaloneHtml = standaloneResponse.as[String].unsafeRunSync()
 
       articleResponse.status.code shouldBe 200
       articleHtml should include ("Subsystem Header")
@@ -2493,6 +2510,11 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       screenHtml should include ("Login Screen")
       screenHtml should not include ("Subsystem Header")
       screenHtml should not include ("<article>")
+      standaloneResponse.status.code shouldBe 200
+      standaloneHtml should include ("standalone-screen")
+      standaloneHtml should include ("Standalone Screen")
+      standaloneHtml should not include ("Subsystem Header")
+      standaloneHtml should not include ("<article>")
     }
 
     "merge subsystem Web app composition override without dropping component app assets" in {
@@ -2555,6 +2577,213 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       singleServer._subsystem_shell_web_roots().map(_.name) should contain (singleRoot.resolve("src").resolve("main").resolve("web").toString)
       multiServer._subsystem_shell_web_roots().map(_.name) should not contain firstRoot.resolve("src").resolve("main").resolve("web").toString
       multiServer._subsystem_shell_web_roots().map(_.name) should not contain secondRoot.resolve("src").resolve("main").resolve("web").toString
+    }
+
+    "compose child component article pages with an explicit subsystem shell owner" in {
+      val descriptorRoot = Files.createTempDirectory("cncf-explicit-shell-descriptor-")
+      val shellRoot = Files.createTempDirectory("cncf-explicit-shell-owner-")
+      val childRoot = Files.createTempDirectory("cncf-explicit-shell-child-")
+      Files.createDirectories(shellRoot.resolve("src").resolve("main").resolve("web").resolve("blog").resolve("WEB-INF").resolve("layouts"))
+      Files.createDirectories(shellRoot.resolve("src").resolve("main").resolve("web").resolve("blog").resolve("WEB-INF").resolve("partials"))
+      Files.createDirectories(childRoot.resolve("src").resolve("main").resolve("web").resolve("notifications"))
+      Files.writeString(
+        descriptorRoot.resolve("web-descriptor.yaml"),
+        """web:
+          |  shell:
+          |    component: blog-component
+          |    app: blog
+          |    layout: default
+          |  apps:
+          |    - name: blog
+          |    - name: notifications
+          |      composition: article
+          |  pages:
+          |    index:
+          |      mode: article
+          |  routes:
+          |    - path: /web/notifications
+          |      target:
+          |        component: textus-user-notification
+          |        app: notifications
+          |""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+      Files.writeString(
+        shellRoot.resolve("src").resolve("main").resolve("web").resolve("blog").resolve("WEB-INF").resolve("layouts").resolve("default.html"),
+        """<!doctype html><html><body>${partial.header}<main class="blog-shell">${content}</main>${partial.footer}</body></html>""",
+        StandardCharsets.UTF_8
+      )
+      Files.writeString(
+        shellRoot.resolve("src").resolve("main").resolve("web").resolve("blog").resolve("WEB-INF").resolve("partials").resolve("header.html"),
+        "<header>Blog Shell Header</header>",
+        StandardCharsets.UTF_8
+      )
+      Files.writeString(
+        shellRoot.resolve("src").resolve("main").resolve("web").resolve("blog").resolve("WEB-INF").resolve("partials").resolve("footer.html"),
+        "<footer>Blog Shell Footer</footer>",
+        StandardCharsets.UTF_8
+      )
+      Files.writeString(
+        childRoot.resolve("src").resolve("main").resolve("web").resolve("notifications").resolve("index.html"),
+        "<section>Notification Article</section>",
+        StandardCharsets.UTF_8
+      )
+      val subsystem = _management_console_fixture_subsystem(
+        Configuration(Map(
+          RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(descriptorRoot.resolve("web-descriptor.yaml").toString)
+        ))
+      ).add(Vector(
+        TestComponentFactory.create("blog_component", Protocol.empty),
+        TestComponentFactory.create("textus_user_notification", Protocol.empty)
+      ))
+      subsystem.components.find(_.name == "blog_component").getOrElse(fail("blog component missing")).withArtifactMetadata(
+        org.goldenport.cncf.component.Component.ArtifactMetadata("test", "blog-component", "0.1.0", component = Some("blog-component"), archivePath = Some(shellRoot.toString))
+      )
+      subsystem.components.find(_.name == "textus_user_notification").getOrElse(fail("notification component missing")).withArtifactMetadata(
+        org.goldenport.cncf.component.Component.ArtifactMetadata("test", "textus-user-notification", "0.1.0", component = Some("textus-user-notification"), archivePath = Some(childRoot.toString))
+      )
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+
+      val response = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/notifications"))).unsafeRunSync()
+      val html = response.as[String].unsafeRunSync()
+
+      response.status.code shouldBe 200
+      html should include ("Blog Shell Header")
+      html should include ("Blog Shell Footer")
+      html should include ("Notification Article")
+      html should include ("blog-shell")
+    }
+
+    "compose child component form result templates through the route Web app shell" in {
+      val descriptorRoot = Files.createTempDirectory("cncf-explicit-shell-form-descriptor-")
+      val shellRoot = Files.createTempDirectory("cncf-explicit-shell-form-owner-")
+      val childRoot = Files.createTempDirectory("cncf-explicit-shell-form-child-")
+      Files.createDirectories(shellRoot.resolve("src").resolve("main").resolve("web").resolve("blog").resolve("WEB-INF").resolve("layouts"))
+      Files.createDirectories(shellRoot.resolve("src").resolve("main").resolve("web").resolve("blog").resolve("WEB-INF").resolve("partials"))
+      Files.createDirectories(childRoot.resolve("src").resolve("main").resolve("web").resolve("notifications"))
+      Files.writeString(
+        descriptorRoot.resolve("web-descriptor.yaml"),
+        """web:
+          |  shell:
+          |    component: blog-component
+          |    app: blog
+          |    layout: default
+          |  apps:
+          |    - name: blog
+          |    - name: notifications
+          |      composition: article
+          |    - name: alerts
+          |      composition: article
+          |  pages:
+          |    notifications.notifications:
+          |      mode: article
+          |  form:
+          |    textus-user-notification.notification.search-my-notifications:
+          |      layout: notifications
+          |  routes:
+          |    - path: /web/notifications
+          |      target:
+          |        component: textus-user-notification
+          |        app: notifications
+          |    - path: /web/alerts
+          |      target:
+          |        component: textus-user-notification
+          |        app: alerts
+          |""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+      Files.writeString(
+        shellRoot.resolve("src").resolve("main").resolve("web").resolve("blog").resolve("WEB-INF").resolve("layouts").resolve("default.html"),
+        """<!doctype html><html><body>${partial.header}<main class="blog-shell">${content}</main></body></html>""",
+        StandardCharsets.UTF_8
+      )
+      Files.writeString(
+        shellRoot.resolve("src").resolve("main").resolve("web").resolve("blog").resolve("WEB-INF").resolve("partials").resolve("header.html"),
+        "<header>Blog Shell Header</header>",
+        StandardCharsets.UTF_8
+      )
+      Files.writeString(
+        childRoot.resolve("src").resolve("main").resolve("web").resolve("notifications").resolve("notifications__success.html"),
+        "<section>Notification Result</section>",
+        StandardCharsets.UTF_8
+      )
+      val subsystem = _management_console_fixture_subsystem(
+        Configuration(Map(
+          RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(descriptorRoot.resolve("web-descriptor.yaml").toString)
+        ))
+      ).add(Vector(
+        TestComponentFactory.create("blog_component", Protocol.empty),
+        TestComponentFactory.create("textus_user_notification", Protocol.empty)
+      ))
+      subsystem.components.find(_.name == "blog_component").getOrElse(fail("blog component missing")).withArtifactMetadata(
+        org.goldenport.cncf.component.Component.ArtifactMetadata("test", "blog-component", "0.1.0", component = Some("blog-component"), archivePath = Some(shellRoot.toString))
+      )
+      subsystem.components.find(_.name == "textus_user_notification").getOrElse(fail("notification component missing")).withArtifactMetadata(
+        org.goldenport.cncf.component.Component.ArtifactMetadata("test", "textus-user-notification", "0.1.0", component = Some("textus-user-notification"), archivePath = Some(childRoot.toString))
+      )
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+
+      val html = server._prepared_form_result_template(
+        "textus-user-notification",
+        "notification",
+        "search-my-notifications",
+        200,
+        Map("textus.form.page" -> "notifications")
+      ).toOption.flatten.getOrElse(fail("notification result is missing"))
+
+      html should include ("Blog Shell Header")
+      html should include ("Notification Result")
+      html should include ("blog-shell")
+    }
+
+    "fail when explicit subsystem shell owner has no component Web root" in {
+      val descriptorRoot = Files.createTempDirectory("cncf-missing-explicit-shell-owner-")
+      val childRoot = Files.createTempDirectory("cncf-missing-explicit-shell-child-")
+      Files.createDirectories(descriptorRoot.resolve("WEB-INF").resolve("layouts"))
+      Files.createDirectories(childRoot.resolve("src").resolve("main").resolve("web").resolve("notifications"))
+      Files.writeString(
+        descriptorRoot.resolve("web-descriptor.yaml"),
+        """web:
+          |  shell:
+          |    component: missing-shell
+          |    app: blog
+          |    layout: default
+          |  apps:
+          |    - name: notifications
+          |      composition: article
+          |  routes:
+          |    - path: /web/notifications
+          |      target:
+          |        component: textus-user-notification
+          |        app: notifications
+          |""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+      Files.writeString(
+        descriptorRoot.resolve("WEB-INF").resolve("layouts").resolve("default.html"),
+        """<!doctype html><html><body>${content}</body></html>""",
+        StandardCharsets.UTF_8
+      )
+      Files.writeString(
+        childRoot.resolve("src").resolve("main").resolve("web").resolve("notifications").resolve("index.html"),
+        "<section>Notification Article</section>",
+        StandardCharsets.UTF_8
+      )
+      val subsystem = _management_console_fixture_subsystem(
+        Configuration(Map(
+          RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(descriptorRoot.resolve("web-descriptor.yaml").toString)
+        ))
+      ).add(Vector(TestComponentFactory.create("textus_user_notification", Protocol.empty)))
+      subsystem.components.find(_.name == "textus_user_notification").getOrElse(fail("notification component missing")).withArtifactMetadata(
+        org.goldenport.cncf.component.Component.ArtifactMetadata("test", "textus-user-notification", "0.1.0", component = Some("textus-user-notification"), archivePath = Some(childRoot.toString))
+      )
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+
+      val response = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/notifications"))).unsafeRunSync()
+      val html = response.as[String].unsafeRunSync()
+
+      response.status.code shouldBe 500
+      html should include ("Static Form subsystem shell component Web root not found: missing-shell")
     }
 
     "compose form result templates into a subsystem shell when app composition is article" in {
@@ -2821,15 +3050,53 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
 
       val root = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/"))).unsafeRunSync()
       val web = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web"))).unsafeRunSync()
+      val webSlash = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/"))).unsafeRunSync()
       val webHtml = web.as[String].unsafeRunSync()
 
       root.status.code shouldBe 307
       root.headers.get[org.http4s.headers.Location].map(_.uri.renderString) shouldBe Some("/web")
+      webSlash.status.code shouldBe 307
+      webSlash.headers.get[org.http4s.headers.Location].map(_.uri.renderString) shouldBe Some("/web")
       web.status.code shouldBe 200
       webHtml should include ("CNCF Runtime Help")
-      webHtml should include ("/web/system/manual")
+      webHtml should include ("/web/system/document")
       webHtml should include ("/web/notice-board")
       webHtml should not include ("/form/notice-board")
+    }
+
+    "render runtime landing app links from WebDescriptor routes instead of component names" in {
+      val root = Files.createTempDirectory("cncf-runtime-landing-routes-")
+      Files.writeString(
+        root.resolve("web-descriptor.yaml"),
+        """web:
+          |  apps:
+          |    - name: board
+          |      kind: static-form
+          |  routes:
+          |    - path: /web/board
+          |      target:
+          |        component: notice-board
+          |        app: board
+          |""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+      val subsystem = _management_console_fixture_subsystem(
+        Configuration(Map(
+          RuntimeConfig.OperationModeKey -> ConfigurationValue.StringValue("develop"),
+          RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web-descriptor.yaml").toString)
+        ))
+      )
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+
+      val web = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web"))).unsafeRunSync()
+      val componentAlias = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/notice-board"))).unsafeRunSync()
+      val webHtml = web.as[String].unsafeRunSync()
+
+      web.status.code shouldBe 200
+      webHtml should include ("""href="/web/board"""")
+      webHtml should not include ("""href="/web/notice-board"""")
+      componentAlias.status.code shouldBe 307
+      componentAlias.headers.get[org.http4s.headers.Location].map(_.uri.renderString) shouldBe Some("/web/board")
     }
 
     "redirect / to /web and keep /web strict in production when no default web route is configured" in {
@@ -4721,44 +4988,43 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("34 ms")
       html should include ("/web/system/dashboard")
       html should include ("/web/system/admin")
-      html should include ("/web/system/manual")
+      html should include ("/web/system/document")
       html should include ("/web/console")
     }
 
-    "render manual and console entry pages without inline operation execution" in {
+    "render document and console entry pages without inline operation execution" in {
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
 
-      val manual = StaticFormAppRenderer.render(subsystem, "manual").map(_.body).getOrElse(fail("manual is missing"))
+      val manual = StaticFormAppRenderer.render(subsystem, "document").map(_.body).getOrElse(fail("documents page is missing"))
       val console = StaticFormAppRenderer.render(subsystem, "console").map(_.body).getOrElse(fail("console is missing"))
 
-      manual should include ("System Manual")
+      manual should include ("System Documents")
       manual should include ("/web/system/dashboard")
       manual should include ("/web/console")
-      manual should include ("Console handoff")
-      manual should include ("Manual pages remain read-only")
-      manual should include ("do not inline operation actions")
+      manual should include ("Generated Specification")
+      manual should include ("Component documents")
       console should include ("System Console")
       console should include ("/web/system/dashboard")
-      console should include ("/web/system/manual")
+      console should include ("/web/system/document")
       console should include ("/form/")
       console should include ("Console links to operation forms")
       console should include ("does not execute operations inline")
       console should not include ("<form method=\"post\"")
     }
 
-    "keep system manual and console available while filtering component app entries by WebDescriptor apps" in {
+    "keep system documents and console available while filtering component app entries by WebDescriptor apps" in {
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       val descriptor = WebDescriptor(
-        apps = Vector(WebDescriptor.App("manual", "/web/manual", "manual"))
+        apps = Vector(WebDescriptor.App("document", "/web/document", "document"))
       )
 
-      val manual = StaticFormAppRenderer.render(subsystem, "manual", webDescriptor = descriptor)
+      val manual = StaticFormAppRenderer.render(subsystem, "document", webDescriptor = descriptor)
       val console = StaticFormAppRenderer.render(subsystem, "console", webDescriptor = descriptor)
       val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
       val componentPath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)
       val componentForms = StaticFormAppRenderer.render(subsystem, componentPath, webDescriptor = descriptor)
 
-      manual.map(_.body).getOrElse(fail("manual is missing")) should include ("System Manual")
+      manual.map(_.body).getOrElse(fail("documents page is missing")) should include ("System Documents")
       console.map(_.body).getOrElse(fail("console is missing")) should include ("System Console")
       componentForms shouldBe None
     }
@@ -4808,6 +5074,50 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("class=\"form-control\"")
       html should include (s"/form/${org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)}/${org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(service.name)}/${org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(operation.name)}")
       html should not include ("cdn.jsdelivr")
+    }
+
+    "append development debug panel to operation form error redisplay" in {
+      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
+      val service = component.protocol.services.services.headOption.getOrElse(fail("service is missing"))
+      val operation = service.operations.operations.toVector.headOption.getOrElse(fail("operation is missing"))
+
+      val html = StaticFormAppRenderer.renderOperationForm(
+        subsystem,
+        component.name,
+        service.name,
+        operation.name,
+        values = Map(
+          "error.status" -> "400",
+          "error.body" -> "Operation.Invalid[missing subject]",
+          "textus.debug.executionPanel" -> "true"
+        ),
+        operationMode = OperationMode.Develop,
+        showExecutionDebugPanel = true
+      ).map(_.body).getOrElse(fail("operation form is missing"))
+
+      html should include ("Form submission failed.")
+      html should include ("textus-execution-debug-panel")
+      html should include ("CallTree was not captured for this response.")
+      html should include ("Operation.Invalid[missing subject]")
+    }
+
+    "ignore external debug panel flags on operation form input pages" in {
+      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
+      val service = component.protocol.services.services.headOption.getOrElse(fail("service is missing"))
+      val operation = service.operations.operations.toVector.headOption.getOrElse(fail("operation is missing"))
+
+      val html = StaticFormAppRenderer.renderOperationForm(
+        subsystem,
+        component.name,
+        service.name,
+        operation.name,
+        values = Map("textus.debug.executionPanel" -> "true"),
+        operationMode = OperationMode.Develop
+      ).map(_.body).getOrElse(fail("operation form is missing"))
+
+      html should not include ("textus-execution-debug-panel")
     }
 
     "apply app-scoped assets to the component HTML form index" in {
@@ -7683,7 +7993,14 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
     }
 
     "render development execution debug panel with inline calltree" in {
-      val calltree = Record.data("name" -> "notice.post-notice", "children" -> Vector.empty[String])
+      val calltree = Record.data(
+        "calltree" -> Vector(
+          Record.data("kind" -> "enter", "label" -> "notice.post-notice", "attributes" -> Record.data("started_at_nanos" -> "1")),
+          Record.data("kind" -> "enter", "label" -> "uow:entitystore:search:direct", "attributes" -> Record.data("started_at_nanos" -> "2", "real_io" -> "true", "cache_layer" -> "entity-store")),
+          Record.data("kind" -> "leave", "label" -> "uow:entitystore:search:direct", "attributes" -> Record.data("started_at_nanos" -> "2", "ended_at_nanos" -> "3", "duration_millis" -> "1")),
+          Record.data("kind" -> "leave", "label" -> "notice.post-notice", "attributes" -> Record.data("started_at_nanos" -> "1", "ended_at_nanos" -> "4", "duration_millis" -> "3"))
+        )
+      )
       val properties = StaticFormAppRenderer.FormResultProperties(
         StaticFormAppRenderer.FormPageProperties(
           "notice-board",
@@ -7706,9 +8023,87 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       ).body
 
       html should include ("textus-execution-debug-panel")
-      html should include ("Development execution result")
+      html should include ("Development execution diagnostics")
+      html should include ("bg-success-subtle")
       html should include ("notice.post-notice")
+      html should include ("textus-calltree-tree")
+      html should include ("data-textus-calltree")
+      html should include ("data-calltree-node")
+      html should include ("data-calltree-label")
+      html should include ("data-calltree-kind")
+      html should include ("/web/assets/textus-calltree.js")
+      html should not include ("Raw CallTree JSON")
+      html should include ("border-start")
+      html should include ("uow:entitystore:search:direct")
+      html should include ("real_io=true")
+      html should include ("cache_layer=entity-store")
       html should include ("/web/system/admin/jobs/cncf-job-job-1")
+    }
+
+    "append development execution debug panel to full HTML result templates" in {
+      val properties = StaticFormAppRenderer.FormResultProperties(
+        StaticFormAppRenderer.FormPageProperties(
+          "notice-board",
+          "notice",
+          "post-notice"
+        ),
+        200,
+        "application/json",
+        """{"id":"notice-1"}""",
+        executionMetadata = RuntimeContext.ExecutionMetadata(
+          inlineCallTree = Some(Record.data("name" -> "notice.post-notice"))
+        ),
+        operationMode = OperationMode.Develop
+      )
+
+      val html = StaticFormAppRenderer.renderFormResult(
+        properties,
+        """<!doctype html><html><head><title>Result</title></head><body><main>Custom result</main></body></html>"""
+      ).body
+
+      html should include ("Custom result")
+      html should include ("textus-execution-debug-panel")
+      html should include ("Development execution diagnostics")
+      html should include ("bg-success-subtle")
+      html should include ("notice.post-notice")
+      html should include ("/web/assets/textus-calltree.js")
+      _count_occurrences(html, "/web/assets/textus-calltree.js") shouldBe 1
+    }
+
+    "render development execution debug panel even when calltree metadata is absent" in {
+      val properties = StaticFormAppRenderer.FormResultProperties(
+        StaticFormAppRenderer.FormPageProperties(
+          "notice-board",
+          "notice",
+          "post-notice",
+          Map(
+            "textus.debug.executionPanel" -> "true",
+            "password" -> "plain-secret",
+            "accessSessionId" -> "session-secret"
+          )
+        ),
+        200,
+        "application/json",
+        "id=notice-1 accessSessionId=session-secret password=plain-secret credentialValue=credential-secret",
+        operationMode = OperationMode.Develop,
+        fieldConfidentiality = Map("credentialValue" -> org.goldenport.schema.DataConfidentiality.Secret)
+      )
+
+      val html = StaticFormAppRenderer.renderFormResult(
+        properties,
+        """<article><h2>Custom result</h2></article>"""
+      ).body
+
+      html should include ("textus-execution-debug-panel")
+      html should include ("Operation arguments")
+      html should include ("bg-success-subtle")
+      html should include ("CallTree was not captured for this response.")
+      html should not include ("/web/assets/textus-calltree.js")
+      html should include ("[redacted]")
+      html should not include ("plain-secret")
+      html should not include ("session-secret")
+      html should not include ("credential-secret")
+      html should include ("id=notice-1")
     }
 
     "hide development execution debug panel in production mode" in {
@@ -7733,6 +8128,21 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       ).body
 
       html should not include ("textus-execution-debug-panel")
+      html should not include ("/web/assets/textus-calltree.js")
+    }
+
+    "ship progressive CallTree enhancement asset for development diagnostics" in {
+      val js = StaticFormAppAssets.textusCalltreeJs
+
+      js should include ("data-calltree-enhanced")
+      js should include ("Expand all")
+      js should include ("Collapse all")
+      js should include ("data-calltree-search")
+      js should include ("data-calltree-clear")
+      js should include ("data-calltree-show-io")
+      js should include ("data-calltree-show-real-io")
+      js should include ("data-calltree-long-attribute")
+      js should include ("openAncestors")
     }
 
     "render application user job list and detail pages" in {

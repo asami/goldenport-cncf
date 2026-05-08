@@ -15,6 +15,8 @@ import org.goldenport.cncf.context.{ScopeContext, ScopeKind}
 import org.goldenport.cncf.context.GlobalRuntimeContext
 import org.goldenport.cncf.config.ResolvedParameters
 import org.goldenport.cncf.http.RuntimeDashboardMetrics
+import org.goldenport.record.Record
+import org.goldenport.schema.DataConfidentiality
 
 /*
  * @since   Apr. 11, 2025
@@ -26,7 +28,7 @@ import org.goldenport.cncf.http.RuntimeDashboardMetrics
  *  version Feb.  6, 2026
  *  version Mar. 13, 2026
  *  version Apr. 25, 2026
- * @version May.  6, 2026
+ * @version May.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 class ActionEngine(
@@ -75,7 +77,10 @@ class ActionEngine(
         ()
       }
 
-    authresult.flatMap { _ =>
+    authresult.recoverWith { conclusion =>
+      _record_pre_execution_failure_calltree(call, ec, calltree, label, conclusion)
+      Consequence.Failure(conclusion)
+    }.flatMap { _ =>
       Consequence run {
         val params = _build_resolved_parameters(call)
         runtime.setResolvedParameters(params)
@@ -85,11 +90,14 @@ class ActionEngine(
             // Observation hooks apply only to executed actions.
             observe_enter(call)
             try {
+              calltree.mark("io:input", _calltree_input_attributes(call, params))
               val r = call.execute()
               r match {
                 case Consequence.Success(response) =>
+                  calltree.mark("io:output", _calltree_output_attributes(call, response))
                   executionOutcome = Some(Right(response))
                 case Consequence.Failure(conclusion) =>
+                  calltree.failure("io:error", conclusion.display, _calltree_error_attributes(conclusion))
                   executionOutcome = Some(Left(conclusion))
               }
               ec.runtime.commit()
@@ -113,6 +121,7 @@ class ActionEngine(
               case e: Throwable =>
                 ec.runtime.abort()
                 val conclusion = org.goldenport.Conclusion.from(e)
+                calltree.failure("io:error", conclusion.display, _calltree_error_attributes(conclusion))
                 executionOutcome = Some(Left(conclusion))
                 observe_leave(call, Consequence.Failure(conclusion))
                 val _ = ObservabilityEngine.build( // TODO
@@ -145,9 +154,10 @@ class ActionEngine(
                 RuntimeDashboardMetrics.recordActionCall(outcome.isLeft)
                 ObservabilityEngine.recordActionExecution(
                   operation = call.action.name,
-                  parameters = call.request.toRecord,
-                  parametersText = params.usedText.getOrElse(""),
+                  parameters = _sanitize_calltree_record(call.request.toRecord, call.fieldConfidentiality),
+                  parametersText = _calltree_resolved_parameters_text(params, call.fieldConfidentiality),
                   outcome = outcome,
+                  resultConfidentiality = call.resultFieldConfidentiality,
                   jobId = ec.jobContext.jobId.map(_.value),
                   calltree = builtCallTree
                 )
@@ -350,10 +360,188 @@ class ActionEngine(
     )
   }
 
+  private def _record_pre_execution_failure_calltree(
+    call: ActionCall,
+    ec: ExecutionContext,
+    calltree: CallTreeContext,
+    label: String,
+    conclusion: org.goldenport.Conclusion
+  ): Unit =
+    if (calltree.isEnabled) {
+      val params = _build_resolved_parameters(call)
+      params.markAllLocalUsed()
+      calltree.enter(label)
+      try {
+        calltree.mark("io:input", _calltree_input_attributes(call, params))
+        calltree.failure("io:error", conclusion.display, _calltree_error_attributes(conclusion))
+      } finally {
+        calltree.leave()
+        if (ec.framework.inlineCallTree) {
+          calltree.build().foreach { tree =>
+            ec.runtime.noteInlineCallTree(
+              ObservabilityEngine.callTreeRecord(tree, ec.jobContext.jobId.map(_.value))
+            )
+          }
+        }
+        calltree.clear()
+      }
+    }
+
+  private def _calltree_input_attributes(
+    call: ActionCall,
+    params: ResolvedParameters
+  ): Map[String, String] =
+    Map(
+      "component" -> call.request.component.getOrElse(""),
+      "service" -> call.request.service.getOrElse(""),
+      "operation" -> call.request.operation,
+      "request" -> _calltree_record_text(call.request.toRecord, call.fieldConfidentiality),
+      "resolved_parameters" -> _calltree_resolved_parameters_text(params, call.fieldConfidentiality)
+    ).filter(_._2.nonEmpty)
+
+  private def _calltree_output_attributes(
+    call: ActionCall,
+    response: OperationResponse
+  ): Map[String, String] =
+    Map(
+      "response_type" -> response.getClass.getSimpleName.stripSuffix("$"),
+      "response" -> _truncate_calltree_text(_operation_response_text(response, call.resultFieldConfidentiality), 4000)
+    )
+
+  private def _calltree_error_attributes(
+    conclusion: org.goldenport.Conclusion
+  ): Map[String, String] =
+    Map(
+      "status" -> conclusion.status.webCode.code.toString,
+      "error" -> _truncate_calltree_text(conclusion.display, 4000)
+    )
+
+  private def _calltree_record_text(
+    record: Record
+  ): String =
+    _calltree_record_text(record, Map.empty)
+
+  private def _calltree_record_text(
+    record: Record,
+    confidentiality: Map[String, DataConfidentiality]
+  ): String =
+    _truncate_calltree_text(_sanitize_calltree_record(record, confidentiality).print, 4000)
+
+  private def _sanitize_calltree_record(
+    record: Record,
+    confidentiality: Map[String, DataConfidentiality] = Map.empty
+  ): Record =
+    Record.dataAuto(
+      record.asMap.toVector
+        .sortBy(_._1)
+        .map { case (key, value) => key -> _sanitize_calltree_value(key, value, confidentiality) }*
+    )
+
+  private def _calltree_resolved_parameters_text(
+    params: ResolvedParameters,
+    confidentiality: Map[String, DataConfidentiality] = Map.empty
+  ): String = {
+    val entries = params.usedEntries
+    if (entries.isEmpty)
+      ""
+    else {
+      val text = entries.map { param =>
+        val value =
+          if (_is_sensitive_calltree_key(param.key, confidentiality))
+            "***"
+          else
+            org.goldenport.cncf.config.ResolvedParameter.format_value(param.value)
+        s"${param.key}=${value}(source=${param.source.label})"
+      }.mkString("params=", ", ", "")
+      _truncate_calltree_text(text, 4000)
+    }
+  }
+
+  private def _sanitize_calltree_value(
+    key: String,
+    value: Any,
+    confidentiality: Map[String, DataConfidentiality] = Map.empty
+  ): Any =
+    if (_is_sensitive_calltree_key(key, confidentiality))
+      "***"
+    else
+      _sanitize_calltree_nested_value(value, confidentiality)
+
+  private def _sanitize_calltree_nested_value(
+    value: Any,
+    confidentiality: Map[String, DataConfidentiality] = Map.empty
+  ): Any =
+    value match {
+      case r: Record =>
+        _sanitize_calltree_record(r, confidentiality)
+      case xs: Seq[?] =>
+        xs.map(_sanitize_calltree_nested_value(_, confidentiality))
+      case xs: Array[?] =>
+        xs.toVector.map(_sanitize_calltree_nested_value(_, confidentiality))
+      case m: scala.collection.Map[?, ?] =>
+        m.toVector.map {
+          case (k, v) =>
+            val key = Option(k).map(_.toString).getOrElse("")
+            key -> _sanitize_calltree_value(key, v, confidentiality)
+        }.toMap
+      case _ =>
+        value
+    }
+
+  private def _is_sensitive_calltree_key(
+    key: String,
+    confidentiality: Map[String, DataConfidentiality] = Map.empty
+  ): Boolean = {
+    val normalized = _normalize_calltree_key(key)
+    confidentiality.get(key)
+      .orElse(confidentiality.find { case (k, _) => _normalize_calltree_key(k) == normalized }.map(_._2))
+      .exists(_.shouldRedactByDefault) ||
+    normalized.contains("password") ||
+      normalized.contains("passwd") ||
+      normalized.contains("secret") ||
+      normalized.contains("token") ||
+      normalized.contains("session") ||
+      normalized.contains("authorization") ||
+      normalized.contains("cookie") ||
+      normalized.contains("credential") ||
+      normalized.contains("apikey") ||
+      normalized.contains("privatekey")
+  }
+
+  private def _normalize_calltree_key(key: String): String =
+    Option(key).getOrElse("").toLowerCase(java.util.Locale.ROOT).replaceAll("[^a-z0-9]", "")
+
+  private def _truncate_calltree_text(
+    value: String,
+    limit: Int
+  ): String =
+    if (value.length <= limit) value else value.take(limit) + "..."
+
   private def _parameter_source_text(
     call: ActionCall
   ): Option[String] =
-    call.executionContext.runtime.resolvedParameters.usedText
+    Option(_calltree_resolved_parameters_text(call.executionContext.runtime.resolvedParameters)).filter(_.nonEmpty)
+
+  private def _operation_response_text(
+    response: OperationResponse,
+    confidentiality: Map[String, DataConfidentiality] = Map.empty
+  ): String =
+    response match {
+      case OperationResponse.RecordResponse(record) =>
+        _sanitize_calltree_record(record, confidentiality).print
+      case _ =>
+        _redact_sensitive_text(response.show)
+    }
+
+  private def _redact_sensitive_text(
+    value: String
+  ): String = {
+    val sensitive = """password|passwd|secret|token|access[-_]?session[-_]?id|refresh[-_]?session[-_]?id|session[-_]?id|session|authorization|cookie|credential|api[-_]?key|private[-_]?key"""
+    val jsonLike = s"""(?i)("(?:$sensitive)"\\s*:\\s*)"[^"]*"""".r
+    val formLike = s"""(?i)(^|[?&\\s,;])($sensitive)(\\s*[=:]\\s*)([^&\\s,;]+)""".r
+    val jsonRedacted = jsonLike.replaceAllIn(value, m => s"""${m.group(1)}"***"""")
+    formLike.replaceAllIn(jsonRedacted, m => s"${m.group(1)}${m.group(2)}${m.group(3)}***")
+  }
 
   protected def authorize_pre(
     actionName: String,

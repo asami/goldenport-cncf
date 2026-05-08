@@ -7,6 +7,7 @@ import org.goldenport.Conclusion
 import org.goldenport.http.HttpRequest
 import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.record.Record
+import org.goldenport.schema.DataConfidentiality
 import org.goldenport.cncf.context.{ObservabilityContext, ScopeContext}
 import org.goldenport.cncf.log.{LogBackend, LogBackendHolder}
 import org.goldenport.observation.calltree.CallTree
@@ -14,7 +15,8 @@ import org.goldenport.observation.calltree.CallTree
 /*
  * @since   Jan.  7, 2026
  *  version Jan. 29, 2026
- * @version Apr. 25, 2026
+ *  version Apr. 25, 2026
+ * @version May.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class OperationContext(
@@ -28,7 +30,7 @@ object ObservabilityEngine {
   ): Record =
     Record.data(
       "job_id" -> jobId.getOrElse(""),
-      "calltree" -> _calltree_records(calltree.toRecord)
+      "calltree" -> _calltree_nodes(calltree.toRecord)
     )
 
   final case class ExecutionHistoryFilter(
@@ -72,7 +74,7 @@ object ObservabilityEngine {
         "captured_at" -> capturedAt.toString,
         "job_id" -> jobId.getOrElse("")
         )
-      ) ++ calltree.map(tree => Record.data("calltree" -> _calltree_records(tree.toRecord))).getOrElse(Record.empty)
+      ) ++ calltree.map(tree => Record.data("calltree" -> _calltree_nodes(tree.toRecord))).getOrElse(Record.empty)
 
     def calltreeRecord: Record =
       Record.createFull(
@@ -86,18 +88,148 @@ object ObservabilityEngine {
         "result_summary" -> resultSummary,
         "captured_at" -> capturedAt.toString,
         "job_id" -> jobId.getOrElse(""),
-        "calltree" -> calltree.map(tree => _calltree_records(tree.toRecord)).getOrElse(Vector.empty)
+        "calltree" -> calltree.map(tree => _calltree_nodes(tree.toRecord)).getOrElse(Vector.empty)
         )
       )
 
-    private def _calltree_records(record: Record): Vector[Any] =
-      ObservabilityEngine._calltree_records(record)
+    private def _calltree_nodes(record: Record): Vector[Record] =
+      ObservabilityEngine._calltree_nodes(record)
   }
 
-  private def _calltree_records(record: Record): Vector[Any] =
+  private final case class CallTreeEvent(
+    kind: String,
+    label: String,
+    attributes: Map[String, String],
+    startedAtNanos: Long,
+    endedAtNanos: Option[Long]
+  )
+
+  private final case class CallTreeNode(
+    label: String,
+    attributes: Map[String, String],
+    startedAtNanos: Long,
+    endedAtNanos: Option[Long],
+    children: Vector[CallTreeNode]
+  ) {
+    def toRecord: Record =
+      Record.dataAuto(
+        "label" -> label,
+        "attributes" -> Record.dataAuto(attributes.toVector.sortBy(_._1)*),
+        "children" -> children.map(_.toRecord)
+      )
+  }
+
+  private def _calltree_nodes(record: Record): Vector[Record] =
+    _calltree_node_models(record).map(_.toRecord)
+
+  private def _calltree_node_models(record: Record): Vector[CallTreeNode] = {
+    val events = _calltree_events(record)
+    if (events.isEmpty)
+      Vector.empty
+    else {
+      val leaves = events.filter(_is_leave_event).groupBy(x => (x.label, x.startedAtNanos))
+      val spanNodes = events.zipWithIndex.collect { case (entry, index) if entry.kind == "enter" =>
+        val leave = leaves.get((entry.label, entry.startedAtNanos)).flatMap(_.headOption)
+        index -> CallTreeNode(
+          entry.label,
+          entry.attributes ++ leave.map(_.attributes).getOrElse(Map.empty),
+          entry.startedAtNanos,
+          leave.flatMap(_.endedAtNanos).orElse(entry.endedAtNanos),
+          Vector.empty
+        )
+      }
+      val markerNodes = events.zipWithIndex.collect {
+        case (event, index) if event.kind != "enter" && !_is_leave_event(event) =>
+          index -> CallTreeNode(
+            event.label,
+            event.attributes,
+            event.startedAtNanos,
+            event.endedAtNanos.orElse(Some(event.startedAtNanos)),
+            Vector.empty
+          )
+      }
+      val nodes = spanNodes ++ markerNodes
+      val byindex = nodes.toMap
+      val parentCandidates = spanNodes.toMap
+      val parentByIndex = nodes.map { case (index, node) =>
+        index -> parentCandidates.collect {
+          case (parentIndex, parent) if parentIndex != index && _calltree_contains(parent, node) =>
+            val span = parent.endedAtNanos.getOrElse(Long.MaxValue) - parent.startedAtNanos
+            (parentIndex, span, parent.startedAtNanos)
+        }.toVector.sortBy { case (_, span, start) => (span, -start) }.headOption.map(_._1)
+      }.toMap
+      def build(index: Int): CallTreeNode = {
+        val node = byindex(index)
+        val children = parentByIndex.collect { case (childIndex, Some(parentIndex)) if parentIndex == index => childIndex }
+          .toVector
+          .sortBy(child => byindex(child).startedAtNanos)
+          .map(build)
+        node.copy(children = children)
+      }
+      parentByIndex.collect { case (index, None) => index }
+        .toVector
+        .sortBy(index => byindex(index).startedAtNanos)
+        .map(build)
+    }
+  }
+
+  private def _is_leave_event(
+    event: CallTreeEvent
+  ): Boolean =
+    event.kind == "leave" || event.kind == "exit"
+
+  private def _calltree_contains(
+    parent: CallTreeNode,
+    child: CallTreeNode
+  ): Boolean = {
+    val parentEnd = parent.endedAtNanos.getOrElse(Long.MaxValue)
+    val childEnd = child.endedAtNanos.getOrElse(child.startedAtNanos)
+    parent.startedAtNanos <= child.startedAtNanos && childEnd <= parentEnd &&
+      (parent.startedAtNanos < child.startedAtNanos || parentEnd > childEnd)
+  }
+
+  private def _calltree_events(record: Record): Vector[CallTreeEvent] =
     record.asMap.toVector
       .sortBy { case (k, _) => scala.util.Try(k.toString.toInt).toOption.getOrElse(Int.MaxValue) }
-      .map(_._2)
+      .collect { case (_, r: Record) => _calltree_event(r) }
+      .flatten
+
+  private def _calltree_event(record: Record): Option[CallTreeEvent] = {
+    val attrs = _calltree_attributes(record.asMap.get("attributes")) ++
+      record.asMap.get("message").map(x => Map("message" -> x.toString)).getOrElse(Map.empty)
+    for {
+      kind <- record.asMap.get("kind").map(_.toString.toLowerCase(Locale.ROOT))
+      label <- record.asMap.get("label").map(_.toString).filter(_.nonEmpty)
+      start <- attrs.get("started_at_nanos")
+        .orElse(attrs.get("ended_at_nanos"))
+        .orElse(attrs.get("failed_at_nanos"))
+        .orElse(attrs.get("sampled_at_nanos"))
+        .flatMap(_to_long_option)
+    } yield CallTreeEvent(
+      kind,
+      label,
+      attrs,
+      start,
+      attrs.get("ended_at_nanos")
+        .orElse(attrs.get("failed_at_nanos"))
+        .orElse(attrs.get("sampled_at_nanos"))
+        .flatMap(_to_long_option)
+    )
+  }
+
+  private def _calltree_attributes(
+    value: Option[Any]
+  ): Map[String, String] =
+    value match {
+      case Some(r: Record) => r.asMap.map { case (k, v) => k -> v.toString }
+      case Some(m: Map[?, ?]) => m.map { case (k, v) => k.toString -> v.toString }
+      case _ => Map.empty
+    }
+
+  private def _to_long_option(
+    value: String
+  ): Option[Long] =
+    scala.util.Try(value.toLong).toOption
 
   @volatile private var _execution_history_config: ExecutionHistoryConfig = ExecutionHistoryConfig()
   private var _execution_history_sequence: Long = 0L
@@ -149,6 +281,7 @@ object ObservabilityEngine {
     parameters: Record,
     parametersText: String,
     outcome: Either[Conclusion, OperationResponse],
+    resultConfidentiality: Map[String, DataConfidentiality] = Map.empty,
     jobId: Option[String] = None,
     calltree: Option[CallTree]
   ): Unit =
@@ -162,7 +295,7 @@ object ObservabilityEngine {
           parametersText = parametersText,
           outcome = outcome.fold(_ => "failure", _ => "success"),
           resultType = outcome.fold(_ => "Conclusion", _result_type_),
-          resultSummary = outcome.fold(_failure_summary_, _result_summary_),
+          resultSummary = outcome.fold(_failure_summary_, _result_summary_(_, resultConfidentiality)),
           capturedAt = Instant.now(),
           jobId = jobId,
           calltree = calltree
@@ -180,14 +313,110 @@ object ObservabilityEngine {
   private def _result_type_(response: OperationResponse): String =
     response.getClass.getSimpleName.stripSuffix("$")
 
-  private def _result_summary_(response: OperationResponse): String =
-    _truncate(response.show, 1000)
+  private def _result_summary_(
+    response: OperationResponse,
+    confidentiality: Map[String, DataConfidentiality] = Map.empty
+  ): String =
+    _truncate(_response_summary_text(response, confidentiality), 1000)
+
+  private def _response_summary_text(
+    response: OperationResponse,
+    confidentiality: Map[String, DataConfidentiality] = Map.empty
+  ): String =
+    response match {
+      case OperationResponse.RecordResponse(record) => _sanitize_record(record, confidentiality).show
+      case _ => _redact_sensitive_text(response.show)
+    }
 
   private def _failure_summary_(conclusion: Conclusion): String =
     _truncate(conclusion.display, 1000)
 
   private def _truncate(s: String, limit: Int): String =
     if (s.length <= limit) s else s.take(limit) + "..."
+
+  private def _sanitize_record(
+    record: Record,
+    confidentiality: Map[String, DataConfidentiality] = Map.empty
+  ): Record =
+    Record.dataAuto(
+      record.asMap.toVector
+        .sortBy(_._1)
+        .map { case (key, value) => key -> _sanitize_value(key, value, confidentiality) }*
+    )
+
+  private def _sanitize_value(
+    key: String,
+    value: Any,
+    confidentiality: Map[String, DataConfidentiality] = Map.empty
+  ): Any =
+    if (_is_sensitive_key(key, confidentiality))
+      "***"
+    else
+      value match {
+        case r: Record =>
+          _sanitize_record(r, confidentiality)
+        case xs: Seq[?] =>
+          xs.map(_sanitize_nested_value(_, confidentiality))
+        case xs: Array[?] =>
+          xs.toVector.map(_sanitize_nested_value(_, confidentiality))
+        case m: scala.collection.Map[?, ?] =>
+          m.toVector.map {
+            case (k, v) =>
+              val childKey = Option(k).map(_.toString).getOrElse("")
+              childKey -> _sanitize_value(childKey, v, confidentiality)
+          }.toMap
+        case _ =>
+          value
+      }
+
+  private def _sanitize_nested_value(
+    value: Any,
+    confidentiality: Map[String, DataConfidentiality] = Map.empty
+  ): Any =
+    value match {
+      case r: Record =>
+        _sanitize_record(r, confidentiality)
+      case xs: Seq[?] =>
+        xs.map(_sanitize_nested_value(_, confidentiality))
+      case xs: Array[?] =>
+        xs.toVector.map(_sanitize_nested_value(_, confidentiality))
+      case m: scala.collection.Map[?, ?] =>
+        m.toVector.map {
+          case (k, v) =>
+            val childKey = Option(k).map(_.toString).getOrElse("")
+            childKey -> _sanitize_value(childKey, v, confidentiality)
+        }.toMap
+      case _ =>
+        value
+    }
+
+  private def _is_sensitive_key(
+    key: String,
+    confidentiality: Map[String, DataConfidentiality] = Map.empty
+  ): Boolean = {
+    val normalized = key.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]", "")
+    confidentiality.get(key)
+      .orElse(confidentiality.find { case (k, _) => k.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]", "") == normalized }.map(_._2))
+      .exists(_.shouldRedactByDefault) ||
+    normalized.contains("password") ||
+      normalized.contains("passwd") ||
+      normalized.contains("secret") ||
+      normalized.contains("token") ||
+      normalized.contains("session") ||
+      normalized.contains("authorization") ||
+      normalized.contains("cookie") ||
+      normalized.contains("credential") ||
+      normalized.contains("apikey") ||
+      normalized.contains("privatekey")
+  }
+
+  private def _redact_sensitive_text(value: String): String = {
+    val sensitive = """password|passwd|secret|token|access[-_]?session[-_]?id|refresh[-_]?session[-_]?id|session[-_]?id|session|authorization|cookie|credential|api[-_]?key|private[-_]?key"""
+    val jsonLike = s"""(?i)("(?:$sensitive)"\\s*:\\s*)"[^"]*"""".r
+    val formLike = s"""(?i)(^|[?&\\s,;])($sensitive)(\\s*[=:]\\s*)([^&\\s,;]+)""".r
+    val jsonRedacted = jsonLike.replaceAllIn(value, m => s"""${m.group(1)}"***"""")
+    formLike.replaceAllIn(jsonRedacted, m => s"${m.group(1)}${m.group(2)}${m.group(3)}***")
+  }
 
   def build(
     scope: ScopeContext,

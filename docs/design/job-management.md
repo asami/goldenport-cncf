@@ -474,6 +474,13 @@ stale.
 Duplicate terminal updates must not send duplicate notifications for the same
 `(jobId, trigger)`.
 
+`textus-blog` is the first deemed-subsystem driver for this policy. Its assembly
+includes `textus-user-notification`, resolves the provider through
+`runtime.userNotification.providers`, and uses explicit Job lifecycle/recovery
+Event forwarding rules. Blog code does not write notification entities directly;
+the Blog header only reads a user-facing summary from the notification component
+and hides the badge when that component is absent or unavailable.
+
 
 ----------------------------------------------------------------------
 15. Product Boundary

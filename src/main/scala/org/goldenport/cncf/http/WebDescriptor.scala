@@ -13,7 +13,7 @@ import org.goldenport.record.Record
 /*
  * @since   Apr. 14, 2026
  *  version Apr. 25, 2026
- * @version May.  6, 2026
+ * @version May.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class WebDescriptor(
@@ -24,6 +24,7 @@ final case class WebDescriptor(
   form: Map[String, WebDescriptor.Form] = Map.empty,
   apps: Vector[WebDescriptor.App] = Vector.empty,
   routes: Vector[WebDescriptor.Route] = Vector.empty,
+  shell: Option[WebDescriptor.Shell] = None,
   pages: Map[String, WebDescriptor.PageCustomization] = Map.empty,
   theme: WebDescriptor.Theme = WebDescriptor.Theme(),
   assets: WebDescriptor.Assets = WebDescriptor.Assets(),
@@ -65,6 +66,7 @@ final case class WebDescriptor(
       form = form ++ rhs.form,
       apps = merge_apps(apps, rhs.apps),
       routes = merge_vector(routes, rhs.routes)(_.normalizedPathText),
+      shell = rhs.shell.orElse(shell),
       pages = pages ++ rhs.pages,
       theme = theme.merge(rhs.theme),
       assets = assets.merge(rhs.assets),
@@ -78,6 +80,7 @@ final case class WebDescriptor(
       form.nonEmpty ||
       apps.nonEmpty ||
       routes.nonEmpty ||
+      shell.nonEmpty ||
       theme != WebDescriptor.Theme() ||
       assets != WebDescriptor.Assets() ||
       admin.nonEmpty ||
@@ -127,6 +130,51 @@ final case class WebDescriptor(
         app.normalizedName == org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(name)
     ).map(_.composition).getOrElse(WebDescriptor.ComponentWebComposition.Disabled)
 
+  def routeAppsForComponent(componentName: String): Vector[String] = {
+    val normalized = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(componentName)
+    routes
+      .filter(_.target.normalizedComponent == normalized)
+      .map(_.target.normalizedApp)
+      .distinct
+  }
+
+  def routeAppForComponent(componentName: String): Option[String] =
+    routeAppsForComponent(componentName) match {
+      case Vector(app) => Some(app)
+      case _ => None
+    }
+
+  def routeAppForComponentPage(
+    componentName: String,
+    page: Vector[String]
+  ): Option[String] = {
+    val apps = routeAppsForComponent(componentName)
+    val pageName =
+      if (page.isEmpty) "index"
+      else page.map(_.stripSuffix(".html")).map(WebDescriptor.normalizeSelector).mkString(".")
+    val pageSpecific = apps.filter { app =>
+      pages.contains(s"${WebDescriptor.normalizeSelector(app)}.${pageName}")
+    }
+    pageSpecific match {
+      case Vector(app) => Some(app)
+      case _ =>
+        val composed = apps.filter(appComposition(_) != WebDescriptor.ComponentWebComposition.Disabled)
+        composed match {
+          case Vector(app) => Some(app)
+          case _ => routeAppForComponent(componentName)
+        }
+    }
+  }
+
+  def shellComponentName: Option[String] =
+    shell.flatMap(_.componentName)
+
+  def shellAppName: Option[String] =
+    shell.map(_.effectiveAppName)
+
+  def shellLayoutName: Option[String] =
+    shell.flatMap(_.layoutName)
+
   def staticPageMode(
     appName: String,
     page: Vector[String]
@@ -166,11 +214,12 @@ final case class WebDescriptor(
     val pageName =
       if (page.isEmpty) "index"
       else page.map(_.stripSuffix(".html")).map(WebDescriptor.normalizeSelector).mkString(".")
-    Vector(
-      s"${app}.${pageName}",
-      pageName,
-      app
-    ).collectFirst(Function.unlift(pages.get))
+    val candidates =
+      if (page.isEmpty)
+        Vector(s"${app}.${pageName}", app, pageName)
+      else
+        Vector(s"${app}.${pageName}", pageName, app)
+    candidates.collectFirst(Function.unlift(pages.get))
   }
 
   def formAssets(
@@ -530,6 +579,24 @@ object WebDescriptor {
     }
   }
 
+  final case class Shell(
+    component: Option[String] = None,
+    app: Option[String] = None,
+    layout: Option[String] = None
+  ) {
+    def componentName: Option[String] =
+      component.map(_.trim).filter(_.nonEmpty).map(_normalize_app_segment)
+
+    def appName: Option[String] =
+      app.map(_.trim).filter(_.nonEmpty).map(_normalize_app_segment)
+
+    def effectiveAppName: String =
+      appName.orElse(componentName).getOrElse("default")
+
+    def layoutName: Option[String] =
+      layout.map(_.trim).filter(_.nonEmpty)
+  }
+
   enum RouteKind {
     case Alias
     case Default
@@ -669,6 +736,7 @@ object WebDescriptor {
       form = _form(web),
       apps = _apps(web),
       routes = _routes(web),
+      shell = _shell(web),
       pages = _pages(web),
       theme = _theme(web),
       assets = _assets(web),
@@ -700,7 +768,12 @@ object WebDescriptor {
         case (name, page) if page.modeRaw.exists(raw => PageMode.parse(raw).isEmpty) =>
           s"invalid page mode in ${path}: ${name}=${page.modeRaw.get}"
       }
-    invalidApp.orElse(invalidPage) match {
+    val invalidShell =
+      descriptor.shell.collect {
+        case shell if shell.component.exists(_.trim.isEmpty) =>
+          s"invalid web shell in ${path}: component is empty"
+      }
+    invalidApp.orElse(invalidPage).orElse(invalidShell) match {
       case Some(message) => Consequence.resourceInvalid(message)
       case None => Consequence.success(descriptor)
     }
@@ -889,6 +962,18 @@ object WebDescriptor {
       case Some(xs: java.util.List[?]) => xs.asScala.toVector.flatMap(_any_to_record).flatMap(_route)
       case _ => Vector.empty
     }
+
+  private def _shell(record: Record): Option[Shell] =
+    _record_value(record, "shell")
+      .orElse(_record_value(record, "webShell"))
+      .orElse(_record_value(record, "web-shell"))
+      .map { r =>
+        Shell(
+          component = _string(r, "component"),
+          app = _string(r, "app"),
+          layout = _string(r, "layout")
+        )
+      }
 
   private def _assets(record: Record): Assets =
     _record_value(record, "assets")

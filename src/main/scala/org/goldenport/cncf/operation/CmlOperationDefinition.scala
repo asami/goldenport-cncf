@@ -3,11 +3,12 @@ package org.goldenport.cncf.operation
 import org.goldenport.cncf.security.OperationAuthorizationRule
 import org.goldenport.cncf.action.CommandExecutionPolicy
 import org.goldenport.record.Record
+import org.goldenport.schema.DataConfidentiality
 
 /*
  * @since   Mar. 22, 2026
  *  version Mar. 28, 2026
- * @version May.  7, 2026
+ * @version May.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class CmlOperationAssociationBinding(
@@ -133,8 +134,12 @@ final case class CmlOperationField(
   controlType: Option[String] = None,
   placeholder: Option[String] = None,
   help: Option[String] = None,
-  required: Option[Boolean] = None
-)
+  required: Option[Boolean] = None,
+  confidentiality: Option[String] = None
+) {
+  def effectiveConfidentiality: DataConfidentiality =
+    DataConfidentiality.getOrPublic(confidentiality)
+}
 
 final case class CmlOperationAccess(
   policy: String,
@@ -174,7 +179,8 @@ final case class CmlOperationDefinition(
   operationAuthorization: Option[OperationAuthorizationRule] = None,
   childEntityBindings: Vector[CmlOperationChildEntityBinding] = Vector.empty,
   associationBinding: Option[CmlOperationAssociationBinding] = None,
-  imageBinding: Option[CmlOperationImageBinding] = None
+  imageBinding: Option[CmlOperationImageBinding] = None,
+  resultFields: Vector[CmlOperationField] = Vector.empty
 ) {
   def effectiveCommandExecutionPolicy: CommandExecutionPolicy =
     commandExecutionPolicy

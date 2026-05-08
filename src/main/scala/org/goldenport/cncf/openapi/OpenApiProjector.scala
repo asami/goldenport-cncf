@@ -4,13 +4,14 @@ import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.protocol.spec.{OperationDefinition, ParameterDefinition, ServiceDefinition}
 import org.goldenport.datatype.I18nString
-import org.goldenport.schema.{XBlob, XFileBundle}
+import org.goldenport.schema.{DataConfidentiality, XBlob, XFileBundle}
 import org.slf4j.LoggerFactory
 
 /*
  * @since   Jan.  8, 2026
  *  version Jan. 20, 2026
- * @version Apr. 30, 2026
+ *  version Apr. 30, 2026
+ * @version May.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 object OpenApiProjector {
@@ -25,13 +26,19 @@ object OpenApiProjector {
     operation: String,
     operationId: String,
     httpMethod: String,
-    parameters: Vector[String],
+    parameters: Vector[ParameterSpec],
     hasRequestBody: Boolean,
     hasMultipartBody: Boolean,
-    requestBodyFields: Vector[(String, Boolean)],
+    requestBodyFields: Vector[ParameterSpec],
     responseSchemaKind: String,
     summary: String,
     description: String
+  )
+
+  private final case class ParameterSpec(
+    name: String,
+    binary: Boolean = false,
+    confidentiality: DataConfidentiality = DataConfidentiality.Public
   )
 
   def forSubsystem(subsystem: Subsystem): String = {
@@ -146,16 +153,17 @@ object OpenApiProjector {
         normalized == "blob" || normalized == "filebundle"
       }
 
-  private def _query_parameters(op: OperationDefinition): Vector[String] =
+  private def _query_parameters(op: OperationDefinition): Vector[ParameterSpec] =
     op.specification.request.parameters.toVector
       .filterNot(_.kind == ParameterDefinition.Kind.Property)
       .filterNot(_is_binary_upload_parameter)
-      .map(_.name)
+      .map(p => ParameterSpec(p.name, confidentiality = p.confidentiality))
 
-  private def _request_body_fields(op: OperationDefinition): Vector[(String, Boolean)] =
-    op.specification.request.parameters.toVector.collect {
-      case p if _is_binary_upload_parameter(p) => p.name -> true
-      case p if p.kind == ParameterDefinition.Kind.Property => p.name -> false
+  private def _request_body_fields(op: OperationDefinition): Vector[ParameterSpec] =
+    op.specification.request.parameters.toVector
+      .collect {
+      case p if _is_binary_upload_parameter(p) => ParameterSpec(p.name, binary = true, confidentiality = p.confidentiality)
+      case p if p.kind == ParameterDefinition.Kind.Property => ParameterSpec(p.name, confidentiality = p.confidentiality)
     }
 
   private def _openapi_json(paths: Vector[PathSpec]): String = {
@@ -186,25 +194,25 @@ object OpenApiProjector {
     s"""{"openapi":"3.0.0","info":{"title":"CNCF API","version":"0.1.0"},"paths":{${pathsJson}}}"""
   }
 
-  private def _parameters_section(parameters: Vector[String]): String =
+  private def _parameters_section(parameters: Vector[ParameterSpec]): String =
     if (parameters.isEmpty) {
       """"parameters":[]"""
     } else {
       val entries = parameters.map { param =>
-        s"""{"name":"${_escape(param)}","in":"query","schema":{"type":"string"}}"""
+        s"""{"name":"${_escape(param.name)}","in":"query","schema":{"type":"string"},"x-textus-confidentiality":"${param.confidentiality.label}"}"""
       }.mkString(",")
       s""""parameters":[${entries}]"""
     }
 
-  private def _request_body_schema(fields: Vector[(String, Boolean)]): String =
+  private def _request_body_schema(fields: Vector[ParameterSpec]): String =
     if (fields.isEmpty) {
       """{"type":"object"}"""
     } else {
       val properties = fields.map {
-        case (name, true) =>
-          s""""${_escape(name)}":{"type":"string","format":"binary"}"""
-        case (name, false) =>
-          s""""${_escape(name)}":{"type":"string"}"""
+        case ParameterSpec(name, true, confidentiality) =>
+          s""""${_escape(name)}":{"type":"string","format":"binary","x-textus-confidentiality":"${confidentiality.label}"}"""
+        case ParameterSpec(name, false, confidentiality) =>
+          s""""${_escape(name)}":{"type":"string","x-textus-confidentiality":"${confidentiality.label}"}"""
       }.mkString(",")
       s"""{"type":"object","properties":{${properties}}}"""
     }

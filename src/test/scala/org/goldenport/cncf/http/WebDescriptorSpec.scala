@@ -17,7 +17,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Apr. 14, 2026
  *  version Apr. 25, 2026
- * @version May.  1, 2026
+ * @version May.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 final class WebDescriptorSpec extends AnyWordSpec with Matchers {
@@ -92,9 +92,9 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
           |          values: [created, updated]
           |
           |  apps:
-          |    - name: manual
-          |      path: /web/manual
-          |      kind: manual
+          |    - name: document
+          |      path: /web/document
+          |      kind: document
           |    - name: console
           |      path: /web/console
           |      kind: console
@@ -202,8 +202,8 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
       descriptor.adminTotalCountPolicy("notice_board", "entity", "notice") shouldBe WebDescriptor.TotalCountPolicy.Optional
       descriptor.adminTotalCountPolicy("notice_board", "data", "audit") shouldBe WebDescriptor.TotalCountPolicy.Required
       descriptor.adminFields("notice_board", "data", "audit").map(_.name) shouldBe Vector("id", "action", "actor")
-      descriptor.apps.map(_.name) shouldBe Vector("manual", "console")
-      descriptor.apps.map(_.path) shouldBe Vector("/web/manual", "/web/console")
+      descriptor.apps.map(_.name) shouldBe Vector("document", "console")
+      descriptor.apps.map(_.path) shouldBe Vector("/web/document", "/web/console")
       descriptor.apps(1).theme.css shouldBe Vector("/web/console/assets/console-theme.css")
       descriptor.apps(1).theme.variables("primary") shouldBe "#0f766e"
       descriptor.apps(1).assets.css shouldBe Vector("/web/console/assets/console.css")
@@ -475,6 +475,54 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
 
       descriptor.routes.size shouldBe 1
       descriptor.routes.head.normalizedPathText shouldBe "/web/board"
+    }
+
+    "parse descriptor-driven subsystem shell owner" in {
+      val path = Files.createTempFile("cncf-web-descriptor-shell", ".yaml")
+      Files.writeString(
+        path,
+        """web:
+          |  shell:
+          |    component: blog-component
+          |    app: blog
+          |    layout: default
+          |  apps:
+          |    - name: notifications
+          |      composition: article
+          |  pages:
+          |    index:
+          |      mode: article
+          |""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+
+      val descriptor = WebDescriptor.load(path).toOption.get
+
+      descriptor.shellComponentName shouldBe Some("blog-component")
+      descriptor.shellAppName shouldBe Some("blog")
+      descriptor.shellLayoutName shouldBe Some("default")
+      descriptor.appComposition("notifications") shouldBe WebDescriptor.ComponentWebComposition.Article
+      descriptor.staticPageMode("notifications", Vector.empty) shouldBe WebDescriptor.PageMode.Article
+    }
+
+    "prefer app root page customization before global index customization" in {
+      val path = Files.createTempFile("cncf-web-descriptor-page-mode", ".yaml")
+      Files.writeString(
+        path,
+        """web:
+          |  pages:
+          |    index:
+          |      mode: article
+          |    signin:
+          |      mode: screen
+          |""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+
+      val descriptor = WebDescriptor.load(path).toOption.get
+
+      descriptor.staticPageMode("signin", Vector.empty) shouldBe WebDescriptor.PageMode.Screen
+      descriptor.staticPageMode("blog", Vector.empty) shouldBe WebDescriptor.PageMode.Article
     }
 
     "derive implicit SAR routes when a Web app matches one component among several candidates" in {

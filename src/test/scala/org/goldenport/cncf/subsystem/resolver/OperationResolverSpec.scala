@@ -191,6 +191,20 @@ class OperationResolverSpec extends AnyWordSpec with Matchers {
           fail(s"unexpected result: $other")
       }
     }
+
+    "resolve component artifact metadata name as a component alias" in {
+      val resolver = OperationResolver.build(Seq(_component_with_artifact_metadata_alias()))
+
+      resolver.resolve("textus-user-notification.notification.search-my-notifications") match {
+        case ResolutionResult.Resolved(fqn, component, service, operation) =>
+          fqn shouldBe "UserNotification.notification.searchMyNotifications"
+          component shouldBe "UserNotification"
+          service shouldBe "notification"
+          operation shouldBe "searchMyNotifications"
+        case other =>
+          fail(s"unexpected result: $other")
+      }
+    }
   }
 
   "Single Operation Optimization (CLI / Script, FQN-only)" should {
@@ -303,6 +317,44 @@ class OperationResolverSpec extends AnyWordSpec with Matchers {
     component.initialize(
       org.goldenport.cncf.component.ComponentInit(
         subsystem = org.goldenport.cncf.testutil.TestComponentFactory.emptySubsystem("public-notice"),
+        core = core,
+        origin = org.goldenport.cncf.component.ComponentOrigin.Main,
+        componentDescriptors = Vector.empty
+      )
+    )
+  }
+
+  private def _component_with_artifact_metadata_alias(): Component = {
+    val component = new Component() {}
+    val protocol = Protocol(
+      services = spec.ServiceDefinitionGroup(
+        Vector(
+          spec.ServiceDefinition(
+            name = "notification",
+            operations = spec.OperationDefinitionGroup(
+              operations = NonEmptyVector.of(_NoopOperation("searchMyNotifications"))
+            )
+          )
+        )
+      )
+    )
+    val core = org.goldenport.cncf.component.Component.Core.create(
+      name = "UserNotification",
+      componentid = org.goldenport.cncf.component.ComponentId("user_notification"),
+      instanceid = org.goldenport.cncf.component.ComponentInstanceId.default(
+        org.goldenport.cncf.component.ComponentId("user_notification")
+      ),
+      protocol = protocol
+    )
+    component.withArtifactMetadata(org.goldenport.cncf.component.Component.ArtifactMetadata(
+      sourceType = "car",
+      name = "textus-user-notification",
+      version = "0.1.1-SNAPSHOT",
+      component = Some("textus-user-notification")
+    ))
+    component.initialize(
+      org.goldenport.cncf.component.ComponentInit(
+        subsystem = org.goldenport.cncf.testutil.TestComponentFactory.emptySubsystem("UserNotification"),
         core = core,
         origin = org.goldenport.cncf.component.ComponentOrigin.Main,
         componentDescriptors = Vector.empty
