@@ -17,7 +17,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Apr. 14, 2026
  *  version Apr. 25, 2026
- * @version May.  8, 2026
+ * @version May.  9, 2026
  * @author  ASAMI, Tomoharu
  */
 final class WebDescriptorSpec extends AnyWordSpec with Matchers {
@@ -75,6 +75,14 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
           |          readonly: true
           |
           |  admin:
+          |    pages:
+          |      - name: notifications
+          |        label: Notification Admin
+          |        href: /web/notice-board/admin/notifications
+          |        description: Manage notification records.
+          |        permission: admin.entity.read
+          |        component: notice-board
+          |        audience: application
           |    entity.notice:
           |      totalCount: optional
           |      fields:
@@ -199,6 +207,18 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
       descriptor.admin("data.audit").fields.map(_.name) shouldBe Vector("id", "action", "actor")
       descriptor.admin("data.audit").fields(1).control.controlType shouldBe Some("select")
       descriptor.admin("data.audit").fields(1).control.values shouldBe Vector("created", "updated")
+      descriptor.adminPages.map(_.name) shouldBe Vector("notifications")
+      descriptor.adminPages.head.effectiveLabel shouldBe "Notification Admin"
+      descriptor.adminPages.head.href shouldBe "/web/notice-board/admin/notifications"
+      descriptor.adminPages.head.description shouldBe "Manage notification records."
+      descriptor.adminPages.head.effectivePermission shouldBe "admin.entity.read"
+      descriptor.adminPages.head.audience shouldBe WebDescriptor.AdminAudience.Application
+      WebDescriptor.AdminPage("legacy").audience shouldBe WebDescriptor.AdminAudience.Application
+      WebDescriptor.AdminAudience.parse("system") shouldBe Some(WebDescriptor.AdminAudience.System)
+      WebDescriptor.AdminAudience.parse("invalid") shouldBe None
+      descriptor.adminPagesForAudience(WebDescriptor.AdminAudience.Application).map(_.name) shouldBe Vector("notifications")
+      descriptor.adminPagesFor("notice-board").map(_.name) shouldBe Vector("notifications")
+      descriptor.adminPage("notice-board", "notifications").map(_.href) shouldBe Some("/web/notice-board/admin/notifications")
       descriptor.adminTotalCountPolicy("notice_board", "entity", "notice") shouldBe WebDescriptor.TotalCountPolicy.Optional
       descriptor.adminTotalCountPolicy("notice_board", "data", "audit") shouldBe WebDescriptor.TotalCountPolicy.Required
       descriptor.adminFields("notice_board", "data", "audit").map(_.name) shouldBe Vector("id", "action", "actor")
@@ -450,6 +470,57 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
           conclusion.show should include ("/web/board")
         case _ =>
           fail("expected descriptor conflict failure")
+      }
+    }
+
+    "reject admin page component and href component mismatches during descriptor load" in {
+      val path = Files.createTempFile("cncf-web-descriptor-admin-page-conflict", ".yaml")
+      Files.writeString(
+        path,
+        """web:
+          |  admin:
+          |    pages:
+          |      - name: notifications
+          |        href: /web/notice-board/admin/notifications
+          |        component: inventory
+          |""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+
+      val result = WebDescriptor.load(path)
+
+      result shouldBe a[org.goldenport.Consequence.Failure[_]]
+      result match {
+        case org.goldenport.Consequence.Failure(conclusion) =>
+          conclusion.show should include ("invalid admin page component")
+          conclusion.show should include ("notifications")
+        case _ =>
+          fail("expected descriptor admin page component failure")
+      }
+    }
+
+    "reject descriptor-declared admin pages without names during descriptor load" in {
+      val path = Files.createTempFile("cncf-web-descriptor-admin-page-missing-name", ".yaml")
+      Files.writeString(
+        path,
+        """web:
+          |  admin:
+          |    pages:
+          |      - href: /web/notice-board/admin/notifications
+          |        label: Notification Admin
+          |""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+
+      val result = WebDescriptor.load(path)
+
+      result shouldBe a[org.goldenport.Consequence.Failure[_]]
+      result match {
+        case org.goldenport.Consequence.Failure(conclusion) =>
+          conclusion.show should include ("invalid admin page")
+          conclusion.show should include ("name is required")
+        case _ =>
+          fail("expected descriptor admin page name failure")
       }
     }
 

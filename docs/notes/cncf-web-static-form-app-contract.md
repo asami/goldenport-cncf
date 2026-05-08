@@ -891,7 +891,21 @@ The required browser-visible flow is:
 - list-to-edit navigation and update submission
 - list-to-new navigation and create submission
 
-The Management Console has separate entry points for each managed-data kind:
+Admin UI has two top-level operator entry points:
+
+```text
+/web/admin
+/web/system/admin
+```
+
+`/web/admin` is the Application Admin home. It is for application operators and
+collects component-owned admin pages plus application-facing Entity/Data/View/
+Aggregate management links. `/web/system/admin` is the System Admin home. It is
+for runtime/system operators and keeps runtime configuration, descriptor
+diagnostics, assembly warnings/report, performance, execution history, jobs,
+calltree, dashboard, and console links.
+
+Component-scoped technical admin pages remain available and stable:
 
 ```text
 /web/{component}/admin/entities
@@ -899,6 +913,39 @@ The Management Console has separate entry points for each managed-data kind:
 /web/{component}/admin/aggregates
 /web/{component}/admin/views
 ```
+
+Components may also declare operator-focused admin entry pages in
+`WebDescriptor.admin.pages`. These are component-owned Static Form pages, not
+new built-in CRUD surfaces. The component admin home renders them as Bootstrap
+list/card links, and the runtime serves only declared pages:
+
+```yaml
+admin:
+  pages:
+    - name: notifications
+      label: Notification Admin
+      href: /web/textus-user-notification/admin/notifications
+      description: Manage notification records, delivery attempts, preferences, and user state.
+      permission: admin.entity.read
+      component: textus-user-notification
+      audience: application
+```
+
+`audience` controls which top-level admin app links the page:
+
+- `application`: shown from `/web/admin`; this is the default.
+- `system`: shown from system-admin-oriented operational details.
+
+The canonical route is:
+
+```text
+GET /web/{component}/admin/{page}
+```
+
+The page must be backed by a component Web template such as
+`src/main/web/admin/{page}.html`. Undeclared admin pages return 404. The
+declared `permission` is checked through the existing Web/admin authorization
+path; when omitted, `admin.entity.read` is used.
 
 Current implementation status:
 

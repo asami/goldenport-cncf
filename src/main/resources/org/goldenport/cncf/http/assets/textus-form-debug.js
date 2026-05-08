@@ -164,6 +164,10 @@
     return !response.ok || shouldShowSuccess(input, init);
   }
 
+  function hasServerExecutionPanel() {
+    return Boolean(document.querySelector(".textus-execution-debug-panel"));
+  }
+
   function escapeHtml(value) {
     return String(value == null ? "" : value)
       .replace(/&/g, "&amp;")
@@ -183,6 +187,7 @@
   }
 
   function ensurePanel() {
+    if (hasServerExecutionPanel()) return null;
     let panel = document.querySelector("[data-textus-form-debug-panel]");
     if (panel) return panel;
     panel = document.createElement("section");
@@ -248,6 +253,7 @@
 
   function renderRecord(record) {
     const panel = ensurePanel();
+    if (!panel) return;
     const events = panel.querySelector("[data-debug-events]");
     const ok = Boolean(record.ok);
     const variant = ok ? "success" : "danger";
@@ -289,7 +295,7 @@
     renderRecord(record);
   }
 
-  takeCarryover().forEach(renderRecord);
+  if (!hasServerExecutionPanel()) takeCarryover().forEach(renderRecord);
 
   window.fetch = async function (input, init) {
     const response = await originalFetch.apply(this, arguments);
@@ -297,12 +303,12 @@
       try {
         const text = await response.clone().text();
         const record = eventRecord(input, init, response, text);
-        if (shouldCarryOver(requestMetadata(input, init))) storeCarryover(record);
-        if (shouldRender(input, init, response)) renderRecord(record);
+        if (!hasServerExecutionPanel() && shouldCarryOver(requestMetadata(input, init))) storeCarryover(record);
+        if (!hasServerExecutionPanel() && shouldRender(input, init, response)) renderRecord(record);
       } catch (_) {
         const record = eventRecord(input, init, response, "[Unable to read response body]");
-        if (shouldCarryOver(requestMetadata(input, init))) storeCarryover(record);
-        if (shouldRender(input, init, response)) renderRecord(record);
+        if (!hasServerExecutionPanel() && shouldCarryOver(requestMetadata(input, init))) storeCarryover(record);
+        if (!hasServerExecutionPanel() && shouldRender(input, init, response)) renderRecord(record);
       }
     }
     return response;

@@ -183,11 +183,18 @@ WN-09 explicitly does not implement:
 - a new runtime renderer separate from `StaticFormAppRenderer`;
 - reusable header/footer/nav/sidebar partials, implemented by WN-10 through
   the `WEB-INF` layout/partial contract;
-- component-owned admin page discovery beyond the WN-12 article/screen
-  composition contract;
 - Island Architecture runtime or SPA/API gateway hosting. WN-13 defines only
   the progressive-enhancement boundary, and WN-14 covers SPA/API gateway
   deployment modes.
+
+Component-owned admin entry pages are part of the current descriptor contract:
+`WebDescriptor.admin.pages` declares operator-facing pages under
+`GET /web/{component}/admin/{page}`. They are rendered from component Web
+templates and linked from the component admin home; undeclared pages are not
+served. `admin.pages[].audience` separates Application Admin entries from
+System Admin entries. Missing audience defaults to `application`, so
+application operators use `/web/admin` as the canonical gathered admin app,
+while runtime diagnostics stay under `/web/system/admin`.
 
 The older wireframe DSL notes remain historical draft references for future
 generation work. Future generators must emit this Bootstrap/Textus contract

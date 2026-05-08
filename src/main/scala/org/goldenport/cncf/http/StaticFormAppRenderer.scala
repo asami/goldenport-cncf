@@ -28,7 +28,7 @@ import io.circe.parser.parse
 /*
  * @since   Apr. 12, 2026
  *  version Apr. 30, 2026
- * @version May.  8, 2026
+ * @version May.  9, 2026
  * @author  ASAMI, Tomoharu
  */
 object StaticFormAppRenderer {
@@ -122,8 +122,8 @@ object StaticFormAppRenderer {
         "result.ok" -> (status >= 200 && status < 400).toString,
         "result.contentType" -> contentType,
         "result.body" -> body,
-        "paging.page" -> page.values.getOrElse("paging.page", "1"),
-        "paging.pageSize" -> page.values.getOrElse("paging.pageSize", "20"),
+        "paging.page" -> page.values.getOrElse("paging.page", page.values.getOrElse("page", "1")),
+        "paging.pageSize" -> page.values.getOrElse("paging.pageSize", page.values.getOrElse("pageSize", page.values.getOrElse("limit", "20"))),
         "paging.chunkSize" -> page.values.getOrElse("paging.chunkSize", "1000"),
         "paging.href" -> page.values.getOrElse("paging.href", _default_paging_href)
       ) ++ _framework_action_values(metadata) ++ metadata.toTemplateValues
@@ -136,7 +136,62 @@ object StaticFormAppRenderer {
         base
 
     private def _default_paging_href: String =
-      s"/form/${page.componentPath}/${page.servicePath}/${page.operationPath}/result?page={page}&pageSize={pageSize}"
+      _form_result_paging_href(
+        s"/form/${page.componentPath}/${page.servicePath}/${page.operationPath}/result",
+        page.values
+      )
+
+    private def _form_result_paging_href(
+      base: String,
+      values: Map[String, String]
+    ): String = {
+      val reserved = Set(
+        "page",
+        "pageSize",
+        "offset",
+        "textus.debug.executionPanel"
+      )
+      val context = values.toVector
+        .filter { case (key, value) =>
+          value.nonEmpty &&
+            !reserved.contains(key) &&
+            !key.startsWith("paging.") &&
+            !key.startsWith("result.") &&
+            !key.startsWith("error.") &&
+            !key.startsWith("form.") &&
+            _is_safe_paging_context_key(key)
+        }
+        .sortBy(_._1)
+      val pairs = context ++ Vector("page" -> "{page}", "pageSize" -> "{pageSize}")
+      val query = pairs.map {
+        case (key, "{page}") => s"${_escape_query(key)}={page}"
+        case (key, "{pageSize}") => s"${_escape_query(key)}={pageSize}"
+        case (key, value) => s"${_escape_query(key)}=${_escape_query(value)}"
+      }.mkString("&")
+      s"${base}?${query}"
+    }
+
+    private def _is_safe_paging_context_key(key: String): Boolean = {
+      val normalized = key.trim.toLowerCase(java.util.Locale.ROOT)
+      val safeKeys = Set(
+        "textus.form.page",
+        "q",
+        "text",
+        "tag",
+        "searchmode",
+        "sort",
+        "order",
+        "limit",
+        "includetotal",
+        "includedescendants",
+        "unreadonly",
+        "includedismissed",
+        "notificationtype",
+        "channel",
+        "status"
+      )
+      safeKeys.contains(normalized)
+    }
 
     private def _framework_action_values(metadata: FormResultMetadata): Map[String, String] =
       _detail_action_values(metadata) ++ _job_action_values(metadata) ++ _return_action_values
@@ -2940,8 +2995,25 @@ object StaticFormAppRenderer {
       performancePath = "/web/system/performance",
       webDescriptor = webDescriptor,
       runtimeConfiguration = Some(subsystem.configuration),
-      operationalDetails = Some(_system_admin_operational_details),
+      operationalDetails = Some(_system_admin_operational_details(webDescriptor)),
       componentFormsPath = None
+    ))
+
+  def renderApplicationAdmin(
+    subsystem: Subsystem,
+    webDescriptor: WebDescriptor = WebDescriptor.empty
+  ): Page =
+    Page(_simple_page(
+      title = "Application Admin",
+      subtitle = "Application operator console",
+      body =
+        s"""${_admin_nav_card(Vector(
+             "System admin" -> "/web/system/admin",
+             "Tags" -> "/web/admin/tags",
+             "Associations" -> "/web/admin/associations"
+           ))}
+           |${_application_admin_entry_pages(webDescriptor)}
+           |${_application_admin_component_cards(subsystem, webDescriptor)}""".stripMargin
     ))
 
   def renderSystemAdminDescriptor(
@@ -7477,6 +7549,7 @@ object StaticFormAppRenderer {
       val aggregateCount = component.aggregateDefinitions.size
       val viewCount = component.viewDefinitions.size
       val formsCount = component.protocol.services.services.map(_.operations.operations.toVector.size).sum
+      val componentAdminPages = webDescriptor.adminPagesFor(componentPath)
       val cards = _admin_entry_cards(Vector(
         _admin_entry_card(
           "Entities",
@@ -7517,6 +7590,7 @@ object StaticFormAppRenderer {
           Some(formsCount.toString)
         )
       ))
+      val componentOwnedAdminPages = _component_owned_admin_pages(componentAdminPages)
       val technicalDetails =
         s"""<details class="mt-3">
            |  <summary>Technical details</summary>
@@ -7531,6 +7605,7 @@ object StaticFormAppRenderer {
         component.name,
         s"""<p class="text-body-secondary">Version ${_escape(version)}</p>
            |${cards}
+           |${componentOwnedAdminPages}
            |${technicalDetails}""".stripMargin
       )
     }.mkString("\n")
@@ -7549,17 +7624,19 @@ object StaticFormAppRenderer {
         "Runtime",
         _admin_table(None, runtimeRows, tableClass = "table table-sm align-middle mb-0")
       )
+    val primaryNav = Vector(
+      "Application admin" -> "/web/admin",
+      "Dashboard" -> dashboardPath,
+      "Performance details" -> performancePath,
+      "Documents" -> "/web/system/document",
+      "Console" -> "/web/console"
+    )
     _simple_page(
       title = title,
       subtitle = subtitle,
       body =
         s"""${runtimeCard}
-           |${_admin_nav_card(Vector(
-             "Dashboard" -> dashboardPath,
-             "Performance details" -> performancePath,
-             "Documents" -> "/web/system/document",
-             "Console" -> "/web/console"
-           ))}
+           |${_admin_nav_card(primaryNav)}
            |${componentInventory}
            |${_admin_operational_details(operationalDetails)}
            |${_component_admin_actions(componentFormsPath)}
@@ -7593,6 +7670,100 @@ object StaticFormAppRenderer {
            |<p class="mt-3 mb-0">Mutation actions must require explicit admin authorization, confirmation for destructive actions, and audit logging before they are enabled.</p>""".stripMargin
       )
     }.getOrElse("")
+
+  private def _application_admin_entry_pages(
+    webDescriptor: WebDescriptor
+  ): String = {
+    val pages = webDescriptor.adminPagesForAudience(WebDescriptor.AdminAudience.Application)
+    if (pages.isEmpty)
+      _admin_card("Application Admin Pages", _admin_empty_state("No descriptor-declared application admin pages are available."))
+    else
+      _admin_card("Application Admin Pages", _component_owned_admin_pages_list(pages))
+  }
+
+  private def _application_admin_component_cards(
+    subsystem: Subsystem,
+    webDescriptor: WebDescriptor
+  ): String = {
+    val cards = subsystem.components.toVector.flatMap { component =>
+      val componentPath = NamingConventions.toNormalizedSegment(component.name)
+      val entityCount = component.componentDescriptors.flatMap(_.entityRuntimeDescriptors).size
+      val dataCount = _admin_surface_selector_count(webDescriptor, Some(componentPath), "data")
+      val aggregateCount = component.aggregateDefinitions.size
+      val viewCount = component.viewDefinitions.size
+      val entries = Vector(
+        Option.when(entityCount > 0)(_admin_entry_card(
+          "Entities",
+          s"${_pluralize(entityCount, "runtime descriptor", "runtime descriptors")} available for application operations.",
+          s"/web/${componentPath}/admin/entities",
+          Some(entityCount.toString)
+        )),
+        Option.when(dataCount > 0)(_admin_entry_card(
+          "Data",
+          s"${_pluralize(dataCount, "descriptor surface", "descriptor surfaces")} available for application operations.",
+          s"/web/${componentPath}/admin/data",
+          Some(dataCount.toString)
+        )),
+        Option.when(aggregateCount > 0)(_admin_entry_card(
+          "Aggregates",
+          s"${_pluralize(aggregateCount, "aggregate", "aggregates")} available for application operations.",
+          s"/web/${componentPath}/admin/aggregates",
+          Some(aggregateCount.toString)
+        )),
+        Option.when(viewCount > 0)(_admin_entry_card(
+          "Views",
+          s"${_pluralize(viewCount, "view definition", "view definitions")} available for application operations.",
+          s"/web/${componentPath}/admin/views",
+          Some(viewCount.toString)
+        ))
+      ).flatten
+      Option.when(entries.nonEmpty) {
+        _admin_card(
+          component.name,
+          s"""<p class="text-body-secondary">Application-facing generic admin surfaces.</p>
+             |${_admin_entry_cards(entries)}
+             |${_admin_action_row(Vector("Component admin" -> s"/web/${componentPath}/admin"), primary = false)}""".stripMargin
+        )
+      }
+    }
+    if (cards.isEmpty)
+      _admin_card("Component Admin Surfaces", _admin_empty_state("No application-facing component admin surfaces are available."))
+    else
+      cards.mkString("\n")
+  }
+
+  private def _component_owned_admin_pages(
+    pages: Vector[WebDescriptor.AdminPage]
+  ): String =
+    if (pages.isEmpty)
+      ""
+    else {
+      s"""<section class="mt-3">
+         |  <h3 class="h6">Component Admin Pages</h3>
+         |  ${_component_owned_admin_pages_list(pages)}
+         |</section>""".stripMargin
+    }
+
+  private def _component_owned_admin_pages_list(
+    pages: Vector[WebDescriptor.AdminPage]
+  ): String = {
+    val items = pages.map { page =>
+      val description = Option(page.description).map(_.trim).filter(_.nonEmpty)
+        .map(value => s"""<p class="mb-2 text-body-secondary">${_escape(value)}</p>""")
+        .getOrElse("")
+      s"""<a class="list-group-item list-group-item-action" href="${_escape(page.href)}">
+         |  <div class="d-flex justify-content-between align-items-start gap-3">
+         |    <div>
+         |      <div class="fw-semibold">${_escape(page.effectiveLabel)}</div>
+         |      ${description}
+         |      <code>${_escape(page.href)}</code>
+         |    </div>
+         |    <span class="badge text-bg-secondary">${_escape(page.effectivePermission)}</span>
+         |  </div>
+         |</a>""".stripMargin
+    }
+    s"""<div class="list-group">${items.mkString("\n")}</div>"""
+  }
 
   private def _admin_runtime_configuration(
     configuration: Option[ResolvedConfiguration]
@@ -7681,8 +7852,19 @@ object StaticFormAppRenderer {
       _admin_card("Operational Details", body)
     }.getOrElse("")
 
-  private def _system_admin_operational_details: String =
-    """<div class="row g-3">
+  private def _system_admin_operational_details(
+    webDescriptor: WebDescriptor
+  ): String = {
+    val systemPages = webDescriptor.adminPagesForAudience(WebDescriptor.AdminAudience.System)
+    val systemPageLinks =
+      if (systemPages.isEmpty)
+        ""
+      else
+        s"""<div class="mt-3">
+           |  <h3 class="h6">System Admin Pages</h3>
+           |  ${_component_owned_admin_pages_list(systemPages)}
+           |</div>""".stripMargin
+    s"""<div class="row g-3">
       |  <div class="col-12 col-lg-6">
       |    <section class="h-100">
       |      <h3 class="h6">Assembly</h3>
@@ -7701,7 +7883,9 @@ object StaticFormAppRenderer {
       |      </div>
       |    </section>
       |  </div>
-      |</div>""".stripMargin
+      |</div>
+      |${systemPageLinks}""".stripMargin
+  }
 
   private def _componentlet_table(
     component: Component
@@ -7747,8 +7931,9 @@ object StaticFormAppRenderer {
     formsPath.map { path =>
       val componentPath = path.stripPrefix("/form/")
       s"""<section class="admin-section">
-         |  <h2 class="h5">Management Console Home</h2>
-         |  <p>Use the cards below for ordinary management work. Operation selectors and protocol paths stay available as technical reference only.</p>
+         |  <h2 class="h5">Component Admin</h2>
+         |  <p>Use Application Admin for ordinary operator workflows. This component page remains available for component-specific drill-down and technical reference.</p>
+         |  ${_admin_action_row(Vector("Application admin" -> "/web/admin"), primary = false)}
          |  ${_component_admin_management_cards(componentPath, path)}
          |  <details class="mt-3">
          |    <summary>Technical details</summary>

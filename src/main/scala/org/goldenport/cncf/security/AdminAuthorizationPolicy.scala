@@ -4,7 +4,7 @@ import org.goldenport.cncf.config.{OperationMode, RuntimeConfig}
 
 /*
  * @since   Apr. 25, 2026
- * @version Apr. 25, 2026
+ * @version May.  9, 2026
  * @author  ASAMI, Tomoharu
  */
 object AdminAuthorizationPolicy {
@@ -25,6 +25,13 @@ object AdminAuthorizationPolicy {
   ): OperationAuthorizationRule =
     if (!runtimeConfig.webProductionAdminEnabled)
       OperationAuthorizationRule(deny = true)
+    else if (_is_application_admin(selector))
+      OperationAuthorizationRule(
+        requireAuthenticated = true,
+        requireProviderAuthentication = true,
+        minimumPrivilege = Some("operator"),
+        roles = runtimeConfig.webProductionAdminComponentRoles
+      )
     else if (_is_component_admin(selector))
       OperationAuthorizationRule(
         requireAuthenticated = true,
@@ -46,6 +53,13 @@ object AdminAuthorizationPolicy {
         minimumPrivilege = Some("system"),
         roles = runtimeConfig.webProductionAdminSystemRoles
       )
+
+  private def _is_application_admin(
+    selector: String
+  ): Boolean = {
+    val normalized = _normalize(selector)
+    normalized.startsWith("admin.application.")
+  }
 
   private def _is_component_admin(
     selector: String

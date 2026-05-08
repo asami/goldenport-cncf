@@ -10,7 +10,7 @@ import org.goldenport.cncf.naming.NamingConventions
 /*
  * @since   Apr. 15, 2026
  *  version Apr. 21, 2026
- * @version May.  6, 2026
+ * @version May.  9, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class FormResultMetadata(
@@ -20,9 +20,16 @@ final case class FormResultMetadata(
   outcome: Option[String] = None,
   message: Option[String] = None,
   totalCount: Option[Long] = None,
+  fetchedCount: Option[Long] = None,
+  limit: Option[Long] = None,
   actions: Vector[FormResultMetadata.Action] = Vector.empty
 ) {
   def toTemplateValues: Map[String, String] = {
+    val hasNext = for {
+      fetched <- fetchedCount
+      n <- limit
+      if n > 0
+    } yield fetched >= n
     val scalar =
       id.map("result.id" -> _).toMap ++
         jobId.map("result.job.id" -> _).toMap ++
@@ -31,6 +38,9 @@ final case class FormResultMetadata(
         message.map("result.message" -> _).toMap ++
         totalCount.map(x => "result.totalCount" -> x.toString).toMap ++
         totalCount.map(x => "paging.total" -> x.toString).toMap ++
+        fetchedCount.map(x => "result.fetchedCount" -> x.toString).toMap ++
+        limit.map(x => "result.limit" -> x.toString).toMap ++
+        hasNext.map(x => "paging.hasNext" -> x.toString).toMap ++
         (if (actions.nonEmpty) Map("result.actions.count" -> actions.length.toString) else Map.empty)
     scalar ++ _action_values
   }
@@ -91,7 +101,33 @@ object FormResultMetadata {
         jobStatus = _first_string(cursor, Vector("jobStatus", "job-status", "job.status", "result.jobStatus", "result.job-status", "result.job.status")),
         outcome = _first_string(cursor, Vector("outcome", "result.outcome")),
         message = _first_string(cursor, Vector("message", "result.message", "error.message")),
-        totalCount = _first_long(cursor, Vector("totalCount", "total_count", "total-count", "result.totalCount", "result.total_count", "result.total-count")),
+        totalCount = _first_long(cursor, Vector(
+          "totalCount",
+          "total_count",
+          "total-count",
+          "data.totalCount",
+          "data.total_count",
+          "data.total-count",
+          "result.totalCount",
+          "result.total_count",
+          "result.total-count"
+        )),
+        fetchedCount = _first_long(cursor, Vector(
+          "fetchedCount",
+          "fetched_count",
+          "fetched-count",
+          "data.fetchedCount",
+          "data.fetched_count",
+          "data.fetched-count",
+          "result.fetchedCount",
+          "result.fetched_count",
+          "result.fetched-count"
+        )),
+        limit = _first_long(cursor, Vector(
+          "limit",
+          "data.limit",
+          "result.limit"
+        )),
         actions = _actions(cursor)
       )
     }

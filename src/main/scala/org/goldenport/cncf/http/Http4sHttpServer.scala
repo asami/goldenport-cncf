@@ -122,25 +122,25 @@ final class Http4sHttpServer(
         _web_global_asset(_web_global_asset_path(req).get)
       case req @ GET -> Root / "web" / "blob" / "content" / id =>
         _blob_content(req, id)
-      case GET -> Root / "web" / "system" / "dashboard" =>
-        _subsystem_dashboard()
-      case GET -> Root / "web" / "system" / "dashboard" / "state" =>
-        _dashboard_state(None)
-      case GET -> Root / "web" / "system" / "performance" =>
-        _system_performance()
-      case GET -> Root / "web" / "system" / "document" =>
-        _system_document()
-      case GET -> Root / "web" / "system" / "document" / "specification" =>
-        _system_manual()
-      case GET -> Root / "web" / "system" / "document" / "specification" / "openapi.json" =>
-        _system_manual_openapi()
+      case req @ GET -> Root / "web" / "system" / "dashboard" =>
+        if (_is_web_authorized("system", "dashboard", "index", Some(req), Some("admin.system.dashboard"))) _subsystem_dashboard() else _forbidden_web(req, Some("system"), Some("dashboard"), Some("index"))
+      case req @ GET -> Root / "web" / "system" / "dashboard" / "state" =>
+        if (_is_web_authorized("system", "dashboard", "state", Some(req), Some("admin.system.dashboard"))) _dashboard_state(None) else _forbidden_web(req, Some("system"), Some("dashboard"), Some("state"))
+      case req @ GET -> Root / "web" / "system" / "performance" =>
+        if (_is_web_authorized("system", "performance", "index", Some(req), Some("admin.system.performance"))) _system_performance() else _forbidden_web(req, Some("system"), Some("performance"), Some("index"))
+      case req @ GET -> Root / "web" / "system" / "document" =>
+        if (_is_web_authorized("system", "document", "index", Some(req), Some("admin.system.document"))) _system_document() else _forbidden_web(req, Some("system"), Some("document"), Some("index"))
+      case req @ GET -> Root / "web" / "system" / "document" / "specification" =>
+        if (_is_web_authorized("system", "document", "specification", Some(req), Some("admin.system.document"))) _system_manual() else _forbidden_web(req, Some("system"), Some("document"), Some("specification"))
+      case req @ GET -> Root / "web" / "system" / "document" / "specification" / "openapi.json" =>
+        if (_is_web_authorized("system", "document", "openapi", Some(req), Some("admin.system.document"))) _system_manual_openapi() else _forbidden_web(req, Some("system"), Some("document"), Some("openapi"))
       case req @ GET -> Root / "web" / app / "login" =>
-        _web_route_alias(Vector("web", app, "login")).flatMap {
+        _web_route_alias(req, Vector("web", app, "login")).flatMap {
           case Some(response) => IO.pure(response)
           case None => _login_page(req, app)
         }
       case req @ GET -> Root / "web" / app / "signup" =>
-        _web_route_alias(Vector("web", app, "signup")).flatMap {
+        _web_route_alias(req, Vector("web", app, "signup")).flatMap {
           case Some(response) => IO.pure(response)
           case None => _component_web_app_or_static_form_app(app, "signup")
         }
@@ -155,13 +155,13 @@ final class Http4sHttpServer(
       case req @ POST -> Root / "web" / "system" / "jobs" / jobId / "await" =>
         _system_job_await(req, jobId)
       case req @ GET -> Root / "web" / "system" / "admin" =>
-        if (_is_web_authorized("system", "admin", "index", Some(req))) _system_admin() else _forbidden_web(req, Some("system"), Some("admin"), Some("index"))
+        if (_is_web_authorized("system", "admin", "index", Some(req), Some("admin.system.index"))) _system_admin() else _forbidden_web(req, Some("system"), Some("admin"), Some("index"))
       case req @ GET -> Root / "web" / "system" / "admin" / "descriptor" =>
-        if (_is_web_authorized("system", "admin", "descriptor", Some(req))) _system_admin_descriptor() else _forbidden_web(req, Some("system"), Some("admin"), Some("descriptor"))
+        if (_is_web_authorized("system", "admin", "descriptor", Some(req), Some("admin.system.descriptor"))) _system_admin_descriptor() else _forbidden_web(req, Some("system"), Some("admin"), Some("descriptor"))
       case req @ GET -> Root / "web" / "system" / "admin" / "assembly" / "warnings" =>
-        if (_is_web_authorized("system", "admin.assembly", "warnings", Some(req))) _system_admin_assembly_warnings() else _forbidden_web(req, Some("system"), Some("admin.assembly"), Some("warnings"))
+        if (_is_web_authorized("system", "admin.assembly", "warnings", Some(req), Some("admin.system.assembly"))) _system_admin_assembly_warnings() else _forbidden_web(req, Some("system"), Some("admin.assembly"), Some("warnings"))
       case req @ GET -> Root / "web" / "system" / "admin" / "assembly" / "report" =>
-        if (_is_web_authorized("system", "admin.assembly", "report", Some(req))) _system_admin_assembly_report() else _forbidden_web(req, Some("system"), Some("admin.assembly"), Some("report"))
+        if (_is_web_authorized("system", "admin.assembly", "report", Some(req), Some("admin.system.assembly"))) _system_admin_assembly_report() else _forbidden_web(req, Some("system"), Some("admin.assembly"), Some("report"))
       case req @ GET -> Root / "web" / "system" / "admin" / "jobs" =>
         if (_is_web_authorized("system", "admin.jobs", "index", Some(req))) _system_admin_jobs() else _forbidden_web(req, Some("system"), Some("admin.jobs"), Some("index"))
       case req @ GET -> Root / "web" / "system" / "admin" / "jobs" / jobId =>
@@ -184,6 +184,8 @@ final class Http4sHttpServer(
         if (_is_web_authorized("blob", "admin.associations", "detach", Some(req), Some("admin.entity.update"))) _blob_admin_association_detach(req) else _forbidden_web(req, Some("blob"), Some("admin.associations"), Some("detach"))
       case req @ GET -> Root / "web" / "blob" / "admin" / "store" =>
         if (_is_web_authorized("blob", "admin.store", "index", Some(req))) _blob_admin_store(req) else _forbidden_web(req, Some("blob"), Some("admin.store"), Some("index"))
+      case req @ GET -> Root / "web" / "admin" =>
+        if (_is_web_authorized("admin", "application", "index", Some(req), Some("admin.application.index"))) _application_admin() else _forbidden_web(req, Some("admin"), Some("application"), Some("index"))
       case req @ GET -> Root / "web" / "admin" / "associations" =>
         if (_is_web_authorized("admin", "associations", "index", Some(req), Some("admin.entity.read"))) _admin_associations(req) else _forbidden_web(req, Some("admin"), Some("associations"), Some("index"))
       case req @ POST -> Root / "web" / "admin" / "associations" / "attach" =>
@@ -244,6 +246,16 @@ final class Http4sHttpServer(
         if (_is_web_authorized(app, "admin.views", view, Some(req))) _component_admin_view_instance_detail(app, view, id) else _forbidden_web(req, Some(app), Some("admin.views"), Some(view))
       case req @ GET -> Root / "web" / app / "admin" / "views" / view =>
         if (_is_web_authorized(app, "admin.views", view, Some(req))) _component_admin_view_detail(req, app, view) else _forbidden_web(req, Some(app), Some("admin.views"), Some(view))
+      case req @ GET -> Root / "web" / app / "admin" / page =>
+        engine.webDescriptor.adminPage(app, page) match {
+          case Some(entry) =>
+            if (_is_web_authorized(app, "admin.pages", entry.normalizedName, Some(req), Some(entry.effectivePermission)))
+              _component_admin_page(app, entry)
+            else
+              _forbidden_web(req, Some(app), Some("admin.pages"), Some(entry.normalizedName))
+          case None =>
+            IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component admin page not found"))
+        }
       case GET -> Root / "web" / app / "document" =>
         _component_document(app)
       case GET -> Root / "web" / app / "document" / "specification" =>
@@ -256,8 +268,8 @@ final class Http4sHttpServer(
         _component_document_asset(app, Vector(documentPath))
       case GET -> Root / "web" / app / "document" / documentPath / documentName =>
         _component_document_asset(app, Vector(documentPath, documentName))
-      case GET -> Root / "web" =>
-        _web_route_alias(Vector("web")).flatMap {
+      case req @ GET -> Root / "web" =>
+        _web_route_alias(req, Vector("web")).flatMap {
           case Some(response) => IO.pure(response)
           case None =>
             if (_show_runtime_landing)
@@ -273,10 +285,10 @@ final class Http4sHttpServer(
       case req @ GET -> _ if _web_alias_asset_path(req).nonEmpty =>
         val (app, assetPath) = _web_alias_asset_path(req).get
         _web_route_alias_asset(app, assetPath)
-      case GET -> Root / "web" / component / webApp / page =>
-        _component_web_app(component, webApp, Vector(page))
-      case GET -> Root / "web" / app =>
-        _web_route_alias(Vector("web", app)).flatMap {
+      case req @ GET -> Root / "web" / component / webApp / page =>
+        _component_web_app(component, webApp, Vector(page), Some(req))
+      case req @ GET -> Root / "web" / app =>
+        _web_route_alias(req, Vector("web", app)).flatMap {
           case Some(response) => IO.pure(response)
           case None =>
             _component_default_web_app_redirect(app) match {
@@ -466,6 +478,9 @@ final class Http4sHttpServer(
       case None =>
         _html_status(StaticFormAppRenderer.renderSystemJobResult(jobId, HttpResponse.notFound(s"job not found: $jobId")), HStatus.NotFound)
     }
+
+  private def _application_admin(): IO[HResponse[IO]] =
+    _html(StaticFormAppRenderer.renderApplicationAdmin(engine.runtimeSubsystem, engine.webDescriptor))
 
   private def _blob_admin(): IO[HResponse[IO]] =
     _html(StaticFormAppRenderer.renderBlobAdmin(), Some("blob"))
@@ -1037,6 +1052,7 @@ final class Http4sHttpServer(
       }
 
   private[http] def _web_route_alias(
+    req: org.http4s.Request[IO],
     path: Vector[String]
   ): IO[Option[HResponse[IO]]] =
     engine.webDescriptor.webRouteFor(path) match {
@@ -1047,7 +1063,8 @@ final class Http4sHttpServer(
               _component_web_app(
                 route.target.normalizedComponent,
                 route.target.normalizedApp,
-                Vector.empty
+                Vector.empty,
+                Some(req)
               ).map(Some(_))
             else
               _static_form_app(route.target.normalizedApp, Vector.empty).map(Some(_))
@@ -1055,13 +1072,15 @@ final class Http4sHttpServer(
             _component_web_app(
               route.target.normalizedComponent,
               route.target.normalizedApp,
-              route.remainingPath
+              route.remainingPath,
+              Some(req)
             ).map(Some(_))
           case _ =>
             _component_web_app(
               route.target.normalizedComponent,
               route.target.normalizedApp,
-              route.remainingPath
+              route.remainingPath,
+              Some(req)
             ).map(Some(_))
         }
       case None =>
@@ -1088,23 +1107,29 @@ final class Http4sHttpServer(
   private[http] def _component_web_app(
     componentName: String,
     webAppName: String,
-    page: Vector[String]
+    page: Vector[String],
+    req: Option[org.http4s.Request[IO]] = None
   ): IO[HResponse[IO]] =
     if (!_component_exists(componentName))
       IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component Web app not found"))
     else
       _web_app_static_html_content(Some(componentName), webAppName, page) match {
         case Some(content) =>
-          _web_app_static_page(Some(componentName), webAppName, page, content) match {
-            case Consequence.Success(page) =>
-              _html_content(page.body, Some(webAppName), Some(componentName))
-            case Consequence.Failure(conclusion) =>
-              _web_error_response(
-                Some(webAppName),
-                HStatus.InternalServerError,
-                conclusion,
-                s"/web/${componentName}/${webAppName}${page.map(p => s"/${p}").mkString}"
-              )
+          _web_operation_result_widget(content) match {
+            case Some(widget) =>
+              _web_operation_result_page(req, componentName, webAppName, page, widget)
+            case None =>
+              _web_app_static_page(Some(componentName), webAppName, page, content) match {
+                case Consequence.Success(page) =>
+                  _html_content(page.body, Some(webAppName), Some(componentName))
+                case Consequence.Failure(conclusion) =>
+                  _web_error_response(
+                    Some(webAppName),
+                    HStatus.InternalServerError,
+                    conclusion,
+                    s"/web/${componentName}/${webAppName}${page.map(p => s"/${p}").mkString}"
+                  )
+              }
           }
         case None =>
           _web_error_response(
@@ -1114,6 +1139,140 @@ final class Http4sHttpServer(
             s"/web/${componentName}/${webAppName}${page.map(p => s"/${p}").mkString}"
           )
       }
+
+  private final case class WebOperationResultWidget(
+    component: String,
+    service: String,
+    operation: String,
+    values: Map[String, String],
+    label: Option[String]
+  )
+
+  private def _web_operation_result_widget(
+    content: String
+  ): Option[WebOperationResultWidget] = {
+    val widget = """(?s)<textus(?::operation-result|-operation-result)\b([^>]*)/?>(?:\s*</textus(?::operation-result|-operation-result)>)?""".r
+    widget.findFirstMatchIn(content).flatMap { m =>
+      val attrs = _web_widget_attrs(m.group(1))
+      for {
+        component <- attrs.get("component").orElse(attrs.get("app")).map(_.trim).filter(_.nonEmpty)
+        service <- attrs.get("service").map(_.trim).filter(_.nonEmpty)
+        operation <- attrs.get("operation").map(_.trim).filter(_.nonEmpty)
+      } yield {
+        val reserved = Set("component", "app", "service", "operation", "debug-label", "debugLabel")
+        WebOperationResultWidget(
+          component,
+          service,
+          operation,
+          attrs.filterNot { case (key, _) => reserved.contains(key) },
+          attrs.get("debug-label").orElse(attrs.get("debugLabel"))
+        )
+      }
+    }
+  }
+
+  private def _web_widget_attrs(
+    source: String
+  ): Map[String, String] =
+    """([A-Za-z0-9_.:-]+)\s*=\s*(?:"([^"]*)"|'([^']*)')""".r.findAllMatchIn(source).map { m =>
+      m.group(1) -> Option(m.group(2)).getOrElse(m.group(3))
+    }.toMap
+
+  private def _web_operation_result_page(
+    req: Option[org.http4s.Request[IO]],
+    ownerComponentName: String,
+    webAppName: String,
+    page: Vector[String],
+    widget: WebOperationResultWidget
+  ): IO[HResponse[IO]] =
+    req match {
+      case Some(request) =>
+        _web_operation_result_page(request, ownerComponentName, webAppName, page, widget)
+      case None =>
+        _web_error_response(
+          Some(webAppName),
+          HStatus.InternalServerError,
+          "Static Form operation-result requires request context",
+          s"/web/${ownerComponentName}/${webAppName}${page.map(p => s"/${p}").mkString}"
+        )
+    }
+
+  private def _web_operation_result_page(
+    req: org.http4s.Request[IO],
+    ownerComponentName: String,
+    webAppName: String,
+    page: Vector[String],
+    widget: WebOperationResultWidget
+  ): IO[HResponse[IO]] = {
+    val app = widget.component
+    val service = widget.service
+    val operation = widget.operation
+    if (!_is_form_enabled(app, service, operation))
+      _web_error_response(Some(webAppName), HStatus.NotFound, "Static Form operation-result operation not found", req.uri.path.renderString)
+    else if (!_is_web_authorized(app, service, operation, Some(req)))
+      _forbidden_web(req, Some(app), Some(service), Some(operation))
+    else {
+      val started = System.nanoTime()
+      val queryValues = req.uri.query.params.toMap
+      val values = widget.values ++ queryValues
+      val form = Record.create(values.toVector)
+      val query = Record.create(req.uri.query.params.toVector)
+      val header = _web_operation_result_header(req, query, form, widget.label.getOrElse(s"${service}.${operation}"))
+      val result = _dispatch_operation_result(
+        app,
+        service,
+        operation,
+        HttpRequest.fromPath(
+          method = HttpRequest.POST,
+          path = s"/${app}/${service}/${operation}",
+          query = query,
+          header = header,
+          form = _operation_dispatch_form(form)
+        )
+      )
+      val res = result.response
+      val continuation = _create_form_continuation(app, service, operation, form, res, _form_chunk_size(form))
+      val properties = _form_result_properties(app, service, operation, result, values ++ _continuation_values(continuation))
+      _prepared_form_result_template(app, service, operation, res.code, properties.page.values) match {
+        case Consequence.Success(template) =>
+          _html(StaticFormAppRenderer.renderFormResult(properties, template), Some(webAppName)).map { response =>
+            RuntimeDashboardMetrics.recordHtmlRequest(
+              req.method.name,
+              req.uri.path.renderString,
+              res.code,
+              (System.nanoTime() - started) / 1000000L
+            )
+            response
+          }
+        case Consequence.Failure(conclusion) =>
+          _web_error_response(Some(webAppName), HStatus.InternalServerError, conclusion, req.uri.path.renderString, req.method.name)
+      }
+    }
+  }
+
+  private def _web_operation_result_header(
+    req: org.http4s.Request[IO],
+    query: Record,
+    form: Record,
+    label: String
+  ): Record = {
+    val base = _development_form_header_record(req, query, form)
+    if (!_is_development_operation_mode(_operation_mode))
+      base
+    else {
+      Record.create(
+        _with_header_if_absent(
+          _with_header_if_absent(
+            _with_header_if_absent(base.asMap.toVector, "x-textus-debug-request-kind", "page-render"),
+            "x-textus-debug-label",
+            label
+          ),
+          "x-textus-debug-display",
+          "always"
+        )
+      )
+    }
+  }
 
   private[http] def _component_web_app_or_static_form_app(
     first: String,
@@ -1153,6 +1312,12 @@ final class Http4sHttpServer(
       case None =>
         IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component descriptor admin not found"))
     }
+
+  private def _component_admin_page(
+    app: String,
+    entry: WebDescriptor.AdminPage
+  ): IO[HResponse[IO]] =
+    _component_web_app(app, "admin", Vector(entry.normalizedName))
 
   private def _component_admin_entities(app: String): IO[HResponse[IO]] =
     StaticFormAppRenderer.renderComponentAdminEntities(engine.runtimeSubsystem, app) match {

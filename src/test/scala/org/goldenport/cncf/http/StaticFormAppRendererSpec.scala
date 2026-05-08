@@ -57,7 +57,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr. 12, 2026
- * @version May.  8, 2026
+ * @version May.  9, 2026
  * @author  ASAMI, Tomoharu
  */
 final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
@@ -822,10 +822,11 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("/web/system/performance")
       html should include ("/web/system/document")
       html should include ("/web/console")
-      html should include ("Management Console Home")
+      html should include ("Component Admin")
+      html should include ("/web/admin")
       html should include (s"/form/${org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)}")
       html should include (s"/web/${org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)}/admin/descriptor")
-      html should include ("Management Console Home")
+      html should include ("Use Application Admin for ordinary operator workflows")
       html should include ("Open Entities")
       html should include ("Open Data")
       html should include ("Open Aggregates")
@@ -6030,8 +6031,20 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         .orNotFound
         .run(_with_session(_get_request("/web/system/admin"), "system-admin-session"))
         .unsafeRunSync()
+      val performance = server
+        .routes(null)
+        .orNotFound
+        .run(_with_session(_get_request("/web/system/performance"), "system-admin-session"))
+        .unsafeRunSync()
+      val assembly = server
+        .routes(null)
+        .orNotFound
+        .run(_with_session(_get_request("/web/system/admin/assembly/report"), "system-admin-session"))
+        .unsafeRunSync()
 
       response.status.code shouldBe 200
+      performance.status.code shouldBe 200
+      assembly.status.code shouldBe 200
     }
 
     "allow audit viewer session to read production admin jobs but not system admin home" in {
@@ -6064,9 +6077,15 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         .orNotFound
         .run(_with_session(_get_request("/web/system/admin"), "audit-viewer-session"))
         .unsafeRunSync()
+      val performance = server
+        .routes(null)
+        .orNotFound
+        .run(_with_session(_get_request("/web/system/performance"), "audit-viewer-session"))
+        .unsafeRunSync()
 
       jobs.status.code shouldBe 200
       home.status.code shouldBe 403
+      performance.status.code shouldBe 403
     }
 
     "allow authenticated admin form API when develop anonymous admin is disabled" in {
@@ -8523,6 +8542,42 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should not include ("/form/notice-board/notice/search-notices/result?page=2&amp;pageSize=20")
     }
 
+    "preserve form result context in default paging href" in {
+      val properties = StaticFormAppRenderer.FormResultProperties(
+        StaticFormAppRenderer.FormPageProperties(
+          "textus-user-notification",
+          "notification",
+          "search-my-notifications",
+          Map(
+            "textus.form.page" -> "notifications",
+            "limit" -> "100",
+            "unreadOnly" -> "true",
+            "password" -> "secret-password",
+            "x-textus-session" -> "session-1",
+            "textus.debug.executionPanel" -> "true"
+          )
+        ),
+        200,
+        "application/json",
+        """{"data":{"total_count":0,"offset":0,"limit":100,"fetched_count":0}}"""
+      )
+
+      val html = StaticFormAppRenderer.renderFormResult(
+        properties,
+        """<article><textus:card-list source="result.body" title="title"></textus:card-list></article>"""
+      ).body
+
+      html should include ("textus.form.page=notifications")
+      html should include ("limit=100")
+      html should include ("unreadOnly=true")
+      html should include ("page=2&amp;pageSize=100")
+      html should include ("No records")
+      html should include ("""<li class="page-item disabled"><a class="page-link" href="/form/textus-user-notification/notification/search-my-notifications/result?limit=100&amp;textus.form.page=notifications&amp;unreadOnly=true&amp;page=2&amp;pageSize=100">Next</a></li>""")
+      html should not include ("textus.debug.executionPanel")
+      html should not include ("secret-password")
+      html should not include ("x-textus-session=session-1")
+    }
+
     "render textus record card with CML summary columns" in {
       val columns = Vector(
         StaticFormAppRenderer.TableColumn("title", "Title"),
@@ -9502,6 +9557,78 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       StaticFormAppAssets.bootstrapBundleJs should include ("bootstrap=e()")
       StaticFormAppAssets.bootstrapBundleJs should include ("Dropdown")
       StaticFormAppAssets.bootstrapBundleJs should not include ("cdn.jsdelivr")
+    }
+
+    "render descriptor-declared component admin pages on component admin home" in {
+      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
+      val componentPath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)
+      val descriptor = WebDescriptor(
+        adminPages = Vector(WebDescriptor.AdminPage(
+          name = "notifications",
+          label = "Notification Admin",
+          href = s"/web/${componentPath}/admin/notifications",
+          description = "Manage notification records.",
+          permission = Some("admin.entity.read"),
+          component = Some(componentPath)
+        ))
+      )
+
+      val html = StaticFormAppRenderer.renderComponentAdmin(subsystem, componentPath, descriptor).map(_.body).getOrElse(fail("component admin is missing"))
+
+      html should include ("Component Admin Pages")
+      html should include ("Notification Admin")
+      html should include (s"""href="/web/${componentPath}/admin/notifications"""")
+      html should include ("Manage notification records.")
+      html should include ("admin.entity.read")
+      html should include ("list-group")
+    }
+
+    "render Application Admin separately from System Admin diagnostics" in {
+      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
+      val componentPath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)
+      val descriptor = WebDescriptor(
+        adminPages = Vector(
+          WebDescriptor.AdminPage(
+            name = "notifications",
+            label = "Notification Admin",
+            href = s"/web/${componentPath}/admin/notifications",
+            description = "Manage notification records.",
+            permission = Some("admin.entity.read"),
+            component = Some(componentPath),
+            audience = WebDescriptor.AdminAudience.Application,
+            audienceRaw = Some("application")
+          ),
+          WebDescriptor.AdminPage(
+            name = "runtime-probe",
+            label = "Runtime Probe",
+            href = s"/web/${componentPath}/admin/runtime-probe",
+            description = "Inspect runtime-only probe state.",
+            permission = Some("admin.system.read"),
+            component = Some(componentPath),
+            audience = WebDescriptor.AdminAudience.System,
+            audienceRaw = Some("system")
+          )
+        )
+      )
+
+      val appHtml = StaticFormAppRenderer.renderApplicationAdmin(subsystem, descriptor).body
+      val systemHtml = StaticFormAppRenderer.renderSystemAdmin(subsystem, descriptor).body
+
+      appHtml should include ("Application Admin")
+      appHtml should include ("Notification Admin")
+      appHtml should include (s"""/web/${componentPath}/admin""")
+      appHtml should include ("System admin")
+      appHtml should not include ("Runtime Probe")
+      appHtml should not include ("Runtime Configuration")
+      appHtml should not include ("Assembly report")
+      appHtml should not include ("Execution history")
+      systemHtml should include ("""href="/web/admin"""")
+      systemHtml should include ("Application admin")
+      systemHtml should include ("Runtime Configuration")
+      systemHtml should include ("Assembly report")
+      systemHtml should include ("Runtime Probe")
     }
 
     "provide Bootstrap 5 by default in the Static Form App layout" in {

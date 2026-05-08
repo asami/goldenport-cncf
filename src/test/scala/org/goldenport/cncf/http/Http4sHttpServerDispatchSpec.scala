@@ -23,7 +23,7 @@ import org.typelevel.ci.CIStringSyntax
 /*
  * @since   Apr. 24, 2026
  *  version Apr. 25, 2026
- * @version May.  8, 2026
+ * @version May.  9, 2026
  * @author  ASAMI, Tomoharu
  */
 class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers {
@@ -375,8 +375,56 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers {
       StaticFormAppAssets.textusFormDebugJs should include ("sessionStorage")
       StaticFormAppAssets.textusFormDebugJs should include ("textus.form.debug.carryover.v1")
       StaticFormAppAssets.textusFormDebugJs should include ("function takeCarryover")
+      StaticFormAppAssets.textusFormDebugJs should include ("function hasServerExecutionPanel")
+      StaticFormAppAssets.textusFormDebugJs should include ("textus-execution-debug-panel")
       StaticFormAppAssets.textusFormDebugJs should include ("<details class=\"card border-secondary-subtle bg-body-tertiary\">")
       StaticFormAppAssets.textusFormDebugJs should not include ("<details class=\"card border-secondary-subtle bg-body-tertiary\" open>")
+    }
+
+    "serve only descriptor-declared component admin pages" in {
+      val root = Files.createTempDirectory("http4s-http-server-admin-page-spec")
+      Files.createDirectories(root.resolve("admin"))
+      Files.writeString(
+        root.resolve("web.yaml"),
+        """admin:
+          |  pages:
+          |    - name: notifications
+          |      label: Notification Admin
+          |      href: /web/debug/admin/notifications
+          |      permission: admin.entity.read
+          |      component: debug
+          |""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+      Files.writeString(
+        root.resolve("admin").resolve("notifications.html"),
+        """<section><h1>Notification Admin</h1></section>""",
+        StandardCharsets.UTF_8
+      )
+      val configuration = ResolvedConfiguration(
+        Configuration(
+          Map(
+            RuntimeConfig.WebDescriptorKey ->
+              ConfigurationValue.StringValue(root.resolve("web.yaml").toString)
+          )
+        ),
+        ConfigurationTrace.empty
+      )
+      val subsystem = DefaultSubsystemFactory.default(None, configuration)
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val app = server.routes(null.asInstanceOf[org.http4s.server.websocket.WebSocketBuilder2[IO]]).orNotFound
+
+      val applicationAdmin = app.run(HRequest[IO](method = Method.GET, uri = Uri.unsafeFromString("/web/admin"))).unsafeRunSync()
+      val declared = app.run(HRequest[IO](method = Method.GET, uri = Uri.unsafeFromString("/web/debug/admin/notifications"))).unsafeRunSync()
+      val undeclared = app.run(HRequest[IO](method = Method.GET, uri = Uri.unsafeFromString("/web/debug/admin/unknown"))).unsafeRunSync()
+      val applicationAdminBody = applicationAdmin.as[String].unsafeRunSync()
+
+      applicationAdmin.status.code shouldBe 200
+      applicationAdminBody should include ("Application Admin")
+      applicationAdminBody should include ("Notification Admin")
+      declared.status.code shouldBe 200
+      declared.as[String].unsafeRunSync() should include ("Notification Admin")
+      undeclared.status.code shouldBe 404
     }
   }
 

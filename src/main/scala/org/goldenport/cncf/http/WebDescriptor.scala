@@ -13,7 +13,7 @@ import org.goldenport.record.Record
 /*
  * @since   Apr. 14, 2026
  *  version Apr. 25, 2026
- * @version May.  8, 2026
+ * @version May.  9, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class WebDescriptor(
@@ -28,7 +28,8 @@ final case class WebDescriptor(
   pages: Map[String, WebDescriptor.PageCustomization] = Map.empty,
   theme: WebDescriptor.Theme = WebDescriptor.Theme(),
   assets: WebDescriptor.Assets = WebDescriptor.Assets(),
-  admin: Map[String, WebDescriptor.AdminSurface] = Map.empty
+  admin: Map[String, WebDescriptor.AdminSurface] = Map.empty,
+  adminPages: Vector[WebDescriptor.AdminPage] = Vector.empty
 ) {
   def mergeOverride(rhs: WebDescriptor): WebDescriptor = {
     def merge_vector[A, K](
@@ -70,7 +71,8 @@ final case class WebDescriptor(
       pages = pages ++ rhs.pages,
       theme = theme.merge(rhs.theme),
       assets = assets.merge(rhs.assets),
-      admin = admin ++ rhs.admin
+      admin = admin ++ rhs.admin,
+      adminPages = merge_vector(adminPages, rhs.adminPages)(_.scopeKey)
     )
   }
 
@@ -84,6 +86,7 @@ final case class WebDescriptor(
       theme != WebDescriptor.Theme() ||
       assets != WebDescriptor.Assets() ||
       admin.nonEmpty ||
+      adminPages.nonEmpty ||
       defaultView != WebTableColumnResolver.defaultViewName ||
       auth != WebDescriptor.Auth()
 
@@ -345,6 +348,24 @@ final case class WebDescriptor(
       s
     ).flatMap(admin.get).headOption
   }
+
+  def adminPagesFor(
+    componentName: String
+  ): Vector[WebDescriptor.AdminPage] =
+    adminPages.filter(_.matchesComponent(componentName))
+
+  def adminPagesForAudience(
+    audience: WebDescriptor.AdminAudience
+  ): Vector[WebDescriptor.AdminPage] =
+    adminPages.filter(_.audience == audience)
+
+  def adminPage(
+    componentName: String,
+    pageName: String
+  ): Option[WebDescriptor.AdminPage] = {
+    val page = WebDescriptor.normalizeSelector(pageName)
+    adminPagesFor(componentName).find(_.normalizedName == page)
+  }
 }
 
 object WebDescriptor {
@@ -499,6 +520,78 @@ object WebDescriptor {
     totalCount: TotalCountPolicy = TotalCountPolicy.Disabled,
     fields: Vector[AdminField] = Vector.empty
   )
+
+  final case class AdminPage(
+    name: String,
+    label: String = "",
+    href: String = "",
+    description: String = "",
+    permission: Option[String] = None,
+    component: Option[String] = None,
+    audience: AdminAudience = AdminAudience.Application,
+    audienceRaw: Option[String] = None
+  ) {
+    def normalizedName: String =
+      WebDescriptor.normalizeSelector(name)
+
+    def effectiveLabel: String =
+      Option(label).map(_.trim).filter(_.nonEmpty).getOrElse(name)
+
+    def effectivePermission: String =
+      permission.map(_.trim).filter(_.nonEmpty).getOrElse("admin.entity.read")
+
+    def isApplicationAudience: Boolean =
+      audience == AdminAudience.Application
+
+    def isSystemAudience: Boolean =
+      audience == AdminAudience.System
+
+    def scopeKey: String =
+      Vector(component.map(_normalize_app_segment).orElse(hrefComponent), Some(audience.name), Some(normalizedName)).flatten.mkString(":")
+
+    def matchesComponent(componentName: String): Boolean = {
+      val target = _normalize_app_segment(componentName)
+      component.map(_normalize_app_segment) match {
+        case Some(value) => value == target
+        case None => hrefComponent.contains(target)
+      }
+    }
+
+    def componentHrefMismatch: Option[(String, String)] =
+      for {
+        declared <- component.map(_normalize_app_segment)
+        href <- hrefComponent
+        if declared != href
+      } yield declared -> href
+
+    private def hrefComponent: Option[String] = {
+      val parts = Option(href).map(_.trim).filter(_.nonEmpty).getOrElse("").split("/").toVector.filter(_.nonEmpty)
+      parts match {
+        case Vector("web", componentName, "admin", _*) => Some(_normalize_app_segment(componentName))
+        case _ => None
+      }
+    }
+  }
+
+  enum AdminAudience {
+    case Application
+    case System
+
+    def name: String =
+      this match {
+        case Application => "application"
+        case System => "system"
+      }
+  }
+
+  object AdminAudience {
+    def parse(value: String): Option[AdminAudience] =
+      Option(value).map(_.trim.toLowerCase(java.util.Locale.ROOT)).flatMap {
+        case "application" | "app" | "operator" => Some(Application)
+        case "system" | "runtime" => Some(System)
+        case _ => None
+      }
+  }
 
   final case class AdminField(
     name: String,
@@ -740,7 +833,8 @@ object WebDescriptor {
       pages = _pages(web),
       theme = _theme(web),
       assets = _assets(web),
-      admin = _admin(web)
+      admin = _admin(web),
+      adminPages = _admin_pages(web)
     )
   }
 
@@ -773,7 +867,17 @@ object WebDescriptor {
         case shell if shell.component.exists(_.trim.isEmpty) =>
           s"invalid web shell in ${path}: component is empty"
       }
-    invalidApp.orElse(invalidPage).orElse(invalidShell) match {
+    val invalidAdminPage =
+      descriptor.adminPages.collectFirst {
+        case page if page.name.trim.isEmpty =>
+          s"invalid admin page in ${path}: name is required"
+        case page if page.audienceRaw.exists(raw => AdminAudience.parse(raw).isEmpty) =>
+          s"invalid admin page audience in ${path}: ${page.name}=${page.audienceRaw.get}"
+        case page if page.componentHrefMismatch.nonEmpty =>
+          val (declared, href) = page.componentHrefMismatch.get
+          s"invalid admin page component in ${path}: ${page.name} component=${declared}, href component=${href}"
+      }
+    invalidApp.orElse(invalidPage).orElse(invalidShell).orElse(invalidAdminPage) match {
       case Some(message) => Consequence.resourceInvalid(message)
       case None => Consequence.success(descriptor)
     }
@@ -1023,6 +1127,7 @@ object WebDescriptor {
   private def _admin(record: Record): Map[String, AdminSurface] =
     _record_value(record, "admin")
       .map(_.asMap.toVector.flatMap {
+        case (key, _) if _normalize_selector(key) == "pages" => None
         case (key, value) =>
           _any_to_record(value).map { r =>
             _normalize_selector(key) -> AdminSurface(
@@ -1032,6 +1137,57 @@ object WebDescriptor {
           }
       }.toMap)
       .getOrElse(Map.empty)
+
+  private def _admin_pages(record: Record): Vector[AdminPage] =
+    _record_value(record, "admin")
+      .flatMap(_.getAny("pages"))
+      .map { value =>
+        val pages: Vector[AdminPage] = value match {
+        case xs: Seq[?] => xs.toVector.flatMap(_admin_page(_, None))
+        case xs: java.util.List[?] => xs.asScala.toVector.flatMap(_admin_page(_, None))
+        case r: Record =>
+          r.asMap.toVector.flatMap {
+            case (name, value) => _admin_page(value, Some(name))
+          }
+        case m: Map[?, ?] =>
+          m.toVector.flatMap {
+            case (name, pageValue) => _admin_page(pageValue, Some(name.toString))
+          }
+        case m: java.util.Map[?, ?] =>
+          m.asScala.toVector.flatMap {
+            case (name, pageValue) => _admin_page(pageValue, Some(name.toString))
+          }
+        case other => _admin_page(other, None).toVector
+        }
+        pages
+      }.getOrElse(Vector.empty)
+
+  private def _admin_page(
+    value: Any,
+    nameHint: Option[String]
+  ): Option[AdminPage] =
+    value match {
+      case r: Record =>
+        val name = _string(r, "name")
+          .orElse(nameHint.map(_.trim).filter(_.nonEmpty))
+          .getOrElse("")
+        Some(AdminPage(
+          name = name,
+          label = _string(r, "label").getOrElse(""),
+          href = _string(r, "href").getOrElse(""),
+          description = _string(r, "description").getOrElse(""),
+          permission = _string(r, "permission"),
+          component = _string(r, "component"),
+          audience = _string(r, "audience").flatMap(AdminAudience.parse).getOrElse(AdminAudience.Application),
+          audienceRaw = _string(r, "audience")
+        ))
+      case m: Map[?, ?] => _admin_page(_map_to_record(m), nameHint)
+      case m: java.util.Map[?, ?] => _admin_page(_map_to_record(m.asScala.toMap), nameHint)
+      case s: String =>
+        val name = nameHint.getOrElse(s).trim
+        Option.when(name.nonEmpty)(AdminPage(name = name, label = s.trim))
+      case _ => None
+    }
 
   private def _admin_fields(record: Record): Vector[AdminField] = {
     val controls = _form_controls(record)
