@@ -2,6 +2,7 @@ package org.goldenport.cncf.http
 
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
+import java.nio.file.{Files, Paths}
 import org.goldenport.Consequence
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.cncf.component.Component
@@ -2995,7 +2996,7 @@ object StaticFormAppRenderer {
       performancePath = "/web/system/performance",
       webDescriptor = webDescriptor,
       runtimeConfiguration = Some(subsystem.configuration),
-      operationalDetails = Some(_system_admin_operational_details(webDescriptor)),
+      operationalDetails = Some(_system_admin_operational_details(webDescriptor, subsystem.components)),
       componentFormsPath = None
     ))
 
@@ -7853,7 +7854,8 @@ object StaticFormAppRenderer {
     }.getOrElse("")
 
   private def _system_admin_operational_details(
-    webDescriptor: WebDescriptor
+    webDescriptor: WebDescriptor,
+    components: Vector[Component]
   ): String = {
     val systemPages = webDescriptor.adminPagesForAudience(WebDescriptor.AdminAudience.System)
     val systemPageLinks =
@@ -7884,7 +7886,42 @@ object StaticFormAppRenderer {
       |    </section>
       |  </div>
       |</div>
-      |${systemPageLinks}""".stripMargin
+      |${systemPageLinks}
+      |${_component_dev_dir_diagnostics(components)}""".stripMargin
+  }
+
+  private def _component_dev_dir_diagnostics(
+    components: Vector[Component]
+  ): String = {
+    val rows = components.flatMap { component =>
+      component.artifactMetadata.toVector.filter(_.sourceType == "component-dev-dir").map { metadata =>
+        val base = metadata.archivePath.map(p => Paths.get(p).toAbsolutePath.normalize)
+        val classpath = base.map(_.resolve("target").resolve("cncf.d").resolve("runtime-classpath.txt"))
+        val webRoots = base.toVector.flatMap { path =>
+          Vector(path.resolve("car.d").resolve("web"), path.resolve("src").resolve("main").resolve("web"), path.resolve("web"))
+            .filter(Files.isDirectory(_))
+        }.map(path => _escape(path.toString)).mkString("<br>")
+        s"""<tr>
+           |  <td><code>${_escape(component.name)}</code></td>
+           |  <td><code>${_escape(base.map(_.toString).getOrElse(""))}</code></td>
+           |  <td><code>${_escape(classpath.map(_.toString).getOrElse(""))}</code></td>
+           |  <td>${if (webRoots.isEmpty) "<span class=\"text-body-secondary\">No Web root</span>" else webRoots}</td>
+           |</tr>""".stripMargin
+      }
+    }
+    if (rows.isEmpty) {
+      ""
+    } else {
+      s"""<div class="mt-3">
+         |  <h3 class="h6">Component Development Directories</h3>
+         |  <div class="table-responsive">
+         |    <table class="table table-sm table-hover align-middle">
+         |      <thead><tr><th>Component</th><th>Development directory</th><th>Runtime classpath</th><th>Web resource roots</th></tr></thead>
+         |      <tbody>${rows.mkString("\n")}</tbody>
+         |    </table>
+         |  </div>
+         |</div>""".stripMargin
+    }
   }
 
   private def _componentlet_table(

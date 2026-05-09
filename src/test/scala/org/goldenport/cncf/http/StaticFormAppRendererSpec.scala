@@ -189,6 +189,30 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("/form/admin/execution/calltree")
     }
 
+    "render component development directory diagnostics on system admin page" in {
+      val devRoot = Files.createTempDirectory("cncf-component-dev-root-")
+      Files.createDirectories(devRoot.resolve("target").resolve("cncf.d"))
+      Files.createDirectories(devRoot.resolve("src").resolve("main").resolve("web"))
+      val subsystem = _management_console_fixture_subsystem()
+        .add(Vector(TestComponentFactory.create("dev_component", Protocol.empty)))
+      subsystem.components.find(_.name == "dev_component").getOrElse(fail("dev component missing")).withArtifactMetadata(
+        org.goldenport.cncf.component.Component.ArtifactMetadata(
+          sourceType = "component-dev-dir",
+          name = "dev-component",
+          version = "0.1.0",
+          component = Some("dev-component"),
+          archivePath = Some(devRoot.toString)
+        )
+      )
+
+      val html = StaticFormAppRenderer.renderSystemAdmin(subsystem).body
+
+      html should include ("Component Development Directories")
+      html should include ("dev_component")
+      html should include (devRoot.resolve("target").resolve("cncf.d").resolve("runtime-classpath.txt").toString)
+      html should include (devRoot.resolve("src").resolve("main").resolve("web").toString)
+    }
+
     "render system admin jobs list and detail pages" in {
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       val action = _RendererJobAction(GRequest.of(

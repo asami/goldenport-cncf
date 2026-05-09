@@ -17,7 +17,8 @@ import org.goldenport.cncf.subsystem.Subsystem
  *  version Feb.  5, 2026
  *  version Mar. 26, 2026
  *  version Apr. 25, 2026
- * @version May.  1, 2026
+ *  version May.  1, 2026
+ * @version May.  9, 2026
  * @author  ASAMI, Tomoharu
  */
 class ComponentRepositorySpace(
@@ -58,7 +59,7 @@ object ComponentRepositorySpace {
   ) = {
     val extracted = ComponentRepositorySpace.extractRepositoryArgs(configuration, Array[String]())
     ComponentRepositorySpace.resolveSpecifications(extracted.active, cwd, extracted.noDefault) match {
-      case Left(err) => Vector.empty
+      case Left(err) => throw new IllegalStateException(err)
       case Right(specs) => specs
     }
   }
@@ -345,8 +346,9 @@ object ComponentRepositorySpace {
   }
 
   private def _component_dev_repository_spec(value: String): String =
-    if (value.startsWith("component-dir:") || value.contains(":")) value
-    else s"component-dir:${value.stripSuffix("/")}/target"
+    if (value.startsWith("component-dev-dir:")) value
+    else if (value.contains(":")) s"invalid-component-dev-dir:${value}"
+    else s"component-dev-dir:${value}"
 
   private def _config_active_repository_specs(
     configuration: ResolvedConfiguration
@@ -362,7 +364,7 @@ object ComponentRepositorySpace {
       case _ => Vector.empty
     }
     val devDirs = _config_values(configuration, Vector(RuntimeConfig.ComponentDevDirKey, "cncf.component.dev.dir"))
-      .map(v => if (v.startsWith("component-dev-dir:")) v else s"component-dev-dir:${v}")
+      .map(_component_dev_repository_spec)
     val carDirs = _config_values(configuration, Vector(RuntimeConfig.ComponentCarDirKey, "cncf.component.car.dir"))
       .map(v => if (v.startsWith("component-dir:") || v.contains(":")) v else s"component-dir:${v}")
     val sarDirs = _config_values(configuration, Vector(

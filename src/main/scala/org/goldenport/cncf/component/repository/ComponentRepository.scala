@@ -29,7 +29,8 @@ import org.goldenport.cncf.subsystem.GenericSubsystemDescriptor
  *  version Feb.  5, 2026
  *  version Mar. 22, 2026
  *  version Apr. 25, 2026
- * @version May.  1, 2026
+ *  version May.  1, 2026
+ * @version May.  9, 2026
  * @author  ASAMI, Tomoharu
  */
 sealed abstract class ComponentRepository {
@@ -41,6 +42,7 @@ object ComponentRepository extends GlobalObservable {
   private val _component_dir_type = "component-dir"
   private val _component_file_type = "component-file"
   private val _component_dev_dir_type = "component-dev-dir"
+  private val _invalid_component_dev_dir_type = "invalid-component-dev-dir"
   private val _subsystem_dev_dir_type = "subsystem-dev-dir"
   private val _scala_cli_default_dir = ".scala-build"
   private val _component_dir_default_dir = "component.dir"
@@ -121,7 +123,11 @@ object ComponentRepository extends GlobalObservable {
         }
       case `_component_dev_dir_type` =>
         val dir = _resolve_dir(dirOpt, ".", baseDir)
-        Right(ComponentDevDirRepository.Specification(dir))
+        ComponentDevDirRepository.validate(dir).map(_ =>
+          ComponentDevDirRepository.Specification(dir)
+        )
+      case `_invalid_component_dev_dir_type` =>
+        Left("component development directory configuration must be a plain path or component-dev-dir:path; use component-dir/component-file settings for packaged CARs")
       case `_subsystem_dev_dir_type` =>
         val dir = _resolve_dir(dirOpt, ".", baseDir)
         Right(SubsystemDevDirRepository.Specification(dir))
@@ -318,15 +324,17 @@ object ComponentRepository extends GlobalObservable {
   ) extends ComponentRepository {
     def discover(): Seq[Component] = {
       val log = PersistentBootstrapLog.forClass(classOf[ComponentDevDirRepository], ObservabilityScopeDefaults.Bootstrap)
+      ComponentDevDirRepository.validate(baseDir) match {
+        case Left(message) =>
+          throw new IllegalStateException(message)
+        case Right(_) =>
+          ()
+      }
       val classpath = _dev_runtime_classpath(baseDir)
-      if (classpath.isEmpty) {
-        log.warn(s"[component-dev-dir] runtime classpath file missing or empty under ${baseDir}")
-        Vector.empty
-      } else {
+      {
         val classDirs = classpath.filter(Files.isDirectory(_))
         if (classDirs.isEmpty) {
-          log.warn(s"[component-dev-dir] runtime classpath contains no class directories: ${baseDir}")
-          Vector.empty
+          throw new IllegalStateException(ComponentDevDirRepository.noClassDirectoryMessage(baseDir))
         } else {
           val loader = _class_loader_from_paths(classpath, getClass.getClassLoader)
           _discover_components(
@@ -366,7 +374,7 @@ object ComponentRepository extends GlobalObservable {
     }
 
     private def _dev_artifact_metadata(base: Path): Component.ArtifactMetadata = {
-      val descriptor = _dev_component_descriptors(base).headOption
+      val descriptor = ComponentDevDirRepository.devComponentDescriptors(base).headOption
       Component.ArtifactMetadata(
         sourceType = "component-dev-dir",
         name = descriptor.flatMap(_.name).orElse(descriptor.flatMap(_.componentName)).getOrElse(base.getFileName.toString),
@@ -378,17 +386,6 @@ object ComponentRepository extends GlobalObservable {
         effectiveConfig = descriptor.map(_.config).getOrElse(Map.empty)
       )
     }
-
-    private def _dev_component_descriptors(base: Path): Vector[ComponentDescriptor] =
-      Vector(
-        base.resolve("car.d"),
-        base.resolve("src").resolve("main").resolve("car")
-      ).flatMap { dir =>
-        ComponentDescriptorLoader.load(dir) match {
-          case Consequence.Success(xs) => xs
-          case Consequence.Failure(_) => Vector.empty
-        }
-      }
   }
 
   object ComponentDevDirRepository {
@@ -401,7 +398,50 @@ object ComponentRepository extends GlobalObservable {
           params = params,
           packagePrefixes = ComponentRepository.resolvePackagePrefixes()
         )
+
+      override def resolveComponentDescriptor(
+        componentName: String
+      ): Option[ComponentDescriptor] =
+        ComponentDevDirRepository.devComponentDescriptors(baseDir)
+          .find(_matches_component_descriptor(_, componentName))
     }
+
+    def runtimeClasspathFile(base: Path): Path =
+      base.resolve("target").resolve("cncf.d").resolve("runtime-classpath.txt")
+
+    def validate(base: Path): Either[String, Unit] = {
+      val file = runtimeClasspathFile(base)
+      if (!Files.isDirectory(base))
+        Left(s"[component-dev-dir] component development directory not found: ${base}")
+      else if (!Files.isRegularFile(file))
+        Left(missingRuntimeClasspathMessage(base))
+      else if (Files.size(file) == 0L)
+        Left(missingRuntimeClasspathMessage(base))
+      else
+        Right(())
+    }
+
+    def missingRuntimeClasspathMessage(base: Path): String = {
+      val file = runtimeClasspathFile(base)
+      s"[component-dev-dir] runtime classpath file is missing or empty: ${file}. " +
+        s"Run '${base.resolve("scripts").resolve("update-runtime-classpath.sh")}' once for this development component, " +
+        "then restart the application server. CNCF will not fall back to a packaged CAR while component-dev-dir is explicit."
+    }
+
+    def noClassDirectoryMessage(base: Path): String =
+      s"[component-dev-dir] runtime classpath contains no class directories: ${runtimeClasspathFile(base)}. " +
+        s"Run 'sbt --batch compile' in ${base}, then restart the application server."
+
+    def devComponentDescriptors(base: Path): Vector[ComponentDescriptor] =
+      Vector(
+        base.resolve("car.d"),
+        base.resolve("src").resolve("main").resolve("car")
+      ).flatMap { dir =>
+        ComponentDescriptorLoader.load(dir) match {
+          case Consequence.Success(xs) => xs
+          case Consequence.Failure(_) => Vector.empty
+        }
+      }
   }
 
   final class SubsystemDevDirRepository(

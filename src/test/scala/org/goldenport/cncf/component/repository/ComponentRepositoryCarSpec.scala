@@ -16,13 +16,15 @@ import org.goldenport.cncf.workarea.WorkAreaSpace
 import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.component.{ComponentCreate, ComponentDescriptor, ComponentDescriptorLoader, ComponentOrigin}
 import org.goldenport.cncf.subsystem.Subsystem
+import org.goldenport.cncf.testutil.TestComponentFactory
 import org.goldenport.configuration.{Configuration, ConfigurationValue, ResolvedConfiguration}
 import org.goldenport.configuration.ConfigurationTrace
 
 /*
  * @since   Feb.  4, 2026
  *  version Apr. 25, 2026
- * @version May.  1, 2026
+ *  version May.  1, 2026
+ * @version May.  9, 2026
  * @author  ASAMI, Tomoharu
  */
 class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAndAfterAll {
@@ -40,6 +42,75 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
 
       extracted.active shouldBe Right(Vector("component-dev-dir:/tmp/dev-component", "component-dir:/tmp/debug.car.d"))
       extracted.residual.toVector shouldBe Vector("command")
+    }
+
+    "reject explicit component development directory without runtime classpath" in {
+      _with_temp_dir { root =>
+        val componentdir = root.resolve("component")
+        Files.createDirectories(componentdir.resolve("target"))
+
+        val parsed = ComponentRepository.parseSpecs(s"component-dev-dir:${componentdir}", root)
+
+        parsed.left.toOption.get should include ("runtime classpath file is missing or empty")
+        parsed.left.toOption.get should include (componentdir.resolve("target").resolve("cncf.d").resolve("runtime-classpath.txt").toString)
+        parsed.left.toOption.get should include ("will not fall back to a packaged CAR")
+      }
+    }
+
+    "fail repository space creation when configured component development directory is invalid" in {
+      _with_temp_dir { root =>
+        val componentdir = root.resolve("component")
+        Files.createDirectories(componentdir)
+        val configuration = ResolvedConfiguration(
+          Configuration(Map(
+            RuntimeConfig.ComponentDevDirKey -> ConfigurationValue.StringValue(componentdir.toString)
+          )),
+          ConfigurationTrace.empty
+        )
+
+        val thrown = intercept[IllegalStateException] {
+          ComponentRepositorySpace.create(TestComponentFactory.emptySubsystem("dev-dir-fail-fast"), root, configuration)
+        }
+
+        thrown.getMessage should include ("runtime classpath file is missing or empty")
+        thrown.getMessage should include ("will not fall back to a packaged CAR")
+      }
+    }
+
+    "reject CAR schemes in component development directory configuration" in {
+      _with_temp_dir { root =>
+        val configuration = ResolvedConfiguration(
+          Configuration(Map(
+            RuntimeConfig.RepositoryComponentDevDirKey -> ConfigurationValue.StringValue("component-dir:/tmp/packaged-cars")
+          )),
+          ConfigurationTrace.empty
+        )
+
+        val extracted = ComponentRepositorySpace.extractRepositoryArgs(configuration, Array("server"))
+        val parsed = ComponentRepositorySpace.resolveSpecifications(extracted.search, root, noDefault = true)
+
+        parsed.left.toOption.get should include ("component development directory configuration must be a plain path or component-dev-dir:path")
+      }
+    }
+
+    "treat repository component development directories as direct dev-dir repositories" in {
+      _with_temp_dir { root =>
+        val componentdir = root.resolve("textus-user-account")
+        val classdir = componentdir.resolve("target").resolve("scala-3.3.7").resolve("classes")
+        Files.createDirectories(classdir)
+        _write_runtime_classpath(componentdir, classdir)
+        val configuration = ResolvedConfiguration(
+          Configuration(Map(
+            RuntimeConfig.RepositoryComponentDevDirKey -> ConfigurationValue.StringValue(componentdir.toString)
+          )),
+          ConfigurationTrace.empty
+        )
+
+        val extracted = ComponentRepositorySpace.extractRepositoryArgs(configuration, Array("server"))
+        val specs = ComponentRepositorySpace.resolveSpecifications(extracted.search, root, noDefault = true).toOption.get
+
+        specs shouldBe Vector(ComponentRepository.ComponentDevDirRepository.Specification(componentdir))
+      }
     }
 
     "parse explicit expanded SAR directory routes" in {
@@ -132,6 +203,9 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
     "infer subsystem name from explicit component development directory" in {
       _with_temp_dir { root =>
         val componentdir = root.resolve("component")
+        val classdir = componentdir.resolve("target").resolve("scala-3.3.7").resolve("classes")
+        Files.createDirectories(classdir)
+        _write_runtime_classpath(componentdir, classdir)
         Files.createDirectories(componentdir.resolve("src").resolve("main").resolve("car"))
         Files.writeString(
           componentdir.resolve("src").resolve("main").resolve("car").resolve("component-descriptor.yaml"),
@@ -155,6 +229,9 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
     "do not auto-append a packaged CAR when component development directory is explicit" in {
       _with_temp_dir { root =>
         val componentdir = root.resolve("component")
+        val classdir = componentdir.resolve("target").resolve("scala-3.3.7").resolve("classes")
+        Files.createDirectories(classdir)
+        _write_runtime_classpath(componentdir, classdir)
         Files.createDirectories(componentdir.resolve("src").resolve("main").resolve("car"))
         Files.writeString(
           componentdir.resolve("src").resolve("main").resolve("car").resolve("component-descriptor.yaml"),
@@ -609,6 +686,15 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
     entries: Seq[(String, Path)]
   ): Unit =
     _create_zip(target, entries)
+
+  private def _write_runtime_classpath(
+    componentdir: Path,
+    classdir: Path
+  ): Unit = {
+    val file = componentdir.resolve("target").resolve("cncf.d").resolve("runtime-classpath.txt")
+    Files.createDirectories(file.getParent)
+    Files.writeString(file, classdir.toString)
+  }
 
   private def _create_zip(
     target: Path,
