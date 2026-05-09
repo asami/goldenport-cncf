@@ -36,6 +36,7 @@ import cats.~>
  *
  * Helpers such as create()/test() exist only for specs and demos to inject fake or in-memory RuntimeContext.
  * Production execution paths must supply real RuntimeContext instances.
+ * @version May. 10, 2026
  */
 /*
  * @since   Dec. 21, 2025
@@ -352,14 +353,14 @@ object ExecutionContext {
       val observability = i.cncfCore.observability.copy(
         callTreeContext = if (enabled) CallTreeContext.enabled else CallTreeContext.Disabled
       )
-      i.copy(
+      _rebind_runtime_context(i.copy(
         cncfCore = i.cncfCore.copy(
           observability = observability,
           framework = i.cncfCore.framework.copy(
             callTreeEnabled = enabled
           )
         )
-      )
+      ))
     case _ =>
       ctx
   }
@@ -374,7 +375,7 @@ object ExecutionContext {
           i.cncfCore.observability.copy(callTreeContext = CallTreeContext.enabled)
         else
           i.cncfCore.observability
-      i.copy(
+      _rebind_runtime_context(i.copy(
         cncfCore = i.cncfCore.copy(
           observability = observability,
           framework = i.cncfCore.framework.copy(
@@ -382,7 +383,7 @@ object ExecutionContext {
             inlineCallTree = enabled
           )
         )
-      )
+      ))
     case _ =>
       ctx
   }
@@ -397,7 +398,7 @@ object ExecutionContext {
           i.cncfCore.observability.copy(callTreeContext = CallTreeContext.enabled)
         else
           i.cncfCore.observability
-      i.copy(
+      _rebind_runtime_context(i.copy(
         cncfCore = i.cncfCore.copy(
           observability = observability,
           framework = i.cncfCore.framework.copy(
@@ -405,7 +406,7 @@ object ExecutionContext {
             traceJob = enabled
           )
         )
-      )
+      ))
     case _ =>
       ctx
   }
@@ -420,7 +421,7 @@ object ExecutionContext {
           i.cncfCore.observability.copy(callTreeContext = CallTreeContext.enabled)
         else
           i.cncfCore.observability
-      i.copy(
+      _rebind_runtime_context(i.copy(
         cncfCore = i.cncfCore.copy(
           observability = observability,
           framework = i.cncfCore.framework.copy(
@@ -428,9 +429,20 @@ object ExecutionContext {
             saveCallTree = enabled
           )
         )
-      )
+      ))
     case _ =>
       ctx
+  }
+
+  private def _rebind_runtime_context(
+    ctx: Instance
+  ): ExecutionContext = {
+    lazy val rebound: ExecutionContext =
+      withRuntimeContextPreservingIdGeneration(
+        ctx,
+        ctx.runtime.withUnitOfWorkContext(rebound, ctx.runtime.toToken)
+      )
+    rebound
   }
 
   def withFrameworkDslChokepointHooks(

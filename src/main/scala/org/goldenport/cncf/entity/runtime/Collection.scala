@@ -7,12 +7,13 @@ import org.goldenport.cncf.context.ExecutionContext
 import org.simplemodeling.model.datatype.EntityId
 import org.goldenport.cncf.entity.{EntityAccessScopePolicy, EntityIdentityScope, EntityLifecycleRecordPolicy, EntityQuery, EntitySearchScope, EntityVisibilityScope, SimpleEntityStorageShapePolicy}
 import org.goldenport.cncf.directive.{Query, SearchResult}
+import org.goldenport.cncf.observability.CallTreeValueSummary
 import org.goldenport.cncf.unitofwork.UnitOfWorkOp
 
 /*
  * @since   Mar. 14, 2026
  *  version Mar. 30, 2026
- * @version May.  2, 2026
+ * @version May. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 trait Collection[A] {
@@ -81,7 +82,9 @@ final class EntityCollection[E](
   override def resolveScoped(
     id: EntityId
   )(using ctx: ExecutionContext): Consequence[E] =
-    _resolve(id, _is_normal_access_visible)
+    _with_calltree("space:entity:resolve", _entity_collection_attributes("resolve") + ("entity_id" -> id.print)) {
+      _resolve(id, _is_normal_access_visible)
+    }
 
   private def _resolve(
     id: EntityId,
@@ -136,12 +139,14 @@ final class EntityCollection[E](
     scope: EntityIdentityScope,
     includeEntityIdEntropy: Boolean
   )(using ctx: ExecutionContext): Boolean =
-    _identity_candidates(scope).exists { case (_, id, record) =>
-      !excludeId.exists(_.value == id.value) &&
-        (
-          SimpleEntityStorageShapePolicy.stringValue(record, fieldName).contains(value) ||
-            (includeEntityIdEntropy && id.parts.entropy == value)
-        )
+    _with_calltree("space:entity:unique-value-exists", _entity_collection_attributes("unique-value-exists") + ("field" -> fieldName)) {
+      _identity_candidates(scope).exists { case (_, id, record) =>
+        !excludeId.exists(_.value == id.value) &&
+          (
+            SimpleEntityStorageShapePolicy.stringValue(record, fieldName).contains(value) ||
+              (includeEntityIdEntropy && id.parts.entropy == value)
+          )
+      }
     }
 
   def resolveIdentity(
@@ -150,10 +155,12 @@ final class EntityCollection[E](
     includeEntityIdEntropy: Boolean,
     scope: EntityIdentityScope
   )(using ctx: ExecutionContext): Option[EntityId] =
-    _identity_candidates(scope).collectFirst {
-      case (_, id, record) if _identity_matches(id, record, value, fieldNames, includeEntityIdEntropy) =>
-        id
+    _with_calltree("space:entity:resolve-identity", _entity_collection_attributes("resolve-identity")) {
+      _identity_candidates(scope).collectFirst {
+        case (_, id, record) if _identity_matches(id, record, value, fieldNames, includeEntityIdEntropy) =>
+          id
       }
+    }
 
   private def _canonical_entity_id(
     idOrShortid: String
@@ -206,34 +213,79 @@ final class EntityCollection[E](
   def search(
     query: EntityQuery[?]
   )(using ctx: ExecutionContext): Consequence[SearchResult[E]] = {
-    val visibilitypolicy = _visibility_policy(query)
-    val source = query.scope match {
-      case EntitySearchScope.WorkingSet =>
-        if (workingSetSearchAvailable) _working_set_source else _search_source
-      case EntitySearchScope.Store => _search_source
-    }
-    val notdeleted = source.filterNot(_is_logically_deleted)
-    val scoped = notdeleted.filter(entity => _is_access_scope_visible(entity, query.visibilityScope))
-    val resident = query.scope match {
-      case EntitySearchScope.WorkingSet =>
-        if (workingSetSearchAvailable) scoped.filter(_is_resident) else scoped
-      case EntitySearchScope.Store => scoped
-    }
-    val visible = resident.filter(v => _is_visible(descriptor.persistent.toRecord(v), visibilitypolicy))
-    val filtered = visible.filter(v => Query.matches(query.query, v))
-    val sorted = Query.sortValues(filtered, query.query.sort)
-    val values = Query.sliceValues(sorted, query.query.offset, query.query.limit)
-    Consequence.success(
-      SearchResult(
-        query = query.query,
-        data = values,
-        totalCount = if (query.query.includeTotal) Some(filtered.size) else None,
-        offset = query.query.offset,
-        limit = query.query.limit,
-        fetchedCount = values.size
+    _with_calltree("space:entity:search", _entity_collection_attributes("search") ++ Map("scope" -> query.scope.toString, "working_set_ready" -> workingSetStatus.isReady.toString)) {
+      val visibilitypolicy = _visibility_policy(query)
+      val source = query.scope match {
+        case EntitySearchScope.WorkingSet =>
+          if (workingSetSearchAvailable) _working_set_source else _search_source
+        case EntitySearchScope.Store => _search_source
+      }
+      val notdeleted = source.filterNot(_is_logically_deleted)
+      val scoped = notdeleted.filter(entity => _is_access_scope_visible(entity, query.visibilityScope))
+      val resident = query.scope match {
+        case EntitySearchScope.WorkingSet =>
+          if (workingSetSearchAvailable) scoped.filter(_is_resident) else scoped
+        case EntitySearchScope.Store => scoped
+      }
+      val visible = resident.filter(v => _is_visible(descriptor.persistent.toRecord(v), visibilitypolicy))
+      val filtered = visible.filter(v => Query.matches(query.query, v))
+      val sorted = Query.sortValues(filtered, query.query.sort)
+      val values = Query.sliceValues(sorted, query.query.offset, query.query.limit)
+      Consequence.success(
+        SearchResult(
+          query = query.query,
+          data = values,
+          totalCount = if (query.query.includeTotal) Some(filtered.size) else None,
+          offset = query.query.offset,
+          limit = query.query.limit,
+          fetchedCount = values.size
+        )
       )
-    )
+    }
   }
+
+  private def _with_calltree[A](
+    label: String,
+    attributes: Map[String, String]
+  )(
+    body: => A
+  )(using ctx: ExecutionContext): A = {
+    val calltree = ctx.observability.callTreeContext
+    if (calltree.isEnabled) {
+      calltree.enter(label, attributes ++ Map("calltree_kind" -> "space"))
+      try {
+        val result = body
+        result match {
+          case success: Consequence.Success[A] =>
+            calltree.leave(Map("outcome" -> "success") ++ CallTreeValueSummary.resultAttributes(success.result))
+          case failure: Consequence.Failure[A] =>
+            calltree.leave(Map(
+              "outcome" -> "failure",
+              "status" -> failure.conclusion.status.webCode.code.toString,
+              "error" -> failure.conclusion.display
+            ))
+          case other =>
+            calltree.leave(Map("outcome" -> "success") ++ CallTreeValueSummary.resultAttributes(other))
+        }
+        result
+      } catch {
+        case e: Throwable =>
+          calltree.leave()
+          throw e
+      }
+    } else {
+      body
+    }
+  }
+
+  private def _entity_collection_attributes(
+    operation: String
+  ): Map[String, String] =
+    Map(
+      "space" -> "entity",
+      "operation" -> operation,
+      "collection" -> descriptor.collectionId.print
+    )
 
   private def _search_source: Vector[E] = {
     val memory = storage.memoryRealm.map(_.values).getOrElse(Vector.empty)

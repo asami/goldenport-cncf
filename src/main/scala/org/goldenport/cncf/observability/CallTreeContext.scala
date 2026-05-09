@@ -4,15 +4,20 @@ import org.goldenport.observation.calltree.{CallTree, CallTreeBuilder}
 
 /*
  * @since   Feb.  7, 2026
- * @version May.  8, 2026
+ * @version May. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 trait CallTreeContext {
   def isEnabled: Boolean
+  def currentLabels: Vector[String] = Vector.empty
+  def hasOpenLabelPrefix(prefix: String): Boolean =
+    currentLabels.exists(_.startsWith(prefix))
   def enter(label: String): Unit =
     enter(label, Map.empty)
   def enter(label: String, attributes: Map[String, String]): Unit
-  def leave(): Unit
+  def leave(): Unit =
+    leave(Map.empty)
+  def leave(attributes: Map[String, String]): Unit
   def mark(label: String, attributes: Map[String, String] = Map.empty): Unit
   def failure(label: String, message: String, attributes: Map[String, String] = Map.empty): Unit
   def build(): Option[CallTree]
@@ -23,7 +28,7 @@ object CallTreeContext {
   object Disabled extends CallTreeContext {
     def isEnabled: Boolean = false
     def enter(label: String, attributes: Map[String, String]): Unit = ()
-    def leave(): Unit = ()
+    def leave(attributes: Map[String, String]): Unit = ()
     def mark(label: String, attributes: Map[String, String]): Unit = ()
     def failure(label: String, message: String, attributes: Map[String, String]): Unit = ()
     def build(): Option[CallTree] = None
@@ -36,15 +41,18 @@ object CallTreeContext {
 
     def isEnabled: Boolean = true
 
+    override def currentLabels: Vector[String] =
+      _stack.reverse.toVector
+
     def enter(label: String, attributes: Map[String, String]): Unit = {
       _stack.push(label)
       _builder.enter(label, attributes)
     }
 
-    def leave(): Unit = {
+    def leave(attributes: Map[String, String]): Unit = {
       if (_stack.nonEmpty) {
         val label = _stack.pop()
-        _builder.leave(label)
+        _builder.leave(label, attributes)
       }
     }
 

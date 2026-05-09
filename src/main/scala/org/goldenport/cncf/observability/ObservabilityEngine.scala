@@ -3,6 +3,8 @@ package org.goldenport.cncf.observability
 import java.util.Locale
 import java.time.Instant
 
+import io.circe.Json
+import io.circe.parser
 import org.goldenport.Conclusion
 import org.goldenport.http.HttpRequest
 import org.goldenport.protocol.operation.OperationResponse
@@ -16,7 +18,7 @@ import org.goldenport.observation.calltree.CallTree
  * @since   Jan.  7, 2026
  *  version Jan. 29, 2026
  *  version Apr. 25, 2026
- * @version May.  8, 2026
+ * @version May. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class OperationContext(
@@ -106,18 +108,167 @@ object ObservabilityEngine {
 
   private final case class CallTreeNode(
     label: String,
-    attributes: Map[String, String],
+    enterAttributes: Map[String, String],
+    leaveAttributes: Map[String, String],
     startedAtNanos: Long,
     endedAtNanos: Option[Long],
-    children: Vector[CallTreeNode]
+    children: Vector[CallTreeNode],
+    observations: Vector[CallTreeObservation] = Vector.empty
   ) {
-    def toRecord: Record =
-      Record.dataAuto(
-        "label" -> label,
-        "attributes" -> Record.dataAuto(attributes.toVector.sortBy(_._1)*),
-        "children" -> children.map(_.toRecord)
-      )
+    def attributes: Map[String, String] =
+      enterAttributes ++ leaveAttributes
+
+    private def hasRealIo: Boolean =
+      attributes.get("real_io").exists(_.equalsIgnoreCase("true")) ||
+        _semantic_kind(attributes) == "io" ||
+        children.exists(_.hasRealIo) ||
+        observations.exists(_.hasRealIo)
+
+    def toRecord: Record = {
+      val highlights = _node_highlights(attributes, if (hasRealIo) Vector("real_io") else Vector.empty)
+      val merged = attributes - "real_io"
+      val scalarFields = _ordered_scalar_fields(merged)
+      val fields =
+        Vector(
+          "label" -> label,
+          "kind" -> _semantic_kind(merged)
+        ) ++
+          _display_label_field(merged, label) ++
+          scalarFields ++
+          (if (highlights.nonEmpty) Vector("highlights" -> highlights.mkString(",")) else Vector.empty) ++
+          _json_object_field("request", merged.get("request")) ++
+          _json_object_field("response", merged.get("response")) ++
+          _json_object_field("result", merged.get("result")) ++
+          _json_object_field("web_parameters", merged.get("web_parameters")) ++
+          _json_object_field("query", merged.get("query")) ++
+          (if (children.nonEmpty) Vector("flow" -> children.map(_.toRecord)) else Vector.empty) ++
+          (if (observations.nonEmpty) Vector("observations" -> observations.map(_.toRecord)) else Vector.empty)
+      Record.dataAuto(fields*)
+    }
   }
+
+  private final case class CallTreeObservation(
+    label: String,
+    attributes: Map[String, String]
+  ) {
+    def hasRealIo: Boolean =
+      attributes.get("real_io").exists(_.equalsIgnoreCase("true")) ||
+        _semantic_kind(attributes) == "io"
+
+    def toRecord: Record = {
+      val highlights = _node_highlights(attributes, if (hasRealIo) Vector("real_io") else Vector.empty)
+      val merged = attributes - "real_io"
+      val scalarFields = _ordered_scalar_fields(merged)
+      val fields = Vector(
+        "label" -> label,
+        "kind" -> _semantic_kind(merged)
+      ) ++
+        _display_label_field(merged, label) ++
+        scalarFields ++
+        (if (highlights.nonEmpty) Vector("highlights" -> highlights.mkString(",")) else Vector.empty) ++
+        _json_object_field("request", merged.get("request")) ++
+        _json_object_field("response", merged.get("response")) ++
+        _json_object_field("web_parameters", merged.get("web_parameters")) ++
+        _json_object_field("query", merged.get("query"))
+      Record.dataAuto(fields*)
+    }
+  }
+
+  private def _json_object_field(
+    key: String,
+    value: Option[String]
+  ): Vector[(String, Any)] =
+    value.filter(_.trim.nonEmpty).map { text =>
+      key -> _parse_json_value(text).getOrElse(text)
+    }.toVector
+
+  private val _reserved_payload_keys: Set[String] =
+    Set("request", "response", "result", "web_parameters", "resolved_parameters", "query", "calltree_kind", "display_label", "highlights")
+
+  private val _calltree_scalar_order: Vector[String] =
+    Vector(
+      "component",
+      "service",
+      "operation",
+      "started_at_nanos",
+      "ended_at_nanos",
+      "duration_nanos",
+      "duration_micros",
+      "duration_millis",
+      "outcome",
+      "status",
+      "response_type",
+      "source",
+      "target",
+      "entity",
+      "collection",
+      "datastore",
+      "error",
+      "message"
+    )
+
+  private def _node_highlights(
+    attributes: Map[String, String],
+    derived: Vector[String]
+  ): Vector[String] = {
+    val explicit = attributes.get("highlights")
+      .toVector
+      .flatMap(_.split("[,\\s]+").toVector)
+      .map(_.trim)
+      .filter(_.nonEmpty)
+    (explicit ++ derived).distinct
+  }
+
+  private def _ordered_scalar_fields(
+    attributes: Map[String, String]
+  ): Vector[(String, String)] = {
+    val scalar = attributes.filterNot { case (key, _) => _reserved_payload_keys.contains(key) }
+    val fixed = _calltree_scalar_order.flatMap(key => scalar.get(key).map(key -> _))
+    val rest = scalar.toVector
+      .filterNot { case (key, _) => _calltree_scalar_order.contains(key) }
+      .sortBy(_._1)
+    fixed ++ rest
+  }
+
+  private def _parse_json_value(
+    text: String
+  ): Option[Any] =
+    parser.parse(text).toOption.map { json =>
+      json.asString.flatMap { s =>
+        val trimmed = s.trim
+        if (trimmed.startsWith("{") || trimmed.startsWith("["))
+          parser.parse(trimmed).toOption
+        else
+          None
+      }.map(_json_to_value).getOrElse(_json_to_value(json))
+    }
+
+  private def _json_to_value(
+    json: Json
+  ): Any =
+    json.fold(
+      jsonNull = null,
+      jsonBoolean = identity,
+      jsonNumber = n => n.toLong.getOrElse(n.toDouble),
+      jsonString = identity,
+      jsonArray = _.map(_json_to_value).toVector,
+      jsonObject = obj => Record.dataAuto(obj.toVector.map { case (k, v) => k -> _json_to_value(v) }*)
+    )
+
+  private def _semantic_kind(
+    attributes: Map[String, String]
+  ): String =
+    attributes.get("calltree_kind").filter(_.nonEmpty).getOrElse("step")
+
+  private def _display_label_field(
+    attributes: Map[String, String],
+    fallback: String
+  ): Vector[(String, String)] =
+    attributes.get("display_label")
+      .filter(_.nonEmpty)
+      .filter(_ != fallback)
+      .map("display_label" -> _)
+      .toVector
 
   private def _calltree_nodes(record: Record): Vector[Record] =
     _calltree_node_models(record).map(_.toRecord)
@@ -132,7 +283,8 @@ object ObservabilityEngine {
         val leave = leaves.get((entry.label, entry.startedAtNanos)).flatMap(_.headOption)
         index -> CallTreeNode(
           entry.label,
-          entry.attributes ++ leave.map(_.attributes).getOrElse(Map.empty),
+          entry.attributes,
+          leave.map(_.attributes).getOrElse(Map.empty),
           entry.startedAtNanos,
           leave.flatMap(_.endedAtNanos).orElse(entry.endedAtNanos),
           Vector.empty
@@ -143,6 +295,7 @@ object ObservabilityEngine {
           index -> CallTreeNode(
             event.label,
             event.attributes,
+            Map.empty,
             event.startedAtNanos,
             event.endedAtNanos.orElse(Some(event.startedAtNanos)),
             Vector.empty
@@ -160,11 +313,18 @@ object ObservabilityEngine {
       }.toMap
       def build(index: Int): CallTreeNode = {
         val node = byindex(index)
-        val children = parentByIndex.collect { case (childIndex, Some(parentIndex)) if parentIndex == index => childIndex }
+        val childindices = parentByIndex.collect { case (childIndex, Some(parentIndex)) if parentIndex == index => childIndex }
           .toVector
           .sortBy(child => byindex(child).startedAtNanos)
-          .map(build)
-        node.copy(children = children)
+        val (observationindices, spanindices) = childindices.partition(child => _is_observation_node(byindex(child)))
+        val observations = observationindices.map { child =>
+          val n = byindex(child)
+          CallTreeObservation(n.label, n.attributes)
+        }
+        node.copy(
+          children = spanindices.map(build),
+          observations = observations
+        )
       }
       parentByIndex.collect { case (index, None) => index }
         .toVector
@@ -177,6 +337,12 @@ object ObservabilityEngine {
     event: CallTreeEvent
   ): Boolean =
     event.kind == "leave" || event.kind == "exit"
+
+  private def _is_observation_node(
+    node: CallTreeNode
+  ): Boolean = {
+    _semantic_kind(node.attributes) == "metric"
+  }
 
   private def _calltree_contains(
     parent: CallTreeNode,

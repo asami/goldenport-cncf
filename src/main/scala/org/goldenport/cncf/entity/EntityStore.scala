@@ -13,6 +13,7 @@ import org.goldenport.cncf.directive.{Query as EntityDirectiveQuery, SearchResul
 import org.goldenport.cncf.datastore.{DataStore, Query as DataStoreQuery, QueryDirective, QueryLimit, QueryOrder, OrderDirection}
 import org.goldenport.cncf.datastore.DataStore.EntryId
 import org.goldenport.cncf.metrics.EntityAccessMetricsRegistry
+import org.goldenport.cncf.observability.CallTreeValueSummary
 import org.simplemodeling.model.statemachine.{Aliveness, PostStatus}
 
 /*
@@ -22,7 +23,7 @@ import org.simplemodeling.model.statemachine.{Aliveness, PostStatus}
  *  version Feb. 26, 2026
  *  version Mar. 30, 2026
  *  version Apr. 26, 2026
- * @version May.  8, 2026
+ * @version May. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class EntityStore {
@@ -181,7 +182,9 @@ class StandardEntityStore(
       dsid <- ctx.entityStoreSpace.dataStoreEntryId(id)
       ds <- ctx.dataStoreSpace.dataStore(cid)
       rec <- ContentBodyStoragePolicy.prepareForSave(id, _complement_create_record(tc.toStoreRecord(entity), id, options))
-      _ <- ds.create(cid, dsid, rec)
+      _ <- _with_datastore_calltree("create", cid, Some(dsid)) {
+        ds.create(cid, dsid, rec)
+      }
     } yield CreateResult(id, Some(rec))
   }
 
@@ -192,7 +195,9 @@ class StandardEntityStore(
       cid <- ctx.entityStoreSpace.dataStoreCollection(id)
       dsid <- ctx.entityStoreSpace.dataStoreEntryId(id)
       ds <- ctx.dataStoreSpace.dataStore(cid)
-      o <- ds.load(cid, dsid)
+      o <- _with_datastore_calltree("load", cid, Some(dsid)) {
+        ds.load(cid, dsid)
+      }
       // Normal get uses the same access-scope hook as search. Today this means
       // deletedAt exclusion; tenant scope is a prepared NOP hook tied to
       // ExecutionContext.
@@ -220,11 +225,15 @@ class StandardEntityStore(
       cid <- ctx.entityStoreSpace.dataStoreCollection(id)
       dsid <- ctx.entityStoreSpace.dataStoreEntryId(id)
       ds <- ctx.dataStoreSpace.dataStore(cid)
-      existing <- ds.load(cid, dsid)
+      existing <- _with_datastore_calltree("load", cid, Some(dsid)) {
+        ds.load(cid, dsid)
+      }
       _ <- _reject_logically_deleted_existing(id, existing)
       rec0 = _complement_save_record(tc.toStoreRecord(entity), id, existing)
       rec <- ContentBodyStoragePolicy.prepareForSave(id, rec0)
-      r <- ds.save(cid, dsid, rec)
+      r <- _with_datastore_calltree("save", cid, Some(dsid)) {
+        ds.save(cid, dsid, rec)
+      }
     } yield r
   }
 
@@ -236,7 +245,9 @@ class StandardEntityStore(
       cid <- ctx.entityStoreSpace.dataStoreCollection(id)
       dsid <- ctx.entityStoreSpace.dataStoreEntryId(id)
       ds <- ctx.dataStoreSpace.dataStore(cid)
-      existing <- ds.load(cid, dsid)
+      existing <- _with_datastore_calltree("load", cid, Some(dsid)) {
+        ds.load(cid, dsid)
+      }
       base <- existing match {
         case Some(record) => Consequence.success(record)
         case None => Consequence.DataStoreNotFound(dsid.print)
@@ -248,7 +259,9 @@ class StandardEntityStore(
         rec0,
         preserveExistingOverflowOnMissingContent = true
       )
-      r <- ds.save(cid, dsid, rec)
+      r <- _with_datastore_calltree("save", cid, Some(dsid)) {
+        ds.save(cid, dsid, rec)
+      }
     } yield r
   }
 
@@ -259,13 +272,21 @@ class StandardEntityStore(
       cid <- ctx.entityStoreSpace.dataStoreCollection(id)
       dsid <- ctx.entityStoreSpace.dataStoreEntryId(id)
       ds <- ctx.dataStoreSpace.dataStore(cid)
-      current <- ds.load(cid, dsid)
+      current <- _with_datastore_calltree("load", cid, Some(dsid)) {
+        ds.load(cid, dsid)
+      }
       r <- current match {
         case Some(rec) =>
           if (_is_soft_delete_target(rec))
-            ds.save(cid, dsid, _merge_update_record(rec, _soft_delete_record(rec)))
+            _with_datastore_calltree("save", cid, Some(dsid)) {
+              ds.save(cid, dsid, _merge_update_record(rec, _soft_delete_record(rec)))
+            }
           else
-            ContentBodyStoragePolicy.deleteOverflow(id).flatMap(_ => ds.delete(cid, dsid))
+            ContentBodyStoragePolicy.deleteOverflow(id).flatMap { _ =>
+              _with_datastore_calltree("delete", cid, Some(dsid)) {
+                ds.delete(cid, dsid)
+              }
+            }
         case None =>
           Consequence.unit
       }
@@ -280,7 +301,9 @@ class StandardEntityStore(
       dsid <- ctx.entityStoreSpace.dataStoreEntryId(id)
       ds <- ctx.dataStoreSpace.dataStore(cid)
       _ <- ContentBodyStoragePolicy.deleteOverflow(id)
-      r <- ds.delete(cid, dsid)
+      r <- _with_datastore_calltree("delete", cid, Some(dsid)) {
+        ds.delete(cid, dsid)
+      }
     } yield r
   }
 
@@ -871,15 +894,61 @@ class StandardEntityStore(
   ): Boolean =
     EntityLifecycleRecordPolicy.isLogicallyDeleted(record)
 
+  private def _with_datastore_calltree[A](
+    operation: String,
+    cid: DataStore.CollectionId,
+    entryId: Option[DataStore.EntryId] = None
+  )(
+    body: => A
+  )(using ctx: ExecutionContext): A = {
+    val calltree = ctx.observability.callTreeContext
+    if (calltree.isEnabled) {
+      calltree.enter(
+        s"io:datastore:$operation",
+        _datastore_calltree_attributes(operation, cid, entryId) ++ Map("calltree_kind" -> "io")
+      )
+      try {
+        val result = body
+        result match {
+          case success: Consequence.Success[A] =>
+            calltree.leave(Map("outcome" -> "success") ++ CallTreeValueSummary.resultAttributes(success.result))
+          case failure: Consequence.Failure[A] =>
+            calltree.leave(Map(
+              "outcome" -> "failure",
+              "status" -> failure.conclusion.status.webCode.code.toString,
+              "error" -> failure.conclusion.display
+            ))
+          case other =>
+            calltree.leave(Map("outcome" -> "success") ++ CallTreeValueSummary.resultAttributes(other))
+        }
+        result
+      } catch {
+        case e: Throwable =>
+          calltree.leave()
+          throw e
+      }
+    } else {
+      body
+    }
+  }
+
+  private def _datastore_calltree_attributes(
+    operation: String,
+    cid: DataStore.CollectionId,
+    entryId: Option[DataStore.EntryId]
+  ): Map[String, String] =
+    Map(
+      "space" -> "datastore",
+      "operation" -> operation,
+      "collection" -> cid.print,
+      "real_io" -> "true"
+    ) ++ entryId.map(x => Map("entry_id" -> x.print)).getOrElse(Map.empty)
+
   private def _emit_entity_access(
     name: String,
     attributes: Record
   )(using ctx: ExecutionContext): Unit = {
     EntityAccessMetricsRegistry.shared.record(name, attributes)
-    ctx.observability.callTreeContext.mark(
-      s"metrics:$name",
-      _calltree_metric_attributes(name, attributes)
-    )
     val _ = ctx.observability.emitInfo(ctx.cncfCore.scope, name, attributes)
   }
 

@@ -1049,6 +1049,18 @@ Future observability development item.
 
 - Metrics collection expansion.
 - OpenTelemetry support.
+- CallTree / execution-history / Job diagnostic result externalization:
+  - CallTree, Task calltree, and Job result records must store compact
+    summaries/references by default, not full action/UoW/space/I/O
+    result/response payloads.
+  - Small result values may be displayed inline with JSON/YAML pretty printing;
+    large values should be represented by summary metadata such as byte size,
+    record count, result type, and truncation/externalization status.
+  - Explicit debug configuration may write selected large payloads to external
+    diagnostic files or object storage and surface only the file/object reference
+    in Web/admin diagnostics.
+  - Externalized payload retention, redaction, authorization, and cleanup policy
+    must be defined before production use.
 
 ### 9.5 Knowledge Structure Follow-ups
 Future knowledge-structure development item.

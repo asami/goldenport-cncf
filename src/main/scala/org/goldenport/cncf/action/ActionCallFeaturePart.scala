@@ -36,7 +36,7 @@ import org.goldenport.cncf.directive.SearchResult
 import org.goldenport.cncf.metrics.EntityAccessMetricsRegistry
 import org.goldenport.cncf.cli.RunMode
 import org.goldenport.cncf.action.AggregateBehavior
-import org.goldenport.cncf.observability.{DslChokepointContext, DslChokepointPhase, DslChokepointRunner}
+import org.goldenport.cncf.observability.{CallTreeValueSummary, DslChokepointContext, DslChokepointPhase, DslChokepointRunner}
 import org.goldenport.configuration.ConfigurationValue
 
 /*
@@ -45,7 +45,7 @@ import org.goldenport.configuration.ConfigurationValue
  *  version Feb. 25, 2026
  *  version Mar. 30, 2026
  *  version Apr. 29, 2026
- * @version May.  8, 2026
+ * @version May. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 trait ActionCallFeaturePart { self: ActionCall.Core.Holder =>
@@ -60,6 +60,14 @@ trait ActionCallFeaturePart { self: ActionCall.Core.Holder =>
 
   protected final def exec_from[A](c: Consequence[A]): ExecUowM[A] =
     ConsequenceT.fromConsequence[[X] =>> Program[UnitOfWorkOp, X], A](c)
+
+  protected final def exec_from_calltree[A](
+    label: String,
+    attributes: Map[String, String] = Map.empty
+  )(
+    c: => Consequence[A]
+  ): ExecUowM[A] =
+    exec_from(consequence_with_calltree(label, attributes)(c))
 
   protected final def exec_c[A](op: UnitOfWorkOp[A])(using uow: UnitOfWork): Consequence[A] =
     new UnitOfWorkInterpreter(uow).run(ConsequenceT.liftF(Free.liftF(op)))
@@ -88,6 +96,38 @@ trait ActionCallFeaturePart { self: ActionCall.Core.Holder =>
       s"Property not found: $name"
     )
 
+  protected final def consequence_with_calltree[A](
+    label: String,
+    attributes: Map[String, String]
+  )(
+    body: => Consequence[A]
+  ): Consequence[A] = {
+    val calltree = execution_context.observability.callTreeContext
+    if (calltree.isEnabled) {
+      calltree.enter(label, attributes ++ Map("calltree_kind" -> "uow"))
+      try {
+        val result = body
+        result match {
+          case success: Consequence.Success[A] =>
+            calltree.leave(Map("outcome" -> "success") ++ CallTreeValueSummary.resultAttributes(success.result))
+          case failure: Consequence.Failure[A] =>
+            calltree.leave(Map(
+              "outcome" -> "failure",
+              "status" -> failure.conclusion.status.webCode.code.toString,
+              "error" -> failure.conclusion.display
+            ))
+        }
+        result
+      } catch {
+        case e: Throwable =>
+          calltree.leave()
+          throw e
+      }
+    } else {
+      body
+    }
+  }
+
   protected final def resolve_aggregate_behavior(
   ): Consequence[AggregateBehavior[?]] =
     component.flatMap(_.factory).flatMap(_.create_aggregate_behavior(action, core)) match {
@@ -107,7 +147,9 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
     component.map(_.aggregateSpace).getOrElse(Consequence.uninitializedState.RAISE)
 
   protected final def aggregate_load[A](id: EntityId): ExecUowM[A] =
-    exec_from(aggregate_load_c[A](id))
+    exec_from_calltree("uow:aggregate:load", _aggregate_calltree_attributes("load", id.collection.name) + ("entity_id" -> id.print)) {
+      aggregate_load_c[A](id)
+    }
 
   // Aggregate-oriented access for application logic.
   // This returns the domain value object directly.
@@ -219,7 +261,9 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
     aggregate_load_c[A](id).TAKE
 
   protected final def aggregate_load_option[A](targetid: EntityId): ExecUowM[Option[A]] =
-    exec_from(aggregate_load_option_c[A](targetid))
+    exec_from_calltree("uow:aggregate:load-option", _aggregate_calltree_attributes("load-option", targetid.collection.name) + ("entity_id" -> targetid.print)) {
+      aggregate_load_option_c[A](targetid)
+    }
 
   // Preserve transport/storage failures (e.g. I/O) as Failure.
   // Only "not found" is converted to Success(None).
@@ -251,7 +295,9 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
     collectionname: String,
     id: EntityId
   ): ExecUowM[A] =
-    exec_from(aggregate_load_c[A](collectionname, id))
+    exec_from_calltree("uow:aggregate:load", _aggregate_calltree_attributes("load", collectionname) + ("entity_id" -> id.print)) {
+      aggregate_load_c[A](collectionname, id)
+    }
 
   protected final def aggregate_load_c[A](
     collectionname: String,
@@ -355,7 +401,9 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
     collectionname: String,
     q: Query[?]
   ): ExecUowM[SearchResult[A]] =
-    exec_from(aggregate_search_c[A](collectionname, q))
+    exec_from_calltree("uow:aggregate:search", _aggregate_calltree_attributes("search", collectionname)) {
+      aggregate_search_c[A](collectionname, q)
+    }
 
   protected final def aggregate_search_c[A](
     collectionname: String,
@@ -421,7 +469,9 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
     commandName: String,
     action: => Consequence[A]
   ): ExecUowM[A] =
-    exec_from(aggregate_create_c(entityName, commandName, action))
+    exec_from_calltree("uow:aggregate:create", _aggregate_calltree_attributes("create", entityName) + ("command" -> commandName)) {
+      aggregate_create_c(entityName, commandName, action)
+    }
 
   protected final def aggregate_create_c[A <: org.goldenport.record.RecordPresentable](
     entityName: String,
@@ -452,7 +502,9 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
     commandName: String,
     action: => Consequence[A]
   ): ExecUowM[A] =
-    exec_from(aggregate_update_c(entityName, targetId, commandName, action))
+    exec_from_calltree("uow:aggregate:update", _aggregate_calltree_attributes("update", entityName) + ("command" -> commandName, "entity_id" -> targetId.print)) {
+      aggregate_update_c(entityName, targetId, commandName, action)
+    }
 
   protected final def aggregate_update_c[A <: org.goldenport.record.RecordPresentable](
     entityName: String,
@@ -509,6 +561,16 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
     DslChokepointRunner.phase(context, phase)(body)
   }
 
+  private def _aggregate_calltree_attributes(
+    operation: String,
+    aggregateName: String
+  ): Map[String, String] =
+    Map(
+      "dsl" -> "uow",
+      "operation" -> operation,
+      "aggregate" -> aggregateName
+    )
+
   private def _aggregate_authorize_create(
     aggregateName: String,
     commandName: String
@@ -557,7 +619,9 @@ trait ActionCallBrowserPart extends ActionCallFeaturePart { self: ActionCall.Cor
     collectionname: String,
     id: EntityId
   ): Consequence[A] =
-    browser.browser[A](collectionname).find_with_context(id)(using execution_context)
+    consequence_with_calltree("uow:view:load", _view_calltree_attributes("load", collectionname) + ("entity_id" -> id.print)) {
+      browser.browser[A](collectionname).find_with_context(id)(using execution_context)
+    }
 
   protected final def view_load_or_throw[A](
     collectionname: String,
@@ -577,7 +641,9 @@ trait ActionCallBrowserPart extends ActionCallFeaturePart { self: ActionCall.Cor
     viewname: String,
     id: EntityId
   ): Consequence[A] =
-    browser.browser[A](collectionname, viewname).find_with_context(id)(using execution_context)
+    consequence_with_calltree("uow:view:load", _view_calltree_attributes("load", collectionname, Some(viewname)) + ("entity_id" -> id.print)) {
+      browser.browser[A](collectionname, viewname).find_with_context(id)(using execution_context)
+    }
 
   protected final def view_load_or_throw[A](
     collectionname: String,
@@ -596,7 +662,9 @@ trait ActionCallBrowserPart extends ActionCallFeaturePart { self: ActionCall.Cor
     collectionname: String,
     q: Query[?]
   ): Consequence[SearchResult[A]] =
-    browser.browser[A](collectionname).query_with_context(q)(using execution_context).map(_to_search_result(q, _))
+    consequence_with_calltree("uow:view:search", _view_calltree_attributes("search", collectionname)) {
+      browser.browser[A](collectionname).query_with_context(q)(using execution_context).map(_to_search_result(q, _))
+    }
 
   protected final def view_search_or_throw[A](
     collectionname: String,
@@ -616,7 +684,9 @@ trait ActionCallBrowserPart extends ActionCallFeaturePart { self: ActionCall.Cor
     viewname: String,
     q: Query[?]
   ): Consequence[SearchResult[A]] =
-    browser.browser[A](collectionname, viewname).query_with_context(q)(using execution_context).map(_to_search_result(q, _))
+    consequence_with_calltree("uow:view:search", _view_calltree_attributes("search", collectionname, Some(viewname))) {
+      browser.browser[A](collectionname, viewname).query_with_context(q)(using execution_context).map(_to_search_result(q, _))
+    }
 
   protected final def view_search_or_throw[A](
     collectionname: String,
@@ -637,6 +707,17 @@ trait ActionCallBrowserPart extends ActionCallFeaturePart { self: ActionCall.Cor
       limit = q.limit,
       fetchedCount = xs.size
     )
+
+  private def _view_calltree_attributes(
+    operation: String,
+    collectionname: String,
+    viewname: Option[String] = None
+  ): Map[String, String] =
+    Map(
+      "dsl" -> "uow",
+      "operation" -> operation,
+      "view" -> collectionname
+    ) ++ viewname.map(x => Map("view_name" -> x)).getOrElse(Map.empty)
 }
 
 trait ActionCallHttpPart extends ActionCallFeaturePart { self: ActionCall.Core.Holder =>
@@ -796,10 +877,6 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
     attributes: Record
   ): Unit = {
     component.flatMap(_.subsystem).map(_.entityAccessMetrics).getOrElse(EntityAccessMetricsRegistry.shared).record(name, attributes)
-    execution_context.observability.callTreeContext.mark(
-      s"metrics:$name",
-      _calltree_metric_attributes(name, attributes)
-    )
     val _ = execution_context.observability.emitInfo(
       execution_context.cncfCore.scope,
       name,

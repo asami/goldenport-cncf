@@ -1,7 +1,10 @@
 package org.goldenport.cncf.component
 
 import cats.data.NonEmptyVector
+import cats.free.Free
+import cats.syntax.all.*
 import org.goldenport.Consequence
+import org.goldenport.ConsequenceT
 import org.goldenport.record.Record
 import org.goldenport.protocol.{Protocol, Request}
 import org.goldenport.protocol.Property
@@ -11,6 +14,7 @@ import org.goldenport.cncf.action.{Action, ActionCall, CommandExecutionPolicy, P
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.operation.CmlOperationDefinition
 import org.goldenport.cncf.testutil.TestComponentFactory
+import org.goldenport.cncf.unitofwork.{ExecUowM, UnitOfWorkOp}
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -18,7 +22,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Mar. 22, 2026
  *  version Apr. 25, 2026
- * @version May.  8, 2026
+ * @version May. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentLogicOperationDefinitionSemanticsSpec
@@ -126,15 +130,35 @@ final class ComponentLogicOperationDefinitionSemanticsSpec
       job.calltree should not be empty
       val calltree = job.calltree.map(_.show).getOrElse("")
       calltree should include ("action:operation_definition_semantics_spec.entity.fetchPerson")
-      calltree should include ("children")
-      calltree should not include ("kind")
-      calltree should include ("io:input")
-      calltree should include ("io:output")
+      calltree should include ("kind=action")
+      calltree should include ("operation=fetchPerson")
+      calltree should include ("response_type")
       calltree should include ("fetch-ok")
       job.debug.calltreeSaved shouldBe true
       job.debug.calltreeStorage shouldBe Some("calltree")
       job.debug.calltreeSerializedBytes.exists(_ > 0) shouldBe true
       job.debug.calltreeDropReason shouldBe None
+    }
+
+    "include UoW spans in inline calltree when debug calltree is enabled" in {
+      Given("a functional query action that executes a UoW operation")
+      val component = _component()
+      val req = Request.of(
+        component = component.name,
+        service = "entity",
+        operation = "fetchWithUow"
+      )
+      val action = component.logic.makeOperationRequest(req).toOption.getOrElse(fail("action creation failed")).asInstanceOf[Action]
+      val debugctx = ExecutionContext.withFrameworkInlineCallTreeEnabled(ExecutionContext.create(), enabled = true)
+
+      When("the action is executed")
+      val result = component.logic.executeAction(action, debugctx)
+
+      Then("the inline calltree contains the action and its nested UoW span")
+      result.toOption.map(_.print) shouldBe Some("uow-ok")
+      val calltree = debugctx.runtime.executionMetadata.inlineCallTree.map(_.show).getOrElse("")
+      calltree should include ("action:operation_definition_semantics_spec.entity.fetchWithUow")
+      calltree should include ("uow:http:get")
     }
 
     "save job-specific calltree for failed persistent debug query" in {
@@ -162,10 +186,10 @@ final class ComponentLogicOperationDefinitionSemanticsSpec
       job.debug.calltreeStorage shouldBe Some("calltree")
       job.calltree should not be empty
       val calltree = job.calltree.map(_.show).getOrElse("")
-      calltree should include ("children")
       calltree should include ("io:error")
+      calltree should include ("outcome=failure")
       calltree should include ("debug trace query failure")
-      calltree should not include ("kind")
+      calltree should include ("kind=action")
     }
 
     "validate request values while building a generated VO before action execution" in {
@@ -330,6 +354,7 @@ final class ComponentLogicOperationDefinitionSemanticsSpec
             operations = spec.OperationDefinitionGroup(
               operations = NonEmptyVector.of(
                 _ActionOperation("fetchPerson", "fetch-ok"),
+                _FunctionalUowOperation("fetchWithUow"),
                 _FailingOperation("fetchFailure"),
                 _RecordOperation("fetchAddress"),
                 _ValidatedRecordOperation("fetchAddressValidated"),
@@ -351,6 +376,13 @@ final class ComponentLogicOperationDefinitionSemanticsSpec
             name = "fetchPerson",
             kind = "QUERY",
             inputType = "FetchPerson",
+            outputType = "PersonView",
+            inputValueKind = "QUERY_VALUE"
+          ),
+          CmlOperationDefinition(
+            name = "fetchWithUow",
+            kind = "QUERY",
+            inputType = "FetchWithUow",
             outputType = "PersonView",
             inputValueKind = "QUERY_VALUE"
           ),
@@ -462,6 +494,36 @@ private final case class _PlainActionCall(
 ) extends ProcedureActionCall {
   override def execute(): Consequence[OperationResponse] =
     Consequence.success(OperationResponse.Scalar(value))
+}
+
+private final case class _FunctionalUowOperation(
+  opname: String
+) extends spec.OperationDefinition {
+  override val specification: spec.OperationDefinition.Specification =
+    spec.OperationDefinition.Specification(
+      name = opname,
+      request = spec.RequestDefinition(),
+      response = spec.ResponseDefinition.void
+    )
+
+  override def createOperationRequest(req: Request): Consequence[OperationRequest] =
+    Consequence.success(_FunctionalUowAction(req))
+}
+
+private final case class _FunctionalUowAction(
+  request: Request
+) extends Action {
+  override def createCall(core: ActionCall.Core): ActionCall =
+    _FunctionalUowActionCall(core)
+}
+
+private final case class _FunctionalUowActionCall(
+  core: ActionCall.Core
+) extends org.goldenport.cncf.action.FunctionalActionCall {
+  protected def build_Program: ExecUowM[OperationResponse] =
+    for {
+      _ <- ConsequenceT.liftF(Free.liftF(UnitOfWorkOp.HttpGet("/debug/uow")))
+    } yield OperationResponse.Scalar("uow-ok")
 }
 
 private final case class _FailingOperation(

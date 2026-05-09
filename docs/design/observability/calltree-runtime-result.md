@@ -214,3 +214,35 @@ retention buffer.
 
 Admin and dashboard surfaces must reuse the same calltree event semantics rather
 than inventing another timing vocabulary.
+
+## Result Payload Policy
+
+CallTree is an execution diagnostic structure, not a result payload archive.
+Action, UnitOfWork, Space, I/O, Task, and Job calltree projections should carry
+compact result summaries by default.
+
+Default inline result data should be limited to:
+
+- result kind/type;
+- outcome/status;
+- byte/character size where applicable;
+- record/element count where applicable;
+- paging summary such as `offset`, `limit`, `fetched_count`, and `total_count`;
+- small scalar or small structured values that are safe to show inline.
+
+Large result/response bodies must not be copied wholesale into CallTree,
+execution history, Job Entity, Task Execution Tree, or task-local calltree
+records. For large values, the diagnostic projection should show summary
+metadata and an explicit indication that the full payload is not inline.
+
+Future observability work should add an opt-in externalization mechanism:
+
+- configuration selects which operations or result fields may be externalized;
+- large debug payloads are written to a diagnostic file/object store;
+- CallTree and Job diagnostics display the external file/object reference;
+- redaction and confidentiality policy is applied before writing;
+- authorization and retention/cleanup policy are defined for the external
+  payload store.
+
+This keeps Web/admin diagnostics readable while still allowing deep inspection
+when a developer or operator explicitly asks for large payload capture.

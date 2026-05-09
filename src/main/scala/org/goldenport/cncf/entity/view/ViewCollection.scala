@@ -14,7 +14,7 @@ import org.goldenport.cncf.security.SecuritySubject
  * @since   Mar. 14, 2026
  *  version Mar. 24, 2026
  *  version Apr. 15, 2026
- * @version May.  4, 2026
+ * @version May. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 trait ViewBuilder[V] {
@@ -37,6 +37,8 @@ final class ViewCollection[V](
   metricsRegistry: Option[EntityAccessMetricsRegistry] = None,
   cachePolicy: Option[ViewCachePolicy] = None
 ) extends Collection[V] {
+  private type EmitMetric = (String, Record) => Unit
+
   private[this] val _cachePolicy =
     cachePolicy.getOrElse(ViewCachePolicy(maxEntities, maxQueries, queryChunkSize, if (maxQueries <= 0) ViewQueryCacheScope.Disabled else ViewQueryCacheScope.Shared, metricsName)).normalized
   private[this] val _entityCache = mutable.LinkedHashMap.empty[EntityId, V]
@@ -69,7 +71,7 @@ final class ViewCollection[V](
     _entityCache.get(id) match {
       case Some(v) =>
         _touch_entity(id, v)
-        _emit_metric("view.load.hit", Record.dataAuto(
+        _emit_metric_context("view.load.hit", Record.dataAuto(
           "entity" -> _cachePolicy.metricsName,
           "source" -> "view-cache",
           "outcome" -> "hit"
@@ -78,7 +80,7 @@ final class ViewCollection[V](
       case None =>
         _build_with_context(id).map { v =>
           _put_entity(id, v)
-          _emit_metric("view.load.miss", Record.dataAuto(
+          _emit_metric_context("view.load.miss", Record.dataAuto(
             "entity" -> _cachePolicy.metricsName,
             "source" -> "view-cache",
             "outcome" -> "miss"
@@ -102,15 +104,16 @@ final class ViewCollection[V](
 
   private def _query(
     q: Query[_],
-    scopeKey: Option[String]
+    scopeKey: Option[String],
+    emitMetric: EmitMetric = _emit_metric
   )(queryfn: Query[_] => Consequence[Vector[V]]): Consequence[Vector[V]] =
     (q.offset, q.limit) match {
       case (Some(offset), Some(limit)) if limit >= 0 =>
-        _query_chunked(q, offset, limit, scopeKey)(queryfn)
+        _query_chunked(q, offset, limit, scopeKey, emitMetric)(queryfn)
       case (Some(offset), None) if offset >= 0 =>
-        _query_chunked(q, offset, _cachePolicy.queryChunkSize, scopeKey)(queryfn)
+        _query_chunked(q, offset, _cachePolicy.queryChunkSize, scopeKey, emitMetric)(queryfn)
       case _ =>
-        _query_small_result(q, scopeKey)(queryfn)
+        _query_small_result(q, scopeKey, emitMetric)(queryfn)
     }
 
   def query_with_context(
@@ -119,7 +122,7 @@ final class ViewCollection[V](
     queryfn: Query[_] => ExecutionContext ?=> Consequence[Vector[V]]
   )(using ctx: ExecutionContext): Consequence[Vector[V]] =
     synchronized {
-      _query(q, _context_query_scope_key)(qq => queryfn(qq))
+      _query(q, _context_query_scope_key, (name, attrs) => _emit_metric_context(name, attrs))(qq => queryfn(qq))
     }
 
   def invalidate(id: EntityId): Unit = synchronized {
@@ -146,7 +149,8 @@ final class ViewCollection[V](
     q: Query[_],
     offset: Int,
     limit: Int,
-    scopeKey: Option[String]
+    scopeKey: Option[String],
+    emitMetric: EmitMetric
   )(
     queryfn: Query[_] => Consequence[Vector[V]]
   ): Consequence[Vector[V]] = {
@@ -163,7 +167,7 @@ final class ViewCollection[V](
         (firstchunkstart to lastchunkstart by _cachePolicy.queryChunkSize).toVector
       chunkstarts.foldLeft(Consequence.success(Vector.empty[V])) { (z, start) =>
         z.flatMap { xs =>
-          _resolve_query_chunk(basekey, q, start, scopeKey)(queryfn).map(xs ++ _)
+          _resolve_query_chunk(basekey, q, start, scopeKey, emitMetric)(queryfn).map(xs ++ _)
         }
       }.map { xs =>
         val localoffset = normalizedoffset - firstchunkstart
@@ -174,13 +178,14 @@ final class ViewCollection[V](
 
   private def _query_small_result(
     q: Query[_],
-    scopeKey: Option[String]
+    scopeKey: Option[String],
+    emitMetric: EmitMetric
   )(
     queryfn: Query[_] => Consequence[Vector[V]]
   ): Consequence[Vector[V]] = {
     if (!_query_cache_enabled(scopeKey))
       return queryfn(q).map { v =>
-        _emit_metric("view.query.small.bypass", Record.dataAuto(
+        emitMetric("view.query.small.bypass", Record.dataAuto(
           "entity" -> _cachePolicy.metricsName,
           "source" -> "view-cache",
           "outcome" -> _cache_bypass_outcome(scopeKey),
@@ -193,7 +198,7 @@ final class ViewCollection[V](
     _queryChunkCache.get(key) match {
       case Some(v) =>
         _touch_query(key, v)
-        _emit_metric("view.query.small.hit", Record.dataAuto(
+        emitMetric("view.query.small.hit", Record.dataAuto(
           "entity" -> _cachePolicy.metricsName,
           "source" -> "view-cache",
           "outcome" -> "hit",
@@ -204,7 +209,7 @@ final class ViewCollection[V](
         queryfn(q).map { v =>
           if (v.size <= _cachePolicy.queryChunkSize)
             _put_query(key, v)
-          _emit_metric(
+          emitMetric(
             if (v.size <= _cachePolicy.queryChunkSize) "view.query.small.miss"
             else "view.query.small.bypass",
             Record.dataAuto(
@@ -224,13 +229,14 @@ final class ViewCollection[V](
     basekey: String,
     q: Query[_],
     start: Int,
-    scopeKey: Option[String]
+    scopeKey: Option[String],
+    emitMetric: EmitMetric
   )(
     queryfn: Query[_] => Consequence[Vector[V]]
   ): Consequence[Vector[V]] = {
     if (!_query_cache_enabled(scopeKey))
       return queryfn(_query_chunk_query(q, start, _cachePolicy.queryChunkSize)).map { v =>
-        _emit_metric("view.query.chunk.bypass", Record.dataAuto(
+        emitMetric("view.query.chunk.bypass", Record.dataAuto(
           "entity" -> _cachePolicy.metricsName,
           "source" -> "view-cache",
           "outcome" -> _cache_bypass_outcome(scopeKey),
@@ -245,7 +251,7 @@ final class ViewCollection[V](
     _queryChunkCache.get(chunkkey) match {
       case Some(v) =>
         _touch_query(chunkkey, v)
-        _emit_metric("view.query.chunk.hit", Record.dataAuto(
+        emitMetric("view.query.chunk.hit", Record.dataAuto(
           "entity" -> _cachePolicy.metricsName,
           "source" -> "view-cache",
           "outcome" -> "hit",
@@ -257,7 +263,7 @@ final class ViewCollection[V](
       case None =>
         queryfn(_query_chunk_query(q, start, _cachePolicy.queryChunkSize)).map { v =>
           _put_query(chunkkey, v)
-          _emit_metric("view.query.chunk.miss", Record.dataAuto(
+          emitMetric("view.query.chunk.miss", Record.dataAuto(
             "entity" -> _cachePolicy.metricsName,
             "source" -> "view-cache",
             "outcome" -> "miss",
@@ -276,6 +282,17 @@ final class ViewCollection[V](
     attributes: Record
   ): Unit =
     metricsRegistry.getOrElse(EntityAccessMetricsRegistry.shared).record(name, attributes)
+
+  private def _emit_metric_context(
+    name: String,
+    attributes: Record
+  )(using ctx: ExecutionContext): Unit = {
+    _emit_metric(name, attributes)
+    ctx.observability.callTreeContext.mark(
+      s"metrics:$name",
+      (Vector("calltree_kind" -> "metric", "metric" -> name) ++ attributes.asMap.toVector.map { case (k, v) => k -> v.toString }).toMap
+    )
+  }
 
   private def _query_base_key(q: Query[_], scopeKey: Option[String]): String = {
     val base = q.query match {

@@ -23,7 +23,7 @@ import org.typelevel.ci.CIStringSyntax
 /*
  * @since   Apr. 24, 2026
  *  version Apr. 25, 2026
- * @version May.  9, 2026
+ * @version May. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers {
@@ -267,6 +267,58 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers {
       response.headers.get(ci"X-Textus-Job-Id").map(_.head.value).getOrElse("") should include ("cncf-job-job")
     }
 
+    "resolve operation-result forbidden templates by owning Web app" in {
+      val root = Files.createTempDirectory("http4s-http-server-operation-result-forbidden-spec")
+      Files.createDirectories(root.resolve("debug-app"))
+      Files.writeString(
+        root.resolve("web.yaml"),
+        """expose:
+          |  debug.http.echo: protected
+          |authorization:
+          |  debug.http.echo:
+          |    requireAuthenticated: true
+          |form:
+          |  debug.http.echo:
+          |    enabled: true
+          |""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+      Files.writeString(
+        root.resolve("debug-app").resolve("index.html"),
+        """<textus:operation-result component="debug" service="http" operation="echo" body="hello"></textus:operation-result>""",
+        StandardCharsets.UTF_8
+      )
+      Files.writeString(
+        root.resolve("debug-app").resolve("__403.html"),
+        """<section><h1>Debug app sign in required</h1></section>""",
+        StandardCharsets.UTF_8
+      )
+      val configuration = ResolvedConfiguration(
+        Configuration(
+          Map(
+            RuntimeConfig.WebDescriptorKey ->
+              ConfigurationValue.StringValue(root.resolve("web.yaml").toString)
+          )
+        ),
+        ConfigurationTrace.empty
+      )
+      val subsystem = DefaultSubsystemFactory.default(None, configuration)
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+
+      val response = server
+        ._component_web_app(
+          "debug",
+          "debug-app",
+          Vector.empty,
+          Some(HRequest[IO](method = Method.GET, uri = Uri.unsafeFromString("/web/debug-app")))
+        )
+        .unsafeRunSync()
+      val body = response.as[String].unsafeRunSync()
+
+      response.status.code shouldBe 403
+      body should include ("Debug app sign in required")
+    }
+
     "inject subsystem theme into component static Web pages" in {
       val root = Files.createTempDirectory("http4s-http-server-theme-spec")
       Files.createDirectories(root.resolve("debug-app"))
@@ -359,8 +411,11 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers {
       generatedPage.status.code shouldBe 200
       generatedBody should include ("/web/assets/console-theme.css")
       body should include ("/web/assets/textus-form-debug.js")
+      body should include ("/web/assets/textus-calltree.js")
       StaticFormAppAssets.textusFormDebugJs should include ("x-textus-debug-request-kind")
       StaticFormAppAssets.textusFormDebugJs should include ("x-textus-debug-display")
+      StaticFormAppAssets.textusFormDebugJs should include ("function extractCallTree")
+      StaticFormAppAssets.textusFormDebugJs should include ("data-textus-calltree")
       StaticFormAppAssets.textusFormDebugJs should include ("function shouldShowSuccess")
       StaticFormAppAssets.textusFormDebugJs should include ("function shouldInspect")
       StaticFormAppAssets.textusFormDebugJs should include ("function shouldRender")

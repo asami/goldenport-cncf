@@ -11,18 +11,20 @@ import org.goldenport.cncf.datastore.*
 import org.goldenport.cncf.entity.*
 import org.simplemodeling.model.datatype.EntityId
 import org.goldenport.cncf.directive.SearchResult
-import org.goldenport.cncf.observability.CallTreeContext
+import org.goldenport.cncf.observability.{CallTreeContext, CallTreeValueSummary}
 import org.goldenport.process.ShellCommandExecutor
 import org.goldenport.cncf.statemachine.TransitionValidationHook
 import org.goldenport.cncf.security.OperationAccessPolicy
 import org.goldenport.cncf.metrics.EntityAccessMetricsRegistry
 import org.goldenport.record.Record
+import org.goldenport.record.io.RecordEncoder
 
 /*
  * Interpreter for UnitOfWorkOp.
  *
  * This bridges declarative UoW programs (Free) and
  * concrete UnitOfWork execution.
+ * @version May. 10, 2026
  */
 /*
  * @since   Jan. 10, 2026
@@ -616,8 +618,18 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
       "cache_layer" -> layer,
       "real_io" -> realIo.toString,
       "working_set_enabled" -> _working_set_enabled.toString,
-      "query" -> _truncate_calltree_text(query.query.toString, 2000)
+      "query" -> _calltree_entity_query_json(query)
     )
+
+  private def _calltree_entity_query_json(
+    query: EntityQuery[?]
+  ): String =
+    _truncate_calltree_text(RecordEncoder.json(Record.dataAuto(
+      "collection" -> query.collection.name,
+      "scope" -> query.scope.toString,
+      "visibility_scope" -> query.visibilityScope.map(_.toString),
+      "query" -> query.query.toRecord()
+    )), 4000)
 
   private def _truncate_calltree_text(
     value: String,
@@ -630,11 +642,31 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
     attributes: Map[String, String] = Map.empty
   )(body: => Consequence[A]): Consequence[A] = {
     val ctx = callTreeContext
-    ctx.enter(label, attributes)
-    try {
+    if (ctx.isEnabled) {
+      ctx.enter(label, attributes ++ Map(
+        "calltree_kind" -> "uow"
+      ))
+      try {
+        val result = body
+        result match {
+          case success: Consequence.Success[A] =>
+            ctx.leave(Map("outcome" -> "success") ++ CallTreeValueSummary.resultAttributes(success.result))
+            success
+          case failure: Consequence.Failure[A] =>
+            ctx.leave(Map(
+              "outcome" -> "failure",
+              "status" -> failure.conclusion.status.webCode.code.toString,
+              "error" -> failure.conclusion.display
+            ))
+            failure
+        }
+      } catch {
+        case e: Throwable =>
+          ctx.leave()
+          throw e
+      }
+    } else {
       body
-    } finally {
-      ctx.leave()
     }
   }
 }

@@ -20,7 +20,8 @@ import org.goldenport.util.StringUtils
  * @since   Dec. 21, 2025
  *  version Jan. 18, 2026
  *  version Mar. 31, 2026
- * @version Apr. 28, 2026
+ *  version Apr. 28, 2026
+ * @version May. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 final class RuntimeContext(
@@ -125,6 +126,17 @@ final class RuntimeContext(
   def noteInlineCallTree(calltree: Record): Unit =
     updateExecutionMetadata(_.copy(inlineCallTree = Some(calltree)))
 
+  def noteExecutionContext(
+    sagaId: Option[String],
+    jobId: Option[String],
+    taskId: Option[String]
+  ): Unit =
+    updateExecutionMetadata(_.copy(
+      sagaId = sagaId,
+      executionJobId = jobId,
+      executionTaskId = taskId
+    ))
+
   def clearExecutionMetadata(): Unit =
     _execution_metadata = RuntimeContext.ExecutionMetadata.empty
 }
@@ -133,7 +145,10 @@ object RuntimeContext {
   final case class ExecutionMetadata(
     responseJobId: Option[String] = None,
     debugJobId: Option[String] = None,
-    inlineCallTree: Option[Record] = None
+    inlineCallTree: Option[Record] = None,
+    sagaId: Option[String] = None,
+    executionJobId: Option[String] = None,
+    executionTaskId: Option[String] = None
   )
 
   object ExecutionMetadata {

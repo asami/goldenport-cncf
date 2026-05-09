@@ -16,7 +16,8 @@ import scala.xml.{Elem, NodeSeq, Text}
 /*
  * @since   Mar. 13, 2026
  *  version Mar. 28, 2026
- * @version Apr. 30, 2026
+ *  version Apr. 30, 2026
+ * @version May. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 object OperationResponseFormatter {
@@ -221,10 +222,25 @@ object OperationResponseFormatter {
       Record.data(
         "data" -> data,
         "debug" -> Record.data(
-          "calltree" -> calltree
+          "calltree" -> _debug_calltree_payload(calltree)
         )
       )
     }
+
+  private def _debug_calltree_payload(
+    calltree: Record
+  ): Record = {
+    val values = calltree.asMap
+    val nodes = values.get("nodes")
+      .orElse(values.get("calltree"))
+      .getOrElse(Vector.empty)
+    val fields =
+      Vector(
+        "job_id" -> values.getOrElse("job_id", ""),
+        "nodes" -> nodes
+      ) ++ values.toVector.filterNot { case (key, _) => key == "job_id" || key == "calltree" || key == "nodes" }
+    Record.dataAuto(fields*)
+  }
 
   private def _execution_record_for_record: Record =
     Record.data(

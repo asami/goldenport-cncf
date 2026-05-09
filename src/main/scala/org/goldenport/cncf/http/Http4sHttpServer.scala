@@ -45,7 +45,7 @@ import org.goldenport.datatype.{ContentType, MimeBody, MimeType}
  *  version Jan. 21, 2026
  *  version Mar. 29, 2026
  *  version Apr. 30, 2026
- * @version May.  8, 2026
+ * @version May. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Http4sHttpServer(
@@ -1210,7 +1210,7 @@ final class Http4sHttpServer(
     if (!_is_form_enabled(app, service, operation))
       _web_error_response(Some(webAppName), HStatus.NotFound, "Static Form operation-result operation not found", req.uri.path.renderString)
     else if (!_is_web_authorized(app, service, operation, Some(req)))
-      _forbidden_web(req, Some(app), Some(service), Some(operation))
+      _forbidden_web(req, Some(webAppName), Some(service), Some(operation))
     else {
       val started = System.nanoTime()
       val queryValues = req.uri.query.params.toMap
@@ -1699,7 +1699,7 @@ final class Http4sHttpServer(
       for {
         form <- _to_form_record(req)
         query = Record.create(req.uri.query.params.toVector)
-        header = _request_header_record(req, query, form)
+        header = _development_form_header_record(req, query, form)
         componentSegment = _dispatch_component_segment(app)
         result = _dispatch_operation_result(
           componentSegment,
@@ -3814,15 +3814,30 @@ final class Http4sHttpServer(
       .map(_.trim)
       .filter(_.nonEmpty)
       .orElse {
-        req.cookies.collectFirst {
-          case cookie if cookie.name.equalsIgnoreCase(_session_cookie_name) => cookie.content
-        }.map(_.trim).filter(_.nonEmpty)
+        _session_cookie_names(req).collectFirst(Function.unlift { name =>
+          req.cookies.collectFirst {
+            case cookie if cookie.name.equalsIgnoreCase(name) => cookie.content
+          }.map(_.trim).filter(_.nonEmpty)
+        })
       }
       .orElse(form.getString("x-textus-session").map(_.trim).filter(_.nonEmpty))
       .orElse(query.getString("x-textus-session").map(_.trim).filter(_.nonEmpty))
 
+  private def _session_cookie_names(req: org.http4s.Request[IO]): Vector[String] =
+    (_session_cookie_name +: _web_app_session_cookie_name(req).toVector).distinct
+
   private def _session_cookie_name: String =
     s"textus-session-${NamingConventions.toNormalizedSegment(engine.runtimeSubsystem.name)}"
+
+  private def _web_app_session_cookie_name(req: org.http4s.Request[IO]): Option[String] = {
+    val segments = req.uri.path.segments.map(_.decoded()).toVector
+    segments match {
+      case Vector("web", app, _*) if app.nonEmpty =>
+        Some(s"textus-session-${NamingConventions.toNormalizedSegment(app)}")
+      case _ =>
+        None
+    }
+  }
 
   private def _session_cookie_(
     sessionid: String
@@ -3951,11 +3966,13 @@ final class Http4sHttpServer(
         .getOrElse(WebDescriptorAuthorization.Subject())
     else
       req.map { r =>
-        val subject = WebDescriptorAuthorization.Subject.fromHttp(r)
-        if (!subject.anonymous || _session_id_(r).isEmpty)
-          subject
-        else
-          subject.copy(anonymous = false)
+        _web_authorization_subject_from_session(r).getOrElse {
+          val subject = WebDescriptorAuthorization.Subject.fromHttp(r)
+          if (!subject.anonymous || _session_id_(r).isEmpty)
+            subject
+          else
+            subject.copy(anonymous = false)
+        }
       }.getOrElse(WebDescriptorAuthorization.Subject())
 
   private def _web_authorization_subject_from_session(
@@ -4226,7 +4243,7 @@ final class Http4sHttpServer(
     )
     val debugJs =
       if (_is_development_operation_mode(_operation_mode))
-        Vector("/web/assets/textus-form-debug.js")
+        Vector("/web/assets/textus-form-debug.js", "/web/assets/textus-calltree.js")
       else
         Vector.empty
     StaticFormAppLayout.completeDeclaredAssets(

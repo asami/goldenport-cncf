@@ -57,7 +57,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr. 12, 2026
- * @version May.  9, 2026
+ * @version May. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
@@ -8038,10 +8038,28 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
     "render development execution debug panel with inline calltree" in {
       val calltree = Record.data(
         "calltree" -> Vector(
-          Record.data("kind" -> "enter", "label" -> "notice.post-notice", "attributes" -> Record.data("started_at_nanos" -> "1")),
-          Record.data("kind" -> "enter", "label" -> "uow:entitystore:search:direct", "attributes" -> Record.data("started_at_nanos" -> "2", "real_io" -> "true", "cache_layer" -> "entity-store")),
-          Record.data("kind" -> "leave", "label" -> "uow:entitystore:search:direct", "attributes" -> Record.data("started_at_nanos" -> "2", "ended_at_nanos" -> "3", "duration_millis" -> "1")),
-          Record.data("kind" -> "leave", "label" -> "notice.post-notice", "attributes" -> Record.data("started_at_nanos" -> "1", "ended_at_nanos" -> "4", "duration_millis" -> "3"))
+          Record.data(
+            "label" -> "notice.post-notice",
+            "kind" -> "action",
+            "attributes" -> Record.data("started_at_nanos" -> "1", "ended_at_nanos" -> "6", "duration_millis" -> "5", "component" -> "NoticeBoard", "service" -> "Notice", "operation" -> "postNotice", "request" -> "id=notice-1", "response_type" -> "RecordResponse", "response" -> """{"kind":"record","field_count":2,"size_bytes":72,"inline":false,"payload_href":"/web/system/admin/execution/payloads/notice-1"}""", "outcome" -> "success"),
+            "enter_attributes" -> Record.data("started_at_nanos" -> "1", "request" -> "id=notice-1"),
+            "leave_attributes" -> Record.data("ended_at_nanos" -> "6", "duration_millis" -> "5", "response_type" -> "RecordResponse", "response" -> """{"kind":"record","field_count":2,"size_bytes":72,"inline":false,"payload_href":"/web/system/admin/execution/payloads/notice-1"}""", "outcome" -> "success"),
+            "observations" -> Vector.empty,
+            "children" -> Vector(
+              Record.data(
+                "label" -> "uow:entitystore:search:direct",
+                "kind" -> "uow",
+                "display_label" -> "UoW EntityStore direct search",
+                "attributes" -> Record.data("started_at_nanos" -> "2", "ended_at_nanos" -> "5", "duration_millis" -> "3", "real_io" -> "true", "cache_layer" -> "entity-store", "result" -> """{"kind":"search-result","record_count":3,"size_bytes":2048,"inline":false}"""),
+                "observations" -> Vector(
+                  Record.data("label" -> "metrics:entity.search.start", "kind" -> "metric", "display_label" -> "Entity search", "sampled_at_nanos" -> "4", "outcome" -> "start", "query" -> Record.data("condition" -> Record.data("recipientUserId" -> "user-1")))
+                ),
+                "children" -> Vector(
+                  Record.data("label" -> "metrics:entity.load.start", "kind" -> "metric", "sampled_at_nanos" -> "4", "outcome" -> "start", "entity" -> "notice")
+                )
+              )
+            )
+          )
         )
       )
       val properties = StaticFormAppRenderer.FormResultProperties(
@@ -8052,10 +8070,13 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         ),
         200,
         "application/json",
-        """{"id":"notice-1"}""",
+        """{"data":{"id":"notice-1"},"debug":{"calltree":{"nodes":[{"label":"raw-calltree-json-only"}]}}}""",
         executionMetadata = RuntimeContext.ExecutionMetadata(
           debugJobId = Some("cncf-job-job-1"),
-          inlineCallTree = Some(calltree)
+          inlineCallTree = Some(calltree),
+          sagaId = Some("saga-1"),
+          executionJobId = Some("cncf-job-job-1"),
+          executionTaskId = Some("cncf-task-task-1")
         ),
         operationMode = OperationMode.Develop
       )
@@ -8068,19 +8089,52 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("textus-execution-debug-panel")
       html should include ("Development execution diagnostics")
       html should include ("bg-success-subtle")
+      html should include ("<dt class=\"col-sm-3\">Saga</dt><dd class=\"col-sm-9\"><code>saga-1</code></dd>")
+      html should include ("<dt class=\"col-sm-3\">Job</dt><dd class=\"col-sm-9\"><code>cncf-job-job-1</code></dd>")
+      html should include ("<dt class=\"col-sm-3\">Task</dt><dd class=\"col-sm-9\"><code>cncf-task-task-1</code></dd>")
       html should include ("notice.post-notice")
       html should include ("textus-calltree-tree")
       html should include ("data-textus-calltree")
       html should include ("data-calltree-node")
+      html should include ("data-calltree-row")
+      html should include ("data-calltree-step")
+      html should include ("data-calltree-children")
+      html should not include ("data-calltree-enter")
+      html should not include ("data-calltree-leave")
+      html should not include ("data-calltree-parent")
       html should include ("data-calltree-label")
       html should include ("data-calltree-kind")
       html should include ("/web/assets/textus-calltree.js")
       html should not include ("Raw CallTree JSON")
       html should include ("border-start")
-      html should include ("uow:entitystore:search:direct")
-      html should include ("real_io=true")
+      html should include ("UoW EntityStore direct search")
+      html should include ("id=notice-1")
+      html should include ("[shown in CallTree panel]")
+      html should not include ("raw-calltree-json-only")
+      html should include ("response_type")
+      html should include ("RecordResponse")
+      html should include ("records=3")
+      html should include ("Show result")
+      html should include ("fields=2")
+      html should include ("Show response")
+      html should include ("Open external response")
+      html should include ("Entity search")
+      html should include ("metrics:entity.load.start")
+      html should include ("data-calltree-observation")
+      html should include ("Step observations (2)")
+      html should include ("<details class=\"mt-2\" data-calltree-observations>")
+      html should include ("recipientUserId")
+      html should not include ("data-calltree-mark")
+      html should include ("data-calltree-highlight=\"real_io\"")
+      html should include ("data-calltree-real-io=\"true\"")
+      html should not include ("""data-calltree-attribute-key="real_io"""")
       html should include ("cache_layer=entity-store")
+      html should not include (">UoW</span>")
       html should include ("/web/system/admin/jobs/cncf-job-job-1")
+      html.indexOf ("""data-calltree-attribute-key="component">component""") should be < html.indexOf ("""data-calltree-attribute-key="service">service""")
+      html.indexOf ("""data-calltree-attribute-key="service">service""") should be < html.indexOf ("""data-calltree-attribute-key="operation">operation""")
+      html.indexOf ("""data-calltree-label>notice.post-notice""") should be < html.indexOf ("""data-calltree-label>UoW EntityStore direct search""")
+      html.indexOf ("""data-calltree-label>UoW EntityStore direct search""") should be < html.indexOf ("""data-calltree-observation-label>Entity search""")
     }
 
     "append development execution debug panel to full HTML result templates" in {
@@ -8184,8 +8238,42 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       js should include ("data-calltree-clear")
       js should include ("data-calltree-show-io")
       js should include ("data-calltree-show-real-io")
+      js should include ("data-calltree-toggle")
+      js should include ("setupNodeExpansion")
+      js should include ("refreshExpansion")
+      js should include ("directChildContainer")
       js should include ("data-calltree-long-attribute")
+      js should include ("compactDurationAttributes")
+      js should include ("duration_millis")
+      js should include ("duration_micros")
+      js should include ("duration_nanos")
+      js should include ("data-calltree-pair")
+      js should include ("textus-calltree-row-highlight")
+      js should include ("bindPairHighlight")
       js should include ("openAncestors")
+      js should include ("enhancePayloadAttributes")
+      js should include ("Show \" + key")
+      js should include ("Open external \" + key")
+      js should include ("window.TextusCallTree")
+      js should include ("enhanceAll")
+    }
+
+    "ship form API diagnostics CallTree extraction asset" in {
+      val js = StaticFormAppAssets.textusFormDebugJs
+
+      js should include ("extractCallTree")
+      js should include ("[shown in CallTree panel]")
+      js should include ("data-textus-calltree")
+      js should include ("isCallTreeObservation")
+      js should include ("callTreeObservations")
+      js should include ("data-calltree-children")
+      js should include ("Step observations")
+      js should include ("const attributeOrder = { component: 0, service: 1, operation: 2 }")
+      js should include ("callTreePayloadHtml")
+      js should include ("Show ' + escapeHtml(key)")
+      js should include ("Open external ' + escapeHtml(key)")
+      js should not include ("UoW</span>")
+      js should include ("window.TextusCallTree.enhanceAll")
     }
 
     "render application user job list and detail pages" in {

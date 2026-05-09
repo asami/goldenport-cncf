@@ -3,12 +3,13 @@ package org.goldenport.cncf.entity.runtime
 import scala.collection.mutable
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.entity.EntityIdentityScope
+import org.goldenport.cncf.observability.CallTreeValueSummary
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 
 /*
  * @since   Mar. 14, 2026
  *  version Mar. 27, 2026
- * @version May.  2, 2026
+ * @version May. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 // Component-local container for entity collections.
@@ -50,10 +51,12 @@ class EntitySpace {
     excludeId: Option[EntityId],
     scope: EntityIdentityScope,
     includeEntityIdEntropy: Boolean
-  )(using ExecutionContext): Boolean =
-    entityOption[E](collectionId.name)
-      .orElse(entityOption(collectionId).map(_.asInstanceOf[EntityCollection[E]]))
-      .exists(_.uniqueValueExists(fieldName, value, excludeId, scope, includeEntityIdEntropy))
+  )(using ctx: ExecutionContext): Boolean =
+    _with_calltree("space:entity:unique-value-exists", _entity_space_attributes("unique-value-exists", collectionId) + ("field" -> fieldName)) {
+      entityOption[E](collectionId.name)
+        .orElse(entityOption(collectionId).map(_.asInstanceOf[EntityCollection[E]]))
+        .exists(_.uniqueValueExists(fieldName, value, excludeId, scope, includeEntityIdEntropy))
+    }
 
   def resolveIdentity[E](
     collectionId: EntityCollectionId,
@@ -61,10 +64,12 @@ class EntitySpace {
     fieldNames: Vector[String],
     includeEntityIdEntropy: Boolean,
     scope: EntityIdentityScope
-  )(using ExecutionContext): Option[EntityId] =
-    entityOption[E](collectionId.name)
-      .orElse(entityOption(collectionId).map(_.asInstanceOf[EntityCollection[E]]))
-      .flatMap(_.resolveIdentity(value, fieldNames, includeEntityIdEntropy, scope))
+  )(using ctx: ExecutionContext): Option[EntityId] =
+    _with_calltree("space:entity:resolve-identity", _entity_space_attributes("resolve-identity", collectionId)) {
+      entityOption[E](collectionId.name)
+        .orElse(entityOption(collectionId).map(_.asInstanceOf[EntityCollection[E]]))
+        .flatMap(_.resolveIdentity(value, fieldNames, includeEntityIdEntropy, scope))
+    }
 
   def entityOption(
     collectionId: EntityCollectionId
@@ -81,4 +86,37 @@ class EntitySpace {
       .getOrElse(
         throw new IllegalStateException(s"$kind not found: $name")
       )
+
+  private def _with_calltree[A](
+    label: String,
+    attributes: Map[String, String]
+  )(
+    body: => A
+  )(using ctx: ExecutionContext): A = {
+    val calltree = ctx.observability.callTreeContext
+    if (calltree.isEnabled) {
+      calltree.enter(label, attributes ++ Map("calltree_kind" -> "space"))
+      try {
+        val result = body
+        calltree.leave(Map("outcome" -> "success") ++ CallTreeValueSummary.resultAttributes(result))
+        result
+      } catch {
+        case e: Throwable =>
+          calltree.leave(Map("outcome" -> "failure", "error" -> e.getMessage))
+          throw e
+      }
+    } else {
+      body
+    }
+  }
+
+  private def _entity_space_attributes(
+    operation: String,
+    collectionId: EntityCollectionId
+  ): Map[String, String] =
+    Map(
+      "space" -> "entity",
+      "operation" -> operation,
+      "collection" -> collectionId.print
+    )
 }

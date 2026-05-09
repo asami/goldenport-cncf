@@ -29,7 +29,7 @@ import io.circe.parser.parse
 /*
  * @since   Apr. 12, 2026
  *  version Apr. 30, 2026
- * @version May.  9, 2026
+ * @version May. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 object StaticFormAppRenderer {
@@ -2295,6 +2295,9 @@ object StaticFormAppRenderer {
       val metadata = properties.executionMetadata
       val calltreeHtml = metadata.inlineCallTree.map(_debug_calltree_html).getOrElse("")
       val jobid = metadata.responseJobId.orElse(metadata.debugJobId)
+      val executionJobId = metadata.executionJobId.orElse(jobid)
+      val sagaId = metadata.sagaId
+      val taskId = metadata.executionTaskId
       val joblinks = jobid.map { id =>
         val appHref = pageProperties.value("result.job.href")
         val systemHref = s"/web/system/admin/jobs/${_escape_path_segment(id)}"
@@ -2322,7 +2325,9 @@ object StaticFormAppRenderer {
            |  <dt class="col-sm-3">Operation</dt><dd class="col-sm-9"><code>${_escape(properties.operationLabel)}</code></dd>
            |  <dt class="col-sm-3">HTTP status</dt><dd class="col-sm-9">${properties.status}</dd>
            |  <dt class="col-sm-3">Mode</dt><dd class="col-sm-9">${_escape(properties.operationMode.name)}</dd>
-           |  <dt class="col-sm-3">Job ID</dt><dd class="col-sm-9"><code>${_escape(jobid.getOrElse(""))}</code></dd>
+           |  <dt class="col-sm-3">Saga</dt><dd class="col-sm-9">${_debug_context_value(sagaId)}</dd>
+           |  <dt class="col-sm-3">Job</dt><dd class="col-sm-9">${_debug_context_value(executionJobId)}</dd>
+           |  <dt class="col-sm-3">Task</dt><dd class="col-sm-9">${_debug_context_value(taskId)}</dd>
            |</dl>""".stripMargin
       s"""<section class="container my-4 textus-execution-debug-panel">
          |  <details class="border border-${debugVariant._1} border-2 border-start border-start-4 rounded bg-${debugVariant._1}-subtle shadow-sm">
@@ -2340,6 +2345,13 @@ object StaticFormAppRenderer {
          |  </details>
          |</section>""".stripMargin
     }
+
+  private def _debug_context_value(
+    value: Option[String]
+  ): String =
+    value.filter(_.trim.nonEmpty)
+      .map(x => s"""<code>${_escape(x)}</code>""")
+      .getOrElse("""<span class="text-secondary">none</span>""")
 
   private def _is_development_operation_mode(
     mode: OperationMode
@@ -2389,9 +2401,33 @@ object StaticFormAppRenderer {
       body
     else
       io.circe.parser.parse(trimmed).toOption
-      .map(_debug_redact_json(_, confidentiality).spaces2)
+      .map(json => _debug_redact_json(_debug_compact_result_debug_json(json), confidentiality).spaces2)
       .getOrElse(_debug_redact_text(body, confidentiality))
   }
+
+  private def _debug_compact_result_debug_json(
+    json: Json
+  ): Json =
+    json.asObject.flatMap { obj =>
+      obj("debug").flatMap(_.asObject).map { debug =>
+        val compactDebug =
+          if (debug("calltree").nonEmpty)
+            Json.fromJsonObject(JsonObject.fromIterable(
+              debug.toIterable.map {
+                case ("calltree", _) => "calltree" -> Json.fromString("[shown in CallTree panel]")
+                case x => x
+              }
+            ))
+          else
+            Json.fromJsonObject(debug)
+        Json.fromJsonObject(JsonObject.fromIterable(
+          obj.toIterable.map {
+            case ("debug", _) => "debug" -> compactDebug
+            case x => x
+          }
+        ))
+      }
+    }.getOrElse(json)
 
   private def _debug_operation_arguments(
     pageProperties: FormPageProperties,
@@ -2553,9 +2589,36 @@ object StaticFormAppRenderer {
   private final case class DebugCallTreeNode(
     label: String,
     attributes: Map[String, String],
+    enterAttributes: Map[String, String],
+    leaveAttributes: Map[String, String],
     startedAtNanos: Long,
     endedAtNanos: Option[Long],
-    children: Vector[DebugCallTreeNode]
+    children: Vector[DebugCallTreeNode],
+    observations: Vector[DebugCallTreeObservation] = Vector.empty
+  ) {
+    def enterDisplayAttributes: Map[String, String] =
+      if (enterAttributes.nonEmpty) enterAttributes else attributes
+    def leaveDisplayAttributes: Map[String, String] =
+      if (leaveAttributes.nonEmpty) leaveAttributes else attributes
+  }
+
+  private final case class DebugCallTreeObservation(
+    label: String,
+    displayLabel: String,
+    kind: String,
+    attributes: Map[String, String]
+  )
+
+  private final case class DebugCallTreeLine(
+    role: String,
+    label: String,
+    displayLabel: String,
+    kind: String,
+    attributes: Map[String, String],
+    depth: Int,
+    pair: String,
+    parentDisplayLabel: Option[String] = None,
+    observations: Vector[DebugCallTreeObservation] = Vector.empty
   )
 
   private def _debug_calltree_html(
@@ -2564,7 +2627,7 @@ object StaticFormAppRenderer {
     _debug_calltree_nodes(record) match {
       case Some(nodes) if nodes.nonEmpty =>
         s"""<div class="textus-calltree-tree" data-textus-calltree>
-           |  ${_debug_calltree_node_list(nodes, 0)}
+           |  ${_debug_calltree_outline(nodes)}
            |</div>""".stripMargin
       case _ =>
         _debug_calltree_legacy_html(record)
@@ -2584,16 +2647,17 @@ object StaticFormAppRenderer {
         xs.toVector.map {
           case r: Record =>
             val childLabel = r.getString("name").orElse(r.getString("label")).getOrElse("node")
-            DebugCallTreeNode(childLabel, r.asMap.filterNot { case (key, _) => key == "name" || key == "label" || key == "children" }.map { case (key, value) => key -> value.toString }, 0L, None, Vector.empty)
+            val childAttrs = r.asMap.filterNot { case (key, _) => key == "name" || key == "label" || key == "children" }.map { case (key, value) => key -> value.toString }
+            DebugCallTreeNode(childLabel, childAttrs, childAttrs, childAttrs, 0L, None, Vector.empty)
           case x =>
-            DebugCallTreeNode(x.toString, Map.empty, 0L, None, Vector.empty)
+            DebugCallTreeNode(x.toString, Map.empty, Map.empty, Map.empty, 0L, None, Vector.empty)
         }
       case _ =>
         Vector.empty
     }
-    val node = DebugCallTreeNode(label, attrs, 0L, None, children)
+    val node = DebugCallTreeNode(label, attrs, attrs, attrs, 0L, None, children)
     s"""<div class="textus-calltree-tree" data-textus-calltree>
-       |  ${_debug_calltree_node_list(Vector(node), 0)}
+       |  ${_debug_calltree_outline(Vector(node))}
        |</div>""".stripMargin
   }
 
@@ -2610,9 +2674,12 @@ object StaticFormAppRenderer {
       val leaves = events.filter(_is_debug_leave_event).groupBy(x => (x.label, x.startedAtNanos))
       val spanNodes = events.zipWithIndex.collect { case (entry, index) if entry.kind == "enter" =>
         val leave = leaves.get((entry.label, entry.startedAtNanos)).flatMap(_.headOption)
+        val leaveAttrs = leave.map(_.attributes).getOrElse(Map.empty)
         index -> DebugCallTreeNode(
           entry.label,
-          entry.attributes ++ leave.map(_.attributes).getOrElse(Map.empty),
+          entry.attributes ++ leaveAttrs,
+          entry.attributes,
+          leaveAttrs,
           entry.startedAtNanos,
           leave.flatMap(_.endedAtNanos).orElse(entry.endedAtNanos),
           Vector.empty
@@ -2623,6 +2690,8 @@ object StaticFormAppRenderer {
           index -> DebugCallTreeNode(
             event.label,
             event.attributes,
+            event.attributes,
+            Map.empty,
             event.startedAtNanos,
             event.endedAtNanos.orElse(Some(event.startedAtNanos)),
             Vector.empty
@@ -2674,22 +2743,106 @@ object StaticFormAppRenderer {
   ): Option[DebugCallTreeNode] = {
     val label = record.getString("label").orElse(record.getString("name"))
     label.map { label =>
-      val attrs = _debug_calltree_attributes(record.asMap.get("attributes"))
-      val children = record.asMap.get("children") match {
+      val topAttrs = _debug_calltree_top_level_attributes(record)
+      val legacyAttrs = _debug_calltree_attributes(record.asMap.get("attributes"))
+      val attrs = (if (legacyAttrs.nonEmpty) legacyAttrs else topAttrs) ++
+        record.getString("kind").filter(_.nonEmpty).map("calltree_kind" -> _).toMap ++
+        record.getString("display_label").filter(_.nonEmpty).map("display_label" -> _).toMap
+      val enterAttrs = _debug_calltree_attributes(record.asMap.get("enter_attributes"))
+      val leaveAttrs = _debug_calltree_attributes(record.asMap.get("leave_attributes"))
+      val (children, flowObservations) = _debug_calltree_structured_flow(record)
+      val observations = flowObservations ++ (record.asMap.get("observations") match {
         case Some(xs: Seq[?]) =>
-          xs.toVector.collect { case r: Record => _debug_calltree_structured_node(r) }.flatten
+          xs.toVector.collect { case r: Record => _debug_calltree_structured_observation(r) }.flatten
         case _ =>
           Vector.empty
-      }
+      })
       DebugCallTreeNode(
         label,
         attrs,
+        enterAttrs,
+        leaveAttrs,
         attrs.get("started_at_nanos").flatMap(_to_long_option).getOrElse(0L),
         attrs.get("ended_at_nanos").flatMap(_to_long_option),
-        children
+        children,
+        observations
       )
     }
   }
+
+  private def _debug_calltree_structured_flow(
+    record: Record
+  ): (Vector[DebugCallTreeNode], Vector[DebugCallTreeObservation]) =
+    record.asMap.get("flow").orElse(record.asMap.get("children")) match {
+      case Some(xs: Seq[?]) =>
+        val records = xs.toVector.collect { case r: Record => r }
+        val children = records.filterNot(_debug_calltree_is_observation_record).flatMap(_debug_calltree_structured_node)
+        val observations = records.filter(_debug_calltree_is_observation_record).flatMap(_debug_calltree_structured_observation)
+        children -> observations
+      case _ =>
+        Vector.empty -> Vector.empty
+    }
+
+  private def _debug_calltree_is_observation_record(
+    record: Record
+  ): Boolean = {
+    val kind = record.getString("kind").getOrElse("").toLowerCase(java.util.Locale.ROOT)
+    val label = record.getString("label").orElse(record.getString("name")).getOrElse("").toLowerCase(java.util.Locale.ROOT)
+    kind == "metric" || kind == "observation"
+  }
+
+  private def _debug_calltree_structured_observation(
+    record: Record
+  ): Option[DebugCallTreeObservation] =
+    record.getString("label").orElse(record.getString("name")).filterNot(_debug_calltree_legacy_io_boundary).map { label =>
+      val topAttrs = _debug_calltree_top_level_attributes(record)
+      val legacyAttrs = _debug_calltree_attributes(record.asMap.get("attributes"))
+      val attrs = (if (legacyAttrs.nonEmpty) legacyAttrs else topAttrs) ++
+        record.getString("kind").filter(_.nonEmpty).map("calltree_kind" -> _).toMap ++
+        record.getString("display_label").filter(_.nonEmpty).map("display_label" -> _).toMap
+      val node = DebugCallTreeNode(label, attrs, Map.empty, Map.empty, 0L, None, Vector.empty)
+      DebugCallTreeObservation(
+        label,
+        _debug_calltree_display_label(node),
+        _debug_calltree_node_kind(node),
+        _debug_calltree_display_attributes(node, node.attributes)
+      )
+    }
+
+  private def _debug_calltree_legacy_io_boundary(
+    label: String
+  ): Boolean = {
+    val lower = label.toLowerCase(java.util.Locale.ROOT)
+    lower == "io:input" || lower == "io:output"
+  }
+
+  private def _debug_calltree_top_level_attributes(
+    record: Record
+  ): Map[String, String] =
+    record.asMap
+      .filterNot { case (key, _) =>
+        key == "label" ||
+          key == "name" ||
+          key == "kind" ||
+          key == "display_label" ||
+          key == "calltree_kind" ||
+          key == "flow" ||
+          key == "children" ||
+          key == "observations" ||
+          key == "attributes" ||
+          key == "enter_attributes" ||
+          key == "leave_attributes"
+      }
+      .map { case (key, value) => key -> _debug_calltree_value_string(value) }
+
+  private def _debug_calltree_value_string(
+    value: Any
+  ): String =
+    value match {
+      case r: Record => _manual_raw_json(r).map(_.spaces2).getOrElse(r.show)
+      case xs: Seq[?] => _manual_raw_json(xs).map(_.spaces2).getOrElse(xs.mkString("[", ", ", "]"))
+      case x => Option(x).map(_.toString).getOrElse("")
+    }
 
   private def _debug_calltree_contains(
     parent: DebugCallTreeNode,
@@ -2756,83 +2909,151 @@ object StaticFormAppRenderer {
   ): Option[Long] =
     scala.util.Try(value.toLong).toOption
 
-  private def _debug_calltree_node_list(
-    nodes: Vector[DebugCallTreeNode],
-    depth: Int
-  ): String =
-    s"""<ul class="${if (depth == 0) "list-group border rounded bg-white" else "list-unstyled border-start border-2 ms-3 ps-3 mt-2"}" data-calltree-node-list>
-       |${nodes.map(_debug_calltree_node_html(_, depth)).mkString}
-       |</ul>""".stripMargin
+  private def _debug_calltree_outline(
+    nodes: Vector[DebugCallTreeNode]
+  ): String = {
+    s"""<div class="list-group border rounded bg-white textus-calltree-outline" data-calltree-node-list>
+       |${nodes.zipWithIndex.map { case (node, index) =>
+         _debug_calltree_node_html(node, 0, Vector(index + 1), None)
+       }.mkString}
+       |</div>""".stripMargin
+  }
 
   private def _debug_calltree_node_html(
     node: DebugCallTreeNode,
-    depth: Int
+    depth: Int,
+    path: Vector[Int],
+    parentDisplayLabel: Option[String] = None
   ): String = {
-    val attrs = _debug_calltree_attributes_html(node.attributes)
-    val children =
-      if (node.children.isEmpty)
-        ""
-      else
-        _debug_calltree_node_list(node.children, depth + 1)
-    val badges = _debug_calltree_badges(node)
-    val open = if (depth <= 1) " open" else ""
-    val itemClass =
-      if (depth == 0)
-        "list-group-item py-2"
-      else
-        "position-relative py-2 ps-2"
     val kind = _debug_calltree_node_kind(node)
-    val realIo = node.attributes.getOrElse("real_io", "")
-    val source = node.attributes
-      .get("source")
-      .orElse(node.attributes.get("cache_layer"))
-      .orElse(node.attributes.get("datastore"))
-      .getOrElse("")
-    val marker =
-      if (depth == 0)
+    val displayLabel = _debug_calltree_display_label(node)
+    val pair = path.mkString("-")
+    val line = DebugCallTreeLine("step", node.label, displayLabel, kind, _debug_calltree_display_attributes(node, node.attributes), depth, pair, parentDisplayLabel, node.observations)
+    val children = node.children.zipWithIndex.map { case (child, index) =>
+      _debug_calltree_node_html(child, depth + 1, path :+ (index + 1), Some(displayLabel))
+    }.mkString
+    _debug_calltree_line_html(line, children)
+  }
+
+  private def _debug_calltree_line_html(
+    line: DebugCallTreeLine
+  ): String =
+    _debug_calltree_line_html(line, "")
+
+  private def _debug_calltree_line_html(
+    line: DebugCallTreeLine,
+    childrenHtml: String
+  ): String = {
+    val childBlock =
+      if (childrenHtml.isEmpty)
         ""
       else
-        """<span class="position-absolute top-0 start-0 translate-middle-x mt-3 bg-body border rounded-circle" style="width:.55rem;height:.55rem"></span>"""
-    s"""<li class="${itemClass}" data-calltree-node data-calltree-kind="${_escape(kind)}" data-calltree-real-io="${_escape(realIo)}" data-calltree-source="${_escape(source)}">
-       |  ${marker}
-       |  <details${open}>
-       |    <summary class="d-flex flex-wrap align-items-center gap-1"><code data-calltree-label>${_escape(node.label)}</code>${badges}</summary>
-       |    <div class="mt-2">
-       |      ${attrs}
-       |      ${children}
-       |    </div>
+        s"""<div class="list-group mt-2 textus-calltree-children" data-calltree-children>
+           |${childrenHtml}
+           |</div>""".stripMargin
+    val attrs = _debug_calltree_attributes_html(line.attributes)
+    val observations = _debug_calltree_observations_html(line.observations)
+    val body = attrs + observations + childBlock
+    val badges = _debug_calltree_badges(line)
+    val realIo = if (_debug_calltree_has_highlight(line.attributes, "real_io")) "true" else ""
+    val source = line.attributes
+      .get("source")
+      .orElse(line.attributes.get("cache_layer"))
+      .orElse(line.attributes.get("datastore"))
+      .getOrElse("")
+    val style = s"padding-left:${if (line.depth == 0) 0.75 else 1.0}rem"
+    val lane = if (line.depth == 0) "" else """<span class="textus-calltree-lane" aria-hidden="true"></span>"""
+    s"""<div class="list-group-item py-2 textus-calltree-row textus-calltree-row-${_escape(line.role)}" style="${style}" data-calltree-node data-calltree-row data-calltree-${_escape(line.role)}="true" data-calltree-pair="${_escape(line.pair)}" data-calltree-depth="${line.depth}" data-calltree-kind="${_escape(line.kind)}" data-calltree-real-io="${_escape(realIo)}" data-calltree-source="${_escape(source)}">
+       |  ${lane}
+       |  <details${if (line.depth <= 1) " open" else ""}>
+       |    <summary class="d-flex flex-wrap align-items-center gap-2">
+       |      <span class="badge ${_debug_calltree_role_badge_variant(line.role)}" data-calltree-role>${_escape(line.kind)}</span>
+       |      <span class="fw-semibold" data-calltree-label>${_escape(line.displayLabel)}</span>
+       |      ${badges}
+       |    </summary>
+       |    <div class="mt-2">${body}</div>
        |  </details>
-       |</li>""".stripMargin
+       |</div>""".stripMargin
+    }
+
+  private def _debug_calltree_observations_html(
+    observations: Vector[DebugCallTreeObservation]
+  ): String =
+    if (observations.isEmpty)
+      ""
+    else {
+      val items = observations.map { observation =>
+        val attrs = _debug_calltree_attributes_html(observation.attributes)
+        val badges = _debug_calltree_badges(observation.attributes, observation.kind)
+        val realIo = if (_debug_calltree_has_highlight(observation.attributes, "real_io")) "true" else ""
+        val source = observation.attributes
+          .get("source")
+          .orElse(observation.attributes.get("cache_layer"))
+          .orElse(observation.attributes.get("datastore"))
+          .getOrElse("")
+        s"""<div class="border-start border-2 ps-2 py-1 mb-1 textus-calltree-observation" data-calltree-observation data-calltree-observation-kind="${_escape(observation.kind)}" data-calltree-observation-real-io="${_escape(realIo)}" data-calltree-observation-source="${_escape(source)}">
+           |  <div class="d-flex flex-wrap align-items-center gap-2">
+           |    <span class="badge text-bg-secondary">observation</span>
+           |    <span class="fw-semibold" data-calltree-observation-label>${_escape(observation.displayLabel)}</span>
+           |    ${badges}
+           |  </div>
+           |  <div class="mt-1">${attrs}</div>
+           |</div>""".stripMargin
+      }.mkString
+      s"""<details class="mt-2" data-calltree-observations>
+         |  <summary class="small text-secondary fw-semibold">Step observations (${observations.length})</summary>
+         |  <div class="mt-2">${items}</div>
+         |</details>""".stripMargin
+    }
+
+  private def _debug_calltree_display_label(
+    node: DebugCallTreeNode
+  ): String =
+    node.attributes.get("display_label").filter(_.nonEmpty).getOrElse(node.label)
+
+  private def _debug_calltree_display_attributes(
+    node: DebugCallTreeNode,
+    attributes: Map[String, String]
+  ): Map[String, String] = {
+    attributes
   }
 
   private def _debug_calltree_node_kind(
     node: DebugCallTreeNode
   ): String = {
-    val label = node.label.toLowerCase(java.util.Locale.ROOT)
-    if (label.contains("io:error"))
-      "io-error"
-    else if (label.startsWith("io:") || label.contains(":io:"))
-      "io"
-    else if (label.startsWith("metrics:datastore") || node.attributes.contains("sql"))
-      "datastore"
-    else if (label.startsWith("metrics:"))
-      "metrics"
-    else if (label.startsWith("uow:"))
-      "uow"
-    else
-      "operation"
+    node.attributes.get("calltree_kind").filter(_.nonEmpty).getOrElse("step")
   }
 
   private def _debug_calltree_badges(
     node: DebugCallTreeNode
+  ): String =
+    _debug_calltree_badges(node.attributes, _debug_calltree_node_kind(node))
+
+  private def _debug_calltree_badges(
+    line: DebugCallTreeLine
+  ): String =
+    _debug_calltree_badges(line.attributes, line.kind)
+
+  private def _debug_calltree_badges(
+    attributes: Map[String, String],
+    kind: String
   ): String = {
-    val keys = Vector("duration_millis", "real_io", "cache_layer", "source", "datastore")
+    val highlightBadges = _debug_calltree_highlights(attributes).map { highlight =>
+      val variant = highlight match {
+        case "real_io" => "text-bg-warning"
+        case "cache_hit" => "text-bg-info"
+        case _ => "text-bg-secondary"
+      }
+      s"""<span class="badge ${variant} ms-2" data-calltree-badge data-calltree-highlight="${_escape(highlight)}">${_escape(highlight)}</span>"""
+    }
+    val keys = Vector("outcome", "duration_millis", "cache_layer", "source", "datastore")
     val badges = keys.flatMap { key =>
-      node.attributes.get(key).filter(_.nonEmpty).map { value =>
+      attributes.get(key).filter(_.nonEmpty).map { value =>
         val variant =
           key match {
-            case "real_io" if value == "true" => "text-bg-warning"
-            case "real_io" => "text-bg-secondary"
+            case "outcome" if value == "failure" || value == "failed" || value == "error" => "text-bg-danger"
+            case "outcome" if value == "success" || value == "succeeded" => "text-bg-success"
+            case "outcome" if value == "start" => "text-bg-primary"
             case "cache_layer" => "text-bg-info"
             case "duration_millis" => "text-bg-light"
             case _ => "text-bg-secondary"
@@ -2841,15 +3062,51 @@ object StaticFormAppRenderer {
         s"""<span class="badge ${variant} ms-2" data-calltree-badge>${_escape(label)}</span>"""
       }
     }
-    badges.mkString
+    (highlightBadges ++ badges).mkString
   }
+
+  private def _debug_calltree_highlights(
+    attributes: Map[String, String]
+  ): Vector[String] =
+    attributes.get("highlights")
+      .toVector
+      .flatMap(_.split("[,\\s]+").toVector)
+      .map(_.trim)
+      .filter(_.nonEmpty)
+      .distinct ++
+      (if (attributes.get("real_io").exists(_.equalsIgnoreCase("true"))) Vector("real_io") else Vector.empty)
+
+  private def _debug_calltree_has_highlight(
+    attributes: Map[String, String],
+    name: String
+  ): Boolean =
+    _debug_calltree_highlights(attributes).contains(name)
+
+  private def _debug_calltree_role_badge_variant(
+    role: String
+  ): String =
+    role match {
+      case "enter" => "text-bg-primary"
+      case "leave" => "text-bg-dark"
+      case _ => "text-bg-secondary"
+    }
 
   private def _debug_calltree_attributes_html(
     attributes: Map[String, String]
   ): String = {
+    def key_order(key: String): (Int, String) =
+      key match {
+        case "calltree_kind" => (-1, key)
+        case "display_label" => (-1, key)
+        case "component" => (0, key)
+        case "service" => (1, key)
+        case "operation" => (2, key)
+        case _ => (100, key)
+      }
     val visible = attributes.toVector
       .filterNot { case (key, _) => key == "started_at_nanos" || key == "ended_at_nanos" }
-      .sortBy(_._1)
+      .filterNot { case (key, _) => key == "calltree_kind" || key == "display_label" || key == "highlights" || key == "real_io" }
+      .sortBy { case (key, _) => key_order(key) }
     if (visible.isEmpty)
       ""
     else
@@ -2857,7 +3114,9 @@ object StaticFormAppRenderer {
          |${visible.map { case (key, value) =>
            val long = _debug_calltree_multiline_attribute(key, value)
            val body =
-             if (long)
+             if (_debug_calltree_payload_attribute(key))
+               _debug_calltree_payload_html(key, value)
+             else if (long)
                s"""<pre class="bg-light border rounded p-2 mb-1"><code>${_escape(value)}</code></pre>"""
              else
                s"""<code>${_escape(value)}</code>"""
@@ -2876,7 +3135,133 @@ object StaticFormAppRenderer {
       key == "query" ||
       key == "request" ||
       key == "resolved_parameters" ||
-      key == "response"
+      key == "response" ||
+      key == "result"
+
+  private def _debug_calltree_payload_attribute(
+    key: String
+  ): Boolean =
+    key == "result" || key == "response"
+
+  private def _debug_calltree_payload_html(
+    key: String,
+    value: String
+  ): String = {
+    val parsed = _debug_calltree_payload_json(value)
+    val summary = parsed.map(_debug_calltree_payload_summary).getOrElse(_debug_calltree_compact_text(value))
+    val external = parsed.flatMap(_debug_calltree_external_payload)
+    val details =
+      if (_debug_calltree_payload_detail_required(parsed, value))
+        s"""<details class="textus-calltree-payload-details mt-1">
+           |  <summary class="small text-secondary">Show ${_escape(key)}</summary>
+           |  <pre class="bg-light border rounded p-2 mt-1 mb-1"><code>${_escape(parsed.map(_.spaces2).getOrElse(value))}</code></pre>
+           |</details>""".stripMargin
+      else
+        ""
+    s"""<div class="textus-calltree-payload" data-calltree-payload="${_escape(key)}">
+       |  <code>${_escape(summary)}</code>
+       |  ${external.map(_debug_calltree_external_payload_html(key, _)).getOrElse("")}
+       |  $details
+       |</div>""".stripMargin
+  }
+
+  private def _debug_calltree_payload_json(
+    value: String
+  ): Option[Json] =
+    parse(value).toOption.flatMap { json =>
+      json.asString match {
+        case Some(s) =>
+          val trimmed = s.trim
+          if (trimmed.startsWith("{") || trimmed.startsWith("["))
+            parse(trimmed).toOption.orElse(Some(json))
+          else
+            Some(json)
+        case None => Some(json)
+      }
+    }
+
+  private def _debug_calltree_payload_detail_required(
+    parsed: Option[Json],
+    raw: String
+  ): Boolean =
+    parsed match {
+      case Some(json) =>
+        !_debug_calltree_payload_one_line(json)
+      case None =>
+        raw.length > 120 || raw.contains("\n")
+    }
+
+  private def _debug_calltree_payload_one_line(
+    json: Json
+  ): Boolean =
+    json.asObject.flatMap(_("kind")).flatMap(_.asString).exists { kind =>
+      Set("void", "unit", "null", "none").contains(kind)
+    } || json.asString.exists(_.length <= 120) ||
+      json.asNumber.nonEmpty ||
+      json.asBoolean.nonEmpty
+
+  private def _debug_calltree_payload_summary(
+    json: Json
+  ): String =
+    json.asObject match {
+      case Some(obj) =>
+        val kind = obj("kind").flatMap(_.asString)
+        val inline = obj("inline").flatMap(_debug_calltree_json_scalar_string)
+        val parts =
+          Vector(
+            kind,
+            obj("record_count").flatMap(_debug_calltree_json_scalar_string).map(x => s"records=$x"),
+            obj("field_count").flatMap(_debug_calltree_json_scalar_string).map(x => s"fields=$x"),
+            obj("size_bytes").flatMap(_debug_calltree_json_scalar_string).map(x => s"${x} bytes"),
+            obj("char_count").flatMap(_debug_calltree_json_scalar_string).map(x => s"${x} chars"),
+            inline.filterNot(_ == "false").filter(_.length <= 80).map(x => s"inline=$x")
+          ).flatten
+        if (parts.nonEmpty)
+          parts.mkString(" ")
+        else
+          _debug_calltree_compact_text(json.noSpaces)
+      case None =>
+        _debug_calltree_json_scalar_string(json).map(_debug_calltree_compact_text).getOrElse(_debug_calltree_compact_text(json.noSpaces))
+    }
+
+  private def _debug_calltree_json_scalar_string(
+    json: Json
+  ): Option[String] =
+    json.asString
+      .orElse(json.asNumber.map(_.toString))
+      .orElse(json.asBoolean.map(_.toString))
+
+  private def _debug_calltree_external_payload(
+    json: Json
+  ): Option[(String, Boolean)] =
+    json.asObject.flatMap { obj =>
+      Vector("external_href", "external_url", "payload_href", "payload_url", "href", "url")
+        .flatMap(key => obj(key).flatMap(_.asString))
+        .headOption
+        .map(_ -> true)
+        .orElse(
+          Vector("external_path", "payload_path", "file_path", "path", "file", "ref")
+            .flatMap(key => obj(key).flatMap(_.asString))
+            .headOption
+            .map(_ -> false)
+        )
+    }
+
+  private def _debug_calltree_external_payload_html(
+    key: String,
+    target: (String, Boolean)
+  ): String = {
+    val label = s"Open external $key"
+    if (target._2)
+      s"""<a class="btn btn-sm btn-outline-secondary ms-2" href="${_escape(target._1)}">${_escape(label)}</a>"""
+    else
+      s"""<span class="badge text-bg-light ms-2">external: ${_escape(target._1)}</span>"""
+  }
+
+  private def _debug_calltree_compact_text(
+    value: String
+  ): String =
+    if (value.length <= 120) value else value.take(117) + "..."
 
   def renderSystemJobTicket(
     jobId: String

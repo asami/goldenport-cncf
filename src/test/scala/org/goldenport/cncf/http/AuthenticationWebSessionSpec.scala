@@ -22,7 +22,7 @@ import org.typelevel.ci.CIStringSyntax
 
 /*
  * @since   Apr. 23, 2026
- * @version Apr. 23, 2026
+ * @version May. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 final class AuthenticationWebSessionSpec extends AnyWordSpec with Matchers {
@@ -199,6 +199,18 @@ final class AuthenticationWebSessionSpec extends AnyWordSpec with Matchers {
       server._session_id_(cookieRequest, query, form) shouldBe Some("cookie-session")
       server._session_id_(_get_request("/form-api/cwitter/timeline/create-post"), query, form) shouldBe Some("form-session")
       server._session_id_(_get_request("/form-api/cwitter/timeline/create-post"), query, org.goldenport.record.Record.empty) shouldBe Some("query-session")
+    }
+
+    "accept app-scoped Web session cookies for composed Web apps" in {
+      val provider = new _SessionProvider(Map.empty, Map.empty)
+      val subsystem = _subsystem(provider)
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+
+      val request = _get_request("/web/notifications").putHeaders(
+        Header.Raw(ci"Cookie", "textus-session-notifications=notification-session")
+      )
+
+      server._session_id_(request) shouldBe Some("notification-session")
     }
 
     "promote fallback form-api session id into the auth header record" in {

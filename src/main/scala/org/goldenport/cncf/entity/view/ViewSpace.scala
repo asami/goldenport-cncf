@@ -7,12 +7,13 @@ import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.datastore.TotalCountCapability
 import org.goldenport.cncf.directive.Query
 import org.goldenport.cncf.entity.view.Browser
+import org.goldenport.cncf.observability.CallTreeValueSummary
 
 /*
  * @since   Mar. 16, 2026
  *  version Mar. 17, 2026
  *  version Apr.  4, 2026
- * @version May.  4, 2026
+ * @version May. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ViewSpace {
@@ -124,40 +125,64 @@ final class ViewSpace {
     name: String,
     id: EntityId
   )(using ctx: ExecutionContext): Consequence[V] =
-    browser[V](name).find_with_context(id)
+    _with_direct_uow_if_needed("find", name) {
+      _with_calltree("space:view:find", _view_space_attributes("find", name) + ("entity_id" -> id.print)) {
+        browser[V](name).find_with_context(id)
+      }
+    }
 
   def findWithContext[V](
     name: String,
     viewname: String,
     id: EntityId
   )(using ctx: ExecutionContext): Consequence[V] =
-    browser[V](name, viewname).find_with_context(id)
+    _with_direct_uow_if_needed("find", name, Some(viewname)) {
+      _with_calltree("space:view:find", _view_space_attributes("find", name, Some(viewname)) + ("entity_id" -> id.print)) {
+        browser[V](name, viewname).find_with_context(id)
+      }
+    }
 
   def queryWithContext[V](
     name: String,
     q: Query[_]
   )(using ctx: ExecutionContext): Consequence[Vector[V]] =
-    browser[V](name).query_with_context(q)
+    _with_direct_uow_if_needed("query", name) {
+      _with_calltree("space:view:query", _view_space_attributes("query", name)) {
+        browser[V](name).query_with_context(q)
+      }
+    }
 
   def queryWithContext[V](
     name: String,
     viewname: String,
     q: Query[_]
   )(using ctx: ExecutionContext): Consequence[Vector[V]] =
-    browser[V](name, viewname).query_with_context(q)
+    _with_direct_uow_if_needed("query", name, Some(viewname)) {
+      _with_calltree("space:view:query", _view_space_attributes("query", name, Some(viewname))) {
+        browser[V](name, viewname).query_with_context(q)
+      }
+    }
 
   def countWithContext(
     name: String,
     q: Query[_]
   )(using ctx: ExecutionContext): Consequence[Int] =
-    browser[Any](name).count_with_context(q)
+    _with_direct_uow_if_needed("count", name) {
+      _with_calltree("space:view:count", _view_space_attributes("count", name)) {
+        browser[Any](name).count_with_context(q)
+      }
+    }
 
   def countWithContext(
     name: String,
     viewname: String,
     q: Query[_]
   )(using ctx: ExecutionContext): Consequence[Int] =
-    browser[Any](name, viewname).count_with_context(q)
+    _with_direct_uow_if_needed("count", name, Some(viewname)) {
+      _with_calltree("space:view:count", _view_space_attributes("count", name, Some(viewname))) {
+        browser[Any](name, viewname).count_with_context(q)
+      }
+    }
 
   def invalidate(name: String): Unit =
     _collections.get(name).foreach(_.invalidateAll())
@@ -172,6 +197,93 @@ final class ViewSpace {
 
   private def _view_key(name: String, viewname: String): (String, String) =
     (name, Option(viewname).map(_.trim).getOrElse(""))
+
+  private def _with_calltree[A](
+    label: String,
+    attributes: Map[String, String]
+  )(
+    body: => A
+  )(using ctx: ExecutionContext): A = {
+    val calltree = ctx.observability.callTreeContext
+    if (calltree.isEnabled) {
+      calltree.enter(label, attributes ++ Map("calltree_kind" -> "space"))
+      try {
+        val result = body
+        result match {
+          case success: Consequence.Success[A] =>
+            calltree.leave(Map("outcome" -> "success") ++ CallTreeValueSummary.resultAttributes(success.result))
+          case failure: Consequence.Failure[A] =>
+            calltree.leave(Map(
+              "outcome" -> "failure",
+              "status" -> failure.conclusion.status.webCode.code.toString,
+              "error" -> failure.conclusion.display
+            ))
+          case other =>
+            calltree.leave(Map("outcome" -> "success") ++ CallTreeValueSummary.resultAttributes(other))
+        }
+        result
+      } catch {
+        case e: Throwable =>
+          calltree.leave()
+          throw e
+      }
+    } else {
+      body
+    }
+  }
+
+  private def _with_direct_uow_if_needed[A](
+    operation: String,
+    name: String,
+    viewname: Option[String] = None
+  )(
+    body: => A
+  )(using ctx: ExecutionContext): A = {
+    val calltree = ctx.observability.callTreeContext
+    if (calltree.isEnabled && !calltree.hasOpenLabelPrefix("uow")) {
+      calltree.enter(
+        s"uow*:view:$operation:direct",
+        _view_space_attributes(operation, name, viewname) ++ Map(
+          "calltree_kind" -> "uow",
+          "dsl" -> "direct",
+          "uow_boundary" -> "synthetic"
+        )
+      )
+      try {
+        val result = body
+        result match {
+          case success: Consequence.Success[A] =>
+            calltree.leave(Map("outcome" -> "success") ++ CallTreeValueSummary.resultAttributes(success.result))
+          case failure: Consequence.Failure[A] =>
+            calltree.leave(Map(
+              "outcome" -> "failure",
+              "status" -> failure.conclusion.status.webCode.code.toString,
+              "error" -> failure.conclusion.display
+            ))
+          case other =>
+            calltree.leave(Map("outcome" -> "success") ++ CallTreeValueSummary.resultAttributes(other))
+        }
+        result
+      } catch {
+        case e: Throwable =>
+          calltree.leave()
+          throw e
+      }
+    } else {
+      body
+    }
+  }
+
+  private def _view_space_attributes(
+    operation: String,
+    name: String,
+    viewname: Option[String] = None
+  ): Map[String, String] =
+    Map(
+      "space" -> "view",
+      "operation" -> operation,
+      "view" -> name
+    ) ++ viewname.filterNot(_is_default_view_name).map(v => Map("view_name" -> v)).getOrElse(Map.empty)
 
   private def _is_default_view_name(name: String): Boolean =
     Option(name).map(_.trim).forall(_.isEmpty)
