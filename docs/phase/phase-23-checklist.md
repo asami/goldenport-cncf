@@ -159,7 +159,7 @@ errors.
 
 ## EM-04: Consequence Helper and Component Failure Normalization
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
@@ -168,12 +168,26 @@ Normalize recurring framework and builtin-component failures onto structured
 
 ### Detailed Tasks
 
-- [ ] Review existing `Consequence` helpers and add missing semantic helpers
+- [x] Review existing `Consequence` helpers and add missing semantic helpers
       where recurring failure shapes are found.
-- [ ] Replace selected component-local labels/message parsing with structured
+- [x] Replace selected component-local labels/message parsing with structured
       taxonomy/cause/facet construction.
-- [ ] Keep low-level `Consequence.failure` available for intentionally
+- [x] Keep low-level `Consequence.failure` available for intentionally
       application-specific structured failures.
+
+### Completion Notes
+
+- `simplemodeling-lib` adds focused semantic helper overloads for recurring
+  framework failures, including `stateInvalid`, facet-bearing resource helpers,
+  and operation/component/service helpers.
+- `Conclusion.previous` remains the source-error link mechanism. EM-04 does not
+  add a separate link model.
+- Representative CNCF Blob, Static Form/Web, Job, and Event failure paths now
+  use structured taxonomy/cause/facet helpers where the failure is part of the
+  common framework surface.
+- Managed Blob metadata with a missing payload is represented as
+  `state.invalid` with the lower-level storage/resource failure retained in the
+  `previous` chain.
 
 ### Guardrails
 
@@ -184,7 +198,7 @@ Normalize recurring framework and builtin-component failures onto structured
 
 ## EM-05: Web/API/Admin/Observability Projection Alignment
 
-Status: TODO
+Status: ACTIVE
 
 ### Objective
 

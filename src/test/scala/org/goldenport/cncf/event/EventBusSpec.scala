@@ -7,7 +7,7 @@ import org.goldenport.cncf.context.{ExecutionContext, SecurityContext}
 import org.goldenport.cncf.context.ExecutionContextId
 import org.goldenport.cncf.datastore.DataStore
 import org.goldenport.cncf.unitofwork.CommitRecorder
-import org.goldenport.observation.Taxonomy
+import org.goldenport.observation.{Cause, Taxonomy}
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -147,6 +147,8 @@ final class EventBusSpec
         case Consequence.Failure(c) =>
           c.observation.taxonomy.category shouldBe Taxonomy.Category.Operation
           c.observation.taxonomy.symptom shouldBe Taxonomy.Symptom.Invalid
+          c.observation.cause.kind shouldBe Some(Cause.Kind.Inconsistency)
+          c.previous should not be empty
         case _ =>
           fail("expected failure")
       }

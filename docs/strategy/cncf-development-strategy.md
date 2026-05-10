@@ -1021,9 +1021,10 @@ corresponding completed-history entry.
 
 Phase 23 is active. `9.7 Error Model / Consequence-Conclusion Realignment` is
 the selected development item. EM-01 Error Taxonomy / Detail Code Policy
-Opening and EM-02 Taxonomy / Cause / Disposition Inventory and Canonical
-Ordering and EM-03 Detail Code Generation Model are complete; EM-04
-Consequence Helper and Component Failure Normalization is the active slice.
+Opening, EM-02 Taxonomy / Cause / Disposition Inventory and Canonical
+Ordering, EM-03 Detail Code Generation Model, and EM-04 Consequence Helper and
+Component Failure Normalization are complete; EM-05 Web/API/Admin/
+Observability Projection Alignment is the active slice.
 
 ### 9.1 Web Next Stage Follow-ups
 Future Web/platform development item.
@@ -1139,8 +1140,8 @@ Active stack:
 - EM-01: Error Taxonomy / Detail Code Policy Opening. DONE.
 - EM-02: Taxonomy / Cause / Disposition Inventory and Canonical Ordering. DONE.
 - EM-03: Detail Code Generation Model. DONE.
-- EM-04: Consequence Helper and Component Failure Normalization. ACTIVE.
-- EM-05: Web/API/Admin/Observability Projection Alignment. TODO.
+- EM-04: Consequence Helper and Component Failure Normalization. DONE.
+- EM-05: Web/API/Admin/Observability Projection Alignment. ACTIVE.
 - EM-06: Phase 23 verification and closure. TODO.
 
 - Revisit the core `Consequence` / `Conclusion` / `Observation` model before

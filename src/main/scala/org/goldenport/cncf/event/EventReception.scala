@@ -14,7 +14,7 @@ import org.goldenport.cncf.job.{ActionId, JobEngine, JobPersistencePolicy, JobSu
 import org.goldenport.cncf.security.IngressSecurityResolver
 import org.goldenport.observation.Descriptor.Facet
 import org.goldenport.record.Record
-import org.goldenport.observation.Taxonomy
+import org.goldenport.observation.{Cause, Taxonomy}
 
 /*
  * EV-06 canonical mapping:
@@ -1111,7 +1111,11 @@ object EventReception {
     }
 
     private def _failure[A](message: String): Consequence[A] =
-      Consequence.operationInvalid(s"event.reception: $message")
+      Consequence.operationInvalid(
+        "event.reception",
+        Cause.Kind.Policy,
+        Seq(Facet.Message(message))
+      )
 
     private def _dispatch_to_listeners(
       event: ReceptionDomainEvent,

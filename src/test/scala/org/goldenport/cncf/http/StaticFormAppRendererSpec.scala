@@ -28,6 +28,7 @@ import org.goldenport.protocol.handler.projection.ProjectionCollection
 import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
 import org.goldenport.protocol.spec as spec
 import org.goldenport.record.Record
+import org.goldenport.observation.{Cause, Descriptor, Taxonomy}
 import org.goldenport.schema.{Column, Multiplicity, Schema, ValueDomain, WebColumn, WebValidationHints, XBoolean, XDateTime, XInt, XString}
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 import org.goldenport.cncf.action.{Action, ActionCall, ActionEngine, ProcedureActionCall, QueryAction}
@@ -476,6 +477,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       response.status.code shouldBe 500
       body should include ("Request failed")
       body should include ("HTTP status")
+      body should include ("managed Blob metadata points at a missing payload")
+      body should include ("state")
+      body should include ("invalid")
+      body should include ("previous")
     }
 
     "serve Blob admin mutation routes" in {
@@ -2971,6 +2976,9 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         case Consequence.Success(_) => fail("missing explicit layout should fail")
         case Consequence.Failure(conclusion) =>
           conclusion.toString should include ("Static Form layout not found: missing")
+          conclusion.observation.taxonomy shouldBe Taxonomy.resourceInvalid
+          conclusion.observation.cause.kind shouldBe Some(Cause.Kind.Inconsistency)
+          conclusion.observation.cause.descriptor.facets should contain (Descriptor.Facet.Name("missing"))
       }
     }
 

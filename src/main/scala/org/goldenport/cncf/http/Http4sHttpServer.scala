@@ -40,6 +40,7 @@ import org.goldenport.cncf.openapi.OpenApiProjector
 import org.goldenport.cncf.security.{AuthenticationRequest, IngressSecurityResolver}
 import org.goldenport.bag.{Bag, BinaryBag}
 import org.goldenport.datatype.{ContentType, MimeBody, MimeType}
+import org.goldenport.observation.{Cause, Descriptor}
 
 /*
  * @since   Jan.  7, 2026
@@ -2800,7 +2801,14 @@ final class Http4sHttpServer(
   private def _validate_explicit_shell_owner(): Consequence[Unit] =
     engine.webDescriptor.shellComponentName match {
       case Some(componentName) if _component_web_roots(componentName).isEmpty =>
-        Consequence.resourceInvalid(s"Static Form subsystem shell component Web root not found: ${componentName}")
+        Consequence.resourceInvalid(
+          s"Static Form subsystem shell component Web root not found: ${componentName}",
+          Cause.Kind.Inconsistency,
+          Seq(
+            Descriptor.Facet.Component(componentName),
+            Descriptor.Facet.State("subsystem-shell-owner-missing-web-root")
+          )
+        )
       case _ =>
         Consequence.success(())
     }
@@ -3294,9 +3302,24 @@ final class Http4sHttpServer(
           case None =>
             explicitLayout match {
               case Some(name) if !scope.equals(WebTemplatePartScope.SubsystemShell) =>
-                Consequence.resourceInvalid(s"Static Form layout not found: ${name}")
+                Consequence.resourceInvalid(
+                  s"Static Form layout not found: ${name}",
+                  Cause.Kind.Inconsistency,
+                  Seq(
+                    Descriptor.Facet.Name(name),
+                    Descriptor.Facet.State("static-form-layout-not-found")
+                  )
+                )
               case _ if requireLayout =>
-                Consequence.resourceInvalid(s"Static Form subsystem shell layout not found: ${names.headOption.getOrElse("default")}")
+                val name = names.headOption.getOrElse("default")
+                Consequence.resourceInvalid(
+                  s"Static Form subsystem shell layout not found: ${name}",
+                  Cause.Kind.Inconsistency,
+                  Seq(
+                    Descriptor.Facet.Name(name),
+                    Descriptor.Facet.State("subsystem-shell-layout-not-found")
+                  )
+                )
               case _ =>
                 Consequence.success(WebTemplateComposition(content, appliedLayout = false))
             }
@@ -3313,7 +3336,15 @@ final class Http4sHttpServer(
     componentName: Option[String] = None
   ): Consequence[String] =
     if (!layout.contains("${content}"))
-      Consequence.resourceInvalid(s"Static Form layout lacks $${content} slot: ${layoutName}")
+      Consequence.resourceInvalid(
+        s"Static Form layout lacks $${content} slot: ${layoutName}",
+        Cause.Kind.Inconsistency,
+        Seq(
+          Descriptor.Facet.Name(layoutName),
+          Descriptor.Facet.Expected("${content}"),
+          Descriptor.Facet.State("static-form-layout-missing-content-slot")
+        )
+      )
     else {
       val withContent = layout.replace("${content}", content)
       Consequence.success(_expand_template_partials(webAppName, page, withContent, scope, componentName))

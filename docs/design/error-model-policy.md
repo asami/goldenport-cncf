@@ -78,6 +78,18 @@ scope and should be defined later when CNCF approaches a stable release.
   readable labels as projection-only data derived from `Conclusion`.
 - Component-local labels and message parsing should be migrated to structured
   `Conclusion` data in EM-04 and EM-05.
+- EM-04 treats semantic `Consequence` helpers as the framework-facing
+  construction surface for common failures. Helpers should set taxonomy, cause
+  kind, and `Descriptor.Facet` data explicitly enough that tests, projections,
+  metrics, and dashboards do not parse messages.
+- `resource.not-found` helpers should not accept a `Cause.Kind` override.
+  Missing-resource semantics are carried by taxonomy; if the visible failure is
+  actually a higher-level invalid state, use a higher-level helper such as
+  `stateInvalid(..., previous)` and keep the lower `resource.not-found`
+  conclusion in the `previous` chain.
+- Source-error links use `Conclusion.previous`. A higher-level failure may wrap
+  a lower-level storage, resource, service, or provider failure by setting
+  `previous`; EM-04 does not introduce another link field.
 - Historical draft notes are inputs only; this document and later Phase 23
   design/spec documents supersede them where they conflict.
 

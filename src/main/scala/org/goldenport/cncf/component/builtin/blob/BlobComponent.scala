@@ -777,7 +777,7 @@ object BlobComponent {
                     store <- exec_from(_blob_store)
                     result <- _observe_blob_store("blob_store_get", store) {
                       _recover_with(exec_from(store.get(ref))) { conclusion =>
-                        exec_from(Consequence.Failure(_managed_payload_missing(blob, ref, conclusion)))
+                        exec_from(_managed_payload_missing(blob, ref, conclusion))
                       }
                     }
                   } yield result
@@ -1168,15 +1168,15 @@ object BlobComponent {
       blob: Blob,
       ref: BlobStorageRef,
       previous: Conclusion
-    ): Conclusion =
-      Conclusion.stateInvalid(
+    ): Consequence.Failure[Nothing] =
+      Consequence.stateInvalid(
         s"managed Blob metadata points at a missing payload: ${blob.id.value}",
         Seq(
           Descriptor.Facet.Id(blob.id.value),
           Descriptor.Facet.Key(ref.print),
           Descriptor.Facet.State("managed-payload-missing")
         ),
-        Some(previous)
+        previous
       )
 
     protected final def _blob_resolve_id(value: String): ExecUowM[EntityId] = {
@@ -1191,7 +1191,13 @@ object BlobComponent {
             includeEntityIdEntropy = true
           ).flatMap {
             case Some(id) => exec_pure(id)
-            case None => exec_from(Consequence.Failure(Conclusion.notFound(org.goldenport.observation.Observation.resourceNotFound(s"blob:${value}"))))
+            case None => exec_from(Consequence.resourceNotFound(
+              s"blob not found: ${value}",
+              Seq(
+                Descriptor.Facet.Id(value),
+                Descriptor.Facet.Name("blob")
+              )
+            ))
           }
       }
     }

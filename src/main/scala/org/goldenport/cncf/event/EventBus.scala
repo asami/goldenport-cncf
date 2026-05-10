@@ -5,7 +5,7 @@ import org.goldenport.Consequence
 import org.goldenport.cncf.action.Action
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.observation.Descriptor.Facet
-import org.goldenport.observation.Taxonomy
+import org.goldenport.observation.{Cause, Taxonomy}
 
 /*
  * EventBus baseline for EV-03.
@@ -232,6 +232,14 @@ final class DefaultEventBus(
     cause: org.goldenport.Conclusion
   ): Consequence[A] =
     Consequence.operationInvalid(
-      s"event.dispatch: subscription=${subscription.name} event=$eventName kind=$eventKind cause=${cause.show}"
+      "event.dispatch",
+      Cause.Kind.Inconsistency,
+      Seq(
+        Facet.Name(subscription.name),
+        Facet.Key(eventName),
+        Facet.State(eventKind),
+        Facet.Message("event dispatch failed")
+      ),
+      previous = Some(cause)
     )
 }

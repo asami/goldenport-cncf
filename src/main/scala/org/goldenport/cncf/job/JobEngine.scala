@@ -7,7 +7,7 @@ import scala.concurrent.ExecutionContext as ScalaExecutionContext
 import org.goldenport.{Conclusion, Consequence}
 import org.goldenport.consequence.Failures
 import org.goldenport.id.UniversalId
-import org.goldenport.observation.Descriptor
+import org.goldenport.observation.{Cause, Descriptor}
 import org.goldenport.conclusion.Disposition
 import org.goldenport.observation.Taxonomy
 import org.goldenport.protocol.operation.OperationResponse
@@ -968,7 +968,14 @@ final class InMemoryJobEngine(
     e: Throwable
   ): Unit = {
     val message = Option(e.getMessage).filter(_.nonEmpty).getOrElse(e.getClass.getName)
-    val conclusion = Conclusion.simple(s"job scheduler failure: $message")
+    val conclusion = Consequence.stateInvalid[Nothing](
+      s"job scheduler failure: $message",
+      Seq(
+        Descriptor.Facet.Operation("job.scheduler"),
+        Descriptor.Facet.State("scheduler-worker-failure")
+      ),
+      previous = Some(Conclusion.fromThrowable(e))
+    ).conclusion
     _append_timeline_(jobid, "job.failed", None, None, Some(message))
     _update_record_(jobid, JobStatus.Failed, Some(JobResult.Failure(conclusion)))
     _append_event_(
@@ -1077,7 +1084,10 @@ final class InMemoryJobEngine(
           _run_compensations_(jobid, failedTaskId, committedTasks.reverse)
         val deferred = _get_record(jobid).map(_.status) match {
           case Some(JobStatus.Cancelled) =>
-            Some(JobResult.Failure(Conclusion.simple("job cancelled")))
+            Some(JobResult.Failure(Consequence.stateInvalid[Nothing](
+              "job cancelled",
+              Seq(Descriptor.Facet.State("cancelled"))
+            ).conclusion))
           case _ =>
             failure.map(JobResult.Failure.apply).orElse(successResponse.map(JobResult.Success.apply))
         }
@@ -1328,7 +1338,10 @@ final class InMemoryJobEngine(
 
   private def _control_result_for(status: JobStatus): Option[JobResult] =
     status match {
-      case JobStatus.Cancelled => Some(JobResult.Failure(Conclusion.simple("job cancelled")))
+      case JobStatus.Cancelled => Some(JobResult.Failure(Consequence.stateInvalid[Nothing](
+        "job cancelled",
+        Seq(Descriptor.Facet.State("cancelled"))
+      ).conclusion))
       case _ => None
     }
 
@@ -1411,11 +1424,21 @@ final class InMemoryJobEngine(
     status: JobStatus
   ): Consequence[A] =
     Consequence.operationInvalid(
-      s"job.control.${command.toString.toLowerCase}: invalid transition: status=${status.toString.toLowerCase}"
+      "job.control",
+      Cause.Kind.Guard,
+      Seq(
+        Descriptor.Facet.Operation(s"job.control.${command.toString.toLowerCase}"),
+        Descriptor.Facet.State(status.toString.toLowerCase),
+        Descriptor.Facet.Message(s"invalid transition: status=${status.toString.toLowerCase}")
+      )
     )
 
   private def _control_failure[A](message: String): Consequence[A] =
-    Consequence.operationInvalid(s"job.control: $message")
+    Consequence.operationInvalid(
+      "job.control",
+      Cause.Kind.Policy,
+      Seq(Descriptor.Facet.Message(message))
+    )
 
   private def _control_timeout[A](message: String): Consequence[A] =
     Failures.fail(

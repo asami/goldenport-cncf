@@ -10,12 +10,13 @@ import org.goldenport.cncf.job.{ActionId, InMemoryJobEngine, JobRunMode, JobStat
 import org.goldenport.cncf.subsystem.{GenericSubsystemComponentBinding, GenericSubsystemDescriptor, GenericSubsystemRuntimeBinding, GenericSubsystemUserNotificationBinding, GenericSubsystemUserNotificationEventForwardingBinding, GenericSubsystemUserNotificationProviderBinding, Subsystem}
 import org.goldenport.protocol.Protocol
 import org.goldenport.protocol.operation.OperationResponse
+import org.goldenport.observation.{Cause, Descriptor, Taxonomy}
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   May.  7, 2026
- * @version May.  7, 2026
+ * @version May. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UserNotificationProviderRuntimeSpec extends AnyWordSpec with Matchers {
@@ -32,6 +33,15 @@ final class UserNotificationProviderRuntimeSpec extends AnyWordSpec with Matcher
       )
 
       result.isSuccess shouldBe false
+      result match
+        case Consequence.Failure(conclusion) =>
+          conclusion.observation.taxonomy shouldBe Taxonomy.serviceUnavailable
+          conclusion.observation.cause.kind shouldBe Some(Cause.Kind.Capability)
+          conclusion.observation.cause.descriptor.facets should contain (Descriptor.Facet.Service("user-notification"))
+          conclusion.observation.cause.descriptor.facets should contain (Descriptor.Facet.Name("user-notification-provider"))
+          conclusion.observation.cause.descriptor.facets should contain (Descriptor.Facet.State("provider-unavailable"))
+        case _ =>
+          fail("expected disabled provider failure")
       sink shouldBe empty
     }
 

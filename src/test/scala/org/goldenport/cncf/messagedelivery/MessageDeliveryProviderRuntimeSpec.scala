@@ -5,12 +5,14 @@ import org.goldenport.cncf.component.{ComponentCreate, ComponentOrigin}
 import org.goldenport.cncf.component.builtin.messagedeliverystub.MessageDeliveryStubComponent
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.subsystem.{GenericSubsystemComponentBinding, GenericSubsystemDescriptor, GenericSubsystemMessageDeliveryBinding, GenericSubsystemMessageDeliveryProviderBinding, GenericSubsystemSecurityBinding, Subsystem}
+import org.goldenport.Consequence
+import org.goldenport.observation.{Cause, Descriptor, Taxonomy}
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr. 23, 2026
- * @version Apr. 24, 2026
+ * @version May. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class MessageDeliveryProviderRuntimeSpec extends AnyWordSpec with Matchers {
@@ -62,6 +64,15 @@ final class MessageDeliveryProviderRuntimeSpec extends AnyWordSpec with Matchers
       )
 
       result.isSuccess shouldBe false
+      result match
+        case Consequence.Failure(conclusion) =>
+          conclusion.observation.taxonomy shouldBe Taxonomy.serviceUnavailable
+          conclusion.observation.cause.kind shouldBe Some(Cause.Kind.Capability)
+          conclusion.observation.cause.descriptor.facets should contain (Descriptor.Facet.Service("message-delivery"))
+          conclusion.observation.cause.descriptor.facets should contain (Descriptor.Facet.Name("message-delivery-provider"))
+          conclusion.observation.cause.descriptor.facets should contain (Descriptor.Facet.State("provider-unavailable"))
+        case _ =>
+          fail("expected disabled provider failure")
     }
 
     "record stub deliveries deterministically when wired" in {

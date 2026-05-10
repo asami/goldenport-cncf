@@ -3,12 +3,13 @@ package org.goldenport.cncf.usernotification
 import org.goldenport.Consequence
 import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.context.{ExecutionContext, ScopeContext}
+import org.goldenport.observation.{Cause, Descriptor}
 
 /*
  * Shared user-notification provider traversal rules.
  *
  * @since   May.  7, 2026
- * @version May.  7, 2026
+ * @version May. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 object UserNotificationProviderRuntime:
@@ -24,7 +25,15 @@ object UserNotificationProviderRuntime:
   ): Consequence[UserNotificationResult] =
     providers(base).headOption match
       case Some(provider) => provider.notify(request)(using base)
-      case None => Consequence.serviceUnavailable("No user-notification provider is configured for the current subsystem.")
+      case None => Consequence.serviceUnavailable(
+        "No user-notification provider is configured for the current subsystem.",
+        Cause.Kind.Capability,
+        Seq(
+          Descriptor.Facet.Service("user-notification"),
+          Descriptor.Facet.Name("user-notification-provider"),
+          Descriptor.Facet.State("provider-unavailable")
+        )
+      )
 
   @annotation.tailrec
   private def _subsystem_from_scope(
