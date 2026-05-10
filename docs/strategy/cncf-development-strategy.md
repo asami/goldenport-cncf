@@ -649,12 +649,12 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Notes contain execution details and results for each phase.
 
 ## Process Status Pointers
-- Current phase selection: Phase 22 — Job Management.
-- Current active phase dashboard: `docs/phase/phase-22.md`
-- Current active phase checklist: `docs/phase/phase-22-checklist.md`
-- Latest closed phase dashboard: `docs/phase/phase-21.md`
-- Latest closed phase checklist: `docs/phase/phase-21-checklist.md`
-- Candidate next phase areas after Phase 22: AwsComponent/S3 BlobStore
+- Current phase selection: next phase to be selected.
+- Current active phase dashboard: none.
+- Current active phase checklist: none.
+- Latest closed phase dashboard: `docs/phase/phase-22.md`
+- Latest closed phase checklist: `docs/phase/phase-22-checklist.md`
+- Candidate next phase areas: AwsComponent/S3 BlobStore
   provider; Error Model / Consequence-Conclusion Realignment; Search/index
   planning; DB migration tooling.
 - Status interpretation rules: `docs/rules/stage-status-and-checklist-convention.md`
@@ -685,7 +685,7 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Phase 19: closed (`docs/phase/phase-19.md`)
 - Phase 20: closed (`docs/phase/phase-20.md`)
 - Phase 21: closed (`docs/phase/phase-21.md`)
-- Phase 22: active (`docs/phase/phase-22.md`)
+- Phase 22: closed (`docs/phase/phase-22.md`)
 
 ## 8. Completed Development Item History
 
@@ -979,6 +979,39 @@ Completed in Phase 21.
   - application developer documentation path and Web document index updates
 - Deferred scope remains under 9.1 Web Next Stage Follow-ups.
 
+### 8.12 Job Management
+Completed in Phase 22.
+
+- Closed dashboard: `docs/phase/phase-22.md`
+- Closed checklist: `docs/phase/phase-22-checklist.md`
+- Completed scope:
+  - Command execution policy normalization around explicit interface timing,
+    Job run timing, and managed-by-Job policy, with synchronous direct/no-Job
+    as the ordinary default.
+  - Job SimpleEntity management as a CNCF `entityKind = system` runtime
+    management projection synchronized from JobEngine lifecycle snapshots.
+  - Canonical single-Job JCL diagnostics for declared Event/Action chains,
+    observed profile reconstruction, and declared-vs-observed comparison.
+  - JobDefinition SimpleEntity management as a separate `entityKind = system`
+    reusable definition record, including `jobDefinitionRef` binding and Job
+    launch snapshots.
+  - Execution record boundary for lightweight Job Entity records, full
+    timeline, Task Execution Tree, task-local calltree, large result body, and
+    raw event history.
+  - Task transaction and explicit compensation boundary inside managed Jobs,
+    including recovery-required diagnostics for incomplete cleanup.
+  - User Job notification provider SPI plus Event-based forwarding so JobEngine
+    emits lifecycle/recovery events while notification creation remains a
+    provider concern.
+  - `textus-user-notification` and `textus-blog` driver integration for
+    provider-backed notifications, notification badges, composed notification
+    pages, and application/system admin separation.
+  - Query-only CompositeQuery boundary for page-view context aggregation across
+    Web tier, App tier, and Domain tier responsibilities.
+- Deferred scope remains under 9.14 Job Management Follow-ups, 9.4 Metrics and
+  Observability, 9.15 Saga Management, 9.13 Distributed Component Runtime,
+  9.2 Event Mechanism Follow-ups, and 9.1 Web Next Stage Follow-ups.
+
 ## 9. Development Item Status
 
 This final section lists planned active and future development areas only.
@@ -986,13 +1019,9 @@ Completed work areas are recorded in section 8. When a development item closes,
 remove its completion record from this section and add or update the
 corresponding completed-history entry.
 
-Phase 22 is active. `9.14 Job Management` is the selected development item.
-JM-01 Command Execution Policy Normalization, JM-02 Job Entity Management,
-JM-03 JCL Profile / Execution Profile Difference Checking, JM-03B
-JobDefinition Entity / Binding / Execution Record Policy, and JM-04 Task
-Transaction and Compensation Boundary, and JM-05 User Job Notification Policy
-and CQ-01 Composite Query Boundary for Page View Context are complete; JM-06
-verification and closure is the active slice.
+No phase is currently selected. Phase 22 is closed and its completed Job
+Management baseline is recorded in section 8.12. Section 9 now tracks future
+development candidates only.
 
 ### 9.1 Web Next Stage Follow-ups
 Future Web/platform development item.
@@ -1011,6 +1040,11 @@ Future Web/platform development item.
   own explicit design.
 - Component-owned admin page discovery beyond explicit Web composition remains
   future work.
+- Full application notification UX remains future work beyond the Phase 22
+  provider/forwarding/badge baseline. This includes richer user inbox
+  operations, read/dismiss workflows, multicast/broadcast audience operations,
+  and operator-facing notification administration as application UX rather than
+  Job core behavior.
 
 ### 9.2 Event Mechanism Follow-ups
 Future event/runtime development item.
@@ -1031,6 +1065,8 @@ Future event/runtime development item.
 - Align transaction outcome events with EventStore/EventBus lanes, ActionCall /
   UoW transaction boundaries, Job lifecycle records, and existing
   non-transactional / error event concepts.
+- Align richer Event reception policy and async/sync same-job continuation
+  semantics with future executable JCL `events` / `onEvent` orchestration.
 
 ### 9.3 Security
 Future security development item.
@@ -1190,82 +1226,35 @@ Future distributed-system development item.
   distributed implementation can replace or extend the in-process `JobEngine`,
   Working Set, and View cache behavior.
 
-### 9.14 Job Management
-Active in Phase 22.
+### 9.14 Job Management Follow-ups
+Future Job Management development item.
 
-Work documents:
+Phase 22 closed the baseline Job Management scope. Completed behavior is
+recorded in section 8.12 and the closed Phase 22 documents:
 
 - Dashboard: `docs/phase/phase-22.md`
 - Checklist: `docs/phase/phase-22-checklist.md`
 
-Active stack:
+Future follow-ups:
 
-- JM-01: Command Execution Policy Normalization. DONE.
-- JM-02: Job Entity Management. DONE.
-- JM-03: JCL Profile / Execution Profile Difference Checking. DONE.
-- JM-03B: JobDefinition Entity / Binding / Execution Record Policy. DONE.
-- JM-04: Task Transaction and Compensation Boundary. DONE.
-- JM-05: User Job Notification Policy. DONE.
-- JM-05B: Event-Based User Notification Forwarding and textus-blog driver
-  integration. DONE.
-- CQ-01: Composite Query Boundary for Page View Context. DONE.
-- JM-06: Phase 22 verification and closure. ACTIVE.
-
-- Define Command execution policy before broadening Job usage. CQRS makes
-  state-changing operations Commands, but application UX and runtime cost still
-  decide whether a Command is executed synchronously or as a Job.
-- Default policy should be synchronous for ordinary CRUD-style Commands that
-  create or update one Entity in one transaction. Heavy Commands should opt into
-  Job execution explicitly.
-- Add Command definition metadata for `commandKind`,
-  `commandExecutionProperties`, and `commandExecutionPolicy`.
-- Use Command execution policy to drive Form/Web UX: synchronous Commands return
-  ordinary result pages, async Job Commands return application job result and
-  “My jobs” navigation.
-- Add user notification support before relying on async Jobs for ordinary
-  application operations.
-- Add a query-only CompositeQuery boundary for page-view context aggregation so
-  Web tier can request App-tier page context and App tier can batch Domain-tier
-  queries without exposing Web layout/badge/navigation concepts to Domain tier.
-- Manage Job as a first-class SimpleEntity management record synchronized from
-  JobEngine lifecycle snapshots while keeping JobEngine as execution authority.
-- Make Job behavior definable by canonical single-Job `job:` JCL, allow Job
-  launch with an intended Event/Action chain profile, and record the actual
-  execution profile for inspection.
-- Add diagnostics-only difference checking between declared JCL and observed
-  execution, plus a reconstruction path from execution profiles back into
-  canonical `job:` JCL.
-- Add JobDefinition Entity management as the reusable definition registry
-  separate from Job instances. Command / Action / Operation metadata should be
-  able to bind to JobDefinition through `jobDefinitionRef`; inline JCL submit
-  remains compatibility/debug input.
-- Add `entityKind = system` for CNCF runtime/system management Entities. Job
-  and JobDefinition use `system`; `workflow` remains for business state-machine
-  Entities.
-- Keep active JobDefinitions resident. Keep active Jobs and Jobs completed
-  within the one-day operational confirmation window resident.
-- Define Job instance definition snapshots (`jobDefinitionId`, version, hash,
-  declared profile, optional normalized JCL/source snapshot) and the execution
-  record storage policy before Task compensation work.
-- Treat Task Execution Tree and task-local calltree as distinct diagnostic
-  storage surfaces. Job Entity keeps summaries/references; full timeline, task
-  tree, task calltrees, large results, and raw event history are managed
-  outside the lightweight Job Entity body.
-- Reserve JCL `profile` for diagnostics-only declared/observed comparison.
-  Future executable JCL orchestration should use separate `flow` and `events` /
-  `onEvent` sections for procedural subtask flow and Event-driven behavior.
-- Jobs have state and state transitions; Job control operations should be
-  state-aware.
-- Treat Task as the transaction unit inside a Job. Aggregate execution is a
-  Task, and Task boundaries are the natural place to define transactional
-  success/failure and compensation.
-- Support compensation between Tasks and integrate incomplete cleanup with
-  recovery-required events and human recovery diagnostics.
-- Expose Task Execution Tree and Task detail diagnostics through `job_control`;
-  compensation is explicit and no business undo is inferred automatically.
-- Application/user notification for async Job completion, failure, and
-  recovery-required states is handled by Event-based forwarding to the
-  `UserNotificationProvider` SPI. JobEngine itself remains notification-agnostic.
+- Implement executable JCL runtime for procedural `flow` and Event-driven
+  `events` / `onEvent` sections. Phase 22 stores and documents those sections
+  as future language surfaces only.
+- Add JobDefinition accept/apply workflow and operational lifecycle expansion
+  beyond create/update/activate/retire/search. This includes operator review of
+  reconstructed JCL, promotion policy, and definition rollout/rollback
+  handling.
+- Persist Job/Task execution records beyond the current lightweight Job Entity
+  projection. Full timeline, Task Execution Tree, task-local calltree, raw
+  event history, and large result bodies need durable storage, retention, and
+  authorization policy before production-scale use.
+- Add CompositeQuery v2 features: parallel execution, a cross-subsystem
+  protocol surface, richer App-tier page-view query contracts, and more
+  explicit diagnostics for Web -> App and App -> Domain query composition.
+- Continue refining Job UX around user-visible async work, including confirmed
+  completion state, read/unread job indicators, and application-specific
+  operator workflows. These should build on the Phase 22 Job/Event/notification
+  boundaries rather than adding notification logic back into JobEngine.
 
 ### 9.15 Saga Management
 Future distributed-collaboration development item.
@@ -1278,6 +1267,9 @@ Future distributed-collaboration development item.
 - This item owns cross-component Saga coordination, correlation/causation/saga
   identity propagation, remote retry, remote compensation, and failure
   observability across cluster boundaries.
+- Saga diagnostics should include distributed observability for remote
+  operation boundaries, remote retry/compensation attempts, saga identity
+  propagation, and cross-subsystem execution records.
 - Saga management should reuse the Job/JCL concepts where practical, but its
   ownership, persistence, compensation, and observability boundaries are
   distributed rather than local to one in-process JobEngine.

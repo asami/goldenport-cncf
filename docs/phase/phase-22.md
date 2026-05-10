@@ -1,11 +1,10 @@
 # Phase 22 — Job Management
 
-status = active
+status = closed
 
 ## 1. Purpose of This Document
 
-This work document opens Phase 22 and makes `9.14 Job Management` the
-current development item.
+This work document records the closed Phase 22 work for `9.14 Job Management`.
 
 Phase 22 started by normalizing Command execution policy, made Job a
 store-backed SimpleEntity management projection, and added JCL diagnostics for
@@ -20,7 +19,7 @@ This document is a phase dashboard, not a design journal.
 
 ## 2. Phase Scope
 
-- Make `9.14 Job Management` the active development item.
+- Record the closed baseline for `9.14 Job Management`.
 - Normalize Command sync/async execution policy before broadening Job usage.
 - Prepare Command definition metadata for `commandKind`,
   `commandExecutionProperties`, and `commandExecutionPolicy`.
@@ -68,7 +67,7 @@ Final semantic direction:
 
 ## 3. Non-Goals
 
-- No Scala/runtime behavior change in the Phase 22 opening slice.
+- No Scala/runtime behavior change in the JM-06 closure slice.
 - No broadening of Job usage before Command execution policy is normalized.
 - Job Entity management is limited to the synchronized management/search record;
   JobEngine remains the execution authority.
@@ -78,7 +77,7 @@ Final semantic direction:
 - No user notification runtime in JM-01.
 - No distributed Saga management in Phase 22; Saga is a separate future item.
 
-## 4. Active Work Stack
+## 4. Closed Work Stack
 
 - A (DONE): JM-01 — Command Execution Policy Normalization.
 - B (DONE): JM-02 — Job Entity Management.
@@ -88,13 +87,14 @@ Final semantic direction:
 - F (DONE): JM-05 — User Job Notification Policy.
 - G (DONE): JM-05B — Event-Based User Notification Forwarding.
 - H (DONE): CQ-01 — Composite Query Boundary for Page View Context.
-- I (ACTIVE): JM-06 — Phase 22 verification and closure.
+- I (DONE): JM-06 — Phase 22 verification and closure.
 
 Resume hint:
 
-- Continue with JM-06. JobEngine emits Job lifecycle/recovery events only;
-  configured Event forwarding rules translate matching user-visible Job events
-  into `UserNotificationProvider` requests.
+- Phase 22 is closed. Select the next phase before adding new active work.
+- JobEngine emits Job lifecycle/recovery events only; configured Event
+  forwarding rules translate matching user-visible Job events into
+  `UserNotificationProvider` requests.
 - `textus-blog` is the JM-05B application driver: its deemed-subsystem assembly
   includes `textus-user-notification`, explicit Job event forwarding rules, and
   a header badge that reads the current user's unconfirmed notification count.
@@ -112,7 +112,7 @@ Resume hint:
 - [x] JM-05: User Job Notification Policy.
 - [x] JM-05B: Event-Based User Notification Forwarding.
 - [x] CQ-01: Composite Query Boundary for Page View Context.
-- [ ] JM-06: Phase 22 verification and closure.
+- [x] JM-06: Phase 22 verification and closure.
 
 Detailed task breakdown and progress tracking are recorded in
 `phase-22-checklist.md`.
@@ -144,3 +144,30 @@ Phase 22 closure conditions:
 - Composite page-view context query aggregation is completed or explicitly
   deferred with remaining work named.
 - No Phase 22 work item remains implicitly untracked.
+- Phase 22 closure notes are recorded in `phase-22-checklist.md`.
+- JM-06 closure validation is docs-only: `git diff --check` and the
+  Phase 22 closure status `rg` check are sufficient because no runtime files
+  change in this closure slice.
+
+## 7. Closure Note
+
+Phase 22 is closed with the following completed baseline:
+
+- Command execution policy is normalized around explicit interface timing,
+  Job run timing, and Job management policy.
+- Job and JobDefinition are CNCF runtime/system management Entities using
+  `entityKind = system`.
+- JCL diagnostics can declare, compare, and reconstruct intended Event/Action
+  chains, while executable JCL remains future work.
+- Task transaction and explicit compensation boundaries are defined and
+  observable through Job diagnostics.
+- Job user notification is implemented as Event-based forwarding to the
+  `UserNotificationProvider` SPI, not as direct JobEngine notification logic.
+- Page-view support data has a query-only CompositeQuery boundary for
+  server-rendered Web context aggregation.
+
+Deferred items are not active Phase 22 work. They are recorded as future
+development candidates in `docs/strategy/cncf-development-strategy.md`,
+including Job Management follow-ups, observability externalization, distributed
+Saga, distributed component runtime, Event reception policy follow-ups, and
+notification UX/operations.

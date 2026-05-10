@@ -103,7 +103,7 @@ record.
 ### Completion Notes
 
 - `job_control` now exposes a built-in `job` SimpleEntity descriptor with
-  `entityKind = workflow` and store-backed management policy.
+  `entityKind = system` and store-backed management policy.
 - Persistent JobEngine records synchronize lightweight Job Entity records on
   submit, lifecycle transitions, control transitions, retry/recovery metadata,
   and result summary updates.
@@ -418,7 +418,7 @@ or page context.
 
 ## JM-06: Phase 22 Verification and Closure
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
@@ -427,11 +427,11 @@ scope.
 
 ### Detailed Tasks
 
-- [ ] Confirm Phase 22 docs and strategy status match implemented behavior.
-- [ ] Confirm JM-01 through JM-05B and CQ-01 are DONE or explicitly deferred.
-- [ ] Run focused and full validations required by touched implementation
+- [x] Confirm Phase 22 docs and strategy status match implemented behavior.
+- [x] Confirm JM-01 through JM-05B and CQ-01 are DONE or explicitly deferred.
+- [x] Run focused and full validations required by touched implementation
       slices.
-- [ ] Record closure notes and next development candidates.
+- [x] Record closure notes and next development candidates.
 
 ### Expected Output
 
@@ -440,3 +440,50 @@ scope.
 ### Guardrails
 
 - Do not close Phase 22 while active Job Management work remains implicit.
+
+### Closure Notes
+
+Phase 22 is closed. The completed baseline includes:
+
+- Command execution policy normalization with synchronous direct/no-Job as the
+  ordinary default and explicit async managed Job execution where configured.
+- Job SimpleEntity management and JobDefinition SimpleEntity management as
+  CNCF `entityKind = system` runtime management records.
+- Single-Job JCL diagnostics for declared/observed Event/Action chains,
+  profile comparison, and reconstruction.
+- JobDefinition binding, launch snapshot policy, and execution-record
+  boundaries for lightweight Job Entity records, full timeline, Task Execution
+  Tree, task-local calltree, large result bodies, and raw event history.
+- Task transaction and explicit compensation boundaries, including
+  recovery-required diagnostics for incomplete cleanup.
+- Event-based user notification forwarding to `UserNotificationProvider`,
+  with `textus-user-notification` as the first provider driver.
+- Query-only CompositeQuery boundary for page-view context aggregation across
+  Web tier, App tier, and Domain tier responsibilities.
+
+Deferred items are future development candidates, not active Phase 22 work:
+
+- `9.14 Job Management Follow-ups`: executable JCL `flow`, `events`, and
+  `onEvent` runtime; JobDefinition accept/apply workflow and operational
+  lifecycle expansion; Job/Task execution record persistence beyond the
+  current lightweight projection; CompositeQuery v2 parallel execution,
+  cross-subsystem protocol surface, and richer App-tier page-view contracts.
+- `9.4 Metrics and Observability`: large result/response externalization for
+  CallTree, Task calltree, execution history, and Job diagnostics; compact
+  summary/reference storage policy for Job result and diagnostic payloads.
+- `9.15 Saga Management`: distributed Saga as the cross-subsystem and
+  long-running extension of Job management, including remote retry, remote
+  compensation, saga identity propagation, and distributed observability.
+- `9.13 Distributed Component Runtime`: distributed scheduler, clustered
+  Job/Event ownership, and cross-instance Working Set/View consistency.
+- `9.2 Event Mechanism Follow-ups`: richer Event reception policy and
+  async/sync same-job continuation semantics that executable JCL may later
+  consume.
+- `9.1 Web Next Stage Follow-ups`: full user notification inbox/admin
+  operations beyond the Phase 22 provider, forwarding, badge, and baseline
+  composed-page work.
+
+Closure validation for JM-06 is docs-only:
+
+- `git diff --check`
+- Phase 22 status `rg` check over the phase/checklist/strategy files.
