@@ -9,7 +9,7 @@ import org.goldenport.cncf.http.FakeHttpDriver
 import org.goldenport.cncf.job.{ActionId, InMemoryJobEngine, JobContext, JobControlPolicy, JobControlRequest, JobControlResponse, JobEngine, JobEngineTestFixture, JobPersistencePolicy, JobQueryReadModel, JobResult, JobStatus, JobSubmitOption, JobTask, JobTaskPage, JobTimelinePage, JobId, TaskId}
 import org.goldenport.cncf.security.IngressSecurityResolver
 import org.goldenport.cncf.unitofwork.{CommitRecorder, UnitOfWork, UnitOfWorkOp}
-import org.goldenport.provisional.observation.Taxonomy
+import org.goldenport.observation.Taxonomy
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -17,7 +17,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Mar. 21, 2026
  *  version Apr. 22, 2026
- * @version May.  4, 2026
+ * @version May. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EventReceptionSpec

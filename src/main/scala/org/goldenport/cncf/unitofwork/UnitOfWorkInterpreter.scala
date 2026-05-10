@@ -24,7 +24,7 @@ import org.goldenport.record.io.RecordEncoder
  *
  * This bridges declarative UoW programs (Free) and
  * concrete UnitOfWork execution.
- * @version May. 10, 2026
+ * @version May. 11, 2026
  */
 /*
  * @since   Jan. 10, 2026
@@ -539,12 +539,27 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
   private def _load_record(
     id: EntityId
   ): Consequence[Option[org.goldenport.record.Record]] =
-    for {
+    (for {
       cid <- uow.executionContext.entityStoreSpace.dataStoreCollection(id)
       dsid <- uow.executionContext.entityStoreSpace.dataStoreEntryId(id)
       ds <- uow.executionContext.dataStoreSpace.dataStore(cid)
       rec <- ds.load(cid, dsid)
-    } yield rec
+    } yield rec).recoverWith {
+      case conclusion =>
+        if (_is_not_found(conclusion))
+          Consequence.success(None)
+        else
+          Consequence.Failure(conclusion)
+    }
+
+  private def _is_not_found(conclusion: Conclusion): Boolean = {
+    val symptom = conclusion.observation.taxonomy.symptom
+    val message = conclusion.show.toLowerCase(java.util.Locale.ROOT)
+    symptom == org.goldenport.observation.Taxonomy.Symptom.NotFound ||
+      message.contains("not found") ||
+      message.contains("not-found") ||
+      message.contains("notfound")
+  }
 
   private def _filter_search_result[T](
     op: UnitOfWorkOp.EntityStoreSearch[T],
@@ -578,7 +593,7 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
   ): Boolean = {
     val symptom = conclusion.observation.taxonomy.symptom
     val message = conclusion.show.toLowerCase
-    symptom == org.goldenport.provisional.observation.Taxonomy.Symptom.NotFound ||
+    symptom == org.goldenport.observation.Taxonomy.Symptom.NotFound ||
       message.contains("not found") ||
       message.contains("not-found") ||
       message.contains("notfound")
@@ -587,7 +602,7 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
   private def _is_not_implemented(
     conclusion: org.goldenport.Conclusion
   ): Boolean =
-    conclusion.show.contains("NotImplemented")
+    conclusion.observation.taxonomy.symptom == org.goldenport.observation.Taxonomy.Symptom.NotImplemented
 
   private def _shell_command_executor: ShellCommandExecutor =
     uow.shellCommandExecutor

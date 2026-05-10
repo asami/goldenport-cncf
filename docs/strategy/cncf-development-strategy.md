@@ -1021,8 +1021,8 @@ corresponding completed-history entry.
 
 Phase 23 is active. `9.7 Error Model / Consequence-Conclusion Realignment` is
 the selected development item. EM-01 Error Taxonomy / Detail Code Policy
-Opening is complete; EM-02 Taxonomy / Cause / Disposition Inventory and
-Canonical Ordering is the active slice.
+Opening and EM-02 Taxonomy / Cause / Disposition Inventory and Canonical
+Ordering are complete; EM-03 Detail Code Generation Model is the active slice.
 
 ### 9.1 Web Next Stage Follow-ups
 Future Web/platform development item.
@@ -1136,8 +1136,8 @@ Work documents:
 Active stack:
 
 - EM-01: Error Taxonomy / Detail Code Policy Opening. DONE.
-- EM-02: Taxonomy / Cause / Disposition Inventory and Canonical Ordering. ACTIVE.
-- EM-03: Detail Code Generation Model. TODO.
+- EM-02: Taxonomy / Cause / Disposition Inventory and Canonical Ordering. DONE.
+- EM-03: Detail Code Generation Model. ACTIVE.
 - EM-04: Consequence Helper and Component Failure Normalization. TODO.
 - EM-05: Web/API/Admin/Observability Projection Alignment. TODO.
 - EM-06: Phase 23 verification and closure. TODO.
@@ -1147,6 +1147,9 @@ Active stack:
 - Inventory and redesign taxonomy, cause, disposition, status/detail facets,
   including categories that are likely to be needed by near-future CNCF work.
 - Reorder taxonomy/cause/disposition kinds meaningfully and renumber them.
+- Formal Error Model vocabulary now lives in `org.goldenport.observation` and
+  `org.goldenport.conclusion`; `org.goldenport.provisional.*` is no longer the
+  active package surface for these types.
 - Establish deterministic detail-code generation and put it into normal
   operation for CNCF-visible errors.
 - Pre-stable CNCF does not guarantee compatibility for error taxonomy, numeric
@@ -1154,8 +1157,9 @@ Active stack:
   classifications; changes must be documented and tested, but compatibility
   aliases are not required until CNCF stable.
 - `docs/design/error-model-policy.md` is the normative Phase 23 policy entry
-  point. Older error-semantics and Observation/Descriptor notes are provisional
-  inputs, not the final contract.
+  point. `docs/design/error-taxonomy-catalog.md` records the EM-02 canonical
+  package locations, ordering, and numbers. Older error-semantics and
+  Observation/Descriptor notes are provisional inputs, not the final contract.
 - Make reusable framework and builtin components emit ordinary
   `Consequence.Failure(Conclusion)` values.
 - Use `Cause.Kind` for coarse mechanism classification such as capability,

@@ -8,13 +8,13 @@ import com.typesafe.config.{ConfigFactory, ConfigValueType}
 import org.yaml.snakeyaml.Yaml
 import org.goldenport.Consequence
 import org.goldenport.observation.Descriptor
-import org.goldenport.provisional.observation.Taxonomy
+import org.goldenport.observation.Taxonomy
 import org.goldenport.configuration.{Configuration, ConfigurationValue}
 import org.goldenport.configuration.source.file.FileConfigLoader
 
 /*
  * @since   Apr. 15, 2026
- * @version Apr. 15, 2026
+ * @version May. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class RuntimeFileConfigLoader extends FileConfigLoader {

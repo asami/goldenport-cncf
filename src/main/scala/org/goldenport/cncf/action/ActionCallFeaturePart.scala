@@ -374,7 +374,7 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
   ): Boolean = {
     val symptom = conclusion.observation.taxonomy.symptom
     val message = conclusion.show.toLowerCase
-    symptom == org.goldenport.provisional.observation.Taxonomy.Symptom.NotFound ||
+    symptom == org.goldenport.observation.Taxonomy.Symptom.NotFound ||
       message.contains("not found") ||
       message.contains("not-found") ||
       message.contains("notfound")
@@ -958,7 +958,7 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
   ): Boolean = {
     val symptom = conclusion.observation.taxonomy.symptom
     val message = conclusion.show.toLowerCase
-    symptom == org.goldenport.provisional.observation.Taxonomy.Symptom.NotFound ||
+    symptom == org.goldenport.observation.Taxonomy.Symptom.NotFound ||
       message.contains("not found") ||
       message.contains("not-found") ||
       message.contains("notfound")

@@ -6,7 +6,7 @@ import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.cncf.action.{Action, ActionCall, ActionEngine, CommandAction}
 import org.goldenport.cncf.context.{ExecutionContext, SecurityContext}
 import org.goldenport.cncf.entity.EntityStore
-import org.goldenport.provisional.observation.Taxonomy
+import org.goldenport.observation.Taxonomy
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -14,7 +14,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Mar. 21, 2026
  *  version Apr. 22, 2026
- * @version May.  7, 2026
+ * @version May. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class JobControlCommandSpec

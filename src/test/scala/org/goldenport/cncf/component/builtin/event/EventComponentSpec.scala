@@ -8,7 +8,7 @@ import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.event.{EventId, EventLane, EventRecord}
 import org.goldenport.cncf.job.{ActionId, ActionTask, JobId, JobRunMode, JobSubmitOption, JobTask, TaskOutcome, TaskSucceeded, TaskFailed}
 import org.goldenport.cncf.subsystem.DefaultSubsystemFactory
-import org.goldenport.provisional.conclusion.Disposition
+import org.goldenport.conclusion.Disposition
 import org.goldenport.protocol.{Argument, Request, Response}
 import org.goldenport.protocol.operation.OperationResponse
 import org.scalatest.matchers.should.Matchers
@@ -16,7 +16,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 28, 2026
- * @version Apr. 22, 2026
+ *  version Apr. 22, 2026
+ * @version May. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EventComponentSpec extends AnyWordSpec with Matchers {

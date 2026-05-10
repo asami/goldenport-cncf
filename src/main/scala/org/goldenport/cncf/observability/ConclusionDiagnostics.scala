@@ -2,7 +2,7 @@ package org.goldenport.cncf.observability
 
 import org.goldenport.Conclusion
 import org.goldenport.observation.Descriptor
-import org.goldenport.provisional.observation.{Cause, Taxonomy}
+import org.goldenport.observation.{Cause, Taxonomy}
 import org.goldenport.record.Record
 
 /*
@@ -12,7 +12,7 @@ import org.goldenport.record.Record
  * than message parsing, Status.detailCodes, or component-local error taxonomies.
  *
  * @since   Apr. 29, 2026
- * @version Apr. 29, 2026
+ * @version May. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 object ConclusionDiagnostics {

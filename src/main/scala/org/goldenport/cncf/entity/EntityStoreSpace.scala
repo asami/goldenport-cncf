@@ -1,7 +1,7 @@
 package org.goldenport.cncf.entity
 
 import org.goldenport.Consequence
-import org.goldenport.provisional.observation.Observation
+import org.goldenport.observation.Observation
 import org.goldenport.configuration.ResolvedConfiguration
 import org.goldenport.cncf.context.ExecutionContext
 import org.simplemodeling.model.datatype.EntityId
@@ -18,7 +18,7 @@ import org.goldenport.cncf.unitofwork.UnitOfWorkOp.*
  *  version Mar. 27, 2026
  *  version Apr. 13, 2026
  *  version Apr. 14, 2026
- * @version May. 10, 2026
+ * @version May. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 class EntityStoreSpace {

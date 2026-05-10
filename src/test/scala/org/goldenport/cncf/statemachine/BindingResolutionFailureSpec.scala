@@ -3,15 +3,15 @@ package org.goldenport.cncf.statemachine
 import org.goldenport.Consequence
 import org.goldenport.Conclusion
 import org.goldenport.observation.Descriptor.Facet
-import org.goldenport.provisional.observation.Taxonomy
+import org.goldenport.observation.Taxonomy
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 20, 2026
- *  version Mar. 20, 2026
- * @version Apr. 14, 2026
+ *  version Apr. 14, 2026
+ * @version May. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class BindingResolutionFailureSpec

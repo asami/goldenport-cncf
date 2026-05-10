@@ -7,15 +7,15 @@ import org.goldenport.cncf.context.{ExecutionContext, SecurityContext}
 import org.goldenport.cncf.context.ExecutionContextId
 import org.goldenport.cncf.datastore.DataStore
 import org.goldenport.cncf.unitofwork.CommitRecorder
-import org.goldenport.provisional.observation.Taxonomy
+import org.goldenport.observation.Taxonomy
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 20, 2026
- *  version Mar. 20, 2026
- * @version Apr. 14, 2026
+ *  version Apr. 14, 2026
+ * @version May. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EventBusSpec

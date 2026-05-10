@@ -5,7 +5,7 @@ import org.goldenport.Consequence
 import org.goldenport.cncf.action.Action
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.observation.Descriptor.Facet
-import org.goldenport.provisional.observation.Taxonomy
+import org.goldenport.observation.Taxonomy
 
 /*
  * EventBus baseline for EV-03.
@@ -17,8 +17,8 @@ import org.goldenport.provisional.observation.Taxonomy
  * Async/job execution is an extension point and is intentionally out of scope in EV-03.
  *
  * @since   Mar. 20, 2026
- *  version Mar. 20, 2026
- * @version Apr. 22, 2026
+ *  version Apr. 22, 2026
+ * @version May. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 trait EventDispatchHandler {

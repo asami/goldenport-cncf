@@ -12,13 +12,14 @@ import org.goldenport.cncf.http.RuntimeDashboardMetrics
 import org.goldenport.cncf.observability.ConclusionDiagnostics
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.cncf.unitofwork.UnitOfWorkAuthorization
-import org.goldenport.provisional.observation.Cause
+import org.goldenport.observation.Cause
 import org.simplemodeling.model.datatype.EntityId
 import org.simplemodeling.model.value.SecurityAttributes
 
 /*
  * @since   Apr.  6, 2026
- * @version Apr. 29, 2026
+ *  version Apr. 29, 2026
+ * @version May. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 object OperationAccessPolicy {

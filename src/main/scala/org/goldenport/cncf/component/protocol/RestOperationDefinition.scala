@@ -1,6 +1,6 @@
 package org.goldenport.cncf.component.protocol
 
-import org.goldenport.provisional.observation._
+import org.goldenport.observation._
 import org.goldenport.observation.Descriptor.Facet
 
 import org.goldenport.Consequence
@@ -21,7 +21,8 @@ import cats.syntax.all.*
 
 /*
  * @since   Feb.  6, 2026
- * @version Feb. 19, 2026
+ *  version Feb. 19, 2026
+ * @version May. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class RestOperationDefinition()

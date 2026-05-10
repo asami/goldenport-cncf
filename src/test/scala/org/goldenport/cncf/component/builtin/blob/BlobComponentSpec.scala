@@ -17,7 +17,7 @@ import org.goldenport.configuration.{Configuration, ConfigurationTrace, Configur
 import org.goldenport.datatype.ContentType
 import org.goldenport.http.HttpResponse
 import org.goldenport.observation.Descriptor
-import org.goldenport.provisional.observation.Cause
+import org.goldenport.observation.Cause
 import org.goldenport.protocol.{Argument, Property, Request}
 import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.record.Record
@@ -32,7 +32,8 @@ import org.scalatest.wordspec.AnyWordSpec
  *
  * @since   Apr. 26, 2026
  *  version Apr. 28, 2026
- * @version Apr. 29, 2026
+ *  version Apr. 29, 2026
+ * @version May. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class BlobComponentSpec

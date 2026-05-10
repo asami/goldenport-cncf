@@ -5,7 +5,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import scala.collection.mutable.ArrayBuffer
 import org.goldenport.{Conclusion, Consequence}
 import org.goldenport.cncf.context.ExecutionContext
-import org.goldenport.provisional.conclusion.Disposition
+import org.goldenport.conclusion.Disposition
 import org.goldenport.protocol.operation.OperationResponse
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
@@ -13,7 +13,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   May.  4, 2026
- * @version May.  4, 2026
+ * @version May. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class JobRetryStateTransitionSpec

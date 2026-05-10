@@ -5,7 +5,7 @@ import java.util.concurrent.{CountDownLatch, TimeUnit}
 import java.util.concurrent.atomic.AtomicInteger
 import org.goldenport.{Conclusion, Consequence}
 import org.goldenport.cncf.context.ExecutionContext
-import org.goldenport.provisional.conclusion.Disposition
+import org.goldenport.conclusion.Disposition
 import org.goldenport.protocol.operation.OperationResponse
 import org.scalatest.Assertions.fail
 import org.scalatest.{GivenWhenThen, Tag}
@@ -14,7 +14,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   May.  4, 2026
- * @version May.  4, 2026
+ * @version May. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class JobRetryTimingSpec

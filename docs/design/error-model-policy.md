@@ -88,7 +88,7 @@ Phase 23 proceeds in this order:
 1. EM-01 fixes this policy boundary.
 2. EM-02 inventories taxonomy, cause, disposition, status/detail facets, and
    component-local classifications, then defines canonical ordering and
-   numbering.
+   numbering in `docs/design/error-taxonomy-catalog.md`.
 3. EM-03 defines deterministic detail-code generation.
 4. EM-04 normalizes recurring framework and builtin-component failures onto
    structured `Consequence.Failure(Conclusion)` helpers.
@@ -109,3 +109,8 @@ contract:
 Use them as source material during inventory and redesign. Do not treat their
 older compatibility, freeze, or finality wording as authoritative when it
 conflicts with this Phase 23 policy.
+
+## 7. Normative Catalogs
+
+- `docs/design/error-taxonomy-catalog.md` defines the formal EM-02 package
+  locations, canonical vocabulary, ordering, and numbers.

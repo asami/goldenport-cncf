@@ -14,7 +14,7 @@ import scala.util.Using
 import org.goldenport.Consequence
 import org.goldenport.observation.Descriptor
 import org.goldenport.protocol.Protocol
-import org.goldenport.provisional.observation.{Observation, ObservationRender, Taxonomy}
+import org.goldenport.observation.{Observation, ObservationRender, Taxonomy}
 import org.goldenport.cncf.bootstrap.BootstrapLog
 import org.goldenport.cncf.context.GlobalContext
 import org.goldenport.cncf.observability.global.{GlobalObservable, ObservabilityScopeDefaults, PersistentBootstrapLog}
@@ -29,8 +29,7 @@ import org.goldenport.cncf.subsystem.GenericSubsystemDescriptor
  *  version Feb.  5, 2026
  *  version Mar. 22, 2026
  *  version Apr. 25, 2026
- *  version May.  1, 2026
- * @version May.  9, 2026
+ * @version May. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 sealed abstract class ComponentRepository {

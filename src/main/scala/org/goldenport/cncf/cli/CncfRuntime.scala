@@ -11,7 +11,7 @@ import scala.jdk.CollectionConverters._
 import scala.util.control.NonFatal
 import org.goldenport.Consequence
 import org.goldenport.Conclusion
-import org.goldenport.provisional.observation.Taxonomy
+import org.goldenport.observation.Taxonomy
 import org.goldenport.observation.Descriptor.Facet
 import org.goldenport.bag.Bag
 import org.goldenport.cli.parser.ArgsParser

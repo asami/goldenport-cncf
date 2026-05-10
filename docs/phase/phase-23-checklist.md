@@ -80,7 +80,7 @@ and development order for Error Model realignment before runtime/model changes.
 
 ## EM-02: Taxonomy / Cause / Disposition Inventory and Canonical Ordering
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
@@ -90,14 +90,14 @@ and numbering.
 
 ### Detailed Tasks
 
-- [ ] Inventory current `Taxonomy`, `Cause.Kind`, disposition, status, and
+- [x] Inventory current `Taxonomy`, `Cause.Kind`, disposition, status, and
       detail-code use across `simplemodeling-lib`, CNCF, and builtin
       components.
-- [ ] Identify duplicates, ambiguous categories, missing categories, and
+- [x] Identify duplicates, ambiguous categories, missing categories, and
       component-local labels that should become core vocabulary.
-- [ ] Define canonical order and numbering rules for taxonomy/cause/disposition
+- [x] Define canonical order and numbering rules for taxonomy/cause/disposition
       values.
-- [ ] Add tests that intentionally assert the new canonical order and numbers.
+- [x] Add tests that intentionally assert the new canonical order and numbers.
 
 ### Guardrails
 
@@ -105,11 +105,28 @@ and numbering.
 - Do not implement detail-code generation before the canonical vocabulary is
   chosen.
 
+### Completion Notes
+
+- Active error-model vocabulary moved out of `org.goldenport.provisional.*`:
+  - `org.goldenport.observation` now owns `Observation`, `Taxonomy`, `Cause`,
+    and observation-side axes.
+  - `org.goldenport.conclusion` now owns `Interpretation` and `Disposition`.
+  - `org.goldenport.Conclusion` remains the public aggregate type.
+- Canonical taxonomy/cause/disposition ordering and numbers are documented in
+  `docs/design/error-taxonomy-catalog.md`.
+- Pre-stable spelling defects were fixed:
+  - `record` is no longer rendered as `value`;
+  - `network` is no longer rendered as `operation`;
+  - `subsystem` is no longer rendered as `subsytem`;
+  - `redundant` is no longer rendered as `missing`.
+- `simplemodeling-lib` tests assert the formal package usage and canonical
+  vocabulary values.
+
 ---
 
 ## EM-03: Detail Code Generation Model
 
-Status: TODO
+Status: ACTIVE
 
 ### Objective
 

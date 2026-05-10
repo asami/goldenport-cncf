@@ -8,8 +8,8 @@ import org.goldenport.{Conclusion, Consequence}
 import org.goldenport.consequence.Failures
 import org.goldenport.id.UniversalId
 import org.goldenport.observation.Descriptor
-import org.goldenport.provisional.conclusion.Disposition
-import org.goldenport.provisional.observation.Taxonomy
+import org.goldenport.conclusion.Disposition
+import org.goldenport.observation.Taxonomy
 import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.record.Record
 import org.goldenport.record.io.RecordEncoder
@@ -24,7 +24,7 @@ import org.goldenport.cncf.observability.ObservabilityEngine
 /*
  * @since   Jan.  4, 2026
  *  version Mar. 30, 2026
- * @version May.  7, 2026
+ * @version May. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class JobId(

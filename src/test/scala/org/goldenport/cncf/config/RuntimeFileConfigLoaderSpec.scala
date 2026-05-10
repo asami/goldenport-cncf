@@ -3,14 +3,14 @@ package org.goldenport.cncf.config
 import java.nio.file.Files
 import org.goldenport.Consequence
 import org.goldenport.observation.Descriptor
-import org.goldenport.provisional.observation.Taxonomy
+import org.goldenport.observation.Taxonomy
 import org.goldenport.configuration.ConfigurationValue
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr. 15, 2026
- * @version Apr. 15, 2026
+ * @version May. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class RuntimeFileConfigLoaderSpec extends AnyWordSpec with Matchers {

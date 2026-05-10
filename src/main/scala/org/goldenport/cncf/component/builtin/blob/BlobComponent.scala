@@ -1174,7 +1174,7 @@ object BlobComponent {
             includeEntityIdEntropy = true
           ).flatMap {
             case Some(id) => exec_pure(id)
-            case None => exec_from(Consequence.Failure(Conclusion.notFound(org.goldenport.provisional.observation.Observation.resourceNotFound(s"blob:${value}"))))
+            case None => exec_from(Consequence.Failure(Conclusion.notFound(org.goldenport.observation.Observation.resourceNotFound(s"blob:${value}"))))
           }
       }
     }
@@ -1512,7 +1512,7 @@ object BlobComponent {
     private def _is_permission_denied(
       conclusion: Conclusion
     ): Boolean =
-      conclusion.observation.taxonomy.symptom == org.goldenport.provisional.observation.Taxonomy.Symptom.PermissionDenied
+      conclusion.observation.taxonomy.symptom == org.goldenport.observation.Taxonomy.Symptom.PermissionDenied
 
     private def _delete_blob_payload(blob: Blob): ExecUowM[Boolean] =
       blob.sourceMode match {

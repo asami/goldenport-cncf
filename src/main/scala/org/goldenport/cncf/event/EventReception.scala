@@ -14,7 +14,7 @@ import org.goldenport.cncf.job.{ActionId, JobEngine, JobPersistencePolicy, JobSu
 import org.goldenport.cncf.security.IngressSecurityResolver
 import org.goldenport.observation.Descriptor.Facet
 import org.goldenport.record.Record
-import org.goldenport.provisional.observation.Taxonomy
+import org.goldenport.observation.Taxonomy
 
 /*
  * EV-06 canonical mapping:
@@ -24,7 +24,8 @@ import org.goldenport.provisional.observation.Taxonomy
  *
  * @since   Mar. 21, 2026
  *  version Mar. 24, 2026
- * @version Apr. 22, 2026
+ *  version Apr. 22, 2026
+ * @version May. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 enum CmlEventCategory {

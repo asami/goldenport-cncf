@@ -3274,8 +3274,7 @@ object AdminComponent {
   private def _is_not_implemented(
     conclusion: org.goldenport.Conclusion
   ): Boolean =
-    conclusion.show.contains("NotImplemented") ||
-      conclusion.show.toLowerCase(java.util.Locale.ROOT).contains("not implemented")
+    conclusion.observation.taxonomy.symptom == org.goldenport.observation.Taxonomy.Symptom.NotImplemented
 
   private def _value_(value: ConfigurationValue): String = {
     value match {
