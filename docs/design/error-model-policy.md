@@ -72,10 +72,10 @@ scope and should be defined later when CNCF approaches a stable release.
 ## 4. EM-01 Policy Decisions
 
 - Messages are human/operator narrative, not primary matching keys.
-- Detail codes are CNCF-visible semantic identifiers.
+- Detail codes are CNCF-visible numeric semantic identifiers.
 - CLI exit codes must not be derived directly from detail codes.
-- `Status.detailCode`, `Status.detailCodes`, and `strategies` need explicit
-  clarification in EM-03.
+- EM-03 makes `DetailCode` a `Long`, removes `Status.strategies`, and treats
+  readable labels as projection-only data derived from `Conclusion`.
 - Component-local labels and message parsing should be migrated to structured
   `Conclusion` data in EM-04 and EM-05.
 - Historical draft notes are inputs only; this document and later Phase 23

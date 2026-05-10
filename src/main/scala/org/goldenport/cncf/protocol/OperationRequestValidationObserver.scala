@@ -16,7 +16,7 @@ import org.goldenport.record.Record
  * moving parsing into ActionCall execution.
  *
  * @since   Apr. 29, 2026
- * @version Apr. 29, 2026
+ * @version May. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 trait OperationRequestValidationObserver { self: OperationDefinition =>
@@ -62,7 +62,7 @@ object OperationRequestValidationObserver {
             "result.success" -> false,
             "diagnostic" -> classification.toRecord,
             "error.kind" -> conclusion.observation.taxonomy.print,
-            "error.code" -> conclusion.status.webCode.code
+            "error.status" -> conclusion.status.webCode.code
           )
         )
         operation.foreach(observe(_, request, conclusion, context))

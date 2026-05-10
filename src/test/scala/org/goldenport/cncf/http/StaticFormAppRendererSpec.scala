@@ -15,7 +15,6 @@ import io.circe.Json
 import io.circe.parser.parse
 import org.http4s.{MediaType, Method, Request, Uri}
 import org.goldenport.{Conclusion, Consequence}
-import org.goldenport.error.ErrorCode
 import org.goldenport.http.{HttpRequest, HttpResponse}
 import org.goldenport.http.HttpStatus
 import org.goldenport.bag.Bag
@@ -57,7 +56,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr. 12, 2026
- * @version May. 10, 2026
+ * @version May. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
@@ -474,9 +473,9 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       val response = server.routes(null).orNotFound.run(_get_request(displayPath)).unsafeRunSync()
       val body = response.as[String].unsafeRunSync()
 
-      response.status.code shouldBe 400
+      response.status.code shouldBe 500
       body should include ("Request failed")
-      body should include ("Error code")
+      body should include ("HTTP status")
     }
 
     "serve Blob admin mutation routes" in {
@@ -574,7 +573,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       )).unsafeRunSync()
 
       rejected.status.code shouldBe 400
-      rejected.as[String].unsafeRunSync() should include ("Error code")
+      rejected.as[String].unsafeRunSync() should include ("HTTP status")
       forced.status.code shouldBe 200
       forced.as[String].unsafeRunSync() should include ("Blob Deleted")
       subsystem.executeOperationResponse(_blob_request("admin_get_blob", Property("id", id, None))) shouldBe a[Consequence.Failure[_]]
@@ -588,7 +587,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       val body = response.as[String].unsafeRunSync()
 
       response.status.code shouldBe 400
-      body should include ("Error code")
+      body should include ("HTTP status")
       body should include ("missing-blob")
       body should not include ("System job result")
     }
@@ -610,7 +609,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       response.status.code shouldBe 403
       mutation.status.code shouldBe 403
       body should include ("Request failed")
-      body should include ("Error code:")
+      body should include ("HTTP status:")
     }
 
     "render resolved runtime configuration with masking rules on system admin page" in {
@@ -4883,7 +4882,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       response.status.code shouldBe 400
       response.contentType.map(_.mediaType) shouldBe Some(MediaType.application.json)
       json.downField("error").get[String]("message") shouldBe Right("bad request from operation")
-      json.downField("error").get[String]("code") shouldBe Right("http.400")
+      json.downField("error").get[Int]("status") shouldBe Right(400)
+      json.downField("error").get[String]("statusText") shouldBe Right("Bad Request")
       json.downField("error").downField("debug").get[String]("path") shouldBe Right("/form-api/notice-board/notice/post-secret-notice")
     }
 
@@ -4921,7 +4921,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       response.contentType.map(_.mediaType.toString).getOrElse("") should include ("application/yaml")
       body should include ("error:")
       body should include ("message: bad request from operation")
-      body should include ("code: http.400")
+      body should include ("status: 400")
+      body should include ("statusText: Bad Request")
     }
 
     "record minimal runtime hooks when Web dispatch crosses the operation adapter" in {
@@ -5883,6 +5884,32 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       json.downField("error").downField("debug").get[String]("method") shouldBe Right("GET")
     }
 
+    "include status and detail code in plain-text structured API errors" in {
+      val subsystem = _management_console_fixture_subsystem(
+        configuration = Configuration(Map(
+          RuntimeConfig.WebDevelopAnonymousAdminKey -> ConfigurationValue.StringValue("false")
+        ))
+      )
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val request = _get_request("/form-api/notice-board/admin/entities/notice")
+        .putHeaders(org.http4s.Header.Raw(org.typelevel.ci.CIString("Accept"), "text/plain"))
+
+      val response = server
+        ._component_admin_entity_form_api_definition(
+          request,
+          "notice-board",
+          "notice"
+        )
+        .unsafeRunSync()
+      val body = response.as[String].unsafeRunSync()
+
+      response.status.code shouldBe 403
+      response.contentType.map(_.mediaType) shouldBe Some(org.http4s.MediaType.text.plain)
+      body should include ("Forbidden")
+      body should include ("status: 403 Forbidden")
+      body should include ("detailCode:")
+    }
+
     "deny anonymous admin form API in production operation mode" in {
       val subsystem = _management_console_fixture_subsystem(
         configuration = Configuration(Map(
@@ -5920,8 +5947,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       response.status.code shouldBe 403
       response.contentType.map(_.mediaType) shouldBe Some(org.http4s.MediaType.text.html)
       body should include ("Request failed")
-      body should include ("Error code:")
-      body should include ("http.403")
+      body should include ("HTTP status:")
+      body should include ("403 Forbidden")
       body should not include ("structured-error-debug")
       body should not include ("\"error\"")
     }
@@ -7514,10 +7541,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
     }
 
     "render non-production structured error debug YAML at the bottom of Web error pages" in {
-      val conclusion = _coded_conclusion("cncf.test.detail")
+      val conclusion = _structured_conclusion()
+      val detailCode = conclusion.status.detailCode.map(_.code).getOrElse(fail("detailCode is missing"))
       val error = StructuredHttpError.fromConclusion(
         conclusion,
-        500,
         "/web/notice-board/missing",
         "GET",
         OperationMode.Develop,
@@ -7527,7 +7554,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       val html = StaticFormAppRenderer.renderStructuredErrorPage(Some("notice-board"), error).body
 
       html should include ("Request failed")
-      html should include ("cncf.test.detail")
+      html should include (detailCode.toString)
       html should include ("structured-error-debug")
       html should include ("Debug error details")
       html should include ("mode: develop")
@@ -7535,10 +7562,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
     }
 
     "hide structured debug YAML in production Web error pages while keeping the Conclusion detail code" in {
-      val conclusion = _coded_conclusion("cncf.test.production")
+      val conclusion = _structured_conclusion()
+      val detailCode = conclusion.status.detailCode.map(_.code).getOrElse(fail("detailCode is missing"))
       val error = StructuredHttpError.fromConclusion(
         conclusion,
-        500,
         "/web/notice-board/missing",
         "GET",
         OperationMode.Production,
@@ -7547,10 +7574,25 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
 
       val html = StaticFormAppRenderer.renderStructuredErrorPage(Some("notice-board"), error).body
 
-      html should include ("cncf.test.production")
+      html should include (detailCode.toString)
       html should not include ("structured-error-debug")
       html should not include ("Debug error details")
       html should not include ("mode: production")
+    }
+
+    "include structured Conclusion detail code in response error records" in {
+      val conclusion = _structured_conclusion()
+      val detailCode = conclusion.status.detailCode.map(_.code).getOrElse(fail("detailCode is missing"))
+      val error = StructuredHttpError.fromConclusion(
+        conclusion,
+        "/web/notice-board/missing",
+        "GET",
+        OperationMode.Production,
+        component = Some("notice-board")
+      )
+
+      error.publicRecord.asMap.get("detailCode") shouldBe Some(detailCode)
+      error.envelopeJson should include (s""""detailCode":${detailCode}""")
     }
 
     "redisplay the operation form with submitted values when stayOnError is enabled" in {
@@ -9970,12 +10012,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       attributes = Map.empty
     )
 
-  private def _coded_conclusion(
-    code: String
-  ): Conclusion = {
-    val conclusion = Conclusion.simple("coded failure")
-    conclusion.copy(status = conclusion.status.copy(detailCodes = List(_TestErrorCode(code))))
-  }
+  private def _structured_conclusion(): Conclusion =
+    Conclusion.simple("coded failure")
 
   private final case class _DataFixture(
     subsystem: Subsystem,
@@ -10956,10 +10994,6 @@ private final case class _SuccessfulAggregateActionCall(
     Consequence.success(OperationResponse.Scalar(s"${resultPrefix}:${value}"))
   }
 }
-
-private final case class _TestErrorCode(
-  id: String
-) extends ErrorCode
 
 private final class RecordingWebOperationDispatcher(
   delegate: WebOperationDispatcher

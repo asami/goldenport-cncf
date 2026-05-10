@@ -16,7 +16,7 @@ import org.goldenport.configuration.{Configuration, ConfigurationTrace, Configur
  * @since   Jan.  8, 2026
  *  version Jan. 20, 2026
  *  version Apr. 15, 2026
- * @version May. 10, 2026
+ * @version May. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 class ObservabilityEngineSpec extends AnyWordSpec with Matchers with BeforeAndAfterEach {
@@ -66,7 +66,8 @@ class ObservabilityEngineSpec extends AnyWordSpec with Matchers with BeforeAndAf
       val keys = record.asMap.keySet
       keys.contains("result.success") shouldBe true
       keys.contains("error.kind") shouldBe true
-      keys.contains("error.code") shouldBe true
+      keys.contains("error.status") shouldBe true
+      keys.contains("error.detail_code") shouldBe true
     }
   }
 

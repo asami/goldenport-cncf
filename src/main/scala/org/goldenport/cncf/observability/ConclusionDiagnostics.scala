@@ -9,7 +9,7 @@ import org.goldenport.record.Record
  * Common diagnostics projected from Consequence/Conclusion structure.
  *
  * Metrics, dashboards, and observability should use this projection rather
- * than message parsing, Status.detailCodes, or component-local error taxonomies.
+ * than message parsing or component-local error taxonomies.
  *
  * @since   Apr. 29, 2026
  * @version May. 11, 2026

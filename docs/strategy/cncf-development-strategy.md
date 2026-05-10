@@ -836,8 +836,8 @@ Completed in Phase 18.
     not CNCF core.
   - Broader ACL administration, subject grant UI, role lifecycle UI, and
     organization-grade policy management remain under 9.3 Security.
-  - `Status.detailCode` / `Status.detailCodes` / `strategies` redesign and
-    broader Observation semantics remain under 9.7.
+  - Broader Observation semantics and structured failure normalization remain
+    under 9.7.
   - Retention policy, signed URLs, configurable MIME allowlists, thumbnail
     generation, virus scanning, and resumable upload remain future Blob/AWS
     hardening work.
@@ -1022,7 +1022,8 @@ corresponding completed-history entry.
 Phase 23 is active. `9.7 Error Model / Consequence-Conclusion Realignment` is
 the selected development item. EM-01 Error Taxonomy / Detail Code Policy
 Opening and EM-02 Taxonomy / Cause / Disposition Inventory and Canonical
-Ordering are complete; EM-03 Detail Code Generation Model is the active slice.
+Ordering and EM-03 Detail Code Generation Model are complete; EM-04
+Consequence Helper and Component Failure Normalization is the active slice.
 
 ### 9.1 Web Next Stage Follow-ups
 Future Web/platform development item.
@@ -1137,8 +1138,8 @@ Active stack:
 
 - EM-01: Error Taxonomy / Detail Code Policy Opening. DONE.
 - EM-02: Taxonomy / Cause / Disposition Inventory and Canonical Ordering. DONE.
-- EM-03: Detail Code Generation Model. ACTIVE.
-- EM-04: Consequence Helper and Component Failure Normalization. TODO.
+- EM-03: Detail Code Generation Model. DONE.
+- EM-04: Consequence Helper and Component Failure Normalization. ACTIVE.
 - EM-05: Web/API/Admin/Observability Projection Alignment. TODO.
 - EM-06: Phase 23 verification and closure. TODO.
 
@@ -1150,15 +1151,16 @@ Active stack:
 - Formal Error Model vocabulary now lives in `org.goldenport.observation` and
   `org.goldenport.conclusion`; `org.goldenport.provisional.*` is no longer the
   active package surface for these types.
-- Establish deterministic detail-code generation and put it into normal
-  operation for CNCF-visible errors.
+- Establish deterministic numeric `Long` detail-code generation and put it into
+  normal operation for CNCF-visible errors.
 - Pre-stable CNCF does not guarantee compatibility for error taxonomy, numeric
   ordering, or detail codes. Phase 23 may renumber, rename, merge, or split
   classifications; changes must be documented and tested, but compatibility
   aliases are not required until CNCF stable.
 - `docs/design/error-model-policy.md` is the normative Phase 23 policy entry
   point. `docs/design/error-taxonomy-catalog.md` records the EM-02 canonical
-  package locations, ordering, and numbers. Older error-semantics and
+  package locations, ordering, and numbers. `docs/design/error-detail-code-policy.md`
+  records the EM-03 numeric `DetailCode` policy. Older error-semantics and
   Observation/Descriptor notes are provisional inputs, not the final contract.
 - Make reusable framework and builtin components emit ordinary
   `Consequence.Failure(Conclusion)` values.
@@ -1169,8 +1171,10 @@ Active stack:
 - Project metrics, dashboards, Web/admin diagnostics, and observability records
   from structured `Conclusion` data rather than component-local labels or
   message parsing.
-- Clarify `Status.detailCode` / `Status.detailCodes` / `strategies` semantics
-  and rewrite the draft notes into a normative design/spec.
+- `Conclusion.Status` carries generated `webCode`, generated numeric
+  `DetailCode`, and optional application `appCode` / `appStatus` metadata,
+  while `Status.detailCodes` and `Status.strategies` are removed from the
+  active model.
 
 ### 9.8 Media Attributes Model Cleanup
 Future platform development item.

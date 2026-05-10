@@ -46,7 +46,7 @@ import org.goldenport.datatype.{ContentType, MimeBody, MimeType}
  *  version Jan. 21, 2026
  *  version Mar. 29, 2026
  *  version Apr. 30, 2026
- * @version May. 10, 2026
+ * @version May. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Http4sHttpServer(
@@ -682,7 +682,7 @@ final class Http4sHttpServer(
       case Consequence.Failure(conclusion) =>
         val status = HStatus.fromInt(conclusion.status.webCode.code).getOrElse(HStatus.InternalServerError)
         RuntimeDashboardMetrics.recordBlobOperation("content", error = true, diagnosticKey = Some(ConclusionDiagnostics.classify(conclusion).diagnosticKey))
-        _web_error_response(Some("blob"), status, conclusion, req.uri.path.renderString, req.method.name)
+        _web_error_response(Some("blob"), conclusion, req.uri.path.renderString, req.method.name)
     }
   }
 
@@ -773,10 +773,8 @@ final class Http4sHttpServer(
       case org.goldenport.Consequence.Success(p) =>
         _html(p, Some("blob"))
       case org.goldenport.Consequence.Failure(conclusion) =>
-        val status = HStatus.fromInt(conclusion.status.webCode.code).getOrElse(HStatus.InternalServerError)
         val error = StructuredHttpError.fromConclusion(
           conclusion,
-          status.code,
           req.uri.path.renderString,
           req.method.name,
           _operation_mode,
@@ -784,7 +782,7 @@ final class Http4sHttpServer(
           service = service,
           operation = operation
         )
-        _web_error_response(Some("blob"), status, error)
+        _web_error_response(Some("blob"), error)
     }
 
   private def _admin_page(
@@ -797,10 +795,8 @@ final class Http4sHttpServer(
       case org.goldenport.Consequence.Success(p) =>
         _html(p, Some("admin"))
       case org.goldenport.Consequence.Failure(conclusion) =>
-        val status = HStatus.fromInt(conclusion.status.webCode.code).getOrElse(HStatus.InternalServerError)
         val error = StructuredHttpError.fromConclusion(
           conclusion,
-          status.code,
           req.uri.path.renderString,
           req.method.name,
           _operation_mode,
@@ -808,7 +804,7 @@ final class Http4sHttpServer(
           service = service,
           operation = operation
         )
-        _web_error_response(Some("admin"), status, error)
+        _web_error_response(Some("admin"), error)
     }
 
   private def _admin_request_properties(
@@ -892,16 +888,16 @@ final class Http4sHttpServer(
         }
         _html(StaticFormAppRenderer.renderApplicationJobs(app, jobs), Some(app))
       case Consequence.Failure(conclusion) =>
-        _html_status(StaticFormAppRenderer.renderStructuredErrorPage(Some(app), StructuredHttpError.fromConclusion(
+        val error = StructuredHttpError.fromConclusion(
           conclusion,
-          HStatus.Forbidden.code,
           req.uri.path.renderString,
           req.method.name,
           _operation_mode,
           component = Some(app),
           service = Some("jobs"),
           operation = Some("index")
-        )), HStatus.Forbidden)
+        )
+        _html_status(StaticFormAppRenderer.renderStructuredErrorPage(Some(app), error), _http_status(error))
     }
 
   private def _application_job(
@@ -930,16 +926,16 @@ final class Http4sHttpServer(
                 )), HStatus.NotFound)
             }
           case Consequence.Failure(conclusion) =>
-            _html_status(StaticFormAppRenderer.renderStructuredErrorPage(Some(app), StructuredHttpError.fromConclusion(
+            val error = StructuredHttpError.fromConclusion(
               conclusion,
-              HStatus.Forbidden.code,
               req.uri.path.renderString,
               req.method.name,
               _operation_mode,
               component = Some(app),
               service = Some("jobs"),
               operation = Some(jobId)
-            )), HStatus.Forbidden)
+            )
+            _html_status(StaticFormAppRenderer.renderStructuredErrorPage(Some(app), error), _http_status(error))
         }
       case None =>
         _html_status(StaticFormAppRenderer.renderStructuredErrorPage(Some(app), StructuredHttpError.fromMessage(
@@ -1131,7 +1127,6 @@ final class Http4sHttpServer(
                 case Consequence.Failure(conclusion) =>
                   _web_error_response(
                     Some(webAppName),
-                    HStatus.InternalServerError,
                     conclusion,
                     s"/web/${componentName}/${webAppName}${page.map(p => s"/${p}").mkString}"
                   )
@@ -1259,7 +1254,7 @@ final class Http4sHttpServer(
             response
           }
         case Consequence.Failure(conclusion) =>
-          _web_error_response(Some(webAppName), HStatus.InternalServerError, conclusion, req.uri.path.renderString, req.method.name)
+          _web_error_response(Some(webAppName), conclusion, req.uri.path.renderString, req.method.name)
       }
     }
   }
@@ -1832,7 +1827,7 @@ final class Http4sHttpServer(
               html
             }
           case Consequence.Failure(conclusion) =>
-            _web_error_response(Some(app), HStatus.InternalServerError, conclusion, req.uri.path.renderString, req.method.name)
+            _web_error_response(Some(app), conclusion, req.uri.path.renderString, req.method.name)
         }
       case _ =>
         IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Form continuation not found"))
@@ -1875,7 +1870,6 @@ final class Http4sHttpServer(
       case org.goldenport.Consequence.Failure(conclusion) =>
         val error = StructuredHttpError.fromConclusion(
           conclusion,
-          HStatus.InternalServerError.code,
           request.path.asString,
           request.method.name,
           _operation_mode,
@@ -1884,8 +1878,8 @@ final class Http4sHttpServer(
           operation = Some(operation)
         )
         HttpExecutionResult(
-          HttpResponse.Text(
-            HttpStatus.InternalServerError,
+            HttpResponse.Text(
+            HttpStatus.fromInt(error.status).getOrElse(HttpStatus.InternalServerError),
             ContentType(MimeType("application/json"), Some(StandardCharsets.UTF_8)),
             Bag.text(error.envelopeJson, StandardCharsets.UTF_8)
           ),
@@ -2291,7 +2285,7 @@ final class Http4sHttpServer(
           html
         }
       case Consequence.Failure(conclusion) =>
-        _web_error_response(Some(app), HStatus.InternalServerError, conclusion, req.uri.path.renderString, req.method.name)
+        _web_error_response(Some(app), conclusion, req.uri.path.renderString, req.method.name)
     }
   }
 
@@ -2352,7 +2346,7 @@ final class Http4sHttpServer(
               html
             }
           case Consequence.Failure(conclusion) =>
-            _web_error_response(Some(app), HStatus.InternalServerError, conclusion, req.uri.path.renderString, req.method.name)
+            _web_error_response(Some(app), conclusion, req.uri.path.renderString, req.method.name)
         }
       }
     }
@@ -2579,7 +2573,7 @@ final class Http4sHttpServer(
                 template
               ), Some(app))
             case Consequence.Failure(conclusion) =>
-              _web_error_response(Some(app), HStatus.InternalServerError, conclusion, s"/form/${app}/${service}/${operation}")
+              _web_error_response(Some(app), conclusion, s"/form/${app}/${service}/${operation}")
           }
     }
   }
@@ -3884,7 +3878,7 @@ final class Http4sHttpServer(
                 .addCookie(_expired_session_cookie)
             )
           case org.goldenport.Consequence.Failure(c) =>
-            _web_error_response(Some(app), HStatus.Unauthorized, c, s"/web/${app}/logout", req.method.name)
+            _web_error_response(Some(app), c, s"/web/${app}/logout", req.method.name)
         }
       case None =>
         IO.pure(
@@ -3904,7 +3898,7 @@ final class Http4sHttpServer(
           case org.goldenport.Consequence.Success(summary) =>
             _json(StaticFormAppRenderer.Page(summary.toJson.noSpaces))
           case org.goldenport.Consequence.Failure(c) =>
-            _web_error_response(Some(app), HStatus.Unauthorized, c, s"/web/${app}/session", req.method.name)
+            _web_error_response(Some(app), c, s"/web/${app}/session", req.method.name)
         }
       case None =>
         _web_error_response(Some(app), HStatus.ServiceUnavailable, "Authentication service is unavailable.", s"/web/${app}/session")
@@ -4243,7 +4237,6 @@ final class Http4sHttpServer(
   ): StructuredHttpError =
     StructuredHttpError.fromConclusion(
       Conclusion.securityPermissionDenied("Forbidden"),
-      HStatus.Forbidden.code,
       req.uri.path.renderString,
       req.method.name,
       _operation_mode,
@@ -4259,7 +4252,7 @@ final class Http4sHttpServer(
     operation: Option[String]
   ): IO[HResponse[IO]] = {
     val error = _forbidden_error(req, component, service, operation)
-    _web_error_response(component, HStatus.Forbidden, error)
+    _web_error_response(component, error)
   }
 
   private def _forbidden_api(
@@ -4284,41 +4277,43 @@ final class Http4sHttpServer(
       _operation_mode,
       component = app
     )
-    _web_error_response(app, status, error)
+    _web_error_response(app, error)
   }
 
   private[http] def _web_error_response(
     app: Option[String],
-    status: HStatus,
     conclusion: Conclusion,
     path: String,
     method: String = "GET"
   ): IO[HResponse[IO]] = {
     val error = StructuredHttpError.fromConclusion(
       conclusion,
-      status.code,
       path,
       method,
       _operation_mode,
       component = app
     )
-    _web_error_response(app, status, error)
+    _web_error_response(app, error)
   }
 
   private def _web_error_response(
     app: Option[String],
-    status: HStatus,
     error: StructuredHttpError
-  ): IO[HResponse[IO]] =
-    _web_error_template(app, status.code) match {
+  ): IO[HResponse[IO]] = {
+    val resolvedstatus = _http_status(error)
+    _web_error_template(app, resolvedstatus.code) match {
       case Some(template) =>
         _html_status(
-          StaticFormAppRenderer.renderErrorTemplate(app, status.code, error.message, error.path, Some(error), template),
-          status
+          StaticFormAppRenderer.renderErrorTemplate(app, resolvedstatus.code, error.message, error.path, Some(error), template),
+          resolvedstatus
         )
       case None =>
-        _html_status(StaticFormAppRenderer.renderStructuredErrorPage(app, error), status)
+        _html_status(StaticFormAppRenderer.renderStructuredErrorPage(app, error), resolvedstatus)
     }
+  }
+
+  private def _http_status(error: StructuredHttpError): HStatus =
+    HStatus.fromInt(error.status).getOrElse(HStatus.InternalServerError)
 
   private def _create_form_continuation(
     app: String,
@@ -4656,11 +4651,22 @@ final class Http4sHttpServer(
     else if (_prefers_plain_text(Some(req)))
       IO.pure(
         HResponse[IO](HStatus.fromInt(error.status).getOrElse(HStatus.InternalServerError))
-          .withEntity(error.message)
+          .withEntity(_plain_structured_error_body(error))
           .withContentType(`Content-Type`(MediaType.text.plain, Some(Charset.`UTF-8`)))
       )
     else
       _error_json_response(error)
+
+  private def _plain_structured_error_body(
+    error: StructuredHttpError
+  ): String =
+    Vector(
+      Some(error.message),
+      Some(s"status: ${s"${error.status} ${error.statusText}".trim}"),
+      error.detailCode.map(x => s"detailCode: ${x}"),
+      error.appCode.map(x => s"appCode: ${x}"),
+      error.appStatus.map(x => s"appStatus: ${x}")
+    ).flatten.mkString("\n")
 
   private def _not_found_api_response(
     req: org.http4s.Request[IO],

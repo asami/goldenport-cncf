@@ -2,19 +2,22 @@ package org.goldenport.cncf.http
 
 import org.goldenport.Conclusion
 import org.goldenport.cncf.config.OperationMode
+import org.goldenport.error.DetailCode
 import org.goldenport.record.Record
 import org.goldenport.record.io.RecordEncoder
 
 /*
  * @since   Apr. 24, 2026
- * @version Apr. 24, 2026
+ * @version May. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class StructuredHttpError(
   status: Int,
+  statusText: String,
   message: String,
-  code: String,
-  codeSource: String,
+  detailCode: Option[Long],
+  appCode: Option[Long],
+  appStatus: Option[String],
   path: String,
   method: String,
   operationMode: OperationMode,
@@ -32,10 +35,12 @@ final case class StructuredHttpError(
   def publicRecord: Record =
     Record.data(
       "status" -> status,
-      "message" -> message,
-      "code" -> code,
-      "detailCode" -> code,
-      "codeSource" -> codeSource
+      "statusText" -> statusText,
+      "message" -> message
+    ) ++ Record.dataOption(
+      "detailCode" -> detailCode,
+      "appCode" -> appCode,
+      "appStatus" -> appStatus
     )
 
   def diagnosticRecord: Record =
@@ -49,6 +54,7 @@ final case class StructuredHttpError(
         "component" -> component,
         "service" -> service,
         "operation" -> operation,
+        "detailCodePath" -> conclusion.map(DetailCode.path),
         "conclusion" -> conclusion.map(_.toRecord),
         "diagnostic" -> conclusion.map(_.show)
       )
@@ -72,7 +78,6 @@ final case class StructuredHttpError(
 object StructuredHttpError {
   def fromConclusion(
     conclusion: Conclusion,
-    status: Int,
     path: String,
     method: String,
     operationmode: OperationMode,
@@ -80,12 +85,14 @@ object StructuredHttpError {
     service: Option[String] = None,
     operation: Option[String] = None
   ): StructuredHttpError = {
-    val code = _code(conclusion, status)
+    val resolvedstatus = conclusion.status.webCode.code
     StructuredHttpError(
-      status = status,
+      status = resolvedstatus,
+      statusText = _status_text(resolvedstatus),
       message = conclusion.displayMessage,
-      code = code._1,
-      codeSource = code._2,
+      detailCode = conclusion.status.detailCode.map(_.code),
+      appCode = conclusion.status.appCode,
+      appStatus = conclusion.status.appStatus,
       path = path,
       method = method,
       operationMode = operationmode,
@@ -108,9 +115,11 @@ object StructuredHttpError {
   ): StructuredHttpError =
     StructuredHttpError(
       status = status,
+      statusText = _status_text(status),
       message = message,
-      code = s"http.${status}",
-      codeSource = "fallback",
+      detailCode = None,
+      appCode = None,
+      appStatus = None,
       path = path,
       method = method,
       operationMode = operationmode,
@@ -119,12 +128,22 @@ object StructuredHttpError {
       operation = operation
     )
 
-  private def _code(
-    conclusion: Conclusion,
-    status: Int
-  ): (String, String) =
-    conclusion.status.detailCodes.headOption match {
-      case Some(code) => code.id -> "conclusion"
-      case None => s"http.${status}" -> "fallback"
+  private def _status_text(status: Int): String =
+    status match {
+      case 200 => "OK"
+      case 201 => "Created"
+      case 204 => "No Content"
+      case 303 => "See Other"
+      case 307 => "Temporary Redirect"
+      case 400 => "Bad Request"
+      case 401 => "Unauthorized"
+      case 403 => "Forbidden"
+      case 404 => "Not Found"
+      case 409 => "Conflict"
+      case 500 => "Internal Server Error"
+      case 501 => "Not Implemented"
+      case 503 => "Service Unavailable"
+      case _ => ""
     }
+
 }

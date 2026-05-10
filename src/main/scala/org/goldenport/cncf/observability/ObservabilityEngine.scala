@@ -18,7 +18,7 @@ import org.goldenport.observation.calltree.CallTree
  * @since   Jan.  7, 2026
  *  version Jan. 29, 2026
  *  version Apr. 25, 2026
- * @version May. 10, 2026
+ * @version May. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class OperationContext(
@@ -614,7 +614,9 @@ object ObservabilityEngine {
         Record.data(
           "result.success" -> false,
           "error.kind" -> conclusion.observation.taxonomy.print,
-          "error.code" -> conclusion.status.webCode.code
+          "error.status" -> conclusion.status.webCode.code
+        ) ++ Record.dataOption(
+          "error.detail_code" -> conclusion.status.detailCode.map(_.code)
         )
     }
     Record(

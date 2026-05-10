@@ -135,8 +135,13 @@ Canonical `Disposition.Responsibility` order and numbers:
 `Conclusion.Status` remains the status carrier with:
 
 - `webCode`
-- `detailCodes`
-- `strategies`
+- numeric `DetailCode`
 
-EM-02 inventories these fields but does not define deterministic detail-code
-generation. Detail-code generation and projection policy are owned by EM-03.
+EM-03 replaces the provisional string/list detail-code surface with a numeric
+`Long` `DetailCode`. `Conclusion` materialization generates `webCode` and
+`DetailCode` deterministically from the canonical category, symptom, cause,
+interpretation, and disposition values. Projections read `Status.webCode` and
+`Status.detailCode` and do not recompute them. Optional application-specific
+`appCode` and `appStatus` metadata may be carried separately. `strategies` are
+removed from the active model; reaction guidance is represented by
+`Disposition`.

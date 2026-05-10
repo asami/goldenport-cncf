@@ -42,7 +42,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
  * Builtin Blob user-facing component.
  *
  * @since   Apr. 26, 2026
- * @version May.  4, 2026
+ * @version May. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class BlobComponent() extends Component {
@@ -776,7 +776,9 @@ object BlobComponent {
                   for {
                     store <- exec_from(_blob_store)
                     result <- _observe_blob_store("blob_store_get", store) {
-                      exec_from(store.get(ref))
+                      _recover_with(exec_from(store.get(ref))) { conclusion =>
+                        exec_from(Consequence.Failure(_managed_payload_missing(blob, ref, conclusion)))
+                      }
                     }
                   } yield result
                 case None => exec_from(Consequence.operationIllegal("blob.read_blob", s"managed blob has no storageRef: ${id.value}"))
@@ -1162,6 +1164,21 @@ object BlobComponent {
       _exec_uow(op).flatMap(x => exec_from(Consequence.successOrEntityNotFound(x)(id)))
     }
 
+    protected final def _managed_payload_missing(
+      blob: Blob,
+      ref: BlobStorageRef,
+      previous: Conclusion
+    ): Conclusion =
+      Conclusion.stateInvalid(
+        s"managed Blob metadata points at a missing payload: ${blob.id.value}",
+        Seq(
+          Descriptor.Facet.Id(blob.id.value),
+          Descriptor.Facet.Key(ref.print),
+          Descriptor.Facet.State("managed-payload-missing")
+        ),
+        Some(previous)
+      )
+
     protected final def _blob_resolve_id(value: String): ExecUowM[EntityId] = {
       import BlobRepository.given
       EntityId.parse(value).toOption.filter(_.collection == BlobRepository.CollectionId) match {
@@ -1491,7 +1508,7 @@ object BlobComponent {
     private def _exec_uow[A](op: UnitOfWorkOp[A]): ExecUowM[A] =
       ConsequenceT.liftF(Free.liftF(op))
 
-    private def _recover_with[A](
+    protected final def _recover_with[A](
       program: ExecUowM[A]
     )(f: Conclusion => ExecUowM[A]): ExecUowM[A] =
       ConsequenceT(program.value.flatMap {

@@ -29,7 +29,7 @@ import io.circe.parser.parse
 /*
  * @since   Apr. 12, 2026
  *  version Apr. 30, 2026
- * @version May. 10, 2026
+ * @version May. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 object StaticFormAppRenderer {
@@ -2219,12 +2219,20 @@ object StaticFormAppRenderer {
     app: Option[String],
     error: StructuredHttpError
   ): Page = {
-    val code = _escape(error.code)
+    val status = _escape(s"${error.status} ${error.statusText}".trim)
+    val detailcode = error.detailCode.map(x =>
+      s"""  <p class="mb-0"><strong>Detail code:</strong> <code>${x}</code></p>"""
+    ).getOrElse("")
+    val appstatus = error.appStatus.map(x =>
+      s"""  <p class="mb-0"><strong>Application status:</strong> <code>${_escape(x)}</code></p>"""
+    ).getOrElse("")
     val body =
       s"""<section class="alert alert-danger" role="alert">
          |  <h2 class="h5">Request failed</h2>
          |  <p class="mb-2">${_escape(error.message)}</p>
-         |  <p class="mb-0"><strong>Error code:</strong> <code>${code}</code></p>
+         |  <p class="mb-1"><strong>HTTP status:</strong> <code>${status}</code></p>
+         |${detailcode}
+         |${appstatus}
          |</section>
          |${renderStructuredErrorPanel(error)}""".stripMargin
     Page(_simple_page(
@@ -2252,9 +2260,11 @@ object StaticFormAppRenderer {
     error: StructuredHttpError
   ): Map[String, String] =
     Map(
-      "error.code" -> error.code,
-      "error.detailCode" -> error.code,
-      "error.codeSource" -> error.codeSource,
+      "error.status" -> error.status.toString,
+      "error.statusText" -> error.statusText,
+      "error.detailCode" -> error.detailCode.map(_.toString).getOrElse(""),
+      "error.appCode" -> error.appCode.map(_.toString).getOrElse(""),
+      "error.appStatus" -> error.appStatus.getOrElse(""),
       "error.mode" -> error.operationMode.name,
       "error.method" -> error.method,
       "error.debugYaml" -> (if (error.debugEnabled) error.diagnosticYaml else "")

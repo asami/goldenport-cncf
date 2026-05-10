@@ -126,7 +126,7 @@ and numbering.
 
 ## EM-03: Detail Code Generation Model
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
@@ -135,11 +135,20 @@ errors.
 
 ### Detailed Tasks
 
-- [ ] Define detail-code family, subcode, facet, and source mapping rules.
-- [ ] Define how generated detail codes relate to taxonomy, cause, disposition,
+- [x] Define detail-code family, subcode, facet, and source mapping rules.
+- [x] Define how generated detail codes relate to taxonomy, cause, disposition,
       and `Descriptor.Facet`.
-- [ ] Decide where hand-authored codes are still allowed.
-- [ ] Add tests for stable generation and projection.
+- [x] Decide that hand-authored detail-code overrides are not allowed.
+- [x] Add tests for stable generation and projection.
+
+### Completion Notes
+
+- `DetailCode` is a numeric `Long` semantic code generated from structured
+  `Conclusion` data.
+- `Conclusion.Status` carries generated `webCode`, generated numeric
+  `DetailCode`, and optional application `appCode` / `appStatus` metadata.
+- `Status.strategies` is removed; `Disposition` is the reaction guidance axis.
+- `docs/design/error-detail-code-policy.md` records the EM-03 normative policy.
 
 ### Guardrails
 
@@ -150,7 +159,7 @@ errors.
 
 ## EM-04: Consequence Helper and Component Failure Normalization
 
-Status: TODO
+Status: ACTIVE
 
 ### Objective
 

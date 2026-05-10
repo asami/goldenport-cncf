@@ -29,10 +29,9 @@ final class EventReceptionSpec
   "EventReception" should {
     "route target event to ActionCall dispatcher deterministically" in {
       Given("reception with CML event definition and action route")
-      val recorder = new _InMemoryCommitRecorder
-      val store = EventStore.inMemory
-      val engine = EventEngine.noop(DataStore.noop(recorder), recorder, store)
-      val bus = EventBus.default(engine)
+      val fixture = _event_fixture()
+      val store = fixture.store
+      val bus = fixture.bus
       val calls = ArrayBuffer.empty[String]
       val dispatcher = new _RecordingDispatcher(calls)
       val reception = EventReception.default(
@@ -77,10 +76,9 @@ final class EventReceptionSpec
 
     "drop non-target event deterministically" in {
       Given("reception with target definition")
-      val recorder = new _InMemoryCommitRecorder
-      val store = EventStore.inMemory
-      val engine = EventEngine.noop(DataStore.noop(recorder), recorder, store)
-      val bus = EventBus.default(engine)
+      val fixture = _event_fixture()
+      val store = fixture.store
+      val bus = fixture.bus
       val calls = ArrayBuffer.empty[String]
       val reception = EventReception.default(
         eventBus = bus,
@@ -119,10 +117,9 @@ final class EventReceptionSpec
 
     "fail for unknown event" in {
       Given("empty reception definition")
-      val recorder = new _InMemoryCommitRecorder
-      val engine = EventEngine.noop(DataStore.noop(recorder), recorder, EventStore.inMemory)
+      val fixture = _event_fixture()
       val reception = EventReception.default(
-        EventBus.default(engine),
+        fixture.bus,
         new _RecordingDispatcher(ArrayBuffer.empty)
       )
 
@@ -147,10 +144,9 @@ final class EventReceptionSpec
 
     "fail for subscription mismatch when event has no route binding" in {
       Given("known event without action binding")
-      val recorder = new _InMemoryCommitRecorder
-      val engine = EventEngine.noop(DataStore.noop(recorder), recorder, EventStore.inMemory)
+      val fixture = _event_fixture()
       val reception = EventReception.default(
-        EventBus.default(engine),
+        fixture.bus,
         new _RecordingDispatcher(ArrayBuffer.empty)
       )
       reception.register(
@@ -177,10 +173,9 @@ final class EventReceptionSpec
     "deny authorized reception by event policy for user privilege" in {
       Given("authorized reception with user privilege")
       given ExecutionContext = ExecutionContext.test(SecurityContext.Privilege.User)
-      val recorder = new _InMemoryCommitRecorder
-      val store = EventStore.inMemory
-      val engine = EventEngine.noop(DataStore.noop(recorder), recorder, store)
-      val bus = EventBus.default(engine)
+      val fixture = _event_fixture()
+      val store = fixture.store
+      val bus = fixture.bus
       val calls = ArrayBuffer.empty[String]
       val reception = EventReception.default(
         eventBus = bus,
@@ -211,10 +206,9 @@ final class EventReceptionSpec
 
     "bind ingress-resolved execution context to secure action dispatcher" in {
       Given("secured reception and secure action dispatcher")
-      val recorder = new _InMemoryCommitRecorder
-      val store = EventStore.inMemory
-      val engine = EventEngine.noop(DataStore.noop(recorder), recorder, store)
-      val bus = EventBus.default(engine)
+      val fixture = _event_fixture()
+      val store = fixture.store
+      val bus = fixture.bus
       val calls = ArrayBuffer.empty[String]
       val levels = ArrayBuffer.empty[SecurityLevel]
       val dispatcher = new _SecureRecordingDispatcher(calls, levels)
@@ -253,10 +247,9 @@ final class EventReceptionSpec
 
     "route non-action event only through state-machine listener" in {
       Given("non-action event definition and explicit state-machine listener")
-      val recorder = new _InMemoryCommitRecorder
-      val store = EventStore.inMemory
-      val engine = EventEngine.noop(DataStore.noop(recorder), recorder, store)
-      val bus = EventBus.default(engine)
+      val fixture = _event_fixture()
+      val store = fixture.store
+      val bus = fixture.bus
       val calls = ArrayBuffer.empty[String]
       val reception = EventReception.default(
         eventBus = bus,
@@ -307,10 +300,9 @@ final class EventReceptionSpec
 
     "route non-action event through direct listener without state-machine listener" in {
       Given("non-action event definition and direct listener only")
-      val recorder = new _InMemoryCommitRecorder
-      val store = EventStore.inMemory
-      val engine = EventEngine.noop(DataStore.noop(recorder), recorder, store)
-      val bus = EventBus.default(engine)
+      val fixture = _event_fixture()
+      val store = fixture.store
+      val bus = fixture.bus
       val calls = ArrayBuffer.empty[String]
       val reception = EventReception.default(
         eventBus = bus,
@@ -361,10 +353,9 @@ final class EventReceptionSpec
 
     "dispatch subscription route from CML subscription definition" in {
       Given("subscription-based route with unicast target expression")
-      val recorder = new _InMemoryCommitRecorder
-      val store = EventStore.inMemory
-      val engine = EventEngine.noop(DataStore.noop(recorder), recorder, store)
-      val bus = EventBus.default(engine)
+      val fixture = _event_fixture()
+      val store = fixture.store
+      val bus = fixture.bus
       val calls = ArrayBuffer.empty[String]
       val reception = EventReception.default(
         eventBus = bus,
@@ -414,10 +405,9 @@ final class EventReceptionSpec
 
     "validate invalid broadcast subscription deterministically" in {
       Given("broadcast subscription with selector")
-      val recorder = new _InMemoryCommitRecorder
-      val store = EventStore.inMemory
-      val engine = EventEngine.noop(DataStore.noop(recorder), recorder, store)
-      val bus = EventBus.default(engine)
+      val fixture = _event_fixture()
+      val store = fixture.store
+      val bus = fixture.bus
       val reception = EventReception.default(bus, new _RecordingDispatcher(ArrayBuffer.empty))
 
       When("registering invalid subscription")
@@ -439,10 +429,9 @@ final class EventReceptionSpec
 
     "propagate entity target attributes to action for entity-state transition bridge" in {
       Given("subscription with entity target bridge")
-      val recorder = new _InMemoryCommitRecorder
-      val store = EventStore.inMemory
-      val engine = EventEngine.noop(DataStore.noop(recorder), recorder, store)
-      val bus = EventBus.default(engine)
+      val fixture = _event_fixture()
+      val store = fixture.store
+      val bus = fixture.bus
       val seen = ArrayBuffer.empty[(String, Map[String, String])]
       val dispatcher = new ActionCallDispatcher {
         def dispatchAction(actionName: String, event: DomainEvent): Consequence[Unit] = {
@@ -510,10 +499,9 @@ final class EventReceptionSpec
 
     "inject standard context attributes into event attributes for authorized reception" in {
       Given("authorized reception with explicit job and observability context")
-      val recorder = new _InMemoryCommitRecorder
-      val store = EventStore.inMemory
-      val engine = EventEngine.noop(DataStore.noop(recorder), recorder, store)
-      val bus = EventBus.default(engine)
+      val fixture = _event_fixture()
+      val store = fixture.store
+      val bus = fixture.bus
       val captured = ArrayBuffer.empty[Map[String, String]]
       val dispatcher = new ActionCallDispatcher {
         def dispatchAction(actionName: String, event: DomainEvent): Consequence[Unit] = {
@@ -587,10 +575,9 @@ final class EventReceptionSpec
 
     "route external-subsystem reception with async new-job same-saga policy" in {
       Given("subscription with rule-selected async new-job same-saga policy")
-      val recorder = new _InMemoryCommitRecorder
-      val store = EventStore.inMemory
-      val engine = EventEngine.noop(DataStore.noop(recorder), recorder, store)
-      val bus = EventBus.default(engine)
+      val fixture = _event_fixture()
+      val store = fixture.store
+      val bus = fixture.bus
       val jobengine = _manual_job_engine()
       val calls = ArrayBuffer.empty[String]
       val parentjobs = ArrayBuffer.empty[Option[String]]
@@ -677,10 +664,9 @@ final class EventReceptionSpec
 
     "drop duplicated replay event deterministically" in {
       Given("replay-tagged event with replayEventId")
-      val recorder = new _InMemoryCommitRecorder
-      val store = EventStore.inMemory
-      val engine = EventEngine.noop(DataStore.noop(recorder), recorder, store)
-      val bus = EventBus.default(engine)
+      val fixture = _event_fixture()
+      val store = fixture.store
+      val bus = fixture.bus
       val calls = ArrayBuffer.empty[String]
       val reception = EventReception.default(
         eventBus = bus,
@@ -753,10 +739,9 @@ final class EventReceptionSpec
 
     "drop out-of-order replay event deterministically" in {
       Given("replay-tagged events in the same replay stream")
-      val recorder = new _InMemoryCommitRecorder
-      val store = EventStore.inMemory
-      val engine = EventEngine.noop(DataStore.noop(recorder), recorder, store)
-      val bus = EventBus.default(engine)
+      val fixture = _event_fixture()
+      val store = fixture.store
+      val bus = fixture.bus
       val calls = ArrayBuffer.empty[String]
       val reception = EventReception.default(
         eventBus = bus,
@@ -831,10 +816,9 @@ final class EventReceptionSpec
 
     "route same-subsystem reception with default sync policy without creating a new job" in {
       Given("subscription without explicit rule or continuation and parent job context")
-      val recorder = new _InMemoryCommitRecorder
-      val store = EventStore.inMemory
-      val engine = EventEngine.noop(DataStore.noop(recorder), recorder, store)
-      val bus = EventBus.default(engine)
+      val fixture = _event_fixture()
+      val store = fixture.store
+      val bus = fixture.bus
       val calls = ArrayBuffer.empty[String]
       val jobids = ArrayBuffer.empty[Option[String]]
       val parentids = ArrayBuffer.empty[Option[String]]
@@ -907,10 +891,9 @@ final class EventReceptionSpec
 
     "materialize compatibility-mapped async continuation as spawned job lineage" in {
       Given("same-subsystem subscription with legacy NewJob continuation")
-      val recorder = new _InMemoryCommitRecorder
-      val store = EventStore.inMemory
-      val engine = EventEngine.noop(DataStore.noop(recorder), recorder, store)
-      val bus = EventBus.default(engine)
+      val fixture = _event_fixture()
+      val store = fixture.store
+      val bus = fixture.bus
       val jobengine = _manual_job_engine()
       val calls = ArrayBuffer.empty[String]
       val jobids = ArrayBuffer.empty[Option[String]]
@@ -1007,10 +990,9 @@ final class EventReceptionSpec
 
     "prefer explicit rule over compatibility mapping for same-subsystem runtime dispatch" in {
       Given("same-subsystem subscription with legacy NewJob continuation and explicit sync rule")
-      val recorder = new _InMemoryCommitRecorder
-      val store = EventStore.inMemory
-      val engine = EventEngine.noop(DataStore.noop(recorder), recorder, store)
-      val bus = EventBus.default(engine)
+      val fixture = _event_fixture()
+      val store = fixture.store
+      val bus = fixture.bus
       val jobengine = _recording_job_engine()
       val calls = ArrayBuffer.empty[String]
       val jobids = ArrayBuffer.empty[Option[String]]
@@ -1095,10 +1077,9 @@ final class EventReceptionSpec
 
     "project retryable async failure disposition from failed child job" in {
       Given("an async continuation that fails under retry policy")
-      val recorder = new _InMemoryCommitRecorder
-      val store = EventStore.inMemory
-      val engine = EventEngine.noop(DataStore.noop(recorder), recorder, store)
-      val bus = EventBus.default(engine)
+      val fixture = _event_fixture()
+      val store = fixture.store
+      val bus = fixture.bus
       val jobengine = _manual_job_engine()
       val jobids = ArrayBuffer.empty[Option[String]]
       val reception = EventReception.default(
@@ -1125,7 +1106,7 @@ final class EventReceptionSpec
           continuationMode = Some(EventContinuationMode.NewJob)
         )
       )
-      given ExecutionContext = _shared_event_context(recorder, store)
+      given ExecutionContext = fixture.executionContext()
 
       When("the child job fails")
       val result = reception.receiveAuthorized(
@@ -1156,10 +1137,9 @@ final class EventReceptionSpec
     }
 
     "expose same-job separate-task sync metadata without creating a child job" in {
-      val recorder = new _InMemoryCommitRecorder
-      val store = EventStore.inMemory
-      val engine = EventEngine.noop(DataStore.noop(recorder), recorder, store)
-      val bus = EventBus.default(engine)
+      val fixture = _event_fixture()
+      val store = fixture.store
+      val bus = fixture.bus
       val jobengine = _recording_job_engine()
       val calls = ArrayBuffer.empty[String]
       val attrs = ArrayBuffer.empty[Map[String, String]]
@@ -1180,7 +1160,7 @@ final class EventReceptionSpec
           actionName = "notice.sync"
         )
       )
-      val base = _shared_event_context(recorder, store)
+      val base = fixture.executionContext()
       val rootJobId = _jobid(jobengine.submit(Nil, base))
       given ExecutionContext = ExecutionContext.withJobContext(
         base,
@@ -1216,10 +1196,9 @@ final class EventReceptionSpec
     }
 
     "run same-job async new-transaction continuation without creating a child job" in {
-      val recorder = new _InMemoryCommitRecorder
-      val store = EventStore.inMemory
-      val engine = EventEngine.noop(DataStore.noop(recorder), recorder, store)
-      val bus = EventBus.default(engine)
+      val fixture = _event_fixture()
+      val store = fixture.store
+      val bus = fixture.bus
       val jobengine = _recording_job_engine()
       val calls = ArrayBuffer.empty[String]
       val reception = EventReception.default(
@@ -1250,7 +1229,7 @@ final class EventReceptionSpec
           policy = EventReceptionExecutionPolicy.AsyncSameJobSameSagaNewTransaction
         )
       )
-      val base = _shared_event_context(recorder, store)
+      val base = fixture.executionContext()
       val rootJobId = _jobid(jobengine.submit(Nil, base))
       given ExecutionContext = ExecutionContext.withJobContext(
         base,
@@ -1284,10 +1263,9 @@ final class EventReceptionSpec
     }
 
     "reject async same-job same-transaction at policy selection time" in {
-      val recorder = new _InMemoryCommitRecorder
-      val store = EventStore.inMemory
-      val engine = EventEngine.noop(DataStore.noop(recorder), recorder, store)
-      val bus = EventBus.default(engine)
+      val fixture = _event_fixture()
+      val store = fixture.store
+      val bus = fixture.bus
       val jobengine = _recording_job_engine()
       val reception = EventReception.default(
         eventBus = bus,
@@ -1323,7 +1301,7 @@ final class EventReceptionSpec
           )
         )
       )
-      val base = _shared_event_context(recorder, store)
+      val base = fixture.executionContext()
       val rootJobId = _jobid(jobengine.submit(Nil, base))
       given ExecutionContext = ExecutionContext.withJobContext(
         base,
@@ -1351,10 +1329,9 @@ final class EventReceptionSpec
 
     "project terminal async failure disposition from failed child job" in {
       Given("an async continuation that fails under fail policy")
-      val recorder = new _InMemoryCommitRecorder
-      val store = EventStore.inMemory
-      val engine = EventEngine.noop(DataStore.noop(recorder), recorder, store)
-      val bus = EventBus.default(engine)
+      val fixture = _event_fixture()
+      val store = fixture.store
+      val bus = fixture.bus
       val jobengine = _manual_job_engine()
       val jobids = ArrayBuffer.empty[Option[String]]
       val reception = EventReception.default(
@@ -1397,7 +1374,7 @@ final class EventReceptionSpec
           )
         )
       )
-      given ExecutionContext = _shared_event_context(recorder, store)
+      given ExecutionContext = fixture.executionContext()
 
       When("the child job fails")
       val result = reception.receiveAuthorized(
@@ -1429,10 +1406,9 @@ final class EventReceptionSpec
 
     "select more specific external rule and mark new-saga async dispatch" in {
       Given("external rules with different specificity")
-      val recorder = new _InMemoryCommitRecorder
-      val store = EventStore.inMemory
-      val engine = EventEngine.noop(DataStore.noop(recorder), recorder, store)
-      val bus = EventBus.default(engine)
+      val fixture = _event_fixture()
+      val store = fixture.store
+      val bus = fixture.bus
       val jobengine = _manual_job_engine()
       val calls = ArrayBuffer.empty[String]
       val parentjobs = ArrayBuffer.empty[Option[String]]
@@ -1482,7 +1458,7 @@ final class EventReceptionSpec
           policy = EventReceptionExecutionPolicy.AsyncNewJobNewSaga
         )
       )
-      given ExecutionContext = _shared_event_context(recorder, store)
+      given ExecutionContext = fixture.executionContext()
 
       When("receiving selector-specific external event")
       val result = reception.receiveAuthorized(
@@ -1517,10 +1493,9 @@ final class EventReceptionSpec
 
     "prefer ABAC-matched explicit rule over compatibility mapping and fall through on ABAC miss" in {
       Given("same-subsystem subscription with explicit ABAC-gated rule and legacy NewJob continuation")
-      val recorder = new _InMemoryCommitRecorder
-      val store = EventStore.inMemory
-      val engine = EventEngine.noop(DataStore.noop(recorder), recorder, store)
-      val bus = EventBus.default(engine)
+      val fixture = _event_fixture()
+      val store = fixture.store
+      val bus = fixture.bus
       val jobengine = _recording_job_engine()
       val calls = ArrayBuffer.empty[String]
       val jobids = ArrayBuffer.empty[Option[String]]
@@ -1649,15 +1624,14 @@ final class EventReceptionSpec
 
     "persist same-subsystem sync event after inline dispatch with framework-owned history" in {
       Given("persistent same-subsystem sync reception with inline dispatch recorder")
-      val recorder = new _InMemoryCommitRecorder
-      val store = EventStore.inMemory
-      val engine = EventEngine.noop(DataStore.noop(recorder), recorder, store)
-      val bus = EventBus.default(engine)
+      val fixture = _event_fixture()
+      val store = fixture.store
+      val bus = fixture.bus
       val dispatchentries = ArrayBuffer.empty[Vector[String]]
       val attrs = ArrayBuffer.empty[Map[String, String]]
       val reception = EventReception.default(
         eventBus = bus,
-        dispatcher = new _SecureRecordingDispatcherWithRecorder(dispatchentries, attrs, recorder),
+        dispatcher = new _SecureRecordingDispatcherWithRecorder(dispatchentries, attrs, fixture.recorder),
         currentSubsystemName = Some("public-notice"),
         currentComponentName = Some("notice-admin")
       )
@@ -1677,7 +1651,7 @@ final class EventReceptionSpec
           actionName = "notice.admin.sync"
         )
       )
-      given ExecutionContext = _shared_event_context(recorder, store)
+      given ExecutionContext = fixture.executionContext()
 
       When("persistent event is received through same-subsystem sync path")
       val result = reception.receiveAuthorized(
@@ -1716,7 +1690,7 @@ final class EventReceptionSpec
       record.attributes.get(EventReception.StandardAttribute.EventHistory).exists(_.contains("source{")) shouldBe true
       record.attributes.get(EventReception.StandardAttribute.EventHistory).exists(_.contains("reception{")) shouldBe true
       record.attributes.get(EventReception.StandardAttribute.EventHistory).exists(_.contains("dispatch{")) shouldBe true
-      recorder.entries shouldBe Vector(
+      fixture.recorder.entries shouldBe Vector(
         "UnitOfWork.prepare",
         "EventEngine.prepare",
         "UnitOfWork.commit",
@@ -1727,10 +1701,9 @@ final class EventReceptionSpec
 
     "rollback same-subsystem sync reception when inline dispatch fails" in {
       Given("persistent same-subsystem sync reception with failing inline dispatch")
-      val recorder = new _InMemoryCommitRecorder
-      val store = EventStore.inMemory
-      val engine = EventEngine.noop(DataStore.noop(recorder), recorder, store)
-      val bus = EventBus.default(engine)
+      val fixture = _event_fixture()
+      val store = fixture.store
+      val bus = fixture.bus
       val reception = EventReception.default(
         eventBus = bus,
         dispatcher = new _FailingSecureDispatcher,
@@ -1753,7 +1726,7 @@ final class EventReceptionSpec
           actionName = "notice.admin.sync"
         )
       )
-      given ExecutionContext = _shared_event_context(recorder, store)
+      given ExecutionContext = fixture.executionContext()
 
       When("dispatch fails")
       val result = reception.receiveAuthorized(
@@ -1771,16 +1744,15 @@ final class EventReceptionSpec
       Then("the failure is returned and no event is committed")
       result shouldBe a[Consequence.Failure[_]]
       store.query(EventStore.Query(name = Some("notice.failed"))).toOption.getOrElse(Vector.empty) shouldBe Vector.empty
-      recorder.entries should not contain "UnitOfWork.commit"
-      recorder.entries should not contain "EventEngine.commit"
+      fixture.recorder.entries should not contain "UnitOfWork.commit"
+      fixture.recorder.entries should not contain "EventEngine.commit"
     }
 
     "fail fast when event history exceeds configured cap" in {
       Given("same-subsystem sync reception with oversized target metadata")
-      val recorder = new _InMemoryCommitRecorder
-      val store = EventStore.inMemory
-      val engine = EventEngine.noop(DataStore.noop(recorder), recorder, store)
-      val bus = EventBus.default(engine)
+      val fixture = _event_fixture()
+      val store = fixture.store
+      val bus = fixture.bus
       val reception = EventReception.default(
         eventBus = bus,
         dispatcher = new _SecureRecordingDispatcher(ArrayBuffer.empty, ArrayBuffer.empty),
@@ -1822,15 +1794,14 @@ final class EventReceptionSpec
       Then("the reception fails before commit and nothing is persisted")
       result shouldBe a[Consequence.Failure[_]]
       store.query(EventStore.Query(name = Some("notice.oversized"))).toOption.getOrElse(Vector.empty) shouldBe Vector.empty
-      recorder.entries should not contain "UnitOfWork.commit"
+      fixture.recorder.entries should not contain "UnitOfWork.commit"
     }
 
     "fail policy selection when subscription event has no source boundary information" in {
       Given("subscription-based event reception without source subsystem or external ingress marker")
-      val recorder = new _InMemoryCommitRecorder
-      val store = EventStore.inMemory
-      val engine = EventEngine.noop(DataStore.noop(recorder), recorder, store)
-      val bus = EventBus.default(engine)
+      val fixture = _event_fixture()
+      val store = fixture.store
+      val bus = fixture.bus
       val reception = EventReception.default(
         eventBus = bus,
         dispatcher = new _RecordingDispatcher(ArrayBuffer.empty),
@@ -1868,10 +1839,9 @@ final class EventReceptionSpec
 
     "materialize no-match event as ephemeral job when jobEngine is provided" in {
       Given("a known event whose selector does not match and recording job engine")
-      val recorder = new _InMemoryCommitRecorder
-      val store = EventStore.inMemory
-      val engine = EventEngine.noop(DataStore.noop(recorder), recorder, store)
-      val bus = EventBus.default(engine)
+      val fixture = _event_fixture()
+      val store = fixture.store
+      val bus = fixture.bus
       val recordingengine = _recording_job_engine()
       val reception = EventReception.default(
         eventBus = bus,
@@ -1907,6 +1877,44 @@ final class EventReceptionSpec
       )
       recordingengine.lastOption.map(_.persistence) shouldBe Some(JobPersistencePolicy.Ephemeral)
     }
+  }
+
+  private final case class _EventReceptionFixture(
+    recorder: _InMemoryCommitRecorder,
+    store: EventStore,
+    engine: EventEngine,
+    bus: EventBus
+  ) {
+    def reception(
+      dispatcher: ActionCallDispatcher,
+      ingressSecurityResolver: IngressSecurityResolver = IngressSecurityResolver.default,
+      currentSubsystemName: Option[String] = None,
+      currentComponentName: Option[String] = None,
+      jobEngine: Option[JobEngine] = None
+    ): EventReception =
+      EventReception.default(
+        eventBus = bus,
+        dispatcher = dispatcher,
+        ingressSecurityResolver = ingressSecurityResolver,
+        currentSubsystemName = currentSubsystemName,
+        currentComponentName = currentComponentName,
+        jobEngine = jobEngine
+      )
+
+    def executionContext(): ExecutionContext =
+      _shared_event_context(recorder, store)
+  }
+
+  private def _event_fixture(): _EventReceptionFixture = {
+    val recorder = new _InMemoryCommitRecorder
+    val store = EventStore.inMemory
+    val engine = EventEngine.noop(DataStore.noop(recorder), recorder, store)
+    _EventReceptionFixture(
+      recorder = recorder,
+      store = store,
+      engine = engine,
+      bus = EventBus.default(engine)
+    )
   }
 
   private final class _RecordingDispatcher(
@@ -2092,7 +2100,9 @@ final class EventReceptionSpec
     @volatile private var _annotations: Vector[(JobId, Map[String, String])] = Vector.empty
     @volatile private var _syncRuns: Vector[(JobId, String)] = Vector.empty
     @volatile private var _asyncEnqueues: Vector[(JobId, String)] = Vector.empty
-    private val _delegate = new org.goldenport.cncf.job.InMemoryJobEngine()(scala.concurrent.ExecutionContext.global)
+    private val _delegate = new org.goldenport.cncf.job.InMemoryJobEngine(
+      schedulerConfig = InMemoryJobEngine.SchedulerConfig(workerCount = 1, autoStartWorkers = false)
+    )(scala.concurrent.ExecutionContext.global)
 
     def lastOption: Option[JobSubmitOption] =
       _options.lastOption

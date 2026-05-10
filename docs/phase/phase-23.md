@@ -9,9 +9,10 @@ This work document opens Phase 23 and makes
 item.
 
 Phase 23 started by fixing the policy boundary for CNCF error semantics.
-`EM-01 — Error Taxonomy / Detail Code Policy Opening` and
-`EM-02 — Taxonomy / Cause / Disposition Inventory and Canonical Ordering` are
-complete. `EM-03 — Detail Code Generation Model` is active.
+`EM-01 — Error Taxonomy / Detail Code Policy Opening`,
+`EM-02 — Taxonomy / Cause / Disposition Inventory and Canonical Ordering`, and
+`EM-03 — Detail Code Generation Model` are complete. `EM-04 — Consequence
+Helper and Component Failure Normalization` is active.
 
 This document is a phase dashboard, not a design journal.
 
@@ -45,7 +46,8 @@ Historical/provisional inputs:
 These notes are inputs to Phase 23. They are not the final normative contract.
 The first normative policy entry point is `docs/design/error-model-policy.md`.
 The canonical EM-02 vocabulary catalog is
-`docs/design/error-taxonomy-catalog.md`.
+`docs/design/error-taxonomy-catalog.md`. The EM-03 numeric detail-code policy is
+`docs/design/error-detail-code-policy.md`.
 
 ## 3. Non-Goals
 
@@ -60,16 +62,16 @@ The canonical EM-02 vocabulary catalog is
 
 - A (DONE): EM-01 — Error Taxonomy / Detail Code Policy Opening.
 - B (DONE): EM-02 — Taxonomy / Cause / Disposition Inventory and Canonical Ordering.
-- C (ACTIVE): EM-03 — Detail Code Generation Model.
-- D (TODO): EM-04 — Consequence Helper and Component Failure Normalization.
+- C (DONE): EM-03 — Detail Code Generation Model.
+- D (ACTIVE): EM-04 — Consequence Helper and Component Failure Normalization.
 - E (TODO): EM-05 — Web/API/Admin/Observability Projection Alignment.
 - F (TODO): EM-06 — Phase 23 verification and closure.
 
 Resume hint:
 
-- Continue with EM-03. Define deterministic detail-code generation using the
-  formal package locations and canonical vocabulary in
-  `docs/design/error-taxonomy-catalog.md`.
+- Continue with EM-04. Normalize recurring framework and builtin-component
+  failures onto structured `Consequence.Failure(Conclusion)` helpers using the
+  canonical vocabulary and numeric `DetailCode` policy.
 - Keep the error-code policy explicitly pre-stable: renumbering and
   classification changes are allowed during Phase 23, but each completed slice
   must be deterministic and documented.
@@ -78,7 +80,7 @@ Resume hint:
 
 - [x] EM-01: Error Taxonomy / Detail Code Policy Opening.
 - [x] EM-02: Taxonomy / Cause / Disposition Inventory and Canonical Ordering.
-- [ ] EM-03: Detail Code Generation Model.
+- [x] EM-03: Detail Code Generation Model.
 - [ ] EM-04: Consequence Helper and Component Failure Normalization.
 - [ ] EM-05: Web/API/Admin/Observability Projection Alignment.
 - [ ] EM-06: Phase 23 verification and closure.
