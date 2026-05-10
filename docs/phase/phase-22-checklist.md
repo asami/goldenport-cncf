@@ -365,6 +365,57 @@ events; a CNCF Event routing bridge forwards matching events to
 
 ---
 
+## CQ-01: Composite Query Boundary for Page View Context
+
+Status: DONE
+
+### Objective
+
+Add a query-only composite request mechanism that can aggregate page-view
+support data through Web tier -> App tier and App tier -> Domain tier
+boundaries without making Domain tier aware of Web layout, badges, navigation,
+or page context.
+
+### Detailed Tasks
+
+- [x] Add `CompositeQueryRequest`, `NamedQuery`,
+      `CompositeQueryResponse`, `CompositeQueryResult`, and
+      `CompositeQueryPolicy`.
+- [x] Add `CompositeQueryEngine.execute` with deterministic sequential
+      execution in declared order.
+- [x] Reject duplicate query names and unknown `dependsOn` references.
+- [x] Limit v1 to Query operations; reject Command and trace-job /
+      Job-producing query execution.
+- [x] Preserve required vs optional query behavior:
+  - required query failure fails the composite request;
+  - optional query failure is recorded in composite diagnostics and does not
+    block other queries.
+- [x] Refactor `WebPageContextProvider` into a contributor shape that can
+      provide `NamedQuery` entries and map the composite response into
+      server-rendered `WebPageContext` values.
+- [x] Move `textus-user-notification` notification badge context resolution to
+      the CompositeQuery path rather than direct provider action execution.
+
+### Expected Output
+
+- Page-view context can be resolved from a single query-only aggregation
+  boundary.
+- Web tier page rendering can request App-tier page context without directly
+  bundling Domain-tier Web concerns.
+- `/form-api` remains optional enhancement/refresh/validation, not the primary
+  page render path for badge/context data.
+
+### Guardrails
+
+- Do not allow Command, Task, Job, compensation, or mutation semantics inside
+  CompositeQuery.
+- Do not expose Web-specific names in Domain-tier APIs.
+- Do not make Domain tier aware of layout/header/badge/navigation concepts.
+- Keep v1 sequential; parallel execution can be added behind the same
+  interface later.
+
+---
+
 ## JM-06: Phase 22 Verification and Closure
 
 Status: ACTIVE
@@ -377,7 +428,7 @@ scope.
 ### Detailed Tasks
 
 - [ ] Confirm Phase 22 docs and strategy status match implemented behavior.
-- [ ] Confirm JM-01 through JM-05B are DONE or explicitly deferred.
+- [ ] Confirm JM-01 through JM-05B and CQ-01 are DONE or explicitly deferred.
 - [ ] Run focused and full validations required by touched implementation
       slices.
 - [ ] Record closure notes and next development candidates.

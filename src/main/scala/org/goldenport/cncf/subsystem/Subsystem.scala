@@ -9,7 +9,7 @@ import org.goldenport.protocol.spec.{OperationDefinition, ParameterDefinition, S
 import org.goldenport.record.Record
 import org.goldenport.schema.XFileBundle
 import org.goldenport.protocol.operation.OperationResponse
-import org.goldenport.cncf.action.Action
+import org.goldenport.cncf.action.{Action, QueryAction}
 import org.goldenport.cncf.CncfVersion
 import org.goldenport.cncf.component.{
   Component,
@@ -52,7 +52,7 @@ import org.goldenport.cncf.metrics.EntityAccessMetricsRegistry
  *  version Jan. 31, 2026
  *  version Feb.  4, 2026
  *  version Apr. 30, 2026
- * @version May.  8, 2026
+ * @version May. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Subsystem(
@@ -287,6 +287,10 @@ final class Subsystem(
     _execute_with_metadata(request, None)
   }
 
+  def executeQueryOnlyWithMetadata(request: Request): Consequence[ExecutionResult] = {
+    _execute_query_only_with_metadata(request, None)
+  }
+
   private def _execute_with_metadata(
     request: Request,
     httpRequest: Option[HttpRequest]
@@ -325,6 +329,54 @@ final class Subsystem(
               case _ =>
                 Consequence.argumentInvalid("OperationRequest must be Action")
               }
+          }
+        }
+      }
+    } yield response
+    _observe_execute_failure(request, r)
+    r
+  }
+
+  private def _execute_query_only_with_metadata(
+    request: Request,
+    httpRequest: Option[HttpRequest]
+  ): Consequence[ExecutionResult] = {
+    val r: Consequence[ExecutionResult] = for {
+      route <- _resolve_route(request) match {
+        case Some(r) =>
+          Consequence.success(r)
+        case None =>
+          Consequence.operationNotFound("operation route")
+      }
+      normalizedRequest <- _prepare_filebundle_parameters(route._3, request)
+      response <- {
+        val (component, _, _) = route
+        val domainRequest = _domain_request(normalizedRequest)
+        IngressSecurityResolver.resolve(component.logic.executionContext(), normalizedRequest).flatMap { security =>
+          val executionContext =
+            _with_http_runtime_parameters(security.executionContext, httpRequest)
+          given ExecutionContext = executionContext
+          if (executionContext.framework.traceJob) {
+            Consequence.operationInvalid("CompositeQuery accepts only direct Query execution; trace-job is not allowed")
+          } else _authorize_operation(route, executionContext).flatMap { _ =>
+            val operationDomainRequest = _operation_business_request(route, domainRequest)
+            val oprequest = component.logic.makeOperationRequest(operationDomainRequest)
+            _observe_operation_request_validation_failure(
+              route,
+              operationDomainRequest,
+              oprequest,
+              executionContext
+            )
+            oprequest.flatMap {
+              case action: QueryAction =>
+                component.logic.executeAction(action, executionContext).map { response =>
+                  ExecutionResult(response, executionContext.runtime.executionMetadata)
+                }
+              case action: Action =>
+                Consequence.operationInvalid(s"CompositeQuery accepts only Query operations: ${action.request.name}")
+              case _ =>
+                Consequence.argumentInvalid("OperationRequest must be Action")
+            }
           }
         }
       }

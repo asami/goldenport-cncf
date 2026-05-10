@@ -11,7 +11,10 @@ Phase 22 started by normalizing Command execution policy, made Job a
 store-backed SimpleEntity management projection, and added JCL diagnostics for
 declared Event/Action chains, and added JobDefinition binding / execution
 record policy. Task transaction and compensation boundaries are now complete;
-user notification now uses Event routing and provider forwarding.
+user notification now uses Event routing and provider forwarding. Page-view
+context data now has a query-only CompositeQuery boundary so Web tier page
+rendering can aggregate App-tier data without coupling Domain tier to Web
+layout concerns.
 
 This document is a phase dashboard, not a design journal.
 
@@ -39,6 +42,9 @@ This document is a phase dashboard, not a design journal.
   boundaries between Tasks.
 - Add application user notification policy before async Jobs become ordinary
   application UX.
+- Add a query-only CompositeQuery boundary for page view context so Web tier,
+  App tier, and Domain tier can batch display-support queries without allowing
+  Command/Job-producing execution.
 
 Final semantic direction:
 
@@ -81,7 +87,8 @@ Final semantic direction:
 - E (DONE): JM-04 — Task Transaction and Compensation Boundary.
 - F (DONE): JM-05 — User Job Notification Policy.
 - G (DONE): JM-05B — Event-Based User Notification Forwarding.
-- H (ACTIVE): JM-06 — Phase 22 verification and closure.
+- H (DONE): CQ-01 — Composite Query Boundary for Page View Context.
+- I (ACTIVE): JM-06 — Phase 22 verification and closure.
 
 Resume hint:
 
@@ -91,6 +98,9 @@ Resume hint:
 - `textus-blog` is the JM-05B application driver: its deemed-subsystem assembly
   includes `textus-user-notification`, explicit Job event forwarding rules, and
   a header badge that reads the current user's unconfirmed notification count.
+- Page-view context providers now contribute optional `NamedQuery` entries that
+  are executed by the query-only CompositeQuery boundary and mapped back into
+  server-rendered page context.
 
 ## 5. Development Items
 
@@ -101,6 +111,7 @@ Resume hint:
 - [x] JM-04: Task Transaction and Compensation Boundary.
 - [x] JM-05: User Job Notification Policy.
 - [x] JM-05B: Event-Based User Notification Forwarding.
+- [x] CQ-01: Composite Query Boundary for Page View Context.
 - [ ] JM-06: Phase 22 verification and closure.
 
 Detailed task breakdown and progress tracking are recorded in
@@ -130,4 +141,6 @@ Phase 22 closure conditions:
   deferred with remaining work named.
 - User job notification policy and Event-based forwarding are completed or
   explicitly deferred with remaining work named.
+- Composite page-view context query aggregation is completed or explicitly
+  deferred with remaining work named.
 - No Phase 22 work item remains implicitly untracked.

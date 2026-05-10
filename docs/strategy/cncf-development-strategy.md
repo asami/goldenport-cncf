@@ -991,7 +991,8 @@ JM-01 Command Execution Policy Normalization, JM-02 Job Entity Management,
 JM-03 JCL Profile / Execution Profile Difference Checking, JM-03B
 JobDefinition Entity / Binding / Execution Record Policy, and JM-04 Task
 Transaction and Compensation Boundary, and JM-05 User Job Notification Policy
-are complete; JM-06 verification and closure is the active slice.
+and CQ-01 Composite Query Boundary for Page View Context are complete; JM-06
+verification and closure is the active slice.
 
 ### 9.1 Web Next Stage Follow-ups
 Future Web/platform development item.
@@ -1207,6 +1208,7 @@ Active stack:
 - JM-05: User Job Notification Policy. DONE.
 - JM-05B: Event-Based User Notification Forwarding and textus-blog driver
   integration. DONE.
+- CQ-01: Composite Query Boundary for Page View Context. DONE.
 - JM-06: Phase 22 verification and closure. ACTIVE.
 
 - Define Command execution policy before broadening Job usage. CQRS makes
@@ -1222,6 +1224,9 @@ Active stack:
   “My jobs” navigation.
 - Add user notification support before relying on async Jobs for ordinary
   application operations.
+- Add a query-only CompositeQuery boundary for page-view context aggregation so
+  Web tier can request App-tier page context and App tier can batch Domain-tier
+  queries without exposing Web layout/badge/navigation concepts to Domain tier.
 - Manage Job as a first-class SimpleEntity management record synchronized from
   JobEngine lifecycle snapshots while keeping JobEngine as execution authority.
 - Make Job behavior definable by canonical single-Job `job:` JCL, allow Job
