@@ -649,14 +649,13 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Notes contain execution details and results for each phase.
 
 ## Process Status Pointers
-- Current phase selection: next phase to be selected.
-- Current active phase dashboard: none.
-- Current active phase checklist: none.
+- Current phase selection: Phase 23 — Error Model / Consequence-Conclusion Realignment.
+- Current active phase dashboard: `docs/phase/phase-23.md`
+- Current active phase checklist: `docs/phase/phase-23-checklist.md`
 - Latest closed phase dashboard: `docs/phase/phase-22.md`
 - Latest closed phase checklist: `docs/phase/phase-22-checklist.md`
 - Candidate next phase areas: AwsComponent/S3 BlobStore
-  provider; Error Model / Consequence-Conclusion Realignment; Search/index
-  planning; DB migration tooling.
+  provider; Search/index planning; DB migration tooling.
 - Status interpretation rules: `docs/rules/stage-status-and-checklist-convention.md`
 
 ## 6. Explicit Non-Goals
@@ -686,6 +685,7 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Phase 20: closed (`docs/phase/phase-20.md`)
 - Phase 21: closed (`docs/phase/phase-21.md`)
 - Phase 22: closed (`docs/phase/phase-22.md`)
+- Phase 23: active (`docs/phase/phase-23.md`)
 
 ## 8. Completed Development Item History
 
@@ -1019,9 +1019,9 @@ Completed work areas are recorded in section 8. When a development item closes,
 remove its completion record from this section and add or update the
 corresponding completed-history entry.
 
-No phase is currently selected. Phase 22 is closed and its completed Job
-Management baseline is recorded in section 8.12. Section 9 now tracks future
-development candidates only.
+Phase 23 is active. `9.7 Error Model / Consequence-Conclusion Realignment` is
+the selected development item. EM-01 Error Taxonomy / Detail Code Policy
+Opening is the active slice.
 
 ### 9.1 Web Next Stage Follow-ups
 Future Web/platform development item.
@@ -1125,10 +1125,33 @@ Future component development item.
   serve development and executable-spec use cases.
 
 ### 9.7 Error Model / Consequence-Conclusion Realignment
-Future platform development item.
+Active in Phase 23.
+
+Work documents:
+
+- Dashboard: `docs/phase/phase-23.md`
+- Checklist: `docs/phase/phase-23-checklist.md`
+
+Active stack:
+
+- EM-01: Error Taxonomy / Detail Code Policy Opening. ACTIVE.
+- EM-02: Taxonomy / Cause / Disposition Inventory and Canonical Ordering. TODO.
+- EM-03: Detail Code Generation Model. TODO.
+- EM-04: Consequence Helper and Component Failure Normalization. TODO.
+- EM-05: Web/API/Admin/Observability Projection Alignment. TODO.
+- EM-06: Phase 23 verification and closure. TODO.
 
 - Revisit the core `Consequence` / `Conclusion` / `Observation` model before
   adding more component-local error classification surfaces.
+- Inventory and redesign taxonomy, cause, disposition, status/detail facets,
+  including categories that are likely to be needed by near-future CNCF work.
+- Reorder taxonomy/cause/disposition kinds meaningfully and renumber them.
+- Establish deterministic detail-code generation and put it into normal
+  operation for CNCF-visible errors.
+- Pre-stable CNCF does not guarantee compatibility for error taxonomy, numeric
+  ordering, or detail codes. Phase 23 may renumber, rename, merge, or split
+  classifications; changes must be documented and tested, but compatibility
+  aliases are not required until CNCF stable.
 - Make reusable framework and builtin components emit ordinary
   `Consequence.Failure(Conclusion)` values.
 - Use `Cause.Kind` for coarse mechanism classification such as capability,
