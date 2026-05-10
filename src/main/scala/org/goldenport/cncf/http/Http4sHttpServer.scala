@@ -677,12 +677,13 @@ final class Http4sHttpServer(
             else
               _blob_content_response(req, response, result.metadata)
           case other =>
-            RuntimeDashboardMetrics.recordBlobOperation("content", error = true, diagnosticKey = Some(ConclusionDiagnostics.unknown.diagnosticKey))
+            RuntimeDashboardMetrics.recordBlobOperation("content", error = true, diagnosticKey = Some(ConclusionDiagnostics.unknown.diagnosticKey), diagnosticRecord = Some(ConclusionDiagnostics.unknown.toRecord))
             _web_error_response(Some("blob"), HStatus.InternalServerError, s"Blob content operation returned ${other.show}", req.uri.path.renderString)
         }
       case Consequence.Failure(conclusion) =>
         val status = HStatus.fromInt(conclusion.status.webCode.code).getOrElse(HStatus.InternalServerError)
-        RuntimeDashboardMetrics.recordBlobOperation("content", error = true, diagnosticKey = Some(ConclusionDiagnostics.classify(conclusion).diagnosticKey))
+        val classification = ConclusionDiagnostics.classify(conclusion)
+        RuntimeDashboardMetrics.recordBlobOperation("content", error = true, diagnosticKey = Some(classification.diagnosticKey), diagnosticRecord = Some(classification.toRecord))
         _web_error_response(Some("blob"), conclusion, req.uri.path.renderString, req.method.name)
     }
   }
@@ -737,7 +738,8 @@ final class Http4sHttpServer(
         RuntimeDashboardMetrics.recordBlobOperation(
           "content",
           error = response.code >= 400,
-          diagnosticKey = if (response.code >= 400) Some(ConclusionDiagnostics.unknown.diagnosticKey) else None
+          diagnosticKey = if (response.code >= 400) Some(ConclusionDiagnostics.unknown.diagnosticKey) else None,
+          diagnosticRecord = if (response.code >= 400) Some(Http4sHttpServer.fallbackHttpDiagnosticRecord(response.code)) else None
         )
         _to_http_response_with_metadata(response, Some(req), Some("blob"), Some("blob"), Some("read_blob"), metadata)
     }
@@ -4693,7 +4695,8 @@ final class Http4sHttpServer(
   ): String =
     Vector(
       Some(error.message),
-      Some(s"status: ${s"${error.status} ${error.statusText}".trim}"),
+      Some(s"status: ${error.status}"),
+      Some(s"statusText: ${error.statusText}"),
       error.detailCode.map(x => s"detailCode: ${x}"),
       error.appCode.map(x => s"appCode: ${x}"),
       error.appStatus.map(x => s"appStatus: ${x}")
@@ -5145,6 +5148,14 @@ final class Http4sHttpServer(
 object Http4sHttpServer {
   val PortPropertyKey = "textus.server.port"
   val LegacyPortPropertyKey = "cncf.server.port"
+
+  private[http] def fallbackHttpDiagnosticRecord(
+    status: Int
+  ): Record =
+    Record.data(
+      "webStatus" -> status,
+      "statusText" -> StructuredHttpError.statusText(status)
+    ) ++ ConclusionDiagnostics.unknown.toRecord
 
   final case class JobBadgeCounts(
     active: Int,

@@ -129,7 +129,7 @@ Re-align error taxonomy and definitions before Phase 3 (CML).
 - Incorporate practical issues discovered in Phase 2.6
 - Define CNCF-level exit code policy:
   - OS / shell exit codes are constrained to 8-bit (0–255) and exposed as `Int`.
-  - `Conclusion.detailCode` is planned as `Long` and represents semantic detail.
+  - `Conclusion.Status.detailCode` is a numeric `Long` semantic detail code.
   - Exit codes MUST NOT be derived directly from `detailCode`.
 - Introduce a CNCF framework policy to compute exit codes from `Conclusion`:
   - Mapping extracts only operationally relevant information
@@ -1022,9 +1022,10 @@ corresponding completed-history entry.
 Phase 23 is active. `9.7 Error Model / Consequence-Conclusion Realignment` is
 the selected development item. EM-01 Error Taxonomy / Detail Code Policy
 Opening, EM-02 Taxonomy / Cause / Disposition Inventory and Canonical
-Ordering, EM-03 Detail Code Generation Model, and EM-04 Consequence Helper and
-Component Failure Normalization are complete; EM-05 Web/API/Admin/
-Observability Projection Alignment is the active slice.
+Ordering, EM-03 Detail Code Generation Model, EM-04 Consequence Helper and
+Component Failure Normalization, and EM-05 Web/API/Admin/Observability
+Projection Alignment are complete; EM-06 Phase 23 verification and closure is
+the active slice.
 
 ### 9.1 Web Next Stage Follow-ups
 Future Web/platform development item.
@@ -1141,8 +1142,8 @@ Active stack:
 - EM-02: Taxonomy / Cause / Disposition Inventory and Canonical Ordering. DONE.
 - EM-03: Detail Code Generation Model. DONE.
 - EM-04: Consequence Helper and Component Failure Normalization. DONE.
-- EM-05: Web/API/Admin/Observability Projection Alignment. ACTIVE.
-- EM-06: Phase 23 verification and closure. TODO.
+- EM-05: Web/API/Admin/Observability Projection Alignment. DONE.
+- EM-06: Phase 23 verification and closure. ACTIVE.
 
 - Revisit the core `Consequence` / `Conclusion` / `Observation` model before
   adding more component-local error classification surfaces.

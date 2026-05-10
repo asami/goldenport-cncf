@@ -2,6 +2,8 @@ package org.goldenport.cncf.cli
 
 import org.goldenport.Consequence
 import org.goldenport.Conclusion
+import org.goldenport.conclusion.cli.CliConclusionRenderer
+import org.goldenport.conclusion.presentation.{PresentationContext, SimpleConclusionPresenter}
 import org.goldenport.protocol.Request
 import org.goldenport.protocol.Response
 import org.goldenport.protocol.Argument
@@ -18,7 +20,7 @@ import org.goldenport.cncf.observability.global.GlobalObservable
  *  version Feb.  1, 2026
  *  version Mar. 27, 2026
  *  version Apr. 11, 2026
- * @version Apr. 15, 2026
+ * @version May. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class CliOperation extends GlobalObservable {
@@ -247,7 +249,8 @@ abstract class CliOperation extends GlobalObservable {
   }
 
   final protected def print_error(c: Conclusion): Unit = {
-    Console.err.println(c.show) // TODO
+    val presented = new SimpleConclusionPresenter().present(c, PresentationContext("en"))
+    Console.err.println(CliConclusionRenderer.render(presented)._2)
   }
 
   final protected def print_error(message: String): Unit = {

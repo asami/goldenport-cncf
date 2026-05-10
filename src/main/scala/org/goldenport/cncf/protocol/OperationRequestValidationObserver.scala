@@ -43,12 +43,14 @@ object OperationRequestValidationObserver {
         val classification = OperationRequestValidationDiagnostics.classify(conclusion)
         RuntimeDashboardMetrics.recordOperationRequestValidation(
           operation = fqn,
-          diagnosticKey = Some(classification.diagnosticKey)
+          diagnosticKey = Some(classification.diagnosticKey),
+          diagnosticRecord = Some(classification.toRecord)
         )
         if (ValidationDiagnostics.isValidation(conclusion))
           RuntimeDashboardMetrics.recordValidation(
             operation = fqn,
-            diagnosticKey = Some(classification.diagnosticKey)
+            diagnosticKey = Some(classification.diagnosticKey),
+            diagnosticRecord = Some(classification.toRecord)
           )
         val _ = context.observability.emitInfo(
           context.cncfCore.scope,
@@ -62,7 +64,19 @@ object OperationRequestValidationObserver {
             "result.success" -> false,
             "diagnostic" -> classification.toRecord,
             "error.kind" -> conclusion.observation.taxonomy.print,
-            "error.status" -> conclusion.status.webCode.code
+            "error.taxonomy.category" -> classification.taxonomyCategory,
+            "error.taxonomy.symptom" -> classification.taxonomySymptom,
+            "error.cause.kind" -> classification.causeKind,
+            "error.interpretation" -> classification.interpretation,
+            "error.user_action" -> classification.userAction,
+            "error.responsibility" -> classification.responsibility,
+            "error.status" -> conclusion.status.webCode.code,
+            "error.status_text" -> conclusion.status.webCode.statusText,
+            "error.diagnostic_key" -> classification.diagnosticKey
+          ) ++ Record.dataOption(
+            "error.detail_code" -> conclusion.status.detailCode.map(_.code),
+            "error.app_code" -> conclusion.status.appCode,
+            "error.app_status" -> conclusion.status.appStatus
           )
         )
         operation.foreach(observe(_, request, conclusion, context))

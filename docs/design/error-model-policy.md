@@ -90,6 +90,13 @@ scope and should be defined later when CNCF approaches a stable release.
 - Source-error links use `Conclusion.previous`. A higher-level failure may wrap
   a lower-level storage, resource, service, or provider failure by setting
   `previous`; EM-04 does not introduce another link field.
+- EM-05 projection surfaces read protocol status, numeric `DetailCode`, and
+  application status metadata from materialized `Conclusion.Status`. Web/API/
+  admin/debug/metrics projections must not recompute `DetailCode`, parse
+  messages as classification keys, or expose legacy `http.xxx` / `codeSource`
+  fields as the active client contract.
+- Fallback message-only errors may still be rendered at protocol boundaries,
+  but they do not carry a numeric `detailCode`.
 - Historical draft notes are inputs only; this document and later Phase 23
   design/spec documents supersede them where they conflict.
 

@@ -1,8 +1,10 @@
 package org.goldenport.cncf.http
 
+import org.goldenport.record.Record
+
 /*
  * @since   Apr. 12, 2026
- * @version Apr. 29, 2026
+ * @version May. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 object RuntimeDashboardMetrics {
@@ -44,6 +46,7 @@ object RuntimeDashboardMetrics {
     observedAt: Long,
     error: Boolean,
     diagnosticKey: Option[String] = None,
+    diagnosticRecord: Option[Record] = None,
     operation: Option[String] = None,
     kind: Option[String] = None,
     sourceMode: Option[String] = None,
@@ -80,10 +83,11 @@ object RuntimeDashboardMetrics {
 
   def recordAuthorizationDecision(
     denied: Boolean,
-    diagnosticKey: Option[String]
+    diagnosticKey: Option[String],
+    diagnosticRecord: Option[Record] = None
   ): Unit = synchronized {
     val kind = if (denied) diagnosticKey.filter(_.nonEmpty) else None
-    _authorizationEvents = (_authorizationEvents :+ Event(java.time.Instant.now.toEpochMilli, denied, kind)).takeRight(10000)
+    _authorizationEvents = (_authorizationEvents :+ Event(java.time.Instant.now.toEpochMilli, denied, kind, if (denied) diagnosticRecord else None)).takeRight(10000)
   }
 
   def recordDslChokepoint(error: Boolean): Unit = synchronized {
@@ -92,24 +96,28 @@ object RuntimeDashboardMetrics {
 
   def recordValidation(
     operation: String,
-    diagnosticKey: Option[String]
+    diagnosticKey: Option[String],
+    diagnosticRecord: Option[Record] = None
   ): Unit = synchronized {
     _validationEvents = (_validationEvents :+ Event(
       observedAt = java.time.Instant.now.toEpochMilli,
       error = true,
       diagnosticKey = diagnosticKey.filter(_.nonEmpty),
+      diagnosticRecord = diagnosticRecord,
       operation = Some(operation).filter(_.nonEmpty)
     )).takeRight(10000)
   }
 
   def recordOperationRequestValidation(
     operation: String,
-    diagnosticKey: Option[String]
+    diagnosticKey: Option[String],
+    diagnosticRecord: Option[Record] = None
   ): Unit = synchronized {
     _operationRequestValidationEvents = (_operationRequestValidationEvents :+ Event(
       observedAt = java.time.Instant.now.toEpochMilli,
       error = true,
       diagnosticKey = diagnosticKey.filter(_.nonEmpty),
+      diagnosticRecord = diagnosticRecord,
       operation = Some(operation).filter(_.nonEmpty)
     )).takeRight(10000)
   }
@@ -118,6 +126,7 @@ object RuntimeDashboardMetrics {
     operation: String,
     error: Boolean,
     diagnosticKey: Option[String] = None,
+    diagnosticRecord: Option[Record] = None,
     kind: Option[String] = None,
     sourceMode: Option[String] = None,
     backend: Option[String] = None
@@ -126,6 +135,7 @@ object RuntimeDashboardMetrics {
       observedAt = java.time.Instant.now.toEpochMilli,
       error = error,
       diagnosticKey = if (error) diagnosticKey.filter(_.nonEmpty) else None,
+      diagnosticRecord = if (error) diagnosticRecord else None,
       operation = Some(operation).filter(_.nonEmpty),
       kind = kind.filter(_.nonEmpty),
       sourceMode = sourceMode.filter(_.nonEmpty),
@@ -154,6 +164,10 @@ object RuntimeDashboardMetrics {
       .toMap
   }
 
+  def authorizationDiagnosticRecords: Map[String, Record] = synchronized {
+    _diagnostic_records(_authorizationEvents)
+  }
+
   def dslChokepointSnapshot: Snapshot = synchronized {
     _snapshot(_dslEvents, Vector.empty)
   }
@@ -171,6 +185,10 @@ object RuntimeDashboardMetrics {
       .toMap
   }
 
+  def validationDiagnosticRecords: Map[String, Record] = synchronized {
+    _diagnostic_records(_validationEvents)
+  }
+
   def operationRequestValidationSnapshot: Snapshot = synchronized {
     _snapshot(_operationRequestValidationEvents, Vector.empty)
   }
@@ -182,6 +200,10 @@ object RuntimeDashboardMetrics {
       .view
       .mapValues(_.size.toLong)
       .toMap
+  }
+
+  def operationRequestValidationDiagnosticRecords: Map[String, Record] = synchronized {
+    _diagnostic_records(_operationRequestValidationEvents)
   }
 
   def blobOperationSnapshot: Snapshot = synchronized {
@@ -196,6 +218,17 @@ object RuntimeDashboardMetrics {
       .mapValues(_.size.toLong)
       .toMap
   }
+
+  def blobDiagnosticRecords: Map[String, Record] = synchronized {
+    _diagnostic_records(_blobEvents)
+  }
+
+  private def _diagnostic_records(events: Vector[Event]): Map[String, Record] =
+    events
+      .filter(_.error)
+      .flatMap(e => e.diagnosticKey.map(_ -> e.diagnosticRecord))
+      .groupBy(_._1)
+      .flatMap { case (key, values) => values.reverse.collectFirst { case (_, Some(record)) => key -> record } }
 
   private def _snapshot(
     events: Vector[Event],

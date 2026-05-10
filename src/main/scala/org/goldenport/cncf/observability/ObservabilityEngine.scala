@@ -611,12 +611,23 @@ object ObservabilityEngine {
           "result.success" -> true
         )
       case Left(conclusion) =>
+        val classification = ConclusionDiagnostics.classify(conclusion)
         Record.data(
           "result.success" -> false,
           "error.kind" -> conclusion.observation.taxonomy.print,
-          "error.status" -> conclusion.status.webCode.code
+          "error.taxonomy.category" -> classification.taxonomyCategory,
+          "error.taxonomy.symptom" -> classification.taxonomySymptom,
+          "error.cause.kind" -> classification.causeKind,
+          "error.interpretation" -> classification.interpretation,
+          "error.user_action" -> classification.userAction,
+          "error.responsibility" -> classification.responsibility,
+          "error.status" -> conclusion.status.webCode.code,
+          "error.status_text" -> conclusion.status.webCode.statusText,
+          "error.diagnostic_key" -> classification.diagnosticKey
         ) ++ Record.dataOption(
-          "error.detail_code" -> conclusion.status.detailCode.map(_.code)
+          "error.detail_code" -> conclusion.status.detailCode.map(_.code),
+          "error.app_code" -> conclusion.status.appCode,
+          "error.app_status" -> conclusion.status.appStatus
         )
     }
     Record(

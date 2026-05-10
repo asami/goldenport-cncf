@@ -198,7 +198,7 @@ Normalize recurring framework and builtin-component failures onto structured
 
 ## EM-05: Web/API/Admin/Observability Projection Alignment
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
@@ -207,12 +207,26 @@ metrics, dashboards, and observability records.
 
 ### Detailed Tasks
 
-- [ ] Align HTTP/Web error rendering with the canonical detail-code model.
-- [ ] Align CLI/API projection with `Conclusion` rather than message parsing.
-- [ ] Align observability and metrics classification with taxonomy/cause/facet
+- [x] Align HTTP/Web error rendering with the canonical detail-code model.
+- [x] Align CLI/API projection with `Conclusion` rather than message parsing.
+- [x] Align observability and metrics classification with taxonomy/cause/facet
       data.
-- [ ] Ensure debug/admin surfaces expose enough structured detail without
+- [x] Ensure debug/admin surfaces expose enough structured detail without
       treating descriptive `Observation` data as control-flow input.
+
+### Completion Notes
+
+- Web/API structured errors expose `status`, `statusText`, numeric
+  `detailCode`, and optional `appCode` / `appStatus`. Legacy `http.xxx` and
+  `codeSource` fields are not part of the active projection contract.
+- `StructuredHttpError.fromConclusion` reads status data from
+  `Conclusion.Status`; fallback message-only errors do not carry a
+  `detailCode`.
+- Debug panels include `Conclusion.toRecord`, `detailCodePath`, and the
+  `previous` chain so the source failure can be traced without message parsing.
+- Observability and runtime dashboard diagnostics use a common structured
+  classification record with taxonomy, cause, interpretation, disposition,
+  status, detail code, application status metadata, and facets.
 
 ### Guardrails
 
@@ -223,7 +237,7 @@ metrics, dashboards, and observability records.
 
 ## EM-06: Phase 23 Verification and Closure
 
-Status: TODO
+Status: ACTIVE
 
 ### Objective
 

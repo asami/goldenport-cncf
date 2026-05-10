@@ -2219,7 +2219,6 @@ object StaticFormAppRenderer {
     app: Option[String],
     error: StructuredHttpError
   ): Page = {
-    val status = _escape(s"${error.status} ${error.statusText}".trim)
     val detailcode = error.detailCode.map(x =>
       s"""  <p class="mb-0"><strong>Detail code:</strong> <code>${x}</code></p>"""
     ).getOrElse("")
@@ -2230,7 +2229,8 @@ object StaticFormAppRenderer {
       s"""<section class="alert alert-danger" role="alert">
          |  <h2 class="h5">Request failed</h2>
          |  <p class="mb-2">${_escape(error.message)}</p>
-         |  <p class="mb-1"><strong>HTTP status:</strong> <code>${status}</code></p>
+         |  <p class="mb-1"><strong>Status:</strong> <code>${error.status}</code></p>
+         |  <p class="mb-1"><strong>Status text:</strong> <code>${_escape(error.statusText)}</code></p>
          |${detailcode}
          |${appstatus}
          |</section>
@@ -9267,13 +9267,17 @@ object StaticFormAppRenderer {
     val actionCalls = RuntimeDashboardMetrics.actionCallSnapshot
     val authorizationDecisions = RuntimeDashboardMetrics.authorizationDecisionSnapshot
     val authorizationDiagnostics = RuntimeDashboardMetrics.authorizationDiagnosticCounts
+    val authorizationDiagnosticRecords = RuntimeDashboardMetrics.authorizationDiagnosticRecords
     val dslChokepoints = RuntimeDashboardMetrics.dslChokepointSnapshot
     val validation = RuntimeDashboardMetrics.validationSnapshot
     val validationDiagnostics = RuntimeDashboardMetrics.validationDiagnosticCounts
+    val validationDiagnosticRecords = RuntimeDashboardMetrics.validationDiagnosticRecords
     val operationRequestValidation = RuntimeDashboardMetrics.operationRequestValidationSnapshot
     val operationRequestValidationDiagnostics = RuntimeDashboardMetrics.operationRequestValidationDiagnosticCounts
+    val operationRequestValidationDiagnosticRecords = RuntimeDashboardMetrics.operationRequestValidationDiagnosticRecords
     val blobOperations = RuntimeDashboardMetrics.blobOperationSnapshot
     val blobDiagnostics = RuntimeDashboardMetrics.blobDiagnosticCounts
+    val blobDiagnosticRecords = RuntimeDashboardMetrics.blobDiagnosticRecords
     val jobs = _job_metrics(subsystem)
     def card(title: String, body: String, id: Option[String] = None): String =
       s"""<div class="col-12">${_admin_card(title, body, id)}</div>"""
@@ -9315,26 +9319,26 @@ object StaticFormAppRenderer {
       "Authorization",
       s"""${_summary_table(authorizationDecisions.summary)}
          |<h3 class="h6 mt-3">Diagnostic</h3>
-         |${_diagnostics_table(authorizationDiagnostics)}""".stripMargin,
+         |${_diagnostics_table(authorizationDiagnostics, authorizationDiagnosticRecords)}""".stripMargin,
       Some("authorization")
     )
     val validationCard = card(
       "Validation",
       s"""${_summary_table(validation.summary)}
          |<h3 class="h6 mt-3">Diagnostic</h3>
-         |${_diagnostics_table(validationDiagnostics)}""".stripMargin
+         |${_diagnostics_table(validationDiagnostics, validationDiagnosticRecords)}""".stripMargin
     )
     val operationRequestValidationCard = card(
       "Operation Request Validation",
       s"""${_summary_table(operationRequestValidation.summary)}
          |<h3 class="h6 mt-3">Diagnostic</h3>
-         |${_diagnostics_table(operationRequestValidationDiagnostics)}""".stripMargin
+         |${_diagnostics_table(operationRequestValidationDiagnostics, operationRequestValidationDiagnosticRecords)}""".stripMargin
     )
     val blobOperationsCard = card(
       "Blob operations",
       s"""${_summary_table(blobOperations.summary)}
          |<h3 class="h6 mt-3">Diagnostic</h3>
-         |${_diagnostics_table(blobDiagnostics)}""".stripMargin
+         |${_diagnostics_table(blobDiagnostics, blobDiagnosticRecords)}""".stripMargin
     )
     val cards = Vector(
       navigationCard,
@@ -11634,17 +11638,25 @@ object StaticFormAppRenderer {
     s"<tr><td>${_escape(label)}</td><td>${window.total}</td><td>${window.errors}</td></tr>"
 
   private def _diagnostics_table(
-    counts: Map[String, Long]
+    counts: Map[String, Long],
+    records: Map[String, Record] = Map.empty
   ): String =
     if (counts.isEmpty)
       """<p class="text-secondary">No diagnostics have been recorded.</p>"""
     else {
       val rows = counts.toVector.sortBy(_._1).map {
         case (kind, count) =>
-          s"<tr><td><code>${_escape(kind)}</code></td><td>${count}</td></tr>"
+          val detail = records.get(kind).map { record =>
+            val status = record.getInt("webStatus").map(_.toString).getOrElse("")
+            val detailCode = record.getAny("detailCode").map(_.toString).getOrElse("")
+            val taxonomy = record.getString("taxonomy").getOrElse("")
+            val cause = record.getString("causeKind").getOrElse("")
+            Vector(status, detailCode, taxonomy, cause).filter(_.nonEmpty).map(_escape).mkString("<br>")
+          }.getOrElse("")
+          s"<tr><td><code>${_escape(kind)}</code></td><td>${count}</td><td>${detail}</td></tr>"
       }.mkString("\n")
       s"""<div class="table-responsive"><table class="table table-sm table-hover align-middle">
-         |  <thead><tr><th>Diagnostic</th><th>Count</th></tr></thead>
+         |  <thead><tr><th>Diagnostic</th><th>Count</th><th>Structured detail</th></tr></thead>
          |  <tbody>${rows}</tbody>
          |</table></div>""".stripMargin
     }

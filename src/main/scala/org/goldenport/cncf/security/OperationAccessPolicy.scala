@@ -444,7 +444,11 @@ object OperationAccessPolicy {
       case Consequence.Success(_) => "allow"
       case Consequence.Failure(_) => "deny"
     val diagnostic = _diagnostic(result)
-    RuntimeDashboardMetrics.recordAuthorizationDecision(outcome == "deny", diagnostic.map(_.diagnosticKey))
+    RuntimeDashboardMetrics.recordAuthorizationDecision(
+      outcome == "deny",
+      diagnostic.map(_.diagnosticKey),
+      diagnostic.map(_.toRecord)
+    )
     val _ = ctx.observability.emitInfo(
       ctx.cncfCore.scope,
       "authorization.decision",

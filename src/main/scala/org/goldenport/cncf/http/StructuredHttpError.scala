@@ -88,7 +88,7 @@ object StructuredHttpError {
     val resolvedstatus = conclusion.status.webCode.code
     StructuredHttpError(
       status = resolvedstatus,
-      statusText = _status_text(resolvedstatus),
+      statusText = conclusion.status.webCode.statusText,
       message = conclusion.displayMessage,
       detailCode = conclusion.status.detailCode.map(_.code),
       appCode = conclusion.status.appCode,
@@ -127,8 +127,7 @@ object StructuredHttpError {
       service = service,
       operation = operation
     )
-
-  private def _status_text(status: Int): String =
+  def statusText(status: Int): String =
     status match {
       case 200 => "OK"
       case 201 => "Created"
@@ -145,5 +144,8 @@ object StructuredHttpError {
       case 503 => "Service Unavailable"
       case _ => ""
     }
+
+  private def _status_text(status: Int): String =
+    statusText(status)
 
 }

@@ -11,6 +11,8 @@ import scala.jdk.CollectionConverters._
 import scala.util.control.NonFatal
 import org.goldenport.Consequence
 import org.goldenport.Conclusion
+import org.goldenport.conclusion.cli.CliConclusionRenderer
+import org.goldenport.conclusion.presentation.{PresentationContext, SimpleConclusionPresenter}
 import org.goldenport.observation.Taxonomy
 import org.goldenport.observation.Descriptor.Facet
 import org.goldenport.bag.Bag
@@ -62,7 +64,7 @@ import org.goldenport.cncf.subsystem.GenericSubsystemDescriptor
  *  version Jan. 31, 2026
  *  version Feb.  5, 2026
  *  version Apr. 30, 2026
- * @version May.  6, 2026
+ * @version May. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 object CncfRuntime extends GlobalObservable {
@@ -1695,9 +1697,8 @@ object CncfRuntime extends GlobalObservable {
     }
 
   private def _print_error(c: Conclusion): Unit = {
-    val rec = c.toRecord
-    val s = rec.toYamlString
-    Console.err.print(s)
+    val presented = new SimpleConclusionPresenter().present(c, PresentationContext("en"))
+    Console.err.println(CliConclusionRenderer.render(presented)._2)
   }
 
   private def _print_error(message: String): Unit = {
@@ -4633,9 +4634,8 @@ class CncfRuntime() extends GlobalObservable {
   }
 
   private def _print_error(c: Conclusion): Unit = {
-    val rec = c.toRecord
-    val s = rec.toYamlString
-    Console.err.print(s)
+    val presented = new SimpleConclusionPresenter().present(c, PresentationContext("en"))
+    Console.err.println(CliConclusionRenderer.render(presented)._2)
   }
 
   private def _print_error(message: String): Unit = {

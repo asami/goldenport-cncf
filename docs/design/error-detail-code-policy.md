@@ -84,6 +84,14 @@ Renderers and protocol adapters read `Conclusion.Status.detailCode`; they do not
 derive a second response-local code.
 
 Legacy/message-only errors without a `Conclusion` do not carry `detailCode`.
+`codeSource`, `http.xxx`, and string detail-code lists are not part of the
+active EM-05 projection contract.
+
+Observability, runtime dashboards, and admin diagnostics project the same
+structured error axes: taxonomy category/symptom, cause kind, interpretation,
+disposition, Web/API status, status text, numeric detail code, optional
+application code/status metadata, and structured facets. Dashboard grouping
+keys are derived summaries and are not semantic error identifiers.
 
 ## Compatibility
 

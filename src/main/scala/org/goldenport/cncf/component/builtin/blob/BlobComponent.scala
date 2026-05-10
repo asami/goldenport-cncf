@@ -1958,13 +1958,15 @@ object BlobComponent {
       val classification = ConclusionDiagnostics.classify(c)
       RuntimeDashboardMetrics.recordValidation(
         operation = operation,
-        diagnosticKey = Some(classification.diagnosticKey)
+        diagnosticKey = Some(classification.diagnosticKey),
+        diagnosticRecord = Some(classification.toRecord)
       )
     }
     RuntimeDashboardMetrics.recordBlobOperation(
       operation = operation,
       error = !success,
       diagnosticKey = diagnostickey,
+      diagnosticRecord = diagnostic.map(_.toRecord),
       kind = kind,
       sourceMode = sourceMode,
       backend = backend

@@ -11,9 +11,10 @@ item.
 Phase 23 started by fixing the policy boundary for CNCF error semantics.
 `EM-01 — Error Taxonomy / Detail Code Policy Opening`,
 `EM-02 — Taxonomy / Cause / Disposition Inventory and Canonical Ordering`, and
-`EM-03 — Detail Code Generation Model` and `EM-04 — Consequence Helper and
-Component Failure Normalization` are complete. `EM-05 — Web/API/Admin/
-Observability Projection Alignment` is active.
+`EM-03 — Detail Code Generation Model`, `EM-04 — Consequence Helper and
+Component Failure Normalization`, and `EM-05 — Web/API/Admin/Observability
+Projection Alignment` are complete. `EM-06 — Phase 23 verification and closure`
+is active.
 
 This document is a phase dashboard, not a design journal.
 
@@ -65,14 +66,13 @@ The canonical EM-02 vocabulary catalog is
 - B (DONE): EM-02 — Taxonomy / Cause / Disposition Inventory and Canonical Ordering.
 - C (DONE): EM-03 — Detail Code Generation Model.
 - D (DONE): EM-04 — Consequence Helper and Component Failure Normalization.
-- E (ACTIVE): EM-05 — Web/API/Admin/Observability Projection Alignment.
-- F (TODO): EM-06 — Phase 23 verification and closure.
+- E (DONE): EM-05 — Web/API/Admin/Observability Projection Alignment.
+- F (ACTIVE): EM-06 — Phase 23 verification and closure.
 
 Resume hint:
 
-- Continue with EM-05. Align Web/API/Admin/Observability projections on
-  structured `Conclusion` data and keep `DetailCode` sourced from
-  `Conclusion.Status`.
+- Continue with EM-06. Verify Phase 23 end-to-end behavior, run final
+  validation, and prepare closure notes.
 - Keep the error-code policy explicitly pre-stable: renumbering and
   classification changes are allowed during Phase 23, but each completed slice
   must be deterministic and documented.
@@ -83,7 +83,7 @@ Resume hint:
 - [x] EM-02: Taxonomy / Cause / Disposition Inventory and Canonical Ordering.
 - [x] EM-03: Detail Code Generation Model.
 - [x] EM-04: Consequence Helper and Component Failure Normalization.
-- [ ] EM-05: Web/API/Admin/Observability Projection Alignment.
+- [x] EM-05: Web/API/Admin/Observability Projection Alignment.
 - [ ] EM-06: Phase 23 verification and closure.
 
 Detailed task breakdown and progress tracking are recorded in

@@ -117,6 +117,13 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       c.downField("links").get[String]("manual") shouldBe Right(s"/web/${org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(componentName)}/document")
     }
 
+    "preserve fallback HTTP status in non-Conclusion diagnostic records" in {
+      val record = Http4sHttpServer.fallbackHttpDiagnosticRecord(404)
+
+      record.getInt("webStatus") shouldBe Some(404)
+      record.getString("statusText") shouldBe Some("Not Found")
+    }
+
     "render dashboard pages with Bootstrap health hierarchy without changing links" in {
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
 
@@ -476,7 +483,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
 
       response.status.code shouldBe 500
       body should include ("Request failed")
-      body should include ("HTTP status")
+      body should include ("<strong>Status:</strong>")
+      body should include ("<strong>Status text:</strong>")
       body should include ("managed Blob metadata points at a missing payload")
       body should include ("state")
       body should include ("invalid")
@@ -578,7 +586,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       )).unsafeRunSync()
 
       rejected.status.code shouldBe 400
-      rejected.as[String].unsafeRunSync() should include ("HTTP status")
+      rejected.as[String].unsafeRunSync() should include ("<strong>Status:</strong>")
       forced.status.code shouldBe 200
       forced.as[String].unsafeRunSync() should include ("Blob Deleted")
       subsystem.executeOperationResponse(_blob_request("admin_get_blob", Property("id", id, None))) shouldBe a[Consequence.Failure[_]]
@@ -592,7 +600,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       val body = response.as[String].unsafeRunSync()
 
       response.status.code shouldBe 400
-      body should include ("HTTP status")
+      body should include ("<strong>Status:</strong>")
       body should include ("missing-blob")
       body should not include ("System job result")
     }
@@ -614,7 +622,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       response.status.code shouldBe 403
       mutation.status.code shouldBe 403
       body should include ("Request failed")
-      body should include ("HTTP status:")
+      body should include ("<strong>Status:</strong>")
+      body should include ("<strong>Status text:</strong>")
     }
 
     "render resolved runtime configuration with masking rules on system admin page" in {
@@ -4892,6 +4901,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       json.downField("error").get[String]("message") shouldBe Right("bad request from operation")
       json.downField("error").get[Int]("status") shouldBe Right(400)
       json.downField("error").get[String]("statusText") shouldBe Right("Bad Request")
+      json.downField("error").downField("codeSource").succeeded shouldBe false
+      json.downField("error").downField("code").succeeded shouldBe false
       json.downField("error").downField("debug").get[String]("path") shouldBe Right("/form-api/notice-board/notice/post-secret-notice")
     }
 
@@ -5914,7 +5925,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       response.status.code shouldBe 403
       response.contentType.map(_.mediaType) shouldBe Some(org.http4s.MediaType.text.plain)
       body should include ("Forbidden")
-      body should include ("status: 403 Forbidden")
+      body should include ("status: 403")
+      body should include ("statusText: Forbidden")
       body should include ("detailCode:")
     }
 
@@ -5955,8 +5967,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       response.status.code shouldBe 403
       response.contentType.map(_.mediaType) shouldBe Some(org.http4s.MediaType.text.html)
       body should include ("Request failed")
-      body should include ("HTTP status:")
-      body should include ("403 Forbidden")
+      body should include ("<strong>Status:</strong>")
+      body should include ("<strong>Status text:</strong>")
+      body should include ("<code>403</code>")
+      body should include ("<code>Forbidden</code>")
       body should not include ("structured-error-debug")
       body should not include ("\"error\"")
     }
@@ -7601,6 +7615,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
 
       error.publicRecord.asMap.get("detailCode") shouldBe Some(detailCode)
       error.envelopeJson should include (s""""detailCode":${detailCode}""")
+      error.envelopeJson should not include ("codeSource")
+      error.envelopeJson should not include ("http.404")
     }
 
     "redisplay the operation form with submitted values when stayOnError is enabled" in {

@@ -67,7 +67,13 @@ class ObservabilityEngineSpec extends AnyWordSpec with Matchers with BeforeAndAf
       keys.contains("result.success") shouldBe true
       keys.contains("error.kind") shouldBe true
       keys.contains("error.status") shouldBe true
+      keys.contains("error.status_text") shouldBe true
       keys.contains("error.detail_code") shouldBe true
+      keys.contains("error.taxonomy.category") shouldBe true
+      keys.contains("error.taxonomy.symptom") shouldBe true
+      keys.contains("error.cause.kind") shouldBe true
+      keys.contains("error.interpretation") shouldBe true
+      keys.contains("error.diagnostic_key") shouldBe true
     }
   }
 
