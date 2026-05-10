@@ -649,9 +649,9 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Notes contain execution details and results for each phase.
 
 ## Process Status Pointers
-- Current phase selection: next phase to be selected.
-- Current active phase dashboard: none.
-- Current active phase checklist: none.
+- Current phase selection: Phase 24 — Metrics and Observability.
+- Current active phase dashboard: `docs/phase/phase-24.md`
+- Current active phase checklist: `docs/phase/phase-24-checklist.md`
 - Latest closed phase dashboard: `docs/phase/phase-23.md`
 - Latest closed phase checklist: `docs/phase/phase-23-checklist.md`
 - Candidate next phase areas: AwsComponent/S3 BlobStore
@@ -686,6 +686,7 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Phase 21: closed (`docs/phase/phase-21.md`)
 - Phase 22: closed (`docs/phase/phase-22.md`)
 - Phase 23: closed (`docs/phase/phase-23.md`)
+- Phase 24: active (`docs/phase/phase-24.md`)
 
 ## 8. Completed Development Item History
 
@@ -1046,8 +1047,11 @@ Completed work areas are recorded in section 8. When a development item closes,
 remove its completion record from this section and add or update the
 corresponding completed-history entry.
 
-No current development item is selected. Phase 23 is closed; choose the next
-phase from the candidate development areas below.
+Current development item:
+
+- `9.4 Metrics and Observability` is active in Phase 24.
+- Active dashboard: `docs/phase/phase-24.md`.
+- Active checklist: `docs/phase/phase-24-checklist.md`.
 
 ### 9.1 Web Next Stage Follow-ups
 Future Web/platform development item.
@@ -1110,10 +1114,26 @@ Future security development item.
 - Organization-grade policy management beyond the Blob-required surfaces.
 
 ### 9.4 Metrics and Observability
-Future observability development item.
+Active in Phase 24.
+
+Phase 24 owns observability storage, projection, metrics, and telemetry.
+Web/API error presentation polish remains under 9.1. Error Model hardening
+remains under 9.7.
+
+Active work stack:
+
+- OB-01: Diagnostic Payload Externalization Policy Opening.
+- OB-02: CallTree / Execution History / Job Diagnostic Summary Model.
+- OB-03: Diagnostic Payload External Store and Runtime Config.
+- OB-04: Structured Diagnostic Dashboard Drill-down.
+- OB-05: Metrics Collection and Metrics Service Expansion.
+- OB-06: OpenTelemetry Boundary and Export Policy.
+- OB-07: Phase 24 verification and closure.
 
 - Metrics collection expansion.
 - OpenTelemetry support.
+- `cncf-samples` sample 13 observability integration, including docker-compose
+  wiring to the actual observability backend.
 - Dashboard drill-down for structured diagnostics, including
   `Conclusion.previous` source-error chains and grouping by structured
   taxonomy/cause/disposition fields.
