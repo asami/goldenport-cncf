@@ -1122,9 +1122,9 @@ remains under 9.7.
 
 Active work stack:
 
-- OB-01: Diagnostic Payload Externalization Policy Opening.
-- OB-02: CallTree / Execution History / Job Diagnostic Summary Model.
-- OB-03: Diagnostic Payload External Store and Runtime Config.
+- OB-01: Diagnostic Payload Externalization Policy Opening. (DONE)
+- OB-02: CallTree / Execution History / Job Diagnostic Summary Model. (DONE)
+- OB-03: Diagnostic Payload External Store and Runtime Config. (ACTIVE)
 - OB-04: Structured Diagnostic Dashboard Drill-down.
 - OB-05: Metrics Collection and Metrics Service Expansion.
 - OB-06: OpenTelemetry Boundary and Export Policy.
@@ -1134,6 +1134,16 @@ Active work stack:
 - OpenTelemetry support.
 - `cncf-samples` sample 13 observability integration, including docker-compose
   wiring to the actual observability backend.
+- Normative diagnostic payload policy:
+  `docs/design/observability/diagnostic-payload-externalization-policy.md`.
+- OB-02 summary/reference model:
+  - `DiagnosticPayloadSummary` is the reusable compact summary shape for
+    CallTree, retained execution history, Job diagnostics, and task-local
+    calltree projections.
+  - `DiagnosticPayloadReference` is placeholder-only until OB-03 implements
+    external store configuration and authorized reference resolution.
+  - Generic JSON/YAML operation responses are summary-only in diagnostics;
+    secret-aware operation results should use typed result/value-class records.
 - Dashboard drill-down for structured diagnostics, including
   `Conclusion.previous` source-error chains and grouping by structured
   taxonomy/cause/disposition fields.

@@ -24,15 +24,12 @@ import org.goldenport.record.io.RecordEncoder
  *
  * This bridges declarative UoW programs (Free) and
  * concrete UnitOfWork execution.
- * @version May. 11, 2026
- */
-/*
  * @since   Jan. 10, 2026
  *  version Jan. 21, 2026
  *  version Feb. 25, 2026
  *  version Mar. 29, 2026
  *  version Apr. 29, 2026
- * @version May.  8, 2026
+ * @version May. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkInterpreter(uow: UnitOfWork) {
@@ -639,12 +636,12 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
   private def _calltree_entity_query_json(
     query: EntityQuery[?]
   ): String =
-    _truncate_calltree_text(RecordEncoder.json(Record.dataAuto(
+    _truncate_calltree_text(RecordEncoder.json(CallTreeValueSummary.recordSummary(Record.dataAuto(
       "collection" -> query.collection.name,
       "scope" -> query.scope.toString,
       "visibility_scope" -> query.visibilityScope.map(_.toString),
       "query" -> query.query.toRecord()
-    )), 4000)
+    ), includeInline = true)), 4000)
 
   private def _truncate_calltree_text(
     value: String,

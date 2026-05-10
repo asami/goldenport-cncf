@@ -230,19 +230,32 @@ Default inline result data should be limited to:
 - paging summary such as `offset`, `limit`, `fetched_count`, and `total_count`;
 - small scalar or small structured values that are safe to show inline.
 
+OB-02 standardizes this shape as `DiagnosticPayloadSummary`. CallTree action,
+UnitOfWork, Space, and I/O nodes should put summary records in payload-bearing
+fields such as `request`, `web_parameters`, `query`, `response`, and `result`.
+Those records preserve compatible projection keys such as `kind`, `inline`,
+`size_bytes`, `field_count`, `record_count`, `fetched_count`, `total_count`,
+and optional `payload_href` / `external_href`.
+
 Large result/response bodies must not be copied wholesale into CallTree,
 execution history, Job Entity, Task Execution Tree, or task-local calltree
 records. For large values, the diagnostic projection should show summary
 metadata and an explicit indication that the full payload is not inline.
 
-Future observability work should add an opt-in externalization mechanism:
+Scalar/string result values are non-inline by default. CML confidentiality
+metadata is applied before any inline display or summary generation, with
+name-based redaction kept only as a fallback.
 
-- configuration selects which operations or result fields may be externalized;
-- large debug payloads are written to a diagnostic file/object store;
-- CallTree and Job diagnostics display the external file/object reference;
-- redaction and confidentiality policy is applied before writing;
-- authorization and retention/cleanup policy are defined for the external
-  payload store.
+Generic JSON/YAML operation responses are also non-inline by default. They are
+not considered secret-aware payloads because arbitrary JSON/YAML fields cannot
+be reliably matched to CML result confidentiality metadata. Secret-bearing
+operation results should be modeled as typed result/value-class records so the
+diagnostic summarizer can apply field-level confidentiality before projection.
+
+The cross-cutting Phase 24 policy is defined in
+`docs/design/observability/diagnostic-payload-externalization-policy.md`.
+That policy owns the inline/summary/truncated/externalized vocabulary,
+redaction-before-output rule, and external payload reference boundary.
 
 This keeps Web/admin diagnostics readable while still allowing deep inspection
 when a developer or operator explicitly asks for large payload capture.

@@ -39,7 +39,8 @@ import org.scalatest.matchers.should.Matchers
  */
 /*
  * @since   Jan.  1, 2026
- * @version Apr. 11, 2026
+ *  version Apr. 11, 2026
+ * @version May. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 class ArgsToStringScenarioSpec extends AnyWordSpec with GivenWhenThen
@@ -118,12 +119,7 @@ private object TestQueryOperation extends spec.OperationDefinition {
                 override def action: Action = actionself
                 override def execute(): org.goldenport.Consequence[OperationResponse] =
                   org.goldenport.Consequence.Success(
-                    new OperationResponse {
-                      override def toResponse: Response = Response.Scalar[String](toString)
-                      override def show: String = s"Query(${arg.value})"
-                      def print = show
-//                      override def toString: String = show
-                    }
+                    OperationResponse.Scalar(s"Query(${arg.value})")
                   )
               }
             }

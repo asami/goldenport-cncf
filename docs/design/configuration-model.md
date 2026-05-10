@@ -760,6 +760,11 @@ the execution succeeds and is not slow.
 `textus.execution.history.*` controls the retained action execution history
 used by `admin.execution.history` and `admin.execution.calltree`.
 
+Diagnostic payload externalization policy is described in
+`docs/design/observability/diagnostic-payload-externalization-policy.md`.
+Current CallTree/history debug keys remain valid. Concrete payload
+externalization runtime keys are intentionally deferred to Phase 24 OB-03.
+
 Use `runtime` only when the value is genuinely about the runtime process itself and no clearer owner exists.
 
 Examples to avoid for new primary keys:

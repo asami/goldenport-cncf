@@ -22,7 +22,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Mar. 22, 2026
  *  version Apr. 25, 2026
- * @version May. 10, 2026
+ * @version May. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentLogicOperationDefinitionSemanticsSpec
@@ -133,7 +133,9 @@ final class ComponentLogicOperationDefinitionSemanticsSpec
       calltree should include ("kind=action")
       calltree should include ("operation=fetchPerson")
       calltree should include ("response_type")
-      calltree should include ("fetch-ok")
+      calltree should include ("kind=scalar")
+      calltree should include ("inline=false")
+      calltree should not include ("fetch-ok")
       job.debug.calltreeSaved shouldBe true
       job.debug.calltreeStorage shouldBe Some("calltree")
       job.debug.calltreeSerializedBytes.exists(_ > 0) shouldBe true

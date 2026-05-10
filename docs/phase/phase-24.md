@@ -65,9 +65,9 @@ Payload policy:
 
 ## 4. Active Work Stack
 
-- A (ACTIVE): OB-01 — Diagnostic Payload Externalization Policy Opening.
-- B (TODO): OB-02 — CallTree / Execution History / Job Diagnostic Summary Model.
-- C (TODO): OB-03 — Diagnostic Payload External Store and Runtime Config.
+- A (DONE): OB-01 — Diagnostic Payload Externalization Policy Opening.
+- B (DONE): OB-02 — CallTree / Execution History / Job Diagnostic Summary Model.
+- C (ACTIVE): OB-03 — Diagnostic Payload External Store and Runtime Config.
 - D (TODO): OB-04 — Structured Diagnostic Dashboard Drill-down.
 - E (TODO): OB-05 — Metrics Collection and Metrics Service Expansion.
 - F (TODO): OB-06 — OpenTelemetry Boundary and Export Policy.
@@ -75,15 +75,16 @@ Payload policy:
 
 Resume hint:
 
-- Continue with OB-01. Fix the normative diagnostic payload policy first, then
-  proceed to the summary/reference model in OB-02.
+- Continue with OB-03. Implement diagnostic payload external-store boundaries,
+  runtime configuration keys, retention/cleanup hooks, and authorized payload
+  reference resolution.
 - Keep `cncf-samples` sample 13 and docker-compose observability wiring visible
   as the concrete integration driver.
 
 ## 5. Development Items
 
-- [ ] OB-01: Diagnostic Payload Externalization Policy Opening.
-- [ ] OB-02: CallTree / Execution History / Job Diagnostic Summary Model.
+- [x] OB-01: Diagnostic Payload Externalization Policy Opening.
+- [x] OB-02: CallTree / Execution History / Job Diagnostic Summary Model.
 - [ ] OB-03: Diagnostic Payload External Store and Runtime Config.
 - [ ] OB-04: Structured Diagnostic Dashboard Drill-down.
 - [ ] OB-05: Metrics Collection and Metrics Service Expansion.
@@ -92,6 +93,29 @@ Resume hint:
 
 Detailed task breakdown and progress tracking are recorded in
 `phase-24-checklist.md`.
+
+OB-01 completion note:
+
+- `docs/design/observability/diagnostic-payload-externalization-policy.md`
+  is the normative Phase 24 policy entry point for diagnostic payload storage.
+- Runtime summary/reference shape starts in OB-02.
+- External store implementation and runtime configuration keys start in OB-03.
+
+OB-02 completion note:
+
+- CNCF now has a reusable `DiagnosticPayloadSummary` /
+  `DiagnosticPayloadReference` model for CallTree, execution history, Job
+  calltree/debug records, and task-local calltree projections.
+- CallTree action/UoW/space/I/O payload fields use compact summary records for
+  request, Web parameters, query, response, and result values.
+- Retained execution history keeps a structured `resultSummaryRecord` plus a
+  short display string for existing admin/list views.
+- Redaction is applied before summary/inline projection. Generic scalar/string
+  values are not inlined by default.
+- Generic JSON/YAML operation responses are summary-only in diagnostics; secret
+  bearing operation results should use typed result/value-class records.
+- OB-03 owns external file/object storage, payload-reference resolution,
+  retention, cleanup, authorization, and runtime configuration keys.
 
 ## 6. Completion Conditions
 

@@ -27,7 +27,7 @@ import org.scalatest.wordspec.AnyWordSpec
  *  version Mar. 28, 2026
  *  version Apr. 11, 2026
  *  version Apr. 14, 2026
- * @version May.  8, 2026
+ * @version May. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class AdminSystemPingExecutionSpec
@@ -144,9 +144,13 @@ final class AdminSystemPingExecutionSpec
       )
 
       val entry = ObservabilityEngine.latestExecution.getOrElse(fail("execution history missing"))
-      entry.resultSummary should include ("***")
+      entry.resultSummary should include ("scalar")
+      entry.resultSummaryRecord.getString("kind") shouldBe Some("scalar")
+      entry.resultSummaryRecord.getString("inline") shouldBe Some("false")
       entry.resultSummary should not include ("secret-token")
       entry.resultSummary should not include ("plain-secret")
+      entry.resultSummaryRecord.show should not include ("secret-token")
+      entry.resultSummaryRecord.show should not include ("plain-secret")
     }
 
     "redact metadata-sensitive record result summaries in execution history" in {
@@ -162,9 +166,12 @@ final class AdminSystemPingExecutionSpec
       )
 
       val entry = ObservabilityEngine.latestExecution.getOrElse(fail("execution history missing"))
-      entry.resultSummary should include ("***")
-      entry.resultSummary should include ("status")
+      entry.resultSummary should include ("record")
+      entry.resultSummaryRecord.getString("kind") shouldBe Some("record")
+      entry.resultSummaryRecord.show should include ("[redacted]")
+      entry.resultSummaryRecord.show should include ("status=ok")
       entry.resultSummary should not include ("123456")
+      entry.resultSummaryRecord.show should not include ("123456")
     }
   }
 

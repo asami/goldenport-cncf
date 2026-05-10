@@ -9,7 +9,10 @@ import org.goldenport.Conclusion
 import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.context.{ObservabilityContext, ScopeContext, ScopeKind, TraceId}
 import org.goldenport.cncf.log.{LogBackend, LogBackendHolder}
+import io.circe.Json
+import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.record.Record
+import org.goldenport.schema.DataConfidentiality
 import org.goldenport.configuration.{Configuration, ConfigurationTrace, ConfigurationValue, ResolvedConfiguration}
 
 /*
@@ -161,6 +164,67 @@ class ObservabilityEngineSpec extends AnyWordSpec with Matchers with BeforeAndAf
       result.getString("kind") shouldBe Some("string")
       result.getString("inline") shouldBe Some("false")
       result.show should not include ("proof-code-123")
+    }
+  }
+
+  "DiagnosticPayloadSummary" should {
+    "inline small safe records and summarize large records" in {
+      val small = DiagnosticPayloadSummary.recordSummary(
+        Record.data("status" -> "ok", "count" -> 1)
+      ).toRecord
+      val large = DiagnosticPayloadSummary.recordSummary(
+        Record.dataAuto((1 to 30).map(i => s"field$i" -> s"value$i")*),
+        includeInline = true
+      ).toRecord
+
+      small.getString("kind") shouldBe Some("record")
+      small.getString("inline") should not be Some("false")
+      large.getString("kind") shouldBe Some("record")
+      large.getString("field_count") shouldBe Some("30")
+      large.getString("inline") shouldBe Some("false")
+    }
+
+    "redact confidentiality metadata before summary generation" in {
+      val summary = DiagnosticPayloadSummary.recordSummary(
+        Record.data("proof" -> "123456", "status" -> "ok"),
+        confidentiality = Map("proof" -> DataConfidentiality.Secret)
+      ).toRecord
+
+      summary.show should include ("[redacted]")
+      summary.show should include ("status=ok")
+      summary.show should not include ("123456")
+    }
+
+    "summarize operation response variants deterministically" in {
+      val responses = Vector(
+        OperationResponse.Void(),
+        OperationResponse.RecordResponse(Record.data("status" -> "ok")),
+        OperationResponse.Json(Json.obj("password" -> Json.fromString("secret"))),
+        OperationResponse.Yaml("password: secret"),
+        OperationResponse.Scalar("token=secret-token"),
+        OperationResponse.Opaque("opaque-secret")
+      )
+      val summaries = responses.map(DiagnosticPayloadSummary.operationResponse(_).toRecord)
+
+      summaries.map(_.getString("kind")) should contain allOf (Some("void"), Some("record"), Some("json"), Some("yaml"), Some("scalar"), Some("opaque"))
+      summaries.find(_.getString("kind").contains("json")).get.getString("inline") shouldBe Some("false")
+      summaries.find(_.getString("kind").contains("yaml")).get.getString("inline") shouldBe Some("false")
+      summaries.find(_.getString("kind").contains("json")).get.show should not include ("secret")
+      summaries.find(_.getString("kind").contains("yaml")).get.show should not include ("secret")
+      summaries.find(_.getString("kind").contains("scalar")).get.show should not include ("secret-token")
+      summaries.find(_.getString("kind").contains("opaque")).get.show should not include ("opaque-secret")
+    }
+
+    "preserve existing payload references without creating external files" in {
+      val summary = DiagnosticPayloadSummary.recordSummary(
+        Record.data(
+          "payload_href" -> "/web/system/admin/execution/payloads/p1",
+          "status" -> "externalized"
+        )
+      ).toRecord
+
+      summary.getString("payload_href") shouldBe Some("/web/system/admin/execution/payloads/p1")
+      summary.getString("href") shouldBe Some("/web/system/admin/execution/payloads/p1")
     }
   }
 

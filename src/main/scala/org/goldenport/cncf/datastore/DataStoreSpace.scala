@@ -10,11 +10,12 @@ import org.goldenport.cncf.config.{ConfigurationAccess, ResolvedParameter}
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.observability.CallTreeValueSummary
 import org.goldenport.record.Record
+import org.goldenport.record.io.RecordEncoder
 
 /*
  * @since   Feb. 25, 2026
  *  version Apr. 15, 2026
- * @version May. 10, 2026
+ * @version May. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 class DataStoreSpace {
@@ -204,7 +205,7 @@ class DataStoreSpace {
       "datastore" -> store.getClass.getSimpleName.stripSuffix("$"),
       "operation" -> kind,
       "real_io" -> "true",
-      "query" -> _truncate_calltree_text(_redact_sensitive_text(directive.query.toString), 2000),
+      "query" -> _calltree_query_summary_json(directive),
       "limit" -> directive.limit.toString,
       "offset" -> directive.offset.toString
     )
@@ -258,6 +259,15 @@ class DataStoreSpace {
     limit: Int
   ): String =
     if (value.length <= limit) value else value.take(limit) + "..."
+
+  private def _calltree_query_summary_json(
+    directive: QueryDirective
+  ): String =
+    _truncate_calltree_text(RecordEncoder.json(CallTreeValueSummary.recordSummary(Record.dataAuto(
+      "query" -> _redact_sensitive_text(directive.query.toString),
+      "limit" -> directive.limit,
+      "offset" -> directive.offset
+    ), includeInline = true)), 4000)
 
   private def _redact_sensitive_text(value: String): String = {
     val sensitive = "(?i)(password|passwd|secret|token|session|authorization|cookie|credential|api[_-]?key)"

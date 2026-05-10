@@ -59,6 +59,7 @@ object ObservabilityEngine {
     outcome: String,
     resultType: String,
     resultSummary: String,
+    resultSummaryRecord: Record,
     capturedAt: Instant,
     jobId: Option[String],
     calltree: Option[CallTree]
@@ -73,6 +74,7 @@ object ObservabilityEngine {
         "outcome" -> outcome,
         "result_type" -> resultType,
         "result_summary" -> resultSummary,
+        "result_summary_record" -> resultSummaryRecord,
         "captured_at" -> capturedAt.toString,
         "job_id" -> jobId.getOrElse("")
         )
@@ -88,6 +90,7 @@ object ObservabilityEngine {
         "outcome" -> outcome,
         "result_type" -> resultType,
         "result_summary" -> resultSummary,
+        "result_summary_record" -> resultSummaryRecord,
         "captured_at" -> capturedAt.toString,
         "job_id" -> jobId.getOrElse(""),
         "calltree" -> calltree.map(tree => _calltree_nodes(tree.toRecord)).getOrElse(Vector.empty)
@@ -190,6 +193,7 @@ object ObservabilityEngine {
       "component",
       "service",
       "operation",
+      "value_type",
       "started_at_nanos",
       "ended_at_nanos",
       "duration_nanos",
@@ -461,7 +465,8 @@ object ObservabilityEngine {
           parametersText = parametersText,
           outcome = outcome.fold(_ => "failure", _ => "success"),
           resultType = outcome.fold(_ => "Conclusion", _result_type_),
-          resultSummary = outcome.fold(_failure_summary_, _result_summary_(_, resultConfidentiality)),
+          resultSummary = outcome.fold(_failure_summary_, _result_summary_text_(_, resultConfidentiality)),
+          resultSummaryRecord = outcome.fold(_failure_summary_record_, _result_summary_record_(_, resultConfidentiality)),
           capturedAt = Instant.now(),
           jobId = jobId,
           calltree = calltree
@@ -482,20 +487,47 @@ object ObservabilityEngine {
   private def _result_summary_(
     response: OperationResponse,
     confidentiality: Map[String, DataConfidentiality] = Map.empty
-  ): String =
-    _truncate(_response_summary_text(response, confidentiality), 1000)
+  ): Record =
+    _result_summary_record_(response, confidentiality)
 
-  private def _response_summary_text(
+  private def _result_summary_record_(
+    response: OperationResponse,
+    confidentiality: Map[String, DataConfidentiality] = Map.empty
+  ): Record =
+    DiagnosticPayloadSummary.operationResponse(response, confidentiality).toRecord
+
+  private def _result_summary_text_(
     response: OperationResponse,
     confidentiality: Map[String, DataConfidentiality] = Map.empty
   ): String =
-    response match {
-      case OperationResponse.RecordResponse(record) => _sanitize_record(record, confidentiality).show
-      case _ => _redact_sensitive_text(response.show)
-    }
+    _payload_display_text(_result_summary_record_(response, confidentiality))
 
   private def _failure_summary_(conclusion: Conclusion): String =
-    _truncate(conclusion.display, 1000)
+    _payload_display_text(_failure_summary_record_(conclusion))
+
+  private def _failure_summary_record_(conclusion: Conclusion): Record =
+    DiagnosticPayloadSummary.textSummary("conclusion", conclusion.display, includeInline = false).toRecord ++
+      Record.dataAuto(
+        "status" -> conclusion.status.webCode.code.toString,
+        "outcome" -> "failure"
+      )
+
+  private def _payload_display_text(record: Record): String = {
+    val kind = record.getString("kind").getOrElse("payload")
+    val parts = Vector(
+      Some(kind),
+      record.getString("record_count").map(x => s"records=$x"),
+      record.getString("element_count").map(x => s"elements=$x"),
+      record.getString("field_count").map(x => s"fields=$x"),
+      record.getString("fetched_count").map(x => s"fetched=$x"),
+      record.getString("total_count").map(x => s"total=$x"),
+      record.getString("size_bytes").map(x => s"${x} bytes"),
+      record.getString("char_count").map(x => s"${x} chars"),
+      record.getString("truncated").filter(_.equalsIgnoreCase("true")).map(_ => "truncated"),
+      record.getString("payload_href").orElse(record.getString("external_href")).map(x => s"ref=$x")
+    ).flatten
+    _truncate(parts.mkString(" "), 1000)
+  }
 
   private def _truncate(s: String, limit: Int): String =
     if (s.length <= limit) s else s.take(limit) + "..."
