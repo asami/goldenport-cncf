@@ -61,11 +61,11 @@ Error semantics must be completed before domain expansion.
 CML and CRUD layers will rely on this frozen contract.
 
 **Artifacts**
-- CNCF note: `error-semantics.md`
+- CNCF note: `docs/notes/legacy/2026/05/error-semantics.md`
 - Core note: `core-error-semantics.md`
 - Related design notes:
   - `docs/notes/scope-context-design.md`
-  - `docs/notes/conclusion-observation-design.md`
+  - `docs/notes/legacy/2026/05/conclusion-observation-design.md`
   - `docs/notes/observability-engine-build-emit-design.md`
 
 ### Phase 2.6: Demo Completion on Frozen Platform
@@ -144,7 +144,7 @@ Re-align error taxonomy and definitions before Phase 3 (CML).
 - No CRUD generation
 
 **Artifact (notes)**
-- `docs/notes/phase-2.9-error-realignment.md`
+- `docs/notes/legacy/2026/05/phase-2.9-error-realignment.md`
 
 **Relationship**
 Phase 3.0 starts only after Phase 2.9 is complete.
@@ -1021,7 +1021,8 @@ corresponding completed-history entry.
 
 Phase 23 is active. `9.7 Error Model / Consequence-Conclusion Realignment` is
 the selected development item. EM-01 Error Taxonomy / Detail Code Policy
-Opening is the active slice.
+Opening is complete; EM-02 Taxonomy / Cause / Disposition Inventory and
+Canonical Ordering is the active slice.
 
 ### 9.1 Web Next Stage Follow-ups
 Future Web/platform development item.
@@ -1134,8 +1135,8 @@ Work documents:
 
 Active stack:
 
-- EM-01: Error Taxonomy / Detail Code Policy Opening. ACTIVE.
-- EM-02: Taxonomy / Cause / Disposition Inventory and Canonical Ordering. TODO.
+- EM-01: Error Taxonomy / Detail Code Policy Opening. DONE.
+- EM-02: Taxonomy / Cause / Disposition Inventory and Canonical Ordering. ACTIVE.
 - EM-03: Detail Code Generation Model. TODO.
 - EM-04: Consequence Helper and Component Failure Normalization. TODO.
 - EM-05: Web/API/Admin/Observability Projection Alignment. TODO.
@@ -1152,6 +1153,9 @@ Active stack:
   ordering, or detail codes. Phase 23 may renumber, rename, merge, or split
   classifications; changes must be documented and tested, but compatibility
   aliases are not required until CNCF stable.
+- `docs/design/error-model-policy.md` is the normative Phase 23 policy entry
+  point. Older error-semantics and Observation/Descriptor notes are provisional
+  inputs, not the final contract.
 - Make reusable framework and builtin components emit ordinary
   `Consequence.Failure(Conclusion)` values.
 - Use `Cause.Kind` for coarse mechanism classification such as capability,

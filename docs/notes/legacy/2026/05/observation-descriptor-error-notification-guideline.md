@@ -1,5 +1,11 @@
 # Observation/Descriptor-Based Error Notification Guidelines (Draft)
 
+> Legacy note: This document is historical/provisional material. It is
+> superseded for Phase 23 Error Model work by
+> `docs/design/error-model-policy.md`. Do not treat freeze, stability,
+> compatibility, or finality wording in this document as the current normative
+> contract.
+
 Status: draft
 
 ## 1. Purpose

@@ -1,5 +1,11 @@
 # Conclusion & Observation Design — Typed Failure Semantics with Descriptive Records
 
+> Legacy note: This document is historical/provisional material. It is
+> superseded for Phase 23 Error Model work by
+> `docs/design/error-model-policy.md`. Do not treat freeze, stability,
+> compatibility, or finality wording in this document as the current normative
+> contract.
+
 status = draft
 since = 2026-01-08
 
@@ -136,7 +142,7 @@ CONSTRAINTS
 - Do NOT change wording or structure
 
 EXPECTED RESULT
-- New design note exists at docs/notes/conclusion-observation-design.md
+- New design note exists at docs/notes/legacy/2026/05/conclusion-observation-design.md
 - No code changes
 
 END

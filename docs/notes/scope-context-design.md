@@ -106,5 +106,5 @@ This note is a design contract for Phase 2.5.
 Implementation details remain minimal and subject to later refinement.
 
 See also:
-- conclusion-observation-design.md
+- legacy/2026/05/conclusion-observation-design.md
 - observability-engine-build-emit-design.md

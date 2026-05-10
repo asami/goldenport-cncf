@@ -13,7 +13,7 @@ It does not define backends, exporters, or operational policies.
 1) [scope-context-design.md](scope-context-design.md)
    - Defines the ScopeContext boundary and structural ownership of context.
 
-2) [conclusion-observation-design.md](conclusion-observation-design.md)
+2) [conclusion-observation-design.md](legacy/2026/05/conclusion-observation-design.md)
    - Defines the boundary between logic-bearing Conclusion and descriptive Observation.
 
 3) [observability-engine-build-emit-design.md](observability-engine-build-emit-design.md)

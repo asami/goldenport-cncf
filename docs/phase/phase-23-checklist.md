@@ -18,7 +18,7 @@ It complements the summary-level phase document (`phase-23.md`).
 
 ## EM-01: Error Taxonomy / Detail Code Policy Opening
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
@@ -27,25 +27,25 @@ and development order for Error Model realignment before runtime/model changes.
 
 ### Detailed Tasks
 
-- [ ] Confirm Phase 23 is selected in strategy and Phase 22 remains the latest
+- [x] Confirm Phase 23 is selected in strategy and Phase 22 remains the latest
       closed phase.
-- [ ] Record the pre-stable compatibility policy:
+- [x] Record the pre-stable compatibility policy:
   - error taxonomy compatibility is not guaranteed;
   - numeric ordering and detail codes may be renumbered;
   - classifications may be renamed, merged, or split;
   - compatibility aliases are not required until CNCF stable.
-- [ ] Identify historical/provisional inputs:
-  - `docs/notes/error-semantics.md`;
-  - `docs/notes/conclusion-observation-design.md`;
-  - `docs/notes/observation-descriptor-error-notification-guideline.md`;
-  - `docs/notes/phase-2.9-error-realignment.md`.
-- [ ] Define the development order from policy opening to implementation:
+- [x] Identify historical/provisional inputs:
+  - `docs/notes/legacy/2026/05/error-semantics.md`;
+  - `docs/notes/legacy/2026/05/conclusion-observation-design.md`;
+  - `docs/notes/legacy/2026/05/observation-descriptor-error-notification-guideline.md`;
+  - `docs/notes/legacy/2026/05/phase-2.9-error-realignment.md`.
+- [x] Define the development order from policy opening to implementation:
   - inventory and canonical ordering;
   - detail-code generation;
   - helper/component failure normalization;
   - Web/API/Admin/Observability projection alignment;
   - verification and closure.
-- [ ] Keep EM-01 docs/status only.
+- [x] Keep EM-01 docs/status only.
 
 ### Expected Output
 
@@ -62,11 +62,25 @@ and development order for Error Model realignment before runtime/model changes.
 - Do not treat historical draft notes as normative until they are rewritten or
   superseded by Phase 23 docs/specs.
 
+### Completion Notes
+
+- `docs/design/error-model-policy.md` is the normative Phase 23 policy entry
+  point.
+- The role boundaries are fixed:
+  - `Conclusion` is logic-bearing failure semantics and stable control input.
+  - `Observation` is descriptive evidence and diagnostics, not control flow.
+  - `Cause`, taxonomy, disposition, and facets are structured classification
+    for helpers, tests, projections, metrics, and dashboards.
+- Pre-stable compatibility is explicit: taxonomy, numeric ordering, and detail
+  codes may change during Phase 23; aliases are not required before CNCF stable.
+- Historical notes remain provisional inputs and are superseded where they
+  conflict with the Phase 23 policy.
+
 ---
 
 ## EM-02: Taxonomy / Cause / Disposition Inventory and Canonical Ordering
 
-Status: TODO
+Status: ACTIVE
 
 ### Objective
 
