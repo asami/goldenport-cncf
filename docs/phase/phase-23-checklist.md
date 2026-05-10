@@ -237,7 +237,7 @@ metrics, dashboards, and observability records.
 
 ## EM-06: Phase 23 Verification and Closure
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
@@ -245,12 +245,47 @@ Verify Phase 23 work and close or explicitly defer remaining Error Model scope.
 
 ### Detailed Tasks
 
-- [ ] Confirm Phase 23 docs and strategy status match implemented behavior.
-- [ ] Confirm EM-01 through EM-05 are DONE or explicitly deferred.
-- [ ] Run focused and full validations required by touched implementation
+- [x] Confirm Phase 23 docs and strategy status match implemented behavior.
+- [x] Confirm EM-01 through EM-05 are DONE or explicitly deferred.
+- [x] Run focused and full validations required by touched implementation
       slices.
-- [ ] Record closure notes and next development candidates.
+- [x] Record closure notes and next development candidates.
 
 ### Guardrails
 
 - Do not close Phase 23 while active Error Model work remains implicit.
+
+### Closure Notes
+
+- Phase 23 is closed. No ACTIVE Error Model slice remains in the phase
+  dashboard or checklist.
+- EM-01 through EM-05 completed the normative policy note, formal vocabulary
+  migration, numeric `DetailCode` generation model, helper/failure
+  normalization, and Web/API/Admin/Observability projection alignment.
+- `Conclusion.Status.detailCode` is the single canonical numeric detail code
+  source for structured failures. Projection layers must not recompute it.
+- `Status.detailCodes`, `Status.strategies`, legacy `http.xxx`, and
+  `codeSource` are not active Error Model contract surfaces.
+- `Conclusion.previous` remains the source-error trace mechanism.
+
+Validation evidence from the implementation closure:
+
+- `simplemodeling-lib`: `sbt --batch test` passed.
+- CNCF: `sbt --batch test` passed.
+
+Deferred items moved to future development candidates:
+
+- Broader replacement of remaining message-only / `Conclusion.simple` /
+  component-local failure paths.
+- Stable post-pre-stable compatibility policy for taxonomy, numeric ordering,
+  and `DetailCode`.
+- Generated error catalog/reference documentation from formal vocabulary and
+  detail-code rules.
+- Application-level `appCode` / `appStatus` conventions and examples.
+- CLI exit-code mapping policy from `Conclusion`, separate from numeric
+  `DetailCode`.
+- Dashboard drill-down for `previous` chains and structured diagnostic grouping.
+- Large diagnostic payload externalization for CallTree, execution history, Job
+  diagnostics, and Task calltree.
+- Additional structured Web/API error presentation polish after application
+  feedback.

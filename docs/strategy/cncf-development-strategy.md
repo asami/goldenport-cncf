@@ -649,11 +649,11 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Notes contain execution details and results for each phase.
 
 ## Process Status Pointers
-- Current phase selection: Phase 23 — Error Model / Consequence-Conclusion Realignment.
-- Current active phase dashboard: `docs/phase/phase-23.md`
-- Current active phase checklist: `docs/phase/phase-23-checklist.md`
-- Latest closed phase dashboard: `docs/phase/phase-22.md`
-- Latest closed phase checklist: `docs/phase/phase-22-checklist.md`
+- Current phase selection: next phase to be selected.
+- Current active phase dashboard: none.
+- Current active phase checklist: none.
+- Latest closed phase dashboard: `docs/phase/phase-23.md`
+- Latest closed phase checklist: `docs/phase/phase-23-checklist.md`
 - Candidate next phase areas: AwsComponent/S3 BlobStore
   provider; Search/index planning; DB migration tooling.
 - Status interpretation rules: `docs/rules/stage-status-and-checklist-convention.md`
@@ -685,7 +685,7 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Phase 20: closed (`docs/phase/phase-20.md`)
 - Phase 21: closed (`docs/phase/phase-21.md`)
 - Phase 22: closed (`docs/phase/phase-22.md`)
-- Phase 23: active (`docs/phase/phase-23.md`)
+- Phase 23: closed (`docs/phase/phase-23.md`)
 
 ## 8. Completed Development Item History
 
@@ -1012,6 +1012,33 @@ Completed in Phase 22.
   Observability, 9.15 Saga Management, 9.13 Distributed Component Runtime,
   9.2 Event Mechanism Follow-ups, and 9.1 Web Next Stage Follow-ups.
 
+### 8.13 Error Model / Consequence-Conclusion Realignment
+Completed in Phase 23.
+
+- Closed dashboard: `docs/phase/phase-23.md`
+- Closed checklist: `docs/phase/phase-23-checklist.md`
+- Completed scope:
+  - Normative Error Model policy entry point in
+    `docs/design/error-model-policy.md`, with legacy Phase 2.x draft notes
+    moved under `docs/notes/legacy/2026/05/`.
+  - Formal Error Model vocabulary in `org.goldenport.observation` and
+    `org.goldenport.conclusion`, while `org.goldenport.Conclusion` remains the
+    public aggregate type.
+  - Canonical taxonomy, cause, interpretation, disposition, status, and detail
+    vocabulary ordering and numbering documented in
+    `docs/design/error-taxonomy-catalog.md`.
+  - Numeric `Long` `DetailCode` generation from structured `Conclusion` data,
+    with `Conclusion.Status.detailCode` as the single authoritative detail-code
+    value and `Status.detailCodes` / `Status.strategies` removed.
+  - Focused `Consequence` helper expansion and representative CNCF Blob,
+    Static Form/Web, Job, and Event failure normalization onto structured
+    `Consequence.Failure(Conclusion)` values.
+  - Web/API/Admin/Observability projection alignment on materialized
+    `Conclusion.Status`, taxonomy, cause, disposition, facets, and
+    `Conclusion.previous` source-error chains.
+- Deferred scope remains under 9.7 Error Model Follow-ups, 9.4 Metrics and
+  Observability, and 9.1 Web Next Stage Follow-ups.
+
 ## 9. Development Item Status
 
 This final section lists planned active and future development areas only.
@@ -1019,13 +1046,8 @@ Completed work areas are recorded in section 8. When a development item closes,
 remove its completion record from this section and add or update the
 corresponding completed-history entry.
 
-Phase 23 is active. `9.7 Error Model / Consequence-Conclusion Realignment` is
-the selected development item. EM-01 Error Taxonomy / Detail Code Policy
-Opening, EM-02 Taxonomy / Cause / Disposition Inventory and Canonical
-Ordering, EM-03 Detail Code Generation Model, EM-04 Consequence Helper and
-Component Failure Normalization, and EM-05 Web/API/Admin/Observability
-Projection Alignment are complete; EM-06 Phase 23 verification and closure is
-the active slice.
+No current development item is selected. Phase 23 is closed; choose the next
+phase from the candidate development areas below.
 
 ### 9.1 Web Next Stage Follow-ups
 Future Web/platform development item.
@@ -1049,6 +1071,8 @@ Future Web/platform development item.
   operations, read/dismiss workflows, multicast/broadcast audience operations,
   and operator-facing notification administration as application UX rather than
   Job core behavior.
+- Structured Web/API error presentation polish remains future work after
+  application feedback on the Phase 23 projection baseline.
 
 ### 9.2 Event Mechanism Follow-ups
 Future event/runtime development item.
@@ -1090,6 +1114,9 @@ Future observability development item.
 
 - Metrics collection expansion.
 - OpenTelemetry support.
+- Dashboard drill-down for structured diagnostics, including
+  `Conclusion.previous` source-error chains and grouping by structured
+  taxonomy/cause/disposition fields.
 - CallTree / execution-history / Job diagnostic result externalization:
   - CallTree, Task calltree, and Job result records must store compact
     summaries/references by default, not full action/UoW/space/I/O
@@ -1128,55 +1155,21 @@ Future component development item.
 - AwsComponent remains optional. Local and in-memory BlobStores continue to
   serve development and executable-spec use cases.
 
-### 9.7 Error Model / Consequence-Conclusion Realignment
-Active in Phase 23.
+### 9.7 Error Model Follow-ups
+Future error-model hardening item.
 
-Work documents:
-
-- Dashboard: `docs/phase/phase-23.md`
-- Checklist: `docs/phase/phase-23-checklist.md`
-
-Active stack:
-
-- EM-01: Error Taxonomy / Detail Code Policy Opening. DONE.
-- EM-02: Taxonomy / Cause / Disposition Inventory and Canonical Ordering. DONE.
-- EM-03: Detail Code Generation Model. DONE.
-- EM-04: Consequence Helper and Component Failure Normalization. DONE.
-- EM-05: Web/API/Admin/Observability Projection Alignment. DONE.
-- EM-06: Phase 23 verification and closure. ACTIVE.
-
-- Revisit the core `Consequence` / `Conclusion` / `Observation` model before
-  adding more component-local error classification surfaces.
-- Inventory and redesign taxonomy, cause, disposition, status/detail facets,
-  including categories that are likely to be needed by near-future CNCF work.
-- Reorder taxonomy/cause/disposition kinds meaningfully and renumber them.
-- Formal Error Model vocabulary now lives in `org.goldenport.observation` and
-  `org.goldenport.conclusion`; `org.goldenport.provisional.*` is no longer the
-  active package surface for these types.
-- Establish deterministic numeric `Long` detail-code generation and put it into
-  normal operation for CNCF-visible errors.
-- Pre-stable CNCF does not guarantee compatibility for error taxonomy, numeric
-  ordering, or detail codes. Phase 23 may renumber, rename, merge, or split
-  classifications; changes must be documented and tested, but compatibility
-  aliases are not required until CNCF stable.
-- `docs/design/error-model-policy.md` is the normative Phase 23 policy entry
-  point. `docs/design/error-taxonomy-catalog.md` records the EM-02 canonical
-  package locations, ordering, and numbers. `docs/design/error-detail-code-policy.md`
-  records the EM-03 numeric `DetailCode` policy. Older error-semantics and
-  Observation/Descriptor notes are provisional inputs, not the final contract.
-- Make reusable framework and builtin components emit ordinary
-  `Consequence.Failure(Conclusion)` values.
-- Use `Cause.Kind` for coarse mechanism classification such as capability,
-  permission, guard, relation, format, policy, limit, and inconsistency.
-- Use `Descriptor.Facet` for machine-readable details such as parameter, field
-  path, policy, algorithm, capability, permission, guard, relation, and reason.
-- Project metrics, dashboards, Web/admin diagnostics, and observability records
-  from structured `Conclusion` data rather than component-local labels or
-  message parsing.
-- `Conclusion.Status` carries generated `webCode`, generated numeric
-  `DetailCode`, and optional application `appCode` / `appStatus` metadata,
-  while `Status.detailCodes` and `Status.strategies` are removed from the
-  active model.
+- Broader replacement of remaining message-only / `Conclusion.simple` /
+  component-local failure paths with structured `Consequence.Failure(Conclusion)`
+  values where they are part of reusable framework behavior.
+- Stable CNCF compatibility policy for taxonomy, numeric ordering, and
+  `DetailCode` after pre-stable iteration ends.
+- Generated error catalog/reference documentation from formal taxonomy, cause,
+  interpretation, disposition, status, and detail-code rules.
+- Application-level `appCode` / `appStatus` conventions and examples.
+- CLI exit-code mapping policy from `Conclusion`; exit codes remain separate
+  from numeric `DetailCode`.
+- Additional source-error trace UX around `Conclusion.previous`, including
+  dashboard drill-down and structured diagnostic grouping.
 
 ### 9.8 Media Attributes Model Cleanup
 Future platform development item.

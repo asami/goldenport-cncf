@@ -1,20 +1,19 @@
 # Phase 23 — Error Model / Consequence-Conclusion Realignment
 
-status = active
+status = closed
 
 ## 1. Purpose of This Document
 
-This work document opens Phase 23 and makes
-`9.7 Error Model / Consequence-Conclusion Realignment` the current development
-item.
+This work document records the completed Phase 23 work for
+`9.7 Error Model / Consequence-Conclusion Realignment`.
 
-Phase 23 started by fixing the policy boundary for CNCF error semantics.
+Phase 23 fixed the policy boundary for CNCF error semantics.
 `EM-01 — Error Taxonomy / Detail Code Policy Opening`,
 `EM-02 — Taxonomy / Cause / Disposition Inventory and Canonical Ordering`, and
 `EM-03 — Detail Code Generation Model`, `EM-04 — Consequence Helper and
 Component Failure Normalization`, and `EM-05 — Web/API/Admin/Observability
 Projection Alignment` are complete. `EM-06 — Phase 23 verification and closure`
-is active.
+is complete.
 
 This document is a phase dashboard, not a design journal.
 
@@ -60,22 +59,20 @@ The canonical EM-02 vocabulary catalog is
 - No stable-version deprecation policy in EM-01; stable compatibility policy is
   a later pre-release hardening concern.
 
-## 4. Active Work Stack
+## 4. Closed Work Stack
 
 - A (DONE): EM-01 — Error Taxonomy / Detail Code Policy Opening.
 - B (DONE): EM-02 — Taxonomy / Cause / Disposition Inventory and Canonical Ordering.
 - C (DONE): EM-03 — Detail Code Generation Model.
 - D (DONE): EM-04 — Consequence Helper and Component Failure Normalization.
 - E (DONE): EM-05 — Web/API/Admin/Observability Projection Alignment.
-- F (ACTIVE): EM-06 — Phase 23 verification and closure.
+- F (DONE): EM-06 — Phase 23 verification and closure.
 
 Resume hint:
 
-- Continue with EM-06. Verify Phase 23 end-to-end behavior, run final
-  validation, and prepare closure notes.
-- Keep the error-code policy explicitly pre-stable: renumbering and
-  classification changes are allowed during Phase 23, but each completed slice
-  must be deterministic and documented.
+- Phase 23 closed; select next phase.
+- Future Error Model hardening remains in the development candidates rather than
+  as active Phase 23 work.
 
 ## 5. Development Items
 
@@ -84,14 +81,14 @@ Resume hint:
 - [x] EM-03: Detail Code Generation Model.
 - [x] EM-04: Consequence Helper and Component Failure Normalization.
 - [x] EM-05: Web/API/Admin/Observability Projection Alignment.
-- [ ] EM-06: Phase 23 verification and closure.
+- [x] EM-06: Phase 23 verification and closure.
 
 Detailed task breakdown and progress tracking are recorded in
 `phase-23-checklist.md`.
 
 ## 6. Completion Conditions
 
-Phase 23 can close when:
+Phase 23 closed after:
 
 - `Consequence`, `Conclusion`, and `Observation` responsibilities are
   documented and reflected in implementation-facing helpers.
@@ -105,3 +102,35 @@ Phase 23 can close when:
 - Metrics, dashboards, Web/admin diagnostics, and observability records project
   structured `Conclusion` data consistently.
 - Deferred post-Phase-23 compatibility/stability work is explicitly named.
+
+## 7. Closure Note
+
+Completed scope:
+
+- Formal Error Model vocabulary moved to `org.goldenport.observation` and
+  `org.goldenport.conclusion`, with `org.goldenport.Conclusion` remaining the
+  public aggregate type.
+- Canonical taxonomy, cause, interpretation, disposition, status, and detail
+  vocabulary ordering is documented and tested.
+- `DetailCode` is a generated numeric `Long` carried by
+  `Conclusion.Status.detailCode`; message text and debug labels are not part of
+  the generation key.
+- `Conclusion.Status` carries generated `webCode`, generated `detailCode`, and
+  optional `appCode` / `appStatus`; `Status.detailCodes` and
+  `Status.strategies` are removed from the active model.
+- Reusable helpers and representative CNCF Blob, Static Form/Web, Job, and
+  Event failure paths were normalized onto structured
+  `Consequence.Failure(Conclusion)` values with `Conclusion.previous` as the
+  source-error link.
+- Web/API/Admin/Observability projections read structured status and diagnostic
+  fields from materialized `Conclusion` values and do not expose legacy
+  `http.xxx` / `codeSource` fields as the active error contract.
+
+Validation evidence from the implementation closure:
+
+- `simplemodeling-lib`: `sbt --batch test` passed.
+- CNCF: `sbt --batch test` passed.
+
+Deferred follow-ups are tracked in
+`docs/strategy/cncf-development-strategy.md` section 9.7 and related
+Observability/Web follow-up sections.
