@@ -2421,7 +2421,11 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       )
       Files.writeString(root.resolve("WEB-INF").resolve("layouts").resolve("lower-private.html"), "<h1>lowercase private</h1>", StandardCharsets.UTF_8)
       Files.writeString(root.resolve("WEB-INF").resolve("partials").resolve("header.html"), "<header>Global Header</header>", StandardCharsets.UTF_8)
-      Files.writeString(root.resolve("WEB-INF").resolve("partials").resolve("publicblogs").resolve("header.html"), "<header>Public Blogs Header</header>", StandardCharsets.UTF_8)
+      Files.writeString(
+        root.resolve("WEB-INF").resolve("partials").resolve("publicblogs").resolve("header.html"),
+        """<header>Public Blogs Header <a data-notification-indicator ${pageContext.notification.indicatorHidden}>Notifications <span data-notification-badge ${pageContext.notification.badgeHidden}>${pageContext.notification.unconfirmedCount}</span></a></header>""",
+        StandardCharsets.UTF_8
+      )
       Files.writeString(root.resolve("WEB-INF").resolve("partials").resolve("navigation.html"), "<nav>Shared Navigation</nav>", StandardCharsets.UTF_8)
       Files.writeString(root.resolve("WEB-INF").resolve("partials").resolve("footer.html"), "<footer>Shared Footer</footer>", StandardCharsets.UTF_8)
       Files.writeString(
@@ -2448,6 +2452,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         response.status.code shouldBe 200
       }
       html should include ("Public Blogs Header")
+      html should include ("data-notification-indicator hidden")
+      html should include ("data-notification-badge hidden>0</span>")
       html should not include ("Global Header")
       html should include ("Shared Navigation")
       html should include ("Shared Footer")
@@ -8272,6 +8278,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       js should include ("callTreePayloadHtml")
       js should include ("Show ' + escapeHtml(key)")
       js should include ("Open external ' + escapeHtml(key)")
+      js should include ("function debugRecordKey")
+      js should include ("function shouldReplaceRecord")
+      js should include ("data-debug-event-key")
+      js should include ("""kind === "page-render" || kind === "background"""")
       js should not include ("UoW</span>")
       js should include ("window.TextusCallTree.enhanceAll")
     }
@@ -9398,6 +9408,32 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       _count_occurrences(html, "/web/assets/bootstrap.bundle.min.js") shouldBe 1
       _count_occurrences(html, "/web/assets/textus-widgets.css") shouldBe 1
       _count_occurrences(html, "/web/assets/textus-widgets.js") shouldBe 1
+    }
+
+    "insert descriptor-declared favicon once during completion" in {
+      val html = StaticFormAppLayout.completeDeclaredAssets(
+        """<!doctype html>
+          |<html lang="en">
+          |<head><title>Declared favicon</title></head>
+          |<body><main>Body</main></body>
+          |</html>""".stripMargin,
+        StaticFormAppLayout.AssetCompletionOptions(
+          declaredCss = Vector("/web/assets/site.css"),
+          favicon = Some("/web/assets/favicon.svg")
+        )
+      )
+      val existing = StaticFormAppLayout.completeDeclaredAssets(
+        html,
+        StaticFormAppLayout.AssetCompletionOptions(
+          favicon = Some("/web/assets/other.ico")
+        )
+      )
+
+      html should include ("""<link rel="icon" href="/web/assets/favicon.svg">""")
+      html should include ("""<link href="/web/assets/site.css" rel="stylesheet">""")
+      _count_occurrences(html, """rel="icon"""") shouldBe 1
+      _count_occurrences(existing, """rel="icon"""") shouldBe 1
+      existing should not include ("/web/assets/other.ico")
     }
 
     "load packaged Textus widget assets" in {

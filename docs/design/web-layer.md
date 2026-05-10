@@ -144,6 +144,28 @@ The API boundary is operation-centric:
 - Static Form assets, component app assets, and any future SPA bundle assets are
   distinct packaging concerns.
 
+Static Form page rendering uses an Application-tier page view context for
+screen chrome and other display support values that are backed by domain state.
+The Web tier should not fetch notification counts, job badges, session display
+state, tag summaries, or similar header/navigation data by issuing many
+independent Domain-tier calls. Instead, the renderer asks the Application tier
+for a single page context for the current app/page/route/session/query and
+exposes the result to layouts and partials as properties such as
+`${pageContext.notification.unconfirmedCount}`,
+`${pageContext.jobs.activeCount}`, and
+`${pageContext.jobs.unconfirmedCount}`. Job active count means submitted,
+running, or suspended application jobs visible to the current subject. Job
+unconfirmed count means terminal application jobs updated after the subject
+last opened that app's jobs page. Missing providers, anonymous sessions, or
+domain lookup failures must degrade to empty/zero/unavailable values and must
+not break HTML rendering.
+
+`/form-api` remains useful for input assistance, validation, optional refresh,
+async status checks, editor helpers, and other progressive enhancement. It is
+not the primary mechanism for rendering ordinary Static Form page bodies. When
+a page needs several display support values, add or use a page context query
+instead of adding multiple page-load Form API calls.
+
 Existing route families remain stable: `/web/...`, `/form/...`, `/form-api/...`,
 and `/rest/v1/...`. A SPA catch-all route must not be applied to `/web` as a
 whole. If SPA hosting is introduced later, it must be explicitly scoped to a
@@ -456,15 +478,23 @@ Static Form result rendering uses `web.assets` as composition input:
 - `autoComplete: false` disables automatic framework asset insertion.
 - `css` and `js` entries are inserted into result pages as application
   composition assets, with duplicate suppression.
+- `favicon` declares the page icon URL. The renderer inserts one
+  `<link rel="icon" ...>` when the page does not already declare an icon.
+  `/favicon.ico` and `/web/favicon.ico` resolve to the descriptor favicon when
+  configured, otherwise to `assets/favicon.ico`, `assets/favicon.svg`, or
+  `assets/favicon.png` from the Web resource roots.
 - framework assets are inserted first, followed by descriptor-declared assets.
 
 Descriptor assets can also be scoped to a Web app and to a form/operation:
 
 ```yaml
 web:
+  assets:
+    favicon: /web/assets/favicon.svg
   apps:
     - name: notice-board
       assets:
+        favicon: /web/notice-board/notice-board/assets/favicon.ico
         css:
           - /web/notice-board/notice-board/assets/app.css
         js:

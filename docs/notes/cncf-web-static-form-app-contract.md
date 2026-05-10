@@ -24,6 +24,28 @@ It is intentionally small. Static Form should support useful framework and
 application validation screens without becoming a general Web application
 framework.
 
+Static Form assumes a future three-tier deployment shape:
+
+- Web tier: server-rendered HTML, links/forms, local assets, and optional
+  page-local JavaScript enhancement.
+- Application tier: operation execution plus page-oriented aggregation queries
+  for data needed to render a screen.
+- Domain tier: business state, entities, jobs, notifications, tags, and other
+  durable domain/runtime records.
+
+Values needed by page chrome, such as notification badges, job visibility,
+session display, tag summaries, or feature availability, are exposed to
+templates through page context properties. The Web tier asks the Application
+tier for this context once for the current app/page/route/session/query; it
+does not directly issue separate Domain-tier calls for each header badge or
+navigation helper.
+
+The built-in job badge context exposes active application jobs and terminal
+jobs not yet checked from the application's jobs page:
+`${pageContext.jobs.activeCount}` and
+`${pageContext.jobs.unconfirmedCount}`. Opening `/web/{app}/jobs` records the
+current check point for that session/app pair.
+
 ## Path Model
 
 Operation REST paths use normalized Component / Service / Operation segments:
@@ -267,6 +289,15 @@ JSON Form API is an input preparation layer:
 - `GET /form-api/{component}/admin/aggregates/{aggregate}` returns Management
   Console aggregate form metadata from the resolved Web schema.
 - `POST /form-api/.../validate` validates input but does not execute the operation.
+
+Static Form page bodies should not depend on repeated `/form-api` calls for
+ordinary list/search rendering or for header badges. Search/list pages should
+prefer `/form/...` HTML submissions and result templates. Page chrome and
+lookup values needed for initial rendering should come from the Application
+tier page context and appear in templates as `${pageContext.*}` properties.
+`/form-api` remains appropriate for optional refresh, field assistance,
+validation, editor helpers, async status polling, and other progressive
+enhancement that does not own the main page render.
 - operation execution still uses the REST operation path.
 
 The stable JSON response contract for the definition endpoints is maintained in

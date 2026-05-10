@@ -334,6 +334,19 @@ object StaticFormAppRenderer {
     title: String,
     href: String
   )
+  val defaultPageViewContextValues: Map[String, String] = Map(
+    "pageContext.session.authenticated" -> "false",
+    "pageContext.notification.available" -> "false",
+    "pageContext.notification.unconfirmedCount" -> "0",
+    "pageContext.notification.indicatorHidden" -> "hidden",
+    "pageContext.notification.badgeHidden" -> "hidden",
+    "pageContext.jobs.activeCount" -> "0",
+    "pageContext.jobs.unconfirmedCount" -> "0",
+    "pageContext.jobs.visible" -> "false",
+    "pageContext.jobs.hidden" -> "hidden",
+    "pageContext.jobs.activeBadgeHidden" -> "hidden",
+    "pageContext.jobs.unconfirmedBadgeHidden" -> "hidden"
+  )
 
   def render(
     subsystem: Subsystem,
@@ -364,7 +377,8 @@ object StaticFormAppRenderer {
     page: Vector[String],
     template: String,
     assetCompletion: StaticFormAppLayout.AssetCompletionOptions =
-      StaticFormAppLayout.AssetCompletionOptions()
+      StaticFormAppLayout.AssetCompletionOptions(),
+    pageContext: WebPageContext = WebPageContext.empty
   ): Page = {
     val pageName =
       if (page.isEmpty) "index"
@@ -377,10 +391,16 @@ object StaticFormAppRenderer {
         "app" -> app,
         "page.name" -> pageName,
         "page.path" -> ("/web/" + (app +: page).mkString("/"))
-      )
+      ) ++ _page_context_properties(pageContext)
     )
     val rendered = _render_template(template, properties, Map.empty)
     Page(_complete_widget_assets(template, rendered, assetCompletion))
+  }
+
+  private def _page_context_properties(
+    pageContext: WebPageContext
+  ): Map[String, String] = {
+    defaultPageViewContextValues ++ pageContext.values
   }
 
   def isHtmlDocumentTemplate(template: String): Boolean =

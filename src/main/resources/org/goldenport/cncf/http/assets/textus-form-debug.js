@@ -632,6 +632,26 @@
     });
   }
 
+  function debugRecordKey(record) {
+    return [
+      record.kind || "interactive",
+      record.operation || "form-api",
+      record.label || ""
+    ].join("\u001f");
+  }
+
+  function shouldReplaceRecord(record) {
+    const kind = record.kind || "interactive";
+    return kind === "page-render" || kind === "background";
+  }
+
+  function replaceExistingRecord(events, key) {
+    if (!key) return;
+    events.querySelectorAll("[data-debug-event-key]").forEach(item => {
+      if (item.getAttribute("data-debug-event-key") === key) item.remove();
+    });
+  }
+
   function renderRecord(record) {
     const panel = ensurePanel();
     if (!panel) return;
@@ -641,10 +661,13 @@
     const body = record.body || "";
     const args = JSON.stringify(record.arguments || {}, null, 2);
     const calltree = callTreeHtml(record.calltree);
+    const key = debugRecordKey(record);
+    if (shouldReplaceRecord(record)) replaceExistingRecord(events, key);
     const event = document.createElement("details");
     event.className = "card border-" + variant + "-subtle bg-" + variant + "-subtle";
     event.open = false;
     event.setAttribute("data-debug-event", ok ? "success" : "failure");
+    event.setAttribute("data-debug-event-key", key);
     event.innerHTML = [
       '<summary class="card-header fw-semibold d-flex flex-wrap gap-2 align-items-center">',
       '<span class="badge text-bg-' + variant + '">' + (ok ? "success" : "failure") + '</span>',

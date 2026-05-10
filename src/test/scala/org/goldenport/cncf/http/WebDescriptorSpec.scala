@@ -17,7 +17,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Apr. 14, 2026
  *  version Apr. 25, 2026
- * @version May.  9, 2026
+ * @version May. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 final class WebDescriptorSpec extends AnyWordSpec with Matchers {
@@ -112,6 +112,7 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
           |        variables:
           |          primary: "#0f766e"
           |      assets:
+          |        favicon: /web/console/assets/favicon.ico
           |        css:
           |          - /web/console/assets/console.css
           |        js:
@@ -151,6 +152,7 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
           |
           |  assets:
           |    autoComplete: false
+          |    favicon: /web/assets/favicon.svg
           |    css:
           |      - /web/assets/bootstrap.min.css
           |      - /web/notice-board/assets/app.css
@@ -228,6 +230,7 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
       descriptor.apps(1).theme.variables("primary") shouldBe "#0f766e"
       descriptor.apps(1).assets.css shouldBe Vector("/web/console/assets/console.css")
       descriptor.apps(1).assets.js shouldBe Vector("/web/console/assets/console.js")
+      descriptor.apps(1).assets.favicon shouldBe Some("/web/console/assets/favicon.ico")
       descriptor.routes.map(_.path) shouldBe Vector("/web/notice-board", "/web")
       descriptor.routes.map(_.kind) shouldBe Vector(WebDescriptor.RouteKind.Alias, WebDescriptor.RouteKind.Default)
       descriptor.routes.head.target.component shouldBe "notice-board"
@@ -249,6 +252,7 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
       descriptor.assets.autoComplete shouldBe false
       descriptor.assets.css shouldBe Vector("/web/assets/bootstrap.min.css", "/web/notice-board/assets/app.css")
       descriptor.assets.js shouldBe Vector("/web/assets/bootstrap.bundle.min.js", "/web/notice-board/assets/app.js")
+      descriptor.assets.favicon shouldBe Some("/web/assets/favicon.svg")
       descriptor.theme.name shouldBe Some("shared")
       descriptor.theme.css shouldBe Vector("/web/assets/theme.css")
       descriptor.theme.variables("primary") shouldBe "#14532d"
@@ -264,6 +268,8 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
         "/web/notice-board/assets/app.css",
         "/web/console/assets/console.css"
       )
+      descriptor.resultAssets("notice-board", "notice", "search-notices").favicon shouldBe Some("/web/assets/favicon.svg")
+      descriptor.resultAssets("console", "notice", "search-notices").favicon shouldBe Some("/web/console/assets/favicon.ico")
     }
 
     "complete obvious Static Form Web app defaults from a minimal app entry" in {

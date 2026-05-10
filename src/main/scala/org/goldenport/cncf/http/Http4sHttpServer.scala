@@ -6,6 +6,7 @@ import cats.effect.unsafe.implicits.global
 import cats.syntax.all.*
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path, Paths}
+import java.time.Instant
 import java.util.UUID
 import scala.concurrent.duration.*
 import scala.collection.concurrent.TrieMap
@@ -32,7 +33,7 @@ import org.goldenport.cncf.component.builtin.auth.AuthComponent
 import org.goldenport.cncf.context.{ExecutionContext, RuntimeContext, ScopeContext, ScopeKind}
 import org.goldenport.cncf.config.{OperationMode, RuntimeConfig}
 import org.goldenport.cncf.naming.NamingConventions
-import org.goldenport.cncf.job.JobId
+import org.goldenport.cncf.job.{JobId, JobQueryReadModel, JobStatus}
 import org.goldenport.cncf.observability.{ConclusionDiagnostics, DslChokepointContext, DslChokepointPhase, DslChokepointRunner}
 import org.goldenport.cncf.mcp.McpJsonRpcAdapter
 import org.goldenport.cncf.openapi.OpenApiProjector
@@ -55,6 +56,7 @@ final class Http4sHttpServer(
 ) extends HttpServer(engine) {
   private val _bind_host = Host.fromString("0.0.0.0").get
   private val _form_continuations = TrieMap.empty[String, Http4sHttpServer.FormContinuation]
+  private val _application_job_seen_at = TrieMap.empty[(String, String), Instant]
   private val _operation_dispatcher =
     operationDispatcherOption.getOrElse(WebOperationDispatcher.create(engine))
   private val _mcp = new McpJsonRpcAdapter(engine.runtimeSubsystem)
@@ -106,6 +108,10 @@ final class Http4sHttpServer(
         IO.pure(_temporary_redirect(_redirect_target_with_query(req, "/web")))
       case GET -> Root / "mcp" =>
         _mcp_websocket(wsb, _mcp)
+      case GET -> Root / "favicon.ico" =>
+        _favicon()
+      case GET -> Root / "web" / "favicon.ico" =>
+        _favicon()
       case GET -> Root / "web" / "assets" / "bootstrap.min.css" =>
         _bootstrap_css()
       case GET -> Root / "web" / "assets" / "bootstrap.bundle.min.js" =>
@@ -142,7 +148,7 @@ final class Http4sHttpServer(
       case req @ GET -> Root / "web" / app / "signup" =>
         _web_route_alias(req, Vector("web", app, "signup")).flatMap {
           case Some(response) => IO.pure(response)
-          case None => _component_web_app_or_static_form_app(app, "signup")
+          case None => _component_web_app_or_static_form_app(app, "signup", Some(req))
         }
       case req @ POST -> Root / "web" / app / "login" =>
         _login_submit(req, app)
@@ -296,8 +302,8 @@ final class Http4sHttpServer(
               case None => _static_form_app(app, Vector.empty)
             }
         }
-      case GET -> Root / "web" / first / second =>
-        _component_web_app_or_static_form_app(first, second)
+      case req @ GET -> Root / "web" / first / second =>
+        _component_web_app_or_static_form_app(first, second, Some(req))
       case GET -> Root / "form" / app =>
         _form_index(app)
       case req @ GET -> Root / "form" / app / service / operation =>
@@ -879,11 +885,11 @@ final class Http4sHttpServer(
     _request_execution_context(req) match {
       case Consequence.Success(ctx) =>
         given ExecutionContext = ctx
-        val jobs = engine.runtimeSubsystem.jobEngine
-          .listJobs(limit = Int.MaxValue, persistentOnly = false)
-          .filter(_job_belongs_to_app(_, app))
-          .flatMap(model => engine.runtimeSubsystem.jobEngine.queryVisible(model.jobId).toOption.flatten)
+        val jobs = _visible_application_jobs(app)
           .take(100)
+        _session_id_(req).foreach { sessionId =>
+          _application_job_seen_at.update((sessionId, NamingConventions.toNormalizedSegment(app)), Instant.now)
+        }
         _html(StaticFormAppRenderer.renderApplicationJobs(app, jobs), Some(app))
       case Consequence.Failure(conclusion) =>
         _html_status(StaticFormAppRenderer.renderStructuredErrorPage(Some(app), StructuredHttpError.fromConclusion(
@@ -1119,7 +1125,7 @@ final class Http4sHttpServer(
             case Some(widget) =>
               _web_operation_result_page(req, componentName, webAppName, page, widget)
             case None =>
-              _web_app_static_page(Some(componentName), webAppName, page, content) match {
+              _web_app_static_page(Some(componentName), webAppName, page, content, req) match {
                 case Consequence.Success(page) =>
                   _html_content(page.body, Some(webAppName), Some(componentName))
                 case Consequence.Failure(conclusion) =>
@@ -1232,7 +1238,15 @@ final class Http4sHttpServer(
       )
       val res = result.response
       val continuation = _create_form_continuation(app, service, operation, form, res, _form_chunk_size(form))
-      val properties = _form_result_properties(app, service, operation, result, values ++ _continuation_values(continuation))
+      val resultValues = values ++ _continuation_values(continuation)
+      val properties = _form_result_properties(
+        app,
+        service,
+        operation,
+        result,
+        resultValues,
+        _form_page_view_context_values(req, app, service, operation, resultValues)
+      )
       _prepared_form_result_template(app, service, operation, res.code, properties.page.values) match {
         case Consequence.Success(template) =>
           _html(StaticFormAppRenderer.renderFormResult(properties, template), Some(webAppName)).map { response =>
@@ -1276,13 +1290,14 @@ final class Http4sHttpServer(
 
   private[http] def _component_web_app_or_static_form_app(
     first: String,
-    second: String
+    second: String,
+    req: Option[org.http4s.Request[IO]] = None
   ): IO[HResponse[IO]] =
     if (_component_exists(first) && _web_app_static_html_content(Some(first), second, Vector.empty).nonEmpty)
-      _component_web_app(first, second, Vector.empty)
+      _component_web_app(first, second, Vector.empty, req)
     else engine.webDescriptor.webRouteFor(Vector("web", first, second)) match {
       case Some(route) =>
-        _component_web_app(route.target.normalizedComponent, route.target.normalizedApp, route.remainingPath)
+        _component_web_app(route.target.normalizedComponent, route.target.normalizedApp, route.remainingPath, req)
       case None =>
       _static_form_app(first, Vector(second))
     }
@@ -1628,7 +1643,7 @@ final class Http4sHttpServer(
                 HttpStatus.BadRequest,
                 ContentType(MimeType("text/plain"), Some(StandardCharsets.UTF_8)),
                 Bag.text("Validation failed.", StandardCharsets.UTF_8)
-              ), pageValues)
+              ), pageValues, _form_page_view_context_values(req, app, service, operation, pageValues))
             ))
             _html_status(page, HStatus.BadRequest, Some(app)).map { html =>
               RuntimeDashboardMetrics.recordHtmlRequest(
@@ -1672,7 +1687,15 @@ final class Http4sHttpServer(
     _annotate_application_job(result, app, service, operation)
     val res = result.response
     val continuation = _create_form_continuation(app, service, operation, form, res, _form_chunk_size(form))
-    val properties = _form_result_properties(app, service, operation, result, values ++ _continuation_values(continuation))
+    val resultValues = values ++ _continuation_values(continuation)
+    val properties = _form_result_properties(
+      app,
+      service,
+      operation,
+      result,
+      resultValues,
+      _form_page_view_context_values(req, app, service, operation, resultValues)
+    )
     _form_transition_response(app, service, operation, form, res, properties).map { response =>
       RuntimeDashboardMetrics.recordHtmlRequest(
         req.method.name,
@@ -1789,7 +1812,14 @@ final class Http4sHttpServer(
         _prepared_form_result_template(app, service, operation, res.code, values) match {
           case Consequence.Success(template) =>
             val page = StaticFormAppRenderer.renderFormResult(
-              _form_result_properties(app, service, operation, res, values),
+              _form_result_properties(
+                app,
+                service,
+                operation,
+                res,
+                values,
+                _form_page_view_context_values(req, app, service, operation, values)
+              ),
               template
             )
             _html(page, Some(app)).map { html =>
@@ -2241,7 +2271,14 @@ final class Http4sHttpServer(
     _prepared_form_result_template(app, service, operation, res.code, values) match {
       case Consequence.Success(template) =>
         val page = StaticFormAppRenderer.renderFormResult(
-          _form_result_properties(app, service, operation, result, values),
+          _form_result_properties(
+            app,
+            service,
+            operation,
+            result,
+            values,
+            _form_page_view_context_values(req, app, service, operation, values)
+          ),
           template
         )
         _html(page, Some(app)).map { html =>
@@ -2295,7 +2332,14 @@ final class Http4sHttpServer(
         _prepared_form_result_template(app, service, operation, res.code, values) match {
           case Consequence.Success(template) =>
             val page = StaticFormAppRenderer.renderFormResult(
-              _form_result_properties(app, service, operation, result, values),
+              _form_result_properties(
+                app,
+                service,
+                operation,
+                result,
+                values,
+                _form_page_view_context_values(req, app, service, operation, values)
+              ),
               template
             )
             _html(page, Some(app)).map { html =>
@@ -2318,14 +2362,16 @@ final class Http4sHttpServer(
     service: String,
     operation: String,
     response: HttpResponse,
-    values: Map[String, String]
+    values: Map[String, String],
+    pageContextValues: Map[String, String]
   ): StaticFormAppRenderer.FormResultProperties =
     _form_result_properties(
       app,
       service,
       operation,
       HttpExecutionResult(response, RuntimeContext.ExecutionMetadata.empty),
-      values
+      values,
+      pageContextValues
     )
 
   private def _form_result_properties(
@@ -2333,15 +2379,19 @@ final class Http4sHttpServer(
     service: String,
     operation: String,
     result: HttpExecutionResult,
-    values: Map[String, String]
+    values: Map[String, String],
+    pageContextValues: Map[String, String] = Map.empty
   ): StaticFormAppRenderer.FormResultProperties = {
     val debugValues =
       if (_is_development_operation_mode(_operation_mode))
         values + ("textus.debug.executionPanel" -> "true")
       else
         values
+    val userValues = debugValues.filterNot { case (key, _) => key.startsWith("pageContext.") }
+    val pageValues =
+      userValues ++ StaticFormAppRenderer.defaultPageViewContextValues ++ pageContextValues
     StaticFormAppRenderer.FormResultProperties(
-      StaticFormAppRenderer.FormPageProperties(app, service, operation, debugValues),
+      StaticFormAppRenderer.FormPageProperties(app, service, operation, pageValues),
       result.response.code,
       result.response.mime.value,
       result.response.getString.getOrElse(""),
@@ -2414,7 +2464,8 @@ final class Http4sHttpServer(
     StaticFormAppLayout.AssetCompletionOptions(
       autoComplete = assets.autoComplete,
       declaredCss = assets.css,
-      declaredJs = assets.js
+      declaredJs = assets.js,
+      favicon = assets.favicon
     )
   }
 
@@ -2902,6 +2953,47 @@ final class Http4sHttpServer(
       root.readBinary(path).map(_ -> _asset_media_type(assetPath.lastOption.getOrElse("")))
     }.headOption
 
+  private[http] def _favicon(): IO[HResponse[IO]] =
+    _favicon_content() match {
+      case Some((content, mediaType)) =>
+        _asset_response(content, mediaType)
+      case None =>
+        IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Favicon not found"))
+    }
+
+  private[http] def _favicon_content(): Option[(BinaryBag, MediaType)] =
+    engine.webDescriptor.assets.favicon
+      .flatMap(_web_asset_href_content)
+      .orElse(_web_global_asset_content(Vector("favicon.ico")))
+      .orElse(_web_global_asset_content(Vector("favicon.svg")))
+      .orElse(_web_global_asset_content(Vector("favicon.png")))
+
+  private def _web_asset_href_content(
+    href: String
+  ): Option[(BinaryBag, MediaType)] = {
+    val clean = href.trim.takeWhile(c => c != '?' && c != '#')
+    val segments = clean.split("/").toVector.filter(_.nonEmpty)
+    segments match {
+      case Vector("web", "assets", tail*) if tail.nonEmpty =>
+        _web_global_asset_content(tail.toVector)
+      case Vector("web", component, app, "assets", tail*) if tail.nonEmpty =>
+        _web_app_asset_content(Some(component), app, tail.toVector)
+      case Vector("web", app, "assets", tail*) if tail.nonEmpty =>
+        engine.webDescriptor.webRouteFor(Vector("web", app)) match {
+          case Some(route) if route.remainingPath.isEmpty =>
+            _web_app_asset_content(
+              Some(route.target.normalizedComponent),
+              route.target.normalizedApp,
+              tail.toVector
+            )
+          case _ =>
+            _web_app_asset_content(None, app, tail.toVector)
+        }
+      case _ =>
+        None
+    }
+  }
+
   private[http] def _web_app_static_html_content(
     webAppName: String,
     page: Vector[String]
@@ -2924,7 +3016,17 @@ final class Http4sHttpServer(
     componentName: Option[String],
     webAppName: String,
     page: Vector[String],
-    content: String
+    content: String,
+    req: org.http4s.Request[IO]
+  ): Consequence[StaticFormAppRenderer.Page] =
+    _web_app_static_page(componentName, webAppName, page, content, Some(req))
+
+  private[http] def _web_app_static_page(
+    componentName: Option[String],
+    webAppName: String,
+    page: Vector[String],
+    content: String,
+    req: Option[org.http4s.Request[IO]] = None
   ): Consequence[StaticFormAppRenderer.Page] = {
     val fullHtmlDocument = StaticFormAppRenderer.isHtmlDocumentTemplate(content)
     val composeSubsystemArticle =
@@ -2950,7 +3052,8 @@ final class Http4sHttpServer(
           webAppName,
           page,
           composed.html,
-          _web_app_asset_completion(webAppName)
+          _web_app_asset_completion(webAppName),
+          _page_view_context(req, webAppName, page)
         )
       else
         StaticFormAppRenderer.Page(composed.html)
@@ -2963,6 +3066,111 @@ final class Http4sHttpServer(
     content: String
   ): Consequence[StaticFormAppRenderer.Page] =
     _web_app_static_page(None, webAppName, page, content)
+
+  private def _page_view_context(
+    req: Option[org.http4s.Request[IO]],
+    webAppName: String,
+    page: Vector[String]
+  ): WebPageContext = {
+    val sessionId = req.flatMap(_session_id_(_))
+    val authenticated = req.exists(_is_page_context_authenticated)
+    val jobCounts =
+      if (authenticated)
+        req.flatMap(_application_job_badge_counts(_, webAppName)).getOrElse(Http4sHttpServer.JobBadgeCounts.empty)
+      else
+        Http4sHttpServer.JobBadgeCounts.empty
+    val base = WebPageContext(Map(
+      "pageContext.session.authenticated" -> authenticated.toString,
+      "pageContext.jobs.activeCount" -> jobCounts.active.toString,
+      "pageContext.jobs.unconfirmedCount" -> jobCounts.unconfirmed.toString,
+      "pageContext.jobs.visible" -> authenticated.toString,
+      "pageContext.jobs.hidden" -> (if (authenticated) "" else "hidden"),
+      "pageContext.jobs.activeBadgeHidden" -> (if (authenticated && jobCounts.active > 0) "" else "hidden"),
+      "pageContext.jobs.unconfirmedBadgeHidden" -> (if (authenticated && jobCounts.unconfirmed > 0) "" else "hidden"),
+      "pageContext.app" -> webAppName,
+      "pageContext.page" -> (if (page.isEmpty) "index" else page.mkString("/"))
+    ))
+    base.merge(_page_context_from_providers(req, webAppName, page, sessionId, authenticated))
+  }
+
+  private def _is_page_context_authenticated(
+    req: org.http4s.Request[IO]
+  ): Boolean =
+    _web_authorization_subject_from_session(req).exists(_.authenticated)
+
+  private def _form_page_view_context_values(
+    req: org.http4s.Request[IO],
+    app: String,
+    service: String,
+    operation: String,
+    values: Map[String, String]
+  ): Map[String, String] = {
+    val page = _form_result_template_page(service, operation, values)
+    val webAppName = _form_result_web_app(app, page)
+    _page_view_context(Some(req), webAppName, page).values
+  }
+
+  private def _page_context_from_providers(
+    req: Option[org.http4s.Request[IO]],
+    webAppName: String,
+    page: Vector[String],
+    sessionId: Option[String],
+    authenticated: Boolean
+  ): WebPageContext =
+    req.flatMap { r =>
+      _request_execution_context(r).toOption.map { ctx =>
+        given ExecutionContext = ctx
+        WebPageContextProviderRuntime.resolve(
+          engine.runtimeSubsystem,
+          WebPageContextRequest(
+            app = webAppName,
+            page = page,
+            routePath = "/web/" + (webAppName +: page).mkString("/"),
+            sessionId = sessionId,
+            authenticated = authenticated
+          )
+        )
+      }
+    }.getOrElse(WebPageContext.empty)
+
+  private def _application_job_badge_counts(
+    req: org.http4s.Request[IO],
+    app: String
+  ): Option[Http4sHttpServer.JobBadgeCounts] =
+    _session_id_(req).flatMap { sessionId =>
+      _request_execution_context(req).toOption.map { ctx =>
+        given ExecutionContext = ctx
+        val seenAt = _application_job_seen_at.get((sessionId, NamingConventions.toNormalizedSegment(app)))
+        val jobs = _visible_application_jobs(app)
+        val active = jobs.count(_is_active_application_job)
+        val unconfirmed = jobs.count(job => _is_terminal_application_job(job) && seenAt.forall(job.updatedAt.isAfter))
+        Http4sHttpServer.JobBadgeCounts(active, unconfirmed)
+      }
+    }
+
+  private def _visible_application_jobs(
+    app: String
+  )(using ExecutionContext): Vector[JobQueryReadModel] =
+    engine.runtimeSubsystem.jobEngine
+      .listJobs(limit = Int.MaxValue, persistentOnly = false)
+      .filter(_job_belongs_to_app(_, app))
+      .flatMap(model => engine.runtimeSubsystem.jobEngine.queryVisible(model.jobId).toOption.flatten)
+
+  private def _is_active_application_job(
+    model: JobQueryReadModel
+  ): Boolean =
+    model.status match {
+      case JobStatus.Submitted | JobStatus.Running | JobStatus.Suspended => true
+      case _ => false
+    }
+
+  private def _is_terminal_application_job(
+    model: JobQueryReadModel
+  ): Boolean =
+    model.status match {
+      case JobStatus.Succeeded | JobStatus.Failed | JobStatus.Cancelled => true
+      case _ => false
+    }
 
   private def _compose_subsystem_article(
     webAppName: String,
@@ -3274,7 +3482,8 @@ final class Http4sHttpServer(
     val assets = engine.webDescriptor.assets.merge(engine.webDescriptor.appAssets(webAppName))
     StaticFormAppLayout.AssetCompletionOptions(
       declaredCss = assets.css,
-      declaredJs = assets.js
+      declaredJs = assets.js,
+      favicon = assets.favicon
     )
   }
 
@@ -3412,6 +3621,7 @@ final class Http4sHttpServer(
       case x if x.endsWith(".md") || x.endsWith(".markdown") => _media_type("text/markdown")
       case x if x.endsWith(".pdf") => _media_type("application/pdf")
       case x if x.endsWith(".svg") => _media_type("image/svg+xml")
+      case x if x.endsWith(".ico") => _media_type("image/x-icon")
       case x if x.endsWith(".png") => _media_type("image/png")
       case x if x.endsWith(".jpg") || x.endsWith(".jpeg") => _media_type("image/jpeg")
       case x if x.endsWith(".woff") => _media_type("font/woff")
@@ -4250,7 +4460,8 @@ final class Http4sHttpServer(
       themed,
       StaticFormAppLayout.AssetCompletionOptions(
         declaredCss = baseAssets.css,
-        declaredJs = baseAssets.js ++ debugJs
+        declaredJs = baseAssets.js ++ debugJs,
+        favicon = baseAssets.favicon
       )
     )
   }
@@ -4897,6 +5108,14 @@ final class Http4sHttpServer(
 object Http4sHttpServer {
   val PortPropertyKey = "textus.server.port"
   val LegacyPortPropertyKey = "cncf.server.port"
+
+  final case class JobBadgeCounts(
+    active: Int,
+    unconfirmed: Int
+  )
+  object JobBadgeCounts {
+    val empty: JobBadgeCounts = JobBadgeCounts(0, 0)
+  }
 
   final case class FormContinuation(
     id: String,

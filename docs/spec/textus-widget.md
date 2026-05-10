@@ -147,11 +147,13 @@ Descriptor assets may be declared at multiple scopes:
 ```yaml
 web:
   assets:
+    favicon: /web/assets/favicon.svg
     css:
       - /web/assets/site.css
   apps:
     - name: notice-board
       assets:
+        favicon: /web/notice-board/notice-board/assets/favicon.ico
         css:
           - /web/notice-board/notice-board/assets/app.css
         js:
@@ -165,6 +167,9 @@ web:
 
 Static Form result rendering merges scopes in this order: global, app, then
 form/operation. Duplicate asset URLs are inserted once.
+`favicon` uses the same scope merge, with more specific scopes replacing the
+broader icon URL. Renderers insert a single `<link rel="icon" ...>` when the
+final HTML document does not already declare one.
 
 Static Form input pages use the same descriptor asset scopes. Component form
 indexes use global and app assets. Operation input forms use global, app, and

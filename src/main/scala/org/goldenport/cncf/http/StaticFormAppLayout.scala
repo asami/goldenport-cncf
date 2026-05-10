@@ -2,7 +2,8 @@ package org.goldenport.cncf.http
 
 /*
  * @since   Apr. 12, 2026
- * @version Apr. 25, 2026
+ *  version Apr. 25, 2026
+ * @version May. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 object StaticFormAppLayout {
@@ -11,7 +12,8 @@ object StaticFormAppLayout {
     requiresBootstrap: Boolean = false,
     requiresTextusWidgets: Boolean = false,
     declaredCss: Vector[String] = Vector.empty,
-    declaredJs: Vector[String] = Vector.empty
+    declaredJs: Vector[String] = Vector.empty,
+    favicon: Option[String] = None
   )
   final case class ThemeOptions(
     name: Option[String] = None,
@@ -107,7 +109,10 @@ object StaticFormAppLayout {
     html: String,
     options: AssetCompletionOptions
   ): String = {
-    val withCss = options.declaredCss.distinct.foldLeft(html) { (z, href) =>
+    val withFavicon = options.favicon
+      .map(_insert_favicon_asset_if_absent(html, _))
+      .getOrElse(html)
+    val withCss = options.declaredCss.distinct.foldLeft(withFavicon) { (z, href) =>
       _insert_css_asset_if_absent(z, href)
     }
     options.declaredJs.distinct.foldLeft(withCss) { (z, src) =>
@@ -218,6 +223,30 @@ object StaticFormAppLayout {
         html,
         "</head>",
         s"""  <link href="${escape(asset)}" rel="stylesheet">
+           |""".stripMargin
+      )
+  }
+
+  private def _insert_favicon_asset_if_absent(
+    html: String,
+    href: String
+  ): String = {
+    val asset = href.trim
+    val lower = html.toLowerCase(java.util.Locale.ROOT)
+    if (
+      asset.isEmpty ||
+        lower.contains("""rel="icon"""") ||
+        lower.contains("""rel='icon'""") ||
+        lower.contains("""rel="shortcut icon"""") ||
+        lower.contains("""rel='shortcut icon'""") ||
+        _has_declared_asset(html, asset)
+    )
+      html
+    else
+      _insert_before(
+        html,
+        "</head>",
+        s"""  <link rel="icon" href="${escape(asset)}">
            |""".stripMargin
       )
   }

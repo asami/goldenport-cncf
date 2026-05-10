@@ -328,6 +328,8 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers {
       Files.writeString(
         root.resolve("web.yaml"),
         """web:
+          |  assets:
+          |    favicon: /web/assets/favicon.svg
           |  theme:
           |    name: brand
           |    css:
@@ -336,6 +338,8 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers {
           |      primary: "#14532d"
           |  apps:
           |    - name: debug-app
+          |      assets:
+          |        favicon: /web/debug/debug-app/assets/favicon.ico
           |      theme:
           |        css:
           |          - /web/debug/debug-app/assets/app-theme.css
@@ -374,7 +378,9 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers {
         StandardCharsets.UTF_8
       )
       Files.writeString(root.resolve("assets").resolve("theme.css"), "body { color: var(--bs-primary); }", StandardCharsets.UTF_8)
+      Files.writeString(root.resolve("assets").resolve("favicon.svg"), "<svg xmlns=\"http://www.w3.org/2000/svg\"></svg>", StandardCharsets.UTF_8)
       Files.write(root.resolve("assets").resolve("fonts").resolve("brand.woff2"), Array[Byte](1, 2, 3))
+      Files.write(root.resolve("debug-app").resolve("assets").resolve("favicon.ico"), Array[Byte](0, 0, 1, 0))
       Files.write(root.resolve("debug-app").resolve("assets").resolve("fonts").resolve("app.woff2"), Array[Byte](4, 5, 6))
       val configuration = ResolvedConfiguration(
         Configuration(
@@ -393,11 +399,13 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers {
       val asset = server._web_global_asset("theme.css").unsafeRunSync()
       val nestedGlobalAsset = server._web_global_asset(Vector("fonts", "brand.woff2")).unsafeRunSync()
       val nestedAppAsset = server._web_app_asset("debug", "debug-app", Vector("fonts", "app.woff2")).unsafeRunSync()
+      val favicon = server._favicon().unsafeRunSync()
       val generatedPage = server._static_form_app("console", Vector.empty).unsafeRunSync()
       val generatedBody = generatedPage.as[String].unsafeRunSync()
 
       response.status.code shouldBe 200
       body should include ("/web/assets/theme.css")
+      body should include ("""rel="icon" href="/web/debug/debug-app/assets/favicon.ico"""")
       body should include ("/web/debug/debug-app/assets/app-theme.css")
       body should include ("data-textus-theme-vars=\"brand\"")
       body should include ("--bs-primary: #14532d")
@@ -408,7 +416,10 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers {
       asset.as[String].unsafeRunSync() should include ("var(--bs-primary)")
       nestedGlobalAsset.status.code shouldBe 200
       nestedAppAsset.status.code shouldBe 200
+      favicon.status.code shouldBe 200
+      favicon.as[String].unsafeRunSync() should include ("<svg")
       generatedPage.status.code shouldBe 200
+      generatedBody should include ("""rel="icon" href="/web/assets/favicon.svg"""")
       generatedBody should include ("/web/assets/console-theme.css")
       body should include ("/web/assets/textus-form-debug.js")
       body should include ("/web/assets/textus-calltree.js")

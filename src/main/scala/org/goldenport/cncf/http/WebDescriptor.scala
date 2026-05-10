@@ -13,7 +13,7 @@ import org.goldenport.record.Record
 /*
  * @since   Apr. 14, 2026
  *  version Apr. 25, 2026
- * @version May.  9, 2026
+ * @version May. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class WebDescriptor(
@@ -761,13 +761,15 @@ object WebDescriptor {
   final case class Assets(
     autoComplete: Boolean = true,
     css: Vector[String] = Vector.empty,
-    js: Vector[String] = Vector.empty
+    js: Vector[String] = Vector.empty,
+    favicon: Option[String] = None
   ) {
     def merge(rhs: Assets): Assets =
       Assets(
         autoComplete && rhs.autoComplete,
         (css ++ rhs.css).distinct,
-        (js ++ rhs.js).distinct
+        (js ++ rhs.js).distinct,
+        rhs.favicon.orElse(favicon)
       )
   }
 
@@ -1088,6 +1090,7 @@ object WebDescriptor {
           autoComplete = _boolean(r, "autoComplete")
             .orElse(_boolean(r, "auto-complete"))
             .getOrElse(true),
+          favicon = _string(r, "favicon").orElse(_string(r, "icon")),
           css = _string_vector(r, "css") ++ _string_vector(r, "styles"),
           js = _string_vector(r, "js") ++ _string_vector(r, "scripts")
         )

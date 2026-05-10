@@ -64,6 +64,14 @@ Do not require CNCF to understand page-local JavaScript. A script such as
 improves tag suggestions, image pickers, upload modals, or list/detail
 navigation while preserving server-rendered forms and links.
 
+For page-load data, prefer server rendering and Application-tier page context.
+Header badges, job visibility, session display, tag summaries, and similar
+screen support data should be gathered once as page context and expanded in
+layout/partial templates with `${pageContext.*}` properties. Avoid page-load
+Form API chains such as one call for notification count, another for job state,
+and another for list content. `/form-api` should stay focused on assistance,
+validation, optional refresh, async status, and editor/image-picker behavior.
+
 Island Architecture is a later reusable JavaScript component contract. It would
 need explicit island names, props, lifecycle, asset dependencies, and duplicate
 initialization rules. CNCF does not currently provide a `data-textus-island`
