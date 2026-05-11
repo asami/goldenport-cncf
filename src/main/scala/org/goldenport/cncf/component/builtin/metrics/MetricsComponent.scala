@@ -4,8 +4,10 @@ import cats.data.NonEmptyVector
 import org.goldenport.Consequence
 import org.goldenport.cncf.action.{Action, ActionCall, ProcedureActionCall, QueryAction}
 import org.goldenport.cncf.component.{Component, ComponentCreate, ComponentId, ComponentInstanceId}
+import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.http.RuntimeDashboardMetrics
 import org.goldenport.cncf.metrics.EntityAccessMetricsRegistry
+import org.goldenport.cncf.observability.OpenTelemetryExporter
 import org.goldenport.protocol.Protocol
 import org.goldenport.protocol.Request
 import org.goldenport.protocol.handler.ProtocolHandler
@@ -60,20 +62,35 @@ object MetricsComponent {
         services = spec.ServiceDefinitionGroup(services = Vector(service)),
         handler = ProtocolHandler.default
       )
-      comp.withPort(Component.Port.of(new DefaultMetricsService(params.subsystem.entityAccessMetrics)))
+      val runtimeConfig = RuntimeConfig.from(params.subsystem.configuration)
+      comp.withPort(Component.Port.of(new DefaultMetricsService(params.subsystem.entityAccessMetrics, runtimeConfig)))
       val instanceId = ComponentInstanceId.default(componentId)
       Component.Core.create(name, componentId, instanceId, protocol)
     }
   }
 
   private final class DefaultMetricsService(
-    registry: EntityAccessMetricsRegistry
+    registry: EntityAccessMetricsRegistry,
+    runtimeConfig: RuntimeConfig
   ) extends MetricsService {
     def loadEntityAccessMetrics(): Consequence[Record] =
       Consequence.success(registry.toRecord)
 
-    def loadRuntimeMetrics(): Consequence[Record] =
-      Consequence.success(RuntimeDashboardMetrics.runtimeMetricsSnapshot(registry).toRecord)
+    def loadRuntimeMetrics(): Consequence[Record] = {
+      val snapshot = RuntimeDashboardMetrics.runtimeMetricsSnapshot(registry)
+      val exportResult = OpenTelemetryExporter(
+        runtimeConfig.openTelemetryExportConfig,
+        runtimeConfig.operationMode
+      ).exportMetrics(snapshot)
+      Consequence.success(snapshot.toRecord ++ Record.dataAuto(
+        "otel_export" -> Record.dataOption(
+          "signal" -> Some(exportResult.signal),
+          "status" -> Some(exportResult.status),
+          "status_code" -> exportResult.statusCode,
+          "message" -> exportResult.message
+        )
+      ))
+    }
 
     def loadMetricsCatalog(): Consequence[Record] =
       Consequence.success(RuntimeDashboardMetrics.metricsCatalogRecord)

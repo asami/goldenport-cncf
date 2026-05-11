@@ -1127,8 +1127,8 @@ Active work stack:
 - OB-03: Diagnostic Payload External Store and Runtime Config. (DONE)
 - OB-04: Structured Diagnostic Dashboard Drill-down. (DONE)
 - OB-05: Metrics Collection and Metrics Service Expansion. (DONE)
-- OB-06: OpenTelemetry Boundary and Export Policy. (ACTIVE)
-- OB-07: Phase 24 verification and closure.
+- OB-06: OpenTelemetry Boundary and Export Policy. (DONE)
+- OB-07: Phase 24 verification and closure. (ACTIVE)
 
 - Metrics collection expansion.
 - OpenTelemetry support.
@@ -1164,6 +1164,20 @@ Active work stack:
     compact counter/error/duration tables.
   - Metric labels are low-cardinality operational grouping hints, not the
     semantic error contract.
+- OpenTelemetry export boundary:
+  - CNCF internal observability remains authoritative; OpenTelemetry is an
+    export/projection boundary only.
+  - `textus.observability.otel.*` config enables OTLP HTTP trace and metrics
+    export.
+  - Action CallTree flow maps to OTEL spans; OB-05 runtime metrics snapshots map
+    to OTEL metrics.
+  - Payload bodies are not exported by default; summaries/references and
+    redacted structured attributes are the export surface.
+  - Export failures are non-fatal and counted under the `otel.export` metric
+    scope.
+  - `cncf-samples` sample `13-observability-jaeger` is the minimal Jaeger proof;
+    `13.a-observability-stack-lab` is the Collector + Jaeger + Prometheus +
+    Grafana lab.
 - CallTree / execution-history / Job diagnostic result externalization:
   - CallTree, Task calltree, and Job result records must store compact
     summaries/references by default, not full action/UoW/space/I/O

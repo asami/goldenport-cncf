@@ -31,6 +31,7 @@ Supported OB-05 scopes are:
 - `operation-request-validation`
 - `blob.operation`
 - `diagnostic-payload.externalization`
+- `otel.export`
 - `entity-access`
 
 Default labels exclude high-cardinality values such as raw paths, entity ids,
@@ -60,5 +61,10 @@ failure facts.
 
 ## Export Boundary
 
-OB-05 is in-process only. OpenTelemetry mapping, exporter configuration,
-docker-compose backend wiring, and sample 13 integration are OB-06 work.
+OB-05 remains the in-process source of truth. OB-06 adds an OpenTelemetry
+projection boundary described in
+`docs/design/observability/opentelemetry-export-policy.md`.
+
+`metrics.load_runtime_metrics` may export the current runtime snapshot to OTLP
+HTTP when `textus.observability.otel.*` is enabled. Export failures are
+non-fatal and are counted under the low-cardinality `otel.export` scope.

@@ -91,6 +91,12 @@ object RuntimeDashboardMetrics {
     destination: String
   )
 
+  private final case class OpenTelemetryExportEvent(
+    observedAt: Long,
+    signal: String,
+    status: String
+  )
+
   private var _htmlEvents = Vector.empty[Event]
   private var _actionEvents = Vector.empty[Event]
   private var _authorizationEvents = Vector.empty[Event]
@@ -99,6 +105,7 @@ object RuntimeDashboardMetrics {
   private var _operationRequestValidationEvents = Vector.empty[Event]
   private var _blobEvents = Vector.empty[Event]
   private var _payloadExternalizationEvents = Vector.empty[PayloadExternalizationEvent]
+  private var _openTelemetryExportEvents = Vector.empty[OpenTelemetryExportEvent]
   private var _recent = Vector.empty[RequestEntry]
 
   private val DiagnosticScopeLabels: Map[String, String] = Map(
@@ -218,6 +225,17 @@ object RuntimeDashboardMetrics {
       status = _normalize_label(status),
       payloadKind = _normalize_label(payloadKind),
       destination = _normalize_label(destination)
+    )).takeRight(10000)
+  }
+
+  def recordOpenTelemetryExport(
+    signal: String,
+    status: String
+  ): Unit = synchronized {
+    _openTelemetryExportEvents = (_openTelemetryExportEvents :+ OpenTelemetryExportEvent(
+      observedAt = java.time.Instant.now.toEpochMilli,
+      signal = _normalize_label(signal),
+      status = _normalize_label(status)
     )).takeRight(10000)
   }
 
@@ -407,6 +425,7 @@ object RuntimeDashboardMetrics {
         event.labels ++ _outcome_label(event)
       ),
       _payload_externalization_points,
+      _open_telemetry_export_points,
       _entity_access_points(entityAccessMetrics)
     ).flatten
 
@@ -449,6 +468,22 @@ object RuntimeDashboardMetrics {
             labels = labels,
             count = xs.size.toLong,
             errorCount = xs.count(x => Set("failed", "unavailable", "not_supported").contains(x.status)).toLong
+          )
+      }
+
+  private def _open_telemetry_export_points: Vector[RuntimeMetricPoint] =
+    _openTelemetryExportEvents
+      .groupBy(x => Map("status" -> x.status, "signal" -> x.signal))
+      .toVector
+      .sortBy(_._1.toVector.sortBy(_._1).mkString("|"))
+      .map {
+        case (labels, xs) =>
+          RuntimeMetricPoint(
+            scope = "otel.export",
+            name = "exports",
+            labels = labels,
+            count = xs.size.toLong,
+            errorCount = xs.count(x => Set("failed", "unavailable").contains(x.status)).toLong
           )
       }
 

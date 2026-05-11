@@ -41,9 +41,12 @@ final class MetricsComponentSpec extends AnyWordSpec with Matchers {
       entityAccess.show should include ("entity.search")
       runtime.show should include ("web.request")
       runtime.show should include ("diagnostic-payload.externalization")
+      runtime.show should include ("otel.export")
       runtime.show should include ("entity-access")
       runtime.show should include ("payload_kind=result")
+      runtime.show should include ("otel_export")
       catalog.show should include ("web.request")
+      catalog.show should include ("otel.export")
       catalog.show should include ("label_keys")
     }
   }

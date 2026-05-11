@@ -12,7 +12,7 @@ import org.goldenport.cncf.config.ConfigurationAccess
 import org.goldenport.cncf.config.RuntimeDefaults
 import org.goldenport.cncf.action.CommandExecutionMode
 import org.goldenport.cncf.context.IdGenerationContext
-import org.goldenport.cncf.observability.{DiagnosticPayloadExternalizationConfig, ObservabilityEngine}
+import org.goldenport.cncf.observability.{DiagnosticPayloadExternalizationConfig, ObservabilityEngine, OpenTelemetryExportConfig}
 import org.goldenport.cncf.blob.BlobStoreConfig
 
 /*
@@ -45,6 +45,8 @@ final case class RuntimeConfig(
     ObservabilityEngine.ExecutionHistoryConfig(),
   diagnosticPayloadExternalizationConfig: DiagnosticPayloadExternalizationConfig =
     DiagnosticPayloadExternalizationConfig(),
+  openTelemetryExportConfig: OpenTelemetryExportConfig =
+    OpenTelemetryExportConfig(),
   blobStoreConfig: BlobStoreConfig = BlobStoreConfig(),
   idNamespace: IdGenerationContext.IdNamespace = IdGenerationContext.DefaultNamespace
 )
@@ -96,6 +98,18 @@ object RuntimeConfig {
   val RuntimeObservabilityPayloadExternalizationUnsafeOpaquePayloadsKey = "textus.runtime.observability.payload.externalization.unsafe-opaque-payloads"
   val ObservabilityPayloadExternalizationRetentionDaysKey = "textus.observability.payload.externalization.retention.days"
   val RuntimeObservabilityPayloadExternalizationRetentionDaysKey = "textus.runtime.observability.payload.externalization.retention.days"
+  val ObservabilityOtelEnabledKey = "textus.observability.otel.enabled"
+  val RuntimeObservabilityOtelEnabledKey = "textus.runtime.observability.otel.enabled"
+  val ObservabilityOtelEndpointKey = "textus.observability.otel.endpoint"
+  val RuntimeObservabilityOtelEndpointKey = "textus.runtime.observability.otel.endpoint"
+  val ObservabilityOtelProtocolKey = "textus.observability.otel.protocol"
+  val RuntimeObservabilityOtelProtocolKey = "textus.runtime.observability.otel.protocol"
+  val ObservabilityOtelTracesEnabledKey = "textus.observability.otel.traces.enabled"
+  val RuntimeObservabilityOtelTracesEnabledKey = "textus.runtime.observability.otel.traces.enabled"
+  val ObservabilityOtelMetricsEnabledKey = "textus.observability.otel.metrics.enabled"
+  val RuntimeObservabilityOtelMetricsEnabledKey = "textus.runtime.observability.otel.metrics.enabled"
+  val ObservabilityOtelLogsEnabledKey = "textus.observability.otel.logs.enabled"
+  val RuntimeObservabilityOtelLogsEnabledKey = "textus.runtime.observability.otel.logs.enabled"
   val DiscoverClassesKey = "textus.discover.classes"
   val RuntimeDiscoverClassesKey = "textus.runtime.discover.classes"
   val ComponentFactoryClassKey = "textus.component.factory-class"
@@ -197,6 +211,7 @@ object RuntimeConfig {
       commandExecutionMode = None,
       executionHistoryConfig = ObservabilityEngine.ExecutionHistoryConfig(),
       diagnosticPayloadExternalizationConfig = DiagnosticPayloadExternalizationConfig(),
+      openTelemetryExportConfig = OpenTelemetryExportConfig(),
       blobStoreConfig = BlobStoreConfig(),
       idNamespace = DefaultIdNamespace
     )
@@ -262,6 +277,8 @@ object RuntimeConfig {
     val executionHistoryConfig = _execution_history_config(configuration)
     val diagnosticPayloadExternalizationConfig =
       _diagnostic_payload_externalization_config(configuration, operationMode)
+    val openTelemetryExportConfig =
+      _open_telemetry_export_config(configuration, operationMode)
     val blobStoreConfig = BlobStoreConfig.fromConfiguration(configuration)
     val idNamespace = _id_namespace(configuration)
     val webOperationDispatcher =
@@ -315,6 +332,7 @@ object RuntimeConfig {
       commandExecutionMode = commandExecutionMode,
       executionHistoryConfig = executionHistoryConfig,
       diagnosticPayloadExternalizationConfig = diagnosticPayloadExternalizationConfig,
+      openTelemetryExportConfig = openTelemetryExportConfig,
       blobStoreConfig = blobStoreConfig,
       idNamespace = idNamespace
     )
@@ -342,10 +360,14 @@ object RuntimeConfig {
     from(conf)
   }
 
-  private def _validate(config: RuntimeConfig): Unit =
+  private def _validate(config: RuntimeConfig): Unit = {
     config.diagnosticPayloadExternalizationConfig.validationError.foreach { message =>
       throw new IllegalArgumentException(message)
     }
+    config.openTelemetryExportConfig.validationError.foreach { message =>
+      throw new IllegalArgumentException(message)
+    }
+  }
 
   def parseCommandExecutionMode(
     value: String
@@ -430,6 +452,20 @@ object RuntimeConfig {
       operationMode = operationMode
     )
 
+  private def _open_telemetry_export_config(
+    configuration: ResolvedConfiguration,
+    operationMode: OperationMode
+  ): OpenTelemetryExportConfig =
+    OpenTelemetryExportConfig.fromValues(
+      enabled = _get_boolean(configuration, ObservabilityOtelEnabledKey).getOrElse(false),
+      endpoint = _get_string(configuration, ObservabilityOtelEndpointKey),
+      protocol = _get_string(configuration, ObservabilityOtelProtocolKey),
+      tracesEnabled = _get_boolean(configuration, ObservabilityOtelTracesEnabledKey),
+      metricsEnabled = _get_boolean(configuration, ObservabilityOtelMetricsEnabledKey),
+      logsEnabled = _get_boolean(configuration, ObservabilityOtelLogsEnabledKey),
+      operationMode = operationMode
+    )
+
   private def _id_namespace(
     configuration: ResolvedConfiguration
   ): IdGenerationContext.IdNamespace = {
@@ -478,6 +514,12 @@ object RuntimeConfig {
         case ObservabilityPayloadExternalizationAllowRequestOverrideKey => Vector(RuntimeObservabilityPayloadExternalizationAllowRequestOverrideKey)
         case ObservabilityPayloadExternalizationUnsafeOpaquePayloadsKey => Vector(RuntimeObservabilityPayloadExternalizationUnsafeOpaquePayloadsKey)
         case ObservabilityPayloadExternalizationRetentionDaysKey => Vector(RuntimeObservabilityPayloadExternalizationRetentionDaysKey)
+        case ObservabilityOtelEnabledKey => Vector(RuntimeObservabilityOtelEnabledKey)
+        case ObservabilityOtelEndpointKey => Vector(RuntimeObservabilityOtelEndpointKey)
+        case ObservabilityOtelProtocolKey => Vector(RuntimeObservabilityOtelProtocolKey)
+        case ObservabilityOtelTracesEnabledKey => Vector(RuntimeObservabilityOtelTracesEnabledKey)
+        case ObservabilityOtelMetricsEnabledKey => Vector(RuntimeObservabilityOtelMetricsEnabledKey)
+        case ObservabilityOtelLogsEnabledKey => Vector(RuntimeObservabilityOtelLogsEnabledKey)
         case DiscoverClassesKey => Vector(RuntimeDiscoverClassesKey)
         case ComponentFactoryClassKey => Vector(RuntimeComponentFactoryClassKey)
         case WorkspaceKey => Vector(RuntimeWorkspaceKey)

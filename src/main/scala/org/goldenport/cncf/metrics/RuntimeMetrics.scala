@@ -118,6 +118,12 @@ object RuntimeMetricsCatalog {
       Vector("status", "payload_kind", "destination")
     ),
     MetricScopeDefinition(
+      "otel.export",
+      "OpenTelemetry export",
+      "OpenTelemetry export outcomes grouped by exported signal.",
+      Vector("status", "signal")
+    ),
+    MetricScopeDefinition(
       "entity-access",
       "Entity access",
       "Entity/data/view access metrics from the entity access registry.",

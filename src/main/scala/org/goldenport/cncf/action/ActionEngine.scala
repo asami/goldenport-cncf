@@ -10,7 +10,7 @@ import org.goldenport.cncf.security.AuthorizationDecision
 import org.goldenport.cncf.security.AuthorizationEngine
 import org.goldenport.cncf.security.{Action as SecurityAction, SecuredResource}
 import org.goldenport.cncf.log.LogBackendHolder
-import org.goldenport.cncf.observability.{CallTreeContext, CallTreeValueSummary, DiagnosticPayloadExternalizer, DiagnosticPayloadSummary, ObservabilityEngine, OperationContext}
+import org.goldenport.cncf.observability.{CallTreeContext, CallTreeValueSummary, DiagnosticPayloadExternalizer, DiagnosticPayloadSummary, ObservabilityEngine, OpenTelemetryExporter, OperationContext}
 import org.goldenport.cncf.context.{ScopeContext, ScopeKind}
 import org.goldenport.cncf.context.GlobalRuntimeContext
 import org.goldenport.cncf.config.ResolvedParameters
@@ -163,9 +163,20 @@ class ActionEngine(
                 }
               }
               executionOutcome.foreach { outcome =>
+                val actionEndedAtNanos = System.nanoTime()
                 RuntimeDashboardMetrics.recordActionCall(
                   outcome.isLeft,
-                  Some((System.nanoTime() - actionStartedAtNanos) / 1000000L)
+                  Some((actionEndedAtNanos - actionStartedAtNanos) / 1000000L)
+                )
+                OpenTelemetryExporter.fromGlobal.exportActionTrace(
+                  operation = call.action.name,
+                  calltree = builtCallTree,
+                  jobId = ec.jobContext.jobId.map(_.value),
+                  taskId = ec.jobContext.currentTask.orElse(ec.jobContext.taskId).map(_.value),
+                  sagaId = ec.observability.sagaId,
+                  outcome = outcome.fold(_ => "failure", _ => "success"),
+                  startedAtNanos = actionStartedAtNanos,
+                  endedAtNanos = actionEndedAtNanos
                 )
                 ObservabilityEngine.recordActionExecution(
                   operation = call.action.name,

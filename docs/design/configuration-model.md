@@ -786,6 +786,21 @@ store provider to be supplied behind the BlobStore boundary. The BlobStore must
 be durable; in-memory BlobStore is rejected for diagnostic payload
 externalization because its references cannot be resolved reliably.
 
+OB-06 adds opt-in OpenTelemetry export keys:
+
+- `textus.observability.otel.enabled`
+- `textus.observability.otel.endpoint`
+- `textus.observability.otel.protocol`
+- `textus.observability.otel.traces.enabled`
+- `textus.observability.otel.metrics.enabled`
+- `textus.observability.otel.logs.enabled`
+
+OpenTelemetry export is disabled by default and is an export/projection
+boundary only. V1 supports `otlp-http`. Develop/test mode uses
+`http://127.0.0.1:4318` when export is enabled without an endpoint; production
+requires an explicit endpoint. The policy is described in
+`docs/design/observability/opentelemetry-export-policy.md`.
+
 Use `runtime` only when the value is genuinely about the runtime process itself and no clearer owner exists.
 
 Examples to avoid for new primary keys:

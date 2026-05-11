@@ -70,15 +70,14 @@ Payload policy:
 - C (DONE): OB-03 — Diagnostic Payload External Store and Runtime Config.
 - D (DONE): OB-04 — Structured Diagnostic Dashboard Drill-down.
 - E (DONE): OB-05 — Metrics Collection and Metrics Service Expansion.
-- F (ACTIVE): OB-06 — OpenTelemetry Boundary and Export Policy.
-- G (TODO): OB-07 — Phase 24 verification and closure.
+- F (DONE): OB-06 — OpenTelemetry Boundary and Export Policy.
+- G (ACTIVE): OB-07 — Phase 24 verification and closure.
 
 Resume hint:
 
-- Continue with OB-06. Define the OpenTelemetry boundary and export policy
-  without making OpenTelemetry the CNCF internal source of truth.
-- Keep `cncf-samples` sample 13 and docker-compose observability wiring visible
-  as the concrete integration driver.
+- Continue with OB-07. Verify Phase 24 and prepare closure notes.
+- Keep `cncf-samples` sample 13 and sample 13a validation visible as concrete
+  OpenTelemetry integration evidence.
 
 ## 5. Development Items
 
@@ -87,7 +86,7 @@ Resume hint:
 - [x] OB-03: Diagnostic Payload External Store and Runtime Config.
 - [x] OB-04: Structured Diagnostic Dashboard Drill-down.
 - [x] OB-05: Metrics Collection and Metrics Service Expansion.
-- [ ] OB-06: OpenTelemetry Boundary and Export Policy.
+- [x] OB-06: OpenTelemetry Boundary and Export Policy.
 - [ ] OB-07: Phase 24 verification and closure.
 
 Detailed task breakdown and progress tracking are recorded in
@@ -161,6 +160,21 @@ OB-05 completion note:
   semantic error contracts.
 - OB-06 owns OpenTelemetry mapping, exporter configuration, docker-compose
   backend wiring, and `cncf-samples` sample 13 integration.
+
+OB-06 completion note:
+
+- OpenTelemetry is defined as an export/projection boundary, not the CNCF
+  internal observability model.
+- `docs/design/observability/opentelemetry-export-policy.md` documents trace,
+  metrics, diagnostics, correlation attributes, and safety rules.
+- `textus.observability.otel.*` runtime keys configure opt-in OTLP HTTP export.
+- Action execution can export CallTree-derived spans, and
+  `metrics.load_runtime_metrics` can export OB-05 runtime metric snapshots.
+- Export failures are non-fatal and counted under the `otel.export` metric
+  scope.
+- `cncf-samples` sample `13-observability-jaeger` is the minimal Jaeger proof;
+  `13.a-observability-stack-lab` is the Collector + Jaeger + Prometheus +
+  Grafana lab.
 
 ## 6. Completion Conditions
 

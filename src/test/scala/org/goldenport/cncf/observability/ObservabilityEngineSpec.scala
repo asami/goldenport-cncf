@@ -11,7 +11,7 @@ import org.goldenport.cncf.config.OperationMode
 import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.context.{ObservabilityContext, ScopeContext, ScopeKind, TraceId}
 import org.goldenport.cncf.http.RuntimeDashboardMetrics
-import org.goldenport.cncf.metrics.EntityAccessMetricsRegistry
+import org.goldenport.cncf.metrics.{EntityAccessMetricsRegistry, RuntimeMetricPoint, RuntimeMetricsSnapshot}
 import org.goldenport.cncf.log.{LogBackend, LogBackendHolder}
 import io.circe.Json
 import org.goldenport.protocol.operation.OperationResponse
@@ -384,6 +384,134 @@ class ObservabilityEngineSpec extends AnyWordSpec with Matchers with BeforeAndAf
         point.labels.get("status").contains("disabled") &&
           point.labels.get("payload_kind").contains("result")
       ) shouldBe true
+    }
+  }
+
+  "OpenTelemetryExporter" should {
+    "load OTEL runtime config with disabled defaults and explicit endpoint flags" in {
+      RuntimeConfig.default.openTelemetryExportConfig.enabled shouldBe false
+
+      val configuration = ResolvedConfiguration(
+        Configuration(
+          Map(
+            RuntimeConfig.ObservabilityOtelEnabledKey -> ConfigurationValue.BooleanValue(true),
+            RuntimeConfig.ObservabilityOtelEndpointKey -> ConfigurationValue.StringValue("http://127.0.0.1:4318"),
+            RuntimeConfig.ObservabilityOtelProtocolKey -> ConfigurationValue.StringValue("otlp-http"),
+            RuntimeConfig.ObservabilityOtelTracesEnabledKey -> ConfigurationValue.BooleanValue(true),
+            RuntimeConfig.ObservabilityOtelMetricsEnabledKey -> ConfigurationValue.BooleanValue(false),
+            RuntimeConfig.ObservabilityOtelLogsEnabledKey -> ConfigurationValue.BooleanValue(false)
+          )
+        ),
+        ConfigurationTrace.empty
+      )
+
+      val config = RuntimeConfig.from(configuration).openTelemetryExportConfig
+
+      config.enabled shouldBe true
+      config.endpoint shouldBe Some("http://127.0.0.1:4318")
+      config.protocol shouldBe "otlp-http"
+      config.tracesEnabled shouldBe true
+      config.metricsEnabled shouldBe false
+      config.logsEnabled shouldBe false
+    }
+
+    "reject unsupported OTEL protocols deterministically" in {
+      val configuration = ResolvedConfiguration(
+        Configuration(
+          Map(
+            RuntimeConfig.ObservabilityOtelEnabledKey -> ConfigurationValue.BooleanValue(true),
+            RuntimeConfig.ObservabilityOtelProtocolKey -> ConfigurationValue.StringValue("otlp-grpc")
+          )
+        ),
+        ConfigurationTrace.empty
+      )
+
+      val thrown = intercept[IllegalArgumentException] {
+        RuntimeConfig.from(configuration)
+      }
+      thrown.getMessage should include ("unsupported OpenTelemetry protocol")
+    }
+
+    "project CallTree flow to OTLP spans without raw payload bodies" in {
+      val calltree = CallTreeContext.enabled
+      calltree.enter(
+        "action:notification.search",
+        Map(
+          "calltree_kind" -> "action",
+          "component" -> "UserNotification",
+          "service" -> "Notification",
+          "operation" -> "searchMyNotifications"
+        )
+      )
+      calltree.enter("uow:entitystore:search:direct", Map("calltree_kind" -> "uow", "source" -> "entity-store"))
+      calltree.leave(Map("outcome" -> "success", "result" -> """{"kind":"record","field_count":1,"inline":false}"""))
+      calltree.leave(Map("outcome" -> "success", "response" -> """{"kind":"record","field_count":2,"inline":false}"""))
+      val record = ObservabilityEngine.callTreeRecord(calltree.build().get, Some("job-1"))
+
+      val payload = OpenTelemetryExporterSupport.tracePayload(
+        operation = "UserNotification.Notification.searchMyNotifications",
+        calltreeRecord = Some(record),
+        jobId = Some("job-1"),
+        taskId = None,
+        sagaId = None,
+        outcome = "success",
+        startedAtNanos = 1L,
+        endedAtNanos = 10L
+      ).noSpaces
+
+      payload should include ("resourceSpans")
+      payload should include ("cncf.component")
+      payload should include ("UserNotification")
+      payload should include ("cncf.job.id")
+      payload should include ("job-1")
+      payload should include ("cncf.task.id")
+      payload should include ("none")
+      payload should include ("cncf.payload.response.kind")
+      payload should not include ("password")
+    }
+
+    "project runtime metrics snapshot to low-cardinality OTLP metric points" in {
+      val snapshot = RuntimeMetricsSnapshot(
+        generatedAt = java.time.Instant.parse("2026-05-11T00:00:00Z"),
+        points = Vector(
+          RuntimeMetricPoint(
+            scope = "web.request",
+            name = "requests",
+            labels = Map("outcome" -> "success", "status" -> "2xx"),
+            count = 2,
+            durationCount = 2,
+            durationTotalMillis = 10
+          )
+        ),
+        catalog = Vector.empty
+      )
+
+      val payload = OpenTelemetryExporterSupport.metricsPayload(snapshot).noSpaces
+
+      payload should include ("resourceMetrics")
+      payload should include ("cncf.web.request.requests.count")
+      payload should include ("cncf.outcome")
+      payload should include ("success")
+      payload should include ("duration.avg_millis")
+    }
+
+    "records export failure as non-fatal runtime metric" in {
+      val exporter = OpenTelemetryExporter(
+        OpenTelemetryExportConfig(enabled = true, endpoint = Some("http://%")),
+        OperationMode.Develop
+      )
+
+      val result = exporter.exportMetrics(RuntimeMetricsSnapshot(java.time.Instant.now(), Vector.empty, Vector.empty))
+
+      result.status shouldBe "failed"
+      RuntimeDashboardMetrics
+        .runtimeMetricsSnapshot(EntityAccessMetricsRegistry.shared)
+        .points
+        .exists(point =>
+          point.scope == "otel.export" &&
+            point.labels.get("signal").contains("metrics") &&
+            point.labels.get("status").contains("failed")
+        ) shouldBe true
     }
   }
 

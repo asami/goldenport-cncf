@@ -245,12 +245,11 @@ OpenTelemetry export is not the internal source of truth for CNCF diagnostics.
 Telemetry export must apply the same redaction and bounded-payload rules before
 data leaves the CNCF runtime.
 
-OB-06 owns the concrete OpenTelemetry boundary and export policy.
+The concrete OpenTelemetry boundary and export policy are described in
+`docs/design/observability/opentelemetry-export-policy.md`.
 
 ## Phase 24 Driver
 
-`cncf-samples` sample 13 is the concrete Phase 24 observability integration
-driver. Later Phase 24 slices should use it to demonstrate docker-compose
-wiring to the actual observability backend.
-
-OB-01 does not implement sample code or docker-compose changes.
+`cncf-samples` sample `13-observability-jaeger` is the minimal Jaeger driver.
+Sample `13.a-observability-stack-lab` is the Collector + Jaeger + Prometheus +
+Grafana lab driver.

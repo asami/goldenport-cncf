@@ -239,14 +239,14 @@ diagnostic, and payload-externalization signals.
   `load_metrics_catalog`; `load_entity_access_metrics` remains compatible.
 - `/web/system/admin/observability/metrics` is linked from Performance and
   the Observability admin app.
-- OpenTelemetry export, backend wiring, and `cncf-samples` sample 13 remain
-  OB-06 work.
+- OpenTelemetry export, backend wiring, and `cncf-samples` sample 13 are
+  completed in OB-06.
 
 ---
 
 ## OB-06: OpenTelemetry Boundary and Export Policy
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
@@ -255,18 +255,31 @@ without making OpenTelemetry the internal source of truth.
 
 ### Detailed Tasks
 
-- [ ] Define which CNCF signals map to traces, spans, metrics, and logs.
-- [ ] Define redaction and attribute-size limits before export.
-- [ ] Define correlation between CNCF Job/Task/CallTree identifiers and
+- [x] Define which CNCF signals map to traces, spans, metrics, and logs.
+- [x] Define redaction and attribute-size limits before export.
+- [x] Define correlation between CNCF Job/Task/CallTree identifiers and
       OpenTelemetry trace/span identifiers.
-- [ ] Define provider/configuration boundary for exporter implementations.
-- [ ] Validate the policy through `cncf-samples` sample 13 docker-compose
+- [x] Define provider/configuration boundary for exporter implementations.
+- [x] Validate the policy through `cncf-samples` sample 13 docker-compose
       observability wiring.
 
 ### Guardrails
 
 - Do not leak unredacted request/result payloads to telemetry exports.
 - Do not require OpenTelemetry to use CNCF diagnostics locally.
+
+### Completion Notes
+
+- CNCF now has an opt-in OTLP HTTP exporter boundary controlled by
+  `textus.observability.otel.*`.
+- Action CallTree flow is projected to OTEL spans with Job/Task/Saga context
+  attributes where available and `none` where absent.
+- OB-05 runtime metrics snapshots are projected to OTEL metrics while preserving
+  low-cardinality label rules.
+- Export failures are non-fatal and recorded under the `otel.export` metric
+  scope.
+- `cncf-samples` includes `13-observability-jaeger` for direct Jaeger traces and
+  `13.a-observability-stack-lab` for Collector-routed traces and metrics.
 
 ---
 
