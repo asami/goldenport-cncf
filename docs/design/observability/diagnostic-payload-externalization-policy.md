@@ -195,6 +195,29 @@ The CallTree-specific projection contract is described in
 cross-cutting storage and externalization rule that CallTree and Job
 diagnostics must follow.
 
+## Dashboard Drill-down
+
+`/web/system/performance` remains the summary entry point for request,
+authorization, validation, operation-request-validation, Blob, Job, and
+ActionCall counts. Diagnostic keys shown on that page link to
+`/web/system/admin/observability/diagnostics/{scope}/{diagnosticKey}`.
+
+`/web/system/admin/observability` is the System Admin entry point for deeper
+inspection. It shows diagnostic scope cards, payload externalization status,
+and links back to Performance. Supported OB-04 diagnostic scopes are
+`authorization`, `validation`, `operation-request-validation`, and `blob`.
+
+Diagnostic detail pages are projections of already structured records. They
+show taxonomy category/symptom, cause kind, interpretation, disposition,
+status/status text, numeric `detailCode`, application status metadata, facets,
+recent examples, and payload references. Message text is evidence only and is
+not a grouping key.
+
+`Conclusion.previous` is rendered as a collapsed source-error trace, one
+structured record per level. Raw diagnostic records are also collapsed by
+default. Payload links point to the system-admin payload resolver, and payload
+bytes are never expanded inline by default.
+
 ## Relationship to OpenTelemetry
 
 OpenTelemetry export is not the internal source of truth for CNCF diagnostics.

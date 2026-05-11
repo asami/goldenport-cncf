@@ -12,6 +12,7 @@ import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.cncf.job.JobQueryReadModel
 import org.goldenport.cncf.CncfVersion
 import org.goldenport.cncf.config.{OperationMode, RuntimeConfig}
+import org.goldenport.cncf.observability.{DiagnosticPayloadExternalizationConfig, DiagnosticPayloadReference}
 import org.goldenport.cncf.operation.{AssociationBindingOperationDefinition, CmlEntityRelationshipDefinition, CmlOperationAssociationBinding, CmlOperationImageBinding, ImageBindingOperationDefinition}
 import org.goldenport.cncf.projection.{AuthorizationPolicyProjection, DescribeProjection, HelpProjection, SchemaProjection}
 import org.goldenport.cncf.search.{SearchMode, SearchPlanningProfile, WebSearchQueryPlanner}
@@ -7644,6 +7645,20 @@ object StaticFormAppRenderer {
   def renderSystemPerformance(subsystem: Subsystem): Page =
     Page(_performance_page(subsystem))
 
+  def renderSystemAdminObservability(subsystem: Subsystem): Page =
+    Page(_observability_admin_page(subsystem))
+
+  def renderSystemAdminObservabilityDiagnostics(): Page =
+    Page(_observability_diagnostics_page())
+
+  def renderSystemAdminObservabilityDiagnostic(
+    scope: String,
+    diagnosticKey: String
+  ): Option[Page] =
+    RuntimeDashboardMetrics.diagnosticDetail(scope, diagnosticKey).map(group =>
+      Page(_observability_diagnostic_detail_page(group))
+    )
+
   def renderSystemConsole(subsystem: Subsystem): Page =
     Page(_simple_page(
       title = "System Console",
@@ -8044,6 +8059,7 @@ object StaticFormAppRenderer {
       "Application admin" -> "/web/admin",
       "Dashboard" -> dashboardPath,
       "Performance details" -> performancePath,
+      "Observability" -> "/web/system/admin/observability",
       "Documents" -> "/web/system/document",
       "Console" -> "/web/console"
     )
@@ -8295,6 +8311,7 @@ object StaticFormAppRenderer {
       |    <section class="h-100">
       |      <h3 class="h6">Execution</h3>
       |      <div class="list-group">
+      |        <a class="list-group-item list-group-item-action" href="/web/system/admin/observability">Observability diagnostics</a>
       |        <a class="list-group-item list-group-item-action" href="/form/admin/execution/history">Execution history</a>
       |        <a class="list-group-item list-group-item-action" href="/form/admin/execution/calltree">Latest calltree</a>
       |      </div>
@@ -9286,6 +9303,7 @@ object StaticFormAppRenderer {
       """<nav class="nav nav-pills flex-column flex-sm-row gap-2">
         |  <a class="nav-link border" href="/web/system/dashboard">System dashboard</a>
         |  <a class="nav-link border" href="/web/system/admin">Admin configuration</a>
+        |  <a class="nav-link border" href="/web/system/admin/observability">Observability drill-down</a>
         |  <a class="nav-link border" href="/web/system/document">Documents</a>
         |  <a class="nav-link border" href="/web/console">Console</a>
         |</nav>""".stripMargin,
@@ -9319,26 +9337,26 @@ object StaticFormAppRenderer {
       "Authorization",
       s"""${_summary_table(authorizationDecisions.summary)}
          |<h3 class="h6 mt-3">Diagnostic</h3>
-         |${_diagnostics_table(authorizationDiagnostics, authorizationDiagnosticRecords)}""".stripMargin,
+         |${_diagnostics_table(authorizationDiagnostics, authorizationDiagnosticRecords, Some("authorization"))}""".stripMargin,
       Some("authorization")
     )
     val validationCard = card(
       "Validation",
       s"""${_summary_table(validation.summary)}
          |<h3 class="h6 mt-3">Diagnostic</h3>
-         |${_diagnostics_table(validationDiagnostics, validationDiagnosticRecords)}""".stripMargin
+         |${_diagnostics_table(validationDiagnostics, validationDiagnosticRecords, Some("validation"))}""".stripMargin
     )
     val operationRequestValidationCard = card(
       "Operation Request Validation",
       s"""${_summary_table(operationRequestValidation.summary)}
          |<h3 class="h6 mt-3">Diagnostic</h3>
-         |${_diagnostics_table(operationRequestValidationDiagnostics, operationRequestValidationDiagnosticRecords)}""".stripMargin
+         |${_diagnostics_table(operationRequestValidationDiagnostics, operationRequestValidationDiagnosticRecords, Some("operation-request-validation"))}""".stripMargin
     )
     val blobOperationsCard = card(
       "Blob operations",
       s"""${_summary_table(blobOperations.summary)}
          |<h3 class="h6 mt-3">Diagnostic</h3>
-         |${_diagnostics_table(blobDiagnostics, blobDiagnosticRecords)}""".stripMargin
+         |${_diagnostics_table(blobDiagnostics, blobDiagnosticRecords, Some("blob"))}""".stripMargin
     )
     val cards = Vector(
       navigationCard,
@@ -11604,6 +11622,279 @@ object StaticFormAppRenderer {
       .map { case (k, v) => s""""${_json(k)}":${v}""" }
       .mkString("{", ",", "}")
 
+  private def _observability_admin_page(subsystem: Subsystem): String = {
+    val runtime = RuntimeConfig.from(subsystem.configuration)
+    val config = runtime.diagnosticPayloadExternalizationConfig
+    val scopeCards = RuntimeDashboardMetrics.diagnosticScopes.map(_observability_scope_card).mkString("\n")
+    _simple_page(
+      title = "System Observability",
+      subtitle = "Structured diagnostic drill-down and diagnostic payload references",
+      body =
+        s"""${_admin_nav_card(Vector(
+             "Performance summary" -> "/web/system/performance",
+             "All diagnostics" -> "/web/system/admin/observability/diagnostics",
+             "System admin" -> "/web/system/admin"
+           ))}
+           |<div class="row g-3 mb-3">${scopeCards}</div>
+           |${_admin_card("Diagnostic Payload Externalization", _payload_externalization_status(config, runtime.operationMode))}
+           |${_admin_card(
+             "Safety policy",
+             """<p class="mb-2">Diagnostic records are grouped by structured diagnostic key. Message text is evidence only and is not used for grouping.</p>
+               |<p class="mb-0">Large payloads are summarized or linked. Payload bytes are resolved only through the system-admin payload route.</p>""".stripMargin
+           )}""".stripMargin
+    )
+  }
+
+  private def _observability_diagnostics_page(): String = {
+    val scopes = RuntimeDashboardMetrics.diagnosticScopes
+    val cards = scopes.map { scope =>
+      _admin_card(
+        scope.label,
+        s"""<p><span class="badge text-bg-secondary">${scope.totalCount}</span> diagnostic event(s).</p>
+           |${_observability_diagnostic_group_table(scope)}""".stripMargin,
+        Some(s"observability-${scope.scope}")
+      )
+    }.mkString("\n")
+    _simple_page(
+      title = "Observability Diagnostics",
+      subtitle = "Structured diagnostic groups by scope",
+      body =
+        s"""${_admin_nav_card(Vector(
+             "Observability home" -> "/web/system/admin/observability",
+             "Performance summary" -> "/web/system/performance"
+           ))}
+           |${cards}""".stripMargin
+    )
+  }
+
+  private def _observability_diagnostic_detail_page(
+    group: RuntimeDashboardMetrics.DiagnosticGroup
+  ): String = {
+    val record = group.latestRecord
+    val structured = record.map(_observability_structured_fields).getOrElse(_admin_empty_state("No structured diagnostic record has been captured for this key."))
+    val examples = _observability_examples_table(group.recentExamples)
+    val previous = record.map(_previous_chain_html).getOrElse("")
+    val payloads = record.map(_payload_references_html).getOrElse("")
+    val raw = record.map(_manual_raw_details("diagnostic record", _)).getOrElse("")
+    _simple_page(
+      title = s"${group.label} Diagnostic ${group.diagnosticKey}",
+      subtitle = "Structured diagnostic facts, source-error chain, and payload references",
+      body =
+        s"""${_admin_nav_card(Vector(
+             "Observability diagnostics" -> "/web/system/admin/observability/diagnostics",
+             "Observability home" -> "/web/system/admin/observability",
+             "Performance summary" -> "/web/system/performance"
+           ))}
+           |${_admin_card(
+             "Summary",
+             _field_table(Vector(
+               "Scope" -> group.label,
+               "Diagnostic key" -> group.diagnosticKey,
+               "Recent count" -> group.count.toString
+             ))
+           )}
+           |${_admin_card("Structured fields", structured)}
+           |${_admin_card("Recent examples", examples)}
+           |${_admin_card("Source-error trace", previous)}
+           |${_admin_card("Payload references", payloads)}
+           |${raw}""".stripMargin
+    )
+  }
+
+  private def _observability_scope_card(
+    scope: RuntimeDashboardMetrics.DiagnosticScope
+  ): String =
+    s"""<div class="col-12 col-md-6 col-xl-3">
+       |  ${_admin_card(
+             scope.label,
+             s"""<p><span class="badge text-bg-secondary">${scope.totalCount}</span> diagnostic event(s).</p>
+                |${_admin_action_row(Vector("Open diagnostics" -> s"/web/system/admin/observability/diagnostics#observability-${scope.scope}"), primary = false)}""".stripMargin,
+             Some(s"observability-card-${scope.scope}")
+           )}
+       |</div>""".stripMargin
+
+  private def _payload_externalization_status(
+    config: DiagnosticPayloadExternalizationConfig,
+    mode: OperationMode
+  ): String = {
+    val rows = Vector(
+      "enabled" -> config.enabled.toString,
+      "destination" -> config.normalizedDestination(mode).getOrElse("disabled"),
+      "localRoot" -> config.localRoot.toString,
+      "thresholdBytes" -> config.thresholdBytes.toString,
+      "payloadTargets" -> config.payloadTargets.toVector.sorted.mkString(", "),
+      "operationExact" -> config.operationExact.toVector.sorted.mkString(", "),
+      "operationContains" -> config.operationContains.mkString(", "),
+      "allowRequestOverride" -> config.allowRequestOverride.toString,
+      "unsafeOpaquePayloads" -> config.unsafeOpaquePayloads.toString,
+      "retentionDays" -> config.retentionDays.map(_.toString).getOrElse("not configured"),
+      "validationError" -> config.validationError.getOrElse("")
+    )
+    _field_table(rows)
+  }
+
+  private def _observability_diagnostic_group_table(
+    scope: RuntimeDashboardMetrics.DiagnosticScope
+  ): String =
+    if (scope.groups.isEmpty)
+      _admin_empty_state("No diagnostics have been recorded.")
+    else {
+      val rows = scope.groups.map { group =>
+        val href = s"/web/system/admin/observability/diagnostics/${_escape_path_segment(group.scope)}/${_escape_path_segment(group.diagnosticKey)}"
+        val latest = group.latestRecord.map(_diagnostic_record_compact).getOrElse("")
+        s"""<tr>
+           |  <td><a href="${_escape(href)}"><code>${_escape(group.diagnosticKey)}</code></a></td>
+           |  <td>${group.count}</td>
+           |  <td>${latest}</td>
+           |</tr>""".stripMargin
+      }.mkString("\n")
+      s"""<div class="table-responsive"><table class="table table-sm table-hover align-middle">
+         |  <thead><tr><th>Diagnostic</th><th>Count</th><th>Latest structured fields</th></tr></thead>
+         |  <tbody>${rows}</tbody>
+         |</table></div>""".stripMargin
+    }
+
+  private def _observability_structured_fields(record: Record): String = {
+    val keys = Vector(
+      "diagnosticKey",
+      "taxonomy",
+      "taxonomyCategory",
+      "taxonomySymptom",
+      "causeKind",
+      "interpretation",
+      "userAction",
+      "responsibility",
+      "webStatus",
+      "statusText",
+      "detailCode",
+      "appCode",
+      "appStatus",
+      "parameter",
+      "fieldPath",
+      "policy",
+      "capability",
+      "permission",
+      "guard",
+      "relation"
+    )
+    val rows = keys.flatMap(key => _record_string(record, key).filter(_.nonEmpty).map(key -> _))
+    if (rows.isEmpty)
+      _admin_empty_state("No structured diagnostic fields are available.")
+    else
+      _field_table(rows)
+  }
+
+  private def _diagnostic_record_compact(record: Record): String = {
+    val xs = Vector(
+      _record_string(record, "webStatus"),
+      _record_string(record, "statusText"),
+      _record_string(record, "detailCode").map(x => s"detailCode $x"),
+      _record_string(record, "taxonomy"),
+      _record_string(record, "causeKind").map(x => s"cause $x")
+    ).flatten.filter(_.nonEmpty)
+    xs.map(x => s"<span class=\"badge text-bg-light border me-1\">${_escape(x)}</span>").mkString
+  }
+
+  private def _observability_examples_table(
+    examples: Vector[RuntimeDashboardMetrics.DiagnosticExample]
+  ): String =
+    if (examples.isEmpty)
+      _admin_empty_state("No recent examples are available.")
+    else {
+      val rows = examples.map { example =>
+        s"""<tr>
+           |  <td>${_escape(_instant_text(example.observedAt))}</td>
+           |  <td>${_escape(example.operation.getOrElse(""))}</td>
+           |  <td>${_escape(example.kind.getOrElse(""))}</td>
+           |  <td>${_escape(example.sourceMode.getOrElse(""))}</td>
+           |  <td>${_escape(example.backend.getOrElse(""))}</td>
+           |</tr>""".stripMargin
+      }.mkString("\n")
+      s"""<div class="table-responsive"><table class="table table-sm table-hover align-middle">
+         |  <thead><tr><th>Observed at</th><th>Operation</th><th>Kind</th><th>Source</th><th>Backend</th></tr></thead>
+         |  <tbody>${rows}</tbody>
+         |</table></div>""".stripMargin
+    }
+
+  private def _previous_chain_html(record: Record): String = {
+    val previous = _record_seq(record.getAny("previous"))
+    if (previous.isEmpty)
+      _admin_empty_state("No previous Conclusion chain is attached.")
+    else
+      previous.zipWithIndex.map {
+        case (entry, index) =>
+          s"""<details class="mb-2">
+             |  <summary>Source error ${index + 1}</summary>
+             |  <div class="mt-2">${_observability_structured_fields(entry)}</div>
+             |  ${_manual_raw_details(s"source error ${index + 1}", entry)}
+             |</details>""".stripMargin
+      }.mkString("\n")
+  }
+
+  private def _payload_references_html(record: Record): String = {
+    val refs = _payload_references(record)
+    if (refs.isEmpty)
+      _admin_empty_state("No payload references are attached.")
+    else {
+      val rows = refs.map {
+        case (path, href) =>
+          val value =
+            if (href.startsWith("/web/system/admin/observability/payloads/"))
+              s"""<a href="${_escape(href)}"><code>${_escape(href)}</code></a>"""
+            else
+              s"<code>${_escape(href)}</code>"
+          s"<tr><th>${_escape(path)}</th><td>${value}</td></tr>"
+      }.mkString("\n")
+      s"""<div class="table-responsive"><table class="table table-sm table-hover align-middle">
+         |  <tbody>${rows}</tbody>
+         |</table></div>""".stripMargin
+    }
+  }
+
+  private def _payload_references(record: Record): Vector[(String, String)] =
+    _payload_references_from_any("diagnostic", record).distinct
+
+  private def _payload_references_from_any(
+    path: String,
+    value: Any
+  ): Vector[(String, String)] =
+    value match {
+      case Some(x) => _payload_references_from_any(path, x)
+      case r: Record =>
+        val direct = _diagnostic_payload_reference(r).toVector.flatMap { ref =>
+          ref.href.orElse(ref.url).orElse(ref.path).orElse(ref.ref).map(path -> _)
+        }
+        direct ++ r.asMap.toVector.flatMap {
+          case (key, v) => _payload_references_from_any(s"$path.${key.toString}", v)
+        }
+      case xs: Seq[?] =>
+        xs.toVector.zipWithIndex.flatMap { case (x, i) => _payload_references_from_any(s"$path[$i]", x) }
+      case xs: Array[?] =>
+        xs.toVector.zipWithIndex.flatMap { case (x, i) => _payload_references_from_any(s"$path[$i]", x) }
+      case _ =>
+        Vector.empty
+    }
+
+  private def _diagnostic_payload_reference(record: Record): Option[DiagnosticPayloadReference] = {
+    val keys = record.asMap.keySet.map(_.toString).toSet
+    val hasPayloadKey = keys.exists(key => key.startsWith("payload_") || key.startsWith("external_")) ||
+      keys.contains("externalization_status") ||
+      keys.contains("externalization_reason")
+    val hasReferenceShape =
+      keys.exists(Set("href", "url", "path", "ref")) &&
+        keys.exists(Set("storage", "content_type", "contentType", "size_bytes"))
+    if (hasPayloadKey || hasReferenceShape)
+      DiagnosticPayloadReference.fromRecord(record)
+    else
+      None
+  }
+
+  private def _record_string(
+    record: Record,
+    key: String
+  ): Option[String] =
+    record.getAny(key).map(_display_value).map(_.trim).filter(_.nonEmpty)
+
   private def _jobs_json(
     running: Int,
     queued: Int,
@@ -11639,13 +11930,18 @@ object StaticFormAppRenderer {
 
   private def _diagnostics_table(
     counts: Map[String, Long],
-    records: Map[String, Record] = Map.empty
+    records: Map[String, Record] = Map.empty,
+    scope: Option[String] = None
   ): String =
     if (counts.isEmpty)
       """<p class="text-secondary">No diagnostics have been recorded.</p>"""
     else {
       val rows = counts.toVector.sortBy(_._1).map {
         case (kind, count) =>
+          val diagnosticLabel = scope.map { s =>
+            val href = s"/web/system/admin/observability/diagnostics/${_escape_path_segment(s)}/${_escape_path_segment(kind)}"
+            s"""<a href="${_escape(href)}"><code>${_escape(kind)}</code></a>"""
+          }.getOrElse(s"<code>${_escape(kind)}</code>")
           val detail = records.get(kind).map { record =>
             val status = record.getInt("webStatus").map(_.toString).getOrElse("")
             val detailCode = record.getAny("detailCode").map(_.toString).getOrElse("")
@@ -11653,7 +11949,7 @@ object StaticFormAppRenderer {
             val cause = record.getString("causeKind").getOrElse("")
             Vector(status, detailCode, taxonomy, cause).filter(_.nonEmpty).map(_escape).mkString("<br>")
           }.getOrElse("")
-          s"<tr><td><code>${_escape(kind)}</code></td><td>${count}</td><td>${detail}</td></tr>"
+          s"<tr><td>${diagnosticLabel}</td><td>${count}</td><td>${detail}</td></tr>"
       }.mkString("\n")
       s"""<div class="table-responsive"><table class="table table-sm table-hover align-middle">
          |  <thead><tr><th>Diagnostic</th><th>Count</th><th>Structured detail</th></tr></thead>

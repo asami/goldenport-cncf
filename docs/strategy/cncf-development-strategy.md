@@ -1125,8 +1125,8 @@ Active work stack:
 - OB-01: Diagnostic Payload Externalization Policy Opening. (DONE)
 - OB-02: CallTree / Execution History / Job Diagnostic Summary Model. (DONE)
 - OB-03: Diagnostic Payload External Store and Runtime Config. (DONE)
-- OB-04: Structured Diagnostic Dashboard Drill-down. (ACTIVE)
-- OB-05: Metrics Collection and Metrics Service Expansion.
+- OB-04: Structured Diagnostic Dashboard Drill-down. (DONE)
+- OB-05: Metrics Collection and Metrics Service Expansion. (ACTIVE)
 - OB-06: OpenTelemetry Boundary and Export Policy.
 - OB-07: Phase 24 verification and closure.
 
@@ -1147,6 +1147,10 @@ Active work stack:
 - Dashboard drill-down for structured diagnostics, including
   `Conclusion.previous` source-error chains and grouping by structured
   taxonomy/cause/disposition fields.
+  - `/web/system/performance` links diagnostic keys to
+    `/web/system/admin/observability/diagnostics/{scope}/{diagnosticKey}`.
+  - `/web/system/admin/observability` shows diagnostic scope cards,
+    payload-externalization status, and system-admin payload navigation.
 - CallTree / execution-history / Job diagnostic result externalization:
   - CallTree, Task calltree, and Job result records must store compact
     summaries/references by default, not full action/UoW/space/I/O
@@ -1202,8 +1206,8 @@ Future error-model hardening item.
 - Application-level `appCode` / `appStatus` conventions and examples.
 - CLI exit-code mapping policy from `Conclusion`; exit codes remain separate
   from numeric `DetailCode`.
-- Additional source-error trace UX around `Conclusion.previous`, including
-  dashboard drill-down and structured diagnostic grouping.
+- Additional source-error trace UX around `Conclusion.previous` beyond the
+  initial Phase 24 dashboard drill-down and structured diagnostic grouping.
 
 ### 9.8 Media Attributes Model Cleanup
 Future platform development item.

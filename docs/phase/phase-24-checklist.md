@@ -165,13 +165,13 @@ configuration.
   `externalization_reason`, and successful writes attach
   `DiagnosticPayloadReference` projection fields.
 - System-admin payload resolution is wired for local diagnostic payload files;
-  richer dashboard drill-down is OB-04.
+  richer dashboard drill-down is completed in OB-04.
 
 ---
 
 ## OB-04: Structured Diagnostic Dashboard Drill-down
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
@@ -180,21 +180,33 @@ references.
 
 ### Detailed Tasks
 
-- [ ] Drill down from structured taxonomy/cause/disposition/status fields.
-- [ ] Surface `Conclusion.previous` chains and source-error traces.
-- [ ] Show compact payload summaries and external payload links when available.
-- [ ] Keep large payloads collapsed or linked, not fully expanded by default.
+- [x] Drill down from structured taxonomy/cause/disposition/status fields.
+- [x] Surface `Conclusion.previous` chains and source-error traces.
+- [x] Show compact payload summaries and external payload links when available.
+- [x] Keep large payloads collapsed or linked, not fully expanded by default.
 
 ### Guardrails
 
 - Do not parse messages as semantic grouping keys.
 - Do not make dashboard display shape the persistence contract.
 
+### Completion Notes
+
+- `/web/system/admin/observability` is the System Admin observability entry
+  point for structured diagnostic drill-down.
+- `/web/system/performance` keeps the summary tables and links diagnostic keys
+  to the shared detail routes.
+- Diagnostic detail pages show structured taxonomy/cause/disposition/status
+  fields, recent examples, collapsed previous-chain records, and compact
+  payload-reference links.
+- Payload bytes remain gated by the system-admin observability payload route.
+- Metrics expansion and metrics service query surfaces remain OB-05.
+
 ---
 
 ## OB-05: Metrics Collection and Metrics Service Expansion
 
-Status: TODO
+Status: ACTIVE
 
 ### Objective
 

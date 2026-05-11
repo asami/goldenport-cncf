@@ -175,6 +175,12 @@ final class Http4sHttpServer(
         if (_is_web_authorized("system", "admin.jobs", "index", Some(req))) _system_admin_jobs() else _forbidden_web(req, Some("system"), Some("admin.jobs"), Some("index"))
       case req @ GET -> Root / "web" / "system" / "admin" / "jobs" / jobId =>
         if (_is_web_authorized("system", "admin.jobs", jobId, Some(req))) _system_admin_job(req, jobId) else _forbidden_web(req, Some("system"), Some("admin.jobs"), Some(jobId))
+      case req @ GET -> Root / "web" / "system" / "admin" / "observability" =>
+        if (_is_web_authorized("system", "admin.observability", "index", Some(req), Some("admin.system.observability"))) _system_admin_observability() else _forbidden_web(req, Some("system"), Some("admin.observability"), Some("index"))
+      case req @ GET -> Root / "web" / "system" / "admin" / "observability" / "diagnostics" =>
+        if (_is_web_authorized("system", "admin.observability", "diagnostics", Some(req), Some("admin.system.observability"))) _system_admin_observability_diagnostics() else _forbidden_web(req, Some("system"), Some("admin.observability"), Some("diagnostics"))
+      case req @ GET -> Root / "web" / "system" / "admin" / "observability" / "diagnostics" / scope / diagnosticKey =>
+        if (_is_web_authorized("system", "admin.observability", "diagnostics", Some(req), Some("admin.system.observability"))) _system_admin_observability_diagnostic(scope, diagnosticKey) else _forbidden_web(req, Some("system"), Some("admin.observability"), Some("diagnostics"))
       case req @ GET -> Root / "web" / "system" / "admin" / "observability" / "payloads" / id =>
         if (_is_web_authorized("system", "admin.observability", "payloads", Some(req), Some("admin.system.observability"))) _system_admin_observability_payload(id) else _forbidden_web(req, Some("system"), Some("admin.observability"), Some("payloads"))
       case req @ GET -> Root / "web" / "blob" / "admin" =>
@@ -488,6 +494,28 @@ final class Http4sHttpServer(
         _html(StaticFormAppRenderer.renderSystemAdminJob(engine.runtimeSubsystem, model))
       case None =>
         _html_status(StaticFormAppRenderer.renderSystemJobResult(jobId, HttpResponse.notFound(s"job not found: $jobId")), HStatus.NotFound)
+    }
+
+  private def _system_admin_observability(): IO[HResponse[IO]] =
+    _html(StaticFormAppRenderer.renderSystemAdminObservability(engine.runtimeSubsystem))
+
+  private def _system_admin_observability_diagnostics(): IO[HResponse[IO]] =
+    _html(StaticFormAppRenderer.renderSystemAdminObservabilityDiagnostics())
+
+  private def _system_admin_observability_diagnostic(
+    scope: String,
+    diagnosticKey: String
+  ): IO[HResponse[IO]] =
+    StaticFormAppRenderer.renderSystemAdminObservabilityDiagnostic(scope, diagnosticKey) match {
+      case Some(page) =>
+        _html(page)
+      case None =>
+        _web_error_response(
+          Some("system"),
+          HStatus.NotFound,
+          s"diagnostic not found: $scope/$diagnosticKey",
+          s"/web/system/admin/observability/diagnostics/$scope/$diagnosticKey"
+        )
     }
 
   private def _system_admin_observability_payload(

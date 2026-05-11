@@ -42,6 +42,33 @@ object RuntimeDashboardMetrics {
     recent: Vector[RequestEntry]
   )
 
+  final case class DiagnosticExample(
+    observedAt: Long,
+    diagnosticKey: String,
+    operation: Option[String],
+    kind: Option[String],
+    sourceMode: Option[String],
+    backend: Option[String],
+    diagnosticRecord: Option[Record]
+  )
+
+  final case class DiagnosticGroup(
+    scope: String,
+    label: String,
+    diagnosticKey: String,
+    count: Long,
+    latestRecord: Option[Record],
+    recentExamples: Vector[DiagnosticExample]
+  )
+
+  final case class DiagnosticScope(
+    scope: String,
+    label: String,
+    groups: Vector[DiagnosticGroup]
+  ) {
+    def totalCount: Long = groups.map(_.count).sum
+  }
+
   private final case class Event(
     observedAt: Long,
     error: Boolean,
@@ -61,6 +88,13 @@ object RuntimeDashboardMetrics {
   private var _operationRequestValidationEvents = Vector.empty[Event]
   private var _blobEvents = Vector.empty[Event]
   private var _recent = Vector.empty[RequestEntry]
+
+  private val DiagnosticScopeLabels: Map[String, String] = Map(
+    "authorization" -> "Authorization",
+    "validation" -> "Validation",
+    "operation-request-validation" -> "Operation Request Validation",
+    "blob" -> "Blob"
+  )
 
   def recordHtmlRequest(
     method: String,
@@ -223,12 +257,75 @@ object RuntimeDashboardMetrics {
     _diagnostic_records(_blobEvents)
   }
 
+  def diagnosticScopes: Vector[DiagnosticScope] = synchronized {
+    Vector(
+      _diagnostic_scope("authorization", _authorizationEvents),
+      _diagnostic_scope("validation", _validationEvents),
+      _diagnostic_scope("operation-request-validation", _operationRequestValidationEvents),
+      _diagnostic_scope("blob", _blobEvents)
+    )
+  }
+
+  def diagnosticScope(scope: String): Option[DiagnosticScope] = synchronized {
+    val normalized = _normalize_scope(scope)
+    diagnosticScopes.find(_.scope == normalized)
+  }
+
+  def diagnosticDetail(
+    scope: String,
+    diagnosticKey: String
+  ): Option[DiagnosticGroup] = synchronized {
+    diagnosticScope(scope).flatMap(_.groups.find(_.diagnosticKey == diagnosticKey))
+  }
+
   private def _diagnostic_records(events: Vector[Event]): Map[String, Record] =
     events
       .filter(_.error)
       .flatMap(e => e.diagnosticKey.map(_ -> e.diagnosticRecord))
       .groupBy(_._1)
       .flatMap { case (key, values) => values.reverse.collectFirst { case (_, Some(record)) => key -> record } }
+
+  private def _diagnostic_scope(
+    scope: String,
+    events: Vector[Event]
+  ): DiagnosticScope = {
+    val label = DiagnosticScopeLabels.getOrElse(scope, scope)
+    val groups = events
+      .filter(_.error)
+      .groupBy(_.diagnosticKey.getOrElse("unknown"))
+      .toVector
+      .sortBy(_._1)
+      .map {
+        case (key, xs) =>
+          val latest = xs.reverse.collectFirst { case event if event.diagnosticRecord.nonEmpty => event.diagnosticRecord.get }
+          DiagnosticGroup(
+            scope = scope,
+            label = label,
+            diagnosticKey = key,
+            count = xs.size.toLong,
+            latestRecord = latest,
+            recentExamples = xs.takeRight(20).reverse.map(_diagnostic_example(key, _))
+          )
+      }
+    DiagnosticScope(scope, label, groups)
+  }
+
+  private def _diagnostic_example(
+    diagnosticKey: String,
+    event: Event
+  ): DiagnosticExample =
+    DiagnosticExample(
+      observedAt = event.observedAt,
+      diagnosticKey = diagnosticKey,
+      operation = event.operation,
+      kind = event.kind,
+      sourceMode = event.sourceMode,
+      backend = event.backend,
+      diagnosticRecord = event.diagnosticRecord
+    )
+
+  private def _normalize_scope(scope: String): String =
+    scope.trim.toLowerCase(java.util.Locale.ROOT).replace('_', '-')
 
   private def _snapshot(
     events: Vector[Event],

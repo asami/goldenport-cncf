@@ -265,3 +265,9 @@ redaction-before-output rule, and external payload reference boundary.
 
 This keeps Web/admin diagnostics readable while still allowing deep inspection
 when a developer or operator explicitly asks for large payload capture.
+
+Structured dashboard drill-down for diagnostics is provided under
+`/web/system/admin/observability`. Payload references shown from CallTree,
+execution history, Job diagnostics, or task-local calltrees should link through
+the system-admin observability payload resolver rather than exposing raw local
+paths or object-store internals.

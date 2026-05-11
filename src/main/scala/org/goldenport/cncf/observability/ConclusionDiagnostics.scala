@@ -36,7 +36,8 @@ object ConclusionDiagnostics {
     capability: Option[String],
     permission: Option[String],
     guard: Option[String],
-    relation: Option[String]
+    relation: Option[String],
+    previous: Vector[Record]
   ) {
     def toRecord: Record = Record.dataAuto(
       "diagnosticKey" -> diagnosticKey,
@@ -58,7 +59,8 @@ object ConclusionDiagnostics {
       "capability" -> capability,
       "permission" -> permission,
       "guard" -> guard,
-      "relation" -> relation
+      "relation" -> relation,
+      "previous" -> previous
     )
   }
 
@@ -82,7 +84,8 @@ object ConclusionDiagnostics {
     capability = None,
     permission = None,
     guard = None,
-    relation = None
+    relation = None,
+    previous = Vector.empty
   )
 
   def classify(conclusion: Conclusion): Classification = {
@@ -116,7 +119,8 @@ object ConclusionDiagnostics {
       capability = capabilities.toVector.sorted.headOption,
       permission = permissions.toVector.sorted.headOption,
       guard = guards.toVector.sorted.headOption,
-      relation = relations.toVector.sorted.headOption
+      relation = relations.toVector.sorted.headOption,
+      previous = _previous_chain(conclusion)
     )
   }
 
@@ -160,6 +164,21 @@ object ConclusionDiagnostics {
         case Some(Cause.Kind.Unknown) => "unknown"
         case None => _taxonomy_key(conclusion)
       }
+  }
+
+  private def _previous_chain(conclusion: Conclusion): Vector[Record] = {
+    @annotation.tailrec
+    def loop(
+      current: Option[Conclusion],
+      acc: Vector[Record]
+    ): Vector[Record] =
+      current match {
+        case Some(x) =>
+          loop(x.previous, acc :+ x.copy(previous = None).toRecord)
+        case None =>
+          acc
+      }
+    loop(conclusion.previous, Vector.empty)
   }
 
   private def _format_key(parameters: Set[String]): String =

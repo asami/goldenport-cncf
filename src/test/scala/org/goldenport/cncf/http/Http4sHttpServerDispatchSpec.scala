@@ -14,6 +14,7 @@ import org.goldenport.cncf.subsystem.DefaultSubsystemFactory
 import org.goldenport.Consequence
 import org.goldenport.protocol.Protocol
 import org.goldenport.configuration.{Configuration, ConfigurationTrace, ConfigurationValue, ResolvedConfiguration}
+import org.goldenport.record.Record
 import org.http4s.{Method, Request as HRequest, Uri}
 import org.http4s.headers.`Content-Type`
 import org.scalatest.matchers.should.Matchers
@@ -23,7 +24,7 @@ import org.typelevel.ci.CIStringSyntax
 /*
  * @since   Apr. 24, 2026
  *  version Apr. 25, 2026
- * @version May. 10, 2026
+ * @version May. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers {
@@ -491,6 +492,41 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers {
       declared.status.code shouldBe 200
       declared.as[String].unsafeRunSync() should include ("Notification Admin")
       undeclared.status.code shouldBe 404
+    }
+
+    "dispatch system observability drill-down routes" in {
+      RuntimeDashboardMetrics.recordValidation(
+        "spec.operation",
+        Some("ob04_format"),
+        Some(Record.dataAuto(
+          "diagnosticKey" -> "ob04_format",
+          "taxonomy" -> "argument.invalid",
+          "taxonomyCategory" -> "argument",
+          "taxonomySymptom" -> "invalid",
+          "causeKind" -> "format",
+          "webStatus" -> 400,
+          "statusText" -> "Bad Request",
+          "detailCode" -> 1010401L
+        ))
+      )
+      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val app = server.routes(null.asInstanceOf[org.http4s.server.websocket.WebSocketBuilder2[IO]]).orNotFound
+
+      val home = app.run(HRequest[IO](method = Method.GET, uri = Uri.unsafeFromString("/web/system/admin/observability"))).unsafeRunSync()
+      val diagnostics = app.run(HRequest[IO](method = Method.GET, uri = Uri.unsafeFromString("/web/system/admin/observability/diagnostics"))).unsafeRunSync()
+      val detail = app.run(HRequest[IO](method = Method.GET, uri = Uri.unsafeFromString("/web/system/admin/observability/diagnostics/validation/ob04_format"))).unsafeRunSync()
+      val unknown = app.run(HRequest[IO](method = Method.GET, uri = Uri.unsafeFromString("/web/system/admin/observability/diagnostics/validation/missing"))).unsafeRunSync()
+
+      home.status.code shouldBe 200
+      home.as[String].unsafeRunSync() should include ("System Observability")
+      diagnostics.status.code shouldBe 200
+      diagnostics.as[String].unsafeRunSync() should include ("ob04_format")
+      detail.status.code shouldBe 200
+      val detailBody = detail.as[String].unsafeRunSync()
+      detailBody should include ("argument.invalid")
+      detailBody should include ("1010401")
+      unknown.status.code shouldBe 404
     }
   }
 

@@ -5039,8 +5039,79 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("34 ms")
       html should include ("/web/system/dashboard")
       html should include ("/web/system/admin")
+      html should include ("/web/system/admin/observability")
+      html should include ("/web/system/admin/observability/diagnostics/authorization/capability")
       html should include ("/web/system/document")
       html should include ("/web/console")
+    }
+
+    "render structured observability drill-down pages" in {
+      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val previous = Record.dataAuto(
+        "diagnosticKey" -> "storage_missing",
+        "taxonomy" -> "resource.not-found",
+        "taxonomyCategory" -> "resource",
+        "taxonomySymptom" -> "not-found",
+        "webStatus" -> 404,
+        "statusText" -> "Not Found",
+        "detailCode" -> 1060401L
+      )
+      val diagnostic = Record.dataAuto(
+        "diagnosticKey" -> "ob04_payload_missing",
+        "taxonomy" -> "state.invalid",
+        "taxonomyCategory" -> "state",
+        "taxonomySymptom" -> "invalid",
+        "causeKind" -> "inconsistency",
+        "interpretation" -> "system-failure",
+        "userAction" -> "escalation",
+        "responsibility" -> "system-admin",
+        "webStatus" -> 500,
+        "statusText" -> "Internal Server Error",
+        "detailCode" -> 1080501L,
+        "appCode" -> 9001L,
+        "appStatus" -> "blob.payload.missing",
+        "previous" -> Vector(previous),
+        "result" -> Record.dataAuto(
+          "kind" -> "record",
+          "inline" -> false,
+          "size_bytes" -> 4096,
+          "payload_href" -> "/web/system/admin/observability/payloads/payload-1.json"
+        )
+      )
+      RuntimeDashboardMetrics.recordBlobOperation(
+        operation = "blob.content.get",
+        error = true,
+        diagnosticKey = Some("ob04_payload_missing"),
+        diagnosticRecord = Some(diagnostic),
+        kind = Some("content"),
+        sourceMode = Some("managed"),
+        backend = Some("local-file")
+      )
+
+      val performance = StaticFormAppRenderer.renderSystemPerformance(subsystem).body
+      val home = StaticFormAppRenderer.renderSystemAdminObservability(subsystem).body
+      val diagnostics = StaticFormAppRenderer.renderSystemAdminObservabilityDiagnostics().body
+      val detail = StaticFormAppRenderer
+        .renderSystemAdminObservabilityDiagnostic("blob", "ob04_payload_missing")
+        .map(_.body)
+        .getOrElse(fail("diagnostic detail is missing"))
+
+      performance should include ("/web/system/admin/observability/diagnostics/blob/ob04_payload_missing")
+      home should include ("System Observability")
+      home should include ("Diagnostic Payload Externalization")
+      diagnostics should include ("Observability Diagnostics")
+      diagnostics should include ("ob04_payload_missing")
+      detail should include ("Structured fields")
+      detail should include ("state.invalid")
+      detail should include ("Internal Server Error")
+      detail should include ("1080501")
+      detail should include ("blob.payload.missing")
+      detail should include ("Source-error trace")
+      detail should include ("storage_missing")
+      detail should include ("/web/system/admin/observability/payloads/payload-1.json")
+      detail should include ("Raw diagnostic record")
+      StaticFormAppRenderer.renderSystemAdminObservabilityDiagnostic("missing", "ob04_payload_missing") shouldBe None
+      StaticFormAppRenderer.renderSystemAdminObservabilityDiagnostic("blob", "missing") shouldBe None
     }
 
     "render document and console entry pages without inline operation execution" in {
