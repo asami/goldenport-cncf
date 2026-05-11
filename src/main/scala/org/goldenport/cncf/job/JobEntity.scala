@@ -15,7 +15,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
  * SimpleEntity-compatible record used for search, admin, and management views.
  *
  * @since   May.  7, 2026
- * @version May.  7, 2026
+ * @version May. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 object JobEntityCollections {
@@ -354,6 +354,7 @@ object JobEntity {
       "calltreeSaved" -> model.debug.calltreeSaved,
       "calltreeStorage" -> model.debug.calltreeStorage,
       "calltreeSerializedBytes" -> model.debug.calltreeSerializedBytes,
+      "calltreePayloadReference" -> model.debug.calltreePayloadReference,
       "calltreeDropReason" -> model.debug.calltreeDropReason,
       "requestSummary" -> model.debug.requestSummary,
       "jobDefinitionId" -> model.debug.jobDefinitionSnapshot.map(_.id),

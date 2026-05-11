@@ -6,6 +6,8 @@ import org.scalatest.BeforeAndAfterEach
 import org.scalatest.wordspec.AnyWordSpec
 import org.scalatest.matchers.should.Matchers
 import org.goldenport.Conclusion
+import org.goldenport.cncf.blob.BlobStoreConfig
+import org.goldenport.cncf.config.OperationMode
 import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.context.{ObservabilityContext, ScopeContext, ScopeKind, TraceId}
 import org.goldenport.cncf.log.{LogBackend, LogBackendHolder}
@@ -225,6 +227,137 @@ class ObservabilityEngineSpec extends AnyWordSpec with Matchers with BeforeAndAf
 
       summary.getString("payload_href") shouldBe Some("/web/system/admin/execution/payloads/p1")
       summary.getString("href") shouldBe Some("/web/system/admin/execution/payloads/p1")
+    }
+  }
+
+  "DiagnosticPayloadExternalizer" should {
+    "leave summaries as disabled when externalization is off" in {
+      val externalizer = DiagnosticPayloadExternalizer.disabled
+      val record = Record.data("status" -> "ok")
+      val summary = DiagnosticPayloadSummary.recordSummary(record)
+      val result = externalizer.externalizeRecordSummary("demo.op", "result", record, summary).toRecord
+
+      result.getString("externalization_status") shouldBe Some("disabled")
+      result.getString("payload_href") shouldBe empty
+    }
+
+    "write sanitized local files only for matching payload targets and operations" in {
+      val root = java.nio.file.Files.createTempDirectory("cncf-diagnostic-payload")
+      val config = DiagnosticPayloadExternalizationConfig(
+        enabled = true,
+        destination = Some("local-file"),
+        localRoot = root,
+        thresholdBytes = 1,
+        payloadTargets = Set("result"),
+        operationExact = Set("UserNotification.Notification.searchMyNotifications")
+      )
+      val externalizer = DiagnosticPayloadExternalizer(config, OperationMode.Develop, BlobStoreConfig())
+      val record = Record.data("proof" -> "123456", "status" -> "ok")
+      val summary = DiagnosticPayloadSummary.recordSummary(
+        record,
+        confidentiality = Map("proof" -> DataConfidentiality.Secret)
+      )
+
+      val stored = externalizer.externalizeRecordSummary(
+        "UserNotification.Notification.searchMyNotifications",
+        "result",
+        record,
+        summary,
+        Map("proof" -> DataConfidentiality.Secret)
+      ).toRecord
+      val skipped = externalizer.externalizeRecordSummary(
+        "UserNotification.Notification.searchMyNotifications",
+        "request",
+        record,
+        summary
+      ).toRecord
+
+      stored.getString("externalization_status") shouldBe Some("stored")
+      stored.getString("payload_storage") shouldBe Some("local-file")
+      val path = java.nio.file.Path.of(stored.getString("payload_path").get)
+      java.nio.file.Files.exists(path) shouldBe true
+      val text = java.nio.file.Files.readString(path)
+      text should include ("[redacted]")
+      text should not include ("123456")
+      skipped.getString("externalization_status") shouldBe Some("not_matched")
+      skipped.getString("payload_href") shouldBe empty
+    }
+
+    "write durable BlobStore backed references through the BlobStore boundary" in {
+      val root = java.nio.file.Files.createTempDirectory("cncf-diagnostic-blob-payload")
+      val config = DiagnosticPayloadExternalizationConfig(
+        enabled = true,
+        destination = Some("blob-store"),
+        thresholdBytes = 1,
+        payloadTargets = Set("result")
+      )
+      val externalizer = DiagnosticPayloadExternalizer(
+        config,
+        OperationMode.Develop,
+        BlobStoreConfig(
+          backend = BlobStoreConfig.BackendLocal,
+          localRoot = Some(root)
+        )
+      )
+      val record = Record.data("status" -> "ok", "count" -> 1)
+      val summary = DiagnosticPayloadSummary.recordSummary(record)
+
+      val stored = externalizer.externalizeRecordSummary(
+        "demo.operation",
+        "result",
+        record,
+        summary
+      ).toRecord
+
+      stored.getString("externalization_status") shouldBe Some("stored")
+      stored.getString("payload_storage") shouldBe Some("blob-store")
+      stored.getString("payload_ref").get should include ("local://")
+      stored.getString("payload_href").get should include ("/web/system/admin/observability/payloads/blob-")
+      DiagnosticPayloadReferenceCodec.decodeBlobRef(stored.getString("payload_href").get.split("/").last).map(_.print) shouldBe stored.getString("payload_ref")
+    }
+
+    "reject non-durable in-memory BlobStore externalization" in {
+      val config = DiagnosticPayloadExternalizationConfig(
+        enabled = true,
+        destination = Some("blob-store"),
+        thresholdBytes = 1,
+        payloadTargets = Set("result")
+      )
+      val externalizer = DiagnosticPayloadExternalizer(config, OperationMode.Develop, BlobStoreConfig())
+      val record = Record.data("status" -> "ok")
+      val summary = DiagnosticPayloadSummary.recordSummary(record)
+
+      val stored = externalizer.externalizeRecordSummary("demo.operation", "result", record, summary).toRecord
+
+      stored.getString("externalization_status") shouldBe Some("failed")
+      stored.getString("externalization_reason").get should include ("durable BlobStore")
+    }
+
+    "requires explicit unsafe opt-in before opaque payloads are externalized" in {
+      val root = java.nio.file.Files.createTempDirectory("cncf-diagnostic-opaque-payload")
+      val disabledUnsafe = DiagnosticPayloadExternalizationConfig(
+        enabled = true,
+        destination = Some("local-file"),
+        localRoot = root,
+        thresholdBytes = 1,
+        payloadTargets = Set("response"),
+        unsafeOpaquePayloads = false
+      )
+      val enabledUnsafe = disabledUnsafe.copy(unsafeOpaquePayloads = true)
+      val summary = DiagnosticPayloadSummary.textSummary("yaml", "token: secret-token", includeInline = false)
+
+      val skipped = DiagnosticPayloadExternalizer(disabledUnsafe, OperationMode.Develop, BlobStoreConfig())
+        .externalizeUnsafeTextSummary("demo.operation", "response", "application/yaml", "yaml", "token: secret-token", summary)
+        .toRecord
+      val stored = DiagnosticPayloadExternalizer(enabledUnsafe, OperationMode.Develop, BlobStoreConfig())
+        .externalizeUnsafeTextSummary("demo.operation", "response", "application/yaml", "yaml", "token: secret-token", summary)
+        .toRecord
+
+      skipped.getString("externalization_status") shouldBe Some("not_supported")
+      stored.getString("externalization_status") shouldBe Some("stored")
+      val text = java.nio.file.Files.readString(java.nio.file.Path.of(stored.getString("payload_path").get))
+      text should include ("[redacted]")
+      text should not include ("secret-token")
     }
   }
 

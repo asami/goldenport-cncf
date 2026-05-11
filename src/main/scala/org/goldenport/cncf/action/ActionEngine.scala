@@ -10,7 +10,7 @@ import org.goldenport.cncf.security.AuthorizationDecision
 import org.goldenport.cncf.security.AuthorizationEngine
 import org.goldenport.cncf.security.{Action as SecurityAction, SecuredResource}
 import org.goldenport.cncf.log.LogBackendHolder
-import org.goldenport.cncf.observability.{CallTreeContext, CallTreeValueSummary, DiagnosticPayloadSummary, ObservabilityEngine, OperationContext}
+import org.goldenport.cncf.observability.{CallTreeContext, CallTreeValueSummary, DiagnosticPayloadExternalizer, DiagnosticPayloadSummary, ObservabilityEngine, OperationContext}
 import org.goldenport.cncf.context.{ScopeContext, ScopeKind}
 import org.goldenport.cncf.context.GlobalRuntimeContext
 import org.goldenport.cncf.config.ResolvedParameters
@@ -85,6 +85,7 @@ class ActionEngine(
     }.flatMap { _ =>
       Consequence run {
         val params = _build_resolved_parameters(call)
+        DiagnosticPayloadExternalizer.withOperation(call.action.name, params) {
         runtime.setResolvedParameters(params)
         val inputAttributes = _calltree_input_attributes(call, params)
         var leaveAttributes: Map[String, String] = Map.empty
@@ -171,12 +172,13 @@ class ActionEngine(
                   jobId = ec.jobContext.jobId.map(_.value),
                   calltree = builtCallTree
                 )
-              }
-            }
-          }
+      }
+      }
+      }
         } finally {
           runtime.clearResolvedParameters()
         }
+      }
       }
     }
   }
@@ -412,8 +414,8 @@ class ActionEngine(
       "component" -> call.request.component.getOrElse(""),
       "service" -> call.request.service.getOrElse(""),
       "operation" -> call.request.operation,
-      "request" -> _calltree_record_summary_json(request, call.fieldConfidentiality),
-      "web_parameters" -> _calltree_record_summary_json(web, call.fieldConfidentiality)
+      "request" -> _calltree_record_summary_json(request, call.fieldConfidentiality, "request"),
+      "web_parameters" -> _calltree_record_summary_json(web, call.fieldConfidentiality, "web_parameters")
     ).filter(_._2.nonEmpty)
   }
 
@@ -452,12 +454,13 @@ class ActionEngine(
 
   private def _calltree_record_summary_json(
     record: Record,
-    confidentiality: Map[String, DataConfidentiality] = Map.empty
+    confidentiality: Map[String, DataConfidentiality] = Map.empty,
+    payloadKind: String = "result"
   ): String =
     if (record.asMap.isEmpty)
       ""
     else
-      _calltree_record_json(DiagnosticPayloadSummary.recordSummary(record, includeInline = true, confidentiality).toRecord)
+      _calltree_record_json(CallTreeValueSummary.recordSummary(record, includeInline = true, confidentiality, payloadKind = payloadKind))
 
   private def _operation_response_summary_attributes(
     response: OperationResponse,
@@ -467,7 +470,7 @@ class ActionEngine(
       case OperationResponse.RecordResponse(record) =>
         Map(
           "response_type" -> response.getClass.getSimpleName.stripSuffix("$"),
-          "response" -> _calltree_record_json(CallTreeValueSummary.recordSummary(record, includeInline = true, confidentiality))
+          "response" -> _calltree_record_json(CallTreeValueSummary.recordSummary(record, includeInline = true, confidentiality, payloadKind = "response"))
         )
       case _ =>
         val summary = CallTreeValueSummary.operationResponseSummary(response, confidentiality)

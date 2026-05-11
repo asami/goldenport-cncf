@@ -96,8 +96,8 @@ these policies exist:
 - destination configuration;
 - failure diagnostics for disabled, unavailable, or failed externalization.
 
-OB-02 defines the concrete summary/reference model shape. OB-03 owns external
-store implementation and runtime configuration keys.
+OB-02 defines the concrete summary/reference model shape. OB-03 adds the
+external store boundary and runtime configuration keys.
 
 ## Summary / Reference Record Shape
 
@@ -116,7 +116,10 @@ Stable fields are:
 - `inline`: small safe inline value, or `false` when the payload is summarized
   only.
 - `truncated` and `truncationReason`: explicit truncation metadata.
-- `payloadReference`: optional future external payload reference.
+- `externalizationStatus` / `externalizationReason`: `disabled`,
+  `not_matched`, `stored`, `unavailable`, `failed`, or `not_supported`
+  externalization state.
+- `payloadReference`: optional external payload reference.
 
 Record projections use snake-case keys for Web/admin/debug compatibility:
 `kind`, `value_type`, `size_bytes`, `char_count`, `field_count`,
@@ -124,9 +127,37 @@ Record projections use snake-case keys for Web/admin/debug compatibility:
 `truncated`, `truncation_reason`, `payload_reference`, and optional
 `payload_href` / `external_href`.
 
-`DiagnosticPayloadReference` is a placeholder shape for OB-03. It can carry
-already-known `href`, `url`, `path`, `ref`, `storage`, `contentType`, and
-`sizeBytes`, but OB-02 does not create external files or object-store entries.
+`DiagnosticPayloadReference` can carry already-known `href`, `url`, `path`,
+`ref`, `storage`, `contentType`, and `sizeBytes`. OB-03 can create references
+for `local-file` and `blob-store` destinations.
+
+## External Store Configuration
+
+Externalization is disabled by default:
+
+- `textus.observability.payload.externalization.enabled=false`
+- destination: `local-file` or `blob-store`
+- local root: `target/cncf.d/observability/payloads`
+- default threshold: `1200` bytes
+- default payload targets: `result,response`
+- optional local cleanup: `retention.days`
+
+Develop/test mode may use local-file externalization without an explicit
+destination. Production mode must specify a destination when externalization is
+enabled; missing or unknown production destinations are deterministic runtime
+configuration failures, not per-payload warnings.
+
+Selectors can restrict externalization by exact
+`component.service.operation`, operation substring, and payload kind. Request
+parameters such as `textus.debug.payload.externalize=true` can opt in for a
+single development/test request when request override is allowed.
+
+`blob-store` uses CNCF `BlobStore` for persistence. S3 or another object store
+is therefore an implementation of BlobStore, not an observability-specific
+storage API. BlobStore-backed diagnostic payload references are resolved through
+the system-admin observability payload route. Non-durable in-memory BlobStore
+backends are not valid externalization destinations because the generated
+reference cannot be reliably resolved later.
 
 Default inline thresholds are centralized in policy: inline bytes `1200`,
 inline fields `20`, inline elements `20`, and text preview bytes `0`.
@@ -141,7 +172,9 @@ payloads because CNCF cannot reliably bind arbitrary JSON/YAML fields back to
 CML result attributes. Therefore JSON/YAML operation responses are summarized
 with `inline=false` by default in diagnostics. Operations that return secret or
 personal values should use a typed result model/value class rather than raw
-JSON/YAML.
+JSON/YAML. JSON/YAML/scalar/opaque externalization is disabled by default and
+requires the explicit unsafe debug option; even then, name-based redaction is
+applied before the payload is written.
 
 ## Relationship to CallTree and Job Diagnostics
 

@@ -10,6 +10,7 @@ import java.time.Instant
 import java.util.UUID
 import scala.concurrent.duration.*
 import scala.collection.concurrent.TrieMap
+import scala.jdk.CollectionConverters.*
 import fs2.Pipe
 import fs2.Stream
 import com.comcast.ip4s.Host
@@ -32,9 +33,10 @@ import org.goldenport.http.{HttpContext, HttpRequest, HttpResponse, HttpStatus}
 import org.goldenport.cncf.component.builtin.auth.AuthComponent
 import org.goldenport.cncf.context.{ExecutionContext, RuntimeContext, ScopeContext, ScopeKind}
 import org.goldenport.cncf.config.{OperationMode, RuntimeConfig}
+import org.goldenport.cncf.blob.{BlobStoreFactory, BlobStorageRef}
 import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.cncf.job.{JobId, JobQueryReadModel, JobStatus}
-import org.goldenport.cncf.observability.{ConclusionDiagnostics, DslChokepointContext, DslChokepointPhase, DslChokepointRunner}
+import org.goldenport.cncf.observability.{ConclusionDiagnostics, DiagnosticPayloadReferenceCodec, DslChokepointContext, DslChokepointPhase, DslChokepointRunner}
 import org.goldenport.cncf.mcp.McpJsonRpcAdapter
 import org.goldenport.cncf.openapi.OpenApiProjector
 import org.goldenport.cncf.security.{AuthenticationRequest, IngressSecurityResolver}
@@ -173,6 +175,8 @@ final class Http4sHttpServer(
         if (_is_web_authorized("system", "admin.jobs", "index", Some(req))) _system_admin_jobs() else _forbidden_web(req, Some("system"), Some("admin.jobs"), Some("index"))
       case req @ GET -> Root / "web" / "system" / "admin" / "jobs" / jobId =>
         if (_is_web_authorized("system", "admin.jobs", jobId, Some(req))) _system_admin_job(req, jobId) else _forbidden_web(req, Some("system"), Some("admin.jobs"), Some(jobId))
+      case req @ GET -> Root / "web" / "system" / "admin" / "observability" / "payloads" / id =>
+        if (_is_web_authorized("system", "admin.observability", "payloads", Some(req), Some("admin.system.observability"))) _system_admin_observability_payload(id) else _forbidden_web(req, Some("system"), Some("admin.observability"), Some("payloads"))
       case req @ GET -> Root / "web" / "blob" / "admin" =>
         if (_is_web_authorized("blob", "admin", "index", Some(req))) _blob_admin() else _forbidden_web(req, Some("blob"), Some("admin"), Some("index"))
       case req @ GET -> Root / "web" / "blob" / "admin" / "blobs" =>
@@ -485,6 +489,75 @@ final class Http4sHttpServer(
       case None =>
         _html_status(StaticFormAppRenderer.renderSystemJobResult(jobId, HttpResponse.notFound(s"job not found: $jobId")), HStatus.NotFound)
     }
+
+  private def _system_admin_observability_payload(
+    id: String
+  ): IO[HResponse[IO]] = {
+    val safe = id.matches("[A-Za-z0-9._-]+")
+    val runtimeConfig = RuntimeConfig.from(engine.runtimeSubsystem.configuration)
+    val config = runtimeConfig.diagnosticPayloadExternalizationConfig
+    if (!safe)
+      _web_error_response(Some("system"), HStatus.BadRequest, "invalid diagnostic payload id", s"/web/system/admin/observability/payloads/$id")
+    else if (id.startsWith("blob-"))
+      DiagnosticPayloadReferenceCodec.decodeBlobRef(id) match {
+        case Some(ref) =>
+          _system_admin_observability_blob_payload(id, ref, runtimeConfig)
+        case None =>
+          _web_error_response(Some("system"), HStatus.BadRequest, "invalid diagnostic blob payload id", s"/web/system/admin/observability/payloads/$id")
+      }
+    else
+      _find_observability_payload(config.localRoot, id) match {
+        case Some(path) =>
+          IO.pure(
+            HResponse[IO](HStatus.Ok)
+              .withBodyStream(fs2.io.readInputStream(IO(Files.newInputStream(path)), 8192, closeAfterUse = true))
+              .withContentType(`Content-Type`(MediaType.application.json))
+          )
+        case None =>
+          _web_error_response(Some("system"), HStatus.NotFound, s"diagnostic payload not found: $id", s"/web/system/admin/observability/payloads/$id")
+      }
+  }
+
+  private def _system_admin_observability_blob_payload(
+    id: String,
+    ref: BlobStorageRef,
+    runtimeConfig: RuntimeConfig
+  ): IO[HResponse[IO]] =
+    BlobStoreFactory.create(runtimeConfig.blobStoreConfig).flatMap(_.get(ref)) match {
+      case Consequence.Success(result) =>
+        val mime = MediaType.parse(result.contentType.header).fold(_ => MediaType.application.`octet-stream`, identity)
+        IO.pure(
+          HResponse[IO](HStatus.Ok)
+            .withBodyStream(fs2.io.readInputStream(IO(result.payload.openInputStream()), 8192, closeAfterUse = true))
+            .withContentType(`Content-Type`(mime))
+        )
+      case Consequence.Failure(conclusion) =>
+        _web_error_response(Some("system"), HStatus.NotFound, s"diagnostic blob payload not found: $id: ${conclusion.display}", s"/web/system/admin/observability/payloads/$id")
+    }
+
+  private def _find_observability_payload(
+    root: Path,
+    id: String
+  ): Option[Path] = {
+    val base = root.toAbsolutePath.normalize
+    if (!Files.exists(base))
+      None
+    else {
+      val direct = base.resolve(id).normalize
+      if (direct.startsWith(base) && Files.isRegularFile(direct))
+        Some(direct)
+      else {
+        val dirs = Files.newDirectoryStream(base)
+        try {
+          dirs.iterator().asScala
+            .map(_.resolve(id).normalize)
+            .find(path => path.startsWith(base) && Files.isRegularFile(path))
+        } finally {
+          dirs.close()
+        }
+      }
+    }
+  }
 
   private def _application_admin(): IO[HResponse[IO]] =
     _html(StaticFormAppRenderer.renderApplicationAdmin(engine.runtimeSubsystem, engine.webDescriptor))

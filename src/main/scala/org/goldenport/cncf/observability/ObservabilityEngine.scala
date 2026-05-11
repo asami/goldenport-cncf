@@ -493,8 +493,67 @@ object ObservabilityEngine {
   private def _result_summary_record_(
     response: OperationResponse,
     confidentiality: Map[String, DataConfidentiality] = Map.empty
-  ): Record =
-    DiagnosticPayloadSummary.operationResponse(response, confidentiality).toRecord
+  ): Record = {
+    val base = DiagnosticPayloadSummary.operationResponse(response, confidentiality)
+    response match {
+      case OperationResponse.RecordResponse(record) =>
+        DiagnosticPayloadExternalizer.fromGlobal
+          .externalizeRecordSummary(
+            DiagnosticPayloadExternalizer.currentOperation.getOrElse(""),
+            "result",
+            record,
+            base,
+            confidentiality
+          )
+          .toRecord
+      case OperationResponse.Json(json) =>
+        DiagnosticPayloadExternalizer.fromGlobal
+          .externalizeUnsafeTextSummary(
+            DiagnosticPayloadExternalizer.currentOperation.getOrElse(""),
+            "result",
+            "application/json",
+            "json",
+            json.spaces2,
+            base
+          )
+          .toRecord
+      case OperationResponse.Yaml(yaml) =>
+        DiagnosticPayloadExternalizer.fromGlobal
+          .externalizeUnsafeTextSummary(
+            DiagnosticPayloadExternalizer.currentOperation.getOrElse(""),
+            "result",
+            "application/yaml",
+            "yaml",
+            yaml,
+            base
+          )
+          .toRecord
+      case OperationResponse.Scalar(value) =>
+        DiagnosticPayloadExternalizer.fromGlobal
+          .externalizeUnsafeTextSummary(
+            DiagnosticPayloadExternalizer.currentOperation.getOrElse(""),
+            "result",
+            "text/plain",
+            "txt",
+            String.valueOf(value),
+            base
+          )
+          .toRecord
+      case OperationResponse.Opaque(value) =>
+        DiagnosticPayloadExternalizer.fromGlobal
+          .externalizeUnsafeTextSummary(
+            DiagnosticPayloadExternalizer.currentOperation.getOrElse(""),
+            "result",
+            "text/plain",
+            "txt",
+            String.valueOf(value),
+            base
+          )
+          .toRecord
+      case _ =>
+        base.toRecord
+    }
+  }
 
   private def _result_summary_text_(
     response: OperationResponse,

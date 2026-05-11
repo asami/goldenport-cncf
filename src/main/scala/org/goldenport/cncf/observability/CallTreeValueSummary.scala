@@ -15,7 +15,7 @@ object CallTreeValueSummary {
     value: Any,
     key: String = "result"
   ): Map[String, String] =
-    Map(key -> json(summary(value, includeInline = false)))
+    Map(key -> json(summary(value, includeInline = false, payloadKind = key)))
 
   def responseAttributes(
     response: OperationResponse
@@ -33,8 +33,34 @@ object CallTreeValueSummary {
   def operationResponseSummary(
     response: OperationResponse,
     confidentiality: Map[String, DataConfidentiality]
-  ): Record =
-    DiagnosticPayloadSummary.operationResponse(response, confidentiality).toRecord
+  ): Record = {
+    val base = DiagnosticPayloadSummary.operationResponse(response, confidentiality)
+    val operation = DiagnosticPayloadExternalizer.currentOperation.getOrElse("")
+    response match {
+      case OperationResponse.RecordResponse(record) =>
+        DiagnosticPayloadExternalizer.fromGlobal
+          .externalizeRecordSummary(operation, "response", record, base, confidentiality)
+          .toRecord
+      case OperationResponse.Json(json) =>
+        DiagnosticPayloadExternalizer.fromGlobal
+          .externalizeUnsafeTextSummary(operation, "response", "application/json", "json", json.spaces2, base)
+          .toRecord
+      case OperationResponse.Yaml(yaml) =>
+        DiagnosticPayloadExternalizer.fromGlobal
+          .externalizeUnsafeTextSummary(operation, "response", "application/yaml", "yaml", yaml, base)
+          .toRecord
+      case OperationResponse.Scalar(value) =>
+        DiagnosticPayloadExternalizer.fromGlobal
+          .externalizeUnsafeTextSummary(operation, "response", "text/plain", "txt", String.valueOf(value), base)
+          .toRecord
+      case OperationResponse.Opaque(value) =>
+        DiagnosticPayloadExternalizer.fromGlobal
+          .externalizeUnsafeTextSummary(operation, "response", "text/plain", "txt", String.valueOf(value), base)
+          .toRecord
+      case _ =>
+        base.toRecord
+    }
+  }
 
   def summary(
     value: Any
@@ -45,7 +71,24 @@ object CallTreeValueSummary {
     value: Any,
     includeInline: Boolean
   ): Record =
-    DiagnosticPayloadSummary.summarize(value, includeInline).toRecord
+    summary(value, includeInline, payloadKind = "result")
+
+  def summary(
+    value: Any,
+    includeInline: Boolean,
+    payloadKind: String
+  ): Record = {
+    val base = DiagnosticPayloadSummary.summarize(value, includeInline)
+    val operation = DiagnosticPayloadExternalizer.currentOperation.getOrElse("")
+    value match {
+      case r: Record =>
+        DiagnosticPayloadExternalizer.fromGlobal
+          .externalizeRecordSummary(operation, payloadKind, r, base)
+          .toRecord
+      case _ =>
+        base.toRecord
+    }
+  }
 
   def recordSummary(
     record: Record
@@ -62,8 +105,26 @@ object CallTreeValueSummary {
     record: Record,
     includeInline: Boolean,
     confidentiality: Map[String, DataConfidentiality]
-  ): Record =
-    DiagnosticPayloadSummary.recordSummary(record, includeInline, confidentiality).toRecord
+  ): Record = {
+    val base = DiagnosticPayloadSummary.recordSummary(record, includeInline, confidentiality)
+    val operation = DiagnosticPayloadExternalizer.currentOperation.getOrElse("")
+    DiagnosticPayloadExternalizer.fromGlobal
+      .externalizeRecordSummary(operation, "result", record, base, confidentiality)
+      .toRecord
+  }
+
+  def recordSummary(
+    record: Record,
+    includeInline: Boolean,
+    confidentiality: Map[String, DataConfidentiality],
+    payloadKind: String
+  ): Record = {
+    val base = DiagnosticPayloadSummary.recordSummary(record, includeInline, confidentiality)
+    val operation = DiagnosticPayloadExternalizer.currentOperation.getOrElse("")
+    DiagnosticPayloadExternalizer.fromGlobal
+      .externalizeRecordSummary(operation, payloadKind, record, base, confidentiality)
+      .toRecord
+  }
 
   def textSummary(
     kind: String,

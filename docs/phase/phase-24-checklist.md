@@ -111,9 +111,8 @@ execution history, and Job diagnostic records.
   `outcome`, `size_bytes`, `char_count`, `field_count`, `record_count`,
   `element_count`, paging counts, `inline`, `truncated`,
   `truncation_reason`, and optional payload reference metadata.
-- `DiagnosticPayloadReference` is placeholder-only in OB-02. It can project
-  existing `href`, `url`, `path`, `ref`, `storage`, `content_type`, and
-  `size_bytes` data, but OB-02 does not create files or object-store entries.
+- `DiagnosticPayloadReference` started as placeholder-only in OB-02. OB-03 now
+  attaches local-file or BlobStore references when externalization is enabled.
 - CallTree and retained execution-history payloads now use summary records
   rather than raw full payload strings. Existing admin/list surfaces keep short
   display strings derived from those records.
@@ -131,7 +130,7 @@ execution history, and Job diagnostic records.
 
 ## OB-03: Diagnostic Payload External Store and Runtime Config
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
@@ -140,12 +139,12 @@ configuration.
 
 ### Detailed Tasks
 
-- [ ] Define local-file and object-store destination configuration.
-- [ ] Define retention and cleanup hooks.
-- [ ] Define authorization checks for payload reference access.
-- [ ] Define diagnostics when externalization is disabled, unavailable, or
+- [x] Define local-file and object-store destination configuration.
+- [x] Define retention and cleanup hooks.
+- [x] Define authorization checks for payload reference access.
+- [x] Define diagnostics when externalization is disabled, unavailable, or
       fails.
-- [ ] Make payload externalization opt-in/configured until production policy is
+- [x] Make payload externalization opt-in/configured until production policy is
       complete.
 
 ### Guardrails
@@ -153,11 +152,26 @@ configuration.
 - Do not write sensitive payloads before redaction policy is applied.
 - Do not expose filesystem paths or object keys without authorization policy.
 
+### Completion Note
+
+- `textus.observability.payload.externalization.*` keys configure opt-in
+  diagnostic payload externalization.
+- Develop/test externalization defaults to local files under
+  `target/cncf.d/observability/payloads`; production requires explicit
+  destination selection.
+- `local-file` and `blob-store` destinations are available. Blob/object-store
+  persistence uses CNCF `BlobStore`.
+- Summary records include `externalization_status` /
+  `externalization_reason`, and successful writes attach
+  `DiagnosticPayloadReference` projection fields.
+- System-admin payload resolution is wired for local diagnostic payload files;
+  richer dashboard drill-down is OB-04.
+
 ---
 
 ## OB-04: Structured Diagnostic Dashboard Drill-down
 
-Status: TODO
+Status: ACTIVE
 
 ### Objective
 

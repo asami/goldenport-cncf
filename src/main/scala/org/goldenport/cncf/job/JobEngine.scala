@@ -19,7 +19,7 @@ import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.entity.EntityStore
 import org.goldenport.cncf.event.{EventBus, EventId, EventLane, EventPublishOption, EventRecord, EventStore, ReceptionDomainEvent}
 import org.goldenport.cncf.naming.NamingConventions
-import org.goldenport.cncf.observability.ObservabilityEngine
+import org.goldenport.cncf.observability.{DiagnosticPayloadExternalizer, ObservabilityEngine}
 
 /*
  * @since   Jan.  4, 2026
@@ -353,6 +353,7 @@ final case class JobDebugInfo(
   calltreeSaved: Boolean = false,
   calltreeStorage: Option[String] = None,
   calltreeSerializedBytes: Option[Int] = None,
+  calltreePayloadReference: Option[Record] = None,
   calltreeDropReason: Option[String] = None
 )
 
@@ -1195,21 +1196,65 @@ final class InMemoryJobEngine(
   ): Unit = {
     val json = RecordEncoder.json(record)
     val bytes = json.getBytes(java.nio.charset.StandardCharsets.UTF_8).length
-    val useclob = bytes > InMemoryJobEngine.CallTreeVarcharThresholdBytes
-    _mutate_record(jobid) { current =>
-      current.copy(
-        debug = current.debug.copy(
-          calltree = Some(record),
-          calltreeJson = if (useclob) None else Some(json),
-          calltreeClob = if (useclob) Some(json) else None,
-          calltreeSaved = true,
-          calltreeStorage = Some(if (useclob) "calltree_clob" else "calltree"),
-          calltreeSerializedBytes = Some(bytes),
-          calltreeDropReason = None
+    val externalizer = DiagnosticPayloadExternalizer.fromGlobal
+    val externalSummary =
+      externalizer.externalizeText(
+        operation = _job_operation_fqn(jobid),
+        payloadKind = "calltree",
+        contentType = "application/json",
+        extension = "json",
+        text = json,
+        summary = org.goldenport.cncf.observability.DiagnosticPayloadSummary(
+          kind = "calltree",
+          valueType = Some("Record"),
+          sizeBytes = Some(bytes)
         )
       )
+    externalSummary.payloadReference match {
+      case Some(ref) if externalSummary.externalizationStatus.contains("stored") =>
+        _mutate_record(jobid) { current =>
+          current.copy(
+            debug = current.debug.copy(
+              calltree = None,
+              calltreeJson = None,
+              calltreeClob = None,
+              calltreeSaved = true,
+              calltreeStorage = Some(s"external:${ref.storage.getOrElse("payload")}"),
+              calltreeSerializedBytes = Some(bytes),
+              calltreePayloadReference = Some(ref.toRecord),
+              calltreeDropReason = None
+            )
+          )
+        }
+      case _ =>
+        val useclob = bytes > InMemoryJobEngine.CallTreeVarcharThresholdBytes
+        _mutate_record(jobid) { current =>
+          current.copy(
+            debug = current.debug.copy(
+              calltree = Some(record),
+              calltreeJson = if (useclob) None else Some(json),
+              calltreeClob = if (useclob) Some(json) else None,
+              calltreeSaved = true,
+              calltreeStorage = Some(if (useclob) "calltree_clob" else "calltree"),
+              calltreeSerializedBytes = Some(bytes),
+              calltreePayloadReference = None,
+              calltreeDropReason = None
+            )
+          )
+        }
     }
   }
+
+  private def _job_operation_fqn(
+    jobid: JobId
+  ): String =
+    _get_record(jobid)
+      .flatMap(_.tasks.headOption)
+      .flatMap { task =>
+        val parts = Vector(task.componentName, task.serviceName, task.operationName).flatten.filter(_.nonEmpty)
+        Option.when(parts.nonEmpty)(parts.mkString("."))
+      }
+      .getOrElse("job.calltree")
 
   private def _mark_calltree_not_saved_(
     jobid: JobId,

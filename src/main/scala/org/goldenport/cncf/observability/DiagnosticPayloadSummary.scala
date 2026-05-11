@@ -75,6 +75,8 @@ final case class DiagnosticPayloadSummary(
   inline: Option[Any] = None,
   truncated: Boolean = false,
   truncationReason: Option[String] = None,
+  externalizationStatus: Option[String] = None,
+  externalizationReason: Option[String] = None,
   payloadReference: Option[DiagnosticPayloadReference] = None
 ) {
   def toRecord: Record = {
@@ -94,6 +96,9 @@ final case class DiagnosticPayloadSummary(
       "limit" -> limit,
       "fetched_count" -> fetchedCount,
       "total_count" -> totalCount
+    ) ++ Record.dataOption(
+      "externalization_status" -> externalizationStatus,
+      "externalization_reason" -> externalizationReason
     ) ++ Record.dataAuto(
       "inline" -> inline.getOrElse(false)
     ) ++ (
@@ -124,6 +129,7 @@ final case class DiagnosticPayloadSummary(
       sizeBytes.map(x => s"${x} bytes"),
       charCount.map(x => s"${x} chars"),
       Option.when(truncated)("truncated"),
+      externalizationStatus.map(x => s"externalization=$x"),
       payloadReference.flatMap(r => r.href.orElse(r.url).orElse(r.path).orElse(r.ref)).map(x => s"ref=$x")
     ).flatten
     parts.mkString(" ")

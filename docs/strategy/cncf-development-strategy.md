@@ -1124,8 +1124,8 @@ Active work stack:
 
 - OB-01: Diagnostic Payload Externalization Policy Opening. (DONE)
 - OB-02: CallTree / Execution History / Job Diagnostic Summary Model. (DONE)
-- OB-03: Diagnostic Payload External Store and Runtime Config. (ACTIVE)
-- OB-04: Structured Diagnostic Dashboard Drill-down.
+- OB-03: Diagnostic Payload External Store and Runtime Config. (DONE)
+- OB-04: Structured Diagnostic Dashboard Drill-down. (ACTIVE)
 - OB-05: Metrics Collection and Metrics Service Expansion.
 - OB-06: OpenTelemetry Boundary and Export Policy.
 - OB-07: Phase 24 verification and closure.
@@ -1140,8 +1140,8 @@ Active work stack:
   - `DiagnosticPayloadSummary` is the reusable compact summary shape for
     CallTree, retained execution history, Job diagnostics, and task-local
     calltree projections.
-  - `DiagnosticPayloadReference` is placeholder-only until OB-03 implements
-    external store configuration and authorized reference resolution.
+  - `DiagnosticPayloadReference` can now point to `local-file` or `blob-store`
+    diagnostic payloads when externalization is explicitly enabled.
   - Generic JSON/YAML operation responses are summary-only in diagnostics;
     secret-aware operation results should use typed result/value-class records.
 - Dashboard drill-down for structured diagnostics, including
@@ -1156,6 +1156,10 @@ Active work stack:
     record count, result type, and truncation/externalization status.
   - Explicit debug configuration may write selected large payloads to external
     diagnostic files or object storage and surface only the file/object reference
+    in primary diagnostics.
+  - Develop/test local payload files are collected under
+    `target/cncf.d/observability/payloads`; production object storage goes
+    through the configured CNCF `BlobStore`.
     in Web/admin diagnostics.
   - Externalized payload retention, redaction, authorization, and cleanup policy
     must be defined before production use.

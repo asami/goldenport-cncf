@@ -27,7 +27,7 @@ import org.goldenport.value.BaseContent
  * @since   Mar. 28, 2026
  *  version Mar. 29, 2026
  *  version Apr. 22, 2026
- * @version May.  7, 2026
+ * @version May. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class JobControlComponent() extends Component {
@@ -1698,6 +1698,7 @@ object JobControlComponent {
       "calltree-saved" -> model.debug.calltreeSaved,
       "calltree-storage" -> model.debug.calltreeStorage.getOrElse(""),
       "calltree-serialized-bytes" -> model.debug.calltreeSerializedBytes.getOrElse(0),
+      "calltree-payload-reference" -> model.debug.calltreePayloadReference,
       "calltree-drop-reason" -> model.debug.calltreeDropReason.getOrElse(""),
       "calltree" -> model.calltree.getOrElse(Record.empty)
     )

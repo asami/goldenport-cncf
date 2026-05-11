@@ -11,7 +11,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Apr. 18, 2026
  *  version Apr. 28, 2026
- * @version May.  5, 2026
+ * @version May. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class RuntimeConfigSpec extends AnyWordSpec with Matchers {
@@ -106,6 +106,61 @@ final class RuntimeConfigSpec extends AnyWordSpec with Matchers {
 
       config.mode shouldBe RunMode.Server
       config.operationMode shouldBe OperationMode.Production
+    }
+
+    "keep diagnostic payload externalization disabled by default" in {
+      val config = RuntimeConfig.from(ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty))
+
+      config.diagnosticPayloadExternalizationConfig.enabled shouldBe false
+      config.diagnosticPayloadExternalizationConfig.payloadTargets shouldBe Set("result", "response")
+      config.diagnosticPayloadExternalizationConfig.localRoot.toString shouldBe "target/cncf.d/observability/payloads"
+    }
+
+    "parse diagnostic payload externalization configuration and selectors" in {
+      val root = java.nio.file.Files.createTempDirectory("cncf-observability-payloads")
+      val configuration = ResolvedConfiguration(
+        Configuration(Map(
+          RuntimeConfig.ObservabilityPayloadExternalizationEnabledKey -> ConfigurationValue.StringValue("true"),
+          RuntimeConfig.ObservabilityPayloadExternalizationDestinationKey -> ConfigurationValue.StringValue("local-file"),
+          RuntimeConfig.ObservabilityPayloadExternalizationLocalRootKey -> ConfigurationValue.StringValue(root.toString),
+          RuntimeConfig.ObservabilityPayloadExternalizationThresholdBytesKey -> ConfigurationValue.StringValue("32"),
+          RuntimeConfig.ObservabilityPayloadExternalizationPayloadsKey -> ConfigurationValue.StringValue("result,response,calltree"),
+          RuntimeConfig.ObservabilityPayloadExternalizationOperationKey -> ConfigurationValue.StringValue("blog.component.search"),
+          RuntimeConfig.ObservabilityPayloadExternalizationOperationContainsKey -> ConfigurationValue.StringValue("notification.search"),
+          RuntimeConfig.ObservabilityPayloadExternalizationRetentionDaysKey -> ConfigurationValue.StringValue("3")
+        )),
+        ConfigurationTrace.empty
+      )
+
+      val config = RuntimeConfig.from(configuration).diagnosticPayloadExternalizationConfig
+
+      config.enabled shouldBe true
+      config.normalizedDestination(OperationMode.Develop) shouldBe Some("local-file")
+      config.localRoot shouldBe root
+      config.thresholdBytes shouldBe 32
+      config.payloadTargets should contain allOf ("result", "response", "calltree")
+      config.operationExact should contain ("blog.component.search")
+      config.operationContains should contain ("notification.search")
+      config.retentionDays shouldBe Some(3)
+      config.matches("blog.component.search", "result", 33) shouldBe true
+      config.matches("blog.component.search", "request", 33) shouldBe false
+      config.matches("other.operation", "result", 33) shouldBe false
+    }
+
+    "reject production diagnostic payload destination errors deterministically" in {
+      val configuration = ResolvedConfiguration(
+        Configuration(Map(
+          RuntimeConfig.OperationModeKey -> ConfigurationValue.StringValue("production"),
+          RuntimeConfig.ObservabilityPayloadExternalizationEnabledKey -> ConfigurationValue.StringValue("true")
+        )),
+        ConfigurationTrace.empty
+      )
+
+      val thrown = intercept[IllegalArgumentException] {
+        RuntimeConfig.from(configuration)
+      }
+      thrown.getMessage should include ("destination is required")
+      RuntimeConfig.create(configuration) shouldBe a[org.goldenport.Consequence.Failure[_]]
     }
 
     "parse BlobStore configuration and aliases" in {

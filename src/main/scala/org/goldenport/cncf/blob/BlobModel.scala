@@ -15,7 +15,7 @@ import org.simplemodeling.model.datatype.EntityId
  * @since   Apr. 26, 2026
  *  version Apr. 28, 2026
  *  version Apr. 29, 2026
- * @version May.  4, 2026
+ * @version May. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 enum BlobKind(val value: String) {
@@ -76,6 +76,25 @@ final case class BlobStorageRef(
 object BlobStorageRef {
   val DefaultStore: String = "blob"
   val DefaultContainer: String = "default"
+
+  def parse(value: String): Consequence[BlobStorageRef] = {
+    val trimmed = value.trim
+    val scheme = trimmed.indexOf("://")
+    if (scheme <= 0)
+      Consequence.argumentInvalid(s"invalid blob storage ref: $value")
+    else {
+      val store = trimmed.substring(0, scheme)
+      val rest = trimmed.substring(scheme + 3)
+      val hash = rest.indexOf("#")
+      val path = if (hash >= 0) rest.substring(0, hash) else rest
+      val version = if (hash >= 0) Some(rest.substring(hash + 1)).filter(_.nonEmpty) else None
+      val slash = path.indexOf("/")
+      if (slash <= 0 || slash == path.length - 1)
+        Consequence.argumentInvalid(s"invalid blob storage ref: $value")
+      else
+        Consequence.success(BlobStorageRef(store, path.substring(0, slash), path.substring(slash + 1), version))
+    }
+  }
 }
 
 enum BlobAccessUrlSource(val value: String) {

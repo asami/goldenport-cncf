@@ -762,8 +762,29 @@ used by `admin.execution.history` and `admin.execution.calltree`.
 
 Diagnostic payload externalization policy is described in
 `docs/design/observability/diagnostic-payload-externalization-policy.md`.
-Current CallTree/history debug keys remain valid. Concrete payload
-externalization runtime keys are intentionally deferred to Phase 24 OB-03.
+Current CallTree/history debug keys remain valid.
+
+OB-03 adds opt-in diagnostic payload externalization keys:
+
+- `textus.observability.payload.externalization.enabled`
+- `textus.observability.payload.externalization.destination`
+- `textus.observability.payload.externalization.local.root`
+- `textus.observability.payload.externalization.threshold.bytes`
+- `textus.observability.payload.externalization.payloads`
+- `textus.observability.payload.externalization.operation`
+- `textus.observability.payload.externalization.operation-contains`
+- `textus.observability.payload.externalization.allow-request-override`
+- `textus.observability.payload.externalization.unsafe-opaque-payloads`
+- `textus.observability.payload.externalization.retention.days`
+
+Externalization is disabled by default. Develop/test mode uses
+`target/cncf.d/observability/payloads` for local-file externalization when no
+destination is specified. Production mode requires an explicit destination and
+fails configuration validation when externalization is enabled without one.
+`blob-store` uses the configured CNCF `BlobStore`, allowing S3 or another object
+store provider to be supplied behind the BlobStore boundary. The BlobStore must
+be durable; in-memory BlobStore is rejected for diagnostic payload
+externalization because its references cannot be resolved reliably.
 
 Use `runtime` only when the value is genuinely about the runtime process itself and no clearer owner exists.
 

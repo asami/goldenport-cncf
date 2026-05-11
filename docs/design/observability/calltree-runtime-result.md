@@ -237,6 +237,12 @@ Those records preserve compatible projection keys such as `kind`, `inline`,
 `size_bytes`, `field_count`, `record_count`, `fetched_count`, `total_count`,
 and optional `payload_href` / `external_href`.
 
+OB-03 adds opt-in externalization. When configured, matching CallTree
+payload-bearing fields may include `externalization_status`,
+`externalization_reason`, and `DiagnosticPayloadReference` projection keys such
+as `payload_href`, `payload_ref`, and `payload_storage`. The default remains no
+external write.
+
 Large result/response bodies must not be copied wholesale into CallTree,
 execution history, Job Entity, Task Execution Tree, or task-local calltree
 records. For large values, the diagnostic projection should show summary

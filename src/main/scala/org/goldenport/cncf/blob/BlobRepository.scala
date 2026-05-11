@@ -14,7 +14,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
  *
  * @since   Apr. 27, 2026
  *  version Apr. 28, 2026
- * @version May.  4, 2026
+ * @version May. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 trait BlobRepository {
@@ -203,22 +203,7 @@ object BlobRecordCodec {
   }
 
   private def _parse_storage_ref(value: String): Consequence[Option[BlobStorageRef]] = {
-    val trimmed = value.trim
-    val scheme = trimmed.indexOf("://")
-    if (scheme <= 0)
-      Consequence.argumentInvalid(s"invalid blob storage ref: $value")
-    else {
-      val store = trimmed.substring(0, scheme)
-      val rest = trimmed.substring(scheme + 3)
-      val hash = rest.indexOf("#")
-      val path = if (hash >= 0) rest.substring(0, hash) else rest
-      val version = if (hash >= 0) Some(rest.substring(hash + 1)).filter(_.nonEmpty) else None
-      val slash = path.indexOf("/")
-      if (slash <= 0 || slash == path.length - 1)
-        Consequence.argumentInvalid(s"invalid blob storage ref: $value")
-      else
-        Consequence.success(Some(BlobStorageRef(store, path.substring(0, slash), path.substring(slash + 1), version)))
-    }
+    BlobStorageRef.parse(value).map(Some(_))
   }
 
   private def _string(record: Record, names: String*): Option[String] =

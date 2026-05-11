@@ -12,7 +12,7 @@ import org.goldenport.cncf.config.ConfigurationAccess
 import org.goldenport.cncf.config.RuntimeDefaults
 import org.goldenport.cncf.action.CommandExecutionMode
 import org.goldenport.cncf.context.IdGenerationContext
-import org.goldenport.cncf.observability.ObservabilityEngine
+import org.goldenport.cncf.observability.{DiagnosticPayloadExternalizationConfig, ObservabilityEngine}
 import org.goldenport.cncf.blob.BlobStoreConfig
 
 /*
@@ -21,7 +21,7 @@ import org.goldenport.cncf.blob.BlobStoreConfig
  *  version Feb.  1, 2026
  *  version Mar. 28, 2026
  *  version Apr. 30, 2026
- * @version May.  5, 2026
+ * @version May. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class RuntimeConfig(
@@ -43,6 +43,8 @@ final case class RuntimeConfig(
   commandExecutionMode: Option[CommandExecutionMode] = None,
   executionHistoryConfig: ObservabilityEngine.ExecutionHistoryConfig =
     ObservabilityEngine.ExecutionHistoryConfig(),
+  diagnosticPayloadExternalizationConfig: DiagnosticPayloadExternalizationConfig =
+    DiagnosticPayloadExternalizationConfig(),
   blobStoreConfig: BlobStoreConfig = BlobStoreConfig(),
   idNamespace: IdGenerationContext.IdNamespace = IdGenerationContext.DefaultNamespace
 )
@@ -74,6 +76,26 @@ object RuntimeConfig {
   val RuntimeExecutionHistoryFilteredLimitKey = "textus.runtime.execution.history.filtered-limit"
   val ExecutionHistoryFilterOperationContainsKey = "textus.execution.history.filter.operation-contains"
   val RuntimeExecutionHistoryFilterOperationContainsKey = "textus.runtime.execution.history.filter.operation-contains"
+  val ObservabilityPayloadExternalizationEnabledKey = "textus.observability.payload.externalization.enabled"
+  val RuntimeObservabilityPayloadExternalizationEnabledKey = "textus.runtime.observability.payload.externalization.enabled"
+  val ObservabilityPayloadExternalizationDestinationKey = "textus.observability.payload.externalization.destination"
+  val RuntimeObservabilityPayloadExternalizationDestinationKey = "textus.runtime.observability.payload.externalization.destination"
+  val ObservabilityPayloadExternalizationLocalRootKey = "textus.observability.payload.externalization.local.root"
+  val RuntimeObservabilityPayloadExternalizationLocalRootKey = "textus.runtime.observability.payload.externalization.local.root"
+  val ObservabilityPayloadExternalizationThresholdBytesKey = "textus.observability.payload.externalization.threshold.bytes"
+  val RuntimeObservabilityPayloadExternalizationThresholdBytesKey = "textus.runtime.observability.payload.externalization.threshold.bytes"
+  val ObservabilityPayloadExternalizationPayloadsKey = "textus.observability.payload.externalization.payloads"
+  val RuntimeObservabilityPayloadExternalizationPayloadsKey = "textus.runtime.observability.payload.externalization.payloads"
+  val ObservabilityPayloadExternalizationOperationKey = "textus.observability.payload.externalization.operation"
+  val RuntimeObservabilityPayloadExternalizationOperationKey = "textus.runtime.observability.payload.externalization.operation"
+  val ObservabilityPayloadExternalizationOperationContainsKey = "textus.observability.payload.externalization.operation-contains"
+  val RuntimeObservabilityPayloadExternalizationOperationContainsKey = "textus.runtime.observability.payload.externalization.operation-contains"
+  val ObservabilityPayloadExternalizationAllowRequestOverrideKey = "textus.observability.payload.externalization.allow-request-override"
+  val RuntimeObservabilityPayloadExternalizationAllowRequestOverrideKey = "textus.runtime.observability.payload.externalization.allow-request-override"
+  val ObservabilityPayloadExternalizationUnsafeOpaquePayloadsKey = "textus.observability.payload.externalization.unsafe-opaque-payloads"
+  val RuntimeObservabilityPayloadExternalizationUnsafeOpaquePayloadsKey = "textus.runtime.observability.payload.externalization.unsafe-opaque-payloads"
+  val ObservabilityPayloadExternalizationRetentionDaysKey = "textus.observability.payload.externalization.retention.days"
+  val RuntimeObservabilityPayloadExternalizationRetentionDaysKey = "textus.runtime.observability.payload.externalization.retention.days"
   val DiscoverClassesKey = "textus.discover.classes"
   val RuntimeDiscoverClassesKey = "textus.runtime.discover.classes"
   val ComponentFactoryClassKey = "textus.component.factory-class"
@@ -174,6 +196,7 @@ object RuntimeConfig {
       webProductionAdminJobsRoles = DefaultWebProductionAdminJobsRoles,
       commandExecutionMode = None,
       executionHistoryConfig = ObservabilityEngine.ExecutionHistoryConfig(),
+      diagnosticPayloadExternalizationConfig = DiagnosticPayloadExternalizationConfig(),
       blobStoreConfig = BlobStoreConfig(),
       idNamespace = DefaultIdNamespace
     )
@@ -237,6 +260,8 @@ object RuntimeConfig {
     val datastorespace = DataStoreSpace.create(configuration)
     val entitystorespace = EntityStoreSpace.create(configuration)
     val executionHistoryConfig = _execution_history_config(configuration)
+    val diagnosticPayloadExternalizationConfig =
+      _diagnostic_payload_externalization_config(configuration, operationMode)
     val blobStoreConfig = BlobStoreConfig.fromConfiguration(configuration)
     val idNamespace = _id_namespace(configuration)
     val webOperationDispatcher =
@@ -271,7 +296,7 @@ object RuntimeConfig {
           case roles => roles
         }
     ObservabilityEngine.updateExecutionHistoryConfig(executionHistoryConfig)
-    RuntimeConfig(
+    val config = RuntimeConfig(
       logbackend,
       loglevel,
       serverEmulatorBaseUrl = baseurl,
@@ -289,9 +314,12 @@ object RuntimeConfig {
       webProductionAdminJobsRoles = webProductionAdminJobsRoles,
       commandExecutionMode = commandExecutionMode,
       executionHistoryConfig = executionHistoryConfig,
+      diagnosticPayloadExternalizationConfig = diagnosticPayloadExternalizationConfig,
       blobStoreConfig = blobStoreConfig,
       idNamespace = idNamespace
     )
+    _validate(config)
+    config
   }
 
   private def _is_console_log_backend(
@@ -313,6 +341,11 @@ object RuntimeConfig {
   def create(conf: ResolvedConfiguration): Consequence[RuntimeConfig] = Consequence {
     from(conf)
   }
+
+  private def _validate(config: RuntimeConfig): Unit =
+    config.diagnosticPayloadExternalizationConfig.validationError.foreach { message =>
+      throw new IllegalArgumentException(message)
+    }
 
   def parseCommandExecutionMode(
     value: String
@@ -379,6 +412,24 @@ object RuntimeConfig {
     )
   }
 
+  private def _diagnostic_payload_externalization_config(
+    configuration: ResolvedConfiguration,
+    operationMode: OperationMode
+  ): DiagnosticPayloadExternalizationConfig =
+    DiagnosticPayloadExternalizationConfig.fromValues(
+      enabled = _get_boolean(configuration, ObservabilityPayloadExternalizationEnabledKey).getOrElse(false),
+      destination = _get_string(configuration, ObservabilityPayloadExternalizationDestinationKey),
+      localRoot = _get_string(configuration, ObservabilityPayloadExternalizationLocalRootKey),
+      thresholdBytes = _get_int(configuration, ObservabilityPayloadExternalizationThresholdBytesKey),
+      payloadTargets = _split_csv(_get_string(configuration, ObservabilityPayloadExternalizationPayloadsKey)),
+      operationExact = _split_csv(_get_string(configuration, ObservabilityPayloadExternalizationOperationKey)),
+      operationContains = _split_csv(_get_string(configuration, ObservabilityPayloadExternalizationOperationContainsKey)),
+      allowRequestOverride = _get_boolean(configuration, ObservabilityPayloadExternalizationAllowRequestOverrideKey),
+      unsafeOpaquePayloads = _get_boolean(configuration, ObservabilityPayloadExternalizationUnsafeOpaquePayloadsKey),
+      retentionDays = _get_int(configuration, ObservabilityPayloadExternalizationRetentionDaysKey),
+      operationMode = operationMode
+    )
+
   private def _id_namespace(
     configuration: ResolvedConfiguration
   ): IdGenerationContext.IdNamespace = {
@@ -417,6 +468,16 @@ object RuntimeConfig {
         case ExecutionHistoryRecentLimitKey => Vector(RuntimeExecutionHistoryRecentLimitKey)
         case ExecutionHistoryFilteredLimitKey => Vector(RuntimeExecutionHistoryFilteredLimitKey)
         case ExecutionHistoryFilterOperationContainsKey => Vector(RuntimeExecutionHistoryFilterOperationContainsKey)
+        case ObservabilityPayloadExternalizationEnabledKey => Vector(RuntimeObservabilityPayloadExternalizationEnabledKey)
+        case ObservabilityPayloadExternalizationDestinationKey => Vector(RuntimeObservabilityPayloadExternalizationDestinationKey)
+        case ObservabilityPayloadExternalizationLocalRootKey => Vector(RuntimeObservabilityPayloadExternalizationLocalRootKey)
+        case ObservabilityPayloadExternalizationThresholdBytesKey => Vector(RuntimeObservabilityPayloadExternalizationThresholdBytesKey)
+        case ObservabilityPayloadExternalizationPayloadsKey => Vector(RuntimeObservabilityPayloadExternalizationPayloadsKey)
+        case ObservabilityPayloadExternalizationOperationKey => Vector(RuntimeObservabilityPayloadExternalizationOperationKey)
+        case ObservabilityPayloadExternalizationOperationContainsKey => Vector(RuntimeObservabilityPayloadExternalizationOperationContainsKey)
+        case ObservabilityPayloadExternalizationAllowRequestOverrideKey => Vector(RuntimeObservabilityPayloadExternalizationAllowRequestOverrideKey)
+        case ObservabilityPayloadExternalizationUnsafeOpaquePayloadsKey => Vector(RuntimeObservabilityPayloadExternalizationUnsafeOpaquePayloadsKey)
+        case ObservabilityPayloadExternalizationRetentionDaysKey => Vector(RuntimeObservabilityPayloadExternalizationRetentionDaysKey)
         case DiscoverClassesKey => Vector(RuntimeDiscoverClassesKey)
         case ComponentFactoryClassKey => Vector(RuntimeComponentFactoryClassKey)
         case WorkspaceKey => Vector(RuntimeWorkspaceKey)

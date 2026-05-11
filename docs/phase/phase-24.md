@@ -67,17 +67,16 @@ Payload policy:
 
 - A (DONE): OB-01 — Diagnostic Payload Externalization Policy Opening.
 - B (DONE): OB-02 — CallTree / Execution History / Job Diagnostic Summary Model.
-- C (ACTIVE): OB-03 — Diagnostic Payload External Store and Runtime Config.
-- D (TODO): OB-04 — Structured Diagnostic Dashboard Drill-down.
+- C (DONE): OB-03 — Diagnostic Payload External Store and Runtime Config.
+- D (ACTIVE): OB-04 — Structured Diagnostic Dashboard Drill-down.
 - E (TODO): OB-05 — Metrics Collection and Metrics Service Expansion.
 - F (TODO): OB-06 — OpenTelemetry Boundary and Export Policy.
 - G (TODO): OB-07 — Phase 24 verification and closure.
 
 Resume hint:
 
-- Continue with OB-03. Implement diagnostic payload external-store boundaries,
-  runtime configuration keys, retention/cleanup hooks, and authorized payload
-  reference resolution.
+- Continue with OB-04. Build dashboard/admin drill-down for structured
+  diagnostic grouping, source-error chains, and payload references.
 - Keep `cncf-samples` sample 13 and docker-compose observability wiring visible
   as the concrete integration driver.
 
@@ -85,7 +84,7 @@ Resume hint:
 
 - [x] OB-01: Diagnostic Payload Externalization Policy Opening.
 - [x] OB-02: CallTree / Execution History / Job Diagnostic Summary Model.
-- [ ] OB-03: Diagnostic Payload External Store and Runtime Config.
+- [x] OB-03: Diagnostic Payload External Store and Runtime Config.
 - [ ] OB-04: Structured Diagnostic Dashboard Drill-down.
 - [ ] OB-05: Metrics Collection and Metrics Service Expansion.
 - [ ] OB-06: OpenTelemetry Boundary and Export Policy.
@@ -116,6 +115,20 @@ OB-02 completion note:
   bearing operation results should use typed result/value-class records.
 - OB-03 owns external file/object storage, payload-reference resolution,
   retention, cleanup, authorization, and runtime configuration keys.
+
+OB-03 completion note:
+
+- Diagnostic payload externalization is runtime-configured and disabled by
+  default.
+- Develop/test mode can write selected diagnostic payloads to
+  `target/cncf.d/observability/payloads`; production mode requires an explicit
+  destination.
+- Blob/object-store persistence is routed through CNCF `BlobStore`; CNCF does
+  not add direct S3-specific APIs.
+- CallTree, execution history, and Job calltree storage can attach payload
+  references and externalization status without changing operation outcomes.
+- System-admin payload reference resolution is available through the
+  observability payload route, while broader dashboard drill-down remains OB-04.
 
 ## 6. Completion Conditions
 
