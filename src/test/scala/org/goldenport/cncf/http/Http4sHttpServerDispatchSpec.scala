@@ -514,12 +514,15 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers {
       val app = server.routes(null.asInstanceOf[org.http4s.server.websocket.WebSocketBuilder2[IO]]).orNotFound
 
       val home = app.run(HRequest[IO](method = Method.GET, uri = Uri.unsafeFromString("/web/system/admin/observability"))).unsafeRunSync()
+      val metrics = app.run(HRequest[IO](method = Method.GET, uri = Uri.unsafeFromString("/web/system/admin/observability/metrics"))).unsafeRunSync()
       val diagnostics = app.run(HRequest[IO](method = Method.GET, uri = Uri.unsafeFromString("/web/system/admin/observability/diagnostics"))).unsafeRunSync()
       val detail = app.run(HRequest[IO](method = Method.GET, uri = Uri.unsafeFromString("/web/system/admin/observability/diagnostics/validation/ob04_format"))).unsafeRunSync()
       val unknown = app.run(HRequest[IO](method = Method.GET, uri = Uri.unsafeFromString("/web/system/admin/observability/diagnostics/validation/missing"))).unsafeRunSync()
 
       home.status.code shouldBe 200
       home.as[String].unsafeRunSync() should include ("System Observability")
+      metrics.status.code shouldBe 200
+      metrics.as[String].unsafeRunSync() should include ("Observability Metrics")
       diagnostics.status.code shouldBe 200
       diagnostics.as[String].unsafeRunSync() should include ("ob04_format")
       detail.status.code shouldBe 200

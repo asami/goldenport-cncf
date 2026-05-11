@@ -218,6 +218,27 @@ structured record per level. Raw diagnostic records are also collapsed by
 default. Payload links point to the system-admin payload resolver, and payload
 bytes are never expanded inline by default.
 
+## Metrics Projection
+
+OB-05 adds an in-process metrics read model and service surface for operational
+counts, error counts, duration summaries, and low-cardinality labels. Metrics
+are projections over runtime/dashboard signals; they do not replace diagnostic
+records, payload references, or structured `Conclusion` data.
+
+The builtin metrics component exposes entity-access metrics, the unified
+runtime metrics snapshot, and the metrics catalog. The System Admin
+Observability app renders these values at
+`/web/system/admin/observability/metrics`.
+
+Metric labels are deliberately constrained to low-cardinality grouping hints,
+such as scope, outcome/status, source, backend, payload kind, entity kind/name,
+and existing diagnostic keys. Raw paths, entity ids, job ids, payload ids,
+request parameters, and user/session identifiers are excluded from default
+labels.
+
+The concrete metrics service contract is described in
+`docs/design/observability/metrics-service.md`.
+
 ## Relationship to OpenTelemetry
 
 OpenTelemetry export is not the internal source of truth for CNCF diagnostics.

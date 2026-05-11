@@ -1126,8 +1126,8 @@ Active work stack:
 - OB-02: CallTree / Execution History / Job Diagnostic Summary Model. (DONE)
 - OB-03: Diagnostic Payload External Store and Runtime Config. (DONE)
 - OB-04: Structured Diagnostic Dashboard Drill-down. (DONE)
-- OB-05: Metrics Collection and Metrics Service Expansion. (ACTIVE)
-- OB-06: OpenTelemetry Boundary and Export Policy.
+- OB-05: Metrics Collection and Metrics Service Expansion. (DONE)
+- OB-06: OpenTelemetry Boundary and Export Policy. (ACTIVE)
 - OB-07: Phase 24 verification and closure.
 
 - Metrics collection expansion.
@@ -1151,6 +1151,19 @@ Active work stack:
     `/web/system/admin/observability/diagnostics/{scope}/{diagnosticKey}`.
   - `/web/system/admin/observability` shows diagnostic scope cards,
     payload-externalization status, and system-admin payload navigation.
+- Metrics service expansion:
+  - Runtime metrics use the in-process
+    `org.goldenport.cncf.metrics.RuntimeMetricsSnapshot` read model.
+  - V1 scopes include Web requests, Action execution, authorization decisions,
+    DSL chokepoints, validation, operation-request-validation, Blob operations,
+    diagnostic payload externalization, and entity access.
+  - The builtin `metrics` component exposes `load_runtime_metrics` and
+    `load_metrics_catalog` while keeping `load_entity_access_metrics`
+    compatible.
+  - `/web/system/admin/observability/metrics` renders metric scope cards and
+    compact counter/error/duration tables.
+  - Metric labels are low-cardinality operational grouping hints, not the
+    semantic error contract.
 - CallTree / execution-history / Job diagnostic result externalization:
   - CallTree, Task calltree, and Job result records must store compact
     summaries/references by default, not full action/UoW/space/I/O

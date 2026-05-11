@@ -206,7 +206,7 @@ references.
 
 ## OB-05: Metrics Collection and Metrics Service Expansion
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
@@ -215,22 +215,38 @@ diagnostic, and payload-externalization signals.
 
 ### Detailed Tasks
 
-- [ ] Inventory current metrics produced by action, UoW, entity/data/view/space,
+- [x] Inventory current metrics produced by action, UoW, entity/data/view/space,
       Job, Event, Web, and Blob paths.
-- [ ] Add missing counters/timers for selected Phase 24 runtime surfaces.
-- [ ] Add metrics service query surfaces for dashboard/admin use.
-- [ ] Align metrics labels with structured diagnostic fields where applicable.
+- [x] Add missing counters/timers for selected Phase 24 runtime surfaces.
+- [x] Add metrics service query surfaces for dashboard/admin use.
+- [x] Align metrics labels with structured diagnostic fields where applicable.
 
 ### Guardrails
 
 - Do not treat metrics labels as error semantics.
 - Keep high-cardinality values out of default metrics labels.
 
+### Completion Notes
+
+- `org.goldenport.cncf.metrics` defines the OB-05 runtime metrics snapshot,
+  point, and catalog read model.
+- `RuntimeDashboardMetrics` now exposes structured snapshot APIs while keeping
+  the OB-04 diagnostic drill-down read model intact.
+- V1 scopes cover Web requests, Action execution, authorization decisions,
+  DSL chokepoints, validation, operation-request-validation, Blob operations,
+  diagnostic payload externalization, and entity access.
+- The builtin `metrics` component exposes `load_runtime_metrics` and
+  `load_metrics_catalog`; `load_entity_access_metrics` remains compatible.
+- `/web/system/admin/observability/metrics` is linked from Performance and
+  the Observability admin app.
+- OpenTelemetry export, backend wiring, and `cncf-samples` sample 13 remain
+  OB-06 work.
+
 ---
 
 ## OB-06: OpenTelemetry Boundary and Export Policy
 
-Status: TODO
+Status: ACTIVE
 
 ### Objective
 

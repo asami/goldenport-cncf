@@ -1,5 +1,7 @@
 package org.goldenport.cncf.http
 
+import java.time.Instant
+import org.goldenport.cncf.metrics.{EntityAccessMetricEntry, EntityAccessMetricsRegistry, RuntimeMetricPoint, RuntimeMetricsCatalog, RuntimeMetricsSnapshot}
 import org.goldenport.record.Record
 
 /*
@@ -77,7 +79,16 @@ object RuntimeDashboardMetrics {
     operation: Option[String] = None,
     kind: Option[String] = None,
     sourceMode: Option[String] = None,
-    backend: Option[String] = None
+    backend: Option[String] = None,
+    elapsedMillis: Option[Long] = None,
+    labels: Map[String, String] = Map.empty
+  )
+
+  private final case class PayloadExternalizationEvent(
+    observedAt: Long,
+    status: String,
+    payloadKind: String,
+    destination: String
   )
 
   private var _htmlEvents = Vector.empty[Event]
@@ -87,6 +98,7 @@ object RuntimeDashboardMetrics {
   private var _validationEvents = Vector.empty[Event]
   private var _operationRequestValidationEvents = Vector.empty[Event]
   private var _blobEvents = Vector.empty[Event]
+  private var _payloadExternalizationEvents = Vector.empty[PayloadExternalizationEvent]
   private var _recent = Vector.empty[RequestEntry]
 
   private val DiagnosticScopeLabels: Map[String, String] = Map(
@@ -103,12 +115,24 @@ object RuntimeDashboardMetrics {
     elapsedMillis: Long
   ): Unit = synchronized {
     val now = java.time.Instant.now.toEpochMilli
-    _htmlEvents = (_htmlEvents :+ Event(now, status >= 400)).takeRight(10000)
+    _htmlEvents = (_htmlEvents :+ Event(
+      observedAt = now,
+      error = status >= 400,
+      elapsedMillis = Some(elapsedMillis),
+      labels = Map("status" -> _status_class(status))
+    )).takeRight(10000)
     _recent = (_recent :+ RequestEntry(now, method, path, status, elapsedMillis)).takeRight(12)
   }
 
-  def recordActionCall(error: Boolean): Unit = synchronized {
-    _actionEvents = (_actionEvents :+ Event(java.time.Instant.now.toEpochMilli, error)).takeRight(10000)
+  def recordActionCall(
+    error: Boolean,
+    elapsedMillis: Option[Long] = None
+  ): Unit = synchronized {
+    _actionEvents = (_actionEvents :+ Event(
+      observedAt = java.time.Instant.now.toEpochMilli,
+      error = error,
+      elapsedMillis = elapsedMillis
+    )).takeRight(10000)
   }
 
   def recordAuthorizationDecision(denied: Boolean): Unit = synchronized {
@@ -165,15 +189,35 @@ object RuntimeDashboardMetrics {
     sourceMode: Option[String] = None,
     backend: Option[String] = None
   ): Unit = synchronized {
+    val cleanDiagnosticKey = if (error) diagnosticKey.filter(_.nonEmpty) else None
     _blobEvents = (_blobEvents :+ Event(
       observedAt = java.time.Instant.now.toEpochMilli,
       error = error,
-      diagnosticKey = if (error) diagnosticKey.filter(_.nonEmpty) else None,
+      diagnosticKey = cleanDiagnosticKey,
       diagnosticRecord = if (error) diagnosticRecord else None,
       operation = Some(operation).filter(_.nonEmpty),
       kind = kind.filter(_.nonEmpty),
       sourceMode = sourceMode.filter(_.nonEmpty),
-      backend = backend.filter(_.nonEmpty)
+      backend = backend.filter(_.nonEmpty),
+      labels = _clean_labels(Map(
+        "kind" -> kind.getOrElse(""),
+        "source" -> sourceMode.getOrElse(""),
+        "backend" -> backend.getOrElse(""),
+        "diagnostic_key" -> cleanDiagnosticKey.getOrElse("")
+      ))
+    )).takeRight(10000)
+  }
+
+  def recordDiagnosticPayloadExternalization(
+    payloadKind: String,
+    status: String,
+    destination: String
+  ): Unit = synchronized {
+    _payloadExternalizationEvents = (_payloadExternalizationEvents :+ PayloadExternalizationEvent(
+      observedAt = java.time.Instant.now.toEpochMilli,
+      status = _normalize_label(status),
+      payloadKind = _normalize_label(payloadKind),
+      destination = _normalize_label(destination)
     )).takeRight(10000)
   }
 
@@ -278,6 +322,19 @@ object RuntimeDashboardMetrics {
     diagnosticScope(scope).flatMap(_.groups.find(_.diagnosticKey == diagnosticKey))
   }
 
+  def runtimeMetricsSnapshot(
+    entityAccessMetrics: EntityAccessMetricsRegistry
+  ): RuntimeMetricsSnapshot = synchronized {
+    RuntimeMetricsSnapshot(
+      generatedAt = Instant.now(),
+      points = _runtime_metric_points(entityAccessMetrics.snapshot()),
+      catalog = RuntimeMetricsCatalog.scopes
+    )
+  }
+
+  def metricsCatalogRecord: Record =
+    RuntimeMetricsCatalog.toRecord
+
   private def _diagnostic_records(events: Vector[Event]): Map[String, Record] =
     events
       .filter(_.error)
@@ -326,6 +383,105 @@ object RuntimeDashboardMetrics {
 
   private def _normalize_scope(scope: String): String =
     scope.trim.toLowerCase(java.util.Locale.ROOT).replace('_', '-')
+
+  private def _runtime_metric_points(
+    entityAccessMetrics: Vector[EntityAccessMetricEntry]
+  ): Vector[RuntimeMetricPoint] =
+    Vector(
+      _event_points("web.request", "requests", _htmlEvents, event =>
+        event.labels ++ _outcome_label(event)
+      ),
+      _event_points("action.execution", "executions", _actionEvents, _outcome_label),
+      _event_points("authorization.decision", "decisions", _authorizationEvents, event =>
+        Map("outcome" -> (if (event.error) "denied" else "allowed")) ++
+          event.diagnosticKey.map("diagnostic_key" -> _).toMap
+      ),
+      _event_points("dsl.chokepoint", "chokepoints", _dslEvents, _outcome_label),
+      _event_points("validation", "failures", _validationEvents, event =>
+        event.diagnosticKey.map("diagnostic_key" -> _).toMap
+      ),
+      _event_points("operation-request-validation", "failures", _operationRequestValidationEvents, event =>
+        event.diagnosticKey.map("diagnostic_key" -> _).toMap
+      ),
+      _event_points("blob.operation", "operations", _blobEvents, event =>
+        event.labels ++ _outcome_label(event)
+      ),
+      _payload_externalization_points,
+      _entity_access_points(entityAccessMetrics)
+    ).flatten
+
+  private def _event_points(
+    scope: String,
+    name: String,
+    events: Vector[Event],
+    labels: Event => Map[String, String]
+  ): Vector[RuntimeMetricPoint] =
+    events
+      .groupBy(event => _clean_labels(labels(event)))
+      .toVector
+      .sortBy(_._1.toVector.sortBy(_._1).mkString("|"))
+      .map {
+        case (labelset, xs) =>
+          val durations = xs.flatMap(_.elapsedMillis)
+          RuntimeMetricPoint(
+            scope = scope,
+            name = name,
+            labels = labelset,
+            count = xs.size.toLong,
+            errorCount = xs.count(_.error).toLong,
+            durationCount = durations.size.toLong,
+            durationTotalMillis = durations.sum,
+            durationMinMillis = durations.minOption,
+            durationMaxMillis = durations.maxOption
+          )
+      }
+
+  private def _payload_externalization_points: Vector[RuntimeMetricPoint] =
+    _payloadExternalizationEvents
+      .groupBy(x => Map("status" -> x.status, "payload_kind" -> x.payloadKind, "destination" -> x.destination))
+      .toVector
+      .sortBy(_._1.toVector.sortBy(_._1).mkString("|"))
+      .map {
+        case (labels, xs) =>
+          RuntimeMetricPoint(
+            scope = "diagnostic-payload.externalization",
+            name = "payloads",
+            labels = labels,
+            count = xs.size.toLong,
+            errorCount = xs.count(x => Set("failed", "unavailable", "not_supported").contains(x.status)).toLong
+          )
+      }
+
+  private def _entity_access_points(
+    entries: Vector[EntityAccessMetricEntry]
+  ): Vector[RuntimeMetricPoint] =
+    entries.map { entry =>
+      RuntimeMetricPoint(
+        scope = "entity-access",
+        name = entry.name,
+        labels = _clean_labels(Map(
+          "entity" -> entry.entity.getOrElse(""),
+          "source" -> entry.source.getOrElse(""),
+          "outcome" -> entry.outcome.getOrElse(""),
+          "reason" -> entry.reason.getOrElse(""),
+          "working_set_state" -> entry.workingSetState.getOrElse("")
+        )),
+        count = entry.count,
+        errorCount = if (entry.outcome.exists(x => x == "failure" || x == "denied")) entry.count else 0L
+      )
+    }
+
+  private def _outcome_label(event: Event): Map[String, String] =
+    Map("outcome" -> (if (event.error) "failure" else "success"))
+
+  private def _status_class(status: Int): String =
+    s"${status / 100}xx"
+
+  private def _clean_labels(values: Map[String, String]): Map[String, String] =
+    values.map { case (k, v) => k -> _normalize_label(v) }.filter(_._2.nonEmpty)
+
+  private def _normalize_label(value: String): String =
+    Option(value).getOrElse("").trim.toLowerCase(java.util.Locale.ROOT).replace(' ', '-')
 
   private def _snapshot(
     events: Vector[Event],

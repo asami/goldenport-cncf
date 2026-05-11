@@ -5040,9 +5040,51 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("/web/system/dashboard")
       html should include ("/web/system/admin")
       html should include ("/web/system/admin/observability")
+      html should include ("/web/system/admin/observability/metrics")
       html should include ("/web/system/admin/observability/diagnostics/authorization/capability")
       html should include ("/web/system/document")
       html should include ("/web/console")
+    }
+
+    "render structured observability metrics page" in {
+      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      RuntimeDashboardMetrics.recordHtmlRequest("GET", "/web/test", 200, 15L)
+      RuntimeDashboardMetrics.recordHtmlRequest("GET", "/web/missing", 404, 25L)
+      RuntimeDashboardMetrics.recordActionCall(error = false, Some(7L))
+      RuntimeDashboardMetrics.recordBlobOperation(
+        operation = "blob.content.get",
+        error = true,
+        diagnosticKey = Some("ob05_blob"),
+        kind = Some("content"),
+        sourceMode = Some("managed"),
+        backend = Some("local-file")
+      )
+      RuntimeDashboardMetrics.recordDiagnosticPayloadExternalization("result", "stored", "local-file")
+      subsystem.entityAccessMetrics.record(
+        "entity.search",
+        Record.dataAuto(
+          "entity" -> "notice",
+          "source" -> "datastore",
+          "outcome" -> "success"
+        )
+      )
+
+      val html = StaticFormAppRenderer.renderSystemAdminObservabilityMetrics(subsystem).body
+      val home = StaticFormAppRenderer.renderSystemAdminObservability(subsystem).body
+      val performance = StaticFormAppRenderer.renderSystemPerformance(subsystem).body
+
+      html should include ("Observability Metrics")
+      html should include ("web.request")
+      html should include ("action.execution")
+      html should include ("blob.operation")
+      html should include ("diagnostic-payload.externalization")
+      html should include ("entity-access")
+      html should include ("payload_kind=result")
+      html should include ("destination=local-file")
+      html should include ("/web/system/admin/observability/diagnostics/blob/ob05_blob")
+      html should include ("Raw metrics snapshot")
+      home should include ("/web/system/admin/observability/metrics")
+      performance should include ("/web/system/admin/observability/metrics")
     }
 
     "render structured observability drill-down pages" in {

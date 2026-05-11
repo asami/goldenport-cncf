@@ -86,6 +86,7 @@ class ActionEngine(
       Consequence run {
         val params = _build_resolved_parameters(call)
         DiagnosticPayloadExternalizer.withOperation(call.action.name, params) {
+        val actionStartedAtNanos = System.nanoTime()
         runtime.setResolvedParameters(params)
         val inputAttributes = _calltree_input_attributes(call, params)
         var leaveAttributes: Map[String, String] = Map.empty
@@ -162,7 +163,10 @@ class ActionEngine(
                 }
               }
               executionOutcome.foreach { outcome =>
-                RuntimeDashboardMetrics.recordActionCall(outcome.isLeft)
+                RuntimeDashboardMetrics.recordActionCall(
+                  outcome.isLeft,
+                  Some((System.nanoTime() - actionStartedAtNanos) / 1000000L)
+                )
                 ObservabilityEngine.recordActionExecution(
                   operation = call.action.name,
                   parameters = _sanitize_calltree_record(call.request.toRecord, call.fieldConfidentiality),

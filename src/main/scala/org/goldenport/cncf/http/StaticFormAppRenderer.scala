@@ -10,6 +10,7 @@ import org.goldenport.cncf.component.ComponentOrigin
 import org.goldenport.cncf.context.RuntimeContext
 import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.cncf.job.JobQueryReadModel
+import org.goldenport.cncf.metrics.RuntimeMetricPoint
 import org.goldenport.cncf.CncfVersion
 import org.goldenport.cncf.config.{OperationMode, RuntimeConfig}
 import org.goldenport.cncf.observability.{DiagnosticPayloadExternalizationConfig, DiagnosticPayloadReference}
@@ -7648,6 +7649,9 @@ object StaticFormAppRenderer {
   def renderSystemAdminObservability(subsystem: Subsystem): Page =
     Page(_observability_admin_page(subsystem))
 
+  def renderSystemAdminObservabilityMetrics(subsystem: Subsystem): Page =
+    Page(_observability_metrics_page(subsystem))
+
   def renderSystemAdminObservabilityDiagnostics(): Page =
     Page(_observability_diagnostics_page())
 
@@ -9304,6 +9308,7 @@ object StaticFormAppRenderer {
         |  <a class="nav-link border" href="/web/system/dashboard">System dashboard</a>
         |  <a class="nav-link border" href="/web/system/admin">Admin configuration</a>
         |  <a class="nav-link border" href="/web/system/admin/observability">Observability drill-down</a>
+        |  <a class="nav-link border" href="/web/system/admin/observability/metrics">Metrics</a>
         |  <a class="nav-link border" href="/web/system/document">Documents</a>
         |  <a class="nav-link border" href="/web/console">Console</a>
         |</nav>""".stripMargin,
@@ -11632,6 +11637,7 @@ object StaticFormAppRenderer {
       body =
         s"""${_admin_nav_card(Vector(
              "Performance summary" -> "/web/system/performance",
+             "Metrics" -> "/web/system/admin/observability/metrics",
              "All diagnostics" -> "/web/system/admin/observability/diagnostics",
              "System admin" -> "/web/system/admin"
            ))}
@@ -11642,6 +11648,46 @@ object StaticFormAppRenderer {
              """<p class="mb-2">Diagnostic records are grouped by structured diagnostic key. Message text is evidence only and is not used for grouping.</p>
                |<p class="mb-0">Large payloads are summarized or linked. Payload bytes are resolved only through the system-admin payload route.</p>""".stripMargin
            )}""".stripMargin
+    )
+  }
+
+  private def _observability_metrics_page(subsystem: Subsystem): String = {
+    val snapshot = RuntimeDashboardMetrics.runtimeMetricsSnapshot(subsystem.entityAccessMetrics)
+    val scopeCards = snapshot.catalog.map { scope =>
+      val points = snapshot.points.filter(_.scope == scope.scope)
+      _admin_card(
+        scope.label,
+        s"""<p class="mb-2">${_escape(scope.description)}</p>
+           |<p><span class="badge text-bg-secondary">${points.map(_.count).sum}</span> event(s).</p>
+           |<p class="text-secondary mb-0">Labels: ${_escape(scope.labelKeys.mkString(", "))}</p>""".stripMargin,
+        Some(s"metrics-${scope.scope.replace('.', '-')}")
+      )
+    }.mkString("\n")
+    val metricTables = snapshot.catalog.map { scope =>
+      val points = snapshot.points.filter(_.scope == scope.scope)
+      _admin_card(
+        scope.label,
+        _metrics_points_table(points),
+        Some(s"metrics-table-${scope.scope.replace('.', '-')}")
+      )
+    }.mkString("\n")
+    _simple_page(
+      title = "Observability Metrics",
+      subtitle = "Low-cardinality runtime metrics for dashboard and admin use",
+      body =
+        s"""${_admin_nav_card(Vector(
+             "Observability home" -> "/web/system/admin/observability",
+             "Performance summary" -> "/web/system/performance",
+             "Diagnostics" -> "/web/system/admin/observability/diagnostics"
+           ))}
+           |<div class="row g-3 mb-3">${scopeCards}</div>
+           |${_admin_card(
+             "Metric label policy",
+             """<p class="mb-2">Metric labels are operational grouping hints, not error semantics.</p>
+               |<p class="mb-0">High-cardinality identifiers such as paths, entity ids, job ids, payload ids, request parameters, and user/session ids are excluded from default metric labels.</p>""".stripMargin
+           )}
+           |${metricTables}
+           |${_manual_raw_details("metrics snapshot", snapshot.toRecord)}""".stripMargin
     )
   }
 
@@ -11712,6 +11758,64 @@ object StaticFormAppRenderer {
              Some(s"observability-card-${scope.scope}")
            )}
        |</div>""".stripMargin
+
+  private def _metrics_points_table(
+    points: Vector[RuntimeMetricPoint]
+  ): String =
+    if (points.isEmpty)
+      _admin_empty_state("No metrics have been recorded.")
+    else {
+      val rows = points.sortBy(x => (x.name, x.labels.toVector.sortBy(_._1).mkString("|"))).map { point =>
+        val labels = _metrics_labels_html(point)
+        val duration = point.durationAvgMillis
+          .map(avg => s"avg ${avg} ms, min ${point.durationMinMillis.getOrElse(0L)} ms, max ${point.durationMaxMillis.getOrElse(0L)} ms")
+          .getOrElse("")
+        s"""<tr>
+           |  <td><code>${_escape(point.name)}</code></td>
+           |  <td>${labels}</td>
+           |  <td>${point.count}</td>
+           |  <td>${point.errorCount}</td>
+           |  <td>${_escape(duration)}</td>
+           |</tr>""".stripMargin
+      }.mkString("\n")
+      s"""<div class="table-responsive"><table class="table table-sm table-hover align-middle">
+         |  <thead><tr><th>Metric</th><th>Labels</th><th>Count</th><th>Errors</th><th>Duration</th></tr></thead>
+         |  <tbody>${rows}</tbody>
+         |</table></div>""".stripMargin
+    }
+
+  private def _metrics_labels_html(
+    point: RuntimeMetricPoint
+  ): String =
+    if (point.labels.isEmpty)
+      ""
+    else
+      point.labels.toVector.sortBy(_._1).map {
+        case ("diagnostic_key", value) =>
+          _metric_diagnostic_link(point.scope, value)
+        case (key, value) =>
+          s"""<span class="badge text-bg-light border me-1">${_escape(key)}=${_escape(value)}</span>"""
+      }.mkString
+
+  private def _metric_diagnostic_link(
+    metricScope: String,
+    diagnosticKey: String
+  ): String = {
+    val diagnosticScope = metricScope match {
+      case "authorization.decision" => Some("authorization")
+      case "validation" => Some("validation")
+      case "operation-request-validation" => Some("operation-request-validation")
+      case "blob.operation" => Some("blob")
+      case _ => None
+    }
+    diagnosticScope match {
+      case Some(scope) =>
+        val href = s"/web/system/admin/observability/diagnostics/${_escape_path_segment(scope)}/${_escape_path_segment(diagnosticKey)}"
+        s"""<a class="badge text-bg-light border me-1" href="${_escape(href)}">diagnostic_key=${_escape(diagnosticKey)}</a>"""
+      case None =>
+        s"""<span class="badge text-bg-light border me-1">diagnostic_key=${_escape(diagnosticKey)}</span>"""
+    }
+  }
 
   private def _payload_externalization_status(
     config: DiagnosticPayloadExternalizationConfig,

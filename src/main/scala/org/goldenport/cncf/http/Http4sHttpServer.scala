@@ -177,6 +177,8 @@ final class Http4sHttpServer(
         if (_is_web_authorized("system", "admin.jobs", jobId, Some(req))) _system_admin_job(req, jobId) else _forbidden_web(req, Some("system"), Some("admin.jobs"), Some(jobId))
       case req @ GET -> Root / "web" / "system" / "admin" / "observability" =>
         if (_is_web_authorized("system", "admin.observability", "index", Some(req), Some("admin.system.observability"))) _system_admin_observability() else _forbidden_web(req, Some("system"), Some("admin.observability"), Some("index"))
+      case req @ GET -> Root / "web" / "system" / "admin" / "observability" / "metrics" =>
+        if (_is_web_authorized("system", "admin.observability", "metrics", Some(req), Some("admin.system.observability"))) _system_admin_observability_metrics() else _forbidden_web(req, Some("system"), Some("admin.observability"), Some("metrics"))
       case req @ GET -> Root / "web" / "system" / "admin" / "observability" / "diagnostics" =>
         if (_is_web_authorized("system", "admin.observability", "diagnostics", Some(req), Some("admin.system.observability"))) _system_admin_observability_diagnostics() else _forbidden_web(req, Some("system"), Some("admin.observability"), Some("diagnostics"))
       case req @ GET -> Root / "web" / "system" / "admin" / "observability" / "diagnostics" / scope / diagnosticKey =>
@@ -498,6 +500,9 @@ final class Http4sHttpServer(
 
   private def _system_admin_observability(): IO[HResponse[IO]] =
     _html(StaticFormAppRenderer.renderSystemAdminObservability(engine.runtimeSubsystem))
+
+  private def _system_admin_observability_metrics(): IO[HResponse[IO]] =
+    _html(StaticFormAppRenderer.renderSystemAdminObservabilityMetrics(engine.runtimeSubsystem))
 
   private def _system_admin_observability_diagnostics(): IO[HResponse[IO]] =
     _html(StaticFormAppRenderer.renderSystemAdminObservabilityDiagnostics())

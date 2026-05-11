@@ -12,6 +12,7 @@ import org.goldenport.Consequence
 import org.goldenport.bag.Bag
 import org.goldenport.cncf.blob.{BlobKind, BlobPutRequest, BlobStorageRef, BlobStoreConfig, BlobStoreFactory}
 import org.goldenport.cncf.config.{OperationMode, ResolvedParameter, ResolvedParameters}
+import org.goldenport.cncf.http.RuntimeDashboardMetrics
 import org.goldenport.datatype.ContentType
 import org.goldenport.record.Record
 import org.goldenport.record.io.RecordEncoder
@@ -274,13 +275,17 @@ final case class DiagnosticPayloadExternalizer(
     val bytes = text.getBytes(StandardCharsets.UTF_8)
     val normalizedKind = DiagnosticPayloadExternalizationConfig.normalizePayloadKind(payloadKind)
     val effectiveConfig = _effective_config
-    if (!effectiveConfig.enabled)
+    val destination = _metrics_destination(effectiveConfig)
+    if (!effectiveConfig.enabled) {
+      _record_metrics(normalizedKind, "disabled", destination)
       summary.copy(externalizationStatus = Some("disabled"))
-    else if (effectiveConfig.validationError.isDefined)
+    } else if (effectiveConfig.validationError.isDefined) {
+      _record_metrics(normalizedKind, "unavailable", destination)
       summary.copy(externalizationStatus = Some("unavailable"), externalizationReason = effectiveConfig.validationError)
-    else if (!effectiveConfig.matches(operation, normalizedKind, bytes.length))
+    } else if (!effectiveConfig.matches(operation, normalizedKind, bytes.length)) {
+      _record_metrics(normalizedKind, "not_matched", destination)
       summary.copy(externalizationStatus = Some("not_matched"))
-    else
+    } else
       _write(effectiveConfig, DiagnosticPayloadWriteRequest(
         operation = operation,
         payloadKind = normalizedKind,
@@ -294,12 +299,14 @@ final case class DiagnosticPayloadExternalizer(
         )
       )) match {
         case Consequence.Success(result) =>
+          _record_metrics(normalizedKind, "stored", destination)
           summary.copy(
             inline = None,
             payloadReference = Some(result.reference),
             externalizationStatus = Some("stored")
           )
         case Consequence.Failure(conclusion) =>
+          _record_metrics(normalizedKind, "failed", destination)
           summary.copy(
             externalizationStatus = Some("failed"),
             externalizationReason = Some(conclusion.display)
@@ -318,20 +325,37 @@ final case class DiagnosticPayloadExternalizer(
     val bytes = text.getBytes(StandardCharsets.UTF_8)
     val normalizedKind = DiagnosticPayloadExternalizationConfig.normalizePayloadKind(payloadKind)
     val effectiveConfig = _effective_config
-    if (!effectiveConfig.enabled)
+    val destination = _metrics_destination(effectiveConfig)
+    if (!effectiveConfig.enabled) {
+      _record_metrics(normalizedKind, "disabled", destination)
       summary.copy(externalizationStatus = Some("disabled"))
-    else if (effectiveConfig.validationError.isDefined)
+    } else if (effectiveConfig.validationError.isDefined) {
+      _record_metrics(normalizedKind, "unavailable", destination)
       summary.copy(externalizationStatus = Some("unavailable"), externalizationReason = effectiveConfig.validationError)
-    else if (!effectiveConfig.matches(operation, normalizedKind, bytes.length))
+    } else if (!effectiveConfig.matches(operation, normalizedKind, bytes.length)) {
+      _record_metrics(normalizedKind, "not_matched", destination)
       summary.copy(externalizationStatus = Some("not_matched"))
-    else if (!effectiveConfig.unsafeOpaquePayloads)
+    } else if (!effectiveConfig.unsafeOpaquePayloads) {
+      _record_metrics(normalizedKind, "not_supported", destination)
       summary.copy(
         externalizationStatus = Some("not_supported"),
         externalizationReason = Some("unsafe opaque payload externalization is disabled")
       )
-    else
+    } else
       externalizeText(operation, normalizedKind, contentType, extension, _redact_sensitive_text(text), summary)
   }
+
+  private def _record_metrics(
+    payloadKind: String,
+    status: String,
+    destination: String
+  ): Unit =
+    RuntimeDashboardMetrics.recordDiagnosticPayloadExternalization(payloadKind, status, destination)
+
+  private def _metrics_destination(
+    effectiveConfig: DiagnosticPayloadExternalizationConfig
+  ): String =
+    effectiveConfig.normalizedDestination(operationMode).getOrElse("disabled")
 
   private def _effective_config: DiagnosticPayloadExternalizationConfig =
     DiagnosticPayloadExternalizer.currentOverride match {

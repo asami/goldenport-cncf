@@ -4,6 +4,7 @@ import cats.data.NonEmptyVector
 import org.goldenport.Consequence
 import org.goldenport.cncf.action.{Action, ActionCall, ProcedureActionCall, QueryAction}
 import org.goldenport.cncf.component.{Component, ComponentCreate, ComponentId, ComponentInstanceId}
+import org.goldenport.cncf.http.RuntimeDashboardMetrics
 import org.goldenport.cncf.metrics.EntityAccessMetricsRegistry
 import org.goldenport.protocol.Protocol
 import org.goldenport.protocol.Request
@@ -15,9 +16,8 @@ import org.goldenport.schema.DataType
 
 /*
  * @since   Mar. 29, 2026
- *  version Mar. 29, 2026
  *  version Apr. 10, 2026
- * @version Apr. 14, 2026
+ * @version May. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class MetricsComponent() extends Component {
@@ -26,6 +26,8 @@ final class MetricsComponent() extends Component {
 object MetricsComponent {
   trait MetricsService {
     def loadEntityAccessMetrics(): Consequence[Record]
+    def loadRuntimeMetrics(): Consequence[Record]
+    def loadMetricsCatalog(): Consequence[Record]
   }
 
   val name: String = "metrics"
@@ -42,10 +44,16 @@ object MetricsComponent {
       val request = spec.RequestDefinition()
       val response = spec.ResponseDefinition(result = List(DataType.Named("Record")))
       val loadEntityAccessMetrics = new LoadEntityAccessMetricsOperationDefinition(request, response)
+      val loadRuntimeMetrics = new LoadRuntimeMetricsOperationDefinition(request, response)
+      val loadMetricsCatalog = new LoadMetricsCatalogOperationDefinition(request, response)
       val service = spec.ServiceDefinition(
         name = "metrics",
         operations = spec.OperationDefinitionGroup(
-          operations = NonEmptyVector.of(loadEntityAccessMetrics)
+          operations = NonEmptyVector.of(
+            loadEntityAccessMetrics,
+            loadRuntimeMetrics,
+            loadMetricsCatalog
+          )
         )
       )
       val protocol = Protocol(
@@ -63,6 +71,12 @@ object MetricsComponent {
   ) extends MetricsService {
     def loadEntityAccessMetrics(): Consequence[Record] =
       Consequence.success(registry.toRecord)
+
+    def loadRuntimeMetrics(): Consequence[Record] =
+      Consequence.success(RuntimeDashboardMetrics.runtimeMetricsSnapshot(registry).toRecord)
+
+    def loadMetricsCatalog(): Consequence[Record] =
+      Consequence.success(RuntimeDashboardMetrics.metricsCatalogRecord)
   }
 
   private final class LoadEntityAccessMetricsOperationDefinition(
@@ -80,11 +94,55 @@ object MetricsComponent {
       Consequence.success(LoadEntityAccessMetricsAction(req))
   }
 
+  private final class LoadRuntimeMetricsOperationDefinition(
+    request: spec.RequestDefinition,
+    response: spec.ResponseDefinition
+  ) extends spec.OperationDefinition {
+    val specification: spec.OperationDefinition.Specification =
+      spec.OperationDefinition.Specification(
+        name = "load_runtime_metrics",
+        request = request,
+        response = response
+      )
+
+    def createOperationRequest(req: Request): Consequence[OperationRequest] =
+      Consequence.success(LoadRuntimeMetricsAction(req))
+  }
+
+  private final class LoadMetricsCatalogOperationDefinition(
+    request: spec.RequestDefinition,
+    response: spec.ResponseDefinition
+  ) extends spec.OperationDefinition {
+    val specification: spec.OperationDefinition.Specification =
+      spec.OperationDefinition.Specification(
+        name = "load_metrics_catalog",
+        request = request,
+        response = response
+      )
+
+    def createOperationRequest(req: Request): Consequence[OperationRequest] =
+      Consequence.success(LoadMetricsCatalogAction(req))
+  }
+
   private final case class LoadEntityAccessMetricsAction(
     request: Request
   ) extends QueryAction {
     def createCall(core: ActionCall.Core): ActionCall =
       LoadEntityAccessMetricsActionCall(core)
+  }
+
+  private final case class LoadRuntimeMetricsAction(
+    request: Request
+  ) extends QueryAction {
+    def createCall(core: ActionCall.Core): ActionCall =
+      LoadRuntimeMetricsActionCall(core)
+  }
+
+  private final case class LoadMetricsCatalogAction(
+    request: Request
+  ) extends QueryAction {
+    def createCall(core: ActionCall.Core): ActionCall =
+      LoadMetricsCatalogActionCall(core)
   }
 
   private final case class LoadEntityAccessMetricsActionCall(
@@ -94,6 +152,30 @@ object MetricsComponent {
       core.component.flatMap(_.port.get[MetricsService]) match {
         case Some(service) =>
           service.loadEntityAccessMetrics().map(OperationResponse.RecordResponse.apply)
+        case None =>
+          Consequence.serviceUnavailable("metrics service is not available")
+      }
+  }
+
+  private final case class LoadRuntimeMetricsActionCall(
+    core: ActionCall.Core
+  ) extends ProcedureActionCall {
+    def execute(): Consequence[OperationResponse] =
+      core.component.flatMap(_.port.get[MetricsService]) match {
+        case Some(service) =>
+          service.loadRuntimeMetrics().map(OperationResponse.RecordResponse.apply)
+        case None =>
+          Consequence.serviceUnavailable("metrics service is not available")
+      }
+  }
+
+  private final case class LoadMetricsCatalogActionCall(
+    core: ActionCall.Core
+  ) extends ProcedureActionCall {
+    def execute(): Consequence[OperationResponse] =
+      core.component.flatMap(_.port.get[MetricsService]) match {
+        case Some(service) =>
+          service.loadMetricsCatalog().map(OperationResponse.RecordResponse.apply)
         case None =>
           Consequence.serviceUnavailable("metrics service is not available")
       }

@@ -10,6 +10,8 @@ import org.goldenport.cncf.blob.BlobStoreConfig
 import org.goldenport.cncf.config.OperationMode
 import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.context.{ObservabilityContext, ScopeContext, ScopeKind, TraceId}
+import org.goldenport.cncf.http.RuntimeDashboardMetrics
+import org.goldenport.cncf.metrics.EntityAccessMetricsRegistry
 import org.goldenport.cncf.log.{LogBackend, LogBackendHolder}
 import io.circe.Json
 import org.goldenport.protocol.operation.OperationResponse
@@ -358,6 +360,30 @@ class ObservabilityEngineSpec extends AnyWordSpec with Matchers with BeforeAndAf
       val text = java.nio.file.Files.readString(java.nio.file.Path.of(stored.getString("payload_path").get))
       text should include ("[redacted]")
       text should not include ("secret-token")
+    }
+
+    "record externalization outcomes in runtime metrics" in {
+      val before = RuntimeDashboardMetrics
+        .runtimeMetricsSnapshot(EntityAccessMetricsRegistry.shared)
+        .points
+        .filter(_.scope == "diagnostic-payload.externalization")
+        .map(_.count)
+        .sum
+      val externalizer = DiagnosticPayloadExternalizer.disabled
+      val record = Record.data("status" -> "ok")
+      val summary = DiagnosticPayloadSummary.recordSummary(record)
+
+      externalizer.externalizeRecordSummary("demo.op", "result", record, summary)
+
+      val metrics = RuntimeDashboardMetrics
+        .runtimeMetricsSnapshot(EntityAccessMetricsRegistry.shared)
+        .points
+        .filter(_.scope == "diagnostic-payload.externalization")
+      metrics.map(_.count).sum should be > before
+      metrics.exists(point =>
+        point.labels.get("status").contains("disabled") &&
+          point.labels.get("payload_kind").contains("result")
+      ) shouldBe true
     }
   }
 

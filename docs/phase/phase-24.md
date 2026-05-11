@@ -69,14 +69,14 @@ Payload policy:
 - B (DONE): OB-02 — CallTree / Execution History / Job Diagnostic Summary Model.
 - C (DONE): OB-03 — Diagnostic Payload External Store and Runtime Config.
 - D (DONE): OB-04 — Structured Diagnostic Dashboard Drill-down.
-- E (ACTIVE): OB-05 — Metrics Collection and Metrics Service Expansion.
-- F (TODO): OB-06 — OpenTelemetry Boundary and Export Policy.
+- E (DONE): OB-05 — Metrics Collection and Metrics Service Expansion.
+- F (ACTIVE): OB-06 — OpenTelemetry Boundary and Export Policy.
 - G (TODO): OB-07 — Phase 24 verification and closure.
 
 Resume hint:
 
-- Continue with OB-05. Expand selected metrics collection and metrics service
-  query surfaces without changing the diagnostic persistence contract.
+- Continue with OB-06. Define the OpenTelemetry boundary and export policy
+  without making OpenTelemetry the CNCF internal source of truth.
 - Keep `cncf-samples` sample 13 and docker-compose observability wiring visible
   as the concrete integration driver.
 
@@ -86,7 +86,7 @@ Resume hint:
 - [x] OB-02: CallTree / Execution History / Job Diagnostic Summary Model.
 - [x] OB-03: Diagnostic Payload External Store and Runtime Config.
 - [x] OB-04: Structured Diagnostic Dashboard Drill-down.
-- [ ] OB-05: Metrics Collection and Metrics Service Expansion.
+- [x] OB-05: Metrics Collection and Metrics Service Expansion.
 - [ ] OB-06: OpenTelemetry Boundary and Export Policy.
 - [ ] OB-07: Phase 24 verification and closure.
 
@@ -144,6 +144,23 @@ OB-04 completion note:
 - Payload bytes remain behind the existing system-admin payload resolver.
 - OB-05 owns metrics collection and metrics service expansion; OB-04 only
   projects already structured diagnostic records.
+
+OB-05 completion note:
+
+- CNCF now has a reusable in-process runtime metrics read model under
+  `org.goldenport.cncf.metrics`.
+- `RuntimeDashboardMetrics` exposes structured metric snapshots for the
+  selected OB-05 scopes: Web requests, Action execution, authorization,
+  DSL chokepoints, validation, operation-request-validation, Blob operations,
+  diagnostic payload externalization, and entity access.
+- The builtin `metrics` component keeps `load_entity_access_metrics` and adds
+  `load_runtime_metrics` plus `load_metrics_catalog`.
+- `/web/system/admin/observability/metrics` renders metric scope cards and
+  compact tables, and Performance/Observability admin pages link to it.
+- Metric labels are low-cardinality operational grouping hints. They are not
+  semantic error contracts.
+- OB-06 owns OpenTelemetry mapping, exporter configuration, docker-compose
+  backend wiring, and `cncf-samples` sample 13 integration.
 
 ## 6. Completion Conditions
 
