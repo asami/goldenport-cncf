@@ -64,7 +64,7 @@ import org.goldenport.cncf.subsystem.GenericSubsystemDescriptor
  *  version Jan. 31, 2026
  *  version Feb.  5, 2026
  *  version Apr. 30, 2026
- * @version May. 11, 2026
+ * @version May. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 object CncfRuntime extends GlobalObservable {
@@ -3591,11 +3591,11 @@ class CncfRuntime() extends GlobalObservable {
     }
 
   private[cli] def _request_path(req: Request): String =
-    NamingConventions.toNormalizedPath(
+    s"/rest/v1${NamingConventions.toNormalizedPath(
       req.component.getOrElse(""),
       req.service.getOrElse(""),
       req.operation
-    )
+    )}"
 
   private[cli] def _http_method_for_request(
     subsystem: Subsystem,

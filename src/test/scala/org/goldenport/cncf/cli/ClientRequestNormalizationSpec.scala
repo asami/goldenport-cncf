@@ -31,7 +31,8 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Jan. 10, 2026
  *  version Mar. 29, 2026
- * @version Apr. 30, 2026
+ *  version Apr. 30, 2026
+ * @version May. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 class ClientRequestNormalizationSpec
@@ -91,9 +92,9 @@ class ClientRequestNormalizationSpec
       }
     }
 
-    "normalize client sugar into http get" in {
+    "normalize operation client arguments into canonical REST http get" in {
       val subsystem = _subsystem_with_admin()
-      Given("client sugar arguments without explicit http operation")
+      Given("client operation arguments without explicit http operation")
       val request = CncfRuntime.parseClientArgs(
         subsystem,
         Array("admin", "system", "ping")
@@ -102,14 +103,14 @@ class ClientRequestNormalizationSpec
       When("the arguments are normalized into a Request")
       request should be_success
 
-      Then("the Request becomes a client http get with normalized path")
+      Then("the Request becomes a client http get with canonical REST path")
       request match {
         case org.goldenport.Consequence.Success(req) =>
           req.component shouldBe Some("client")
           req.service shouldBe Some("http")
           req.operation shouldBe "get"
           req.arguments shouldBe List(
-            Argument("path", "/admin/system/ping", None)
+            Argument("path", "/rest/v1/admin/system/ping", None)
           )
           _property(req, "baseurl") shouldBe None
         case _ =>
@@ -172,7 +173,7 @@ class ClientRequestNormalizationSpec
 
     "separate operation body field from namespaced HTTP body options" in {
       val subsystem = _subsystem_with_admin()
-      Given("client sugar arguments with a body field")
+      Given("client operation arguments with a body field")
       val request = CncfRuntime.parseClientArgs(
         subsystem,
         Array("admin.system.ping", "--body", "hello", "--http.body", "raw")
@@ -194,9 +195,9 @@ class ClientRequestNormalizationSpec
       }
     }
 
-    "treat data as a normal client sugar form field" in {
+    "treat data as a normal client operation form field" in {
       val subsystem = _subsystem_with_admin()
-      Given("client sugar arguments with a data field")
+      Given("client operation arguments with a data field")
       val request = CncfRuntime.parseClientArgs(
         subsystem,
         Array("admin.system.ping", "--data", "normal")
