@@ -294,13 +294,13 @@ class ClientAdminSystemPingSpec
   private final class FakeHttpDriver(
     response: HttpResponse
   ) extends HttpDriver {
-    private val buffer = scala.collection.mutable.ArrayBuffer.empty[HttpCall]
+    private val _buffer = scala.collection.mutable.ArrayBuffer.empty[HttpCall]
 
     def calls: Vector[HttpCall] =
-      buffer.toVector
+      _buffer.toVector
 
-    def get(path: String): HttpResponse = {
-      buffer += HttpCall("GET", path, None, Map.empty)
+    def get(path: String, headers: Map[String, String]): HttpResponse = {
+      _buffer += HttpCall("GET", path, None, headers)
       response
     }
 
@@ -309,7 +309,7 @@ class ClientAdminSystemPingSpec
       body: Option[String],
       headers: Map[String, String]
     ): HttpResponse = {
-      buffer += HttpCall("POST", path, body, headers)
+      _buffer += HttpCall("POST", path, body, headers)
       response
     }
 
@@ -318,7 +318,7 @@ class ClientAdminSystemPingSpec
       body: Option[Bag],
       headers: Map[String, String]
     ): HttpResponse = {
-      buffer += HttpCall("POST", path, body.map(_bag_to_string), headers)
+      _buffer += HttpCall("POST", path, body.map(_bag_to_string), headers)
       response
     }
 
@@ -327,7 +327,7 @@ class ClientAdminSystemPingSpec
       body: Option[String],
       headers: Map[String, String]
     ): HttpResponse = {
-      buffer += HttpCall("PUT", path, body, headers)
+      _buffer += HttpCall("PUT", path, body, headers)
       response
     }
 
@@ -501,7 +501,7 @@ class ClientAdminSystemPingSpec
     val component = _client_component()
     subsystem.add(Seq(component))
     val base = org.goldenport.cncf.context.ExecutionContext.create()
-    val bootstrap = _bootstrapRuntimeContext(driver, base.cncfCore.observability)
+    val bootstrap = _bootstrap_runtime_context(driver, base.cncfCore.observability)
     val uowcontext = org.goldenport.cncf.context.ExecutionContext.withRuntimeContext(
       base,
       bootstrap
@@ -510,7 +510,7 @@ class ClientAdminSystemPingSpec
     val eventengine = org.goldenport.cncf.event.EventEngine.noop(datastore)
     val uow = new UnitOfWork(uowcontext, eventengine, CommitRecorder.noop)
     val interpreter = new UnitOfWorkInterpreter(uow)
-    val runtime = _testRuntimeContext(driver, base.cncfCore.observability, uow, interpreter)
+    val runtime = _test_runtime_context(driver, base.cncfCore.observability, uow, interpreter)
     TestHarness(subsystem, component, runtime, interpreter)
   }
 
@@ -524,7 +524,7 @@ class ClientAdminSystemPingSpec
     )
   }
 
-  private def _testRuntimeContext(
+  private def _test_runtime_context(
     driver: HttpDriver,
     observability: ObservabilityContext,
     uow: UnitOfWork,
@@ -535,7 +535,7 @@ class ClientAdminSystemPingSpec
         Consequence(interpreter.execute(fa))
     }
     new RuntimeContext(
-      core = _runtimeCore("client-admin-system-ping-spec-runtime", driver, observability),
+      core = _runtime_core("client-admin-system-ping-spec-runtime", driver, observability),
       unitOfWorkSupplier = () => uow,
       unitOfWorkInterpreterFn = idInterpreter,
       commitAction = uowArg => {
@@ -551,7 +551,7 @@ class ClientAdminSystemPingSpec
     )
   }
 
-  private def _bootstrapRuntimeContext(
+  private def _bootstrap_runtime_context(
     driver: HttpDriver,
     observability: ObservabilityContext
   ): RuntimeContext = {
@@ -560,7 +560,7 @@ class ClientAdminSystemPingSpec
         throw new UnsupportedOperationException("bootstrap runtime has no interpreter")
     }
     new RuntimeContext(
-      core = _runtimeCore("client-admin-system-ping-spec-bootstrap-runtime", driver, observability),
+      core = _runtime_core("client-admin-system-ping-spec-bootstrap-runtime", driver, observability),
       unitOfWorkSupplier = () => throw new UnsupportedOperationException("bootstrap runtime has no UnitOfWork"),
       unitOfWorkInterpreterFn = idInterpreter,
       commitAction = _ => (),
@@ -570,7 +570,7 @@ class ClientAdminSystemPingSpec
     )
   }
 
-  private def _runtimeCore(
+  private def _runtime_core(
     name: String,
     driver: HttpDriver,
     observability: ObservabilityContext

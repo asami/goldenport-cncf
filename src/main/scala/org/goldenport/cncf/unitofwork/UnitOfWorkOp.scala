@@ -42,7 +42,8 @@ object UnitOfWorkOp {
   // ------------------------------------------------------------
 
   final case class HttpGet(
-    path: String
+    path: String,
+    headers: Map[String, String] = Map.empty
   ) extends UnitOfWorkOp[HttpResponse]
 
   final case class HttpPost(

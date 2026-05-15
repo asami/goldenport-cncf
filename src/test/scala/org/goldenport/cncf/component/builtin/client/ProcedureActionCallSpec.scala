@@ -83,13 +83,13 @@ class ProcedureActionCallSpec
   )
 
   private final class FakeHttpDriver extends HttpDriver {
-    private val buffer = scala.collection.mutable.ArrayBuffer.empty[HttpCall]
+    private val _buffer = scala.collection.mutable.ArrayBuffer.empty[HttpCall]
 
     def calls: Vector[HttpCall] =
-      buffer.toVector
+      _buffer.toVector
 
-    def get(path: String): HttpResponse = {
-      buffer += HttpCall("GET", path, None, Map.empty)
+    def get(path: String, headers: Map[String, String]): HttpResponse = {
+      _buffer += HttpCall("GET", path, None, headers)
       _response()
     }
 
@@ -98,7 +98,7 @@ class ProcedureActionCallSpec
       body: Option[String],
       headers: Map[String, String]
     ): HttpResponse = {
-      buffer += HttpCall("POST", path, body, headers)
+      _buffer += HttpCall("POST", path, body, headers)
       _response()
     }
 
@@ -107,7 +107,7 @@ class ProcedureActionCallSpec
       body: Option[String],
       headers: Map[String, String]
     ): HttpResponse = {
-      buffer += HttpCall("PUT", path, body, headers)
+      _buffer += HttpCall("PUT", path, body, headers)
       _response()
     }
 
@@ -166,15 +166,15 @@ class ProcedureActionCallSpec
     var abortCount: Int = 0
     var disposeCount: Int = 0
 
-    private val observability = _testObservabilityContext()
-    private val driver = FakeHttpDriver.okText("nop")
+    private val _observability = _test_observability_context()
+    private val _driver = FakeHttpDriver.okText("nop")
 
     lazy val runtime: RuntimeContext = new RuntimeContext(
       core = RuntimeContext.core(
         name = "procedure-action-call-spec-runtime",
         parent = None,
-        observabilityContext = observability,
-        httpDriverOption = Some(driver)
+        observabilityContext = _observability,
+        httpDriverOption = Some(_driver)
       ),
       unitOfWorkSupplier = () => {
         unitOfWorkAccessCount += 1
@@ -200,7 +200,7 @@ class ProcedureActionCallSpec
     )
   }
 
-  private def _testObservabilityContext(): ObservabilityContext =
+  private def _test_observability_context(): ObservabilityContext =
     ObservabilityContext(
       traceId = TraceId("procedure", "call"),
       spanId = None,

@@ -144,7 +144,7 @@ final class Subsystem(
     val injected = bootstrapped.map(x => _inject_context(x.name, x))
     injected.foreach(_bind_runtime_services)
     _component_space = _component_space.add(injected)
-    _rebuildResolver()
+    _rebuild_resolver()
     this
   }
 
@@ -242,7 +242,7 @@ final class Subsystem(
   def configurationOrEmpty: org.goldenport.configuration.Configuration =
     configuration.configuration
 
-  private def _rebuildResolver(): Unit = {
+  private def _rebuild_resolver(): Unit = {
     _resolver = OperationResolver.build(_component_space.components)
     _resolved_security_wiring = ResolvedSecurityWiring.resolve(_descriptor, _component_space.components)
     _ensure_user_notification_event_forwarding()
@@ -1133,7 +1133,7 @@ final class Subsystem(
   private def _framework_properties_from_http(
     req: HttpRequest
   ): List[Property] = {
-    val query = req.query.asMap.toVector.collect {
+    val query = _http_query_record(req).asMap.toVector.collect {
       case (name, value) if _is_http_framework_key(name) =>
         Property(name, value.toString, None)
     }
@@ -1151,6 +1151,42 @@ final class Subsystem(
     }
     (query ++ header).toList
   }
+
+  private def _http_query_record(
+    req: HttpRequest
+  ): Record = {
+    val fallback = _http_query_record_from_uri(req)
+    if (req.query.isEmpty)
+      fallback.getOrElse(Record.empty)
+    else
+      fallback match {
+        case Some(record) if !record.isEmpty =>
+          Record.create(record.asMap.toVector ++ req.query.asMap.toVector)
+        case _ =>
+          req.query
+      }
+  }
+
+  private def _http_query_record_from_uri(
+    req: HttpRequest
+  ): Option[Record] =
+    _http_query_record_from_string(req.context.originalUri)
+      .orElse(req.url.flatMap(url => Option(url.getQuery).map(HttpRequest.parseQuery)))
+
+  private def _http_query_record_from_string(
+    value: Option[String]
+  ): Option[Record] =
+    value.flatMap { text =>
+      val i = text.indexOf('?')
+      if (i < 0)
+        None
+      else {
+        val raw = text.substring(i + 1)
+        val j = raw.indexOf('#')
+        val query = if (j < 0) raw else raw.substring(0, j)
+        if (query.isEmpty) None else Some(HttpRequest.parseQuery(query))
+      }
+    }
 
   private def _is_http_framework_key(
     name: String

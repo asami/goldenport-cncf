@@ -20,7 +20,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr. 22, 2026
- * @version Apr. 22, 2026
+ * @version May. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final class GeneratedComponentBundleFactorySpec
@@ -48,16 +48,18 @@ final class GeneratedComponentBundleFactorySpec
 
     "dispatch same-subsystem sync reception on generated componentlet with runtime identity" in {
       Given("bootstrapped generated runtime participants")
+      _GeneratedBundleFactory.clearCalls()
       val subsystem = TestComponentFactory.emptySubsystem("generated-bundle")
       val params = ComponentCreate(subsystem, ComponentOrigin.Repository("cozy-generated"))
       val bundle = _GeneratedBundleFactory.create(params)
       val factory = new ComponentFactory()
       val components = bundle.participants.map(factory.bootstrap)
       subsystem.add(components)
+      val publisher = subsystem.components.find(_.name == "domain").getOrElse(fail("missing publisher component"))
       val target = subsystem.components.find(_.name == "notice-admin").getOrElse(fail("missing target componentlet"))
 
-      When("componentlet receives same-subsystem event")
-      val result = target.eventReception.getOrElse(fail("missing event reception")).receive(
+      When("publisher emits event through the shared subsystem event path")
+      val result = publisher.eventReception.getOrElse(fail("missing publisher event reception")).receive(
         ReceptionInput(
           name = "notice.published",
           kind = "published",
@@ -70,6 +72,7 @@ final class GeneratedComponentBundleFactorySpec
       )
 
       Then("follow-up action executes with componentlet runtime identity")
+      target.eventReception.isDefined shouldBe true
       result shouldBe Consequence.success(
         ReceptionResult(
           outcome = ReceptionOutcome.Routed,
@@ -99,10 +102,20 @@ final class GeneratedComponentBundleFactorySpec
     private val _calls = ArrayBuffer.empty[String]
 
     def calls: ArrayBuffer[String] = _calls
+    def clearCalls(): Unit = _calls.clear()
 
     object PrimaryFactory extends Component.PrimaryComponentFactory {
       protected def create_Component(params: ComponentCreate): Component =
-        new Component() {}
+        new Component() {
+          override def eventReceptionDefinitions: Vector[CmlEventDefinition] =
+            Vector(
+              CmlEventDefinition(
+                name = "notice.published",
+                category = CmlEventCategory.NonActionEvent,
+                kind = Some("published")
+              )
+            )
+        }
 
       protected def create_Core(
         params: ComponentCreate,

@@ -1,9 +1,9 @@
 package org.goldenport.cncf.component.repository
 
-import java.net.URLClassLoader
+import java.net.{URI, URLClassLoader}
 import java.io.File
 import java.nio.charset.StandardCharsets
-import java.nio.file.{Files, Path, Paths}
+import java.nio.file.{AtomicMoveNotSupportedException, Files, Path, Paths, StandardCopyOption}
 import java.lang.reflect.Modifier
 import java.util.ServiceLoader
 import java.util.jar.JarFile
@@ -29,7 +29,7 @@ import org.goldenport.cncf.subsystem.GenericSubsystemDescriptor
  *  version Feb.  5, 2026
  *  version Mar. 22, 2026
  *  version Apr. 25, 2026
- * @version May. 11, 2026
+ * @version May. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 sealed abstract class ComponentRepository {
@@ -43,10 +43,17 @@ object ComponentRepository extends GlobalObservable {
   private val _component_dev_dir_type = "component-dev-dir"
   private val _invalid_component_dev_dir_type = "invalid-component-dev-dir"
   private val _subsystem_dev_dir_type = "subsystem-dev-dir"
+  private val _standard_repository_type = "standard-repository"
   private val _scala_cli_default_dir = ".scala-build"
   private val _component_dir_default_dir = "component.dir"
-  private val _standard_repository_group_path = Paths.get("org", "simplemodeling", "car")
-  private val _standard_subsystem_group_path = Paths.get("org", "simplemodeling", "sar")
+  private val _standard_component_repository_url = "https://www.simplemodeling.org/repository/car"
+  private val _standard_subsystem_repository_url = "https://www.simplemodeling.org/repository/sar"
+  private val _standard_component_repository_path = Paths.get("car")
+  private val _standard_subsystem_repository_path = Paths.get("sar")
+  private val _legacy_standard_component_repository_path = Paths.get("org", "simplemodeling", "car")
+  private val _legacy_standard_subsystem_repository_path = Paths.get("org", "simplemodeling", "sar")
+  private val _remote_connect_timeout_ms = 2000
+  private val _remote_read_timeout_ms = 5000
 
   sealed abstract class Specification {
     def build(params: ComponentCreate): ComponentRepository
@@ -100,10 +107,31 @@ object ComponentRepository extends GlobalObservable {
   def defaultStandardRepositoryDir(): Path =
     Paths.get(sys.props.getOrElse("user.home", "."), ".cncf", "repository").normalize
 
+  def standardComponentRepositoryUrl(): String =
+    _standard_component_repository_url
+
+  def standardSubsystemRepositoryUrl(): String =
+    _standard_subsystem_repository_url
+
+  def standardComponentRepositorySpec(): ComponentRepository.StandardRepository.Specification =
+    StandardRepository.Specification(
+      StandardRepositoryKind.Car,
+      _standard_component_repository_url,
+      defaultStandardRepositoryDir()
+    )
+
+  def standardSubsystemRepositorySpec(): ComponentRepository.StandardRepository.Specification =
+    StandardRepository.Specification(
+      StandardRepositoryKind.Sar,
+      _standard_subsystem_repository_url,
+      defaultStandardRepositoryDir()
+    )
+
   private def _parse_spec(
     spec: String,
     baseDir: Path
-  ): Either[String, Specification] = {
+  ): Either[String, Specification] =
+    _parse_standard_url_spec(spec).getOrElse {
     val (kind, dirOpt) = _split_spec(spec)
     kind match {
       case `_scala_cli_type` =>
@@ -130,10 +158,40 @@ object ComponentRepository extends GlobalObservable {
       case `_subsystem_dev_dir_type` =>
         val dir = _resolve_dir(dirOpt, ".", baseDir)
         Right(SubsystemDevDirRepository.Specification(dir))
+      case `_standard_repository_type` =>
+        dirOpt match {
+          case Some(value) =>
+            _parse_standard_url_spec(value).map(_.left.map(_.replace("unsupported standard component repository URL", "unsupported standard repository URL")))
+              .getOrElse(Left(s"standard-repository requires a URL"))
+          case None =>
+            Left("standard-repository requires a URL")
+        }
       case other =>
         Left(s"unknown component repository type: ${other}")
     }
   }
+
+  private def _parse_standard_url_spec(
+    spec: String
+  ): Option[Either[String, Specification]] = {
+    val trimmed = spec.trim
+    if (!trimmed.startsWith("http://") && !trimmed.startsWith("https://")) {
+      None
+    } else {
+      val normalized = _strip_trailing_slash(trimmed)
+      if (normalized == _standard_component_repository_url)
+        Some(Right(standardComponentRepositorySpec()))
+      else if (normalized == _standard_subsystem_repository_url)
+        Some(Right(standardSubsystemRepositorySpec()))
+      else
+        Some(Left(s"unsupported standard component repository URL: ${trimmed}"))
+    }
+  }
+
+  private def _strip_trailing_slash(
+    value: String
+  ): String =
+    value.reverse.dropWhile(_ == '/').reverse
 
   private def _split_spec(
     spec: String
@@ -510,6 +568,73 @@ object ComponentRepository extends GlobalObservable {
     }
   }
 
+  enum StandardRepositoryKind {
+    case Car
+    case Sar
+  }
+
+  final class StandardRepository(
+    kind: StandardRepositoryKind,
+    baseUrl: String,
+    cacheRoot: Path,
+    params: ComponentCreate,
+    packagePrefixes: Seq[String]
+  ) extends ComponentRepository {
+    def discover(): Seq[Component] =
+      new ComponentDirRepository(cacheRoot, params, packagePrefixes).discover()
+  }
+
+  object StandardRepository {
+    final case class Specification(
+      kind: StandardRepositoryKind,
+      baseUrl: String,
+      cacheRoot: Path
+    ) extends ComponentRepository.Specification {
+      def build(params: ComponentCreate): ComponentRepository =
+        new StandardRepository(
+          kind,
+          baseUrl,
+          cacheRoot,
+          params,
+          ComponentRepository.resolvePackagePrefixes()
+        )
+
+      override def resolveSubsystemDescriptor(
+        subsystemName: String
+      ): Option[GenericSubsystemDescriptor] =
+        kind match {
+          case StandardRepositoryKind.Sar =>
+            _resolve_standard_subsystem_descriptor(cacheRoot, subsystemName)
+              .orElse(_fetch_standard_subsystem_descriptor(baseUrl, cacheRoot, subsystemName))
+          case _ =>
+            None
+        }
+
+      override def resolveComponentDescriptor(
+        componentName: String
+      ): Option[ComponentDescriptor] =
+        kind match {
+          case StandardRepositoryKind.Car =>
+            _resolve_standard_component_descriptor(cacheRoot, componentName)
+              .orElse(_fetch_standard_component_descriptor(baseUrl, cacheRoot, componentName))
+          case _ =>
+            None
+        }
+
+      override def resolveComponentArchivePath(
+        componentName: String
+      ): Option[Path] =
+        kind match {
+          case StandardRepositoryKind.Car =>
+            _resolve_standard_component_artifact(cacheRoot, componentName, None)
+              .orElse(_fetch_standard_component_artifact(baseUrl, cacheRoot, componentName, None))
+              .collect { case Artifact(path, ArtifactKind.Car) => path }
+          case _ =>
+            None
+        }
+    }
+  }
+
   def resolveSubsystemDescriptor(
     specs: Seq[Specification],
     subsystemName: String
@@ -761,19 +886,10 @@ object ComponentRepository extends GlobalObservable {
     basedir: Path,
     componentName: String,
     version: Option[String]
-  ): Option[Artifact] = {
-    val componentRoot = basedir.resolve(_standard_repository_group_path).resolve(componentName)
-    if (!Files.isDirectory(componentRoot)) {
-      None
-    } else {
-      val versions =
-        version.map(v => Vector(v)).getOrElse(_version_dirs_desc(componentRoot))
-      versions.iterator.flatMap { v =>
-        val artifact = componentRoot.resolve(v).resolve(s"${componentName}-${v}.car")
-        if (Files.isRegularFile(artifact)) Some(Artifact(artifact, ArtifactKind.Car)) else None
-      }.toSeq.headOption
-    }
-  }
+  ): Option[Artifact] =
+    _standard_component_repository_roots(basedir).iterator.flatMap { root =>
+      _resolve_standard_artifact(root, componentName, version, ".car", ArtifactKind.Car)
+    }.toSeq.headOption
 
   private def _resolve_standard_subsystem_descriptor(
     basedir: Path,
@@ -788,17 +904,208 @@ object ComponentRepository extends GlobalObservable {
   private def _resolve_standard_subsystem_artifact(
     basedir: Path,
     subsystemName: String
+  ): Option[Artifact] =
+    _standard_subsystem_repository_roots(basedir).iterator.flatMap { root =>
+      _resolve_standard_artifact(root, subsystemName, None, ".sar", ArtifactKind.Sar)
+    }.toSeq.headOption
+
+  private def _standard_component_repository_roots(
+    basedir: Path
+  ): Vector[Path] =
+    Vector(
+      basedir.resolve(_standard_component_repository_path),
+      basedir.resolve(_legacy_standard_component_repository_path)
+    )
+
+  private def _standard_subsystem_repository_roots(
+    basedir: Path
+  ): Vector[Path] =
+    Vector(
+      basedir.resolve(_standard_subsystem_repository_path),
+      basedir.resolve(_legacy_standard_subsystem_repository_path)
+    )
+
+  private def _resolve_standard_artifact(
+    repositoryroot: Path,
+    name: String,
+    version: Option[String],
+    suffix: String,
+    kind: ArtifactKind
   ): Option[Artifact] = {
-    val subsystemRoot = basedir.resolve(_standard_subsystem_group_path).resolve(subsystemName)
-    if (!Files.isDirectory(subsystemRoot)) {
+    val artifactroot = repositoryroot.resolve(name)
+    if (!Files.isDirectory(artifactroot)) {
       None
     } else {
-      _version_dirs_desc(subsystemRoot).iterator.flatMap { v =>
-        val artifact = subsystemRoot.resolve(v).resolve(s"${subsystemName}-${v}.sar")
-        if (Files.isRegularFile(artifact)) Some(Artifact(artifact, ArtifactKind.Sar)) else None
+      val versions =
+        version.map(v => Vector(v)).getOrElse(_version_dirs_desc(artifactroot))
+      versions.iterator.flatMap { v =>
+        val artifact = artifactroot.resolve(v).resolve(s"${name}-${v}${suffix}")
+        if (Files.isRegularFile(artifact)) Some(Artifact(artifact, kind)) else None
       }.toSeq.headOption
     }
   }
+
+  private def _fetch_standard_component_descriptor(
+    baseurl: String,
+    cacheroot: Path,
+    componentname: String
+  ): Option[ComponentDescriptor] =
+    _fetch_standard_component_artifact(baseurl, cacheroot, componentname, None).iterator.flatMap {
+      case Artifact(path, ArtifactKind.Car) =>
+        ComponentDescriptorLoader.loadArchive(path).toOption
+      case _ =>
+        None
+    }.toSeq.headOption
+
+  private def _fetch_standard_component_artifact(
+    baseurl: String,
+    cacheroot: Path,
+    componentname: String,
+    version: Option[String]
+  ): Option[Artifact] =
+    _standard_versions(baseurl, cacheroot.resolve(_standard_component_repository_path), componentname, version).iterator.flatMap { v =>
+      _fetch_standard_artifact(
+        baseurl,
+        cacheroot.resolve(_standard_component_repository_path),
+        componentname,
+        v,
+        ".car",
+        ArtifactKind.Car
+      )
+    }.toSeq.headOption
+
+  private def _fetch_standard_subsystem_descriptor(
+    baseurl: String,
+    cacheroot: Path,
+    subsystemname: String
+  ): Option[GenericSubsystemDescriptor] =
+    _fetch_standard_subsystem_artifact(baseurl, cacheroot, subsystemname, None).flatMap {
+      case Artifact(path, ArtifactKind.Sar) =>
+        GenericSubsystemDescriptor.load(path).toOption
+      case _ =>
+        None
+    }
+
+  private def _fetch_standard_subsystem_artifact(
+    baseurl: String,
+    cacheroot: Path,
+    subsystemname: String,
+    version: Option[String]
+  ): Option[Artifact] =
+    _standard_versions(baseurl, cacheroot.resolve(_standard_subsystem_repository_path), subsystemname, version).iterator.flatMap { v =>
+      _fetch_standard_artifact(
+        baseurl,
+        cacheroot.resolve(_standard_subsystem_repository_path),
+        subsystemname,
+        v,
+        ".sar",
+        ArtifactKind.Sar
+      )
+    }.toSeq.headOption
+
+  private def _standard_versions(
+    baseurl: String,
+    repositoryroot: Path,
+    name: String,
+    version: Option[String]
+  ): Vector[String] =
+    version.map(Vector(_)).getOrElse {
+      val local = {
+        val artifactroot = repositoryroot.resolve(name)
+        if (Files.isDirectory(artifactroot)) _version_dirs_desc(artifactroot) else Vector.empty
+      }
+      if (local.nonEmpty) local else _fetch_standard_metadata_versions(baseurl, name)
+    }
+
+  private def _fetch_standard_metadata_versions(
+    baseurl: String,
+    name: String
+  ): Vector[String] =
+    _read_remote_text(_join_url(baseurl, name, "maven-metadata.xml")).map { text =>
+      val latest = _first_xml_tag(text, "latest").orElse(_first_xml_tag(text, "release")).toVector
+      val versions = "<version>([^<]+)</version>".r.findAllMatchIn(text).map(_.group(1).trim).filter(_.nonEmpty).toVector
+      (latest ++ versions.reverse).distinct
+    }.getOrElse(Vector.empty)
+
+  private def _fetch_standard_artifact(
+    baseurl: String,
+    repositoryroot: Path,
+    name: String,
+    version: String,
+    suffix: String,
+    kind: ArtifactKind
+  ): Option[Artifact] = {
+    val filename = s"${name}-${version}${suffix}"
+    val target = repositoryroot.resolve(name).resolve(version).resolve(filename)
+    if (Files.isRegularFile(target)) {
+      Some(Artifact(target, kind))
+    } else {
+      Files.createDirectories(target.getParent)
+      val tmp = target.resolveSibling(s"${filename}.tmp")
+      try {
+        val url = _join_url(baseurl, name, version, filename)
+        _copy_remote(url, tmp)
+        try {
+          Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
+        } catch {
+          case _: AtomicMoveNotSupportedException =>
+            Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING)
+        }
+        Some(Artifact(target, kind))
+      } catch {
+        case NonFatal(_) =>
+          try Files.deleteIfExists(tmp) catch {
+            case NonFatal(_) => ()
+          }
+          None
+      }
+    }
+  }
+
+  private def _read_remote_text(
+    url: String
+  ): Option[String] =
+    try {
+      val uri = URI.create(url)
+      val connection = uri.toURL.openConnection()
+      connection.setConnectTimeout(_remote_connect_timeout_ms)
+      connection.setReadTimeout(_remote_read_timeout_ms)
+      Using.resource(connection.getInputStream) { in =>
+        new String(in.readAllBytes(), StandardCharsets.UTF_8)
+      } match {
+        case text if text.trim.nonEmpty => Some(text)
+        case _ => None
+      }
+    } catch {
+      case NonFatal(_) => None
+    }
+
+  private def _copy_remote(
+    url: String,
+    target: Path
+  ): Unit = {
+    val uri = URI.create(url)
+    val connection = uri.toURL.openConnection()
+    connection.setConnectTimeout(_remote_connect_timeout_ms)
+    connection.setReadTimeout(_remote_read_timeout_ms)
+    Using.resource(connection.getInputStream) { in =>
+      Files.copy(in, target, StandardCopyOption.REPLACE_EXISTING)
+    }
+  }
+
+  private def _first_xml_tag(
+    text: String,
+    tag: String
+  ): Option[String] = {
+    val pattern = s"<${tag}>([^<]+)</${tag}>".r
+    pattern.findFirstMatchIn(text).map(_.group(1).trim).filter(_.nonEmpty)
+  }
+
+  private def _join_url(
+    base: String,
+    parts: String*
+  ): String =
+    (_strip_trailing_slash(base) +: parts.map(_.stripPrefix("/").stripSuffix("/"))).mkString("/")
 
   private def _version_dirs_desc(root: Path): Vector[String] = {
     val stream = Files.list(root)

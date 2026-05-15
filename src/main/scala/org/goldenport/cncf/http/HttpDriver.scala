@@ -16,7 +16,7 @@ import org.slf4j.LoggerFactory
  * @author  ASAMI, Tomoharu
  */
 trait HttpDriver {
-  def get(path: String): HttpResponse
+  def get(path: String, headers: Map[String, String] = Map.empty): HttpResponse
   def post(path: String, body: Option[String], headers: Map[String, String]): HttpResponse
   def postBag(path: String, body: Option[Bag], headers: Map[String, String]): HttpResponse =
     throw new UnsupportedOperationException("HttpDriver.postBag is not implemented by this driver")
@@ -26,8 +26,9 @@ trait HttpDriver {
 final class UrlConnectionHttpDriver(
   baseurl: String
 ) extends HttpDriver {
-  def get(path: String): HttpResponse = {
+  def get(path: String, headers: Map[String, String] = Map.empty): HttpResponse = {
     val conn = _open_connection(_build_url(path), "GET")
+    headers.foreach { case (k, v) => conn.setRequestProperty(k, v) }
     _execute(conn, None)
   }
 
@@ -61,7 +62,7 @@ final class UrlConnectionHttpDriver(
     _execute(conn, body.map(Bag.text(_, StandardCharsets.UTF_8)))
   }
 
-  private val log = LoggerFactory.getLogger(classOf[UrlConnectionHttpDriver])
+  private val _log = LoggerFactory.getLogger(classOf[UrlConnectionHttpDriver])
 
   private def _open_connection(
     url: URL,
@@ -186,8 +187,8 @@ final class UrlConnectionHttpDriver(
 final class FakeHttpDriver(
   response: HttpResponse
 ) extends HttpDriver {
-  def get(path: String): HttpResponse = {
-    val _ = path
+  def get(path: String, headers: Map[String, String] = Map.empty): HttpResponse = {
+    val _ = (path, headers)
     response
   }
 
@@ -224,13 +225,13 @@ object FakeHttpDriver {
     body: String,
     contentType: String = "text/plain; charset=utf-8"
   ): FakeHttpDriver = {
-    val (mime, charset) = _parse_content_type_(contentType)
+    val (mime, charset) = _parse_content_type(contentType)
     val ct = ContentType(MimeType(mime), charset)
     val res = HttpResponse.Text(HttpStatus.Ok, ct, Bag.text(body, charset.getOrElse(StandardCharsets.UTF_8)))
     new FakeHttpDriver(res)
   }
 
-  private def _parse_content_type_(
+  private def _parse_content_type(
     value: String
   ): (String, Option[Charset]) = {
     if (value.isEmpty) {

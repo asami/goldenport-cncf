@@ -30,7 +30,7 @@ class UnitOfWorkHttpSpec extends AnyWordSpec with Matchers with ConsequenceMatch
   ) extends HttpDriver {
     var calls: Vector[String] = Vector.empty
 
-    override def get(path: String): HttpResponse = {
+    override def get(path: String, headers: Map[String, String]): HttpResponse = {
       calls = calls :+ s"GET $path"
       response
     }
@@ -69,7 +69,7 @@ class UnitOfWorkHttpSpec extends AnyWordSpec with Matchers with ConsequenceMatch
   "UnitOfWork HTTP wiring" should {
     "execute HTTP ops via Free/ConsequenceT path" in {
       val driver = new FakeHttpDriver(_response_ok())
-      val context = _context_(driver)
+      val context = _context(driver)
       val datastore = DataStore.noop()
       val eventengine = EventEngine.noop(datastore)
       val uow = new UnitOfWork(context, eventengine)
@@ -85,7 +85,7 @@ class UnitOfWorkHttpSpec extends AnyWordSpec with Matchers with ConsequenceMatch
 
     "execute HTTP ops via direct path" in {
       val driver = new FakeHttpDriver(_response_ok())
-      val context = _context_(driver)
+      val context = _context(driver)
       val datastore = DataStore.noop()
       val eventengine = EventEngine.noop(datastore)
       val uow = new UnitOfWork(context, eventengine)
@@ -96,7 +96,7 @@ class UnitOfWorkHttpSpec extends AnyWordSpec with Matchers with ConsequenceMatch
     }
   }
 
-  private def _context_(
+  private def _context(
     driver: HttpDriver
   ): ExecutionContext = {
     val base = ExecutionContext.create()

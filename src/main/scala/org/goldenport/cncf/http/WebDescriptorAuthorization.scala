@@ -6,7 +6,8 @@ import org.goldenport.cncf.security.SecuritySubject
 
 /*
  * @since   Apr. 14, 2026
- * @version Apr. 19, 2026
+ * version Apr. 19, 2026
+ * @version May. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 object WebDescriptorAuthorization {
@@ -54,8 +55,8 @@ object WebDescriptorAuthorization {
       }
       val roles = tokens("role", "roles", "x-cncf-role", "x-cncf-roles", "x-textus-role", "x-textus-roles")
       val scopes = tokens("scope", "scopes", "x-cncf-scope", "x-cncf-scopes", "x-textus-scope", "x-textus-scopes")
-      val capabilities = tokens("capability", "capabilities", "x-cncf-capability", "x-cncf-capabilities", "x-textus-capability", "x-textus-capabilities")
-      val privileges = tokens("privilege", "privileges", "x-cncf-privilege", "x-cncf-privileges", "x-textus-privilege", "x-textus-privileges")
+      val capabilities = tokens("capability", "capabilities")
+      val privileges = tokens("privilege", "privileges")
       val authenticatedTokens = tokens(
         "authorization",
         "x-cncf-session",

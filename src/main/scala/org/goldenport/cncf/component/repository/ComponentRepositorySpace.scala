@@ -18,7 +18,7 @@ import org.goldenport.cncf.subsystem.Subsystem
  *  version Mar. 26, 2026
  *  version Apr. 25, 2026
  *  version May.  1, 2026
- * @version May.  9, 2026
+ * @version May. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 class ComponentRepositorySpace(
@@ -89,6 +89,8 @@ object ComponentRepositorySpace {
         ComponentOrigin.Repository("component-dev-dir")
       case _: ComponentRepository.SubsystemDevDirRepository.Specification =>
         ComponentOrigin.Repository("subsystem-dev-dir")
+      case _: ComponentRepository.StandardRepository.Specification =>
+        ComponentOrigin.Repository("standard-repository")
       case _: ComponentRepository.ScalaCliRepository.Specification =>
         ComponentOrigin.Repository("scala-cli")
     }
@@ -101,22 +103,8 @@ object ComponentRepositorySpace {
     repositorySpecs: Vector[ComponentRepository.Specification],
     componentDescriptors: Vector[ComponentDescriptor]
   ): ComponentRepositorySpace = {
-    build(subsystem, repositorySpecs, componentDescriptors)
-  }
-
-  // Legacy
-  private def build(
-    subsystem: Subsystem,
-    specs: Seq[ComponentRepository.Specification],
-    componentDescriptors: Vector[ComponentDescriptor]
-  ): ComponentRepositorySpace = {
-    val entries = specs.toVector.map { spec =>
-      val origin = originForSpec(spec)
-      val params = ComponentCreate(subsystem, origin, componentDescriptors)
-      val repo = spec.build(params)
-      Slot(repo, origin)
-    }
-    new ComponentRepositorySpace(entries)
+    val _ = c
+    new ComponentRepositorySpace(_make_repositories(subsystem, repositorySpecs, componentDescriptors).toVector)
   }
 
   // CncfRuntime
@@ -147,22 +135,6 @@ object ComponentRepositorySpace {
         specsResult
     }
 
-  private def originForSpec(
-    spec: ComponentRepository.Specification
-  ): ComponentOrigin =
-    spec match {
-      case _: ComponentRepository.ComponentDirRepository.Specification =>
-        ComponentOrigin.Repository("component-dir")
-      case _: ComponentRepository.ComponentFileRepository.Specification =>
-        ComponentOrigin.Repository("component-file")
-      case _: ComponentRepository.ComponentDevDirRepository.Specification =>
-        ComponentOrigin.Repository("component-dev-dir")
-      case _: ComponentRepository.SubsystemDevDirRepository.Specification =>
-        ComponentOrigin.Repository("subsystem-dev-dir")
-      case _: ComponentRepository.ScalaCliRepository.Specification =>
-        ComponentOrigin.Repository("scala-cli")
-    }
-
   // CncfRuntime
   def extractRepositoryArgs(
     configuration: ResolvedConfiguration,
@@ -181,13 +153,14 @@ object ComponentRepositorySpace {
         noDefault = true
         i += 1
       } else if (arg.startsWith("--repository-dir=")) {
-        search += s"component-dir:${arg.stripPrefix("--repository-dir=")}"
+        val value = arg.stripPrefix("--repository-dir=")
+        search += (if (_is_url(value)) value else s"component-dir:${value}")
         i += 1
       } else if (arg == "--repository-dir") {
         if (i + 1 >= args.length) {
           return ExtractedArgs(Left("--repository-dir requires a value"), Right(Vector.empty), args, noDefault)
         }
-        search += s"component-dir:${args(i + 1)}"
+        search += (if (_is_url(args(i + 1))) args(i + 1) else s"component-dir:${args(i + 1)}")
         i += 2
       } else if (arg.startsWith("--component-dir=")) {
         active += s"component-dir:${arg.stripPrefix("--component-dir=")}"
@@ -504,16 +477,26 @@ object ComponentRepositorySpace {
         case None =>
           specs
       }
+    val withstandard =
+      Vector(
+        ComponentRepository.standardComponentRepositorySpec(),
+        ComponentRepository.standardSubsystemRepositorySpec()
+      ).foldLeft(withSearch)(_append_spec_if_missing)
     _default_standard_repository_dir() match {
       case Some(dir) =>
-        Right(_append_spec_if_missing(withSearch, ComponentRepository.ComponentDirRepository.Specification(dir)))
+        Right(_append_spec_if_missing(withstandard, ComponentRepository.ComponentDirRepository.Specification(dir)))
       case None =>
-        Right(withSearch)
+        Right(withstandard)
     }
   }
+
+  private def _is_url(
+    value: String
+  ): Boolean =
+    value.startsWith("http://") || value.startsWith("https://")
 
   def component_extra_function(
     specs: Seq[ComponentRepository.Specification]
   ): Subsystem => Seq[Component] =
-    (subsystem: Subsystem) => build(subsystem, specs, Vector.empty).discover()
+    (subsystem: Subsystem) => new ComponentRepositorySpace(_make_repositories(subsystem, specs, Vector.empty).toVector).discover()
 }

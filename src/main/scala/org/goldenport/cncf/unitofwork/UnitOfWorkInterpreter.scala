@@ -35,7 +35,7 @@ import org.goldenport.record.io.RecordEncoder
 final class UnitOfWorkInterpreter(uow: UnitOfWork) {
   given ExecutionContext = uow.executionContext
 
-  private val step: UnitOfWorkOp ~> Consequence =
+  private val _step: UnitOfWorkOp ~> Consequence =
     new (UnitOfWorkOp ~> Consequence) {
       def apply[A](op: UnitOfWorkOp[A]): Consequence[A] =
         _execute(op)
@@ -44,7 +44,7 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
   def run[R](program: ExecUowM[R]): Consequence[R] = {
     val result =
       try {
-        program.value.foldMap(step)
+        program.value.foldMap(_step)
       } catch {
         case e: Throwable =>
           uow.abort()
@@ -77,47 +77,47 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
 
   private def _execute[A](op: UnitOfWorkOp[A]): Consequence[A] = op match {
     case UnitOfWorkOp.Authorize(authorization) =>
-      withCallTree("uow:authorize") {
+      _with_calltree("uow:authorize") {
         _authorize(Some(authorization))
       }
 
-    case UnitOfWorkOp.HttpGet(path) =>
-      withCallTree("uow:http:get") {
-        Consequence(_http_driver.get(path))
+    case UnitOfWorkOp.HttpGet(path, headers) =>
+      _with_calltree("uow:http:get") {
+        Consequence(_http_driver.get(path, headers))
       }
 
     case UnitOfWorkOp.HttpPost(path, body, headers) =>
-      withCallTree("uow:http:post") {
+      _with_calltree("uow:http:post") {
         Consequence(_http_driver.post(path, body, headers))
       }
 
     case UnitOfWorkOp.HttpPostBag(path, body, headers) =>
-      withCallTree("uow:http:post") {
+      _with_calltree("uow:http:post") {
         Consequence(_http_driver.postBag(path, body, headers))
       }
 
     case UnitOfWorkOp.HttpPut(path, body, headers) =>
-      withCallTree("uow:http:put") {
+      _with_calltree("uow:http:put") {
         Consequence(_http_driver.put(path, body, headers))
       }
 
     case UnitOfWorkOp.DataStoreLoad(id) =>
-      withCallTree("uow:datastore:load") {
+      _with_calltree("uow:datastore:load") {
         Consequence.dataStoreUnavailable("DataStore not wired: DataStoreLoad")
       }
 
     case UnitOfWorkOp.DataStoreSave(id, record) =>
-      withCallTree("uow:datastore:save") {
+      _with_calltree("uow:datastore:save") {
         Consequence.dataStoreUnavailable("DataStore not wired: DataStoreSave")
       }
 
     case UnitOfWorkOp.DataStoreDelete(id) =>
-      withCallTree("uow:datastore:delete") {
+      _with_calltree("uow:datastore:delete") {
         Consequence.dataStoreUnavailable("DataStore not wired: DataStoreDelete")
       }
 
     case m: (UnitOfWorkOp.EntityStoreCreate[t] @unchecked) =>
-      withCallTree("uow:entitystore:create") {
+      _with_calltree("uow:entitystore:create") {
         _authorize(m.authorization).flatMap(_ =>
           _entity_store_space.create(m).flatMap { r =>
             _entity_space_put_record(r.id, r.record).map { _ =>
@@ -129,7 +129,7 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
       }
 
     case m: (UnitOfWorkOp.EntityStoreLoad[t] @unchecked) =>
-      withCallTree("uow:entityspace:load", _entity_calltree_attributes(m.id, "entity-space", realIo = !_working_set_enabled)) {
+      _with_calltree("uow:entityspace:load", _entity_calltree_attributes(m.id, "entity-space", realIo = !_working_set_enabled)) {
         _authorize(m.authorization, Some(() => _load_record(m.id))).flatMap { _ =>
           val loaded =
             if (_working_set_enabled)
@@ -147,12 +147,12 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
       }
 
     case m: (UnitOfWorkOp.EntityStoreLoadDirect[t] @unchecked) =>
-      withCallTree("uow:entitystore:load:direct", _entity_calltree_attributes(m.id, "entity-store", realIo = true)) {
+      _with_calltree("uow:entitystore:load:direct", _entity_calltree_attributes(m.id, "entity-store", realIo = true)) {
         _entity_store_space.load(UnitOfWorkOp.EntityStoreLoad(m.id, m.tc))
       }
 
     case m: (UnitOfWorkOp.EntityStoreSave[t] @unchecked) =>
-      withCallTree("uow:entitystore:save") {
+      _with_calltree("uow:entitystore:save") {
         val loadrecord = () =>
           _load_record(m.tc.id(m.entity)).map(_.orElse(Some(m.tc.authorizationRecord(m.entity))))
         _authorize(m.authorization, Some(loadrecord)).flatMap(_ =>
@@ -168,7 +168,7 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
       }
 
     case m: (UnitOfWorkOp.EntityStoreUpdate[t] @unchecked) =>
-      withCallTree("uow:entitystore:update") {
+      _with_calltree("uow:entitystore:update") {
         val loadrecord = () =>
           _load_record(m.tc.id(m.entity)).map(_.orElse(Some(m.tc.authorizationRecord(m.entity))))
         _authorize(m.authorization, Some(loadrecord)).flatMap(_ =>
@@ -184,7 +184,7 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
       }
 
     case m: (UnitOfWorkOp.EntityStoreUpdateById[t] @unchecked) =>
-      withCallTree("uow:entitystore:update:patch") {
+      _with_calltree("uow:entitystore:update:patch") {
         _authorize(m.authorization, Some(() => _load_record(m.id))).flatMap(_ =>
           _transition_validation_hook
             .beforeUpdateById[t](m.id, m.patch, m.tc)
@@ -197,7 +197,7 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
       }
 
     case m: UnitOfWorkOp.EntityStoreDelete =>
-      withCallTree("uow:entitystore:delete") {
+      _with_calltree("uow:entitystore:delete") {
         _authorize(m.authorization, Some(() => _load_record(m.id))).flatMap(_ =>
           _entity_store_space.delete(m).map { r =>
             _entity_space_evict(m.id)
@@ -208,7 +208,7 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
       }
 
     case m: UnitOfWorkOp.EntityStoreDeleteHard =>
-      withCallTree("uow:entitystore:delete:hard") {
+      _with_calltree("uow:entitystore:delete:hard") {
         _entity_store_space.deleteHard(m).map { r =>
           _entity_space_evict(m.id)
           _view_space_invalidate_all()
@@ -217,7 +217,7 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
       }
 
     case m: (UnitOfWorkOp.EntityStoreSearch[t] @unchecked) =>
-      withCallTree("uow:entityspace:search", _entity_search_calltree_attributes(m.query, "entity-space", realIo = !_working_set_enabled)) {
+      _with_calltree("uow:entityspace:search", _entity_search_calltree_attributes(m.query, "entity-space", realIo = !_working_set_enabled)) {
         _authorize(m.authorization).flatMap { _ =>
           if (_working_set_enabled)
             _entity_space_search(m)
@@ -227,7 +227,7 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
       }
 
     case m: (UnitOfWorkOp.EntityStoreSearchDirect[t] @unchecked) =>
-      withCallTree("uow:entitystore:search:direct", _entity_search_calltree_attributes(m.query, "entity-store", realIo = true)) {
+      _with_calltree("uow:entitystore:search:direct", _entity_search_calltree_attributes(m.query, "entity-store", realIo = true)) {
         val op = UnitOfWorkOp.EntityStoreSearch(m.query, m.tc, m.authorization)
         _authorize(m.authorization).flatMap { _ =>
           _entity_store_space.search(UnitOfWorkOp.EntityStoreSearch(m.query, m.tc)).flatMap(_filter_search_result(op, _))
@@ -235,12 +235,12 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
       }
 
     case m: (UnitOfWorkOp.EntityStoreSearchInternal[t] @unchecked) =>
-      withCallTree("uow:entitystore:search:internal", _entity_search_calltree_attributes(m.query, "entity-store", realIo = true)) {
+      _with_calltree("uow:entitystore:search:internal", _entity_search_calltree_attributes(m.query, "entity-store", realIo = true)) {
         _entity_store_space.searchInternal(m)
       }
 
     case m: (UnitOfWorkOp.EntityStoreUniqueValueExists[t] @unchecked) =>
-      withCallTree("uow:entitystore:unique-value-exists") {
+      _with_calltree("uow:entitystore:unique-value-exists") {
         _entity_space_unique_value_exists(m).flatMap {
           case true => Consequence.success(true)
           case false => _entity_store_space.uniqueValueExists(m)
@@ -248,7 +248,7 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
       }
 
     case m: (UnitOfWorkOp.EntityStoreResolveIdentity[t] @unchecked) =>
-      withCallTree("uow:entitystore:resolve-identity") {
+      _with_calltree("uow:entitystore:resolve-identity") {
         _entity_space_resolve_identity(m).flatMap {
           case Some(id) => Consequence.success(Some(id))
           case None => _entity_store_space.resolveIdentity(m)
@@ -256,14 +256,14 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
       }
 
     case UnitOfWorkOp.BlobNormalizeInlineImages(content) =>
-      withCallTree("uow:blob:inline-image:normalize") {
+      _with_calltree("uow:blob:inline-image:normalize") {
         _component_required.flatMap { component =>
           BlobInlineImageWorkflow(component).normalize(content)
         }
       }
 
     case UnitOfWorkOp.BlobAttachInlineImages(source, occurrences) =>
-      withCallTree("uow:blob:inline-image:attach") {
+      _with_calltree("uow:blob:inline-image:attach") {
         _component_required.flatMap { component =>
           BlobInlineImageWorkflow(component).attachInlineImages(source, occurrences).map { result =>
             _view_space_invalidate_all()
@@ -273,14 +273,14 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
       }
 
     case UnitOfWorkOp.ContentNormalizeReferences(content) =>
-      withCallTree("uow:content:references:normalize") {
+      _with_calltree("uow:content:references:normalize") {
         _component_required.flatMap { component =>
           ContentReferenceWorkflow(component).normalize(content)
         }
       }
 
     case UnitOfWorkOp.ContentAttachReferences(source, references) =>
-      withCallTree("uow:content:references:attach") {
+      _with_calltree("uow:content:references:attach") {
         _component_required.flatMap { component =>
           ContentReferenceWorkflow(component).attachReferences(source, references).map { result =>
             _view_space_invalidate_all()
@@ -290,14 +290,14 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
       }
 
     case UnitOfWorkOp.ContentValidateReferences(references) =>
-      withCallTree("uow:content:references:validate") {
+      _with_calltree("uow:content:references:validate") {
         _component_required.flatMap { component =>
           ContentReferenceWorkflow(component).validateInlineReferences(references)
         }
       }
 
     case UnitOfWorkOp.ContentSyncInlineReferences(source, references) =>
-      withCallTree("uow:content:references:sync-inline") {
+      _with_calltree("uow:content:references:sync-inline") {
         _component_required.flatMap { component =>
           ContentReferenceWorkflow(component).syncInlineReferences(source, references).map { result =>
             _view_space_invalidate_all()
@@ -307,14 +307,14 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
       }
 
     case UnitOfWorkOp.ContentRenderHtml(content) =>
-      withCallTree("uow:content:render:html") {
+      _with_calltree("uow:content:render:html") {
         _component_required.flatMap { component =>
           ContentRenderWorkflow(component).renderHtml(content)
         }
       }
 
     case UnitOfWorkOp.ShellCommandExec(command) =>
-      withCallTree("uow:shell:exec") {
+      _with_calltree("uow:shell:exec") {
         _shell_command_executor.execute(command)
       }
   }
@@ -604,7 +604,7 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
   private def _shell_command_executor: ShellCommandExecutor =
     uow.shellCommandExecutor
 
-  private def callTreeContext: CallTreeContext =
+  private def _calltree_context: CallTreeContext =
     uow.executionContext.observability.callTreeContext
 
   private def _entity_calltree_attributes(
@@ -649,11 +649,11 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
   ): String =
     if (value.length <= limit) value else value.take(limit) + "..."
 
-  private def withCallTree[A](
+  private def _with_calltree[A](
     label: String,
     attributes: Map[String, String] = Map.empty
   )(body: => Consequence[A]): Consequence[A] = {
-    val ctx = callTreeContext
+    val ctx = _calltree_context
     if (ctx.isEnabled) {
       ctx.enter(label, attributes ++ Map(
         "calltree_kind" -> "uow"

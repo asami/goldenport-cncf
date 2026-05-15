@@ -723,8 +723,11 @@ trait ActionCallBrowserPart extends ActionCallFeaturePart { self: ActionCall.Cor
 trait ActionCallHttpPart extends ActionCallFeaturePart { self: ActionCall.Core.Holder =>
 
   // Declarative DSL (UoW / Free)
-  protected final def http_get(path: String): ExecUowM[HttpResponse] = {
-    val op = _op_http_get(path)
+  protected final def http_get(
+    path: String,
+    headers: Map[String, String] = Map.empty
+  ): ExecUowM[HttpResponse] = {
+    val op = _op_http_get(path, headers)
     ConsequenceT.liftF(Free.liftF(op))
   }
 
@@ -806,8 +809,11 @@ trait ActionCallHttpPart extends ActionCallFeaturePart { self: ActionCall.Core.H
   }
 
   // Private helpers to build UnitOfWorkOp
-  private def _op_http_get(path: String): UnitOfWorkOp[HttpResponse] =
-    UnitOfWorkOp.HttpGet(path)
+  private def _op_http_get(
+    path: String,
+    headers: Map[String, String] = Map.empty
+  ): UnitOfWorkOp[HttpResponse] =
+    UnitOfWorkOp.HttpGet(path, headers)
 
   private def _op_http_post(
     path: String,

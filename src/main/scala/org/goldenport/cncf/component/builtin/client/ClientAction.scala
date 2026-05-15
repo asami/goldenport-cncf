@@ -55,7 +55,7 @@ sealed trait ClientHttpActionCall extends FunctionalActionCall with ActionCallHt
       case HttpRequest.POST =>
         http_post_bag(url, req.body, headers)
       case _ =>
-        http_get(url)
+        http_get(url, headers)
     }
   }
 }

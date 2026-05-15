@@ -11193,8 +11193,8 @@ private final class RecordingRestDriver extends HttpDriver {
     _calls.toVector
   }
 
-  def get(path: String): HttpResponse = {
-    _record(Call("GET", path, None, Map.empty))
+  def get(path: String, headers: Map[String, String]): HttpResponse = {
+    _record(Call("GET", path, None, headers))
     _response
   }
 

@@ -459,7 +459,7 @@ case class ComponentLogic(
   private def _execution_context(): ExecutionContext = {
     val driver = component.applicationConfig.httpDriver
       .orElse(component.subsystem.flatMap(_.httpDriver))
-      .getOrElse(_fallback_http_driver_())
+      .getOrElse(_fallback_http_driver())
     lazy val context: ExecutionContext = ExecutionContext.create(runtime)
     // Bind UnitOfWork to the ActionCall execution context.
     lazy val uow: UnitOfWork = new UnitOfWork(
@@ -547,9 +547,9 @@ case class ComponentLogic(
         other.parent.flatMap(_global_runtime_context)
     }
 
-  private def _fallback_http_driver_(): HttpDriver =
+  private def _fallback_http_driver(): HttpDriver =
     new HttpDriver {
-      def get(path: String): HttpResponse =
+      def get(path: String, headers: Map[String, String] = Map.empty): HttpResponse =
         throw new UnsupportedOperationException(s"HttpDriver not configured: GET ${path}")
 
       def post(
@@ -579,7 +579,7 @@ object ComponentLogic {
     override val action: Action
   ) extends ProcedureActionCall {
     private def _component = core.component
-    private def _executionContext = core.executionContext
+    private def _execution_context = core.executionContext
 
     private def _payload: Map[String, Any] =
       action.request.toRecord.fields.map(x => x.key -> x.value).toMap
@@ -596,7 +596,7 @@ object ComponentLogic {
                 attributes = definition.selectors,
                 persistent = false
               )
-              given ExecutionContext = _executionContext
+              given ExecutionContext = _execution_context
               reception.receiveAuthorized(input).map { result =>
                 OperationResponse.create(
                   Record.data(

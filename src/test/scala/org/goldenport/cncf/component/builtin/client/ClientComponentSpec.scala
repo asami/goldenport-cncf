@@ -60,13 +60,13 @@ class ClientComponentSpec
   )
 
   private final class FakeHttpDriver extends HttpDriver {
-    private val buffer = scala.collection.mutable.ArrayBuffer.empty[HttpCall]
+    private val _buffer = scala.collection.mutable.ArrayBuffer.empty[HttpCall]
 
     def calls: Vector[HttpCall] =
-      buffer.toVector
+      _buffer.toVector
 
-    def get(path: String): HttpResponse = {
-      buffer += HttpCall("GET", path, None, Map.empty)
+    def get(path: String, headers: Map[String, String]): HttpResponse = {
+      _buffer += HttpCall("GET", path, None, headers)
       HttpResponse.notFound()
     }
 
@@ -75,7 +75,7 @@ class ClientComponentSpec
       body: Option[String],
       headers: Map[String, String]
     ): HttpResponse = {
-      buffer += HttpCall("POST", path, body, headers)
+      _buffer += HttpCall("POST", path, body, headers)
       HttpResponse.notFound()
     }
 
@@ -84,7 +84,7 @@ class ClientComponentSpec
       body: Option[String],
       headers: Map[String, String]
     ): HttpResponse = {
-      buffer += HttpCall("PUT", path, body, headers)
+      _buffer += HttpCall("PUT", path, body, headers)
       HttpResponse.notFound()
     }
   }

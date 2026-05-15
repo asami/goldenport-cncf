@@ -74,7 +74,7 @@ class ActionCallSpec extends AnyWordSpec with Matchers {
       val interpreter = new (UnitOfWorkOp ~> Consequence) {
         def apply[A](fa: UnitOfWorkOp[A]): Consequence[A] =
           fa match {
-            case UnitOfWorkOp.HttpGet("/procedure-dsl") =>
+            case UnitOfWorkOp.HttpGet("/procedure-dsl", _) =>
               Consequence.success(response.asInstanceOf[A])
             case other =>
               Consequence.operationIllegal("procedure_action_call_spec", s"unexpected op: $other")

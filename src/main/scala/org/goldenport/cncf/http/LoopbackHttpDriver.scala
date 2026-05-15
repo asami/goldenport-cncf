@@ -21,8 +21,8 @@ final class LoopbackHttpDriver(
   charset: Charset = StandardCharsets.UTF_8
 ) extends HttpDriver {
 
-  def get(path: String): HttpResponse =
-    _execute(_buildRequest(HttpRequest.GET, path, None))
+  def get(path: String, headers: Map[String, String] = Map.empty): HttpResponse =
+    _execute(_build_request(HttpRequest.GET, path, None, headers))
 
   def post(
     path: String,
@@ -30,7 +30,7 @@ final class LoopbackHttpDriver(
     headers: Map[String, String]
   ): HttpResponse = {
     val bag = body.map(b => Bag.text(b, charset))
-    _execute(_buildRequest(HttpRequest.POST, path, bag, headers))
+    _execute(_build_request(HttpRequest.POST, path, bag, headers))
   }
 
   override def postBag(
@@ -38,7 +38,7 @@ final class LoopbackHttpDriver(
     body: Option[Bag],
     headers: Map[String, String]
   ): HttpResponse =
-    _execute(_buildRequest(HttpRequest.POST, path, body, headers))
+    _execute(_build_request(HttpRequest.POST, path, body, headers))
 
   def put(
     path: String,
@@ -46,7 +46,7 @@ final class LoopbackHttpDriver(
     headers: Map[String, String]
   ): HttpResponse = {
     val bag = body.map(b => Bag.text(b, charset))
-    _execute(_buildRequest(HttpRequest.PUT, path, bag, headers))
+    _execute(_build_request(HttpRequest.PUT, path, bag, headers))
   }
 
   private def _execute(
@@ -70,13 +70,13 @@ final class LoopbackHttpDriver(
     Record(remaining) ++ Record.data(name -> value)
   }
 
-  private def _buildRequest(
+  private def _build_request(
     method: HttpRequest.Method,
     path: String,
     body: Option[Bag],
     headers: Map[String, String] = Map.empty
   ): HttpRequest = {
-    val url = _buildUrl(path)
+    val url = _build_url(path)
     val query = Option(url.getQuery)
       .filter(_.nonEmpty)
       .map(HttpRequest.parseQuery)
@@ -91,7 +91,7 @@ final class LoopbackHttpDriver(
     HttpRequest.fromUrl(method = method, url = url, query = query, header = header, body = body)
   }
 
-  private def _buildUrl(path: String): URL = {
+  private def _build_url(path: String): URL = {
     if (path.startsWith("http://") || path.startsWith("https://")) {
       URI.create(path).toURL
     } else {

@@ -131,6 +131,8 @@ object ClientComponent {
 
   private def _baseurl(req: Request): String =
     req.properties.find(_.name == "baseurl").map(_.value.toString)
+      .orElse(sys.props.get("textus.http.baseurl"))
+      .orElse(sys.props.get("cncf.http.baseurl"))
       .getOrElse(ClientConfig.DefaultBaseUrl)
 
   private def _path(req: Request): Consequence[String] =
@@ -146,12 +148,12 @@ object ClientComponent {
   }
 
   private def _body(req: Request): Option[Bag] =
-    req.properties.find(p => _is_http_body_property(p.name)).flatMap(_body_from_property_)
+    req.properties.find(p => _is_http_body_property(p.name)).flatMap(_body_from_property)
 
   private def _is_http_body_property(name: String): Boolean =
     name == "http.body" || name == "http.data" || name == "-d"
 
-  private def _body_from_property_(p: Property): Option[Bag] = {
+  private def _body_from_property(p: Property): Option[Bag] = {
     val charset = StandardCharsets.UTF_8
     p.value match {
       case b: Bag => Some(b)

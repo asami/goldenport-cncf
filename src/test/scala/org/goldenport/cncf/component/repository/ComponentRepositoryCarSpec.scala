@@ -24,7 +24,7 @@ import org.goldenport.configuration.ConfigurationTrace
  * @since   Feb.  4, 2026
  *  version Apr. 25, 2026
  *  version May.  1, 2026
- * @version May.  9, 2026
+ * @version May. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAndAfterAll {
@@ -34,6 +34,40 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
   }
 
   "ComponentDirRepository" should {
+    "expose SimpleModeling CAR and SAR standard repository URLs" in {
+      ComponentRepository.standardComponentRepositoryUrl() shouldBe
+        "https://www.simplemodeling.org/repository/car"
+      ComponentRepository.standardSubsystemRepositoryUrl() shouldBe
+        "https://www.simplemodeling.org/repository/sar"
+    }
+
+    "parse SimpleModeling CAR and SAR URLs as standard search repository specs" in {
+      _with_temp_dir { root =>
+        ComponentRepository.parseSpecs(
+          ComponentRepository.standardComponentRepositoryUrl(),
+          root
+        ).toOption.get shouldBe Vector(ComponentRepository.standardComponentRepositorySpec())
+        ComponentRepository.parseSpecs(
+          ComponentRepository.standardSubsystemRepositoryUrl(),
+          root
+        ).toOption.get shouldBe Vector(ComponentRepository.standardSubsystemRepositorySpec())
+      }
+    }
+
+    "append SimpleModeling standard URL repositories to the default search set" in {
+      _with_temp_dir { cwd =>
+        val resolved = ComponentRepositorySpace.appendDefaultSearchRepositories(
+          Right(Vector.empty),
+          active = Vector.empty,
+          cwd,
+          noDefault = false
+        ).toOption.get
+
+        resolved should contain (ComponentRepository.standardComponentRepositorySpec())
+        resolved should contain (ComponentRepository.standardSubsystemRepositorySpec())
+      }
+    }
+
     "parse explicit development and expanded CAR directory routes" in {
       val extracted = ComponentRepositorySpace.extractRepositoryArgs(
         ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty),
@@ -602,17 +636,91 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
       }
     }
 
-    "discover a requested component from the default standard repository layout" in {
+    "discover a requested component from the standard CAR repository layout" in {
       val subsystem = new Subsystem(
         name = "test-standard-repo",
         configuration = ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty)
       )
       val origin = ComponentOrigin.Repository("component-dir")
       _with_temp_dir { repositoryroot =>
-        val artifactdir = repositoryroot.resolve("org").resolve("simplemodeling").resolve("car").resolve("textus-user-account").resolve("0.1.0-SNAPSHOT")
+        val artifactdir = repositoryroot.resolve("car").resolve("textus-user-account").resolve("0.1.0-SNAPSHOT")
         Files.createDirectories(artifactdir)
         val fakecomponentjar = _create_fake_component_jar(repositoryroot.resolve("assets").resolve("component-main-standard.jar"))
         val descriptor = repositoryroot.resolve("component-descriptor-standard.json")
+        Files.writeString(
+          descriptor,
+          """{"name":"textus-user-account","version":"0.1.0-SNAPSHOT","component":"textus-user-account"}"""
+        )
+        _create_car(
+          artifactdir.resolve("textus-user-account-0.1.0-SNAPSHOT.car"),
+          Seq(
+            "component/main.jar" -> fakecomponentjar,
+            "component-descriptor.json" -> descriptor
+          )
+        )
+        val repository = ComponentRepository.StandardRepository.Specification(
+          ComponentRepository.StandardRepositoryKind.Car,
+          ComponentRepository.standardComponentRepositoryUrl(),
+          repositoryroot
+        ).build(
+          ComponentCreate(
+            subsystem,
+            origin,
+            Vector(ComponentDescriptor(name = Some("textus-user-account"), version = Some("0.1.0-SNAPSHOT"), componentName = Some("textus-user-account")))
+          )
+        )
+        val components = repository.discover()
+
+        components.map(_.name) should contain ("spec")
+        components.flatMap(_.artifactMetadata).flatMap(_.component) should contain ("textus-user-account")
+      }
+    }
+
+    "resolve a subsystem descriptor from the standard SAR repository layout" in {
+      _with_temp_dir { repositoryroot =>
+        val artifactdir = repositoryroot.resolve("sar").resolve("cwitter").resolve("0.1.0")
+        Files.createDirectories(artifactdir)
+        val descriptor = repositoryroot.resolve("subsystem-descriptor-standard-sar.yaml")
+        Files.writeString(
+          descriptor,
+          """subsystem: cwitter
+            |version: 0.1.0
+            |components:
+            |  - component: cwitter
+            |""".stripMargin
+        )
+        _create_zip(
+          artifactdir.resolve("cwitter-0.1.0.sar"),
+          Seq(
+            "subsystem-descriptor.yaml" -> descriptor
+          )
+        )
+
+        val loaded = ComponentRepository.resolveSubsystemDescriptor(
+          Vector(ComponentRepository.StandardRepository.Specification(
+            ComponentRepository.StandardRepositoryKind.Sar,
+            ComponentRepository.standardSubsystemRepositoryUrl(),
+            repositoryroot
+          )),
+          "cwitter"
+        )
+
+        loaded.map(_.subsystemName) shouldBe Some("cwitter")
+        loaded.flatMap(_.version) shouldBe Some("0.1.0")
+      }
+    }
+
+    "keep compatibility with the legacy Maven-style standard repository layout" in {
+      val subsystem = new Subsystem(
+        name = "test-legacy-standard-repo",
+        configuration = ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty)
+      )
+      val origin = ComponentOrigin.Repository("component-dir")
+      _with_temp_dir { repositoryroot =>
+        val artifactdir = repositoryroot.resolve("org").resolve("simplemodeling").resolve("car").resolve("textus-user-account").resolve("0.1.0-SNAPSHOT")
+        Files.createDirectories(artifactdir)
+        val fakecomponentjar = _create_fake_component_jar(repositoryroot.resolve("assets").resolve("component-main-legacy-standard.jar"))
+        val descriptor = repositoryroot.resolve("component-descriptor-legacy-standard.json")
         Files.writeString(
           descriptor,
           """{"name":"textus-user-account","version":"0.1.0-SNAPSHOT","component":"textus-user-account"}"""

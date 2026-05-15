@@ -118,6 +118,46 @@ class ClientRequestNormalizationSpec
       }
     }
 
+    "preserve dotted framework query names in explicit HTTP paths" in {
+      val subsystem = TestComponentFactory.emptySubsystem("client-request-normalization")
+      Given("client http arguments with a framework query on the path")
+      val request = CncfRuntime.parseClientArgs(
+        subsystem,
+        Array("http", "post", "/rest/v1/job-control/job/await-job-result?cncf.context.securityLevel=content_manager", "id=job-1")
+      )
+
+      When("the arguments are normalized into a Request")
+      request should be_success
+
+      Then("only the route path is normalized and the query key remains intact")
+      request match {
+        case org.goldenport.Consequence.Success(req) =>
+          req.arguments shouldBe List(
+            Argument("path", "/rest/v1/job-control/job/await-job-result?cncf.context.securityLevel=content_manager", None)
+          )
+        case _ =>
+          fail("expected successful normalization")
+      }
+    }
+
+    "append client query with ampersand when the path already has a query" in {
+      val req = Request(
+        component = Some("client"),
+        service = Some("http"),
+        operation = "post",
+        arguments = List(Argument("path", "/rest/v1/job-control/job/await-job-result?cncf.context.securityLevel=content_manager", None)),
+        switches = Nil,
+        properties = List(Property("id", "job-1", None))
+      )
+
+      val url = CncfRuntime._append_client_query(
+        "http://localhost:19083/rest/v1/job-control/job/await-job-result?cncf.context.securityLevel=content_manager",
+        req
+      )
+
+      url shouldBe "http://localhost:19083/rest/v1/job-control/job/await-job-result?cncf.context.securityLevel=content_manager&id=job-1"
+    }
+
     "resolve -d @file into Bag at request construction time" in {
       val subsystem = TestComponentFactory.emptySubsystem("client-request-normalization")
       Given("a local file referenced via -d @path")
