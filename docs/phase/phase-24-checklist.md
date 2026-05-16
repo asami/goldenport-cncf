@@ -50,7 +50,7 @@ runtime/model changes begin.
 
 ### Expected Output
 
-- Phase 24 is active as the Metrics and Observability phase.
+- Phase 24 was selected as the Metrics and Observability phase.
 - The payload externalization policy is explicit enough for OB-02/OB-03 to
   implement without reopening the storage boundary.
 - The sample-13/docker-compose integration target is visible from the start.
@@ -285,7 +285,7 @@ without making OpenTelemetry the internal source of truth.
 
 ## OB-07: Phase 24 Verification and Closure
 
-Status: TODO
+Status: DONE
 
 ### Objective
 
@@ -294,12 +294,49 @@ Observability scope.
 
 ### Detailed Tasks
 
-- [ ] Confirm Phase 24 docs and strategy status match implemented behavior.
-- [ ] Confirm OB-01 through OB-06 are DONE or explicitly deferred.
-- [ ] Run validations required by touched implementation slices.
-- [ ] Record closure notes and future observability candidates.
+- [x] Confirm Phase 24 docs and strategy status match implemented behavior.
+- [x] Confirm OB-01 through OB-06 are DONE or explicitly deferred.
+- [x] Run validations required by touched implementation slices.
+- [x] Record closure notes and future observability candidates.
 
 ### Guardrails
 
 - Do not close Phase 24 while active Metrics and Observability work remains
   implicit.
+
+### Closure Notes
+
+- Phase 24 is closed as the Metrics and Observability phase.
+- Completed scope:
+  - diagnostic payload externalization policy;
+  - CallTree / execution history / Job diagnostic summary/reference model;
+  - diagnostic payload external store and runtime configuration boundary;
+  - structured diagnostic dashboard drill-down;
+  - runtime metrics read model and metrics component expansion;
+  - OpenTelemetry export policy and opt-in OTLP HTTP exporter boundary;
+  - `cncf-samples` sample 13 / 13a observability demo direction.
+- CNCF stores and projects compact diagnostic summaries/references by default.
+  Full unbounded result/response payloads are not the primary diagnostic
+  storage format.
+- OpenTelemetry remains an export/projection boundary. CNCF CallTree,
+  diagnostic, payload-summary, metrics, Job, and Task context remain
+  CNCF-native.
+- Validation evidence was accumulated during OB-01 through OB-06 implementation
+  slices. OB-07 itself is docs/status-only and uses `git diff --check` plus
+  status-reference inspection.
+- Unrelated review findings around standard-CAR dependency fetch fail-fast,
+  CAR component descriptor version metadata, and stale SimpleModeling Maven
+  documentation URLs remain outside Phase 24 closure.
+
+### Deferred Items
+
+- Production hardening of payload retention, cleanup, authorization, and
+  operational lifecycle policy.
+- BlobStore-backed diagnostic payload production examples, including
+  S3/S3-compatible deployment through a component provider.
+- Dashboard drill-down polish for `Conclusion.previous` chains, payload
+  reference navigation, and structured diagnostic grouping.
+- Durable metrics storage beyond the in-process runtime snapshot.
+- OpenTelemetry logs export hardening and OTLP gRPC support if needed.
+- Richer Grafana dashboards and sample 13 / 13a article-ready documentation.
+- Broader observability validation in the heavy-test/release validation path.

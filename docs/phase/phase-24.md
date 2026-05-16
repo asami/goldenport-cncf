@@ -1,13 +1,13 @@
 # Phase 24 — Metrics and Observability
 
-status = active
+status = closed
 
 ## 1. Purpose of This Document
 
-This work document opens Phase 24 and selects
-`9.4 Metrics and Observability` as the active development item.
+This work document records Phase 24, which selected
+`9.4 Metrics and Observability` as the development item and is now closed.
 
-Phase 24 starts with a docs/status-only opening slice and then proceeds toward
+Phase 24 started with a docs/status-only opening slice and then proceeded toward
 diagnostic payload externalization, compact diagnostic summary/reference models,
 structured dashboard drill-down, metrics expansion, and OpenTelemetry boundary
 design.
@@ -71,13 +71,11 @@ Payload policy:
 - D (DONE): OB-04 — Structured Diagnostic Dashboard Drill-down.
 - E (DONE): OB-05 — Metrics Collection and Metrics Service Expansion.
 - F (DONE): OB-06 — OpenTelemetry Boundary and Export Policy.
-- G (ACTIVE): OB-07 — Phase 24 verification and closure.
+- G (DONE): OB-07 — Phase 24 verification and closure.
 
 Resume hint:
 
-- Continue with OB-07. Verify Phase 24 and prepare closure notes.
-- Keep `cncf-samples` sample 13 and sample 13a validation visible as concrete
-  OpenTelemetry integration evidence.
+- Phase 24 closed; select next phase.
 
 ## 5. Development Items
 
@@ -87,7 +85,7 @@ Resume hint:
 - [x] OB-04: Structured Diagnostic Dashboard Drill-down.
 - [x] OB-05: Metrics Collection and Metrics Service Expansion.
 - [x] OB-06: OpenTelemetry Boundary and Export Policy.
-- [ ] OB-07: Phase 24 verification and closure.
+- [x] OB-07: Phase 24 verification and closure.
 
 Detailed task breakdown and progress tracking are recorded in
 `phase-24-checklist.md`.
@@ -176,6 +174,26 @@ OB-06 completion note:
   `13.a-observability-stack-lab` is the Collector + Jaeger + Prometheus +
   Grafana lab.
 
+OB-07 closure note:
+
+- Phase 24 closes the Metrics and Observability development item with the
+  observability policy, summary/reference model, payload externalization
+  boundary, diagnostic drill-down, metrics service expansion, and
+  OpenTelemetry export boundary in place.
+- CNCF internal observability remains authoritative. OpenTelemetry is an
+  opt-in export/projection boundary.
+- Diagnostic payloads are summarized or referenced by default; unbounded
+  result/response bodies are not the primary diagnostic storage format.
+- `cncf-samples` sample 13 and sample 13a remain the concrete observability
+  demo drivers for Jaeger and the Collector + Jaeger + Prometheus + Grafana
+  stack.
+- Deferred observability work is recorded as future scope in
+  `docs/strategy/cncf-development-strategy.md` section 9.4.
+- Closure validation is documentation/status focused. Recent implementation
+  slice validations were performed during OB-01 through OB-06; unrelated dirty
+  implementation and publication-review findings remain outside this closure
+  slice.
+
 ## 6. Completion Conditions
 
 Phase 24 can close when:
@@ -195,3 +213,8 @@ Phase 24 can close when:
 - `cncf-samples` sample 13 demonstrates the observability connection with
   docker-compose.
 - Deferred observability work is explicitly recorded as future scope.
+
+Closure status:
+
+- All completion conditions are satisfied for the Phase 24 closure boundary.
+- No active Metrics and Observability item remains in this phase document.

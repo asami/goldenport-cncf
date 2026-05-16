@@ -649,11 +649,11 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Notes contain execution details and results for each phase.
 
 ## Process Status Pointers
-- Current phase selection: Phase 24 — Metrics and Observability.
-- Current active phase dashboard: `docs/phase/phase-24.md`
-- Current active phase checklist: `docs/phase/phase-24-checklist.md`
-- Latest closed phase dashboard: `docs/phase/phase-23.md`
-- Latest closed phase checklist: `docs/phase/phase-23-checklist.md`
+- Current phase selection: next phase to be selected.
+- Current active phase dashboard: none.
+- Current active phase checklist: none.
+- Latest closed phase dashboard: `docs/phase/phase-24.md`
+- Latest closed phase checklist: `docs/phase/phase-24-checklist.md`
 - Candidate next phase areas: AwsComponent/S3 BlobStore
   provider; Search/index planning; DB migration tooling.
 - Status interpretation rules: `docs/rules/stage-status-and-checklist-convention.md`
@@ -686,7 +686,7 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Phase 21: closed (`docs/phase/phase-21.md`)
 - Phase 22: closed (`docs/phase/phase-22.md`)
 - Phase 23: closed (`docs/phase/phase-23.md`)
-- Phase 24: active (`docs/phase/phase-24.md`)
+- Phase 24: closed (`docs/phase/phase-24.md`)
 
 ## 8. Completed Development Item History
 
@@ -1040,6 +1040,33 @@ Completed in Phase 23.
 - Deferred scope remains under 9.7 Error Model Follow-ups, 9.4 Metrics and
   Observability, and 9.1 Web Next Stage Follow-ups.
 
+### 8.14 Metrics and Observability
+Completed in Phase 24.
+
+- Closed dashboard: `docs/phase/phase-24.md`
+- Closed checklist: `docs/phase/phase-24-checklist.md`
+- Completed scope:
+  - Normative diagnostic payload externalization policy for CallTree, Task
+    calltree, execution history, Job diagnostics, and admin/debug projections.
+  - Reusable `DiagnosticPayloadSummary` /
+    `DiagnosticPayloadReference` model for compact diagnostic payload storage
+    and projection.
+  - Opt-in diagnostic payload external store and runtime configuration boundary
+    for local-file and BlobStore-backed payload references.
+  - Structured System Admin observability drill-down for diagnostics,
+    `Conclusion.previous` source-error chains, payload summaries, and payload
+    references.
+  - Runtime metrics read model and builtin `metrics` component expansion for
+    selected low-cardinality runtime scopes.
+  - OpenTelemetry export boundary and opt-in OTLP HTTP projection for traces
+    and metrics while keeping CNCF-native observability authoritative.
+  - `cncf-samples` sample `13-observability-jaeger` and
+    `13.a-observability-stack-lab` as the concrete Jaeger and full-stack
+    observability demo drivers.
+- Deferred scope remains under 9.4 Metrics and Observability Follow-ups,
+  9.1 Web Next Stage Follow-ups, and future release/heavy-test validation
+  work.
+
 ## 9. Development Item Status
 
 This final section lists planned active and future development areas only.
@@ -1049,9 +1076,7 @@ corresponding completed-history entry.
 
 Current development item:
 
-- `9.4 Metrics and Observability` is active in Phase 24.
-- Active dashboard: `docs/phase/phase-24.md`.
-- Active checklist: `docs/phase/phase-24-checklist.md`.
+- Next development item to be selected.
 
 ### 9.1 Web Next Stage Follow-ups
 Future Web/platform development item.
@@ -1114,86 +1139,24 @@ Future security development item.
 - Organization-grade policy management beyond the Blob-required surfaces.
 
 ### 9.4 Metrics and Observability
-Active in Phase 24.
+Future Metrics and Observability follow-ups.
 
-Phase 24 owns observability storage, projection, metrics, and telemetry.
-Web/API error presentation polish remains under 9.1. Error Model hardening
-remains under 9.7.
+Phase 24 completed the baseline observability storage, projection, metrics, and
+telemetry boundary. Completed scope is recorded in section 8.14. Remaining work
+is future hardening and operationalization.
 
-Active work stack:
-
-- OB-01: Diagnostic Payload Externalization Policy Opening. (DONE)
-- OB-02: CallTree / Execution History / Job Diagnostic Summary Model. (DONE)
-- OB-03: Diagnostic Payload External Store and Runtime Config. (DONE)
-- OB-04: Structured Diagnostic Dashboard Drill-down. (DONE)
-- OB-05: Metrics Collection and Metrics Service Expansion. (DONE)
-- OB-06: OpenTelemetry Boundary and Export Policy. (DONE)
-- OB-07: Phase 24 verification and closure. (ACTIVE)
-
-- Metrics collection expansion.
-- OpenTelemetry support.
-- `cncf-samples` sample 13 observability integration, including docker-compose
-  wiring to the actual observability backend.
-- Normative diagnostic payload policy:
-  `docs/design/observability/diagnostic-payload-externalization-policy.md`.
-- OB-02 summary/reference model:
-  - `DiagnosticPayloadSummary` is the reusable compact summary shape for
-    CallTree, retained execution history, Job diagnostics, and task-local
-    calltree projections.
-  - `DiagnosticPayloadReference` can now point to `local-file` or `blob-store`
-    diagnostic payloads when externalization is explicitly enabled.
-  - Generic JSON/YAML operation responses are summary-only in diagnostics;
-    secret-aware operation results should use typed result/value-class records.
-- Dashboard drill-down for structured diagnostics, including
-  `Conclusion.previous` source-error chains and grouping by structured
-  taxonomy/cause/disposition fields.
-  - `/web/system/performance` links diagnostic keys to
-    `/web/system/admin/observability/diagnostics/{scope}/{diagnosticKey}`.
-  - `/web/system/admin/observability` shows diagnostic scope cards,
-    payload-externalization status, and system-admin payload navigation.
-- Metrics service expansion:
-  - Runtime metrics use the in-process
-    `org.goldenport.cncf.metrics.RuntimeMetricsSnapshot` read model.
-  - V1 scopes include Web requests, Action execution, authorization decisions,
-    DSL chokepoints, validation, operation-request-validation, Blob operations,
-    diagnostic payload externalization, and entity access.
-  - The builtin `metrics` component exposes `load_runtime_metrics` and
-    `load_metrics_catalog` while keeping `load_entity_access_metrics`
-    compatible.
-  - `/web/system/admin/observability/metrics` renders metric scope cards and
-    compact counter/error/duration tables.
-  - Metric labels are low-cardinality operational grouping hints, not the
-    semantic error contract.
-- OpenTelemetry export boundary:
-  - CNCF internal observability remains authoritative; OpenTelemetry is an
-    export/projection boundary only.
-  - `textus.observability.otel.*` config enables OTLP HTTP trace and metrics
-    export.
-  - Action CallTree flow maps to OTEL spans; OB-05 runtime metrics snapshots map
-    to OTEL metrics.
-  - Payload bodies are not exported by default; summaries/references and
-    redacted structured attributes are the export surface.
-  - Export failures are non-fatal and counted under the `otel.export` metric
-    scope.
-  - `cncf-samples` sample `13-observability-jaeger` is the minimal Jaeger proof;
-    `13.a-observability-stack-lab` is the Collector + Jaeger + Prometheus +
-    Grafana lab.
-- CallTree / execution-history / Job diagnostic result externalization:
-  - CallTree, Task calltree, and Job result records must store compact
-    summaries/references by default, not full action/UoW/space/I/O
-    result/response payloads.
-  - Small result values may be displayed inline with JSON/YAML pretty printing;
-    large values should be represented by summary metadata such as byte size,
-    record count, result type, and truncation/externalization status.
-  - Explicit debug configuration may write selected large payloads to external
-    diagnostic files or object storage and surface only the file/object reference
-    in primary diagnostics.
-  - Develop/test local payload files are collected under
-    `target/cncf.d/observability/payloads`; production object storage goes
-    through the configured CNCF `BlobStore`.
-    in Web/admin diagnostics.
-  - Externalized payload retention, redaction, authorization, and cleanup policy
-    must be defined before production use.
+- Production hardening for diagnostic payload retention, cleanup,
+  authorization, and operational lifecycle policy.
+- BlobStore-backed diagnostic payload production examples, including
+  S3/S3-compatible deployment through an external component provider.
+- Dashboard drill-down polish for `Conclusion.previous` chains, payload
+  reference navigation, structured diagnostic grouping, and operator workflow.
+- Durable metrics storage beyond the in-process
+  `RuntimeMetricsSnapshot` read model.
+- OpenTelemetry logs export hardening and OTLP gRPC support if needed.
+- Richer Grafana dashboards and sample 13 / 13a article-ready documentation,
+  including where to inspect CNCF Web UI, Jaeger, Prometheus, and Grafana.
+- Broader observability validation in the heavy-test/release validation path.
 
 ### 9.5 Knowledge Structure Follow-ups
 Future knowledge-structure development item.
