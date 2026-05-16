@@ -13,7 +13,8 @@ import org.goldenport.cncf.workarea.WorkAreaSpace
 /*
  * @since   Feb.  3, 2026
  *  version Mar. 22, 2026
- * @version Apr.  8, 2026
+ *  version Apr.  8, 2026
+ * @version May. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class CarExtracted(
@@ -92,7 +93,10 @@ object CarExtractor {
     } else if (componentjars.size > 1) {
       _invalid_structure(car, "component/", "exactly(1)", componentjars.size)
     } else {
-      val componentlibs = _list_jars(componentdir.resolve("lib")).sortBy(_.getFileName.toString)
+      val componentlibs =
+        (_list_jars(root.resolve("lib")) ++ _list_jars(componentdir.resolve("lib")))
+          .distinct
+          .sortBy(_.getFileName.toString)
       val collaboratordir = componentdir.resolve("collaborator")
       val collaboratormainfiles = _list_jars(collaboratordir)
       if (collaboratormainfiles.size > 1) {

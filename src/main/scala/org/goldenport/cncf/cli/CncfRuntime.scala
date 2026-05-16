@@ -64,7 +64,7 @@ import org.goldenport.cncf.subsystem.GenericSubsystemDescriptor
  *  version Jan. 31, 2026
  *  version Feb.  5, 2026
  *  version Apr. 30, 2026
- * @version May. 14, 2026
+ * @version May. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 object CncfRuntime extends GlobalObservable {
@@ -92,7 +92,8 @@ object CncfRuntime extends GlobalObservable {
   private[cncf] final case class RuntimeInvocationParameters(
     actualArgs: Array[String],
     subsystemName: Option[String],
-    componentName: Option[String]
+    componentName: Option[String],
+    componentVersion: Option[String] = None
   )
 
   private final case class RuntimeLaunch(
@@ -632,7 +633,8 @@ object CncfRuntime extends GlobalObservable {
     RuntimeInvocationParameters(
       actualArgs = actualargs,
       subsystemName = _subsystem_name(configuration, args),
-      componentName = _component_name(configuration, args)
+      componentName = _component_name(configuration, args),
+      componentVersion = _component_version(configuration, args)
     )
   }
 
@@ -690,7 +692,7 @@ object CncfRuntime extends GlobalObservable {
     } else {
       invocation.componentName
         .flatMap { name =>
-          _resolve_component_archive_entry(searchspecs, name)
+          _resolve_component_archive_entry(searchspecs, name, invocation.componentVersion)
             .map { path =>
               invocation.copy(actualArgs = args ++ Array(s"--${RuntimeConfig.ComponentFileKey}=${path}"))
             }
@@ -920,6 +922,13 @@ object CncfRuntime extends GlobalObservable {
     _component_name_from_args(args)
       .orElse(RuntimeConfig.getString(configuration, RuntimeConfig.ComponentNameKey))
 
+  private def _component_version(
+    configuration: ResolvedConfiguration,
+    args: Array[String]
+  ): Option[String] =
+    _component_version_from_args(args)
+      .orElse(RuntimeConfig.getString(configuration, RuntimeConfig.ComponentVersionKey))
+
   private def _subsystem_name_from_args(
     args: Array[String]
   ): Option[String] = {
@@ -958,6 +967,25 @@ object CncfRuntime extends GlobalObservable {
     None
   }
 
+  private def _component_version_from_args(
+    args: Array[String]
+  ): Option[String] = {
+    var i = 0
+    while (i < args.length) {
+      val current = args(i)
+      if (_is_option_name(current, _component_version_keys) && i + 1 < args.length) {
+        return Option(args(i + 1)).map(_.trim).filter(_.nonEmpty)
+      } else {
+        _option_value(current, _component_version_keys) match {
+          case Some(value) => return Some(value)
+          case None => ()
+        }
+      }
+      i += 1
+    }
+    None
+  }
+
   private def _strip_invocation_selection_args(
     args: Array[String]
   ): Array[String] = {
@@ -966,11 +994,11 @@ object CncfRuntime extends GlobalObservable {
     while (i < args.length) {
       val current = args(i)
       if (
-        _is_option_name(current, _subsystem_name_keys ++ _component_name_keys)
+        _is_option_name(current, _subsystem_name_keys ++ _component_name_keys ++ _component_version_keys)
       ) {
         i += (if (i + 1 < args.length) 2 else 1)
       } else if (
-        _has_option_value(current, _subsystem_name_keys ++ _component_name_keys)
+        _has_option_value(current, _subsystem_name_keys ++ _component_name_keys ++ _component_version_keys)
       ) {
         i += 1
       } else {
@@ -995,6 +1023,14 @@ object CncfRuntime extends GlobalObservable {
       RuntimeConfig.RuntimeComponentNameKey,
       "cncf.component",
       "cncf.runtime.component"
+    )
+
+  private def _component_version_keys: Vector[String] =
+    Vector(
+      RuntimeConfig.ComponentVersionKey,
+      RuntimeConfig.RuntimeComponentVersionKey,
+      "cncf.component.version",
+      "cncf.runtime.component.version"
     )
 
   private def _subsystem_descriptor_keys: Vector[String] =
@@ -1116,9 +1152,10 @@ object CncfRuntime extends GlobalObservable {
 
   private def _resolve_component_archive_entry(
     specs: Vector[ComponentRepository.Specification],
-    componentname: String
+    componentname: String,
+    version: Option[String] = None
   ): Option[java.nio.file.Path] =
-    specs.iterator.flatMap(_.resolveComponentArchivePath(componentname)).toSeq.headOption
+    specs.iterator.flatMap(_.resolveComponentArchivePath(componentname, version)).toSeq.headOption
 
   private def _spec_argument(
     spec: ComponentRepository.Specification

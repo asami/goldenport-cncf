@@ -21,7 +21,7 @@ import org.goldenport.cncf.blob.BlobStoreConfig
  *  version Feb.  1, 2026
  *  version Mar. 28, 2026
  *  version Apr. 30, 2026
- * @version May. 11, 2026
+ * @version May. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class RuntimeConfig(
@@ -124,6 +124,18 @@ object RuntimeConfig {
   val RuntimeSiteBaseUrlKey = "textus.runtime.site.base-url"
   val SubsystemNameKey = "textus.subsystem"
   val ComponentNameKey = "textus.component"
+  val ComponentVersionKey = "textus.component.version"
+  val RuntimeComponentVersionKey = "textus.runtime.component.version"
+  val ComponentDependenciesResolveEnabledKey = "textus.component.dependencies.resolve.enabled"
+  val RuntimeComponentDependenciesResolveEnabledKey = "textus.runtime.component.dependencies.resolve.enabled"
+  val ComponentDependenciesCacheDirKey = "textus.component.dependencies.cache.dir"
+  val RuntimeComponentDependenciesCacheDirKey = "textus.runtime.component.dependencies.cache.dir"
+  val ComponentDependenciesSharedEnabledKey = "textus.component.dependencies.shared.enabled"
+  val RuntimeComponentDependenciesSharedEnabledKey = "textus.runtime.component.dependencies.shared.enabled"
+  val ComponentDependenciesLocalOverrideEnabledKey = "textus.component.dependencies.local_override.enabled"
+  val RuntimeComponentDependenciesLocalOverrideEnabledKey = "textus.runtime.component.dependencies.local_override.enabled"
+  val ComponentDependenciesRepositoriesKey = "textus.component.dependencies.repositories"
+  val RuntimeComponentDependenciesRepositoriesKey = "textus.runtime.component.dependencies.repositories"
   val SubsystemDescriptorKey = "textus.subsystem.descriptor"
   val SubsystemFileKey = "textus.subsystem.file"
   val SubsystemDevDirKey = "textus.subsystem.dev.dir"
@@ -528,6 +540,12 @@ object RuntimeConfig {
         case SiteBaseUrlKey => Vector(RuntimeSiteBaseUrlKey)
         case SubsystemNameKey => Vector(RuntimeSubsystemNameKey)
         case ComponentNameKey => Vector(RuntimeComponentNameKey)
+        case ComponentVersionKey => Vector(RuntimeComponentVersionKey)
+        case ComponentDependenciesResolveEnabledKey => Vector(RuntimeComponentDependenciesResolveEnabledKey)
+        case ComponentDependenciesCacheDirKey => Vector(RuntimeComponentDependenciesCacheDirKey)
+        case ComponentDependenciesSharedEnabledKey => Vector(RuntimeComponentDependenciesSharedEnabledKey)
+        case ComponentDependenciesLocalOverrideEnabledKey => Vector(RuntimeComponentDependenciesLocalOverrideEnabledKey)
+        case ComponentDependenciesRepositoriesKey => Vector(RuntimeComponentDependenciesRepositoriesKey)
         case SubsystemDescriptorKey => Vector(RuntimeSubsystemDescriptorKey)
         case SubsystemFileKey => Vector(RuntimeSubsystemFileKey)
         case SubsystemDevDirKey => Vector(RuntimeSubsystemDevDirKey)

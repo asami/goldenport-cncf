@@ -29,7 +29,7 @@ import org.goldenport.cncf.subsystem.GenericSubsystemDescriptor
  *  version Feb.  5, 2026
  *  version Mar. 22, 2026
  *  version Apr. 25, 2026
- * @version May. 14, 2026
+ * @version May. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 sealed abstract class ComponentRepository {
@@ -66,6 +66,11 @@ object ComponentRepository extends GlobalObservable {
     def resolveComponentArchivePath(
       componentName: String
     ): Option[Path] = None
+    def resolveComponentArchivePath(
+      componentName: String,
+      version: Option[String]
+    ): Option[Path] =
+      resolveComponentArchivePath(componentName)
   }
 
   def parseSpecs(
@@ -624,10 +629,16 @@ object ComponentRepository extends GlobalObservable {
       override def resolveComponentArchivePath(
         componentName: String
       ): Option[Path] =
+        resolveComponentArchivePath(componentName, None)
+
+      override def resolveComponentArchivePath(
+        componentName: String,
+        version: Option[String]
+      ): Option[Path] =
         kind match {
           case StandardRepositoryKind.Car =>
-            _resolve_standard_component_artifact(cacheRoot, componentName, None)
-              .orElse(_fetch_standard_component_artifact(baseUrl, cacheRoot, componentName, None))
+            _resolve_standard_component_artifact(cacheRoot, componentName, version)
+              .orElse(_fetch_standard_component_artifact(baseUrl, cacheRoot, componentName, version))
               .collect { case Artifact(path, ArtifactKind.Car) => path }
           case _ =>
             None
@@ -1243,41 +1254,50 @@ object ComponentRepository extends GlobalObservable {
       effectiveExtensions = effectiveExtensions,
       effectiveConfig = effectiveConfig
     )
-    Using.resource(_class_loader_from_paths(extracted.componentClasspath, getClass.getClassLoader)) { componentLoader =>
-      val components0 =
-        _discover_component_from_artifact_with_loader(
-          artifactname = artifactPath.getFileName.toString,
-          loader = componentLoader,
-          // Scan only the component's main archive. Dependency jars may contain
-          // demo or builtin components that must not be treated as packaged
-          // component definitions for this CAR.
-          scanclasspath = Vector(extracted.componentMain),
-          params = params,
-          origin = baseOrigin,
-          log = log
-        ).toVector
-      val components = components0.map(_.withArtifactMetadata(artifactMetadata))
-      val collaboratorComponents = components.collect {
-        case comp: CollaboratorComponent => comp
-      }
-      if (collaboratorComponents.isEmpty) {
-        Consequence.success(components)
-      } else {
-        extracted.collaboratorClasspath match {
-          case Some(paths) if paths.nonEmpty =>
-            Using.resource(CollaboratorClassLoader(paths)) { collaboratorLoader =>
-              CollaboratorFactory.create(collaboratorLoader, paths) match {
-                case Consequence.Success(collaborator) =>
-                  collaboratorComponents.foreach(_.setCollaborator(collaborator))
-                  Consequence.success(components)
-                case Consequence.Failure(conclusion) =>
-                  log.warn(s"[component-dir] artifact=${artifactPath.getFileName} collaborator init failed cause=${conclusion.show}")
-                  Consequence.success(Vector.empty)
+    val componentname =
+      extracted.descriptor.componentName.orElse(extracted.descriptor.name).getOrElse(artifactPath.getFileName.toString)
+    val dependencyresolution = ComponentDependencyResolver.resolve(
+      extracted.root,
+      componentname,
+      params.subsystem.configuration
+    )
+    dependencyresolution.flatMap { dependencies =>
+      Using.resource(dependencies.componentClassLoader(Vector(extracted.componentMain), extracted.componentLibs, getClass.getClassLoader)) { componentLoader =>
+        val components0 =
+          _discover_component_from_artifact_with_loader(
+            artifactname = artifactPath.getFileName.toString,
+            loader = componentLoader,
+            // Scan only the component's main archive. Dependency jars may contain
+            // demo or builtin components that must not be treated as packaged
+            // component definitions for this CAR.
+            scanclasspath = Vector(extracted.componentMain),
+            params = params,
+            origin = baseOrigin,
+            log = log
+          ).toVector
+        val components = components0.map(_.withArtifactMetadata(artifactMetadata))
+        val collaboratorcomponents = components.collect {
+          case comp: CollaboratorComponent => comp
+        }
+        if (collaboratorcomponents.isEmpty) {
+          Consequence.success(components)
+        } else {
+          extracted.collaboratorClasspath match {
+            case Some(paths) if paths.nonEmpty =>
+              Using.resource(CollaboratorClassLoader(paths)) { collaboratorLoader =>
+                CollaboratorFactory.create(collaboratorLoader, paths) match {
+                  case Consequence.Success(collaborator) =>
+                    collaboratorcomponents.foreach(_.setCollaborator(collaborator))
+                    Consequence.success(components)
+                  case Consequence.Failure(conclusion) =>
+                    log.warn(s"[component-dir] artifact=${artifactPath.getFileName} collaborator init failed cause=${conclusion.show}")
+                    Consequence.success(Vector.empty)
+                }
               }
-            }
-          case _ =>
-            log.warn(s"[component-dir] artifact=${artifactPath.getFileName} collaborator classpath missing")
-            Consequence.success(Vector.empty)
+            case _ =>
+              log.warn(s"[component-dir] artifact=${artifactPath.getFileName} collaborator classpath missing")
+              Consequence.success(Vector.empty)
+          }
         }
       }
     }

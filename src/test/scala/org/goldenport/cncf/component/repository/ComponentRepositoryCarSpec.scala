@@ -14,7 +14,7 @@ import org.scalatest.BeforeAndAfterAll
 import org.goldenport.cncf.context.GlobalContext
 import org.goldenport.cncf.workarea.WorkAreaSpace
 import org.goldenport.cncf.config.RuntimeConfig
-import org.goldenport.cncf.component.{ComponentCreate, ComponentDescriptor, ComponentDescriptorLoader, ComponentOrigin}
+import org.goldenport.cncf.component.{CarExtractor, ComponentCreate, ComponentDependencyManifest, ComponentDependencyPool, ComponentDescriptor, ComponentDescriptorLoader, ComponentLocalFirstClassLoader, ComponentOrigin, CoursierComponentDependencyResolver}
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.cncf.testutil.TestComponentFactory
 import org.goldenport.configuration.{Configuration, ConfigurationValue, ResolvedConfiguration}
@@ -23,8 +23,7 @@ import org.goldenport.configuration.ConfigurationTrace
 /*
  * @since   Feb.  4, 2026
  *  version Apr. 25, 2026
- *  version May.  1, 2026
- * @version May. 14, 2026
+ * @version May. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAndAfterAll {
@@ -65,6 +64,51 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
 
         resolved should contain (ComponentRepository.standardComponentRepositorySpec())
         resolved should contain (ComponentRepository.standardSubsystemRepositorySpec())
+      }
+    }
+
+    "resolve top-level component invocation by explicit component version" in {
+      _with_temp_dir { repositoryroot =>
+        val currentdir = repositoryroot.resolve("car").resolve("blog-component").resolve("0.0.2")
+        val olddir = repositoryroot.resolve("car").resolve("blog-component").resolve("0.0.1")
+        Files.createDirectories(currentdir)
+        Files.createDirectories(olddir)
+        val fakecomponentjar = _create_fake_component_jar(repositoryroot.resolve("assets").resolve("blog-main.jar"))
+        val currentdescriptor = repositoryroot.resolve("component-descriptor-blog-current.json")
+        val olddescriptor = repositoryroot.resolve("component-descriptor-blog-old.json")
+        Files.writeString(
+          currentdescriptor,
+          """{"name":"blog-component","version":"0.0.2","component":"blog-component"}"""
+        )
+        Files.writeString(
+          olddescriptor,
+          """{"name":"blog-component","version":"0.0.1","component":"blog-component"}"""
+        )
+        _create_car(
+          currentdir.resolve("blog-component-0.0.2.car"),
+          Seq("component/main.jar" -> fakecomponentjar, "component-descriptor.json" -> currentdescriptor)
+        )
+        _create_car(
+          olddir.resolve("blog-component-0.0.1.car"),
+          Seq("component/main.jar" -> fakecomponentjar, "component-descriptor.json" -> olddescriptor)
+        )
+        val invocation = org.goldenport.cncf.cli.CncfRuntime.RuntimeInvocationParameters(
+          actualArgs = Array("--textus.component=blog-component", "--textus.component.version=0.0.1", "server"),
+          subsystemName = None,
+          componentName = Some("blog-component"),
+          componentVersion = Some("0.0.1")
+        )
+
+        val resolved = org.goldenport.cncf.cli.CncfRuntime.resolveComponentInvocation(
+          invocation,
+          Vector(ComponentRepository.StandardRepository.Specification(
+            ComponentRepository.StandardRepositoryKind.Car,
+            ComponentRepository.standardComponentRepositoryUrl(),
+            repositoryroot
+          ))
+        )
+
+        resolved.actualArgs.toVector should contain (s"--${RuntimeConfig.ComponentFileKey}=${olddir.resolve("blog-component-0.0.1.car")}")
       }
     }
 
@@ -786,6 +830,75 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
 
         ComponentDescriptorLoader.loadArchive(sarpath).toOption shouldBe empty
       }
+    }
+
+    "parse scoped component dependency manifest" in {
+      val manifest = ComponentDependencyManifest.parse(
+        Vector(
+          "dependencies:",
+          "  provided:",
+          "    - org.goldenport:goldenport-cncf_3:0.4.8-SNAPSHOT",
+          "  shared:",
+          "    - org.postgresql:postgresql:42.7.3",
+          "  local:",
+          "    - com.example:legacy-driver:1.2.0",
+          "  repositories:",
+          "    - maven-central",
+          "    - https://www.simplemodeling.org/repository/maven"
+        )
+      ).toOption.get
+
+      manifest.provided shouldBe Vector("org.goldenport:goldenport-cncf_3:0.4.8-SNAPSHOT")
+      manifest.shared shouldBe Vector("org.postgresql:postgresql:42.7.3")
+      manifest.local shouldBe Vector("com.example:legacy-driver:1.2.0")
+      manifest.repositories shouldBe Vector("maven-central", "https://www.simplemodeling.org/repository/maven")
+    }
+
+    "extract CAR root lib jars as embedded component libraries" in {
+      _with_temp_dir { root =>
+        val mainjar = _create_fake_component_jar(root.resolve("component").resolve("main.jar"))
+        val depjar = _create_fake_component_jar(root.resolve("lib").resolve("dep.jar"))
+        Files.writeString(
+          root.resolve("component-descriptor.json"),
+          """{"name":"sample-component","version":"0.1.0","component":"sample-component"}"""
+        )
+
+        val extracted = CarExtractor.resolveDirectory(root).toOption.get
+
+        extracted.componentMain shouldBe mainjar
+        extracted.componentLibs.map(_.getFileName.toString) should contain ("dep.jar")
+        extracted.componentLibs should contain (depjar)
+      }
+    }
+
+    "keep generated component packages outside parent-first runtime ABI packages" in {
+      ComponentLocalFirstClassLoader.isParentFirst("org.simplemodeling.model.Entity") shouldBe true
+      ComponentLocalFirstClassLoader.isParentFirst("org.simplemodeling.textus.useraccount.ComponentFactory") shouldBe false
+    }
+
+    "detect resolved shared dependency module conflicts" in {
+      val modules = Vector(
+        CoursierComponentDependencyResolver.ResolvedModule("com.example", "driver", "1.0.0"),
+        CoursierComponentDependencyResolver.ResolvedModule("com.example", "driver", "2.0.0"),
+        CoursierComponentDependencyResolver.ResolvedModule("com.example", "other", "1.0.0")
+      )
+
+      ComponentDependencyPool.moduleConflicts(modules) shouldBe Vector("com.example:driver resolved=1.0.0,2.0.0")
+    }
+
+    "parse coursier resolved modules deterministically" in {
+      val modules = CoursierComponentDependencyResolver.parseResolvedModules(
+        """com.example:driver:1.0.0
+          |com.example:other:2.0.0:default
+          |
+          |# ignored
+          |""".stripMargin
+      )
+
+      modules shouldBe Vector(
+        CoursierComponentDependencyResolver.ResolvedModule("com.example", "driver", "1.0.0"),
+        CoursierComponentDependencyResolver.ResolvedModule("com.example", "other", "2.0.0")
+      )
     }
   }
 
