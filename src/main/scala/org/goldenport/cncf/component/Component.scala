@@ -30,6 +30,7 @@ import org.goldenport.cncf.cli.renderer.{CliTreeJsonRenderer, CliTreeYamlRendere
 import org.goldenport.cncf.entity.aggregate.{AggregateCollection, AggregateSpace, Repository, AggregateDefinition}
 import org.goldenport.cncf.entity.runtime.{EntityCollection, EntitySpace}
 import org.goldenport.cncf.entity.view.{Browser, ViewCollection, ViewSpace, ViewDefinition}
+import org.goldenport.cncf.knowledge.KnowledgeSpace
 import org.goldenport.cncf.operation.{CmlEntityRelationshipDefinition, CmlOperationAccess, CmlOperationDefinition}
 import org.goldenport.cncf.statemachine.{CmlStateMachineDefinition, StateMachinePlannerProvider}
 import org.goldenport.cncf.event.{CmlEventDefinition, CmlRoutingDefinition, CmlSubscriptionDefinition, EventReception, EventReceptionRule, EventStore}
@@ -52,7 +53,7 @@ import org.goldenport.schema.{DataType, XString}
  *  version Feb. 17, 2026
  *  version Mar. 30, 2026
  *  version Apr. 30, 2026
- * @version May. 10, 2026
+ * @version May. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class Component() extends Component.Core.Holder {
@@ -81,6 +82,7 @@ abstract class Component() extends Component.Core.Holder {
   val entitySpace: EntitySpace = new EntitySpace()
   val aggregateSpace: AggregateSpace = new AggregateSpace()
   val viewSpace: ViewSpace = new ViewSpace()
+  val knowledgeSpace: KnowledgeSpace = new KnowledgeSpace()
 
   override def core: Component.Core =
     _core.getOrElse(throw new IllegalStateException("Component core is not initialized."))
@@ -147,7 +149,7 @@ abstract class Component() extends Component.Core.Holder {
     _participant_role = params.participantRole
     _subsystem = Some(params.subsystem)
     _component_descriptors = params.componentDescriptors
-    _inherit_http_driver_(params)
+    _inherit_http_driver(params)
     _event_store = Some(params.subsystem.eventStore)
     jobEngine match {
       case m: InMemoryJobEngine =>
@@ -355,7 +357,7 @@ abstract class Component() extends Component.Core.Holder {
     this
   }
 
-  private def _inherit_http_driver_(
+  private def _inherit_http_driver(
     params: ComponentInit
   ): Unit = {
     if (_application_config.httpDriver.isEmpty) {
@@ -408,7 +410,7 @@ object Component {
       for {
         contract <- port.api.resolve(req)
         selection <- port.variation.current(req)
-        service <- _provide_(contract, selection)
+        service <- _provide(contract, selection)
       } yield service
 
     def bind(
@@ -437,7 +439,7 @@ object Component {
         component.withPort(Component.Port.of(service).orElse(component.port))
       }
 
-    private def _provide_(
+    private def _provide(
       contract: ServiceContract[S],
       selection: VariationSelection
     )(using ExecutionContext): Consequence[S] =

@@ -649,13 +649,13 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Notes contain execution details and results for each phase.
 
 ## Process Status Pointers
-- Current phase selection: next phase to be selected.
-- Current active phase dashboard: none.
-- Current active phase checklist: none.
+- Current phase selection: Phase 25 — Knowledge Structure Follow-ups.
+- Current active phase dashboard: `docs/phase/phase-25.md`
+- Current active phase checklist: `docs/phase/phase-25-checklist.md`
 - Latest closed phase dashboard: `docs/phase/phase-24.md`
 - Latest closed phase checklist: `docs/phase/phase-24-checklist.md`
-- Candidate next phase areas: AwsComponent/S3 BlobStore
-  provider; Search/index planning; DB migration tooling.
+- Candidate next phase areas: AwsComponent/S3 BlobStore provider;
+  Search/index planning; DB migration tooling.
 - Status interpretation rules: `docs/rules/stage-status-and-checklist-convention.md`
 
 ## 6. Explicit Non-Goals
@@ -687,6 +687,7 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Phase 22: closed (`docs/phase/phase-22.md`)
 - Phase 23: closed (`docs/phase/phase-23.md`)
 - Phase 24: closed (`docs/phase/phase-24.md`)
+- Phase 25: active (`docs/phase/phase-25.md`)
 
 ## 8. Completed Development Item History
 
@@ -1076,7 +1077,7 @@ corresponding completed-history entry.
 
 Current development item:
 
-- Next development item to be selected.
+- `9.5 Knowledge Structure Follow-ups` is active in Phase 25.
 
 ### 9.1 Web Next Stage Follow-ups
 Future Web/platform development item.
@@ -1159,11 +1160,55 @@ is future hardening and operationalization.
 - Broader observability validation in the heavy-test/release validation path.
 
 ### 9.5 Knowledge Structure Follow-ups
-Future knowledge-structure development item.
+Active knowledge-structure development item.
+
+Phase 25 uses `textus-sie` as the application driver while keeping CNCF core
+generic. Active work is tracked in `docs/phase/phase-25.md` and
+`docs/phase/phase-25-checklist.md`.
+
+KS-01 is complete. `textus-sie` is
+`/Users/asami/src/dev2026/textus-semantic-integration-engine`. KS-02 is
+complete. KS-03 is complete. KS-04 is complete. KS-05 is complete. KS-06 is
+complete. KS-07 is complete. KS-08 is complete. KS-09 is complete; the active
+next focus is KS-10 `textus-sie` provider/runtime realization.
+Phase 25 notes:
+
+- `docs/notes/knowledge-structure/knowledge-structure-opening.md`
+- `docs/notes/knowledge-structure/knowledge-vocabulary-source-inventory.md`
+- `docs/notes/knowledge-structure/tag-graph-polyhierarchy-model.md`
+- `docs/notes/knowledge-structure/knowledge-node-relationship-evidence-model.md`
+- `docs/notes/knowledge-structure/knowledge-query-projection-surfaces.md`
+- `docs/notes/knowledge-structure/textus-sie-driver-integration.md`
+- `docs/notes/knowledge-structure/phase-25-implementation-rebaseline.md`
 
 - RDF-based data representation.
 - External knowledge graph integration.
 - DAG/polyhierarchy Tag graphs beyond the Phase 20 strict tree model.
+- Knowledge node, relationship, evidence/source, and provenance modeling.
+- Query/projection surfaces for graph traversal, application navigation, and
+  admin/debug inspection.
+- Entity-to-knowledge binding so ordinary business Entity records can be
+  linked to related knowledge nodes, evidence, provenance, and external
+  identifiers without making Entity ids equal knowledge ids.
+- CNCF `KnowledgeSpace` core model and memory-resident WorkingSet skeleton.
+- CNCF `KnowledgeSpace` query/projection/admin surface.
+- `textus-sie` provider/runtime realization through RDF DB and Vector DB
+  provider paths.
+- CNCF MCP end-to-end validation for `textus-sie`.
+
+Parallel development plan:
+
+- `textus-structured-knowledge` is a separate development plan under 9.5, not
+  a replacement for the Phase 25 `textus-sie` driver.
+- Driver: `textus-structured-knowledge`.
+- Goal: project DB-stored `SimpleEntity` records into knowledge nodes,
+  relationships, evidence, and provenance.
+- Map DB entity identity and knowledge node identity explicitly.
+- Treat entity relationships and references as knowledge relationships.
+- Preserve source/evidence/provenance such as DB rows, entity versions, and
+  operation context.
+- Keep query/projection surfaces generic in CNCF core; do not trap the design
+  inside `textus-structured-knowledge` application-specific code.
 
 ### 9.6 AwsComponent
 Future component development item.

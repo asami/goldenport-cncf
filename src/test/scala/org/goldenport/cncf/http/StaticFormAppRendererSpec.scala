@@ -46,6 +46,7 @@ import org.goldenport.cncf.entity.runtime.*
 import org.goldenport.cncf.entity.view.{Browser, ViewBuilder, ViewCollection, ViewDefinition, ViewQueryDefinition}
 import org.goldenport.cncf.operation.{CmlEntityRelationshipDefinition, CmlOperationAssociationBinding, CmlOperationDefinition, CmlOperationField, CmlOperationImageBinding}
 import org.goldenport.cncf.job.{ActionId, ActionTask, JobPersistencePolicy, JobRunMode, JobSubmitOption}
+import org.goldenport.cncf.knowledge.*
 import org.goldenport.cncf.path.AliasResolver
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.cncf.subsystem.DefaultSubsystemFactory
@@ -57,7 +58,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr. 12, 2026
- * @version May. 11, 2026
+ * @version May. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
@@ -255,6 +256,63 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       detail should include ("class=\"card admin-card")
       detail should include ("nav nav-pills")
       detail should include ("table table-sm table-hover align-middle mb-0")
+    }
+
+    "render system admin knowledge pages" in {
+      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      subsystem.add(TestComponentFactory.create("knowledge_component", Protocol.empty))
+      val component = subsystem.findComponent("knowledge_component").getOrElse(fail("knowledge component missing"))
+      val ext = ExternalKnowledgeIdentifier.entity("customer", "customer-1")
+      val provenance = KnowledgeProvenance(KnowledgeProvenanceId("prov-1"), "renderer-spec", Some("cncf"))
+      val evidence = KnowledgeEvidence(
+        KnowledgeEvidenceId("ev-1"),
+        "entity-record",
+        KnowledgeSourceRef("entity", "customer-1"),
+        Some("Customer source record"),
+        Some(provenance.id)
+      )
+      val customer = KnowledgeNode(
+        KnowledgeNodeId("node-customer"),
+        "entity",
+        Some("Customer"),
+        Vector(ext),
+        Some(provenance.id),
+        Map("segment" -> "enterprise")
+      )
+      val concept = KnowledgeNode(KnowledgeNodeId("node-concept"), "concept", Some("Important customer"))
+      val relationship = KnowledgeRelationship(
+        KnowledgeRelationshipId("rel-1"),
+        "classified-as",
+        customer.id,
+        concept.id,
+        Vector(evidence.id),
+        Some(provenance.id)
+      )
+      _success(component.knowledgeSpace.replace(KnowledgeWorkingSetSnapshot(
+        nodes = Vector(customer, concept),
+        relationships = Vector(relationship),
+        evidence = Vector(evidence),
+        provenance = Vector(provenance)
+      )))
+
+      val index = StaticFormAppRenderer.renderSystemAdminKnowledge(subsystem).body
+      val detail = StaticFormAppRenderer.renderSystemAdminKnowledgeComponent(subsystem, "knowledge-component").map(_.body).getOrElse(fail("knowledge component page missing"))
+      val node = StaticFormAppRenderer.renderSystemAdminKnowledgeNode(subsystem, "knowledge_component", "node-customer").map(_.body).getOrElse(fail("knowledge node page missing"))
+
+      index should include ("System Knowledge")
+      index should include ("knowledge_component")
+      index should include ("/web/system/admin/knowledge/knowledge_component")
+      detail should include ("System Knowledge knowledge_component")
+      detail should include ("node-customer")
+      detail should include ("rel-1")
+      node should include ("Knowledge Node node-customer")
+      node should include ("cncf.entity")
+      node should include ("customer-1")
+      node should include ("Outgoing relationships")
+      node should include ("Customer source record")
+      node should include ("renderer-spec")
+      StaticFormAppRenderer.renderSystemAdminKnowledgeComponent(subsystem, "missing") shouldBe None
+      StaticFormAppRenderer.renderSystemAdminKnowledgeNode(subsystem, "knowledge_component", "missing") shouldBe None
     }
 
     "render Blob admin read-only pages" in {

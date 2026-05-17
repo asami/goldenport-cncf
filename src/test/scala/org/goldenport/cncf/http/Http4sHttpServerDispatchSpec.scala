@@ -9,8 +9,10 @@ import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.component.{ComponentId, ComponentInstanceId}
 import org.goldenport.cncf.context.{Capability, ExecutionContext, PrincipalId, SecurityLevel, SessionContext, SubjectKind}
 import org.goldenport.cncf.config.RuntimeConfig
+import org.goldenport.cncf.knowledge.{KnowledgeNode, KnowledgeNodeId, KnowledgeWorkingSetSnapshot}
 import org.goldenport.cncf.security.{AuthenticationProvider, AuthenticationRequest, AuthenticationResult}
 import org.goldenport.cncf.subsystem.DefaultSubsystemFactory
+import org.goldenport.cncf.testutil.TestComponentFactory
 import org.goldenport.Consequence
 import org.goldenport.protocol.Protocol
 import org.goldenport.configuration.{Configuration, ConfigurationTrace, ConfigurationValue, ResolvedConfiguration}
@@ -24,7 +26,7 @@ import org.typelevel.ci.CIStringSyntax
 /*
  * @since   Apr. 24, 2026
  *  version Apr. 25, 2026
- * @version May. 11, 2026
+ * @version May. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers {
@@ -530,6 +532,35 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers {
       detailBody should include ("argument.invalid")
       detailBody should include ("1010401")
       unknown.status.code shouldBe 404
+    }
+
+    "dispatch system knowledge admin routes" in {
+      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      subsystem.add(TestComponentFactory.create("knowledge_component", Protocol.empty))
+      val component = subsystem.findComponent("knowledge_component").getOrElse(fail("knowledge component missing"))
+      component.knowledgeSpace.replace(KnowledgeWorkingSetSnapshot(
+        nodes = Vector(KnowledgeNode(KnowledgeNodeId("node-1"), "concept", Some("Node One")))
+      )) match {
+        case Consequence.Success(_) => ()
+        case Consequence.Failure(conclusion) => fail(conclusion.toString)
+      }
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val app = server.routes(null.asInstanceOf[org.http4s.server.websocket.WebSocketBuilder2[IO]]).orNotFound
+
+      val index = app.run(HRequest[IO](method = Method.GET, uri = Uri.unsafeFromString("/web/system/admin/knowledge"))).unsafeRunSync()
+      val componentpage = app.run(HRequest[IO](method = Method.GET, uri = Uri.unsafeFromString("/web/system/admin/knowledge/knowledge-component"))).unsafeRunSync()
+      val nodepage = app.run(HRequest[IO](method = Method.GET, uri = Uri.unsafeFromString("/web/system/admin/knowledge/knowledge_component/nodes/node-1"))).unsafeRunSync()
+      val unknowncomponent = app.run(HRequest[IO](method = Method.GET, uri = Uri.unsafeFromString("/web/system/admin/knowledge/missing"))).unsafeRunSync()
+      val unknownnode = app.run(HRequest[IO](method = Method.GET, uri = Uri.unsafeFromString("/web/system/admin/knowledge/knowledge_component/nodes/missing"))).unsafeRunSync()
+
+      index.status.code shouldBe 200
+      index.as[String].unsafeRunSync() should include ("System Knowledge")
+      componentpage.status.code shouldBe 200
+      componentpage.as[String].unsafeRunSync() should include ("node-1")
+      nodepage.status.code shouldBe 200
+      nodepage.as[String].unsafeRunSync() should include ("Node One")
+      unknowncomponent.status.code shouldBe 404
+      unknownnode.status.code shouldBe 404
     }
   }
 

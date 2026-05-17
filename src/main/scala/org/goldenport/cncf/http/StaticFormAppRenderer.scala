@@ -10,6 +10,7 @@ import org.goldenport.cncf.component.ComponentOrigin
 import org.goldenport.cncf.context.RuntimeContext
 import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.cncf.job.JobQueryReadModel
+import org.goldenport.cncf.knowledge.{KnowledgeNodeId, KnowledgeSpaceProjection}
 import org.goldenport.cncf.metrics.RuntimeMetricPoint
 import org.goldenport.cncf.CncfVersion
 import org.goldenport.cncf.config.{OperationMode, RuntimeConfig}
@@ -31,11 +32,11 @@ import io.circe.parser.parse
 /*
  * @since   Apr. 12, 2026
  *  version Apr. 30, 2026
- * @version May. 11, 2026
+ * @version May. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 object StaticFormAppRenderer {
-  private val CallTreeJsAsset = "/web/assets/textus-calltree.js"
+  private val _call_tree_js_asset = "/web/assets/textus-calltree.js"
 
   final case class Page(body: String)
   final case class PageRequest(
@@ -2403,8 +2404,8 @@ object StaticFormAppRenderer {
   ): StaticFormAppLayout.AssetCompletionOptions = {
     val base = properties.assetCompletion
     if (_execution_debug_calltree_asset_required(properties, pageProperties) &&
-        !base.declaredJs.contains(CallTreeJsAsset))
-      base.copy(declaredJs = base.declaredJs :+ CallTreeJsAsset)
+        !base.declaredJs.contains(_call_tree_js_asset))
+      base.copy(declaredJs = base.declaredJs :+ _call_tree_js_asset)
     else
       base
   }
@@ -7663,6 +7664,27 @@ object StaticFormAppRenderer {
       Page(_observability_diagnostic_detail_page(group))
     )
 
+  def renderSystemAdminKnowledge(subsystem: Subsystem): Page =
+    Page(_knowledge_admin_page(subsystem))
+
+  def renderSystemAdminKnowledgeComponent(
+    subsystem: Subsystem,
+    componentName: String
+  ): Option[Page] =
+    KnowledgeSpaceProjection
+      .componentOption(subsystem.components, componentName)
+      .map(component => Page(_knowledge_component_page(subsystem, component)))
+
+  def renderSystemAdminKnowledgeNode(
+    subsystem: Subsystem,
+    componentName: String,
+    nodeId: String
+  ): Option[Page] =
+    for {
+      component <- KnowledgeSpaceProjection.componentOption(subsystem.components, componentName)
+      projection <- KnowledgeSpaceProjection.nodeOption(component, KnowledgeNodeId(nodeId))
+    } yield Page(_knowledge_node_page(subsystem, projection))
+
   def renderSystemConsole(subsystem: Subsystem): Page =
     Page(_simple_page(
       title = "System Console",
@@ -8315,6 +8337,7 @@ object StaticFormAppRenderer {
       |    <section class="h-100">
       |      <h3 class="h6">Execution</h3>
       |      <div class="list-group">
+      |        <a class="list-group-item list-group-item-action" href="/web/system/admin/knowledge">KnowledgeSpace</a>
       |        <a class="list-group-item list-group-item-action" href="/web/system/admin/observability">Observability diagnostics</a>
       |        <a class="list-group-item list-group-item-action" href="/form/admin/execution/history">Execution history</a>
       |        <a class="list-group-item list-group-item-action" href="/form/admin/execution/calltree">Latest calltree</a>
@@ -11626,6 +11649,262 @@ object StaticFormAppRenderer {
       .sortBy(_._1)
       .map { case (k, v) => s""""${_json(k)}":${v}""" }
       .mkString("{", ",", "}")
+
+  private def _knowledge_admin_page(subsystem: Subsystem): String = {
+    val projections = KnowledgeSpaceProjection.components(subsystem.components)
+    val rows =
+      if (projections.isEmpty)
+        _admin_empty_table_cell(9, "No components are loaded.")
+      else
+        projections.map { projection =>
+          val path = _escape_path_segment(projection.componentName)
+          val status = projection.status
+          val counts = projection.counts
+          val source = projection.sourceDiagnostics
+          s"""<tr>
+             |  <td><a href="/web/system/admin/knowledge/${path}">${_escape(projection.componentName)}</a></td>
+             |  <td><span class="badge text-bg-secondary">${_escape(status.state.label)}</span></td>
+             |  <td>${_escape(source.sourceKind)}</td>
+             |  <td>${_escape(source.providerStatus)}</td>
+             |  <td>${counts.nodeCount}</td>
+             |  <td>${counts.relationshipCount}</td>
+             |  <td>${counts.evidenceCount}</td>
+             |  <td>${counts.provenanceCount}</td>
+             |  <td>${_escape(status.error.getOrElse(""))}</td>
+             |</tr>""".stripMargin
+        }.mkString("\n")
+    _simple_page(
+      title = "System Knowledge",
+      subtitle = "Component-owned KnowledgeSpace status and compact graph projection",
+      body =
+        s"""${_admin_nav_card(Vector(
+             "System admin" -> "/web/system/admin",
+             "Performance summary" -> "/web/system/performance",
+             "Observability" -> "/web/system/admin/observability"
+           ))}
+           |${_admin_card(
+             "KnowledgeSpace Components",
+             s"""<div class="table-responsive"><table class="table table-sm table-hover align-middle mb-0">
+                |  <thead><tr><th>Component</th><th>Status</th><th>Source</th><th>Provider</th><th>Nodes</th><th>Relationships</th><th>Evidence</th><th>Provenance</th><th>Error</th></tr></thead>
+                |  <tbody>${rows}</tbody>
+                |</table></div>""".stripMargin
+           )}
+           |${_admin_card(
+             "Projection policy",
+             """<p class="mb-2">This page shows CNCF operational semantic projections, not raw RDF triples, Vector DB payloads, or source documents.</p>
+               |<p class="mb-0">KnowledgeSpace is component-owned. Cross-component views are rendered as read-only aggregation.</p>""".stripMargin
+           )}""".stripMargin
+    )
+  }
+
+  private def _knowledge_component_page(
+    subsystem: Subsystem,
+    component: Component
+  ): String = {
+    val projection = KnowledgeSpaceProjection.component(component)
+    val path = _escape_path_segment(component.name)
+    val previewlimit = 50
+    val sortednodes = projection.nodes.sortBy(_.id.print)
+    val sortedrelationships = projection.relationships.sortBy(_.id.print)
+    val nodepreview = sortednodes.take(previewlimit)
+    val relationshippreview = sortedrelationships.take(previewlimit)
+    val nodecaption =
+      if (sortednodes.size > previewlimit)
+        s"""<p class="text-secondary small mb-2">Showing first ${previewlimit} of ${sortednodes.size} nodes.</p>"""
+      else
+        ""
+    val relationshipcaption =
+      if (sortedrelationships.size > previewlimit)
+        s"""<p class="text-secondary small mb-2">Showing first ${previewlimit} of ${sortedrelationships.size} relationships.</p>"""
+      else
+        ""
+    val nodes =
+      if (sortednodes.isEmpty)
+        _admin_empty_table_cell(4, "No knowledge nodes are loaded.")
+      else
+        nodepreview.map { node =>
+          s"""<tr>
+             |  <td><a href="/web/system/admin/knowledge/${path}/nodes/${_escape_path_segment(node.id.print)}"><code>${_escape(node.id.print)}</code></a></td>
+             |  <td>${_escape(node.kind)}</td>
+             |  <td>${_escape(node.label.getOrElse(""))}</td>
+             |  <td>${node.externalIdentifiers.size}</td>
+             |</tr>""".stripMargin
+        }.mkString("\n")
+    val relationships =
+      if (sortedrelationships.isEmpty)
+        _admin_empty_table_cell(5, "No knowledge relationships are loaded.")
+      else
+        relationshippreview.map(_knowledge_relationship_row).mkString("\n")
+    _simple_page(
+      title = s"System Knowledge ${component.name}",
+      subtitle = "Component KnowledgeSpace compact projection",
+      body =
+        s"""${_admin_nav_card(Vector(
+             "System knowledge" -> "/web/system/admin/knowledge",
+             "System admin" -> "/web/system/admin"
+           ))}
+           |${_admin_card(
+             "Status",
+             _field_table(Vector(
+               "Component" -> component.name,
+               "Subsystem" -> subsystem.name,
+               "State" -> projection.status.state.label,
+               "Ready" -> projection.status.isReady.toString,
+               "Nodes" -> projection.counts.nodeCount.toString,
+               "Relationships" -> projection.counts.relationshipCount.toString,
+               "Evidence" -> projection.counts.evidenceCount.toString,
+               "Provenance" -> projection.counts.provenanceCount.toString,
+               "External identifiers" -> projection.counts.externalIdentifierCount.toString,
+               "Projection source" -> projection.sourceDiagnostics.sourceKind,
+               "Storage" -> projection.sourceDiagnostics.storage,
+               "Provider status" -> projection.sourceDiagnostics.providerStatus,
+               "Projection mode" -> projection.sourceDiagnostics.projectionMode,
+               "Error" -> projection.status.error.getOrElse("")
+             ))
+           )}
+           |${_admin_card(
+             "Nodes",
+             s"""${nodecaption}<div class="table-responsive"><table class="table table-sm table-hover align-middle mb-0">
+                |  <thead><tr><th>Node</th><th>Kind</th><th>Label</th><th>External identifiers</th></tr></thead>
+                |  <tbody>${nodes}</tbody>
+                |</table></div>""".stripMargin
+           )}
+           |${_admin_card(
+             "Relationships",
+             s"""${relationshipcaption}<div class="table-responsive"><table class="table table-sm table-hover align-middle mb-0">
+                |  <thead><tr><th>Relationship</th><th>Kind</th><th>Source</th><th>Target</th><th>Evidence</th></tr></thead>
+                |  <tbody>${relationships}</tbody>
+                |</table></div>""".stripMargin
+           )}""".stripMargin
+    )
+  }
+
+  private def _knowledge_node_page(
+    subsystem: Subsystem,
+    projection: org.goldenport.cncf.knowledge.KnowledgeNodeProjection
+  ): String = {
+    val componentpath = _escape_path_segment(projection.componentName)
+    val node = projection.node
+    val externalids = _knowledge_external_identifier_table(node.externalIdentifiers)
+    val from =
+      if (projection.relationshipsFrom.isEmpty)
+        _admin_empty_table_cell(5, "No outgoing relationships.")
+      else
+        projection.relationshipsFrom.sortBy(_.id.print).map(_knowledge_relationship_row).mkString("\n")
+    val to =
+      if (projection.relationshipsTo.isEmpty)
+        _admin_empty_table_cell(5, "No incoming relationships.")
+      else
+        projection.relationshipsTo.sortBy(_.id.print).map(_knowledge_relationship_row).mkString("\n")
+    val evidence = _knowledge_evidence_table(projection.evidence)
+    val provenance = _knowledge_provenance_table(projection.provenance)
+    _simple_page(
+      title = s"Knowledge Node ${node.id.print}",
+      subtitle = s"${projection.componentName} KnowledgeSpace node detail",
+      body =
+        s"""${_admin_nav_card(Vector(
+             "Component knowledge" -> s"/web/system/admin/knowledge/${componentpath}",
+             "System knowledge" -> "/web/system/admin/knowledge"
+           ))}
+           |${_admin_card(
+             "Node",
+             _field_table(Vector(
+               "Component" -> projection.componentName,
+               "Subsystem" -> subsystem.name,
+               "Id" -> node.id.print,
+               "Kind" -> node.kind,
+               "Label" -> node.label.getOrElse(""),
+               "Provenance id" -> node.provenanceId.map(_.print).getOrElse("")
+             ))
+           )}
+           |${_admin_card("External identifiers", externalids)}
+           |${_admin_card(
+             "Outgoing relationships",
+             s"""<div class="table-responsive"><table class="table table-sm table-hover align-middle mb-0">
+                |  <thead><tr><th>Relationship</th><th>Kind</th><th>Source</th><th>Target</th><th>Evidence</th></tr></thead>
+                |  <tbody>${from}</tbody>
+                |</table></div>""".stripMargin
+           )}
+           |${_admin_card(
+             "Incoming relationships",
+             s"""<div class="table-responsive"><table class="table table-sm table-hover align-middle mb-0">
+                |  <thead><tr><th>Relationship</th><th>Kind</th><th>Source</th><th>Target</th><th>Evidence</th></tr></thead>
+                |  <tbody>${to}</tbody>
+                |</table></div>""".stripMargin
+           )}
+           |${_admin_card("Evidence", evidence)}
+           |${_admin_card("Provenance", provenance)}
+           |${_admin_card("Attributes", _field_table(node.attributes.toVector.sortBy(_._1)))}""".stripMargin
+    )
+  }
+
+  private def _knowledge_relationship_row(
+    relationship: org.goldenport.cncf.knowledge.KnowledgeRelationship
+  ): String =
+    s"""<tr>
+       |  <td><code>${_escape(relationship.id.print)}</code></td>
+       |  <td>${_escape(relationship.kind)}</td>
+       |  <td><code>${_escape(relationship.sourceNodeId.print)}</code></td>
+       |  <td><code>${_escape(relationship.targetNodeId.print)}</code></td>
+       |  <td>${_escape(relationship.evidenceIds.map(_.print).mkString(", "))}</td>
+       |</tr>""".stripMargin
+
+  private def _knowledge_external_identifier_table(
+    ids: Vector[org.goldenport.cncf.knowledge.ExternalKnowledgeIdentifier]
+  ): String =
+    if (ids.isEmpty)
+      _admin_empty_state("No external identifiers.")
+    else {
+      val rows = ids.sortBy(_.key).map { id =>
+        s"""<tr><td>${_escape(id.system)}</td><td>${_escape(id.kind.getOrElse(""))}</td><td><code>${_escape(id.value)}</code></td><td><code>${_escape(id.key)}</code></td></tr>"""
+      }.mkString("\n")
+      s"""<div class="table-responsive"><table class="table table-sm table-hover align-middle mb-0">
+         |  <thead><tr><th>System</th><th>Kind</th><th>Value</th><th>Key</th></tr></thead>
+         |  <tbody>${rows}</tbody>
+         |</table></div>""".stripMargin
+    }
+
+  private def _knowledge_evidence_table(
+    evidence: Vector[org.goldenport.cncf.knowledge.KnowledgeEvidence]
+  ): String =
+    if (evidence.isEmpty)
+      _admin_empty_state("No evidence linked to this node projection.")
+    else {
+      val rows = evidence.sortBy(_.id.print).map { item =>
+        s"""<tr>
+           |  <td><code>${_escape(item.id.print)}</code></td>
+           |  <td>${_escape(item.kind)}</td>
+           |  <td>${_escape(item.source.kind)}</td>
+           |  <td><code>${_escape(item.source.value)}</code></td>
+           |  <td>${_escape(item.summary.getOrElse(""))}</td>
+           |</tr>""".stripMargin
+      }.mkString("\n")
+      s"""<div class="table-responsive"><table class="table table-sm table-hover align-middle mb-0">
+         |  <thead><tr><th>Evidence</th><th>Kind</th><th>Source kind</th><th>Source</th><th>Summary</th></tr></thead>
+         |  <tbody>${rows}</tbody>
+         |</table></div>""".stripMargin
+    }
+
+  private def _knowledge_provenance_table(
+    provenance: Vector[org.goldenport.cncf.knowledge.KnowledgeProvenance]
+  ): String =
+    if (provenance.isEmpty)
+      _admin_empty_state("No provenance linked to this node projection.")
+    else {
+      val rows = provenance.sortBy(_.id.print).map { item =>
+        s"""<tr>
+           |  <td><code>${_escape(item.id.print)}</code></td>
+           |  <td>${_escape(item.origin)}</td>
+           |  <td>${_escape(item.owner.getOrElse(""))}</td>
+           |  <td>${_escape(item.generatedBy.getOrElse(""))}</td>
+           |  <td>${_escape(item.confidence.map(_.toString).getOrElse(""))}</td>
+           |</tr>""".stripMargin
+      }.mkString("\n")
+      s"""<div class="table-responsive"><table class="table table-sm table-hover align-middle mb-0">
+         |  <thead><tr><th>Provenance</th><th>Origin</th><th>Owner</th><th>Generated by</th><th>Confidence</th></tr></thead>
+         |  <tbody>${rows}</tbody>
+         |</table></div>""".stripMargin
+    }
 
   private def _observability_admin_page(subsystem: Subsystem): String = {
     val runtime = RuntimeConfig.from(subsystem.configuration)

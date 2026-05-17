@@ -49,7 +49,7 @@ import org.goldenport.observation.{Cause, Descriptor}
  *  version Jan. 21, 2026
  *  version Mar. 29, 2026
  *  version Apr. 30, 2026
- * @version May. 11, 2026
+ * @version May. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Http4sHttpServer(
@@ -175,6 +175,12 @@ final class Http4sHttpServer(
         if (_is_web_authorized("system", "admin.jobs", "index", Some(req))) _system_admin_jobs() else _forbidden_web(req, Some("system"), Some("admin.jobs"), Some("index"))
       case req @ GET -> Root / "web" / "system" / "admin" / "jobs" / jobId =>
         if (_is_web_authorized("system", "admin.jobs", jobId, Some(req))) _system_admin_job(req, jobId) else _forbidden_web(req, Some("system"), Some("admin.jobs"), Some(jobId))
+      case req @ GET -> Root / "web" / "system" / "admin" / "knowledge" =>
+        if (_is_web_authorized("system", "admin.knowledge", "index", Some(req), Some("admin.system.knowledge"))) _system_admin_knowledge() else _forbidden_web(req, Some("system"), Some("admin.knowledge"), Some("index"))
+      case req @ GET -> Root / "web" / "system" / "admin" / "knowledge" / component =>
+        if (_is_web_authorized("system", "admin.knowledge", component, Some(req), Some("admin.system.knowledge"))) _system_admin_knowledge_component(component) else _forbidden_web(req, Some("system"), Some("admin.knowledge"), Some(component))
+      case req @ GET -> Root / "web" / "system" / "admin" / "knowledge" / component / "nodes" / nodeId =>
+        if (_is_web_authorized("system", "admin.knowledge", "node", Some(req), Some("admin.system.knowledge"))) _system_admin_knowledge_node(component, nodeId) else _forbidden_web(req, Some("system"), Some("admin.knowledge"), Some("node"))
       case req @ GET -> Root / "web" / "system" / "admin" / "observability" =>
         if (_is_web_authorized("system", "admin.observability", "index", Some(req), Some("admin.system.observability"))) _system_admin_observability() else _forbidden_web(req, Some("system"), Some("admin.observability"), Some("index"))
       case req @ GET -> Root / "web" / "system" / "admin" / "observability" / "metrics" =>
@@ -496,6 +502,40 @@ final class Http4sHttpServer(
         _html(StaticFormAppRenderer.renderSystemAdminJob(engine.runtimeSubsystem, model))
       case None =>
         _html_status(StaticFormAppRenderer.renderSystemJobResult(jobId, HttpResponse.notFound(s"job not found: $jobId")), HStatus.NotFound)
+    }
+
+  private def _system_admin_knowledge(): IO[HResponse[IO]] =
+    _html(StaticFormAppRenderer.renderSystemAdminKnowledge(engine.runtimeSubsystem))
+
+  private def _system_admin_knowledge_component(
+    component: String
+  ): IO[HResponse[IO]] =
+    StaticFormAppRenderer.renderSystemAdminKnowledgeComponent(engine.runtimeSubsystem, component) match {
+      case Some(page) =>
+        _html(page)
+      case None =>
+        _web_error_response(
+          Some("system"),
+          HStatus.NotFound,
+          s"knowledge component not found: $component",
+          s"/web/system/admin/knowledge/$component"
+        )
+    }
+
+  private def _system_admin_knowledge_node(
+    component: String,
+    nodeId: String
+  ): IO[HResponse[IO]] =
+    StaticFormAppRenderer.renderSystemAdminKnowledgeNode(engine.runtimeSubsystem, component, nodeId) match {
+      case Some(page) =>
+        _html(page)
+      case None =>
+        _web_error_response(
+          Some("system"),
+          HStatus.NotFound,
+          s"knowledge node not found: $component/$nodeId",
+          s"/web/system/admin/knowledge/$component/nodes/$nodeId"
+        )
     }
 
   private def _system_admin_observability(): IO[HResponse[IO]] =
@@ -2694,9 +2734,9 @@ final class Http4sHttpServer(
     status: Int,
     values: Map[String, String] = Map.empty
   ): Option[String] =
-    _form_result_static_templateC(app, service, operation, status, values).toOption.flatten
+    _form_result_static_template_c(app, service, operation, status, values).toOption.flatten
 
-  private def _form_result_static_templateC(
+  private def _form_result_static_template_c(
     app: String,
     service: String,
     operation: String,
@@ -2737,7 +2777,7 @@ final class Http4sHttpServer(
     status: Int,
     values: Map[String, String] = Map.empty
   ): Consequence[Option[String]] =
-    _form_result_static_templateC(app, service, operation, status, values).flatMap {
+    _form_result_static_template_c(app, service, operation, status, values).flatMap {
       case Some(template) =>
         Consequence.success(Some(template))
       case None =>
@@ -3929,9 +3969,9 @@ final class Http4sHttpServer(
     app: String,
     error: Option[String] = None
   ): IO[HResponse[IO]] = {
-    val returnTo = _login_return_to_(req.uri.query.params).getOrElse(s"/web/${_escape_path_segment_(app)}")
-    val hiddenReturnTo =
-      s"""<input type="hidden" name="returnTo" value="${_escape_html_(returnTo)}">"""
+    val returnto = _login_return_to(req.uri.query.params).getOrElse(s"/web/${_escape_path_segment(app)}")
+    val hiddenreturnto =
+      s"""<input type="hidden" name="returnTo" value="${_escape_html(returnto)}">"""
     _html(
       StaticFormAppRenderer.Page(
         s"""<!doctype html>
@@ -3939,7 +3979,7 @@ final class Http4sHttpServer(
            |<head>
            |  <meta charset="utf-8">
            |  <meta name="viewport" content="width=device-width, initial-scale=1">
-           |  <title>${_escape_html_(app)} Login</title>
+           |  <title>${_escape_html(app)} Login</title>
            |  <link href="/web/assets/bootstrap.min.css" rel="stylesheet">
            |</head>
            |<body class="bg-light">
@@ -3948,10 +3988,10 @@ final class Http4sHttpServer(
            |      <div class="col-12 col-md-6 col-lg-4">
            |        <div class="card shadow-sm">
            |          <div class="card-body">
-           |            <h1 class="h4 mb-3">${_escape_html_(app)} Login</h1>
-           |            ${error.map(e => s"""<div class="alert alert-danger" role="alert">${_escape_html_(e)}</div>""").getOrElse("")}
-           |            <form method="post" action="/web/${_escape_path_segment_(app)}/login">
-           |              $hiddenReturnTo
+           |            <h1 class="h4 mb-3">${_escape_html(app)} Login</h1>
+           |            ${error.map(e => s"""<div class="alert alert-danger" role="alert">${_escape_html(e)}</div>""").getOrElse("")}
+           |            <form method="post" action="/web/${_escape_path_segment(app)}/login">
+           |              $hiddenreturnto
            |              <div class="mb-3">
            |                <label class="form-label" for="username">Username</label>
            |                <input class="form-control" id="username" name="username" autocomplete="username" required>
@@ -3988,12 +4028,12 @@ final class Http4sHttpServer(
               case org.goldenport.Consequence.Success(summary) =>
                 val sessionid = summary.sessionId.getOrElse(throw new IllegalStateException("auth.login must return session id"))
                 IO.pure(
-                  _see_other(_login_return_to_(req.uri.query.params ++ formAttributes).getOrElse(s"/web/${app}"))
-                    .addCookie(_session_cookie_(sessionid))
+                  _see_other(_login_return_to(req.uri.query.params ++ formAttributes).getOrElse(s"/web/${app}"))
+                    .addCookie(_session_cookie(sessionid))
                 )
               case org.goldenport.Consequence.Failure(c) =>
-                if (_has_exact_web_route_alias_(Vector("web", app, "login")))
-                  IO.pure(_see_other(_login_error_redirect_(app, c.displayMessage, _login_return_to_(req.uri.query.params ++ formAttributes))))
+                if (_has_exact_web_route_alias(Vector("web", app, "login")))
+                  IO.pure(_see_other(_login_error_redirect(app, c.displayMessage, _login_return_to(req.uri.query.params ++ formAttributes))))
                 else
                   _login_page(req, app, Some(c.displayMessage))
             }
@@ -4056,29 +4096,29 @@ final class Http4sHttpServer(
       req.uri.query.params.toMap ++
       extra
 
-  private def _has_exact_web_route_alias_(
+  private def _has_exact_web_route_alias(
     path: Vector[String]
   ): Boolean =
     engine.webDescriptor.webRouteFor(path).isDefined
 
-  private def _login_error_redirect_(
+  private def _login_error_redirect(
     app: String,
     error: String,
-    returnTo: Option[String]
+    returnto: Option[String]
   ): String = {
-    val base = Uri.unsafeFromString(s"/web/${_escape_path_segment_(app)}/login")
+    val base = Uri.unsafeFromString(s"/web/${_escape_path_segment(app)}/login")
       .withQueryParam("error", error)
-    returnTo.fold(base)(x => base.withQueryParam("returnTo", x)).renderString
+    returnto.fold(base)(x => base.withQueryParam("returnTo", x)).renderString
   }
 
-  private def _login_return_to_(
+  private def _login_return_to(
     params: Map[String, String]
   ): Option[String] =
     params.get("returnTo")
       .map(_.trim)
-      .filter(_non_empty_local_web_path_)
+      .filter(_non_empty_local_web_path)
 
-  private def _non_empty_local_web_path_(
+  private def _non_empty_local_web_path(
     path: String
   ): Boolean =
     path.nonEmpty &&
@@ -4182,7 +4222,7 @@ final class Http4sHttpServer(
     }
   }
 
-  private def _session_cookie_(
+  private def _session_cookie(
     sessionid: String
   ): ResponseCookie =
     ResponseCookie(
@@ -4203,7 +4243,7 @@ final class Http4sHttpServer(
       maxAge = Some(0L)
     )
 
-  private def _escape_html_(p: String): String =
+  private def _escape_html(p: String): String =
     Option(p).getOrElse("")
       .replace("&", "&amp;")
       .replace("<", "&lt;")
@@ -4211,7 +4251,7 @@ final class Http4sHttpServer(
       .replace("\"", "&quot;")
       .replace("'", "&#39;")
 
-  private def _escape_path_segment_(p: String): String =
+  private def _escape_path_segment(p: String): String =
     java.net.URLEncoder.encode(Option(p).getOrElse(""), StandardCharsets.UTF_8)
 
   private def _escape_uri_path_segment(p: String): String =
