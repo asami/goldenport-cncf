@@ -1170,7 +1170,8 @@ KS-01 is complete. `textus-sie` is
 `/Users/asami/src/dev2026/textus-semantic-integration-engine`. KS-02 is
 complete. KS-03 is complete. KS-04 is complete. KS-05 is complete. KS-06 is
 complete. KS-07 is complete. KS-08 is complete. KS-09 is complete; the active
-next focus is KS-10 `textus-sie` provider/runtime realization.
+next focus is KS-10 Knowledge operational model hardening. Provider/runtime
+integration with `textus-sie` moves after the CNCF model is hardened.
 Phase 25 notes:
 
 - `docs/notes/knowledge-structure/knowledge-structure-opening.md`
@@ -1192,6 +1193,11 @@ Phase 25 notes:
   identifiers without making Entity ids equal knowledge ids.
 - CNCF `KnowledgeSpace` core model and memory-resident WorkingSet skeleton.
 - CNCF `KnowledgeSpace` query/projection/admin surface.
+- Knowledge operational model hardening before SIE provider integration:
+  typed node/relationship kinds, CNCF-internal `KnowledgeNodeId` semantics,
+  I18n/localizable labels, external identifier mapping, vector/embedding
+  references, and Entity-to-knowledge binding refinement.
+- KnowledgeSpace query/projection refinement against the hardened model.
 - `textus-sie` provider/runtime realization through RDF DB and Vector DB
   provider paths.
 - CNCF MCP end-to-end validation for `textus-sie`.

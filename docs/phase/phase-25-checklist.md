@@ -350,9 +350,60 @@ projection surfaces.
 
 ---
 
-## KS-10: `textus-sie` Provider / Runtime Realization
+## KS-10: Knowledge Operational Model Hardening
 
 Status: ACTIVE
+
+### Objective
+
+Harden the CNCF operational knowledge model before connecting concrete
+`textus-sie` RDF DB / Vector DB provider paths. KS-10 must keep model design
+separate from provider integration so that SIE validation does not obscure
+core model decisions.
+
+### Initial Tasks
+
+- [ ] Replace string-valued node/relationship kinds with typed
+      `KnowledgeNodeKind` / `KnowledgeRelationshipKind` or an equivalent
+      extensible typed model.
+- [ ] Clarify `KnowledgeNodeId` as a CNCF-internal node id, distinct from RDF
+      subject URI, Entity id, Tag id, and provider ids.
+- [ ] Keep RDF subject URI, Entity id, Tag id, and provider ids in explicit
+      external identifier mappings.
+- [ ] Replace display `label: Option[String]` with an I18n/localizable label
+      shape suitable for RDF language-tagged labels.
+- [ ] Add vector/embedding reference metadata without storing raw embedding
+      vectors in `KnowledgeNode`.
+- [ ] Strengthen Entity-to-knowledge binding helpers and tests.
+- [ ] Keep fact/assertion/observation separation as a future hook unless KS-10
+      needs a concrete type.
+
+---
+
+## KS-11: KnowledgeSpace Query / Projection Refinement
+
+Status: PLANNED
+
+### Objective
+
+Update the KS-09 query/projection/admin surfaces to use the hardened KS-10
+model before connecting SIE providers.
+
+### Initial Tasks
+
+- [ ] Update Record projection and admin pages for typed node/relationship
+      kinds, I18n labels, external identifier mappings, and vector references.
+- [ ] Preserve compact bounded previews for large graphs.
+- [ ] Add or refine Entity detail / business-logic lookup surfaces if needed
+      before SIE integration.
+- [ ] Validate CNCF-only KnowledgeSpace query/projection behavior against the
+      hardened model.
+
+---
+
+## KS-12: `textus-sie` Provider / Runtime Realization
+
+Status: PLANNED
 
 ### Objective
 
@@ -370,7 +421,7 @@ preserving CNCF/SIE responsibility boundaries.
 
 ---
 
-## KS-11: CNCF MCP End-to-End Validation for `textus-sie`
+## KS-13: CNCF MCP End-to-End Validation for `textus-sie`
 
 Status: PLANNED
 
@@ -389,7 +440,7 @@ MCP publication/runtime path.
 
 ---
 
-## KS-12: Phase 25 Verification and Closure
+## KS-14: Phase 25 Verification and Closure
 
 Status: PLANNED
 

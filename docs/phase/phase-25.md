@@ -29,6 +29,9 @@ This document is a phase dashboard, not a design journal.
 - Support Entity-to-knowledge binding so business Entities can be linked to
   related knowledge without making every Entity a KnowledgeNode.
 - Implement a minimal CNCF `KnowledgeSpace` runtime skeleton and WorkingSet.
+- Harden the CNCF operational knowledge model before connecting concrete
+  `textus-sie` RDF DB / Vector DB providers. In particular, avoid mixing model
+  design work and provider integration in the same slice.
 - Validate `textus-sie` against concrete RDF DB / Vector DB provider behavior,
   semantic retrieval operations, and CNCF MCP publication.
 - Keep Web/API/Admin projection requirements explicit without making the
@@ -62,15 +65,18 @@ Scope boundaries:
 - G (DONE): KS-07 — Phase 25 implementation rebaseline.
 - H (DONE): KS-08 — CNCF `KnowledgeSpace` core model and WorkingSet skeleton.
 - I (DONE): KS-09 — CNCF knowledge query/projection/admin surface.
-- J (ACTIVE): KS-10 — `textus-sie` provider/runtime realization.
-- K (PLANNED): KS-11 — CNCF MCP end-to-end validation for `textus-sie`.
-- L (PLANNED): KS-12 — Phase 25 verification and closure.
+- J (ACTIVE): KS-10 — Knowledge operational model hardening.
+- K (PLANNED): KS-11 — KnowledgeSpace query/projection refinement against the
+  hardened model.
+- L (PLANNED): KS-12 — `textus-sie` provider/runtime realization.
+- M (PLANNED): KS-13 — CNCF MCP end-to-end validation for `textus-sie`.
+- N (PLANNED): KS-14 — Phase 25 verification and closure.
 
 Resume hint:
 
-- Continue with KS-10. Connect `textus-sie` provider/runtime behavior to the
-  CNCF KnowledgeSpace projection surface without moving RDF DB / Vector DB
-  implementation into CNCF core.
+- Continue with KS-10. Harden the CNCF `KnowledgeNode` /
+  `KnowledgeRelationship` operational model before connecting `textus-sie`
+  provider/runtime behavior.
 
 ## 5. Development Items
 
@@ -83,9 +89,12 @@ Resume hint:
 - [x] KS-07: Phase 25 implementation rebaseline.
 - [x] KS-08: CNCF `KnowledgeSpace` core model and WorkingSet skeleton.
 - [x] KS-09: CNCF knowledge query/projection/admin surface.
-- [ ] KS-10: `textus-sie` provider/runtime realization.
-- [ ] KS-11: CNCF MCP end-to-end validation for `textus-sie`.
-- [ ] KS-12: Phase 25 verification and closure.
+- [ ] KS-10: Knowledge operational model hardening.
+- [ ] KS-11: KnowledgeSpace query/projection refinement against the hardened
+      model.
+- [ ] KS-12: `textus-sie` provider/runtime realization.
+- [ ] KS-13: CNCF MCP end-to-end validation for `textus-sie`.
+- [ ] KS-14: Phase 25 verification and closure.
 
 Detailed task breakdown and progress tracking are recorded in
 `phase-25-checklist.md`.
