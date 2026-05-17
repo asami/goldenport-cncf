@@ -66,17 +66,17 @@ Scope boundaries:
 - H (DONE): KS-08 — CNCF `KnowledgeSpace` core model and WorkingSet skeleton.
 - I (DONE): KS-09 — CNCF knowledge query/projection/admin surface.
 - J (DONE): KS-10 — Knowledge operational model hardening.
-- K (ACTIVE): KS-11 — KnowledgeSpace query/projection refinement against the
+- K (DONE): KS-11 — KnowledgeSpace query/projection refinement against the
   hardened model.
-- L (PLANNED): KS-12 — `textus-sie` provider/runtime realization.
+- L (ACTIVE): KS-12 — `textus-sie` provider/runtime realization.
 - M (PLANNED): KS-13 — CNCF MCP end-to-end validation for `textus-sie`.
 - N (PLANNED): KS-14 — Phase 25 verification and closure.
 
 Resume hint:
 
-- Continue with KS-11. Refine the KnowledgeSpace query/projection/admin
-  surfaces against the hardened KS-10 operational model before connecting
-  `textus-sie` provider/runtime behavior.
+- Continue with KS-12. Connect `textus-sie` provider/runtime behavior to the
+  CNCF KnowledgeSpace boundary without moving Fuseki/Chroma implementation
+  details into CNCF core.
 
 ## 5. Development Items
 
@@ -90,7 +90,7 @@ Resume hint:
 - [x] KS-08: CNCF `KnowledgeSpace` core model and WorkingSet skeleton.
 - [x] KS-09: CNCF knowledge query/projection/admin surface.
 - [x] KS-10: Knowledge operational model hardening.
-- [ ] KS-11: KnowledgeSpace query/projection refinement against the hardened
+- [x] KS-11: KnowledgeSpace query/projection refinement against the hardened
       model.
 - [ ] KS-12: `textus-sie` provider/runtime realization.
 - [ ] KS-13: CNCF MCP end-to-end validation for `textus-sie`.
@@ -126,4 +126,5 @@ Current status:
 - KS-08 is done.
 - KS-09 is done.
 - KS-10 is done.
-- KS-11 is active.
+- KS-11 is done.
+- KS-12 is active.

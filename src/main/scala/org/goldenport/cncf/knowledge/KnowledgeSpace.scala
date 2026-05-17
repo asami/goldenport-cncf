@@ -32,6 +32,9 @@ final class KnowledgeSpace {
   def counts: KnowledgeWorkingSetCounts =
     _working_set.counts
 
+  def query: KnowledgeSpaceQuery =
+    KnowledgeSpaceQuery(this)
+
   def nodeOption(id: KnowledgeNodeId): Option[KnowledgeNode] =
     _working_set.nodeOption(id)
 

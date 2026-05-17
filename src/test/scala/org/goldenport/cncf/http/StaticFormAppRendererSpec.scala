@@ -272,27 +272,67 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         Some(provenance.id)
       )
       val customer = KnowledgeNode(
-        KnowledgeNodeId("node-customer"),
-        "entity",
-        Some("Customer"),
-        Vector(ext),
-        Some(provenance.id),
-        Map("segment" -> "enterprise")
+        id = KnowledgeNodeId("node-customer"),
+        category = KnowledgeNodeCategory.Entity,
+        identity = KnowledgeNodeIdentity(
+          rdfNode = Some(RdfNodeName("rdf:customer-1")),
+          externalIdentifiers = Vector(ext)
+        ),
+        presentation = KnowledgeNodePresentation.label("Customer"),
+        semantics = KnowledgeNodeSemantics(
+          semanticTypes = Vector(KnowledgeSemanticType("cncf", "customer")),
+          roles = Set("business-entity")
+        ),
+        sources = KnowledgeNodeSources(provenanceIds = Vector(provenance.id)),
+        bindings = KnowledgeNodeBindings.from(Vector(ext)),
+        similarity = KnowledgeNodeSimilarity(
+          representations = Vector(KnowledgeSimilarityRepresentation(method = Some("embedding"), model = Some("demo-model"), metric = Some("cosine"))),
+          searchEntries = Vector(KnowledgeSimilaritySearchEntry(provider = Some("demo"), collection = Some("customers"), searchId = Some("search-customer-1")))
+        ),
+        attributes = KnowledgeAttributes("segment" -> "enterprise")
       )
       val concept = KnowledgeNode(KnowledgeNodeId("node-concept"), "concept", Some("Important customer"))
       val relationship = KnowledgeRelationship(
         KnowledgeRelationshipId("rel-1"),
-        "classified-as",
+        KnowledgeRelationshipKind.ClassifiedBy,
         customer.id,
         concept.id,
-        Vector(evidence.id),
-        Some(provenance.id)
+        rdfPredicate = Some(RdfPredicateName("rdf:type")),
+        semanticTypes = Vector(KnowledgeRelationshipSemanticType("rdf", "type")),
+        evidenceIds = Vector(evidence.id),
+        provenanceId = Some(provenance.id)
+      )
+      val fact = KnowledgeFact(
+        KnowledgeFactId("fact-1"),
+        KnowledgeFactKind.EntityDerived,
+        subjectNodeId = Some(customer.id),
+        predicate = Some("customer.status"),
+        value = Some("active"),
+        evidenceIds = Vector(evidence.id),
+        provenanceId = Some(provenance.id)
+      )
+      val frame = KnowledgeFrame(
+        KnowledgeFrameId("frame-1"),
+        KnowledgeFrameKind.EntityContext,
+        focusNodeIds = Vector(customer.id),
+        nodeIds = Vector(customer.id, concept.id),
+        relationshipIds = Vector(relationship.id),
+        factIds = Vector(fact.id),
+        evidenceIds = Vector(evidence.id),
+        provenanceIds = Vector(provenance.id),
+        origin = KnowledgeFrameOrigin(
+          KnowledgeFrameInputRoute.EntityProjection,
+          operation = Some("customer.search"),
+          provenanceId = Some(provenance.id)
+        )
       )
       _success(component.knowledgeSpace.replace(KnowledgeWorkingSetSnapshot(
         nodes = Vector(customer, concept),
         relationships = Vector(relationship),
         evidence = Vector(evidence),
-        provenance = Vector(provenance)
+        provenance = Vector(provenance),
+        frames = Vector(frame),
+        facts = Vector(fact)
       )))
 
       val index = StaticFormAppRenderer.renderSystemAdminKnowledge(subsystem).body
@@ -305,9 +345,19 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       detail should include ("System Knowledge knowledge_component")
       detail should include ("node-customer")
       detail should include ("rel-1")
+      detail should include ("frame-1")
+      detail should include ("fact-1")
       node should include ("Knowledge Node node-customer")
+      node should include ("rdf:customer-1")
+      node should include ("cncf:customer")
       node should include ("cncf.entity")
       node should include ("customer-1")
+      node should include ("classified-by")
+      node should include ("rdf:type")
+      node should include ("embedding")
+      node should include ("search-customer-1")
+      node should include ("Frames")
+      node should include ("Facts")
       node should include ("Outgoing relationships")
       node should include ("Customer source record")
       node should include ("renderer-spec")

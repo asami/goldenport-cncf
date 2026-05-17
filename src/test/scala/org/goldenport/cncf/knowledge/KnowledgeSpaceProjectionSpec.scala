@@ -21,6 +21,7 @@ final class KnowledgeSpaceProjectionSpec
     "project status counts and records deterministically" in {
       val component = TestComponentFactory.create("knowledge_component", Protocol.empty)
       val ext = ExternalKnowledgeIdentifier.entity("customer", "customer-1")
+      val rdfnode = RdfNodeName("rdf:customer-1")
       val provenance = KnowledgeProvenance(KnowledgeProvenanceId("prov-1"), "spec")
       val evidence = KnowledgeEvidence(
         KnowledgeEvidenceId("ev-1"),
@@ -29,12 +30,24 @@ final class KnowledgeSpaceProjectionSpec
         Some("Customer record")
       )
       val customer = KnowledgeNode(
-        KnowledgeNodeId("node-customer"),
-        "entity",
-        Some("Customer"),
-        Vector(ext),
-        Some(provenance.id),
-        Map("segment" -> "enterprise")
+        id = KnowledgeNodeId("node-customer"),
+        category = KnowledgeNodeCategory.Entity,
+        identity = KnowledgeNodeIdentity(
+          rdfNode = Some(rdfnode),
+          externalIdentifiers = Vector(ext)
+        ),
+        presentation = KnowledgeNodePresentation.label("Customer"),
+        semantics = KnowledgeNodeSemantics(
+          semanticTypes = Vector(KnowledgeSemanticType("cncf", "customer")),
+          roles = Set("business-entity")
+        ),
+        sources = KnowledgeNodeSources(provenanceIds = Vector(provenance.id)),
+        bindings = KnowledgeNodeBindings.from(Vector(ext)),
+        similarity = KnowledgeNodeSimilarity(
+          representations = Vector(KnowledgeSimilarityRepresentation(method = Some("embedding"), model = Some("demo-model"), metric = Some("cosine"))),
+          searchEntries = Vector(KnowledgeSimilaritySearchEntry(provider = Some("demo"), collection = Some("customers"), searchId = Some("search-customer-1")))
+        ),
+        attributes = KnowledgeAttributes("segment" -> "enterprise")
       )
       val concept = KnowledgeNode(KnowledgeNodeId("node-concept"), "concept", Some("Important customer"))
       val relationship = KnowledgeRelationship(
@@ -43,6 +56,7 @@ final class KnowledgeSpaceProjectionSpec
         customer.id,
         concept.id,
         rdfPredicate = Some(RdfPredicateName("rdf:type")),
+        semanticTypes = Vector(KnowledgeRelationshipSemanticType("rdf", "type")),
         evidenceIds = Vector(evidence.id),
         provenanceId = Some(provenance.id)
       )
@@ -86,6 +100,7 @@ final class KnowledgeSpaceProjectionSpec
 
       val projection = KnowledgeSpaceProjection.component(component)
       val record = projection.toRecord
+      val query = component.knowledgeSpace.query
       val node = KnowledgeSpaceProjection.nodeOption(component, customer.id).getOrElse(fail("missing node projection"))
 
       projection.componentName shouldBe "knowledge_component"
@@ -111,6 +126,19 @@ final class KnowledgeSpaceProjectionSpec
       node.provenance shouldBe Vector(provenance)
       node.node.structure.classifications.primary shouldBe Some(concept.id)
       node.node.bindings.tagBindings should contain (KnowledgeTagBinding("customer-segment", "enterprise"))
+      node.node.identity.rdfNode shouldBe Some(rdfnode)
+      node.node.semantics.semanticTypes.map(x => x.system -> x.name) shouldBe Vector("cncf" -> "customer")
+      query.node(customer.id).nodes shouldBe Vector(node.node)
+      query.rdfNode(rdfnode).nodes.map(_.id) shouldBe Vector(customer.id)
+      query.externalIdentifier(ext).nodes.map(_.id) shouldBe Vector(customer.id)
+      query.entityBinding(KnowledgeEntityBinding("customer", "customer-1")).nodes.map(_.id) shouldBe Vector(customer.id)
+      query.tagBinding(KnowledgeTagBinding("customer-segment", "enterprise")).nodes.map(_.id) shouldBe Vector(customer.id)
+      query.semanticType("cncf", "customer").nodes.map(_.id) shouldBe Vector(customer.id)
+      query.semanticType("rdf", "type").relationships.map(_.id) shouldBe Vector(relationship.id)
+      query.frame(frame.id).frames shouldBe Vector(frame)
+      query.fact(fact.id).facts shouldBe Vector(fact)
+      query.relationship(relationship.id).relationships shouldBe Vector(relationship)
+      query.node(KnowledgeNodeId("missing")).isEmpty shouldBe true
 
       val conceptnode = KnowledgeSpaceProjection.nodeOption(component, concept.id).getOrElse(fail("missing concept projection"))
       conceptnode.frames shouldBe Vector(frame)

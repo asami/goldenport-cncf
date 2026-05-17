@@ -408,7 +408,7 @@ core model decisions.
 
 ## KS-11: KnowledgeSpace Query / Projection Refinement
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
@@ -417,19 +417,29 @@ model before connecting SIE providers.
 
 ### Initial Tasks
 
-- [ ] Update Record projection and admin pages for typed node/relationship
+- [x] Update Record projection and admin pages for typed node/relationship
       kinds, I18n labels, external identifier mappings, and vector references.
-- [ ] Preserve compact bounded previews for large graphs.
-- [ ] Add or refine Entity detail / business-logic lookup surfaces if needed
+- [x] Preserve compact bounded previews for large graphs.
+- [x] Add or refine Entity detail / business-logic lookup surfaces if needed
       before SIE integration.
-- [ ] Validate CNCF-only KnowledgeSpace query/projection behavior against the
+- [x] Validate CNCF-only KnowledgeSpace query/projection behavior against the
       hardened model.
+
+### Completion Notes
+
+- Added `KnowledgeSpace.query` and `KnowledgeSpaceQueryResult` for
+  component-local lookups by node, relationship, frame, fact, RDF node,
+  external identifier, Entity binding, Tag binding, and semantic type.
+- Refined system knowledge admin projection for KS-10 delegated node sections,
+  relationship RDF predicates, frame/fact previews, bindings, and similarity
+  metadata.
+- Added `docs/notes/knowledge-structure/ks-11-knowledge-query-projection-refinement.md`.
 
 ---
 
 ## KS-12: `textus-sie` Provider / Runtime Realization
 
-Status: PLANNED
+Status: ACTIVE
 
 ### Objective
 

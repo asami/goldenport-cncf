@@ -11654,7 +11654,7 @@ object StaticFormAppRenderer {
     val projections = KnowledgeSpaceProjection.components(subsystem.components)
     val rows =
       if (projections.isEmpty)
-        _admin_empty_table_cell(9, "No components are loaded.")
+        _admin_empty_table_cell(13, "No components are loaded.")
       else
         projections.map { projection =>
           val path = _escape_path_segment(projection.componentName)
@@ -11668,8 +11668,12 @@ object StaticFormAppRenderer {
              |  <td>${_escape(source.providerStatus)}</td>
              |  <td>${counts.nodeCount}</td>
              |  <td>${counts.relationshipCount}</td>
+             |  <td>${counts.frameCount}</td>
+             |  <td>${counts.factCount}</td>
              |  <td>${counts.evidenceCount}</td>
              |  <td>${counts.provenanceCount}</td>
+             |  <td>${counts.entityBindingCount}</td>
+             |  <td>${counts.tagBindingCount}</td>
              |  <td>${_escape(status.error.getOrElse(""))}</td>
              |</tr>""".stripMargin
         }.mkString("\n")
@@ -11685,7 +11689,7 @@ object StaticFormAppRenderer {
            |${_admin_card(
              "KnowledgeSpace Components",
              s"""<div class="table-responsive"><table class="table table-sm table-hover align-middle mb-0">
-                |  <thead><tr><th>Component</th><th>Status</th><th>Source</th><th>Provider</th><th>Nodes</th><th>Relationships</th><th>Evidence</th><th>Provenance</th><th>Error</th></tr></thead>
+                |  <thead><tr><th>Component</th><th>Status</th><th>Source</th><th>Provider</th><th>Nodes</th><th>Relationships</th><th>Frames</th><th>Facts</th><th>Evidence</th><th>Provenance</th><th>Entity bindings</th><th>Tag bindings</th><th>Error</th></tr></thead>
                 |  <tbody>${rows}</tbody>
                 |</table></div>""".stripMargin
            )}
@@ -11706,8 +11710,14 @@ object StaticFormAppRenderer {
     val previewlimit = 50
     val sortednodes = projection.nodes.sortBy(_.id.print)
     val sortedrelationships = projection.relationships.sortBy(_.id.print)
+    val sortedframes = projection.frames.sortBy(_.id.print)
+    val sortedfacts = projection.facts.sortBy(_.id.print)
     val nodepreview = sortednodes.take(previewlimit)
     val relationshippreview = sortedrelationships.take(previewlimit)
+    val framepreview = sortedframes.take(previewlimit)
+    val factpreview = sortedfacts.take(previewlimit)
+    val similarityrepresentations = projection.nodes.map(_.similarity.representations.size).sum + projection.relationships.map(_.similarity.representations.size).sum
+    val similaritysearchentries = projection.nodes.map(_.similarity.searchEntries.size).sum + projection.relationships.map(_.similarity.searchEntries.size).sum
     val nodecaption =
       if (sortednodes.size > previewlimit)
         s"""<p class="text-secondary small mb-2">Showing first ${previewlimit} of ${sortednodes.size} nodes.</p>"""
@@ -11716,6 +11726,16 @@ object StaticFormAppRenderer {
     val relationshipcaption =
       if (sortedrelationships.size > previewlimit)
         s"""<p class="text-secondary small mb-2">Showing first ${previewlimit} of ${sortedrelationships.size} relationships.</p>"""
+      else
+        ""
+    val framecaption =
+      if (sortedframes.size > previewlimit)
+        s"""<p class="text-secondary small mb-2">Showing first ${previewlimit} of ${sortedframes.size} frames.</p>"""
+      else
+        ""
+    val factcaption =
+      if (sortedfacts.size > previewlimit)
+        s"""<p class="text-secondary small mb-2">Showing first ${previewlimit} of ${sortedfacts.size} facts.</p>"""
       else
         ""
     val nodes =
@@ -11732,9 +11752,11 @@ object StaticFormAppRenderer {
         }.mkString("\n")
     val relationships =
       if (sortedrelationships.isEmpty)
-        _admin_empty_table_cell(5, "No knowledge relationships are loaded.")
+        _admin_empty_table_cell(7, "No knowledge relationships are loaded.")
       else
-        relationshippreview.map(_knowledge_relationship_row).mkString("\n")
+        relationshippreview.map(_knowledge_relationship_row(_, Some(path))).mkString("\n")
+    val frames = _knowledge_frame_rows(framepreview, emptycolspan = 8, "No knowledge frames are loaded.")
+    val facts = _knowledge_fact_rows(factpreview, emptycolspan = 6, "No knowledge facts are loaded.")
     _simple_page(
       title = s"System Knowledge ${component.name}",
       subtitle = "Component KnowledgeSpace compact projection",
@@ -11752,9 +11774,15 @@ object StaticFormAppRenderer {
                "Ready" -> projection.status.isReady.toString,
                "Nodes" -> projection.counts.nodeCount.toString,
                "Relationships" -> projection.counts.relationshipCount.toString,
+               "Frames" -> projection.counts.frameCount.toString,
+               "Facts" -> projection.counts.factCount.toString,
                "Evidence" -> projection.counts.evidenceCount.toString,
                "Provenance" -> projection.counts.provenanceCount.toString,
                "External identifiers" -> projection.counts.externalIdentifierCount.toString,
+               "Entity bindings" -> projection.counts.entityBindingCount.toString,
+               "Tag bindings" -> projection.counts.tagBindingCount.toString,
+               "Similarity representations" -> similarityrepresentations.toString,
+               "Similarity search entries" -> similaritysearchentries.toString,
                "Projection source" -> projection.sourceDiagnostics.sourceKind,
                "Storage" -> projection.sourceDiagnostics.storage,
                "Provider status" -> projection.sourceDiagnostics.providerStatus,
@@ -11772,8 +11800,22 @@ object StaticFormAppRenderer {
            |${_admin_card(
              "Relationships",
              s"""${relationshipcaption}<div class="table-responsive"><table class="table table-sm table-hover align-middle mb-0">
-                |  <thead><tr><th>Relationship</th><th>Kind</th><th>Source</th><th>Target</th><th>Evidence</th></tr></thead>
+                |  <thead><tr><th>Relationship</th><th>Kind</th><th>RDF predicate</th><th>Source</th><th>Target</th><th>Semantic types</th><th>Evidence</th></tr></thead>
                 |  <tbody>${relationships}</tbody>
+                |</table></div>""".stripMargin
+           )}
+           |${_admin_card(
+             "Frames",
+             s"""${framecaption}<div class="table-responsive"><table class="table table-sm table-hover align-middle mb-0">
+                |  <thead><tr><th>Frame</th><th>Kind</th><th>Route</th><th>Provider</th><th>Purpose</th><th>Query</th><th>Focus nodes</th><th>Facts</th></tr></thead>
+                |  <tbody>${frames}</tbody>
+                |</table></div>""".stripMargin
+           )}
+           |${_admin_card(
+             "Facts",
+             s"""${factcaption}<div class="table-responsive"><table class="table table-sm table-hover align-middle mb-0">
+                |  <thead><tr><th>Fact</th><th>Kind</th><th>Subject</th><th>Relationship</th><th>Predicate</th><th>Value</th></tr></thead>
+                |  <tbody>${facts}</tbody>
                 |</table></div>""".stripMargin
            )}""".stripMargin
     )
@@ -11788,18 +11830,25 @@ object StaticFormAppRenderer {
     val externalids = _knowledge_external_identifier_table(node.identity.externalIdentifiers)
     val from =
       if (projection.relationshipsFrom.isEmpty)
-        _admin_empty_table_cell(5, "No outgoing relationships.")
+        _admin_empty_table_cell(7, "No outgoing relationships.")
       else
-        projection.relationshipsFrom.sortBy(_.id.print).map(_knowledge_relationship_row).mkString("\n")
+        projection.relationshipsFrom.sortBy(_.id.print).map(_knowledge_relationship_row(_, Some(componentpath))).mkString("\n")
     val to =
       if (projection.relationshipsTo.isEmpty)
-        _admin_empty_table_cell(5, "No incoming relationships.")
+        _admin_empty_table_cell(7, "No incoming relationships.")
       else
-        projection.relationshipsTo.sortBy(_.id.print).map(_knowledge_relationship_row).mkString("\n")
+        projection.relationshipsTo.sortBy(_.id.print).map(_knowledge_relationship_row(_, Some(componentpath))).mkString("\n")
     val evidence = _knowledge_evidence_table(projection.evidence)
     val provenance = _knowledge_provenance_table(projection.provenance)
     val frames = _knowledge_frame_table(projection.frames)
     val facts = _knowledge_fact_table(projection.facts)
+    val identity = _knowledge_identity_table(node)
+    val presentation = _knowledge_presentation_table(node.presentation)
+    val semantics = _knowledge_semantics_table(node.semantics)
+    val structure = _knowledge_structure_table(node.structure)
+    val bindings = _knowledge_bindings_table(node.bindings)
+    val similarity = _knowledge_similarity_table(node.similarity)
+    val operations = _knowledge_operations_table(node.operations)
     _simple_page(
       title = s"Knowledge Node ${node.id.print}",
       subtitle = s"${projection.componentName} KnowledgeSpace node detail",
@@ -11808,54 +11857,60 @@ object StaticFormAppRenderer {
              "Component knowledge" -> s"/web/system/admin/knowledge/${componentpath}",
              "System knowledge" -> "/web/system/admin/knowledge"
            ))}
-           |${_admin_card(
-             "Node",
-             _field_table(Vector(
-               "Component" -> projection.componentName,
-               "Subsystem" -> subsystem.name,
-               "Id" -> node.id.print,
-               "Category" -> node.category.print,
-               "Label" -> node.presentation.defaultLabel.getOrElse(""),
-               "RDF node" -> node.identity.rdfNode.map(_.print).getOrElse(""),
-               "Semantic types" -> node.semantics.semanticTypes.map(x => s"${x.system}:${x.name}").mkString(", "),
-               "Entity bindings" -> node.bindings.entityBindings.map(x => s"${x.entityName}:${x.entityId}").mkString(", "),
-               "Tag bindings" -> node.bindings.tagBindings.map(x => s"${x.tagSpace}:${x.tagId}").mkString(", "),
-               "Frame ids" -> node.operations.frameIds.map(_.print).mkString(", ")
-             ))
-           )}
+           |${_admin_card("Node identity", identity)}
+           |${_admin_card("Presentation", presentation)}
+           |${_admin_card("Semantics", semantics)}
+           |${_admin_card("Structure", structure)}
+           |${_admin_card("Entity and Tag bindings", bindings)}
+           |${_admin_card("Similarity", similarity)}
+           |${_admin_card("Operations", operations)}
            |${_admin_card("External identifiers", externalids)}
            |${_admin_card("Frames", frames)}
            |${_admin_card("Facts", facts)}
            |${_admin_card(
              "Outgoing relationships",
              s"""<div class="table-responsive"><table class="table table-sm table-hover align-middle mb-0">
-                |  <thead><tr><th>Relationship</th><th>Kind</th><th>Source</th><th>Target</th><th>Evidence</th></tr></thead>
+                |  <thead><tr><th>Relationship</th><th>Kind</th><th>RDF predicate</th><th>Source</th><th>Target</th><th>Semantic types</th><th>Evidence</th></tr></thead>
                 |  <tbody>${from}</tbody>
                 |</table></div>""".stripMargin
            )}
            |${_admin_card(
              "Incoming relationships",
              s"""<div class="table-responsive"><table class="table table-sm table-hover align-middle mb-0">
-                |  <thead><tr><th>Relationship</th><th>Kind</th><th>Source</th><th>Target</th><th>Evidence</th></tr></thead>
+                |  <thead><tr><th>Relationship</th><th>Kind</th><th>RDF predicate</th><th>Source</th><th>Target</th><th>Semantic types</th><th>Evidence</th></tr></thead>
                 |  <tbody>${to}</tbody>
                 |</table></div>""".stripMargin
            )}
            |${_admin_card("Evidence", evidence)}
-           |${_admin_card("Provenance", provenance)}
-           |${_admin_card("Structured node", s"<pre class=\"small mb-0\"><code>${_escape(org.goldenport.cncf.knowledge.KnowledgeRecordCodec.toRecord(node).toString)}</code></pre>")}""".stripMargin
+           |${_admin_card("Provenance", provenance)}""".stripMargin
     )
   }
 
   private def _knowledge_relationship_row(
-    relationship: org.goldenport.cncf.knowledge.KnowledgeRelationship
-  ): String =
+    relationship: org.goldenport.cncf.knowledge.KnowledgeRelationship,
+    componentpath: Option[String] = None
+  ): String = {
+    val source = _knowledge_node_link(componentpath, relationship.sourceNodeId)
+    val target = _knowledge_node_link(componentpath, relationship.targetNodeId)
+    val semantictypes = relationship.semanticTypes.map(x => s"${x.system}:${x.name}").mkString(", ")
     s"""<tr>
        |  <td><code>${_escape(relationship.id.print)}</code></td>
        |  <td>${_escape(relationship.kind.print)}</td>
-       |  <td><code>${_escape(relationship.sourceNodeId.print)}</code></td>
-       |  <td><code>${_escape(relationship.targetNodeId.print)}</code></td>
+       |  <td>${_escape(relationship.rdfPredicate.map(_.print).getOrElse(""))}</td>
+       |  <td>${source}</td>
+       |  <td>${target}</td>
+       |  <td>${_escape(semantictypes)}</td>
        |  <td>${_escape(relationship.evidenceIds.map(_.print).mkString(", "))}</td>
        |</tr>""".stripMargin
+  }
+
+  private def _knowledge_node_link(
+    componentpath: Option[String],
+    id: org.goldenport.cncf.knowledge.KnowledgeNodeId
+  ): String =
+    componentpath
+      .map(path => s"""<a href="/web/system/admin/knowledge/${path}/nodes/${_escape_path_segment(id.print)}"><code>${_escape(id.print)}</code></a>""")
+      .getOrElse(s"<code>${_escape(id.print)}</code>")
 
   private def _knowledge_frame_table(
     frames: Vector[org.goldenport.cncf.knowledge.KnowledgeFrame]
@@ -11863,20 +11918,33 @@ object StaticFormAppRenderer {
     if (frames.isEmpty)
       _admin_empty_state("No frames linked to this node projection.")
     else {
-      val rows = frames.sortBy(_.id.print).map { item =>
+      val rows = _knowledge_frame_rows(frames.sortBy(_.id.print), emptycolspan = 8, "No frames linked to this node projection.")
+      s"""<div class="table-responsive"><table class="table table-sm table-hover align-middle mb-0">
+         |  <thead><tr><th>Frame</th><th>Kind</th><th>Route</th><th>Provider</th><th>Purpose</th><th>Query</th><th>Focus nodes</th><th>Facts</th></tr></thead>
+         |  <tbody>${rows}</tbody>
+         |</table></div>""".stripMargin
+    }
+
+  private def _knowledge_frame_rows(
+    frames: Vector[org.goldenport.cncf.knowledge.KnowledgeFrame],
+    emptycolspan: Int,
+    emptymessage: String
+  ): String =
+    if (frames.isEmpty)
+      _admin_empty_table_cell(emptycolspan, emptymessage)
+    else
+      frames.sortBy(_.id.print).map { item =>
         s"""<tr>
            |  <td><code>${_escape(item.id.print)}</code></td>
            |  <td>${_escape(item.kind.print)}</td>
            |  <td>${_escape(item.origin.route.print)}</td>
            |  <td>${_escape(item.origin.provider.getOrElse(""))}</td>
+           |  <td>${_escape(item.purpose.map(_.print).getOrElse(""))}</td>
+           |  <td>${_escape(item.query.map(_.print).getOrElse(""))}</td>
            |  <td>${_escape(item.focusNodeIds.map(_.print).mkString(", "))}</td>
+           |  <td>${_escape(item.factIds.map(_.print).mkString(", "))}</td>
            |</tr>""".stripMargin
       }.mkString("\n")
-      s"""<div class="table-responsive"><table class="table table-sm table-hover align-middle mb-0">
-         |  <thead><tr><th>Frame</th><th>Kind</th><th>Route</th><th>Provider</th><th>Focus nodes</th></tr></thead>
-         |  <tbody>${rows}</tbody>
-         |</table></div>""".stripMargin
-    }
 
   private def _knowledge_fact_table(
     facts: Vector[org.goldenport.cncf.knowledge.KnowledgeFact]
@@ -11884,20 +11952,118 @@ object StaticFormAppRenderer {
     if (facts.isEmpty)
       _admin_empty_state("No facts linked to this node projection.")
     else {
-      val rows = facts.sortBy(_.id.print).map { item =>
-        s"""<tr>
-           |  <td><code>${_escape(item.id.print)}</code></td>
-           |  <td>${_escape(item.kind.print)}</td>
-           |  <td>${_escape(item.predicate.getOrElse(""))}</td>
-           |  <td>${_escape(item.value.getOrElse(""))}</td>
-           |  <td>${_escape(item.evidenceIds.map(_.print).mkString(", "))}</td>
-           |</tr>""".stripMargin
-      }.mkString("\n")
+      val rows = _knowledge_fact_rows(facts.sortBy(_.id.print), emptycolspan = 6, "No facts linked to this node projection.")
       s"""<div class="table-responsive"><table class="table table-sm table-hover align-middle mb-0">
-         |  <thead><tr><th>Fact</th><th>Kind</th><th>Predicate</th><th>Value</th><th>Evidence</th></tr></thead>
+         |  <thead><tr><th>Fact</th><th>Kind</th><th>Subject</th><th>Relationship</th><th>Predicate</th><th>Value</th></tr></thead>
          |  <tbody>${rows}</tbody>
          |</table></div>""".stripMargin
     }
+
+  private def _knowledge_fact_rows(
+    facts: Vector[org.goldenport.cncf.knowledge.KnowledgeFact],
+    emptycolspan: Int,
+    emptymessage: String
+  ): String =
+    if (facts.isEmpty)
+      _admin_empty_table_cell(emptycolspan, emptymessage)
+    else
+      facts.sortBy(_.id.print).map { item =>
+        s"""<tr>
+           |  <td><code>${_escape(item.id.print)}</code></td>
+           |  <td>${_escape(item.kind.print)}</td>
+           |  <td>${_escape(item.subjectNodeId.map(_.print).getOrElse(""))}</td>
+           |  <td>${_escape(item.relationshipId.map(_.print).getOrElse(""))}</td>
+           |  <td>${_escape(item.predicate.getOrElse(""))}</td>
+           |  <td>${_escape(item.value.getOrElse(""))}</td>
+           |</tr>""".stripMargin
+      }.mkString("\n")
+
+  private def _knowledge_identity_table(
+    node: org.goldenport.cncf.knowledge.KnowledgeNode
+  ): String =
+    _field_table(Vector(
+      "Id" -> node.id.print,
+      "Category" -> node.category.print,
+      "RDF node" -> node.identity.rdfNode.map(_.print).getOrElse(""),
+      "Canonical" -> node.identity.identityLinks.canonical.map(_.print).getOrElse(""),
+      "Same as" -> node.identity.identityLinks.sameAs.map(_.print).mkString(", "),
+      "Equivalent to" -> node.identity.identityLinks.equivalentTo.map(_.print).mkString(", ")
+    ))
+
+  private def _knowledge_presentation_table(
+    value: org.goldenport.cncf.knowledge.KnowledgeNodePresentation
+  ): String =
+    _field_table(Vector(
+      "Default label" -> value.labels.default.getOrElse(""),
+      "Localized labels" -> value.labels.localized.toVector.sortBy(_._1).map { case (k, v) => s"$k=$v" }.mkString(", "),
+      "Alternative labels" -> value.labels.alternatives.mkString(", "),
+      "Canonical name" -> value.names.canonical.getOrElse(""),
+      "Aliases" -> value.names.aliases.mkString(", "),
+      "Description" -> value.descriptions.default.getOrElse(""),
+      "Localized descriptions" -> value.descriptions.localized.toVector.sortBy(_._1).map { case (k, v) => s"$k=$v" }.mkString(", ")
+    ))
+
+  private def _knowledge_semantics_table(
+    value: org.goldenport.cncf.knowledge.KnowledgeNodeSemantics
+  ): String =
+    _field_table(Vector(
+      "Semantic types" -> value.semanticTypes.map(x => s"${x.system}:${x.name}:${x.status.print}").mkString(", "),
+      "Roles" -> value.roles.toVector.sorted.mkString(", "),
+      "Confidence" -> value.confidence.value.map(_.toString).orElse(value.confidence.status).getOrElse(""),
+      "Confidentiality" -> Vector(value.confidentiality.status, value.confidentiality.visibility).flatten.mkString(", "),
+      "Valid from" -> value.temporal.validFrom.map(_.toString).getOrElse(""),
+      "Valid to" -> value.temporal.validTo.map(_.toString).getOrElse(""),
+      "Observed at" -> value.temporal.observedAt.map(_.toString).getOrElse(""),
+      "Lifecycle state" -> value.lifecycle.state.getOrElse("")
+    ))
+
+  private def _knowledge_structure_table(
+    value: org.goldenport.cncf.knowledge.KnowledgeNodeStructure
+  ): String =
+    _field_table(Vector(
+      "Translations" -> value.correspondences.translations.map(_.nodeId.print).mkString(", "),
+      "Localized versions" -> value.correspondences.localizedVersions.map(_.nodeId.print).mkString(", "),
+      "Same concepts" -> value.correspondences.sameConcepts.map(_.nodeId.print).mkString(", "),
+      "Same resources" -> value.correspondences.sameResources.map(_.nodeId.print).mkString(", "),
+      "Source alignments" -> value.correspondences.sourceAlignments.map(_.nodeId.print).mkString(", "),
+      "Aliases" -> value.correspondences.aliases.map(_.nodeId.print).mkString(", "),
+      "Primary classification" -> value.classifications.primary.map(_.print).getOrElse(""),
+      "Broader" -> value.classifications.broader.map(_.print).mkString(", "),
+      "Narrower" -> value.classifications.narrower.map(_.print).mkString(", "),
+      "Additional classifications" -> value.classifications.additional.map(_.print).mkString(", "),
+      "Parent" -> value.hierarchy.parent.map(_.print).getOrElse(""),
+      "Children" -> value.hierarchy.children.map(_.print).mkString(", "),
+      "Part of" -> value.partWhole.partOf.map(_.print).mkString(", "),
+      "Has part" -> value.partWhole.hasPart.map(_.print).mkString(", "),
+      "Member of" -> value.partWhole.memberOf.map(_.print).mkString(", "),
+      "Has member" -> value.partWhole.hasMember.map(_.print).mkString(", ")
+    ))
+
+  private def _knowledge_bindings_table(
+    value: org.goldenport.cncf.knowledge.KnowledgeNodeBindings
+  ): String =
+    _field_table(Vector(
+      "Entity bindings" -> value.entityBindings.map(x => Vector(x.component, Some(x.entityName), Some(x.entityId), x.entityVersion).flatten.mkString(":")).mkString(", "),
+      "Tag bindings" -> value.tagBindings.map(x => s"${x.tagSpace}:${x.tagId}").mkString(", ")
+    ))
+
+  private def _knowledge_similarity_table(
+    value: org.goldenport.cncf.knowledge.KnowledgeNodeSimilarity
+  ): String =
+    _field_table(Vector(
+      "Status" -> value.status.print,
+      "Representations" -> value.representations.map(x => Vector(x.method, x.model, x.metric, x.context, x.payloadReference).flatten.mkString(":")).mkString(", "),
+      "Search entries" -> value.searchEntries.map(x => Vector(x.provider, x.collection, x.searchId, x.indexedAt.map(_.toString)).flatten.mkString(":")).mkString(", ")
+    ))
+
+  private def _knowledge_operations_table(
+    value: org.goldenport.cncf.knowledge.KnowledgeNodeOperations
+  ): String =
+    _field_table(Vector(
+      "Materialized at" -> value.materializedAt.map(_.toString).getOrElse(""),
+      "Frame ids" -> value.frameIds.map(_.print).mkString(", "),
+      "Validation status" -> value.validationStatus.print
+    ))
 
   private def _knowledge_external_identifier_table(
     ids: Vector[org.goldenport.cncf.knowledge.ExternalKnowledgeIdentifier]
