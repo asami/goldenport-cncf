@@ -340,7 +340,8 @@ projection surfaces.
 - Added component-local KnowledgeSpace projection and cross-component read-only
   aggregation.
 - Added projection source diagnostics for the KS-09 component-owned in-memory
-  snapshot surface. Provider-backed RDF/Vector diagnostics remain KS-10 work.
+  snapshot surface. Provider-backed RDF/Vector diagnostics remain later
+  provider/runtime work.
 - Added canonical Entity-to-knowledge binding through
   `ExternalKnowledgeIdentifier.entity(entityName, entityId)`.
 - Added system admin KnowledgeSpace pages for component status/counts,
@@ -352,7 +353,7 @@ projection surfaces.
 
 ## KS-10: Knowledge Operational Model Hardening
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
@@ -363,26 +364,51 @@ core model decisions.
 
 ### Initial Tasks
 
-- [ ] Replace string-valued node/relationship kinds with typed
-      `KnowledgeNodeKind` / `KnowledgeRelationshipKind` or an equivalent
+- [x] Use `docs/notes/knowledge-structure/ks-10-knowledge-operational-model-hardening.md`
+      as the KS-10 implementation design input.
+- [x] Replace string-valued node/relationship kinds with typed
+      provisional `KnowledgeNodeCategory` / `KnowledgeRelationshipKind` or an equivalent
       extensible typed model.
-- [ ] Clarify `KnowledgeNodeId` as a CNCF-internal node id, distinct from RDF
+- [x] Clarify `KnowledgeNodeId` as a CNCF-internal node id, distinct from RDF
       subject URI, Entity id, Tag id, and provider ids.
-- [ ] Keep RDF subject URI, Entity id, Tag id, and provider ids in explicit
+- [x] Keep RDF subject URI, Entity id, Tag id, and provider ids in explicit
       external identifier mappings.
-- [ ] Replace display `label: Option[String]` with an I18n/localizable label
+- [x] Replace display `label: Option[String]` with an I18n/localizable label
       shape suitable for RDF language-tagged labels.
-- [ ] Add vector/embedding reference metadata without storing raw embedding
+- [x] Introduce `KnowledgeFrame` as the purpose/focus/source/query unit inside
+      `KnowledgeWorkingSet`, including frame origin.
+- [x] Split `KnowledgeNode` into SimpleEntity-style delegated value objects:
+      identity, presentation, semantics, structure, sources, bindings,
+      similarity, and operations.
+- [x] Add similarity/distance metadata using meaning-level names; keep
+      embedding/vector/index as implementation metadata and do not store raw
       vectors in `KnowledgeNode`.
-- [ ] Strengthen Entity-to-knowledge binding helpers and tests.
-- [ ] Keep fact/assertion/observation separation as a future hook unless KS-10
+- [x] Strengthen Entity-to-knowledge binding helpers and tests.
+- [x] Treat Entity-derived facts, especially SimpleEntity-derived facts, as a
+      first-class KnowledgeSpace fact category.
+- [x] Keep fact/assertion/observation separation as a future hook unless KS-10
       needs a concrete type.
+
+### Completion Notes
+
+- Added typed CNCF knowledge operational model primitives:
+  `KnowledgeNodeCategory`, `KnowledgeRelationshipKind`,
+  `KnowledgeRelationshipSemanticType`, `RdfNodeName`, `RdfPredicateName`,
+  `KnowledgeFact`, `KnowledgeFrame`, and `KnowledgeFrameOrigin`.
+- Reworked `KnowledgeNode` into delegated value objects for identity,
+  presentation, semantics, structure, sources, bindings, similarity,
+  operations, and attributes.
+- Extended `KnowledgeWorkingSet` with frames, facts, Entity/Tag binding
+  indexes, and canonical node projection built from relationships and facts.
+- Updated `KnowledgeSpace`, projections, admin rendering, and focused specs to
+  use the hardened model while leaving TagSpace behavior unchanged.
+- Validation: focused KS-10/admin/tag specs passed.
 
 ---
 
 ## KS-11: KnowledgeSpace Query / Projection Refinement
 
-Status: PLANNED
+Status: ACTIVE
 
 ### Objective
 

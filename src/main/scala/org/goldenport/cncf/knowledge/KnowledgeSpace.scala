@@ -44,8 +44,29 @@ final class KnowledgeSpace {
   def relationshipsTo(id: KnowledgeNodeId): Vector[KnowledgeRelationship] =
     _working_set.relationshipsTo(id)
 
+  def frameOption(id: KnowledgeFrameId): Option[KnowledgeFrame] =
+    _working_set.frameOption(id)
+
+  def framesForNode(id: KnowledgeNodeId): Vector[KnowledgeFrame] =
+    _working_set.framesForNode(id)
+
+  def factOption(id: KnowledgeFactId): Option[KnowledgeFact] =
+    _working_set.factOption(id)
+
+  def factsForNode(id: KnowledgeNodeId): Vector[KnowledgeFact] =
+    _working_set.factsForNode(id)
+
+  def factsForRelationship(id: KnowledgeRelationshipId): Vector[KnowledgeFact] =
+    _working_set.factsForRelationship(id)
+
   def nodeIdsByExternalIdentifier(id: ExternalKnowledgeIdentifier): Vector[KnowledgeNodeId] =
     _working_set.nodeIdsByExternalIdentifier(id)
+
+  def nodeIdsByEntityBinding(id: KnowledgeEntityBinding): Vector[KnowledgeNodeId] =
+    _working_set.nodeIdsByEntityBinding(id)
+
+  def nodeIdsByTagBinding(id: KnowledgeTagBinding): Vector[KnowledgeNodeId] =
+    _working_set.nodeIdsByTagBinding(id)
 
   def evidenceOption(id: KnowledgeEvidenceId): Option[KnowledgeEvidence] =
     _working_set.evidenceOption(id)

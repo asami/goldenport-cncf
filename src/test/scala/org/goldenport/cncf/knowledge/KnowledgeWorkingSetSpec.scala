@@ -16,11 +16,12 @@ final class KnowledgeWorkingSetSpec
   with GivenWhenThen {
 
   "KnowledgeWorkingSet" should {
-    "load and index nodes relationships evidence provenance and external identifiers" in {
+    "load index and project frames facts relationships and bindings" in {
       Given("a knowledge working-set snapshot")
       val ext = ExternalKnowledgeIdentifier("rdf", "https://example.com/a", Some("subject"))
       val nodea = KnowledgeNode(KnowledgeNodeId("node-a"), "entity", Some("Node A"), Vector(ext))
       val nodeb = KnowledgeNode(KnowledgeNodeId("node-b"), "concept", Some("Node B"))
+      val nodec = KnowledgeNode(KnowledgeNodeId("node-c"), "concept", Some("Node C"))
       val provenance = KnowledgeProvenance(KnowledgeProvenanceId("prov-1"), "test")
       val evidence = KnowledgeEvidence(
         KnowledgeEvidenceId("ev-1"),
@@ -30,17 +31,56 @@ final class KnowledgeWorkingSetSpec
       )
       val relationship = KnowledgeRelationship(
         KnowledgeRelationshipId("rel-1"),
-        "related",
+        KnowledgeRelationshipKind.TranslationOf,
         nodea.id,
         nodeb.id,
-        Vector(evidence.id),
-        Some(provenance.id)
+        rdfPredicate = Some(RdfPredicateName("skos:exactMatch")),
+        evidenceIds = Vector(evidence.id),
+        provenanceId = Some(provenance.id)
+      )
+      val classification = KnowledgeRelationship(
+        KnowledgeRelationshipId("rel-2"),
+        KnowledgeRelationshipKind.ClassifiedBy,
+        nodea.id,
+        nodec.id
+      )
+      val fact = KnowledgeFact(
+        KnowledgeFactId("fact-1"),
+        KnowledgeFactKind.EntityDerived,
+        subjectNodeId = Some(nodea.id),
+        predicate = Some("customer.segment"),
+        value = Some("enterprise"),
+        evidenceIds = Vector(evidence.id),
+        provenanceId = Some(provenance.id),
+        attributes = KnowledgeAttributes(
+          "entity_name" -> "customer",
+          "entity_id" -> "customer-1",
+          "tag_space" -> "topic",
+          "tag_id" -> "important"
+        )
+      )
+      val frame = KnowledgeFrame(
+        KnowledgeFrameId("frame-1"),
+        KnowledgeFrameKind.EntityContext,
+        focusNodeIds = Vector(nodea.id),
+        nodeIds = Vector(nodea.id, nodeb.id, nodec.id),
+        relationshipIds = Vector(relationship.id, classification.id),
+        factIds = Vector(fact.id),
+        evidenceIds = Vector(evidence.id),
+        provenanceIds = Vector(provenance.id),
+        origin = KnowledgeFrameOrigin(
+          KnowledgeFrameInputRoute.EntityProjection,
+          operation = Some("customer.load"),
+          provenanceId = Some(provenance.id)
+        )
       )
       val snapshot = KnowledgeWorkingSetSnapshot(
-        nodes = Vector(nodea, nodeb),
-        relationships = Vector(relationship),
+        nodes = Vector(nodea, nodeb, nodec),
+        relationships = Vector(relationship, classification),
         evidence = Vector(evidence),
-        provenance = Vector(provenance)
+        provenance = Vector(provenance),
+        frames = Vector(frame),
+        facts = Vector(fact)
       )
 
       When("loading the snapshot")
@@ -48,14 +88,39 @@ final class KnowledgeWorkingSetSpec
 
       Then("the indexes are available")
       workingset.status.isReady shouldBe true
-      workingset.counts shouldBe KnowledgeWorkingSetCounts(2, 1, 1, 1, 1)
-      workingset.nodeOption(nodea.id) shouldBe Some(nodea)
+      workingset.counts shouldBe KnowledgeWorkingSetCounts(
+        nodeCount = 3,
+        relationshipCount = 2,
+        evidenceCount = 1,
+        provenanceCount = 1,
+        externalIdentifierCount = 1,
+        frameCount = 1,
+        factCount = 1,
+        entityBindingCount = 1,
+        tagBindingCount = 1
+      )
+      val projected = workingset.nodeOption(nodea.id).getOrElse(fail("missing projected node"))
+      projected.structure.correspondences.translations.map(_.nodeId) shouldBe Vector(nodeb.id)
+      projected.structure.classifications.primary shouldBe Some(nodec.id)
+      projected.bindings.entityBindings should contain (KnowledgeEntityBinding("customer", "customer-1"))
+      projected.bindings.tagBindings should contain (KnowledgeTagBinding("topic", "important"))
+      projected.sources.evidenceIds shouldBe Vector(evidence.id)
+      projected.sources.provenanceIds shouldBe Vector(provenance.id)
+      projected.operations.frameIds shouldBe Vector(frame.id)
       workingset.relationshipOption(relationship.id) shouldBe Some(relationship)
-      workingset.relationshipsFrom(nodea.id) shouldBe Vector(relationship)
+      workingset.relationshipsFrom(nodea.id) shouldBe Vector(relationship, classification)
       workingset.relationshipsTo(nodeb.id) shouldBe Vector(relationship)
+      workingset.frameOption(frame.id) shouldBe Some(frame)
+      workingset.framesForNode(nodea.id) shouldBe Vector(frame)
+      workingset.framesForNode(nodeb.id) shouldBe Vector(frame)
+      workingset.framesForNode(nodec.id) shouldBe Vector(frame)
+      workingset.factOption(fact.id) shouldBe Some(fact)
+      workingset.factsForNode(nodea.id) shouldBe Vector(fact)
       workingset.evidenceOption(evidence.id) shouldBe Some(evidence)
       workingset.provenanceOption(provenance.id) shouldBe Some(provenance)
       workingset.nodeIdsByExternalIdentifier(ext) shouldBe Vector(nodea.id)
+      workingset.nodeIdsByEntityBinding(KnowledgeEntityBinding("customer", "customer-1")) shouldBe Vector(nodea.id)
+      workingset.nodeIdsByTagBinding(KnowledgeTagBinding("topic", "important")) shouldBe Vector(nodea.id)
     }
 
     "reject duplicate ids" in {
@@ -79,6 +144,25 @@ final class KnowledgeWorkingSetSpec
       )
 
       KnowledgeWorkingSet.load(snapshot) shouldBe a[Consequence.Failure[_]]
+    }
+
+    "reject missing frame and fact references" in {
+      val node = KnowledgeNode(KnowledgeNodeId("node-a"), "entity")
+      val brokenfact = KnowledgeFact(
+        KnowledgeFactId("fact-broken"),
+        KnowledgeFactKind.EntityDerived,
+        subjectNodeId = Some(KnowledgeNodeId("missing"))
+      )
+      val brokenframe = KnowledgeFrame(
+        KnowledgeFrameId("frame-broken"),
+        KnowledgeFrameKind.EntityContext,
+        focusNodeIds = Vector(node.id),
+        factIds = Vector(KnowledgeFactId("missing")),
+        origin = KnowledgeFrameOrigin(KnowledgeFrameInputRoute.EntityProjection)
+      )
+
+      KnowledgeWorkingSet.load(KnowledgeWorkingSetSnapshot(nodes = Vector(node), facts = Vector(brokenfact))) shouldBe a[Consequence.Failure[_]]
+      KnowledgeWorkingSet.load(KnowledgeWorkingSetSnapshot(nodes = Vector(node), frames = Vector(brokenframe))) shouldBe a[Consequence.Failure[_]]
     }
   }
 

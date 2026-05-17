@@ -11725,9 +11725,9 @@ object StaticFormAppRenderer {
         nodepreview.map { node =>
           s"""<tr>
              |  <td><a href="/web/system/admin/knowledge/${path}/nodes/${_escape_path_segment(node.id.print)}"><code>${_escape(node.id.print)}</code></a></td>
-             |  <td>${_escape(node.kind)}</td>
-             |  <td>${_escape(node.label.getOrElse(""))}</td>
-             |  <td>${node.externalIdentifiers.size}</td>
+             |  <td>${_escape(node.category.print)}</td>
+             |  <td>${_escape(node.presentation.defaultLabel.getOrElse(""))}</td>
+             |  <td>${node.identity.externalIdentifiers.size}</td>
              |</tr>""".stripMargin
         }.mkString("\n")
     val relationships =
@@ -11765,7 +11765,7 @@ object StaticFormAppRenderer {
            |${_admin_card(
              "Nodes",
              s"""${nodecaption}<div class="table-responsive"><table class="table table-sm table-hover align-middle mb-0">
-                |  <thead><tr><th>Node</th><th>Kind</th><th>Label</th><th>External identifiers</th></tr></thead>
+                |  <thead><tr><th>Node</th><th>Category</th><th>Label</th><th>External identifiers</th></tr></thead>
                 |  <tbody>${nodes}</tbody>
                 |</table></div>""".stripMargin
            )}
@@ -11785,7 +11785,7 @@ object StaticFormAppRenderer {
   ): String = {
     val componentpath = _escape_path_segment(projection.componentName)
     val node = projection.node
-    val externalids = _knowledge_external_identifier_table(node.externalIdentifiers)
+    val externalids = _knowledge_external_identifier_table(node.identity.externalIdentifiers)
     val from =
       if (projection.relationshipsFrom.isEmpty)
         _admin_empty_table_cell(5, "No outgoing relationships.")
@@ -11798,6 +11798,8 @@ object StaticFormAppRenderer {
         projection.relationshipsTo.sortBy(_.id.print).map(_knowledge_relationship_row).mkString("\n")
     val evidence = _knowledge_evidence_table(projection.evidence)
     val provenance = _knowledge_provenance_table(projection.provenance)
+    val frames = _knowledge_frame_table(projection.frames)
+    val facts = _knowledge_fact_table(projection.facts)
     _simple_page(
       title = s"Knowledge Node ${node.id.print}",
       subtitle = s"${projection.componentName} KnowledgeSpace node detail",
@@ -11812,12 +11814,18 @@ object StaticFormAppRenderer {
                "Component" -> projection.componentName,
                "Subsystem" -> subsystem.name,
                "Id" -> node.id.print,
-               "Kind" -> node.kind,
-               "Label" -> node.label.getOrElse(""),
-               "Provenance id" -> node.provenanceId.map(_.print).getOrElse("")
+               "Category" -> node.category.print,
+               "Label" -> node.presentation.defaultLabel.getOrElse(""),
+               "RDF node" -> node.identity.rdfNode.map(_.print).getOrElse(""),
+               "Semantic types" -> node.semantics.semanticTypes.map(x => s"${x.system}:${x.name}").mkString(", "),
+               "Entity bindings" -> node.bindings.entityBindings.map(x => s"${x.entityName}:${x.entityId}").mkString(", "),
+               "Tag bindings" -> node.bindings.tagBindings.map(x => s"${x.tagSpace}:${x.tagId}").mkString(", "),
+               "Frame ids" -> node.operations.frameIds.map(_.print).mkString(", ")
              ))
            )}
            |${_admin_card("External identifiers", externalids)}
+           |${_admin_card("Frames", frames)}
+           |${_admin_card("Facts", facts)}
            |${_admin_card(
              "Outgoing relationships",
              s"""<div class="table-responsive"><table class="table table-sm table-hover align-middle mb-0">
@@ -11834,7 +11842,7 @@ object StaticFormAppRenderer {
            )}
            |${_admin_card("Evidence", evidence)}
            |${_admin_card("Provenance", provenance)}
-           |${_admin_card("Attributes", _field_table(node.attributes.toVector.sortBy(_._1)))}""".stripMargin
+           |${_admin_card("Structured node", s"<pre class=\"small mb-0\"><code>${_escape(org.goldenport.cncf.knowledge.KnowledgeRecordCodec.toRecord(node).toString)}</code></pre>")}""".stripMargin
     )
   }
 
@@ -11843,11 +11851,53 @@ object StaticFormAppRenderer {
   ): String =
     s"""<tr>
        |  <td><code>${_escape(relationship.id.print)}</code></td>
-       |  <td>${_escape(relationship.kind)}</td>
+       |  <td>${_escape(relationship.kind.print)}</td>
        |  <td><code>${_escape(relationship.sourceNodeId.print)}</code></td>
        |  <td><code>${_escape(relationship.targetNodeId.print)}</code></td>
        |  <td>${_escape(relationship.evidenceIds.map(_.print).mkString(", "))}</td>
        |</tr>""".stripMargin
+
+  private def _knowledge_frame_table(
+    frames: Vector[org.goldenport.cncf.knowledge.KnowledgeFrame]
+  ): String =
+    if (frames.isEmpty)
+      _admin_empty_state("No frames linked to this node projection.")
+    else {
+      val rows = frames.sortBy(_.id.print).map { item =>
+        s"""<tr>
+           |  <td><code>${_escape(item.id.print)}</code></td>
+           |  <td>${_escape(item.kind.print)}</td>
+           |  <td>${_escape(item.origin.route.print)}</td>
+           |  <td>${_escape(item.origin.provider.getOrElse(""))}</td>
+           |  <td>${_escape(item.focusNodeIds.map(_.print).mkString(", "))}</td>
+           |</tr>""".stripMargin
+      }.mkString("\n")
+      s"""<div class="table-responsive"><table class="table table-sm table-hover align-middle mb-0">
+         |  <thead><tr><th>Frame</th><th>Kind</th><th>Route</th><th>Provider</th><th>Focus nodes</th></tr></thead>
+         |  <tbody>${rows}</tbody>
+         |</table></div>""".stripMargin
+    }
+
+  private def _knowledge_fact_table(
+    facts: Vector[org.goldenport.cncf.knowledge.KnowledgeFact]
+  ): String =
+    if (facts.isEmpty)
+      _admin_empty_state("No facts linked to this node projection.")
+    else {
+      val rows = facts.sortBy(_.id.print).map { item =>
+        s"""<tr>
+           |  <td><code>${_escape(item.id.print)}</code></td>
+           |  <td>${_escape(item.kind.print)}</td>
+           |  <td>${_escape(item.predicate.getOrElse(""))}</td>
+           |  <td>${_escape(item.value.getOrElse(""))}</td>
+           |  <td>${_escape(item.evidenceIds.map(_.print).mkString(", "))}</td>
+           |</tr>""".stripMargin
+      }.mkString("\n")
+      s"""<div class="table-responsive"><table class="table table-sm table-hover align-middle mb-0">
+         |  <thead><tr><th>Fact</th><th>Kind</th><th>Predicate</th><th>Value</th><th>Evidence</th></tr></thead>
+         |  <tbody>${rows}</tbody>
+         |</table></div>""".stripMargin
+    }
 
   private def _knowledge_external_identifier_table(
     ids: Vector[org.goldenport.cncf.knowledge.ExternalKnowledgeIdentifier]

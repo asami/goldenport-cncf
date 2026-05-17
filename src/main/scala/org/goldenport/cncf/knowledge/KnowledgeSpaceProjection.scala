@@ -14,8 +14,10 @@ final case class ComponentKnowledgeProjection(
   status: KnowledgeWorkingSetStatus,
   counts: KnowledgeWorkingSetCounts,
   sourceDiagnostics: KnowledgeProjectionSourceDiagnostics,
+  frames: Vector[KnowledgeFrame],
   nodes: Vector[KnowledgeNode],
   relationships: Vector[KnowledgeRelationship],
+  facts: Vector[KnowledgeFact],
   evidence: Vector[KnowledgeEvidence],
   provenance: Vector[KnowledgeProvenance]
 ) {
@@ -25,8 +27,10 @@ final case class ComponentKnowledgeProjection(
       "status" -> KnowledgeRecordCodec.toRecord(status),
       "counts" -> KnowledgeRecordCodec.toRecord(counts),
       "source_diagnostics" -> KnowledgeRecordCodec.toRecord(sourceDiagnostics),
+      "frames" -> frames.map(KnowledgeRecordCodec.toRecord),
       "nodes" -> nodes.map(KnowledgeRecordCodec.toRecord),
       "relationships" -> relationships.map(KnowledgeRecordCodec.toRecord),
+      "facts" -> facts.map(KnowledgeRecordCodec.toRecord),
       "evidence" -> evidence.map(KnowledgeRecordCodec.toRecord),
       "provenance" -> provenance.map(KnowledgeRecordCodec.toRecord)
     )
@@ -37,6 +41,8 @@ final case class KnowledgeNodeProjection(
   node: KnowledgeNode,
   relationshipsFrom: Vector[KnowledgeRelationship],
   relationshipsTo: Vector[KnowledgeRelationship],
+  frames: Vector[KnowledgeFrame],
+  facts: Vector[KnowledgeFact],
   evidence: Vector[KnowledgeEvidence],
   provenance: Vector[KnowledgeProvenance]
 ) {
@@ -46,6 +52,8 @@ final case class KnowledgeNodeProjection(
       "node" -> KnowledgeRecordCodec.toRecord(node),
       "relationships_from" -> relationshipsFrom.map(KnowledgeRecordCodec.toRecord),
       "relationships_to" -> relationshipsTo.map(KnowledgeRecordCodec.toRecord),
+      "frames" -> frames.map(KnowledgeRecordCodec.toRecord),
+      "facts" -> facts.map(KnowledgeRecordCodec.toRecord),
       "evidence" -> evidence.map(KnowledgeRecordCodec.toRecord),
       "provenance" -> provenance.map(KnowledgeRecordCodec.toRecord)
     )
@@ -82,10 +90,12 @@ object KnowledgeSpaceProjection {
         storage = "memory",
         providerStatus = "not_attached",
         projectionMode = "snapshot",
-        message = Some("KS-09 exposes the component-owned in-memory KnowledgeSpace projection; provider-backed RDF/Vector loading starts in KS-10.")
+        message = Some("KS-10 exposes the component-owned in-memory KnowledgeSpace operational model; provider-backed RDF/Vector loading starts in KS-12.")
       ),
+      snapshot.frames,
       snapshot.nodes,
       snapshot.relationships,
+      snapshot.facts,
       snapshot.evidence,
       snapshot.provenance
     )
@@ -96,25 +106,30 @@ object KnowledgeSpaceProjection {
 
   def componentOption(
     components: Vector[Component],
-    componentName: String
+    componentname: String
   ): Option[Component] =
-    components.find(x => _matches_component_name(x, componentName))
+    components.find(x => _matches_component_name(x, componentname))
 
   def nodeOption(
     component: Component,
-    nodeId: KnowledgeNodeId
+    nodeid: KnowledgeNodeId
   ): Option[KnowledgeNodeProjection] =
-    component.knowledgeSpace.nodeOption(nodeId).map { node =>
+    component.knowledgeSpace.nodeOption(nodeid).map { node =>
       val from = component.knowledgeSpace.relationshipsFrom(node.id)
       val to = component.knowledgeSpace.relationshipsTo(node.id)
-      val evidenceids = (from ++ to).flatMap(_.evidenceIds).distinct
+      val frames = component.knowledgeSpace.framesForNode(node.id)
+      val facts = component.knowledgeSpace.factsForNode(node.id) ++ (from ++ to).flatMap(x => component.knowledgeSpace.factsForRelationship(x.id))
+      val evidenceids = (node.sources.evidenceIds ++ (from ++ to).flatMap(_.evidenceIds) ++ facts.flatMap(_.evidenceIds)).distinct
       val evidence = evidenceids.flatMap(component.knowledgeSpace.evidenceOption)
       val provenanceids =
-        (node.provenanceId.toVector ++
+        (node.sources.provenanceIds ++
           (from ++ to).flatMap(_.provenanceId) ++
+          frames.flatMap(_.provenanceIds) ++
+          frames.flatMap(_.origin.provenanceId) ++
+          facts.flatMap(_.provenanceId) ++
           evidence.flatMap(_.provenanceId)).distinct
       val provenance = provenanceids.flatMap(component.knowledgeSpace.provenanceOption)
-      KnowledgeNodeProjection(component.name, node, from, to, evidence, provenance)
+      KnowledgeNodeProjection(component.name, node, from, to, frames, facts.distinct, evidence, provenance)
     }
 
   def lookupExternalIdentifier(
@@ -129,10 +144,16 @@ object KnowledgeSpaceProjection {
 
   def lookupEntity(
     components: Vector[Component],
-    entityName: String,
-    entityId: String
-  ): Vector[KnowledgeLookupResult] =
-    lookupExternalIdentifier(components, ExternalKnowledgeIdentifier.entity(entityName, entityId))
+    entityname: String,
+    entityid: String
+  ): Vector[KnowledgeLookupResult] = {
+    val binding = KnowledgeEntityBinding(entityname, entityid)
+    components.sortBy(_.name).flatMap { component =>
+      component.knowledgeSpace.nodeIdsByEntityBinding(binding).flatMap { nodeid =>
+        component.knowledgeSpace.nodeOption(nodeid).map(KnowledgeLookupResult(component.name, _))
+      }
+    }
+  }
 
   private def _matches_component_name(
     component: Component,

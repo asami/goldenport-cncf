@@ -31,11 +31,32 @@ final class KnowledgeSpaceSpec
       val nodeb = KnowledgeNode(KnowledgeNodeId("node-b"), "concept")
       val relationship = KnowledgeRelationship(
         KnowledgeRelationshipId("rel-1"),
-        "related",
+        KnowledgeRelationshipKind.HasPart,
         nodea.id,
         nodeb.id
       )
-      val snapshot = KnowledgeWorkingSetSnapshot(Vector(nodea, nodeb), Vector(relationship))
+      val fact = KnowledgeFact(
+        KnowledgeFactId("fact-1"),
+        KnowledgeFactKind.Generated,
+        subjectNodeId = Some(nodea.id),
+        predicate = Some("generated.summary"),
+        value = Some("node-a has node-b")
+      )
+      val frame = KnowledgeFrame(
+        KnowledgeFrameId("frame-1"),
+        KnowledgeFrameKind.Generated,
+        focusNodeIds = Vector(nodea.id),
+        nodeIds = Vector(nodea.id, nodeb.id),
+        relationshipIds = Vector(relationship.id),
+        factIds = Vector(fact.id),
+        origin = KnowledgeFrameOrigin(KnowledgeFrameInputRoute.OperationGenerated)
+      )
+      val snapshot = KnowledgeWorkingSetSnapshot(
+        nodes = Vector(nodea, nodeb),
+        relationships = Vector(relationship),
+        frames = Vector(frame),
+        facts = Vector(fact)
+      )
 
       When("replacing the snapshot")
       val status = _success(space.replace(snapshot))
@@ -43,8 +64,15 @@ final class KnowledgeSpaceSpec
       Then("lookup methods use the loaded working set")
       status.isReady shouldBe true
       space.counts.nodeCount shouldBe 2
-      space.nodeOption(nodea.id) shouldBe Some(nodea)
+      val projected = space.nodeOption(nodea.id).getOrElse(fail("missing projected node"))
+      projected.id shouldBe nodea.id
+      projected.structure.partWhole.hasPart shouldBe Vector(nodeb.id)
+      projected.operations.frameIds shouldBe Vector(frame.id)
       space.relationshipsFrom(nodea.id) shouldBe Vector(relationship)
+      space.frameOption(frame.id) shouldBe Some(frame)
+      space.framesForNode(nodea.id) shouldBe Vector(frame)
+      space.factOption(fact.id) shouldBe Some(fact)
+      space.factsForNode(nodea.id) shouldBe Vector(fact)
 
       When("clearing the space")
       space.clear()
