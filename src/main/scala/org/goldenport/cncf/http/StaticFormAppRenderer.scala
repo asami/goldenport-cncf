@@ -36,8 +36,62 @@ import io.circe.parser.parse
  * @author  ASAMI, Tomoharu
  */
 object StaticFormAppRenderer {
-  private val _call_tree_js_asset = "/web/assets/textus-calltree.js"
+  type Page = StaticFormAppRendererSupport.Page
+  val Page = StaticFormAppRendererSupport.Page
+  type PageRequest = StaticFormAppRendererSupport.PageRequest
+  val PageRequest = StaticFormAppRendererSupport.PageRequest
+  type FormPageProperties = StaticFormAppRendererSupport.FormPageProperties
+  val FormPageProperties = StaticFormAppRendererSupport.FormPageProperties
+  type FormResultProperties = StaticFormAppRendererSupport.FormResultProperties
+  val FormResultProperties = StaticFormAppRendererSupport.FormResultProperties
+  type TableColumn = StaticFormAppRendererSupport.TableColumn
+  val TableColumn = StaticFormAppRendererSupport.TableColumn
+  type FormValidationResult = StaticFormAppRendererSupport.FormValidationResult
+  val FormValidationResult = StaticFormAppRendererSupport.FormValidationResult
+  type FormValidationMessage = StaticFormAppRendererSupport.FormValidationMessage
+  val FormValidationMessage = StaticFormAppRendererSupport.FormValidationMessage
+  type DocumentLink = StaticFormAppRendererSupport.DocumentLink
+  val DocumentLink = StaticFormAppRendererSupport.DocumentLink
 
+  val defaultPageViewContextValues: Map[String, String] =
+    StaticFormAppRendererSupport.defaultPageViewContextValues
+
+  def apply(
+    config: StaticFormAppRendererConfig = StaticFormAppRendererConfig.default
+  ): StaticFormAppRenderer =
+    new StaticFormAppRenderer(config)
+
+  def isHiddenFormContextKey(key: String): Boolean =
+    StaticFormAppRendererSupport.isHiddenFormContextKey(key)
+
+  def isHtmlDocumentTemplate(template: String): Boolean =
+    StaticFormAppRendererSupport.isHtmlDocumentTemplate(template)
+
+  def hasTextusMarkup(template: String): Boolean =
+    StaticFormAppRendererSupport.hasTextusMarkup(template)
+
+  private[http] def tableColumnKey(
+    path: String,
+    entity: String,
+    view: String
+  ): String =
+    StaticFormAppRendererSupport.tableColumnKey(path, entity, view)
+}
+
+final class StaticFormAppRenderer(
+  val config: StaticFormAppRendererConfig = StaticFormAppRendererConfig.default
+) extends StaticFormAppRendererSupport(config)
+    with StaticFormAppRendererCorePart
+    with StaticFormAppRendererTemplatePart
+    with StaticFormAppRendererFormPart
+    with StaticFormAppRendererFormResultPart
+    with StaticFormAppRendererSystemAdminPart
+    with StaticFormAppRendererComponentAdminPart
+    with StaticFormAppRendererBlobTagPart
+    with StaticFormAppRendererJobPart
+    with StaticFormAppRendererObservabilityPart
+    with StaticFormAppRendererKnowledgePart
+object StaticFormAppRendererSupport {
   final case class Page(body: String)
   final case class PageRequest(
     page: Int = 1,
@@ -168,9 +222,9 @@ object StaticFormAppRenderer {
         .sortBy(_._1)
       val pairs = context ++ Vector("page" -> "{page}", "pageSize" -> "{pageSize}")
       val query = pairs.map {
-        case (key, "{page}") => s"${_escape_query(key)}={page}"
-        case (key, "{pageSize}") => s"${_escape_query(key)}={pageSize}"
-        case (key, value) => s"${_escape_query(key)}=${_escape_query(value)}"
+        case (key, "{page}") => s"${escapeQuery(key)}={page}"
+        case (key, "{pageSize}") => s"${escapeQuery(key)}={pageSize}"
+        case (key, value) => s"${escapeQuery(key)}=${escapeQuery(value)}"
       }.mkString("&")
       s"${base}?${query}"
     }
@@ -251,7 +305,7 @@ object StaticFormAppRenderer {
       metadata.id.flatMap(id => _detail_operation_name.map(_ -> id)) match {
         case Some((detailOperation, id)) =>
           val detailOperationPath = NamingConventions.toNormalizedSegment(detailOperation)
-          val href = s"/form/${page.componentPath}/${page.servicePath}/${detailOperationPath}/result?id=${_escape_query(id)}"
+          val href = s"/form/${page.componentPath}/${page.servicePath}/${detailOperationPath}/result?id=${escapeQuery(id)}"
           val common = Map(
             "result.action.detail.name" -> "detail",
             "result.action.detail.label" -> "Open detail",
@@ -297,6 +351,88 @@ object StaticFormAppRenderer {
     name: String,
     label: String
   )
+  final case class FormValidationResult(
+    webSchema: WebSchemaResolver.ResolvedWebSchema,
+    values: Map[String, String],
+    errors: Vector[FormValidationMessage],
+    warnings: Vector[FormValidationMessage]
+  ) {
+    def valid: Boolean = errors.isEmpty
+  }
+  final case class FormValidationMessage(
+    field: Option[String],
+    code: String,
+    message: String
+  )
+  final case class DocumentLink(
+    title: String,
+    href: String
+  )
+
+  val defaultPageViewContextValues: Map[String, String] = Map(
+    "pageContext.session.authenticated" -> "false",
+    "pageContext.notification.available" -> "false",
+    "pageContext.notification.unconfirmedCount" -> "0",
+    "pageContext.notification.indicatorHidden" -> "hidden",
+    "pageContext.notification.badgeHidden" -> "hidden",
+    "pageContext.jobs.activeCount" -> "0",
+    "pageContext.jobs.unconfirmedCount" -> "0",
+    "pageContext.jobs.visible" -> "false",
+    "pageContext.jobs.hidden" -> "hidden",
+    "pageContext.jobs.activeBadgeHidden" -> "hidden",
+    "pageContext.jobs.unconfirmedBadgeHidden" -> "hidden"
+  )
+
+  private val _hidden_form_context_exact_keys: Set[String] =
+    Set(
+      "crud.origin.href",
+      "crud.success.href",
+      "crud.error.href",
+      "paging.page",
+      "paging.pageSize",
+      "paging.chunkSize",
+      "paging.includeTotal",
+      "paging.href",
+      "continuation.id",
+      "return.href",
+      "textus.form.page",
+      "cncf.form.page",
+      "textus.admin.principalId",
+      "textus.admin.subjectId",
+      "version",
+      "etag",
+      "csrf"
+    )
+
+  def isHiddenFormContextKey(key: String): Boolean =
+    _hidden_form_context_exact_keys.contains(key) || key.startsWith("search.")
+
+  def isHtmlDocumentTemplate(template: String): Boolean = {
+    val text = template.dropWhile(_.isWhitespace).toLowerCase(java.util.Locale.ROOT)
+    text.startsWith("<!doctype html") || text.startsWith("<html")
+  }
+
+  def hasTextusMarkup(template: String): Boolean =
+    """<textus(?::|-)[A-Za-z0-9-]+\b""".r.findFirstIn(template).nonEmpty
+
+  private[http] def tableColumnKey(
+    source: String,
+    entity: String,
+    view: String = WebTableColumnResolver.defaultViewName
+  ): String =
+    s"${source}|entity=${NamingConventions.toNormalizedSegment(entity)}|view=${NamingConventions.toNormalizedSegment(view)}"
+
+  private[http] def escapeQuery(value: String): String =
+    URLEncoder.encode(value, StandardCharsets.UTF_8).replace("+", "%20")
+}
+
+abstract class StaticFormAppRendererSupport(
+  protected val renderer_config: StaticFormAppRendererConfig
+) {
+  import StaticFormAppRendererSupport.*
+
+  private val _call_tree_js_asset = "/web/assets/textus-calltree.js"
+
   private final case class OperationWebSchemaContext(
     component: Component,
     serviceName: String,
@@ -320,37 +456,6 @@ object StaticFormAppRenderer {
     method: String,
     path: String
   )
-  final case class FormValidationResult(
-    webSchema: WebSchemaResolver.ResolvedWebSchema,
-    values: Map[String, String],
-    errors: Vector[FormValidationMessage],
-    warnings: Vector[FormValidationMessage]
-  ) {
-    def valid: Boolean = errors.isEmpty
-  }
-  final case class FormValidationMessage(
-    field: Option[String],
-    code: String,
-    message: String
-  )
-  final case class DocumentLink(
-    title: String,
-    href: String
-  )
-  val defaultPageViewContextValues: Map[String, String] = Map(
-    "pageContext.session.authenticated" -> "false",
-    "pageContext.notification.available" -> "false",
-    "pageContext.notification.unconfirmedCount" -> "0",
-    "pageContext.notification.indicatorHidden" -> "hidden",
-    "pageContext.notification.badgeHidden" -> "hidden",
-    "pageContext.jobs.activeCount" -> "0",
-    "pageContext.jobs.unconfirmedCount" -> "0",
-    "pageContext.jobs.visible" -> "false",
-    "pageContext.jobs.hidden" -> "hidden",
-    "pageContext.jobs.activeBadgeHidden" -> "hidden",
-    "pageContext.jobs.unconfirmedBadgeHidden" -> "hidden"
-  )
-
   def render(
     subsystem: Subsystem,
     app: String,
@@ -960,7 +1065,7 @@ object StaticFormAppRenderer {
       case xs if xs.isEmpty => ""
       case xs =>
         xs.map { case (key, value) =>
-          s"${_escape_query(key)}=${_escape_query(value)}"
+          s"${escapeQuery(key)}=${escapeQuery(value)}"
         }.mkString("?", "&", "")
     }
 
@@ -2371,7 +2476,7 @@ object StaticFormAppRenderer {
          |      <h3 class="h6 mt-3">Operation arguments</h3>
          |      ${argumentsHtml}
          |      <h3 class="h6 mt-3">Result body</h3>
-         |      <pre class="bg-light border rounded p-3"><code>${_escape(_debug_body_pretty(properties.body, properties.fieldConfidentiality).take(12000))}</code></pre>
+         |      <pre class="bg-light border rounded p-3"><code>${_escape(_debug_body_pretty(properties.body, properties.fieldConfidentiality).take(renderer_config.debugBodyPreviewChars))}</code></pre>
          |      <h3 class="h6 mt-3">CallTree</h3>
          |      ${effectiveCalltreeHtml}
          |    </div>
@@ -2998,7 +3103,7 @@ object StaticFormAppRenderer {
     val lane = if (line.depth == 0) "" else """<span class="textus-calltree-lane" aria-hidden="true"></span>"""
     s"""<div class="list-group-item py-2 textus-calltree-row textus-calltree-row-${_escape(line.role)}" style="${style}" data-calltree-node data-calltree-row data-calltree-${_escape(line.role)}="true" data-calltree-pair="${_escape(line.pair)}" data-calltree-depth="${line.depth}" data-calltree-kind="${_escape(line.kind)}" data-calltree-real-io="${_escape(realIo)}" data-calltree-source="${_escape(source)}">
        |  ${lane}
-       |  <details${if (line.depth <= 1) " open" else ""}>
+       |  <details${if (line.depth <= renderer_config.callTreeInitialOpenDepth) " open" else ""}>
        |    <summary class="d-flex flex-wrap align-items-center gap-2">
        |      <span class="badge ${_debug_calltree_role_badge_variant(line.role)}" data-calltree-role>${_escape(line.kind)}</span>
        |      <span class="fw-semibold" data-calltree-label>${_escape(line.displayLabel)}</span>
@@ -3512,7 +3617,7 @@ object StaticFormAppRenderer {
   def renderSystemAdminJobs(
     subsystem: Subsystem
   ): Page = {
-    val jobs = subsystem.jobEngine.listJobs(limit = 100, persistentOnly = true)
+    val jobs = subsystem.jobEngine.listJobs(limit = renderer_config.adminPageSize, persistentOnly = true)
     val rows =
       if (jobs.isEmpty)
         """<tr><td colspan="7" class="text-secondary">No persistent jobs have been retained yet. Run a request with <code>--debug.trace-job</code> or <code>textus.debug.trace-job=true</code>.</td></tr>"""
@@ -3759,7 +3864,7 @@ object StaticFormAppRenderer {
     _blob_admin_record(subsystem, "admin_get_blob", Vector("id" -> id), requestProperties).map { record =>
       val nav = _admin_nav_card(Vector(
         "Blobs" -> "/web/blob/admin/blobs",
-        "Associations" -> s"/web/blob/admin/associations?id=${_escape_query(id)}",
+        "Associations" -> s"/web/blob/admin/associations?id=${escapeQuery(id)}",
         "Blob admin" -> "/web/blob/admin"
       ))
       Page(_simple_page(
@@ -3781,7 +3886,7 @@ object StaticFormAppRenderer {
   ): Consequence[Page] =
     for {
       blob <- _blob_admin_record(subsystem, "admin_get_blob", Vector("id" -> id), requestProperties)
-      associations <- _blob_admin_record(subsystem, "admin_list_blob_associations", Vector("id" -> id, "offset" -> "0", "limit" -> "100"), requestProperties)
+      associations <- _blob_admin_record(subsystem, "admin_list_blob_associations", Vector("id" -> id, "offset" -> "0", "limit" -> renderer_config.adminPageSize.toString), requestProperties)
     } yield {
       val count = associations.getInt("fetchedCount").getOrElse(_record_seq(associations.asMap.get("data")).size)
       val warning =
@@ -3805,7 +3910,7 @@ object StaticFormAppRenderer {
         title = s"Delete Blob ${_escape(id)}",
         subtitle = "Confirm controlled Blob deletion",
         body =
-          s"""${_admin_nav_card(Vector("Blob detail" -> s"/web/blob/admin/blobs/${_escape_path_segment(id)}", "Blobs" -> "/web/blob/admin/blobs", "Associations" -> s"/web/blob/admin/associations?id=${_escape_query(id)}"))}
+          s"""${_admin_nav_card(Vector("Blob detail" -> s"/web/blob/admin/blobs/${_escape_path_segment(id)}", "Blobs" -> "/web/blob/admin/blobs", "Associations" -> s"/web/blob/admin/associations?id=${escapeQuery(id)}"))}
              |${warning}
              |${_admin_card("Blob metadata", _field_table(_blob_admin_blob_fields(blob)))}
              |${_admin_card("Delete confirmation", form)}
@@ -3887,7 +3992,7 @@ object StaticFormAppRenderer {
         body =
           s"""${_admin_nav_card(Vector("Associations" -> "/web/blob/admin/associations", "Blob admin" -> "/web/blob/admin"))}
              |${_admin_card("Attach result", _field_table(record.asMap.toVector.map { case (k, v) => k -> _display_value(v) }.sortBy(_._1)))}
-             |${_admin_action_row(Vector("Back to Associations" -> s"/web/blob/admin/associations?sourceEntityId=${_escape_query(form.getOrElse("sourceEntityId", ""))}", "Blob detail" -> s"/web/blob/admin/blobs/${_escape_path_segment(form.getOrElse("id", ""))}"))}
+             |${_admin_action_row(Vector("Back to Associations" -> s"/web/blob/admin/associations?sourceEntityId=${escapeQuery(form.getOrElse("sourceEntityId", ""))}", "Blob detail" -> s"/web/blob/admin/blobs/${_escape_path_segment(form.getOrElse("id", ""))}"))}
              |${_manual_raw_details("Raw attach result", record)}""".stripMargin
       ))
     }
@@ -3904,7 +4009,7 @@ object StaticFormAppRenderer {
         body =
           s"""${_admin_nav_card(Vector("Associations" -> "/web/blob/admin/associations", "Blob admin" -> "/web/blob/admin"))}
              |${_admin_card("Detach result", _field_table(record.asMap.toVector.map { case (k, v) => k -> _display_value(v) }.sortBy(_._1)))}
-             |${_admin_action_row(Vector("Back to Associations" -> s"/web/blob/admin/associations?sourceEntityId=${_escape_query(form.getOrElse("sourceEntityId", ""))}", "Blob detail" -> s"/web/blob/admin/blobs/${_escape_path_segment(form.getOrElse("id", ""))}"))}
+             |${_admin_action_row(Vector("Back to Associations" -> s"/web/blob/admin/associations?sourceEntityId=${escapeQuery(form.getOrElse("sourceEntityId", ""))}", "Blob detail" -> s"/web/blob/admin/blobs/${_escape_path_segment(form.getOrElse("id", ""))}"))}
              |${_manual_raw_details("Raw detach result", record)}""".stripMargin
       ))
     }
@@ -4062,7 +4167,7 @@ object StaticFormAppRenderer {
         body =
           s"""${_admin_nav_card(Vector("Tags" -> "/web/admin/tags", "Associations" -> "/web/admin/associations"))}
              |${_admin_card("Attach result", _field_table(record.asMap.toVector.map { case (k, v) => k -> _display_value(v) }.sortBy(_._1)))}
-             |${_admin_action_row(Vector("Back to Tags" -> s"/web/admin/tags?tagSpace=${_escape_query(form.getOrElse("tagSpace", ""))}&sourceEntityId=${_escape_query(form.getOrElse("sourceEntityId", ""))}"))}
+             |${_admin_action_row(Vector("Back to Tags" -> s"/web/admin/tags?tagSpace=${escapeQuery(form.getOrElse("tagSpace", ""))}&sourceEntityId=${escapeQuery(form.getOrElse("sourceEntityId", ""))}"))}
              |${_manual_raw_details("Raw attach result", record)}""".stripMargin
       ))
     }
@@ -4079,7 +4184,7 @@ object StaticFormAppRenderer {
         body =
           s"""${_admin_nav_card(Vector("Tags" -> "/web/admin/tags", "Associations" -> "/web/admin/associations"))}
              |${_admin_card("Detach result", _field_table(record.asMap.toVector.map { case (k, v) => k -> _display_value(v) }.sortBy(_._1)))}
-             |${_admin_action_row(Vector("Back to Tags" -> s"/web/admin/tags?tagSpace=${_escape_query(form.getOrElse("tagSpace", ""))}&sourceEntityId=${_escape_query(form.getOrElse("sourceEntityId", ""))}"))}
+             |${_admin_action_row(Vector("Back to Tags" -> s"/web/admin/tags?tagSpace=${escapeQuery(form.getOrElse("tagSpace", ""))}&sourceEntityId=${escapeQuery(form.getOrElse("sourceEntityId", ""))}"))}
              |${_manual_raw_details("Raw detach result", record)}""".stripMargin
       ))
     }
@@ -4096,7 +4201,7 @@ object StaticFormAppRenderer {
         body =
           s"""${_admin_nav_card(Vector("Associations" -> "/web/admin/associations", "Blob associations" -> "/web/blob/admin/associations"))}
              |${_admin_card("Attach result", _field_table(record.asMap.toVector.map { case (k, v) => k -> _display_value(v) }.sortBy(_._1)))}
-             |${_admin_action_row(Vector("Back to Associations" -> s"/web/admin/associations?domain=${_escape_query(form.getOrElse("domain", ""))}&sourceEntityId=${_escape_query(form.getOrElse("sourceEntityId", ""))}"))}
+             |${_admin_action_row(Vector("Back to Associations" -> s"/web/admin/associations?domain=${escapeQuery(form.getOrElse("domain", ""))}&sourceEntityId=${escapeQuery(form.getOrElse("sourceEntityId", ""))}"))}
              |${_manual_raw_details("Raw attach result", record)}""".stripMargin
       ))
     }
@@ -4113,7 +4218,7 @@ object StaticFormAppRenderer {
         body =
           s"""${_admin_nav_card(Vector("Associations" -> "/web/admin/associations", "Blob associations" -> "/web/blob/admin/associations"))}
              |${_admin_card("Detach result", _field_table(record.asMap.toVector.map { case (k, v) => k -> _display_value(v) }.sortBy(_._1)))}
-             |${_admin_action_row(Vector("Back to Associations" -> s"/web/admin/associations?domain=${_escape_query(form.getOrElse("domain", ""))}&sourceEntityId=${_escape_query(form.getOrElse("sourceEntityId", ""))}"))}
+             |${_admin_action_row(Vector("Back to Associations" -> s"/web/admin/associations?domain=${escapeQuery(form.getOrElse("domain", ""))}&sourceEntityId=${escapeQuery(form.getOrElse("sourceEntityId", ""))}"))}
              |${_manual_raw_details("Raw detach result", record)}""".stripMargin
       ))
     }
@@ -4230,7 +4335,7 @@ object StaticFormAppRenderer {
   private def _blob_admin_page_args(
     params: Map[String, String]
   ): Vector[(String, String)] = {
-    val limit = params.get("limit").orElse(params.get("pageSize")).flatMap(_.toIntOption).filter(_ > 0).getOrElse(100)
+    val limit = params.get("limit").orElse(params.get("pageSize")).flatMap(_.toIntOption).filter(_ > 0).getOrElse(renderer_config.adminPageSize)
     val offset = params.get("offset").flatMap(_.toIntOption).filter(_ >= 0).getOrElse {
       params.get("page").flatMap(_.toIntOption).filter(_ > 0).map(page => (page - 1) * limit).getOrElse(0)
     }
@@ -4257,11 +4362,11 @@ object StaticFormAppRenderer {
   private def _admin_association_args(
     params: Map[String, String]
   ): Vector[(String, String)] = {
-    val pageSize = params.get("pageSize").orElse(params.get("limit")).flatMap(_.toIntOption).filter(_ > 0).getOrElse(100)
+    val pagesize = params.get("pageSize").orElse(params.get("limit")).flatMap(_.toIntOption).filter(_ > 0).getOrElse(renderer_config.adminPageSize)
     val page = params.get("page").flatMap(_.toIntOption).filter(_ > 0).getOrElse {
-      params.get("offset").flatMap(_.toIntOption).filter(_ >= 0).map(offset => offset / pageSize + 1).getOrElse(1)
+      params.get("offset").flatMap(_.toIntOption).filter(_ >= 0).map(offset => offset / pagesize + 1).getOrElse(1)
     }
-    Vector("page" -> page.toString, "pageSize" -> pageSize.toString) ++
+    Vector("page" -> page.toString, "pageSize" -> pagesize.toString) ++
       Vector("domain" -> params.getOrElse("domain", "association")) ++
       Vector("sourceEntityId", "targetEntityId", "targetKind", "role")
         .flatMap(key => params.get(key).filter(_.nonEmpty).map(key -> _))
@@ -4484,7 +4589,7 @@ object StaticFormAppRenderer {
       body =
         s"""${_admin_nav_card(Vector("Tags" -> "/web/admin/tags", "Associations" -> "/web/admin/associations"))}
            |${_admin_card("Tag result", _field_table(record.asMap.toVector.map { case (k, v) => k -> _display_value(v) }.sortBy(_._1)))}
-           |${_admin_action_row(Vector("Back to Tags" -> s"/web/admin/tags?tagSpace=${_escape_query(form.getOrElse("tagSpace", record.getString("tagSpace").getOrElse("")))}"))}
+           |${_admin_action_row(Vector("Back to Tags" -> s"/web/admin/tags?tagSpace=${escapeQuery(form.getOrElse("tagSpace", record.getString("tagSpace").getOrElse("")))}"))}
            |${_manual_raw_details("Raw tag result", record)}""".stripMargin
     ))
 
@@ -4627,7 +4732,7 @@ object StaticFormAppRenderer {
        |  <div class="col-md-4"><label class="form-label" for="blobAdminSourceEntityId">Source entity</label><input class="form-control" id="blobAdminSourceEntityId" name="sourceEntityId" value="${value("sourceEntityId")}"></div>
        |  <div class="col-md-4"><label class="form-label" for="blobAdminId">Blob id</label><input class="form-control" id="blobAdminId" name="id" value="${value("id")}"></div>
        |  <div class="col-md-2"><label class="form-label" for="blobAdminRole">Role</label><input class="form-control" id="blobAdminRole" name="role" value="${value("role")}"></div>
-       |  <div class="col-md-2"><label class="form-label" for="blobAdminLimit">Limit</label><input class="form-control" id="blobAdminLimit" name="limit" value="${_escape(params.getOrElse("limit", "100"))}"></div>
+       |  <div class="col-md-2"><label class="form-label" for="blobAdminLimit">Limit</label><input class="form-control" id="blobAdminLimit" name="limit" value="${_escape(params.getOrElse("limit", renderer_config.adminPageSize.toString))}"></div>
        |  <div class="col-12"><button class="btn btn-primary" type="submit">Filter</button> <a class="btn btn-outline-secondary" href="/web/blob/admin/associations">Clear</a></div>
        |</form>""".stripMargin
   }
@@ -4658,7 +4763,7 @@ object StaticFormAppRenderer {
        |  <div class="col-md-3"><label class="form-label" for="associationAdminTargetEntityId">Target entity</label><input class="form-control" id="associationAdminTargetEntityId" name="targetEntityId" value="${value("targetEntityId")}"></div>
        |  <div class="col-md-2"><label class="form-label" for="associationAdminTargetKind">Target kind</label><input class="form-control" id="associationAdminTargetKind" name="targetKind" value="${value("targetKind")}"></div>
        |  <div class="col-md-1"><label class="form-label" for="associationAdminRole">Role</label><input class="form-control" id="associationAdminRole" name="role" value="${value("role")}"></div>
-       |  <div class="col-md-1"><label class="form-label" for="associationAdminPageSize">Page size</label><input class="form-control" id="associationAdminPageSize" name="pageSize" value="${_escape(params.get("pageSize").orElse(params.get("limit")).getOrElse("100"))}"></div>
+       |  <div class="col-md-1"><label class="form-label" for="associationAdminPageSize">Page size</label><input class="form-control" id="associationAdminPageSize" name="pageSize" value="${_escape(params.get("pageSize").orElse(params.get("limit")).getOrElse(renderer_config.adminPageSize.toString))}"></div>
        |  <div class="col-12"><button class="btn btn-primary" type="submit">Filter</button> <a class="btn btn-outline-secondary" href="/web/admin/associations">Clear</a></div>
        |</form>""".stripMargin
   }
@@ -4697,7 +4802,7 @@ object StaticFormAppRenderer {
        |  <div class="card-body">
        |    <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-3">
        |      <h2 class="card-title mb-0">Images</h2>
-       |      <a class="btn btn-outline-secondary btn-sm" href="/web/blob/admin/associations?sourceEntityId=${_escape_query(sourceId)}">Open Blob associations</a>
+       |      <a class="btn btn-outline-secondary btn-sm" href="/web/blob/admin/associations?sourceEntityId=${escapeQuery(sourceId)}">Open Blob associations</a>
        |    </div>
        |    <section class="mb-3">
        |      <h3 class="h6">Representative Image</h3>
@@ -4825,7 +4930,7 @@ object StaticFormAppRenderer {
        |  <div class="card-body">
        |    <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-3">
        |      <h2 class="card-title mb-0">Tags</h2>
-       |      <a class="btn btn-outline-secondary btn-sm" href="/web/admin/tags?tagSpace=${_escape_query(tagSpace)}&amp;sourceEntityId=${_escape_query(sourceId)}">Open Tags</a>
+       |      <a class="btn btn-outline-secondary btn-sm" href="/web/admin/tags?tagSpace=${escapeQuery(tagSpace)}&amp;sourceEntityId=${escapeQuery(sourceId)}">Open Tags</a>
        |    </div>
        |    <section class="mb-3">
        |      <h3 class="h6">Attach Tag</h3>
@@ -4925,7 +5030,7 @@ object StaticFormAppRenderer {
             s"""<tbody>${rows.map(row => _admin_association_row(row, includeDetach = true)).mkString("\n")}</tbody>"""
         val attach = _admin_entity_association_attach_form(sourceId, relationship)
         val openlink = relationship.associationDomain.filter(_.nonEmpty).map { domain =>
-          s"""<a class="btn btn-outline-secondary btn-sm" href="/web/admin/associations?domain=${_escape_query(domain)}&amp;sourceEntityId=${_escape_query(sourceId)}">Open Associations</a>"""
+          s"""<a class="btn btn-outline-secondary btn-sm" href="/web/admin/associations?domain=${escapeQuery(domain)}&amp;sourceEntityId=${escapeQuery(sourceId)}">Open Associations</a>"""
         }.getOrElse("")
         s"""<section class="mb-3">
            |  <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between">
@@ -4990,7 +5095,7 @@ object StaticFormAppRenderer {
           "domain" -> domain,
           "sourceEntityId" -> sourceId,
           "targetKind" -> relationship.targetKind.getOrElse(""),
-          "pageSize" -> 100
+          "pageSize" -> renderer_config.adminPageSize
         )
       ).toVector.flatMap(record => _record_seq(record.asMap.get("data")))
     }
@@ -5021,10 +5126,10 @@ object StaticFormAppRenderer {
     record: Record
   ): String = {
     val offset = record.getInt("offset").getOrElse(0)
-    val limit = record.getInt("limit").getOrElse(100)
+    val limit = record.getInt("limit").getOrElse(renderer_config.adminPageSize)
     val hasmore = record.getBoolean("hasMore").getOrElse(false)
     val cleanparams = params -- Set("offset", "page", "pageSize")
-    val querybase = cleanparams.toVector.sortBy(_._1).map { case (k, v) => s"${_escape_query(k)}=${_escape_query(v)}" }
+    val querybase = cleanparams.toVector.sortBy(_._1).map { case (k, v) => s"${escapeQuery(k)}=${escapeQuery(v)}" }
     val prev =
       if (offset <= 0) ""
       else {
@@ -5046,11 +5151,11 @@ object StaticFormAppRenderer {
     record: Record
   ): String = {
     val page = record.getInt("page").getOrElse(1)
-    val pageSize = record.getInt("pageSize").getOrElse(100)
+    val pagesize = record.getInt("pageSize").getOrElse(renderer_config.adminPageSize)
     val hasnext = record.getBoolean("hasNext").getOrElse(false)
     val cleanparams = params -- Set("offset", "limit", "page", "pageSize")
-    val querybase = cleanparams.toVector.sortBy(_._1).map { case (k, v) => s"${_escape_query(k)}=${_escape_query(v)}" } :+
-      s"pageSize=${pageSize}"
+    val querybase = cleanparams.toVector.sortBy(_._1).map { case (k, v) => s"${escapeQuery(k)}=${escapeQuery(v)}" } :+
+      s"pageSize=${pagesize}"
     val prev =
       if (page <= 1) ""
       else {
@@ -5063,7 +5168,7 @@ object StaticFormAppRenderer {
         val nextquery = (querybase :+ s"page=${page + 1}").mkString("&")
         s"""<a class="btn btn-outline-secondary btn-sm" href="${basePath}?${nextquery}">Next</a>"""
       }
-    s"""<div class="d-flex flex-wrap gap-2 align-items-center"><span class="text-secondary">page ${page}, page size ${pageSize}</span>${prev}${next}</div>"""
+    s"""<div class="d-flex flex-wrap gap-2 align-items-center"><span class="text-secondary">page ${page}, page size ${pagesize}</span>${prev}${next}</div>"""
   }
 
   private def _record_seq(
@@ -5911,7 +6016,7 @@ object StaticFormAppRenderer {
     val selectedMode = _admin_search_mode(values).getOrElse(SearchMode.FullText)
     val selectedSort = values.get("sort").orElse(values.get("sortBy")).orElse(values.get("sort_by")).getOrElse("")
     val selectedDirection = values.get("direction").orElse(values.get("order")).getOrElse("asc")
-    val filterControls = filterFields.filterNot(x => x == "id").take(6).map { field =>
+    val filtercontrols = filterFields.filterNot(x => x == "id").take(renderer_config.adminFilterFieldLimit).map { field =>
       val value = values.get(field).getOrElse("")
       s"""<div class="col-12 col-md-4 col-xl-2">
          |  <label class="form-label" for="adminSearchFilter${_escape(field)}">${_escape(_title_label(field))}</label>
@@ -5960,7 +6065,7 @@ object StaticFormAppRenderer {
        |          <option value="desc"${if (selectedDirection == "desc") " selected" else ""}>Descending</option>
        |        </select>
        |      </div>
-       |      ${filterControls}
+       |      ${filtercontrols}
        |      <div class="col-12 d-flex flex-wrap gap-2 justify-content-end">
        |        <input type="hidden" name="includeTotal" value="${_escape(values.getOrElse("includeTotal", "false"))}">
        |        <button class="btn btn-primary" type="submit">Search</button>
@@ -6003,7 +6108,7 @@ object StaticFormAppRenderer {
       if (pairs.isEmpty)
         "?page={page}&pageSize={pageSize}"
       else
-        pairs.map { case (key, value) => s"${_escape_query(key)}=${_escape_query(value)}" }.mkString("?", "&", "&page={page}&pageSize={pageSize}")
+        pairs.map { case (key, value) => s"${escapeQuery(key)}=${escapeQuery(value)}" }.mkString("?", "&", "&page={page}&pageSize={pageSize}")
     s"${basePath}${suffix}"
   }
 
@@ -6819,7 +6924,7 @@ object StaticFormAppRenderer {
     URLEncoder.encode(value, StandardCharsets.UTF_8).replace("+", "%20")
 
   private def _escape_query(value: String): String =
-    URLEncoder.encode(value, StandardCharsets.UTF_8).replace("+", "%20")
+    StaticFormAppRendererSupport.escapeQuery(value)
 
   private def _form_initial_fields(values: Map[String, String]): String =
     values.toVector
@@ -6949,7 +7054,7 @@ object StaticFormAppRenderer {
       base
     else
       base + values.toVector.sortBy(_._1).map {
-        case (key, value) => s"${_escape_query(key)}=${_escape_query(value)}"
+        case (key, value) => s"${escapeQuery(key)}=${escapeQuery(value)}"
       }.mkString("?", "&", "")
   }
 
@@ -10916,7 +11021,7 @@ object StaticFormAppRenderer {
         key.stripPrefix("detail-param-") -> _record_value_template(value, obj)
     }.collect {
       case (key, Some(value)) if key.nonEmpty && value.nonEmpty =>
-        s"${_escape_query(key)}=${_escape_query(value)}"
+        s"${escapeQuery(key)}=${escapeQuery(value)}"
     }
     if (params.isEmpty)
       href
@@ -11707,7 +11812,7 @@ object StaticFormAppRenderer {
   ): String = {
     val projection = KnowledgeSpaceProjection.component(component)
     val path = _escape_path_segment(component.name)
-    val previewlimit = 50
+    val previewlimit = renderer_config.previewLimit
     val sortednodes = projection.nodes.sortBy(_.id.print)
     val sortedrelationships = projection.relationships.sortBy(_.id.print)
     val sortedframes = projection.frames.sortBy(_.id.print)

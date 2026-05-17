@@ -5,7 +5,7 @@ import org.goldenport.configuration.ResolvedConfiguration
 import org.goldenport.cncf.cli.RunMode
 import org.goldenport.cncf.log.LogBackend
 import org.goldenport.cncf.observability.LogLevel
-import org.goldenport.cncf.http.{HttpDriver, FakeHttpDriver, HttpDriverFactory}
+import org.goldenport.cncf.http.{HttpDriver, FakeHttpDriver, HttpDriverFactory, StaticFormAppRendererConfig}
 import org.goldenport.cncf.datastore.DataStoreSpace
 import org.goldenport.cncf.entity.{EntityStore, EntityStoreSpace}
 import org.goldenport.cncf.config.ConfigurationAccess
@@ -21,7 +21,7 @@ import org.goldenport.cncf.blob.BlobStoreConfig
  *  version Feb.  1, 2026
  *  version Mar. 28, 2026
  *  version Apr. 30, 2026
- * @version May. 16, 2026
+ * @version May. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class RuntimeConfig(
@@ -47,6 +47,8 @@ final case class RuntimeConfig(
     DiagnosticPayloadExternalizationConfig(),
   openTelemetryExportConfig: OpenTelemetryExportConfig =
     OpenTelemetryExportConfig(),
+  staticFormAppRendererConfig: StaticFormAppRendererConfig =
+    StaticFormAppRendererConfig.default,
   blobStoreConfig: BlobStoreConfig = BlobStoreConfig(),
   idNamespace: IdGenerationContext.IdNamespace = IdGenerationContext.DefaultNamespace
 )
@@ -110,6 +112,18 @@ object RuntimeConfig {
   val RuntimeObservabilityOtelMetricsEnabledKey = "textus.runtime.observability.otel.metrics.enabled"
   val ObservabilityOtelLogsEnabledKey = "textus.observability.otel.logs.enabled"
   val RuntimeObservabilityOtelLogsEnabledKey = "textus.runtime.observability.otel.logs.enabled"
+  val WEB_RENDERER_DEFAULT_PAGE_SIZE_KEY = "textus.web.renderer.default-page-size"
+  val RUNTIME_WEB_RENDERER_DEFAULT_PAGE_SIZE_KEY = "textus.runtime.web.renderer.default-page-size"
+  val WEB_RENDERER_ADMIN_PAGE_SIZE_KEY = "textus.web.renderer.admin-page-size"
+  val RUNTIME_WEB_RENDERER_ADMIN_PAGE_SIZE_KEY = "textus.runtime.web.renderer.admin-page-size"
+  val WEB_RENDERER_ADMIN_FILTER_FIELD_LIMIT_KEY = "textus.web.renderer.admin-filter-field-limit"
+  val RUNTIME_WEB_RENDERER_ADMIN_FILTER_FIELD_LIMIT_KEY = "textus.runtime.web.renderer.admin-filter-field-limit"
+  val WEB_RENDERER_PREVIEW_LIMIT_KEY = "textus.web.renderer.preview-limit"
+  val RUNTIME_WEB_RENDERER_PREVIEW_LIMIT_KEY = "textus.runtime.web.renderer.preview-limit"
+  val WEB_RENDERER_DEBUG_BODY_PREVIEW_CHARS_KEY = "textus.web.renderer.debug-body-preview-chars"
+  val RUNTIME_WEB_RENDERER_DEBUG_BODY_PREVIEW_CHARS_KEY = "textus.runtime.web.renderer.debug-body-preview-chars"
+  val WEB_RENDERER_CALLTREE_INITIAL_OPEN_DEPTH_KEY = "textus.web.renderer.calltree.initial-open-depth"
+  val RUNTIME_WEB_RENDERER_CALLTREE_INITIAL_OPEN_DEPTH_KEY = "textus.runtime.web.renderer.calltree.initial-open-depth"
   val DiscoverClassesKey = "textus.discover.classes"
   val RuntimeDiscoverClassesKey = "textus.runtime.discover.classes"
   val ComponentFactoryClassKey = "textus.component.factory-class"
@@ -224,6 +238,7 @@ object RuntimeConfig {
       executionHistoryConfig = ObservabilityEngine.ExecutionHistoryConfig(),
       diagnosticPayloadExternalizationConfig = DiagnosticPayloadExternalizationConfig(),
       openTelemetryExportConfig = OpenTelemetryExportConfig(),
+      staticFormAppRendererConfig = StaticFormAppRendererConfig.default,
       blobStoreConfig = BlobStoreConfig(),
       idNamespace = DefaultIdNamespace
     )
@@ -291,6 +306,8 @@ object RuntimeConfig {
       _diagnostic_payload_externalization_config(configuration, operationMode)
     val openTelemetryExportConfig =
       _open_telemetry_export_config(configuration, operationMode)
+    val rendererconfig =
+      _static_form_app_renderer_config(configuration)
     val blobStoreConfig = BlobStoreConfig.fromConfiguration(configuration)
     val idNamespace = _id_namespace(configuration)
     val webOperationDispatcher =
@@ -345,6 +362,7 @@ object RuntimeConfig {
       executionHistoryConfig = executionHistoryConfig,
       diagnosticPayloadExternalizationConfig = diagnosticPayloadExternalizationConfig,
       openTelemetryExportConfig = openTelemetryExportConfig,
+      staticFormAppRendererConfig = rendererconfig,
       blobStoreConfig = blobStoreConfig,
       idNamespace = idNamespace
     )
@@ -377,6 +395,9 @@ object RuntimeConfig {
       throw new IllegalArgumentException(message)
     }
     config.openTelemetryExportConfig.validationError.foreach { message =>
+      throw new IllegalArgumentException(message)
+    }
+    config.staticFormAppRendererConfig.validationError.foreach { message =>
       throw new IllegalArgumentException(message)
     }
   }
@@ -412,6 +433,16 @@ object RuntimeConfig {
     key: String
   ): Option[Int] =
     _get_string(configuration, key).flatMap(x => scala.util.Try(x.trim.toInt).toOption)
+
+  private def _get_renderer_int(
+    configuration: ResolvedConfiguration,
+    key: String
+  ): Option[Int] =
+    _get_string(configuration, key).map { value =>
+      scala.util.Try(value.trim.toInt).getOrElse {
+        throw new IllegalArgumentException(s"${key} must be an integer: ${value}")
+      }
+    }
 
   private def _get_boolean(
     configuration: ResolvedConfiguration,
@@ -478,6 +509,26 @@ object RuntimeConfig {
       operationMode = operationMode
     )
 
+  private def _static_form_app_renderer_config(
+    configuration: ResolvedConfiguration
+  ): StaticFormAppRendererConfig = {
+    val defaults = StaticFormAppRendererConfig.default
+    StaticFormAppRendererConfig(
+      defaultPageSize = _get_renderer_int(configuration, WEB_RENDERER_DEFAULT_PAGE_SIZE_KEY)
+        .getOrElse(defaults.defaultPageSize),
+      adminPageSize = _get_renderer_int(configuration, WEB_RENDERER_ADMIN_PAGE_SIZE_KEY)
+        .getOrElse(defaults.adminPageSize),
+      adminFilterFieldLimit = _get_renderer_int(configuration, WEB_RENDERER_ADMIN_FILTER_FIELD_LIMIT_KEY)
+        .getOrElse(defaults.adminFilterFieldLimit),
+      previewLimit = _get_renderer_int(configuration, WEB_RENDERER_PREVIEW_LIMIT_KEY)
+        .getOrElse(defaults.previewLimit),
+      debugBodyPreviewChars = _get_renderer_int(configuration, WEB_RENDERER_DEBUG_BODY_PREVIEW_CHARS_KEY)
+        .getOrElse(defaults.debugBodyPreviewChars),
+      callTreeInitialOpenDepth = _get_renderer_int(configuration, WEB_RENDERER_CALLTREE_INITIAL_OPEN_DEPTH_KEY)
+        .getOrElse(defaults.callTreeInitialOpenDepth)
+    )
+  }
+
   private def _id_namespace(
     configuration: ResolvedConfiguration
   ): IdGenerationContext.IdNamespace = {
@@ -532,6 +583,12 @@ object RuntimeConfig {
         case ObservabilityOtelTracesEnabledKey => Vector(RuntimeObservabilityOtelTracesEnabledKey)
         case ObservabilityOtelMetricsEnabledKey => Vector(RuntimeObservabilityOtelMetricsEnabledKey)
         case ObservabilityOtelLogsEnabledKey => Vector(RuntimeObservabilityOtelLogsEnabledKey)
+        case WEB_RENDERER_DEFAULT_PAGE_SIZE_KEY => Vector(RUNTIME_WEB_RENDERER_DEFAULT_PAGE_SIZE_KEY)
+        case WEB_RENDERER_ADMIN_PAGE_SIZE_KEY => Vector(RUNTIME_WEB_RENDERER_ADMIN_PAGE_SIZE_KEY)
+        case WEB_RENDERER_ADMIN_FILTER_FIELD_LIMIT_KEY => Vector(RUNTIME_WEB_RENDERER_ADMIN_FILTER_FIELD_LIMIT_KEY)
+        case WEB_RENDERER_PREVIEW_LIMIT_KEY => Vector(RUNTIME_WEB_RENDERER_PREVIEW_LIMIT_KEY)
+        case WEB_RENDERER_DEBUG_BODY_PREVIEW_CHARS_KEY => Vector(RUNTIME_WEB_RENDERER_DEBUG_BODY_PREVIEW_CHARS_KEY)
+        case WEB_RENDERER_CALLTREE_INITIAL_OPEN_DEPTH_KEY => Vector(RUNTIME_WEB_RENDERER_CALLTREE_INITIAL_OPEN_DEPTH_KEY)
         case DiscoverClassesKey => Vector(RuntimeDiscoverClassesKey)
         case ComponentFactoryClassKey => Vector(RuntimeComponentFactoryClassKey)
         case WorkspaceKey => Vector(RuntimeWorkspaceKey)

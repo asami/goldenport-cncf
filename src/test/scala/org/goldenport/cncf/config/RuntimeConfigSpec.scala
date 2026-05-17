@@ -11,7 +11,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Apr. 18, 2026
  *  version Apr. 28, 2026
- * @version May. 11, 2026
+ * @version May. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 final class RuntimeConfigSpec extends AnyWordSpec with Matchers {
@@ -212,6 +212,69 @@ final class RuntimeConfigSpec extends AnyWordSpec with Matchers {
       val config = RuntimeConfig.from(ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty))
 
       config.blobStoreConfig.maxByteSize shouldBe BlobStoreConfig.DefaultMaxByteSize
+    }
+
+    "use default Static Form renderer display limits" in {
+      val config = RuntimeConfig.from(ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty))
+        .staticFormAppRendererConfig
+
+      config.defaultPageSize shouldBe 20
+      config.adminPageSize shouldBe 100
+      config.adminFilterFieldLimit shouldBe 6
+      config.previewLimit shouldBe 50
+      config.debugBodyPreviewChars shouldBe 12000
+      config.callTreeInitialOpenDepth shouldBe 1
+    }
+
+    "parse Static Form renderer display limit keys and aliases" in {
+      val configuration = ResolvedConfiguration(
+        Configuration(Map(
+          RuntimeConfig.WEB_RENDERER_DEFAULT_PAGE_SIZE_KEY -> ConfigurationValue.StringValue("11"),
+          RuntimeConfig.RUNTIME_WEB_RENDERER_ADMIN_PAGE_SIZE_KEY -> ConfigurationValue.StringValue("120"),
+          RuntimeConfig.WEB_RENDERER_ADMIN_FILTER_FIELD_LIMIT_KEY -> ConfigurationValue.StringValue("4"),
+          RuntimeConfig.RUNTIME_WEB_RENDERER_PREVIEW_LIMIT_KEY -> ConfigurationValue.StringValue("33"),
+          RuntimeConfig.WEB_RENDERER_DEBUG_BODY_PREVIEW_CHARS_KEY -> ConfigurationValue.StringValue("900"),
+          RuntimeConfig.RUNTIME_WEB_RENDERER_CALLTREE_INITIAL_OPEN_DEPTH_KEY -> ConfigurationValue.StringValue("2")
+        )),
+        ConfigurationTrace.empty
+      )
+
+      val config = RuntimeConfig.from(configuration).staticFormAppRendererConfig
+
+      config.defaultPageSize shouldBe 11
+      config.adminPageSize shouldBe 120
+      config.adminFilterFieldLimit shouldBe 4
+      config.previewLimit shouldBe 33
+      config.debugBodyPreviewChars shouldBe 900
+      config.callTreeInitialOpenDepth shouldBe 2
+    }
+
+    "reject invalid Static Form renderer display limits" in {
+      val configuration = ResolvedConfiguration(
+        Configuration(Map(RuntimeConfig.WEB_RENDERER_PREVIEW_LIMIT_KEY -> ConfigurationValue.StringValue("0"))),
+        ConfigurationTrace.empty
+      )
+
+      val thrown = intercept[IllegalArgumentException] {
+        RuntimeConfig.from(configuration)
+      }
+
+      thrown.getMessage should include ("textus.web.renderer.preview-limit")
+      RuntimeConfig.create(configuration) shouldBe a[org.goldenport.Consequence.Failure[_]]
+    }
+
+    "reject malformed Static Form renderer display limits" in {
+      val configuration = ResolvedConfiguration(
+        Configuration(Map(RuntimeConfig.WEB_RENDERER_PREVIEW_LIMIT_KEY -> ConfigurationValue.StringValue("large"))),
+        ConfigurationTrace.empty
+      )
+
+      val thrown = intercept[IllegalArgumentException] {
+        RuntimeConfig.from(configuration)
+      }
+
+      thrown.getMessage should include ("textus.web.renderer.preview-limit")
+      RuntimeConfig.create(configuration) shouldBe a[org.goldenport.Consequence.Failure[_]]
     }
 
     "parse CNCF Blob max byte size alias" in {

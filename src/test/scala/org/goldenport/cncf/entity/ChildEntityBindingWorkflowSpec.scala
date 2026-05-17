@@ -24,7 +24,7 @@ import org.simplemodeling.model.datatype.EntityId
  * Executable specification for BI-04 operation child Entity binding.
  *
  * @since   Apr. 30, 2026
- * @version Apr. 30, 2026
+ * @version May. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ChildEntityBindingWorkflowSpec
@@ -178,7 +178,10 @@ final class ChildEntityBindingWorkflowSpec
       val describe = DescribeProjection.project(component, Some(s"${component.name}.order.createOrder"))
       val componentHelp = HelpProjection.project(component, Some(component.name))
       val componentDescribe = DescribeProjection.project(component, Some(component.name))
-      val componentManual = StaticFormAppRenderer.renderComponentManual(component.subsystem.get, component.name).map(_.body).getOrElse(fail("component manual missing"))
+      val componentmanual = StaticFormAppRenderer()
+        .renderComponentManual(component.subsystem.get, component.name)
+        .map(_.body)
+        .getOrElse(fail("component manual missing"))
 
       Then("both help and describe expose childEntityBindings")
       _records(help, "childEntityBindings").map(_.getString("entityName")) shouldBe Vector(Some("order_line"))
@@ -189,10 +192,10 @@ final class ChildEntityBindingWorkflowSpec
       _records(componentDescribe, "relationshipDefinitions").map(_.getString("storageMode")) should contain (Some("embedded-value-object"))
       _records(componentDescribe, "relationshipDefinitions").map(_.getString("targetModelKind")) should contain (Some("value"))
       _records(componentDescribe, "relationshipDefinitions").map(_.getString("valueField")) should contain (Some("shippingAddress"))
-      componentManual should include ("Relationships")
-      componentManual should include ("SalesOrder.lines")
-      componentManual should include ("embedded-value-object")
-      componentManual should include ("shippingAddress")
+      componentmanual should include ("Relationships")
+      componentmanual should include ("SalesOrder.lines")
+      componentmanual should include ("embedded-value-object")
+      componentmanual should include ("shippingAddress")
     }
   }
 

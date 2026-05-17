@@ -1,5 +1,10 @@
 package org.goldenport.cncf.http
 
+/*
+ * @since   May. 18, 2026
+ * @version May. 18, 2026
+ * @author  ASAMI, Tomoharu
+ */
 import scala.collection.mutable.ListBuffer
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
@@ -62,6 +67,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * @author  ASAMI, Tomoharu
  */
 final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
+  private val _renderer = StaticFormAppRenderer()
   "StaticFormAppRenderer" should {
     "render subsystem dashboard state contract" in {
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
@@ -128,7 +134,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
     "render dashboard pages with Bootstrap health hierarchy without changing links" in {
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
 
-      val html = StaticFormAppRenderer.renderSubsystemDashboard(subsystem).body
+      val html = _renderer.renderSubsystemDashboard(subsystem).body
 
       html should include ("CNCF Health")
       html should include ("class=\"card h-100 shadow-sm border-success\"")
@@ -155,7 +161,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
     "render system admin configuration detail page" in {
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
 
-      val html = StaticFormAppRenderer.renderSystemAdmin(subsystem).body
+      val html = _renderer.renderSystemAdmin(subsystem).body
 
       html should include ("System Admin Configuration")
       html should include ("/web/assets/bootstrap.min.css")
@@ -213,7 +219,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         )
       )
 
-      val html = StaticFormAppRenderer.renderSystemAdmin(subsystem).body
+      val html = _renderer.renderSystemAdmin(subsystem).body
 
       html should include ("Component Development Directories")
       html should include ("dev_component")
@@ -240,8 +246,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       ).toOption.getOrElse(fail("job submission failed"))
       val model = subsystem.jobEngine.query(jobid).getOrElse(fail("job read model missing"))
 
-      val list = StaticFormAppRenderer.renderSystemAdminJobs(subsystem).body
-      val detail = StaticFormAppRenderer.renderSystemAdminJob(subsystem, model).body
+      val list = _renderer.renderSystemAdminJobs(subsystem).body
+      val detail = _renderer.renderSystemAdminJob(subsystem, model).body
 
       list should include ("System Admin Jobs")
       list should include (jobid.value)
@@ -335,9 +341,9 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         facts = Vector(fact)
       )))
 
-      val index = StaticFormAppRenderer.renderSystemAdminKnowledge(subsystem).body
-      val detail = StaticFormAppRenderer.renderSystemAdminKnowledgeComponent(subsystem, "knowledge-component").map(_.body).getOrElse(fail("knowledge component page missing"))
-      val node = StaticFormAppRenderer.renderSystemAdminKnowledgeNode(subsystem, "knowledge_component", "node-customer").map(_.body).getOrElse(fail("knowledge node page missing"))
+      val index = _renderer.renderSystemAdminKnowledge(subsystem).body
+      val detail = _renderer.renderSystemAdminKnowledgeComponent(subsystem, "knowledge-component").map(_.body).getOrElse(fail("knowledge component page missing"))
+      val node = _renderer.renderSystemAdminKnowledgeNode(subsystem, "knowledge_component", "node-customer").map(_.body).getOrElse(fail("knowledge node page missing"))
 
       index should include ("System Knowledge")
       index should include ("knowledge_component")
@@ -361,8 +367,17 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       node should include ("Outgoing relationships")
       node should include ("Customer source record")
       node should include ("renderer-spec")
-      StaticFormAppRenderer.renderSystemAdminKnowledgeComponent(subsystem, "missing") shouldBe None
-      StaticFormAppRenderer.renderSystemAdminKnowledgeNode(subsystem, "knowledge_component", "missing") shouldBe None
+      val limited = StaticFormAppRenderer(StaticFormAppRendererConfig(previewLimit = 1))
+        .renderSystemAdminKnowledgeComponent(subsystem, "knowledge-component")
+        .map(_.body)
+        .getOrElse(fail("knowledge component page missing"))
+      limited should include ("Showing first 1 of 2 nodes.")
+      val unconfigured = _renderer.renderSystemAdminKnowledgeComponent(subsystem, "knowledge-component")
+        .map(_.body)
+        .getOrElse(fail("knowledge component page missing"))
+      unconfigured should not include ("Showing first 1 of 2 nodes.")
+      _renderer.renderSystemAdminKnowledgeComponent(subsystem, "missing") shouldBe None
+      _renderer.renderSystemAdminKnowledgeNode(subsystem, "knowledge_component", "missing") shouldBe None
     }
 
     "render Blob admin read-only pages" in {
@@ -383,12 +398,12 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         Property("role", "mainImage", None)
       )))
 
-      val home = StaticFormAppRenderer.renderBlobAdmin().body
-      val list = _success(StaticFormAppRenderer.renderBlobAdminBlobs(subsystem)).body
-      val detail = _success(StaticFormAppRenderer.renderBlobAdminBlobDetail(subsystem, id)).body
-      val delete = _success(StaticFormAppRenderer.renderBlobAdminBlobDelete(subsystem, id)).body
-      val associations = _success(StaticFormAppRenderer.renderBlobAdminAssociations(subsystem, Map("sourceEntityId" -> "article-1"))).body
-      val store = _success(StaticFormAppRenderer.renderBlobAdminStore(subsystem)).body
+      val home = _renderer.renderBlobAdmin().body
+      val list = _success(_renderer.renderBlobAdminBlobs(subsystem)).body
+      val detail = _success(_renderer.renderBlobAdminBlobDetail(subsystem, id)).body
+      val delete = _success(_renderer.renderBlobAdminBlobDelete(subsystem, id)).body
+      val associations = _success(_renderer.renderBlobAdminAssociations(subsystem, Map("sourceEntityId" -> "article-1"))).body
+      val store = _success(_renderer.renderBlobAdminStore(subsystem)).body
 
       home should include ("Blob Admin")
       home should include ("/web/blob/admin/blobs")
@@ -428,7 +443,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       val id = _create_legacy_external_blob(subsystem, "unsafe.png", "javascript:alert(1)")
 
-      val list = _success(StaticFormAppRenderer.renderBlobAdminBlobs(subsystem)).body
+      val list = _success(_renderer.renderBlobAdminBlobs(subsystem)).body
 
       list should include (id)
       list should include ("javascript:alert(1)")
@@ -750,7 +765,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         )
       )
 
-      val html = StaticFormAppRenderer.renderSystemAdmin(subsystem).body
+      val html = _renderer.renderSystemAdmin(subsystem).body
 
       html should include ("Runtime Configuration")
       html should include ("Effective Runtime Policy")
@@ -805,7 +820,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         admin = Map("entity.notice" -> WebDescriptor.AdminSurface(WebDescriptor.TotalCountPolicy.Optional))
       )
 
-      val html = StaticFormAppRenderer.renderSystemAdmin(subsystem, descriptor).body
+      val html = _renderer.renderSystemAdmin(subsystem, descriptor).body
 
       html should include ("Web Descriptor")
       html should include ("configured")
@@ -862,7 +877,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         admin = Map("entity.notice" -> WebDescriptor.AdminSurface(WebDescriptor.TotalCountPolicy.Optional))
       )
 
-      val html = StaticFormAppRenderer.renderSystemAdminDescriptor(descriptor).body
+      val html = _renderer.renderSystemAdminDescriptor(descriptor).body
 
       html should include ("System Web Descriptor")
       html should include ("Descriptor Sections")
@@ -954,7 +969,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
           ))
       )
 
-      val html = StaticFormAppRenderer.renderComponentAdmin(subsystem, component.name).map(_.body).getOrElse(fail("component admin is missing"))
+      val html = _renderer.renderComponentAdmin(subsystem, component.name).map(_.body).getOrElse(fail("component admin is missing"))
 
       html should include (s"${component.name} Admin Configuration")
       html should not include ("article { background")
@@ -1012,7 +1027,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         )
       )
 
-      val html = StaticFormAppRenderer.renderComponentAdminDescriptor(subsystem, component.name, descriptor).map(_.body).getOrElse(fail("component descriptor admin is missing"))
+      val html = _renderer.renderComponentAdminDescriptor(subsystem, component.name, descriptor).map(_.body).getOrElse(fail("component descriptor admin is missing"))
 
       html should include (s"${component.name} Web Descriptor")
       html should include ("Component Management Console descriptor view")
@@ -1089,100 +1104,100 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         )
       }
 
-      val systemDocumentHtml = StaticFormAppRenderer.renderSystemDocument(subsystem).body
-      val systemHtml = StaticFormAppRenderer.renderSystemManual(subsystem).body
-      val componentDocumentHtml = StaticFormAppRenderer.renderComponentDocument(subsystem, "notice-board").map(_.body).getOrElse(fail("component document is missing"))
-      val componentHtml = StaticFormAppRenderer.renderComponentManual(subsystem, "notice-board").map(_.body).getOrElse(fail("component specification is missing"))
-      val serviceHtml = StaticFormAppRenderer.renderComponentManualService(subsystem, "notice-board", "notice-aggregate").map(_.body).getOrElse(fail("service specification is missing"))
-      val operationHtml = StaticFormAppRenderer.renderComponentManualOperation(subsystem, "notice-board", "notice-aggregate", "approve-notice-aggregate").map(_.body).getOrElse(fail("operation specification is missing"))
+      val systemdocumenthtml = _renderer.renderSystemDocument(subsystem).body
+      val systemhtml = _renderer.renderSystemManual(subsystem).body
+      val componentdocumenthtml = _renderer.renderComponentDocument(subsystem, "notice-board").map(_.body).getOrElse(fail("component document is missing"))
+      val componenthtml = _renderer.renderComponentManual(subsystem, "notice-board").map(_.body).getOrElse(fail("component specification is missing"))
+      val servicehtml = _renderer.renderComponentManualService(subsystem, "notice-board", "notice-aggregate").map(_.body).getOrElse(fail("service specification is missing"))
+      val operationhtml = _renderer.renderComponentManualOperation(subsystem, "notice-board", "notice-aggregate", "approve-notice-aggregate").map(_.body).getOrElse(fail("operation specification is missing"))
 
-      systemDocumentHtml should include ("System Documents")
-      systemDocumentHtml should include ("Generated Specification")
-      systemDocumentHtml should include ("/web/system/document/specification")
-      systemDocumentHtml should include ("User Guide")
-      componentDocumentHtml should include ("notice_board Documents")
-      componentDocumentHtml should include ("Generated Specification")
-      componentDocumentHtml should include ("/web/notice-board/document/specification")
-      componentDocumentHtml should include ("Reference Manual")
-      systemHtml should include ("System Specification")
-      systemHtml should include ("OpenAPI JSON")
-      systemHtml should include ("MCP endpoint")
-      systemHtml should include ("/web/notice-board/document/specification")
-      systemHtml should include ("class=\"card manual-card shadow-sm\"")
-      componentHtml should include ("notice_board Specification")
-      componentHtml should include ("Help")
-      componentHtml should include ("Describe")
-      componentHtml should include ("Schema")
-      componentHtml should include ("Componentlets")
-      componentHtml should include ("notice-admin")
-      componentHtml should include ("car-bundled")
-      componentHtml should include ("Raw Describe")
-      componentHtml should include ("Raw Schema")
-      componentHtml should include ("Storage shape")
-      componentHtml should include ("simple_entity_default")
-      componentHtml should include ("short_id")
-      componentHtml should include ("created_at")
-      componentHtml should include ("updated_by")
-      componentHtml should include ("owner_id")
-      componentHtml should include ("group_id")
-      componentHtml should include ("privilege_id")
-      componentHtml should include ("permission")
-      componentHtml should include ("compact_json_text")
-      componentHtml should include ("body")
-      componentHtml should include ("scalar_attribute")
-      componentHtml should include ("delegated_collection")
-      componentHtml should not include ("<td><code>securityAttributes</code></td>")
-      componentHtml should include ("/web/notice-board/document/specification/notice-aggregate")
-      componentHtml should include ("manual-summary-table")
-      serviceHtml should include ("Generated service specification")
-      serviceHtml should include ("/web/notice-board/document/specification/notice-aggregate/approve-notice-aggregate")
-      operationHtml should include ("Generated operation specification")
-      operationHtml should include ("/rest/v1/notice-board/notice-aggregate/approve-notice-aggregate")
-      operationHtml should include ("Parameters")
-      operationHtml should include ("Raw Help")
-      operationHtml should include (">JSON<")
-      operationHtml should include (">YAML<")
-      operationHtml should include ("approve-notice-aggregate")
-      operationHtml should not include ("admin entity")
-      operationHtml should not include ("method=\"post\"")
+      systemdocumenthtml should include ("System Documents")
+      systemdocumenthtml should include ("Generated Specification")
+      systemdocumenthtml should include ("/web/system/document/specification")
+      systemdocumenthtml should include ("User Guide")
+      componentdocumenthtml should include ("notice_board Documents")
+      componentdocumenthtml should include ("Generated Specification")
+      componentdocumenthtml should include ("/web/notice-board/document/specification")
+      componentdocumenthtml should include ("Reference Manual")
+      systemhtml should include ("System Specification")
+      systemhtml should include ("OpenAPI JSON")
+      systemhtml should include ("MCP endpoint")
+      systemhtml should include ("/web/notice-board/document/specification")
+      systemhtml should include ("class=\"card manual-card shadow-sm\"")
+      componenthtml should include ("notice_board Specification")
+      componenthtml should include ("Help")
+      componenthtml should include ("Describe")
+      componenthtml should include ("Schema")
+      componenthtml should include ("Componentlets")
+      componenthtml should include ("notice-admin")
+      componenthtml should include ("car-bundled")
+      componenthtml should include ("Raw Describe")
+      componenthtml should include ("Raw Schema")
+      componenthtml should include ("Storage shape")
+      componenthtml should include ("simple_entity_default")
+      componenthtml should include ("short_id")
+      componenthtml should include ("created_at")
+      componenthtml should include ("updated_by")
+      componenthtml should include ("owner_id")
+      componenthtml should include ("group_id")
+      componenthtml should include ("privilege_id")
+      componenthtml should include ("permission")
+      componenthtml should include ("compact_json_text")
+      componenthtml should include ("body")
+      componenthtml should include ("scalar_attribute")
+      componenthtml should include ("delegated_collection")
+      componenthtml should not include ("<td><code>securityAttributes</code></td>")
+      componenthtml should include ("/web/notice-board/document/specification/notice-aggregate")
+      componenthtml should include ("manual-summary-table")
+      servicehtml should include ("Generated service specification")
+      servicehtml should include ("/web/notice-board/document/specification/notice-aggregate/approve-notice-aggregate")
+      operationhtml should include ("Generated operation specification")
+      operationhtml should include ("/rest/v1/notice-board/notice-aggregate/approve-notice-aggregate")
+      operationhtml should include ("Parameters")
+      operationhtml should include ("Raw Help")
+      operationhtml should include (">JSON<")
+      operationhtml should include (">YAML<")
+      operationhtml should include ("approve-notice-aggregate")
+      operationhtml should not include ("admin entity")
+      operationhtml should not include ("method=\"post\"")
 
       val blobSubsystem = DefaultSubsystemFactory.default(Some("server"))
-      val blobAttachHtml = StaticFormAppRenderer.renderComponentManualOperation(blobSubsystem, "blob", "blob", "admin-attach-blob-to-entity").map(_.body).getOrElse(fail("blob attach specification is missing"))
-      blobAttachHtml should include ("Image Binding")
-      blobAttachHtml should include ("existing Blob id")
-      blobAttachHtml should include ("attach")
-      blobAttachHtml should include ("primary, cover, thumbnail, gallery, inline")
-      blobAttachHtml should include ("sourceEntityId")
-      blobAttachHtml should include ("sortOrder")
-      val associationAttachHtml = StaticFormAppRenderer.renderComponentManualOperation(blobSubsystem, "admin", "association", "admin-attach-association").map(_.body).getOrElse(fail("association attach specification is missing"))
-      associationAttachHtml should include ("Association Binding")
-      associationAttachHtml should include ("create")
-      associationAttachHtml should include ("sourceEntityId")
-      associationAttachHtml should include ("targetEntityId")
-      associationAttachHtml should include ("sortOrder")
+      val blobattachhtml = _renderer.renderComponentManualOperation(blobSubsystem, "blob", "blob", "admin-attach-blob-to-entity").map(_.body).getOrElse(fail("blob attach specification is missing"))
+      blobattachhtml should include ("Image Binding")
+      blobattachhtml should include ("existing Blob id")
+      blobattachhtml should include ("attach")
+      blobattachhtml should include ("primary, cover, thumbnail, gallery, inline")
+      blobattachhtml should include ("sourceEntityId")
+      blobattachhtml should include ("sortOrder")
+      val associationattachhtml = _renderer.renderComponentManualOperation(blobSubsystem, "admin", "association", "admin-attach-association").map(_.body).getOrElse(fail("association attach specification is missing"))
+      associationattachhtml should include ("Association Binding")
+      associationattachhtml should include ("create")
+      associationattachhtml should include ("sourceEntityId")
+      associationattachhtml should include ("targetEntityId")
+      associationattachhtml should include ("sortOrder")
     }
 
     "preserve real componentlet path in rendered specification admin and form links" in {
       val subsystem = _aggregate_http_fixture_subsystem_with_componentlets()
 
-      val manualHtml = StaticFormAppRenderer.renderComponentManual(subsystem, "notice-admin").map(_.body).getOrElse(fail("component specification is missing"))
-      val adminHtml = StaticFormAppRenderer.renderComponentAdmin(subsystem, "notice-admin").map(_.body).getOrElse(fail("component admin is missing"))
-      val formHtml = StaticFormAppRenderer.renderFormIndex(subsystem, "notice-admin").map(_.body).getOrElse(fail("form index is missing"))
+      val manualhtml = _renderer.renderComponentManual(subsystem, "notice-admin").map(_.body).getOrElse(fail("component specification is missing"))
+      val adminhtml = _renderer.renderComponentAdmin(subsystem, "notice-admin").map(_.body).getOrElse(fail("component admin is missing"))
+      val formhtml = _renderer.renderFormIndex(subsystem, "notice-admin").map(_.body).getOrElse(fail("form index is missing"))
 
-      manualHtml should include ("/web/notice-admin/document/specification/notice-aggregate")
-      adminHtml should include ("/web/notice-admin/dashboard")
-      adminHtml should include ("/form/notice-admin")
-      formHtml should include ("/web/notice-admin/dashboard")
-      formHtml should include ("/web/notice-admin/admin")
-      formHtml should include ("/form/notice-admin/notice-aggregate/approve-notice-aggregate")
+      manualhtml should include ("/web/notice-admin/document/specification/notice-aggregate")
+      adminhtml should include ("/web/notice-admin/dashboard")
+      adminhtml should include ("/form/notice-admin")
+      formhtml should include ("/web/notice-admin/dashboard")
+      formhtml should include ("/web/notice-admin/admin")
+      formhtml should include ("/form/notice-admin/notice-aggregate/approve-notice-aggregate")
     }
 
     "not resolve componentlet metadata alone as runtime component in rendered pages" in {
       val subsystem = _aggregate_http_fixture_subsystem_with_componentlet_metadata_only()
 
-      StaticFormAppRenderer.renderComponentManual(subsystem, "notice-admin") shouldBe None
-      StaticFormAppRenderer.renderComponentAdmin(subsystem, "notice-admin") shouldBe None
-      StaticFormAppRenderer.renderFormIndex(subsystem, "notice-admin") shouldBe None
+      _renderer.renderComponentManual(subsystem, "notice-admin") shouldBe None
+      _renderer.renderComponentAdmin(subsystem, "notice-admin") shouldBe None
+      _renderer.renderFormIndex(subsystem, "notice-admin") shouldBe None
     }
 
     "serve document specification routes and OpenAPI JSON through Web HTML paths" in {
@@ -1194,7 +1209,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         .orNotFound
         .run(_get_request("/web/notice-board/document/specification/notice-aggregate/approve-notice-aggregate"))
         .unsafeRunSync()
-      val manualHtml = manualResponse.as[String].unsafeRunSync()
+      val manualhtml = manualResponse.as[String].unsafeRunSync()
       val aliasManualResponse = server
         .routes(null)
         .orNotFound
@@ -1209,9 +1224,9 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       val openApiJson = openApiResponse.as[String].unsafeRunSync()
 
       manualResponse.status.code shouldBe 200
-      manualHtml should include ("Generated operation specification")
-      manualHtml should include ("approve-notice-aggregate")
-      manualHtml should include ("/mcp")
+      manualhtml should include ("Generated operation specification")
+      manualhtml should include ("approve-notice-aggregate")
+      manualhtml should include ("/mcp")
       aliasManualResponse.status.code shouldBe 200
       aliasManualHtml should include ("Generated operation specification")
       aliasManualHtml should include ("approve-notice-aggregate")
@@ -1225,7 +1240,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
       val componentPath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)
 
-      val html = StaticFormAppRenderer.renderComponentAdminEntities(subsystem, component.name).map(_.body).getOrElse(fail("component entity admin is missing"))
+      val html = _renderer.renderComponentAdminEntities(subsystem, component.name).map(_.body).getOrElse(fail("component entity admin is missing"))
 
       html should include (s"${component.name} Entity Administration")
       html should include ("Entity CRUD")
@@ -1250,7 +1265,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
       val componentPath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)
 
-      val html = StaticFormAppRenderer.renderComponentAdminEntityType(subsystem, component.name, "sales-order").map(_.body).getOrElse(fail("component entity type admin is missing"))
+      val html = _renderer.renderComponentAdminEntityType(subsystem, component.name, "sales-order").map(_.body).getOrElse(fail("component entity type admin is missing"))
 
       html should include (s"${component.name} Sales Order Administration")
       html should include ("Sales Order records")
@@ -1272,7 +1287,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
       val componentPath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)
 
-      val html = StaticFormAppRenderer.renderComponentAdminEntityDetail(subsystem, component.name, "sales-order", "missing-id").map(_.body).getOrElse(fail("component entity detail admin is missing"))
+      val html = _renderer.renderComponentAdminEntityDetail(subsystem, component.name, "sales-order", "missing-id").map(_.body).getOrElse(fail("component entity detail admin is missing"))
 
       html should include (s"${component.name} Sales Order Detail")
       html should include ("Sales Order detail")
@@ -1294,29 +1309,29 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       val recordId = recordEntityId.value
       val recordShortid = recordEntityId.parts.entropy
 
-      val list = StaticFormAppRenderer.renderComponentAdminEntityType(subsystem, componentName, entityPath).map(_.body).getOrElse(fail("component entity type admin is missing"))
-      val firstPage = StaticFormAppRenderer.renderComponentAdminEntityType(
+      val list = _renderer.renderComponentAdminEntityType(subsystem, componentName, entityPath).map(_.body).getOrElse(fail("component entity type admin is missing"))
+      val firstpage = _renderer.renderComponentAdminEntityType(
         subsystem,
         componentName,
         entityPath,
         StaticFormAppRenderer.PageRequest(page = 1, pageSize = 1)
       ).map(_.body).getOrElse(fail("component entity first page admin is missing"))
-      val secondPage = StaticFormAppRenderer.renderComponentAdminEntityType(
+      val secondpage = _renderer.renderComponentAdminEntityType(
         subsystem,
         componentName,
         entityPath,
         StaticFormAppRenderer.PageRequest(page = 2, pageSize = 1)
       ).map(_.body).getOrElse(fail("component entity second page admin is missing"))
-      val totalPage = StaticFormAppRenderer.renderComponentAdminEntityType(
+      val totalpage = _renderer.renderComponentAdminEntityType(
         subsystem,
         componentName,
         entityPath,
         StaticFormAppRenderer.PageRequest(page = 1, pageSize = 1, includeTotal = true),
         WebDescriptor(admin = Map("entity.notice" -> WebDescriptor.AdminSurface(WebDescriptor.TotalCountPolicy.Optional)))
       ).map(_.body).getOrElse(fail("component entity total page admin is missing"))
-      val detail = StaticFormAppRenderer.renderComponentAdminEntityDetail(subsystem, componentName, entityPath, recordId).map(_.body).getOrElse(fail("component entity detail admin is missing"))
-      val detailByShortid = StaticFormAppRenderer.renderComponentAdminEntityDetail(subsystem, componentName, entityPath, recordShortid).map(_.body).getOrElse(fail("component entity detail admin by shortid is missing"))
-      val edit = StaticFormAppRenderer.renderComponentAdminEntityEdit(subsystem, componentName, entityPath, recordId).map(_.body).getOrElse(fail("component entity edit admin is missing"))
+      val detail = _renderer.renderComponentAdminEntityDetail(subsystem, componentName, entityPath, recordId).map(_.body).getOrElse(fail("component entity detail admin is missing"))
+      val detailbyshortid = _renderer.renderComponentAdminEntityDetail(subsystem, componentName, entityPath, recordShortid).map(_.body).getOrElse(fail("component entity detail admin by shortid is missing"))
+      val edit = _renderer.renderComponentAdminEntityEdit(subsystem, componentName, entityPath, recordId).map(_.body).getOrElse(fail("component entity edit admin is missing"))
 
       list should include ("Storage shape")
       list should include ("admin-search-card")
@@ -1345,14 +1360,14 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       list should include (s"/web/${componentPath}/admin/entities/${entityPath}/${recordShortid}")
       list should include (s"/web/${componentPath}/admin/entities/${entityPath}/${recordShortid}/edit")
       list should not include ("No records are currently available")
-      firstPage should include ("Page 1")
-      firstPage should include ("page=2&amp;pageSize=1")
-      firstPage should include ("Next")
-      secondPage should include ("Page 2")
-      secondPage should include ("page=1&amp;pageSize=1")
-      secondPage should include ("page-item disabled\"><a class=\"page-link\" href=\"/web/notice-board/admin/entities/notice?page=3&amp;pageSize=1\">Next")
-      totalPage should include ("total 2")
-      totalPage should include ("includeTotal=true")
+      firstpage should include ("Page 1")
+      firstpage should include ("page=2&amp;pageSize=1")
+      firstpage should include ("Next")
+      secondpage should include ("Page 2")
+      secondpage should include ("page=1&amp;pageSize=1")
+      secondpage should include ("page-item disabled\"><a class=\"page-link\" href=\"/web/notice-board/admin/entities/notice?page=3&amp;pageSize=1\">Next")
+      totalpage should include ("total 2")
+      totalpage should include ("includeTotal=true")
       detail should include ("board update")
       detail should include ("alice")
       detail should include ("Images")
@@ -1363,16 +1378,16 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       detail should include ("name=\"sourceEntityId\"")
       detail should include ("entityImageRoleOptions")
       detail should include ("No BlobAttachment images are associated with this Entity.")
-      detailByShortid should include ("board update")
-      detailByShortid should include ("alice")
-      val shortDetailSourceId = """name="sourceEntityId" value="([^"]+)"""".r.findFirstMatchIn(detailByShortid).map(_.group(1)).getOrElse(fail("short-id detail sourceEntityId is missing"))
-      shortDetailSourceId should include ("notice_1")
-      shortDetailSourceId should not be recordShortid
+      detailbyshortid should include ("board update")
+      detailbyshortid should include ("alice")
+      val shortdetailsourceid = """name="sourceEntityId" value="([^"]+)"""".r.findFirstMatchIn(detailbyshortid).map(_.group(1)).getOrElse(fail("short-id detail sourceEntityId is missing"))
+      shortdetailsourceid should include ("notice_1")
+      shortdetailsourceid should not be recordShortid
       edit should include ("name=\"title\"")
       edit should include ("value=\"board update\"")
       edit should include (s"/form/${componentPath}/admin/entities/${entityPath}/${recordShortid}/update")
 
-      val searched = StaticFormAppRenderer.renderComponentAdminEntityType(
+      val searched = _renderer.renderComponentAdminEntityType(
         subsystem,
         componentName,
         entityPath,
@@ -1390,7 +1405,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       searched should include ("board update")
       searched should not include ("No records are currently available")
 
-      val semantic = StaticFormAppRenderer.renderComponentAdminEntityType(
+      val semantic = _renderer.renderComponentAdminEntityType(
         subsystem,
         componentName,
         entityPath,
@@ -1467,9 +1482,9 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         "sortOrder" -> "2"
       )
 
-      val detail = StaticFormAppRenderer.renderComponentAdminEntityDetail(subsystem, "notice_board", "notice", source.value).map(_.body).getOrElse(fail("component entity detail admin is missing"))
-      val manual = StaticFormAppRenderer.renderComponentManual(subsystem, "notice_board").map(_.body).getOrElse(fail("component manual is missing"))
-      val associationPage = StaticFormAppRenderer.renderAdminAssociations(subsystem, Map("domain" -> "related_entity", "sourceEntityId" -> source.value, "pageSize" -> "1")).map(_.body).getOrElse(fail("association admin page is missing"))
+      val detail = _renderer.renderComponentAdminEntityDetail(subsystem, "notice_board", "notice", source.value).map(_.body).getOrElse(fail("component entity detail admin is missing"))
+      val manual = _renderer.renderComponentManual(subsystem, "notice_board").map(_.body).getOrElse(fail("component manual is missing"))
+      val associationpage = _renderer.renderAdminAssociations(subsystem, Map("domain" -> "related_entity", "sourceEntityId" -> source.value, "pageSize" -> "1")).map(_.body).getOrElse(fail("association admin page is missing"))
 
       detail should include ("Associations")
       detail should include ("Notice.related")
@@ -1485,16 +1500,16 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       manual should include ("related_entity")
       manual should include ("Target kind")
       manual should include ("Lifecycle")
-      associationPage should include ("Association Administration")
-      associationPage should include ("Attach Association")
-      associationPage should include ("page 1, page size 1")
-      associationPage should include ("page=2")
-      associationPage should include (target.value)
-      associationPage should include ("class=\"row g-3\"")
-      associationPage should include ("class=\"table table-sm table-hover align-middle mb-0\"")
-      associationPage should include ("data-bs-toggle=\"modal\"")
-      associationPage should include ("class=\"modal fade\"")
-      associationPage should include ("<noscript>")
+      associationpage should include ("Association Administration")
+      associationpage should include ("Attach Association")
+      associationpage should include ("page 1, page size 1")
+      associationpage should include ("page=2")
+      associationpage should include (target.value)
+      associationpage should include ("class=\"row g-3\"")
+      associationpage should include ("class=\"table table-sm table-hover align-middle mb-0\"")
+      associationpage should include ("data-bs-toggle=\"modal\"")
+      associationpage should include ("class=\"modal fade\"")
+      associationpage should include ("<noscript>")
     }
 
     "render generic Tag admin and entity TagAttachment surfaces" in {
@@ -1552,23 +1567,23 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         "role" -> "tag"
       )
 
-      val tagPage = _page_body(StaticFormAppRenderer.renderAdminTags(subsystem, Map("tagSpace" -> "admin-tag-space")), "Tag admin page")
-      val searchPage = _page_body(StaticFormAppRenderer.renderAdminTags(subsystem, Map(
+      val tagpage = _page_body(_renderer.renderAdminTags(subsystem, Map("tagSpace" -> "admin-tag-space")), "Tag admin page")
+      val searchpage = _page_body(_renderer.renderAdminTags(subsystem, Map(
         "tagSpace" -> "admin-tag-space",
         "component" -> "tag",
         "entity" -> "tag",
         "tagRef" -> rootPath,
         "role" -> "tag"
       )), "Tag search page")
-      val emptyTagPage = _page_body(StaticFormAppRenderer.renderAdminTags(subsystem, Map("tagSpace" -> "admin-empty-tag-space")), "empty Tag admin page")
-      val emptySearchPage = _page_body(StaticFormAppRenderer.renderAdminTags(subsystem, Map(
+      val emptytagpage = _page_body(_renderer.renderAdminTags(subsystem, Map("tagSpace" -> "admin-empty-tag-space")), "empty Tag admin page")
+      val emptysearchpage = _page_body(_renderer.renderAdminTags(subsystem, Map(
         "tagSpace" -> "admin-tag-space",
         "component" -> "tag",
         "entity" -> "tag",
         "tagRef" -> rootPath,
         "role" -> "missing-role"
       )), "empty Tag search page")
-      val detail = StaticFormAppRenderer.renderComponentAdminEntityDetail(
+      val detail = _renderer.renderComponentAdminEntityDetail(
         subsystem,
         "tag",
         "tag",
@@ -1576,34 +1591,34 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         values = Map("tagSpace" -> "admin-tag-space")
       ).map(_.body).getOrElse(fail("component entity detail admin is missing"))
 
-      tagPage should include ("Tag Administration")
-      tagPage should include ("TagSpace selector")
-      tagPage should include ("Current TagSpace <span class=\"badge text-bg-secondary\">admin-tag-space</span>")
-      tagPage should include ("Create Tag")
-      tagPage should include ("Search Entities by Tag")
-      tagPage should include ("class=\"row g-3\"")
-      tagPage should include ("class=\"card admin-card h-100\"")
-      tagPage should include ("class=\"table table-sm table-hover align-middle mb-0\"")
-      tagPage should include ("class=\"badge text-bg-secondary\">admin-tag-space</span>")
-      tagPage should include ("class=\"badge text-bg-light border\">cms</span>")
-      tagPage should include ("class=\"input-group input-group-sm\"")
-      tagPage should include ("action=\"/web/admin/tags/create\"")
-      tagPage should include ("action=\"/web/admin/tags/update\"")
-      tagPage should include ("action=\"/web/admin/tags/move\"")
-      tagPage should include ("action=\"/web/admin/tags\"")
-      tagPage should include ("name=\"tagSpace\" value=\"admin-tag-space\"")
-      tagPage should include ("<input type=\"hidden\" name=\"tagSpace\" value=\"admin-tag-space\">")
-      tagPage should include ("name=\"includeDescendants\"")
-      tagPage should include ("admin-tag-root.child")
-      emptyTagPage should include ("No Tags are available for this TagSpace.")
-      emptyTagPage should include ("alert alert-secondary")
-      searchPage should include ("admin-tag-root.child")
-      searchPage should include (childId)
-      searchPage should include ("/web/tag/admin/entities/tag/")
-      searchPage should include ("Tag search result")
-      searchPage should include ("class=\"badge text-bg-light border align-self-start\">")
-      emptySearchPage should include ("No visible Entities matched this Tag filter.")
-      emptySearchPage should include ("alert alert-secondary")
+      tagpage should include ("Tag Administration")
+      tagpage should include ("TagSpace selector")
+      tagpage should include ("Current TagSpace <span class=\"badge text-bg-secondary\">admin-tag-space</span>")
+      tagpage should include ("Create Tag")
+      tagpage should include ("Search Entities by Tag")
+      tagpage should include ("class=\"row g-3\"")
+      tagpage should include ("class=\"card admin-card h-100\"")
+      tagpage should include ("class=\"table table-sm table-hover align-middle mb-0\"")
+      tagpage should include ("class=\"badge text-bg-secondary\">admin-tag-space</span>")
+      tagpage should include ("class=\"badge text-bg-light border\">cms</span>")
+      tagpage should include ("class=\"input-group input-group-sm\"")
+      tagpage should include ("action=\"/web/admin/tags/create\"")
+      tagpage should include ("action=\"/web/admin/tags/update\"")
+      tagpage should include ("action=\"/web/admin/tags/move\"")
+      tagpage should include ("action=\"/web/admin/tags\"")
+      tagpage should include ("name=\"tagSpace\" value=\"admin-tag-space\"")
+      tagpage should include ("<input type=\"hidden\" name=\"tagSpace\" value=\"admin-tag-space\">")
+      tagpage should include ("name=\"includeDescendants\"")
+      tagpage should include ("admin-tag-root.child")
+      emptytagpage should include ("No Tags are available for this TagSpace.")
+      emptytagpage should include ("alert alert-secondary")
+      searchpage should include ("admin-tag-root.child")
+      searchpage should include (childId)
+      searchpage should include ("/web/tag/admin/entities/tag/")
+      searchpage should include ("Tag search result")
+      searchpage should include ("class=\"badge text-bg-light border align-self-start\">")
+      emptysearchpage should include ("No visible Entities matched this Tag filter.")
+      emptysearchpage should include ("alert alert-secondary")
       detail should include ("Tags")
       detail should include ("Attached Tags")
       detail should include ("action=\"/web/admin/tags/attach\"")
@@ -1621,7 +1636,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
 
     "render component admin storage shape from projection metadata without legacy containers" in {
       val subsystem = _management_console_fixture_subsystem(schema = _schema("id", "title", "securityAttributes"))
-      val html = StaticFormAppRenderer.renderComponentAdminEntityType(subsystem, "notice_board", "notice").map(_.body).getOrElse(fail("component entity type admin is missing"))
+      val html = _renderer.renderComponentAdminEntityType(subsystem, "notice_board", "notice").map(_.body).getOrElse(fail("component entity type admin is missing"))
 
       html should include ("Storage shape")
       html should include ("simple_entity_default")
@@ -1648,7 +1663,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         )))
       }
 
-      val html = StaticFormAppRenderer.renderComponentAdminEntityType(subsystem, "notice-board", "notice").map(_.body).getOrElse(fail("component entity type admin is missing"))
+      val html = _renderer.renderComponentAdminEntityType(subsystem, "notice-board", "notice").map(_.body).getOrElse(fail("component entity type admin is missing"))
 
       html should include ("Storage shape")
       html should include ("delegated_collection")
@@ -1670,21 +1685,21 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         "crud.origin.href" -> s"/web/${componentPath}/admin/entities/${entityPath}?page=2&pageSize=1&search.author=alice"
       )
 
-      val list = StaticFormAppRenderer.renderComponentAdminEntityType(
+      val list = _renderer.renderComponentAdminEntityType(
         subsystem,
         componentName,
         entityPath,
         StaticFormAppRenderer.PageRequest(page = 2, pageSize = 1),
         pageContext = context
       ).map(_.body).getOrElse(fail("component entity list admin is missing"))
-      val detail = StaticFormAppRenderer.renderComponentAdminEntityDetail(
+      val detail = _renderer.renderComponentAdminEntityDetail(
         subsystem,
         componentName,
         entityPath,
         recordId,
         values = context
       ).map(_.body).getOrElse(fail("component entity detail admin is missing"))
-      val edit = StaticFormAppRenderer.renderComponentAdminEntityEdit(
+      val edit = _renderer.renderComponentAdminEntityEdit(
         subsystem,
         componentName,
         entityPath,
@@ -1846,7 +1861,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
       val collection = _notice_fixture_component(subsystem).entitySpace.entity[_NoticeEntity]("notice")
       val recordId = collection.storage.storeRealm.values.head.id.value
-      val edit = StaticFormAppRenderer
+      val edit = _renderer
         .renderComponentAdminEntityEdit(subsystem, "notice_board", "notice", recordId)
         .map(_.body)
         .getOrElse(fail("component entity edit admin is missing"))
@@ -2079,30 +2094,30 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       val recordId = recordEntityId.value
       val recordShortid = recordEntityId.parts.entropy
 
-      val newHtml = StaticFormAppRenderer
+      val newhtml = _renderer
         .renderComponentAdminEntityNew(subsystem, componentName, entityPath)
         .map(_.body)
         .getOrElse(fail("component entity new admin is missing"))
-      val editHtml = StaticFormAppRenderer
+      val edithtml = _renderer
         .renderComponentAdminEntityEdit(subsystem, componentName, entityPath, recordId)
         .map(_.body)
         .getOrElse(fail("component entity edit admin is missing"))
 
-      newHtml should include (s"/form/${componentPath}/admin/entities/${entityPath}/create")
-      newHtml should include ("enctype=\"multipart/form-data\"")
-      newHtml should include ("name=\"subject\"")
-      newHtml should include ("name=\"body\"")
-      newHtml should include ("name=\"imageAttachments.0.file\"")
-      newHtml should include ("Image Attachments")
-      newHtml should not include ("name=\"title\"")
-      newHtml should not include ("name=\"content\"")
-      editHtml should include (s"/form/${componentPath}/admin/entities/${entityPath}/${recordShortid}/update")
-      editHtml should include ("enctype=\"multipart/form-data\"")
-      editHtml should include ("name=\"subject\"")
-      editHtml should include ("name=\"body\"")
-      editHtml should include ("name=\"imageAttachments.0.blobId\"")
-      editHtml should not include ("name=\"title\"")
-      editHtml should not include ("name=\"content\"")
+      newhtml should include (s"/form/${componentPath}/admin/entities/${entityPath}/create")
+      newhtml should include ("enctype=\"multipart/form-data\"")
+      newhtml should include ("name=\"subject\"")
+      newhtml should include ("name=\"body\"")
+      newhtml should include ("name=\"imageAttachments.0.file\"")
+      newhtml should include ("Image Attachments")
+      newhtml should not include ("name=\"title\"")
+      newhtml should not include ("name=\"content\"")
+      edithtml should include (s"/form/${componentPath}/admin/entities/${entityPath}/${recordShortid}/update")
+      edithtml should include ("enctype=\"multipart/form-data\"")
+      edithtml should include ("name=\"subject\"")
+      edithtml should include ("name=\"body\"")
+      edithtml should include ("name=\"imageAttachments.0.blobId\"")
+      edithtml should not include ("name=\"title\"")
+      edithtml should not include ("name=\"content\"")
     }
 
     "honor SimpleEntity platform fields when admin schema includes them" in {
@@ -2125,25 +2140,25 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       val entityPath = "notice"
       val recordId = _notice_fixture_component(subsystem).entitySpace.entity[_NoticeEntity](entityPath).storage.storeRealm.values.head.id.value
 
-      val newHtml = StaticFormAppRenderer
+      val newhtml = _renderer
         .renderComponentAdminEntityNew(subsystem, componentName, entityPath)
         .map(_.body)
         .getOrElse(fail("component entity new admin is missing"))
-      val editHtml = StaticFormAppRenderer
+      val edithtml = _renderer
         .renderComponentAdminEntityEdit(subsystem, componentName, entityPath, recordId)
         .map(_.body)
         .getOrElse(fail("component entity edit admin is missing"))
 
-      newHtml should include ("name=\"id\"")
-      newHtml should include ("name=\"nameAttributes\"")
-      newHtml should include ("name=\"lifecycleAttributes\"")
-      newHtml should include ("name=\"securityAttributes\"")
-      newHtml should include ("name=\"senderName\"")
-      newHtml should include ("name=\"subject\"")
-      newHtml should include ("name=\"body\"")
-      editHtml should include ("name=\"nameAttributes\"")
-      editHtml should include ("name=\"lifecycleAttributes\"")
-      editHtml should include ("name=\"securityAttributes\"")
+      newhtml should include ("name=\"id\"")
+      newhtml should include ("name=\"nameAttributes\"")
+      newhtml should include ("name=\"lifecycleAttributes\"")
+      newhtml should include ("name=\"securityAttributes\"")
+      newhtml should include ("name=\"senderName\"")
+      newhtml should include ("name=\"subject\"")
+      newhtml should include ("name=\"body\"")
+      edithtml should include ("name=\"nameAttributes\"")
+      edithtml should include ("name=\"lifecycleAttributes\"")
+      edithtml should include ("name=\"securityAttributes\"")
     }
 
     "render admin entity list and detail with derived alias fields" in {
@@ -2153,11 +2168,11 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       val entityPath = "notice"
       val recordId = _notice_fixture_component(subsystem).entitySpace.entity[_NoticeEntity](entityPath).storage.storeRealm.values.head.id.value
 
-      val list = StaticFormAppRenderer
+      val list = _renderer
         .renderComponentAdminEntityType(subsystem, componentName, entityPath)
         .map(_.body)
         .getOrElse(fail("component entity type admin is missing"))
-      val detail = StaticFormAppRenderer
+      val detail = _renderer
         .renderComponentAdminEntityDetail(subsystem, componentName, entityPath, recordId)
         .map(_.body)
         .getOrElse(fail("component entity detail admin is missing"))
@@ -2193,28 +2208,28 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       val entityPath = "notice"
       val recordId = _notice_fixture_component(subsystem).entitySpace.entity[_NoticeEntity](entityPath).storage.storeRealm.values.head.id.value
 
-      val list = StaticFormAppRenderer
+      val list = _renderer
         .renderComponentAdminEntityType(subsystem, componentName, entityPath)
         .map(_.body)
         .getOrElse(fail("component entity type admin is missing"))
-      val detail = StaticFormAppRenderer
+      val detail = _renderer
         .renderComponentAdminEntityDetail(subsystem, componentName, entityPath, recordId)
         .map(_.body)
         .getOrElse(fail("component entity detail admin is missing"))
-      val edit = StaticFormAppRenderer
+      val edit = _renderer
         .renderComponentAdminEntityEdit(subsystem, componentName, entityPath, recordId)
         .map(_.body)
         .getOrElse(fail("component entity edit admin is missing"))
-      val newly = StaticFormAppRenderer
+      val newly = _renderer
         .renderComponentAdminEntityNew(subsystem, componentName, entityPath)
         .map(_.body)
         .getOrElse(fail("component entity new admin is missing"))
-      val formDefinition = parse(StaticFormAppRenderer
+      val formdefinition = parse(_renderer
         .renderComponentAdminEntityFormDefinition(subsystem, componentName, entityPath)
         .map(_.body)
         .getOrElse(fail("component entity form definition is missing")))
         .getOrElse(fail("component entity form definition JSON is invalid"))
-      val formDefinitionFields = formDefinition.hcursor.downField("fields")
+      val formdefinitionfields = formdefinition.hcursor.downField("fields")
 
       list should include ("<th>id</th><th>subject</th><th>Actions</th>")
       list should not include ("nameAttributes")
@@ -2235,10 +2250,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       newly should not include ("name=\"nameAttributes\"")
       newly should not include ("name=\"lifecycleAttributes\"")
       newly should not include ("name=\"securityAttributes\"")
-      formDefinitionFields.downN(0).downField("name").as[String].toOption shouldBe Some("senderName")
-      formDefinitionFields.downN(1).downField("name").as[String].toOption shouldBe Some("recipientName")
-      formDefinitionFields.downN(2).downField("name").as[String].toOption shouldBe Some("subject")
-      formDefinitionFields.downN(3).downField("name").as[String].toOption shouldBe Some("body")
+      formdefinitionfields.downN(0).downField("name").as[String].toOption shouldBe Some("senderName")
+      formdefinitionfields.downN(1).downField("name").as[String].toOption shouldBe Some("recipientName")
+      formdefinitionfields.downN(2).downField("name").as[String].toOption shouldBe Some("subject")
+      formdefinitionfields.downN(3).downField("name").as[String].toOption shouldBe Some("body")
     }
 
     "create admin entity records without exposing id when create view fields omit it" in {
@@ -2253,11 +2268,11 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       val componentName = "notice_board"
       val componentPath = "notice-board"
       val entityPath = "notice"
-      val newHtml = StaticFormAppRenderer
+      val newhtml = _renderer
         .renderComponentAdminEntityNew(subsystem, componentName, entityPath)
         .map(_.body)
         .getOrElse(fail("component entity new admin is missing"))
-      val formDefinition = parse(StaticFormAppRenderer
+      val formdefinition = parse(_renderer
         .renderComponentAdminEntityFormDefinition(subsystem, componentName, entityPath)
         .map(_.body)
         .getOrElse(fail("component entity form definition is missing")))
@@ -2277,12 +2292,12 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         .flatMap(_.as[String])
         .unsafeRunSync()
 
-      newHtml should include ("name=\"title\"")
-      newHtml should include ("name=\"author\"")
-      newHtml should not include ("name=\"id\"")
-      formDefinition.hcursor.downField("fields").downN(0).downField("name").as[String].toOption shouldBe Some("title")
-      formDefinition.hcursor.downField("fields").downN(1).downField("name").as[String].toOption shouldBe Some("author")
-      formDefinition.hcursor.downField("fields").downN(2).downField("name").as[String].toOption shouldBe None
+      newhtml should include ("name=\"title\"")
+      newhtml should include ("name=\"author\"")
+      newhtml should not include ("name=\"id\"")
+      formdefinition.hcursor.downField("fields").downN(0).downField("name").as[String].toOption shouldBe Some("title")
+      formdefinition.hcursor.downField("fields").downN(1).downField("name").as[String].toOption shouldBe Some("author")
+      formdefinition.hcursor.downField("fields").downN(2).downField("name").as[String].toOption shouldBe None
       html should include ("Entity record was applied")
       html should include ("Applied</th><td>true")
       collection.storage.storeRealm.values.size shouldBe before + 1
@@ -3383,7 +3398,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
       val componentPath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)
 
-      val html = StaticFormAppRenderer.renderComponentAdminEntityEdit(subsystem, component.name, "sales-order", "missing-id").map(_.body).getOrElse(fail("component entity edit admin is missing"))
+      val html = _renderer.renderComponentAdminEntityEdit(subsystem, component.name, "sales-order", "missing-id").map(_.body).getOrElse(fail("component entity edit admin is missing"))
 
       html should include (s"${component.name} Sales Order Edit")
       html should include ("Edit Sales Order")
@@ -3403,7 +3418,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
       val componentPath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)
 
-      val html = StaticFormAppRenderer.renderComponentAdminEntityEdit(
+      val html = _renderer.renderComponentAdminEntityEdit(
         subsystem,
         component.name,
         "sales-order",
@@ -3433,7 +3448,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
       val componentPath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)
 
-      val html = StaticFormAppRenderer.renderComponentAdminEntityNew(subsystem, component.name, "sales-order").map(_.body).getOrElse(fail("component entity new admin is missing"))
+      val html = _renderer.renderComponentAdminEntityNew(subsystem, component.name, "sales-order").map(_.body).getOrElse(fail("component entity new admin is missing"))
 
       html should include (s"${component.name} Sales Order New")
       html should include ("New Sales Order")
@@ -3490,7 +3505,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         .withComponentDescriptors(Vector(descriptor))
       val subsystem = DefaultSubsystemFactory.default(Some("server")).add(Vector(component))
 
-      val html = StaticFormAppRenderer.renderComponentAdminEntityNew(subsystem, "notice_board", "notice").map(_.body).getOrElse(fail("component entity new admin is missing"))
+      val html = _renderer.renderComponentAdminEntityNew(subsystem, "notice_board", "notice").map(_.body).getOrElse(fail("component entity new admin is missing"))
 
       html should include ("name=\"id\"")
       html should include ("name=\"title\"")
@@ -3525,7 +3540,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       val bootstrapped = new ComponentFactory().bootstrap(component)
       val subsystem = DefaultSubsystemFactory.default(Some("server")).add(Vector(bootstrapped))
 
-      val html = StaticFormAppRenderer.renderComponentAdminEntityNew(subsystem, "generated_schema_component", "order").map(_.body).getOrElse(fail("component entity new admin is missing"))
+      val html = _renderer.renderComponentAdminEntityNew(subsystem, "generated_schema_component", "order").map(_.body).getOrElse(fail("component entity new admin is missing"))
 
       html should include ("name=\"id\"")
       html should include ("name=\"name\"")
@@ -3540,7 +3555,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
     "render component entity new page from merged Schema and WebDescriptor controls" in {
       val (subsystem, descriptor) = _entity_schema_web_descriptor_fixture()
 
-      val html = StaticFormAppRenderer.renderComponentAdminEntityNew(
+      val html = _renderer.renderComponentAdminEntityNew(
         subsystem,
         "notice_board",
         "notice",
@@ -3582,7 +3597,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       ))
       val subsystem = _management_console_fixture_subsystem(schema = schema)
 
-      val definition = parse(StaticFormAppRenderer
+      val definition = parse(_renderer
         .renderComponentAdminEntityFormDefinition(subsystem, "notice_board", "notice")
         .map(_.body)
         .getOrElse(fail("component entity form definition is missing")))
@@ -3594,7 +3609,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       fields.downN(1).downField("label").as[String].toOption shouldBe Some("Body")
       fields.downN(1).downField("type").as[String].toOption shouldBe Some("textarea")
 
-      val html = StaticFormAppRenderer
+      val html = _renderer
         .renderComponentAdminEntityNew(subsystem, "notice_board", "notice")
         .map(_.body)
         .getOrElse(fail("component entity new admin is missing"))
@@ -3707,7 +3722,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
     }
 
     "render component entity update submission result contract" in {
-      val html = StaticFormAppRenderer.renderComponentAdminEntityUpdateResult(
+      val html = _renderer.renderComponentAdminEntityUpdateResult(
         "admin",
         "sales-order",
         "sales-order-1",
@@ -3730,7 +3745,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
     }
 
     "render component entity create submission result contract" in {
-      val html = StaticFormAppRenderer.renderComponentAdminEntityCreateResult(
+      val html = _renderer.renderComponentAdminEntityCreateResult(
         "admin",
         "sales-order",
         Map("status" -> "draft")
@@ -3776,7 +3791,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         ))
       ))
 
-      val html = StaticFormAppRenderer.renderComponentAdminEntityEdit(
+      val html = _renderer.renderComponentAdminEntityEdit(
         subsystem,
         "notice_board",
         "notice",
@@ -3796,7 +3811,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
 
-      val html = StaticFormAppRenderer.renderComponentAdminData(subsystem, component.name).map(_.body).getOrElse(fail("component data admin is missing"))
+      val html = _renderer.renderComponentAdminData(subsystem, component.name).map(_.body).getOrElse(fail("component data admin is missing"))
 
       html should include (s"${component.name} Data Administration")
       html should include ("Data record management")
@@ -3812,20 +3827,20 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
     "render component data pages from a live DataStore fixture" in {
       val fixture = _data_fixture()
       _with_global_runtime(fixture.runtime) {
-        val html = StaticFormAppRenderer.renderComponentAdminDataType(fixture.subsystem, "notice_board", "audit").map(_.body).getOrElse(fail("component data type admin is missing"))
-        val firstPage = StaticFormAppRenderer.renderComponentAdminDataType(
+        val html = _renderer.renderComponentAdminDataType(fixture.subsystem, "notice_board", "audit").map(_.body).getOrElse(fail("component data type admin is missing"))
+        val firstpage = _renderer.renderComponentAdminDataType(
           fixture.subsystem,
           "notice_board",
           "audit",
           StaticFormAppRenderer.PageRequest(page = 1, pageSize = 1)
         ).map(_.body).getOrElse(fail("component data first page admin is missing"))
-        val secondPage = StaticFormAppRenderer.renderComponentAdminDataType(
+        val secondpage = _renderer.renderComponentAdminDataType(
           fixture.subsystem,
           "notice_board",
           "audit",
           StaticFormAppRenderer.PageRequest(page = 2, pageSize = 1)
         ).map(_.body).getOrElse(fail("component data second page admin is missing"))
-        val totalPage = StaticFormAppRenderer.renderComponentAdminDataType(
+        val totalpage = _renderer.renderComponentAdminDataType(
           fixture.subsystem,
           "notice_board",
           "audit",
@@ -3834,7 +3849,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         ).map(_.body).getOrElse(fail("component data total page admin is missing"))
         val unsupportedFixture = _data_fixture(TotalCountCapability.Unsupported)
         val unsupportedTotalPage = _with_global_runtime(unsupportedFixture.runtime) {
-          StaticFormAppRenderer.renderComponentAdminDataType(
+          _renderer.renderComponentAdminDataType(
             unsupportedFixture.subsystem,
             "notice_board",
             "audit",
@@ -3842,9 +3857,9 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
             WebDescriptor(admin = Map("data.audit" -> WebDescriptor.AdminSurface(WebDescriptor.TotalCountPolicy.Optional)))
           ).map(_.body).getOrElse(fail("component data unsupported total page admin is missing"))
         }
-        val detail = StaticFormAppRenderer.renderComponentAdminDataDetail(fixture.subsystem, "notice_board", "audit", "audit_1").map(_.body).getOrElse(fail("component data detail admin is missing"))
-        val edit = StaticFormAppRenderer.renderComponentAdminDataEdit(fixture.subsystem, "notice_board", "audit", "audit_1").map(_.body).getOrElse(fail("component data edit admin is missing"))
-        val newly = StaticFormAppRenderer.renderComponentAdminDataNew(fixture.subsystem, "notice_board", "audit").map(_.body).getOrElse(fail("component data new admin is missing"))
+        val detail = _renderer.renderComponentAdminDataDetail(fixture.subsystem, "notice_board", "audit", "audit_1").map(_.body).getOrElse(fail("component data detail admin is missing"))
+        val edit = _renderer.renderComponentAdminDataEdit(fixture.subsystem, "notice_board", "audit", "audit_1").map(_.body).getOrElse(fail("component data edit admin is missing"))
+        val newly = _renderer.renderComponentAdminDataNew(fixture.subsystem, "notice_board", "audit").map(_.body).getOrElse(fail("component data new admin is missing"))
 
         html should include ("audit_1")
         html should include ("<th>id</th><th>action</th><th>actor</th><th>Actions</th>")
@@ -3854,12 +3869,12 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         html should include ("created")
         html should include ("alice")
         html should include ("/web/notice-board/admin/data/audit/audit_1")
-        firstPage should include ("Page 1")
-        firstPage should include ("page=2&amp;pageSize=1")
-        secondPage should include ("Page 2")
-        secondPage should include ("page-item disabled\"><a class=\"page-link\" href=\"/web/notice-board/admin/data/audit?page=3&amp;pageSize=1\">Next")
-        totalPage should include ("total 2")
-        totalPage should include ("includeTotal=true")
+        firstpage should include ("Page 1")
+        firstpage should include ("page=2&amp;pageSize=1")
+        secondpage should include ("Page 2")
+        secondpage should include ("page-item disabled\"><a class=\"page-link\" href=\"/web/notice-board/admin/data/audit?page=3&amp;pageSize=1\">Next")
+        totalpage should include ("total 2")
+        totalpage should include ("includeTotal=true")
         unsupportedTotalPage should include ("alert-warning")
         unsupportedTotalPage should include ("admin-feedback")
         unsupportedTotalPage should include ("total count is not available for data.audit")
@@ -3885,14 +3900,14 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       val fixture = _data_fixture()
       val descriptor = _data_schema_web_descriptor()
       _with_global_runtime(fixture.runtime) {
-        val edit = StaticFormAppRenderer.renderComponentAdminDataEdit(
+        val edit = _renderer.renderComponentAdminDataEdit(
           fixture.subsystem,
           "notice_board",
           "audit",
           "audit_1",
           webDescriptor = descriptor
         ).map(_.body).getOrElse(fail("component data edit admin is missing"))
-        val newly = StaticFormAppRenderer.renderComponentAdminDataNew(
+        val newly = _renderer.renderComponentAdminDataNew(
           fixture.subsystem,
           "notice_board",
           "audit",
@@ -4099,7 +4114,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
 
-      val html = StaticFormAppRenderer.renderComponentAdminViews(subsystem, component.name).map(_.body).getOrElse(fail("component view admin is missing"))
+      val html = _renderer.renderComponentAdminViews(subsystem, component.name).map(_.body).getOrElse(fail("component view admin is missing"))
 
       html should include (s"${component.name} View Administration")
       html should include ("View read")
@@ -4112,7 +4127,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
     "render component view read page from a live ViewSpace fixture" in {
       val subsystem = _view_fixture_subsystem()
 
-      val html = StaticFormAppRenderer.renderComponentAdminViewDetail(subsystem, "notice_board", "notice_view").map(_.body).getOrElse(fail("component view detail admin is missing"))
+      val html = _renderer.renderComponentAdminViewDetail(subsystem, "notice_board", "notice_view").map(_.body).getOrElse(fail("component view detail admin is missing"))
 
       html should include ("notice_board Notice View View")
       html should include ("Notice View metadata")
@@ -4134,7 +4149,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
     "render component view instance detail page through context-aware read" in {
       val subsystem = _view_fixture_subsystem()
 
-      val html = StaticFormAppRenderer.renderComponentAdminViewInstanceDetail(subsystem, "notice_board", "notice_view", "notice_1").map(_.body).getOrElse(fail("component view instance detail admin is missing"))
+      val html = _renderer.renderComponentAdminViewInstanceDetail(subsystem, "notice_board", "notice_view", "notice_1").map(_.body).getOrElse(fail("component view instance detail admin is missing"))
 
       html should include ("notice_board Notice View View Detail")
       html should include ("class=\"card admin-card")
@@ -4162,7 +4177,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         )
       )
 
-      val html = StaticFormAppRenderer.renderComponentAdminViewInstanceDetail(subsystem, "notice_board", "notice_view", "notice_1", descriptor).map(_.body).getOrElse(fail("component view instance detail admin is missing"))
+      val html = _renderer.renderComponentAdminViewInstanceDetail(subsystem, "notice_board", "notice_view", "notice_1", descriptor).map(_.body).getOrElse(fail("component view instance detail admin is missing"))
 
       html should include ("<th>id</th>")
       html should include ("<th>label</th>")
@@ -4177,7 +4192,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
 
-      val html = StaticFormAppRenderer.renderComponentAdminAggregates(subsystem, component.name).map(_.body).getOrElse(fail("component aggregate admin is missing"))
+      val html = _renderer.renderComponentAdminAggregates(subsystem, component.name).map(_.body).getOrElse(fail("component aggregate admin is missing"))
 
       html should include (s"${component.name} Aggregate Administration")
       html should include ("Aggregate CRUD")
@@ -4190,7 +4205,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
     "render component aggregate read page from a live AggregateSpace fixture" in {
       val subsystem = _aggregate_fixture_subsystem()
 
-      val html = StaticFormAppRenderer.renderComponentAdminAggregateDetail(subsystem, "notice_board", "notice_aggregate").map(_.body).getOrElse(fail("component aggregate detail admin is missing"))
+      val html = _renderer.renderComponentAdminAggregateDetail(subsystem, "notice_board", "notice_aggregate").map(_.body).getOrElse(fail("component aggregate detail admin is missing"))
 
       html should include ("notice_board Notice Aggregate Aggregate")
       html should include ("Notice Aggregate metadata")
@@ -4234,7 +4249,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         )
       )
 
-      val html = StaticFormAppRenderer.renderComponentAdminAggregateDetail(subsystem, "notice_board", "notice_aggregate", webDescriptor = descriptor).map(_.body).getOrElse(fail("component aggregate detail admin is missing"))
+      val html = _renderer.renderComponentAdminAggregateDetail(subsystem, "notice_board", "notice_aggregate", webDescriptor = descriptor).map(_.body).getOrElse(fail("component aggregate detail admin is missing"))
 
       html should include ("<th>id</th>")
       html should include ("<th>label</th>")
@@ -4247,7 +4262,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
     "render component aggregate instance detail page through context-aware read" in {
       val subsystem = _aggregate_fixture_subsystem()
 
-      val html = StaticFormAppRenderer.renderComponentAdminAggregateInstanceDetail(subsystem, "notice_board", "notice_aggregate", "notice_1").map(_.body).getOrElse(fail("component aggregate instance detail admin is missing"))
+      val html = _renderer.renderComponentAdminAggregateInstanceDetail(subsystem, "notice_board", "notice_aggregate", "notice_1").map(_.body).getOrElse(fail("component aggregate instance detail admin is missing"))
 
       html should include ("notice_board Notice Aggregate Aggregate Detail")
       html should include ("class=\"card admin-card")
@@ -4283,7 +4298,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         )
       )
 
-      val html = StaticFormAppRenderer.renderComponentAdminAggregateInstanceDetail(subsystem, "notice_board", "notice_aggregate", "notice_1", descriptor).map(_.body).getOrElse(fail("component aggregate instance detail admin is missing"))
+      val html = _renderer.renderComponentAdminAggregateInstanceDetail(subsystem, "notice_board", "notice_aggregate", "notice_1", descriptor).map(_.body).getOrElse(fail("component aggregate instance detail admin is missing"))
 
       html should include ("<th>id</th>")
       html should include ("<th>label</th>")
@@ -4859,7 +4874,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
     "specify selector to Web HTML, Form API, and REST operation path mapping" in {
       val subsystem = _form_type_fixture_subsystem()
 
-      val definition = StaticFormAppRenderer.renderOperationFormDefinition(
+      val definition = _renderer.renderOperationFormDefinition(
         subsystem,
         "notice_board",
         "notice",
@@ -4956,7 +4971,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       val descriptor = WebDescriptor(expose = Map(selector -> WebDescriptor.Exposure.Internal))
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem, Some(descriptor)))
 
-      val htmlForm = StaticFormAppRenderer.renderOperationForm(
+      val htmlform = _renderer.renderOperationForm(
         subsystem,
         "notice-board",
         "notice",
@@ -4973,7 +4988,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         .unsafeRunSync()
 
       descriptor.isFormEnabled(selector) shouldBe false
-      htmlForm shouldBe None
+      htmlform shouldBe None
       apiResponse.status.code shouldBe 404
     }
 
@@ -5097,7 +5112,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         apps = Vector(WebDescriptor.App("component-dashboard", s"/web/${componentPath}/dashboard", "dashboard"))
       )
 
-      val html = StaticFormAppRenderer.renderComponentAdmin(subsystem, component.name, descriptor).map(_.body).getOrElse(fail("component admin is missing"))
+      val html = _renderer.renderComponentAdmin(subsystem, component.name, descriptor).map(_.body).getOrElse(fail("component admin is missing"))
 
       html should include ("Web Descriptor")
       html should include ("configured")
@@ -5112,7 +5127,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       RuntimeDashboardMetrics.recordHtmlRequest("GET", "/missing", 404, 34L)
       RuntimeDashboardMetrics.recordAuthorizationDecision(denied = true, Some("capability"))
 
-      val html = StaticFormAppRenderer.renderSystemPerformance(subsystem).body
+      val html = _renderer.renderSystemPerformance(subsystem).body
 
       html should include ("System Performance")
       html should include ("/web/assets/bootstrap.min.css")
@@ -5177,9 +5192,9 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         )
       )
 
-      val html = StaticFormAppRenderer.renderSystemAdminObservabilityMetrics(subsystem).body
-      val home = StaticFormAppRenderer.renderSystemAdminObservability(subsystem).body
-      val performance = StaticFormAppRenderer.renderSystemPerformance(subsystem).body
+      val html = _renderer.renderSystemAdminObservabilityMetrics(subsystem).body
+      val home = _renderer.renderSystemAdminObservability(subsystem).body
+      val performance = _renderer.renderSystemPerformance(subsystem).body
 
       html should include ("Observability Metrics")
       html should include ("web.request")
@@ -5238,10 +5253,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         backend = Some("local-file")
       )
 
-      val performance = StaticFormAppRenderer.renderSystemPerformance(subsystem).body
-      val home = StaticFormAppRenderer.renderSystemAdminObservability(subsystem).body
-      val diagnostics = StaticFormAppRenderer.renderSystemAdminObservabilityDiagnostics().body
-      val detail = StaticFormAppRenderer
+      val performance = _renderer.renderSystemPerformance(subsystem).body
+      val home = _renderer.renderSystemAdminObservability(subsystem).body
+      val diagnostics = _renderer.renderSystemAdminObservabilityDiagnostics().body
+      val detail = _renderer
         .renderSystemAdminObservabilityDiagnostic("blob", "ob04_payload_missing")
         .map(_.body)
         .getOrElse(fail("diagnostic detail is missing"))
@@ -5260,15 +5275,15 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       detail should include ("storage_missing")
       detail should include ("/web/system/admin/observability/payloads/payload-1.json")
       detail should include ("Raw diagnostic record")
-      StaticFormAppRenderer.renderSystemAdminObservabilityDiagnostic("missing", "ob04_payload_missing") shouldBe None
-      StaticFormAppRenderer.renderSystemAdminObservabilityDiagnostic("blob", "missing") shouldBe None
+      _renderer.renderSystemAdminObservabilityDiagnostic("missing", "ob04_payload_missing") shouldBe None
+      _renderer.renderSystemAdminObservabilityDiagnostic("blob", "missing") shouldBe None
     }
 
     "render document and console entry pages without inline operation execution" in {
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
 
-      val manual = StaticFormAppRenderer.render(subsystem, "document").map(_.body).getOrElse(fail("documents page is missing"))
-      val console = StaticFormAppRenderer.render(subsystem, "console").map(_.body).getOrElse(fail("console is missing"))
+      val manual = _renderer.render(subsystem, "document").map(_.body).getOrElse(fail("documents page is missing"))
+      val console = _renderer.render(subsystem, "console").map(_.body).getOrElse(fail("console is missing"))
 
       manual should include ("System Documents")
       manual should include ("/web/system/dashboard")
@@ -5290,15 +5305,15 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         apps = Vector(WebDescriptor.App("document", "/web/document", "document"))
       )
 
-      val manual = StaticFormAppRenderer.render(subsystem, "document", webDescriptor = descriptor)
-      val console = StaticFormAppRenderer.render(subsystem, "console", webDescriptor = descriptor)
+      val manual = _renderer.render(subsystem, "document", webDescriptor = descriptor)
+      val console = _renderer.render(subsystem, "console", webDescriptor = descriptor)
       val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
       val componentPath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)
-      val componentForms = StaticFormAppRenderer.render(subsystem, componentPath, webDescriptor = descriptor)
+      val componentforms = _renderer.render(subsystem, componentPath, webDescriptor = descriptor)
 
       manual.map(_.body).getOrElse(fail("documents page is missing")) should include ("System Documents")
       console.map(_.body).getOrElse(fail("console is missing")) should include ("System Console")
-      componentForms shouldBe None
+      componentforms shouldBe None
     }
 
     "allow component dashboard app entries by descriptor path" in {
@@ -5309,7 +5324,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         apps = Vector(WebDescriptor.App("component-dashboard", s"/web/${componentPath}/dashboard", "dashboard"))
       )
 
-      val page = StaticFormAppRenderer.render(subsystem, componentPath, Vector("dashboard"), descriptor)
+      val page = _renderer.render(subsystem, componentPath, Vector("dashboard"), descriptor)
 
       page.map(_.body).getOrElse(fail("dashboard is missing")) should include (s"${component.name} Dashboard")
     }
@@ -5318,7 +5333,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
 
-      val html = StaticFormAppRenderer.renderFormIndex(subsystem, component.name).map(_.body).getOrElse(fail("form index is missing"))
+      val html = _renderer.renderFormIndex(subsystem, component.name).map(_.body).getOrElse(fail("form index is missing"))
 
       html should include (s"${component.name} Forms")
       html should include ("/web/assets/bootstrap.min.css")
@@ -5336,7 +5351,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       val service = component.protocol.services.services.headOption.getOrElse(fail("service is missing"))
       val operation = service.operations.operations.toVector.headOption.getOrElse(fail("operation is missing"))
 
-      val html = StaticFormAppRenderer.renderOperationForm(subsystem, component.name, service.name, operation.name).map(_.body).getOrElse(fail("operation form is missing"))
+      val html = _renderer.renderOperationForm(subsystem, component.name, service.name, operation.name).map(_.body).getOrElse(fail("operation form is missing"))
 
       html should include ("<form method=\"post\"")
       html should include ("card admin-card")
@@ -5354,7 +5369,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       val service = component.protocol.services.services.headOption.getOrElse(fail("service is missing"))
       val operation = service.operations.operations.toVector.headOption.getOrElse(fail("operation is missing"))
 
-      val html = StaticFormAppRenderer.renderOperationForm(
+      val html = _renderer.renderOperationForm(
         subsystem,
         component.name,
         service.name,
@@ -5380,7 +5395,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       val service = component.protocol.services.services.headOption.getOrElse(fail("service is missing"))
       val operation = service.operations.operations.toVector.headOption.getOrElse(fail("operation is missing"))
 
-      val html = StaticFormAppRenderer.renderOperationForm(
+      val html = _renderer.renderOperationForm(
         subsystem,
         component.name,
         service.name,
@@ -5414,7 +5429,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         )
       )
 
-      val html = StaticFormAppRenderer.renderFormIndex(subsystem, component.name, descriptor).map(_.body).getOrElse(fail("form index is missing"))
+      val html = _renderer.renderFormIndex(subsystem, component.name, descriptor).map(_.body).getOrElse(fail("form index is missing"))
 
       html should include ("/web/component/assets/forms.css")
       html should include ("/web/component/assets/forms.js")
@@ -5456,7 +5471,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         )
       )
 
-      val html = StaticFormAppRenderer.renderOperationForm(subsystem, component.name, service.name, operation.name, descriptor).map(_.body).getOrElse(fail("operation form is missing"))
+      val html = _renderer.renderOperationForm(subsystem, component.name, service.name, operation.name, descriptor).map(_.body).getOrElse(fail("operation form is missing"))
 
       html should include ("/web/component/assets/forms.css")
       html should include ("/web/component/assets/forms.js")
@@ -5481,8 +5496,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         form = Map(selector -> WebDescriptor.Form(enabled = Some(false)))
       )
 
-      val index = StaticFormAppRenderer.renderFormIndex(subsystem, component.name, descriptor).map(_.body).getOrElse(fail("form index is missing"))
-      val form = StaticFormAppRenderer.renderOperationForm(subsystem, component.name, service.name, operation.name, descriptor)
+      val index = _renderer.renderFormIndex(subsystem, component.name, descriptor).map(_.body).getOrElse(fail("form index is missing"))
+      val form = _renderer.renderOperationForm(subsystem, component.name, service.name, operation.name, descriptor)
 
       index should not include (path)
       form shouldBe None
@@ -5501,7 +5516,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         expose = Map(selector -> WebDescriptor.Exposure.Protected)
       )
 
-      val form = StaticFormAppRenderer.renderOperationForm(subsystem, component.name, service.name, operation.name, descriptor)
+      val form = _renderer.renderOperationForm(subsystem, component.name, service.name, operation.name, descriptor)
 
       form.map(_.body).getOrElse(fail("operation form is missing")) should include (s"/form/${componentPath}/${servicePath}/${operationPath}")
     }
@@ -5509,7 +5524,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
     "render HTML operation form with query-provided initial fields" in {
       val subsystem = _aggregate_fixture_subsystem()
 
-      val html = StaticFormAppRenderer.renderOperationForm(
+      val html = _renderer.renderOperationForm(
         subsystem,
         "notice_board",
         "notice_aggregate",
@@ -5552,7 +5567,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         ))
       )
 
-      val html = StaticFormAppRenderer.renderOperationForm(
+      val html = _renderer.renderOperationForm(
         subsystem,
         "notice_board",
         "notice",
@@ -5706,13 +5721,13 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       _initialize_component("notice_board", component, protocol)
       val subsystem = DefaultSubsystemFactory.default(Some("server")).add(Vector(component))
 
-      val html = StaticFormAppRenderer.renderOperationForm(
+      val html = _renderer.renderOperationForm(
         subsystem,
         "notice-board",
         "notice",
         "register-notice"
       ).map(_.body).getOrElse(fail("operation form is missing"))
-      val definition = StaticFormAppRenderer.renderOperationFormDefinition(
+      val definition = _renderer.renderOperationFormDefinition(
         subsystem,
         "notice-board",
         "notice",
@@ -5767,7 +5782,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       _initialize_component("notice_board", component, protocol)
       val subsystem = DefaultSubsystemFactory.default(Some("server")).add(Vector(component))
 
-      val html = StaticFormAppRenderer.renderOperationForm(
+      val html = _renderer.renderOperationForm(
         subsystem,
         "notice-board",
         "notice",
@@ -5813,13 +5828,13 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       _initialize_component("notice_board", component, protocol)
       val subsystem = DefaultSubsystemFactory.default(Some("server")).add(Vector(component))
 
-      val html = StaticFormAppRenderer.renderOperationForm(
+      val html = _renderer.renderOperationForm(
         subsystem,
         "notice-board",
         "notice",
         "register-notice-tag"
       ).map(_.body).getOrElse(fail("operation form is missing"))
-      val definition = StaticFormAppRenderer.renderOperationFormDefinition(
+      val definition = _renderer.renderOperationFormDefinition(
         subsystem,
         "notice-board",
         "notice",
@@ -5871,14 +5886,14 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       _initialize_component("notice_board", component, protocol)
       val subsystem = DefaultSubsystemFactory.default(Some("server")).add(Vector(component))
 
-      val valid = StaticFormAppRenderer.validateOperationForm(
+      val valid = _renderer.validateOperationForm(
         subsystem,
         "notice-board",
         "notice",
         "register-notice-tag",
         Map("tagId" -> "tag-1")
       ).getOrElse(fail("operation validation is missing"))
-      val missing = StaticFormAppRenderer.validateOperationForm(
+      val missing = _renderer.validateOperationForm(
         subsystem,
         "notice-board",
         "notice",
@@ -5924,13 +5939,13 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       _initialize_component("notice_board", component, protocol)
       val subsystem = DefaultSubsystemFactory.default(Some("server")).add(Vector(component))
 
-      val html = StaticFormAppRenderer.renderOperationForm(
+      val html = _renderer.renderOperationForm(
         subsystem,
         "notice-board",
         "notice",
         "register-notice-tag"
       ).map(_.body).getOrElse(fail("operation form is missing"))
-      val definition = StaticFormAppRenderer.renderOperationFormDefinition(
+      val definition = _renderer.renderOperationFormDefinition(
         subsystem,
         "notice-board",
         "notice",
@@ -5975,13 +5990,13 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       _initialize_component("notice_board", component, protocol)
       val subsystem = DefaultSubsystemFactory.default(Some("server")).add(Vector(component))
 
-      val html = StaticFormAppRenderer.renderOperationForm(
+      val html = _renderer.renderOperationForm(
         subsystem,
         "notice-board",
         "blob",
         "register-blob-like"
       ).map(_.body).getOrElse(fail("operation form is missing"))
-      val definition = StaticFormAppRenderer.renderOperationFormDefinition(
+      val definition = _renderer.renderOperationFormDefinition(
         subsystem,
         "notice-board",
         "blob",
@@ -6890,7 +6905,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       countField.downField("validation").downField("min").as[BigDecimal].toOption shouldBe Some(BigDecimal(0))
       countField.downField("validation").downField("max").as[BigDecimal].toOption shouldBe Some(BigDecimal(100))
 
-      val html = StaticFormAppRenderer.renderOperationForm(
+      val html = _renderer.renderOperationForm(
         subsystem,
         "notice_board",
         "notice",
@@ -7006,7 +7021,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         )
       )
 
-      val html = StaticFormAppRenderer.renderOperationForm(
+      val html = _renderer.renderOperationForm(
         subsystem,
         "notice_board",
         "notice_aggregate",
@@ -7255,7 +7270,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         """{"entity_id":"major-post-1","title":"Hello <Blog>","content":"<article><p>Body</p></article>"}"""
       )
 
-      val html = StaticFormAppRenderer.renderFormResult(
+      val html = _renderer.renderFormResult(
         properties,
         """<form action="/form/blog-component/blog/save-editor-post" method="post">
           |  <input name="id" value="${result.body.entity_id}">
@@ -7794,7 +7809,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         component = Some("notice-board")
       )
 
-      val html = StaticFormAppRenderer.renderStructuredErrorPage(Some("notice-board"), error).body
+      val html = _renderer.renderStructuredErrorPage(Some("notice-board"), error).body
 
       html should include ("Request failed")
       html should include (detailCode.toString)
@@ -7815,7 +7830,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         component = Some("notice-board")
       )
 
-      val html = StaticFormAppRenderer.renderStructuredErrorPage(Some("notice-board"), error).body
+      val html = _renderer.renderStructuredErrorPage(Some("notice-board"), error).body
 
       html should include (detailCode.toString)
       html should not include ("structured-error-debug")
@@ -7954,7 +7969,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         """[{"title":"Hello","author":"Taro"},{"title":"World","author":"Hanako"}]"""
       )
 
-      val html = StaticFormAppRenderer.renderFormResult(properties).body
+      val html = _renderer.renderFormResult(properties).body
 
       html should include ("<table")
       html should include ("Hanako")
@@ -7982,7 +7997,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         """{"id":"notice_1","outcome":"created","message":"created","actions":[{"name":"detail","href":"/web/notice-board/admin/entities/notice/notice_1","method":"GET"}]}"""
       )
 
-      val html = StaticFormAppRenderer.renderFormResult(properties).body
+      val html = _renderer.renderFormResult(properties).body
 
       html should include ("notice-board.notice.post-notice Result")
       html should include ("result.id")
@@ -8014,7 +8029,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         """{"outcome":"created","actions":[{"name":"detail","label":"Open detail","href":"/web/notice-board/admin/entities/notice/notice_1","method":"GET"},{"name":"approve","label":"Approve","href":"/form/notice-board/notice/approve","method":"POST"}]}"""
       )
 
-      val html = StaticFormAppRenderer.renderFormResult(
+      val html = _renderer.renderFormResult(
         properties,
         """<article>
           |  <textus:action-link source="result.action.primary" class="btn btn-primary"></textus:action-link>
@@ -8051,7 +8066,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         """{"actions":[{"name":"approve","label":"Approve","href":"/form/notice-board/notice/approve","method":"POST"},{"name":"detail","label":"Open detail","href":"/web/notice-board/admin/entities/notice/notice_1","method":"GET"}]}"""
       )
 
-      val html = StaticFormAppRenderer.renderFormResult(
+      val html = _renderer.renderFormResult(
         properties,
         """<article>
           |  <textus:action-link source="result.action.approve" class="btn btn-warning"></textus:action-link>
@@ -8091,7 +8106,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         """{"actions":[{"name":"detail","label":"Open detail","href":"/web/notice-board/admin/entities/notice/notice_1","method":"GET"},{"name":"delete","label":"Delete","href":"/form/notice-board/notice/delete","method":"POST"}]}"""
       )
 
-      val html = StaticFormAppRenderer.renderFormResult(
+      val html = _renderer.renderFormResult(
         properties,
         """<article>
           |  <textus:confirm-action source="result.action.detail" title="Open notice" message="Open the notice detail?" label="Open" confirm-label="Open detail" cancel-label="Stay" variant="unknown" class="btn btn-outline-primary" id="open-confirm"></textus:confirm-action>
@@ -8136,7 +8151,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         """{"actions":[{"name":"delete","label":"Delete","href":"/form/notice-board/notice/delete","method":"POST"}]}"""
       )
 
-      val html = StaticFormAppRenderer.renderFormResult(
+      val html = _renderer.renderFormResult(
         properties,
         """<article><textus:confirm-action source="result.action.delete" context="false"></textus:confirm-action></article>"""
       ).body
@@ -8171,7 +8186,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         """{"data":[]}"""
       )
 
-      val html = StaticFormAppRenderer.renderFormResult(
+      val html = _renderer.renderFormResult(
         properties,
         """<form method="post" action="/form/notice-board/notice/search-notices">
           |  <textus:hidden-context keys="ui.tab,empty.context,missing"></textus:hidden-context>
@@ -8205,7 +8220,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         "cncf-job-job-1776566553930-2NnWI1ze2dLoQU4t6hALAa"
       )
 
-      val html = StaticFormAppRenderer.renderFormResult(
+      val html = _renderer.renderFormResult(
         properties,
         """<article>
           |  <p>${result.job.id}</p>
@@ -8235,7 +8250,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         """{"jobId":"cncf-job-job-1","jobStatus":"accepted"}"""
       )
 
-      val html = StaticFormAppRenderer.renderFormResult(
+      val html = _renderer.renderFormResult(
         properties,
         """<article><textus:job-actions actions="await"></textus:job-actions></article>"""
       ).body
@@ -8256,7 +8271,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         """{"jobId":"cncf-job-job-1","jobStatus":"running","message":"Queued"}"""
       )
 
-      val html = StaticFormAppRenderer.renderFormResult(
+      val html = _renderer.renderFormResult(
         properties,
         """<article>
           |  <textus:job-ticket></textus:job-ticket>
@@ -8286,7 +8301,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         """{"jobId":"cncf-job-job-1","jobStatus":"accepted","message":"Queued"}"""
       )
 
-      val html = StaticFormAppRenderer.renderFormResult(
+      val html = _renderer.renderFormResult(
         properties,
         """<article>
           |  <textus:job-panel title="Notice command" actions="await"></textus:job-panel>
@@ -8316,7 +8331,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         """{"jobId":"cncf-job-job-1","jobStatus":"accepted","message":"Queued"}"""
       )
 
-      val html = StaticFormAppRenderer.renderFormResult(
+      val html = _renderer.renderFormResult(
         properties,
         """<article><h2>Custom result</h2></article>"""
       ).body
@@ -8374,7 +8389,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         operationMode = OperationMode.Develop
       )
 
-      val html = StaticFormAppRenderer.renderFormResult(
+      val html = _renderer.renderFormResult(
         properties,
         """<article><h2>Custom result</h2></article>"""
       ).body
@@ -8446,7 +8461,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         operationMode = OperationMode.Develop
       )
 
-      val html = StaticFormAppRenderer.renderFormResult(
+      val html = _renderer.renderFormResult(
         properties,
         """<!doctype html><html><head><title>Result</title></head><body><main>Custom result</main></body></html>"""
       ).body
@@ -8479,7 +8494,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         fieldConfidentiality = Map("credentialValue" -> org.goldenport.schema.DataConfidentiality.Secret)
       )
 
-      val html = StaticFormAppRenderer.renderFormResult(
+      val html = _renderer.renderFormResult(
         properties,
         """<article><h2>Custom result</h2></article>"""
       ).body
@@ -8512,7 +8527,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         operationMode = OperationMode.Production
       )
 
-      val html = StaticFormAppRenderer.renderFormResult(
+      val html = _renderer.renderFormResult(
         properties,
         """<article><h2>Custom result</h2></article>"""
       ).body
@@ -8593,8 +8608,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       subsystem.jobEngine.annotateJob(jobid, Map("web.app" -> "notice-board"))
       val model = subsystem.jobEngine.query(jobid).getOrElse(fail("job read model missing"))
 
-      val list = StaticFormAppRenderer.renderApplicationJobs("notice-board", Vector(model)).body
-      val detail = StaticFormAppRenderer.renderApplicationJob("notice-board", model).body
+      val list = _renderer.renderApplicationJobs("notice-board", Vector(model)).body
+      val detail = _renderer.renderApplicationJob("notice-board", model).body
 
       list should include ("My jobs")
       list should include (jobid.value)
@@ -8606,7 +8621,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
     }
 
     "render system job ticket page with fixed system await link" in {
-      val html = StaticFormAppRenderer.renderSystemJobTicket("cncf-job-job-1").body
+      val html = _renderer.renderSystemJobTicket("cncf-job-job-1").body
 
       html should include ("textus-job-ticket")
       html should include ("cncf-job-job-1")
@@ -8627,7 +8642,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         """{"id":"notice_1"}"""
       )
 
-      val html = StaticFormAppRenderer.renderFormResult(
+      val html = _renderer.renderFormResult(
         properties,
         """<article>
           |  <textus:action-link source="result.action.primary" class="btn btn-primary"></textus:action-link>
@@ -8653,7 +8668,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         """{"id":"notice_1"}"""
       )
 
-      val html = StaticFormAppRenderer.renderFormResult(
+      val html = _renderer.renderFormResult(
         properties,
         """<article><textus:action-link source="result.action.detail" class="btn btn-outline-primary"></textus:action-link></article>"""
       ).body
@@ -8683,7 +8698,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         """{}"""
       )
 
-      val html = StaticFormAppRenderer.renderFormResult(
+      val html = _renderer.renderFormResult(
         properties,
         """<article>
           |  <textus:action-group actions="await,detail"></textus:action-group>
@@ -8711,7 +8726,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         """{"actions":[{"name":"approve","label":"Approve","href":"/form/notice-board/notice/approve","method":"POST"},{"name":"detail","label":"Open detail","href":"/form/notice-board/notice/get-notice/result?id=notice_1","method":"GET"}]}"""
       )
 
-      val html = StaticFormAppRenderer.renderFormResult(
+      val html = _renderer.renderFormResult(
         properties,
         """<article>
           |  <textus:action-group source="result.body.actions"></textus:action-group>
@@ -8737,7 +8752,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         """{"jobId":"job-1","actions":[{"name":"await","label":"Wait now","href":"/custom/jobs/job-1/await","method":"POST"}]}"""
       )
 
-      val html = StaticFormAppRenderer.renderFormResult(
+      val html = _renderer.renderFormResult(
         properties,
         """<article>
           |  <textus:action-group actions="await"></textus:action-group>
@@ -8764,7 +8779,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         """{"id":"notice_1","title":"Phase12"}"""
       )
 
-      val html = StaticFormAppRenderer.renderFormResult(
+      val html = _renderer.renderFormResult(
         properties,
         """<article>
           |  <textus:action-group actions="return"></textus:action-group>
@@ -8795,7 +8810,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         """[{"title":"Hello"}]"""
       )
 
-      val html = StaticFormAppRenderer.renderFormResult(properties).body
+      val html = _renderer.renderFormResult(properties).body
 
       html should include ("Page 2")
       html should include ("Previous")
@@ -8819,7 +8834,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         """{"data":[{"subject":"Hello","sender_name":"alice"},{"subject":"World","sender_name":"bob"}],"total_count":2}"""
       )
 
-      val html = StaticFormAppRenderer.renderFormResult(
+      val html = _renderer.renderFormResult(
         properties,
         """<article>
           |  <p>${result.totalCount}</p>
@@ -8853,7 +8868,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         """{"data":[{"subject":"Hello"}]}"""
       )
 
-      val html = StaticFormAppRenderer.renderFormResult(
+      val html = _renderer.renderFormResult(
         properties,
         """<article><textus-result-table source="result.data"></textus-result-table></article>"""
       ).body
@@ -8881,7 +8896,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         """{"data":[]}"""
       )
 
-      val html = StaticFormAppRenderer.renderFormResult(
+      val html = _renderer.renderFormResult(
         properties,
         """<article>
           |  <textus:pagination></textus:pagination>
@@ -8915,7 +8930,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         """{"data":[]}"""
       )
 
-      val html = StaticFormAppRenderer.renderFormResult(
+      val html = _renderer.renderFormResult(
         properties,
         """<article><textus:pagination></textus:pagination></article>"""
       ).body
@@ -8942,7 +8957,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         """{"data":[]}"""
       )
 
-      val html = StaticFormAppRenderer.renderFormResult(
+      val html = _renderer.renderFormResult(
         properties,
         """<article><textus:pagination></textus:pagination></article>"""
       ).body
@@ -8971,7 +8986,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         """{"data":{"total_count":0,"offset":0,"limit":100,"fetched_count":0}}"""
       )
 
-      val html = StaticFormAppRenderer.renderFormResult(
+      val html = _renderer.renderFormResult(
         properties,
         """<article><textus:card-list source="result.body" title="title"></textus:card-list></article>"""
       ).body
@@ -9004,7 +9019,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         Map(StaticFormAppRenderer.tableColumnKey("result.body", "notice", "summary") -> columns)
       )
 
-      val html = StaticFormAppRenderer.renderFormResult(
+      val html = _renderer.renderFormResult(
         properties,
         """<article><textus:record-card source="result.body" entity="notice" view="summary"></textus:record-card></article>"""
       ).body
@@ -9035,7 +9050,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         Map(StaticFormAppRenderer.tableColumnKey("result.body", "notice", "detail") -> columns)
       )
 
-      val html = StaticFormAppRenderer.renderFormResult(
+      val html = _renderer.renderFormResult(
         properties,
         """<article><textus:description-list source="result.body" entity="notice" view="detail"></textus:description-list></article>"""
       ).body
@@ -9071,7 +9086,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         Map(StaticFormAppRenderer.tableColumnKey("result.body.data", "notice", "summary") -> columns)
       )
 
-      val html = StaticFormAppRenderer.renderFormResult(
+      val html = _renderer.renderFormResult(
         properties,
         """<article><textus:card-list source="result.body" entity="notice" view="summary"></textus:card-list></article>"""
       ).body
@@ -9103,7 +9118,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         """{"data":[{"id":"notice_1","title":"Phase12","content":"hidden","recipient_name":"Bob"}]}"""
       )
 
-      val html = StaticFormAppRenderer.renderFormResult(
+      val html = _renderer.renderFormResult(
         properties,
         """<article><textus:card-list source="result.body" columns="title,recipient_name" cols="1" md="3" lg="4"></textus:card-list></article>"""
       ).body
@@ -9133,7 +9148,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         Map(StaticFormAppRenderer.tableColumnKey("result.body.data", "notice", "summary") -> columns)
       )
 
-      val html = StaticFormAppRenderer.renderFormResult(
+      val html = _renderer.renderFormResult(
         properties,
         """<article>
           |  <textus-result-table source="result.body" entity="notice" view="summary" detail-href="/form/notice-board/notice/get-notice/result?id={id}" detail-param-return.href="/form/notice-board/notice/search-notices?recipientName=Bob Smith" detail-label="Read"></textus-result-table>
@@ -9167,7 +9182,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         """{"data":[{"title":"Phase12"}]}"""
       )
 
-      val html = StaticFormAppRenderer.renderFormResult(
+      val html = _renderer.renderFormResult(
         properties,
         """<article>
           |  <textus:summary-card title="Matches" value="${result.count}" subtitle="result.message" variant="success"></textus:summary-card>
@@ -9215,7 +9230,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         """{"data":[{"title":"Phase12","recipient_name":"Bob"}]}"""
       )
 
-      val html = StaticFormAppRenderer.renderFormResult(
+      val html = _renderer.renderFormResult(
         properties,
         """<article>
           |  <textus-record-card source="result.body" columns="title,recipient_name"></textus-record-card>
@@ -9253,7 +9268,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         """{"title":"Blog","content":"<article><p>Hello <strong>HTML</strong></p></article>"}"""
       )
 
-      val html = StaticFormAppRenderer.renderFormResult(
+      val html = _renderer.renderFormResult(
         properties,
         """<article>
           |  <textus:html-field source="result.body" field="content" class="article-body"></textus:html-field>
@@ -9281,7 +9296,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         """{"data":[]}"""
       )
 
-      val html = StaticFormAppRenderer.renderFormResult(
+      val html = _renderer.renderFormResult(
         properties,
         """<article>
           |  <textus:nav-list items="Search:nav.search.href:btn btn-primary|Post:nav.post.href"></textus:nav-list>
@@ -9317,7 +9332,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         """{"data":[]}"""
       )
 
-      val html = StaticFormAppRenderer.renderFormResult(
+      val html = _renderer.renderFormResult(
         properties,
         """<article>
           |  <textus:nav-list source="nav.items"></textus:nav-list>
@@ -9346,7 +9361,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         """{"data":[]}"""
       )
 
-      val html = StaticFormAppRenderer.renderFormResult(
+      val html = _renderer.renderFormResult(
         properties,
         """<article>
           |  <textus:nav-list items='Docs:https://example.org:8443/docs:btn btn-primary|Forms:/form/notice-board'></textus:nav-list>
@@ -9376,7 +9391,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         """{"jobId":"job-1"}"""
       )
 
-      val html = StaticFormAppRenderer.renderFormResult(
+      val html = _renderer.renderFormResult(
         properties,
         """<article>
           |  <textus:action-card source="result.action.await" title="Command result" description="result.message"></textus:action-card>
@@ -9403,7 +9418,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         """{"data":[{"title":"Phase12","recipient_name":"Bob"}]}"""
       )
 
-      val html = StaticFormAppRenderer.renderFormResult(
+      val html = _renderer.renderFormResult(
         properties,
         """<!doctype html>
           |<html lang="en">
@@ -9443,7 +9458,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         """{"data":[{"title":"Phase12","recipient_name":"Bob"}]}"""
       )
 
-      val html = StaticFormAppRenderer.renderFormResult(
+      val html = _renderer.renderFormResult(
         properties,
         """<!doctype html>
           |<html lang="en">
@@ -9484,7 +9499,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
           |<body><p>No widgets</p></body>
           |</html>""".stripMargin
 
-      val html = StaticFormAppRenderer.renderFormResult(properties, template).body
+      val html = _renderer.renderFormResult(properties, template).body
 
       html shouldBe template
       html should not include ("/web/assets/bootstrap.min.css")
@@ -9506,7 +9521,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         assetCompletion = StaticFormAppLayout.AssetCompletionOptions(autoComplete = false)
       )
 
-      val html = StaticFormAppRenderer.renderFormResult(
+      val html = _renderer.renderFormResult(
         properties,
         """<!doctype html>
           |<html lang="en">
@@ -9547,7 +9562,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         )
       )
 
-      val html = StaticFormAppRenderer.renderFormResult(
+      val html = _renderer.renderFormResult(
         properties,
         """<!doctype html>
           |<html lang="en">
@@ -9582,7 +9597,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         )
       )
 
-      val html = StaticFormAppRenderer.renderFormResult(
+      val html = _renderer.renderFormResult(
         properties,
         """<!doctype html>
           |<html lang="en">
@@ -9617,7 +9632,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         )
       )
 
-      val html = StaticFormAppRenderer.renderFormResult(
+      val html = _renderer.renderFormResult(
         properties,
         """<!doctype html>
           |<html lang="en">
@@ -9653,7 +9668,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         )
       )
 
-      val html = StaticFormAppRenderer.renderFormResult(
+      val html = _renderer.renderFormResult(
         properties,
         """<article>
           |  <h2>Fragment result</h2>
@@ -9740,7 +9755,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         """{"query":{"condition":{"recipient_name":"Bob"},"include_total":false},"data":[{"title":"Phase12","content":"Static form validation","recipient_name":"Bob"}],"fetched_count":1}"""
       )
 
-      val html = StaticFormAppRenderer.renderFormResult(
+      val html = _renderer.renderFormResult(
         properties,
         """<article><textus-result-table source="result.body"></textus-result-table></article>"""
       ).body
@@ -9766,7 +9781,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         """{"data":[{"id":"notice_1","subject":"Hello","sender_name":"alice","rights":{"owner":{"read":true}}}]}"""
       )
 
-      val html = StaticFormAppRenderer.renderFormResult(
+      val html = _renderer.renderFormResult(
         properties,
         """<article><textus-result-table source="result.data" columns="sender_name,subject"></textus-result-table></article>"""
       ).body
@@ -9791,7 +9806,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         """{"id":"notice_1","title":"Phase12","content":"Static form detail","recipient_name":"Bob"}"""
       )
 
-      val html = StaticFormAppRenderer.renderFormResult(
+      val html = _renderer.renderFormResult(
         properties,
         """<article><textus:description-list source="result.body" columns="title:Title,recipient_name:Recipient"></textus:description-list></article>"""
       ).body
@@ -9821,7 +9836,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         Map(StaticFormAppRenderer.tableColumnKey("result.body.data", "notice", "summary") -> columns)
       )
 
-      val html = StaticFormAppRenderer.renderFormResult(
+      val html = _renderer.renderFormResult(
         properties,
         """<article><textus-result-table source="result.body" entity="notice" view="summary"></textus-result-table></article>"""
       ).body
@@ -9851,7 +9866,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         Map("result.data" -> columns)
       )
 
-      val html = StaticFormAppRenderer.renderFormResult(
+      val html = _renderer.renderFormResult(
         properties,
         """<article><textus-result-table source="result.data"></textus-result-table></article>"""
       ).body
@@ -9881,7 +9896,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         Map(StaticFormAppRenderer.tableColumnKey("result.data", "notice", "summary") -> columns)
       )
 
-      val html = StaticFormAppRenderer.renderFormResult(
+      val html = _renderer.renderFormResult(
         properties,
         """<article><textus-result-table source="result.data" entity="notice" view="summary"></textus-result-table></article>"""
       ).body
@@ -9911,7 +9926,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         defaultTableView = "card"
       )
 
-      val html = StaticFormAppRenderer.renderFormResult(
+      val html = _renderer.renderFormResult(
         properties,
         """<article><textus-result-table source="result.data" entity="notice"></textus-result-table></article>"""
       ).body
@@ -9945,7 +9960,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         defaultTableView = "card"
       )
 
-      val html = StaticFormAppRenderer.renderFormResult(
+      val html = _renderer.renderFormResult(
         properties,
         """<article><textus-result-table source="result.data" entity="notice" view="summary"></textus-result-table></article>"""
       ).body
@@ -9968,7 +9983,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         "boom"
       )
 
-      val html = StaticFormAppRenderer.renderFormResult(properties).body
+      val html = _renderer.renderFormResult(properties).body
 
       html should include ("error.status")
       html should include ("500")
@@ -10009,7 +10024,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         ))
       )
 
-      val html = StaticFormAppRenderer.renderComponentAdmin(subsystem, componentPath, descriptor).map(_.body).getOrElse(fail("component admin is missing"))
+      val html = _renderer.renderComponentAdmin(subsystem, componentPath, descriptor).map(_.body).getOrElse(fail("component admin is missing"))
 
       html should include ("Component Admin Pages")
       html should include ("Notification Admin")
@@ -10048,22 +10063,22 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         )
       )
 
-      val appHtml = StaticFormAppRenderer.renderApplicationAdmin(subsystem, descriptor).body
-      val systemHtml = StaticFormAppRenderer.renderSystemAdmin(subsystem, descriptor).body
+      val apphtml = _renderer.renderApplicationAdmin(subsystem, descriptor).body
+      val systemhtml = _renderer.renderSystemAdmin(subsystem, descriptor).body
 
-      appHtml should include ("Application Admin")
-      appHtml should include ("Notification Admin")
-      appHtml should include (s"""/web/${componentPath}/admin""")
-      appHtml should include ("System admin")
-      appHtml should not include ("Runtime Probe")
-      appHtml should not include ("Runtime Configuration")
-      appHtml should not include ("Assembly report")
-      appHtml should not include ("Execution history")
-      systemHtml should include ("""href="/web/admin"""")
-      systemHtml should include ("Application admin")
-      systemHtml should include ("Runtime Configuration")
-      systemHtml should include ("Assembly report")
-      systemHtml should include ("Runtime Probe")
+      apphtml should include ("Application Admin")
+      apphtml should include ("Notification Admin")
+      apphtml should include (s"""/web/${componentPath}/admin""")
+      apphtml should include ("System admin")
+      apphtml should not include ("Runtime Probe")
+      apphtml should not include ("Runtime Configuration")
+      apphtml should not include ("Assembly report")
+      apphtml should not include ("Execution history")
+      systemhtml should include ("""href="/web/admin"""")
+      systemhtml should include ("Application admin")
+      systemhtml should include ("Runtime Configuration")
+      systemhtml should include ("Assembly report")
+      systemhtml should include ("Runtime Probe")
     }
 
     "provide Bootstrap 5 by default in the Static Form App layout" in {
@@ -10084,12 +10099,12 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
       val componentPath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)
       val pages = Vector(
-        StaticFormAppRenderer.renderSubsystemDashboard(subsystem).body,
-        StaticFormAppRenderer.renderSystemAdmin(subsystem).body,
-        StaticFormAppRenderer.renderSystemPerformance(subsystem).body,
-        StaticFormAppRenderer.renderSystemManual(subsystem).body,
-        StaticFormAppRenderer.renderComponentManual(subsystem, componentPath).map(_.body).getOrElse(fail("component manual is missing")),
-        StaticFormAppRenderer.renderComponentAdmin(subsystem, componentPath).map(_.body).getOrElse(fail("component admin is missing"))
+        _renderer.renderSubsystemDashboard(subsystem).body,
+        _renderer.renderSystemAdmin(subsystem).body,
+        _renderer.renderSystemPerformance(subsystem).body,
+        _renderer.renderSystemManual(subsystem).body,
+        _renderer.renderComponentManual(subsystem, componentPath).map(_.body).getOrElse(fail("component manual is missing")),
+        _renderer.renderComponentAdmin(subsystem, componentPath).map(_.body).getOrElse(fail("component admin is missing"))
       )
 
       pages.foreach { html =>
@@ -10118,7 +10133,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
     subsystem: org.goldenport.cncf.subsystem.Subsystem,
     componentName: Option[String]
   ): Json =
-    StaticFormAppRenderer.renderDashboardState(subsystem, componentName) match {
+    _renderer.renderDashboardState(subsystem, componentName) match {
       case Some(page) =>
         parse(page.body).fold(
           err => fail(s"dashboard state is not valid JSON: ${err.getMessage}"),

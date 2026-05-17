@@ -1,5 +1,10 @@
 package org.goldenport.cncf.http
 
+/*
+ * @since   May. 18, 2026
+ * @version May. 18, 2026
+ * @author  ASAMI, Tomoharu
+ */
 import cats.effect.IO
 import cats.effect.std.Queue
 import cats.effect.unsafe.implicits.global
@@ -63,6 +68,9 @@ final class Http4sHttpServer(
   private val _operation_dispatcher =
     operationDispatcherOption.getOrElse(WebOperationDispatcher.create(engine))
   private val _mcp = new McpJsonRpcAdapter(engine.runtimeSubsystem)
+  private val _runtime_config = RuntimeConfig.from(engine.runtimeSubsystem.configuration)
+  private val _static_form_app_renderer =
+    new StaticFormAppRenderer(_runtime_config.staticFormAppRendererConfig)
   private final case class WebTemplateComposition(
     html: String,
     appliedLayout: Boolean
@@ -451,14 +459,14 @@ final class Http4sHttpServer(
     )
 
   private def _subsystem_dashboard(): IO[HResponse[IO]] = {
-    val p = StaticFormAppRenderer.renderSubsystemDashboard(engine.runtimeSubsystem)
+    val p = _static_form_app_renderer.renderSubsystemDashboard(engine.runtimeSubsystem)
     _html(p)
   }
 
   private def _dashboard_state(
     componentName: Option[String]
   ): IO[HResponse[IO]] =
-    StaticFormAppRenderer.renderDashboardState(engine.runtimeSubsystem, componentName) match {
+    _static_form_app_renderer.renderDashboardState(engine.runtimeSubsystem, componentName) match {
       case Some(p) =>
         IO.pure(
           HResponse[IO](HStatus.Ok)
@@ -470,28 +478,28 @@ final class Http4sHttpServer(
     }
 
   private def _system_performance(): IO[HResponse[IO]] = {
-    val p = StaticFormAppRenderer.renderSystemPerformance(engine.runtimeSubsystem)
+    val p = _static_form_app_renderer.renderSystemPerformance(engine.runtimeSubsystem)
     _html(p)
   }
 
   private def _system_admin(): IO[HResponse[IO]] = {
-    val p = StaticFormAppRenderer.renderSystemAdmin(engine.runtimeSubsystem, engine.webDescriptor)
+    val p = _static_form_app_renderer.renderSystemAdmin(engine.runtimeSubsystem, engine.webDescriptor)
     _html(p)
   }
 
   private def _system_admin_descriptor(): IO[HResponse[IO]] = {
-    val p = StaticFormAppRenderer.renderSystemAdminDescriptor(engine.webDescriptor)
+    val p = _static_form_app_renderer.renderSystemAdminDescriptor(engine.webDescriptor)
     _html(p)
   }
 
   private def _system_admin_assembly_warnings(): IO[HResponse[IO]] =
-    _html(StaticFormAppRenderer.renderSystemAdminAssemblyWarnings(engine.runtimeSubsystem))
+    _html(_static_form_app_renderer.renderSystemAdminAssemblyWarnings(engine.runtimeSubsystem))
 
   private def _system_admin_assembly_report(): IO[HResponse[IO]] =
-    _html(StaticFormAppRenderer.renderSystemAdminAssemblyReport(engine.runtimeSubsystem))
+    _html(_static_form_app_renderer.renderSystemAdminAssemblyReport(engine.runtimeSubsystem))
 
   private def _system_admin_jobs(): IO[HResponse[IO]] =
-    _html(StaticFormAppRenderer.renderSystemAdminJobs(engine.runtimeSubsystem))
+    _html(_static_form_app_renderer.renderSystemAdminJobs(engine.runtimeSubsystem))
 
   private def _system_admin_job(
     req: org.http4s.Request[IO],
@@ -499,18 +507,18 @@ final class Http4sHttpServer(
   ): IO[HResponse[IO]] =
     JobId.parse(jobId).toOption.flatMap(engine.runtimeSubsystem.jobEngine.query) match {
       case Some(model) =>
-        _html(StaticFormAppRenderer.renderSystemAdminJob(engine.runtimeSubsystem, model))
+        _html(_static_form_app_renderer.renderSystemAdminJob(engine.runtimeSubsystem, model))
       case None =>
-        _html_status(StaticFormAppRenderer.renderSystemJobResult(jobId, HttpResponse.notFound(s"job not found: $jobId")), HStatus.NotFound)
+        _html_status(_static_form_app_renderer.renderSystemJobResult(jobId, HttpResponse.notFound(s"job not found: $jobId")), HStatus.NotFound)
     }
 
   private def _system_admin_knowledge(): IO[HResponse[IO]] =
-    _html(StaticFormAppRenderer.renderSystemAdminKnowledge(engine.runtimeSubsystem))
+    _html(_static_form_app_renderer.renderSystemAdminKnowledge(engine.runtimeSubsystem))
 
   private def _system_admin_knowledge_component(
     component: String
   ): IO[HResponse[IO]] =
-    StaticFormAppRenderer.renderSystemAdminKnowledgeComponent(engine.runtimeSubsystem, component) match {
+    _static_form_app_renderer.renderSystemAdminKnowledgeComponent(engine.runtimeSubsystem, component) match {
       case Some(page) =>
         _html(page)
       case None =>
@@ -526,7 +534,7 @@ final class Http4sHttpServer(
     component: String,
     nodeId: String
   ): IO[HResponse[IO]] =
-    StaticFormAppRenderer.renderSystemAdminKnowledgeNode(engine.runtimeSubsystem, component, nodeId) match {
+    _static_form_app_renderer.renderSystemAdminKnowledgeNode(engine.runtimeSubsystem, component, nodeId) match {
       case Some(page) =>
         _html(page)
       case None =>
@@ -539,19 +547,19 @@ final class Http4sHttpServer(
     }
 
   private def _system_admin_observability(): IO[HResponse[IO]] =
-    _html(StaticFormAppRenderer.renderSystemAdminObservability(engine.runtimeSubsystem))
+    _html(_static_form_app_renderer.renderSystemAdminObservability(engine.runtimeSubsystem))
 
   private def _system_admin_observability_metrics(): IO[HResponse[IO]] =
-    _html(StaticFormAppRenderer.renderSystemAdminObservabilityMetrics(engine.runtimeSubsystem))
+    _html(_static_form_app_renderer.renderSystemAdminObservabilityMetrics(engine.runtimeSubsystem))
 
   private def _system_admin_observability_diagnostics(): IO[HResponse[IO]] =
-    _html(StaticFormAppRenderer.renderSystemAdminObservabilityDiagnostics())
+    _html(_static_form_app_renderer.renderSystemAdminObservabilityDiagnostics())
 
   private def _system_admin_observability_diagnostic(
     scope: String,
     diagnosticKey: String
   ): IO[HResponse[IO]] =
-    StaticFormAppRenderer.renderSystemAdminObservabilityDiagnostic(scope, diagnosticKey) match {
+    _static_form_app_renderer.renderSystemAdminObservabilityDiagnostic(scope, diagnosticKey) match {
       case Some(page) =>
         _html(page)
       case None =>
@@ -633,15 +641,15 @@ final class Http4sHttpServer(
   }
 
   private def _application_admin(): IO[HResponse[IO]] =
-    _html(StaticFormAppRenderer.renderApplicationAdmin(engine.runtimeSubsystem, engine.webDescriptor))
+    _html(_static_form_app_renderer.renderApplicationAdmin(engine.runtimeSubsystem, engine.webDescriptor))
 
   private def _blob_admin(): IO[HResponse[IO]] =
-    _html(StaticFormAppRenderer.renderBlobAdmin(), Some("blob"))
+    _html(_static_form_app_renderer.renderBlobAdmin(), Some("blob"))
 
   private def _blob_admin_blobs(req: HRequest[IO]): IO[HResponse[IO]] =
     _blob_admin_page(
       req,
-      StaticFormAppRenderer.renderBlobAdminBlobs(engine.runtimeSubsystem, req.uri.query.params.toMap, _blob_admin_request_properties(req)),
+      _static_form_app_renderer.renderBlobAdminBlobs(engine.runtimeSubsystem, req.uri.query.params.toMap, _blob_admin_request_properties(req)),
       Some("admin.blobs"),
       Some("index")
     )
@@ -649,7 +657,7 @@ final class Http4sHttpServer(
   private def _blob_admin_blob(req: HRequest[IO], id: String): IO[HResponse[IO]] =
     _blob_admin_page(
       req,
-      StaticFormAppRenderer.renderBlobAdminBlobDetail(engine.runtimeSubsystem, id, _blob_admin_request_properties(req)),
+      _static_form_app_renderer.renderBlobAdminBlobDetail(engine.runtimeSubsystem, id, _blob_admin_request_properties(req)),
       Some("admin.blobs"),
       Some(id)
     )
@@ -657,7 +665,7 @@ final class Http4sHttpServer(
   private def _blob_admin_blob_delete(req: HRequest[IO], id: String): IO[HResponse[IO]] =
     _blob_admin_page(
       req,
-      StaticFormAppRenderer.renderBlobAdminBlobDelete(engine.runtimeSubsystem, id, _blob_admin_request_properties(req)),
+      _static_form_app_renderer.renderBlobAdminBlobDelete(engine.runtimeSubsystem, id, _blob_admin_request_properties(req)),
       Some("admin.blobs"),
       Some("delete")
     )
@@ -667,7 +675,7 @@ final class Http4sHttpServer(
       form <- _to_form_record(req)
       response <- _blob_admin_page(
         req,
-        StaticFormAppRenderer.renderBlobAdminBlobDeleteResult(engine.runtimeSubsystem, id, form.asMap.map { case (k, v) => k -> v.toString }, _blob_admin_request_properties(req)),
+        _static_form_app_renderer.renderBlobAdminBlobDeleteResult(engine.runtimeSubsystem, id, form.asMap.map { case (k, v) => k -> v.toString }, _blob_admin_request_properties(req)),
         Some("admin.blobs"),
         Some("delete")
       )
@@ -676,7 +684,7 @@ final class Http4sHttpServer(
   private def _blob_admin_associations(req: HRequest[IO]): IO[HResponse[IO]] =
     _blob_admin_page(
       req,
-      StaticFormAppRenderer.renderBlobAdminAssociations(engine.runtimeSubsystem, req.uri.query.params.toMap, _blob_admin_request_properties(req)),
+      _static_form_app_renderer.renderBlobAdminAssociations(engine.runtimeSubsystem, req.uri.query.params.toMap, _blob_admin_request_properties(req)),
       Some("admin.associations"),
       Some("index")
     )
@@ -686,7 +694,7 @@ final class Http4sHttpServer(
       form <- _to_form_record(req)
       response <- _blob_admin_page(
         req,
-        StaticFormAppRenderer.renderBlobAdminAssociationAttachResult(engine.runtimeSubsystem, form.asMap.map { case (k, v) => k -> v.toString }, _blob_admin_request_properties(req)),
+        _static_form_app_renderer.renderBlobAdminAssociationAttachResult(engine.runtimeSubsystem, form.asMap.map { case (k, v) => k -> v.toString }, _blob_admin_request_properties(req)),
         Some("admin.associations"),
         Some("attach")
       )
@@ -697,7 +705,7 @@ final class Http4sHttpServer(
       form <- _to_form_record(req)
       response <- _blob_admin_page(
         req,
-        StaticFormAppRenderer.renderBlobAdminAssociationDetachResult(engine.runtimeSubsystem, form.asMap.map { case (k, v) => k -> v.toString }, _blob_admin_request_properties(req)),
+        _static_form_app_renderer.renderBlobAdminAssociationDetachResult(engine.runtimeSubsystem, form.asMap.map { case (k, v) => k -> v.toString }, _blob_admin_request_properties(req)),
         Some("admin.associations"),
         Some("detach")
       )
@@ -706,7 +714,7 @@ final class Http4sHttpServer(
   private def _admin_associations(req: HRequest[IO]): IO[HResponse[IO]] =
     _admin_page(
       req,
-      StaticFormAppRenderer.renderAdminAssociations(engine.runtimeSubsystem, req.uri.query.params.toMap, _admin_request_properties(req)),
+      _static_form_app_renderer.renderAdminAssociations(engine.runtimeSubsystem, req.uri.query.params.toMap, _admin_request_properties(req)),
       Some("associations"),
       Some("index")
     )
@@ -716,7 +724,7 @@ final class Http4sHttpServer(
       form <- _to_form_record(req)
       response <- _admin_page(
         req,
-        StaticFormAppRenderer.renderAdminAssociationAttachResult(engine.runtimeSubsystem, form.asMap.map { case (k, v) => k -> v.toString }, _admin_request_properties(req)),
+        _static_form_app_renderer.renderAdminAssociationAttachResult(engine.runtimeSubsystem, form.asMap.map { case (k, v) => k -> v.toString }, _admin_request_properties(req)),
         Some("associations"),
         Some("attach")
       )
@@ -727,7 +735,7 @@ final class Http4sHttpServer(
       form <- _to_form_record(req)
       response <- _admin_page(
         req,
-        StaticFormAppRenderer.renderAdminAssociationDetachResult(engine.runtimeSubsystem, form.asMap.map { case (k, v) => k -> v.toString }, _admin_request_properties(req)),
+        _static_form_app_renderer.renderAdminAssociationDetachResult(engine.runtimeSubsystem, form.asMap.map { case (k, v) => k -> v.toString }, _admin_request_properties(req)),
         Some("associations"),
         Some("detach")
       )
@@ -736,7 +744,7 @@ final class Http4sHttpServer(
   private def _admin_tags(req: HRequest[IO]): IO[HResponse[IO]] =
     _admin_page(
       req,
-      StaticFormAppRenderer.renderAdminTags(engine.runtimeSubsystem, req.uri.query.params.toMap, _admin_request_properties(req)),
+      _static_form_app_renderer.renderAdminTags(engine.runtimeSubsystem, req.uri.query.params.toMap, _admin_request_properties(req)),
       Some("tags"),
       Some("index")
     )
@@ -746,7 +754,7 @@ final class Http4sHttpServer(
       form <- _to_form_record(req)
       response <- _admin_page(
         req,
-        StaticFormAppRenderer.renderAdminTagCreateResult(engine.runtimeSubsystem, form.asMap.map { case (k, v) => k -> v.toString }, _admin_request_properties(req)),
+        _static_form_app_renderer.renderAdminTagCreateResult(engine.runtimeSubsystem, form.asMap.map { case (k, v) => k -> v.toString }, _admin_request_properties(req)),
         Some("tags"),
         Some("create")
       )
@@ -757,7 +765,7 @@ final class Http4sHttpServer(
       form <- _to_form_record(req)
       response <- _admin_page(
         req,
-        StaticFormAppRenderer.renderAdminTagUpdateResult(engine.runtimeSubsystem, form.asMap.map { case (k, v) => k -> v.toString }, _admin_request_properties(req)),
+        _static_form_app_renderer.renderAdminTagUpdateResult(engine.runtimeSubsystem, form.asMap.map { case (k, v) => k -> v.toString }, _admin_request_properties(req)),
         Some("tags"),
         Some("update")
       )
@@ -768,7 +776,7 @@ final class Http4sHttpServer(
       form <- _to_form_record(req)
       response <- _admin_page(
         req,
-        StaticFormAppRenderer.renderAdminTagMoveResult(engine.runtimeSubsystem, form.asMap.map { case (k, v) => k -> v.toString }, _admin_request_properties(req)),
+        _static_form_app_renderer.renderAdminTagMoveResult(engine.runtimeSubsystem, form.asMap.map { case (k, v) => k -> v.toString }, _admin_request_properties(req)),
         Some("tags"),
         Some("move")
       )
@@ -779,7 +787,7 @@ final class Http4sHttpServer(
       form <- _to_form_record(req)
       response <- _admin_page(
         req,
-        StaticFormAppRenderer.renderAdminTagAttachResult(engine.runtimeSubsystem, form.asMap.map { case (k, v) => k -> v.toString }, _admin_request_properties(req)),
+        _static_form_app_renderer.renderAdminTagAttachResult(engine.runtimeSubsystem, form.asMap.map { case (k, v) => k -> v.toString }, _admin_request_properties(req)),
         Some("tags"),
         Some("attach")
       )
@@ -790,7 +798,7 @@ final class Http4sHttpServer(
       form <- _to_form_record(req)
       response <- _admin_page(
         req,
-        StaticFormAppRenderer.renderAdminTagDetachResult(engine.runtimeSubsystem, form.asMap.map { case (k, v) => k -> v.toString }, _admin_request_properties(req)),
+        _static_form_app_renderer.renderAdminTagDetachResult(engine.runtimeSubsystem, form.asMap.map { case (k, v) => k -> v.toString }, _admin_request_properties(req)),
         Some("tags"),
         Some("detach")
       )
@@ -799,7 +807,7 @@ final class Http4sHttpServer(
   private def _blob_admin_store(req: HRequest[IO]): IO[HResponse[IO]] =
     _blob_admin_page(
       req,
-      StaticFormAppRenderer.renderBlobAdminStore(engine.runtimeSubsystem, _blob_admin_request_properties(req)),
+      _static_form_app_renderer.renderBlobAdminStore(engine.runtimeSubsystem, _blob_admin_request_properties(req)),
       Some("admin.store"),
       Some("index")
     )
@@ -967,13 +975,13 @@ final class Http4sHttpServer(
     _session_id_(req).map("x-textus-session" -> _).toVector
 
   private def _system_manual(): IO[HResponse[IO]] =
-    _html(StaticFormAppRenderer.renderSystemManual(engine.runtimeSubsystem))
+    _html(_static_form_app_renderer.renderSystemManual(engine.runtimeSubsystem))
 
   private def _system_document(): IO[HResponse[IO]] =
-    _html(StaticFormAppRenderer.renderSystemDocument(engine.runtimeSubsystem))
+    _html(_static_form_app_renderer.renderSystemDocument(engine.runtimeSubsystem))
 
   private def _runtime_landing(): IO[HResponse[IO]] =
-    _html(StaticFormAppRenderer.renderRuntimeLanding(engine.runtimeSubsystem, engine.webDescriptor))
+    _html(_static_form_app_renderer.renderRuntimeLanding(engine.runtimeSubsystem, engine.webDescriptor))
 
   private def _system_manual_openapi(): IO[HResponse[IO]] =
     IO.pure(
@@ -999,9 +1007,9 @@ final class Http4sHttpServer(
       )
     )
     if (res.code >= 200 && res.code < 400)
-      _html(StaticFormAppRenderer.renderSystemJobTicket(jobId))
+      _html(_static_form_app_renderer.renderSystemJobTicket(jobId))
     else
-      _html_status(StaticFormAppRenderer.renderSystemJobResult(jobId, res), HStatus.fromInt(res.code).getOrElse(HStatus.Forbidden))
+      _html_status(_static_form_app_renderer.renderSystemJobResult(jobId, res), HStatus.fromInt(res.code).getOrElse(HStatus.Forbidden))
   }
 
   private def _system_job_await(
@@ -1020,7 +1028,7 @@ final class Http4sHttpServer(
         form = Record.data("id" -> jobId)
       )
     )
-    _html_status(StaticFormAppRenderer.renderSystemJobResult(jobId, res), HStatus.fromInt(res.code).getOrElse(HStatus.Ok))
+    _html_status(_static_form_app_renderer.renderSystemJobResult(jobId, res), HStatus.fromInt(res.code).getOrElse(HStatus.Ok))
   }
 
   private def _application_jobs(
@@ -1035,7 +1043,7 @@ final class Http4sHttpServer(
         _session_id_(req).foreach { sessionId =>
           _application_job_seen_at.update((sessionId, NamingConventions.toNormalizedSegment(app)), Instant.now)
         }
-        _html(StaticFormAppRenderer.renderApplicationJobs(app, jobs), Some(app))
+        _html(_static_form_app_renderer.renderApplicationJobs(app, jobs), Some(app))
       case Consequence.Failure(conclusion) =>
         val error = StructuredHttpError.fromConclusion(
           conclusion,
@@ -1046,7 +1054,7 @@ final class Http4sHttpServer(
           service = Some("jobs"),
           operation = Some("index")
         )
-        _html_status(StaticFormAppRenderer.renderStructuredErrorPage(Some(app), error), _http_status(error))
+        _html_status(_static_form_app_renderer.renderStructuredErrorPage(Some(app), error), _http_status(error))
     }
 
   private def _application_job(
@@ -1061,9 +1069,9 @@ final class Http4sHttpServer(
             given ExecutionContext = ctx
             engine.runtimeSubsystem.jobEngine.queryVisible(id).toOption.flatten.filter(_job_belongs_to_app(_, app)) match {
               case Some(model) =>
-                _html(StaticFormAppRenderer.renderApplicationJob(app, model), Some(app))
+                _html(_static_form_app_renderer.renderApplicationJob(app, model), Some(app))
               case None =>
-                _html_status(StaticFormAppRenderer.renderStructuredErrorPage(Some(app), StructuredHttpError.fromMessage(
+                _html_status(_static_form_app_renderer.renderStructuredErrorPage(Some(app), StructuredHttpError.fromMessage(
                   s"job not found: $jobId",
                   HStatus.NotFound.code,
                   req.uri.path.renderString,
@@ -1084,10 +1092,10 @@ final class Http4sHttpServer(
               service = Some("jobs"),
               operation = Some(jobId)
             )
-            _html_status(StaticFormAppRenderer.renderStructuredErrorPage(Some(app), error), _http_status(error))
+            _html_status(_static_form_app_renderer.renderStructuredErrorPage(Some(app), error), _http_status(error))
         }
       case None =>
-        _html_status(StaticFormAppRenderer.renderStructuredErrorPage(Some(app), StructuredHttpError.fromMessage(
+        _html_status(_static_form_app_renderer.renderStructuredErrorPage(Some(app), StructuredHttpError.fromMessage(
           s"invalid job id: $jobId",
           HStatus.BadRequest.code,
           req.uri.path.renderString,
@@ -1110,13 +1118,13 @@ final class Http4sHttpServer(
   }
 
   private def _component_manual(app: String): IO[HResponse[IO]] =
-    StaticFormAppRenderer.renderComponentManual(engine.runtimeSubsystem, app) match {
+    _static_form_app_renderer.renderComponentManual(engine.runtimeSubsystem, app) match {
       case Some(p) => _html(p)
       case None => IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component specification not found"))
     }
 
   private def _component_document(app: String): IO[HResponse[IO]] =
-    StaticFormAppRenderer.renderComponentDocument(
+    _static_form_app_renderer.renderComponentDocument(
       engine.runtimeSubsystem,
       app,
       _component_document_entries(app)
@@ -1129,7 +1137,7 @@ final class Http4sHttpServer(
     app: String,
     service: String
   ): IO[HResponse[IO]] =
-    StaticFormAppRenderer.renderComponentManualService(engine.runtimeSubsystem, app, service) match {
+    _static_form_app_renderer.renderComponentManualService(engine.runtimeSubsystem, app, service) match {
       case Some(p) => _html(p)
       case None => IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Service specification not found"))
     }
@@ -1139,7 +1147,7 @@ final class Http4sHttpServer(
     service: String,
     operation: String
   ): IO[HResponse[IO]] =
-    StaticFormAppRenderer.renderComponentManualOperation(engine.runtimeSubsystem, app, service, operation) match {
+    _static_form_app_renderer.renderComponentManualOperation(engine.runtimeSubsystem, app, service, operation) match {
       case Some(p) => _html(p)
       case None => IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Operation specification not found"))
     }
@@ -1393,7 +1401,7 @@ final class Http4sHttpServer(
       )
       _prepared_form_result_template(app, service, operation, res.code, properties.page.values) match {
         case Consequence.Success(template) =>
-          _html(StaticFormAppRenderer.renderFormResult(properties, template), Some(webAppName)).map { response =>
+          _html(_static_form_app_renderer.renderFormResult(properties, template), Some(webAppName)).map { response =>
             RuntimeDashboardMetrics.recordHtmlRequest(
               req.method.name,
               req.uri.path.renderString,
@@ -1459,14 +1467,14 @@ final class Http4sHttpServer(
     }
 
   private def _component_admin(app: String): IO[HResponse[IO]] =
-    StaticFormAppRenderer.renderComponentAdmin(engine.runtimeSubsystem, app, engine.webDescriptor) match {
+    _static_form_app_renderer.renderComponentAdmin(engine.runtimeSubsystem, app, engine.webDescriptor) match {
       case Some(p) => _html(p)
       case None =>
         IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component admin not found"))
     }
 
   private def _component_admin_descriptor(app: String): IO[HResponse[IO]] =
-    StaticFormAppRenderer.renderComponentAdminDescriptor(engine.runtimeSubsystem, app, engine.webDescriptor) match {
+    _static_form_app_renderer.renderComponentAdminDescriptor(engine.runtimeSubsystem, app, engine.webDescriptor) match {
       case Some(p) => _html(p)
       case None =>
         IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component descriptor admin not found"))
@@ -1479,112 +1487,112 @@ final class Http4sHttpServer(
     _component_web_app(app, "admin", Vector(entry.normalizedName))
 
   private def _component_admin_entities(app: String): IO[HResponse[IO]] =
-    StaticFormAppRenderer.renderComponentAdminEntities(engine.runtimeSubsystem, app) match {
+    _static_form_app_renderer.renderComponentAdminEntities(engine.runtimeSubsystem, app) match {
       case Some(p) => _html(p)
       case None =>
         IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component entity admin not found"))
     }
 
   private def _component_admin_entity_type(req: HRequest[IO], app: String, entity: String): IO[HResponse[IO]] =
-    StaticFormAppRenderer.renderComponentAdminEntityType(engine.runtimeSubsystem, app, entity, _page_request(req), engine.webDescriptor, req.uri.query.params.toMap) match {
+    _static_form_app_renderer.renderComponentAdminEntityType(engine.runtimeSubsystem, app, entity, _page_request(req), engine.webDescriptor, req.uri.query.params.toMap) match {
       case Some(p) => _html(p)
       case None =>
         IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component entity type admin not found"))
     }
 
   private def _component_admin_entity_detail(req: HRequest[IO], app: String, entity: String, id: String): IO[HResponse[IO]] =
-    StaticFormAppRenderer.renderComponentAdminEntityDetail(engine.runtimeSubsystem, app, entity, id, engine.webDescriptor, req.uri.query.params.toMap) match {
+    _static_form_app_renderer.renderComponentAdminEntityDetail(engine.runtimeSubsystem, app, entity, id, engine.webDescriptor, req.uri.query.params.toMap) match {
       case Some(p) => _html(p)
       case None =>
         IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component entity detail admin not found"))
     }
 
   private def _component_admin_entity_edit(req: HRequest[IO], app: String, entity: String, id: String): IO[HResponse[IO]] =
-    StaticFormAppRenderer.renderComponentAdminEntityEdit(engine.runtimeSubsystem, app, entity, id, values = req.uri.query.params.toMap, webDescriptor = engine.webDescriptor) match {
+    _static_form_app_renderer.renderComponentAdminEntityEdit(engine.runtimeSubsystem, app, entity, id, values = req.uri.query.params.toMap, webDescriptor = engine.webDescriptor) match {
       case Some(p) => _html(p)
       case None =>
         IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component entity edit admin not found"))
     }
 
   private def _component_admin_entity_new(app: String, entity: String): IO[HResponse[IO]] =
-    StaticFormAppRenderer.renderComponentAdminEntityNew(engine.runtimeSubsystem, app, entity, webDescriptor = engine.webDescriptor) match {
+    _static_form_app_renderer.renderComponentAdminEntityNew(engine.runtimeSubsystem, app, entity, webDescriptor = engine.webDescriptor) match {
       case Some(p) => _html(p)
       case None =>
         IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component entity new admin not found"))
     }
 
   private def _component_admin_data(app: String): IO[HResponse[IO]] =
-    StaticFormAppRenderer.renderComponentAdminData(engine.runtimeSubsystem, app) match {
+    _static_form_app_renderer.renderComponentAdminData(engine.runtimeSubsystem, app) match {
       case Some(p) => _html(p)
       case None =>
         IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component data admin not found"))
     }
 
   private def _component_admin_data_type(req: HRequest[IO], app: String, data: String): IO[HResponse[IO]] =
-    StaticFormAppRenderer.renderComponentAdminDataType(engine.runtimeSubsystem, app, data, _page_request(req), engine.webDescriptor) match {
+    _static_form_app_renderer.renderComponentAdminDataType(engine.runtimeSubsystem, app, data, _page_request(req), engine.webDescriptor) match {
       case Some(p) => _html(p)
       case None =>
         IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component data type admin not found"))
     }
 
   private def _component_admin_data_detail(app: String, data: String, id: String): IO[HResponse[IO]] =
-    StaticFormAppRenderer.renderComponentAdminDataDetail(engine.runtimeSubsystem, app, data, id, engine.webDescriptor) match {
+    _static_form_app_renderer.renderComponentAdminDataDetail(engine.runtimeSubsystem, app, data, id, engine.webDescriptor) match {
       case Some(p) => _html(p)
       case None =>
         IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component data detail admin not found"))
     }
 
   private def _component_admin_data_edit(app: String, data: String, id: String): IO[HResponse[IO]] =
-    StaticFormAppRenderer.renderComponentAdminDataEdit(engine.runtimeSubsystem, app, data, id, webDescriptor = engine.webDescriptor) match {
+    _static_form_app_renderer.renderComponentAdminDataEdit(engine.runtimeSubsystem, app, data, id, webDescriptor = engine.webDescriptor) match {
       case Some(p) => _html(p)
       case None =>
         IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component data edit admin not found"))
     }
 
   private def _component_admin_data_new(app: String, data: String): IO[HResponse[IO]] =
-    StaticFormAppRenderer.renderComponentAdminDataNew(engine.runtimeSubsystem, app, data, webDescriptor = engine.webDescriptor) match {
+    _static_form_app_renderer.renderComponentAdminDataNew(engine.runtimeSubsystem, app, data, webDescriptor = engine.webDescriptor) match {
       case Some(p) => _html(p)
       case None =>
         IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component data new admin not found"))
     }
 
   private def _component_admin_views(app: String): IO[HResponse[IO]] =
-    StaticFormAppRenderer.renderComponentAdminViews(engine.runtimeSubsystem, app) match {
+    _static_form_app_renderer.renderComponentAdminViews(engine.runtimeSubsystem, app) match {
       case Some(p) => _html(p)
       case None =>
         IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component view admin not found"))
     }
 
   private def _component_admin_view_detail(req: HRequest[IO], app: String, view: String): IO[HResponse[IO]] =
-    StaticFormAppRenderer.renderComponentAdminViewDetail(engine.runtimeSubsystem, app, view, _page_request(req), engine.webDescriptor) match {
+    _static_form_app_renderer.renderComponentAdminViewDetail(engine.runtimeSubsystem, app, view, _page_request(req), engine.webDescriptor) match {
       case Some(p) => _html(p)
       case None =>
         IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component view detail admin not found"))
     }
 
   private def _component_admin_view_instance_detail(app: String, view: String, id: String): IO[HResponse[IO]] =
-    StaticFormAppRenderer.renderComponentAdminViewInstanceDetail(engine.runtimeSubsystem, app, view, id, engine.webDescriptor) match {
+    _static_form_app_renderer.renderComponentAdminViewInstanceDetail(engine.runtimeSubsystem, app, view, id, engine.webDescriptor) match {
       case Some(p) => _html(p)
       case None =>
         IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component view instance detail admin not found"))
     }
 
   private def _component_admin_aggregates(app: String): IO[HResponse[IO]] =
-    StaticFormAppRenderer.renderComponentAdminAggregates(engine.runtimeSubsystem, app) match {
+    _static_form_app_renderer.renderComponentAdminAggregates(engine.runtimeSubsystem, app) match {
       case Some(p) => _html(p)
       case None =>
         IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component aggregate admin not found"))
     }
 
   private def _component_admin_aggregate_detail(req: HRequest[IO], app: String, aggregate: String): IO[HResponse[IO]] =
-    StaticFormAppRenderer.renderComponentAdminAggregateDetail(engine.runtimeSubsystem, app, aggregate, _page_request(req), engine.webDescriptor) match {
+    _static_form_app_renderer.renderComponentAdminAggregateDetail(engine.runtimeSubsystem, app, aggregate, _page_request(req), engine.webDescriptor) match {
       case Some(p) => _html(p)
       case None =>
         IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component aggregate detail admin not found"))
     }
 
   private def _component_admin_aggregate_instance_detail(app: String, aggregate: String, id: String): IO[HResponse[IO]] =
-    StaticFormAppRenderer.renderComponentAdminAggregateInstanceDetail(engine.runtimeSubsystem, app, aggregate, id, engine.webDescriptor) match {
+    _static_form_app_renderer.renderComponentAdminAggregateInstanceDetail(engine.runtimeSubsystem, app, aggregate, id, engine.webDescriptor) match {
       case Some(p) => _html(p)
       case None =>
         IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component aggregate instance detail admin not found"))
@@ -1594,7 +1602,7 @@ final class Http4sHttpServer(
     app: String,
     page: Vector[String]
   ): IO[HResponse[IO]] =
-    StaticFormAppRenderer.render(engine.runtimeSubsystem, app, page, engine.webDescriptor) match {
+    _static_form_app_renderer.render(engine.runtimeSubsystem, app, page, engine.webDescriptor) match {
       case Some(p) => _html(p, Some(app))
       case None =>
         _web_error_response(
@@ -1606,7 +1614,7 @@ final class Http4sHttpServer(
     }
 
   private def _form_index(app: String): IO[HResponse[IO]] =
-    StaticFormAppRenderer.renderFormIndex(engine.runtimeSubsystem, app, engine.webDescriptor) match {
+    _static_form_app_renderer.renderFormIndex(engine.runtimeSubsystem, app, engine.webDescriptor) match {
       case Some(p) =>
         _html(p, Some(app))
       case None =>
@@ -1621,7 +1629,7 @@ final class Http4sHttpServer(
   ): IO[HResponse[IO]] =
     if (!_is_web_authorized(app, service, operation, Some(req)))
       _forbidden_web(req, Some(app), Some(service), Some(operation))
-    else StaticFormAppRenderer.renderOperationForm(engine.runtimeSubsystem, app, service, operation, engine.webDescriptor, req.uri.query.params.toMap) match {
+    else _static_form_app_renderer.renderOperationForm(engine.runtimeSubsystem, app, service, operation, engine.webDescriptor, req.uri.query.params.toMap) match {
       case Some(p) =>
         _html(p, Some(app))
       case None =>
@@ -1639,7 +1647,7 @@ final class Http4sHttpServer(
     } else if (!_is_web_authorized(app, service, operation, Some(req))) {
       _forbidden_api(req, Some(app), Some(service), Some(operation))
     } else {
-      StaticFormAppRenderer.renderOperationFormDefinition(engine.runtimeSubsystem, app, service, operation, engine.webDescriptor) match {
+      _static_form_app_renderer.renderOperationFormDefinition(engine.runtimeSubsystem, app, service, operation, engine.webDescriptor) match {
         case Some(p) =>
           _json(p)
         case None =>
@@ -1655,7 +1663,7 @@ final class Http4sHttpServer(
     if (!_is_web_authorized(app, "admin.entities", entity, Some(req))) {
       _forbidden_api(req, Some(app), Some("admin.entities"), Some(entity))
     } else {
-      StaticFormAppRenderer.renderComponentAdminEntityFormDefinition(engine.runtimeSubsystem, app, entity, engine.webDescriptor) match {
+      _static_form_app_renderer.renderComponentAdminEntityFormDefinition(engine.runtimeSubsystem, app, entity, engine.webDescriptor) match {
         case Some(p) =>
           _json(p)
         case None =>
@@ -1672,7 +1680,7 @@ final class Http4sHttpServer(
     if (!_is_web_authorized(app, "admin.entities", entity, Some(req))) {
       _forbidden_api(req, Some(app), Some("admin.entities"), Some(entity))
     } else {
-      StaticFormAppRenderer.renderComponentAdminEntityUpdateFormDefinition(engine.runtimeSubsystem, app, entity, id, engine.webDescriptor) match {
+      _static_form_app_renderer.renderComponentAdminEntityUpdateFormDefinition(engine.runtimeSubsystem, app, entity, id, engine.webDescriptor) match {
         case Some(p) =>
           _json(p)
         case None =>
@@ -1688,7 +1696,7 @@ final class Http4sHttpServer(
     if (!_is_web_authorized(app, "admin.data", data, Some(req))) {
       _forbidden_api(req, Some(app), Some("admin.data"), Some(data))
     } else {
-      StaticFormAppRenderer.renderComponentAdminDataFormDefinition(engine.runtimeSubsystem, app, data, engine.webDescriptor) match {
+      _static_form_app_renderer.renderComponentAdminDataFormDefinition(engine.runtimeSubsystem, app, data, engine.webDescriptor) match {
         case Some(p) =>
           _json(p)
         case None =>
@@ -1705,7 +1713,7 @@ final class Http4sHttpServer(
     if (!_is_web_authorized(app, "admin.data", data, Some(req))) {
       _forbidden_api(req, Some(app), Some("admin.data"), Some(data))
     } else {
-      StaticFormAppRenderer.renderComponentAdminDataUpdateFormDefinition(engine.runtimeSubsystem, app, data, id, engine.webDescriptor) match {
+      _static_form_app_renderer.renderComponentAdminDataUpdateFormDefinition(engine.runtimeSubsystem, app, data, id, engine.webDescriptor) match {
         case Some(p) =>
           _json(p)
         case None =>
@@ -1721,7 +1729,7 @@ final class Http4sHttpServer(
     if (!_is_web_authorized(app, "admin.views", view, Some(req))) {
       _forbidden_api(req, Some(app), Some("admin.views"), Some(view))
     } else {
-      StaticFormAppRenderer.renderComponentAdminViewFormDefinition(engine.runtimeSubsystem, app, view, engine.webDescriptor) match {
+      _static_form_app_renderer.renderComponentAdminViewFormDefinition(engine.runtimeSubsystem, app, view, engine.webDescriptor) match {
         case Some(p) =>
           _json(p)
         case None =>
@@ -1737,7 +1745,7 @@ final class Http4sHttpServer(
     if (!_is_web_authorized(app, "admin.aggregates", aggregate, Some(req))) {
       _forbidden_api(req, Some(app), Some("admin.aggregates"), Some(aggregate))
     } else {
-      StaticFormAppRenderer.renderComponentAdminAggregateFormDefinition(engine.runtimeSubsystem, app, aggregate, engine.webDescriptor) match {
+      _static_form_app_renderer.renderComponentAdminAggregateFormDefinition(engine.runtimeSubsystem, app, aggregate, engine.webDescriptor) match {
         case Some(p) =>
           _json(p)
         case None =>
@@ -1761,7 +1769,7 @@ final class Http4sHttpServer(
       form <- _to_form_record(req)
       operationValues = _operation_form_values(form)
       pageValues = _form_values(form)
-      validation = StaticFormAppRenderer.validateOperationForm(
+      validation = _static_form_app_renderer.validateOperationForm(
         engine.runtimeSubsystem,
         app,
         service,
@@ -1772,7 +1780,7 @@ final class Http4sHttpServer(
       response <-
         validation match {
           case Some(result) if !result.valid =>
-            val page = StaticFormAppRenderer.renderOperationForm(
+            val page = _static_form_app_renderer.renderOperationForm(
               engine.runtimeSubsystem,
               app,
               service,
@@ -1782,7 +1790,7 @@ final class Http4sHttpServer(
               Some(result),
               _operation_mode,
               showExecutionDebugPanel = true
-            ).getOrElse(StaticFormAppRenderer.renderFormResult(
+            ).getOrElse(_static_form_app_renderer.renderFormResult(
               _form_result_properties(app, service, operation, HttpResponse.Text(
                 HttpStatus.BadRequest,
                 ContentType(MimeType("text/plain"), Some(StandardCharsets.UTF_8)),
@@ -1912,7 +1920,7 @@ final class Http4sHttpServer(
     } else {
       for {
         form <- _to_plain_form_record(req)
-        response <- StaticFormAppRenderer.renderOperationFormValidation(
+        response <- _static_form_app_renderer.renderOperationFormValidation(
           engine.runtimeSubsystem,
           app,
           service,
@@ -1955,7 +1963,7 @@ final class Http4sHttpServer(
         val values = continuationValues ++ pageValues ++ pagingValues.map { case (k, v) => s"paging.${k}" -> v }
         _prepared_form_result_template(app, service, operation, res.code, values) match {
           case Consequence.Success(template) =>
-            val page = StaticFormAppRenderer.renderFormResult(
+            val page = _static_form_app_renderer.renderFormResult(
               _form_result_properties(
                 app,
                 service,
@@ -2068,13 +2076,13 @@ final class Http4sHttpServer(
       form <- _to_form_record(req)
       record = Record.create((form.asMap + ("id" -> id)).toVector)
       values = _form_values(record)
-      validation = StaticFormAppRenderer.validateComponentAdminEntityForm(engine.runtimeSubsystem, app, entity, values, engine.webDescriptor, Some("detail"))
+      validation = _static_form_app_renderer.validateComponentAdminEntityForm(engine.runtimeSubsystem, app, entity, values, engine.webDescriptor, Some("detail"))
       html <- validation match {
         case Some(result) if !result.valid =>
           _admin_entity_validation_error_response(app, entity, Some(id), values, result)
         case _ =>
           val result = _dispatch_component_admin_entity_record("update", app, entity, record)
-          val page = StaticFormAppRenderer.renderComponentAdminEntityUpdateResult(app, entity, id, values, result.applied, result.message, result.response.code)
+          val page = _static_form_app_renderer.renderComponentAdminEntityUpdateResult(app, entity, id, values, result.applied, result.message, result.response.code)
           _admin_form_transition_response(app, "entities", entity, "update", record, result, page)
       }
     } yield {
@@ -2099,13 +2107,13 @@ final class Http4sHttpServer(
     for {
       form <- _to_form_record(req)
       values = _form_values(form)
-      validation = StaticFormAppRenderer.validateComponentAdminEntityForm(engine.runtimeSubsystem, app, entity, values, engine.webDescriptor, Some("create"))
+      validation = _static_form_app_renderer.validateComponentAdminEntityForm(engine.runtimeSubsystem, app, entity, values, engine.webDescriptor, Some("create"))
       html <- validation match {
         case Some(result) if !result.valid =>
           _admin_entity_validation_error_response(app, entity, None, values, result)
         case _ =>
           val result = _dispatch_component_admin_entity_record("create", app, entity, form)
-          val page = StaticFormAppRenderer.renderComponentAdminEntityCreateResult(app, entity, values, result.applied, result.message, result.response.code)
+          val page = _static_form_app_renderer.renderComponentAdminEntityCreateResult(app, entity, values, result.applied, result.message, result.response.code)
           _admin_form_transition_response(app, "entities", entity, "create", form, result, page)
       }
     } yield {
@@ -2132,13 +2140,13 @@ final class Http4sHttpServer(
       form <- _to_plain_form_record(req)
       record = Record.create((form.asMap + ("id" -> id)).toVector)
       values = _form_values(record)
-      validation = StaticFormAppRenderer.validateComponentAdminDataForm(engine.runtimeSubsystem, app, data, values, engine.webDescriptor)
+      validation = _static_form_app_renderer.validateComponentAdminDataForm(engine.runtimeSubsystem, app, data, values, engine.webDescriptor)
       html <- validation match {
         case Some(result) if !result.valid =>
           _admin_data_validation_error_response(app, data, Some(id), values, result)
         case _ =>
           val result = _dispatch_component_admin_data_record("update", app, data, record)
-          val page = StaticFormAppRenderer.renderComponentAdminDataUpdateResult(app, data, id, values, result.applied, result.message, result.response.code)
+          val page = _static_form_app_renderer.renderComponentAdminDataUpdateResult(app, data, id, values, result.applied, result.message, result.response.code)
           _admin_form_transition_response(app, "data", data, "update", record, result, page)
       }
     } yield {
@@ -2163,13 +2171,13 @@ final class Http4sHttpServer(
     for {
       form <- _to_plain_form_record(req)
       values = _form_values(form)
-      validation = StaticFormAppRenderer.validateComponentAdminDataForm(engine.runtimeSubsystem, app, data, values, engine.webDescriptor)
+      validation = _static_form_app_renderer.validateComponentAdminDataForm(engine.runtimeSubsystem, app, data, values, engine.webDescriptor)
       html <- validation match {
         case Some(result) if !result.valid =>
           _admin_data_validation_error_response(app, data, None, values, result)
         case _ =>
           val result = _dispatch_component_admin_data_record("create", app, data, form)
-          val page = StaticFormAppRenderer.renderComponentAdminDataCreateResult(app, data, values, result.applied, result.message, result.response.code)
+          val page = _static_form_app_renderer.renderComponentAdminDataCreateResult(app, data, values, result.applied, result.message, result.response.code)
           _admin_form_transition_response(app, "data", data, "create", form, result, page)
       }
     } yield {
@@ -2271,7 +2279,7 @@ final class Http4sHttpServer(
   ): IO[HResponse[IO]] = {
     val page = id match {
       case Some(recordId) =>
-        StaticFormAppRenderer.renderComponentAdminEntityEdit(
+        _static_form_app_renderer.renderComponentAdminEntityEdit(
           engine.runtimeSubsystem,
           app,
           entity,
@@ -2281,7 +2289,7 @@ final class Http4sHttpServer(
           Some(validation)
         )
       case None =>
-        StaticFormAppRenderer.renderComponentAdminEntityNew(
+        _static_form_app_renderer.renderComponentAdminEntityNew(
           engine.runtimeSubsystem,
           app,
           entity,
@@ -2290,7 +2298,7 @@ final class Http4sHttpServer(
           Some(validation)
         )
     }
-    _html_status(page.getOrElse(StaticFormAppRenderer.renderSystemAdmin(engine.runtimeSubsystem)), HStatus.BadRequest)
+    _html_status(page.getOrElse(_static_form_app_renderer.renderSystemAdmin(engine.runtimeSubsystem)), HStatus.BadRequest)
   }
 
   private def _admin_data_validation_error_response(
@@ -2302,7 +2310,7 @@ final class Http4sHttpServer(
   ): IO[HResponse[IO]] = {
     val page = id match {
       case Some(recordId) =>
-        StaticFormAppRenderer.renderComponentAdminDataEdit(
+        _static_form_app_renderer.renderComponentAdminDataEdit(
           engine.runtimeSubsystem,
           app,
           data,
@@ -2312,7 +2320,7 @@ final class Http4sHttpServer(
           Some(validation)
         )
       case None =>
-        StaticFormAppRenderer.renderComponentAdminDataNew(
+        _static_form_app_renderer.renderComponentAdminDataNew(
           engine.runtimeSubsystem,
           app,
           data,
@@ -2321,7 +2329,7 @@ final class Http4sHttpServer(
           Some(validation)
         )
     }
-    _html_status(page.getOrElse(StaticFormAppRenderer.renderSystemAdmin(engine.runtimeSubsystem)), HStatus.BadRequest)
+    _html_status(page.getOrElse(_static_form_app_renderer.renderSystemAdmin(engine.runtimeSubsystem)), HStatus.BadRequest)
   }
 
   private def _admin_stay_on_error_response(
@@ -2337,7 +2345,7 @@ final class Http4sHttpServer(
     val page =
       (surface, operation, form.getString("id")) match {
         case ("entities", "update", Some(id)) =>
-          StaticFormAppRenderer.renderComponentAdminEntityEdit(
+          _static_form_app_renderer.renderComponentAdminEntityEdit(
             engine.runtimeSubsystem,
             app,
             collection,
@@ -2346,7 +2354,7 @@ final class Http4sHttpServer(
             engine.webDescriptor
           )
         case ("entities", "create", _) =>
-          StaticFormAppRenderer.renderComponentAdminEntityNew(
+          _static_form_app_renderer.renderComponentAdminEntityNew(
             engine.runtimeSubsystem,
             app,
             collection,
@@ -2354,7 +2362,7 @@ final class Http4sHttpServer(
             engine.webDescriptor
           )
         case ("data", "update", Some(id)) =>
-          StaticFormAppRenderer.renderComponentAdminDataEdit(
+          _static_form_app_renderer.renderComponentAdminDataEdit(
             engine.runtimeSubsystem,
             app,
             collection,
@@ -2363,7 +2371,7 @@ final class Http4sHttpServer(
             engine.webDescriptor
           )
         case ("data", "create", _) =>
-          StaticFormAppRenderer.renderComponentAdminDataNew(
+          _static_form_app_renderer.renderComponentAdminDataNew(
             engine.runtimeSubsystem,
             app,
             collection,
@@ -2413,7 +2421,7 @@ final class Http4sHttpServer(
     val res = result.response
     _prepared_form_result_template(app, service, operation, res.code, values) match {
       case Consequence.Success(template) =>
-        val page = StaticFormAppRenderer.renderFormResult(
+        val page = _static_form_app_renderer.renderFormResult(
           _form_result_properties(
             app,
             service,
@@ -2474,7 +2482,7 @@ final class Http4sHttpServer(
         val res = result.response
         _prepared_form_result_template(app, service, operation, res.code, values) match {
           case Consequence.Success(template) =>
-            val page = StaticFormAppRenderer.renderFormResult(
+            val page = _static_form_app_renderer.renderFormResult(
               _form_result_properties(
                 app,
                 service,
@@ -2704,7 +2712,7 @@ final class Http4sHttpServer(
         IO.pure(_see_other(_render_redirect_template(template, app, service, operation, form, response)))
       case None =>
         if (!ok && descriptor.exists(_.stayOnError))
-          _html(StaticFormAppRenderer.renderOperationForm(
+          _html(_static_form_app_renderer.renderOperationForm(
             engine.runtimeSubsystem,
             app,
             service,
@@ -2713,11 +2721,11 @@ final class Http4sHttpServer(
             _with_form_debug_panel_flag(_operation_form_values(form) ++ _error_values(response)),
             operationMode = _operation_mode,
             showExecutionDebugPanel = true
-          ).getOrElse(StaticFormAppRenderer.renderFormResult(properties)), Some(app))
+          ).getOrElse(_static_form_app_renderer.renderFormResult(properties)), Some(app))
         else
           _prepared_form_result_template(app, service, operation, response.code, properties.page.values) match {
             case Consequence.Success(template) =>
-              _html(StaticFormAppRenderer.renderFormResult(
+              _html(_static_form_app_renderer.renderFormResult(
                 properties,
                 template
               ), Some(app))
@@ -3178,27 +3186,27 @@ final class Http4sHttpServer(
     content: String,
     req: Option[org.http4s.Request[IO]] = None
   ): Consequence[StaticFormAppRenderer.Page] = {
-    val fullHtmlDocument = StaticFormAppRenderer.isHtmlDocumentTemplate(content)
+    val fullhtmldocument = _static_form_app_renderer.isHtmlDocumentTemplate(content)
     val composeSubsystemArticle =
       _compose_subsystem_article(webAppName, page) &&
-        !fullHtmlDocument
+        !fullhtmldocument
     _compose_web_template(
       webAppName,
       page,
       content,
       _static_page_layout(webAppName, page),
-      allowImplicitDefault = !fullHtmlDocument,
+      allowImplicitDefault = !fullhtmldocument,
       subsystemShell = composeSubsystemArticle,
       requireLayout = composeSubsystemArticle,
       componentName = componentName
     ).map { composed =>
       val needsTemplateRendering =
         composed.appliedLayout ||
-          StaticFormAppRenderer.hasTextusMarkup(composed.html) ||
+          _static_form_app_renderer.hasTextusMarkup(composed.html) ||
           _has_textus_include(composed.html) ||
-          (!StaticFormAppRenderer.isHtmlDocumentTemplate(composed.html) && _has_property_placeholder(composed.html))
+          (!_static_form_app_renderer.isHtmlDocumentTemplate(composed.html) && _has_property_placeholder(composed.html))
       if (needsTemplateRendering)
-        StaticFormAppRenderer.renderStaticTemplate(
+        _static_form_app_renderer.renderStaticTemplate(
           webAppName,
           page,
           composed.html,
@@ -3385,7 +3393,7 @@ final class Http4sHttpServer(
       if (subsystemShell) WebTemplatePartScope.ComponentContent else WebTemplatePartScope.Default
     val withIncludes = _expand_template_partials(webAppName, page, content, contentScope, componentName)
     val layoutCandidates = _layout_candidates(normalizedLayout, allowImplicitDefault, subsystemShell)
-    if (noLayout || (!requireLayout && StaticFormAppRenderer.isHtmlDocumentTemplate(content) && layoutCandidates.isEmpty))
+    if (noLayout || (!requireLayout && _static_form_app_renderer.isHtmlDocumentTemplate(content) && layoutCandidates.isEmpty))
       Consequence.success(WebTemplateComposition(withIncludes, appliedLayout = false))
     else
       _validate_shell_owner_if_needed(subsystemShell).flatMap { _ =>
@@ -4483,11 +4491,11 @@ final class Http4sHttpServer(
     _web_error_template(app, resolvedstatus.code) match {
       case Some(template) =>
         _html_status(
-          StaticFormAppRenderer.renderErrorTemplate(app, resolvedstatus.code, error.message, error.path, Some(error), template),
+          _static_form_app_renderer.renderErrorTemplate(app, resolvedstatus.code, error.message, error.path, Some(error), template),
           resolvedstatus
         )
       case None =>
-        _html_status(StaticFormAppRenderer.renderStructuredErrorPage(app, error), resolvedstatus)
+        _html_status(_static_form_app_renderer.renderStructuredErrorPage(app, error), resolvedstatus)
     }
   }
 
@@ -4569,7 +4577,7 @@ final class Http4sHttpServer(
   private def _is_form_context_key(
     key: String
   ): Boolean =
-    StaticFormAppRenderer.isHiddenFormContextKey(key)
+    _static_form_app_renderer.isHiddenFormContextKey(key)
 
   private def _html(p: StaticFormAppRenderer.Page): IO[HResponse[IO]] =
     _html(p, None)
@@ -5272,7 +5280,8 @@ final class Http4sHttpServer(
     val params = req.uri.query.params
     StaticFormAppRenderer.PageRequest(
       page = params.get("page").flatMap(_.toIntOption).filter(_ > 0).getOrElse(1),
-      pageSize = params.get("pageSize").flatMap(_.toIntOption).filter(_ > 0).getOrElse(20),
+      pageSize = params.get("pageSize").flatMap(_.toIntOption).filter(_ > 0)
+        .getOrElse(_static_form_app_renderer.config.defaultPageSize),
       includeTotal = _boolean_param(params, "includeTotal")
     )
   }
