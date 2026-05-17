@@ -23,7 +23,7 @@ import org.simplemodeling.model.statemachine.{Aliveness, PostStatus}
  *  version Feb. 26, 2026
  *  version Mar. 30, 2026
  *  version Apr. 26, 2026
- * @version May. 10, 2026
+ * @version May. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class EntityStore {
@@ -949,7 +949,7 @@ class StandardEntityStore(
     attributes: Record
   )(using ctx: ExecutionContext): Unit = {
     EntityAccessMetricsRegistry.shared.record(name, attributes)
-    val _ = ctx.observability.emitInfo(ctx.cncfCore.scope, name, attributes)
+    val _ = ctx.observability.emitDebug(ctx.cncfCore.scope, name, attributes)
   }
 
   private def _calltree_metric_attributes(

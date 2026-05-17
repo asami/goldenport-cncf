@@ -1,0 +1,21 @@
+schemaVersion: 1
+generatedAt: 2026-05-16T21:17:32.355645Z
+recommended: 0.4.7
+latestStable: 0.4.7
+latestSnapshot:
+mavenRepositories:
+  - https://www.simplemodeling.org/repository/maven
+carRepositories:
+  - https://www.simplemodeling.org/repository/car
+sarRepositories:
+  - https://www.simplemodeling.org/repository/sar
+coursierRepositories:
+  - https://www.simplemodeling.org/repository/maven
+versions:
+  - version: 0.4.7
+    channel: stable
+    status: active
+    scalaBinaryVersion: "3"
+    module: org.goldenport:goldenport-cncf_3:0.4.7
+    publishedAt: 2026-05-16T21:17:32.355645Z
+    metadataUrl: https://www.simplemodeling.org/repository/maven/org/goldenport/goldenport-cncf_3/maven-metadata.xml

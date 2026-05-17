@@ -45,7 +45,7 @@ import org.goldenport.configuration.ConfigurationValue
  *  version Feb. 25, 2026
  *  version Mar. 30, 2026
  *  version Apr. 29, 2026
- * @version May. 10, 2026
+ * @version May. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 trait ActionCallFeaturePart { self: ActionCall.Core.Holder =>
@@ -883,7 +883,7 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
     attributes: Record
   ): Unit = {
     component.flatMap(_.subsystem).map(_.entityAccessMetrics).getOrElse(EntityAccessMetricsRegistry.shared).record(name, attributes)
-    val _ = execution_context.observability.emitInfo(
+    val _ = execution_context.observability.emitDebug(
       execution_context.cncfCore.scope,
       name,
       attributes

@@ -30,7 +30,7 @@ import org.goldenport.schema.DataConfidentiality
  *  version Feb.  6, 2026
  *  version Mar. 13, 2026
  *  version Apr. 25, 2026
- * @version May. 11, 2026
+ * @version May. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 class ActionEngine(
@@ -232,8 +232,8 @@ class ActionEngine(
   ): Unit = {
     // Execution observation hook (not persisted).
     val params = _parameter_source_text(call).getOrElse("")
-    _log_backend_("enter", Some(call.action.name), params, None)
-    observe_info("Action started", call)
+    _log_backend_("debug", Some(call.action.name), params, None, Some(call))
+    observe_debug("Action started", call)
   }
 
   protected def observe_leave(
@@ -243,10 +243,10 @@ class ActionEngine(
     // Execution observation hook (not persisted).
     result match {
       case Consequence.Success(_) =>
-        _log_backend_("leave", Some(call.action.name), "", None) // TODO
-        observe_info("Action completed successfully", call)
+        _log_backend_("debug", Some(call.action.name), "", None, Some(call)) // TODO
+        observe_debug("Action completed successfully", call)
       case Consequence.Failure(conclusion) =>
-        _log_backend_("error", Some(call.action.name), "", None) // TODO
+        _log_backend_("error", Some(call.action.name), "", None, Some(call)) // TODO
         val message = s"Action failed: ${conclusion.show}"
         observe_error(message, conclusion.getException, call)
     }
@@ -317,6 +317,12 @@ class ActionEngine(
   ): Unit =
     _observe("info", message, None, Some(call))
 
+  protected def observe_debug(
+    message: String,
+    call: ActionCall
+  ): Unit =
+    _observe("debug", message, None, Some(call))
+
   protected def observe_error(
     message: String,
     cause: Option[Throwable],
@@ -333,7 +339,7 @@ class ActionEngine(
     val ctx = _observation_context(call)
     val text = if (ctx.isEmpty) message else s"$message $ctx"
     val actionname = call.map(_.action.name)
-    _log_backend_(level, actionname, text, cause) // TODO
+    _log_backend_(level, actionname, text, cause, call) // TODO
   }
 
   private def _observation_context(
@@ -357,16 +363,30 @@ class ActionEngine(
     level: String,
     actionname: Option[String],
     message: String,
-    cause: Option[Throwable]
+    cause: Option[Throwable],
+    call: Option[ActionCall]
   ): Unit = {
     LogBackendHolder.backend.foreach { backend =>
       val name = actionname.getOrElse("unknown")
-      val prefix = s"event=$level scope=Action name=$name "
-      val text = cause match {
-        case Some(c) => s"$message cause=${c.getMessage}"
-        case None => message
+      val scope = call.map(_.executionContext.cncfCore.scope).getOrElse(ScopeContext(
+        kind = ScopeKind.Action,
+        name = name,
+        parent = None,
+        observabilityContext = org.goldenport.cncf.context.ObservabilityContext(
+          traceId = org.goldenport.cncf.context.TraceId("action", name),
+          spanId = None,
+          correlationId = None
+        ),
+        httpDriverOption = None
+      ))
+      if (ObservabilityEngine.shouldEmit(level, scope, "org.goldenport.cncf.action", "ActionEngine", backend)) {
+        val prefix = s"event=$level scope=Action name=$name "
+        val text = cause match {
+          case Some(c) => s"$message cause=${c.getMessage}"
+          case None => message
+        }
+        backend.log(level, s"$prefix$text")
       }
-      backend.log(level, s"$prefix$text")
     }
   }
 

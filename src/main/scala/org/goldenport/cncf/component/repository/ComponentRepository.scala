@@ -29,7 +29,7 @@ import org.goldenport.cncf.subsystem.GenericSubsystemDescriptor
  *  version Feb.  5, 2026
  *  version Mar. 22, 2026
  *  version Apr. 25, 2026
- * @version May. 16, 2026
+ * @version May. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 sealed abstract class ComponentRepository {
@@ -585,8 +585,36 @@ object ComponentRepository extends GlobalObservable {
     params: ComponentCreate,
     packagePrefixes: Seq[String]
   ) extends ComponentRepository {
-    def discover(): Seq[Component] =
+    def discover(): Seq[Component] = {
+      _ensure_requested_component_artifacts()
       new ComponentDirRepository(cacheRoot, params, packagePrefixes).discover()
+    }
+
+    private def _ensure_requested_component_artifacts(): Unit =
+      kind match {
+        case StandardRepositoryKind.Car =>
+          _requested_components(params).foreach { case (name, version) =>
+            val resolved = _resolve_standard_component_artifact(cacheRoot, name, version)
+              .orElse(_fetch_standard_component_artifact(baseUrl, cacheRoot, name, version))
+            if (resolved.isEmpty) {
+              val versiontext = version.getOrElse("latest")
+              Consequence.resourceNotFound[Unit](
+                s"requested component CAR not found: $name",
+                Vector(
+                  Descriptor.Facet.Component(name),
+                  Descriptor.Facet.Artifact(s"$name:$versiontext"),
+                  Descriptor.Facet.RepositoryType("standard-car"),
+                  Descriptor.Facet.Properties(Map(
+                    "repository" -> baseUrl,
+                    "cache" -> cacheRoot.toString
+                  ))
+                )
+              ).RAISE
+            }
+          }
+        case StandardRepositoryKind.Sar =>
+          ()
+      }
   }
 
   object StandardRepository {
@@ -747,6 +775,29 @@ object ComponentRepository extends GlobalObservable {
     names.contains(requested)
   }
 
+  private def _component_descriptors_for_artifact(
+    params: ComponentCreate,
+    descriptor: ComponentDescriptor
+  ): Vector[ComponentDescriptor] = {
+    val names = _component_descriptor_names(descriptor)
+    val matched =
+      params.componentDescriptors.filter { requested =>
+        _component_descriptor_names(requested).exists { requestedname =>
+          names.exists(name => NamingConventions.equivalentByNormalized(name, requestedname))
+        }
+      }
+    if (matched.nonEmpty)
+      matched
+    else
+      Vector(descriptor)
+  }
+
+  private def _component_descriptor_names(
+    descriptor: ComponentDescriptor
+  ): Vector[String] =
+    (Vector(descriptor.componentName, descriptor.name).flatten ++ descriptor.componentlets.map(_.name))
+      .filter(_.trim.nonEmpty)
+
   private def _class_loader_from_paths(
     paths: Seq[Path],
     parent: ClassLoader
@@ -840,14 +891,17 @@ object ComponentRepository extends GlobalObservable {
     basedir: Path,
     params: ComponentCreate
   ): Vector[Artifact] = {
-    val requests =
-      params.componentDescriptors.flatMap { d =>
-        d.componentName.orElse(d.name).map(n => (n, d.version))
-      }.distinct
-    requests.flatMap { case (name, version) =>
+    _requested_components(params).flatMap { case (name, version) =>
       _resolve_requested_component_artifact(basedir, name, version)
     }.distinct
   }
+
+  private def _requested_components(
+    params: ComponentCreate
+  ): Vector[(String, Option[String])] =
+    params.componentDescriptors.flatMap { d =>
+      d.componentName.orElse(d.name).map(n => (n, d.version))
+    }.distinct
 
   private def _resolve_requested_component_artifact(
     basedir: Path,
@@ -1256,6 +1310,8 @@ object ComponentRepository extends GlobalObservable {
     )
     val componentname =
       extracted.descriptor.componentName.orElse(extracted.descriptor.name).getOrElse(artifactPath.getFileName.toString)
+    val componentparams =
+      params.withComponentDescriptors(_component_descriptors_for_artifact(params, extracted.descriptor))
     val dependencyresolution = ComponentDependencyResolver.resolve(
       extracted.root,
       componentname,
@@ -1271,7 +1327,7 @@ object ComponentRepository extends GlobalObservable {
             // demo or builtin components that must not be treated as packaged
             // component definitions for this CAR.
             scanclasspath = Vector(extracted.componentMain),
-            params = params,
+            params = componentparams,
             origin = baseOrigin,
             log = log
           ).toVector

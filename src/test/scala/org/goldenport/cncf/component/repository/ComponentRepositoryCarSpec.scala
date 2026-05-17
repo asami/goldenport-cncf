@@ -11,6 +11,7 @@ import org.scalatest.wordspec.AnyWordSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.BeforeAndAfterAll
 
+import org.goldenport.{Consequence, ConsequenceException}
 import org.goldenport.cncf.context.GlobalContext
 import org.goldenport.cncf.workarea.WorkAreaSpace
 import org.goldenport.cncf.config.RuntimeConfig
@@ -23,7 +24,7 @@ import org.goldenport.configuration.ConfigurationTrace
 /*
  * @since   Feb.  4, 2026
  *  version Apr. 25, 2026
- * @version May. 16, 2026
+ * @version May. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAndAfterAll {
@@ -717,6 +718,103 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
 
         components.map(_.name) should contain ("spec")
         components.flatMap(_.artifactMetadata).flatMap(_.component) should contain ("textus-user-account")
+      }
+    }
+
+    "fetch requested component CARs from a standard repository before discovery" in {
+      val subsystem = new Subsystem(
+        name = "test-standard-repo-fetch",
+        configuration = ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty)
+      )
+      val origin = ComponentOrigin.Repository("component-dir")
+      _with_temp_dir { root =>
+        val remote = root.resolve("remote")
+        val cache = root.resolve("cache")
+        val artifactdir = remote.resolve("textus-user-account").resolve("0.1.1")
+        Files.createDirectories(artifactdir)
+        val fakecomponentjar = _create_fake_component_jar(root.resolve("assets").resolve("component-main-standard-fetch.jar"))
+        val descriptor = root.resolve("component-descriptor-standard-fetch.json")
+        Files.writeString(
+          descriptor,
+          """{"name":"textus-user-account","version":"0.1.1","component":"textus-user-account"}"""
+        )
+        _create_car(
+          artifactdir.resolve("textus-user-account-0.1.1.car"),
+          Seq(
+            "component/main.jar" -> fakecomponentjar,
+            "component-descriptor.json" -> descriptor
+          )
+        )
+        val blogartifactdir = remote.resolve("textus-blog").resolve("0.0.2")
+        Files.createDirectories(blogartifactdir)
+        val blogdescriptor = root.resolve("component-descriptor-blog-standard-fetch.json")
+        Files.writeString(
+          blogdescriptor,
+          """{"name":"textus-blog","version":"0.0.2","component":"textus-blog"}"""
+        )
+        _create_car(
+          blogartifactdir.resolve("textus-blog-0.0.2.car"),
+          Seq(
+            "component/main.jar" -> fakecomponentjar,
+            "component-descriptor.json" -> blogdescriptor
+          )
+        )
+        val repository = ComponentRepository.StandardRepository.Specification(
+          ComponentRepository.StandardRepositoryKind.Car,
+          remote.toUri.toString.stripSuffix("/"),
+          cache
+        ).build(
+          ComponentCreate(
+            subsystem,
+            origin,
+            Vector(
+              ComponentDescriptor(name = Some("textus-blog"), version = Some("0.0.2"), componentName = Some("textus-blog")),
+              ComponentDescriptor(name = Some("textus-user-account"), version = Some("0.1.1"), componentName = Some("textus-user-account"))
+            )
+          )
+        )
+
+        val components = repository.discover()
+
+        cache.resolve("car").resolve("textus-user-account").resolve("0.1.1").resolve("textus-user-account-0.1.1.car").toFile should exist
+        cache.resolve("car").resolve("textus-blog").resolve("0.0.2").resolve("textus-blog-0.0.2.car").toFile should exist
+        components.map(_.name) should contain ("spec")
+        components.flatMap(_.artifactMetadata).flatMap(_.component) should contain ("textus-user-account")
+        val accountcomponents = components.filter(_.artifactMetadata.flatMap(_.component).contains("textus-user-account"))
+        accountcomponents.flatMap(_.componentDescriptors.flatMap(_.componentName)) should contain ("textus-user-account")
+        accountcomponents.flatMap(_.componentDescriptors.flatMap(_.componentName)) should not contain "textus-blog"
+      }
+    }
+
+    "fail fast when requested component CAR is not available in a standard repository" in {
+      val subsystem = new Subsystem(
+        name = "test-standard-repo-fetch-missing",
+        configuration = ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty)
+      )
+      val origin = ComponentOrigin.Repository("component-dir")
+      _with_temp_dir { root =>
+        val repository = ComponentRepository.StandardRepository.Specification(
+          ComponentRepository.StandardRepositoryKind.Car,
+          root.resolve("remote").toUri.toString.stripSuffix("/"),
+          root.resolve("cache")
+        ).build(
+          ComponentCreate(
+            subsystem,
+            origin,
+            Vector(ComponentDescriptor(name = Some("textus-user-account"), version = Some("0.1.1"), componentName = Some("textus-user-account")))
+          )
+        )
+
+        val thrown = the [ConsequenceException] thrownBy repository.discover()
+        thrown.getMessage should include ("requested component CAR not found")
+        val conclusion = thrown.consequence match {
+          case Consequence.Failure(conclusion) => conclusion
+          case _ => fail("expected structured failure")
+        }
+        conclusion.observation.taxonomy.category.name shouldBe "resource"
+        conclusion.observation.taxonomy.symptom.name shouldBe "not-found"
+        conclusion.toRecord.show should include ("textus-user-account")
+        conclusion.toRecord.show should include ("0.1.1")
       }
     }
 
