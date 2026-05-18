@@ -46,7 +46,7 @@ implementation.
 - KS-08: CNCF `KnowledgeSpace` core model and WorkingSet skeleton.
 - KS-09: CNCF knowledge query/projection/admin surface.
 - KS-10: `textus-sie` provider/runtime realization.
-- KS-11: CNCF MCP end-to-end validation for `textus-sie`.
+- KS-11: CNCF MCP boundary validation for `textus-sie`.
 - KS-12: Phase 25 verification and closure.
 
 ## Closure Criterion

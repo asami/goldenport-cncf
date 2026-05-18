@@ -64,7 +64,7 @@ import org.goldenport.cncf.subsystem.GenericSubsystemDescriptor
  *  version Jan. 31, 2026
  *  version Feb.  5, 2026
  *  version Apr. 30, 2026
- * @version May. 16, 2026
+ * @version May. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 object CncfRuntime extends GlobalObservable {

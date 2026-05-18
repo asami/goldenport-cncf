@@ -21,7 +21,8 @@ import org.goldenport.cncf.observability.global.{GlobalObservable, Observability
 import org.goldenport.cncf.component.*
 import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.cncf.backend.collaborator.{CollaboratorClassLoader, CollaboratorFactory}
-import org.goldenport.cncf.subsystem.GenericSubsystemDescriptor
+import org.goldenport.cncf.subsystem.{GenericSubsystemDescriptor, Subsystem}
+import org.goldenport.configuration.{Configuration, ConfigurationTrace, ResolvedConfiguration}
 
 /*
  * @since   Jan. 12, 2026
@@ -29,7 +30,7 @@ import org.goldenport.cncf.subsystem.GenericSubsystemDescriptor
  *  version Feb.  5, 2026
  *  version Mar. 22, 2026
  *  version Apr. 25, 2026
- * @version May. 17, 2026
+ * @version May. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 sealed abstract class ComponentRepository {
@@ -392,7 +393,7 @@ object ComponentRepository extends GlobalObservable {
         case Right(_) =>
           ()
       }
-      val classpath = _dev_runtime_classpath(baseDir)
+      val classpath = ComponentDevDirRepository.devRuntimeClasspath(baseDir)
       {
         val classDirs = classpath.filter(Files.isDirectory(_))
         if (classDirs.isEmpty) {
@@ -415,23 +416,6 @@ object ComponentRepository extends GlobalObservable {
               Vector.empty
           }
         }
-      }
-    }
-
-    private def _dev_runtime_classpath(base: Path): Vector[Path] = {
-      val file = base.resolve("target").resolve("cncf.d").resolve("runtime-classpath.txt")
-      if (!Files.isRegularFile(file)) {
-        Vector.empty
-      } else {
-        Files.readAllLines(file, StandardCharsets.UTF_8).asScala.toVector
-          .map(_.trim)
-          .filter(_.nonEmpty)
-          .flatMap(_.split(java.util.regex.Pattern.quote(File.pathSeparator)).toVector)
-          .map(_.trim)
-          .filter(_.nonEmpty)
-          .map(p => Paths.get(p).toAbsolutePath.normalize)
-          .filter(Files.exists(_))
-          .distinct
       }
     }
 
@@ -470,6 +454,67 @@ object ComponentRepository extends GlobalObservable {
 
     def runtimeClasspathFile(base: Path): Path =
       base.resolve("target").resolve("cncf.d").resolve("runtime-classpath.txt")
+
+    def inferComponentDescriptors(base: Path): Vector[ComponentDescriptor] = {
+      val log = PersistentBootstrapLog.forClass(classOf[ComponentDevDirRepository], ObservabilityScopeDefaults.Bootstrap)
+      validate(base) match {
+        case Left(_) =>
+          Vector.empty
+        case Right(_) =>
+          val classpath = devRuntimeClasspath(base)
+          val classdirs = classpath.filter(Files.isDirectory(_))
+          if (classdirs.isEmpty) {
+            Vector.empty
+          } else {
+            val subsystem = Subsystem(
+              name = "component-dev-dir",
+              configuration = ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty)
+            )
+            val params = ComponentCreate(subsystem, ComponentOrigin.Repository("component-dev-dir"))
+            val loader = _class_loader_from_paths(classpath, getClass.getClassLoader)
+            _discover_components(
+              loader,
+              params,
+              classdirs,
+              ComponentRepository.resolvePackagePrefixes(),
+              ComponentOrigin.Repository("component-dev-dir"),
+              log,
+              tolerant = true
+            ).toOption.getOrElse(Vector.empty)
+              .map { component =>
+                val name = component.core.name
+                ComponentDescriptor(
+                  name = Some(name),
+                  version = component.artifactMetadata.map(_.version).orElse(Some("0.1.0")),
+                  componentName = Some(name)
+                )
+              }
+              .distinctBy(x => x.componentName.orElse(x.name))
+          }
+      }
+    }
+
+    def inferComponentNames(base: Path): Vector[String] =
+      inferComponentDescriptors(base)
+        .flatMap(x => x.componentName.orElse(x.name))
+        .distinct
+
+    def devRuntimeClasspath(base: Path): Vector[Path] = {
+      val file = runtimeClasspathFile(base)
+      if (!Files.isRegularFile(file)) {
+        Vector.empty
+      } else {
+        Files.readAllLines(file, StandardCharsets.UTF_8).asScala.toVector
+          .map(_.trim)
+          .filter(_.nonEmpty)
+          .flatMap(_.split(java.util.regex.Pattern.quote(File.pathSeparator)).toVector)
+          .map(_.trim)
+          .filter(_.nonEmpty)
+          .map(p => Paths.get(p).toAbsolutePath.normalize)
+          .filter(Files.exists(_))
+          .distinct
+      }
+    }
 
     def validate(base: Path): Either[String, Unit] = {
       val file = runtimeClasspathFile(base)
@@ -593,7 +638,9 @@ object ComponentRepository extends GlobalObservable {
     private def _ensure_requested_component_artifacts(): Unit =
       kind match {
         case StandardRepositoryKind.Car =>
-          _requested_components(params).foreach { case (name, version) =>
+          _requested_components(params).filterNot { case (name, _) =>
+            _satisfied_by_active_development_component(params, name)
+          }.foreach { case (name, version) =>
             val resolved = _resolve_standard_component_artifact(cacheRoot, name, version)
               .orElse(_fetch_standard_component_artifact(baseUrl, cacheRoot, name, version))
             if (resolved.isEmpty) {
@@ -902,6 +949,21 @@ object ComponentRepository extends GlobalObservable {
     params.componentDescriptors.flatMap { d =>
       d.componentName.orElse(d.name).map(n => (n, d.version))
     }.distinct
+
+  private def _satisfied_by_active_development_component(
+    params: ComponentCreate,
+    componentName: String
+  ): Boolean = {
+    val target = NamingConventions.toComparisonKey(componentName)
+    params.subsystem.components.exists { component =>
+      component.origin match {
+        case ComponentOrigin.Repository("component-dev-dir") =>
+          NamingConventions.toComparisonKey(component.core.name) == target
+        case _ =>
+          false
+      }
+    }
+  }
 
   private def _resolve_requested_component_artifact(
     basedir: Path,

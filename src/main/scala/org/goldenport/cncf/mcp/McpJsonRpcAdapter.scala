@@ -9,7 +9,8 @@ import org.goldenport.cncf.subsystem.Subsystem
 /*
  * @since   Mar. 19, 2026
  *  version Mar. 27, 2026
- * @version Apr. 15, 2026
+ *  version Apr. 15, 2026
+ * @version May. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 final class McpJsonRpcAdapter(
@@ -61,26 +62,7 @@ final class McpJsonRpcAdapter(
     )
 
   private def _tools: Vector[Json] =
-    subsystem.components.flatMap { component =>
-      component.protocol.services.services.flatMap { service =>
-        service.operations.operations.toVector.map { op =>
-          val fullname = s"${component.name}.${service.name}.${op.name}"
-          val params = op.specification.request.parameters.toVector.map(_.name).distinct
-          val props = JsonObject.fromIterable(params.map { p =>
-            p -> Json.obj("type" -> Json.fromString("string"))
-          })
-          Json.obj(
-            "name" -> Json.fromString(fullname),
-            "description" -> Json.fromString(s"${service.name}.${op.name}"),
-            "inputSchema" -> Json.obj(
-              "type" -> Json.fromString("object"),
-              "properties" -> Json.fromJsonObject(props),
-              "required" -> Json.arr(params.map(Json.fromString): _*)
-            )
-          )
-        }
-      }
-    }
+    McpToolCatalog.toolsForSubsystem(subsystem).map(_.toJson)
 
   private def _tools_call(
     id: Json,

@@ -66,5 +66,5 @@ The admin surface is not a raw RDF browser and not a Vector DB payload viewer.
 ## Deferred
 
 - Provider-backed RDF DB / Vector DB loading: KS-12.
-- CNCF MCP end-to-end validation for `textus-sie`: KS-13.
+- CNCF MCP boundary validation for `textus-sie`: KS-13.
 - Public component operations for knowledge query are not introduced in KS-11.

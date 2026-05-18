@@ -69,13 +69,13 @@ Scope boundaries:
 - K (DONE): KS-11 — KnowledgeSpace query/projection refinement against the
   hardened model.
 - L (DONE): KS-12 — `textus-sie` provider/runtime realization.
-- M (ACTIVE): KS-13 — CNCF MCP end-to-end validation for `textus-sie`.
-- N (PLANNED): KS-14 — Phase 25 verification and closure.
+- M (DONE): KS-13 — CNCF MCP boundary validation for `textus-sie`.
+- N (ACTIVE): KS-14 — Phase 25 verification and closure.
 
 Resume hint:
 
-- Continue with KS-13. Validate CNCF MCP discovery/invocation for `textus-sie`
-  using the provider/runtime and KnowledgeFrame projection added in KS-12.
+- Continue with KS-14. Close Phase 25 after recording the completed
+  KnowledgeSpace and `textus-sie` MCP driver path plus deferred follow-ups.
 
 ## 5. Development Items
 
@@ -92,7 +92,7 @@ Resume hint:
 - [x] KS-11: KnowledgeSpace query/projection refinement against the hardened
       model.
 - [x] KS-12: `textus-sie` provider/runtime realization.
-- [ ] KS-13: CNCF MCP end-to-end validation for `textus-sie`.
+- [x] KS-13: CNCF MCP boundary validation for `textus-sie`.
 - [ ] KS-14: Phase 25 verification and closure.
 
 Detailed task breakdown and progress tracking are recorded in
@@ -108,7 +108,8 @@ Phase 25 can close when:
 - Required CNCF model/runtime/query/projection surfaces are implemented at a
   minimal practical level.
 - `textus-sie` runs on CNCF with RDF DB, Vector DB, semantic retrieval, status,
-  and MCP discovery/invocation paths validated.
+  and focused MCP boundary validation complete; KS-14 owns the final combined
+  startup and `/mcp` smoke before closure.
 - Deferred knowledge work is recorded as future scope in
   `docs/strategy/cncf-development-strategy.md`.
 
@@ -127,4 +128,5 @@ Current status:
 - KS-10 is done.
 - KS-11 is done.
 - KS-12 is done.
-- KS-13 is active.
+- KS-13 is done.
+- KS-14 is active.

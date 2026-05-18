@@ -15,7 +15,7 @@ import org.goldenport.Consequence
  * @since   Apr.  7, 2026
  *  version Apr. 23, 2026
  *  version Apr. 25, 2026
- * @version May.  6, 2026
+ * @version May. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 object GenericSubsystemFactory {
@@ -161,7 +161,9 @@ object GenericSubsystemFactory {
       path.resolve("car.d")
     ).iterator.flatMap { dir =>
       ComponentDescriptorLoader.load(dir).toOption.toVector.flatten
-    }.toSeq.headOption
+    }.toSeq.headOption.orElse(
+      ComponentRepository.ComponentDevDirRepository.inferComponentDescriptors(path).headOption
+    )
 
   private def _fallback_component_descriptor(
     path: Path
@@ -348,7 +350,7 @@ object GenericSubsystemFactory {
       descriptor.toComponentDescriptors
     )
     val components0 =
-      _repository_specs(configuration).flatMap(_.build(params).discover())
+      _repository_specs_for_descriptor(configuration, descriptor).flatMap(_.build(params).discover())
         .filter(component => descriptor.componentBindings.exists(binding => _matches_descriptor_component(component, binding.componentName)))
     val builtins = _builtin_components(subsystem, descriptor)
     val components = _collapse_duplicate_components(builtins ++ components0)
@@ -369,6 +371,24 @@ object GenericSubsystemFactory {
       case None =>
         Vector(_default_repository_spec)
     }
+  }
+
+  private def _repository_specs_for_descriptor(
+    configuration: ResolvedConfiguration,
+    descriptor: GenericSubsystemDescriptor
+  ): Vector[ComponentRepository.Specification] =
+    componentDevDirPath(configuration)
+      .filter(path => _descriptor_components_are_from_dev_dir(path, descriptor))
+      .map(path => Vector(ComponentRepository.ComponentDevDirRepository.Specification(path)))
+      .getOrElse(_repository_specs(configuration))
+
+  private def _descriptor_components_are_from_dev_dir(
+    path: Path,
+    descriptor: GenericSubsystemDescriptor
+  ): Boolean = {
+    val bindings = descriptor.componentBindings.map(_.componentName).toSet
+    val inferred = ComponentRepository.ComponentDevDirRepository.inferComponentNames(path).toSet
+    bindings.nonEmpty && inferred.nonEmpty && bindings.subsetOf(inferred)
   }
 
   private def _parse_repository_specs(

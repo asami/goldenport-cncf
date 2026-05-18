@@ -24,7 +24,7 @@ import org.goldenport.configuration.ConfigurationTrace
 /*
  * @since   Feb.  4, 2026
  *  version Apr. 25, 2026
- * @version May. 17, 2026
+ * @version May. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAndAfterAll {
@@ -343,6 +343,37 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
         RuntimeConfig.getString(bootstrap.configuration, RuntimeConfig.ComponentFileKey) shouldBe empty
         descriptor.map(_.subsystemName) shouldBe Some("dev-cwitter")
         descriptor.toVector.flatMap(_.componentBindings.map(_.componentName)) shouldBe Vector("dev-cwitter")
+      }
+    }
+
+    "infer component development directory identity from discovered component metadata" in {
+      _with_temp_dir { root =>
+        val componentdir = root.resolve("01-minimal")
+        val classdir = componentdir.resolve("target").resolve("scala-3.3.7").resolve("classes")
+        _copy_devdir_sample_classes(classdir)
+        _write_runtime_classpath(componentdir, classdir)
+        val configuration = ResolvedConfiguration(
+          Configuration(Map(
+            RuntimeConfig.ComponentDevDirKey -> ConfigurationValue.StringValue(componentdir.toString)
+          )),
+          ConfigurationTrace.empty
+        )
+
+        val inferred = ComponentRepository.ComponentDevDirRepository.inferComponentNames(componentdir)
+        val descriptor = org.goldenport.cncf.subsystem.GenericSubsystemFactory.resolveDescriptor(configuration)
+        val initialized = new org.goldenport.cncf.cli.CncfRuntime().initializeForEmbedding(
+          cwd = root,
+          args = Array(
+            "--component-dev-dir", componentdir.toString,
+            "command", "devdirsample.main.hello"
+          ),
+          modeHint = Some(org.goldenport.cncf.cli.RunMode.Command)
+        ).TAKE
+
+        inferred shouldBe Vector("devdirsample")
+        descriptor.map(_.subsystemName) shouldBe Some("devdirsample")
+        descriptor.toVector.flatMap(_.componentBindings.map(_.componentName)) shouldBe Vector("devdirsample")
+        initialized.components.map(_.name) should contain ("devdirsample")
       }
     }
 
@@ -1037,6 +1068,18 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
       zos.closeEntry()
     }
     target
+  }
+
+  private def _copy_devdir_sample_classes(target: Path): Unit = {
+    val source = Path.of("target", "scala-3.3.7", "test-classes", "devdirsample")
+    Files.createDirectories(target.resolve("devdirsample"))
+    Using.resource(Files.list(source)) { stream =>
+      stream.iterator().asScala
+        .filter(p => Files.isRegularFile(p) && p.getFileName.toString.endsWith(".class"))
+        .foreach { p =>
+          Files.copy(p, target.resolve("devdirsample").resolve(p.getFileName), java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+        }
+    }
   }
 
   private def _with_temp_dir[T](body: Path => T): T = {

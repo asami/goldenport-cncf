@@ -473,28 +473,49 @@ preserving CNCF/SIE responsibility boundaries.
 
 ---
 
-## KS-13: CNCF MCP End-to-End Validation for `textus-sie`
+## KS-13: CNCF MCP Boundary Validation for `textus-sie`
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
-Validate that `textus-sie` is exposed to generative AI through CNCF's existing
-MCP publication/runtime path.
+Validate the CNCF MCP publication/runtime boundary and the `textus-sie` MCP
+facade before the final combined driver smoke in KS-14.
 
 ### Initial Tasks
 
-- [ ] Start CNCF with `textus-sie`.
-- [ ] Confirm SIE operations are visible through `meta.mcp` /
+- [x] Confirm CNCF generic operations are visible through `meta.mcp` /
       `spec.export.mcp`.
-- [ ] Confirm CNCF `/mcp` can discover and invoke SIE query/explain/status.
-- [ ] Record any MCP hardening follow-ups separately from Phase 25 baseline.
+- [x] Confirm CNCF `/mcp` discovers typed operation schemas and invokes through
+      normal `Subsystem.execute`.
+- [x] Confirm the `textus-sie` MCP facade invokes query/explain/status and uses
+      the same KnowledgeFrame materialization path.
+- [x] Record any MCP hardening follow-ups separately from Phase 25 baseline.
+
+### Completion Notes
+
+- CNCF now uses a shared MCP tool catalog for `meta.mcp`, `spec.export.mcp`,
+  and JSON-RPC `/mcp` tool listing.
+- MCP input schemas carry minimal string/int/boolean types instead of treating
+  every input as string.
+- `/mcp` `tools/call` still invokes through normal `Subsystem.execute`.
+- `textus-sie` `Mcp.callTool` uses the same KnowledgeFrame materialization path
+  as `SemanticRetrieval.query` / `explain`.
+- MCP callers can request RDF results, one-shot KnowledgeFrame JSON, and
+  component `KnowledgeSpace` registration.
+- Chroma source registration now forwards source content, and external provider
+  HTTP calls apply configured timeouts.
+- Live CNCF startup with `textus-sie` plus `/mcp` invocation is left as the
+  KS-14 verification/closure smoke rather than claimed from the focused unit
+  tests.
+- KS-13 details are recorded in
+  `docs/notes/knowledge-structure/ks-13-cncf-mcp-end-to-end-validation.md`.
 
 ---
 
 ## KS-14: Phase 25 Verification and Closure
 
-Status: PLANNED
+Status: ACTIVE
 
 ### Objective
 

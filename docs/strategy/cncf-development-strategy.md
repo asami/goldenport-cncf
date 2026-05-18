@@ -1172,8 +1172,11 @@ complete. KS-03 is complete. KS-04 is complete. KS-05 is complete. KS-06 is
 complete. KS-07 is complete. KS-08 is complete. KS-09 is complete. KS-10 is
 complete. KS-11 is complete. KS-12 is complete: `textus-sie` provider/runtime
 output can be projected into CNCF KnowledgeFrame / KnowledgeSpace data while
-also returning RDF-oriented results. The active next focus is KS-13 CNCF MCP
-end-to-end validation for `textus-sie`.
+also returning RDF-oriented results. KS-13 is complete: CNCF MCP projection and
+JSON-RPC dispatch use the shared typed tool catalog, and the `textus-sie` MCP
+facade invokes query/explain/status through the KnowledgeFrame / KnowledgeSpace
+materialization path. The active next focus is KS-14 Phase 25 verification and
+closure, including the final combined CNCF + `textus-sie` `/mcp` smoke.
 Phase 25 notes:
 
 - `docs/notes/knowledge-structure/knowledge-structure-opening.md`
@@ -1186,6 +1189,7 @@ Phase 25 notes:
 - `docs/notes/knowledge-structure/ks-10-knowledge-operational-model-hardening.md`
 - `docs/notes/knowledge-structure/ks-11-knowledge-query-projection-refinement.md`
 - `docs/notes/knowledge-structure/ks-12-textus-sie-provider-runtime-realization.md`
+- `docs/notes/knowledge-structure/ks-13-cncf-mcp-end-to-end-validation.md`
 
 - RDF-based data representation.
 - External knowledge graph integration.
@@ -1209,7 +1213,9 @@ Phase 25 notes:
 - KnowledgeSpace query/projection refinement against the hardened model.
 - `textus-sie` provider/runtime realization through RDF DB and Vector DB
   provider paths.
-- CNCF MCP end-to-end validation for `textus-sie`.
+- CNCF MCP boundary validation for `textus-sie`; final combined driver smoke
+  remains part of Phase 25 verification and closure.
+- Phase 25 verification and closure.
 
 Parallel development plan:
 

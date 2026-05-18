@@ -7,7 +7,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 19, 2026
- * @version Mar. 19, 2026
+ *  version Mar. 19, 2026
+ * @version May. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 final class McpJsonRpcAdapterSpec extends AnyWordSpec with Matchers {
@@ -39,6 +40,36 @@ final class McpJsonRpcAdapterSpec extends AnyWordSpec with Matchers {
         .flatMap(_.asArray)
         .getOrElse(fail("tools are missing"))
       tools should not be empty
+    }
+
+    "project integer and boolean parameter schemas" in {
+      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val adapter = new McpJsonRpcAdapter(subsystem)
+      val raw = """{"jsonrpc":"2.0","id":"x1b","method":"tools/list","params":{}}"""
+
+      val json = parse(adapter.handle(raw)).fold(
+        err => fail(s"response is not valid JSON: ${err.getMessage}"),
+        identity
+      )
+      val tools = json.hcursor.downField("result").downField("tools").focus
+        .flatMap(_.asArray)
+        .getOrElse(fail("tools are missing"))
+      val deleteblob = tools.find(_.hcursor.get[String]("name").contains("blob.blob.admin_delete_blob"))
+        .getOrElse(fail("blob admin delete tool is missing"))
+      val force = deleteblob.hcursor
+        .downField("inputSchema")
+        .downField("properties")
+        .downField("force")
+        .get[String]("type")
+      force shouldBe Right("boolean")
+      val listblob = tools.find(_.hcursor.get[String]("name").contains("blob.blob.admin_list_blobs"))
+        .getOrElse(fail("blob admin list tool is missing"))
+      val limit = listblob.hcursor
+        .downField("inputSchema")
+        .downField("properties")
+        .downField("limit")
+        .get[String]("type")
+      limit shouldBe Right("integer")
     }
 
     "handle tools/call request through subsystem execution path" in {
