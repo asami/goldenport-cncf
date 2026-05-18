@@ -1170,8 +1170,10 @@ KS-01 is complete. `textus-sie` is
 `/Users/asami/src/dev2026/textus-semantic-integration-engine`. KS-02 is
 complete. KS-03 is complete. KS-04 is complete. KS-05 is complete. KS-06 is
 complete. KS-07 is complete. KS-08 is complete. KS-09 is complete. KS-10 is
-complete. KS-11 is complete; the active next focus is KS-12 `textus-sie`
-provider/runtime realization against the hardened CNCF KnowledgeSpace boundary.
+complete. KS-11 is complete. KS-12 is complete: `textus-sie` provider/runtime
+output can be projected into CNCF KnowledgeFrame / KnowledgeSpace data while
+also returning RDF-oriented results. The active next focus is KS-13 CNCF MCP
+end-to-end validation for `textus-sie`.
 Phase 25 notes:
 
 - `docs/notes/knowledge-structure/knowledge-structure-opening.md`
@@ -1183,6 +1185,7 @@ Phase 25 notes:
 - `docs/notes/knowledge-structure/phase-25-implementation-rebaseline.md`
 - `docs/notes/knowledge-structure/ks-10-knowledge-operational-model-hardening.md`
 - `docs/notes/knowledge-structure/ks-11-knowledge-query-projection-refinement.md`
+- `docs/notes/knowledge-structure/ks-12-textus-sie-provider-runtime-realization.md`
 
 - RDF-based data representation.
 - External knowledge graph integration.

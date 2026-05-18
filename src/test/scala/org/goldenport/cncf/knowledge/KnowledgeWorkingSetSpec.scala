@@ -164,6 +164,85 @@ final class KnowledgeWorkingSetSpec
       KnowledgeWorkingSet.load(KnowledgeWorkingSetSnapshot(nodes = Vector(node), facts = Vector(brokenfact))) shouldBe a[Consequence.Failure[_]]
       KnowledgeWorkingSet.load(KnowledgeWorkingSetSnapshot(nodes = Vector(node), frames = Vector(brokenframe))) shouldBe a[Consequence.Failure[_]]
     }
+
+    "load SIE retrieval frames with document chunk relationships" in {
+      val provenance = KnowledgeProvenance(
+        KnowledgeProvenanceId("prov-sie"),
+        origin = "textus-sie",
+        generatedBy = Some("semantic-retrieval.query")
+      )
+      val document = KnowledgeNode(
+        id = KnowledgeNodeId("document-sm-doc"),
+        category = KnowledgeNodeCategory.Document,
+        identity = KnowledgeNodeIdentity(
+          externalIdentifiers = Vector(ExternalKnowledgeIdentifier("textus.sie.document", "doc-sm", Some("sm")))
+        ),
+        presentation = KnowledgeNodePresentation.label("doc-sm"),
+        sources = KnowledgeNodeSources(provenanceIds = Vector(provenance.id))
+      )
+      val chunk = KnowledgeNode(
+        id = KnowledgeNodeId("chunk-sm-doc-1"),
+        category = KnowledgeNodeCategory.Chunk,
+        presentation = KnowledgeNodePresentation.label("semantic retrieval"),
+        sources = KnowledgeNodeSources(provenanceIds = Vector(provenance.id))
+      )
+      val evidence = KnowledgeEvidence(
+        KnowledgeEvidenceId("ev-chunk-1"),
+        "semantic-chunk",
+        KnowledgeSourceRef("semantic-chunk", "chunk-1"),
+        Some("semantic retrieval"),
+        Some(provenance.id)
+      )
+      val relationship = KnowledgeRelationship(
+        id = KnowledgeRelationshipId("rel-document-chunk-1"),
+        kind = KnowledgeRelationshipKind.HasPart,
+        sourceNodeId = document.id,
+        targetNodeId = chunk.id,
+        semanticTypes = Vector(KnowledgeRelationshipSemanticType("textus.sie", "document-has-chunk")),
+        evidenceIds = Vector(evidence.id),
+        provenanceId = Some(provenance.id)
+      )
+      val fact = KnowledgeFact(
+        KnowledgeFactId("fact-chunk-1"),
+        KnowledgeFactKind.Generated,
+        subjectNodeId = Some(chunk.id),
+        predicate = Some("semantic-result"),
+        value = Some("semantic retrieval"),
+        evidenceIds = Vector(evidence.id),
+        provenanceId = Some(provenance.id)
+      )
+      val frame = KnowledgeFrame(
+        KnowledgeFrameId("frame-sie-query"),
+        KnowledgeFrameKind.RetrievalResult,
+        focusNodeIds = Vector(document.id, chunk.id),
+        nodeIds = Vector(document.id, chunk.id),
+        relationshipIds = Vector(relationship.id),
+        factIds = Vector(fact.id),
+        evidenceIds = Vector(evidence.id),
+        provenanceIds = Vector(provenance.id),
+        origin = KnowledgeFrameOrigin(
+          KnowledgeFrameInputRoute.SieRetrieval,
+          provider = Some("textus-sie"),
+          operation = Some("semantic-retrieval.query"),
+          provenanceId = Some(provenance.id)
+        ),
+        query = Some(KnowledgeQueryRef("semantic retrieval"))
+      )
+
+      val workingset = _success(KnowledgeWorkingSet.load(KnowledgeWorkingSetSnapshot(
+        nodes = Vector(document, chunk),
+        relationships = Vector(relationship),
+        evidence = Vector(evidence),
+        provenance = Vector(provenance),
+        frames = Vector(frame),
+        facts = Vector(fact)
+      )))
+
+      workingset.counts.relationshipCount shouldBe 1
+      workingset.relationshipsFrom(document.id).map(_.kind) shouldBe Vector(KnowledgeRelationshipKind.HasPart)
+      workingset.nodeOption(document.id).flatMap(_.structure.partWhole.hasPart.headOption) shouldBe Some(chunk.id)
+      workingset.frameOption(frame.id).map(_.origin.route) shouldBe Some(KnowledgeFrameInputRoute.SieRetrieval)
+    }
   }
 
   private def _success[A](result: Consequence[A]): A =

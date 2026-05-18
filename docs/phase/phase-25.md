@@ -68,15 +68,14 @@ Scope boundaries:
 - J (DONE): KS-10 — Knowledge operational model hardening.
 - K (DONE): KS-11 — KnowledgeSpace query/projection refinement against the
   hardened model.
-- L (ACTIVE): KS-12 — `textus-sie` provider/runtime realization.
-- M (PLANNED): KS-13 — CNCF MCP end-to-end validation for `textus-sie`.
+- L (DONE): KS-12 — `textus-sie` provider/runtime realization.
+- M (ACTIVE): KS-13 — CNCF MCP end-to-end validation for `textus-sie`.
 - N (PLANNED): KS-14 — Phase 25 verification and closure.
 
 Resume hint:
 
-- Continue with KS-12. Connect `textus-sie` provider/runtime behavior to the
-  CNCF KnowledgeSpace boundary without moving Fuseki/Chroma implementation
-  details into CNCF core.
+- Continue with KS-13. Validate CNCF MCP discovery/invocation for `textus-sie`
+  using the provider/runtime and KnowledgeFrame projection added in KS-12.
 
 ## 5. Development Items
 
@@ -92,7 +91,7 @@ Resume hint:
 - [x] KS-10: Knowledge operational model hardening.
 - [x] KS-11: KnowledgeSpace query/projection refinement against the hardened
       model.
-- [ ] KS-12: `textus-sie` provider/runtime realization.
+- [x] KS-12: `textus-sie` provider/runtime realization.
 - [ ] KS-13: CNCF MCP end-to-end validation for `textus-sie`.
 - [ ] KS-14: Phase 25 verification and closure.
 
@@ -127,4 +126,5 @@ Current status:
 - KS-09 is done.
 - KS-10 is done.
 - KS-11 is done.
-- KS-12 is active.
+- KS-12 is done.
+- KS-13 is active.

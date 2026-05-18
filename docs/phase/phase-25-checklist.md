@@ -439,7 +439,7 @@ model before connecting SIE providers.
 
 ## KS-12: `textus-sie` Provider / Runtime Realization
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
@@ -448,18 +448,34 @@ preserving CNCF/SIE responsibility boundaries.
 
 ### Initial Tasks
 
-- [ ] Implement or wire real Fuseki-backed RDF DB behavior behind the SIE SPI.
-- [ ] Implement or wire real Chroma-backed Vector DB behavior behind the SIE
+- [x] Implement or wire real Fuseki-backed RDF DB behavior behind the SIE SPI.
+- [x] Implement or wire real Chroma-backed Vector DB behavior behind the SIE
       SPI.
-- [ ] Validate RDF-backed knowledge input and Vector DB indexing.
-- [ ] Validate `SemanticRetrieval.query`, `explain`, and `status` against the
+- [x] Validate RDF-backed knowledge input and Vector DB indexing.
+- [x] Validate `SemanticRetrieval.query`, `explain`, and `status` against the
       provider-backed runtime.
+
+### Completion Notes
+
+- `textus-sie` now has a projection layer from `SemanticChunk` / `RdfConcept`
+  provider output into CNCF `KnowledgeFrame` /
+  `KnowledgeWorkingSetSnapshot`.
+- `SemanticRetrieval.query` can return RDF-oriented results and CNCF
+  KnowledgeFrame results.
+- Query/explain can either register the projected snapshot into component
+  `KnowledgeSpace` or return it directly without mutating `KnowledgeSpace`.
+- Fuseki and Chroma provider boundary implementations remain in `textus-sie`;
+  CNCF core stays provider-neutral.
+- CNCF has a focused regression for SIE retrieval frames with
+  document-to-chunk `has-part` relationships.
+- KS-12 implementation notes are recorded in
+  `docs/notes/knowledge-structure/ks-12-textus-sie-provider-runtime-realization.md`.
 
 ---
 
 ## KS-13: CNCF MCP End-to-End Validation for `textus-sie`
 
-Status: PLANNED
+Status: ACTIVE
 
 ### Objective
 
