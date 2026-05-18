@@ -1,6 +1,6 @@
 # Phase 25 — Knowledge Structure Follow-ups
 
-status = active
+status = closed
 
 ## 1. Purpose of This Document
 
@@ -70,12 +70,11 @@ Scope boundaries:
   hardened model.
 - L (DONE): KS-12 — `textus-sie` provider/runtime realization.
 - M (DONE): KS-13 — CNCF MCP boundary validation for `textus-sie`.
-- N (ACTIVE): KS-14 — Phase 25 verification and closure.
+- N (DONE): KS-14 — Docker-based SIE live validation and Phase 25 closure.
 
 Resume hint:
 
-- Continue with KS-14. Close Phase 25 after recording the completed
-  KnowledgeSpace and `textus-sie` MCP driver path plus deferred follow-ups.
+- Phase 25 closed; select next phase.
 
 ## 5. Development Items
 
@@ -93,7 +92,7 @@ Resume hint:
       model.
 - [x] KS-12: `textus-sie` provider/runtime realization.
 - [x] KS-13: CNCF MCP boundary validation for `textus-sie`.
-- [ ] KS-14: Phase 25 verification and closure.
+- [x] KS-14: Docker-based SIE live validation and Phase 25 closure.
 
 Detailed task breakdown and progress tracking are recorded in
 `phase-25-checklist.md`.
@@ -107,15 +106,15 @@ Phase 25 can close when:
   representation, and external knowledge graph integration is clear.
 - Required CNCF model/runtime/query/projection surfaces are implemented at a
   minimal practical level.
-- `textus-sie` runs on CNCF with RDF DB, Vector DB, semantic retrieval, status,
-  and focused MCP boundary validation complete; KS-14 owns the final combined
-  startup and `/mcp` smoke before closure.
+- `textus-sie` runs on CNCF with Docker-backed Fuseki and Chroma adapter,
+  semantic retrieval, status, KnowledgeSpace registration, admin projection, and
+  MCP facade invocation validated through the CNCF developer launcher.
 - Deferred knowledge work is recorded as future scope in
   `docs/strategy/cncf-development-strategy.md`.
 
-Current status:
+Closure note:
 
-- Phase 25 is open.
+- Phase 25 is closed.
 - KS-01 is done.
 - KS-02 is done.
 - KS-03 is done.
@@ -129,4 +128,15 @@ Current status:
 - KS-11 is done.
 - KS-12 is done.
 - KS-13 is done.
-- KS-14 is active.
+- KS-14 is done.
+- Completed runtime scope includes the CNCF component-owned `KnowledgeSpace`
+  model, memory-resident WorkingSet, query/projection/admin surface, hardened
+  operational node/relationship/frame/fact model, and `textus-sie` projection
+  into `KnowledgeFrame` / `KnowledgeWorkingSetSnapshot`.
+- Completed driver validation used Docker-backed Fuseki plus the legacy-style
+  Chroma adapter, explicit RDF/vector seed import, `cncf dev` launcher startup,
+  `SemanticRetrieval.status` / `query` / `explain`, KnowledgeSpace admin counts,
+  and `Mcp.callTool` for `sie.status`, `sie.query`, and `sie.explain`.
+- Deferred production hardening and broader knowledge-structure work are
+  recorded under `9.5 Knowledge Structure Follow-ups` in
+  `docs/strategy/cncf-development-strategy.md`.

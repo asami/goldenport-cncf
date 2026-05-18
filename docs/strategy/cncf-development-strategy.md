@@ -649,11 +649,11 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Notes contain execution details and results for each phase.
 
 ## Process Status Pointers
-- Current phase selection: Phase 25 — Knowledge Structure Follow-ups.
-- Current active phase dashboard: `docs/phase/phase-25.md`
-- Current active phase checklist: `docs/phase/phase-25-checklist.md`
-- Latest closed phase dashboard: `docs/phase/phase-24.md`
-- Latest closed phase checklist: `docs/phase/phase-24-checklist.md`
+- Current phase selection: next phase to be selected.
+- Current active phase dashboard: none.
+- Current active phase checklist: none.
+- Latest closed phase dashboard: `docs/phase/phase-25.md`
+- Latest closed phase checklist: `docs/phase/phase-25-checklist.md`
 - Candidate next phase areas: AwsComponent/S3 BlobStore provider;
   Search/index planning; DB migration tooling.
 - Status interpretation rules: `docs/rules/stage-status-and-checklist-convention.md`
@@ -687,7 +687,7 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Phase 22: closed (`docs/phase/phase-22.md`)
 - Phase 23: closed (`docs/phase/phase-23.md`)
 - Phase 24: closed (`docs/phase/phase-24.md`)
-- Phase 25: active (`docs/phase/phase-25.md`)
+- Phase 25: closed (`docs/phase/phase-25.md`)
 
 ## 8. Completed Development Item History
 
@@ -1068,6 +1068,44 @@ Completed in Phase 24.
   9.1 Web Next Stage Follow-ups, and future release/heavy-test validation
   work.
 
+### 8.15 Knowledge Structure Follow-ups
+Completed in Phase 25.
+
+- Closed dashboard: `docs/phase/phase-25.md`
+- Closed checklist: `docs/phase/phase-25-checklist.md`
+- Completed scope:
+  - Knowledge-structure direction beyond the Phase 20 strict Tag tree model,
+    including the separation between `TagSpace` and component-owned
+    `KnowledgeSpace`.
+  - Vocabulary/source inventory for CNCF baseline concepts and `textus-sie`
+    RDF DB / Vector DB / MCP-facing surfaces.
+  - DAG/polyhierarchy Tag graph model as a future graph extension rather than
+    a change to `Tag.parentId`, `TagTree`, `TagAttachment`, or
+    `tag_search_entities`.
+  - Knowledge node, relationship, evidence, provenance, external identifier,
+    and Entity-to-knowledge binding model boundaries.
+  - Component-owned `KnowledgeSpace` core model and memory-resident
+    `KnowledgeWorkingSet`.
+  - CNCF knowledge query/projection/admin surface for status, counts, node
+    detail, relationships, frames, facts, evidence, provenance, Entity/Tag
+    bindings, and structured debug inspection.
+  - Hardened operational knowledge model with typed node categories,
+    relationship kinds/semantic types, RDF node/predicate names, delegated
+    `KnowledgeNode` sections, `KnowledgeFrame`, `KnowledgeFact`, and canonical
+    node projection from relationships and facts.
+  - `textus-sie` provider/runtime projection from RDF and vector retrieval
+    output into CNCF `KnowledgeFrame` / `KnowledgeWorkingSetSnapshot`, while
+    keeping Fuseki, Chroma, embedding, ranking, and import behavior in
+    `textus-sie`.
+  - CNCF MCP boundary validation through shared typed MCP tool catalog and the
+    `textus-sie` MCP facade for query/explain/status.
+  - Docker-backed KS-14 live validation with Fuseki, the SIE-compatible Chroma
+    adapter, explicit RDF/vector seed import, `cncf dev` launcher startup,
+    semantic retrieval status/query/explain, KnowledgeSpace admin counts, and
+    SIE MCP facade calls.
+- Deferred scope remains under 9.5 Knowledge Structure Follow-ups and future
+  `textus-sie` / application-driver validation work.
+
 ## 9. Development Item Status
 
 This final section lists planned active and future development areas only.
@@ -1077,7 +1115,7 @@ corresponding completed-history entry.
 
 Current development item:
 
-- `9.5 Knowledge Structure Follow-ups` is active in Phase 25.
+- No active development item is selected.
 
 ### 9.1 Web Next Stage Follow-ups
 Future Web/platform development item.
@@ -1160,23 +1198,14 @@ is future hardening and operationalization.
 - Broader observability validation in the heavy-test/release validation path.
 
 ### 9.5 Knowledge Structure Follow-ups
-Active knowledge-structure development item.
+Future knowledge-structure hardening and application-driver work.
 
-Phase 25 uses `textus-sie` as the application driver while keeping CNCF core
-generic. Active work is tracked in `docs/phase/phase-25.md` and
-`docs/phase/phase-25-checklist.md`.
+Phase 25 completed the baseline CNCF `KnowledgeSpace` model, query/projection
+surface, `textus-sie` provider projection, MCP facade validation, and
+Docker-backed live smoke. Completed scope is recorded in section 8.15.
+Remaining work is future hardening, productionization, and additional
+application-driver validation.
 
-KS-01 is complete. `textus-sie` is
-`/Users/asami/src/dev2026/textus-semantic-integration-engine`. KS-02 is
-complete. KS-03 is complete. KS-04 is complete. KS-05 is complete. KS-06 is
-complete. KS-07 is complete. KS-08 is complete. KS-09 is complete. KS-10 is
-complete. KS-11 is complete. KS-12 is complete: `textus-sie` provider/runtime
-output can be projected into CNCF KnowledgeFrame / KnowledgeSpace data while
-also returning RDF-oriented results. KS-13 is complete: CNCF MCP projection and
-JSON-RPC dispatch use the shared typed tool catalog, and the `textus-sie` MCP
-facade invokes query/explain/status through the KnowledgeFrame / KnowledgeSpace
-materialization path. The active next focus is KS-14 Phase 25 verification and
-closure, including the final combined CNCF + `textus-sie` `/mcp` smoke.
 Phase 25 notes:
 
 - `docs/notes/knowledge-structure/knowledge-structure-opening.md`
@@ -1190,37 +1219,32 @@ Phase 25 notes:
 - `docs/notes/knowledge-structure/ks-11-knowledge-query-projection-refinement.md`
 - `docs/notes/knowledge-structure/ks-12-textus-sie-provider-runtime-realization.md`
 - `docs/notes/knowledge-structure/ks-13-cncf-mcp-end-to-end-validation.md`
+- `docs/notes/knowledge-structure/ks-14-docker-sie-live-validation.md`
 
-- RDF-based data representation.
-- External knowledge graph integration.
-- DAG/polyhierarchy Tag graphs beyond the Phase 20 strict tree model.
-- Knowledge node, relationship, evidence/source, and provenance modeling.
-- Query/projection surfaces for graph traversal, application navigation, and
-  admin/debug inspection.
-- Entity-to-knowledge binding so ordinary business Entity records can be
-  linked to related knowledge nodes, evidence, provenance, and external
-  identifiers without making Entity ids equal knowledge ids.
-- CNCF `KnowledgeSpace` core model and memory-resident WorkingSet skeleton.
-- CNCF `KnowledgeSpace` query/projection/admin surface.
-- Hardened CNCF knowledge operational model with typed node/relationship
-  categories, RDF node/predicate names, delegated `KnowledgeNode` values,
-  `KnowledgeFrame`, `KnowledgeFact`, Entity/Tag binding indexes, and canonical
-  node projection from relationships and facts.
-- Knowledge operational model hardening before SIE provider integration:
-  typed node/relationship kinds, CNCF-internal `KnowledgeNodeId` semantics,
-  I18n/localizable labels, external identifier mapping, vector/embedding
-  references, and Entity-to-knowledge binding refinement.
-- KnowledgeSpace query/projection refinement against the hardened model.
-- `textus-sie` provider/runtime realization through RDF DB and Vector DB
-  provider paths.
-- CNCF MCP boundary validation for `textus-sie`; final combined driver smoke
-  remains part of Phase 25 verification and closure.
-- Phase 25 verification and closure.
+Future follow-ups:
+
+- Production hardening for Fuseki/Chroma deployment, credentials,
+  authorization, retention, import governance, and operational lifecycle.
+- Larger corpus ingestion and re-indexing policy, including repeatable import
+  jobs and data provenance review.
+- Provider-level observability, retry, timeout, and degraded-status policy for
+  RDF DB, Vector DB, and embedding providers.
+- Broader graph traversal/search expansion behavior over `KnowledgeSpace`,
+  including projection profiles for application-specific use cases.
+- Entity-derived fact projection, especially for DB-stored `SimpleEntity`
+  records with rich structural knowledge.
+- Tag-to-knowledge projection and optional graph expansion while preserving
+  `TagSpace` strict-tree behavior.
+- Public API/operation surfaces for KnowledgeSpace loading/querying if needed
+  beyond system admin/debug and application-internal Scala helpers.
+- Additional MCP transport and live-client validation beyond the generic CNCF
+  publication boundary and `textus-sie` facade baseline.
+- Production-grade external RDF/vector source lifecycle and update consistency
+  for long-running KnowledgeSpace WorkingSets.
 
 Parallel development plan:
 
-- `textus-structured-knowledge` is a separate development plan under 9.5, not
-  a replacement for the Phase 25 `textus-sie` driver.
+- `textus-structured-knowledge` is a separate development plan under 9.5.
 - Driver: `textus-structured-knowledge`.
 - Goal: project DB-stored `SimpleEntity` records into knowledge nodes,
   relationships, evidence, and provenance.

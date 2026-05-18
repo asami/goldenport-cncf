@@ -51,7 +51,7 @@ keeping CNCF core generic.
 
 ### Expected Output
 
-- Phase 25 is active and visible from the strategy document.
+- Phase 25 is visible from the strategy document.
 - `textus-sie` is recorded as the driver.
 - The first implementation slice can be planned without reopening the high-level
   phase boundary.
@@ -513,17 +513,56 @@ facade before the final combined driver smoke in KS-14.
 
 ---
 
-## KS-14: Phase 25 Verification and Closure
+## KS-14: Docker-Based SIE Live Validation and Phase 25 Closure
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
-Close Phase 25 only after the `textus-sie` end-to-end driver path is validated.
+Close Phase 25 only after the `textus-sie` end-to-end driver path is validated
+against Docker-backed Fuseki and Chroma adapter services.
 
 ### Initial Tasks
 
-- [ ] Record completed runtime and driver scope in the Phase 25 dashboard.
-- [ ] Move completed history into the strategy document.
-- [ ] Record deferred knowledge-structure work as future candidates.
-- [ ] Validate touched repositories and the `textus-sie` driver path.
+- [x] Add Docker validation bundle for Fuseki plus the SIE-compatible Chroma
+      adapter.
+- [x] Make SIE provider runtime selectable by config/environment.
+- [x] Make RDF and vector seed import explicit and repeatable.
+- [x] Validate `SemanticRetrieval.status`, `query`, and `explain` through the
+      CNCF developer launcher against Docker providers.
+- [x] Validate KnowledgeSpace registration and system admin knowledge counts.
+- [x] Validate SIE MCP facade calls for `sie.status`, `sie.query`, and
+      `sie.explain`.
+- [x] Record completed runtime and driver scope in the Phase 25 dashboard.
+- [x] Move completed history into the strategy document.
+- [x] Record deferred knowledge-structure work as future candidates.
+- [x] Validate touched repositories and the `textus-sie` driver path.
+
+### Completion Notes
+
+- KS-14 Docker validation bundle is in
+  `/Users/asami/src/dev2026/textus-semantic-integration-engine/docker/ks-14`.
+- External stores run in Docker only: Fuseki at `http://127.0.0.1:9030/ds`
+  and the SIE-compatible Chroma adapter at `http://127.0.0.1:8081`.
+- CNCF and `textus-sie` run locally in the JVM through the CNCF developer
+  launcher, using the local CNCF runtime development directory when required
+  for current `KnowledgeSpace` APIs.
+- RDF seed data is imported through Fuseki Graph Store Protocol. Vector seed
+  data is imported through SIE provider operations / Chroma adapter endpoints,
+  not by editing database files directly.
+- `SemanticRetrieval.status` reported `overall=healthy`, `graph=fuseki`,
+  `vector=chroma`, and `embedding=lexical`.
+- `SemanticRetrieval.query` returned RDF-oriented results and a CNCF
+  `KnowledgeFrame`, and `registerKnowledgeSpace=true` moved the component
+  `KnowledgeSpace` to `ready` with non-zero node/relationship/evidence/frame
+  counts.
+- `SemanticRetrieval.explain` returned Fuseki-derived explanation chunks and an
+  explanation `KnowledgeFrame`.
+- `/web/system/admin/knowledge` showed the `SemanticIntegrationEngine`
+  component as `ready` after registration.
+- The SIE MCP facade was validated through normal CNCF operation dispatch for
+  `sie.status`, `sie.query`, and `sie.explain`.
+- CNCF core remains provider-neutral. Fuseki, Chroma, embedding, import, and
+  retrieval-specific runtime code remain in `textus-sie`.
+- Phase 25 closure and deferred follow-ups are recorded in
+  `docs/strategy/cncf-development-strategy.md`.
