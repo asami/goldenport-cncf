@@ -102,7 +102,7 @@ lazy val root = project
   .settings(
     organization := "org.goldenport",
     name := "goldenport-cncf",
-    version := "0.4.8",
+    version := "0.4.9-SNAPSHOT",
 
     scalaVersion := scala3Version,
 
@@ -200,6 +200,46 @@ lazy val root = project
         flush()
         blocks.result()
       }
+      def topLevelListBlock(key: String): Option[String] = {
+        val lines = existingText.linesIterator.toVector
+        val start = lines.indexWhere(_ == s"$key:")
+        if (start < 0) {
+          None
+        } else {
+          val entries = lines.drop(start + 1).takeWhile(_.startsWith("  - "))
+          if (entries.isEmpty)
+            None
+          else
+            Some((Vector(s"$key:") ++ entries).mkString("\n"))
+        }
+      }
+      val baseProvidedBlock =
+        topLevelListBlock("baseProvided").getOrElse(
+          """baseProvided:
+            |  - org.goldenport:goldenport-cncf_3
+            |  - org.goldenport:goldenport-core_3
+            |  - org.goldenport:cncf-collaborator-api
+            |  - org.simplemodeling:simplemodeling-model_3
+            |  - org.typelevel:cats-core_3
+            |  - org.typelevel:cats-free_3
+            |  - org.typelevel:cats-effect_3
+            |  - org.http4s:http4s-ember-server_3
+            |  - org.http4s:http4s-core_3
+            |  - org.http4s:http4s-dsl_3
+            |  - com.zaxxer:HikariCP
+            |  - org.xerial:sqlite-jdbc
+            |  - org.apache.pekko:pekko-actor_3
+            |  - org.apache.pekko:pekko-stream_3
+            |  - io.circe:circe-core_3
+            |  - io.circe:circe-generic_3
+            |  - io.circe:circe-parser_3
+            |  - org.yaml:snakeyaml
+            |  - com.vladsch.flexmark:flexmark
+            |  - com.vladsch.flexmark:flexmark-ext-tables
+            |  - com.vladsch.flexmark:flexmark-ext-gfm-strikethrough
+            |  - com.vladsch.flexmark:flexmark-ext-gfm-tasklist
+            |  - org.slf4j:slf4j-simple""".stripMargin
+        )
       val channel =
         if (cncfVersion.endsWith("-SNAPSHOT")) "snapshot" else "stable"
       val latestStable =
@@ -237,6 +277,7 @@ lazy val root = project
            |  - https://www.simplemodeling.org/repository/sar
            |coursierRepositories:
            |  - https://www.simplemodeling.org/repository/maven
+           |$baseProvidedBlock
            |versions:
            |$versions
            |""".stripMargin
