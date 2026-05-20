@@ -274,6 +274,61 @@ External data remains candidate data until reviewed. Even when an ISBN lookup or
 DBpedia/Wikidata match is high confidence, it should be represented with source,
 evidence, provenance, and confidence in `InformationSpace`.
 
+## Domain Entity Multiplicity and Single Textus Knowledge
+
+Applications may each own their own book-related Entity model. A reading-list
+application, a library-holding application, a citation application, and a
+publisher workflow may all have different Entity instances for what humans
+would call the same book or work.
+
+The target operating model is:
+
+```text
+many domain Entity instances
+  -> paired / resolved InformationSpace items
+  -> one Textus Knowledge meaning node when identity resolution confirms it
+  -> KnowledgeFrame neighborhoods in KnowledgeSpace
+```
+
+This means Entity multiplicity is normal. The same external book can be
+represented by multiple application-local entities because each entity carries
+domain context, lifecycle, permissions, and operational state. Textus Knowledge
+should act as the semantic integration point, not as a replacement for those
+domain entities.
+
+Examples:
+
+```text
+reading-app:ReadingItem(id = r-123, isbn = 978...)
+library-app:LibraryHolding(id = h-456, isbn = 978..., shelf = ...)
+citation-app:CitedWork(id = c-789, doi = ...)
+  -> InformationSpace identity bindings and resolution evidence
+  -> Textus KnowledgeNode cncf:book/...
+```
+
+Design rules:
+
+- Domain `Entity.id`, `InformationItemId`, `KnowledgeNodeId`, RDF node URI,
+  ISBN, DOI, and authority ids remain distinct.
+- Entity-derived facts are important knowledge inputs, but they are still
+  evidence-backed projections from a domain context.
+- A domain Entity can bind to an existing Textus book Knowledge node, create a
+  candidate for a new one, or remain unresolved.
+- Multiple domain Entities can bind to one Knowledge node when resolution is
+  confirmed.
+- One domain Entity may produce multiple knowledge nodes when the domain record
+  contains separable knowledge, such as book plus author plus publisher plus
+  cited work.
+- Textus Knowledge should preserve which application/domain Entity contributed
+  each fact, relationship, or confirmation.
+
+For Phase 27, book editing should therefore expose both sides:
+
+- application/domain Entity context when a book record comes from an existing
+  application model;
+- Textus Knowledge identity and 1.5hop+ neighborhood when the record is
+  resolved and materialized.
+
 ## KnowledgeNode Mapping Implications
 
 The book Knowledge node should expose structured attributes that domain logic

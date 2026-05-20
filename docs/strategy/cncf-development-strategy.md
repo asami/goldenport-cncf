@@ -1305,6 +1305,9 @@ Phase 27 active scope:
 - Separation between the reusable common semantic-neighborhood contract and
   the book-oriented extension profile for bibliographic identifiers, roles,
   relations, and authority/source mappings.
+- Explicit binding from multiple application/domain Entity instances through
+  `InformationSpace` to a single Textus book Knowledge node when identity
+  resolution confirms shared meaning.
 - DBpedia integration as one external RDF knowledge source for book records,
   using DBpedia resource URI/RDF node as an external anchor while keeping
   imported data reviewable before confirmation.

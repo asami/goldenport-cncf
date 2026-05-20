@@ -142,6 +142,9 @@ and related `KnowledgeRelationship` facts without id collapse.
       and source alignments.
 - [ ] Define evidence/provenance mapping from InformationSpace records and
       publication results.
+- [ ] Define how multiple application/domain Entity instances can bind through
+      InformationSpace to one Textus book `KnowledgeNode` when identity
+      resolution confirms they represent the same knowledge object.
 - [ ] Define how ISBN/imported publication identifiers become external
       identifiers and identity bindings on the materialized book node.
 - [ ] Define how multiple external ids/RDF anchors are represented as
