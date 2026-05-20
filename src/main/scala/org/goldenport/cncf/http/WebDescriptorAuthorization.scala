@@ -3,11 +3,12 @@ package org.goldenport.cncf.http
 import org.goldenport.cncf.context.{SecurityContext, SubjectKind}
 import org.goldenport.cncf.config.OperationMode
 import org.goldenport.cncf.security.SecuritySubject
+import org.goldenport.http.HttpRequest
 
 /*
  * @since   Apr. 14, 2026
  * version Apr. 19, 2026
- * @version May. 15, 2026
+ * @version May. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 object WebDescriptorAuthorization {
@@ -42,13 +43,13 @@ object WebDescriptorAuthorization {
     def fromHttp[F[_]](
       req: org.http4s.Request[F]
     ): Subject = {
-      val headerValues = req.headers.headers.map(h => h.name.toString -> h.value).toVector
-      val queryValues = req.uri.query.params.toVector
+      val headervalues = req.headers.headers.map(h => h.name.toString -> h.value).toVector
+      val queryvalues = _query_values(req).toVector
       def tokens(keys: String*): Set[String] = {
-        val normalizedKeys = keys.map(_.toLowerCase).toSet
-        (headerValues ++ queryValues)
+        val normalizedkeys = keys.map(_.toLowerCase).toSet
+        (headervalues ++ queryvalues)
           .collect {
-            case (key, value) if normalizedKeys.contains(key.toLowerCase) => value
+            case (key, value) if normalizedkeys.contains(key.toLowerCase) => value
           }
           .flatMap(_split_tokens)
           .toSet
@@ -57,7 +58,7 @@ object WebDescriptorAuthorization {
       val scopes = tokens("scope", "scopes", "x-cncf-scope", "x-cncf-scopes", "x-textus-scope", "x-textus-scopes")
       val capabilities = tokens("capability", "capabilities")
       val privileges = tokens("privilege", "privileges")
-      val authenticatedTokens = tokens(
+      val authenticatedtokens = tokens(
         "authorization",
         "x-cncf-session",
         "x-textus-session",
@@ -72,16 +73,23 @@ object WebDescriptorAuthorization {
         scopes = scopes,
         capabilities = capabilities,
         privileges = privileges,
-        anonymous = authenticatedTokens.isEmpty && roles.isEmpty && scopes.isEmpty && capabilities.isEmpty && privileges.isEmpty,
-        authenticated = authenticatedTokens.nonEmpty,
+        anonymous = authenticatedtokens.isEmpty && roles.isEmpty && scopes.isEmpty && capabilities.isEmpty && privileges.isEmpty,
+        authenticated = authenticatedtokens.nonEmpty,
         providerAuthenticated = false
       )
     }
 
+    private def _query_values[F[_]](
+      req: org.http4s.Request[F]
+    ): Map[String, String] =
+      HttpRequest.parseQuery(req.uri.query.renderString).asMap.iterator.map {
+        case (k, v) => k -> Option(v).map(_.toString).getOrElse("")
+      }.toMap
+
     def from(
       security: SecurityContext
     ): Subject = {
-      val securitySubject = SecuritySubject.from(security)
+      val securitysubject = SecuritySubject.from(security)
       val roles = security.principal.attributes
         .get("role")
         .map(_split_tokens)
@@ -105,8 +113,8 @@ object WebDescriptorAuthorization {
         privileges = privileges,
         anonymous = security.subjectKind == SubjectKind.Anonymous ||
           security.principal.attributes.get("anonymous").exists(_.equalsIgnoreCase("true")),
-        authenticated = securitySubject.isAuthenticated,
-        providerAuthenticated = securitySubject.isProviderAuthenticated
+        authenticated = securitysubject.isAuthenticated,
+        providerAuthenticated = securitysubject.isProviderAuthenticated
       )
     }
   }
@@ -115,30 +123,30 @@ object WebDescriptorAuthorization {
     descriptor: WebDescriptor,
     selector: String,
     subject: Subject,
-    operationMode: OperationMode
+    operationmode: OperationMode
   ): Boolean =
     descriptor.authorization.get(selector) match {
-      case Some(rule) => isAllowed(rule, subject, operationMode)
+      case Some(rule) => isAllowed(rule, subject, operationmode)
       case None => true
     }
 
   def isAllowed(
     rule: WebDescriptor.Authorization,
     subject: Subject,
-    operationMode: OperationMode
+    operationmode: OperationMode
   ): Boolean = {
-    val normalizedSubject = subject.normalized
+    val normalizedsubject = subject.normalized
     !rule.deny &&
-      _operation_mode_allowed(rule, operationMode) &&
-      (if (normalizedSubject.isAnonymous)
-        rule.allowAnonymous && _anonymous_operation_mode_allowed(rule, operationMode)
+      _operation_mode_allowed(rule, operationmode) &&
+      (if (normalizedsubject.isAnonymous)
+        rule.allowAnonymous && _anonymous_operation_mode_allowed(rule, operationmode)
       else
-        (!rule.requireAuthenticated || normalizedSubject.authenticated) &&
-        (!rule.requireProviderAuthentication || normalizedSubject.providerAuthenticated) &&
-        _minimum_privilege_allowed(rule.minimumPrivilege, normalizedSubject.privileges) &&
-        _category_allowed(rule.roles, normalizedSubject.roles) &&
-          _category_allowed(rule.scopes, normalizedSubject.scopes) &&
-          _category_allowed(rule.capabilities, normalizedSubject.capabilities)
+        (!rule.requireAuthenticated || normalizedsubject.authenticated) &&
+        (!rule.requireProviderAuthentication || normalizedsubject.providerAuthenticated) &&
+        _minimum_privilege_allowed(rule.minimumPrivilege, normalizedsubject.privileges) &&
+        _category_allowed(rule.roles, normalizedsubject.roles) &&
+          _category_allowed(rule.scopes, normalizedsubject.scopes) &&
+          _category_allowed(rule.capabilities, normalizedsubject.capabilities)
       )
   }
 
@@ -157,16 +165,16 @@ object WebDescriptorAuthorization {
 
   private def _operation_mode_allowed(
     rule: WebDescriptor.Authorization,
-    operationMode: OperationMode
+    operationmode: OperationMode
   ): Boolean =
-    rule.operationModes.isEmpty || rule.operationModes.contains(operationMode)
+    rule.operationModes.isEmpty || rule.operationModes.contains(operationmode)
 
   private def _anonymous_operation_mode_allowed(
     rule: WebDescriptor.Authorization,
-    operationMode: OperationMode
+    operationmode: OperationMode
   ): Boolean =
     rule.anonymousOperationModes.isEmpty ||
-      rule.anonymousOperationModes.contains(operationMode)
+      rule.anonymousOperationModes.contains(operationmode)
 
   private def _category_allowed(
     required: Vector[String],

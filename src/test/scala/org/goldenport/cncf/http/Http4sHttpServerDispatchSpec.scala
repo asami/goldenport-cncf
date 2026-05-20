@@ -82,6 +82,26 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers {
       body should include("method: \"POST\"")
     }
 
+    "decode percent-encoded REST query parameters before operation dispatch" in {
+      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val app = server.routes(null.asInstanceOf[org.http4s.server.websocket.WebSocketBuilder2[IO]]).orNotFound
+
+      val response = app
+        .run(HRequest[IO](
+          method = Method.GET,
+          uri = Uri.unsafeFromString("/rest/v1/debug/http/echo?body=Knowledge%20Import%20Paper&url=https%3A%2F%2Fexample.test%2Fa%20b")
+        ))
+        .unsafeRunSync()
+      val body = response.as[String].unsafeRunSync()
+
+      response.status.code shouldBe 200
+      body should include ("body: \"Knowledge Import Paper\"")
+      body should include ("url: \"https://example.test/a b\"")
+      body should not include ("Knowledge%20Import%20Paper")
+      body should not include ("https%3A%2F%2Fexample.test")
+    }
+
     "not inject current-session principal attributes into form-api submits" in {
       val root = Files.createTempDirectory("http4s-http-server-dispatch-auth-spec")
       val web = root.resolve("web.yaml")

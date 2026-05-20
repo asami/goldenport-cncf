@@ -17,7 +17,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Apr. 14, 2026
  *  version Apr. 25, 2026
- * @version May. 10, 2026
+ * @version May. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 final class WebDescriptorSpec extends AnyWordSpec with Matchers {
@@ -328,14 +328,14 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
 
       val descriptor = WebDescriptor.load(path).toOption.get
       val assets = descriptor.resultAssets("notice-board", "notice", "search-notices")
-      val indexAssets = descriptor.formIndexAssets("notice-board")
+      val indexassets = descriptor.formIndexAssets("notice-board")
 
       assets.autoComplete shouldBe false
-      indexAssets.css shouldBe Vector(
+      indexassets.css shouldBe Vector(
         "/web/assets/site.css",
         "/web/notice-board/notice-board/assets/app.css"
       )
-      indexAssets.js shouldBe Vector(
+      indexassets.js shouldBe Vector(
         "/web/assets/site.js",
         "/web/notice-board/notice-board/assets/app.js"
       )
@@ -644,24 +644,24 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
     }
 
     "treat exposure as the contract gate for public Web form surfaces" in {
-      val publicSelector = "notice-board.notice.search-notices"
-      val protectedSelector = "notice-board.notice.post-notice"
-      val internalSelector = "notice-board.notice.rebuild-index"
+      val publicselector = "notice-board.notice.search-notices"
+      val protectedselector = "notice-board.notice.post-notice"
+      val internalselector = "notice-board.notice.rebuild-index"
       val descriptor = WebDescriptor(
         expose = Map(
-          publicSelector -> WebDescriptor.Exposure.Public,
-          protectedSelector -> WebDescriptor.Exposure.Protected,
-          internalSelector -> WebDescriptor.Exposure.Internal
+          publicselector -> WebDescriptor.Exposure.Public,
+          protectedselector -> WebDescriptor.Exposure.Protected,
+          internalselector -> WebDescriptor.Exposure.Internal
         )
       )
 
-      descriptor.exposureOf(publicSelector) shouldBe WebDescriptor.Exposure.Public
-      descriptor.exposureOf(protectedSelector) shouldBe WebDescriptor.Exposure.Protected
-      descriptor.exposureOf(internalSelector) shouldBe WebDescriptor.Exposure.Internal
+      descriptor.exposureOf(publicselector) shouldBe WebDescriptor.Exposure.Public
+      descriptor.exposureOf(protectedselector) shouldBe WebDescriptor.Exposure.Protected
+      descriptor.exposureOf(internalselector) shouldBe WebDescriptor.Exposure.Internal
       descriptor.exposureOf("notice-board.notice.unlisted") shouldBe WebDescriptor.Exposure.Internal
-      descriptor.isFormEnabled(publicSelector) shouldBe true
-      descriptor.isFormEnabled(protectedSelector) shouldBe true
-      descriptor.isFormEnabled(internalSelector) shouldBe false
+      descriptor.isFormEnabled(publicselector) shouldBe true
+      descriptor.isFormEnabled(protectedselector) shouldBe true
+      descriptor.isFormEnabled(internalselector) shouldBe false
       descriptor.isFormEnabled("notice-board.notice.unlisted") shouldBe false
     }
 
@@ -874,7 +874,7 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
     "derive a Web authorization subject from HTTP query and header values" in {
       val request = org.http4s.Request[cats.effect.IO](
         method = org.http4s.Method.GET,
-        uri = org.http4s.Uri.unsafeFromString("/web/notice-board/admin?role=operator&capability=notice.admin&principalId=admin-test")
+        uri = org.http4s.Uri.unsafeFromString("/web/notice-board/admin?role=operator%20reviewer&capability=notice.admin&principalId=admin-test")
       ).putHeaders(
         org.http4s.Header.Raw(
           org.typelevel.ci.CIString("x-textus-scope"),
@@ -886,6 +886,7 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
 
       subject.isAnonymous shouldBe false
       subject.roles should contain ("operator")
+      subject.roles should contain ("reviewer")
       subject.scopes should contain ("notice:write")
       subject.capabilities should contain ("notice.admin")
     }

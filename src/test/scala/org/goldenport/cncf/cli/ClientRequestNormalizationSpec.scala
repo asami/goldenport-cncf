@@ -32,7 +32,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Jan. 10, 2026
  *  version Mar. 29, 2026
  *  version Apr. 30, 2026
- * @version May. 14, 2026
+ * @version May. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 class ClientRequestNormalizationSpec
@@ -156,6 +156,30 @@ class ClientRequestNormalizationSpec
       )
 
       url shouldBe "http://localhost:19083/rest/v1/job-control/job/await-job-result?cncf.context.securityLevel=content_manager&id=job-1"
+    }
+
+    "encode client query values before appending them to the request URL" in {
+      val req = Request(
+        component = Some("client"),
+        service = Some("http"),
+        operation = "get",
+        arguments = List(Argument("path", "/rest/v1/debug/http/echo", None)),
+        switches = Nil,
+        properties = List(
+          Property("title", "Knowledge Import Paper", None),
+          Property("url", "https://example.test/a b", None)
+        )
+      )
+
+      val url = CncfRuntime._append_client_query(
+        "http://localhost:19083/rest/v1/debug/http/echo",
+        req
+      )
+
+      url should include ("title=Knowledge+Import+Paper")
+      url should include ("url=https%3A%2F%2Fexample.test%2Fa+b")
+      url should not include ("Knowledge Import Paper")
+      url should not include ("https://example.test/a b")
     }
 
     "resolve -d @file into Bag at request construction time" in {

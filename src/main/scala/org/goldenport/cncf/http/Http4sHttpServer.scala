@@ -683,7 +683,7 @@ final class Http4sHttpServer(
   private def _blob_admin_blobs(req: HRequest[IO]): IO[HResponse[IO]] =
     _blob_admin_page(
       req,
-      _static_form_app_renderer.renderBlobAdminBlobs(engine.runtimeSubsystem, req.uri.query.params.toMap, _blob_admin_request_properties(req)),
+      _static_form_app_renderer.renderBlobAdminBlobs(engine.runtimeSubsystem, _query_values(req), _blob_admin_request_properties(req)),
       Some("admin.blobs"),
       Some("index")
     )
@@ -718,7 +718,7 @@ final class Http4sHttpServer(
   private def _blob_admin_associations(req: HRequest[IO]): IO[HResponse[IO]] =
     _blob_admin_page(
       req,
-      _static_form_app_renderer.renderBlobAdminAssociations(engine.runtimeSubsystem, req.uri.query.params.toMap, _blob_admin_request_properties(req)),
+      _static_form_app_renderer.renderBlobAdminAssociations(engine.runtimeSubsystem, _query_values(req), _blob_admin_request_properties(req)),
       Some("admin.associations"),
       Some("index")
     )
@@ -748,7 +748,7 @@ final class Http4sHttpServer(
   private def _admin_associations(req: HRequest[IO]): IO[HResponse[IO]] =
     _admin_page(
       req,
-      _static_form_app_renderer.renderAdminAssociations(engine.runtimeSubsystem, req.uri.query.params.toMap, _admin_request_properties(req)),
+      _static_form_app_renderer.renderAdminAssociations(engine.runtimeSubsystem, _query_values(req), _admin_request_properties(req)),
       Some("associations"),
       Some("index")
     )
@@ -778,7 +778,7 @@ final class Http4sHttpServer(
   private def _admin_tags(req: HRequest[IO]): IO[HResponse[IO]] =
     _admin_page(
       req,
-      _static_form_app_renderer.renderAdminTags(engine.runtimeSubsystem, req.uri.query.params.toMap, _admin_request_properties(req)),
+      _static_form_app_renderer.renderAdminTags(engine.runtimeSubsystem, _query_values(req), _admin_request_properties(req)),
       Some("tags"),
       Some("index")
     )
@@ -947,7 +947,7 @@ final class Http4sHttpServer(
   ): String = {
     val base = response.headerValue("Content-Disposition").getOrElse("inline")
     val disposition =
-      if (req.uri.query.params.get("download").exists(_.equalsIgnoreCase("true")))
+      if (_query_values(req).get("download").exists(_.equalsIgnoreCase("true")))
         "attachment"
       else
         "inline"
@@ -1405,10 +1405,10 @@ final class Http4sHttpServer(
       _forbidden_web(req, Some(webappname), Some(service), Some(operation))
     else {
       val started = System.nanoTime()
-      val queryvalues = req.uri.query.params.toMap
+      val queryvalues = _query_values(req)
       val values = widget.values ++ queryvalues
       val form = Record.create(values.toVector)
-      val query = Record.create(req.uri.query.params.toVector)
+      val query = _query_record(req)
       val header = _web_operation_result_header(req, query, form, widget.label.getOrElse(s"${service}.${operation}"))
       val result = _dispatch_operation_result(
         app,
@@ -1528,21 +1528,21 @@ final class Http4sHttpServer(
     }
 
   private def _component_admin_entity_type(req: HRequest[IO], app: String, entity: String): IO[HResponse[IO]] =
-    _static_form_app_renderer.renderComponentAdminEntityType(engine.runtimeSubsystem, app, entity, _page_request(req), engine.webDescriptor, req.uri.query.params.toMap) match {
+    _static_form_app_renderer.renderComponentAdminEntityType(engine.runtimeSubsystem, app, entity, _page_request(req), engine.webDescriptor, _query_values(req)) match {
       case Some(p) => _html(p)
       case None =>
         IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component entity type admin not found"))
     }
 
   private def _component_admin_entity_detail(req: HRequest[IO], app: String, entity: String, id: String): IO[HResponse[IO]] =
-    _static_form_app_renderer.renderComponentAdminEntityDetail(engine.runtimeSubsystem, app, entity, id, engine.webDescriptor, req.uri.query.params.toMap) match {
+    _static_form_app_renderer.renderComponentAdminEntityDetail(engine.runtimeSubsystem, app, entity, id, engine.webDescriptor, _query_values(req)) match {
       case Some(p) => _html(p)
       case None =>
         IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component entity detail admin not found"))
     }
 
   private def _component_admin_entity_edit(req: HRequest[IO], app: String, entity: String, id: String): IO[HResponse[IO]] =
-    _static_form_app_renderer.renderComponentAdminEntityEdit(engine.runtimeSubsystem, app, entity, id, values = req.uri.query.params.toMap, webDescriptor = engine.webDescriptor) match {
+    _static_form_app_renderer.renderComponentAdminEntityEdit(engine.runtimeSubsystem, app, entity, id, values = _query_values(req), webDescriptor = engine.webDescriptor) match {
       case Some(p) => _html(p)
       case None =>
         IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component entity edit admin not found"))
@@ -1663,7 +1663,7 @@ final class Http4sHttpServer(
   ): IO[HResponse[IO]] =
     if (!_is_web_authorized(app, service, operation, Some(req)))
       _forbidden_web(req, Some(app), Some(service), Some(operation))
-    else _static_form_app_renderer.renderOperationForm(engine.runtimeSubsystem, app, service, operation, engine.webDescriptor, req.uri.query.params.toMap) match {
+    else _static_form_app_renderer.renderOperationForm(engine.runtimeSubsystem, app, service, operation, engine.webDescriptor, _query_values(req)) match {
       case Some(p) =>
         _html(p, Some(app))
       case None =>
@@ -1857,7 +1857,7 @@ final class Http4sHttpServer(
     values: Map[String, String],
     started: Long
   ): IO[HResponse[IO]] = {
-    val query = Record.create(req.uri.query.params.toVector)
+    val query = _query_record(req)
     val result = _dispatch_operation_result(
         app,
         service,
@@ -1907,7 +1907,7 @@ final class Http4sHttpServer(
       val started = System.nanoTime()
       for {
         form <- _to_form_record(req)
-        query = Record.create(req.uri.query.params.toVector)
+        query = _query_record(req)
         header = _development_form_header_record(req, query, form)
         componentSegment = _dispatch_component_segment(app)
         result = _dispatch_operation_result(
@@ -1983,7 +1983,7 @@ final class Http4sHttpServer(
     _form_continuations.get(id) match {
       case Some(continuation) if continuation.matches(app, service, operation) =>
         val started = System.nanoTime()
-        val queryvalues = req.uri.query.params.toMap
+        val queryvalues = _query_values(req)
         val pagingvalues = queryvalues.filter { case (k, _) => k == "page" || k == "pageSize" || k == "includeTotal" }
         val res = continuation.response
         val continuationvalues =
@@ -2438,8 +2438,8 @@ final class Http4sHttpServer(
       _forbidden_web(req, Some(app), Some(service), Some(operation))
     } else {
     val started = System.nanoTime()
-    val query = _operation_dispatch_record(Record.create(req.uri.query.params.toVector))
-    val values = req.uri.query.params.toMap
+    val query = _operation_dispatch_record(_query_record(req))
+    val values = _query_values(req)
     val result = _dispatch_operation_result(
       app,
       service,
@@ -4011,7 +4011,7 @@ final class Http4sHttpServer(
     app: String,
     error: Option[String] = None
   ): IO[HResponse[IO]] = {
-    val returnto = _login_return_to(req.uri.query.params).getOrElse(s"/web/${_escape_path_segment(app)}")
+    val returnto = _login_return_to(_query_values(req)).getOrElse(s"/web/${_escape_path_segment(app)}")
     val hiddenreturnto =
       s"""<input type="hidden" name="returnTo" value="${_escape_html(returnto)}">"""
     _html(
@@ -4070,12 +4070,12 @@ final class Http4sHttpServer(
               case org.goldenport.Consequence.Success(summary) =>
                 val sessionid = summary.sessionId.getOrElse(throw new IllegalStateException("auth.login must return session id"))
                 IO.pure(
-                  _see_other(_login_return_to(req.uri.query.params ++ formattributes).getOrElse(s"/web/${app}"))
+                  _see_other(_login_return_to(_query_values(req) ++ formattributes).getOrElse(s"/web/${app}"))
                     .addCookie(_session_cookie(sessionid))
                 )
               case org.goldenport.Consequence.Failure(c) =>
                 if (_has_exact_web_route_alias(Vector("web", app, "login")))
-                  IO.pure(_see_other(_login_error_redirect(app, c.displayMessage, _login_return_to(req.uri.query.params ++ formattributes))))
+                  IO.pure(_see_other(_login_error_redirect(app, c.displayMessage, _login_return_to(_query_values(req) ++ formattributes))))
                 else
                   _login_page(req, app, Some(c.displayMessage))
             }
@@ -4135,7 +4135,7 @@ final class Http4sHttpServer(
     extra: Map[String, String] = Map.empty
   ): Map[String, String] =
     _request_header_record(req).asMap.view.mapValues(_.toString).toMap ++
-      req.uri.query.params.toMap ++
+      _query_values(req) ++
       extra
 
   private def _has_exact_web_route_alias(
@@ -4981,7 +4981,7 @@ final class Http4sHttpServer(
       case org.http4s.Method.DELETE => HttpRequest.DELETE
       case _ => HttpRequest.GET
     }
-    val query = Record.create(req.uri.query.params.toVector)
+    val query = _query_record(req)
     val header = _request_header_record(req)
     val origin = _request_origin(req)
     val context = HttpContext(
@@ -4997,6 +4997,18 @@ final class Http4sHttpServer(
     else
       _to_regular_http_request(req, method, path, query, header, context, contenttypeheader)
   }
+
+  private def _query_record(
+    req: org.http4s.Request[IO]
+  ): Record =
+    HttpRequest.parseQuery(req.uri.query.renderString)
+
+  private def _query_values(
+    req: org.http4s.Request[IO]
+  ): Map[String, String] =
+    _query_record(req).asMap.iterator.map {
+      case (k, v) => k -> Option(v).map(_.toString).getOrElse("")
+    }.toMap
 
   private def _is_multipart(contenttype: Option[`Content-Type`]): Boolean =
     contenttype.exists { header =>
@@ -5311,7 +5323,7 @@ final class Http4sHttpServer(
   private def _page_request(
     req: HRequest[IO]
   ): StaticFormAppRenderer.PageRequest = {
-    val params = req.uri.query.params
+    val params = _query_values(req)
     StaticFormAppRenderer.PageRequest(
       page = params.get("page").flatMap(_.toIntOption).filter(_ > 0).getOrElse(1),
       pageSize = params.get("pageSize").flatMap(_.toIntOption).filter(_ > 0)
