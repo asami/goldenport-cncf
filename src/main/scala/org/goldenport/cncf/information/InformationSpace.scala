@@ -30,7 +30,7 @@ import org.goldenport.record.Record
 
 /*
  * @since   May. 20, 2026
- * @version May. 20, 2026
+ * @version May. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 final class InformationSpace {
@@ -428,6 +428,7 @@ object InformationSpace {
   def validate(record: InformationImportRecord): Vector[InformationValidationIssue] =
     record.domain match {
       case "paper" => _validate_paper(record)
+      case "book" => _validate_book(record)
       case _ => Vector.empty
     }
 
@@ -441,6 +442,14 @@ object InformationSpace {
       base += InformationValidationIssue(InformationValidationIssueId("pending"), record.id, "title", "error", "title is required")
     if (paper.authors.isEmpty)
       base += InformationValidationIssue(InformationValidationIssueId("pending"), record.id, "authors", "error", "at least one author is required")
+    base.result()
+  }
+
+  private def _validate_book(record: InformationImportRecord): Vector[InformationValidationIssue] = {
+    val title = record.workingData.getString("title").getOrElse("").trim
+    val base = Vector.newBuilder[InformationValidationIssue]
+    if (title.isEmpty)
+      base += InformationValidationIssue(InformationValidationIssueId("pending"), record.id, "title", "error", "title is required")
     base.result()
   }
 }

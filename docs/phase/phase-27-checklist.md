@@ -142,7 +142,7 @@ materialization.
 
 ## KE-03: Book-to-KnowledgeNode Attribute Mapping
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
@@ -151,49 +151,63 @@ and related `KnowledgeRelationship` facts without id collapse.
 
 ### Initial Tasks
 
-- [ ] Define node identity fields: RDF node name, external identifiers, Entity
+- [x] Define node identity fields: RDF node name, external identifiers, Entity
       binding, Tag binding, and KnowledgeNode id.
-- [ ] Define presentation fields: labels, localized labels, descriptions, and
+- [x] Define presentation fields: labels, localized labels, descriptions, and
       summaries.
-- [ ] Define semantic fields: semantic types, roles, classifications,
+- [x] Define semantic fields: semantic types, roles, classifications,
       confidence, temporal values, lifecycle, and confidentiality.
-- [ ] Define structure fields: authorship, publication venue, citations,
+- [x] Define structure fields: authorship, publication venue, citations,
       part-of/chapter/section relations, same-as, aliases, related resources,
       and source alignments.
-- [ ] Define evidence/provenance mapping from InformationSpace records and
+- [x] Define evidence/provenance mapping from InformationSpace records and
       publication results.
-- [ ] Define how multiple application/domain Entity instances can bind through
+- [x] Define how multiple application/domain Entity instances can bind through
       InformationSpace to one Textus book `KnowledgeNode` when identity
       resolution confirms they represent the same knowledge object.
-- [ ] Define how ISBN/imported publication identifiers become external
+- [x] Define how ISBN/imported publication identifiers become external
       identifiers and identity bindings on the materialized book node.
-- [ ] Define how multiple external ids/RDF anchors are represented as
+- [x] Define how multiple external ids/RDF anchors are represented as
       `sameAs`, `exactMatch`, `closeMatch`, source alignment, or weaker
       evidence-backed correspondence.
-- [ ] Define edge-canonical / node-convenience projection: authorship,
+- [x] Define edge-canonical / node-convenience projection: authorship,
       publisher, citation, classification, and part-whole facts remain
       relationships/facts, while node sections expose derived traversal fields.
-- [ ] Identify relationship/fact qualifiers needed for book data, such as
+- [x] Identify relationship/fact qualifiers needed for book data, such as
       author order, contributor role, chapter order, edition number, volume
       number, translation language, citation context, and page range.
-- [ ] Define how the DBpedia RDF node maps into `KnowledgeNode.identity.rdfNode`
+- [x] Define how the DBpedia RDF node maps into `KnowledgeNode.identity.rdfNode`
       or RDF identity binding when selected.
-- [ ] Define how DBpedia sameAs links, categories, abstracts, predicates, and
+- [x] Define how DBpedia sameAs links, categories, abstracts, predicates, and
       ontology/resource classes map into identity, semantics, structure,
       sources, and evidence/provenance sections.
-- [ ] Define the book 1.5hop+ neighborhood: focal book node, external RDF
+- [x] Define the book 1.5hop+ neighborhood: focal book node, external RDF
       anchors, author/publisher/work/edition/subject/citation nodes,
       relationships, facts, evidence, and provenance that are essential for
       meaning.
-- [ ] Separate common semantic-neighborhood fields from book-oriented
+- [x] Separate common semantic-neighborhood fields from book-oriented
       extension fields, so generic KnowledgeNode/KnowledgeFrame projection and
       book profile projection remain distinguishable.
+
+### Completion Notes
+
+- Book-to-`KnowledgeNode` section mapping, external anchor classification,
+  relationship/fact mapping, RDF vocabulary mapping, and 1.5hop+
+  `KnowledgeFrame` mapping are recorded in
+  `docs/journal/2026/05/phase-27-book-to-knowledge-node-attribute-mapping.md`.
+- The mapping keeps `KnowledgeNodeId`, CNCF RDF node, Information item id,
+  external identifiers, RDF anchors, and Entity ids distinct.
+- Book-specific stable data should enter delegated `KnowledgeNode` sections,
+  `KnowledgeRelationship`, or `KnowledgeFact`; `attributes` is only a
+  temporary extension escape hatch.
+- Next active work is KE-04: editor-facing InformationSpace API and projection
+  metadata for these mappings.
 
 ---
 
 ## KE-04: InformationSpace Editor API and Projection Contract
 
-Status: TODO
+Status: DONE
 
 ### Objective
 
@@ -202,27 +216,41 @@ depending on system admin/debug representations.
 
 ### Initial Tasks
 
-- [ ] Add editor-oriented projection records for editable information items.
-- [ ] Add field metadata projection: label, help text, examples, requiredness,
+- [x] Add editor-oriented projection records for editable information items.
+- [x] Add field metadata projection: label, help text, examples, requiredness,
       validation status, and publication mapping.
-- [ ] Add mapping-profile projection metadata so the editor can explain how a
+- [x] Add mapping-profile projection metadata so the editor can explain how a
       field maps to KnowledgeNode section, KnowledgeRelationship, KnowledgeFact,
       and evidence/provenance.
-- [ ] Add projection metadata for the resulting 1.5hop+ `KnowledgeFrame`, so
+- [x] Add projection metadata for the resulting 1.5hop+ `KnowledgeFrame`, so
       the editor can explain which surrounding nodes and relationships are part
       of the book meaning neighborhood.
-- [ ] Add projection metadata that labels each included node/relationship as
+- [x] Add projection metadata that labels each included node/relationship as
       common semantic-neighborhood structure or book-profile extension.
-- [ ] Add action projection for save, validate, resolve, confirm, reject,
+- [x] Add action projection for save, validate, resolve, confirm, reject,
       reopen, publish, and materialize.
-- [ ] Keep system admin/debug projection separate from application editor
+- [x] Keep system admin/debug projection separate from application editor
       projection.
+
+### Completion Notes
+
+- Added `InformationSpaceEditorProjection` as the editor-facing read/projection
+  boundary, separate from system admin/debug `InformationSpaceProjection`.
+- Added the first concrete `book` editor profile with field descriptors,
+  mapping descriptors, lifecycle action projection, and common-neighborhood vs
+  book-profile-extension labels.
+- The projection is read-only. Mutations still use the existing
+  InformationSpace lifecycle API.
+- Detailed contract notes are recorded in
+  `docs/journal/2026/05/phase-27-information-space-editor-projection-contract.md`.
+- Next active work is KE-05: Web editor shell and book navigation in
+  `textus-knowledge-editor`.
 
 ---
 
 ## KE-05: Web Editor Shell and Book Navigation in `textus-knowledge-editor`
 
-Status: TODO
+Status: ACTIVE
 
 ### Objective
 

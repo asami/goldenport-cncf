@@ -1292,8 +1292,8 @@ Phase 26 completed scope:
 
 Phase 27 active scope:
 
-- KE-01 and KE-02 are done. Current focus is KE-03:
-  book-to-`KnowledgeNode` attribute mapping.
+- KE-01 through KE-04 are done. Current focus is KE-05:
+  Web editor shell and book navigation in `textus-knowledge-editor`.
 - Book-first domain knowledge editing through `textus-knowledge-editor`, with
   paper and web knowledge following after the book path is validated.
 - ISBN and other publication identifiers as import/seed keys for creating CNCF
@@ -1317,7 +1317,12 @@ Phase 27 active scope:
   validation feedback, resolution guidance, and publication/use explanations.
 - Concrete book domain attributes first, then paper and web domain attributes.
 - Concrete book-to-`KnowledgeNode` attribute mapping for edited/imported
-  knowledge.
+  knowledge is now recorded as the KE-03 mapping profile.
+- Editor-facing projection metadata for InformationSpace fields, validation,
+  mapping impact, and 1.5hop+ `KnowledgeFrame` explanation is now available as
+  the KE-04 editor projection contract.
+- The next target is the first Web editor shell and book navigation surface in
+  `textus-knowledge-editor`.
 - Publication/materialization flow from `InformationSpace` into
   `KnowledgeSpace`.
 
