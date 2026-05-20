@@ -1,7 +1,7 @@
 schemaVersion: 1
-generatedAt: 2026-05-19T10:00:55.159400Z
-recommended: 0.4.8
-latestStable: 0.4.8
+generatedAt: 2026-05-20T10:15:31.521759Z
+recommended: 0.4.9
+latestStable: 0.4.9
 latestSnapshot: 
 mavenRepositories:
   - https://www.simplemodeling.org/repository/maven
@@ -49,4 +49,11 @@ versions:
     scalaBinaryVersion: "3"
     module: org.goldenport:goldenport-cncf_3:0.4.8
     publishedAt: 2026-05-19T10:00:55.159400Z
+    metadataUrl: https://www.simplemodeling.org/repository/maven/org/goldenport/goldenport-cncf_3/maven-metadata.xml
+  - version: 0.4.9
+    channel: stable
+    status: active
+    scalaBinaryVersion: "3"
+    module: org.goldenport:goldenport-cncf_3:0.4.9
+    publishedAt: 2026-05-20T10:15:31.521759Z
     metadataUrl: https://www.simplemodeling.org/repository/maven/org/goldenport/goldenport-cncf_3/maven-metadata.xml
