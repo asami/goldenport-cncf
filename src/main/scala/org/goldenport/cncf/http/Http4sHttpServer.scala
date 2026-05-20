@@ -119,6 +119,8 @@ final class Http4sHttpServer(
         IO.pure(_temporary_redirect(_redirect_target_with_query(req, "/web")))
       case GET -> Root / "mcp" =>
         _mcp_websocket(wsb, _mcp)
+      case req @ POST -> Root / "mcp" =>
+        _mcp_json_rpc(req, _mcp)
       case GET -> Root / "favicon.ico" =>
         _favicon()
       case GET -> Root / "web" / "favicon.ico" =>
@@ -420,6 +422,16 @@ final class Http4sHttpServer(
       wsb.build(send, receive)
     }
 
+  private def _mcp_json_rpc(
+    req: HRequest[IO],
+    adapter: McpJsonRpcAdapter
+  ): IO[HResponse[IO]] =
+    req.as[String].map(adapter.handle).map { body =>
+      HResponse[IO](HStatus.Ok)
+        .withEntity(body)
+        .withContentType(`Content-Type`(MediaType.application.json, Some(Charset.`UTF-8`)))
+    }
+
   private def _bootstrap_css(): IO[HResponse[IO]] =
     IO.pure(
       HResponse[IO](HStatus.Ok)
@@ -597,14 +609,14 @@ final class Http4sHttpServer(
     id: String
   ): IO[HResponse[IO]] = {
     val safe = id.matches("[A-Za-z0-9._-]+")
-    val runtimeConfig = RuntimeConfig.from(engine.runtimeSubsystem.configuration)
-    val config = runtimeConfig.diagnosticPayloadExternalizationConfig
+    val runtimeconfig = RuntimeConfig.from(engine.runtimeSubsystem.configuration)
+    val config = runtimeconfig.diagnosticPayloadExternalizationConfig
     if (!safe)
       _web_error_response(Some("system"), HStatus.BadRequest, "invalid diagnostic payload id", s"/web/system/admin/observability/payloads/$id")
     else if (id.startsWith("blob-"))
       DiagnosticPayloadReferenceCodec.decodeBlobRef(id) match {
         case Some(ref) =>
-          _system_admin_observability_blob_payload(id, ref, runtimeConfig)
+          _system_admin_observability_blob_payload(id, ref, runtimeconfig)
         case None =>
           _web_error_response(Some("system"), HStatus.BadRequest, "invalid diagnostic blob payload id", s"/web/system/admin/observability/payloads/$id")
       }
@@ -624,9 +636,9 @@ final class Http4sHttpServer(
   private def _system_admin_observability_blob_payload(
     id: String,
     ref: BlobStorageRef,
-    runtimeConfig: RuntimeConfig
+    runtimeconfig: RuntimeConfig
   ): IO[HResponse[IO]] =
-    BlobStoreFactory.create(runtimeConfig.blobStoreConfig).flatMap(_.get(ref)) match {
+    BlobStoreFactory.create(runtimeconfig.blobStoreConfig).flatMap(_.get(ref)) match {
       case Consequence.Success(result) =>
         val mime = MediaType.parse(result.contentType.header).fold(_ => MediaType.application.`octet-stream`, identity)
         IO.pure(
@@ -1062,8 +1074,8 @@ final class Http4sHttpServer(
         given ExecutionContext = ctx
         val jobs = _visible_application_jobs(app)
           .take(100)
-        _session_id_(req).foreach { sessionId =>
-          _application_job_seen_at.update((sessionId, NamingConventions.toNormalizedSegment(app)), Instant.now)
+        _session_id_(req).foreach { sessionid =>
+          _application_job_seen_at.update((sessionid, NamingConventions.toNormalizedSegment(app)), Instant.now)
         }
         _html(_static_form_app_renderer.renderApplicationJobs(app, jobs), Some(app))
       case Consequence.Failure(conclusion) =>
@@ -1192,14 +1204,14 @@ final class Http4sHttpServer(
 
   private[http] def _web_app_asset(
     componentName: String,
-    webAppName: String,
+    webappname: String,
     assetName: String
   ): IO[HResponse[IO]] =
-    _web_app_asset(componentName, webAppName, Vector(assetName))
+    _web_app_asset(componentName, webappname, Vector(assetName))
 
   private[http] def _web_app_asset(
     componentName: String,
-    webAppName: String,
+    webappname: String,
     assetPath: Vector[String]
   ): IO[HResponse[IO]] =
     if (!_component_exists(componentName))
@@ -1207,7 +1219,7 @@ final class Http4sHttpServer(
     else if (!_safe_asset_path(assetPath))
       IO.pure(HResponse[IO](HStatus.BadRequest).withEntity("Invalid Web app asset path"))
     else
-      _web_app_asset_content(Some(componentName), webAppName, assetPath) match {
+      _web_app_asset_content(Some(componentName), webappname, assetPath) match {
         case Some((content, mediaType)) =>
           _asset_response(content, mediaType)
         case None =>
@@ -1287,36 +1299,36 @@ final class Http4sHttpServer(
 
   private[http] def _component_web_app(
     componentName: String,
-    webAppName: String,
+    webappname: String,
     page: Vector[String],
     req: Option[org.http4s.Request[IO]] = None
   ): IO[HResponse[IO]] =
     if (!_component_exists(componentName))
       IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component Web app not found"))
     else
-      _web_app_static_html_content(Some(componentName), webAppName, page) match {
+      _web_app_static_html_content(Some(componentName), webappname, page) match {
         case Some(content) =>
           _web_operation_result_widget(content) match {
             case Some(widget) =>
-              _web_operation_result_page(req, componentName, webAppName, page, widget)
+              _web_operation_result_page(req, componentName, webappname, page, widget)
             case None =>
-              _web_app_static_page(Some(componentName), webAppName, page, content, req) match {
+              _web_app_static_page(Some(componentName), webappname, page, content, req) match {
                 case Consequence.Success(page) =>
-                  _html_content(page.body, Some(webAppName), Some(componentName))
+                  _html_content(page.body, Some(webappname), Some(componentName))
                 case Consequence.Failure(conclusion) =>
                   _web_error_response(
-                    Some(webAppName),
+                    Some(webappname),
                     conclusion,
-                    s"/web/${componentName}/${webAppName}${page.map(p => s"/${p}").mkString}"
+                    s"/web/${componentName}/${webappname}${page.map(p => s"/${p}").mkString}"
                   )
               }
           }
         case None =>
           _web_error_response(
-            Some(webAppName),
+            Some(webappname),
             HStatus.NotFound,
             "Component Web app page not found",
-            s"/web/${componentName}/${webAppName}${page.map(p => s"/${p}").mkString}"
+            s"/web/${componentName}/${webappname}${page.map(p => s"/${p}").mkString}"
           )
       }
 
@@ -1361,26 +1373,26 @@ final class Http4sHttpServer(
   private def _web_operation_result_page(
     req: Option[org.http4s.Request[IO]],
     ownerComponentName: String,
-    webAppName: String,
+    webappname: String,
     page: Vector[String],
     widget: WebOperationResultWidget
   ): IO[HResponse[IO]] =
     req match {
       case Some(request) =>
-        _web_operation_result_page(request, ownerComponentName, webAppName, page, widget)
+        _web_operation_result_page(request, ownerComponentName, webappname, page, widget)
       case None =>
         _web_error_response(
-          Some(webAppName),
+          Some(webappname),
           HStatus.InternalServerError,
           "Static Form operation-result requires request context",
-          s"/web/${ownerComponentName}/${webAppName}${page.map(p => s"/${p}").mkString}"
+          s"/web/${ownerComponentName}/${webappname}${page.map(p => s"/${p}").mkString}"
         )
     }
 
   private def _web_operation_result_page(
     req: org.http4s.Request[IO],
     ownerComponentName: String,
-    webAppName: String,
+    webappname: String,
     page: Vector[String],
     widget: WebOperationResultWidget
   ): IO[HResponse[IO]] = {
@@ -1388,13 +1400,13 @@ final class Http4sHttpServer(
     val service = widget.service
     val operation = widget.operation
     if (!_is_form_enabled(app, service, operation))
-      _web_error_response(Some(webAppName), HStatus.NotFound, "Static Form operation-result operation not found", req.uri.path.renderString)
+      _web_error_response(Some(webappname), HStatus.NotFound, "Static Form operation-result operation not found", req.uri.path.renderString)
     else if (!_is_web_authorized(app, service, operation, Some(req)))
-      _forbidden_web(req, Some(webAppName), Some(service), Some(operation))
+      _forbidden_web(req, Some(webappname), Some(service), Some(operation))
     else {
       val started = System.nanoTime()
-      val queryValues = req.uri.query.params.toMap
-      val values = widget.values ++ queryValues
+      val queryvalues = req.uri.query.params.toMap
+      val values = widget.values ++ queryvalues
       val form = Record.create(values.toVector)
       val query = Record.create(req.uri.query.params.toVector)
       val header = _web_operation_result_header(req, query, form, widget.label.getOrElse(s"${service}.${operation}"))
@@ -1412,18 +1424,18 @@ final class Http4sHttpServer(
       )
       val res = result.response
       val continuation = _create_form_continuation(app, service, operation, form, res, _form_chunk_size(form))
-      val resultValues = values ++ _continuation_values(continuation)
+      val resultvalues = values ++ _continuation_values(continuation)
       val properties = _form_result_properties(
         app,
         service,
         operation,
         result,
-        resultValues,
-        _form_page_view_context_values(req, app, service, operation, resultValues)
+        resultvalues,
+        _form_page_view_context_values(req, app, service, operation, resultvalues)
       )
       _prepared_form_result_template(app, service, operation, res.code, properties.page.values) match {
         case Consequence.Success(template) =>
-          _html(_static_form_app_renderer.renderFormResult(properties, template), Some(webAppName)).map { response =>
+          _html(_static_form_app_renderer.renderFormResult(properties, template), Some(webappname)).map { response =>
             RuntimeDashboardMetrics.recordHtmlRequest(
               req.method.name,
               req.uri.path.renderString,
@@ -1433,7 +1445,7 @@ final class Http4sHttpServer(
             response
           }
         case Consequence.Failure(conclusion) =>
-          _web_error_response(Some(webAppName), conclusion, req.uri.path.renderString, req.method.name)
+          _web_error_response(Some(webappname), conclusion, req.uri.path.renderString, req.method.name)
       }
     }
   }
@@ -1482,9 +1494,9 @@ final class Http4sHttpServer(
     if (!_component_exists(componentName))
       None
     else {
-      val normalizedComponent = NamingConventions.toNormalizedSegment(componentName)
+      val normalizedcomponent = NamingConventions.toNormalizedSegment(componentName)
       engine.webDescriptor.routeAppForComponent(componentName)
-        .filterNot(_ == normalizedComponent)
+        .filterNot(_ == normalizedcomponent)
         .map(app => _temporary_redirect(s"/web/${app}"))
     }
 
@@ -1790,7 +1802,7 @@ final class Http4sHttpServer(
     for {
       form <- _to_form_record(req)
       operationValues = _operation_form_values(form)
-      pageValues = _form_values(form)
+      pagevalues = _form_values(form)
       validation = _static_form_app_renderer.validateOperationForm(
         engine.runtimeSubsystem,
         app,
@@ -1808,7 +1820,7 @@ final class Http4sHttpServer(
               service,
               operation,
               engine.webDescriptor,
-              _with_form_debug_panel_flag(pageValues),
+              _with_form_debug_panel_flag(pagevalues),
               Some(result),
               _operation_mode,
               showExecutionDebugPanel = true
@@ -1817,7 +1829,7 @@ final class Http4sHttpServer(
                 HttpStatus.BadRequest,
                 ContentType(MimeType("text/plain"), Some(StandardCharsets.UTF_8)),
                 Bag.text("Validation failed.", StandardCharsets.UTF_8)
-              ), pageValues, _form_page_view_context_values(req, app, service, operation, pageValues))
+              ), pagevalues, _form_page_view_context_values(req, app, service, operation, pagevalues))
             ))
             _html_status(page, HStatus.BadRequest, Some(app)).map { html =>
               RuntimeDashboardMetrics.recordHtmlRequest(
@@ -1829,7 +1841,7 @@ final class Http4sHttpServer(
               html
             }
           case _ =>
-            _submit_valid_operation_form(req, app, service, operation, form, pageValues, started)
+            _submit_valid_operation_form(req, app, service, operation, form, pagevalues, started)
         }
     } yield {
       response
@@ -1861,14 +1873,14 @@ final class Http4sHttpServer(
     _annotate_application_job(result, app, service, operation)
     val res = result.response
     val continuation = _create_form_continuation(app, service, operation, form, res, _form_chunk_size(form))
-    val resultValues = values ++ _continuation_values(continuation)
+    val resultvalues = values ++ _continuation_values(continuation)
     val properties = _form_result_properties(
       app,
       service,
       operation,
       result,
-      resultValues,
-      _form_page_view_context_values(req, app, service, operation, resultValues)
+      resultvalues,
+      _form_page_view_context_values(req, app, service, operation, resultvalues)
     )
     _form_transition_response(app, service, operation, form, res, properties).map { response =>
       RuntimeDashboardMetrics.recordHtmlRequest(
@@ -1971,18 +1983,18 @@ final class Http4sHttpServer(
     _form_continuations.get(id) match {
       case Some(continuation) if continuation.matches(app, service, operation) =>
         val started = System.nanoTime()
-        val queryValues = req.uri.query.params.toMap
-        val pagingValues = queryValues.filter { case (k, _) => k == "page" || k == "pageSize" || k == "includeTotal" }
+        val queryvalues = req.uri.query.params.toMap
+        val pagingvalues = queryvalues.filter { case (k, _) => k == "page" || k == "pageSize" || k == "includeTotal" }
         val res = continuation.response
-        val continuationValues =
-          if (_boolean_param(queryValues, "includeTotal"))
+        val continuationvalues =
+          if (_boolean_param(queryvalues, "includeTotal"))
             _continuation_values(continuation) + (
               "paging.href" -> s"/form/${continuation.app}/${continuation.service}/${continuation.operation}/continue/${continuation.id}?page={page}&pageSize={pageSize}&includeTotal=true"
             )
           else
             _continuation_values(continuation)
-        val pageValues = _form_result_page_values(continuation.form)
-        val values = continuationValues ++ pageValues ++ pagingValues.map { case (k, v) => s"paging.${k}" -> v }
+        val pagevalues = _form_result_page_values(continuation.form)
+        val values = continuationvalues ++ pagevalues ++ pagingvalues.map { case (k, v) => s"paging.${k}" -> v }
         _prepared_form_result_template(app, service, operation, res.code, values) match {
           case Consequence.Success(template) =>
             val page = _static_form_app_renderer.renderFormResult(
@@ -2070,14 +2082,14 @@ final class Http4sHttpServer(
   private def _operation_dispatch_form(
     form: Record
   ): Record = {
-    val adminContext = Vector(
+    val admincontext = Vector(
       "textus.admin.principalId" -> "principalId",
       "textus.admin.subjectId" -> "subjectId",
       "textus.admin.privilege" -> "cncf.security.privilege"
     ).flatMap { case (source, target) =>
       form.getString(source).filter(_.nonEmpty).map(target -> _)
     }
-    Record.create((_strip_framework_form_values(form.asMap) ++ adminContext).toVector)
+    Record.create((_strip_framework_form_values(form.asMap) ++ admincontext).toVector)
   }
 
   private def _operation_dispatch_record(
@@ -2486,7 +2498,7 @@ final class Http4sHttpServer(
         "result.job.href" -> s"/form/${app}/${service}/${operation}/jobs/${jobId}/await"
       )
       _to_plain_form_record(req).flatMap { form =>
-        val dispatchForm = Record.create(
+        val dispatchform = Record.create(
           (_operation_dispatch_form(form).asMap + ("id" -> jobId)).toVector
         )
         val result = _dispatch_operation_result(
@@ -2498,7 +2510,7 @@ final class Http4sHttpServer(
             path = "/job_control/job/await_job_result",
             query = Record.empty,
             header = _development_form_header_record(req, form = form),
-            form = dispatchForm
+            form = dispatchform
           )
         )
         val res = result.response
@@ -2555,16 +2567,16 @@ final class Http4sHttpServer(
     values: Map[String, String],
     pageContextValues: Map[String, String] = Map.empty
   ): StaticFormAppRenderer.FormResultProperties = {
-    val debugValues =
+    val debugvalues =
       if (_is_development_operation_mode(_operation_mode))
         values + ("textus.debug.executionPanel" -> "true")
       else
         values
-    val userValues = debugValues.filterNot { case (key, _) => key.startsWith("pageContext.") }
-    val pageValues =
-      userValues ++ StaticFormAppRenderer.defaultPageViewContextValues ++ pageContextValues
+    val uservalues = debugvalues.filterNot { case (key, _) => key.startsWith("pageContext.") }
+    val pagevalues =
+      uservalues ++ StaticFormAppRenderer.defaultPageViewContextValues ++ pageContextValues
     StaticFormAppRenderer.FormResultProperties(
-      StaticFormAppRenderer.FormPageProperties(app, service, operation, pageValues),
+      StaticFormAppRenderer.FormPageProperties(app, service, operation, pagevalues),
       result.response.code,
       result.response.mime.value,
       result.response.getString.getOrElse(""),
@@ -2611,8 +2623,8 @@ final class Http4sHttpServer(
     service: String,
     operation: String
   ): Unit = {
-    val resultJobId = FormResultMetadata.fromHttpResponse(result.response).jobId
-    result.metadata.responseJobId.filter(jobid => resultJobId.contains(jobid)).foreach { jobid =>
+    val resultjobid = FormResultMetadata.fromHttpResponse(result.response).jobId
+    result.metadata.responseJobId.filter(jobid => resultjobid.contains(jobid)).foreach { jobid =>
       JobId.parse(jobid).toOption.foreach { id =>
         engine.runtimeSubsystem.jobEngine.annotateJob(
           id,
@@ -2682,24 +2694,24 @@ final class Http4sHttpServer(
     service: String,
     operation: String
   ): Option[String] = {
-    val fromOperation = for {
+    val fromoperation = for {
       component <- _component(app)
       serviceDefinition <- component.protocol.services.services.find(s => NamingConventions.equivalentByNormalized(s.name, service))
       operationDefinition <- serviceDefinition.operations.operations.find(o => NamingConventions.equivalentByNormalized(o.name, operation))
       datatype <- operationDefinition.response.result.headOption
       entity <- _entity_name_from_result_type(datatype.name)
     } yield entity
-    fromOperation.orElse(Some(service).filter(_.nonEmpty))
+    fromoperation.orElse(Some(service).filter(_.nonEmpty))
   }
 
   private def _entity_name_from_result_type(
     name: String
   ): Option[String] = {
     val text = name.trim
-    val searchResult = """SearchResult\[(.+)\]""".r
+    val searchresult = """SearchResult\[(.+)\]""".r
     val option = """Option\[(.+)\]""".r
     text match {
-      case searchResult(entity) => Some(entity.trim)
+      case searchresult(entity) => Some(entity.trim)
       case option(entity) => Some(entity.trim)
       case _ => None
     }
@@ -2774,25 +2786,25 @@ final class Http4sHttpServer(
     values: Map[String, String] = Map.empty
   ): Consequence[Option[String]] = {
     val page = _form_result_template_page(service, operation, values)
-    val webAppName = _form_result_web_app(app, page)
-    val composeSubsystemArticle = _compose_subsystem_article(webAppName, page)
-    val contentScope =
-      if (composeSubsystemArticle) WebTemplatePartScope.ComponentContent else WebTemplatePartScope.Default
+    val webappname = _form_result_web_app(app, page)
+    val composesubsystemarticle = _compose_subsystem_article(webappname, page)
+    val contentscope =
+      if (composesubsystemarticle) WebTemplatePartScope.ComponentContent else WebTemplatePartScope.Default
     val candidates = for {
-      root <- _web_resource_roots(contentScope, Some(app))
-      candidate <- _form_result_template_candidates(webAppName, service, operation, status, values)
+      root <- _web_resource_roots(contentscope, Some(app))
+      candidate <- _form_result_template_candidates(webappname, service, operation, status, values)
       content <- root.readText(candidate).toVector
     } yield content
     candidates.headOption match {
       case Some(content) =>
         _compose_web_template(
-          webAppName,
+          webappname,
           page,
           content,
           _form_layout(app, service, operation),
           allowImplicitDefault = true,
-          subsystemShell = composeSubsystemArticle,
-          requireLayout = composeSubsystemArticle,
+          subsystemShell = composesubsystemarticle,
+          requireLayout = composesubsystemarticle,
           componentName = Some(app)
         ).map(x => Some(x.html))
       case None =>
@@ -2814,16 +2826,16 @@ final class Http4sHttpServer(
         _form_descriptor(app, service, operation).flatMap(_.resultTemplate) match {
           case Some(template) =>
             val page = _form_result_template_page(service, operation, values)
-            val webAppName = _form_result_web_app(app, page)
-            val composeSubsystemArticle = _compose_subsystem_article(webAppName, page)
+            val webappname = _form_result_web_app(app, page)
+            val composesubsystemarticle = _compose_subsystem_article(webappname, page)
             _compose_web_template(
-              webAppName,
+              webappname,
               page,
               template,
               _form_layout(app, service, operation),
               allowImplicitDefault = true,
-              subsystemShell = composeSubsystemArticle,
-              requireLayout = composeSubsystemArticle,
+              subsystemShell = composesubsystemarticle,
+              requireLayout = composesubsystemarticle,
               componentName = Some(app)
             ).map(x => Some(x.html))
           case None =>
@@ -2844,45 +2856,45 @@ final class Http4sHttpServer(
     status: Int,
     values: Map[String, String] = Map.empty
   ): Vector[Path] = {
-    val operationPath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(operation)
-    val servicePath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(service)
-    val appPath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(app)
+    val operationpath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(operation)
+    val servicepath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(service)
+    val apppath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(app)
     val suffixes =
       if (status >= 200 && status < 400)
         Vector(status.toString, "success")
       else
         Vector(status.toString, "error")
-    val routeLocalOperation = suffixes.flatMap { suffix =>
-      val filename = s"${operationPath}__${suffix}.html"
+    val routelocaloperation = suffixes.flatMap { suffix =>
+      val filename = s"${operationpath}__${suffix}.html"
       Vector(
-        Paths.get(appPath, servicePath, filename),
-        Paths.get(appPath, filename)
+        Paths.get(apppath, servicepath, filename),
+        Paths.get(apppath, filename)
       )
     }
-    val routeLocalCommon = suffixes.flatMap { suffix =>
+    val routelocalcommon = suffixes.flatMap { suffix =>
       val common = s"__${suffix}.html"
       Vector(
-        Paths.get(appPath, servicePath, common),
-        Paths.get(appPath, common)
+        Paths.get(apppath, servicepath, common),
+        Paths.get(apppath, common)
       )
     }
-    val pageLocal = _form_result_page(values).toVector.flatMap { page =>
+    val pagelocal = _form_result_page(values).toVector.flatMap { page =>
       suffixes.flatMap { suffix =>
         Vector(
-          Paths.get(appPath, s"${page}__${suffix}.html"),
+          Paths.get(apppath, s"${page}__${suffix}.html"),
           Paths.get(s"${page}__${suffix}.html")
         )
       }
     }
     val common = suffixes.flatMap { suffix =>
-      val filename = s"${operationPath}__${suffix}.html"
+      val filename = s"${operationpath}__${suffix}.html"
       val common = s"__${suffix}.html"
       Vector(
         Paths.get(filename),
         Paths.get(common)
       )
     }
-    pageLocal ++ routeLocalOperation ++ routeLocalCommon ++ common
+    pagelocal ++ routelocaloperation ++ routelocalcommon ++ common
   }
 
   private def _form_result_page(
@@ -2936,12 +2948,12 @@ final class Http4sHttpServer(
     app: Option[String],
     status: Int
   ): Vector[Path] = {
-    val statusName = s"__${status}.html"
-    val errorName = "__error.html"
-    val appPath = app.map(org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment)
-    appPath.toVector.flatMap { x =>
-      Vector(Paths.get(x, statusName), Paths.get(x, errorName))
-    } ++ Vector(Paths.get(statusName), Paths.get(errorName))
+    val statusname = s"__${status}.html"
+    val errorname = "__error.html"
+    val apppath = app.map(org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment)
+    apppath.toVector.flatMap { x =>
+      Vector(Paths.get(x, statusname), Paths.get(x, errorname))
+    } ++ Vector(Paths.get(statusname), Paths.get(errorname))
   }
 
   private[http] def _web_resource_roots(): Vector[WebResourceRoot] =
@@ -2992,8 +3004,8 @@ final class Http4sHttpServer(
     }
 
   private def _single_component_web_root_for_deemed_subsystem(): Vector[WebResourceRoot] = {
-    val componentRoots = engine.runtimeSubsystem.components.map(_component_web_roots).filter(_.nonEmpty)
-    componentRoots match {
+    val componentroots = engine.runtimeSubsystem.components.map(_component_web_roots).filter(_.nonEmpty)
+    componentroots match {
       case Vector(roots) => roots
       case _ => Vector.empty
     }
@@ -3044,23 +3056,23 @@ final class Http4sHttpServer(
   }
 
   private[http] def _web_app_asset_content(
-    webAppName: String,
+    webappname: String,
     assetName: String
   ): Option[(BinaryBag, MediaType)] =
-    _web_app_asset_content(None, webAppName, Vector(assetName))
+    _web_app_asset_content(None, webappname, Vector(assetName))
 
   private[http] def _web_app_asset_content(
-    webAppName: String,
+    webappname: String,
     assetPath: Vector[String]
   ): Option[(BinaryBag, MediaType)] =
-    _web_app_asset_content(None, webAppName, assetPath)
+    _web_app_asset_content(None, webappname, assetPath)
 
   private[http] def _web_app_asset_content(
     componentName: Option[String],
-    webAppName: String,
+    webappname: String,
     assetPath: Vector[String]
   ): Option[(BinaryBag, MediaType)] =
-    _web_app_asset_candidates(webAppName, assetPath).view.flatMap { path =>
+    _web_app_asset_candidates(webappname, assetPath).view.flatMap { path =>
       _component_content_web_roots(componentName).view.flatMap { root =>
         root.readBinary(path).map(_ -> _asset_media_type(assetPath.lastOption.getOrElse("")))
       }
@@ -3108,16 +3120,16 @@ final class Http4sHttpServer(
     )
 
   private def _web_app_asset_candidates(
-    webAppName: String,
+    webappname: String,
     assetPath: Vector[String]
   ): Vector[Path] = {
-    val webAppPath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(webAppName)
+    val webapppath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(webappname)
     val flat = Vector(
       _relative_path("assets" +: assetPath),
-      _relative_path(webAppPath +: "assets" +: assetPath)
+      _relative_path(webapppath +: "assets" +: assetPath)
     )
-    val appNamed = flat.reverse
-    if (_is_flat_web_root_app(webAppName)) flat else appNamed
+    val appnamed = flat.reverse
+    if (_is_flat_web_root_app(webappname)) flat else appnamed
   }
 
   private[http] def _web_global_asset_content(
@@ -3175,65 +3187,65 @@ final class Http4sHttpServer(
   }
 
   private[http] def _web_app_static_html_content(
-    webAppName: String,
+    webappname: String,
     page: Vector[String]
   ): Option[String] =
-    _web_app_static_html_content(None, webAppName, page)
+    _web_app_static_html_content(None, webappname, page)
 
   private[http] def _web_app_static_html_content(
     componentName: Option[String],
-    webAppName: String,
+    webappname: String,
     page: Vector[String]
   ): Option[String] =
     if (!_safe_web_page_path(page))
       None
     else
-      _web_app_static_html_candidates(webAppName, page).view.flatMap { path =>
+      _web_app_static_html_candidates(webappname, page).view.flatMap { path =>
         _component_content_web_roots(componentName).view.flatMap(_.readText(path))
       }.headOption
 
   private[http] def _web_app_static_page(
     componentName: Option[String],
-    webAppName: String,
+    webappname: String,
     page: Vector[String],
     content: String,
     req: org.http4s.Request[IO]
   ): Consequence[StaticFormAppRenderer.Page] =
-    _web_app_static_page(componentName, webAppName, page, content, Some(req))
+    _web_app_static_page(componentName, webappname, page, content, Some(req))
 
   private[http] def _web_app_static_page(
     componentName: Option[String],
-    webAppName: String,
+    webappname: String,
     page: Vector[String],
     content: String,
     req: Option[org.http4s.Request[IO]] = None
   ): Consequence[StaticFormAppRenderer.Page] = {
     val fullhtmldocument = _static_form_app_renderer.isHtmlDocumentTemplate(content)
-    val composeSubsystemArticle =
-      _compose_subsystem_article(webAppName, page) &&
+    val composesubsystemarticle =
+      _compose_subsystem_article(webappname, page) &&
         !fullhtmldocument
     _compose_web_template(
-      webAppName,
+      webappname,
       page,
       content,
-      _static_page_layout(webAppName, page),
+      _static_page_layout(webappname, page),
       allowImplicitDefault = !fullhtmldocument,
-      subsystemShell = composeSubsystemArticle,
-      requireLayout = composeSubsystemArticle,
+      subsystemShell = composesubsystemarticle,
+      requireLayout = composesubsystemarticle,
       componentName = componentName
     ).map { composed =>
-      val needsTemplateRendering =
+      val needstemplaterendering =
         composed.appliedLayout ||
           _static_form_app_renderer.hasTextusMarkup(composed.html) ||
           _has_textus_include(composed.html) ||
           (!_static_form_app_renderer.isHtmlDocumentTemplate(composed.html) && _has_property_placeholder(composed.html))
-      if (needsTemplateRendering)
+      if (needstemplaterendering)
         _static_form_app_renderer.renderStaticTemplate(
-          webAppName,
+          webappname,
           page,
           composed.html,
-          _web_app_asset_completion(webAppName),
-          _page_view_context(req, webAppName, page)
+          _web_app_asset_completion(webappname),
+          _page_view_context(req, webappname, page)
         )
       else
         StaticFormAppRenderer.Page(composed.html)
@@ -3241,36 +3253,36 @@ final class Http4sHttpServer(
   }
 
   private[http] def _web_app_static_page(
-    webAppName: String,
+    webappname: String,
     page: Vector[String],
     content: String
   ): Consequence[StaticFormAppRenderer.Page] =
-    _web_app_static_page(None, webAppName, page, content)
+    _web_app_static_page(None, webappname, page, content)
 
   private def _page_view_context(
     req: Option[org.http4s.Request[IO]],
-    webAppName: String,
+    webappname: String,
     page: Vector[String]
   ): WebPageContext = {
-    val sessionId = req.flatMap(_session_id_(_))
+    val sessionid = req.flatMap(_session_id_(_))
     val authenticated = req.exists(_is_page_context_authenticated)
-    val jobCounts =
+    val jobcounts =
       if (authenticated)
-        req.flatMap(_application_job_badge_counts(_, webAppName)).getOrElse(Http4sHttpServer.JobBadgeCounts.empty)
+        req.flatMap(_application_job_badge_counts(_, webappname)).getOrElse(Http4sHttpServer.JobBadgeCounts.empty)
       else
         Http4sHttpServer.JobBadgeCounts.empty
     val base = WebPageContext(Map(
       "pageContext.session.authenticated" -> authenticated.toString,
-      "pageContext.jobs.activeCount" -> jobCounts.active.toString,
-      "pageContext.jobs.unconfirmedCount" -> jobCounts.unconfirmed.toString,
+      "pageContext.jobs.activeCount" -> jobcounts.active.toString,
+      "pageContext.jobs.unconfirmedCount" -> jobcounts.unconfirmed.toString,
       "pageContext.jobs.visible" -> authenticated.toString,
       "pageContext.jobs.hidden" -> (if (authenticated) "" else "hidden"),
-      "pageContext.jobs.activeBadgeHidden" -> (if (authenticated && jobCounts.active > 0) "" else "hidden"),
-      "pageContext.jobs.unconfirmedBadgeHidden" -> (if (authenticated && jobCounts.unconfirmed > 0) "" else "hidden"),
-      "pageContext.app" -> webAppName,
+      "pageContext.jobs.activeBadgeHidden" -> (if (authenticated && jobcounts.active > 0) "" else "hidden"),
+      "pageContext.jobs.unconfirmedBadgeHidden" -> (if (authenticated && jobcounts.unconfirmed > 0) "" else "hidden"),
+      "pageContext.app" -> webappname,
       "pageContext.page" -> (if (page.isEmpty) "index" else page.mkString("/"))
     ))
-    base.merge(_page_context_from_providers(req, webAppName, page, sessionId, authenticated))
+    base.merge(_page_context_from_providers(req, webappname, page, sessionid, authenticated))
   }
 
   private def _is_page_context_authenticated(
@@ -3286,15 +3298,15 @@ final class Http4sHttpServer(
     values: Map[String, String]
   ): Map[String, String] = {
     val page = _form_result_template_page(service, operation, values)
-    val webAppName = _form_result_web_app(app, page)
-    _page_view_context(Some(req), webAppName, page).values
+    val webappname = _form_result_web_app(app, page)
+    _page_view_context(Some(req), webappname, page).values
   }
 
   private def _page_context_from_providers(
     req: Option[org.http4s.Request[IO]],
-    webAppName: String,
+    webappname: String,
     page: Vector[String],
-    sessionId: Option[String],
+    sessionid: Option[String],
     authenticated: Boolean
   ): WebPageContext =
     req.flatMap { r =>
@@ -3303,10 +3315,10 @@ final class Http4sHttpServer(
         WebPageContextProviderRuntime.resolve(
           engine.runtimeSubsystem,
           WebPageContextRequest(
-            app = webAppName,
+            app = webappname,
             page = page,
-            routePath = "/web/" + (webAppName +: page).mkString("/"),
-            sessionId = sessionId,
+            routePath = "/web/" + (webappname +: page).mkString("/"),
+            sessionId = sessionid,
             authenticated = authenticated
           )
         )
@@ -3317,13 +3329,13 @@ final class Http4sHttpServer(
     req: org.http4s.Request[IO],
     app: String
   ): Option[Http4sHttpServer.JobBadgeCounts] =
-    _session_id_(req).flatMap { sessionId =>
+    _session_id_(req).flatMap { sessionid =>
       _request_execution_context(req).toOption.map { ctx =>
         given ExecutionContext = ctx
-        val seenAt = _application_job_seen_at.get((sessionId, NamingConventions.toNormalizedSegment(app)))
+        val seenat = _application_job_seen_at.get((sessionid, NamingConventions.toNormalizedSegment(app)))
         val jobs = _visible_application_jobs(app)
         val active = jobs.count(_is_active_application_job)
-        val unconfirmed = jobs.count(job => _is_terminal_application_job(job) && seenAt.forall(job.updatedAt.isAfter))
+        val unconfirmed = jobs.count(job => _is_terminal_application_job(job) && seenat.forall(job.updatedAt.isAfter))
         Http4sHttpServer.JobBadgeCounts(active, unconfirmed)
       }
     }
@@ -3353,29 +3365,29 @@ final class Http4sHttpServer(
     }
 
   private def _compose_subsystem_article(
-    webAppName: String,
+    webappname: String,
     page: Vector[String]
   ): Boolean =
-    engine.webDescriptor.appComposition(webAppName).isArticle &&
-      engine.webDescriptor.staticPageMode(webAppName, page) == WebDescriptor.PageMode.Article
+    engine.webDescriptor.appComposition(webappname).isArticle &&
+      engine.webDescriptor.staticPageMode(webappname, page) == WebDescriptor.PageMode.Article
 
   private[http] def _web_app_static_html_candidates(
-    webAppName: String,
+    webappname: String,
     page: Vector[String]
   ): Vector[Path] = {
-    val webAppPath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(webAppName)
+    val webapppath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(webappname)
     if (page.isEmpty)
-      _flat_or_app_named_candidates(webAppName, Vector(
+      _flat_or_app_named_candidates(webappname, Vector(
         Paths.get("index.html"),
-        Paths.get(webAppPath, "index.html")
+        Paths.get(webapppath, "index.html")
       ))
     else {
       val normalized = page.map(_normalize_web_page_segment)
       val exact =
         if (normalized.last.endsWith(".html"))
-          _flat_or_app_named_candidates(webAppName, Vector(
+          _flat_or_app_named_candidates(webappname, Vector(
             _relative_path(normalized),
-            _relative_path(webAppPath +: normalized)
+            _relative_path(webapppath +: normalized)
           ))
         else
           Vector.empty
@@ -3383,22 +3395,22 @@ final class Http4sHttpServer(
         if (normalized.last.endsWith(".html"))
           Vector.empty
         else {
-          val withHtml = normalized.init :+ s"${normalized.last}.html"
-          _flat_or_app_named_candidates(webAppName, Vector(
-            _relative_path(withHtml),
-            _relative_path(webAppPath +: withHtml)
+          val withhtml = normalized.init :+ s"${normalized.last}.html"
+          _flat_or_app_named_candidates(webappname, Vector(
+            _relative_path(withhtml),
+            _relative_path(webapppath +: withhtml)
           ))
         }
-      val index = _flat_or_app_named_candidates(webAppName, Vector(
+      val index = _flat_or_app_named_candidates(webappname, Vector(
         _relative_path(normalized :+ "index.html"),
-        _relative_path(webAppPath +: (normalized :+ "index.html"))
+        _relative_path(webapppath +: (normalized :+ "index.html"))
       ))
       exact ++ html ++ index
     }
   }
 
   private def _compose_web_template(
-    webAppName: String,
+    webappname: String,
     page: Vector[String],
     content: String,
     explicitLayout: Option[String],
@@ -3407,25 +3419,25 @@ final class Http4sHttpServer(
     requireLayout: Boolean = false,
     componentName: Option[String] = None
   ): Consequence[WebTemplateComposition] = {
-    val normalizedLayout = explicitLayout.map(_.trim).filter(_.nonEmpty)
-    val noLayout = normalizedLayout.exists(_.equalsIgnoreCase("none"))
-    val layoutScope =
+    val normalizedlayout = explicitLayout.map(_.trim).filter(_.nonEmpty)
+    val nolayout = normalizedlayout.exists(_.equalsIgnoreCase("none"))
+    val layoutscope =
       if (subsystemShell) WebTemplatePartScope.SubsystemShell else WebTemplatePartScope.Default
-    val contentScope =
+    val contentscope =
       if (subsystemShell) WebTemplatePartScope.ComponentContent else WebTemplatePartScope.Default
-    val withIncludes = _expand_template_partials(webAppName, page, content, contentScope, componentName)
-    val layoutCandidates = _layout_candidates(normalizedLayout, allowImplicitDefault, subsystemShell)
-    if (noLayout || (!requireLayout && _static_form_app_renderer.isHtmlDocumentTemplate(content) && layoutCandidates.isEmpty))
-      Consequence.success(WebTemplateComposition(withIncludes, appliedLayout = false))
+    val withincludes = _expand_template_partials(webappname, page, content, contentscope, componentName)
+    val layoutcandidates = _layout_candidates(normalizedlayout, allowImplicitDefault, subsystemShell)
+    if (nolayout || (!requireLayout && _static_form_app_renderer.isHtmlDocumentTemplate(content) && layoutcandidates.isEmpty))
+      Consequence.success(WebTemplateComposition(withincludes, appliedLayout = false))
     else
       _validate_shell_owner_if_needed(subsystemShell).flatMap { _ =>
         _compose_with_layout_candidates(
-          webAppName,
+          webappname,
           page,
-          withIncludes,
-          layoutCandidates,
-          explicitLayout = normalizedLayout.filterNot(_.equalsIgnoreCase("none")),
-          layoutScope,
+          withincludes,
+          layoutcandidates,
+          explicitLayout = normalizedlayout.filterNot(_.equalsIgnoreCase("none")),
+          layoutscope,
           componentName,
           requireLayout
         )
@@ -3438,12 +3450,12 @@ final class Http4sHttpServer(
     if (subsystemShell) _validate_explicit_shell_owner() else Consequence.success(())
 
   private def _layout_candidates(
-    normalizedLayout: Option[String],
+    normalizedlayout: Option[String],
     allowImplicitDefault: Boolean,
     subsystemShell: Boolean
   ): Vector[String] = {
-    val explicit = normalizedLayout.filterNot(_.equalsIgnoreCase("none")).toVector
-    val subsystemDefault =
+    val explicit = normalizedlayout.filterNot(_.equalsIgnoreCase("none")).toVector
+    val subsystemdefault =
       if (subsystemShell)
         engine.webDescriptor.shellLayoutName.toVector
       else
@@ -3453,11 +3465,11 @@ final class Http4sHttpServer(
         Vector("default")
       else
         Vector.empty
-    (explicit ++ subsystemDefault ++ default).distinct
+    (explicit ++ subsystemdefault ++ default).distinct
   }
 
   private def _compose_with_layout_candidates(
-    webAppName: String,
+    webappname: String,
     page: Vector[String],
     content: String,
     candidates: Vector[String],
@@ -3471,11 +3483,11 @@ final class Http4sHttpServer(
         Consequence.success(WebTemplateComposition(content, appliedLayout = false))
       case names =>
         val found = names.view.flatMap { name =>
-          _layout_content(webAppName, name, scope, componentName).map(name -> _)
+          _layout_content(webappname, name, scope, componentName).map(name -> _)
         }.headOption
         found match {
           case Some((name, layout)) =>
-            _apply_layout(webAppName, page, name, layout, content, scope, componentName)
+            _apply_layout(webappname, page, name, layout, content, scope, componentName)
               .map(WebTemplateComposition(_, appliedLayout = true))
           case None =>
             explicitLayout match {
@@ -3505,7 +3517,7 @@ final class Http4sHttpServer(
     }
 
   private def _apply_layout(
-    webAppName: String,
+    webappname: String,
     page: Vector[String],
     layoutName: String,
     layout: String,
@@ -3524,12 +3536,12 @@ final class Http4sHttpServer(
         )
       )
     else {
-      val withContent = layout.replace("${content}", content)
-      Consequence.success(_expand_template_partials(webAppName, page, withContent, scope, componentName))
+      val withcontent = layout.replace("${content}", content)
+      Consequence.success(_expand_template_partials(webappname, page, withcontent, scope, componentName))
     }
 
   private def _expand_template_partials(
-    webAppName: String,
+    webappname: String,
     page: Vector[String],
     template: String,
     scope: WebTemplatePartScope = WebTemplatePartScope.Default,
@@ -3540,25 +3552,25 @@ final class Http4sHttpServer(
       if (remaining <= 0)
         value
       else {
-        val next = _expand_textus_includes(webAppName, page, _expand_partial_placeholders(webAppName, page, value, scope, componentName), scope, componentName)
+        val next = _expand_textus_includes(webappname, page, _expand_partial_placeholders(webappname, page, value, scope, componentName), scope, componentName)
         if (next == value) next else loop(next, remaining - 1)
       }
     loop(template, 8)
   }
 
   private def _expand_partial_placeholders(
-    webAppName: String,
+    webappname: String,
     page: Vector[String],
     template: String,
     scope: WebTemplatePartScope,
     componentName: Option[String] = None
   ): String =
     """\$\{partial\.([A-Za-z0-9_.-]+)\}""".r.replaceAllIn(template, m =>
-      java.util.regex.Matcher.quoteReplacement(_partial_content(webAppName, page, m.group(1), scope, componentName).getOrElse(""))
+      java.util.regex.Matcher.quoteReplacement(_partial_content(webappname, page, m.group(1), scope, componentName).getOrElse(""))
     )
 
   private def _expand_textus_includes(
-    webAppName: String,
+    webappname: String,
     page: Vector[String],
     template: String,
     scope: WebTemplatePartScope,
@@ -3568,7 +3580,7 @@ final class Http4sHttpServer(
     include.replaceAllIn(template, m => {
       val attrs = _template_attrs(m.group(1))
       java.util.regex.Matcher.quoteReplacement(
-        attrs.get("name").flatMap(_partial_content(webAppName, page, _, scope, componentName)).getOrElse("")
+        attrs.get("name").flatMap(_partial_content(webappname, page, _, scope, componentName)).getOrElse("")
       )
     })
   }
@@ -3580,7 +3592,7 @@ final class Http4sHttpServer(
     """\$\{[A-Za-z0-9_.-]+\}""".r.findFirstIn(template).nonEmpty
 
   private def _layout_content(
-    webAppName: String,
+    webappname: String,
     name: String,
     scope: WebTemplatePartScope = WebTemplatePartScope.Default,
     componentName: Option[String] = None
@@ -3589,11 +3601,11 @@ final class Http4sHttpServer(
       None
     else
       _web_resource_roots(scope, componentName).view.flatMap { root =>
-        _web_inf_layout_candidates(_template_part_app_name(webAppName, scope), name).view.flatMap(root.readText)
+        _web_inf_layout_candidates(_template_part_app_name(webappname, scope), name).view.flatMap(root.readText)
       }.headOption
 
   private def _partial_content(
-    webAppName: String,
+    webappname: String,
     page: Vector[String],
     name: String,
     scope: WebTemplatePartScope = WebTemplatePartScope.Default,
@@ -3603,55 +3615,55 @@ final class Http4sHttpServer(
       None
     else
       _web_resource_roots(scope, componentName).view.flatMap { root =>
-        _web_inf_partial_candidates(_template_part_app_name(webAppName, scope), page, name, scope).view.flatMap(root.readText)
+        _web_inf_partial_candidates(_template_part_app_name(webappname, scope), page, name, scope).view.flatMap(root.readText)
       }.headOption
 
   private def _template_part_app_name(
-    webAppName: String,
+    webappname: String,
     scope: WebTemplatePartScope
   ): String =
     scope match {
       case WebTemplatePartScope.SubsystemShell =>
-        engine.webDescriptor.shellAppName.getOrElse(webAppName)
+        engine.webDescriptor.shellAppName.getOrElse(webappname)
       case _ =>
-        webAppName
+        webappname
     }
 
   private def _web_inf_layout_candidates(
-    webAppName: String,
+    webappname: String,
     name: String
   ): Vector[Path] = {
-    val webAppPath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(webAppName)
-    _flat_or_app_named_candidates(webAppName, Vector(
+    val webapppath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(webappname)
+    _flat_or_app_named_candidates(webappname, Vector(
       Paths.get("WEB-INF", "layouts", s"${name}.html"),
-      Paths.get(webAppPath, "WEB-INF", "layouts", s"${name}.html")
+      Paths.get(webapppath, "WEB-INF", "layouts", s"${name}.html")
     ))
   }
 
   private def _web_inf_partial_candidates(
-    webAppName: String,
+    webappname: String,
     page: Vector[String],
     name: String,
     scope: WebTemplatePartScope
   ): Vector[Path] = {
-    val webAppPath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(webAppName)
-    val localPage = _web_inf_page_path(page)
-    val localFlat = localPage.toVector.map { pagePath =>
+    val webapppath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(webappname)
+    val localpage = _web_inf_page_path(page)
+    val localflat = localpage.toVector.map { pagePath =>
       _relative_path(Vector("WEB-INF", "partials") ++ pagePath :+ s"${name}.html")
     }
-    val localApp = localPage.toVector.map { pagePath =>
-      _relative_path(webAppPath +: (Vector("WEB-INF", "partials") ++ pagePath :+ s"${name}.html"))
+    val localapp = localpage.toVector.map { pagePath =>
+      _relative_path(webapppath +: (Vector("WEB-INF", "partials") ++ pagePath :+ s"${name}.html"))
     }
-    val globalFlat = Vector(Paths.get("WEB-INF", "partials", s"${name}.html"))
-    val globalApp = Vector(Paths.get(webAppPath, "WEB-INF", "partials", s"${name}.html"))
+    val globalflat = Vector(Paths.get("WEB-INF", "partials", s"${name}.html"))
+    val globalapp = Vector(Paths.get(webapppath, "WEB-INF", "partials", s"${name}.html"))
     scope match {
       case WebTemplatePartScope.ComponentContent =>
-        localApp ++ localFlat ++ globalApp ++ globalFlat
+        localapp ++ localflat ++ globalapp ++ globalflat
       case _ =>
-        if (_is_flat_web_root_app(webAppName))
-          localFlat ++ localApp ++ globalFlat ++ globalApp
+        if (_is_flat_web_root_app(webappname))
+          localflat ++ localapp ++ globalflat ++ globalapp
         else
-          localApp ++ localFlat ++ globalApp ++ globalFlat
+          localapp ++ localflat ++ globalapp ++ globalflat
     }
   }
 
@@ -3665,11 +3677,11 @@ final class Http4sHttpServer(
   }
 
   private def _static_page_layout(
-    webAppName: String,
+    webappname: String,
     page: Vector[String]
   ): Option[String] =
-    engine.webDescriptor.staticPageCustomization(webAppName, page).flatMap(_.layout)
-      .orElse(engine.webDescriptor.appLayout(webAppName))
+    engine.webDescriptor.staticPageCustomization(webappname, page).flatMap(_.layout)
+      .orElse(engine.webDescriptor.appLayout(webappname))
 
   private def _form_layout(
     app: String,
@@ -3680,9 +3692,9 @@ final class Http4sHttpServer(
       .orElse(engine.webDescriptor.appLayout(app))
 
   private def _web_app_asset_completion(
-    webAppName: String
+    webappname: String
   ): StaticFormAppLayout.AssetCompletionOptions = {
-    val assets = engine.webDescriptor.assets.merge(engine.webDescriptor.appAssets(webAppName))
+    val assets = engine.webDescriptor.assets.merge(engine.webDescriptor.appAssets(webappname))
     StaticFormAppLayout.AssetCompletionOptions(
       declaredCss = assets.css,
       declaredJs = assets.js,
@@ -3705,17 +3717,17 @@ final class Http4sHttpServer(
   }
 
   private def _flat_or_app_named_candidates(
-    webAppName: String,
+    webappname: String,
     flatFirst: Vector[Path]
   ): Vector[Path] =
-    if (_is_flat_web_root_app(webAppName)) flatFirst else flatFirst.reverse
+    if (_is_flat_web_root_app(webappname)) flatFirst else flatFirst.reverse
 
   private def _is_flat_web_root_app(
-    webAppName: String
+    webappname: String
   ): Boolean = {
-    val normalized = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(webAppName)
-    val staticApps = engine.webDescriptor.apps.filter(app => app.effectiveKind.equalsIgnoreCase("static-form"))
-    staticApps.size == 1 && staticApps.head.normalizedName == normalized
+    val normalized = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(webappname)
+    val staticapps = engine.webDescriptor.apps.filter(app => app.effectiveKind.equalsIgnoreCase("static-form"))
+    staticapps.size == 1 && staticapps.head.normalizedName == normalized
   }
 
   private def _normalize_web_page_segment(
@@ -3871,17 +3883,17 @@ final class Http4sHttpServer(
     form: Record,
     response: HttpResponse
   ): String = {
-    val formValues = _form_values(form)
-    val resultValues = _result_values(response)
-    val resultId = _redirect_result_id(response, formValues, resultValues)
+    val formvalues = _form_values(form)
+    val resultvalues = _result_values(response)
+    val resultid = _redirect_result_id(response, formvalues, resultvalues)
     val values =
-      formValues ++ Map(
+      formvalues ++ Map(
         "component" -> app,
         "service" -> service,
         "operation" -> operation,
         "result.status" -> response.code.toString,
         "result.body" -> response.getString.getOrElse("")
-      ) ++ resultValues ++ resultId.map("result.id" -> _).toMap
+      ) ++ resultvalues ++ resultid.map("result.id" -> _).toMap
     """\$\{([A-Za-z0-9_.-]+)\}""".r.replaceAllIn(template, m =>
       java.util.regex.Matcher.quoteReplacement(values.getOrElse(m.group(1), ""))
     )
@@ -3889,16 +3901,16 @@ final class Http4sHttpServer(
 
   private def _redirect_result_id(
     response: HttpResponse,
-    formValues: Map[String, String],
-    resultValues: Map[String, String]
+    formvalues: Map[String, String],
+    resultvalues: Map[String, String]
   ): Option[String] =
-    resultValues.get("result.id") match {
+    resultvalues.get("result.id") match {
       case Some(id) if _response_body_is_json(response) =>
         Some(id)
       case Some(id) =>
         Some(_normalize_redirect_result_id(id))
       case None =>
-        formValues.get("id")
+        formvalues.get("id")
     }
 
   private def _normalize_redirect_result_id(id: String): String = {
@@ -3932,7 +3944,7 @@ final class Http4sHttpServer(
     result: _AdminFormDispatchResult
   ): String = {
     val id = form.getString("id")
-    val resultId = id.orElse(FormResultMetadata.fromHttpResponse(result.response).id)
+    val resultid = id.orElse(FormResultMetadata.fromHttpResponse(result.response).id)
     val values =
       _form_values(form) ++ Map(
         "component" -> app,
@@ -3942,7 +3954,7 @@ final class Http4sHttpServer(
         "operation" -> operation,
         "result.status" -> result.response.code.toString,
         "result.body" -> result.message
-      ) ++ id.map("id" -> _).toMap ++ resultId.map("result.id" -> _).toMap
+      ) ++ id.map("id" -> _).toMap ++ resultid.map("result.id" -> _).toMap
     """\$\{([A-Za-z0-9_.-]+)\}""".r.replaceAllIn(template, m =>
       java.util.regex.Matcher.quoteReplacement(values.getOrElse(m.group(1), ""))
     )
@@ -3980,10 +3992,10 @@ final class Http4sHttpServer(
 
   private def _rest_latest_stable_target(req: org.http4s.Request[IO]): String = {
     val path = req.uri.path.renderString
-    val redirectedPath =
+    val redirectedpath =
       if (path == "/rest" || path == "/rest/") "/rest/v1"
       else s"/rest/v1${path.stripPrefix("/rest")}"
-    _redirect_target_with_query(req, redirectedPath)
+    _redirect_target_with_query(req, redirectedpath)
   }
 
   private def _redirect_target_with_query(
@@ -4053,17 +4065,17 @@ final class Http4sHttpServer(
           form <- _to_plain_form_record(req)
           response <- {
             given ExecutionContext = ExecutionContext.create()
-            val formAttributes = form.asMap.map((k, v) => k -> v.toString)
-            service.login(AuthenticationRequest(_request_attributes(req, formAttributes))) match {
+            val formattributes = form.asMap.map((k, v) => k -> v.toString)
+            service.login(AuthenticationRequest(_request_attributes(req, formattributes))) match {
               case org.goldenport.Consequence.Success(summary) =>
                 val sessionid = summary.sessionId.getOrElse(throw new IllegalStateException("auth.login must return session id"))
                 IO.pure(
-                  _see_other(_login_return_to(req.uri.query.params ++ formAttributes).getOrElse(s"/web/${app}"))
+                  _see_other(_login_return_to(req.uri.query.params ++ formattributes).getOrElse(s"/web/${app}"))
                     .addCookie(_session_cookie(sessionid))
                 )
               case org.goldenport.Consequence.Failure(c) =>
                 if (_has_exact_web_route_alias(Vector("web", app, "login")))
-                  IO.pure(_see_other(_login_error_redirect(app, c.displayMessage, _login_return_to(req.uri.query.params ++ formAttributes))))
+                  IO.pure(_see_other(_login_error_redirect(app, c.displayMessage, _login_return_to(req.uri.query.params ++ formattributes))))
                 else
                   _login_page(req, app, Some(c.displayMessage))
             }
@@ -4302,14 +4314,14 @@ final class Http4sHttpServer(
     operationSelector: Option[String] = None
   ): Boolean = {
     val selector = Vector(app, service, operation).mkString(".")
-    val runtimeConfig = RuntimeConfig.from(engine.runtimeSubsystem.configuration)
-    val subject = _web_authorization_subject(req, runtimeConfig)
+    val runtimeconfig = RuntimeConfig.from(engine.runtimeSubsystem.configuration)
+    val subject = _web_authorization_subject(req, runtimeconfig)
     val rule = engine.webDescriptor.authorization
       .get(selector)
       .orElse(
         operationSelector
           .orElse(_admin_operation_selector(app, service, operation))
-          .flatMap(WebOperationAuthorizationPolicy.operationRule(engine.runtimeSubsystem, _, runtimeConfig))
+          .flatMap(WebOperationAuthorizationPolicy.operationRule(engine.runtimeSubsystem, _, runtimeconfig))
       )
     val allowed =
       rule match {
@@ -4317,14 +4329,14 @@ final class Http4sHttpServer(
           WebDescriptorAuthorization.isAllowed(
             rule,
             subject,
-            runtimeConfig.operationMode
+            runtimeconfig.operationMode
           )
         case None =>
           engine.webDescriptor.exposureOf(selector) match {
             case WebDescriptor.Exposure.Protected =>
               subject.normalized.authenticated ||
                 (
-                  runtimeConfig.operationMode != org.goldenport.cncf.config.OperationMode.Production &&
+                  runtimeconfig.operationMode != org.goldenport.cncf.config.OperationMode.Production &&
                     app != "debug"
                 )
             case _ =>
@@ -4372,9 +4384,9 @@ final class Http4sHttpServer(
 
   private def _web_authorization_subject(
     req: Option[org.http4s.Request[IO]],
-    runtimeConfig: RuntimeConfig
+    runtimeconfig: RuntimeConfig
   ): WebDescriptorAuthorization.Subject =
-    if (runtimeConfig.operationMode == OperationMode.Production)
+    if (runtimeconfig.operationMode == OperationMode.Production)
       req.flatMap(_web_authorization_subject_from_session)
         .getOrElse(WebDescriptorAuthorization.Subject())
     else
@@ -4647,7 +4659,7 @@ final class Http4sHttpServer(
     componentName: Option[String] = None
   ): String = {
     val descriptor = engine.webDescriptor
-    val baseAssets = appName
+    val baseassets = appName
       .map(name => descriptor.assets.merge(descriptor.appAssets(name)))
       .getOrElse(descriptor.assets)
     val customized = _page_customized_html(body, componentName, appName)
@@ -4655,7 +4667,7 @@ final class Http4sHttpServer(
       customized,
       descriptor.themeFor(appName).toLayoutOptions
     )
-    val debugJs =
+    val debugjs =
       if (_is_development_operation_mode(_operation_mode))
         Vector("/web/assets/textus-form-debug.js", "/web/assets/textus-calltree.js")
       else
@@ -4663,9 +4675,9 @@ final class Http4sHttpServer(
     StaticFormAppLayout.completeDeclaredAssets(
       themed,
       StaticFormAppLayout.AssetCompletionOptions(
-        declaredCss = baseAssets.css,
-        declaredJs = baseAssets.js ++ debugJs,
-        favicon = baseAssets.favicon
+        declaredCss = baseassets.css,
+        declaredJs = baseassets.js ++ debugjs,
+        favicon = baseassets.favicon
       )
     )
   }
@@ -4937,9 +4949,9 @@ final class Http4sHttpServer(
     }
 
   private def _fields_to_record(text: String): Record = {
-    val trimmedText = text.trim
-    if (!trimmedText.contains("\n") && trimmedText.contains("&")) {
-      HttpRequest.parseQuery(trimmedText)
+    val trimmedtext = text.trim
+    if (!trimmedtext.contains("\n") && trimmedtext.contains("&")) {
+      HttpRequest.parseQuery(trimmedtext)
     } else {
       val pairs = text.linesIterator.toVector.flatMap { line =>
         val trimmed = line.trim
@@ -4978,16 +4990,16 @@ final class Http4sHttpServer(
       originalUri = Some(req.uri.renderString)
     )
     val path = pathOverride.getOrElse(req.uri.path.renderString)
-    val contentTypeHeader = req.headers.get[`Content-Type`]
+    val contenttypeheader = req.headers.get[`Content-Type`]
 
-    if (_is_multipart(contentTypeHeader))
+    if (_is_multipart(contenttypeheader))
       _to_multipart_http_request(req, method, path, query, header, context)
     else
-      _to_regular_http_request(req, method, path, query, header, context, contentTypeHeader)
+      _to_regular_http_request(req, method, path, query, header, context, contenttypeheader)
   }
 
-  private def _is_multipart(contentType: Option[`Content-Type`]): Boolean =
-    contentType.exists { header =>
+  private def _is_multipart(contenttype: Option[`Content-Type`]): Boolean =
+    contenttype.exists { header =>
       header.mediaType.mainType.equalsIgnoreCase("multipart") &&
         header.mediaType.subType.equalsIgnoreCase("form-data")
     }
@@ -5026,17 +5038,17 @@ final class Http4sHttpServer(
     query: Record,
     header: Record,
     context: HttpContext,
-    contentTypeHeader: Option[`Content-Type`]
+    contenttypeheader: Option[`Content-Type`]
   ): IO[HttpRequest] =
     req.body.compile.to(Array).map { bytes =>
-      val isFormUrlEncoded = contentTypeHeader.exists { header =>
+      val isformurlencoded = contenttypeheader.exists { header =>
         header.mediaType.mainType.equalsIgnoreCase("application") &&
           header.mediaType.subType.equalsIgnoreCase("x-www-form-urlencoded")
       }
       val (bodyOption, formRecord) =
         if (bytes.isEmpty) {
           (None, Record.empty)
-        } else if (isFormUrlEncoded) {
+        } else if (isformurlencoded) {
           val text = new String(bytes, java.nio.charset.StandardCharsets.UTF_8)
           (None, HttpRequest.parseQuery(text))
         } else {
@@ -5096,14 +5108,14 @@ final class Http4sHttpServer(
           case Some(name) if name.nonEmpty =>
             part.body.compile.to(Array).map { bytes =>
               val bag = Bag.binary(bytes.toArray)
-              val contentType =
+              val contenttype =
                 part.headers
                   .get[`Content-Type`]
                   .map(_.value)
                   .map(ContentType.parse)
                   .getOrElse(ContentType.APPLICATION_OCTET_STREAM)
               if (_is_multipart_upload_part(name, part.filename)) {
-                val body = Vector(name -> MimeBody(contentType, bag))
+                val body = Vector(name -> MimeBody(contenttype, bag))
                 val filename = part.filename.toVector.filter(_.nonEmpty).map(x => s"$name.filename" -> x)
                 body ++ filename
               } else {
@@ -5201,13 +5213,13 @@ final class Http4sHttpServer(
     val mime = MediaType.parse(res.mime.value).fold(_ => MediaType.text.plain, identity)
     val charset: Option[org.http4s.Charset] =
       res.charset.map(c => org.http4s.Charset.fromNioCharset(c))
-    val contentType = `Content-Type`(mime, charset)
+    val contenttype = `Content-Type`(mime, charset)
     res.getBinary match {
       case Some(binary) if res.code < 400 =>
         return IO.pure(
           _with_response_headers(_with_job_id_header(HResponse[IO](status), metadata), res)
             .withBodyStream(fs2.io.readInputStream(IO(binary.openInputStream()), 8192, closeAfterUse = true))
-            .withContentType(contentType)
+            .withContentType(contenttype)
         )
       case _ =>
         ()
@@ -5241,7 +5253,7 @@ final class Http4sHttpServer(
       IO.pure(
         _with_response_headers(_with_job_id_header(HResponse[IO](status), metadata), res)
           .withEntity(body)
-          .withContentType(contentType)
+          .withContentType(contenttype)
       )
     }
   }
@@ -5323,8 +5335,8 @@ final class Http4sHttpServer(
 }
 
 object Http4sHttpServer {
-  val PortPropertyKey = "textus.server.port"
-  val LegacyPortPropertyKey = "cncf.server.port"
+  val PORT_PROPERTY_KEY = "textus.server.port"
+  val LEGACY_PORT_PROPERTY_KEY = "cncf.server.port"
 
   private[http] def fallbackHttpDiagnosticRecord(
     status: Int
@@ -5361,8 +5373,8 @@ object Http4sHttpServer {
 
   def defaultPort: Int =
     sys.props
-      .get(PortPropertyKey)
-      .orElse(sys.props.get(LegacyPortPropertyKey))
+      .get(PORT_PROPERTY_KEY)
+      .orElse(sys.props.get(LEGACY_PORT_PROPERTY_KEY))
       .flatMap(x => scala.util.Try(x.toInt).toOption)
       .getOrElse(8080)
 

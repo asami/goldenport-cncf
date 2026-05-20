@@ -10,7 +10,7 @@ import org.goldenport.cncf.subsystem.Subsystem
  * @since   Mar. 19, 2026
  *  version Mar. 27, 2026
  *  version Apr. 15, 2026
- * @version May. 18, 2026
+ * @version May. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 final class McpJsonRpcAdapter(
@@ -131,6 +131,7 @@ final class McpJsonRpcAdapter(
             Argument(k, _json_argument_value(v))
           }
           .toList
+        val properties = _request_properties(service, operation, args)
         Right(
           Request.of(
             component = component,
@@ -138,12 +139,24 @@ final class McpJsonRpcAdapter(
             operation = operation,
             arguments = args,
             switches = Nil,
-            properties = List(Property("textus.format", "json", None))
+            properties = properties :+ Property("textus.format", "json", None)
           )
         )
       case _ =>
         Left(s"invalid tool name: $name")
     }
+
+  private def _request_properties(
+    service: String,
+    operation: String,
+    args: List[Argument]
+  ): List[Property] =
+    if (service == "Mcp" && operation == "callTool")
+      args
+        .filter(x => x.name == "name" || x.name == "arguments")
+        .map(x => Property(x.name, x.value, None))
+    else
+      Nil
 
   private def _json_argument_value(v: Json): String =
     v.asString.getOrElse(v.noSpaces)

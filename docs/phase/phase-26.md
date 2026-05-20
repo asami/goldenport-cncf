@@ -1,6 +1,6 @@
 # Phase 26 — Knowledge Import and InformationSpace
 
-status = active
+status = closed
 
 ## 1. Purpose of This Document
 
@@ -53,13 +53,12 @@ Scope boundaries:
 - H (DONE): KI-08 — RDF/vector publication and KnowledgeSpace materialization
   flow.
 - I (DONE): KI-09 — InformationSpace admin/debug projection.
-- J (ACTIVE): KI-10 — Docker-backed SIE smoke and Phase 26 closure.
+- J (DONE): KI-10 — Docker-backed SIE smoke and Phase 26 closure.
 
 Resume hint:
 
-- Continue with KI-10. Run the Docker-backed SIE paper-flow smoke against
-  Fuseki and the SIE-compatible Chroma adapter, then record closure or
-  remaining hardening.
+- Phase 26 is closed. Start the next selected phase from the strategy document;
+  do not reopen KI items unless a regression needs a targeted fix.
 
 ## 4. Development Items
 
@@ -72,14 +71,14 @@ Resume hint:
 - [x] KI-07: Knowledge engine SPI and `textus-sie` provider integration.
 - [x] KI-08: RDF/vector publication and KnowledgeSpace materialization flow.
 - [x] KI-09: InformationSpace admin/debug projection.
-- [ ] KI-10: Docker-backed SIE smoke and Phase 26 closure.
+- [x] KI-10: Docker-backed SIE smoke and Phase 26 closure.
 
 Detailed task breakdown and progress tracking are recorded in
 `phase-26-checklist.md`.
 
 ## 5. Completion Conditions
 
-Phase 26 can close when:
+Phase 26 closed after:
 
 - CNCF has a component-owned `InformationSpace` runtime skeleton with
   import/edit/validate/resolve/confirm/publish/conflict lifecycle operations.
@@ -88,6 +87,7 @@ Phase 26 can close when:
 - `textus-sie` implements the provider side for the Phase 26 SPI boundaries.
 - System admin/debug pages show InformationSpace state without exposing raw RDF
   or vector payloads.
-- Docker-backed Fuseki and the SIE-compatible Chroma adapter validate the
-  import-to-publication-to-KnowledgeSpace flow.
-- Deferred production hardening is recorded in strategy follow-ups.
+- Docker-backed Fuseki and the SIE-compatible Chroma adapter validated the
+  import-to-publication-to-KnowledgeSpace flow through
+  `docker/ks-14/scripts/run-ki10-smoke.sh`.
+- Deferred production hardening was recorded in strategy follow-ups.

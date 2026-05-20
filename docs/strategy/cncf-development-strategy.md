@@ -649,12 +649,12 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Notes contain execution details and results for each phase.
 
 ## Process Status Pointers
-- Current phase selection: Phase 26 — Knowledge Import and InformationSpace.
-- Current active phase dashboard: `docs/phase/phase-26.md`
-- Current active phase checklist: `docs/phase/phase-26-checklist.md`
-- Latest closed phase dashboard: `docs/phase/phase-25.md`
-- Latest closed phase checklist: `docs/phase/phase-25-checklist.md`
-- Candidate next phase areas after Phase 26: AwsComponent/S3 BlobStore
+- Current phase selection: none after Phase 26 closure.
+- Current active phase dashboard: none.
+- Current active phase checklist: none.
+- Latest closed phase dashboard: `docs/phase/phase-26.md`
+- Latest closed phase checklist: `docs/phase/phase-26-checklist.md`
+- Candidate next phase areas: AwsComponent/S3 BlobStore
   provider; Search/index planning; DB migration tooling.
 - Status interpretation rules: `docs/rules/stage-status-and-checklist-convention.md`
 
@@ -688,7 +688,7 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Phase 23: closed (`docs/phase/phase-23.md`)
 - Phase 24: closed (`docs/phase/phase-24.md`)
 - Phase 25: closed (`docs/phase/phase-25.md`)
-- Phase 26: active (`docs/phase/phase-26.md`)
+- Phase 26: closed (`docs/phase/phase-26.md`)
 
 ## 8. Completed Development Item History
 
@@ -1107,6 +1107,33 @@ Completed in Phase 25.
 - Deferred scope remains under 9.5 Knowledge Structure Follow-ups and future
   `textus-sie` / application-driver validation work.
 
+### 8.16 Knowledge Import and InformationSpace
+Completed in Phase 26.
+
+- Closed dashboard: `docs/phase/phase-26.md`
+- Closed checklist: `docs/phase/phase-26-checklist.md`
+- Completed scope:
+  - Component-owned `InformationSpace` as the curated/editable knowledge
+    information boundary, kept distinct from runtime `KnowledgeSpace`.
+  - Import batch, staging record, editable record, validation issue,
+    lifecycle, resolution candidate, identity binding, publication status, and
+    conflict model.
+  - Paper authoring vertical slice with validation, authority resolution,
+    confirmation, RDF/vector publication, and KnowledgeSpace materialization.
+  - Provider-neutral Knowledge engine SPI boundaries for authority resolution,
+    RDF publication, vector publication, and KnowledgeSpace materialization.
+  - `textus-sie` provider implementation for the Phase 26 SPI boundaries while
+    keeping Fuseki, Chroma, embedding, and provider behavior outside CNCF core.
+  - InformationSpace system admin/debug projection for batches, records,
+    validation issues, resolution candidates, confirmed items, publication
+    status, and conflicts.
+  - Docker-backed KI-10 live smoke with Fuseki, the SIE-compatible Chroma
+    adapter, local `cncf dev server`, paper flow publication, semantic
+    retrieval query, InformationSpace admin, KnowledgeSpace admin, and `/mcp`
+    `sie.status` / `sie.query`.
+- Deferred scope remains under 9.5 Knowledge Structure Follow-ups and future
+  application/production hardening.
+
 ## 9. Development Item Status
 
 This final section lists planned active and future development areas only.
@@ -1116,10 +1143,7 @@ corresponding completed-history entry.
 
 Current development item:
 
-- Phase 26 — Knowledge Import and InformationSpace.
-- Dashboard: `docs/phase/phase-26.md`
-- Checklist: `docs/phase/phase-26-checklist.md`
-- Current active slice: KI-10 — Docker-backed SIE smoke and Phase 26 closure.
+- None selected after Phase 26 closure.
 
 ### 9.1 Web Next Stage Follow-ups
 Future Web/platform development item.
@@ -1202,14 +1226,15 @@ is future hardening and operationalization.
 - Broader observability validation in the heavy-test/release validation path.
 
 ### 9.5 Knowledge Structure Follow-ups
-Current development item: Phase 26 — Knowledge Import and InformationSpace.
+Future knowledge/information development item.
 
 Phase 25 completed the baseline CNCF `KnowledgeSpace` model, query/projection
 surface, `textus-sie` provider projection, MCP facade validation, and
 Docker-backed live smoke. Completed scope is recorded in section 8.15.
-Phase 26 now adds the upstream curated information lifecycle: domain authoring
+Phase 26 completed the upstream curated information lifecycle: domain authoring
 input, `InformationSpace` staging/edit/resolve/confirm/publish, RDF/vector
 publication through `textus-sie`, and `KnowledgeSpace` materialization.
+Completed Phase 26 scope is recorded in section 8.16.
 
 Phase 26 documents:
 
@@ -1231,7 +1256,7 @@ Phase 25 notes:
 - `docs/notes/knowledge-structure/ks-13-cncf-mcp-end-to-end-validation.md`
 - `docs/notes/knowledge-structure/ks-14-docker-sie-live-validation.md`
 
-Phase 26 active scope:
+Phase 26 completed scope:
 
 - Add component-owned `InformationSpace` as the editing/curation boundary.
 - Add import batch, staging record, validation issue, resolution candidate,
@@ -1243,10 +1268,10 @@ Phase 26 active scope:
 - Use `textus-sie` as the driver implementation for Fuseki/Chroma-backed
   provider behavior without adding provider dependencies to CNCF core.
 - Add system admin/debug projection for InformationSpace state.
-- Current implementation status: KI-01 through KI-09 are complete; KI-10 live
-  Docker-backed smoke remains active before Phase 26 closure.
+- KI-10 closed Phase 26 with Docker-backed Fuseki / SIE-compatible Chroma
+  validation through `docker/ks-14/scripts/run-ki10-smoke.sh`.
 
-Future follow-ups outside the current Phase 26 baseline:
+Future follow-ups outside the closed Phase 26 baseline:
 
 - Production hardening for Fuseki/Chroma deployment, credentials,
   authorization, retention, import governance, and operational lifecycle.

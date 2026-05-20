@@ -207,7 +207,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers {
       val subsystem = DefaultSubsystemFactory.default(None, configuration)
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
 
-      val htmlResponse = server
+      val htmlresponse = server
         ._submit_operation_form(
           _post_form_request("/form/debug/http/echo", "body=hello"),
           "debug",
@@ -215,7 +215,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers {
           "echo"
         )
         .unsafeRunSync()
-      val apiResponse = server
+      val apiresponse = server
         ._submit_operation_form_api(
           _post_form_request("/form-api/debug/http/echo", "body=hello"),
           "debug",
@@ -224,10 +224,10 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers {
         )
         .unsafeRunSync()
 
-      htmlResponse.status.code shouldBe 403
-      apiResponse.status.code shouldBe 403
-      htmlResponse.as[String].unsafeRunSync() should include ("Forbidden")
-      apiResponse.as[String].unsafeRunSync() should include ("Forbidden")
+      htmlresponse.status.code shouldBe 403
+      apiresponse.status.code shouldBe 403
+      htmlresponse.as[String].unsafeRunSync() should include ("Forbidden")
+      apiresponse.as[String].unsafeRunSync() should include ("Forbidden")
     }
 
     "return debug job id header for debug trace-job form-api requests" in {
@@ -401,11 +401,11 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers {
       val response = server._component_web_app("debug", "debug-app", Vector.empty).unsafeRunSync()
       val body = response.as[String].unsafeRunSync()
       val asset = server._web_global_asset("theme.css").unsafeRunSync()
-      val nestedGlobalAsset = server._web_global_asset(Vector("fonts", "brand.woff2")).unsafeRunSync()
-      val nestedAppAsset = server._web_app_asset("debug", "debug-app", Vector("fonts", "app.woff2")).unsafeRunSync()
+      val nestedglobalasset = server._web_global_asset(Vector("fonts", "brand.woff2")).unsafeRunSync()
+      val nestedappasset = server._web_app_asset("debug", "debug-app", Vector("fonts", "app.woff2")).unsafeRunSync()
       val favicon = server._favicon().unsafeRunSync()
-      val generatedPage = server._static_form_app("console", Vector.empty).unsafeRunSync()
-      val generatedBody = generatedPage.as[String].unsafeRunSync()
+      val generatedpage = server._static_form_app("console", Vector.empty).unsafeRunSync()
+      val generatedbody = generatedpage.as[String].unsafeRunSync()
 
       response.status.code shouldBe 200
       body should include ("/web/assets/theme.css")
@@ -418,13 +418,13 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers {
       body should include ("user@example.test")
       asset.status.code shouldBe 200
       asset.as[String].unsafeRunSync() should include ("var(--bs-primary)")
-      nestedGlobalAsset.status.code shouldBe 200
-      nestedAppAsset.status.code shouldBe 200
+      nestedglobalasset.status.code shouldBe 200
+      nestedappasset.status.code shouldBe 200
       favicon.status.code shouldBe 200
       favicon.as[String].unsafeRunSync() should include ("<svg")
-      generatedPage.status.code shouldBe 200
-      generatedBody should include ("""rel="icon" href="/web/assets/favicon.svg"""")
-      generatedBody should include ("/web/assets/console-theme.css")
+      generatedpage.status.code shouldBe 200
+      generatedbody should include ("""rel="icon" href="/web/assets/favicon.svg"""")
+      generatedbody should include ("/web/assets/console-theme.css")
       body should include ("/web/assets/textus-form-debug.js")
       body should include ("/web/assets/textus-calltree.js")
       StaticFormAppAssets.textusFormDebugJs should include ("x-textus-debug-request-kind")
@@ -484,14 +484,14 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers {
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
       val app = server.routes(null.asInstanceOf[org.http4s.server.websocket.WebSocketBuilder2[IO]]).orNotFound
 
-      val applicationAdmin = app.run(HRequest[IO](method = Method.GET, uri = Uri.unsafeFromString("/web/admin"))).unsafeRunSync()
+      val applicationadmin = app.run(HRequest[IO](method = Method.GET, uri = Uri.unsafeFromString("/web/admin"))).unsafeRunSync()
       val declared = app.run(HRequest[IO](method = Method.GET, uri = Uri.unsafeFromString("/web/debug/admin/notifications"))).unsafeRunSync()
       val undeclared = app.run(HRequest[IO](method = Method.GET, uri = Uri.unsafeFromString("/web/debug/admin/unknown"))).unsafeRunSync()
-      val applicationAdminBody = applicationAdmin.as[String].unsafeRunSync()
+      val applicationadminbody = applicationadmin.as[String].unsafeRunSync()
 
-      applicationAdmin.status.code shouldBe 200
-      applicationAdminBody should include ("Application Admin")
-      applicationAdminBody should include ("Notification Admin")
+      applicationadmin.status.code shouldBe 200
+      applicationadminbody should include ("Application Admin")
+      applicationadminbody should include ("Notification Admin")
       declared.status.code shouldBe 200
       declared.as[String].unsafeRunSync() should include ("Notification Admin")
       undeclared.status.code shouldBe 404
@@ -529,9 +529,9 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers {
       diagnostics.status.code shouldBe 200
       diagnostics.as[String].unsafeRunSync() should include ("ob04_format")
       detail.status.code shouldBe 200
-      val detailBody = detail.as[String].unsafeRunSync()
-      detailBody should include ("argument.invalid")
-      detailBody should include ("1010401")
+      val detailbody = detail.as[String].unsafeRunSync()
+      detailbody should include ("argument.invalid")
+      detailbody should include ("1010401")
       unknown.status.code shouldBe 404
     }
 
@@ -590,6 +590,22 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers {
       componentpage.status.code shouldBe 200
       componentpage.as[String].unsafeRunSync() should include ("Information Import")
       unknowncomponent.status.code shouldBe 404
+    }
+
+    "accept JSON-RPC MCP requests over POST" in {
+      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val app = server.routes(null.asInstanceOf[org.http4s.server.websocket.WebSocketBuilder2[IO]]).orNotFound
+      val request = HRequest[IO](method = Method.POST, uri = Uri.unsafeFromString("/mcp"))
+        .withEntity("""{"jsonrpc":"2.0","id":"tools","method":"tools/list","params":{}}""")
+        .withContentType(`Content-Type`.parse("application/json").toOption.get)
+
+      val response = app.run(request).unsafeRunSync()
+
+      response.status.code shouldBe 200
+      val body = response.as[String].unsafeRunSync()
+      body should include (""""id":"tools"""")
+      body should include (""""tools"""")
     }
   }
 

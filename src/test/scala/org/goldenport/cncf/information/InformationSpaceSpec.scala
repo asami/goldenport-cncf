@@ -51,6 +51,26 @@ final class InformationSpaceSpec
       space.counts shouldBe InformationSpaceCounts()
     }
 
+    "record failed publication status without publishing the item" in {
+      val space = new InformationSpace
+      val batch = _success(space.registerImportBatch("paper", Vector(Record.data("title" -> "Draft", "authors" -> "Alice"))))
+      val recordid = batch.recordIds.head
+      _success(space.validateInformationRecord(recordid))
+      val item = _success(space.confirmInformationRecord(recordid))
+
+      val publication = _success(space.failInformationItemPublication(
+        item.id,
+        "rdf-vector",
+        Some("knowledge-space materialization failed"),
+        Some(KnowledgeFrameId("frame-failed"))
+      ))
+
+      publication.state shouldBe InformationPublicationState.Failed
+      publication.knowledgeFrameId shouldBe Some(KnowledgeFrameId("frame-failed"))
+      space.informationItemOption(item.id).map(_.state) shouldBe Some(InformationLifecycleState.Confirmed)
+      space.informationItemOption(item.id).flatMap(_.publicationId) shouldBe Some(publication.id)
+    }
+
     "reject invalid records before confirmation" in {
       val space = new InformationSpace
       val batch = _success(space.registerImportBatch("paper", Vector(Record.data("title" -> ""))))

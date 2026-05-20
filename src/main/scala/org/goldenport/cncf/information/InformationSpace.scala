@@ -288,6 +288,39 @@ final class InformationSpace {
         Consequence.argumentInvalid(s"information item not found: ${itemid.print}")
     }
 
+  def failInformationItemPublication(
+    itemid: InformationItemId,
+    target: String,
+    message: Option[String] = None,
+    knowledgeframeid: Option[KnowledgeFrameId] = None
+  ): Consequence[InformationPublicationStatus] =
+    informationItemOption(itemid) match {
+      case Some(item) if item.state == InformationLifecycleState.Confirmed || item.state == InformationLifecycleState.Published =>
+        val publicationid = item.publicationId.getOrElse(InformationPublicationId(_next_id("info-publication", _snapshot.publicationStatuses.size + 1)))
+        val publication = InformationPublicationStatus(
+          id = publicationid,
+          itemId = itemid,
+          state = InformationPublicationState.Failed,
+          target = target,
+          message = message,
+          knowledgeFrameId = knowledgeframeid,
+          publishedAt = Some(Instant.now())
+        )
+        val faileditem = item.copy(
+          publicationId = Some(publication.id),
+          updatedAt = Instant.now()
+        )
+        _snapshot = _snapshot.copy(
+          items = _snapshot.items.map(x => if (x.id == itemid) faileditem else x),
+          publicationStatuses = _snapshot.publicationStatuses.filterNot(_.id == publication.id) :+ publication
+        )
+        Consequence.success(publication)
+      case Some(_) =>
+        Consequence.argumentInvalid(s"information item is not confirmed: ${itemid.print}")
+      case None =>
+        Consequence.argumentInvalid(s"information item not found: ${itemid.print}")
+    }
+
   def publicationStatusOption(id: InformationPublicationId): Option[InformationPublicationStatus] =
     _snapshot.publicationStatuses.find(_.id == id)
 

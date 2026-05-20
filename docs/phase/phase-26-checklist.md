@@ -221,7 +221,7 @@ Expose compact operator/debug views for InformationSpace state.
 
 ## KI-10: Docker-Backed SIE Smoke and Phase 26 Closure
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
@@ -230,10 +230,25 @@ close the phase.
 
 ### Initial Tasks
 
-- [ ] Start Docker Fuseki and SIE-compatible Chroma adapter.
-- [ ] Import paper fixture.
-- [ ] Validate, resolve, confirm, publish.
-- [ ] Query through `SemanticRetrieval`.
-- [ ] Verify KnowledgeSpace admin counts and frame details.
-- [ ] Verify MCP status/query path still works after publication.
-- [ ] Record closure and deferred hardening in strategy.
+- [x] Start Docker Fuseki and SIE-compatible Chroma adapter.
+- [x] Import paper fixture.
+- [x] Validate, resolve, confirm, publish.
+- [x] Query through `SemanticRetrieval`.
+- [x] Verify KnowledgeSpace admin counts and frame details.
+- [x] Verify MCP status/query path still works after publication.
+- [x] Record closure and deferred hardening in strategy.
+
+### Completion Notes
+
+- `textus-sie` now has `InformationImport.runPaperFlow` for the Phase 26
+  paper flow smoke.
+- Local development validation uses `cncf dev server` with the local CNCF
+  runtime checkout and Docker-backed Fuseki / SIE-compatible Chroma adapter.
+- `docker/ks-14/scripts/run-ki10-smoke.sh` starts/checks stores, imports
+  vector seed data, runs the paper flow, verifies InformationSpace and
+  KnowledgeSpace admin pages, and calls `/mcp` for `sie.status` and
+  `sie.query`.
+- The recorded smoke completed with `KI10_SMOKE_OK`.
+- Deferred hardening remains future work: durable InformationSpace storage,
+  richer domain UIs, XML import, production conflict workflow, provider
+  credentials/retention/governance, and public CAR release validation.
