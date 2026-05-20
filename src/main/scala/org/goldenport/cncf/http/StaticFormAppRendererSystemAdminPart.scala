@@ -31,7 +31,7 @@ import io.circe.parser.parse
 
 /*
  * @since   May. 18, 2026
- * @version May. 18, 2026
+ * @version May. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 trait StaticFormAppRendererSystemAdminPart {
@@ -806,6 +806,7 @@ trait StaticFormAppRendererSystemAdminPart {
       |    <section class="h-100">
       |      <h3 class="h6">Execution</h3>
       |      <div class="list-group">
+      |        <a class="list-group-item list-group-item-action" href="/web/system/admin/information">InformationSpace</a>
       |        <a class="list-group-item list-group-item-action" href="/web/system/admin/knowledge">KnowledgeSpace</a>
       |        <a class="list-group-item list-group-item-action" href="/web/system/admin/observability">Observability diagnostics</a>
       |        <a class="list-group-item list-group-item-action" href="/form/admin/execution/history">Execution history</a>

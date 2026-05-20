@@ -30,6 +30,7 @@ import org.goldenport.cncf.cli.renderer.{CliTreeJsonRenderer, CliTreeYamlRendere
 import org.goldenport.cncf.entity.aggregate.{AggregateCollection, AggregateSpace, Repository, AggregateDefinition}
 import org.goldenport.cncf.entity.runtime.{EntityCollection, EntitySpace}
 import org.goldenport.cncf.entity.view.{Browser, ViewCollection, ViewSpace, ViewDefinition}
+import org.goldenport.cncf.information.InformationSpace
 import org.goldenport.cncf.knowledge.KnowledgeSpace
 import org.goldenport.cncf.operation.{CmlEntityRelationshipDefinition, CmlOperationAccess, CmlOperationDefinition}
 import org.goldenport.cncf.statemachine.{CmlStateMachineDefinition, StateMachinePlannerProvider}
@@ -53,7 +54,7 @@ import org.goldenport.schema.{DataType, XString}
  *  version Feb. 17, 2026
  *  version Mar. 30, 2026
  *  version Apr. 30, 2026
- * @version May. 18, 2026
+ * @version May. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class Component() extends Component.Core.Holder {
@@ -83,6 +84,7 @@ abstract class Component() extends Component.Core.Holder {
   val aggregateSpace: AggregateSpace = new AggregateSpace()
   val viewSpace: ViewSpace = new ViewSpace()
   val knowledgeSpace: KnowledgeSpace = new KnowledgeSpace()
+  val informationSpace: InformationSpace = new InformationSpace()
 
   override def core: Component.Core =
     _core.getOrElse(throw new IllegalStateException("Component core is not initialized."))

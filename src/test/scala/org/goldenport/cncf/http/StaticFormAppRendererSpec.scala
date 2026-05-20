@@ -2,7 +2,7 @@ package org.goldenport.cncf.http
 
 /*
  * @since   May. 18, 2026
- * @version May. 18, 2026
+ * @version May. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 import scala.collection.mutable.ListBuffer
@@ -51,6 +51,7 @@ import org.goldenport.cncf.entity.runtime.*
 import org.goldenport.cncf.entity.view.{Browser, ViewBuilder, ViewCollection, ViewDefinition, ViewQueryDefinition}
 import org.goldenport.cncf.operation.{CmlEntityRelationshipDefinition, CmlOperationAssociationBinding, CmlOperationDefinition, CmlOperationField, CmlOperationImageBinding}
 import org.goldenport.cncf.job.{ActionId, ActionTask, JobPersistencePolicy, JobRunMode, JobSubmitOption}
+import org.goldenport.cncf.information.*
 import org.goldenport.cncf.knowledge.*
 import org.goldenport.cncf.path.AliasResolver
 import org.goldenport.cncf.subsystem.Subsystem
@@ -63,7 +64,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr. 12, 2026
- * @version May. 18, 2026
+ * @version May. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
@@ -378,6 +379,36 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       unconfigured should not include ("Showing first 1 of 2 nodes.")
       _renderer.renderSystemAdminKnowledgeComponent(subsystem, "missing") shouldBe None
       _renderer.renderSystemAdminKnowledgeNode(subsystem, "knowledge_component", "missing") shouldBe None
+    }
+
+    "render system admin information pages" in {
+      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      subsystem.add(TestComponentFactory.create("information_component", Protocol.empty))
+      val component = subsystem.findComponent("information_component").getOrElse(fail("information component missing"))
+      val batch = _success(component.informationSpace.registerImportBatch(
+        "paper",
+        Vector(Record.data(
+          "title" -> "Knowledge Import",
+          "authors" -> "Alice Example",
+          "venue" -> "CNCF Notes"
+        ))
+      ))
+      val record = component.informationSpace.listImportRecords(batch.id).headOption.getOrElse(fail("information record missing"))
+      _success(component.informationSpace.validateInformationRecord(record.id))
+      val item = _success(component.informationSpace.confirmInformationRecord(record.id))
+      _success(component.informationSpace.publishInformationItem(item.id, "fuseki", Some("published")))
+
+      val index = _renderer.renderSystemAdminInformation(subsystem).body
+      val detail = _renderer.renderSystemAdminInformationComponent(subsystem, "information-component").map(_.body).getOrElse(fail("information component page missing"))
+
+      index should include ("System Information")
+      index should include ("information_component")
+      index should include ("/web/system/admin/information/information_component")
+      detail should include ("System Information information_component")
+      detail should include ("Knowledge Import")
+      detail should include ("paper")
+      detail should include ("published")
+      _renderer.renderSystemAdminInformationComponent(subsystem, "missing") shouldBe None
     }
 
     "render Blob admin read-only pages" in {

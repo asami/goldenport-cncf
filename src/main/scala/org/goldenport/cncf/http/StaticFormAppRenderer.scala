@@ -3,7 +3,7 @@ package org.goldenport.cncf.http
 /*
  * @since   Apr. 12, 2026
  *  version Apr. 30, 2026
- * @version May. 18, 2026
+ * @version May. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 object StaticFormAppRenderer {
@@ -62,3 +62,4 @@ final class StaticFormAppRenderer(
     with StaticFormAppRendererJobPart
     with StaticFormAppRendererObservabilityPart
     with StaticFormAppRendererKnowledgePart
+    with StaticFormAppRendererInformationPart

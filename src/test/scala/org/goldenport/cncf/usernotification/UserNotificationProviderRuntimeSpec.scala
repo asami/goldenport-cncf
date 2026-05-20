@@ -6,7 +6,7 @@ import org.goldenport.configuration.{Configuration, ConfigurationTrace, Resolved
 import org.goldenport.cncf.component.{Component, ComponentId, ComponentInit, ComponentInstanceId, ComponentOrigin}
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.event.{EventPublishOption, ReceptionDomainEvent}
-import org.goldenport.cncf.job.{ActionId, InMemoryJobEngine, JobRunMode, JobStatus, JobSubmitOption, JobTask, TaskOutcome, TaskSucceeded}
+import org.goldenport.cncf.job.{ActionId, InMemoryJobEngine, JobEngine, JobId, JobRunMode, JobStatus, JobSubmitOption, JobTask, TaskOutcome, TaskSucceeded}
 import org.goldenport.cncf.subsystem.{GenericSubsystemComponentBinding, GenericSubsystemDescriptor, GenericSubsystemRuntimeBinding, GenericSubsystemUserNotificationBinding, GenericSubsystemUserNotificationEventForwardingBinding, GenericSubsystemUserNotificationProviderBinding, Subsystem}
 import org.goldenport.protocol.Protocol
 import org.goldenport.protocol.operation.OperationResponse
@@ -16,7 +16,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   May.  7, 2026
- * @version May. 11, 2026
+ * @version May. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UserNotificationProviderRuntimeSpec extends AnyWordSpec with Matchers {
@@ -156,7 +156,7 @@ final class UserNotificationProviderRuntimeSpec extends AnyWordSpec with Matcher
         case _ => ()
       }
 
-      subsystem.jobEngine.getStatus(jobid) shouldBe Some(JobStatus.Succeeded)
+      _await_status(subsystem.jobEngine, jobid, JobStatus.Succeeded) shouldBe true
       sink.size shouldBe 1
       sink.head.actionUrl shouldBe Some(s"/web/blog/jobs/${jobid.value}")
       sink.head.metadata.get("jobId") shouldBe Some(jobid.value)
@@ -305,4 +305,20 @@ final class UserNotificationProviderRuntimeSpec extends AnyWordSpec with Matcher
         TaskSucceeded(OperationResponse.Scalar(name))
       }
     }
+
+  private def _await_status(
+    jobengine: JobEngine,
+    jobid: JobId,
+    expected: JobStatus,
+    timeoutmillis: Long = 5000L,
+    pollmillis: Long = 20L
+  ): Boolean = {
+    val deadline = System.currentTimeMillis() + timeoutmillis
+    var matched = jobengine.getStatus(jobid).contains(expected)
+    while (!matched && System.currentTimeMillis() < deadline) {
+      Thread.sleep(pollmillis)
+      matched = jobengine.getStatus(jobid).contains(expected)
+    }
+    matched
+  }
 }

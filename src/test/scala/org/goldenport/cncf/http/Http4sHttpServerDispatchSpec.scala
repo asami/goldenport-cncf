@@ -9,6 +9,7 @@ import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.component.{ComponentId, ComponentInstanceId}
 import org.goldenport.cncf.context.{Capability, ExecutionContext, PrincipalId, SecurityLevel, SessionContext, SubjectKind}
 import org.goldenport.cncf.config.RuntimeConfig
+import org.goldenport.cncf.information.*
 import org.goldenport.cncf.knowledge.{KnowledgeNode, KnowledgeNodeId, KnowledgeWorkingSetSnapshot}
 import org.goldenport.cncf.security.{AuthenticationProvider, AuthenticationRequest, AuthenticationResult}
 import org.goldenport.cncf.subsystem.DefaultSubsystemFactory
@@ -26,7 +27,7 @@ import org.typelevel.ci.CIStringSyntax
 /*
  * @since   Apr. 24, 2026
  *  version Apr. 25, 2026
- * @version May. 18, 2026
+ * @version May. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers {
@@ -561,6 +562,34 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers {
       nodepage.as[String].unsafeRunSync() should include ("Node One")
       unknowncomponent.status.code shouldBe 404
       unknownnode.status.code shouldBe 404
+    }
+
+    "dispatch system information admin routes" in {
+      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      subsystem.add(TestComponentFactory.create("information_component", Protocol.empty))
+      val component = subsystem.findComponent("information_component").getOrElse(fail("information component missing"))
+      val batch = component.informationSpace.registerImportBatch(
+        "paper",
+        Vector(Record.data("title" -> "Information Import", "authors" -> "Alice Example"))
+      ) match {
+        case Consequence.Success(batch) => batch
+        case Consequence.Failure(conclusion) => fail(conclusion.toString)
+      }
+      val record = component.informationSpace.listImportRecords(batch.id).headOption.getOrElse(fail("information record missing"))
+      component.informationSpace.validateInformationRecord(record.id)
+      component.informationSpace.confirmInformationRecord(record.id)
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val app = server.routes(null.asInstanceOf[org.http4s.server.websocket.WebSocketBuilder2[IO]]).orNotFound
+
+      val index = app.run(HRequest[IO](method = Method.GET, uri = Uri.unsafeFromString("/web/system/admin/information"))).unsafeRunSync()
+      val componentpage = app.run(HRequest[IO](method = Method.GET, uri = Uri.unsafeFromString("/web/system/admin/information/information-component"))).unsafeRunSync()
+      val unknowncomponent = app.run(HRequest[IO](method = Method.GET, uri = Uri.unsafeFromString("/web/system/admin/information/missing"))).unsafeRunSync()
+
+      index.status.code shouldBe 200
+      index.as[String].unsafeRunSync() should include ("System Information")
+      componentpage.status.code shouldBe 200
+      componentpage.as[String].unsafeRunSync() should include ("Information Import")
+      unknowncomponent.status.code shouldBe 404
     }
   }
 

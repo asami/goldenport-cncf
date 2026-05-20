@@ -2,7 +2,7 @@ package org.goldenport.cncf.http
 
 /*
  * @since   May. 18, 2026
- * @version May. 18, 2026
+ * @version May. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 import cats.effect.IO
@@ -54,7 +54,7 @@ import org.goldenport.observation.{Cause, Descriptor}
  *  version Jan. 21, 2026
  *  version Mar. 29, 2026
  *  version Apr. 30, 2026
- * @version May. 18, 2026
+ * @version May. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Http4sHttpServer(
@@ -189,6 +189,10 @@ final class Http4sHttpServer(
         if (_is_web_authorized("system", "admin.knowledge", component, Some(req), Some("admin.system.knowledge"))) _system_admin_knowledge_component(component) else _forbidden_web(req, Some("system"), Some("admin.knowledge"), Some(component))
       case req @ GET -> Root / "web" / "system" / "admin" / "knowledge" / component / "nodes" / nodeId =>
         if (_is_web_authorized("system", "admin.knowledge", "node", Some(req), Some("admin.system.knowledge"))) _system_admin_knowledge_node(component, nodeId) else _forbidden_web(req, Some("system"), Some("admin.knowledge"), Some("node"))
+      case req @ GET -> Root / "web" / "system" / "admin" / "information" =>
+        if (_is_web_authorized("system", "admin.information", "index", Some(req), Some("admin.system.information"))) _system_admin_information() else _forbidden_web(req, Some("system"), Some("admin.information"), Some("index"))
+      case req @ GET -> Root / "web" / "system" / "admin" / "information" / component =>
+        if (_is_web_authorized("system", "admin.information", component, Some(req), Some("admin.system.information"))) _system_admin_information_component(component) else _forbidden_web(req, Some("system"), Some("admin.information"), Some(component))
       case req @ GET -> Root / "web" / "system" / "admin" / "observability" =>
         if (_is_web_authorized("system", "admin.observability", "index", Some(req), Some("admin.system.observability"))) _system_admin_observability() else _forbidden_web(req, Some("system"), Some("admin.observability"), Some("index"))
       case req @ GET -> Root / "web" / "system" / "admin" / "observability" / "metrics" =>
@@ -543,6 +547,24 @@ final class Http4sHttpServer(
           HStatus.NotFound,
           s"knowledge node not found: $component/$nodeId",
           s"/web/system/admin/knowledge/$component/nodes/$nodeId"
+        )
+    }
+
+  private def _system_admin_information(): IO[HResponse[IO]] =
+    _html(_static_form_app_renderer.renderSystemAdminInformation(engine.runtimeSubsystem))
+
+  private def _system_admin_information_component(
+    component: String
+  ): IO[HResponse[IO]] =
+    _static_form_app_renderer.renderSystemAdminInformationComponent(engine.runtimeSubsystem, component) match {
+      case Some(page) =>
+        _html(page)
+      case None =>
+        _web_error_response(
+          Some("system"),
+          HStatus.NotFound,
+          s"information component not found: $component",
+          s"/web/system/admin/information/$component"
         )
     }
 
