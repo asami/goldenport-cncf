@@ -18,7 +18,7 @@ It complements the summary-level phase document (`phase-27.md`).
 
 ## KE-01: Open Phase 27 and Freeze Editor Scope
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
@@ -32,8 +32,8 @@ fix the scope as application-grade knowledge editing on top of CNCF
 - [x] Add Phase 27 dashboard and checklist documents.
 - [x] Update the strategy current phase pointers to Phase 27.
 - [x] Keep Phase 26 closed and use its `InformationSpace` foundation as input.
-- [ ] Add or confirm the `textus-knowledge-editor` driver repository.
-- [ ] Record the editor scope in a design/journal note if implementation
+- [x] Add or confirm the `textus-knowledge-editor` driver repository.
+- [x] Record the editor scope in a design/journal note if implementation
       decisions need more detail than this checklist.
 
 ### Decisions
@@ -79,11 +79,21 @@ fix the scope as application-grade knowledge editing on top of CNCF
 - The first implementation slice can start from domain vocabulary and editor
   field modeling.
 
+### Completion Notes
+
+- Driver repository confirmed at
+  `/Users/asami/src/dev2026/textus-knowledge-editor`.
+- Book-first editor scope, 1.5hop+ meaning-neighborhood modeling, common
+  semantic-neighborhood vs book-profile split, and domain Entity to Textus
+  Knowledge binding policy are recorded in
+  `docs/journal/2026/05/phase-27-book-knowledge-modeling-policy.md`.
+- Next active work is KE-02.
+
 ---
 
 ## KE-02: Book Authoring Vocabulary, Identifiers, and Field Model
 
-Status: TODO
+Status: DONE
 
 ### Objective
 
@@ -93,36 +103,46 @@ materialization.
 
 ### Initial Tasks
 
-- [ ] Define book fields: title, authors/editors, publisher, publication date,
+- [x] Define book fields: title, authors/editors, publisher, publication date,
       ISBN, chapters/sections, summary, keywords, citations, and source
       references.
-- [ ] Define book identifier fields: ISBN-10, ISBN-13, DOI where relevant,
+- [x] Define book identifier fields: ISBN-10, ISBN-13, DOI where relevant,
       OpenLibrary id, Wikidata id, DBpedia URI, VIAF/ISNI/ORCID for
       contributors, OCLC/LCCN/NDL/library identifiers, publisher identifier,
       source URL, and other external authority ids.
-- [ ] Keep work/edition/chapter/manifestation distinctions explicit enough for
+- [x] Keep work/edition/chapter/manifestation distinctions explicit enough for
       the editor, but avoid freezing a full bibliographic ontology before the
       first book workflow proves the operational need.
-- [ ] Define identifier import behavior: entering ISBN or another supported id
+- [x] Define identifier import behavior: entering ISBN or another supported id
       creates or updates a book staging record with imported candidate fields
       and source/evidence/provenance.
-- [ ] Define multi-id merge behavior: multiple identifiers may refer to the
+- [x] Define multi-id merge behavior: multiple identifiers may refer to the
       same book/work/edition, but they remain distinct bindings with source,
       confidence, and evidence.
-- [ ] Define DBpedia lookup inputs and outputs for book enrichment: DBpedia
+- [x] Define DBpedia lookup inputs and outputs for book enrichment: DBpedia
       resource URI/RDF node as the primary match result, plus title,
       author/editor, ISBN where available, publication date, publisher,
       abstract/comment, subjects/categories, sameAs links, and DBpedia URI.
-- [ ] Define how DBpedia confidence/evidence is shown as reviewable
+- [x] Define how DBpedia confidence/evidence is shown as reviewable
       InformationSpace candidates.
-- [ ] Separate required, recommended, optional, and resolver-assisted fields.
-- [ ] Define editor-facing descriptions and examples for each field.
+- [x] Separate required, recommended, optional, and resolver-assisted fields.
+- [x] Define editor-facing descriptions and examples for each field.
+
+### Completion Notes
+
+- Book authoring vocabulary, field groups, identifier behavior, resolver
+  expectations, and editor guidance contract are recorded in
+  `docs/journal/2026/05/phase-27-book-authoring-vocabulary-field-model.md`.
+- Field classifications are `required`, `recommended`, `optional`,
+  `resolver-assisted`, and `derived/materialized`.
+- KE-03 owns the concrete mapping from these fields into `KnowledgeNode`,
+  `KnowledgeRelationship`, `KnowledgeFact`, and 1.5hop+ `KnowledgeFrame`.
 
 ---
 
 ## KE-03: Book-to-KnowledgeNode Attribute Mapping
 
-Status: TODO
+Status: ACTIVE
 
 ### Objective
 
@@ -210,6 +230,9 @@ Create the first application Web surface for knowledge editing.
 
 ### Initial Tasks
 
+- [ ] Initialize or normalize the `textus-knowledge-editor` project using
+      `cozy init component`, the Cozy-owned component init/scaffolding
+      contract from Cozy Phase 6 CS-19.
 - [ ] Add editor home/list screens.
 - [ ] Add create/import/edit/detail navigation for book knowledge.
 - [ ] Add ISBN/identifier entry flow for creating or seeding a book record.

@@ -67,9 +67,9 @@ Scope boundaries:
 
 ## 3. Active Work Stack
 
-- A (ACTIVE): KE-01 — Open Phase 27 and freeze editor scope.
-- B (TODO): KE-02 — Book authoring vocabulary, identifiers, and field model.
-- C (TODO): KE-03 — Book-to-KnowledgeNode attribute mapping.
+- A (DONE): KE-01 — Open Phase 27 and freeze editor scope.
+- B (DONE): KE-02 — Book authoring vocabulary, identifiers, and field model.
+- C (ACTIVE): KE-03 — Book-to-KnowledgeNode attribute mapping.
 - D (TODO): KE-04 — InformationSpace editor API and projection contract.
 - E (TODO): KE-05 — Web editor shell and book navigation in
   `textus-knowledge-editor`.
@@ -81,12 +81,12 @@ Scope boundaries:
 
 Resume hint:
 
-- Start from KE-01. Do not reopen Phase 26 KI items unless fixing a regression.
+- Start from KE-03. Do not reopen Phase 26 KI items unless fixing a regression.
 
 ## 4. Development Items
 
-- [ ] KE-01: Open Phase 27 and freeze editor scope.
-- [ ] KE-02: Book authoring vocabulary, identifiers, and field model.
+- [x] KE-01: Open Phase 27 and freeze editor scope.
+- [x] KE-02: Book authoring vocabulary, identifiers, and field model.
 - [ ] KE-03: Book-to-KnowledgeNode attribute mapping.
 - [ ] KE-04: InformationSpace editor API and projection contract.
 - [ ] KE-05: Web editor shell and book navigation in `textus-knowledge-editor`.

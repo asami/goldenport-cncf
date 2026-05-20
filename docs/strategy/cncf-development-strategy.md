@@ -1292,6 +1292,8 @@ Phase 26 completed scope:
 
 Phase 27 active scope:
 
+- KE-01 and KE-02 are done. Current focus is KE-03:
+  book-to-`KnowledgeNode` attribute mapping.
 - Book-first domain knowledge editing through `textus-knowledge-editor`, with
   paper and web knowledge following after the book path is validated.
 - ISBN and other publication identifiers as import/seed keys for creating CNCF
