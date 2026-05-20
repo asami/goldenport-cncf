@@ -1299,6 +1299,12 @@ Phase 27 active scope:
 - Multiple external identifiers and RDF anchors for book knowledge linkage,
   including ISBN, DOI, OpenLibrary, Wikidata, DBpedia, VIAF, ISNI, ORCID, and
   library authority ids.
+- 1.5hop+ meaning-neighborhood materialization centered on the CNCF book
+  `KnowledgeNode`, with semantically essential surrounding nodes,
+  relationships, facts, evidence, and provenance grouped as a `KnowledgeFrame`.
+- Separation between the reusable common semantic-neighborhood contract and
+  the book-oriented extension profile for bibliographic identifiers, roles,
+  relations, and authority/source mappings.
 - DBpedia integration as one external RDF knowledge source for book records,
   using DBpedia resource URI/RDF node as an external anchor while keeping
   imported data reviewable before confirmation.

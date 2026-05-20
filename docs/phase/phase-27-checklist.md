@@ -42,6 +42,11 @@ fix the scope as application-grade knowledge editing on top of CNCF
 - `KnowledgeSpace` remains runtime semantic materialization and traversal.
 - `textus-knowledge-editor` owns application authoring UX.
 - Book knowledge is the first vertical slice.
+- Book knowledge is organized as a 1.5hop+ meaning neighborhood centered on a
+  CNCF `KnowledgeNode`, not as a flat bibliographic record.
+- Common semantic-neighborhood structure is reusable CNCF knowledge structure;
+  book-specific identifiers, roles, and bibliographic relations are a domain
+  profile extension on top of it.
 - ISBN and other publication identifiers are import/seed keys for creating
   book `InformationSpace` data, not replacements for CNCF item ids,
   `KnowledgeNodeId`, or RDF subject ids.
@@ -153,6 +158,13 @@ and related `KnowledgeRelationship` facts without id collapse.
 - [ ] Define how DBpedia sameAs links, categories, abstracts, predicates, and
       ontology/resource classes map into identity, semantics, structure,
       sources, and evidence/provenance sections.
+- [ ] Define the book 1.5hop+ neighborhood: focal book node, external RDF
+      anchors, author/publisher/work/edition/subject/citation nodes,
+      relationships, facts, evidence, and provenance that are essential for
+      meaning.
+- [ ] Separate common semantic-neighborhood fields from book-oriented
+      extension fields, so generic KnowledgeNode/KnowledgeFrame projection and
+      book profile projection remain distinguishable.
 
 ---
 
@@ -173,6 +185,11 @@ depending on system admin/debug representations.
 - [ ] Add mapping-profile projection metadata so the editor can explain how a
       field maps to KnowledgeNode section, KnowledgeRelationship, KnowledgeFact,
       and evidence/provenance.
+- [ ] Add projection metadata for the resulting 1.5hop+ `KnowledgeFrame`, so
+      the editor can explain which surrounding nodes and relationships are part
+      of the book meaning neighborhood.
+- [ ] Add projection metadata that labels each included node/relationship as
+      common semantic-neighborhood structure or book-profile extension.
 - [ ] Add action projection for save, validate, resolve, confirm, reject,
       reopen, publish, and materialize.
 - [ ] Keep system admin/debug projection separate from application editor

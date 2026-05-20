@@ -37,6 +37,12 @@ This document is a phase dashboard, not a design journal.
   book identifier/title/author data can be matched.
 - Define the concrete `KnowledgeNode` attributes that edited/imported domain
   knowledge publishes/materializes into.
+- Organize edited/imported book knowledge as a 1.5hop+ meaning neighborhood:
+  the focal book `KnowledgeNode` plus semantically essential surrounding
+  identifiers, RDF anchors, relationships, facts, evidence, and provenance.
+- Separate the reusable common semantic-neighborhood contract from the
+  book-oriented extension profile, so CNCF core knowledge projection does not
+  hard-code bibliographic assumptions.
 - Preserve the Phase 26 split:
   - `InformationSpace` owns editing, validation, resolution, confirmation, and
     publication state.
@@ -103,6 +109,8 @@ Phase 27 can close when:
 - Multiple external identifiers and RDF anchors can provide reviewable
   authority/enrichment candidates for book records when matching data is
   available.
+- Book KnowledgeSpace materialization can produce a 1.5hop+ `KnowledgeFrame`
+  centered on the book `KnowledgeNode`.
 - Paper and web knowledge follow-up paths are either implemented or explicitly
   scoped as deferred after the book-first validation.
 - The field model for each knowledge type is concrete enough for validation,

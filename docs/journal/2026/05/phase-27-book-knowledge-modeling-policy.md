@@ -50,6 +50,159 @@ The node must not collapse these identities into one value:
 - Library authority ids
 - Entity id or Tag id
 
+## 1.5hop+ Meaning Node Organization
+
+Phase 27 should connect this book modeling policy to the SimpleModeling
+1.5hop+ concept neighborhood idea:
+
+- Reference article:
+  `https://www.simplemodeling.org/en/knowledge-development/onefive-hop-plus.html`
+- Local development URL used during this discussion:
+  `http://localhost:8085/en/knowledge-development/onefive-hop-plus.html`
+
+1.5hop+ says that a concept neighborhood is not defined by a fixed hop count.
+The neighborhood should include the elements that are semantically essential to
+understand the concept, while still enforcing a safe upper bound.
+
+For Phase 27, this means a CNCF book `KnowledgeNode` is not only a row-like
+book record. It is a meaning node organized around:
+
+- the CNCF-owned book node name;
+- the selected/internal RDF node for the book;
+- external RDF anchors such as Wikidata, DBpedia, Open Library, and LOC;
+- identifier-only bindings such as ISBN and OCLC;
+- first-order book relations such as author, publisher, work/edition, series,
+  chapter, citation, subject, and source;
+- semantically inseparable supporting nodes, such as author authority nodes,
+  subject/category nodes, work/edition nodes, and source/evidence/provenance
+  nodes.
+
+The important point is that 1.5hop+ is not a graph-distance rule. It is a
+semantic inclusion rule. A book node's operational neighborhood should include
+the nodes and relationships required for domain logic, editor explanation, and
+AI retrieval/explanation to understand the book.
+
+Phase 27 should keep two layers separate:
+
+- common semantic neighborhood;
+- book-oriented extension.
+
+The common semantic neighborhood is the CNCF-level contract. It should be
+usable by book, paper, web, and later knowledge domains. It defines how a
+focal `KnowledgeNode` is surrounded by meaning-bearing nodes, relationships,
+facts, evidence, provenance, identity bindings, RDF anchors, and source
+references. This layer belongs to the reusable KnowledgeNode / KnowledgeFrame
+model and should not mention ISBN, author order, publisher, or other
+book-specific concepts as core requirements.
+
+The book-oriented extension is a domain profile on top of the common
+neighborhood. It selects which book relationships and supporting nodes are
+essential for book understanding, editor explanation, and retrieval. ISBN,
+Open Library, Wikidata, DBpedia, author authority, work/edition, publisher,
+series, chapter, subject, and citation handling belong here unless they prove
+to be reusable across domains.
+
+Example:
+
+```text
+CNCF Book KnowledgeNode
+  -> title / labels / descriptions
+  -> ISBN / DOI / OpenLibrary / Wikidata / DBpedia anchors
+  -> author authority nodes
+      -> VIAF / ISNI / ORCID / Wikidata anchors
+  -> publisher node
+  -> work / edition node
+  -> chapter / section nodes when modeled
+  -> subject / category nodes
+  -> citation target nodes
+  -> evidence / source / provenance nodes
+```
+
+This is a 1.5hop+ neighborhood because it includes nodes beyond simple 1-hop
+edges when those nodes carry essential meaning, such as author authority
+identity, subject hierarchy, work/edition distinction, or source provenance.
+
+The mapping profile should therefore produce:
+
+```text
+RDF node / external id / imported source
+  -> InformationSpace candidate
+  -> semantic mapping profile
+  -> KnowledgeNode meaning node
+  -> 1.5hop+ KnowledgeFrame neighborhood
+```
+
+`KnowledgeFrame` is the natural unit for a materialized 1.5hop+ neighborhood.
+It can group the focal book node, selected surrounding nodes, relationships,
+facts, evidence, and provenance that make the book meaning operationally
+usable.
+
+### Common Semantic Neighborhood
+
+The common semantic neighborhood should be domain-neutral. It is the shared
+shape that CNCF can provide for all knowledge authoring domains:
+
+```text
+focal KnowledgeNode
+  -> identity / RDF node / external identifiers
+  -> presentation labels and descriptions
+  -> semantic types and classifications
+  -> canonical KnowledgeRelationships
+  -> KnowledgeFacts
+  -> evidence and provenance
+  -> source references and provider/source alignments
+  -> derived node-convenience attributes
+```
+
+The reusable rule is:
+
+```text
+include surrounding knowledge when it is semantically required to operate on,
+explain, validate, retrieve, or materialize the focal node.
+```
+
+This means CNCF should provide the projection and explanation vocabulary for
+why a surrounding node or edge is included. The common layer should answer
+questions such as:
+
+- Is this surrounding node an identity anchor, classification, part-whole
+  member, source, evidence, provenance, correspondence, or operational
+  support node?
+- Is the value canonical as a `KnowledgeRelationship` / `KnowledgeFact`, or is
+  it a derived convenience field on the focal `KnowledgeNode`?
+- Which InformationSpace record, source, or RDF/provider input produced it?
+- Can it be shown in the editor without exposing raw RDF or provider payloads?
+
+### Book-Oriented Extension
+
+The book profile specializes the common semantic neighborhood:
+
+```text
+Book KnowledgeNode
+  -> book identity bindings
+  -> bibliographic presentation fields
+  -> book/work/edition semantic types
+  -> author/editor/publisher relationships
+  -> work/edition/series/chapter part-whole structure
+  -> subject/category/classification links
+  -> citation links
+  -> Open Library / Wikidata / DBpedia / LOC / VIAF / ISNI / ORCID anchors
+  -> ISBN / DOI / OCLC / LCCN / NDL identifiers
+  -> import source, resolver evidence, editor confirmation provenance
+```
+
+Book-specific values should enter the common model through a mapping profile,
+not by adding bibliographic assumptions to the generic `KnowledgeNode`
+contract. For example:
+
+- ISBN is a book profile identity binding, not a generic node id.
+- author order is a book relationship/fact qualifier, not a generic
+  relationship kind.
+- work/edition/manifestation pressure is a book-oriented part-whole/profile
+  concern until it proves reusable enough for a common model.
+- DBpedia category and Wikidata class mappings are source/profile
+  interpretations before they become confirmed CNCF classifications.
+
 ## External ID / RDF Anchor Classification
 
 RDF-node-like anchors:
