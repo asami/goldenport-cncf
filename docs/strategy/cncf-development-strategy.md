@@ -649,12 +649,12 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Notes contain execution details and results for each phase.
 
 ## Process Status Pointers
-- Current phase selection: none after Phase 26 closure.
-- Current active phase dashboard: none.
-- Current active phase checklist: none.
+- Current phase selection: Phase 27 — Knowledge Editor and Domain Knowledge Authoring.
+- Current active phase dashboard: `docs/phase/phase-27.md`
+- Current active phase checklist: `docs/phase/phase-27-checklist.md`
 - Latest closed phase dashboard: `docs/phase/phase-26.md`
 - Latest closed phase checklist: `docs/phase/phase-26-checklist.md`
-- Candidate next phase areas: AwsComponent/S3 BlobStore
+- Candidate next phase areas after Phase 27: AwsComponent/S3 BlobStore
   provider; Search/index planning; DB migration tooling.
 - Status interpretation rules: `docs/rules/stage-status-and-checklist-convention.md`
 
@@ -689,6 +689,7 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Phase 24: closed (`docs/phase/phase-24.md`)
 - Phase 25: closed (`docs/phase/phase-25.md`)
 - Phase 26: closed (`docs/phase/phase-26.md`)
+- Phase 27: active (`docs/phase/phase-27.md`)
 
 ## 8. Completed Development Item History
 
@@ -1143,7 +1144,17 @@ corresponding completed-history entry.
 
 Current development item:
 
-- None selected after Phase 26 closure.
+- Phase 27 — Knowledge Editor and Domain Knowledge Authoring.
+  - Dashboard: `docs/phase/phase-27.md`
+  - Checklist: `docs/phase/phase-27-checklist.md`
+  - Driver: `/Users/asami/src/dev2026/textus-knowledge-editor`
+  - Goal: build `textus-knowledge-editor` on the CNCF `InformationSpace`
+    foundation so users can start with book knowledge, import/seed it from ISBN
+    or other publication identifiers, link/enrich it through multiple external
+    ids and RDF-node candidates such as DBpedia and Wikidata, edit it through
+    self-explanatory Web authoring screens, then publish/materialize that
+    knowledge into `KnowledgeSpace`. Paper and web knowledge follow after the
+    book-first validation path.
 
 ### 9.1 Web Next Stage Follow-ups
 Future Web/platform development item.
@@ -1226,7 +1237,7 @@ is future hardening and operationalization.
 - Broader observability validation in the heavy-test/release validation path.
 
 ### 9.5 Knowledge Structure Follow-ups
-Future knowledge/information development item.
+Active knowledge/information development item.
 
 Phase 25 completed the baseline CNCF `KnowledgeSpace` model, query/projection
 surface, `textus-sie` provider projection, MCP facade validation, and
@@ -1235,11 +1246,19 @@ Phase 26 completed the upstream curated information lifecycle: domain authoring
 input, `InformationSpace` staging/edit/resolve/confirm/publish, RDF/vector
 publication through `textus-sie`, and `KnowledgeSpace` materialization.
 Completed Phase 26 scope is recorded in section 8.16.
+Phase 27 now uses `textus-knowledge-editor` as the development driver to add
+the application-grade knowledge editing surface on top of the Phase 26
+InformationSpace foundation.
 
 Phase 26 documents:
 
 - `docs/phase/phase-26.md`
 - `docs/phase/phase-26-checklist.md`
+
+Phase 27 documents:
+
+- `docs/phase/phase-27.md`
+- `docs/phase/phase-27-checklist.md`
 
 Phase 25 notes:
 
@@ -1271,7 +1290,28 @@ Phase 26 completed scope:
 - KI-10 closed Phase 26 with Docker-backed Fuseki / SIE-compatible Chroma
   validation through `docker/ks-14/scripts/run-ki10-smoke.sh`.
 
-Future follow-ups outside the closed Phase 26 baseline:
+Phase 27 active scope:
+
+- Book-first domain knowledge editing through `textus-knowledge-editor`, with
+  paper and web knowledge following after the book path is validated.
+- ISBN and other publication identifiers as import/seed keys for creating CNCF
+  `InformationSpace` data for book KnowledgeNode materialization.
+- Multiple external identifiers and RDF anchors for book knowledge linkage,
+  including ISBN, DOI, OpenLibrary, Wikidata, DBpedia, VIAF, ISNI, ORCID, and
+  library authority ids.
+- DBpedia integration as one external RDF knowledge source for book records,
+  using DBpedia resource URI/RDF node as an external anchor while keeping
+  imported data reviewable before confirmation.
+- Self-explanatory Web authoring forms with field descriptions, examples,
+  validation feedback, resolution guidance, and publication/use explanations.
+- Concrete book domain attributes first, then paper and web domain attributes.
+- Concrete book-to-`KnowledgeNode` attribute mapping for edited/imported
+  knowledge.
+- Publication/materialization flow from `InformationSpace` into
+  `KnowledgeSpace`.
+
+Future follow-ups outside the closed Phase 26 baseline and active Phase 27
+scope:
 
 - Production hardening for Fuseki/Chroma deployment, credentials,
   authorization, retention, import governance, and operational lifecycle.
