@@ -475,6 +475,7 @@ object InformationSpace {
     record.domain match {
       case "paper" => _validate_paper(record)
       case "book" => _validate_book(record)
+      case "web-resource" => _validate_web_resource(record)
       case _ => Vector.empty
     }
 
@@ -494,6 +495,16 @@ object InformationSpace {
     val base = Vector.newBuilder[InformationValidationIssue]
     if (title.isEmpty)
       base += InformationValidationIssue(InformationValidationIssueId("pending"), record.id, "title", "error", "title is required")
+    base.result()
+  }
+
+  private def _validate_web_resource(record: InformationImportRecord): Vector[InformationValidationIssue] = {
+    val webresource = WebResourceInformation.from(record.workingData)
+    val base = Vector.newBuilder[InformationValidationIssue]
+    if (webresource.title.isEmpty)
+      base += InformationValidationIssue(InformationValidationIssueId("pending"), record.id, "title", "error", "title is required")
+    if (webresource.url.isEmpty && webresource.canonicalUrl.isEmpty)
+      base += InformationValidationIssue(InformationValidationIssueId("pending"), record.id, "url", "error", "url or canonicalUrl is required")
     base.result()
   }
 }

@@ -376,7 +376,7 @@ Implement the paper knowledge editing workflow after book-first validation.
 
 ## KE-08: Web Knowledge Editor Vertical Slice
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
@@ -384,17 +384,37 @@ Implement the web resource knowledge editing workflow.
 
 ### Initial Tasks
 
-- [ ] Create web knowledge record from URL/manual input.
-- [ ] Edit canonical URL, title, site/publisher, author, retrieved date,
+- [x] Create web knowledge record from URL/manual input.
+- [x] Edit canonical URL, title, site/publisher, author, retrieved date,
       summary, language, keywords, and links.
-- [ ] Preserve source/evidence/provenance for retrieved content.
-- [ ] Publish and materialize web resource nodes and relationships.
+- [x] Preserve source/evidence/provenance for retrieved content.
+- [x] Publish and materialize web resource nodes and relationships.
+
+### Completion Notes
+
+- Added `WebResourceEditor` as a separate service in
+  `textus-knowledge-editor`, so book and paper behavior remain stable while web
+  resource editing gains its own operation contract.
+- Web resource records use the `web-resource` InformationSpace domain and
+  support URL, canonical URL, title, site name, publisher, author, retrieved
+  timestamp, summary, language, keywords, selected links, source URL, and
+  reviewer notes.
+- Added lightweight metadata fetching through an application-local provider.
+  Fetched values are editable InformationSpace data; raw HTML bodies and full
+  crawler payloads are not stored or projected.
+- URL/canonical URL and selected RDF-like links become reviewable
+  identity-binding candidates. Candidate selection remains explicit before
+  confirmation.
+- Publish and materialize operations reuse the existing InformationSpace
+  lifecycle and KnowledgeSpace materialization path.
+- Detailed implementation notes are recorded in
+  `docs/journal/2026/05/phase-27-web-resource-editor-vertical-slice.md`.
 
 ---
 
 ## KE-09: Publish/Materialize Flow and Validation Feedback
 
-Status: TODO
+Status: ACTIVE
 
 ### Objective
 

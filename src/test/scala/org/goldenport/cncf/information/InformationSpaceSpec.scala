@@ -95,6 +95,28 @@ final class InformationSpaceSpec
       item.domain shouldBe "paper"
     }
 
+    "validate web resources with title and URL requirements" in {
+      val space = new InformationSpace
+      val invalidbatch = _success(space.registerImportBatch("web-resource", Vector(Record.data("title" -> ""))))
+      val invalidid = invalidbatch.recordIds.head
+
+      val invalid = _success(space.validateInformationRecord(invalidid))
+
+      invalid.state shouldBe InformationLifecycleState.Invalid
+      space.validationIssues(invalidid).map(_.fieldPath).toSet shouldBe Set("title", "url")
+
+      val validbatch = _success(space.registerImportBatch("web-resource", Vector(Record.data(
+        "title" -> "KnowledgeSpace Web Resource",
+        "url" -> "https://example.org/knowledge"
+      ))))
+      val validid = validbatch.recordIds.head
+      val validated = _success(space.validateInformationRecord(validid))
+      val item = _success(space.confirmInformationRecord(validid))
+
+      validated.state shouldBe InformationLifecycleState.ReadyForConfirmation
+      item.domain shouldBe "web-resource"
+    }
+
     "reject unvalidated records before confirmation" in {
       val space = new InformationSpace
       val batch = _success(space.registerImportBatch("paper", Vector(Record.data("title" -> "Draft", "authors" -> "Alice"))))

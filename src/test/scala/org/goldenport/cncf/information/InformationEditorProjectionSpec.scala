@@ -127,6 +127,57 @@ final class InformationEditorProjectionSpec
       doi.resolutionCandidates.map(_.label) shouldBe Vector("Knowledge Editing with InformationSpace")
     }
 
+    "provide web resource field descriptors and knowledge mapping metadata" in {
+      val profile = InformationSpaceEditorProjection.profileOption("web-resource").getOrElse(fail("web resource profile missing"))
+
+      val url = _field(profile, "url")
+      val canonicalurl = _field(profile, "canonicalUrl")
+      val finalurl = _field(profile, "finalUrl")
+      val title = _field(profile, "title")
+      val links = _field(profile, "links")
+
+      title.label shouldBe "Title"
+      title.requiredness shouldBe "required"
+      url.requiredness shouldBe "required-one-of"
+      canonicalurl.requiredness shouldBe "required-one-of"
+      finalurl.requiredness shouldBe "optional"
+      url.mappings.map(_.targetPath) should contain ("identity.externalIdentifiers")
+      finalurl.mappings.map(_.targetKind) should contain ("provenance")
+      links.mappings.map(_.targetKind) should contain ("relationship")
+      profile.fields.flatMap(_.mappings.map(_.profileLayer)).toSet should contain allOf (
+        "common-neighborhood",
+        "web-resource-profile-extension"
+      )
+    }
+
+    "project web resource records with resolver candidates" in {
+      val component = _component()
+      val batch = _success(component.informationSpace.registerImportBatch("web-resource", Vector(
+        Record.data(
+          "title" -> "KnowledgeSpace Web Resource",
+          "url" -> "https://example.org/knowledge"
+        )
+      )))
+      val recordid = batch.recordIds.head
+      val binding = InformationIdentityBinding(
+        InformationIdentityBindingId("pending"),
+        rdfSubject = Some(RdfNodeName("https://dbpedia.org/resource/Knowledge_graph")),
+        externalIdentifiers = Vector(ExternalKnowledgeIdentifier("url", "https://example.org/knowledge", Some("web-resource"))),
+        authority = Some("local"),
+        confidence = Some(0.80)
+      )
+      _success(component.informationSpace.addResolutionCandidate(recordid, "url", "KnowledgeSpace Web Resource", binding, Some(0.80), Some("local URL")))
+
+      val projection = _success(InformationSpaceEditorProjection.component(component, "web-resource"))
+      val record = projection.records.headOption.getOrElse(fail("web resource record projection missing"))
+      val url = record.fields.find(_.descriptor.fieldPath == "url").getOrElse(fail("url field missing"))
+
+      projection.domain shouldBe "web-resource"
+      record.state shouldBe InformationLifecycleState.NeedsResolution
+      record.title shouldBe Some("KnowledgeSpace Web Resource")
+      url.resolutionCandidates.map(_.label) shouldBe Vector("KnowledgeSpace Web Resource")
+    }
+
     "project action availability across lifecycle states" in {
       val component = _component()
       val batch = _success(component.informationSpace.registerImportBatch("book", Vector(Record.data("title" -> "Ready"))))
@@ -169,6 +220,22 @@ final class InformationEditorProjectionSpec
       _success(component.informationSpace.validateInformationRecord(recordid))
 
       val projection = _success(InformationSpaceEditorProjection.component(component, "paper"))
+      val record = projection.records.headOption.getOrElse(fail("record projection missing"))
+      val title = record.fields.find(_.descriptor.fieldPath == "title").getOrElse(fail("title field missing"))
+
+      record.state shouldBe InformationLifecycleState.Invalid
+      title.validationIssues.map(_.fieldPath) shouldBe Vector("title")
+      record.actions.find(_.name == "confirm").map(_.enabled) shouldBe Some(false)
+      component.informationSpace.confirmInformationRecord(recordid) shouldBe a[Consequence.Failure[_]]
+    }
+
+    "disable confirmation when required web resource fields are missing" in {
+      val component = _component()
+      val batch = _success(component.informationSpace.registerImportBatch("web-resource", Vector(Record.data("url" -> "https://example.org/only-url"))))
+      val recordid = batch.recordIds.head
+      _success(component.informationSpace.validateInformationRecord(recordid))
+
+      val projection = _success(InformationSpaceEditorProjection.component(component, "web-resource"))
       val record = projection.records.headOption.getOrElse(fail("record projection missing"))
       val title = record.fields.find(_.descriptor.fieldPath == "title").getOrElse(fail("title field missing"))
 

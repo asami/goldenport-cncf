@@ -69,14 +69,17 @@ final case class InformationEditorProfile(
 object InformationEditorProfile {
   val BOOK_DOMAIN = "book"
   val PAPER_DOMAIN = "paper"
+  val WEB_RESOURCE_DOMAIN = "web-resource"
   val COMMON_NEIGHBORHOOD = "common-neighborhood"
   val BOOK_PROFILE_EXTENSION = "book-profile-extension"
   val PAPER_PROFILE_EXTENSION = "paper-profile-extension"
+  val WEB_RESOURCE_PROFILE_EXTENSION = "web-resource-profile-extension"
 
   def forDomain(domain: String): Option[InformationEditorProfile] =
     domain match {
       case BOOK_DOMAIN => Some(book)
       case PAPER_DOMAIN => Some(paper)
+      case WEB_RESOURCE_DOMAIN => Some(webResource)
       case _ => None
     }
 
@@ -442,6 +445,163 @@ object InformationEditorProfile {
           resolverassisted = true,
           _mapping("evidence", "sources.sourceRefs", COMMON_NEIGHBORHOOD, "Source reference for evidence and provenance."),
           _mapping("provenance", "origin.source", COMMON_NEIGHBORHOOD, "Origin metadata for imported information.")
+        )
+      )
+    )
+
+  val webResource: InformationEditorProfile =
+    InformationEditorProfile(
+      WEB_RESOURCE_DOMAIN,
+      Vector(
+        _field(
+          "url",
+          "URL",
+          "Original web resource URL entered by the editor.",
+          Some("https://example.org/article"),
+          "required-one-of",
+          Some("Required before confirmation unless canonical URL is present. Store as an external identifier/source anchor, not a CNCF id."),
+          resolverassisted = true,
+          _mapping("knowledge-node-section", "identity.externalIdentifiers", WEB_RESOURCE_PROFILE_EXTENSION, "External URL identifier and source anchor."),
+          _mapping("evidence", "sources.sourceRefs", COMMON_NEIGHBORHOOD, "Source reference for evidence and provenance.")
+        ),
+        _field(
+          "canonicalUrl",
+          "Canonical URL",
+          "Canonical URL selected or fetched for the web resource.",
+          Some("https://example.org/canonical/article"),
+          "required-one-of",
+          Some("Required before confirmation unless URL is present. Treat fetched values as reviewable candidates."),
+          resolverassisted = true,
+          _mapping("knowledge-node-section", "identity.externalIdentifiers", WEB_RESOURCE_PROFILE_EXTENSION, "Canonical external URL identifier."),
+          _mapping("relationship", "structure.correspondences.sourceAlignments", COMMON_NEIGHBORHOOD, "Source alignment candidate.")
+        ),
+        _field(
+          "finalUrl",
+          "Final URL",
+          "Final URL reached by metadata fetch or redirect handling.",
+          Some("https://example.org/final/article"),
+          "optional",
+          Some("Fetched metadata only. Preserve the editor-entered original URL separately."),
+          resolverassisted = true,
+          _mapping("knowledge-node-section", "identity.externalIdentifiers", WEB_RESOURCE_PROFILE_EXTENSION, "Fetched final URL identifier candidate."),
+          _mapping("provenance", "origin.fetch.finalUrl", COMMON_NEIGHBORHOOD, "Fetch provenance and redirect result.")
+        ),
+        _field(
+          "title",
+          "Title",
+          "Main web resource title shown to users and used for resolver matching.",
+          Some("Knowledge editing overview"),
+          "required",
+          Some("Required before confirmation."),
+          resolverassisted = true,
+          _mapping("knowledge-node-section", "presentation.labels", COMMON_NEIGHBORHOOD, "Display label for the web resource node."),
+          _mapping("fact", "information.title", COMMON_NEIGHBORHOOD, "Confirmed title fact with evidence.")
+        ),
+        _field(
+          "siteName",
+          "Site name",
+          "Site, publication, or container name associated with the web resource.",
+          Some("Example Knowledge Notes"),
+          "recommended",
+          Some("Resolvable sites may become relationship targets."),
+          resolverassisted = true,
+          _mapping("relationship", "published-in", WEB_RESOURCE_PROFILE_EXTENSION, "Canonical site/container relationship."),
+          _mapping("frame", "web-resource.site-neighborhood", WEB_RESOURCE_PROFILE_EXTENSION, "Site node and evidence.")
+        ),
+        _field(
+          "publisher",
+          "Publisher",
+          "Publisher organization or agent.",
+          Some("Example Org"),
+          "optional",
+          Some("Publisher can become a relationship target when confirmed."),
+          resolverassisted = true,
+          _mapping("relationship", "published-by", WEB_RESOURCE_PROFILE_EXTENSION, "Canonical publisher relationship.")
+        ),
+        _field(
+          "author",
+          "Author",
+          "Author or creator text as supplied by metadata or an editor.",
+          Some("Alice Example"),
+          "recommended",
+          Some("Author order and role remain relationship qualifiers."),
+          resolverassisted = true,
+          _mapping("relationship", "authored-by", WEB_RESOURCE_PROFILE_EXTENSION, "Canonical authorship relationship."),
+          _mapping("frame", "web-resource.contributor-neighborhood", WEB_RESOURCE_PROFILE_EXTENSION, "Author authority nodes and evidence.")
+        ),
+        _field(
+          "retrievedAt",
+          "Retrieved at",
+          "Timestamp when metadata was fetched or reviewed.",
+          Some("2026-05-22T10:00:00Z"),
+          "recommended",
+          Some("Use as provenance metadata for fetched values."),
+          resolverassisted = false,
+          _mapping("provenance", "origin.retrievedAt", COMMON_NEIGHBORHOOD, "Retrieval timestamp for imported metadata.")
+        ),
+        _field(
+          "summary",
+          "Summary",
+          "Short summary, meta description, or editor-entered description.",
+          Some("A page about editable knowledge resources."),
+          "recommended",
+          None,
+          resolverassisted = true,
+          _mapping("knowledge-node-section", "presentation.descriptions", COMMON_NEIGHBORHOOD, "Human-facing description."),
+          _mapping("knowledge-node-section", "similarity.representations", COMMON_NEIGHBORHOOD, "Search representation source; raw vectors are not stored.")
+        ),
+        _field(
+          "language",
+          "Language",
+          "Primary language detected or edited for the web resource.",
+          Some("en"),
+          "optional",
+          Some("Affects labels, summaries, and resolver matching."),
+          resolverassisted = true,
+          _mapping("knowledge-node-section", "semantics.roles", WEB_RESOURCE_PROFILE_EXTENSION, "Language-related semantic metadata.")
+        ),
+        _field(
+          "keywords",
+          "Keywords",
+          "Keywords, subjects, or tags associated with the web resource.",
+          Some("InformationSpace, KnowledgeSpace"),
+          "recommended",
+          Some("Keywords may become classification nodes."),
+          resolverassisted = true,
+          _mapping("relationship", "classified-by", COMMON_NEIGHBORHOOD, "Canonical classification relationship."),
+          _mapping("knowledge-node-section", "structure.classifications", COMMON_NEIGHBORHOOD, "Derived classification traversal.")
+        ),
+        _field(
+          "links",
+          "Links",
+          "Selected outbound links retained as reviewable metadata references.",
+          Some("https://dbpedia.org/resource/Knowledge_graph"),
+          "optional",
+          Some("Use selected links as candidates only; do not store crawled bodies."),
+          resolverassisted = true,
+          _mapping("relationship", "references", WEB_RESOURCE_PROFILE_EXTENSION, "Canonical referenced-resource relationship."),
+          _mapping("frame", "web-resource.link-neighborhood", WEB_RESOURCE_PROFILE_EXTENSION, "Linked resource candidates and evidence.")
+        ),
+        _field(
+          "sourceUrl",
+          "Source URL",
+          "Source URL used as evidence for manually entered or fetched values.",
+          Some("https://example.org/article"),
+          "recommended",
+          Some("Store as a source/evidence reference, not as a CNCF id."),
+          resolverassisted = true,
+          _mapping("evidence", "sources.sourceRefs", COMMON_NEIGHBORHOOD, "Source reference for evidence and provenance."),
+          _mapping("provenance", "origin.source", COMMON_NEIGHBORHOOD, "Origin metadata for imported information.")
+        ),
+        _field(
+          "reviewerNote",
+          "Reviewer note",
+          "Internal reviewer note for curation and confirmation decisions.",
+          None,
+          "optional",
+          None,
+          resolverassisted = false,
+          _mapping("provenance", "curation.note", COMMON_NEIGHBORHOOD, "Human curation note.")
         )
       )
     )

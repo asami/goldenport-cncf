@@ -12,7 +12,7 @@ import org.goldenport.record.Record
 
 /*
  * @since   May. 20, 2026
- * @version May. 20, 2026
+ * @version May. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class InformationImportBatchId(value: String) {
@@ -231,6 +231,55 @@ object PaperInformation {
       citations = _strings(record, "citations"),
       resolverHooks = _strings(record, "resolverHooks")
     )
+
+  private def _strings(
+    record: Record,
+    key: String
+  ): Vector[String] =
+    record.getString(key).toVector.flatMap { value =>
+      value.split("[,\n]").toVector.map(_.trim).filter(_.nonEmpty)
+    }
+}
+
+final case class WebResourceInformation(
+  title: String,
+  url: Option[String] = None,
+  canonicalUrl: Option[String] = None,
+  finalUrl: Option[String] = None,
+  siteName: Option[String] = None,
+  publisher: Option[String] = None,
+  author: Option[String] = None,
+  retrievedAt: Option[String] = None,
+  summary: Option[String] = None,
+  language: Option[String] = None,
+  keywords: Vector[String] = Vector.empty,
+  links: Vector[String] = Vector.empty,
+  sourceUrl: Option[String] = None
+)
+
+object WebResourceInformation {
+  def from(record: Record): WebResourceInformation =
+    WebResourceInformation(
+      title = record.getString("title").getOrElse("").trim,
+      url = _string(record, "url"),
+      canonicalUrl = _string(record, "canonicalUrl"),
+      finalUrl = _string(record, "finalUrl"),
+      siteName = _string(record, "siteName"),
+      publisher = _string(record, "publisher"),
+      author = _string(record, "author"),
+      retrievedAt = _string(record, "retrievedAt"),
+      summary = _string(record, "summary"),
+      language = _string(record, "language"),
+      keywords = _strings(record, "keywords"),
+      links = _strings(record, "links"),
+      sourceUrl = _string(record, "sourceUrl")
+    )
+
+  private def _string(
+    record: Record,
+    key: String
+  ): Option[String] =
+    record.getString(key).map(_.trim).filter(_.nonEmpty)
 
   private def _strings(
     record: Record,
