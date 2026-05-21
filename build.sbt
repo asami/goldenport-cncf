@@ -5,6 +5,7 @@ val scala3version = "3.3.7"
 
 lazy val generateTextusRuntimeCatalog = taskKey[File]("Generate Textus runtime catalog metadata for the warehouse repository.")
 lazy val exportTextusRuntimeCatalog = taskKey[File]("Export Textus runtime catalog metadata for local development consumers.")
+lazy val generateCncfRuntimeDescriptor = taskKey[File]("Generate CNCF runtime self descriptor for the runtime jar.")
 lazy val copyTextusRuntimeCatalog = taskKey[File]("Copy the checked-in Textus runtime catalog into the warehouse repository.")
 lazy val publishTextusRuntimeCatalog = taskKey[File]("Publish Textus runtime catalog metadata into the warehouse repository.")
 
@@ -125,6 +126,22 @@ def textusRuntimeCatalogText(
      |$baseprovidedblock
      |versions:
      |$versions
+     |""".stripMargin
+}
+
+def cncfRuntimeDescriptorText(
+  cncfversion: String,
+  scalabinaryversion: String,
+  baseprovidedmodules: Vector[String]
+): String = {
+  val baseprovidedblock =
+    baseprovidedmodules.map(module => s"  - $module").mkString("baseProvided:\n", "\n", "")
+  s"""schemaVersion: 1
+     |runtime: cncf
+     |version: $cncfversion
+     |scalaBinaryVersion: "$scalabinaryversion"
+     |module: org.goldenport:goldenport-cncf_$scalabinaryversion:$cncfversion
+     |$baseprovidedblock
      |""".stripMargin
 }
 
@@ -328,6 +345,29 @@ lazy val root = project
         )
       )
     },
+
+    generateCncfRuntimeDescriptor := {
+      val file = (Compile / resourceManaged).value / "META-INF" / "cncf" / "runtime.yaml"
+      IO.createDirectory(file.getParentFile)
+      IO.write(
+        file,
+        cncfRuntimeDescriptorText(
+          version.value,
+          scalaBinaryVersion.value,
+          textusBaseProvidedModules(
+            libraryDependencies.value,
+            organization.value,
+            name.value,
+            scalaBinaryVersion.value
+          )
+        )
+      )
+      file
+    },
+
+    Compile / resourceGenerators += Def.task {
+      Seq(generateCncfRuntimeDescriptor.value)
+    }.taskValue,
 
     exportTextusRuntimeCatalog := {
       val source = baseDirectory.value / "src/main/warehouse/repository/textus/runtime-catalog.yaml"

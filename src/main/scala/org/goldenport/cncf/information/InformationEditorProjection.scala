@@ -6,7 +6,7 @@ import org.goldenport.record.Record
 
 /*
  * @since   May. 21, 2026
- * @version May. 21, 2026
+ * @version May. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class InformationFieldMappingDescriptor(
@@ -68,12 +68,15 @@ final case class InformationEditorProfile(
 
 object InformationEditorProfile {
   val BOOK_DOMAIN = "book"
+  val PAPER_DOMAIN = "paper"
   val COMMON_NEIGHBORHOOD = "common-neighborhood"
   val BOOK_PROFILE_EXTENSION = "book-profile-extension"
+  val PAPER_PROFILE_EXTENSION = "paper-profile-extension"
 
   def forDomain(domain: String): Option[InformationEditorProfile] =
     domain match {
       case BOOK_DOMAIN => Some(book)
+      case PAPER_DOMAIN => Some(paper)
       case _ => None
     }
 
@@ -261,6 +264,184 @@ object InformationEditorProfile {
           resolverassisted = false,
           _mapping("relationship", "cites", BOOK_PROFILE_EXTENSION, "Canonical citation relationship."),
           _mapping("frame", "book.citation-neighborhood", BOOK_PROFILE_EXTENSION, "Citation target nodes and evidence.")
+        )
+      )
+    )
+
+  val paper: InformationEditorProfile =
+    InformationEditorProfile(
+      PAPER_DOMAIN,
+      Vector(
+        _field(
+          "title",
+          "Title",
+          "Main paper title shown to users and used for resolver matching.",
+          Some("Knowledge Editing with InformationSpace"),
+          "required",
+          Some("Required before confirmation."),
+          resolverassisted = false,
+          _mapping("knowledge-node-section", "presentation.labels", COMMON_NEIGHBORHOOD, "Display label for the paper node."),
+          _mapping("fact", "information.title", COMMON_NEIGHBORHOOD, "Confirmed title fact with evidence.")
+        ),
+        _field(
+          "authors",
+          "Authors",
+          "People or organizations credited as paper authors. Preserve order when known.",
+          Some("Alice Example; Bob Example"),
+          "recommended",
+          Some("Author order and role are relationship qualifiers."),
+          resolverassisted = true,
+          _mapping("relationship", "authored-by", PAPER_PROFILE_EXTENSION, "Canonical authorship relationship."),
+          _mapping("frame", "paper.contributor-neighborhood", PAPER_PROFILE_EXTENSION, "Author authority nodes and evidence.")
+        ),
+        _field(
+          "doi",
+          "DOI",
+          "Digital Object Identifier used as a lookup key and external identifier candidate.",
+          Some("10.1000/example"),
+          "recommended",
+          Some("Store as an external identifier; do not use it as a CNCF id."),
+          resolverassisted = true,
+          _mapping("knowledge-node-section", "identity.externalIdentifiers", PAPER_PROFILE_EXTENSION, "External identifier and lookup key."),
+          _mapping("frame", "paper.identity-neighborhood", PAPER_PROFILE_EXTENSION, "Paper identity evidence in the 1.5hop+ neighborhood.")
+        ),
+        _field(
+          "arxivId",
+          "arXiv ID",
+          "arXiv identifier used as a local external identifier anchor.",
+          Some("2401.00001"),
+          "optional",
+          Some("Preserve the supplied identifier distinctly from DOI and RDF anchors."),
+          resolverassisted = true,
+          _mapping("knowledge-node-section", "identity.externalIdentifiers", PAPER_PROFILE_EXTENSION, "External source identifier.")
+        ),
+        _field(
+          "pubmedId",
+          "PubMed ID",
+          "PubMed identifier used as a local external identifier anchor.",
+          Some("12345678"),
+          "optional",
+          None,
+          resolverassisted = true,
+          _mapping("knowledge-node-section", "identity.externalIdentifiers", PAPER_PROFILE_EXTENSION, "External source identifier.")
+        ),
+        _field(
+          "semanticScholarId",
+          "Semantic Scholar ID",
+          "Semantic Scholar identifier used as a local external identifier anchor.",
+          Some("abc123"),
+          "optional",
+          None,
+          resolverassisted = true,
+          _mapping("knowledge-node-section", "identity.externalIdentifiers", PAPER_PROFILE_EXTENSION, "External source identifier.")
+        ),
+        _field(
+          "openAlexId",
+          "OpenAlex ID",
+          "OpenAlex work identifier used as a local external identifier anchor.",
+          Some("W123456"),
+          "optional",
+          None,
+          resolverassisted = true,
+          _mapping("knowledge-node-section", "identity.externalIdentifiers", PAPER_PROFILE_EXTENSION, "External source identifier.")
+        ),
+        _field(
+          "wikidataId",
+          "Wikidata QID",
+          "External RDF-like knowledge anchor candidate for the paper, venue, author, or concept.",
+          Some("Q12345"),
+          "optional",
+          Some("Treat as a candidate until confirmed in InformationSpace."),
+          resolverassisted = true,
+          _mapping("knowledge-node-section", "identity.externalIdentifiers", PAPER_PROFILE_EXTENSION, "External RDF anchor candidate."),
+          _mapping("relationship", "structure.correspondences.sameResources", COMMON_NEIGHBORHOOD, "Confirmed same-resource or same-concept link.")
+        ),
+        _field(
+          "dbpediaUri",
+          "DBpedia URI",
+          "DBpedia resource URI used as an RDF enrichment anchor.",
+          Some("http://dbpedia.org/resource/..."),
+          "optional",
+          Some("DBpedia is an enrichment source, not automatically authoritative."),
+          resolverassisted = true,
+          _mapping("knowledge-node-section", "identity.externalIdentifiers", PAPER_PROFILE_EXTENSION, "External RDF anchor candidate."),
+          _mapping("evidence", "sources.evidenceIds", COMMON_NEIGHBORHOOD, "Resolver evidence for imported labels, abstracts, categories, and links.")
+        ),
+        _field(
+          "venue",
+          "Venue",
+          "Journal, conference, workshop, proceedings, or publication venue.",
+          Some("Textus Knowledge Workshop"),
+          "recommended",
+          Some("Resolvable venues should become relationship targets."),
+          resolverassisted = true,
+          _mapping("relationship", "published-in", PAPER_PROFILE_EXTENSION, "Canonical venue relationship."),
+          _mapping("frame", "paper.venue-neighborhood", PAPER_PROFILE_EXTENSION, "Venue node and evidence.")
+        ),
+        _field(
+          "publicationDate",
+          "Publication date",
+          "Publication date or year. Preserve precision when only year or month is known.",
+          Some("2026"),
+          "recommended",
+          None,
+          resolverassisted = true,
+          _mapping("knowledge-node-section", "semantics.temporal", COMMON_NEIGHBORHOOD, "Publication temporal value."),
+          _mapping("fact", "publication.date", PAPER_PROFILE_EXTENSION, "Publication fact with evidence.")
+        ),
+        _field(
+          "language",
+          "Language",
+          "Primary paper language.",
+          Some("en"),
+          "optional",
+          Some("Affects labels, abstracts, and resolver matching."),
+          resolverassisted = false,
+          _mapping("knowledge-node-section", "semantics.roles", PAPER_PROFILE_EXTENSION, "Language-related semantic metadata.")
+        ),
+        _field(
+          "abstract",
+          "Abstract",
+          "Paper abstract or short description used for display and retrieval.",
+          Some("A paper about editing knowledge as curated information."),
+          "recommended",
+          None,
+          resolverassisted = true,
+          _mapping("knowledge-node-section", "presentation.descriptions", COMMON_NEIGHBORHOOD, "Human-facing description."),
+          _mapping("knowledge-node-section", "similarity.representations", COMMON_NEIGHBORHOOD, "Search representation source; raw vectors are not stored.")
+        ),
+        _field(
+          "keywords",
+          "Keywords",
+          "Author keywords or topics connected to the paper.",
+          Some("InformationSpace, KnowledgeSpace"),
+          "recommended",
+          Some("Keywords may become classification nodes."),
+          resolverassisted = true,
+          _mapping("relationship", "classified-by", COMMON_NEIGHBORHOOD, "Canonical classification relationship."),
+          _mapping("knowledge-node-section", "structure.classifications", COMMON_NEIGHBORHOOD, "Derived classification traversal.")
+        ),
+        _field(
+          "citations",
+          "Citations",
+          "Works cited by this paper or important cited works connected to the paper.",
+          None,
+          "optional",
+          Some("Citation context and page range are qualifiers."),
+          resolverassisted = false,
+          _mapping("relationship", "cites", PAPER_PROFILE_EXTENSION, "Canonical citation relationship."),
+          _mapping("frame", "paper.citation-neighborhood", PAPER_PROFILE_EXTENSION, "Citation target nodes and evidence.")
+        ),
+        _field(
+          "sourceUrl",
+          "Source URL",
+          "Source page or document URL used as evidence for this paper information.",
+          Some("https://example.org/paper"),
+          "recommended",
+          Some("Store as a source/evidence reference, not as a CNCF id."),
+          resolverassisted = true,
+          _mapping("evidence", "sources.sourceRefs", COMMON_NEIGHBORHOOD, "Source reference for evidence and provenance."),
+          _mapping("provenance", "origin.source", COMMON_NEIGHBORHOOD, "Origin metadata for imported information.")
         )
       )
     )

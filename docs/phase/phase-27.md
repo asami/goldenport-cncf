@@ -74,14 +74,14 @@ Scope boundaries:
 - E (DONE): KE-05 — Web editor shell and book navigation in
   `textus-knowledge-editor`.
 - F (DONE): KE-06 — Book import/editor vertical slice with DBpedia lookup.
-- G (ACTIVE): KE-07 — Paper editor follow-up.
-- H (TODO): KE-08 — Web knowledge editor vertical slice.
+- G (DONE): KE-07 — Paper editor follow-up.
+- H (ACTIVE): KE-08 — Web knowledge editor vertical slice.
 - I (TODO): KE-09 — Publish/materialize flow and validation feedback.
 - J (TODO): KE-10 — Usability smoke and Phase 27 closure.
 
 Resume hint:
 
-- Start from KE-07. Do not reopen Phase 26 KI items unless fixing a regression.
+- Start from KE-08. Do not reopen Phase 26 KI items unless fixing a regression.
 
 ## 4. Development Items
 
@@ -91,7 +91,7 @@ Resume hint:
 - [x] KE-04: InformationSpace editor API and projection contract.
 - [x] KE-05: Web editor shell and book navigation in `textus-knowledge-editor`.
 - [x] KE-06: Book import/editor vertical slice with DBpedia lookup.
-- [ ] KE-07: Paper editor follow-up.
+- [x] KE-07: Paper editor follow-up.
 - [ ] KE-08: Web knowledge editor vertical slice.
 - [ ] KE-09: Publish/materialize flow and validation feedback.
 - [ ] KE-10: Usability smoke and Phase 27 closure.

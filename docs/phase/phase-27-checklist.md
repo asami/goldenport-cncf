@@ -339,7 +339,7 @@ candidates.
 
 ## KE-07: Paper Editor Follow-Up
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
@@ -347,19 +347,36 @@ Implement the paper knowledge editing workflow after book-first validation.
 
 ### Initial Tasks
 
-- [ ] Define paper fields: title, authors, publication identity, venue/date,
+- [x] Define paper fields: title, authors, publication identity, venue/date,
       abstract, keywords, citations, source URL, language, and publication
       metadata.
-- [ ] Create paper record.
-- [ ] Edit and validate fields.
-- [ ] Resolve author/venue/concept candidates where available.
-- [ ] Publish and materialize paper nodes and relationships.
+- [x] Create paper record.
+- [x] Edit and validate fields.
+- [x] Resolve author/venue/concept candidates where available.
+- [x] Publish and materialize paper nodes and relationships.
+
+### Completion Notes
+
+- Added `PaperEditor` as a separate service in `textus-knowledge-editor`, so
+  book behavior remains stable while paper editing gains its own operation
+  contract.
+- Paper records use the `paper` InformationSpace domain and support title,
+  authors, DOI, arXiv, PubMed, Semantic Scholar, OpenAlex, Wikidata, DBpedia
+  URI, venue, publication date, language, abstract, keywords, citations, and
+  source URL fields.
+- Local DOI/arXiv/PubMed/Semantic Scholar/OpenAlex/Wikidata/DBpedia/source URL
+  identifiers become reviewable identity-binding candidates. DBpedia Lookup is
+  available as a best-effort RDF candidate source with fake HTTP test coverage.
+- Publish and materialize operations reuse the existing InformationSpace
+  lifecycle and KnowledgeSpace materialization path.
+- Detailed implementation notes are recorded in
+  `docs/journal/2026/05/phase-27-paper-editor-follow-up.md`.
 
 ---
 
 ## KE-08: Web Knowledge Editor Vertical Slice
 
-Status: TODO
+Status: ACTIVE
 
 ### Objective
 

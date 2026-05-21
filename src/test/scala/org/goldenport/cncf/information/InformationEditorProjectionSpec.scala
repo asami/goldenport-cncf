@@ -11,7 +11,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   May. 21, 2026
- * @version May. 21, 2026
+ * @version May. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 final class InformationEditorProjectionSpec
@@ -79,6 +79,54 @@ final class InformationEditorProjectionSpec
       dbpedia.resolutionCandidates.map(_.label) shouldBe Vector("Domain-driven design")
     }
 
+    "provide paper field descriptors and knowledge mapping metadata" in {
+      val profile = InformationSpaceEditorProjection.profileOption("paper").getOrElse(fail("paper profile missing"))
+
+      val title = _field(profile, "title")
+      val doi = _field(profile, "doi")
+      val dbpedia = _field(profile, "dbpediaUri")
+      val citations = _field(profile, "citations")
+
+      title.label shouldBe "Title"
+      title.requiredness shouldBe "required"
+      doi.resolverAssisted shouldBe true
+      doi.mappings.map(_.targetPath) should contain ("identity.externalIdentifiers")
+      dbpedia.mappings.map(_.targetKind) should contain ("evidence")
+      citations.mappings.map(_.targetKind) should contain ("relationship")
+      profile.fields.flatMap(_.mappings.map(_.profileLayer)).toSet should contain allOf (
+        "common-neighborhood",
+        "paper-profile-extension"
+      )
+    }
+
+    "project paper records with field validation issues and resolution candidates" in {
+      val component = _component()
+      val batch = _success(component.informationSpace.registerImportBatch("paper", Vector(
+        Record.data(
+          "title" -> "Knowledge Editing with InformationSpace",
+          "doi" -> "10.1000/paper"
+        )
+      )))
+      val recordid = batch.recordIds.head
+      val binding = InformationIdentityBinding(
+        InformationIdentityBindingId("pending"),
+        rdfSubject = Some(RdfNodeName("http://dbpedia.org/resource/Knowledge_graph")),
+        externalIdentifiers = Vector(ExternalKnowledgeIdentifier("doi", "10.1000/paper", Some("paper"))),
+        authority = Some("local"),
+        confidence = Some(0.80)
+      )
+      _success(component.informationSpace.addResolutionCandidate(recordid, "doi", "Knowledge Editing with InformationSpace", binding, Some(0.80), Some("local identifier")))
+
+      val projection = _success(InformationSpaceEditorProjection.component(component, "paper"))
+      val record = projection.records.headOption.getOrElse(fail("paper record projection missing"))
+      val doi = record.fields.find(_.descriptor.fieldPath == "doi").getOrElse(fail("doi field missing"))
+
+      projection.domain shouldBe "paper"
+      record.state shouldBe InformationLifecycleState.NeedsResolution
+      record.title shouldBe Some("Knowledge Editing with InformationSpace")
+      doi.resolutionCandidates.map(_.label) shouldBe Vector("Knowledge Editing with InformationSpace")
+    }
+
     "project action availability across lifecycle states" in {
       val component = _component()
       val batch = _success(component.informationSpace.registerImportBatch("book", Vector(Record.data("title" -> "Ready"))))
@@ -105,6 +153,22 @@ final class InformationEditorProjectionSpec
       _success(component.informationSpace.validateInformationRecord(recordid))
 
       val projection = _success(InformationSpaceEditorProjection.component(component, "book"))
+      val record = projection.records.headOption.getOrElse(fail("record projection missing"))
+      val title = record.fields.find(_.descriptor.fieldPath == "title").getOrElse(fail("title field missing"))
+
+      record.state shouldBe InformationLifecycleState.Invalid
+      title.validationIssues.map(_.fieldPath) shouldBe Vector("title")
+      record.actions.find(_.name == "confirm").map(_.enabled) shouldBe Some(false)
+      component.informationSpace.confirmInformationRecord(recordid) shouldBe a[Consequence.Failure[_]]
+    }
+
+    "disable confirmation when required paper title is missing" in {
+      val component = _component()
+      val batch = _success(component.informationSpace.registerImportBatch("paper", Vector(Record.data("doi" -> "10.1000/paper"))))
+      val recordid = batch.recordIds.head
+      _success(component.informationSpace.validateInformationRecord(recordid))
+
+      val projection = _success(InformationSpaceEditorProjection.component(component, "paper"))
       val record = projection.records.headOption.getOrElse(fail("record projection missing"))
       val title = record.fields.find(_.descriptor.fieldPath == "title").getOrElse(fail("title field missing"))
 

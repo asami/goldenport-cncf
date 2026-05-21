@@ -1293,8 +1293,8 @@ Phase 26 completed scope:
 
 Phase 27 active scope:
 
-- KE-01 through KE-06 are done. Current focus is KE-07:
-  Paper editor follow-up after the book resolver path.
+- KE-01 through KE-07 are done. Current focus is KE-08:
+  Web knowledge editor vertical slice after the book and paper editor flows.
 - Book-first domain knowledge editing through `textus-knowledge-editor`, with
   paper and web knowledge following after the book path is validated.
 - ISBN and other publication identifiers as import/seed keys for creating CNCF
@@ -1328,8 +1328,10 @@ Phase 27 active scope:
 - The book resolver path now creates local and DBpedia-backed reviewable
   candidates in `InformationSpace`; OpenLibrary and Wikidata remain supplied
   identifier anchors until later live lookup work.
-- The next target is the paper editor follow-up using the same
-  InformationSpace editor projection pattern.
+- The paper editor follow-up now uses the same InformationSpace lifecycle and
+  resolver-candidate pattern as BookEditor, with DOI/arXiv/PubMed/Semantic
+  Scholar/OpenAlex/Wikidata/DBpedia/source URL identity anchors.
+- The next target is the web resource editor vertical slice.
 - Publication/materialization flow from `InformationSpace` into
   `KnowledgeSpace`.
 

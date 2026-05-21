@@ -30,7 +30,7 @@ import org.goldenport.record.Record
 
 /*
  * @since   May. 20, 2026
- * @version May. 21, 2026
+ * @version May. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 final class InformationSpace {
@@ -486,8 +486,6 @@ object InformationSpace {
     val base = Vector.newBuilder[InformationValidationIssue]
     if (paper.title.isEmpty)
       base += InformationValidationIssue(InformationValidationIssueId("pending"), record.id, "title", "error", "title is required")
-    if (paper.authors.isEmpty)
-      base += InformationValidationIssue(InformationValidationIssueId("pending"), record.id, "authors", "error", "at least one author is required")
     base.result()
   }
 

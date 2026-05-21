@@ -9,7 +9,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   May. 20, 2026
- * @version May. 21, 2026
+ * @version May. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 final class InformationSpaceSpec
@@ -79,8 +79,20 @@ final class InformationSpaceSpec
       val validated = _success(space.validateInformationRecord(recordid))
 
       validated.state shouldBe InformationLifecycleState.Invalid
-      space.validationIssues(recordid).map(_.fieldPath) should contain allOf ("title", "authors")
+      space.validationIssues(recordid).map(_.fieldPath) shouldBe Vector("title")
       space.confirmInformationRecord(recordid) shouldBe a[Consequence.Failure[_]]
+    }
+
+    "allow paper confirmation with title only" in {
+      val space = new InformationSpace
+      val batch = _success(space.registerImportBatch("paper", Vector(Record.data("title" -> "Title-only Paper"))))
+      val recordid = batch.recordIds.head
+
+      val validated = _success(space.validateInformationRecord(recordid))
+      val item = _success(space.confirmInformationRecord(recordid))
+
+      validated.state shouldBe InformationLifecycleState.ReadyForConfirmation
+      item.domain shouldBe "paper"
     }
 
     "reject unvalidated records before confirmation" in {
