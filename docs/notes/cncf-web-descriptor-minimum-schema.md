@@ -11,11 +11,23 @@ and does not redefine Component / Service / Operation semantics.
 
 ## Location And Loading
 
-The canonical packaged location is:
+The legacy canonical packaged location is:
 
 ```text
 /web/web.yaml
 ```
+
+For Static Form Web Apps, the preferred split locations are:
+
+```text
+/web/WEB-INF/web.yaml
+/web/WEB-INF/form.yaml
+/web/WEB-INF/admin.yaml
+```
+
+`web.yaml` carries app/page/route/theme/shell metadata. `form.yaml` carries
+operation exposure and form control metadata. `admin.yaml` is reserved for
+admin/debug surfaces when that information would bury the app-level definition.
 
 For a SAR, the descriptor applies to the whole subsystem. For a standalone CAR
 treated as a subsystem, the same location may be used inside the CAR.
@@ -23,8 +35,8 @@ treated as a subsystem, the same location may be used inside the CAR.
 Loading precedence for Phase 12 is:
 
 1. explicit runtime configuration override
-2. SAR `/web/web.yaml`
-3. standalone CAR `/web/web.yaml`
+2. SAR `/web/WEB-INF/*.yaml` plus legacy `/web/web.yaml`
+3. standalone CAR `/web/WEB-INF/*.yaml` plus legacy `/web/web.yaml`
 4. built-in defaults
 
 The intended override key is:
@@ -35,7 +47,8 @@ textus.web.descriptor=<path>
 
 The first runtime hook is `WebDescriptor.load(path)`. It accepts either an
 explicit descriptor file path or a descriptor root directory. When a directory is
-given, the loader resolves `web/web.yaml` below that root.
+given, the loader resolves the known split files and merges them in deterministic
+order.
 
 `WebDescriptorResolver.resolve(configuration)` reads `textus.web.descriptor`
 through `RuntimeConfig.getString` and loads the descriptor when configured. If no
@@ -76,9 +89,10 @@ configured, the built-in HTML apps remain available for compatibility. If app
 entries are configured, `/web/...` rendering uses them as an allow-list by app
 name or path.
 
-SAR/CAR archive discovery uses the same `web/web.yaml` convention. The loader
-can read the descriptor from a directory root or from `.sar`, `.car`, and `.zip`
-archive files. Runtime resolution first honors the explicit
+SAR/CAR archive discovery uses the same split-file convention, with
+`web/web.yaml` retained as a legacy descriptor. The loader can read the
+descriptor from a directory root or from `.sar`, `.car`, and `.zip` archive
+files. Runtime resolution first honors the explicit
 `textus.web.descriptor` override, then falls back to the loaded subsystem
 descriptor path when it is available.
 
@@ -468,24 +482,28 @@ descriptor because they describe the concrete Web Form endpoint directly.
 
 ## CML WEB Metadata Bridge
 
-Cozy `car-sbt-project` may generate `src/main/car/web/web.yaml` from a top-level CML
-`# WEB` section. The section body is treated as raw Web Descriptor YAML and is
-copied into the generated project. When the section is absent, Cozy generates a
-default sample descriptor scaffold.
+Cozy `car-sbt-project` may generate `src/main/web-inf/form.yaml` from a
+top-level CML `# WEB` section as a legacy bridge. The section body is treated as
+raw Web Descriptor YAML and is converted into source form/exposure metadata.
+When the section is absent, Cozy generates a default sample form scaffold.
 
 This bridge keeps Web deployment/configuration data outside the CML core model
 while still allowing a sample application or small CAR project to carry the
-initial Web Descriptor next to the model. The descriptor is CAR metadata and
-therefore lives under `src/main/car/web`; Web application pages and assets live
-under `src/main/web`. The current implementation is a raw metadata bridge. A
+initial Web form descriptor next to the model. New CML generation should not use
+`# WEB` as a raw WebDescriptor block; Operation / Entity / Value Web properties
+are the intended source of truth. The current bridge is legacy input only. A
 later pass may connect the same concept to Dox/Kaleidox AST metadata once the
 CML metadata contract is finalized.
 
-`src/main/web` is the public Web application resource tree. If a future Web app
-needs private bundle metadata or non-public resources, the reserved location is
-`src/main/web/WEB-INF`, and those resources must not be exposed by static Web
-serving. `src/main/web/META-INF` is not used; CAR-wide internal metadata, if it
-becomes necessary, belongs under `src/main/car/META-INF` instead.
+`src/main/web` is the Web application resource tree. Public pages and assets
+live directly under it; private layouts, partials, widgets, and helper
+resources live under `src/main/web/WEB-INF`, and those resources must not be
+exposed by static Web serving. Source metadata for generated runtime descriptors
+lives under `src/main/web-inf/web.yaml`, `src/main/web-inf/form.yaml`, and
+`src/main/web-inf/admin.yaml`. Cozy packages those inputs into CAR
+`web/WEB-INF/*.yaml`; they are not copied from `src/main/web/WEB-INF`.
+`src/main/web/META-INF` is not used; CAR-wide internal metadata, if it becomes
+necessary, belongs under `src/main/car/META-INF` instead.
 
 ## Application Hosting Entries
 

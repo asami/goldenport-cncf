@@ -17,7 +17,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Apr. 14, 2026
  *  version Apr. 25, 2026
- * @version May. 20, 2026
+ * @version May. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 final class WebDescriptorSpec extends AnyWordSpec with Matchers {
@@ -385,11 +385,115 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
       descriptor.expose("notice-board.notice.search-notices") shouldBe WebDescriptor.Exposure.Public
     }
 
+    "discover src/main/web-inf/form.yaml from a development project root" in {
+      val root = Files.createTempDirectory("cncf-web-descriptor-source-web-inf-root")
+      val web = Files.createDirectories(root.resolve("src").resolve("main").resolve("web-inf"))
+      Files.writeString(
+        web.resolve("form.yaml"),
+        """web:
+          |  expose:
+          |    notice-board.notice.search-notices: public
+          |  form:
+          |    notice-board.notice.search-notices:
+          |      enabled: true
+          |""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+
+      val descriptor = WebDescriptor.load(root).toOption.get
+
+      descriptor.expose("notice-board.notice.search-notices") shouldBe WebDescriptor.Exposure.Public
+      descriptor.isFormEnabled("notice-board.notice.search-notices") shouldBe true
+    }
+
+    "merge src/main/web-inf/web.yaml form.yaml and admin.yaml from a development project root" in {
+      val root = Files.createTempDirectory("cncf-web-descriptor-source-web-inf-split-root")
+      val web = Files.createDirectories(root.resolve("src").resolve("main").resolve("web-inf"))
+      Files.writeString(
+        web.resolve("web.yaml"),
+        """web:
+          |  apps:
+          |    - name: notice-board
+          |      path: /web/notice-board
+          |      kind: static-form
+          |  pages:
+          |    notice-board.index:
+          |      heading: Notice Board
+          |""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+      Files.writeString(
+        web.resolve("form.yaml"),
+        """web:
+          |  expose:
+          |    notice-board.notice.search-notices: public
+          |  form:
+          |    notice-board.notice.search-notices:
+          |      enabled: true
+          |""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+      Files.writeString(
+        web.resolve("admin.yaml"),
+        """web:
+          |  admin:
+          |    pages:
+          |      - name: notice-admin
+          |        label: Notice Admin
+          |        href: /web/notice-board/admin/notices
+          |        component: notice-board
+          |""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+
+      val descriptor = WebDescriptor.load(root).toOption.get
+
+      descriptor.apps.map(_.name) should contain ("notice-board")
+      descriptor.pageCustomization(Some("notice-board"), Some("index")).flatMap(_.heading) shouldBe Some("Notice Board")
+      descriptor.expose("notice-board.notice.search-notices") shouldBe WebDescriptor.Exposure.Public
+      descriptor.isFormEnabled("notice-board.notice.search-notices") shouldBe true
+      descriptor.adminPages.map(_.name) should contain ("notice-admin")
+    }
+
     "does not discover src/main/web/web.yaml as CAR metadata" in {
       val root = Files.createTempDirectory("cncf-web-descriptor-web-app-root")
       val web = Files.createDirectories(root.resolve("src").resolve("main").resolve("web"))
       Files.writeString(
         web.resolve("web.yaml"),
+        """web:
+          |  expose:
+          |    notice-board.notice.search-notices: public
+          |""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+
+      val result = WebDescriptor.load(root)
+
+      result shouldBe a[org.goldenport.Consequence.Failure[_]]
+    }
+
+    "does not discover src/main/web/WEB-INF/form.yaml as descriptor source" in {
+      val root = Files.createTempDirectory("cncf-web-descriptor-private-web-inf-root")
+      val web = Files.createDirectories(root.resolve("src").resolve("main").resolve("web").resolve("WEB-INF"))
+      Files.writeString(
+        web.resolve("form.yaml"),
+        """web:
+          |  expose:
+          |    notice-board.notice.search-notices: public
+          |""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+
+      val result = WebDescriptor.load(root)
+
+      result shouldBe a[org.goldenport.Consequence.Failure[_]]
+    }
+
+    "does not discover src/main/form/form.yaml as descriptor source" in {
+      val root = Files.createTempDirectory("cncf-web-descriptor-source-form-root")
+      val form = Files.createDirectories(root.resolve("src").resolve("main").resolve("form"))
+      Files.writeString(
+        form.resolve("form.yaml"),
         """web:
           |  expose:
           |    notice-board.notice.search-notices: public
@@ -680,10 +784,8 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
         _write_zip(
           componentcar,
           Map(
-            "web/web.yaml" ->
+            "web/WEB-INF/web.yaml" ->
               """web:
-                |  expose:
-                |    textus-user-account.user.register: protected
                 |  apps:
                 |    - name: signup
                 |      path: /web/textus-user-account/signup
@@ -693,6 +795,20 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
                 |      target:
                 |        component: textus-user-account
                 |        app: signup
+                |""".stripMargin,
+            "web/WEB-INF/form.yaml" ->
+              """web:
+                |  expose:
+                |    textus-user-account.user.register: protected
+                |""".stripMargin,
+            "web/WEB-INF/admin.yaml" ->
+              """web:
+                |  admin:
+                |    pages:
+                |      - name: signup-admin
+                |        label: Signup Admin
+                |        href: /web/textus-user-account/admin/signup
+                |        component: textus-user-account
                 |""".stripMargin
           )
         )
@@ -729,6 +845,7 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
 
         descriptor.apps.map(_.name) should contain ("signup")
         descriptor.routes.map(_.normalizedPathText) should contain ("/web/textus-user-account/signup")
+        descriptor.adminPages.map(_.name) should contain ("signup-admin")
         descriptor.exposureOf("textus-user-account.user.register") shouldBe WebDescriptor.Exposure.Public
         descriptor.pageCustomization(Some("textus-user-account"), Some("signup")).flatMap(_.heading) shouldBe Some("Create Cwitter account")
       } finally {

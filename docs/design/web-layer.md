@@ -191,17 +191,39 @@ descriptor parent directory acted as the static template root. This was useful
 for early validation, but it is not the target compatibility contract and is
 not preserved as a packaging compatibility rule.
 
+The canonical source layout separates Web application resources from descriptor
+source metadata:
+
+```text
+src/main/web/*.html                    public pages and result templates
+src/main/web/assets/**                 public page assets
+src/main/web/WEB-INF/layouts/**        private layouts
+src/main/web/WEB-INF/partials/**       private partials
+src/main/web-inf/web.yaml              app/page/route/shell/theme/asset metadata
+src/main/web-inf/form.yaml             operation exposure and form controls
+src/main/web-inf/admin.yaml            admin/debug metadata
+```
+
+`src/main/web/WEB-INF` is a private Web resource tree. It is copied to packaged
+`web/WEB-INF`, but it is not descriptor source. Descriptor source files live
+under `src/main/web-inf`; package generation writes the runtime descriptor
+outputs under CAR/SAR `web/WEB-INF`.
+
 The canonical archive layout places Web application resources under `/web` in
 both CAR and SAR packages.
 
 ```text
-/web/web-descriptor.yaml            Web Descriptor
-/web/{webApp}/index.html            Web app entry page
-/web/{webApp}/*.html                Web app result templates
-/web/{webApp}/assets/**             Web app local CSS/JS/images
-/web/{webApp}/islands/**            Web app scoped island scripts
-/web/*.html                         component/subsystem common fallback templates
-/web/assets/**                      component/subsystem common assets
+/web/WEB-INF/web.yaml              generated Web runtime descriptor
+/web/WEB-INF/form.yaml             generated Form runtime descriptor
+/web/WEB-INF/admin.yaml            generated Admin runtime descriptor
+/web/WEB-INF/layouts/**            private layouts copied from source
+/web/WEB-INF/partials/**           private partials copied from source
+/web/{webApp}/index.html           Web app entry page
+/web/{webApp}/*.html               Web app result templates
+/web/{webApp}/assets/**            Web app local CSS/JS/images
+/web/{webApp}/islands/**           Web app scoped island scripts
+/web/*.html                        component/subsystem common fallback templates
+/web/assets/**                     component/subsystem common assets
 ```
 
 CAR `/web` packages a Component-local Web app. SAR `/web` packages a
@@ -209,13 +231,13 @@ Subsystem-level Web app and may also include subsystem-owned app assets or
 composition pages. Runtime extraction should treat the archive `/web` directory
 as the Web app root.
 
-Descriptor discovery uses `web/web-descriptor.yaml` as the canonical packaged
-descriptor name. `web/web.yaml` is accepted as a secondary descriptor name for
-existing tests and small fixtures. When `textus.web.descriptor` points directly
-at a descriptor file, the descriptor parent directory is the static template
-root. When it points at a descriptor root, the runtime discovers the descriptor
-under the root `/web` directory and uses that `/web` directory as the template
-root.
+Descriptor discovery uses the split files under `web/WEB-INF` as the preferred
+packaged runtime descriptor shape. `web/web-descriptor.yaml` and `web/web.yaml`
+remain legacy compatibility inputs for older packages and small fixtures. When
+`textus.web.descriptor` points directly at a descriptor file, the descriptor
+parent directory is the static template root. When it points at a descriptor
+root, the runtime discovers the descriptor under the root `/web` directory and
+uses that `/web` directory as the template root.
 
 The runtime represents each filesystem or archive Web root as a Web resource
 root. Static result templates, common error pages, and app-local assets are read

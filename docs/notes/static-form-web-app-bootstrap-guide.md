@@ -24,6 +24,42 @@ Related formal/background documents:
 - `docs/notes/web-bootstrap-ui-polish-design.md`
 - `docs/notes/cncf-web-static-form-app-contract.md`
 
+## Source Layout For Web Developers
+
+Static Form Web App source is split by role. Edit the source files; do not edit
+the generated CAR `web/WEB-INF/*.yaml` files directly.
+
+```text
+src/main/web/*.html                     public pages and result templates
+src/main/web/assets/...                 public page assets
+src/main/web/WEB-INF/layouts/...        private layouts copied to CAR WEB-INF
+src/main/web/WEB-INF/partials/...       private partials copied to CAR WEB-INF
+src/main/web/WEB-INF/widgets/...        private reusable snippets
+src/main/web-inf/web.yaml               app, page, route, shell, theme, assets
+src/main/web-inf/form.yaml              operation exposure and form controls
+src/main/web-inf/admin.yaml             admin/debug metadata when needed
+```
+
+`src/main/web` is the authored Web application tree. Files under
+`src/main/web/WEB-INF` are private Web resources like Java Web `WEB-INF`; they
+are available to the renderer for layout/partial/widget composition but must
+not be exposed as public pages or used as descriptor sources.
+
+`src/main/web-inf` is the source metadata root. Cozy packages these descriptor
+inputs into CAR runtime descriptors:
+
+```text
+src/main/web-inf/web.yaml   -> web/WEB-INF/web.yaml
+src/main/web-inf/form.yaml  -> web/WEB-INF/form.yaml
+src/main/web-inf/admin.yaml -> web/WEB-INF/admin.yaml
+```
+
+Do not place descriptor source at `src/main/web/WEB-INF/form.yaml` or
+`src/main/form/form.yaml`. Those paths are intentionally not the normal Web
+developer contract. If CML or generated metadata needs to contribute form or
+admin information, materialize the result into `src/main/web-inf/*.yaml`
+during generation before packaging.
+
 ## Asset Baseline
 
 Static Form Web App pages should use the local CNCF Web assets:

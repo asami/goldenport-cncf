@@ -13,7 +13,7 @@ import org.goldenport.record.Record
 /*
  * @since   Apr. 14, 2026
  *  version Apr. 25, 2026
- * @version May. 10, 2026
+ * @version May. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class WebDescriptor(
@@ -32,7 +32,7 @@ final case class WebDescriptor(
   adminPages: Vector[WebDescriptor.AdminPage] = Vector.empty
 ) {
   def mergeOverride(rhs: WebDescriptor): WebDescriptor = {
-    def merge_vector[A, K](
+    def _merge_vector_[A, K](
       lhs: Vector[A],
       rhs: Vector[A]
     )(key: A => K): Vector[A] = {
@@ -41,7 +41,7 @@ final case class WebDescriptor(
       val l = lhs.map(x => key(x) -> x).toMap
       keys.flatMap(k => r.get(k).orElse(l.get(k)))
     }
-    def merge_apps(lhs: Vector[WebDescriptor.App], rhs: Vector[WebDescriptor.App]): Vector[WebDescriptor.App] = {
+    def _merge_apps_(lhs: Vector[WebDescriptor.App], rhs: Vector[WebDescriptor.App]): Vector[WebDescriptor.App] = {
       val r = rhs.map(x => x.normalizedName -> x).toMap
       val l = lhs.map(x => x.normalizedName -> x).toMap
       val keys = (lhs.map(_.normalizedName) ++ rhs.map(_.normalizedName)).distinct
@@ -65,14 +65,14 @@ final case class WebDescriptor(
         else rhs.auth,
       authorization = authorization ++ rhs.authorization,
       form = form ++ rhs.form,
-      apps = merge_apps(apps, rhs.apps),
-      routes = merge_vector(routes, rhs.routes)(_.normalizedPathText),
+      apps = _merge_apps_(apps, rhs.apps),
+      routes = _merge_vector_(routes, rhs.routes)(_.normalizedPathText),
       shell = rhs.shell.orElse(shell),
       pages = pages ++ rhs.pages,
       theme = theme.merge(rhs.theme),
       assets = assets.merge(rhs.assets),
       admin = admin ++ rhs.admin,
-      adminPages = merge_vector(adminPages, rhs.adminPages)(_.scopeKey)
+      adminPages = _merge_vector_(adminPages, rhs.adminPages)(_.scopeKey)
     )
   }
 
@@ -547,24 +547,24 @@ object WebDescriptor {
       audience == AdminAudience.System
 
     def scopeKey: String =
-      Vector(component.map(_normalize_app_segment).orElse(hrefComponent), Some(audience.name), Some(normalizedName)).flatten.mkString(":")
+      Vector(component.map(_normalize_app_segment).orElse(_href_component), Some(audience.name), Some(normalizedName)).flatten.mkString(":")
 
     def matchesComponent(componentName: String): Boolean = {
       val target = _normalize_app_segment(componentName)
       component.map(_normalize_app_segment) match {
         case Some(value) => value == target
-        case None => hrefComponent.contains(target)
+        case None => _href_component.contains(target)
       }
     }
 
     def componentHrefMismatch: Option[(String, String)] =
       for {
         declared <- component.map(_normalize_app_segment)
-        href <- hrefComponent
+        href <- _href_component
         if declared != href
       } yield declared -> href
 
-    private def hrefComponent: Option[String] = {
+    private def _href_component: Option[String] = {
       val parts = Option(href).map(_.trim).filter(_.nonEmpty).getOrElse("").split("/").toVector.filter(_.nonEmpty)
       parts match {
         case Vector("web", componentName, "admin", _*) => Some(_normalize_app_segment(componentName))
@@ -804,18 +804,32 @@ object WebDescriptor {
     if (!Files.exists(path))
       Consequence.resourceNotFound(s"web descriptor path does not exist: ${path}")
     else if (Files.isDirectory(path)) {
-      _descriptor_files(path).find(Files.isRegularFile(_)) match {
-        case Some(file) => load(file)
-        case None => Consequence.resourceNotFound(s"web descriptor not found: ${path.resolve("web")}")
+      _descriptor_files(path).filter(Files.isRegularFile(_)) match {
+        case Vector() => Consequence.resourceNotFound(s"web descriptor not found: ${path.resolve("web")}")
+        case files => _load_descriptor_files(files)
       }
     } else if (_is_archive_file(path)) {
       _load_archive_file(path)
     } else {
-      DescriptorRecordLoader.load(path).flatMap { records =>
-        records.headOption match {
-          case Some(record) => _validate(fromRecord(record), path)
-          case None => Consequence.resourceInvalid(s"web descriptor is empty: ${path}")
-        }
+      _load_descriptor_file(path)
+    }
+
+  private def _load_descriptor_files(
+    files: Vector[Path]
+  ): Consequence[WebDescriptor] =
+    files.foldLeft(Consequence.success(WebDescriptor.empty)) { (r, file) =>
+      r.flatMap { descriptor =>
+        _load_descriptor_file(file).map(descriptor.mergeOverride)
+      }
+    }
+
+  private def _load_descriptor_file(
+    path: Path
+  ): Consequence[WebDescriptor] =
+    DescriptorRecordLoader.load(path).flatMap { records =>
+      records.headOption match {
+        case Some(record) => _validate(fromRecord(record), path)
+        case None => Consequence.resourceInvalid(s"web descriptor is empty: ${path}")
       }
     }
 
@@ -1302,15 +1316,22 @@ object WebDescriptor {
       root.resolve("src").resolve("main").resolve("car").resolve("web").resolve("web-descriptor.yaml"),
       root.resolve("src").resolve("main").resolve("car").resolve("web").resolve("web.yaml"),
       root.resolve("web").resolve("web-descriptor.yaml"),
-      root.resolve("web").resolve("web.yaml")
+      root.resolve("web").resolve("web.yaml"),
+      root.resolve("src").resolve("main").resolve("web-inf").resolve("web.yaml"),
+      root.resolve("src").resolve("main").resolve("web-inf").resolve("form.yaml"),
+      root.resolve("src").resolve("main").resolve("web-inf").resolve("admin.yaml"),
+      root.resolve("web").resolve("WEB-INF").resolve("web-descriptor.yaml"),
+      root.resolve("web").resolve("WEB-INF").resolve("web.yaml"),
+      root.resolve("web").resolve("WEB-INF").resolve("form.yaml"),
+      root.resolve("web").resolve("WEB-INF").resolve("admin.yaml")
     )
 
   private def _load_archive_file(path: Path): Consequence[WebDescriptor] = {
     val uri = URI.create(s"jar:${path.toUri}")
     Using.resource(FileSystems.newFileSystem(uri, Map.empty[String, String].asJava)) { fs =>
-      _descriptor_files(fs.getPath("/")).find(Files.isRegularFile(_)) match {
-        case Some(file) => load(file)
-        case None => Consequence.resourceNotFound(s"web descriptor not found in archive: ${path}")
+      _descriptor_files(fs.getPath("/")).filter(Files.isRegularFile(_)) match {
+        case Vector() => Consequence.resourceNotFound(s"web descriptor not found in archive: ${path}")
+        case files => _load_descriptor_files(files)
       }
     }
   }

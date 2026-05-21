@@ -159,6 +159,13 @@ Web applications should normally be designed as Web-tier applications over REST.
 Static Form Web Apps should use the local Bootstrap/Textus asset baseline and
 ordinary Bootstrap layout primitives before adding application CSS.
 
+For Web developers, editable Web source is split by role: public HTML/assets
+under `src/main/web`, private layouts/partials/widgets under
+`src/main/web/WEB-INF`, and descriptor source metadata under
+`src/main/web-inf/web.yaml`, `src/main/web-inf/form.yaml`, and
+`src/main/web-inf/admin.yaml`. Packaged CAR `web/WEB-INF/*.yaml` files are
+generated runtime descriptors, not source files to edit directly.
+
 ## Content, Media, Tags, And Associations
 
 Use these when a component stores content, references media, or attaches

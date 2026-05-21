@@ -361,6 +361,15 @@ The extensionless URL is canonical, but `.html` URLs are accepted. The older
 `src/main/web/{app}/...` layout remains a fallback for existing samples; new
 component-owned Static Form Apps should prefer the flat Web root layout.
 
+Web developers edit source files, not packaged descriptors. Public pages and
+assets live under `src/main/web`, while private layouts, partials, widgets, and
+helper fragments live under `src/main/web/WEB-INF`. Descriptor source metadata
+for Web app registration, form exposure/control hints, and admin/debug surfaces
+lives under `src/main/web-inf/web.yaml`, `src/main/web-inf/form.yaml`, and
+`src/main/web-inf/admin.yaml`. Cozy packages those inputs into CAR
+`web/WEB-INF/*.yaml`; do not author generated descriptor files directly under
+`src/main/web/WEB-INF`.
+
 The Static Form App boundary is intentionally conservative. The preferred
 approach is to use static pages and filename conventions as far as practical,
 then use WebDescriptor settings only for the parts that cannot be expressed

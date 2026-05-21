@@ -211,6 +211,8 @@ the document unchanged.
 ## WEB-INF Layout And Partial Composition
 
 Static Form Apps may define private reusable HTML parts under `WEB-INF`.
+In source projects these files live below `src/main/web/WEB-INF`; in CAR/SAR
+packages they are copied below `web/WEB-INF`.
 
 Canonical locations:
 
@@ -224,6 +226,13 @@ Canonical locations:
 
 `WEB-INF` files are private template resources and must not be served as static
 Web pages or assets.
+
+Descriptor files are separate from these private template resources. Web
+developers should author descriptor source under `src/main/web-inf/web.yaml`,
+`src/main/web-inf/form.yaml`, and `src/main/web-inf/admin.yaml`; Cozy packages
+those inputs as `web/WEB-INF/web.yaml`, `web/WEB-INF/form.yaml`, and
+`web/WEB-INF/admin.yaml`. Do not use `src/main/web/WEB-INF/*.yaml` as
+descriptor source.
 
 Fragment templates are wrapped by `WEB-INF/layouts/default.html` when that
 layout exists. Explicit `layout` settings on app, page, or form descriptor

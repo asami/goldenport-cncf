@@ -215,9 +215,10 @@ Implement CNCF gaps discovered by the `BlogComponent` driver.
       remain explicit loader/debug inputs through `--component-car-dir` and
       `--subsystem-sar-dir`.
 - [x] CAR Web metadata and Web app resource layout.
-      `src/main/car/web` is the canonical Web descriptor metadata source,
-      `src/main/web` is the public Web app resource source, and future private
-      Web app metadata is reserved for `WEB-INF`.
+      `src/main/car/web` was the Phase 19 Web descriptor metadata source.
+      Current Static Form Web descriptor source uses `src/main/web-inf`,
+      `src/main/web` is the public Web app resource source, and private Web
+      app resources use `WEB-INF`.
 - [x] Non-image Association binding Web/manual surfaces beyond the core
       operation metadata.
 - [x] Entity create/update support for Blob attachment requests.

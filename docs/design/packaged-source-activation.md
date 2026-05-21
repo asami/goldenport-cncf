@@ -188,8 +188,8 @@ they are not embedded inside the application CAR.
   - canonical component-owned CAR-root resources
   - packaged into the CAR root by the build
   - used by `--component-dev-dir` without building a CAR first
-  - Web descriptor metadata belongs under `src/main/car/web`, for example
-    `src/main/car/web/web.yaml`
+  - legacy Web descriptor metadata under `src/main/car/web` remains readable,
+    but new Static Form Web metadata should use `src/main/web-inf`
   - `src/main/car/META-INF` is reserved for CAR-wide internal archive,
     tooling, or runtime metadata; CNCF does not currently define a standard use
     for it, so projects should not create it until a concrete need exists
@@ -198,10 +198,15 @@ they are not embedded inside the application CAR.
   - HTML pages, CSS, JavaScript, and static Web assets live here
   - kept separate from CAR metadata because it is the Web surface, not the
     archive descriptor layer
-  - `src/main/web/WEB-INF` is reserved for future Web-app-internal metadata or
-    private resources; when used, it must not be served as a public Web resource
+  - `src/main/web/WEB-INF` is reserved for private layouts, partials, widgets,
+    and helper resources copied into CAR `web/WEB-INF`; descriptor source files
+    should not be placed here
   - `src/main/web/META-INF` is not used; Web-app-internal metadata should use
     `WEB-INF` to stay aligned with Java Web application conventions
+- `src/main/web-inf`
+  - Static Form Web descriptor generation source
+  - `web.yaml`, `form.yaml`, and `admin.yaml` are merged with CML/component
+    metadata and packaged as generated CAR `web/WEB-INF/*.yaml`
 - `car.d`
   - expanded CAR directory for loader/debug/inspection use
   - no longer a default active component source

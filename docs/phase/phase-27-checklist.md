@@ -275,11 +275,14 @@ Create the first application Web surface for knowledge editing.
   `textus-knowledge-editor/etc/cozy-init.yaml`.
 - Replaced the generated notice sample with `TextusKnowledgeEditor.BookEditor`
   and book lifecycle operations backed by component-local `InformationSpace`.
-- Added Static Form Web descriptors for book list/detail/create/seed/edit,
-  validation, confirmation, publication, and materialization operations.
-- Kept the KE-05 Static Form Web descriptor under `src/main/car/web` as CAR
-  Web metadata. No `src/main/web` Web application resource tree was added in
-  this slice.
+- Added Static Form Web pages under `src/main/web` for book list/detail/create/
+  seed/edit, validation, confirmation, publication, and materialization
+  navigation.
+- Split Web metadata so source app/page information lives in
+  `src/main/web-inf/web.yaml`, while source operation exposure and form control
+  defaults live in `src/main/web-inf/form.yaml`. Cozy packages those inputs into
+  CAR `web/WEB-INF/web.yaml` and `web/WEB-INF/form.yaml`. Application structure
+  lives in ordinary HTML pages, not generated operation-specific fragments.
 - Added focused tests for BookEditor operation exposure, identifier seed,
   title validation, confirmation, and local KnowledgeSpace materialization.
 - Detailed implementation notes are recorded in
