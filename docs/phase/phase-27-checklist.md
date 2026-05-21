@@ -250,7 +250,7 @@ depending on system admin/debug representations.
 
 ## KE-05: Web Editor Shell and Book Navigation in `textus-knowledge-editor`
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
@@ -258,21 +258,40 @@ Create the first application Web surface for knowledge editing.
 
 ### Initial Tasks
 
-- [ ] Initialize or normalize the `textus-knowledge-editor` project using
+- [x] Initialize or normalize the `textus-knowledge-editor` project using
       `cozy init component`, the Cozy-owned component init/scaffolding
       contract from Cozy Phase 6 CS-19.
-- [ ] Add editor home/list screens.
-- [ ] Add create/import/edit/detail navigation for book knowledge.
-- [ ] Add ISBN/identifier entry flow for creating or seeding a book record.
-- [ ] Add visible field guidance, examples, and validation feedback.
-- [ ] Add status indicators for draft, validation, resolution, confirmation,
+- [x] Add editor home/list screens.
+- [x] Add create/import/edit/detail navigation for book knowledge.
+- [x] Add ISBN/identifier entry flow for creating or seeding a book record.
+- [x] Add visible field guidance, examples, and validation feedback.
+- [x] Add status indicators for draft, validation, resolution, confirmation,
       publication, and KnowledgeSpace materialization.
+
+### Completion Notes
+
+- Initialized and normalized `/Users/asami/src/dev2026/textus-knowledge-editor`
+  using Cozy component init. The durable init config is
+  `textus-knowledge-editor/etc/cozy-init.yaml`.
+- Replaced the generated notice sample with `TextusKnowledgeEditor.BookEditor`
+  and book lifecycle operations backed by component-local `InformationSpace`.
+- Added Static Form Web descriptors for book list/detail/create/seed/edit,
+  validation, confirmation, publication, and materialization operations.
+- Kept the KE-05 Static Form Web descriptor under `src/main/car/web` as CAR
+  Web metadata. No `src/main/web` Web application resource tree was added in
+  this slice.
+- Added focused tests for BookEditor operation exposure, identifier seed,
+  title validation, confirmation, and local KnowledgeSpace materialization.
+- Detailed implementation notes are recorded in
+  `docs/journal/2026/05/phase-27-web-editor-shell-book-navigation.md`.
+- Next active work is KE-06: DBpedia/OpenLibrary/Wikidata-backed lookup and
+  enrichment candidates for the book vertical slice.
 
 ---
 
 ## KE-06: Book Import/Editor Vertical Slice with DBpedia Lookup
 
-Status: TODO
+Status: ACTIVE
 
 ### Objective
 

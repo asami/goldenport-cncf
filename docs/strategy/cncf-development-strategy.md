@@ -1292,8 +1292,8 @@ Phase 26 completed scope:
 
 Phase 27 active scope:
 
-- KE-01 through KE-04 are done. Current focus is KE-05:
-  Web editor shell and book navigation in `textus-knowledge-editor`.
+- KE-01 through KE-05 are done. Current focus is KE-06:
+  Book import/editor vertical slice with DBpedia lookup.
 - Book-first domain knowledge editing through `textus-knowledge-editor`, with
   paper and web knowledge following after the book path is validated.
 - ISBN and other publication identifiers as import/seed keys for creating CNCF
@@ -1321,8 +1321,11 @@ Phase 27 active scope:
 - Editor-facing projection metadata for InformationSpace fields, validation,
   mapping impact, and 1.5hop+ `KnowledgeFrame` explanation is now available as
   the KE-04 editor projection contract.
-- The next target is the first Web editor shell and book navigation surface in
-  `textus-knowledge-editor`.
+- The first Web editor shell and book navigation surface in
+  `textus-knowledge-editor` is now available through the KE-05 Static Form
+  shell.
+- The next target is DBpedia/OpenLibrary/Wikidata-backed book lookup and
+  enrichment candidate creation.
 - Publication/materialization flow from `InformationSpace` into
   `KnowledgeSpace`.
 
