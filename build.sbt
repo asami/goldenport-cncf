@@ -1,11 +1,157 @@
 import sbt.TestFrameworks
 import sbt.Tests
 
-val scala3Version = "3.3.7"
+val scala3version = "3.3.7"
 
 lazy val generateTextusRuntimeCatalog = taskKey[File]("Generate Textus runtime catalog metadata for the warehouse repository.")
+lazy val exportTextusRuntimeCatalog = taskKey[File]("Export Textus runtime catalog metadata for local development consumers.")
 lazy val copyTextusRuntimeCatalog = taskKey[File]("Copy the checked-in Textus runtime catalog into the warehouse repository.")
 lazy val publishTextusRuntimeCatalog = taskKey[File]("Publish Textus runtime catalog metadata into the warehouse repository.")
+
+def textusBaseProvidedModules(
+  dependencies: Seq[ModuleID],
+  organizationname: String,
+  modulename: String,
+  scalabinaryversion: String
+): Vector[String] = {
+  def _is_test_dependency_(module: ModuleID): Boolean =
+    module.configurations.exists(_.toLowerCase.contains("test"))
+  def _artifact_name_(module: ModuleID): String =
+    if (module.crossVersion == CrossVersion.disabled)
+      module.name
+    else
+      s"${module.name}_$scalabinaryversion"
+  val self = s"$organizationname:${modulename}_$scalabinaryversion"
+  (Vector(self) ++
+    dependencies
+      .filterNot(_is_test_dependency_)
+      .map(module => s"${module.organization}:${_artifact_name_(module)}"))
+    .distinct
+    .toVector
+}
+
+def textusRuntimeCatalogText(
+  existingtext: String,
+  cncfversion: String,
+  scalabinaryversion: String,
+  generatedat: String,
+  baseprovidedmodules: Vector[String]
+): String = {
+  def _existing_value_(key: String): Option[String] =
+    existingtext.linesIterator.find(_.startsWith(s"$key:")).map(_.drop(key.length + 1).trim)
+      .filter(_.nonEmpty)
+  def _version_blocks_(text: String): Vector[(String, String)] = {
+    val blocks = Vector.newBuilder[(String, String)]
+    var currentversion: Option[String] = None
+    var currentlines = Vector.empty[String]
+    def _flush_(): Unit =
+      currentversion.foreach { v =>
+        blocks += v -> currentlines.mkString("\n")
+      }
+    text.linesIterator.foreach { line =>
+      if (line.startsWith("  - version: ")) {
+        _flush_()
+        currentversion = Some(line.stripPrefix("  - version: ").trim)
+        currentlines = Vector(line)
+      } else if (currentversion.nonEmpty && line.startsWith("    ")) {
+        currentlines :+= line
+      }
+    }
+    _flush_()
+    blocks.result()
+  }
+  def _preserved_version_lines_(version: String): Vector[String] = {
+    val generatedkeys =
+      Set("channel", "status", "scalaBinaryVersion", "module", "publishedAt", "metadataUrl")
+    _version_blocks_(existingtext)
+      .find(_._1 == version)
+      .map { case (_, block) =>
+        val lines = block.linesIterator.toVector.drop(1)
+        val preserved = Vector.newBuilder[String]
+        var keep = false
+        lines.foreach { line =>
+          if (line.startsWith("    ") && !line.startsWith("      ")) {
+            val key = line.trim.takeWhile(_ != ':')
+            keep = !generatedkeys.contains(key)
+          }
+          if (keep)
+            preserved += line
+        }
+        preserved.result()
+      }
+      .getOrElse(Vector.empty)
+  }
+  val baseprovidedblock =
+    baseprovidedmodules.map(module => s"  - $module").mkString("baseProvided:\n", "\n", "")
+  val channel =
+    if (cncfversion.endsWith("-SNAPSHOT")) "snapshot" else "stable"
+  val recommended =
+    _existing_value_("recommended").getOrElse(cncfversion)
+  val lateststable =
+    if (channel == "stable") cncfversion else _existing_value_("latestStable").getOrElse("")
+  val latestsnapshot =
+    if (channel == "snapshot") cncfversion else _existing_value_("latestSnapshot").getOrElse("")
+  val currentblock =
+    s"""  - version: $cncfversion
+       |    channel: $channel
+       |    status: active
+       |    scalaBinaryVersion: "$scalabinaryversion"
+       |    module: org.goldenport:goldenport-cncf_$scalabinaryversion:$cncfversion
+       |    publishedAt: $generatedat
+       |    metadataUrl: https://www.simplemodeling.org/repository/maven/org/goldenport/goldenport-cncf_$scalabinaryversion/maven-metadata.xml""".stripMargin +
+      _preserved_version_lines_(cncfversion).map("\n" + _).mkString
+  val historyblocks =
+    _version_blocks_(existingtext)
+      .foldLeft(Vector.empty[(String, String)]) { case (acc, (v, block)) =>
+        acc.filterNot(_._1 == v) :+ (v -> block)
+      }
+      .filterNot(_._1 == cncfversion)
+      .map(_._2)
+  val versions =
+    (historyblocks :+ currentblock).mkString("\n")
+  s"""schemaVersion: 1
+     |generatedAt: $generatedat
+     |recommended: $recommended
+     |latestStable: $lateststable
+     |latestSnapshot: $latestsnapshot
+     |mavenRepositories:
+     |  - https://www.simplemodeling.org/repository/maven
+     |carRepositories:
+     |  - https://www.simplemodeling.org/repository/car
+     |sarRepositories:
+     |  - https://www.simplemodeling.org/repository/sar
+     |coursierRepositories:
+     |  - https://www.simplemodeling.org/repository/maven
+     |$baseprovidedblock
+     |versions:
+     |$versions
+     |""".stripMargin
+}
+
+def textusWriteRuntimeCatalog(
+  sourcefile: File,
+  targetfile: File,
+  cncfversion: String,
+  scalabinaryversion: String,
+  baseprovidedmodules: Vector[String]
+): File = {
+  val existingtext =
+    if (sourcefile.isFile)
+      IO.read(sourcefile)
+    else
+      ""
+  val text =
+    textusRuntimeCatalogText(
+      existingtext,
+      cncfversion,
+      scalabinaryversion,
+      java.time.Instant.now().toString,
+      baseprovidedmodules
+    )
+  IO.createDirectory(targetfile.getParentFile)
+  IO.write(targetfile, text)
+  targetfile
+}
 
 def textusPublishRepositoryFile(resolver: Resolver): Option[File] =
   resolver match {
@@ -46,22 +192,22 @@ def textusWarehouseDirFromMavenRepository(repository: File): File =
 
 def textusPublishRuntimeCatalogFile(
   source: File,
-  publishResolver: Option[Resolver],
-  baseDir: File,
+  publishresolver: Option[Resolver],
+  basedir: File,
   log: sbt.util.Logger
 ): File = {
-  val warehouseDir =
-    publishResolver
+  val warehousedir =
+    publishresolver
       .flatMap(textusPublishRepositoryFile)
       .map(textusWarehouseDirFromMavenRepository)
-      .getOrElse(textusWarehouseDirFromMavenRepository(baseDir / "maven-local"))
-  val target = warehouseDir / "repository" / "textus" / "runtime-catalog.yaml"
+      .getOrElse(textusWarehouseDirFromMavenRepository(basedir / "maven-local"))
+  val target = warehousedir / "repository" / "textus" / "runtime-catalog.yaml"
   val text = IO.read(source)
-  def valueOf(key: String): Option[String] =
+  def _value_of_(key: String): Option[String] =
     text.linesIterator.find(_.startsWith(s"$key:")).map(_.drop(key.length + 1).trim).filter(_.nonEmpty)
-  val versionLines =
+  val versionlines =
     text.linesIterator.filter(_.startsWith("  - version: ")).map(_.stripPrefix("  - version: ").trim).toVector
-  def statusOf(version: String): Option[String] = {
+  def _status_of_(version: String): Option[String] = {
     val lines = text.linesIterator.toVector
     val start = lines.indexWhere(_ == s"  - version: $version")
     if (start < 0) {
@@ -71,24 +217,24 @@ def textusPublishRuntimeCatalogFile(
       block.find(_.trim.startsWith("status:")).map(_.trim.stripPrefix("status:").trim).filter(_.nonEmpty)
     }
   }
-  val versionLineCount = versionLines.size
-  val distinctVersionCount = versionLines.distinct.size
-  if (versionLineCount == 0)
+  val versionlinecount = versionlines.size
+  val distinctversioncount = versionlines.distinct.size
+  if (versionlinecount == 0)
     sys.error("Textus runtime catalog has no versions")
-  if (versionLineCount != distinctVersionCount)
+  if (versionlinecount != distinctversioncount)
     sys.error("Textus runtime catalog has duplicate versions")
-  valueOf("recommended").foreach { v =>
-    if (!versionLines.contains(v))
+  _value_of_("recommended").foreach { v =>
+    if (!versionlines.contains(v))
       sys.error(s"Textus runtime catalog recommended version is not listed: $v")
-    if (statusOf(v).contains("disabled"))
+    if (_status_of_(v).contains("disabled"))
       sys.error(s"Textus runtime catalog recommended version is disabled: $v")
   }
-  valueOf("latestStable").foreach { v =>
-    if (!versionLines.contains(v))
+  _value_of_("latestStable").foreach { v =>
+    if (!versionlines.contains(v))
       sys.error(s"Textus runtime catalog latestStable version is not listed: $v")
   }
-  valueOf("latestSnapshot").foreach { v =>
-    if (!versionLines.contains(v))
+  _value_of_("latestSnapshot").foreach { v =>
+    if (!versionlines.contains(v))
       sys.error(s"Textus runtime catalog latestSnapshot version is not listed: $v")
   }
   IO.createDirectory(target.getParentFile)
@@ -104,7 +250,7 @@ lazy val root = project
     name := "goldenport-cncf",
     version := "0.4.10-SNAPSHOT",
 
-    scalaVersion := scala3Version,
+    scalaVersion := scala3version,
 
     resolvers ++= Seq(
       Resolver.defaultLocal,
@@ -169,121 +315,35 @@ lazy val root = project
 
     generateTextusRuntimeCatalog := {
       val file = baseDirectory.value / "src/main/warehouse/repository/textus/runtime-catalog.yaml"
-      val cncfVersion = version.value
-      val scalaBinaryVersionValue = scalaBinaryVersion.value
-      val generatedAt = java.time.Instant.now().toString
-      val existingText =
-        if (file.isFile)
-          IO.read(file)
-        else
-          ""
-      def existingValue(key: String): Option[String] =
-        existingText.linesIterator.find(_.startsWith(s"$key:")).map(_.drop(key.length + 1).trim)
-          .filter(_.nonEmpty)
-      def versionBlocks(text: String): Vector[(String, String)] = {
-        val blocks = Vector.newBuilder[(String, String)]
-        var currentVersion: Option[String] = None
-        var currentLines = Vector.empty[String]
-        def flush(): Unit =
-          currentVersion.foreach { v =>
-            blocks += v -> currentLines.mkString("\n")
-          }
-        text.linesIterator.foreach { line =>
-          if (line.startsWith("  - version: ")) {
-            flush()
-            currentVersion = Some(line.stripPrefix("  - version: ").trim)
-            currentLines = Vector(line)
-          } else if (currentVersion.nonEmpty && line.startsWith("    ")) {
-            currentLines :+= line
-          }
-        }
-        flush()
-        blocks.result()
-      }
-      def topLevelListBlock(key: String): Option[String] = {
-        val lines = existingText.linesIterator.toVector
-        val start = lines.indexWhere(_ == s"$key:")
-        if (start < 0) {
-          None
-        } else {
-          val entries = lines.drop(start + 1).takeWhile(_.startsWith("  - "))
-          if (entries.isEmpty)
-            None
-          else
-            Some((Vector(s"$key:") ++ entries).mkString("\n"))
-        }
-      }
-      val baseProvidedBlock =
-        topLevelListBlock("baseProvided").getOrElse(
-          """baseProvided:
-            |  - org.goldenport:goldenport-cncf_3
-            |  - org.goldenport:goldenport-core_3
-            |  - org.goldenport:cncf-collaborator-api
-            |  - org.simplemodeling:simplemodeling-model_3
-            |  - org.typelevel:cats-core_3
-            |  - org.typelevel:cats-free_3
-            |  - org.typelevel:cats-effect_3
-            |  - org.http4s:http4s-ember-server_3
-            |  - org.http4s:http4s-core_3
-            |  - org.http4s:http4s-dsl_3
-            |  - com.zaxxer:HikariCP
-            |  - org.xerial:sqlite-jdbc
-            |  - org.apache.pekko:pekko-actor_3
-            |  - org.apache.pekko:pekko-stream_3
-            |  - io.circe:circe-core_3
-            |  - io.circe:circe-generic_3
-            |  - io.circe:circe-parser_3
-            |  - org.yaml:snakeyaml
-            |  - com.vladsch.flexmark:flexmark
-            |  - com.vladsch.flexmark:flexmark-ext-tables
-            |  - com.vladsch.flexmark:flexmark-ext-gfm-strikethrough
-            |  - com.vladsch.flexmark:flexmark-ext-gfm-tasklist
-            |  - org.slf4j:slf4j-simple""".stripMargin
+      textusWriteRuntimeCatalog(
+        file,
+        file,
+        version.value,
+        scalaBinaryVersion.value,
+        textusBaseProvidedModules(
+          libraryDependencies.value,
+          organization.value,
+          name.value,
+          scalaBinaryVersion.value
         )
-      val channel =
-        if (cncfVersion.endsWith("-SNAPSHOT")) "snapshot" else "stable"
-      val latestStable =
-        if (channel == "stable") cncfVersion else existingValue("latestStable").getOrElse("")
-      val latestSnapshot =
-        if (channel == "snapshot") cncfVersion else existingValue("latestSnapshot").getOrElse("")
-      val currentBlock =
-        s"""  - version: $cncfVersion
-           |    channel: $channel
-           |    status: active
-           |    scalaBinaryVersion: "$scalaBinaryVersionValue"
-           |    module: org.goldenport:goldenport-cncf_$scalaBinaryVersionValue:$cncfVersion
-           |    publishedAt: $generatedAt
-           |    metadataUrl: https://www.simplemodeling.org/repository/maven/org/goldenport/goldenport-cncf_$scalaBinaryVersionValue/maven-metadata.xml""".stripMargin
-      val historyBlocks =
-        versionBlocks(existingText)
-          .foldLeft(Vector.empty[(String, String)]) { case (acc, (v, block)) =>
-            acc.filterNot(_._1 == v) :+ (v -> block)
-          }
-          .filterNot(_._1 == cncfVersion)
-          .map(_._2)
-      val versions =
-        (historyBlocks :+ currentBlock).mkString("\n")
-      val text =
-        s"""schemaVersion: 1
-           |generatedAt: $generatedAt
-           |recommended: $cncfVersion
-           |latestStable: $latestStable
-           |latestSnapshot: $latestSnapshot
-           |mavenRepositories:
-           |  - https://www.simplemodeling.org/repository/maven
-           |carRepositories:
-           |  - https://www.simplemodeling.org/repository/car
-           |sarRepositories:
-           |  - https://www.simplemodeling.org/repository/sar
-           |coursierRepositories:
-           |  - https://www.simplemodeling.org/repository/maven
-           |$baseProvidedBlock
-           |versions:
-           |$versions
-           |""".stripMargin
-      IO.createDirectory(file.getParentFile)
-      IO.write(file, text)
-      file
+      )
+    },
+
+    exportTextusRuntimeCatalog := {
+      val source = baseDirectory.value / "src/main/warehouse/repository/textus/runtime-catalog.yaml"
+      val exportfile = target.value / "cncf.d" / "runtime-catalog.yaml"
+      textusWriteRuntimeCatalog(
+        source,
+        exportfile,
+        version.value,
+        scalaBinaryVersion.value,
+        textusBaseProvidedModules(
+          libraryDependencies.value,
+          organization.value,
+          name.value,
+          scalaBinaryVersion.value
+        )
+      )
     },
 
     copyTextusRuntimeCatalog := {
@@ -300,6 +360,8 @@ lazy val root = project
       publishTextusRuntimeCatalog.value
       (publish / packagedArtifacts).value
     },
+
+    publishLocal := (publishLocal dependsOn exportTextusRuntimeCatalog).value,
 
     Test / fork := false,
     Test / parallelExecution := false,
@@ -373,15 +435,15 @@ dockerBuild := {
 
   // 3) Docker build (local)
   val latest = "goldenport-cncf:latest"
-  val verTag = s"goldenport-cncf:${version.value}"
+  val vertag = s"goldenport-cncf:${version.value}"
 
   val cmd =
-    s"docker build --no-cache -t $latest -t $verTag ."
+    s"docker build --no-cache -t $latest -t $vertag ."
 
   if (sys.process.Process(cmd).! != 0)
     sys.error("Docker build failed")
 
-  log.info(s"Docker images built locally: $latest, $verTag")
+  log.info(s"Docker images built locally: $latest, $vertag")
 }
 
 lazy val dockerPush = taskKey[Unit]("Push CNCF Docker image to GHCR")
@@ -390,21 +452,21 @@ dockerPush := {
   val log = streams.value.log
 
   val repo = "ghcr.io/asami/goldenport-cncf"
-  val verTag = s"$repo:${version.value}"
+  val vertag = s"$repo:${version.value}"
   val latest = s"$repo:latest"
 
-  val tagCmds = Seq(
-    s"docker tag goldenport-cncf:${version.value} $verTag",
+  val tagcmds = Seq(
+    s"docker tag goldenport-cncf:${version.value} $vertag",
     s"docker tag goldenport-cncf:latest $latest"
   )
 
-  tagCmds.foreach { cmd =>
+  tagcmds.foreach { cmd =>
     if (sys.process.Process(cmd).! != 0)
       sys.error(s"Tagging failed: $cmd")
   }
 
-  val pushCmd = s"docker push $repo --all-tags"
-  if (sys.process.Process(pushCmd).! != 0)
+  val pushcmd = s"docker push $repo --all-tags"
+  if (sys.process.Process(pushcmd).! != 0)
     sys.error("Docker push failed")
 
   log.info("Docker images pushed to GHCR.")

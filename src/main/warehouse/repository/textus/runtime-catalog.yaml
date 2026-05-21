@@ -1,8 +1,8 @@
 schemaVersion: 1
-generatedAt: 2026-05-20T10:15:31.521759Z
+generatedAt: 2026-05-21T21:01:01.661718Z
 recommended: 0.4.9
 latestStable: 0.4.9
-latestSnapshot: 
+latestSnapshot: 0.4.10-SNAPSHOT
 mavenRepositories:
   - https://www.simplemodeling.org/repository/maven
 carRepositories:
@@ -13,9 +13,7 @@ coursierRepositories:
   - https://www.simplemodeling.org/repository/maven
 baseProvided:
   - org.goldenport:goldenport-cncf_3
-  - org.goldenport:goldenport-core_3
-  - org.goldenport:cncf-collaborator-api
-  - org.simplemodeling:simplemodeling-model_3
+  - org.scala-lang:scala3-library_3
   - org.typelevel:cats-core_3
   - org.typelevel:cats-free_3
   - org.typelevel:cats-effect_3
@@ -35,6 +33,9 @@ baseProvided:
   - com.vladsch.flexmark:flexmark-ext-gfm-strikethrough
   - com.vladsch.flexmark:flexmark-ext-gfm-tasklist
   - org.slf4j:slf4j-simple
+  - org.goldenport:goldenport-core_3
+  - org.simplemodeling:simplemodeling-model_3
+  - org.goldenport:cncf-collaborator-api
 versions:
   - version: 0.4.7
     channel: stable
@@ -57,3 +58,16 @@ versions:
     module: org.goldenport:goldenport-cncf_3:0.4.9
     publishedAt: 2026-05-20T10:15:31.521759Z
     metadataUrl: https://www.simplemodeling.org/repository/maven/org/goldenport/goldenport-cncf_3/maven-metadata.xml
+  - version: 0.4.10-SNAPSHOT
+    channel: snapshot
+    status: active
+    scalaBinaryVersion: "3"
+    module: org.goldenport:goldenport-cncf_3:0.4.10-SNAPSHOT
+    publishedAt: 2026-05-21T21:01:01.661718Z
+    metadataUrl: https://www.simplemodeling.org/repository/maven/org/goldenport/goldenport-cncf_3/maven-metadata.xml
+    baseProvidedChanges:
+      added:
+        - org.scala-lang:scala3-library_3
+      removed: []
+      changed: []
+      note: baseProvided is derived from Compile / libraryDependencies from 0.4.10-SNAPSHOT.
