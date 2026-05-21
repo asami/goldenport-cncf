@@ -414,7 +414,7 @@ Implement the web resource knowledge editing workflow.
 
 ## KE-09: Publish/Materialize Flow and Validation Feedback
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
@@ -423,19 +423,40 @@ materialization.
 
 ### Initial Tasks
 
-- [ ] Show validation issues in editor context.
-- [ ] Show resolution candidates with evidence and confidence.
-- [ ] Show confirmation and publication status.
-- [ ] Publish through the Phase 26 Knowledge engine SPI path.
-- [ ] Materialize published information into KnowledgeSpace.
-- [ ] Show the resulting KnowledgeNode/KnowledgeRelationship summary to the
+- [x] Show validation issues in editor context.
+- [x] Show resolution candidates with evidence and confidence.
+- [x] Show confirmation and publication status.
+- [x] Publish through the Phase 26 Knowledge engine SPI path.
+- [x] Materialize published information into KnowledgeSpace.
+- [x] Show the resulting KnowledgeNode/KnowledgeRelationship summary to the
       editor user.
+
+### Completion Notes
+
+- `textus-knowledge-editor` now routes book, paper, and web-resource publish
+  and materialize operations through an application-local
+  `KnowledgeEngineProvider` implementation. The provider uses the current local
+  CNCF InformationSpace-to-KnowledgeSpace materialization path and can later be
+  replaced by SIE-backed wiring.
+- Publish operations record provider status, publication target, message, and
+  resulting KnowledgeFrame id only after provider success. Provider failures
+  leave InformationSpace publication state unchanged.
+- Materialize operations store the provider-produced snapshot in the
+  component-local `KnowledgeSpace` and return deterministic KnowledgeSpace
+  counts plus compact frame, node, relationship, fact, evidence, and provenance
+  summaries.
+- Editor responses for book, paper, and web-resource domains continue to show
+  validation issues, resolution candidates, confidence/evidence, action state,
+  and publication status, while excluding raw RDF triples, raw vector payloads,
+  provider JSON, and raw HTML bodies.
+- Detailed implementation notes are recorded in
+  `docs/journal/2026/05/phase-27-ke-09-publish-materialize-feedback.md`.
 
 ---
 
 ## KE-10: Usability Smoke and Phase 27 Closure
 
-Status: TODO
+Status: ACTIVE
 
 ### Objective
 

@@ -76,12 +76,12 @@ Scope boundaries:
 - F (DONE): KE-06 — Book import/editor vertical slice with DBpedia lookup.
 - G (DONE): KE-07 — Paper editor follow-up.
 - H (DONE): KE-08 — Web knowledge editor vertical slice.
-- I (ACTIVE): KE-09 — Publish/materialize flow and validation feedback.
-- J (TODO): KE-10 — Usability smoke and Phase 27 closure.
+- I (DONE): KE-09 — Publish/materialize flow and validation feedback.
+- J (ACTIVE): KE-10 — Usability smoke and Phase 27 closure.
 
 Resume hint:
 
-- Start from KE-09. Do not reopen Phase 26 KI items unless fixing a regression.
+- Start from KE-10. Do not reopen Phase 26 KI items unless fixing a regression.
 
 ## 4. Development Items
 
@@ -93,7 +93,7 @@ Resume hint:
 - [x] KE-06: Book import/editor vertical slice with DBpedia lookup.
 - [x] KE-07: Paper editor follow-up.
 - [x] KE-08: Web knowledge editor vertical slice.
-- [ ] KE-09: Publish/materialize flow and validation feedback.
+- [x] KE-09: Publish/materialize flow and validation feedback.
 - [ ] KE-10: Usability smoke and Phase 27 closure.
 
 Detailed task breakdown and progress tracking are recorded in

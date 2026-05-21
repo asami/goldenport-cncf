@@ -1293,9 +1293,9 @@ Phase 26 completed scope:
 
 Phase 27 active scope:
 
-- KE-01 through KE-08 are done. Current focus is KE-09:
-  publish/materialize flow and validation feedback after the book, paper, and
-  web resource editor flows.
+- KE-01 through KE-09 are done. Current focus is KE-10:
+  usability smoke and Phase 27 closure after publish/materialize feedback is
+  visible for book, paper, and web resource editor flows.
 - Book-first domain knowledge editing through `textus-knowledge-editor`, with
   paper and web knowledge following after the book path is validated.
 - ISBN and other publication identifiers as import/seed keys for creating CNCF
@@ -1335,8 +1335,13 @@ Phase 27 active scope:
 - The web resource editor vertical slice now adds URL seed/import, lightweight
   metadata fetch, reviewable URL/RDF-like link candidates, and local
   InformationSpace-to-KnowledgeSpace materialization.
-- The next target is richer publication/materialization feedback from
-  `InformationSpace` into `KnowledgeSpace`.
+- Publish and materialize operations now route through the
+  `KnowledgeEngineProvider` boundary and return editor-visible validation,
+  candidate, publication, KnowledgeFrame, KnowledgeNode, relationship, fact,
+  evidence, provenance, and KnowledgeSpace count summaries without exposing raw
+  RDF/vector/provider payloads.
+- The next target is a usability smoke for book, paper, and web-resource
+  editing before Phase 27 closure.
 
 Future follow-ups outside the closed Phase 26 baseline and active Phase 27
 scope:
