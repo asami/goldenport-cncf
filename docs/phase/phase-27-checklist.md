@@ -287,14 +287,14 @@ Create the first application Web surface for knowledge editing.
   title validation, confirmation, and local KnowledgeSpace materialization.
 - Detailed implementation notes are recorded in
   `docs/journal/2026/05/phase-27-web-editor-shell-book-navigation.md`.
-- Next active work is KE-06: DBpedia/OpenLibrary/Wikidata-backed lookup and
-  enrichment candidates for the book vertical slice.
+- Completed by KE-06: DBpedia-backed lookup and local identifier candidates
+  for the book vertical slice.
 
 ---
 
 ## KE-06: Book Import/Editor Vertical Slice with DBpedia Lookup
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
@@ -304,24 +304,42 @@ candidates.
 
 ### Initial Tasks
 
-- [ ] Create book record manually.
-- [ ] Create or seed book record from ISBN or another supported identifier.
-- [ ] Add or reconcile multiple external identifiers on the same book record.
-- [ ] Query DBpedia from ISBN/title/author data when available.
-- [ ] Show the matched DBpedia RDF node URI as the external knowledge anchor.
-- [ ] Show DBpedia labels, abstracts/comments, categories, sameAs links,
-      predicates, and inferred candidates as reviewable suggestions.
-- [ ] Edit and validate fields.
-- [ ] Resolve author/publisher/work/concept candidates where available.
-- [ ] Confirm and publish the book knowledge.
-- [ ] Materialize the book into KnowledgeSpace and verify node/relationship
-      projection.
+- [x] Create book record manually.
+- [x] Create or seed book record from ISBN or another supported identifier.
+- [x] Add or reconcile multiple external identifiers on the same book record.
+- [x] Query DBpedia from ISBN/title/author data when available.
+- [x] Show the matched DBpedia RDF node URI as the external knowledge anchor.
+- [x] Show DBpedia labels, abstracts/comments, categories, and sameAs links as
+      reviewable suggestions.
+- [x] Edit and validate fields.
+- [x] Keep author/publisher/work/concept resolution as future candidate work
+      while validating the book-level resolver path.
+- [x] Confirm the selected-candidate book record through the existing lifecycle.
+- [x] Materialize the book into KnowledgeSpace through the existing
+      InformationSpace-to-KnowledgeSpace projection.
+
+### Completion Notes
+
+- `textus-knowledge-editor` now has resolver operations for resolving,
+  listing, selecting, clearing, and enriching book candidates.
+- DBpedia Lookup is the first live external RDF enrichment source. Automated
+  tests use fake HTTP responses so external service availability does not gate
+  validation.
+- Local ISBN, DOI, Open Library, Wikidata, and DBpedia URI fields become
+  reviewable identity-binding candidates.
+- KE-06 does not add predicate-level candidate extraction or
+  author/publisher/work/concept authority resolution; those remain follow-up
+  resolver profile work.
+- CNCF core remains provider-neutral; it only gained generic candidate clearing
+  support in `InformationSpace`.
+- Detailed implementation notes are recorded in
+  `docs/journal/2026/05/phase-27-book-resolver-import-external-candidate-flow.md`.
 
 ---
 
 ## KE-07: Paper Editor Follow-Up
 
-Status: TODO
+Status: ACTIVE
 
 ### Objective
 

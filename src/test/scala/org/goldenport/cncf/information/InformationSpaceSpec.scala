@@ -1,7 +1,7 @@
 package org.goldenport.cncf.information
 
 import org.goldenport.Consequence
-import org.goldenport.cncf.knowledge.KnowledgeFrameId
+import org.goldenport.cncf.knowledge.{ExternalKnowledgeIdentifier, KnowledgeFrameId, RdfNodeName}
 import org.goldenport.record.Record
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
@@ -9,7 +9,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   May. 20, 2026
- * @version May. 20, 2026
+ * @version May. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 final class InformationSpaceSpec
@@ -104,6 +104,70 @@ final class InformationSpaceSpec
       resolved.state shouldBe InformationConflictState.Resolved
       resolved.resolution shouldBe Some("keep-information")
       space.informationItemOption(item.id).map(_.state) shouldBe Some(InformationLifecycleState.Confirmed)
+    }
+
+    "clear resolution candidate and its identity binding" in {
+      val space = new InformationSpace
+      val batch = _success(space.registerImportBatch("paper", Vector(Record.data("title" -> "Knowledge import", "authors" -> "Alice"))))
+      val recordid = batch.recordIds.head
+      val candidate = _success(space.addResolutionCandidate(
+        recordid,
+        "dbpediaUri",
+        "Knowledge import",
+        InformationIdentityBinding(
+          id = InformationIdentityBindingId("pending"),
+          recordId = Some(recordid),
+          rdfSubject = Some(RdfNodeName("https://dbpedia.org/resource/Knowledge_graph")),
+          externalIdentifiers = Vector(ExternalKnowledgeIdentifier("dbpedia", "https://dbpedia.org/resource/Knowledge_graph", Some("resource"))),
+          authority = Some("dbpedia"),
+          confidence = Some(0.72)
+        ),
+        Some(0.72),
+        Some("dbpedia lookup")
+      ))
+
+      space.counts.resolutionCandidateCount shouldBe 1
+      space.counts.identityBindingCount shouldBe 1
+      space.importRecordOption(recordid).map(_.state) shouldBe Some(InformationLifecycleState.NeedsResolution)
+
+      val removed = _success(space.clearResolutionCandidate(candidate.id))
+
+      removed.id shouldBe candidate.id
+      space.resolutionCandidates(recordid) shouldBe Vector.empty
+      space.counts.resolutionCandidateCount shouldBe 0
+      space.counts.identityBindingCount shouldBe 0
+      space.importRecordOption(recordid).map(_.state) shouldBe Some(InformationLifecycleState.Imported)
+      space.importRecordOption(recordid).map(_.resolutionCandidateIds) shouldBe Some(Vector.empty)
+      space.importRecordOption(recordid).map(_.identityBindingIds) shouldBe Some(Vector.empty)
+    }
+
+    "reject clearing candidates after record confirmation" in {
+      val space = new InformationSpace
+      val batch = _success(space.registerImportBatch("paper", Vector(Record.data("title" -> "Knowledge import", "authors" -> "Alice"))))
+      val recordid = batch.recordIds.head
+      _success(space.validateInformationRecord(recordid))
+      val candidate = _success(space.addResolutionCandidate(
+        recordid,
+        "dbpediaUri",
+        "Knowledge import",
+        InformationIdentityBinding(
+          id = InformationIdentityBindingId("pending"),
+          recordId = Some(recordid),
+          rdfSubject = Some(RdfNodeName("https://dbpedia.org/resource/Knowledge_graph")),
+          externalIdentifiers = Vector(ExternalKnowledgeIdentifier("dbpedia", "https://dbpedia.org/resource/Knowledge_graph", Some("resource"))),
+          authority = Some("dbpedia"),
+          confidence = Some(0.72)
+        ),
+        Some(0.72),
+        Some("dbpedia lookup")
+      ))
+      val selected = _success(space.selectResolutionCandidate(candidate.id))
+      val item = _success(space.confirmInformationRecord(recordid))
+
+      space.clearResolutionCandidate(candidate.id) shouldBe a[Consequence.Failure[_]]
+      space.resolutionCandidates(recordid).map(_.id) shouldBe Vector(candidate.id)
+      space.counts.identityBindingCount shouldBe 1
+      space.informationItemOption(item.id).map(_.identityBindingIds) shouldBe Some(Vector(selected.binding.id))
     }
   }
 

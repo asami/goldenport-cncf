@@ -197,6 +197,34 @@ final class InformationSpace {
         Consequence.argumentInvalid(s"information resolution candidate not found: ${candidateid.print}")
     }
 
+  def clearResolutionCandidate(candidateid: InformationResolutionCandidateId): Consequence[InformationResolutionCandidate] =
+    _snapshot.resolutionCandidates.find(_.id == candidateid) match {
+      case Some(candidate) =>
+        val record = importRecordOption(candidate.recordId)
+        record match {
+          case Some(x) if x.itemId.nonEmpty || x.state == InformationLifecycleState.Confirmed || x.state == InformationLifecycleState.Published =>
+            Consequence.argumentInvalid(s"information resolution candidate belongs to confirmed record: ${candidateid.print}")
+          case _ =>
+            val remainingcandidates = _snapshot.resolutionCandidates.filterNot(_.id == candidateid)
+            val updatedrecord = record.map { x =>
+              x.copy(
+                state = _state_after_candidate_update(x, remainingcandidates),
+                resolutionCandidateIds = x.resolutionCandidateIds.filterNot(_ == candidateid),
+                identityBindingIds = x.identityBindingIds.filterNot(_ == candidate.binding.id),
+                updatedAt = Instant.now()
+              )
+            }
+            _snapshot = _snapshot.copy(
+              records = _snapshot.records.map(x => updatedrecord.filter(_.id == x.id).getOrElse(x)),
+              resolutionCandidates = remainingcandidates,
+              identityBindings = _snapshot.identityBindings.filterNot(_.id == candidate.binding.id)
+            )
+            Consequence.success(candidate)
+        }
+      case None =>
+        Consequence.argumentInvalid(s"information resolution candidate not found: ${candidateid.print}")
+    }
+
   def confirmInformationRecord(recordid: InformationRecordId): Consequence[InformationItem] =
     importRecordOption(recordid) match {
       case Some(record) if record.state == InformationLifecycleState.Invalid =>
@@ -422,6 +450,24 @@ final class InformationSpace {
     index: Int
   ): String =
     s"$prefix-$index"
+
+  private def _state_after_candidate_update(
+    record: InformationImportRecord,
+    candidates: Vector[InformationResolutionCandidate]
+  ): InformationLifecycleState =
+    if (record.state == InformationLifecycleState.Confirmed || record.state == InformationLifecycleState.Published)
+      record.state
+    else if (record.validationIssueIds.nonEmpty)
+      InformationLifecycleState.Invalid
+    else {
+      val own = candidates.filter(_.recordId == record.id)
+      if (own.isEmpty)
+        InformationLifecycleState.Imported
+      else if (own.forall(_.selected))
+        InformationLifecycleState.ReadyForConfirmation
+      else
+        InformationLifecycleState.NeedsResolution
+    }
 }
 
 object InformationSpace {

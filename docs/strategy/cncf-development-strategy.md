@@ -1293,8 +1293,8 @@ Phase 26 completed scope:
 
 Phase 27 active scope:
 
-- KE-01 through KE-05 are done. Current focus is KE-06:
-  Book import/editor vertical slice with DBpedia lookup.
+- KE-01 through KE-06 are done. Current focus is KE-07:
+  Paper editor follow-up after the book resolver path.
 - Book-first domain knowledge editing through `textus-knowledge-editor`, with
   paper and web knowledge following after the book path is validated.
 - ISBN and other publication identifiers as import/seed keys for creating CNCF
@@ -1311,9 +1311,9 @@ Phase 27 active scope:
 - Explicit binding from multiple application/domain Entity instances through
   `InformationSpace` to a single Textus book Knowledge node when identity
   resolution confirms shared meaning.
-- DBpedia integration as one external RDF knowledge source for book records,
-  using DBpedia resource URI/RDF node as an external anchor while keeping
-  imported data reviewable before confirmation.
+- DBpedia integration is now available as the first external RDF enrichment
+  source for book records, using DBpedia resource URI/RDF node as an external
+  anchor while keeping imported data reviewable before confirmation.
 - Self-explanatory Web authoring forms with field descriptions, examples,
   validation feedback, resolution guidance, and publication/use explanations.
 - Concrete book domain attributes first, then paper and web domain attributes.
@@ -1325,8 +1325,11 @@ Phase 27 active scope:
 - The first Web editor shell and book navigation surface in
   `textus-knowledge-editor` is now available through the KE-05 Static Form
   shell.
-- The next target is DBpedia/OpenLibrary/Wikidata-backed book lookup and
-  enrichment candidate creation.
+- The book resolver path now creates local and DBpedia-backed reviewable
+  candidates in `InformationSpace`; OpenLibrary and Wikidata remain supplied
+  identifier anchors until later live lookup work.
+- The next target is the paper editor follow-up using the same
+  InformationSpace editor projection pattern.
 - Publication/materialization flow from `InformationSpace` into
   `KnowledgeSpace`.
 
