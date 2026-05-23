@@ -522,7 +522,7 @@ The first widget contracts are:
 
 ```html
 <textus-result-view source="result.body"></textus-result-view>
-<textus-result-table source="result.body" page="paging.page" page-size="paging.pageSize" total="paging.total" href="paging.href"></textus-result-table>
+<textus:table source="result.body" page="paging.page" page-size="paging.pageSize" total="paging.total" href="paging.href"></textus:table>
 <textus:card-list source="result.body" columns="title,updated_at"></textus:card-list>
 <textus:record-card source="result.body" columns="title,updated_at"></textus:record-card>
 <textus:html-field source="result.body" field="content"></textus:html-field>

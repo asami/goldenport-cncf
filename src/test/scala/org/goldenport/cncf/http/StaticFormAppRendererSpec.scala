@@ -2,7 +2,7 @@ package org.goldenport.cncf.http
 
 /*
  * @since   May. 18, 2026
- * @version May. 20, 2026
+ * @version May. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 import scala.collection.mutable.ListBuffer
@@ -385,7 +385,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       subsystem.add(TestComponentFactory.create("information_component", Protocol.empty))
       val component = subsystem.findComponent("information_component").getOrElse(fail("information component missing"))
-      val batch = _success(component.informationSpace.registerImportBatch(
+      val batch = _success(component.informationSpace.registerInformation(
         "paper",
         Vector(Record.data(
           "title" -> "Knowledge Import",
@@ -393,7 +393,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
           "venue" -> "CNCF Notes"
         ))
       ))
-      val record = component.informationSpace.listImportRecords(batch.id).headOption.getOrElse(fail("information record missing"))
+      val record = batch.headOption.getOrElse(fail("information record missing"))
       _success(component.informationSpace.validateInformationRecord(record.id))
       val item = _success(component.informationSpace.confirmInformationRecord(record.id))
       _success(component.informationSpace.publishInformationItem(item.id, "fuseki", Some("published")))
@@ -7445,7 +7445,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
             "approve-notice-aggregate__200.html",
             """<article>
               |  <h2>Matching notices</h2>
-              |  <textus-result-table source="result.body" page="paging.page" page-size="paging.pageSize" href="paging.href"></textus-result-table>
+              |  <textus:table source="result.body" page="paging.page" page-size="paging.pageSize" href="paging.href"></textus:table>
               |</article>""".stripMargin
           ).resolve("web.yaml").toString)
         ))
@@ -7497,7 +7497,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       page2 should include ("Page 2")
       page2 should not include ("Content-Type application/json")
       page2 should not include ("Submitted Values")
-      page2 should not include ("<textus-result-table")
+      page2 should not include ("<textus:table")
     }
 
     "preserve page-local result template on form continuation" in {
@@ -7511,7 +7511,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         root.resolve("publicblogs__success.html"),
         """<article>
           |  <h2>Page Local Search</h2>
-          |  <textus-result-table source="result.body" page="paging.page" page-size="paging.pageSize" href="paging.href"></textus-result-table>
+          |  <textus:table source="result.body" page="paging.page" page-size="paging.pageSize" href="paging.href"></textus:table>
           |</article>""".stripMargin,
         StandardCharsets.UTF_8
       )
@@ -7580,7 +7580,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
             "approve-notice-aggregate__200.html",
             """<article>
               |  <h2>Matching notices</h2>
-              |  <textus-result-table source="result.body" page="paging.page" page-size="paging.pageSize" total="paging.total" href="paging.href"></textus-result-table>
+              |  <textus:table source="result.body" page="paging.page" page-size="paging.pageSize" total="paging.total" href="paging.href"></textus:table>
               |</article>""".stripMargin
           ).resolve("web.yaml").toString)
         ))
@@ -7636,7 +7636,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       page2 should include ("includeTotal=true")
       page2 should not include ("Content-Type application/json")
       page2 should not include ("Submitted Values")
-      page2 should not include ("<textus-result-table")
+      page2 should not include ("<textus:table")
     }
 
     "render operation failure through exact static status template before error template" in {
@@ -8008,7 +8008,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("result.status")
       html should include ("/form/notice-board/notice/search-notices/continue/test-id?page=1&amp;pageSize=1")
       html should include ("/form/notice-board/notice/search-notices/continue/test-id?page=3&amp;pageSize=1")
-      html should not include ("<textus-result-table")
+      html should not include ("<textus:table")
       html should not include ("${result.contentType}")
     }
 
@@ -8824,7 +8824,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should not include ("<textus:hidden-context")
     }
 
-    "render textus result table without total count" in {
+    "render textus table without total count" in {
       val properties = StaticFormAppRenderer.FormResultProperties(
         StaticFormAppRenderer.FormPageProperties(
           "notice-board",
@@ -8850,7 +8850,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("/form/notice-board/notice/search-notices/continue/test-id?page=3&amp;pageSize=10")
     }
 
-    "render textus result table from operation response body fields" in {
+    "render textus table from operation response body fields" in {
       val properties = StaticFormAppRenderer.FormResultProperties(
         StaticFormAppRenderer.FormPageProperties(
           "notice-board",
@@ -8870,7 +8870,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         """<article>
           |  <p>${result.totalCount}</p>
           |  <p>${paging.total}</p>
-          |  <textus-result-table source="result.body.data"></textus-result-table>
+          |  <textus:table source="result.body.data"></textus:table>
           |</article>""".stripMargin
       ).body
 
@@ -8884,10 +8884,112 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should not include ("paging.total")
       html should include ("/form/notice-board/notice/search-notices/result?page=2&amp;pageSize=1")
       html should not include ("Page 1")
-      html should not include ("<textus-result-table")
+      html should not include ("<textus:table")
     }
 
-    "render textus result table from result body shorthand" in {
+    "render textus table download links independent of display columns" in {
+      val properties = StaticFormAppRenderer.FormResultProperties(
+        StaticFormAppRenderer.FormPageProperties(
+          "notice-board",
+          "notice",
+          "search-notices",
+          Map(
+            "recipient" -> "Alice",
+            "result.body" -> """{"debug":"must-not-leak"}""",
+            "paging.href" -> "/form/notice-board/notice/search-notices/result",
+            "form.pageContext.app" -> "notice-board",
+            "component" -> "notice-board",
+            "textus.debug.executionPanel" -> "true"
+          )
+        ),
+        200,
+        "application/json",
+        """{"data":[{"subject":"Hello","sender_name":"alice","body":"full text"}]}"""
+      )
+
+      val html = _renderer.renderFormResult(
+        properties,
+        """<article><textus:table source="result.body.data" columns="subject:Subject" download-source="result.body.data" download-formats="csv,json" download-name="notices"></textus:table></article>"""
+      ).body
+
+      html should include ("textus-table-download")
+      html should include ("textus.download.source=result.body.data")
+      html should include ("textus.download.format=csv")
+      html should include ("textus.download.format=json")
+      html should include ("textus.download.filename=notices.csv")
+      html should include ("recipient=Alice")
+      html should not include ("result.body=")
+      html should not include ("paging.href=")
+      html should not include ("form.pageContext.app=")
+      html should not include ("component=notice-board")
+      html should not include ("textus.debug.executionPanel=")
+      html should include ("Subject")
+      html should not include ("full text</td>")
+    }
+
+    "render textus table without pagination when disabled" in {
+      val properties = StaticFormAppRenderer.FormResultProperties(
+        StaticFormAppRenderer.FormPageProperties(
+          "notice-board",
+          "notice",
+          "search-notices",
+          Map(
+            "paging.pageSize" -> "1"
+          )
+        ),
+        200,
+        "application/json",
+        """{"data":[{"subject":"Hello","sender_name":"alice"},{"subject":"World","sender_name":"bob"}],"total_count":2}"""
+      )
+
+      val html = _renderer.renderFormResult(
+        properties,
+        """<article>
+          |  <textus:table source="result.body.data" pagination="false"></textus:table>
+          |</article>""".stripMargin
+      ).body
+
+      html should include ("<table")
+      html should include ("Hello")
+      html should not include ("bob")
+      html should not include ("Result pages")
+      html should not include ("Previous")
+      html should not include ("Next")
+      html should not include ("<textus:table")
+    }
+
+    "render textus table with clickable rows" in {
+      val properties = StaticFormAppRenderer.FormResultProperties(
+        StaticFormAppRenderer.FormPageProperties(
+          "notice-board",
+          "notice",
+          "search-notices"
+        ),
+        200,
+        "application/json",
+        """{"data":[{"id":"notice-1","subject":"Hello"}]}"""
+      )
+
+      val html = _renderer.renderFormResult(
+        properties,
+        """<article>
+          |  <textus:table
+          |    source="result.body.data"
+          |    detail-href="/web/notices/detail"
+          |    detail-param-id="{id}"
+          |    row-link="true"></textus:table>
+          |</article>""".stripMargin
+      ).body
+
+      html should include ("textus-clickable-row")
+      html should include ("data-textus-row-href=\"/web/notices/detail?id=notice-1\"")
+      html should include ("role=\"link\"")
+      html should include ("tabindex=\"0\"")
+      html should include ("href=\"/web/notices/detail?id=notice-1\"")
+      html should not include ("<textus:table")
+    }
+
+    "render textus table from result body shorthand" in {
       val properties = StaticFormAppRenderer.FormResultProperties(
         StaticFormAppRenderer.FormPageProperties(
           "notice-board",
@@ -8901,11 +9003,11 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
 
       val html = _renderer.renderFormResult(
         properties,
-        """<article><textus-result-table source="result.data"></textus-result-table></article>"""
+        """<article><textus:table source="result.data"></textus:table></article>"""
       ).body
 
       html should include ("<td>Hello</td>")
-      html should not include ("<textus-result-table")
+      html should not include ("<textus:table")
     }
 
     "render standalone textus pagination from shared paging metadata" in {
@@ -9182,7 +9284,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       val html = _renderer.renderFormResult(
         properties,
         """<article>
-          |  <textus-result-table source="result.body" entity="notice" view="summary" detail-href="/form/notice-board/notice/get-notice/result?id={id}" detail-param-return.href="/form/notice-board/notice/search-notices?recipientName=Bob Smith" detail-label="Read"></textus-result-table>
+          |  <textus:table source="result.body" entity="notice" view="summary" detail-href="/form/notice-board/notice/get-notice/result?id={id}" detail-param-return.href="/form/notice-board/notice/search-notices?recipientName=Bob Smith" detail-label="Read"></textus:table>
           |  <textus:card-list source="result.body" entity="notice" view="summary" detail-href="/form/notice-board/notice/get-notice/result?id={id}" detail-param-return.href="/form/notice-board/notice/search-notices?recipientName=Bob Smith" detail-label="Open notice"></textus:card-list>
           |</article>""".stripMargin
       ).body
@@ -9192,7 +9294,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("""Read</a>""")
       html should include ("""Open notice</a>""")
       html should not include ("Static form validation")
-      html should not include ("<textus-result-table")
+      html should not include ("<textus:table")
       html should not include ("<textus:card-list")
     }
 
@@ -9498,7 +9600,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
           |  <link href="/web/assets/textus-widgets.css" rel="stylesheet">
           |</head>
           |<body>
-          |  <textus-result-table source="result.body"></textus-result-table>
+          |  <textus:table source="result.body"></textus:table>
           |  <script src="/web/assets/bootstrap.bundle.min.js"></script>
           |  <script src="/web/assets/textus-widgets.js"></script>
           |</body>
@@ -9509,7 +9611,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       _count_occurrences(html, "/web/assets/bootstrap.bundle.min.js") shouldBe 1
       _count_occurrences(html, "/web/assets/textus-widgets.css") shouldBe 1
       _count_occurrences(html, "/web/assets/textus-widgets.js") shouldBe 1
-      html should not include ("<textus-result-table")
+      html should not include ("<textus:table")
     }
 
     "leave HTML document templates without Textus widgets unchanged by asset completion" in {
@@ -9599,13 +9701,13 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
           |<html lang="en">
           |<head><title>Search result</title></head>
           |<body>
-          |  <textus-result-table source="result.body"></textus-result-table>
+          |  <textus:table source="result.body"></textus:table>
           |</body>
           |</html>""".stripMargin
       ).body
 
       html should include ("<table")
-      html should not include ("<textus-result-table")
+      html should not include ("<textus:table")
       _count_occurrences(html, "/web/assets/bootstrap.min.css") shouldBe 1
       _count_occurrences(html, "/web/assets/bootstrap.bundle.min.js") shouldBe 1
       _count_occurrences(html, "/web/assets/textus-widgets.css") shouldBe 1
@@ -9669,7 +9771,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
           |<html lang="en">
           |<head><title>Search result</title></head>
           |<body>
-          |  <textus-result-table source="result.body"></textus-result-table>
+          |  <textus:table source="result.body"></textus:table>
           |</body>
           |</html>""".stripMargin
       ).body
@@ -9703,7 +9805,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         properties,
         """<article>
           |  <h2>Fragment result</h2>
-          |  <textus-result-table source="result.body"></textus-result-table>
+          |  <textus:table source="result.body"></textus:table>
           |</article>""".stripMargin
       ).body
 
@@ -9713,7 +9815,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("/web/assets/bootstrap.bundle.min.js")
       html should include ("/web/assets/textus-widgets.js")
       html should include ("/web/notice-board/notice-board/assets/app.js")
-      html should not include ("<textus-result-table")
+      html should not include ("<textus:table")
     }
 
     "insert descriptor-declared widget assets once during completion" in {
@@ -9771,10 +9873,12 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
 
     "load packaged Textus widget assets" in {
       StaticFormAppAssets.textusWidgetsCss should include ("textus-widget")
+      StaticFormAppAssets.textusWidgetsCss should include ("textus-clickable-row")
       StaticFormAppAssets.textusWidgetsJs should include ("textusWidgets")
+      StaticFormAppAssets.textusWidgetsJs should include ("data-textus-row-href")
     }
 
-    "render textus result table from result body object data" in {
+    "render textus table from result body object data" in {
       val properties = StaticFormAppRenderer.FormResultProperties(
         StaticFormAppRenderer.FormPageProperties(
           "notice-board",
@@ -9788,7 +9892,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
 
       val html = _renderer.renderFormResult(
         properties,
-        """<article><textus-result-table source="result.body"></textus-result-table></article>"""
+        """<article><textus:table source="result.body"></textus:table></article>"""
       ).body
 
       html should include ("<table")
@@ -9797,10 +9901,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("<td>Phase12</td>")
       html should include ("<td>Static form validation</td>")
       html should include ("Page 1")
-      html should not include ("<textus-result-table")
+      html should not include ("<textus:table")
     }
 
-    "render textus result table with explicit columns" in {
+    "render textus table with explicit columns" in {
       val properties = StaticFormAppRenderer.FormResultProperties(
         StaticFormAppRenderer.FormPageProperties(
           "notice-board",
@@ -9814,7 +9918,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
 
       val html = _renderer.renderFormResult(
         properties,
-        """<article><textus-result-table source="result.data" columns="sender_name,subject"></textus-result-table></article>"""
+        """<article><textus:table source="result.data" columns="sender_name,subject"></textus:table></article>"""
       ).body
 
       html should include ("<th>sender_name</th><th>subject</th>")
@@ -9822,7 +9926,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("<td>Hello</td>")
       html should not include ("notice_1")
       html should not include ("rights")
-      html should not include ("<textus-result-table")
+      html should not include ("<textus:table")
     }
 
     "render textus description list with explicit columns" in {
@@ -9850,7 +9954,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should not include ("<textus:description-list")
     }
 
-    "render textus result table from result body with CML summary columns" in {
+    "render textus table from result body with CML summary columns" in {
       val columns = Vector(
         StaticFormAppRenderer.TableColumn("title", "Title"),
         StaticFormAppRenderer.TableColumn("recipient_name", "Recipient")
@@ -9869,7 +9973,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
 
       val html = _renderer.renderFormResult(
         properties,
-        """<article><textus-result-table source="result.body" entity="notice" view="summary"></textus-result-table></article>"""
+        """<article><textus:table source="result.body" entity="notice" view="summary"></textus:table></article>"""
       ).body
 
       html should include ("<th>Title</th><th>Recipient</th>")
@@ -9877,10 +9981,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("<td>Bob</td>")
       html should not include ("notice_1")
       html should not include ("Static form validation")
-      html should not include ("<textus-result-table")
+      html should not include ("<textus:table")
     }
 
-    "render textus result table with resolved CML table columns" in {
+    "render textus table with resolved CML table columns" in {
       val columns = Vector(
         StaticFormAppRenderer.TableColumn("sender_name", "Sender"),
         StaticFormAppRenderer.TableColumn("subject", "Subject")
@@ -9899,7 +10003,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
 
       val html = _renderer.renderFormResult(
         properties,
-        """<article><textus-result-table source="result.data"></textus-result-table></article>"""
+        """<article><textus:table source="result.data"></textus:table></article>"""
       ).body
 
       html should include ("<th>Sender</th><th>Subject</th>")
@@ -9907,10 +10011,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("<td>Hello</td>")
       html should not include ("notice_1")
       html should not include ("rights")
-      html should not include ("<textus-result-table")
+      html should not include ("<textus:table")
     }
 
-    "render textus result table with explicit entity and view columns" in {
+    "render textus table with explicit entity and view columns" in {
       val columns = Vector(
         StaticFormAppRenderer.TableColumn("sender_name", "Sender"),
         StaticFormAppRenderer.TableColumn("subject", "Subject")
@@ -9929,7 +10033,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
 
       val html = _renderer.renderFormResult(
         properties,
-        """<article><textus-result-table source="result.data" entity="notice" view="summary"></textus-result-table></article>"""
+        """<article><textus:table source="result.data" entity="notice" view="summary"></textus:table></article>"""
       ).body
 
       html should include ("<th>Sender</th><th>Subject</th>")
@@ -9937,10 +10041,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("<td>Hello</td>")
       html should not include ("notice_1")
       html should not include ("hidden")
-      html should not include ("<textus-result-table")
+      html should not include ("<textus:table")
     }
 
-    "render textus result table with descriptor default view columns" in {
+    "render textus table with descriptor default view columns" in {
       val columns = Vector(
         StaticFormAppRenderer.TableColumn("subject", "Subject")
       )
@@ -9959,16 +10063,16 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
 
       val html = _renderer.renderFormResult(
         properties,
-        """<article><textus-result-table source="result.data" entity="notice"></textus-result-table></article>"""
+        """<article><textus:table source="result.data" entity="notice"></textus:table></article>"""
       ).body
 
       html should include ("<th>Subject</th>")
       html should include ("<td>Hello</td>")
       html should not include ("alice")
-      html should not include ("<textus-result-table")
+      html should not include ("<textus:table")
     }
 
-    "let textus result table view attribute override descriptor default view" in {
+    "let textus table view attribute override descriptor default view" in {
       val summaryColumns = Vector(
         StaticFormAppRenderer.TableColumn("sender_name", "Sender")
       )
@@ -9993,13 +10097,13 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
 
       val html = _renderer.renderFormResult(
         properties,
-        """<article><textus-result-table source="result.data" entity="notice" view="summary"></textus-result-table></article>"""
+        """<article><textus:table source="result.data" entity="notice" view="summary"></textus:table></article>"""
       ).body
 
       html should include ("<th>Sender</th>")
       html should include ("<td>alice</td>")
       html should not include ("Hello")
-      html should not include ("<textus-result-table")
+      html should not include ("<textus:table")
     }
 
     "render form result properties with error panel" in {

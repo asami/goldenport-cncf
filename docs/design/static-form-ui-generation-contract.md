@@ -89,7 +89,7 @@ reserved for human-authored packaged manuals such as a Reference Manual.
 
 Supported generated page kinds are:
 
-- `list`: search/filter controls, result table or card list, result summary,
+- `list`: search/filter controls, table or card list, result summary,
   pagination, empty state, detail/create actions.
 - `detail`: breadcrumb/nav, record or description card, action row, return
   context, optional association/media/tag sections supplied by the runtime.
@@ -112,7 +112,7 @@ vocabulary:
 - Page shell: Bootstrap container, breadcrumb/nav, heading/subtitle, and action
   row.
 - List/search: Bootstrap search card, active filter badges, clear link,
-  `textus:result-table` or `textus:card-list`, `textus:pagination`, and
+  `textus:table` or `textus:card-list`, `textus:pagination`, and
   `textus:empty-state`.
 - Detail: `textus:record-card`, `textus:description-list`, Bootstrap cards,
   `textus:action-group`, and return context.

@@ -31,7 +31,7 @@ import io.circe.parser.parse
 
 /*
  * @since   May. 18, 2026
- * @version May. 23, 2026
+ * @version May. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 trait StaticFormAppRendererFormResultPart {
@@ -64,7 +64,7 @@ trait StaticFormAppRendererFormResultPart {
          |  <textus:job-ticket></textus:job-ticket>
          |  <textus-error-panel source="error"></textus-error-panel>
          |  <textus-result-view source="result.body"></textus-result-view>
-         |  <textus-result-table source="result.body" page="paging.page" page-size="paging.pageSize" total="paging.total" href="paging.href"></textus-result-table>
+         |  <textus:table source="result.body" page="paging.page" page-size="paging.pageSize" total="paging.total" href="paging.href"></textus:table>
          |  <textus-form-link href="crud.success.href" label="Back to detail"></textus-form-link>
          |  <textus-property-list source="result"></textus-property-list>
          |  <h3>Submitted Values</h3>

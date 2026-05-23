@@ -8,7 +8,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   May. 20, 2026
- * @version May. 20, 2026
+ * @version May. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 final class InformationIdentityBindingSpec
@@ -18,8 +18,8 @@ final class InformationIdentityBindingSpec
   "Information identity binding" should {
     "keep Information RDF Entity and Knowledge ids separate" in {
       val space = new InformationSpace
-      val batch = _success(space.registerImportBatch("paper", Vector(Record.data("title" -> "Identity", "authors" -> "Alice"))))
-      val recordid = batch.recordIds.head
+      val batch = _success(space.registerInformation("paper", Vector(Record.data("title" -> "Identity", "authors" -> "Alice"))))
+      val recordid = batch.head.id
       val binding = InformationIdentityBinding(
         InformationIdentityBindingId("pending"),
         rdfSubject = Some(RdfNodeName("https://example.org/paper/identity")),

@@ -18,7 +18,7 @@ import org.goldenport.Consequence
 import org.goldenport.protocol.Protocol
 import org.goldenport.configuration.{Configuration, ConfigurationTrace, ConfigurationValue, ResolvedConfiguration}
 import org.goldenport.record.Record
-import org.http4s.{Method, Request as HRequest, Uri}
+import org.http4s.{MediaType, Method, Request as HRequest, Uri}
 import org.http4s.headers.`Content-Type`
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -27,7 +27,7 @@ import org.typelevel.ci.CIStringSyntax
 /*
  * @since   Apr. 24, 2026
  *  version Apr. 25, 2026
- * @version May. 23, 2026
+ * @version May. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers {
@@ -100,6 +100,49 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers {
       body should include ("url: \"https://example.test/a b\"")
       body should not include ("Knowledge%20Import%20Paper")
       body should not include ("https%3A%2F%2Fexample.test")
+    }
+
+    "download form result source as CSV attachment" in {
+      val root = Files.createTempDirectory("http4s-http-server-download-spec")
+      val web = root.resolve("web.yaml")
+      Files.writeString(
+        web,
+        """expose:
+          |  debug.http.echo: public
+          |form:
+          |  debug.http.echo:
+          |    enabled: true
+          |""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+      val configuration = ResolvedConfiguration(
+        Configuration(
+          Map(
+            RuntimeConfig.WebDescriptorKey ->
+              ConfigurationValue.StringValue(web.toString)
+          )
+        ),
+        ConfigurationTrace.empty
+      )
+      val subsystem = DefaultSubsystemFactory.default(None, configuration)
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val app = server.routes(null.asInstanceOf[org.http4s.server.websocket.WebSocketBuilder2[IO]]).orNotFound
+
+      val response = app
+        .run(HRequest[IO](
+          method = Method.GET,
+          uri = Uri.unsafeFromString("/form/debug/http/echo/result?body=hello&textus.download=true&textus.download.source=result.body&textus.download.format=csv&textus.download.filename=echo.csv")
+        ))
+        .unsafeRunSync()
+      val body = response.as[String].unsafeRunSync()
+
+      response.status.code shouldBe 200
+      response.headers.get(ci"Content-Disposition").map(_.head.value) shouldBe Some("""attachment; filename="echo.csv"""")
+      response.contentType.map(_.mediaType) shouldBe MediaType.parse("text/csv").toOption
+      body should include ("body")
+      body should include ("hello")
+      body should include ("path")
+      body should not include ("<html")
     }
 
     "not inject current-session principal attributes into form-api submits" in {
@@ -640,14 +683,14 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers {
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       subsystem.add(TestComponentFactory.create("information_component", Protocol.empty))
       val component = subsystem.findComponent("information_component").getOrElse(fail("information component missing"))
-      val batch = component.informationSpace.registerImportBatch(
+      val batch = component.informationSpace.registerInformation(
         "paper",
         Vector(Record.data("title" -> "Information Import", "authors" -> "Alice Example"))
       ) match {
         case Consequence.Success(batch) => batch
         case Consequence.Failure(conclusion) => fail(conclusion.toString)
       }
-      val record = component.informationSpace.listImportRecords(batch.id).headOption.getOrElse(fail("information record missing"))
+      val record = batch.headOption.getOrElse(fail("information record missing"))
       component.informationSpace.validateInformationRecord(record.id)
       component.informationSpace.confirmInformationRecord(record.id)
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))

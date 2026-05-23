@@ -135,7 +135,7 @@ Recommended implementation sequence:
 
 1. Define the card widget contract in the Static Form App contract document.
 2. Implement `record-card`.
-3. Implement `card-list` with the same paging behavior as `result-table`.
+3. Implement `card-list` with the same paging behavior as `table`.
 4. Add `summary-card` for dashboard/admin summary use.
 5. Validate with `textus-sample-app` by rendering notice search results as
    cards in addition to the current table view.

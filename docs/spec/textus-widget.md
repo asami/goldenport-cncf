@@ -351,7 +351,7 @@ narrow screens.
 The following widgets are the baseline compatibility set:
 
 - `textus-result-view`
-- `textus-result-table`
+- `textus:table`
 - `textus-property-list`
 - `textus-error-panel`
 - `textus:action-link`
@@ -619,7 +619,7 @@ used to smuggle ordinary operation arguments around the form schema.
 ## Paging
 
 List widgets must reuse the existing paging and continuation model used by
-`textus-result-table`.
+`textus:table`.
 
 Requirements:
 
@@ -629,7 +629,7 @@ Requirements:
   descriptor policy allow it.
 - rendered paging controls remain valid plain HTML links/forms.
 
-`textus-result-table` may add per-row detail actions with `detail-href` and
+`textus:table` may add per-row detail actions with `detail-href` and
 `detail-label`. `detail-href` is a URL template whose `{field}` placeholders are
 expanded from each row object. This keeps common search-result-to-detail flows
 inside the static widget contract. Additional URL query parameters can be added
@@ -721,7 +721,7 @@ Required behavior:
 - resolves a collection from `source`.
 - renders each item using the same field/view logic as `record-card`.
 - defaults to `summary` view.
-- supports the same paging metadata model as `textus-result-table`.
+- supports the same paging metadata model as `textus:table`.
 - works when total count is absent.
 - renders paging controls when continuation/page metadata is available.
 
@@ -850,9 +850,9 @@ Standalone paging controls.
 
 Required behavior:
 
-- reuses `textus-result-table` paging and continuation metadata.
+- reuses `textus:table` paging and continuation metadata.
 - supports no-total-count paging.
-- may be embedded by result-table, card-list, or custom static pages.
+- may be embedded by table, card-list, or custom static pages.
 
 Default attributes:
 
@@ -987,7 +987,7 @@ The widget implementation is conformant when:
 - field order follows resolved schema/view order.
 - action and paging widgets reuse the existing action/paging metadata.
 - missing data fails closed with an empty state or controlled diagnostic.
-- `textus-result-table` continues to work without total count.
+- `textus:table` continues to work without total count.
 
 ## Related Documents
 

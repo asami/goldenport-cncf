@@ -428,7 +428,7 @@ Current note:
   Packaging checks verify canonical routes, aliases, descriptor pages, and
   polished app assets.
 - [x] WEB-55: Add result detail navigation.
-  Result table/card-list widgets can render detail links by expanding record
+  Table/card-list widgets can render detail links by expanding record
   fields into `detail-href`.
 - [x] WEB-56: Recheck description-list column selection.
   Detail widgets are covered by CML/view columns and explicit column fallback.

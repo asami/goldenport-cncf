@@ -21,6 +21,7 @@ import fs2.Stream
 import com.comcast.ip4s.Host
 import com.comcast.ip4s.Port
 import io.circe.Json
+import io.circe.parser.parse
 import org.http4s.{HttpRoutes, MediaType, Request as HRequest, Response as HResponse, ResponseCookie, SameSite, Status as HStatus, Uri}
 import org.http4s.Header
 import org.http4s.ember.server.EmberServerBuilder
@@ -54,7 +55,7 @@ import org.goldenport.observation.{Cause, Descriptor}
  *  version Jan. 21, 2026
  *  version Mar. 29, 2026
  *  version Apr. 30, 2026
- * @version May. 20, 2026
+ * @version May. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Http4sHttpServer(
@@ -2553,31 +2554,301 @@ final class Http4sHttpServer(
     )
     _annotate_application_job(result, app, service, operation)
     val res = result.response
-    _prepared_form_result_template(app, service, operation, res.code, values) match {
-      case Consequence.Success(template) =>
-        val page = _static_form_app_renderer.renderFormResult(
-          _form_result_properties(
-            app,
-            service,
-            operation,
-            result,
-            values,
-            _form_page_view_context_values(req, app, service, operation, values)
-          ),
-          template
-        )
-        _html(page, Some(app)).map { html =>
-          RuntimeDashboardMetrics.recordHtmlRequest(
-            req.method.name,
-            req.uri.path.renderString,
-            res.code,
-            (System.nanoTime() - started) / 1000000L
-          )
-          html
+    _form_result_download_response(req, result) match {
+      case Some(response) =>
+        response
+      case None =>
+        _prepared_form_result_template(app, service, operation, res.code, values) match {
+          case Consequence.Success(template) =>
+            val page = _static_form_app_renderer.renderFormResult(
+              _form_result_properties(
+                app,
+                service,
+                operation,
+                result,
+                values,
+                _form_page_view_context_values(req, app, service, operation, values)
+              ),
+              template
+            )
+            _html(page, Some(app)).map { html =>
+              RuntimeDashboardMetrics.recordHtmlRequest(
+                req.method.name,
+                req.uri.path.renderString,
+                res.code,
+                (System.nanoTime() - started) / 1000000L
+              )
+              html
+            }
+          case Consequence.Failure(conclusion) =>
+            _web_error_response(Some(app), conclusion, req.uri.path.renderString, req.method.name)
         }
-      case Consequence.Failure(conclusion) =>
-        _web_error_response(Some(app), conclusion, req.uri.path.renderString, req.method.name)
     }
+  }
+
+  private def _form_result_download_response(
+    req: org.http4s.Request[IO],
+    result: HttpExecutionResult
+  ): Option[IO[HResponse[IO]]] = {
+    val values = _query_values(req)
+    if (!values.get("textus.download").exists(_.equalsIgnoreCase("true")))
+      None
+    else {
+      val source = values.getOrElse("textus.download.source", "result.body")
+      val format = values.getOrElse("textus.download.format", "json")
+      val filename = values.getOrElse("textus.download.filename", s"download.${_download_extension(format)}")
+      Some(_download_source_json(result, source) match {
+        case Right(json) =>
+          IO.pure(_download_response(json, format, filename))
+        case Left(message) =>
+          IO.pure(
+            HResponse[IO](HStatus.BadRequest)
+              .withEntity(message)
+              .withContentType(`Content-Type`(MediaType.text.plain, Some(Charset.`UTF-8`)))
+          )
+      })
+    }
+  }
+
+  private def _download_source_json(
+    result: HttpExecutionResult,
+    source: String
+  ): Either[String, Json] =
+    result.response.getString match {
+      case Some(body) =>
+        val parsed = parse(body).toOption.orElse {
+          Option.when(source == "result.body" || source == "result")(Json.fromString(body))
+        }
+        parsed.toRight(s"Download source is not JSON: ${source}").flatMap { json =>
+          val path =
+            if (source == "result.body" || source == "result")
+              Vector.empty
+            else if (source.startsWith("result.body."))
+              source.stripPrefix("result.body.").split('.').toVector
+            else if (source.startsWith("result."))
+              source.stripPrefix("result.").split('.').toVector
+            else
+              source.split('.').toVector
+          _json_at(json, path).toRight(s"Download source not found: ${source}")
+        }
+      case None =>
+        Left("Download source has no response body.")
+    }
+
+  private def _json_at(
+    json: Json,
+    path: Vector[String]
+  ): Option[Json] =
+    path.foldLeft(Option(json)) { (z, name) =>
+      z.flatMap { current =>
+        current.asArray.flatMap { xs =>
+          name.toIntOption.flatMap(i => xs.lift(i))
+        }.orElse(current.hcursor.downField(name).focus)
+      }
+    }
+
+  private def _download_response(
+    json: Json,
+    format: String,
+    filename: String
+  ): HResponse[IO] = {
+    val normalized = _download_format(format)
+    val body = _download_body(json, normalized)
+    val media = MediaType.parse(_download_mime(normalized)).fold(_ => MediaType.text.plain, identity)
+    HResponse[IO](HStatus.Ok)
+      .withEntity(body)
+      .withContentType(`Content-Type`(media, Some(Charset.`UTF-8`)))
+      .putHeaders(Header.Raw(CIString("Content-Disposition"), s"""attachment; filename="${_download_filename(filename, normalized)}""""))
+  }
+
+  private def _download_format(format: String): String =
+    format.trim.toLowerCase(java.util.Locale.ROOT) match {
+      case "yml" => "yaml"
+      case "txt" | "line" | "lines" => "lines"
+      case "text/tab-separated-values" => "tsv"
+      case "text/csv" => "csv"
+      case x => x
+    }
+
+  private def _download_body(
+    json: Json,
+    format: String
+  ): String =
+    format match {
+      case "csv" => _download_delimited(json, ",")
+      case "tsv" => _download_delimited(json, "\t")
+      case "ltsv" => _download_ltsv(json)
+      case "yaml" => _download_yaml(json)
+      case "xml" => _download_xml(json)
+      case "hocon" => _download_hocon(json)
+      case "lines" => _download_lines(json)
+      case _ => json.spaces2
+    }
+
+  private def _download_rows(json: Json): Vector[Json] =
+    json.asArray
+      .orElse(json.hcursor.downField("data").focus.flatMap(_.asArray))
+      .orElse(json.hcursor.downField("items").focus.flatMap(_.asArray))
+      .orElse(json.hcursor.downField("result").focus.flatMap(_.asArray))
+      .orElse(json.hcursor.downField("records").focus.flatMap(_.asArray))
+      .getOrElse(Vector(json))
+
+  private def _download_objects(json: Json): Vector[Map[String, Json]] =
+    _download_rows(json).map { row =>
+      row.asObject.map(_.toMap).getOrElse(Map("value" -> row))
+    }
+
+  private def _download_columns(objects: Vector[Map[String, Json]]): Vector[String] =
+    objects.flatMap(_.keys).distinct
+
+  private def _download_delimited(
+    json: Json,
+    separator: String
+  ): String = {
+    val objects = _download_objects(json)
+    val columns = _download_columns(objects)
+    val header = columns.map(_download_delimited_cell(_, separator)).mkString(separator)
+    val rows = objects.map { row =>
+      columns.map(column => _download_delimited_cell(row.get(column).map(_download_json_cell).getOrElse(""), separator)).mkString(separator)
+    }
+    (header +: rows).mkString("\n") + "\n"
+  }
+
+  private def _download_delimited_cell(
+    value: String,
+    separator: String
+  ): String =
+    if (separator == ",") {
+      val escaped = value.replace("\"", "\"\"")
+      if (escaped.exists(ch => ch == ',' || ch == '"' || ch == '\n' || ch == '\r'))
+        s""""${escaped}""""
+      else
+        escaped
+    } else {
+      value.replace('\t', ' ').replace('\n', ' ').replace('\r', ' ')
+    }
+
+  private def _download_ltsv(json: Json): String =
+    _download_objects(json).map { row =>
+      row.toVector.map { case (key, value) =>
+        s"${_download_ltsv_label(key)}:${_download_ltsv_value(_download_json_cell(value))}"
+      }.mkString("\t")
+    }.mkString("\n") + "\n"
+
+  private def _download_ltsv_label(value: String): String =
+    value.map {
+      case ch if ch.isLetterOrDigit || ch == '_' || ch == '-' || ch == '.' => ch
+      case _ => '_'
+    }
+
+  private def _download_ltsv_value(value: String): String =
+    value.replace('\t', ' ').replace('\n', ' ').replace('\r', ' ')
+
+  private def _download_lines(json: Json): String =
+    _download_rows(json).map { row =>
+      row.asObject.flatMap { obj =>
+        Vector("value", "isbn", "title", "name", "label").flatMap(key => obj(key).map(_download_json_cell)).headOption
+      }.getOrElse(_download_json_cell(row))
+    }.mkString("\n") + "\n"
+
+  private def _download_yaml(json: Json): String =
+    _download_rows(json).map { row =>
+      row.asObject.map { obj =>
+        val fields = obj.toVector.map { case (key, value) =>
+          s"  ${key}: ${_download_yaml_value(value)}"
+        }.mkString("\n")
+        s"-\n${fields}"
+      }.getOrElse(s"- ${_download_yaml_value(row)}")
+    }.mkString("\n") + "\n"
+
+  private def _download_yaml_value(json: Json): String =
+    json.asString
+      .map(value => "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\"")
+      .orElse(json.asNumber.map(_.toString))
+      .orElse(json.asBoolean.map(_.toString))
+      .getOrElse(json.noSpaces)
+
+  private def _download_xml(json: Json): String = {
+    val body = _download_rows(json).map { row =>
+      row.asObject.map { obj =>
+        val fields = obj.toVector.map { case (key, value) =>
+          s"<${_download_xml_name(key)}>${_download_xml_escape(_download_json_cell(value))}</${_download_xml_name(key)}>"
+        }.mkString
+        s"<record>${fields}</record>"
+      }.getOrElse(s"<record><value>${_download_xml_escape(_download_json_cell(row))}</value></record>")
+    }.mkString
+    s"""<?xml version="1.0" encoding="UTF-8"?><records>${body}</records>"""
+  }
+
+  private def _download_xml_name(value: String): String = {
+    val text = value.map {
+      case ch if ch.isLetterOrDigit || ch == '_' || ch == '-' || ch == '.' => ch
+      case _ => '_'
+    }
+    if (text.headOption.exists(ch => ch.isLetter || ch == '_')) text else s"_${text}"
+  }
+
+  private def _download_xml_escape(value: String): String =
+    value
+      .replace("&", "&amp;")
+      .replace("<", "&lt;")
+      .replace(">", "&gt;")
+      .replace("\"", "&quot;")
+
+  private def _download_hocon(json: Json): String = {
+    val rows = _download_objects(json).map { row =>
+      val fields = row.toVector.map { case (key, value) =>
+        s"${key} = ${_download_hocon_value(value)}"
+      }.mkString(", ")
+      s"{ ${fields} }"
+    }.mkString(",\n  ")
+    s"records = [\n  ${rows}\n]\n"
+  }
+
+  private def _download_hocon_value(json: Json): String =
+    json.asString
+      .map(value => "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\"")
+      .orElse(json.asNumber.map(_.toString))
+      .orElse(json.asBoolean.map(_.toString))
+      .getOrElse(json.noSpaces)
+
+  private def _download_json_cell(json: Json): String =
+    json.asString
+      .orElse(json.asNumber.map(_.toString))
+      .orElse(json.asBoolean.map(_.toString))
+      .getOrElse(json.noSpaces)
+
+  private def _download_mime(format: String): String =
+    format match {
+      case "csv" => "text/csv"
+      case "tsv" => "text/tab-separated-values"
+      case "ltsv" | "lines" => "text/plain"
+      case "yaml" => "application/yaml"
+      case "xml" => "application/xml"
+      case "hocon" => "application/hocon"
+      case _ => "application/json"
+    }
+
+  private def _download_extension(format: String): String =
+    _download_format(format) match {
+      case "yaml" => "yaml"
+      case "xml" => "xml"
+      case "hocon" => "conf"
+      case "ltsv" => "ltsv"
+      case "lines" => "txt"
+      case "tsv" => "tsv"
+      case "csv" => "csv"
+      case _ => "json"
+    }
+
+  private def _download_filename(
+    filename: String,
+    format: String
+  ): String = {
+    val fallback = s"download.${_download_extension(format)}"
+    val clean = filename.replace("\"", "").replace("\\", "").split('/').lastOption.getOrElse("").trim
+    val base = if (clean.nonEmpty) clean else fallback
+    if (base.contains(".")) base else s"${base}.${_download_extension(format)}"
   }
 
   private[http] def _await_operation_form_job(
@@ -4698,6 +4969,8 @@ final class Http4sHttpServer(
     key: String
   ): Boolean =
     key.startsWith("textus.admin.") ||
+      key.startsWith("textus.download.") ||
+      key == "textus.download" ||
       key.startsWith("cncf.security.") ||
       key.startsWith("security.") ||
       key == "principalId" ||

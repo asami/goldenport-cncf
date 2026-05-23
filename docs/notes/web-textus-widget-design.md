@@ -133,7 +133,7 @@ add local CSS, but generated output must be useful with Bootstrap 5 alone.
 The existing widgets remain valid and are the baseline compatibility set:
 
 - `textus-result-view`
-- `textus-result-table`
+- `textus:table`
 - `textus-property-list`
 - `textus-error-panel`
 - `textus:action-link`
@@ -199,7 +199,7 @@ Expected behavior:
 - resolves a collection from `source`.
 - renders each item through the same field/view logic as `record-card`.
 - defaults to `summary` view.
-- supports the same paging metadata model as `textus-result-table`.
+- supports the same paging metadata model as `textus:table`.
 - works when total count is absent.
 - renders paging controls when continuation/page metadata is available.
 
@@ -299,9 +299,9 @@ Standalone paging controls.
 
 Expected behavior:
 
-- reuses the existing `result-table` paging and continuation metadata.
+- reuses the existing `table` paging and continuation metadata.
 - supports no-total-count paging.
-- may be embedded by `result-table`, `card-list`, or custom static pages.
+- may be embedded by `table`, `card-list`, or custom static pages.
 
 ### Feedback Widgets
 
@@ -402,7 +402,7 @@ The action rendering rule remains:
 ## Paging
 
 `textus:card-list` should reuse the existing paging and continuation model used
-by `textus-result-table`.
+by `textus:table`.
 
 Requirements:
 
@@ -438,7 +438,7 @@ Recommended implementation order:
 1. Add the general widget contract to the Static Form App widget renderer tests.
 2. Implement `textus:record-card` and `textus-record-card`.
 3. Implement `textus:card-list` and `textus-card-list`.
-4. Reuse `textus-result-table` paging metadata for `card-list`.
+4. Reuse `textus:table` paging metadata for `card-list`.
 5. Extract shared pagination rendering into `textus:pagination` if duplication
    appears.
 6. Implement `textus:summary-card` for Dashboard/admin overview use.

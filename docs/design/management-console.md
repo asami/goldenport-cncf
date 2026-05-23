@@ -309,7 +309,7 @@ response:
 - `error.status` and `error.body` for HTTP error responses
 
 HTML templates use `textus-*` widgets such as `textus-result-view`,
-`textus-result-table`, `textus-property-list`, and `textus-error-panel` to
+`textus:table`, `textus-property-list`, and `textus-error-panel` to
 render these properties without adding template control syntax.
 
 ## Result Transitions

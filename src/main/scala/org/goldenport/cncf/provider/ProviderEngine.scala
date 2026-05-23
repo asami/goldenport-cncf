@@ -1,11 +1,10 @@
 package org.goldenport.cncf.provider
 
 import org.goldenport.{Conclusion, Consequence}
-import org.goldenport.cncf.observability.CallTreeValueSummary
 
 /*
  * @since   May. 23, 2026
- * @version May. 23, 2026
+ * @version May. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ProviderEngine {
@@ -26,7 +25,7 @@ final class ProviderEngine {
         val elapsed = ((System.nanoTime() - started) / 1000000L).toString
         result match {
           case success: Consequence.Success[A] =>
-            calltree.leave(Map("outcome" -> "success", "duration_ms" -> elapsed) ++ CallTreeValueSummary.resultAttributes(success.result))
+            calltree.leave(Map("outcome" -> "success", "duration_ms" -> elapsed) ++ call.calltreeResultAttributes(success.result))
           case failure: Consequence.Failure[A] =>
             calltree.leave(Map(
               "outcome" -> "failure",

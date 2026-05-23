@@ -9,7 +9,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   May. 20, 2026
- * @version May. 22, 2026
+ * @version May. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 final class InformationSpaceSpec
@@ -20,19 +20,18 @@ final class InformationSpaceSpec
   "InformationSpace" should {
     "register validate confirm publish and clear information records" in {
       val space = new InformationSpace
-      val batch = _success(space.registerImportBatch("paper", Vector(
+      val batch = _success(space.registerInformation("paper", Vector(
         Record.data(
           "title" -> "Knowledge import",
           "authors" -> "Alice, Bob",
           "venue" -> "CNCF Journal"
         )
       )))
-      val recordid = batch.recordIds.head
+      val recordid = batch.head.id
 
-      space.counts.batchCount shouldBe 1
-      space.counts.recordCount shouldBe 1
+            space.counts.recordCount shouldBe 1
       space.importRecordOption(recordid).map(_.state) shouldBe Some(InformationLifecycleState.Imported)
-      space.listImportRecords(batch.id).map(_.id) shouldBe Vector(recordid)
+      batch.map(_.id) shouldBe Vector(recordid)
 
       val validated = _success(space.validateInformationRecord(recordid))
       validated.state shouldBe InformationLifecycleState.ReadyForConfirmation
@@ -53,8 +52,8 @@ final class InformationSpaceSpec
 
     "record failed publication status without publishing the item" in {
       val space = new InformationSpace
-      val batch = _success(space.registerImportBatch("paper", Vector(Record.data("title" -> "Draft", "authors" -> "Alice"))))
-      val recordid = batch.recordIds.head
+      val batch = _success(space.registerInformation("paper", Vector(Record.data("title" -> "Draft", "authors" -> "Alice"))))
+      val recordid = batch.head.id
       _success(space.validateInformationRecord(recordid))
       val item = _success(space.confirmInformationRecord(recordid))
 
@@ -73,8 +72,8 @@ final class InformationSpaceSpec
 
     "reject invalid records before confirmation" in {
       val space = new InformationSpace
-      val batch = _success(space.registerImportBatch("paper", Vector(Record.data("title" -> ""))))
-      val recordid = batch.recordIds.head
+      val batch = _success(space.registerInformation("paper", Vector(Record.data("title" -> ""))))
+      val recordid = batch.head.id
 
       val validated = _success(space.validateInformationRecord(recordid))
 
@@ -85,8 +84,8 @@ final class InformationSpaceSpec
 
     "allow paper confirmation with title only" in {
       val space = new InformationSpace
-      val batch = _success(space.registerImportBatch("paper", Vector(Record.data("title" -> "Title-only Paper"))))
-      val recordid = batch.recordIds.head
+      val batch = _success(space.registerInformation("paper", Vector(Record.data("title" -> "Title-only Paper"))))
+      val recordid = batch.head.id
 
       val validated = _success(space.validateInformationRecord(recordid))
       val item = _success(space.confirmInformationRecord(recordid))
@@ -97,19 +96,19 @@ final class InformationSpaceSpec
 
     "validate web resources with title and URL requirements" in {
       val space = new InformationSpace
-      val invalidbatch = _success(space.registerImportBatch("web-resource", Vector(Record.data("title" -> ""))))
-      val invalidid = invalidbatch.recordIds.head
+      val invalidbatch = _success(space.registerInformation("web-resource", Vector(Record.data("title" -> ""))))
+      val invalidid = invalidbatch.head.id
 
       val invalid = _success(space.validateInformationRecord(invalidid))
 
       invalid.state shouldBe InformationLifecycleState.Invalid
       space.validationIssues(invalidid).map(_.fieldPath).toSet shouldBe Set("title", "url")
 
-      val validbatch = _success(space.registerImportBatch("web-resource", Vector(Record.data(
+      val validbatch = _success(space.registerInformation("web-resource", Vector(Record.data(
         "title" -> "KnowledgeSpace Web Resource",
         "url" -> "https://example.org/knowledge"
       ))))
-      val validid = validbatch.recordIds.head
+      val validid = validbatch.head.id
       val validated = _success(space.validateInformationRecord(validid))
       val item = _success(space.confirmInformationRecord(validid))
 
@@ -119,15 +118,15 @@ final class InformationSpaceSpec
 
     "reject unvalidated records before confirmation" in {
       val space = new InformationSpace
-      val batch = _success(space.registerImportBatch("paper", Vector(Record.data("title" -> "Draft", "authors" -> "Alice"))))
+      val batch = _success(space.registerInformation("paper", Vector(Record.data("title" -> "Draft", "authors" -> "Alice"))))
 
-      space.confirmInformationRecord(batch.recordIds.head) shouldBe a[Consequence.Failure[_]]
+      space.confirmInformationRecord(batch.head.id) shouldBe a[Consequence.Failure[_]]
     }
 
     "track conflicts explicitly" in {
       val space = new InformationSpace
-      val batch = _success(space.registerImportBatch("paper", Vector(Record.data("title" -> "Local", "authors" -> "Alice"))))
-      val recordid = batch.recordIds.head
+      val batch = _success(space.registerInformation("paper", Vector(Record.data("title" -> "Local", "authors" -> "Alice"))))
+      val recordid = batch.head.id
       _success(space.validateInformationRecord(recordid))
       val item = _success(space.confirmInformationRecord(recordid))
 
@@ -142,8 +141,8 @@ final class InformationSpaceSpec
 
     "clear resolution candidate and its identity binding" in {
       val space = new InformationSpace
-      val batch = _success(space.registerImportBatch("paper", Vector(Record.data("title" -> "Knowledge import", "authors" -> "Alice"))))
-      val recordid = batch.recordIds.head
+      val batch = _success(space.registerInformation("paper", Vector(Record.data("title" -> "Knowledge import", "authors" -> "Alice"))))
+      val recordid = batch.head.id
       val candidate = _success(space.addResolutionCandidate(
         recordid,
         "dbpediaUri",
@@ -177,8 +176,8 @@ final class InformationSpaceSpec
 
     "reject clearing candidates after record confirmation" in {
       val space = new InformationSpace
-      val batch = _success(space.registerImportBatch("paper", Vector(Record.data("title" -> "Knowledge import", "authors" -> "Alice"))))
-      val recordid = batch.recordIds.head
+      val batch = _success(space.registerInformation("paper", Vector(Record.data("title" -> "Knowledge import", "authors" -> "Alice"))))
+      val recordid = batch.head.id
       _success(space.validateInformationRecord(recordid))
       val candidate = _success(space.addResolutionCandidate(
         recordid,

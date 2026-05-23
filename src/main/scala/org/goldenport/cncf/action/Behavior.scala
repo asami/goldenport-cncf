@@ -5,12 +5,13 @@ import org.goldenport.cncf.context.{CorrelationId, ExecutionContext}
 
 /*
  * @since   Mar. 30, 2026
- * @version May. 23, 2026
+ * @version May. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 trait Behavior
   extends Behavior.Core.Holder
   with BehaviorFeaturePart
+  with BehaviorInformationPart
 
 object Behavior {
   final case class Core(

@@ -9,13 +9,14 @@ import org.goldenport.cncf.knowledge.{
   KnowledgeNodeId,
   RdfNodeName
 }
+import org.goldenport.cncf.context.IdGenerationContext
 import org.goldenport.convert.ValueReader
 import org.goldenport.record.Record
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 
 /*
  * @since   May. 20, 2026
- * @version May. 23, 2026
+ * @version May. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 type InformationId = EntityId
@@ -27,18 +28,18 @@ object InformationId {
 private def _information_entity_id(
   value: String,
   collection: String
-): EntityId = {
-  val normalized = value.trim.map {
-    case c if c.isLetterOrDigit || c == '_' => c
-    case _ => '_'
-  }.mkString
-  val minor =
-    if (normalized.headOption.exists(_.isLetter))
-      normalized
-    else
-      s"information_${normalized}"
-  EntityId("cncf", minor, EntityCollectionId("cncf", "information", collection))
-}
+): EntityId =
+  EntityId.parse(value.trim).fold(
+    _ => {
+      val namespace = IdGenerationContext.DefaultNamespace
+      EntityId(
+        namespace.major,
+        namespace.minor,
+        EntityCollectionId(namespace.major, namespace.minor, collection)
+      )
+    },
+    identity
+  )
 
 type ConfirmedInformationId = InformationId
 object ConfirmedInformationId {
@@ -53,12 +54,6 @@ object InformationRecordId {
 type InformationItemId = ConfirmedInformationId
 object InformationItemId {
   def apply(value: String): InformationItemId = ConfirmedInformationId(value)
-}
-
-type InformationImportBatchId = EntityId
-object InformationImportBatchId {
-  def apply(value: String): InformationImportBatchId =
-    _information_entity_id(value, "information_import_context")
 }
 
 type InformationValidationIssueId = EntityId
@@ -129,16 +124,8 @@ object InformationConflictState {
 type EditableInformation = InformationImportRecord
 type ConfirmedInformation = InformationItem
 
-final case class InformationImportBatch(
-  id: InformationImportBatchId,
-  domain: String,
-  recordIds: Vector[InformationRecordId],
-  importedAt: Instant = Instant.now()
-)
-
 final case class InformationImportRecord(
   id: InformationRecordId,
-  batchId: InformationImportBatchId,
   domain: String,
   rawData: Record,
   workingData: Record,
@@ -257,7 +244,6 @@ final case class InformationConflict(
 )
 
 final case class InformationSpaceSnapshot(
-  batches: Vector[InformationImportBatch] = Vector.empty,
   records: Vector[InformationImportRecord] = Vector.empty,
   items: Vector[InformationItem] = Vector.empty,
   validationIssues: Vector[InformationValidationIssue] = Vector.empty,
@@ -268,7 +254,6 @@ final case class InformationSpaceSnapshot(
 )
 
 final case class InformationSpaceCounts(
-  batchCount: Int = 0,
   recordCount: Int = 0,
   itemCount: Int = 0,
   validationIssueCount: Int = 0,

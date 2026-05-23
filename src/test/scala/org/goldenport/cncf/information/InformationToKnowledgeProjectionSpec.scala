@@ -8,7 +8,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   May. 20, 2026
- * @version May. 20, 2026
+ * @version May. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 final class InformationToKnowledgeProjectionSpec
@@ -18,8 +18,8 @@ final class InformationToKnowledgeProjectionSpec
   "InformationToKnowledgeProjection" should {
     "materialize confirmed paper information into KnowledgeSpace without id collapse" in {
       val space = new InformationSpace
-      val batch = _success(space.registerImportBatch("paper", Vector(Record.data("title" -> "Projection", "authors" -> "Alice"))))
-      val recordid = batch.recordIds.head
+      val batch = _success(space.registerInformation("paper", Vector(Record.data("title" -> "Projection", "authors" -> "Alice"))))
+      val recordid = batch.head.id
       _success(space.validateInformationRecord(recordid))
       val item = _success(space.confirmInformationRecord(recordid))
 

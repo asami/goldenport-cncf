@@ -393,7 +393,7 @@ template with the same route/result convention remains authoritative.
 
 The standard generated page kinds are:
 
-- list: search card, active filter chips, result table or card list,
+- list: search card, active filter chips, table or card list,
   pagination, empty state, detail/create actions.
 - detail: breadcrumb/nav, record or description card, action row, return
   context, and runtime-provided relationship sections.
@@ -459,7 +459,7 @@ Bootstrap `card`, `row`, `col`, `list-group`, `progress`, and `badge`.
 Prefer Textus widgets when a template is data-driven and the widget already
 expresses the required shape:
 
-- `textus:result-table` for ordinary tabular result data.
+- `textus:table` for ordinary tabular result data.
 - `textus:property-list` for detail/property display.
 - `textus:error-panel` for error projection.
 - `textus:action-group` for related actions.

@@ -1,12 +1,13 @@
 package org.goldenport.cncf.information
 
+import java.time.Instant
 import org.goldenport.Consequence
 import org.goldenport.cncf.component.Component
 import org.goldenport.record.Record
 
 /*
  * @since   May. 21, 2026
- * @version May. 22, 2026
+ * @version May. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class InformationFieldMappingDescriptor(
@@ -48,6 +49,7 @@ final case class InformationEditorRecordProjection(
   domain: String,
   state: InformationLifecycleState,
   title: Option[String],
+  updatedAt: Instant,
   fields: Vector[InformationEditorFieldProjection],
   publication: Option[InformationPublicationStatus],
   actions: Vector[InformationEditorActionDescriptor]
@@ -253,6 +255,17 @@ object InformationEditorProfile {
           _mapping("knowledge-node-section", "similarity.representations", COMMON_NEIGHBORHOOD, "Search representation source; raw vectors are not stored.")
         ),
         _field(
+          "description",
+          "Description",
+          "Imported or resolver-provided description retained for review before it becomes a confirmed summary.",
+          Some("Imported source description."),
+          "optional",
+          Some("Review before copying into a curated summary."),
+          resolverassisted = true,
+          _mapping("knowledge-node-section", "presentation.descriptions", COMMON_NEIGHBORHOOD, "Reviewable source description."),
+          _mapping("evidence", "sources.evidenceIds", COMMON_NEIGHBORHOOD, "Resolver evidence for imported descriptions.")
+        ),
+        _field(
           "subjects",
           "Subjects",
           "Topics, categories, or concepts connected to the book.",
@@ -273,6 +286,17 @@ object InformationEditorProfile {
           resolverassisted = false,
           _mapping("relationship", "cites", BOOK_PROFILE_EXTENSION, "Canonical citation relationship."),
           _mapping("frame", "book.citation-neighborhood", BOOK_PROFILE_EXTENSION, "Citation target nodes and evidence.")
+        ),
+        _field(
+          "sourceUrl",
+          "Source URL",
+          "Source page or catalog URL used as evidence for imported book information.",
+          Some("https://openlibrary.org/books/OL31838212M"),
+          "recommended",
+          Some("Store as a source/evidence reference, not as a CNCF id."),
+          resolverassisted = true,
+          _mapping("evidence", "sources.sourceRefs", COMMON_NEIGHBORHOOD, "Source reference for evidence and provenance."),
+          _mapping("provenance", "origin.source", COMMON_NEIGHBORHOOD, "Origin metadata for imported information.")
         )
       )
     )
@@ -670,7 +694,8 @@ object InformationSpaceEditorProjection {
   ): Vector[InformationEditorRecordProjection] =
     snapshot.records
       .filter(_.domain == profile.domain)
-      .sortBy(_.id.print)
+      .sortBy(_.updatedAt.toEpochMilli)
+      .reverse
       .map { record =>
         InformationEditorRecordProjection(
           recordId = Some(record.id),
@@ -678,6 +703,7 @@ object InformationSpaceEditorProjection {
           domain = record.domain,
           state = record.state,
           title = _title(record.workingData),
+          updatedAt = record.updatedAt,
           fields = profile.fields.map(field => _record_field_projection(field, record, snapshot)),
           publication = record.itemId.flatMap(itemid => _publication(snapshot, itemid)),
           actions = _record_actions(record)
@@ -690,7 +716,8 @@ object InformationSpaceEditorProjection {
   ): Vector[InformationEditorRecordProjection] =
     snapshot.items
       .filter(_.domain == profile.domain)
-      .sortBy(_.id.print)
+      .sortBy(_.updatedAt.toEpochMilli)
+      .reverse
       .map { item =>
         InformationEditorRecordProjection(
           recordId = item.sourceRecordId,
@@ -698,6 +725,7 @@ object InformationSpaceEditorProjection {
           domain = item.domain,
           state = item.state,
           title = _title(item.data),
+          updatedAt = item.updatedAt,
           fields = profile.fields.map(field => _item_field_projection(field, item, snapshot)),
           publication = _publication(snapshot, item.id),
           actions = _item_actions(item)

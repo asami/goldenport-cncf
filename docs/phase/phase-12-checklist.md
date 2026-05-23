@@ -343,7 +343,7 @@ functionality.
 - [x] Support basic field controls: hidden, readonly, required, select,
       textarea, placeholder, help, and validation hints.
 - [x] Support operation result property expansion for result pages.
-- [x] Support result widgets: result view, result table, property list, and
+- [x] Support result widgets: result view, table, property list, and
       error panel.
 - [x] Support action-link result widgets in both preferred `textus:action-link`
       notation and compatible `textus-action-link` notation.
@@ -631,9 +631,9 @@ The WEB-09 validation focused on the generic widget surface and app behavior:
 - [x] Confirm `textus-error-panel` renders through static error pages for
   Operation/runtime errors. Admission validation currently redisplays the
   operation form and does not use `__400.html`.
-- [x] Confirm `textus-result-table` renders both table rows and paging controls
+- [x] Confirm `textus:table` renders both table rows and paging controls
   for operation result objects.
-- [x] Confirm `textus-result-table view="summary"` obtains its column selection
+- [x] Confirm `textus:table view="summary"` obtains its column selection
   from CML-derived view/schema metadata rather than application reflection.
 - [x] Verify total-count-free paging behavior for `search-notices__200.html`;
   page 1 renders a table and a `Next` link without total count, and the
@@ -662,7 +662,7 @@ Runtime verification on Apr. 19, 2026:
   created notice body through `textus-result-view`.
 - `searchNotices` opens `search-notices__200.html` with no unexpanded Textus
   tags, and the paging control is rendered without total count.
-- `textus-result-table source="result.body" view="summary"` now renders table
+- `textus:table source="result.body" view="summary"` now renders table
   rows for the current search result object shape. The table widget accepts
   operation result objects such as `{data: [...]}` as well as direct arrays, and
   column lookup can resolve `result.body.data` CML/view metadata from a
@@ -800,7 +800,7 @@ layout, navigation, feedback, content, and form-helper widgets.
       contract.
 - [x] Implement `textus:record-card` / `textus-record-card`.
 - [x] Implement `textus:card-list` / `textus-card-list`.
-- [x] Reuse existing result-table paging metadata for `card-list`.
+- [x] Reuse existing table paging metadata for `card-list`.
 - [x] Extract `textus:pagination` so table/card/custom pages can share paging
       metadata and rendering.
 - [x] Implement `textus:summary-card` for dashboard/admin summary use.
@@ -821,7 +821,7 @@ Completed scope:
   the HTML-compatible `textus-xxx` notation.
 - action/form-helper widgets cover action links, action forms, hidden context,
   and page-context-preserving POST actions.
-- result widgets cover result view, result table, property list, error panel,
+- result widgets cover result view, table, property list, error panel,
   and standalone pagination.
 - card widgets cover record cards, card lists, and summary cards.
 - feedback widgets cover alerts and empty states.
@@ -2153,7 +2153,7 @@ baseline through the built-in Management Console.
 
 - Recheck `/web/notice-board/admin/views`.
 - Recheck `/web/notice-board/admin/views/notice`.
-- Confirm summary/detail view metadata and the read result table are rendered.
+- Confirm summary/detail view metadata and the read table are rendered.
 - Confirm view JSON Form API metadata stays read-oriented.
 
 ### Detailed Tasks
@@ -2401,7 +2401,7 @@ Static Form result pages.
 
 ### Scope
 
-- Exercise result table and card-list widgets from search results.
+- Exercise table and card-list widgets from search results.
 - Exercise job-ticket, generic card, and action-link widgets from command
   result pages.
 - Exercise property-list, error-panel, and hidden-context widgets from existing
@@ -2973,7 +2973,7 @@ detail page without hand-writing table or card action markup.
 
 ### Scope
 
-- Add detail action support to `textus-result-table`.
+- Add detail action support to `textus:table`.
 - Reuse the same detail action support from `textus:card-list`.
 - Expand record field placeholders from the current result row.
 - Validate the notice-board search result -> detail flow.
@@ -3211,7 +3211,7 @@ widget additions.
       common status templates.
 - [x] Record the current convention-first result template contract here.
 - [x] Validate the sample result flow with action-group, return context,
-      nav-list, result-table/card-list, and description-list widgets.
+      nav-list, table/card-list, and description-list widgets.
 
 ### Closure
 
@@ -3314,7 +3314,7 @@ to pass return context into a detail page.
 
 ### Scope
 
-- Add `detail-param-{name}` attributes for result table and card-list detail
+- Add `detail-param-{name}` attributes for table and card-list detail
   actions.
 - Expand record placeholders in parameter values.
 - URL encode parameter names and values before appending them to `detail-href`.

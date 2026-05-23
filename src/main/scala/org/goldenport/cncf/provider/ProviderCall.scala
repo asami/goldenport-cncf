@@ -4,11 +4,12 @@ import org.goldenport.Consequence
 import org.goldenport.cncf.action.{Behavior, ProviderBehavior}
 import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.context.{CorrelationId, ExecutionContext}
+import org.goldenport.cncf.observability.CallTreeValueSummary
 import org.goldenport.cncf.unitofwork.ExecUowM
 
 /*
  * @since   May. 23, 2026
- * @version May. 23, 2026
+ * @version May. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ProviderRequest(
@@ -30,6 +31,9 @@ abstract class ProviderCall[A]
 
   final def run(): Consequence[A] =
     build_Program.value.foldMap(executionContext.runtime.unitOfWorkInterpreter).flatMap(identity)
+
+  def calltreeResultAttributes(result: A): Map[String, String] =
+    CallTreeValueSummary.resultAttributes(result)
 }
 
 object ProviderCall {

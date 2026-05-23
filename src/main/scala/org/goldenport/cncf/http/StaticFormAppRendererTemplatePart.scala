@@ -31,7 +31,7 @@ import io.circe.parser.parse
 
 /*
  * @since   May. 18, 2026
- * @version May. 23, 2026
+ * @version May. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 trait StaticFormAppRendererTemplatePart {
@@ -92,7 +92,7 @@ trait StaticFormAppRendererTemplatePart {
     defaultTableView: String
   ): String = {
     val resultView = """<textus-result-view\s+source="([^"]+)"\s*></textus-result-view>""".r
-    val resultTable = """<textus-result-table\b([^>]*)></textus-result-table>""".r
+    val table = """<textus:table\b([^>]*)></textus:table>""".r
     val card = """(?s)<textus(?::card(?!-)|-card(?!-))\b([^>]*)>(.*?)</textus(?::card|-card)>""".r
     val recordCard = """<textus(?::record-card|-record-card)\b([^>]*)></textus(?::record-card|-record-card)>""".r
     val cardList = """<textus(?::card-list|-card-list)\b([^>]*)></textus(?::card-list|-card-list)>""".r
@@ -123,9 +123,9 @@ trait StaticFormAppRendererTemplatePart {
     val a = resultView.replaceAllIn(template, m =>
       java.util.regex.Matcher.quoteReplacement(render_result_view(m.group(1), properties))
     )
-    val b = resultTable.replaceAllIn(a, m => {
+    val b = table.replaceAllIn(a, m => {
       val attrs = widget_attrs(m.group(1))
-      java.util.regex.Matcher.quoteReplacement(render_result_table(attrs, properties, tableColumns, defaultTableView))
+      java.util.regex.Matcher.quoteReplacement(render_table(attrs, properties, tableColumns, defaultTableView))
     })
     val b1 = card.replaceAllIn(b, m => {
       val attrs = widget_attrs(m.group(1))
@@ -614,7 +614,7 @@ trait StaticFormAppRendererTemplatePart {
     s"""<pre class="mt-3 p-3 bg-light border rounded">${escape(value)}</pre>"""
   }
 
-  protected def render_result_table(
+  protected def render_table(
     attrs: Map[String, String],
     properties: FormPageProperties,
     tableColumns: Map[String, Vector[TableColumn]],
@@ -631,7 +631,88 @@ trait StaticFormAppRendererTemplatePart {
     val total = optional_int_property(properties, totalPath)
     val href = properties.value(hrefPath)
     val table = json_table(source, properties, page, pageSize, columns, attrs).getOrElse("")
-    s"""${table}<div class="mt-3">${render_pagination(attrs, properties)}</div>"""
+    val download = render_table_download(attrs, properties, source)
+    if (widget_bool(attrs, "pagination", default = true))
+      s"""${download}${table}<div class="mt-3">${render_pagination(attrs, properties)}</div>"""
+    else
+      s"""${download}${table}"""
+  }
+
+  protected def render_table_download(
+    attrs: Map[String, String],
+    properties: FormPageProperties,
+    displaysource: String
+  ): String = {
+    val formats = table_download_formats(attrs)
+    if (formats.isEmpty)
+      ""
+    else {
+      val source = attrs.getOrElse("download-source", displaysource)
+      val name = attrs.getOrElse("download-name", s"${properties.componentPath}-${properties.servicePath}-${properties.operationPath}")
+      val label = attrs.getOrElse("download-label", "Download")
+      val links = formats.map { format =>
+        val href = table_download_href(properties, source, format, name)
+        s"""<li><a class="dropdown-item" href="${escape(href)}">${escape(format.toUpperCase(java.util.Locale.ROOT))}</a></li>"""
+      }.mkString
+      s"""<div class="d-flex justify-content-end mb-2 textus-table-download">
+         |  <div class="dropdown">
+         |    <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">${escape(label)}</button>
+         |    <ul class="dropdown-menu dropdown-menu-end">${links}</ul>
+         |  </div>
+         |</div>""".stripMargin
+    }
+  }
+
+  protected def table_download_formats(
+    attrs: Map[String, String]
+  ): Vector[String] =
+    attrs.get("download-formats")
+      .orElse(attrs.get("download"))
+      .toVector
+      .flatMap(_.split(',').toVector)
+      .map(_.trim.toLowerCase(java.util.Locale.ROOT))
+      .filter(_.nonEmpty)
+      .distinct
+
+  protected def table_download_href(
+    properties: FormPageProperties,
+    source: String,
+    format: String,
+    name: String
+  ): String = {
+    val base =
+      s"/form/${escape_path_segment(properties.componentPath)}/${escape_path_segment(properties.servicePath)}/${escape_path_segment(properties.operationPath)}/result"
+    val current = properties.values.toVector.filterNot { case (key, _) =>
+      is_table_download_context_key(key)
+    }
+    val params = current ++ Vector(
+      "textus.download" -> "true",
+      "textus.download.source" -> source,
+      "textus.download.format" -> format,
+      "textus.download.filename" -> s"${name}.${format}"
+    )
+    val query = params.collect {
+      case (key, value) if key.nonEmpty && value.nonEmpty =>
+        s"${escapeQuery(key)}=${escapeQuery(value)}"
+    }.mkString("&")
+    if (query.isEmpty) base else s"${base}?${query}"
+  }
+
+  protected def is_table_download_context_key(key: String): Boolean = {
+    val reservedprefixes = Vector(
+      "form.",
+      "result.",
+      "paging.",
+      "pageContext.",
+      "operation.",
+      "error.",
+      "debug.",
+      "textus."
+    )
+    reservedprefixes.exists(key.startsWith) ||
+      key == "component" ||
+      key == "service" ||
+      key == "operation"
   }
 
   protected def render_card(
@@ -691,7 +772,10 @@ trait StaticFormAppRendererTemplatePart {
         s"""<div class="${card_list_row_class(attrs)}">${body}</div>"""
       }
     }.getOrElse(empty_state(attrs.getOrElse("empty", "No records")))
-    s"""${cards}<div class="mt-3">${render_pagination(attrs, properties)}</div>"""
+    if (widget_bool(attrs, "pagination", default = true))
+      s"""${cards}<div class="mt-3">${render_pagination(attrs, properties)}</div>"""
+    else
+      cards
   }
 
   protected def card_list_row_class(
@@ -1365,11 +1449,18 @@ trait StaticFormAppRendererTemplatePart {
           val value = obj(h.name).map(json_cell).getOrElse("")
           s"<td>${escape(value)}</td>"
         }.mkString
-        val actionCell = attrs.get("detail-href").flatMap(record_href(_, obj.toMap, attrs)).map { href =>
+        val detailhref = attrs.get("detail-href").flatMap(record_href(_, obj.toMap, attrs))
+        val rowattrs = if (widget_bool(attrs, "row-link", default = false))
+          detailhref.map(href =>
+            s""" class="textus-clickable-row" data-textus-row-href="${escape(href)}" tabindex="0" role="link""""
+          ).getOrElse("")
+        else
+          ""
+        val actioncell = detailhref.map { href =>
           val label = attrs.getOrElse("detail-label", "Open detail")
           s"""<td><a class="btn btn-sm btn-outline-primary" href="${escape(href)}">${escape(label)}</a></td>"""
         }.getOrElse(attrs.get("detail-href").map(_ => "<td></td>").getOrElse(""))
-        s"<tr>${cells}${actionCell}</tr>"
+        s"<tr${rowattrs}>${cells}${actioncell}</tr>"
       }.mkString("\n")
       Some(s"""<div class="table-responsive mt-3"><table class="table table-sm table-striped"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>""")
     }

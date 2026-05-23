@@ -6,7 +6,7 @@ import org.goldenport.cncf.subsystem.Subsystem
 
 /*
  * @since   May. 20, 2026
- * @version May. 20, 2026
+ * @version May. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 trait StaticFormAppRendererInformationPart {
@@ -28,14 +28,13 @@ trait StaticFormAppRendererInformationPart {
     val projections = InformationSpaceProjection.components(subsystem.components)
     val rows =
       if (projections.isEmpty)
-        admin_empty_table_cell(9, "No components are loaded.")
+        admin_empty_table_cell(8, "No components are loaded.")
       else
         projections.map { projection =>
           val path = escape_path_segment(projection.componentName)
           val counts = projection.counts
           s"""<tr>
              |  <td><a href="/web/system/admin/information/${path}">${escape(projection.componentName)}</a></td>
-             |  <td>${counts.batchCount}</td>
              |  <td>${counts.recordCount}</td>
              |  <td>${counts.itemCount}</td>
              |  <td>${counts.validationIssueCount}</td>
@@ -56,7 +55,7 @@ trait StaticFormAppRendererInformationPart {
            |${admin_card(
              "InformationSpace Components",
              s"""<div class="table-responsive"><table class="table table-sm table-hover align-middle mb-0">
-                |  <thead><tr><th>Component</th><th>Batches</th><th>Records</th><th>Items</th><th>Issues</th><th>Candidates</th><th>Bindings</th><th>Publications</th><th>Conflicts</th></tr></thead>
+                |  <thead><tr><th>Component</th><th>Information</th><th>Confirmed</th><th>Issues</th><th>Candidates</th><th>Bindings</th><th>Publications</th><th>Conflicts</th></tr></thead>
                 |  <tbody>${rows}</tbody>
                 |</table></div>""".stripMargin
            )}
@@ -75,7 +74,6 @@ trait StaticFormAppRendererInformationPart {
     val records = snapshot.records.sortBy(_.id.print).take(previewlimit).map { record =>
       s"""<tr>
          |  <td><code>${escape(record.id.print)}</code></td>
-         |  <td><code>${escape(record.batchId.print)}</code></td>
          |  <td>${escape(record.domain)}</td>
          |  <td><span class="badge text-bg-secondary">${escape(record.state.label)}</span></td>
          |  <td>${record.validationIssueIds.size}</td>
@@ -112,16 +110,15 @@ trait StaticFormAppRendererInformationPart {
            ))}
            |${admin_card("Counts", field_table(Vector(
              "Component" -> component.name,
-             "Batches" -> projection.counts.batchCount.toString,
-             "Records" -> projection.counts.recordCount.toString,
-             "Items" -> projection.counts.itemCount.toString,
+             "Information" -> projection.counts.recordCount.toString,
+             "Confirmed information" -> projection.counts.itemCount.toString,
              "Validation issues" -> projection.counts.validationIssueCount.toString,
              "Resolution candidates" -> projection.counts.resolutionCandidateCount.toString,
              "Identity bindings" -> projection.counts.identityBindingCount.toString,
              "Publications" -> projection.counts.publicationStatusCount.toString,
              "Conflicts" -> projection.counts.conflictCount.toString
            )))}
-           |${admin_card("Import records", information_table(records, 7, "No import records are loaded.", "Record", "Batch", "Domain", "State", "Issues", "Candidates", "Item"))}
+           |${admin_card("Editable information", information_table(records, 6, "No editable information is loaded.", "Information", "Domain", "State", "Issues", "Candidates", "Confirmed"))}
            |${admin_card("Information items", information_table(items, 6, "No information items are loaded.", "Item", "Domain", "State", "Title", "Bindings", "Publication"))}
            |${admin_card("Validation issues", information_table(issues, 5, "No validation issues are loaded.", "Issue", "Record", "Field", "Severity", "Message"))}
            |${admin_card("Publication status", information_table(publications, 5, "No publication status records are loaded.", "Publication", "Item", "Target", "State", "Message"))}

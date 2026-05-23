@@ -30,7 +30,7 @@ import org.goldenport.record.Record
 
 /*
  * @since   May. 20, 2026
- * @version May. 22, 2026
+ * @version May. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 final class InformationSpace {
@@ -41,7 +41,6 @@ final class InformationSpace {
 
   def counts: InformationSpaceCounts =
     InformationSpaceCounts(
-      batchCount = _snapshot.batches.size,
       recordCount = _snapshot.records.size,
       itemCount = _snapshot.items.size,
       validationIssueCount = _snapshot.validationIssues.size,
@@ -54,41 +53,31 @@ final class InformationSpace {
   def clear(): Unit =
     _snapshot = InformationSpaceSnapshot()
 
-  def registerImportBatch(
+  def registerInformation(
     domain: String,
     records: Vector[Record]
-  ): Consequence[InformationImportBatch] =
+  ): Consequence[Vector[InformationImportRecord]] =
     if (domain.trim.isEmpty)
-      Consequence.argumentInvalid("information import domain is required")
+      Consequence.argumentInvalid("information domain is required")
     else if (records.isEmpty)
-      Consequence.argumentInvalid("information import records are required")
+      Consequence.argumentInvalid("information records are required")
     else {
-      val batchid = InformationImportBatchId(_next_id("info-batch", _snapshot.batches.size + 1))
       val nextrecords = records.zipWithIndex.map { case (record, index) =>
         InformationImportRecord(
           id = InformationRecordId(_next_id("info-record", _snapshot.records.size + index + 1)),
-          batchId = batchid,
           domain = domain,
           rawData = record,
           workingData = record
         )
       }
-      val batch = InformationImportBatch(batchid, domain, nextrecords.map(_.id))
       _snapshot = _snapshot.copy(
-        batches = _snapshot.batches :+ batch,
         records = _snapshot.records ++ nextrecords
       )
-      Consequence.success(batch)
+      Consequence.success(nextrecords)
     }
-
-  def importBatchOption(id: InformationImportBatchId): Option[InformationImportBatch] =
-    _snapshot.batches.find(_.id == id)
 
   def importRecordOption(id: InformationRecordId): Option[InformationImportRecord] =
     _snapshot.records.find(_.id == id)
-
-  def listImportRecords(batchid: InformationImportBatchId): Vector[InformationImportRecord] =
-    _snapshot.records.filter(_.batchId == batchid)
 
   def updateInformationRecord(
     recordid: InformationRecordId,

@@ -11,7 +11,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   May. 21, 2026
- * @version May. 22, 2026
+ * @version May. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 final class InformationEditorProjectionSpec
@@ -26,6 +26,8 @@ final class InformationEditorProjectionSpec
       val isbn = _field(profile, "isbn13")
       val authors = _field(profile, "authors")
       val subjects = _field(profile, "subjects")
+      val description = _field(profile, "description")
+      val sourceurl = _field(profile, "sourceUrl")
 
       title.label shouldBe "Title"
       title.requiredness shouldBe "required"
@@ -34,6 +36,10 @@ final class InformationEditorProjectionSpec
       isbn.mappings.map(_.targetPath) should contain ("identity.externalIdentifiers")
       authors.mappings.map(_.targetKind) should contain ("relationship")
       subjects.mappings.map(_.profileLayer).toSet should contain ("common-neighborhood")
+      description.resolverAssisted shouldBe true
+      description.mappings.map(_.targetKind) should contain ("evidence")
+      sourceurl.resolverAssisted shouldBe true
+      sourceurl.mappings.map(_.targetKind) should contain allOf ("evidence", "provenance")
       profile.fields.flatMap(_.mappings.map(_.targetKind)).toSet should contain allOf (
         "knowledge-node-section",
         "relationship",
@@ -49,14 +55,14 @@ final class InformationEditorProjectionSpec
 
     "project records with field validation issues and resolution candidates" in {
       val component = _component()
-      val batch = _success(component.informationSpace.registerImportBatch("book", Vector(
+      val batch = _success(component.informationSpace.registerInformation("book", Vector(
         Record.data(
           "isbn13" -> "9780134685991",
           "title" -> "Domain-Driven Design",
           "authors" -> "Eric Evans"
         )
       )))
-      val recordid = batch.recordIds.head
+      val recordid = batch.head.id
       val binding = InformationIdentityBinding(
         InformationIdentityBindingId("pending"),
         rdfSubject = Some(RdfNodeName("http://dbpedia.org/resource/Domain-driven_design")),
@@ -103,13 +109,13 @@ final class InformationEditorProjectionSpec
 
     "project paper records with field validation issues and resolution candidates" in {
       val component = _component()
-      val batch = _success(component.informationSpace.registerImportBatch("paper", Vector(
+      val batch = _success(component.informationSpace.registerInformation("paper", Vector(
         Record.data(
           "title" -> "Knowledge Editing with InformationSpace",
           "doi" -> "10.1000/paper"
         )
       )))
-      val recordid = batch.recordIds.head
+      val recordid = batch.head.id
       val binding = InformationIdentityBinding(
         InformationIdentityBindingId("pending"),
         rdfSubject = Some(RdfNodeName("http://dbpedia.org/resource/Knowledge_graph")),
@@ -154,13 +160,13 @@ final class InformationEditorProjectionSpec
 
     "project web resource records with resolver candidates" in {
       val component = _component()
-      val batch = _success(component.informationSpace.registerImportBatch("web-resource", Vector(
+      val batch = _success(component.informationSpace.registerInformation("web-resource", Vector(
         Record.data(
           "title" -> "KnowledgeSpace Web Resource",
           "url" -> "https://example.org/knowledge"
         )
       )))
-      val recordid = batch.recordIds.head
+      val recordid = batch.head.id
       val binding = InformationIdentityBinding(
         InformationIdentityBindingId("pending"),
         rdfSubject = Some(RdfNodeName("https://dbpedia.org/resource/Knowledge_graph")),
@@ -182,8 +188,8 @@ final class InformationEditorProjectionSpec
 
     "project action availability across lifecycle states" in {
       val component = _component()
-      val batch = _success(component.informationSpace.registerImportBatch("book", Vector(Record.data("title" -> "Ready"))))
-      val recordid = batch.recordIds.head
+      val batch = _success(component.informationSpace.registerInformation("book", Vector(Record.data("title" -> "Ready"))))
+      val recordid = batch.head.id
       _success(component.informationSpace.validateInformationRecord(recordid))
       val readyprojection = _success(InformationSpaceEditorProjection.component(component, "book"))
       val readyrecord = readyprojection.records.headOption.getOrElse(fail("ready record missing"))
@@ -201,8 +207,8 @@ final class InformationEditorProjectionSpec
 
     "disable confirmation when required book fields are missing" in {
       val component = _component()
-      val batch = _success(component.informationSpace.registerImportBatch("book", Vector(Record.data("isbn13" -> "9780134685991"))))
-      val recordid = batch.recordIds.head
+      val batch = _success(component.informationSpace.registerInformation("book", Vector(Record.data("isbn13" -> "9780134685991"))))
+      val recordid = batch.head.id
       _success(component.informationSpace.validateInformationRecord(recordid))
 
       val projection = _success(InformationSpaceEditorProjection.component(component, "book"))
@@ -217,8 +223,8 @@ final class InformationEditorProjectionSpec
 
     "disable confirmation when required paper title is missing" in {
       val component = _component()
-      val batch = _success(component.informationSpace.registerImportBatch("paper", Vector(Record.data("doi" -> "10.1000/paper"))))
-      val recordid = batch.recordIds.head
+      val batch = _success(component.informationSpace.registerInformation("paper", Vector(Record.data("doi" -> "10.1000/paper"))))
+      val recordid = batch.head.id
       _success(component.informationSpace.validateInformationRecord(recordid))
 
       val projection = _success(InformationSpaceEditorProjection.component(component, "paper"))
@@ -233,8 +239,8 @@ final class InformationEditorProjectionSpec
 
     "disable confirmation when required web resource fields are missing" in {
       val component = _component()
-      val batch = _success(component.informationSpace.registerImportBatch("web-resource", Vector(Record.data("url" -> "https://example.org/only-url"))))
-      val recordid = batch.recordIds.head
+      val batch = _success(component.informationSpace.registerInformation("web-resource", Vector(Record.data("url" -> "https://example.org/only-url"))))
+      val recordid = batch.head.id
       _success(component.informationSpace.validateInformationRecord(recordid))
 
       val projection = _success(InformationSpaceEditorProjection.component(component, "web-resource"))
