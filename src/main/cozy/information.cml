@@ -1,0 +1,452 @@
+Information
+===========
+
+CNCF Information vocabulary. Information is curated, editable knowledge input
+held in InformationSpace before publication and KnowledgeSpace materialization.
+
+This CML is the canonical model for CNCF Information. The detailed design
+intent is written next to the generated VALUE, ENTITY, POWERTYPE, and
+STATEMACHINE definitions so the executable vocabulary and the literary model
+stay together.
+
+Type reference policy:
+
+- Types defined in this CML are referenced by short name.
+- External runtime types are referenced by fully qualified name.
+
+Model map:
+
+| Concept              | Responsibility                                      | CML role                       |
+| ---                  | ---                                                 | ---                            |
+| InformationSpace     | Curated editable information workbench              | Runtime space, not generated   |
+| Information          | Editable and publishable Information                | Entity                         |
+| KnowledgeSpace       | Operational semantic runtime traversal              | External runtime space         |
+| KnowledgeFrame       | Materialized semantic neighborhood                  | External materialization target |
+
+Boundary rules:
+
+- Information uses `SimpleEntity.id: EntityId` as its only identity. RDF
+  subjects, external identifiers, Tag ids, and KnowledgeNode ids remain
+  distinct.
+- Domain authoring models such as book, paper, and web-resource are first-class
+  InformationSpace domains.
+- Users edit domain fields; raw RDF predicates and normalized graph structures
+  are not the primary authoring workflow.
+- Resolver output is reviewable candidate data until it is selected and
+  confirmed.
+- Confirmation, publication, and KnowledgeSpace materialization are separate
+  lifecycle steps.
+- Import, enrichment, publication, and materialization execution records belong
+  to CNCF Job. Information may keep job/saga/task references as source context,
+  but InformationSpace does not define its own batch execution entity.
+- Provider-specific RDF, vector, JSON, and HTML payloads stay behind provider
+  boundaries.
+
+Domain profile examples:
+
+| Domain       | Primary input examples                         | Resolver/enrichment examples         |
+| ---          | ---                                            | ---                                  |
+| book         | ISBN, DOI, title, authors, publisher, summary  | Open Library, Wikidata, DBpedia, LOC |
+| paper        | DOI, arXiv, PubMed, OpenAlex, title, authors   | DBpedia, scholarly providers future  |
+| web-resource | URL, canonical URL, title, summary, links      | HTTP metadata, RDF-like links        |
+
+# VALUE
+
+## InformationImportContext
+
+Source context for Information import or enrichment.
+
+This is not an execution record. Long-running import, enrichment, publication,
+and materialization work is represented by CNCF Job. Information keeps only the
+source context and optional job/saga/task references needed to trace where the
+editable data came from.
+
+package = org.goldenport.cncf.information.value
+
+### ATTRIBUTE
+
+| name       | type              | multiplicity |
+| ---        | ---               | ---          |
+| sourceType | String            | 1            |
+| sourceName | String            | ?            |
+| sourceUri  | String            | ?            |
+| operation  | String            | ?            |
+| jobId      | String            | ?            |
+| sagaId     | String            | ?            |
+| taskId     | String            | ?            |
+| importedAt | java.time.Instant | ?            |
+| importedBy | String            | ?            |
+
+## InformationValidationIssue
+
+Field-level validation issue for Information.
+
+Validation issues identify the field path, severity, and human-readable message.
+They should be precise enough for an editor UI to show why Information cannot be
+confirmed and what action is expected. Required-field issues are blocking;
+recommended-field issues may be advisory depending on domain policy.
+
+package = org.goldenport.cncf.information.value
+
+### ATTRIBUTE
+
+| name      | type   | multiplicity |
+| ---       | ---    | ---          |
+| fieldPath | String | 1            |
+| severity  | String | 1            |
+| message   | String | 1            |
+
+## InformationIdentityBinding
+
+Identity binding across curated Information, external authority data, domain
+Entities, and Knowledge runtime ids.
+
+Bindings are explicit because the connected ids are not interchangeable. A book
+ISBN, a DBpedia URI, a Wikidata QID, an application Entity id, and a
+KnowledgeNodeId may all point toward the same curated subject, but each remains a
+separate identifier with source, authority, confidence, and status.
+
+package = org.goldenport.cncf.information.value
+
+### ATTRIBUTE
+
+| name                | type                                                  | multiplicity |
+| ---                 | ---                                                   | ---          |
+| rdfSubject          | org.goldenport.cncf.knowledge.RdfNodeName            | ?            |
+| externalIdentifiers | org.goldenport.cncf.knowledge.ExternalKnowledgeIdentifier | *       |
+| entityBindings      | org.goldenport.cncf.knowledge.KnowledgeEntityBinding | *            |
+| knowledgeNodeId     | org.goldenport.cncf.knowledge.KnowledgeNodeId        | ?            |
+| authority           | String                                               | ?            |
+| confidence          | Double                                               | ?            |
+| status              | InformationBindingStatus                             | 1            |
+
+## InformationResolutionCandidate
+
+Reviewable candidate generated by local input, external lookup, or manual
+resolution.
+
+Candidate selection is a curation action. DBpedia, Wikidata, Open Library,
+DOI-based services, HTTP metadata, and other sources provide evidence; they do
+not overwrite confirmed Information automatically. `candidateKey` is local to
+the containing Information and is only for UI/operation targeting.
+
+package = org.goldenport.cncf.information.value
+
+### ATTRIBUTE
+
+| name           | type                       | multiplicity |
+| ---            | ---                        | ---          |
+| candidateKey   | String                     | 1            |
+| fieldPath      | String                     | 1            |
+| candidateLabel | String                     | 1            |
+| binding        | InformationIdentityBinding | 1            |
+| confidence     | Double                     | ?            |
+| evidence       | String                     | ?            |
+| selected       | Boolean                    | 1            |
+
+## InformationPublicationStatus
+
+Publication status for confirmed Information.
+
+This status records whether Information has been published to the selected
+target and, when materialized, which KnowledgeFrame represents the resulting
+semantic neighborhood. Provider failures should leave the Information
+non-published or failed without marking it as successfully materialized.
+`publicationKey` is local to the containing Information.
+
+package = org.goldenport.cncf.information.value
+
+### ATTRIBUTE
+
+| name             | type                                      | multiplicity |
+| ---              | ---                                       | ---          |
+| publicationKey   | String                                    | 1            |
+| state            | InformationPublicationState               | 1            |
+| target           | String                                    | 1            |
+| message          | String                                    | ?            |
+| knowledgeFrameId | org.goldenport.cncf.knowledge.KnowledgeFrameId | ?      |
+| publishedAt      | java.time.Instant                         | ?            |
+
+## InformationConflict
+
+Conflict between confirmed Information and another authority source.
+
+Conflicts are first-class values because curated Information may disagree with
+existing RDF/provider data, imported values, or older confirmed values. The
+conflict keeps field path, competing values, severity, state, and resolution
+summary so ordinary editor flows can resolve it without exposing raw provider
+payloads. `conflictKey` is local to the containing Information.
+
+package = org.goldenport.cncf.information.value
+
+### ATTRIBUTE
+
+| name             | type                     | multiplicity |
+| ---              | ---                      | ---          |
+| conflictKey      | String                   | 1            |
+| fieldPath        | String                   | 1            |
+| informationValue | String                   | 1            |
+| rdfValue         | String                   | 1            |
+| severity         | String                   | 1            |
+| state            | InformationConflictState | 1            |
+| resolution       | String                   | ?            |
+
+# ENTITY
+
+## Information
+
+Information staged, edited, confirmed, published, and materialized in
+InformationSpace.
+
+Information is the working object edited by domain tools such as the book,
+paper, and web-resource editors. It keeps the original import payload separate
+from the current working data so validation, resolver choices, and human edits
+can be audited.
+
+The lifecycle state is managed by `informationLifecycle`. Knowledge-ready
+Information is the same entity in `confirmed` state, not another entity.
+Confirmation, publication, and KnowledgeSpace materialization change state and
+status without changing the Information id.
+
+### FEATURES
+
+extends = ["org.simplemodeling.model.SimpleEntity"]
+package = org.goldenport.cncf.information
+
+### ATTRIBUTE
+
+| name                 | type                                                    | multiplicity |
+| ---                  | ---                                                     | ---          |
+| domain               | String                                                  | 1            |
+| rawData              | org.goldenport.record.Record                            | 1            |
+| workingData          | org.goldenport.record.Record                            | 1            |
+| state                | InformationLifecycleState                               | 1            |
+| importContext        | InformationImportContext        | ?            |
+| validationIssues     | InformationValidationIssue      | *            |
+| resolutionCandidates | InformationResolutionCandidate  | *            |
+| identityBindings     | InformationIdentityBinding      | *            |
+| publicationStatuses  | InformationPublicationStatus    | *            |
+| conflicts            | InformationConflict             | *            |
+| confirmedAt          | java.time.Instant                                      | ?            |
+| updatedAt            | java.time.Instant                                      | 1            |
+
+# VALUE
+
+## InformationSpaceSnapshot
+
+Storage-neutral snapshot of component-owned InformationSpace.
+
+The snapshot is the runtime transport shape for current InformationSpace
+contents. Durable RDB-backed storage can later provide the same logical model.
+The snapshot is centered on Information. Validation issues, candidates,
+bindings, publication status, conflicts, and source context belong to each
+Information value.
+
+package = org.goldenport.cncf.information.value
+
+### ATTRIBUTE
+
+| name        | type        | multiplicity |
+| ---         | ---         | ---          |
+| information | Information | *            |
+
+## InformationSpaceCounts
+
+Compact InformationSpace counts for admin, editor, and operation feedback.
+
+package = org.goldenport.cncf.information.value
+
+### ATTRIBUTE
+
+| name                     | type | multiplicity |
+| ---                      | ---  | ---          |
+| informationCount         | int  | 1            |
+| validationIssueCount     | int  | 1            |
+| resolutionCandidateCount | int  | 1            |
+| identityBindingCount     | int  | 1            |
+| publicationStatusCount   | int  | 1            |
+| conflictCount            | int  | 1            |
+
+# POWERTYPE
+
+## InformationLifecycleState
+
+Lifecycle state of Information.
+
+`confirmed` is the knowledge-ready state. `published` means publication has
+succeeded for the selected target. Materialization into KnowledgeSpace is
+reported through publication/materialization status and Knowledge summaries.
+
+package = org.goldenport.cncf.information.value
+
+| name                   | label                  |
+| ---                    | ---                    |
+| imported               | Imported               |
+| invalid                | Invalid                |
+| needs_resolution       | Needs resolution       |
+| ready_for_confirmation | Ready for confirmation |
+| confirmed              | Confirmed              |
+| published              | Published              |
+| rejected               | Rejected               |
+| conflict               | Conflict               |
+
+## InformationBindingStatus
+
+Status of an identity binding or candidate binding.
+
+package = org.goldenport.cncf.information.value
+
+| name       | label      |
+| ---        | ---        |
+| candidate  | Candidate  |
+| selected   | Selected   |
+| confirmed  | Confirmed  |
+| rejected   | Rejected   |
+| superseded | Superseded |
+| conflict   | Conflict   |
+
+## InformationPublicationState
+
+Publication outcome state. Publication is provider-mediated and separate from
+confirmation.
+
+package = org.goldenport.cncf.information.value
+
+| name          | label         |
+| ---           | ---           |
+| not_published | Not published |
+| published     | Published     |
+| failed        | Failed        |
+
+## InformationConflictState
+
+Conflict workflow state.
+
+package = org.goldenport.cncf.information.value
+
+| name     | label    |
+| ---      | ---      |
+| open     | Open     |
+| resolved | Resolved |
+
+# STATEMACHINE
+
+## informationLifecycle
+
+Information lifecycle transition contract. The powertype defines state values;
+this state machine records which lifecycle moves are valid for InformationSpace
+operations.
+
+### state
+
+#### imported
+
+value = 1
+
+##### transition
+
+on = validateInvalid
+to = invalid
+
+##### transition
+
+on = validateNeedsResolution
+to = needs_resolution
+
+##### transition
+
+on = validateReady
+to = ready_for_confirmation
+
+##### transition
+
+on = reject
+to = rejected
+
+#### invalid
+
+value = 2
+
+##### transition
+
+on = update
+to = imported
+
+##### transition
+
+on = reject
+to = rejected
+
+#### needs_resolution
+
+value = 3
+
+##### transition
+
+on = selectResolution
+to = ready_for_confirmation
+
+##### transition
+
+on = reject
+to = rejected
+
+#### ready_for_confirmation
+
+value = 4
+
+##### transition
+
+on = confirm
+to = confirmed
+
+##### transition
+
+on = reject
+to = rejected
+
+#### confirmed
+
+value = 5
+
+##### transition
+
+on = publish
+to = published
+
+##### transition
+
+on = reopen
+to = imported
+
+##### transition
+
+on = detectConflict
+to = conflict
+
+#### published
+
+value = 6
+
+##### transition
+
+on = detectConflict
+to = conflict
+
+#### rejected
+
+value = 7
+
+##### transition
+
+on = reopen
+to = imported
+
+#### conflict
+
+value = 8
+
+##### transition
+
+on = resolveConflict
+to = confirmed

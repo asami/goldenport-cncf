@@ -6,6 +6,7 @@ val scala3version = "3.3.7"
 lazy val generateTextusRuntimeCatalog = taskKey[File]("Generate Textus runtime catalog metadata for the warehouse repository.")
 lazy val exportTextusRuntimeCatalog = taskKey[File]("Export Textus runtime catalog metadata for local development consumers.")
 lazy val generateCncfRuntimeDescriptor = taskKey[File]("Generate CNCF runtime self descriptor for the runtime jar.")
+lazy val generateInformationCmlModel = taskKey[Seq[File]]("Generate CNCF Information vocabulary model from CML.")
 lazy val copyTextusRuntimeCatalog = taskKey[File]("Copy the checked-in Textus runtime catalog into the warehouse repository.")
 lazy val publishTextusRuntimeCatalog = taskKey[File]("Publish Textus runtime catalog metadata into the warehouse repository.")
 
@@ -365,9 +366,30 @@ lazy val root = project
       file
     },
 
+    generateInformationCmlModel := {
+      val input = baseDirectory.value / "src/main/cozy/information.cml"
+      val outputdir = target.value / "cncf-information-cml"
+      val generatedroot =
+        outputdir / "target" / s"scala-${scalaVersion.value}" / "src_managed/main/scala"
+      IO.delete(outputdir)
+      IO.createDirectory(outputdir)
+      val command = Seq("cozy", "modeler-scala-value", input.getAbsolutePath, s"--save=${outputdir.getAbsolutePath}")
+      val exitcode = scala.sys.process.Process(command, baseDirectory.value).!(streams.value.log)
+      if (exitcode != 0)
+        sys.error(s"failed to generate CNCF Information model from CML: ${input.getAbsolutePath}")
+      val files =
+        (generatedroot ** "*.scala").get
+          .sortBy(_.getAbsolutePath)
+      if (files.isEmpty)
+        sys.error(s"no CNCF Information CML sources generated from: ${input.getAbsolutePath}")
+      files
+    },
+
     Compile / resourceGenerators += Def.task {
       Seq(generateCncfRuntimeDescriptor.value)
     }.taskValue,
+
+    Compile / sourceGenerators += generateInformationCmlModel.taskValue,
 
     exportTextusRuntimeCatalog := {
       val source = baseDirectory.value / "src/main/warehouse/repository/textus/runtime-catalog.yaml"

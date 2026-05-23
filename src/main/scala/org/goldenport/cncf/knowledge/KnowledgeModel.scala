@@ -1,14 +1,26 @@
 package org.goldenport.cncf.knowledge
 
 import java.time.Instant
+import org.goldenport.Consequence
+import org.goldenport.convert.ValueReader
+import org.goldenport.record.Record
 
 /*
  * @since   May. 17, 2026
- * @version May. 18, 2026
+ * @version May. 23, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class KnowledgeNodeId(value: String) {
   def print: String = value
+}
+
+object KnowledgeNodeId {
+  given ValueReader[KnowledgeNodeId] with
+    def readC(v: Any): Consequence[KnowledgeNodeId] = v match {
+      case m: KnowledgeNodeId => Consequence.success(m)
+      case s: String => Consequence.success(KnowledgeNodeId(s))
+      case _ => Consequence.failValueInvalid(v, org.goldenport.schema.XString)
+    }
 }
 
 final case class KnowledgeRelationshipId(value: String) {
@@ -17,6 +29,15 @@ final case class KnowledgeRelationshipId(value: String) {
 
 final case class KnowledgeFrameId(value: String) {
   def print: String = value
+}
+
+object KnowledgeFrameId {
+  given ValueReader[KnowledgeFrameId] with
+    def readC(v: Any): Consequence[KnowledgeFrameId] = v match {
+      case m: KnowledgeFrameId => Consequence.success(m)
+      case s: String => Consequence.success(KnowledgeFrameId(s))
+      case _ => Consequence.failValueInvalid(v, org.goldenport.schema.XString)
+    }
 }
 
 final case class KnowledgeFactId(value: String) {
@@ -33,6 +54,15 @@ final case class KnowledgeProvenanceId(value: String) {
 
 final case class RdfNodeName(value: String) {
   def print: String = value
+}
+
+object RdfNodeName {
+  given ValueReader[RdfNodeName] with
+    def readC(v: Any): Consequence[RdfNodeName] = v match {
+      case m: RdfNodeName => Consequence.success(m)
+      case s: String => Consequence.success(RdfNodeName(s))
+      case _ => Consequence.failValueInvalid(v, org.goldenport.schema.XString)
+    }
 }
 
 final case class RdfPredicateName(value: String) {
@@ -140,6 +170,20 @@ final case class ExternalKnowledgeIdentifier(
 object ExternalKnowledgeIdentifier {
   val ENTITY_SYSTEM = "cncf.entity"
   val TAG_SYSTEM = "cncf.tag"
+
+  def createC(record: Record): Consequence[ExternalKnowledgeIdentifier] =
+    for {
+      system <- record.getAsC[String]("system").flatMap(Consequence.successOrPropertyNotFound("system", _))
+      value <- record.getAsC[String]("value").flatMap(Consequence.successOrPropertyNotFound("value", _))
+      kind <- record.getAsC[String]("kind")
+    } yield ExternalKnowledgeIdentifier(system, value, kind)
+
+  given ValueReader[ExternalKnowledgeIdentifier] with
+    def readC(v: Any): Consequence[ExternalKnowledgeIdentifier] = v match {
+      case m: ExternalKnowledgeIdentifier => Consequence.success(m)
+      case m: Record => createC(m)
+      case _ => Consequence.failValueInvalid(v, org.goldenport.schema.XString)
+    }
 
   def entity(
     entityname: String,
@@ -373,12 +417,38 @@ final case class KnowledgeEntityBinding(
 }
 
 object KnowledgeEntityBinding {
+  def createC(record: Record): Consequence[KnowledgeEntityBinding] =
+    for {
+      entityname <- _record_get_as_c[String](record, List("entityName", "entity_name")).flatMap(Consequence.successOrPropertyNotFound("entityName", _))
+      entityid <- _record_get_as_c[String](record, List("entityId", "entity_id")).flatMap(Consequence.successOrPropertyNotFound("entityId", _))
+      entityversion <- _record_get_as_c[String](record, List("entityVersion", "entity_version"))
+      component <- record.getAsC[String]("component")
+    } yield KnowledgeEntityBinding(entityname, entityid, entityversion, component)
+
   def from(id: ExternalKnowledgeIdentifier): Option[KnowledgeEntityBinding] =
     id match {
       case ExternalKnowledgeIdentifier(ExternalKnowledgeIdentifier.ENTITY_SYSTEM, value, Some(kind)) =>
         Some(KnowledgeEntityBinding(kind, value))
       case _ =>
         None
+    }
+
+  given ValueReader[KnowledgeEntityBinding] with
+    def readC(v: Any): Consequence[KnowledgeEntityBinding] = v match {
+      case m: KnowledgeEntityBinding => Consequence.success(m)
+      case m: Record => createC(m)
+      case _ => Consequence.failValueInvalid(v, org.goldenport.schema.XString)
+    }
+
+  private def _record_get_as_c[A](
+    record: Record,
+    keys: List[String]
+  )(using vr: ValueReader[A]): Consequence[Option[A]] =
+    keys.foldLeft(Consequence.success(Option.empty[A])) { (z, key) =>
+      z.flatMap {
+        case s @ Some(_) => Consequence.success(s)
+        case None => record.getAsC[A](key)
+      }
     }
 }
 

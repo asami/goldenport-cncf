@@ -31,7 +31,7 @@ import io.circe.parser.parse
 
 /*
  * @since   May. 18, 2026
- * @version May. 18, 2026
+ * @version May. 23, 2026
  * @author  ASAMI, Tomoharu
  */
 trait StaticFormAppRendererFormResultPart {
@@ -105,6 +105,17 @@ trait StaticFormAppRendererFormResultPart {
         assetCompletion
       ))
   }
+
+  def renderFormResultFragment(
+    properties: FormResultProperties,
+    template: String
+  ): String =
+    render_template(
+      template,
+      properties.nextPageProperties,
+      properties.tableColumns,
+      properties.defaultTableView
+    )
 
   def renderErrorTemplate(
     app: Option[String],

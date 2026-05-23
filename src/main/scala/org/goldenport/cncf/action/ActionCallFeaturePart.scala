@@ -45,10 +45,10 @@ import org.goldenport.configuration.ConfigurationValue
  *  version Feb. 25, 2026
  *  version Mar. 30, 2026
  *  version Apr. 29, 2026
- * @version May. 17, 2026
+ * @version May. 23, 2026
  * @author  ASAMI, Tomoharu
  */
-trait ActionCallFeaturePart { self: ActionCall.Core.Holder =>
+trait BehaviorFeaturePart { self: Behavior.Core.Holder =>
   protected final def execution_context: ExecutionContext =
     executionContext
 
@@ -84,18 +84,6 @@ trait ActionCallFeaturePart { self: ActionCall.Core.Holder =>
   protected final def response_yaml(p: String): Consequence[OperationResponse] =
     Consequence.success(OperationResponse.Yaml(p))
 
-  protected final def action_property_string(name: String): Option[String] =
-    action.properties.reverseIterator.collectFirst {
-      case prop if prop.name.equalsIgnoreCase(name) =>
-        Option(prop.value).map(_.toString.trim).getOrElse("")
-    }.filter(_.nonEmpty)
-
-  protected final def action_required_property_string(name: String): Consequence[String] =
-    Consequence.fromOption(
-      action_property_string(name),
-      s"Property not found: $name"
-    )
-
   protected final def consequence_with_calltree[A](
     label: String,
     attributes: Map[String, String]
@@ -120,13 +108,30 @@ trait ActionCallFeaturePart { self: ActionCall.Core.Holder =>
         result
       } catch {
         case e: Throwable =>
-          calltree.leave()
+          calltree.leave(Map(
+            "outcome" -> "failure",
+            "error" -> Option(e.getMessage).getOrElse(e.getClass.getName)
+          ))
           throw e
       }
     } else {
       body
     }
   }
+}
+
+trait ActionCallFeaturePart extends BehaviorFeaturePart { self: ActionCall.Core.Holder =>
+  protected final def action_property_string(name: String): Option[String] =
+    action.properties.reverseIterator.collectFirst {
+      case prop if prop.name.equalsIgnoreCase(name) =>
+        Option(prop.value).map(_.toString.trim).getOrElse("")
+    }.filter(_.nonEmpty)
+
+  protected final def action_required_property_string(name: String): Consequence[String] =
+    Consequence.fromOption(
+      action_property_string(name),
+      s"Property not found: $name"
+    )
 
   protected final def resolve_aggregate_behavior(
   ): Consequence[AggregateBehavior[?]] =
@@ -720,7 +725,7 @@ trait ActionCallBrowserPart extends ActionCallFeaturePart { self: ActionCall.Cor
     ) ++ viewname.map(x => Map("view_name" -> x)).getOrElse(Map.empty)
 }
 
-trait ActionCallHttpPart extends ActionCallFeaturePart { self: ActionCall.Core.Holder =>
+trait BehaviorHttpPart extends BehaviorFeaturePart { self: Behavior.Core.Holder =>
 
   // Declarative DSL (UoW / Free)
   protected final def http_get(
@@ -835,6 +840,83 @@ trait ActionCallHttpPart extends ActionCallFeaturePart { self: ActionCall.Core.H
     headers: Map[String, String]
   ): UnitOfWorkOp[HttpResponse] =
     UnitOfWorkOp.HttpPut(path, body, headers)
+}
+
+trait ActionCallHttpPart extends BehaviorHttpPart with ActionCallFeaturePart { self: ActionCall.Core.Holder =>
+}
+
+trait ProviderBehaviorFeaturePart extends BehaviorFeaturePart { self: Behavior.Core.Holder =>
+  protected final def provider_config_string(
+    key: String,
+    default: String
+  ): String =
+    executionContext.runtime.resolvedParameters.get(key)
+      .map(_.value)
+      .flatMap(_configuration_string)
+      .getOrElse(default)
+
+  protected final def provider_config_int(
+    key: String,
+    default: Int
+  ): Int =
+    executionContext.runtime.resolvedParameters.get(key)
+      .map(_.value)
+      .flatMap(_configuration_string)
+      .flatMap(_.toIntOption)
+      .getOrElse(default)
+
+  protected final def provider_step[A](
+    label: String,
+    attributes: Map[String, String] = Map.empty
+  )(
+    body: => Consequence[A]
+  ): ExecUowM[A] =
+    exec_from(_provider_step_consequence(label, attributes)(body))
+
+  private def _provider_step_consequence[A](
+    label: String,
+    attributes: Map[String, String]
+  )(
+    body: => Consequence[A]
+  ): Consequence[A] = {
+    val calltree = execution_context.observability.callTreeContext
+    if (calltree.isEnabled) {
+      calltree.enter(label, attributes ++ Map("calltree_kind" -> "provider-step"))
+      try {
+        val result = body
+        result match {
+          case success: Consequence.Success[A] =>
+            calltree.leave(Map("outcome" -> "success") ++ CallTreeValueSummary.resultAttributes(success.result))
+          case failure: Consequence.Failure[A] =>
+            calltree.leave(Map(
+              "outcome" -> "failure",
+              "status" -> failure.conclusion.status.webCode.code.toString,
+              "error" -> failure.conclusion.display
+            ))
+        }
+        result
+      } catch {
+        case e: Throwable =>
+          calltree.leave(Map(
+            "outcome" -> "failure",
+            "error" -> Option(e.getMessage).getOrElse(e.getClass.getName)
+          ))
+          throw e
+      }
+    } else {
+      body
+    }
+  }
+
+  private def _configuration_string(
+    value: ConfigurationValue
+  ): Option[String] =
+    value match {
+      case ConfigurationValue.StringValue(v) => Some(v)
+      case ConfigurationValue.NumberValue(v) => Some(v.toString)
+      case ConfigurationValue.BooleanValue(v) => Some(v.toString)
+      case _ => None
+    }
 }
 
 trait ActionCallBlobPart extends ActionCallFeaturePart { self: ActionCall.Core.Holder =>

@@ -2,7 +2,7 @@ package org.goldenport.cncf.http
 
 /*
  * @since   May. 18, 2026
- * @version May. 20, 2026
+ * @version May. 23, 2026
  * @author  ASAMI, Tomoharu
  */
 import cats.effect.IO
@@ -336,7 +336,10 @@ final class Http4sHttpServer(
             }
         }
       case req @ GET -> Root / "web" / first / second =>
-        _component_web_app_or_static_form_app(first, second, Some(req))
+        _web_route_alias(req, Vector("web", first, second)).flatMap {
+          case Some(response) => IO.pure(response)
+          case None => _component_web_app_or_static_form_app(first, second, Some(req))
+        }
       case GET -> Root / "form" / app =>
         _form_index(app)
       case req @ GET -> Root / "form" / app / service / operation =>
@@ -1308,20 +1311,16 @@ final class Http4sHttpServer(
     else
       _web_app_static_html_content(Some(componentName), webappname, page) match {
         case Some(content) =>
-          _web_operation_result_widget(content) match {
-            case Some(widget) =>
-              _web_operation_result_page(req, componentName, webappname, page, widget)
-            case None =>
-              _web_app_static_page(Some(componentName), webappname, page, content, req) match {
-                case Consequence.Success(page) =>
-                  _html_content(page.body, Some(webappname), Some(componentName))
-                case Consequence.Failure(conclusion) =>
-                  _web_error_response(
-                    Some(webappname),
-                    conclusion,
-                    s"/web/${componentName}/${webappname}${page.map(p => s"/${p}").mkString}"
-                  )
-              }
+          val expanded = _web_operation_result_inline_content(req, componentName, webappname, page, content)
+          _web_app_static_page(Some(componentName), webappname, page, expanded, req) match {
+            case Consequence.Success(page) =>
+              _html_content(page.body, Some(webappname), Some(componentName))
+            case Consequence.Failure(conclusion) =>
+              _web_error_response(
+                Some(webappname),
+                conclusion,
+                s"/web/${componentName}/${webappname}${page.map(p => s"/${p}").mkString}"
+              )
           }
         case None =>
           _web_error_response(
@@ -1337,31 +1336,132 @@ final class Http4sHttpServer(
     service: String,
     operation: String,
     values: Map[String, String],
-    label: Option[String]
+    label: Option[String],
+    template: Option[String]
   )
 
   private def _web_operation_result_widget(
-    content: String
+    attrs: String,
+    template: Option[String]
   ): Option[WebOperationResultWidget] = {
-    val widget = """(?s)<textus(?::operation-result|-operation-result)\b([^>]*)/?>(?:\s*</textus(?::operation-result|-operation-result)>)?""".r
-    widget.findFirstMatchIn(content).flatMap { m =>
-      val attrs = _web_widget_attrs(m.group(1))
-      for {
-        component <- attrs.get("component").orElse(attrs.get("app")).map(_.trim).filter(_.nonEmpty)
-        service <- attrs.get("service").map(_.trim).filter(_.nonEmpty)
-        operation <- attrs.get("operation").map(_.trim).filter(_.nonEmpty)
-      } yield {
-        val reserved = Set("component", "app", "service", "operation", "debug-label", "debugLabel")
-        WebOperationResultWidget(
-          component,
-          service,
-          operation,
-          attrs.filterNot { case (key, _) => reserved.contains(key) },
-          attrs.get("debug-label").orElse(attrs.get("debugLabel"))
-        )
-      }
+    val parsed = _web_widget_attrs(attrs)
+    for {
+      component <- parsed.get("component").orElse(parsed.get("app")).map(_.trim).filter(_.nonEmpty)
+      service <- parsed.get("service").map(_.trim).filter(_.nonEmpty)
+      operation <- parsed.get("operation").map(_.trim).filter(_.nonEmpty)
+    } yield {
+      val reserved = Set("component", "app", "service", "operation", "debug-label", "debugLabel")
+      WebOperationResultWidget(
+        component,
+        service,
+        operation,
+        parsed.filterNot { case (key, _) => reserved.contains(key) },
+        parsed.get("debug-label").orElse(parsed.get("debugLabel")),
+        template.map(_.trim).filter(_.nonEmpty)
+      )
     }
   }
+
+  private def _web_operation_result_inline_content(
+    req: Option[org.http4s.Request[IO]],
+    ownerComponentName: String,
+    webappname: String,
+    page: Vector[String],
+    content: String
+  ): String = {
+    val closed = """(?s)<textus(?::operation-result|-operation-result)\b([^>]*)>(.*?)</textus(?::operation-result|-operation-result)>""".r
+    val selfclosing = """(?s)<textus(?::operation-result|-operation-result)\b([^>]*)/>""".r
+    val withclosed = closed.replaceAllIn(content, m =>
+      java.util.regex.Matcher.quoteReplacement(
+        _web_operation_result_widget(m.group(1), Some(m.group(2)))
+          .map(_web_operation_result_inline_fragment(req, ownerComponentName, webappname, page, _))
+          .getOrElse(_web_inline_error("Static Form operation-result is missing component, service, or operation"))
+      )
+    )
+    selfclosing.replaceAllIn(withclosed, m =>
+      java.util.regex.Matcher.quoteReplacement(
+        _web_operation_result_widget(m.group(1), None)
+          .map(_web_operation_result_inline_fragment(req, ownerComponentName, webappname, page, _))
+          .getOrElse(_web_inline_error("Static Form operation-result is missing component, service, or operation"))
+      )
+    )
+  }
+
+  private def _web_operation_result_inline_fragment(
+    req: Option[org.http4s.Request[IO]],
+    ownerComponentName: String,
+    webappname: String,
+    page: Vector[String],
+    widget: WebOperationResultWidget
+  ): String =
+    req match {
+      case Some(request) =>
+        _web_operation_result_inline_fragment(request, ownerComponentName, webappname, page, widget)
+      case None =>
+        _web_inline_error("Static Form operation-result requires request context")
+    }
+
+  private def _web_operation_result_inline_fragment(
+    req: org.http4s.Request[IO],
+    ownerComponentName: String,
+    webappname: String,
+    page: Vector[String],
+    widget: WebOperationResultWidget
+  ): String = {
+    val app = widget.component
+    val service = widget.service
+    val operation = widget.operation
+    if (!_is_form_enabled(app, service, operation))
+      _web_inline_error("Static Form operation-result operation not found")
+    else if (!_is_web_authorized(app, service, operation, Some(req)))
+      _web_inline_error("Static Form operation-result operation is not authorized")
+    else {
+      val queryvalues = _query_values(req)
+      val values = widget.values ++ queryvalues
+      val form = Record.create(values.toVector)
+      val query = _query_record(req)
+      val header = _web_operation_result_header(req, query, form, widget.label.getOrElse(s"${service}.${operation}"))
+      val result = _dispatch_operation_result(
+        app,
+        service,
+        operation,
+        HttpRequest.fromPath(
+          method = HttpRequest.POST,
+          path = s"/${app}/${service}/${operation}",
+          query = query,
+          header = header,
+          form = _operation_dispatch_form(form)
+        )
+      )
+      val res = result.response
+      val continuation = _create_form_continuation(app, service, operation, form, res, _form_chunk_size(form))
+      val resultvalues = values ++ _continuation_values(continuation)
+      val properties = _form_result_properties(
+        app,
+        service,
+        operation,
+        result,
+        resultvalues,
+        _form_page_view_context_values(req, app, service, operation, resultvalues)
+      )
+      _static_form_app_renderer.renderFormResultFragment(
+        properties,
+        widget.template.getOrElse(_default_web_operation_result_inline_template)
+      )
+    }
+  }
+
+  private def _default_web_operation_result_inline_template: String =
+    """<textus:operation-panel title="${operation.label}">
+      |  <textus-error-panel source="error"></textus-error-panel>
+      |  <textus:knowledge-summary source="result.body.data"></textus:knowledge-summary>
+      |  <textus:card-list source="result.body.data.records" title="title" subtitle="state" columns="record_id:Record,state:State,title:Title" empty="No records"></textus:card-list>
+      |</textus:operation-panel>""".stripMargin
+
+  private def _web_inline_error(
+    message: String
+  ): String =
+    s"""<div class="alert alert-warning textus-inline-error" role="alert">${StaticFormAppLayout.escape(message)}</div>"""
 
   private def _web_widget_attrs(
     source: String

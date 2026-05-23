@@ -26,11 +26,11 @@ import org.goldenport.cncf.security.SecuritySubject
  *  version Jan. 22, 2026
  *  version Feb. 21, 2026
  *  version Apr. 28, 2026
- * @version May.  8, 2026
+ * @version May. 23, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class ActionCall()
-  extends Behavior
+  extends ActionBehavior
   with Presentable {
   def name: String = objectToSnakeName("ActionCall", this)
   def accesses: Vector[ResourceAccess] = Vector.empty
@@ -183,13 +183,16 @@ object ActionCall {
       CollaboratorActionCall.Core(collaborator, opname)
   }
   object Core {
-    trait Holder {
+    trait Holder extends Behavior.Core.Holder {
       def core: Core
 
+      override def behaviorCore: Behavior.Core =
+        Behavior.Core(executionContext, component, correlationId)
+
       def action: Action = core.action
-      def executionContext: ExecutionContext = core.executionContext
-      def component: Option[Component] = core.component
-      def correlationId: Option[CorrelationId] = core.correlationId
+      override def executionContext: ExecutionContext = core.executionContext
+      override def component: Option[Component] = core.component
+      override def correlationId: Option[CorrelationId] = core.correlationId
       def getFactory[A <: Component.Factory]: Option[A] = core.getFactory[A]
     }
   }

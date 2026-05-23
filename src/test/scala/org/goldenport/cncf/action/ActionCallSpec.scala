@@ -22,7 +22,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Dec. 23, 2025
- * @version Apr. 28, 2026
+ *  version Apr. 28, 2026
+ * @version May. 23, 2026
  * @author  ASAMI, Tomoharu
  */
 class ActionCallSpec extends AnyWordSpec with Matchers {
@@ -115,6 +116,33 @@ class ActionCallSpec extends AnyWordSpec with Matchers {
       val call = _program_call(program)
 
       call.execute() shouldBe a[Consequence.Failure[_]]
+    }
+
+    "allow ProviderBehavior to use common Behavior helpers without ActionCall core" in {
+      val response = _http_response_ok()
+      val interpreter = new (UnitOfWorkOp ~> Consequence) {
+        def apply[A](fa: UnitOfWorkOp[A]): Consequence[A] =
+          fa match {
+            case UnitOfWorkOp.HttpGet("/provider-dsl", _) =>
+              Consequence.success(response.asInstanceOf[A])
+            case other =>
+              Consequence.operationIllegal("provider_behavior_spec", s"unexpected op: $other")
+          }
+      }
+      val context = _execution_context(
+        principalId = "u1",
+        attrs = Map("authenticated" -> "true"),
+        interpreter = Some(interpreter)
+      )
+      val behavior = new _TestProviderBehavior(
+        Behavior.Core(
+          executionContext = context,
+          component = None,
+          correlationId = Some(CorrelationId("test", "provider"))
+        )
+      )
+
+      behavior.run() shouldBe Consequence.success("200")
     }
   }
 
@@ -250,4 +278,15 @@ class ActionCallSpec extends AnyWordSpec with Matchers {
       ContentType(MimeType("text/plain"), Some(StandardCharsets.UTF_8)),
       Bag.text("ok", StandardCharsets.UTF_8)
     )
+
+  private final class _TestProviderBehavior(
+    val behaviorCore: Behavior.Core
+  ) extends ProviderBehavior {
+    def run(): Consequence[String] =
+      exec_from_calltree("provider:test", Map("provider" -> "test")) {
+        Consequence.success("provider-ok")
+      }.flatMap { _ =>
+        http_get("/provider-dsl").map(_.status.code.toString)
+      }.value.foldMap(behaviorCore.executionContext.runtime.unitOfWorkInterpreter).flatMap(identity)
+  }
 }

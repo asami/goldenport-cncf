@@ -73,6 +73,8 @@ final class InformationEditorProjectionSpec
 
       projection.componentName shouldBe component.name
       projection.domain shouldBe "book"
+      record.informationId shouldBe Some(recordid.print)
+      record.confirmedInformationId shouldBe None
       record.state shouldBe InformationLifecycleState.NeedsResolution
       record.actions.find(_.name == "resolve").map(_.enabled) shouldBe Some(true)
       title.value shouldBe Some("Domain-Driven Design")

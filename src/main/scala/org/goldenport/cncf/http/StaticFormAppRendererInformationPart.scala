@@ -1,7 +1,7 @@
 package org.goldenport.cncf.http
 
 import org.goldenport.cncf.component.Component
-import org.goldenport.cncf.information.InformationSpaceProjection
+import org.goldenport.cncf.information.{InformationSpaceProjection, *}
 import org.goldenport.cncf.subsystem.Subsystem
 
 /*

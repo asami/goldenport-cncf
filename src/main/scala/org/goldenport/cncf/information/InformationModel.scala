@@ -1,6 +1,7 @@
 package org.goldenport.cncf.information
 
 import java.time.Instant
+import org.goldenport.Consequence
 import org.goldenport.cncf.knowledge.{
   ExternalKnowledgeIdentifier,
   KnowledgeEntityBinding,
@@ -8,95 +9,125 @@ import org.goldenport.cncf.knowledge.{
   KnowledgeNodeId,
   RdfNodeName
 }
+import org.goldenport.convert.ValueReader
 import org.goldenport.record.Record
+import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 
 /*
  * @since   May. 20, 2026
- * @version May. 22, 2026
+ * @version May. 23, 2026
  * @author  ASAMI, Tomoharu
  */
-final case class InformationImportBatchId(value: String) {
-  def print: String = value
+type InformationId = EntityId
+object InformationId {
+  def apply(value: String): InformationId =
+    _information_entity_id(value, "information")
 }
 
-final case class InformationRecordId(value: String) {
-  def print: String = value
+private def _information_entity_id(
+  value: String,
+  collection: String
+): EntityId = {
+  val normalized = value.trim.map {
+    case c if c.isLetterOrDigit || c == '_' => c
+    case _ => '_'
+  }.mkString
+  val minor =
+    if (normalized.headOption.exists(_.isLetter))
+      normalized
+    else
+      s"information_${normalized}"
+  EntityId("cncf", minor, EntityCollectionId("cncf", "information", collection))
 }
 
-final case class InformationItemId(value: String) {
-  def print: String = value
+type ConfirmedInformationId = InformationId
+object ConfirmedInformationId {
+  def apply(value: String): ConfirmedInformationId = InformationId(value)
 }
 
-final case class InformationValidationIssueId(value: String) {
-  def print: String = value
+type InformationRecordId = InformationId
+object InformationRecordId {
+  def apply(value: String): InformationRecordId = InformationId(value)
 }
 
-final case class InformationResolutionCandidateId(value: String) {
-  def print: String = value
+type InformationItemId = ConfirmedInformationId
+object InformationItemId {
+  def apply(value: String): InformationItemId = ConfirmedInformationId(value)
 }
 
-final case class InformationIdentityBindingId(value: String) {
-  def print: String = value
+type InformationImportBatchId = EntityId
+object InformationImportBatchId {
+  def apply(value: String): InformationImportBatchId =
+    _information_entity_id(value, "information_import_context")
 }
 
-final case class InformationPublicationId(value: String) {
-  def print: String = value
+type InformationValidationIssueId = EntityId
+object InformationValidationIssueId {
+  def apply(value: String): InformationValidationIssueId =
+    _information_entity_id(value, "information_validation_issue")
 }
 
-final case class InformationConflictId(value: String) {
-  def print: String = value
+type InformationResolutionCandidateId = EntityId
+object InformationResolutionCandidateId {
+  def apply(value: String): InformationResolutionCandidateId =
+    _information_entity_id(value, "information_resolution_candidate")
 }
 
-enum InformationLifecycleState {
-  case Imported, Invalid, NeedsResolution, ReadyForConfirmation, Confirmed, Published, Rejected, Conflict
-
-  def label: String =
-    this match {
-      case Imported => "imported"
-      case Invalid => "invalid"
-      case NeedsResolution => "needs_resolution"
-      case ReadyForConfirmation => "ready_for_confirmation"
-      case Confirmed => "confirmed"
-      case Published => "published"
-      case Rejected => "rejected"
-      case Conflict => "conflict"
-    }
+type InformationIdentityBindingId = EntityId
+object InformationIdentityBindingId {
+  def apply(value: String): InformationIdentityBindingId =
+    _information_entity_id(value, "information_identity_binding")
 }
 
-enum InformationBindingStatus {
-  case Candidate, Selected, Confirmed, Rejected, Superseded, Conflict
-
-  def label: String =
-    this match {
-      case Candidate => "candidate"
-      case Selected => "selected"
-      case Confirmed => "confirmed"
-      case Rejected => "rejected"
-      case Superseded => "superseded"
-      case Conflict => "conflict"
-    }
+type InformationPublicationId = EntityId
+object InformationPublicationId {
+  def apply(value: String): InformationPublicationId =
+    _information_entity_id(value, "information_publication")
 }
 
-enum InformationPublicationState {
-  case NotPublished, Published, Failed
-
-  def label: String =
-    this match {
-      case NotPublished => "not_published"
-      case Published => "published"
-      case Failed => "failed"
-    }
+type InformationConflictId = EntityId
+object InformationConflictId {
+  def apply(value: String): InformationConflictId =
+    _information_entity_id(value, "information_conflict")
 }
 
-enum InformationConflictState {
-  case Open, Resolved
-
-  def label: String =
-    this match {
-      case Open => "open"
-      case Resolved => "resolved"
-    }
+type InformationLifecycleState = value.InformationLifecycleState
+object InformationLifecycleState {
+  val Imported: InformationLifecycleState = value.InformationLifecycleState.imported
+  val Invalid: InformationLifecycleState = value.InformationLifecycleState.invalid
+  val NeedsResolution: InformationLifecycleState = value.InformationLifecycleState.needs_resolution
+  val ReadyForConfirmation: InformationLifecycleState = value.InformationLifecycleState.ready_for_confirmation
+  val Confirmed: InformationLifecycleState = value.InformationLifecycleState.confirmed
+  val Published: InformationLifecycleState = value.InformationLifecycleState.published
+  val Rejected: InformationLifecycleState = value.InformationLifecycleState.rejected
+  val Conflict: InformationLifecycleState = value.InformationLifecycleState.conflict
 }
+
+type InformationBindingStatus = value.InformationBindingStatus
+object InformationBindingStatus {
+  val Candidate: InformationBindingStatus = value.InformationBindingStatus.candidate
+  val Selected: InformationBindingStatus = value.InformationBindingStatus.selected
+  val Confirmed: InformationBindingStatus = value.InformationBindingStatus.confirmed
+  val Rejected: InformationBindingStatus = value.InformationBindingStatus.rejected
+  val Superseded: InformationBindingStatus = value.InformationBindingStatus.superseded
+  val Conflict: InformationBindingStatus = value.InformationBindingStatus.conflict
+}
+
+type InformationPublicationState = value.InformationPublicationState
+object InformationPublicationState {
+  val NotPublished: InformationPublicationState = value.InformationPublicationState.not_published
+  val Published: InformationPublicationState = value.InformationPublicationState.published
+  val Failed: InformationPublicationState = value.InformationPublicationState.failed
+}
+
+type InformationConflictState = value.InformationConflictState
+object InformationConflictState {
+  val Open: InformationConflictState = value.InformationConflictState.open
+  val Resolved: InformationConflictState = value.InformationConflictState.resolved
+}
+
+type EditableInformation = InformationImportRecord
+type ConfirmedInformation = InformationItem
 
 final case class InformationImportBatch(
   id: InformationImportBatchId,
@@ -151,6 +182,47 @@ final case class InformationIdentityBinding(
   confidence: Option[Double] = None,
   status: InformationBindingStatus = InformationBindingStatus.Candidate
 )
+
+object InformationIdentityBinding {
+  def createC(record: Record): Consequence[InformationIdentityBinding] =
+    for {
+      id <- record.getAsC[InformationIdentityBindingId]("id").flatMap(Consequence.successOrPropertyNotFound("id", _))
+      informationitemid <- _record_get_as_c[InformationItemId](record, List("informationItemId", "information_item_id", "confirmedInformationId", "confirmed_information_id"))
+      recordid <- _record_get_as_c[InformationRecordId](record, List("recordId", "record_id", "informationId", "information_id"))
+      rdfsubject <- _record_get_as_c[RdfNodeName](record, List("rdfSubject", "rdf_subject"))
+      knowledgenodeid <- _record_get_as_c[KnowledgeNodeId](record, List("knowledgeNodeId", "knowledge_node_id"))
+      authority <- record.getAsC[String]("authority")
+      confidence <- record.getAsC[Double]("confidence")
+    } yield InformationIdentityBinding(
+      id = id,
+      informationItemId = informationitemid,
+      recordId = recordid,
+      rdfSubject = rdfsubject,
+      externalIdentifiers = Vector.empty,
+      entityBindings = Vector.empty,
+      knowledgeNodeId = knowledgenodeid,
+      authority = authority,
+      confidence = confidence
+    )
+
+  given ValueReader[InformationIdentityBinding] with
+    def readC(v: Any): Consequence[InformationIdentityBinding] = v match {
+      case m: InformationIdentityBinding => Consequence.success(m)
+      case m: Record => createC(m)
+      case _ => Consequence.failValueInvalid(v, org.goldenport.schema.XString)
+    }
+
+  private def _record_get_as_c[A](
+    record: Record,
+    keys: List[String]
+  )(using vr: ValueReader[A]): Consequence[Option[A]] =
+    keys.foldLeft(Consequence.success(Option.empty[A])) { (z, key) =>
+      z.flatMap {
+        case s @ Some(_) => Consequence.success(s)
+        case None => record.getAsC[A](key)
+      }
+    }
+}
 
 final case class InformationResolutionCandidate(
   id: InformationResolutionCandidateId,

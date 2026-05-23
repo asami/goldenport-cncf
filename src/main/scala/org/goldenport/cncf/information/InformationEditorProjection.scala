@@ -51,7 +51,13 @@ final case class InformationEditorRecordProjection(
   fields: Vector[InformationEditorFieldProjection],
   publication: Option[InformationPublicationStatus],
   actions: Vector[InformationEditorActionDescriptor]
-)
+) {
+  def informationId: Option[String] =
+    recordId.map(_.print).orElse(itemId.map(_.print))
+
+  def confirmedInformationId: Option[String] =
+    itemId.map(_.print)
+}
 
 final case class InformationEditorProjection(
   componentName: String,

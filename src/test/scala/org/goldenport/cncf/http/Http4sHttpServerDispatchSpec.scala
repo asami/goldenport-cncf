@@ -27,7 +27,7 @@ import org.typelevel.ci.CIStringSyntax
 /*
  * @since   Apr. 24, 2026
  *  version Apr. 25, 2026
- * @version May. 20, 2026
+ * @version May. 23, 2026
  * @author  ASAMI, Tomoharu
  */
 class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers {
@@ -291,7 +291,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers {
       response.headers.get(ci"X-Textus-Job-Id").map(_.head.value).getOrElse("") should include ("cncf-job-job")
     }
 
-    "resolve operation-result forbidden templates by owning Web app" in {
+    "render unauthorized operation-result widgets as inline page errors" in {
       val root = Files.createTempDirectory("http4s-http-server-operation-result-forbidden-spec")
       Files.createDirectories(root.resolve("debug-app"))
       Files.writeString(
@@ -339,8 +339,60 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers {
         .unsafeRunSync()
       val body = response.as[String].unsafeRunSync()
 
-      response.status.code shouldBe 403
-      body should include ("Debug app sign in required")
+      response.status.code shouldBe 200
+      body should include ("Static Form operation-result operation is not authorized")
+      body should not include "Debug app sign in required"
+    }
+
+    "dispatch static Web app page aliases below the app root" in {
+      val root = Files.createTempDirectory("http4s-http-server-web-page-alias-spec")
+      Files.createDirectories(root.resolve("debug-app"))
+      Files.writeString(
+        root.resolve("web.yaml"),
+        """web:
+          |  apps:
+          |    - name: debug-app
+          |      kind: static-form
+          |  routes:
+          |    - path: /web/debug-app
+          |      kind: alias
+          |      target:
+          |        component: debug
+          |        app: debug-app
+          |""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+      Files.writeString(
+        root.resolve("debug-app").resolve("index.html"),
+        """<section><h1>Debug Home</h1></section>""",
+        StandardCharsets.UTF_8
+      )
+      Files.writeString(
+        root.resolve("debug-app").resolve("seed.html"),
+        """<section><h1>Seed Page</h1></section>""",
+        StandardCharsets.UTF_8
+      )
+      val configuration = ResolvedConfiguration(
+        Configuration(
+          Map(
+            RuntimeConfig.WebDescriptorKey ->
+              ConfigurationValue.StringValue(root.resolve("web.yaml").toString)
+          )
+        ),
+        ConfigurationTrace.empty
+      )
+      val subsystem = DefaultSubsystemFactory.default(None, configuration)
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val app = server.routes(null.asInstanceOf[org.http4s.server.websocket.WebSocketBuilder2[IO]]).orNotFound
+
+      val response = app
+        .run(HRequest[IO](method = Method.GET, uri = Uri.unsafeFromString("/web/debug-app/seed")))
+        .unsafeRunSync()
+      val body = response.as[String].unsafeRunSync()
+
+      response.status.code shouldBe 200
+      body should include ("Seed Page")
+      body should not include ("Debug Home")
     }
 
     "inject subsystem theme into component static Web pages" in {

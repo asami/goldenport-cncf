@@ -31,7 +31,7 @@ import io.circe.parser.parse
 
 /*
  * @since   May. 18, 2026
- * @version May. 18, 2026
+ * @version May. 23, 2026
  * @author  ASAMI, Tomoharu
  */
 trait StaticFormAppRendererTemplatePart {
@@ -111,7 +111,11 @@ trait StaticFormAppRendererTemplatePart {
     val formLink = """<textus-form-link\s+href="([^"]+)"\s+label="([^"]+)"\s*></textus-form-link>""".r
     val actionLink = """<textus(?::action-link|-action-link)\b([^>]*)></textus(?::action-link|-action-link)>""".r
     val actionForm = """<textus(?::action-form|-action-form)\b([^>]*)></textus(?::action-form|-action-form)>""".r
+    val operationpanel = """<textus(?::operation-panel|-operation-panel)\b([^>]*)>(.*?)</textus(?::operation-panel|-operation-panel)>""".r
     val hiddenContext = """<textus(?::hidden-context|-hidden-context)\b([^>]*)></textus(?::hidden-context|-hidden-context)>""".r
+    val fieldlist = """<textus(?::field-list|-field-list)\b([^>]*)></textus(?::field-list|-field-list)>""".r
+    val candidatelist = """<textus(?::candidate-list|-candidate-list)\b([^>]*)></textus(?::candidate-list|-candidate-list)>""".r
+    val knowledgesummary = """<textus(?::knowledge-summary|-knowledge-summary)\b([^>]*)></textus(?::knowledge-summary|-knowledge-summary)>""".r
     val descriptionList = """<textus(?::description-list|-description-list)\b([^>]*)></textus(?::description-list|-description-list)>""".r
     val htmlField = """<textus(?::html-field|-html-field)\b([^>]*)></textus(?::html-field|-html-field)>""".r
     val propertyList = """<textus-property-list\s+source="([^"]+)"\s*></textus-property-list>""".r
@@ -196,11 +200,27 @@ trait StaticFormAppRendererTemplatePart {
       val attrs = widget_attrs(m.group(1))
       java.util.regex.Matcher.quoteReplacement(render_action_form(attrs, properties))
     })
-    val l = hiddenContext.replaceAllIn(k, m => {
+    val k1 = operationpanel.replaceAllIn(k, m => {
+      val attrs = widget_attrs(m.group(1))
+      java.util.regex.Matcher.quoteReplacement(render_operation_panel(attrs, m.group(2), properties))
+    })
+    val l = hiddenContext.replaceAllIn(k1, m => {
       val attrs = widget_attrs(m.group(1))
       java.util.regex.Matcher.quoteReplacement(render_hidden_context(attrs, properties))
     })
-    val l1 = descriptionList.replaceAllIn(l, m => {
+    val l1a = fieldlist.replaceAllIn(l, m => {
+      val attrs = widget_attrs(m.group(1))
+      java.util.regex.Matcher.quoteReplacement(render_field_list(attrs, properties))
+    })
+    val l1b = candidatelist.replaceAllIn(l1a, m => {
+      val attrs = widget_attrs(m.group(1))
+      java.util.regex.Matcher.quoteReplacement(render_candidate_list(attrs, properties))
+    })
+    val l1c = knowledgesummary.replaceAllIn(l1b, m => {
+      val attrs = widget_attrs(m.group(1))
+      java.util.regex.Matcher.quoteReplacement(render_knowledge_summary(attrs, properties))
+    })
+    val l1 = descriptionList.replaceAllIn(l1c, m => {
       val attrs = widget_attrs(m.group(1))
       java.util.regex.Matcher.quoteReplacement(render_description_list(attrs, properties, tableColumns, defaultTableView))
     })
@@ -231,6 +251,154 @@ trait StaticFormAppRendererTemplatePart {
       s"""<input type="hidden" name="${escape(key)}" value="${escape(value)}">"""
     }.mkString("\n")
   }
+
+  protected def render_operation_panel(
+    attrs: Map[String, String],
+    inner: String,
+    properties: FormPageProperties
+  ): String = {
+    val title = attr_value(attrs, "title", properties).getOrElse("Operation")
+    val subtitle = attr_value(attrs, "subtitle", properties)
+    val status = property_non_empty(properties, "result.status").getOrElse("")
+    val ok = property_non_empty(properties, "result.ok").getOrElse("")
+    val subtitlehtml = subtitle.filter(_.nonEmpty).map { x =>
+      s"""<p class="text-secondary mb-0">${escape(x)}</p>"""
+    }.getOrElse("")
+    val badge =
+      if (status.isEmpty)
+        ""
+      else {
+        val variant =
+          if (ok == "true") "success"
+          else if (ok == "false") "danger"
+          else "secondary"
+        s"""<span class="badge text-bg-${escape(variant)}">HTTP ${escape(status)}</span>"""
+      }
+    s"""<section class="card textus-operation-panel"><div class="card-body"><div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3"><div><h3 class="h5 mb-1">${escape(title)}</h3>${subtitlehtml}</div>${badge}</div>${inner}</div></section>"""
+  }
+
+  protected def render_field_list(
+    attrs: Map[String, String],
+    properties: FormPageProperties
+  ): String = {
+    val source = attrs.getOrElse("source", "result.body.data.records.0.fields")
+    val fields = source_json(source, properties).flatMap(_.asArray).getOrElse(Vector.empty)
+    if (fields.isEmpty)
+      empty_state(attrs.getOrElse("empty", "No fields"))
+    else {
+      val items = fields.flatMap(_.asObject).map { obj =>
+        val map = obj.toMap
+        val descriptor = map.get("descriptor").flatMap(_.asObject).map(_.toMap).getOrElse(Map.empty)
+        val label = json_string(map, "label").orElse(json_string(descriptor, "label")).getOrElse(json_string(map, "field_path").getOrElse("Field"))
+        val path = json_string(map, "field_path").getOrElse("")
+        val value = map.get("value").map(json_cell).filter(_.nonEmpty).getOrElse("not set")
+        val description = json_string(descriptor, "description").getOrElse("")
+        val requiredness = json_string(descriptor, "requiredness").getOrElse("")
+        val hint = json_string(descriptor, "validation_hint").getOrElse("")
+        val candidates = map.get("resolution_candidates").flatMap(_.asArray).map(_.size).getOrElse(0)
+        val requiredhtml =
+          if (requiredness.isEmpty)
+            ""
+          else
+            s"""<span class="badge text-bg-light border">${escape(requiredness)}</span>"""
+        val candidatehtml =
+          if (candidates == 0)
+            ""
+          else
+            s"""<span class="badge text-bg-info">${candidates} candidates</span>"""
+        val descriptionhtml =
+          if (description.isEmpty)
+            ""
+          else
+            s"""<p class="text-secondary mb-1">${escape(description)}</p>"""
+        val hinthtml =
+          if (hint.isEmpty)
+            ""
+          else
+            s"""<p class="small text-secondary mb-0">${escape(hint)}</p>"""
+        s"""<article class="textus-field-list-item border rounded p-3"><div class="d-flex flex-wrap justify-content-between gap-2"><div><h4 class="h6 mb-1">${escape(label)}</h4><p class="small text-secondary mb-2">${escape(path)}</p></div><div class="d-flex flex-wrap gap-1">${requiredhtml}${candidatehtml}</div></div>${descriptionhtml}<p class="mb-1"><strong>${escape(value)}</strong></p>${hinthtml}</article>"""
+      }
+      s"""<div class="textus-field-list d-grid gap-2">${items.mkString("\n")}</div>"""
+    }
+  }
+
+  protected def render_candidate_list(
+    attrs: Map[String, String],
+    properties: FormPageProperties
+  ): String = {
+    val source = attrs.getOrElse("source", "result.body.data.records.0.fields.0.resolution_candidates")
+    val candidates = source_json(source, properties).flatMap(_.asArray).getOrElse(Vector.empty)
+    if (candidates.isEmpty)
+      empty_state(attrs.getOrElse("empty", "No candidates"))
+    else {
+      val items = candidates.flatMap(_.asObject).map { obj =>
+        val map = obj.toMap
+        val id = json_string(map, "id").getOrElse("")
+        val label = json_string(map, "label").getOrElse("Candidate")
+        val source = json_string(map, "source").getOrElse("")
+        val confidence = map.get("confidence").map(json_cell).filter(_.nonEmpty).getOrElse("")
+        val evidence = json_string(map, "evidence").getOrElse("")
+        val selected = json_bool(map, "selected")
+        val selectedhtml =
+          if (selected)
+            """<span class="badge text-bg-success">selected</span>"""
+          else
+            """<span class="badge text-bg-secondary">candidate</span>"""
+        val meta = Vector(
+          Option.when(source.nonEmpty)(s"source=${source}"),
+          Option.when(confidence.nonEmpty)(s"confidence=${confidence}"),
+          Option.when(id.nonEmpty)(s"id=${id}")
+        ).flatten.mkString(" / ")
+        val evidencehtml =
+          if (evidence.isEmpty)
+            ""
+          else
+            s"""<p class="small text-secondary mb-0">${escape(evidence)}</p>"""
+        s"""<article class="textus-candidate-list-item border rounded p-3"><div class="d-flex flex-wrap justify-content-between gap-2"><div><h4 class="h6 mb-1">${escape(label)}</h4><p class="small text-secondary mb-2">${escape(meta)}</p></div>${selectedhtml}</div>${evidencehtml}</article>"""
+      }
+      s"""<div class="textus-candidate-list d-grid gap-2">${items.mkString("\n")}</div>"""
+    }
+  }
+
+  protected def render_knowledge_summary(
+    attrs: Map[String, String],
+    properties: FormPageProperties
+  ): String = {
+    val source = attrs.getOrElse("source", "result.body.data")
+    val obj = source_json(source, properties).flatMap(_.asObject).map(_.toMap).getOrElse(Map.empty)
+    val state = json_string(obj, "knowledge_space_state")
+      .orElse(obj.get("knowledge_summary").flatMap(_.asObject).flatMap(x => json_string(x.toMap, "state")))
+      .getOrElse("unknown")
+    val counts = obj.get("knowledge_counts")
+      .flatMap(_.asObject)
+      .map(_.toMap)
+      .orElse(obj.get("knowledge_summary").flatMap(_.asObject).flatMap(_.toMap.get("counts")).flatMap(_.asObject).map(_.toMap))
+      .getOrElse(Map.empty)
+    val rows = Vector(
+      "node_count" -> "Nodes",
+      "relationship_count" -> "Relationships",
+      "frame_count" -> "Frames",
+      "fact_count" -> "Facts",
+      "evidence_count" -> "Evidence",
+      "provenance_count" -> "Provenance"
+    ).map { case (key, label) =>
+      val value = counts.get(key).orElse(counts.get(key.stripSuffix("_count") + "s")).map(json_cell).getOrElse("0")
+      s"""<div class="col"><article class="border rounded p-3 h-100"><p class="text-secondary mb-1">${escape(label)}</p><strong class="h4 mb-0">${escape(value)}</strong></article></div>"""
+    }.mkString("\n")
+    s"""<section class="textus-knowledge-summary"><div class="d-flex flex-wrap justify-content-between align-items-center mb-2"><h3 class="h6 mb-0">KnowledgeSpace</h3><span class="badge text-bg-light border">${escape(state)}</span></div><div class="row row-cols-2 row-cols-md-3 g-2">${rows}</div></section>"""
+  }
+
+  protected def json_string(
+    obj: Map[String, Json],
+    name: String
+  ): Option[String] =
+    obj.get(name).flatMap(_.asString).orElse(obj.get(name).map(json_cell)).map(_.trim).filter(_.nonEmpty)
+
+  protected def json_bool(
+    obj: Map[String, Json],
+    name: String
+  ): Boolean =
+    obj.get(name).exists(_.asBoolean.contains(true))
 
   protected def hidden_context_keys(value: String): Vector[String] =
     value.split(',').toVector.map(_.trim).filter(_.nonEmpty).distinct
@@ -475,16 +643,16 @@ trait StaticFormAppRendererTemplatePart {
     val subtitle = attr_value(attrs, "subtitle", properties)
     val footer = attr_value(attrs, "footer", properties)
     val extraClass = attrs.get("class").map(x => s" ${escape(x)}").getOrElse("")
-    val titleHtml = title.filter(_.nonEmpty).map { x =>
+    val titlehtml = title.filter(_.nonEmpty).map { x =>
       s"""<h3 class="h5 card-title">${escape(x)}</h3>"""
     }.getOrElse("")
-    val subtitleHtml = subtitle.filter(_.nonEmpty).map { x =>
+    val subtitlehtml = subtitle.filter(_.nonEmpty).map { x =>
       s"""<p class="card-subtitle text-secondary mb-2">${escape(x)}</p>"""
     }.getOrElse("")
-    val footerHtml = footer.filter(_.nonEmpty).map { x =>
+    val footerhtml = footer.filter(_.nonEmpty).map { x =>
       s"""<div class="card-footer text-secondary">${escape(x)}</div>"""
     }.getOrElse("")
-    s"""<article class="card textus-card${extraClass}"><div class="card-body">${titleHtml}${subtitleHtml}${inner}</div>${footerHtml}</article>"""
+    s"""<article class="card textus-card${extraClass}"><div class="card-body">${titlehtml}${subtitlehtml}${inner}</div>${footerhtml}</article>"""
   }
 
   protected def render_record_card(
@@ -567,9 +735,9 @@ trait StaticFormAppRendererTemplatePart {
       val value = obj.get(column.name).map(json_cell).getOrElse("")
       s"""<dt class="col-sm-4">${escape(column.label)}</dt><dd class="col-sm-8">${escape(value)}</dd>"""
     }.mkString
-    val subtitleHtml = subtitle.map(x => s"""<p class="card-subtitle text-secondary mb-2">${escape(x)}</p>""").getOrElse("")
-    val actionHtml = record_action_html(obj, attrs)
-    s"""<article class="card h-100 textus-record-card"><div class="card-body"><h3 class="h5 card-title">${escape(title)}</h3>${subtitleHtml}<dl class="row mb-0">${rows}</dl>${actionHtml}</div></article>"""
+    val subtitlehtml = subtitle.map(x => s"""<p class="card-subtitle text-secondary mb-2">${escape(x)}</p>""").getOrElse("")
+    val actionhtml = record_action_html(obj, attrs)
+    s"""<article class="card h-100 textus-record-card"><div class="card-body"><h3 class="h5 card-title">${escape(title)}</h3>${subtitlehtml}<dl class="row mb-0">${rows}</dl>${actionhtml}</div></article>"""
   }
 
   protected def record_action_html(
@@ -651,10 +819,10 @@ trait StaticFormAppRendererTemplatePart {
     message: String,
     action: Option[(String, String)]
   ): String = {
-    val actionHtml = action.map { case (label, href) =>
+    val actionhtml = action.map { case (label, href) =>
       s"""<div class="mt-2"><a class="btn btn-sm btn-primary" href="${escape(href)}">${escape(label)}</a></div>"""
     }.getOrElse("")
-    s"""<div class="alert alert-secondary textus-empty-state" role="status">${escape(message)}${actionHtml}</div>"""
+    s"""<div class="alert alert-secondary textus-empty-state" role="status">${escape(message)}${actionhtml}</div>"""
   }
 
   protected def render_summary_card(
@@ -667,10 +835,10 @@ trait StaticFormAppRendererTemplatePart {
       .getOrElse("")
     val subtitle = attr_value(attrs, "subtitle", properties)
     val variant = bootstrap_variant(attrs.getOrElse("variant", "primary"))
-    val subtitleHtml = subtitle.filter(_.nonEmpty).map { x =>
+    val subtitlehtml = subtitle.filter(_.nonEmpty).map { x =>
       s"""<p class="text-secondary mb-0">${escape(x)}</p>"""
     }.getOrElse("")
-    s"""<article class="card h-100 textus-summary-card border-${escape(variant)}"><div class="card-body"><p class="text-secondary mb-1">${escape(title)}</p><strong class="display-6 text-${escape(variant)}">${escape(value)}</strong>${subtitleHtml}</div></article>"""
+    s"""<article class="card h-100 textus-summary-card border-${escape(variant)}"><div class="card-body"><p class="text-secondary mb-1">${escape(title)}</p><strong class="display-6 text-${escape(variant)}">${escape(value)}</strong>${subtitlehtml}</div></article>"""
   }
 
   protected def render_action_card(
@@ -792,8 +960,8 @@ trait StaticFormAppRendererTemplatePart {
       .orElse(property_non_empty(properties, "result.message"))
       .getOrElse("")
     if (title.exists(_.nonEmpty) || message.nonEmpty) {
-      val titleHtml = title.filter(_.nonEmpty).map(x => s"""<p class="alert-heading fw-semibold mb-1">${escape(x)}</p>""").getOrElse("")
-      s"""<div class="alert alert-${escape(variant)} textus-alert" role="alert">${titleHtml}${escape(message)}</div>"""
+      val titlehtml = title.filter(_.nonEmpty).map(x => s"""<p class="alert-heading fw-semibold mb-1">${escape(x)}</p>""").getOrElse("")
+      s"""<div class="alert alert-${escape(variant)} textus-alert" role="alert">${titlehtml}${escape(message)}</div>"""
     } else {
       ""
     }
@@ -1164,7 +1332,11 @@ trait StaticFormAppRendererTemplatePart {
     path: Vector[String]
   ): Option[Json] =
     path.foldLeft(Option(json)) { (z, name) =>
-      z.flatMap(_.hcursor.downField(name).focus)
+      z.flatMap { current =>
+        current.asArray.flatMap { xs =>
+          name.toIntOption.flatMap(i => xs.lift(i))
+        }.orElse(current.hcursor.downField(name).focus)
+      }
     }
 
   protected def page_rows(
