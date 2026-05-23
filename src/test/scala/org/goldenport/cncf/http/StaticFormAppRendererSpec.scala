@@ -8909,14 +8909,16 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
 
       val html = _renderer.renderFormResult(
         properties,
-        """<article><textus:table source="result.body.data" columns="subject:Subject" download-source="result.body.data" download-formats="csv,json" download-name="notices"></textus:table></article>"""
+        """<article><textus:table source="result.body.data" columns="subject:Subject" download-source="result.body.data" download-formats="csv,json,xlsx" download-name="notices"></textus:table></article>"""
       ).body
 
       html should include ("textus-table-download")
       html should include ("textus.download.source=result.body.data")
       html should include ("textus.download.format=csv")
       html should include ("textus.download.format=json")
+      html should include ("textus.download.format=xlsx")
       html should include ("textus.download.filename=notices.csv")
+      html should include ("textus.download.filename=notices.xlsx")
       html should include ("recipient=Alice")
       html should not include ("result.body=")
       html should not include ("paging.href=")

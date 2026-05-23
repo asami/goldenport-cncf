@@ -145,6 +145,46 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers {
       body should not include ("<html")
     }
 
+    "download form result source as Excel attachment" in {
+      val root = Files.createTempDirectory("http4s-http-server-download-xlsx-spec")
+      val web = root.resolve("web.yaml")
+      Files.writeString(
+        web,
+        """expose:
+          |  debug.http.echo: public
+          |form:
+          |  debug.http.echo:
+          |    enabled: true
+          |""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+      val configuration = ResolvedConfiguration(
+        Configuration(
+          Map(
+            RuntimeConfig.WebDescriptorKey ->
+              ConfigurationValue.StringValue(web.toString)
+          )
+        ),
+        ConfigurationTrace.empty
+      )
+      val subsystem = DefaultSubsystemFactory.default(None, configuration)
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val app = server.routes(null.asInstanceOf[org.http4s.server.websocket.WebSocketBuilder2[IO]]).orNotFound
+
+      val response = app
+        .run(HRequest[IO](
+          method = Method.GET,
+          uri = Uri.unsafeFromString("/form/debug/http/echo/result?body=hello&textus.download=true&textus.download.source=result.body&textus.download.format=xlsx&textus.download.filename=echo.xlsx")
+        ))
+        .unsafeRunSync()
+      val bytes = response.body.compile.to(Array).unsafeRunSync()
+
+      response.status.code shouldBe 200
+      response.headers.get(ci"Content-Disposition").map(_.head.value) shouldBe Some("""attachment; filename="echo.xlsx"""")
+      response.contentType.map(_.mediaType) shouldBe MediaType.parse("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet").toOption
+      bytes.length should be > 0
+    }
+
     "not inject current-session principal attributes into form-api submits" in {
       val root = Files.createTempDirectory("http4s-http-server-dispatch-auth-spec")
       val web = root.resolve("web.yaml")

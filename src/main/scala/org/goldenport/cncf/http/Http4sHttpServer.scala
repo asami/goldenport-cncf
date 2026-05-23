@@ -33,7 +33,8 @@ import org.http4s.multipart.Multipart
 import org.http4s.server.websocket.WebSocketBuilder2
 import org.http4s.websocket.WebSocketFrame
 import org.typelevel.ci.CIString
-import org.goldenport.record.Record
+import org.goldenport.record.{Record, RecordFormat}
+import org.goldenport.record.io.RecordExportEncoder
 import org.goldenport.{Conclusion, Consequence}
 import org.goldenport.http.{HttpContext, HttpRequest, HttpResponse, HttpStatus}
 import org.goldenport.cncf.component.builtin.auth.AuthComponent
@@ -2653,21 +2654,33 @@ final class Http4sHttpServer(
     filename: String
   ): HResponse[IO] = {
     val normalized = _download_format(format)
-    val body = _download_body(json, normalized)
+    val payload = _download_payload(json, normalized)
     val media = MediaType.parse(_download_mime(normalized)).fold(_ => MediaType.text.plain, identity)
     HResponse[IO](HStatus.Ok)
-      .withEntity(body)
-      .withContentType(`Content-Type`(media, Some(Charset.`UTF-8`)))
+      .withEntity(Stream.emits(payload.bytes).covary[IO])
+      .withContentType(`Content-Type`(media, Option.when(payload.text)(Charset.`UTF-8`)))
       .putHeaders(Header.Raw(CIString("Content-Disposition"), s"""attachment; filename="${_download_filename(filename, normalized)}""""))
   }
 
   private def _download_format(format: String): String =
     format.trim.toLowerCase(java.util.Locale.ROOT) match {
       case "yml" => "yaml"
+      case "excel" | "xls" => "xlsx"
       case "txt" | "line" | "lines" => "lines"
       case "text/tab-separated-values" => "tsv"
       case "text/csv" => "csv"
       case x => x
+    }
+
+  private def _download_payload(
+    json: Json,
+    format: String
+  ): Http4sHttpServer.DownloadPayload =
+    if (format == "xlsx") {
+      val result = RecordExportEncoder().encode(_download_records(json), RecordFormat.Excel).TAKE
+      Http4sHttpServer.DownloadPayload(result.bytes, text = false)
+    } else {
+      Http4sHttpServer.DownloadPayload(_download_body(json, format).getBytes(StandardCharsets.UTF_8), text = true)
     }
 
   private def _download_body(
@@ -2697,6 +2710,24 @@ final class Http4sHttpServer(
     _download_rows(json).map { row =>
       row.asObject.map(_.toMap).getOrElse(Map("value" -> row))
     }
+
+  private def _download_records(json: Json): Vector[Record] =
+    _download_rows(json).map(_download_record)
+
+  private def _download_record(json: Json): Record =
+    json.asObject
+      .map(obj => Record.create(obj.toVector.map { case (key, value) => key -> _download_json_value(value) }))
+      .getOrElse(Record.create(Vector("value" -> _download_json_value(json))))
+
+  private def _download_json_value(json: Json): Any =
+    json.fold(
+      jsonNull = null,
+      jsonBoolean = identity,
+      jsonNumber = number => number.toBigDecimal.getOrElse(BigDecimal(number.toString)),
+      jsonString = identity,
+      jsonArray = values => values.map(_download_json_value).toVector,
+      jsonObject = obj => Record.create(obj.toVector.map { case (key, value) => key -> _download_json_value(value) })
+    )
 
   private def _download_columns(objects: Vector[Map[String, Json]]): Vector[String] =
     objects.flatMap(_.keys).distinct
@@ -2826,6 +2857,7 @@ final class Http4sHttpServer(
       case "yaml" => "application/yaml"
       case "xml" => "application/xml"
       case "hocon" => "application/hocon"
+      case "xlsx" => RecordExportEncoder.ExcelContentType
       case _ => "application/json"
     }
 
@@ -2836,6 +2868,7 @@ final class Http4sHttpServer(
       case "hocon" => "conf"
       case "ltsv" => "ltsv"
       case "lines" => "txt"
+      case "xlsx" => "xlsx"
       case "tsv" => "tsv"
       case "csv" => "csv"
       case _ => "json"
@@ -5720,6 +5753,11 @@ final class Http4sHttpServer(
 }
 
 object Http4sHttpServer {
+  final case class DownloadPayload(
+    bytes: Array[Byte],
+    text: Boolean
+  )
+
   val PORT_PROPERTY_KEY = "textus.server.port"
   val LEGACY_PORT_PROPERTY_KEY = "cncf.server.port"
 
