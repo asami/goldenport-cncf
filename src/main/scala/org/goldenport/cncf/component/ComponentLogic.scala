@@ -16,7 +16,7 @@ import org.goldenport.cncf.datastore.DataStore
 import org.goldenport.cncf.entity.EntityStore
 import org.goldenport.cncf.event.{EventEngine, EventStore, ReceptionInput}
 import org.goldenport.cncf.http.HttpDriver
-import org.goldenport.cncf.job.{ActionId, ActionTask, JobBatchDefinition, JobControlPolicy, JobControlRequest, JobControlResponse, JobDefinitionEntity, JobDefinitionSnapshot, JobEngine, JobFailureHook, JobId, JobPersistencePolicy, JobResult, JobRunMode, JobStatus, JobSubmitOption, JobTask}
+import org.goldenport.cncf.job.{ActionId, ActionTask, JobBatchDefinition, JobControlPolicy, JobControlRequest, JobControlResponse, JobDefinitionEntity, JobDefinitionSnapshot, JobEngine, JobFailureHook, JobId, JobInput, JobInputPayload, JobInputRetentionPolicy, JobPersistencePolicy, JobResult, JobRunMode, JobStatus, JobSubmitOption, JobTask}
 import org.goldenport.cncf.subsystem.resolver.OperationResolver
 import org.goldenport.cncf.unitofwork.UnitOfWork
 import org.goldenport.cncf.unitofwork.UnitOfWorkOp
@@ -30,7 +30,7 @@ import org.goldenport.cncf.operation.CmlOperationDefinition
  *  version Feb. 25, 2026
  *  version Mar. 31, 2026
  *  version Apr. 24, 2026
- * @version May.  7, 2026
+ * @version May. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 /**
@@ -123,21 +123,21 @@ case class ComponentLogic(
   ): Consequence[OperationResponse] = {
     ctx.runtime.clearExecutionMetadata()
     val actionscope = component.scopeContext.createChildScope(ScopeKind.Action, action.name)
-    val scopedCtx = ctx.withScope(actionscope)
+    val scopedctx = ctx.withScope(actionscope)
     val task = ActionTask(ActionId.generate(), action, component.actionEngine, Some(component))
     _resolve_operation_kind(action) match {
       case Some(ComponentLogic.OperationKind.Query) =>
-        _execute_query_action(task, scopedCtx)
+        _execute_query_action(task, scopedctx)
       case Some(ComponentLogic.OperationKind.Command) =>
-        _execute_command_action(task, action, scopedCtx)
+        _execute_command_action(task, action, scopedctx)
       case None =>
         action match {
           case _: QueryAction =>
-            _execute_query_action(task, scopedCtx)
+            _execute_query_action(task, scopedctx)
           case _: CommandAction =>
-            _execute_command_action(task, action, scopedCtx)
+            _execute_command_action(task, action, scopedctx)
           case _ =>
-            submitJob(List(task), scopedCtx).map(jobid => OperationResponse.Scalar(jobid.value))
+            submitJob(List(task), scopedctx).map(jobid => OperationResponse.Scalar(jobid.value))
       }
     }
   }
@@ -197,7 +197,12 @@ case class ComponentLogic(
         case CommandJobRunMode.Sync => JobRunMode.Sync
         case CommandJobRunMode.Async => JobRunMode.Async
       }
-      val option0 = _default_submit_option(List(task)).copy(runMode = runmode)
+      val jobinput = _job_input(action)
+      val option0 = _default_submit_option(List(task)).copy(
+        runMode = runmode,
+        input = jobinput,
+        parameters = _job_debug_parameters(action, jobinput)
+      )
       _job_definition_submit_binding(action, option0, ctx).flatMap { binding =>
         _task_with_compensation(task, binding.compensation, action, ctx).flatMap { task1 =>
           submitJob(List(task1), ctx, binding.option).flatMap { jobid =>
@@ -382,6 +387,72 @@ case class ComponentLogic(
     (action.arguments.map(x => x.name -> x.value.toString) ++
       action.properties.map(x => x.name -> x.value.toString)).toMap
 
+  private def _job_debug_parameters(
+    action: Action,
+    input: Option[JobInput]
+  ): Map[String, String] = {
+    val raw = (action.arguments.map(x => x.name -> x.value) ++
+      action.switches.map(x => x.name -> x.value) ++
+      action.properties.map(x => x.name -> x.value)).toMap
+    val safe = raw.flatMap {
+      case (key, _) if _is_job_input_raw_key(key) => None
+      case (key, value: org.goldenport.datatype.MimeBody) =>
+        Some(key -> s"mime-body:${value.contentType.header}")
+      case (key, value) =>
+        Some(key -> value.toString)
+    }
+    input match {
+      case Some(in) =>
+        safe ++ Map(
+          "cncf.job.input.count" -> in.payloads.size.toString,
+          "cncf.job.input.retention" -> in.retentionPolicy.print,
+          "cncf.job.input.cleaned" -> in.isCleaned.toString
+        )
+      case None => safe
+    }
+  }
+
+  private def _job_input(action: Action): Option[JobInput] = {
+    val params = (action.arguments.map(x => x.name -> x.value.toString) ++
+      action.properties.map(x => x.name -> x.value.toString)).toMap
+    params.get("cncf.job.input.storage").map(_.trim).filter(_.nonEmpty).map { storage =>
+      val created = params.get("cncf.job.input.createdAt")
+        .flatMap(x => scala.util.Try(java.time.Instant.parse(x)).toOption)
+        .getOrElse(java.time.Instant.now())
+      val payload = JobInputPayload(
+        storage = storage,
+        fieldName = _job_input_string(params, "cncf.job.input.fieldName"),
+        filename = _job_input_string(params, "cncf.job.input.filename"),
+        contentType = _job_input_string(params, "cncf.job.input.contentType"),
+        byteSize = params.get("cncf.job.input.byteSize").flatMap(x => scala.util.Try(x.toLong).toOption),
+        sha256 = _job_input_string(params, "cncf.job.input.sha256"),
+        inlineBase64 = _job_input_string(params, "cncf.job.input.inlineBase64"),
+        blobId = _job_input_string(params, "cncf.job.input.blobId"),
+        createdAt = created
+      )
+      val retention = params.get("cncf.job.input.retention")
+        .flatMap(JobInputRetentionPolicy.parse)
+        .getOrElse(JobInputRetentionPolicy.Ttl)
+      val ttl = params.get("cncf.job.input.ttlSeconds")
+        .flatMap(x => scala.util.Try(java.time.Duration.ofSeconds(x.toLong)).toOption)
+        .getOrElse(JobInput.DefaultTtl)
+      JobInput(Vector(payload), retention, ttl, created)
+    }
+  }
+
+  private def _job_input_string(
+    params: Map[String, String],
+    key: String
+  ): Option[String] =
+    params.get(key).map(_.trim).filter(_.nonEmpty)
+
+  private def _is_job_input_raw_key(key: String): Boolean = {
+    val k = key.trim
+    k == "file" ||
+      k == "fileContent" ||
+      k == "cncf.job.input.inlineBase64"
+  }
+
   private def _job_definition_ref(
     action: Action
   ): Option[String] =
@@ -508,14 +579,14 @@ case class ComponentLogic(
       entitystore = Some(EntityStoreContext(parent.entityStoreSpace)),
       entityspace = Some(EntitySpaceContext(component.entitySpace))
     )
-    val consequenceInterpreter = new (UnitOfWorkOp ~> Consequence) {
+    val consequenceinterpreter = new (UnitOfWorkOp ~> Consequence) {
       def apply[A](fa: UnitOfWorkOp[A]): Consequence[A] =
         new UnitOfWorkInterpreter(uowsupplier()).interpret(fa)
     }
     val runtime = new RuntimeContext(
       core = core,
       unitOfWorkSupplier = uowsupplier,
-      unitOfWorkInterpreterFn = consequenceInterpreter,
+      unitOfWorkInterpreterFn = consequenceinterpreter,
       commitAction = commitUow => {
         val _ = commitUow.commit()
         ()

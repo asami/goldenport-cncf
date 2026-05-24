@@ -483,7 +483,46 @@ and hides the badge when that component is absent or unavailable.
 
 
 ----------------------------------------------------------------------
-15. Product Boundary
+15. Job Input Storage and Retention
+----------------------------------------------------------------------
+
+Large user-submitted work, such as bulk Information import, should be
+represented as a Job. The Job is the durable work unit and the place from
+which operators and applications navigate to the created or affected
+Information.
+
+Job input storage is split by size:
+
+    - small input is stored inline on the Job entity;
+    - large input is stored in BlobStore, while the Job entity stores only
+      blob id, filename, content type, byte size, digest, and timestamps.
+
+The default inline threshold is 64 KiB. Runtime configuration may adjust the
+threshold.
+
+Raw input must not be written to CallTree, provider spans, or summary Web
+projections. These surfaces may show metadata such as filename, byte size,
+digest, record count, skipped count, and result summary.
+
+Job input retention defaults to TTL:
+
+    - default policy: `ttl`
+    - default TTL: 7 days
+    - alternatives: `delete-on-completion`, `keep`
+
+After a terminal Job state and the TTL has passed, inline raw bodies and
+BlobStore payload references are cleaned while metadata, digest, and import
+summary remain. Within TTL, a rerun may reuse the same Job input. After TTL,
+the caller must submit the source file again.
+
+Bulk Information import must not introduce an InformationSpace-specific
+batch entity. If the application needs to group created Information by import
+work unit, it records the Job id / task id in the Information import context
+and filters Information by that context.
+
+
+----------------------------------------------------------------------
+16. Product Boundary
 ----------------------------------------------------------------------
 
 Job management is part of the CNCF built-in execution layer and follows
@@ -517,7 +556,7 @@ For the execution-platform boundary, see:
     - `docs/design/execution-platform-boundary.md`
 
 ----------------------------------------------------------------------
-16. Relationship to Consumers (e.g. SIE)
+17. Relationship to Consumers (e.g. SIE)
 ----------------------------------------------------------------------
 
 Consumers such as Semantic Integration Engine:
@@ -536,7 +575,7 @@ Job management is shared infrastructure.
 
 
 ----------------------------------------------------------------------
-17. Final Note
+18. Final Note
 ----------------------------------------------------------------------
 
 Job management exists to make execution failures

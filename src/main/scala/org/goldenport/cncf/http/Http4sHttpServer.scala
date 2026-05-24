@@ -2,13 +2,14 @@ package org.goldenport.cncf.http
 
 /*
  * @since   May. 18, 2026
- * @version May. 23, 2026
+ * @version May. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 import cats.effect.IO
 import cats.effect.std.Queue
 import cats.effect.unsafe.implicits.global
 import cats.syntax.all.*
+import java.security.MessageDigest
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path, Paths}
 import java.time.Instant
@@ -16,6 +17,7 @@ import java.util.UUID
 import scala.concurrent.duration.*
 import scala.collection.concurrent.TrieMap
 import scala.jdk.CollectionConverters.*
+import scala.util.Using
 import fs2.Pipe
 import fs2.Stream
 import com.comcast.ip4s.Host
@@ -40,9 +42,9 @@ import org.goldenport.http.{HttpContext, HttpRequest, HttpResponse, HttpStatus}
 import org.goldenport.cncf.component.builtin.auth.AuthComponent
 import org.goldenport.cncf.context.{ExecutionContext, RuntimeContext, ScopeContext, ScopeKind}
 import org.goldenport.cncf.config.{OperationMode, RuntimeConfig}
-import org.goldenport.cncf.blob.{BlobStoreFactory, BlobStorageRef}
+import org.goldenport.cncf.blob.{BlobKind, BlobPayloadSupport, BlobRepository, BlobStoreFactory, BlobStorageRef}
 import org.goldenport.cncf.naming.NamingConventions
-import org.goldenport.cncf.job.{JobId, JobQueryReadModel, JobStatus}
+import org.goldenport.cncf.job.{JobId, JobInput, JobInputRetentionPolicy, JobQueryReadModel, JobStatus}
 import org.goldenport.cncf.observability.{ConclusionDiagnostics, DiagnosticPayloadReferenceCodec, DslChokepointContext, DslChokepointPhase, DslChokepointRunner}
 import org.goldenport.cncf.mcp.McpJsonRpcAdapter
 import org.goldenport.cncf.openapi.OpenApiProjector
@@ -1960,40 +1962,179 @@ final class Http4sHttpServer(
     started: Long
   ): IO[HResponse[IO]] = {
     val query = _query_record(req)
-    val result = _dispatch_operation_result(
-        app,
-        service,
-        operation,
-        HttpRequest.fromPath(
-          method = HttpRequest.POST,
-          path = s"/${app}/${service}/${operation}",
-          query = query,
-          header = _development_form_header_record(req, query, form),
-          form = _operation_dispatch_form(form)
+    _stage_job_input_form(app, service, operation, form) match {
+      case Consequence.Success(dispatchform0) =>
+        val result = _dispatch_operation_result(
+          app,
+          service,
+          operation,
+          HttpRequest.fromPath(
+            method = HttpRequest.POST,
+            path = s"/${app}/${service}/${operation}",
+            query = query,
+            header = _development_form_header_record(req, query, dispatchform0),
+            form = _operation_dispatch_form(dispatchform0)
+          )
         )
-      )
-    _annotate_application_job(result, app, service, operation)
-    val res = result.response
-    val continuation = _create_form_continuation(app, service, operation, form, res, _form_chunk_size(form))
-    val resultvalues = values ++ _continuation_values(continuation)
-    val properties = _form_result_properties(
-      app,
-      service,
-      operation,
-      result,
-      resultvalues,
-      _form_page_view_context_values(req, app, service, operation, resultvalues)
-    )
-    _form_transition_response(app, service, operation, form, res, properties).map { response =>
-      RuntimeDashboardMetrics.recordHtmlRequest(
-        req.method.name,
-        req.uri.path.renderString,
-        res.code,
-        (System.nanoTime() - started) / 1000000L
-      )
-      response
+        _annotate_application_job(result, app, service, operation)
+        val res = result.response
+        val continuation = _create_form_continuation(app, service, operation, dispatchform0, res, _form_chunk_size(dispatchform0))
+        val resultvalues = values ++ _continuation_values(continuation)
+        val properties = _form_result_properties(
+          app,
+          service,
+          operation,
+          result,
+          resultvalues,
+          _form_page_view_context_values(req, app, service, operation, resultvalues)
+        )
+        _form_transition_response(app, service, operation, dispatchform0, res, properties).map { response =>
+          RuntimeDashboardMetrics.recordHtmlRequest(
+            req.method.name,
+            req.uri.path.renderString,
+            res.code,
+            (System.nanoTime() - started) / 1000000L
+          )
+          response
+        }
+      case Consequence.Failure(conclusion) =>
+        _web_error_response(Some(app), conclusion, req.uri.path.renderString, req.method.name)
     }
   }
+
+  private final case class _JobInputSource(
+    fieldName: String,
+    bytes: Array[Byte],
+    filename: Option[String],
+    contentType: ContentType
+  )
+
+  private def _stage_job_input_form(
+    app: String,
+    service: String,
+    operation: String,
+    form: Record
+  ): Consequence[Record] =
+    if (!_is_async_job_operation(app, service, operation))
+      Consequence.success(form)
+    else
+      _job_input_source(form) match {
+        case None => Consequence.success(form)
+        case Some(source) =>
+          val now = Instant.now()
+          val common = Vector(
+            "cncf.job.input.fieldName" -> source.fieldName,
+            "cncf.job.input.filename" -> source.filename.getOrElse(""),
+            "cncf.job.input.contentType" -> source.contentType.header,
+            "cncf.job.input.byteSize" -> source.bytes.length.toString,
+            "cncf.job.input.sha256" -> _sha256(source.bytes),
+            "cncf.job.input.retention" -> _job_input_retention_policy().print,
+            "cncf.job.input.ttlSeconds" -> _job_input_retention_ttl_seconds().toString,
+            "cncf.job.input.createdAt" -> now.toString
+          )
+          val payload =
+            if (source.bytes.length.toLong <= _job_input_inline_threshold_bytes())
+              Consequence.success(common ++ Vector(
+                "cncf.job.input.storage" -> "inline",
+                "cncf.job.input.inlineBase64" -> java.util.Base64.getEncoder.encodeToString(source.bytes)
+              ))
+            else
+              _stage_job_input_blob(app, source, now).map { blobid =>
+                common ++ Vector(
+                  "cncf.job.input.storage" -> "blob",
+                  "cncf.job.input.blobId" -> blobid
+                )
+              }
+          payload.map { fields =>
+            val removed = Set(source.fieldName, "file", "fileContent")
+            val kept = form.fields.filterNot(f => removed.contains(f.key)).map(f => f.key -> f.value.single)
+            Record.create(kept ++ fields)
+          }
+      }
+
+  private def _is_async_job_operation(
+    app: String,
+    service: String,
+    operation: String
+  ): Boolean =
+    _component(app).flatMap { component =>
+      component.protocol.services.services.find(s => NamingConventions.equivalentByNormalized(s.name, service))
+        .flatMap { servicedef =>
+          servicedef.operations.operations
+            .find(d => NamingConventions.equivalentByNormalized(d.name, operation))
+            .flatMap(_ => component.operationDefinitions.find(d => NamingConventions.equivalentByNormalized(d.name, operation)))
+        }
+    }.exists(_.effectiveCommandExecutionPolicy.managedByJob)
+
+  private def _job_input_source(form: Record): Option[_JobInputSource] =
+    form.asMap.get("file") match {
+      case Some(MimeBody(contenttype, bag)) =>
+        Some(_JobInputSource(
+          "file",
+          Using.resource(bag.openInputStream())(_.readAllBytes()),
+          form.getString("file.filename").filter(_.nonEmpty),
+          contenttype
+        ))
+      case _ =>
+        form.getString("fileContent").filter(_.nonEmpty).map { text =>
+          _JobInputSource(
+            "fileContent",
+            text.getBytes(StandardCharsets.UTF_8),
+            form.getString("fileName").filter(_.nonEmpty),
+            ContentType.TEXT_PLAIN
+          )
+        }
+    }
+
+  private def _stage_job_input_blob(
+    app: String,
+    source: _JobInputSource,
+    now: Instant
+  ): Consequence[String] =
+    _component(app) match {
+      case Some(component) =>
+        given ExecutionContext = ExecutionContext.create()
+        val id = summon[ExecutionContext].idGeneration.entityId(BlobRepository.CollectionId)
+        BlobPayloadSupport.putManagedPayload(
+          component,
+          id,
+          BlobKind.Attachment,
+          source.filename,
+          source.contentType,
+          Bag.binary(source.bytes),
+          Map(
+            "cncf.job.input" -> "true",
+            "cncf.job.input.createdAt" -> now.toString,
+            "cncf.job.input.fieldName" -> source.fieldName
+          )
+        ).map(_.id.value)
+      case None =>
+        Consequence.operationNotFound(s"component:$app")
+    }
+
+  private def _job_input_inline_threshold_bytes(): Long =
+    _config_long("cncf.job.input.inline-threshold-bytes")
+      .orElse(_config_long("textus.job.input.inline-threshold-bytes"))
+      .getOrElse(JobInput.DefaultInlineThresholdBytes)
+
+  private def _job_input_retention_policy(): JobInputRetentionPolicy =
+    _config_string("cncf.job.input.retention")
+      .flatMap(JobInputRetentionPolicy.parse)
+      .getOrElse(JobInputRetentionPolicy.Ttl)
+
+  private def _job_input_retention_ttl_seconds(): Long =
+    _config_long("cncf.job.input.ttl-seconds")
+      .orElse(_config_long("textus.job.input.ttl-seconds"))
+      .getOrElse(JobInput.DefaultTtl.getSeconds)
+
+  private def _config_string(key: String): Option[String] =
+    RuntimeConfig.getString(engine.runtimeSubsystem.configuration, key)
+
+  private def _config_long(key: String): Option[Long] =
+    _config_string(key).flatMap(x => scala.util.Try(x.trim.toLong).toOption)
+
+  private def _sha256(bytes: Array[Byte]): String =
+    MessageDigest.getInstance("SHA-256").digest(bytes).map("%02x".format(_)).mkString
 
   private[http] def _submit_operation_form_api(
     req: org.http4s.Request[IO],
