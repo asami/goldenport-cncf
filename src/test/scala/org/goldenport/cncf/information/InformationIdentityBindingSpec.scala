@@ -8,7 +8,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   May. 20, 2026
- * @version May. 24, 2026
+ * @version May. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 final class InformationIdentityBindingSpec
@@ -21,7 +21,6 @@ final class InformationIdentityBindingSpec
       val batch = _success(space.registerInformation("paper", Vector(Record.data("title" -> "Identity", "authors" -> "Alice"))))
       val recordid = batch.head.id
       val binding = InformationIdentityBinding(
-        InformationIdentityBindingId("pending"),
         rdfSubject = Some(RdfNodeName("https://example.org/paper/identity")),
         externalIdentifiers = Vector(ExternalKnowledgeIdentifier("doi", "10.123/example")),
         entityBindings = Vector(KnowledgeEntityBinding("paper", "paper-1")),
@@ -31,17 +30,17 @@ final class InformationIdentityBindingSpec
       )
 
       val candidate = _success(space.addResolutionCandidate(recordid, "title", "Identity", binding, Some(0.9), Some("exact title match")))
-      val selected = _success(space.selectResolutionCandidate(candidate.id))
-      _success(space.validateInformationRecord(recordid))
-      val item = _success(space.confirmInformationRecord(recordid))
-      val confirmed = space.snapshot.identityBindings.find(_.informationItemId.contains(item.id)).getOrElse(fail("missing binding"))
+      val selected = _success(space.selectResolutionCandidate(recordid, candidate.candidateKey))
+      _success(space.validateInformation(recordid))
+      val item = _success(space.confirmInformation(recordid))
+      val confirmed = item.identityBindings.headOption.getOrElse(fail("missing binding"))
 
       selected.selected shouldBe true
       confirmed.status shouldBe InformationBindingStatus.Confirmed
       confirmed.rdfSubject.map(_.print) shouldBe Some("https://example.org/paper/identity")
       confirmed.entityBindings shouldBe Vector(KnowledgeEntityBinding("paper", "paper-1"))
       confirmed.knowledgeNodeId shouldBe Some(KnowledgeNodeId("node-paper-1"))
-      confirmed.informationItemId should not be confirmed.knowledgeNodeId
+      item.id should not be confirmed.knowledgeNodeId
     }
   }
 

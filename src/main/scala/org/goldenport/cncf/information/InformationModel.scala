@@ -16,7 +16,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 
 /*
  * @since   May. 20, 2026
- * @version May. 24, 2026
+ * @version May. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 type InformationId = EntityId
@@ -40,51 +40,6 @@ private def _information_entity_id(
     },
     identity
   )
-
-type ConfirmedInformationId = InformationId
-object ConfirmedInformationId {
-  def apply(value: String): ConfirmedInformationId = InformationId(value)
-}
-
-type InformationRecordId = InformationId
-object InformationRecordId {
-  def apply(value: String): InformationRecordId = InformationId(value)
-}
-
-type InformationItemId = ConfirmedInformationId
-object InformationItemId {
-  def apply(value: String): InformationItemId = ConfirmedInformationId(value)
-}
-
-type InformationValidationIssueId = EntityId
-object InformationValidationIssueId {
-  def apply(value: String): InformationValidationIssueId =
-    _information_entity_id(value, "information_validation_issue")
-}
-
-type InformationResolutionCandidateId = EntityId
-object InformationResolutionCandidateId {
-  def apply(value: String): InformationResolutionCandidateId =
-    _information_entity_id(value, "information_resolution_candidate")
-}
-
-type InformationIdentityBindingId = EntityId
-object InformationIdentityBindingId {
-  def apply(value: String): InformationIdentityBindingId =
-    _information_entity_id(value, "information_identity_binding")
-}
-
-type InformationPublicationId = EntityId
-object InformationPublicationId {
-  def apply(value: String): InformationPublicationId =
-    _information_entity_id(value, "information_publication")
-}
-
-type InformationConflictId = EntityId
-object InformationConflictId {
-  def apply(value: String): InformationConflictId =
-    _information_entity_id(value, "information_conflict")
-}
 
 type InformationLifecycleState = value.InformationLifecycleState
 object InformationLifecycleState {
@@ -121,46 +76,33 @@ object InformationConflictState {
   val Resolved: InformationConflictState = value.InformationConflictState.resolved
 }
 
-type EditableInformation = InformationImportRecord
-type ConfirmedInformation = InformationItem
+type InformationImportContext = value.InformationImportContext
 
-final case class InformationImportRecord(
-  id: InformationRecordId,
+final case class Information(
+  id: InformationId,
   domain: String,
   rawData: Record,
   workingData: Record,
   state: InformationLifecycleState = InformationLifecycleState.Imported,
-  itemId: Option[InformationItemId] = None,
-  validationIssueIds: Vector[InformationValidationIssueId] = Vector.empty,
-  resolutionCandidateIds: Vector[InformationResolutionCandidateId] = Vector.empty,
-  identityBindingIds: Vector[InformationIdentityBindingId] = Vector.empty,
-  updatedAt: Instant = Instant.now()
-)
-
-final case class InformationItem(
-  id: InformationItemId,
-  domain: String,
-  data: Record,
-  state: InformationLifecycleState = InformationLifecycleState.Confirmed,
-  sourceRecordId: Option[InformationRecordId] = None,
-  identityBindingIds: Vector[InformationIdentityBindingId] = Vector.empty,
-  publicationId: Option[InformationPublicationId] = None,
+  importContext: Option[InformationImportContext] = None,
+  validationIssues: Vector[InformationValidationIssue] = Vector.empty,
+  resolutionCandidates: Vector[InformationResolutionCandidate] = Vector.empty,
+  identityBindings: Vector[InformationIdentityBinding] = Vector.empty,
+  publicationStatuses: Vector[InformationPublicationStatus] = Vector.empty,
+  conflicts: Vector[InformationConflict] = Vector.empty,
   confirmedAt: Option[Instant] = None,
   updatedAt: Instant = Instant.now()
-)
+) {
+  def data: Record = workingData
+}
 
 final case class InformationValidationIssue(
-  id: InformationValidationIssueId,
-  recordId: InformationRecordId,
   fieldPath: String,
   severity: String,
   message: String
 )
 
 final case class InformationIdentityBinding(
-  id: InformationIdentityBindingId,
-  informationItemId: Option[InformationItemId] = None,
-  recordId: Option[InformationRecordId] = None,
   rdfSubject: Option[RdfNodeName] = None,
   externalIdentifiers: Vector[ExternalKnowledgeIdentifier] = Vector.empty,
   entityBindings: Vector[KnowledgeEntityBinding] = Vector.empty,
@@ -173,17 +115,11 @@ final case class InformationIdentityBinding(
 object InformationIdentityBinding {
   def createC(record: Record): Consequence[InformationIdentityBinding] =
     for {
-      id <- record.getAsC[InformationIdentityBindingId]("id").flatMap(Consequence.successOrPropertyNotFound("id", _))
-      informationitemid <- _record_get_as_c[InformationItemId](record, List("informationItemId", "information_item_id", "confirmedInformationId", "confirmed_information_id"))
-      recordid <- _record_get_as_c[InformationRecordId](record, List("recordId", "record_id", "informationId", "information_id"))
       rdfsubject <- _record_get_as_c[RdfNodeName](record, List("rdfSubject", "rdf_subject"))
       knowledgenodeid <- _record_get_as_c[KnowledgeNodeId](record, List("knowledgeNodeId", "knowledge_node_id"))
       authority <- record.getAsC[String]("authority")
       confidence <- record.getAsC[Double]("confidence")
     } yield InformationIdentityBinding(
-      id = id,
-      informationItemId = informationitemid,
-      recordId = recordid,
       rdfSubject = rdfsubject,
       externalIdentifiers = Vector.empty,
       entityBindings = Vector.empty,
@@ -212,19 +148,19 @@ object InformationIdentityBinding {
 }
 
 final case class InformationResolutionCandidate(
-  id: InformationResolutionCandidateId,
-  recordId: InformationRecordId,
+  candidateKey: String,
   fieldPath: String,
-  label: String,
+  candidateLabel: String,
   binding: InformationIdentityBinding,
   confidence: Option[Double] = None,
   evidence: Option[String] = None,
   selected: Boolean = false
-)
+) {
+  def label: String = candidateLabel
+}
 
 final case class InformationPublicationStatus(
-  id: InformationPublicationId,
-  itemId: InformationItemId,
+  publicationKey: String,
   state: InformationPublicationState,
   target: String,
   message: Option[String] = None,
@@ -233,8 +169,7 @@ final case class InformationPublicationStatus(
 )
 
 final case class InformationConflict(
-  id: InformationConflictId,
-  itemId: InformationItemId,
+  conflictKey: String,
   fieldPath: String,
   informationValue: String,
   rdfValue: String,
@@ -244,18 +179,11 @@ final case class InformationConflict(
 )
 
 final case class InformationSpaceSnapshot(
-  records: Vector[InformationImportRecord] = Vector.empty,
-  items: Vector[InformationItem] = Vector.empty,
-  validationIssues: Vector[InformationValidationIssue] = Vector.empty,
-  resolutionCandidates: Vector[InformationResolutionCandidate] = Vector.empty,
-  identityBindings: Vector[InformationIdentityBinding] = Vector.empty,
-  publicationStatuses: Vector[InformationPublicationStatus] = Vector.empty,
-  conflicts: Vector[InformationConflict] = Vector.empty
+  information: Vector[Information] = Vector.empty
 )
 
 final case class InformationSpaceCounts(
-  recordCount: Int = 0,
-  itemCount: Int = 0,
+  informationCount: Int = 0,
   validationIssueCount: Int = 0,
   resolutionCandidateCount: Int = 0,
   identityBindingCount: Int = 0,

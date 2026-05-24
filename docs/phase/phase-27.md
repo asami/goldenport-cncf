@@ -77,7 +77,9 @@ Scope boundaries:
 - G (DONE): KE-07 — Paper editor follow-up.
 - H (DONE): KE-08 — Web knowledge editor vertical slice.
 - I (DONE): KE-09 — Publish/materialize flow and validation feedback.
-- J (ACTIVE): KE-10 — Usability smoke and Phase 27 closure.
+- J (ACTIVE): KE-10 — Usability smoke and Phase 27 closure, including the
+  single-`Information` runtime cleanup and v1 Information tag support needed
+  before final usability validation.
 
 Resume hint:
 

@@ -5,11 +5,11 @@ import org.goldenport.cncf.knowledge.KnowledgeWorkingSetSnapshot
 
 /*
  * @since   May. 20, 2026
- * @version May. 20, 2026
+ * @version May. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class InformationAuthorityResolutionRequest(
-  item: InformationItem,
+  information: Information,
   fieldPath: String,
   value: String,
   limit: Int = 10
@@ -20,7 +20,7 @@ final case class InformationAuthorityResolutionResult(
 )
 
 final case class InformationPublicationRequest(
-  item: InformationItem,
+  information: Information,
   target: String = "rdf-vector"
 )
 
@@ -34,5 +34,5 @@ trait KnowledgeEngineProvider {
 
   def publishInformation(request: InformationPublicationRequest): Consequence[InformationPublicationResult]
 
-  def materializeInformation(item: InformationItem): Consequence[KnowledgeWorkingSetSnapshot]
+  def materializeInformation(information: Information): Consequence[KnowledgeWorkingSetSnapshot]
 }

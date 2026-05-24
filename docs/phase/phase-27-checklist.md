@@ -67,7 +67,7 @@ fix the scope as application-grade knowledge editing on top of CNCF
 - Do not treat DBpedia or any external id source as automatically
   authoritative; each source is an evidence-backed candidate/enrichment source.
 - Do not collapse external RDF node URI, CNCF `KnowledgeNodeId`,
-  `InformationItemId`, ISBN, DOI, authority id, or Entity id into one id. Store
+  `Information.id`, ISBN, DOI, authority id, or Entity id into one id. Store
   each external id/RDF node as an explicit identity binding.
 - Do not hide required guidance in a separate manual when it can be shown in
   the editor.
@@ -465,9 +465,26 @@ the selected paper/book/web workflows.
 
 ### Initial Tasks
 
+- [x] Migrate CNCF Information runtime and TKE public/editor surfaces from
+      record/item split terminology to the single `Information` entity and
+      lifecycle-state model.
+- [x] Add v1 Information tag management using the dedicated `information` tag
+      space, with tag filtering in TKE lists and tag bindings included in
+      local KnowledgeSpace materialization.
 - [ ] Run a book identifier import/editing smoke with DBpedia lookup.
 - [ ] Run a paper editing smoke if included in the closure scope.
 - [ ] Run a web knowledge editing smoke.
 - [ ] Verify field guidance and validation messages are visible in the UI.
 - [ ] Verify published knowledge appears in KnowledgeSpace.
 - [ ] Record deferred hardening in strategy.
+
+### Completion Notes
+
+- CNCF Information runtime now uses a single `Information` entity with
+  lifecycle state, nested validation/candidate/binding/publication/conflict
+  values, and `Information.id` as the public identity.
+- TKE book, paper, and web-resource operations now use `informationId` for
+  detail, lifecycle, publication, materialization, and candidate actions.
+- Information tags use the dedicated `information` tag space in v1. TKE can
+  sync tags, filter lists by tag, show tag summaries in Information tables and
+  detail projections, and materialize local Knowledge nodes with tag bindings.

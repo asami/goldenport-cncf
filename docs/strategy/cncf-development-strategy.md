@@ -1340,6 +1340,14 @@ Phase 27 active scope:
   candidate, publication, KnowledgeFrame, KnowledgeNode, relationship, fact,
   evidence, provenance, and KnowledgeSpace count summaries without exposing raw
   RDF/vector/provider payloads.
+- CNCF Information runtime and TKE editor APIs now use a single `Information`
+  entity with lifecycle state instead of public record/item identity split.
+  Validation issues, resolver candidates, identity bindings, publication
+  statuses, and conflicts are nested Information values.
+- TKE now supports Information tagging in the dedicated `information` tag
+  space: lists can filter by tag, Information detail shows tag summaries, and
+  local KnowledgeSpace materialization carries tag bindings into KnowledgeNode
+  bindings.
 - The next target is a usability smoke for book, paper, and web-resource
   editing before Phase 27 closure.
 

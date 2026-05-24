@@ -2,7 +2,7 @@ package org.goldenport.cncf.http
 
 /*
  * @since   May. 18, 2026
- * @version May. 24, 2026
+ * @version May. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 import scala.collection.mutable.ListBuffer
@@ -64,7 +64,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr. 12, 2026
- * @version May. 20, 2026
+ * @version May. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
@@ -394,9 +394,9 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         ))
       ))
       val record = batch.headOption.getOrElse(fail("information record missing"))
-      _success(component.informationSpace.validateInformationRecord(record.id))
-      val item = _success(component.informationSpace.confirmInformationRecord(record.id))
-      _success(component.informationSpace.publishInformationItem(item.id, "fuseki", Some("published")))
+      _success(component.informationSpace.validateInformation(record.id))
+      val item = _success(component.informationSpace.confirmInformation(record.id))
+      _success(component.informationSpace.publishInformation(item.id, "fuseki", Some("published")))
 
       val index = _renderer.renderSystemAdminInformation(subsystem).body
       val detail = _renderer.renderSystemAdminInformationComponent(subsystem, "information-component").map(_.body).getOrElse(fail("information component page missing"))

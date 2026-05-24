@@ -3,11 +3,13 @@ package org.goldenport.cncf.information
 import java.time.Instant
 import org.goldenport.Consequence
 import org.goldenport.cncf.component.Component
+import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.cncf.tag.{Tag, TaggingWorkflow}
 import org.goldenport.record.Record
 
 /*
  * @since   May. 21, 2026
- * @version May. 24, 2026
+ * @version May. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class InformationFieldMappingDescriptor(
@@ -35,6 +37,25 @@ final case class InformationEditorActionDescriptor(
   reason: Option[String] = None
 )
 
+final case class InformationTagProjection(
+  tagSpace: String,
+  key: String,
+  path: String,
+  title: Option[String],
+  description: Option[String]
+)
+
+object InformationTagProjection {
+  def from(tag: Tag): InformationTagProjection =
+    InformationTagProjection(
+      tag.tagSpace,
+      tag.key,
+      tag.path,
+      tag.title,
+      tag.description
+    )
+}
+
 final case class InformationEditorFieldProjection(
   descriptor: InformationFieldDescriptor,
   value: Option[String],
@@ -44,29 +65,25 @@ final case class InformationEditorFieldProjection(
 )
 
 final case class InformationEditorRecordProjection(
-  recordId: Option[InformationRecordId],
-  itemId: Option[InformationItemId],
+  informationId: InformationId,
   domain: String,
   state: InformationLifecycleState,
   title: Option[String],
   updatedAt: Instant,
+  tags: Vector[InformationTagProjection] = Vector.empty,
   fields: Vector[InformationEditorFieldProjection],
   publication: Option[InformationPublicationStatus],
   actions: Vector[InformationEditorActionDescriptor]
 ) {
-  def informationId: Option[String] =
-    recordId.map(_.print).orElse(itemId.map(_.print))
-
-  def confirmedInformationId: Option[String] =
-    itemId.map(_.print)
+  def informationIdString: String =
+    informationId.print
 }
 
 final case class InformationEditorProjection(
   componentName: String,
   domain: String,
   fields: Vector[InformationFieldDescriptor],
-  records: Vector[InformationEditorRecordProjection],
-  items: Vector[InformationEditorRecordProjection]
+  information: Vector[InformationEditorRecordProjection]
 )
 
 final case class InformationEditorProfile(
@@ -667,6 +684,9 @@ object InformationEditorProfile {
 }
 
 object InformationSpaceEditorProjection {
+  val InformationTagSpace: String = "information"
+  val InformationTagRole: String = "information-tag"
+
   def component(
     component: Component,
     domain: String
@@ -678,110 +698,96 @@ object InformationSpaceEditorProjection {
           component.name,
           profile.domain,
           profile.fields,
-          _record_projections(profile, snapshot),
-          _item_projections(profile, snapshot)
+          _information_projections(profile, snapshot, Map.empty)
         ))
       case None =>
         Consequence.argumentInvalid(s"information editor profile not found: $domain")
     }
 
+  def componentWithTags(
+    component: Component,
+    domain: String
+  )(using ExecutionContext): Consequence[InformationEditorProjection] =
+    InformationEditorProfile.forDomain(domain) match {
+      case Some(profile) =>
+        val snapshot = component.informationSpace.snapshot
+        _information_tags(snapshot).map { tags =>
+          InformationEditorProjection(
+            component.name,
+            profile.domain,
+            profile.fields,
+            _information_projections(profile, snapshot, tags)
+          )
+        }
+      case None =>
+        Consequence.argumentInvalid(s"information editor profile not found: $domain")
+    }
+
+  def informationTagSourceIds(
+    tagref: String,
+    tagspace: String = InformationTagSpace
+  )(using ExecutionContext): Consequence[Set[String]] =
+    TaggingWorkflow(tagSpace = tagspace).searchSourceIds(tagref, includeDescendants = true, Some(InformationTagRole))
+
   def profileOption(domain: String): Option[InformationEditorProfile] =
     InformationEditorProfile.forDomain(domain)
 
-  private def _record_projections(
-    profile: InformationEditorProfile,
+  private def _information_tags(
     snapshot: InformationSpaceSnapshot
+  )(using ExecutionContext): Consequence[Map[String, Vector[InformationTagProjection]]] =
+    snapshot.information.foldLeft(Consequence.success(Map.empty[String, Vector[InformationTagProjection]])) { (z, information) =>
+      z.flatMap { xs =>
+        TaggingWorkflow(tagSpace = InformationTagSpace)
+          .listEntityTags(information.id.print, Some(InformationTagRole))
+          .map(summary => xs + (information.id.print -> summary.tags.map(InformationTagProjection.from)))
+      }
+    }
+
+  private def _information_projections(
+    profile: InformationEditorProfile,
+    snapshot: InformationSpaceSnapshot,
+    tags: Map[String, Vector[InformationTagProjection]]
   ): Vector[InformationEditorRecordProjection] =
-    snapshot.records
+    snapshot.information
       .filter(_.domain == profile.domain)
       .sortBy(_.updatedAt.toEpochMilli)
       .reverse
-      .map { record =>
+      .map { information =>
         InformationEditorRecordProjection(
-          recordId = Some(record.id),
-          itemId = record.itemId,
-          domain = record.domain,
-          state = record.state,
-          title = _title(record.workingData),
-          updatedAt = record.updatedAt,
-          fields = profile.fields.map(field => _record_field_projection(field, record, snapshot)),
-          publication = record.itemId.flatMap(itemid => _publication(snapshot, itemid)),
-          actions = _record_actions(record)
+          informationId = information.id,
+          domain = information.domain,
+          state = information.state,
+          title = _title(information.workingData),
+          updatedAt = information.updatedAt,
+          tags = tags.getOrElse(information.id.print, Vector.empty),
+          fields = profile.fields.map(field => _information_field_projection(field, information)),
+          publication = information.publicationStatuses.headOption,
+          actions = _information_actions(information)
         )
       }
 
-  private def _item_projections(
-    profile: InformationEditorProfile,
-    snapshot: InformationSpaceSnapshot
-  ): Vector[InformationEditorRecordProjection] =
-    snapshot.items
-      .filter(_.domain == profile.domain)
-      .sortBy(_.updatedAt.toEpochMilli)
-      .reverse
-      .map { item =>
-        InformationEditorRecordProjection(
-          recordId = item.sourceRecordId,
-          itemId = Some(item.id),
-          domain = item.domain,
-          state = item.state,
-          title = _title(item.data),
-          updatedAt = item.updatedAt,
-          fields = profile.fields.map(field => _item_field_projection(field, item, snapshot)),
-          publication = _publication(snapshot, item.id),
-          actions = _item_actions(item)
-        )
-      }
-
-  private def _record_field_projection(
+  private def _information_field_projection(
     field: InformationFieldDescriptor,
-    record: InformationImportRecord,
-    snapshot: InformationSpaceSnapshot
+    information: Information
   ): InformationEditorFieldProjection =
     InformationEditorFieldProjection(
       field,
-      _value(record.workingData, field.fieldPath),
-      snapshot.validationIssues.filter(x => x.recordId == record.id && x.fieldPath == field.fieldPath).sortBy(_.id.print),
-      snapshot.resolutionCandidates.filter(x => x.recordId == record.id && x.fieldPath == field.fieldPath).sortBy(_.id.print),
-      Vector.empty
+      _value(information.workingData, field.fieldPath),
+      information.validationIssues.filter(_.fieldPath == field.fieldPath),
+      information.resolutionCandidates.filter(_.fieldPath == field.fieldPath).sortBy(_.candidateKey),
+      information.conflicts.filter(_.fieldPath == field.fieldPath).sortBy(_.conflictKey)
     )
 
-  private def _item_field_projection(
-    field: InformationFieldDescriptor,
-    item: InformationItem,
-    snapshot: InformationSpaceSnapshot
-  ): InformationEditorFieldProjection =
-    InformationEditorFieldProjection(
-      field,
-      _value(item.data, field.fieldPath),
-      Vector.empty,
-      item.sourceRecordId.toVector.flatMap(recordid =>
-        snapshot.resolutionCandidates.filter(x => x.recordId == recordid && x.fieldPath == field.fieldPath)
-      ).sortBy(_.id.print),
-      snapshot.conflicts.filter(x => x.itemId == item.id && x.fieldPath == field.fieldPath).sortBy(_.id.print)
-    )
-
-  private def _record_actions(record: InformationImportRecord): Vector[InformationEditorActionDescriptor] =
+  private def _information_actions(information: Information): Vector[InformationEditorActionDescriptor] =
     Vector(
-      _action("save", "Save", record.state != InformationLifecycleState.Published, None),
-      _action("validate", "Validate", record.state != InformationLifecycleState.Published, None),
-      _action("resolve", "Resolve", record.resolutionCandidateIds.nonEmpty && record.state == InformationLifecycleState.NeedsResolution, Some("available when unresolved candidates exist")),
-      _action("confirm", "Confirm", record.state == InformationLifecycleState.ReadyForConfirmation || record.state == InformationLifecycleState.Confirmed, Some("requires valid and resolved record")),
-      _action("reject", "Reject", record.state != InformationLifecycleState.Rejected && record.state != InformationLifecycleState.Published, None),
-      _action("reopen", "Reopen", record.state == InformationLifecycleState.Rejected || record.state == InformationLifecycleState.Confirmed || record.state == InformationLifecycleState.Published, None),
-      _action("publish", "Publish", record.state == InformationLifecycleState.Confirmed || record.state == InformationLifecycleState.Published, Some("requires confirmed item")),
-      _action("materialize", "Materialize", record.state == InformationLifecycleState.Confirmed || record.state == InformationLifecycleState.Published, Some("requires confirmed item"))
-    )
-
-  private def _item_actions(item: InformationItem): Vector[InformationEditorActionDescriptor] =
-    Vector(
-      _action("save", "Save", item.state != InformationLifecycleState.Published, None),
-      _action("validate", "Validate", false, Some("confirmed items are validated through their source records")),
-      _action("resolve", "Resolve", item.state == InformationLifecycleState.Conflict, Some("available when conflicts need resolution")),
-      _action("confirm", "Confirm", item.state == InformationLifecycleState.ReadyForConfirmation || item.state == InformationLifecycleState.Confirmed, None),
-      _action("reject", "Reject", item.state != InformationLifecycleState.Rejected && item.state != InformationLifecycleState.Published, None),
-      _action("reopen", "Reopen", item.state == InformationLifecycleState.Rejected || item.state == InformationLifecycleState.Confirmed || item.state == InformationLifecycleState.Published || item.state == InformationLifecycleState.Conflict, None),
-      _action("publish", "Publish", item.state == InformationLifecycleState.Confirmed || item.state == InformationLifecycleState.Published, Some("requires confirmed information item")),
-      _action("materialize", "Materialize", item.state == InformationLifecycleState.Confirmed || item.state == InformationLifecycleState.Published, Some("creates KnowledgeFrame / KnowledgeSpace projection"))
+      _action("save", "Save", information.state != InformationLifecycleState.Published, None),
+      _action("validate", "Validate", information.state != InformationLifecycleState.Published, None),
+      _action("resolve", "Resolve", information.resolutionCandidates.nonEmpty && information.state == InformationLifecycleState.NeedsResolution, Some("available when unresolved candidates exist")),
+      _action("confirm", "Confirm", information.state == InformationLifecycleState.ReadyForConfirmation || information.state == InformationLifecycleState.Confirmed, Some("requires valid and resolved information")),
+      _action("reject", "Reject", information.state != InformationLifecycleState.Rejected && information.state != InformationLifecycleState.Published, None),
+      _action("reopen", "Reopen", information.state == InformationLifecycleState.Rejected || information.state == InformationLifecycleState.Confirmed || information.state == InformationLifecycleState.Published || information.state == InformationLifecycleState.Conflict, None),
+      _action("publish", "Publish", information.state == InformationLifecycleState.Confirmed || information.state == InformationLifecycleState.Published, Some("requires confirmed information")),
+      _action("materialize", "Materialize", information.state == InformationLifecycleState.Confirmed || information.state == InformationLifecycleState.Published, Some("creates KnowledgeFrame / KnowledgeSpace projection"))
     )
 
   private def _action(
@@ -791,12 +797,6 @@ object InformationSpaceEditorProjection {
     reason: Option[String]
   ): InformationEditorActionDescriptor =
     InformationEditorActionDescriptor(name, label, enabled, if (enabled) None else reason)
-
-  private def _publication(
-    snapshot: InformationSpaceSnapshot,
-    itemid: InformationItemId
-  ): Option[InformationPublicationStatus] =
-    snapshot.publicationStatuses.find(_.itemId == itemid)
 
   private def _title(record: Record): Option[String] =
     _value(record, "title")

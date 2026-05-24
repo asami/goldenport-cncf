@@ -38,15 +38,11 @@ import org.goldenport.cncf.cli.RunMode
 import org.goldenport.cncf.action.AggregateBehavior
 import org.goldenport.cncf.information.{
   InformationConflict,
-  InformationConflictId,
+  Information,
+  InformationId,
   InformationIdentityBinding,
-  InformationImportRecord,
-  InformationItem,
-  InformationItemId,
   InformationPublicationStatus,
-  InformationRecordId,
   InformationResolutionCandidate,
-  InformationResolutionCandidateId,
   InformationSpace,
   InformationValidationIssue
 }
@@ -60,7 +56,7 @@ import org.goldenport.configuration.ConfigurationValue
  *  version Feb. 25, 2026
  *  version Mar. 30, 2026
  *  version Apr. 29, 2026
- * @version May. 24, 2026
+ * @version May. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 trait BehaviorFeaturePart { self: Behavior.Core.Holder =>
@@ -864,139 +860,135 @@ trait BehaviorInformationPart extends BehaviorFeaturePart { self: Behavior.Core.
   protected final def information_register(
     domain: String,
     records: Vector[Record]
-  ): ExecUowM[Vector[InformationImportRecord]] =
+  ): ExecUowM[Vector[Information]] =
     exec_from_calltree("uow:information:register", _information_attributes("register", domain) + ("record_count" -> records.size.toString)) {
       _information_space.flatMap(_.registerInformation(domain, records))
     }
 
-  protected final def information_update_record(
-    recordid: InformationRecordId,
+  protected final def information_update(
+    informationid: InformationId,
     workingdata: Record
-  ): ExecUowM[InformationImportRecord] =
-    exec_from_calltree("uow:information:update", _information_record_attributes("update", recordid)) {
-      _information_space.flatMap(_.updateInformationRecord(recordid, workingdata))
+  ): ExecUowM[Information] =
+    exec_from_calltree("uow:information:update", _information_attributes("update", informationid)) {
+      _information_space.flatMap(_.updateInformation(informationid, workingdata))
     }
 
-  protected final def information_validate_record(
-    recordid: InformationRecordId
-  ): ExecUowM[InformationImportRecord] =
-    exec_from_calltree("uow:information:validate", _information_record_attributes("validate", recordid)) {
-      _information_space.flatMap(_.validateInformationRecord(recordid))
+  protected final def information_validate(
+    informationid: InformationId
+  ): ExecUowM[Information] =
+    exec_from_calltree("uow:information:validate", _information_attributes("validate", informationid)) {
+      _information_space.flatMap(_.validateInformation(informationid))
     }
 
-  protected final def information_confirm_record(
-    recordid: InformationRecordId
-  ): ExecUowM[InformationItem] =
-    exec_from_calltree("uow:information:confirm", _information_record_attributes("confirm", recordid)) {
-      _information_space.flatMap(_.confirmInformationRecord(recordid))
+  protected final def information_confirm(
+    informationid: InformationId
+  ): ExecUowM[Information] =
+    exec_from_calltree("uow:information:confirm", _information_attributes("confirm", informationid)) {
+      _information_space.flatMap(_.confirmInformation(informationid))
     }
 
-  protected final def information_reject_record(
-    recordid: InformationRecordId,
+  protected final def information_reject(
+    informationid: InformationId,
     reason: String
-  ): ExecUowM[InformationImportRecord] =
-    exec_from_calltree("uow:information:reject", _information_record_attributes("reject", recordid)) {
-      _information_space.flatMap(_.rejectInformationRecord(recordid, reason))
+  ): ExecUowM[Information] =
+    exec_from_calltree("uow:information:reject", _information_attributes("reject", informationid)) {
+      _information_space.flatMap(_.rejectInformation(informationid, reason))
     }
 
-  protected final def information_reopen_item(
-    itemid: InformationItemId
-  ): ExecUowM[InformationItem] =
-    exec_from_calltree("uow:information:reopen", _information_item_attributes("reopen", itemid)) {
-      _information_space.flatMap(_.reopenInformationItem(itemid))
+  protected final def information_reopen(
+    informationid: InformationId
+  ): ExecUowM[Information] =
+    exec_from_calltree("uow:information:reopen", _information_attributes("reopen", informationid)) {
+      _information_space.flatMap(_.reopenInformation(informationid))
     }
 
-  protected final def information_publish_item(
-    itemid: InformationItemId,
+  protected final def information_publish(
+    informationid: InformationId,
     target: String,
     message: Option[String] = None,
     knowledgeframeid: Option[KnowledgeFrameId] = None
   ): ExecUowM[InformationPublicationStatus] =
-    exec_from_calltree("uow:information:publish", _information_item_attributes("publish", itemid) + ("target" -> target)) {
-      _information_space.flatMap(_.publishInformationItem(itemid, target, message, knowledgeframeid))
+    exec_from_calltree("uow:information:publish", _information_attributes("publish", informationid) + ("target" -> target)) {
+      _information_space.flatMap(_.publishInformation(informationid, target, message, knowledgeframeid))
     }
 
-  protected final def information_fail_item_publication(
-    itemid: InformationItemId,
+  protected final def information_fail_publication(
+    informationid: InformationId,
     target: String,
     message: Option[String] = None,
     knowledgeframeid: Option[KnowledgeFrameId] = None
   ): ExecUowM[InformationPublicationStatus] =
-    exec_from_calltree("uow:information:publish-failure", _information_item_attributes("publish-failure", itemid) + ("target" -> target)) {
-      _information_space.flatMap(_.failInformationItemPublication(itemid, target, message, knowledgeframeid))
+    exec_from_calltree("uow:information:publish-failure", _information_attributes("publish-failure", informationid) + ("target" -> target)) {
+      _information_space.flatMap(_.failInformationPublication(informationid, target, message, knowledgeframeid))
     }
 
   protected final def information_add_resolution_candidate(
-    recordid: InformationRecordId,
+    informationid: InformationId,
     fieldpath: String,
     candidatelabel: String,
     binding: InformationIdentityBinding,
     confidence: Option[Double] = None,
     evidence: Option[String] = None
   ): ExecUowM[InformationResolutionCandidate] =
-    exec_from_calltree("uow:information:candidate:add", _information_record_attributes("candidate-add", recordid) + ("field_path" -> fieldpath)) {
-      _information_space.flatMap(_.addResolutionCandidate(recordid, fieldpath, candidatelabel, binding, confidence, evidence))
+    exec_from_calltree("uow:information:candidate:add", _information_attributes("candidate-add", informationid) + ("field_path" -> fieldpath)) {
+      _information_space.flatMap(_.addResolutionCandidate(informationid, fieldpath, candidatelabel, binding, confidence, evidence))
     }
 
   protected final def information_select_resolution_candidate(
-    candidateid: InformationResolutionCandidateId
+    informationid: InformationId,
+    candidatekey: String
   ): ExecUowM[InformationResolutionCandidate] =
-    exec_from_calltree("uow:information:candidate:select", _information_candidate_attributes("candidate-select", candidateid)) {
-      _information_space.flatMap(_.selectResolutionCandidate(candidateid))
+    exec_from_calltree("uow:information:candidate:select", _information_candidate_attributes("candidate-select", informationid, candidatekey)) {
+      _information_space.flatMap(_.selectResolutionCandidate(informationid, candidatekey))
     }
 
   protected final def information_clear_resolution_candidate(
-    candidateid: InformationResolutionCandidateId
+    informationid: InformationId,
+    candidatekey: String
   ): ExecUowM[InformationResolutionCandidate] =
-    exec_from_calltree("uow:information:candidate:clear", _information_candidate_attributes("candidate-clear", candidateid)) {
-      _information_space.flatMap(_.clearResolutionCandidate(candidateid))
+    exec_from_calltree("uow:information:candidate:clear", _information_candidate_attributes("candidate-clear", informationid, candidatekey)) {
+      _information_space.flatMap(_.clearResolutionCandidate(informationid, candidatekey))
     }
 
-  protected final def information_materialize_item(
-    item: InformationItem
+  protected final def information_materialize(
+    information: Information
   ): ExecUowM[KnowledgeWorkingSetSnapshot] =
-    exec_from_calltree("uow:information:materialize", _information_item_attributes("materialize", item.id)) {
-      Consequence.success(InformationSpace.materializeItem(item))
+    exec_from_calltree("uow:information:materialize", _information_attributes("materialize", information.id)) {
+      Consequence.success(InformationSpace.materializeInformation(information))
     }
 
-  protected final def information_record_option(
-    recordid: InformationRecordId
-  ): ExecUowM[Option[InformationImportRecord]] =
-    exec_from_calltree("uow:information:record-option", _information_record_attributes("record-option", recordid)) {
-      _information_space.map(_.importRecordOption(recordid))
-    }
-
-  protected final def information_item_option(
-    itemid: InformationItemId
-  ): ExecUowM[Option[InformationItem]] =
-    exec_from_calltree("uow:information:item-option", _information_item_attributes("item-option", itemid)) {
-      _information_space.map(_.informationItemOption(itemid))
+  protected final def information_option(
+    informationid: InformationId
+  ): ExecUowM[Option[Information]] =
+    exec_from_calltree("uow:information:option", _information_attributes("option", informationid)) {
+      _information_space.map(_.getInformation(informationid))
     }
 
   protected final def information_validation_issues(
-    recordid: InformationRecordId
+    informationid: InformationId
   ): ExecUowM[Vector[InformationValidationIssue]] =
-    exec_from_calltree("uow:information:validation-issues", _information_record_attributes("validation-issues", recordid)) {
-      _information_space.map(_.validationIssues(recordid))
+    exec_from_calltree("uow:information:validation-issues", _information_attributes("validation-issues", informationid)) {
+      _information_space.map(_.validationIssues(informationid))
     }
 
-  protected final def information_record_conflict(
-    itemid: InformationItemId,
+  protected final def information_add_conflict(
+    informationid: InformationId,
     fieldpath: String,
     informationvalue: String,
     rdfvalue: String,
     severity: String = "warning"
   ): ExecUowM[InformationConflict] =
-    exec_from_calltree("uow:information:conflict:record", _information_item_attributes("conflict-record", itemid) + ("field_path" -> fieldpath)) {
-      _information_space.flatMap(_.recordConflict(itemid, fieldpath, informationvalue, rdfvalue, severity))
+    exec_from_calltree("uow:information:conflict:record", _information_attributes("conflict-record", informationid) + ("field_path" -> fieldpath)) {
+      _information_space.flatMap(_.recordConflict(informationid, fieldpath, informationvalue, rdfvalue, severity))
     }
 
   protected final def information_resolve_conflict(
-    conflictid: InformationConflictId,
+    informationid: InformationId,
+    conflictkey: String,
     decision: String
   ): ExecUowM[InformationConflict] =
-    exec_from_calltree("uow:information:conflict:resolve", Map("operation" -> "conflict-resolve", "conflict_id" -> conflictid.print)) {
-      _information_space.flatMap(_.resolveConflict(conflictid, decision))
+    exec_from_calltree("uow:information:conflict:resolve", Map("operation" -> "conflict-resolve", "information_id" -> informationid.print, "conflict_key" -> conflictkey)) {
+      _information_space.flatMap(_.resolveConflict(informationid, conflictkey, decision))
     }
 
   private def _information_space: Consequence[InformationSpace] =
@@ -1011,23 +1003,18 @@ trait BehaviorInformationPart extends BehaviorFeaturePart { self: Behavior.Core.
   ): Map[String, String] =
     Map("operation" -> operation, "domain" -> domain)
 
-  private def _information_record_attributes(
+  private def _information_attributes(
     operation: String,
-    recordid: InformationRecordId
+    informationid: InformationId
   ): Map[String, String] =
-    Map("operation" -> operation, "information_id" -> recordid.print)
-
-  private def _information_item_attributes(
-    operation: String,
-    itemid: InformationItemId
-  ): Map[String, String] =
-    Map("operation" -> operation, "confirmed_information_id" -> itemid.print)
+    Map("operation" -> operation, "information_id" -> informationid.print)
 
   private def _information_candidate_attributes(
     operation: String,
-    candidateid: InformationResolutionCandidateId
+    informationid: InformationId,
+    candidatekey: String
   ): Map[String, String] =
-    Map("operation" -> operation, "candidate_id" -> candidateid.print)
+    Map("operation" -> operation, "information_id" -> informationid.print, "candidate_key" -> candidatekey)
 }
 
 trait ActionCallHttpPart extends BehaviorHttpPart with ActionCallFeaturePart { self: ActionCall.Core.Holder =>

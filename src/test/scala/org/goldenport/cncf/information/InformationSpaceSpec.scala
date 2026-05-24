@@ -9,7 +9,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   May. 20, 2026
- * @version May. 24, 2026
+ * @version May. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 final class InformationSpaceSpec
@@ -29,22 +29,22 @@ final class InformationSpaceSpec
       )))
       val recordid = batch.head.id
 
-            space.counts.recordCount shouldBe 1
-      space.importRecordOption(recordid).map(_.state) shouldBe Some(InformationLifecycleState.Imported)
+      space.counts.informationCount shouldBe 1
+      space.getInformation(recordid).map(_.state) shouldBe Some(InformationLifecycleState.Imported)
       batch.map(_.id) shouldBe Vector(recordid)
 
-      val validated = _success(space.validateInformationRecord(recordid))
+      val validated = _success(space.validateInformation(recordid))
       validated.state shouldBe InformationLifecycleState.ReadyForConfirmation
       space.validationIssues(recordid) shouldBe Vector.empty
 
-      val item = _success(space.confirmInformationRecord(recordid))
+      val item = _success(space.confirmInformation(recordid))
       item.state shouldBe InformationLifecycleState.Confirmed
-      space.informationItemOption(item.id) shouldBe Some(item)
+      space.getInformation(item.id) shouldBe Some(item)
 
-      val publication = _success(space.publishInformationItem(item.id, "rdf-vector", Some("published"), Some(KnowledgeFrameId("frame-1"))))
+      val publication = _success(space.publishInformation(item.id, "rdf-vector", Some("published"), Some(KnowledgeFrameId("frame-1"))))
       publication.state shouldBe InformationPublicationState.Published
       publication.knowledgeFrameId shouldBe Some(KnowledgeFrameId("frame-1"))
-      space.informationItemOption(item.id).map(_.state) shouldBe Some(InformationLifecycleState.Published)
+      space.getInformation(item.id).map(_.state) shouldBe Some(InformationLifecycleState.Published)
 
       space.clear()
       space.counts shouldBe InformationSpaceCounts()
@@ -54,10 +54,10 @@ final class InformationSpaceSpec
       val space = new InformationSpace
       val batch = _success(space.registerInformation("paper", Vector(Record.data("title" -> "Draft", "authors" -> "Alice"))))
       val recordid = batch.head.id
-      _success(space.validateInformationRecord(recordid))
-      val item = _success(space.confirmInformationRecord(recordid))
+      _success(space.validateInformation(recordid))
+      val item = _success(space.confirmInformation(recordid))
 
-      val publication = _success(space.failInformationItemPublication(
+      val publication = _success(space.failInformationPublication(
         item.id,
         "rdf-vector",
         Some("knowledge-space materialization failed"),
@@ -66,8 +66,8 @@ final class InformationSpaceSpec
 
       publication.state shouldBe InformationPublicationState.Failed
       publication.knowledgeFrameId shouldBe Some(KnowledgeFrameId("frame-failed"))
-      space.informationItemOption(item.id).map(_.state) shouldBe Some(InformationLifecycleState.Confirmed)
-      space.informationItemOption(item.id).flatMap(_.publicationId) shouldBe Some(publication.id)
+      space.getInformation(item.id).map(_.state) shouldBe Some(InformationLifecycleState.Confirmed)
+      space.getInformation(item.id).flatMap(_.publicationStatuses.headOption.map(_.publicationKey)) shouldBe Some(publication.publicationKey)
     }
 
     "reject invalid records before confirmation" in {
@@ -75,11 +75,11 @@ final class InformationSpaceSpec
       val batch = _success(space.registerInformation("paper", Vector(Record.data("title" -> ""))))
       val recordid = batch.head.id
 
-      val validated = _success(space.validateInformationRecord(recordid))
+      val validated = _success(space.validateInformation(recordid))
 
       validated.state shouldBe InformationLifecycleState.Invalid
       space.validationIssues(recordid).map(_.fieldPath) shouldBe Vector("title")
-      space.confirmInformationRecord(recordid) shouldBe a[Consequence.Failure[_]]
+      space.confirmInformation(recordid) shouldBe a[Consequence.Failure[_]]
     }
 
     "allow paper confirmation with title only" in {
@@ -87,8 +87,8 @@ final class InformationSpaceSpec
       val batch = _success(space.registerInformation("paper", Vector(Record.data("title" -> "Title-only Paper"))))
       val recordid = batch.head.id
 
-      val validated = _success(space.validateInformationRecord(recordid))
-      val item = _success(space.confirmInformationRecord(recordid))
+      val validated = _success(space.validateInformation(recordid))
+      val item = _success(space.confirmInformation(recordid))
 
       validated.state shouldBe InformationLifecycleState.ReadyForConfirmation
       item.domain shouldBe "paper"
@@ -99,7 +99,7 @@ final class InformationSpaceSpec
       val invalidbatch = _success(space.registerInformation("web-resource", Vector(Record.data("title" -> ""))))
       val invalidid = invalidbatch.head.id
 
-      val invalid = _success(space.validateInformationRecord(invalidid))
+      val invalid = _success(space.validateInformation(invalidid))
 
       invalid.state shouldBe InformationLifecycleState.Invalid
       space.validationIssues(invalidid).map(_.fieldPath).toSet shouldBe Set("title", "url")
@@ -109,8 +109,8 @@ final class InformationSpaceSpec
         "url" -> "https://example.org/knowledge"
       ))))
       val validid = validbatch.head.id
-      val validated = _success(space.validateInformationRecord(validid))
-      val item = _success(space.confirmInformationRecord(validid))
+      val validated = _success(space.validateInformation(validid))
+      val item = _success(space.confirmInformation(validid))
 
       validated.state shouldBe InformationLifecycleState.ReadyForConfirmation
       item.domain shouldBe "web-resource"
@@ -120,23 +120,23 @@ final class InformationSpaceSpec
       val space = new InformationSpace
       val batch = _success(space.registerInformation("paper", Vector(Record.data("title" -> "Draft", "authors" -> "Alice"))))
 
-      space.confirmInformationRecord(batch.head.id) shouldBe a[Consequence.Failure[_]]
+      space.confirmInformation(batch.head.id) shouldBe a[Consequence.Failure[_]]
     }
 
     "track conflicts explicitly" in {
       val space = new InformationSpace
       val batch = _success(space.registerInformation("paper", Vector(Record.data("title" -> "Local", "authors" -> "Alice"))))
       val recordid = batch.head.id
-      _success(space.validateInformationRecord(recordid))
-      val item = _success(space.confirmInformationRecord(recordid))
+      _success(space.validateInformation(recordid))
+      val item = _success(space.confirmInformation(recordid))
 
       val conflict = _success(space.recordConflict(item.id, "title", "Local", "Remote"))
-      val resolved = _success(space.resolveConflict(conflict.id, "keep-information"))
+      val resolved = _success(space.resolveConflict(item.id, conflict.conflictKey, "keep-information"))
 
       conflict.state shouldBe InformationConflictState.Open
       resolved.state shouldBe InformationConflictState.Resolved
       resolved.resolution shouldBe Some("keep-information")
-      space.informationItemOption(item.id).map(_.state) shouldBe Some(InformationLifecycleState.Confirmed)
+      space.getInformation(item.id).map(_.state) shouldBe Some(InformationLifecycleState.Confirmed)
     }
 
     "clear resolution candidate and its identity binding" in {
@@ -148,8 +148,6 @@ final class InformationSpaceSpec
         "dbpediaUri",
         "Knowledge import",
         InformationIdentityBinding(
-          id = InformationIdentityBindingId("pending"),
-          recordId = Some(recordid),
           rdfSubject = Some(RdfNodeName("https://dbpedia.org/resource/Knowledge_graph")),
           externalIdentifiers = Vector(ExternalKnowledgeIdentifier("dbpedia", "https://dbpedia.org/resource/Knowledge_graph", Some("resource"))),
           authority = Some("dbpedia"),
@@ -161,31 +159,29 @@ final class InformationSpaceSpec
 
       space.counts.resolutionCandidateCount shouldBe 1
       space.counts.identityBindingCount shouldBe 1
-      space.importRecordOption(recordid).map(_.state) shouldBe Some(InformationLifecycleState.NeedsResolution)
+      space.getInformation(recordid).map(_.state) shouldBe Some(InformationLifecycleState.NeedsResolution)
 
-      val removed = _success(space.clearResolutionCandidate(candidate.id))
+      val removed = _success(space.clearResolutionCandidate(recordid, candidate.candidateKey))
 
-      removed.id shouldBe candidate.id
+      removed.candidateKey shouldBe candidate.candidateKey
       space.resolutionCandidates(recordid) shouldBe Vector.empty
       space.counts.resolutionCandidateCount shouldBe 0
       space.counts.identityBindingCount shouldBe 0
-      space.importRecordOption(recordid).map(_.state) shouldBe Some(InformationLifecycleState.Imported)
-      space.importRecordOption(recordid).map(_.resolutionCandidateIds) shouldBe Some(Vector.empty)
-      space.importRecordOption(recordid).map(_.identityBindingIds) shouldBe Some(Vector.empty)
+      space.getInformation(recordid).map(_.state) shouldBe Some(InformationLifecycleState.Imported)
+      space.getInformation(recordid).map(_.resolutionCandidates) shouldBe Some(Vector.empty)
+      space.getInformation(recordid).map(_.identityBindings) shouldBe Some(Vector.empty)
     }
 
     "reject clearing candidates after record confirmation" in {
       val space = new InformationSpace
       val batch = _success(space.registerInformation("paper", Vector(Record.data("title" -> "Knowledge import", "authors" -> "Alice"))))
       val recordid = batch.head.id
-      _success(space.validateInformationRecord(recordid))
+      _success(space.validateInformation(recordid))
       val candidate = _success(space.addResolutionCandidate(
         recordid,
         "dbpediaUri",
         "Knowledge import",
         InformationIdentityBinding(
-          id = InformationIdentityBindingId("pending"),
-          recordId = Some(recordid),
           rdfSubject = Some(RdfNodeName("https://dbpedia.org/resource/Knowledge_graph")),
           externalIdentifiers = Vector(ExternalKnowledgeIdentifier("dbpedia", "https://dbpedia.org/resource/Knowledge_graph", Some("resource"))),
           authority = Some("dbpedia"),
@@ -194,13 +190,13 @@ final class InformationSpaceSpec
         Some(0.72),
         Some("dbpedia lookup")
       ))
-      val selected = _success(space.selectResolutionCandidate(candidate.id))
-      val item = _success(space.confirmInformationRecord(recordid))
+      _success(space.selectResolutionCandidate(recordid, candidate.candidateKey))
+      val item = _success(space.confirmInformation(recordid))
 
-      space.clearResolutionCandidate(candidate.id) shouldBe a[Consequence.Failure[_]]
-      space.resolutionCandidates(recordid).map(_.id) shouldBe Vector(candidate.id)
+      space.clearResolutionCandidate(recordid, candidate.candidateKey) shouldBe a[Consequence.Failure[_]]
+      space.resolutionCandidates(recordid).map(_.candidateKey) shouldBe Vector(candidate.candidateKey)
       space.counts.identityBindingCount shouldBe 1
-      space.informationItemOption(item.id).map(_.identityBindingIds) shouldBe Some(Vector(selected.binding.id))
+      space.getInformation(item.id).map(_.identityBindings.map(_.status)) shouldBe Some(Vector(InformationBindingStatus.Confirmed))
     }
   }
 

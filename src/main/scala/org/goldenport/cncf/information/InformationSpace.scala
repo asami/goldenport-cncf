@@ -16,6 +16,7 @@ import org.goldenport.cncf.knowledge.{
   KnowledgeFrameKind,
   KnowledgeFrameOrigin,
   KnowledgeNode,
+  KnowledgeNodeBindings,
   KnowledgeNodeCategory,
   KnowledgeNodeId,
   KnowledgeNodeIdentity,
@@ -24,13 +25,16 @@ import org.goldenport.cncf.knowledge.{
   KnowledgeProvenance,
   KnowledgeProvenanceId,
   KnowledgeSourceRef,
+  KnowledgeTagBinding,
   KnowledgeWorkingSetSnapshot
 }
+import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.cncf.tag.TaggingWorkflow
 import org.goldenport.record.Record
 
 /*
  * @since   May. 20, 2026
- * @version May. 24, 2026
+ * @version May. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 final class InformationSpace {
@@ -41,13 +45,12 @@ final class InformationSpace {
 
   def counts: InformationSpaceCounts =
     InformationSpaceCounts(
-      recordCount = _snapshot.records.size,
-      itemCount = _snapshot.items.size,
-      validationIssueCount = _snapshot.validationIssues.size,
-      resolutionCandidateCount = _snapshot.resolutionCandidates.size,
-      identityBindingCount = _snapshot.identityBindings.size,
-      publicationStatusCount = _snapshot.publicationStatuses.size,
-      conflictCount = _snapshot.conflicts.size
+      informationCount = _snapshot.information.size,
+      validationIssueCount = _snapshot.information.map(_.validationIssues.size).sum,
+      resolutionCandidateCount = _snapshot.information.map(_.resolutionCandidates.size).sum,
+      identityBindingCount = _snapshot.information.map(_.identityBindings.size).sum,
+      publicationStatusCount = _snapshot.information.map(_.publicationStatuses.size).sum,
+      conflictCount = _snapshot.information.map(_.conflicts.size).sum
     )
 
   def clear(): Unit =
@@ -56,383 +59,340 @@ final class InformationSpace {
   def registerInformation(
     domain: String,
     records: Vector[Record]
-  ): Consequence[Vector[InformationImportRecord]] =
+  ): Consequence[Vector[Information]] =
     if (domain.trim.isEmpty)
       Consequence.argumentInvalid("information domain is required")
     else if (records.isEmpty)
       Consequence.argumentInvalid("information records are required")
     else {
-      val nextrecords = records.zipWithIndex.map { case (record, index) =>
-        InformationImportRecord(
-          id = InformationRecordId(_next_id("info-record", _snapshot.records.size + index + 1)),
+      val base = _snapshot.information.size
+      val values = records.zipWithIndex.map { case (record, index) =>
+        Information(
+          id = InformationId(_next_id("information", base + index + 1)),
           domain = domain,
           rawData = record,
           workingData = record
         )
       }
-      _snapshot = _snapshot.copy(
-        records = _snapshot.records ++ nextrecords
-      )
-      Consequence.success(nextrecords)
+      _snapshot = _snapshot.copy(information = _snapshot.information ++ values)
+      Consequence.success(values)
     }
 
-  def importRecordOption(id: InformationRecordId): Option[InformationImportRecord] =
-    _snapshot.records.find(_.id == id)
+  def getInformation(id: InformationId): Option[Information] =
+    _snapshot.information.find(_.id == id)
 
-  def updateInformationRecord(
-    recordid: InformationRecordId,
+  def updateInformation(
+    informationid: InformationId,
     workingdata: Record
-  ): Consequence[InformationImportRecord] =
-    _update_record(recordid) { record =>
-      record.copy(
+  ): Consequence[Information] =
+    _update_information(informationid) { information =>
+      information.copy(
         workingData = workingdata,
         state = InformationLifecycleState.Imported,
-        validationIssueIds = Vector.empty,
+        validationIssues = Vector.empty,
         updatedAt = Instant.now()
       )
     }
 
-  def validateInformationRecord(recordid: InformationRecordId): Consequence[InformationImportRecord] =
-    importRecordOption(recordid) match {
-      case Some(record) =>
-        val issues = InformationSpace.validate(record).zipWithIndex.map { case (issue, index) =>
-          issue.copy(id = InformationValidationIssueId(_next_id("info-issue", _snapshot.validationIssues.size + index + 1)))
-        }
+  def validateInformation(informationid: InformationId): Consequence[Information] =
+    getInformation(informationid) match {
+      case Some(information) =>
+        val issues = InformationSpace.validate(information)
         val state =
           if (issues.nonEmpty)
             InformationLifecycleState.Invalid
-          else if (!record.resolutionCandidateIds.forall(id => _snapshot.resolutionCandidates.exists(x => x.id == id && x.selected)))
+          else if (information.resolutionCandidates.exists(!_.selected))
             InformationLifecycleState.NeedsResolution
           else
             InformationLifecycleState.ReadyForConfirmation
-        val retainedissues = _snapshot.validationIssues.filterNot(_.recordId == recordid)
-        val updated = record.copy(
+        val updated = information.copy(
           state = state,
-          validationIssueIds = issues.map(_.id),
+          validationIssues = issues,
           updatedAt = Instant.now()
         )
-        _snapshot = _snapshot.copy(
-          records = _snapshot.records.map(x => if (x.id == recordid) updated else x),
-          validationIssues = retainedissues ++ issues
-        )
+        _replace_information(updated)
         Consequence.success(updated)
       case None =>
-        Consequence.argumentInvalid(s"information record not found: ${recordid.print}")
+        Consequence.argumentInvalid(s"information not found: ${informationid.print}")
     }
 
-  def validationIssues(recordid: InformationRecordId): Vector[InformationValidationIssue] =
-    _snapshot.validationIssues.filter(_.recordId == recordid)
+  def validationIssues(informationid: InformationId): Vector[InformationValidationIssue] =
+    getInformation(informationid).map(_.validationIssues).getOrElse(Vector.empty)
 
   def addResolutionCandidate(
-    recordid: InformationRecordId,
+    informationid: InformationId,
     fieldpath: String,
     label: String,
     binding: InformationIdentityBinding,
     confidence: Option[Double] = None,
     evidence: Option[String] = None
   ): Consequence[InformationResolutionCandidate] =
-    importRecordOption(recordid) match {
-      case Some(record) =>
-        val bindingid = InformationIdentityBindingId(_next_id("info-binding", _snapshot.identityBindings.size + 1))
-        val candidateid = InformationResolutionCandidateId(_next_id("info-candidate", _snapshot.resolutionCandidates.size + 1))
-        val nextbinding = binding.copy(id = bindingid, recordId = Some(recordid), status = InformationBindingStatus.Candidate)
-        val candidate = InformationResolutionCandidate(candidateid, recordid, fieldpath, label, nextbinding, confidence, evidence)
-        val updated = record.copy(
+    getInformation(informationid) match {
+      case Some(information) =>
+        val key = _next_key("candidate", information.resolutionCandidates.size + 1)
+        val nextbinding = binding.copy(status = InformationBindingStatus.Candidate)
+        val candidate = InformationResolutionCandidate(key, fieldpath, label, nextbinding, confidence, evidence)
+        val updated = information.copy(
           state = InformationLifecycleState.NeedsResolution,
-          resolutionCandidateIds = record.resolutionCandidateIds :+ candidate.id,
-          identityBindingIds = record.identityBindingIds :+ nextbinding.id,
+          resolutionCandidates = information.resolutionCandidates :+ candidate,
+          identityBindings = information.identityBindings :+ nextbinding,
           updatedAt = Instant.now()
         )
-        _snapshot = _snapshot.copy(
-          records = _snapshot.records.map(x => if (x.id == recordid) updated else x),
-          identityBindings = _snapshot.identityBindings :+ nextbinding,
-          resolutionCandidates = _snapshot.resolutionCandidates :+ candidate
-        )
+        _replace_information(updated)
         Consequence.success(candidate)
       case None =>
-        Consequence.argumentInvalid(s"information record not found: ${recordid.print}")
+        Consequence.argumentInvalid(s"information not found: ${informationid.print}")
     }
 
-  def resolutionCandidates(recordid: InformationRecordId): Vector[InformationResolutionCandidate] =
-    _snapshot.resolutionCandidates.filter(_.recordId == recordid)
+  def resolutionCandidates(informationid: InformationId): Vector[InformationResolutionCandidate] =
+    getInformation(informationid).map(_.resolutionCandidates).getOrElse(Vector.empty)
 
-  def selectResolutionCandidate(candidateid: InformationResolutionCandidateId): Consequence[InformationResolutionCandidate] =
-    _snapshot.resolutionCandidates.find(_.id == candidateid) match {
-      case Some(candidate) =>
-        val selectedbinding = candidate.binding.copy(status = InformationBindingStatus.Selected)
-        val updatedcandidate = candidate.copy(binding = selectedbinding, selected = true)
-        val record = importRecordOption(candidate.recordId)
-        val selectedids = _snapshot.resolutionCandidates
-          .map(x => if (x.id == candidateid) updatedcandidate else x)
-          .filter(_.recordId == candidate.recordId)
-          .filter(_.selected)
-          .map(_.id)
-          .toSet
-        val nextstate = record.map { x =>
-          if (x.validationIssueIds.nonEmpty)
-            InformationLifecycleState.Invalid
-          else if (x.resolutionCandidateIds.forall(selectedids.contains))
-            InformationLifecycleState.ReadyForConfirmation
-          else
-            InformationLifecycleState.NeedsResolution
-        }
-        _snapshot = _snapshot.copy(
-          records = _snapshot.records.map(x => if (x.id == candidate.recordId && nextstate.isDefined) x.copy(state = nextstate.get, updatedAt = Instant.now()) else x),
-          resolutionCandidates = _snapshot.resolutionCandidates.map(x => if (x.id == candidateid) updatedcandidate else x),
-          identityBindings = _snapshot.identityBindings.map(x => if (x.id == selectedbinding.id) selectedbinding else x)
-        )
-        Consequence.success(updatedcandidate)
-      case None =>
-        Consequence.argumentInvalid(s"information resolution candidate not found: ${candidateid.print}")
-    }
-
-  def clearResolutionCandidate(candidateid: InformationResolutionCandidateId): Consequence[InformationResolutionCandidate] =
-    _snapshot.resolutionCandidates.find(_.id == candidateid) match {
-      case Some(candidate) =>
-        val record = importRecordOption(candidate.recordId)
-        record match {
-          case Some(x) if x.itemId.nonEmpty || x.state == InformationLifecycleState.Confirmed || x.state == InformationLifecycleState.Published =>
-            Consequence.argumentInvalid(s"information resolution candidate belongs to confirmed record: ${candidateid.print}")
-          case _ =>
-            val remainingcandidates = _snapshot.resolutionCandidates.filterNot(_.id == candidateid)
-            val updatedrecord = record.map { x =>
-              x.copy(
-                state = _state_after_candidate_update(x, remainingcandidates),
-                resolutionCandidateIds = x.resolutionCandidateIds.filterNot(_ == candidateid),
-                identityBindingIds = x.identityBindingIds.filterNot(_ == candidate.binding.id),
-                updatedAt = Instant.now()
-              )
+  def selectResolutionCandidate(
+    informationid: InformationId,
+    candidatekey: String
+  ): Consequence[InformationResolutionCandidate] =
+    getInformation(informationid) match {
+      case Some(information) =>
+        information.resolutionCandidates.find(_.candidateKey == candidatekey) match {
+          case Some(candidate) =>
+            val selectedbinding = candidate.binding.copy(status = InformationBindingStatus.Selected)
+            val selected = candidate.copy(binding = selectedbinding, selected = true)
+            val candidates = information.resolutionCandidates.map(x => if (x.candidateKey == candidatekey) selected else x)
+            val bindings = information.identityBindings.map { binding =>
+              if (_same_binding(binding, candidate.binding)) selectedbinding else binding
             }
-            _snapshot = _snapshot.copy(
-              records = _snapshot.records.map(x => updatedrecord.filter(_.id == x.id).getOrElse(x)),
-              resolutionCandidates = remainingcandidates,
-              identityBindings = _snapshot.identityBindings.filterNot(_.id == candidate.binding.id)
+            val state = _state_after_candidate_update(information.copy(resolutionCandidates = candidates))
+            val updated = information.copy(
+              state = state,
+              resolutionCandidates = candidates,
+              identityBindings = bindings,
+              updatedAt = Instant.now()
             )
-            Consequence.success(candidate)
+            _replace_information(updated)
+            Consequence.success(selected)
+          case None =>
+            Consequence.argumentInvalid(s"information resolution candidate not found: $candidatekey")
         }
       case None =>
-        Consequence.argumentInvalid(s"information resolution candidate not found: ${candidateid.print}")
+        Consequence.argumentInvalid(s"information not found: ${informationid.print}")
     }
 
-  def confirmInformationRecord(recordid: InformationRecordId): Consequence[InformationItem] =
-    importRecordOption(recordid) match {
-      case Some(record) if record.state == InformationLifecycleState.Invalid =>
-        Consequence.argumentInvalid(s"information record is invalid: ${recordid.print}")
-      case Some(record) if record.state != InformationLifecycleState.ReadyForConfirmation && record.state != InformationLifecycleState.Confirmed =>
-        Consequence.argumentInvalid(s"information record is not ready for confirmation: ${recordid.print}")
-      case Some(record) =>
-        val itemid = record.itemId.getOrElse(InformationItemId(_next_id("info-item", _snapshot.items.size + 1)))
-        val bindingids = record.identityBindingIds
-        val item = InformationItem(
-          id = itemid,
-          domain = record.domain,
-          data = record.workingData,
-          state = InformationLifecycleState.Confirmed,
-          sourceRecordId = Some(record.id),
-          identityBindingIds = bindingids,
-          confirmedAt = Some(Instant.now())
-        )
-        val confirmedbindings = _snapshot.identityBindings.map { binding =>
-          if (bindingids.contains(binding.id))
-            binding.copy(informationItemId = Some(itemid), status = InformationBindingStatus.Confirmed)
-          else
-            binding
+  def clearResolutionCandidate(
+    informationid: InformationId,
+    candidatekey: String
+  ): Consequence[InformationResolutionCandidate] =
+    getInformation(informationid) match {
+      case Some(information) if information.state == InformationLifecycleState.Confirmed || information.state == InformationLifecycleState.Published =>
+        Consequence.argumentInvalid(s"information is already confirmed: ${informationid.print}")
+      case Some(information) =>
+        information.resolutionCandidates.find(_.candidateKey == candidatekey) match {
+          case Some(candidate) =>
+            val candidates = information.resolutionCandidates.filterNot(_.candidateKey == candidatekey)
+            val bindings = information.identityBindings.filterNot(_same_binding(_, candidate.binding))
+            val updated = information.copy(
+              state = _state_after_candidate_update(information.copy(resolutionCandidates = candidates)),
+              resolutionCandidates = candidates,
+              identityBindings = bindings,
+              updatedAt = Instant.now()
+            )
+            _replace_information(updated)
+            Consequence.success(candidate)
+          case None =>
+            Consequence.argumentInvalid(s"information resolution candidate not found: $candidatekey")
         }
-        val updatedrecord = record.copy(
+      case None =>
+        Consequence.argumentInvalid(s"information not found: ${informationid.print}")
+    }
+
+  def confirmInformation(informationid: InformationId): Consequence[Information] =
+    getInformation(informationid) match {
+      case Some(information) if information.state == InformationLifecycleState.Invalid =>
+        Consequence.argumentInvalid(s"information is invalid: ${informationid.print}")
+      case Some(information) if information.state != InformationLifecycleState.ReadyForConfirmation && information.state != InformationLifecycleState.Confirmed =>
+        Consequence.argumentInvalid(s"information is not ready for confirmation: ${informationid.print}")
+      case Some(information) =>
+        val bindings = information.identityBindings.map(_.copy(status = InformationBindingStatus.Confirmed))
+        val confirmed = information.copy(
           state = InformationLifecycleState.Confirmed,
-          itemId = Some(itemid),
+          identityBindings = bindings,
+          confirmedAt = information.confirmedAt.orElse(Some(Instant.now())),
           updatedAt = Instant.now()
         )
-        _snapshot = _snapshot.copy(
-          records = _snapshot.records.map(x => if (x.id == recordid) updatedrecord else x),
-          items = _snapshot.items.filterNot(_.id == itemid) :+ item,
-          identityBindings = confirmedbindings
-        )
-        Consequence.success(item)
+        _replace_information(confirmed)
+        Consequence.success(confirmed)
       case None =>
-        Consequence.argumentInvalid(s"information record not found: ${recordid.print}")
+        Consequence.argumentInvalid(s"information not found: ${informationid.print}")
     }
 
-  def informationItemOption(id: InformationItemId): Option[InformationItem] =
-    _snapshot.items.find(_.id == id)
-
-  def searchInformationItems(domain: Option[String] = None): Vector[InformationItem] =
+  def searchInformation(domain: Option[String] = None): Vector[Information] =
     domain match {
-      case Some(value) => _snapshot.items.filter(_.domain == value)
-      case None => _snapshot.items
+      case Some(value) => _snapshot.information.filter(_.domain == value)
+      case None => _snapshot.information
     }
 
-  def rejectInformationRecord(
-    recordid: InformationRecordId,
+  def rejectInformation(
+    informationid: InformationId,
     reason: String
-  ): Consequence[InformationImportRecord] =
-    _update_record(recordid)(_.copy(state = InformationLifecycleState.Rejected, updatedAt = Instant.now()))
+  ): Consequence[Information] =
+    _update_information(informationid)(_.copy(state = InformationLifecycleState.Rejected, updatedAt = Instant.now()))
 
-  def reopenInformationItem(itemid: InformationItemId): Consequence[InformationItem] =
-    _update_item(itemid)(_.copy(state = InformationLifecycleState.ReadyForConfirmation, updatedAt = Instant.now()))
+  def reopenInformation(informationid: InformationId): Consequence[Information] =
+    _update_information(informationid)(_.copy(state = InformationLifecycleState.ReadyForConfirmation, updatedAt = Instant.now()))
 
-  def publishInformationItem(
-    itemid: InformationItemId,
+  def publishInformation(
+    informationid: InformationId,
     target: String,
     message: Option[String] = None,
     knowledgeframeid: Option[KnowledgeFrameId] = None
   ): Consequence[InformationPublicationStatus] =
-    informationItemOption(itemid) match {
-      case Some(item) if item.state == InformationLifecycleState.Confirmed || item.state == InformationLifecycleState.Published =>
-        val publicationid = item.publicationId.getOrElse(InformationPublicationId(_next_id("info-publication", _snapshot.publicationStatuses.size + 1)))
+    getInformation(informationid) match {
+      case Some(information) if information.state == InformationLifecycleState.Confirmed || information.state == InformationLifecycleState.Published =>
+        val key = information.publicationStatuses.headOption.map(_.publicationKey).getOrElse(_next_key("publication", 1))
         val publication = InformationPublicationStatus(
-          id = publicationid,
-          itemId = itemid,
+          publicationKey = key,
           state = InformationPublicationState.Published,
           target = target,
           message = message,
           knowledgeFrameId = knowledgeframeid,
           publishedAt = Some(Instant.now())
         )
-        val publisheditem = item.copy(
+        val published = information.copy(
           state = InformationLifecycleState.Published,
-          publicationId = Some(publication.id),
+          publicationStatuses = information.publicationStatuses.filterNot(_.publicationKey == key) :+ publication,
           updatedAt = Instant.now()
         )
-        _snapshot = _snapshot.copy(
-          items = _snapshot.items.map(x => if (x.id == itemid) publisheditem else x),
-          publicationStatuses = _snapshot.publicationStatuses.filterNot(_.id == publication.id) :+ publication
-        )
+        _replace_information(published)
         Consequence.success(publication)
       case Some(_) =>
-        Consequence.argumentInvalid(s"information item is not confirmed: ${itemid.print}")
+        Consequence.argumentInvalid(s"information is not confirmed: ${informationid.print}")
       case None =>
-        Consequence.argumentInvalid(s"information item not found: ${itemid.print}")
+        Consequence.argumentInvalid(s"information not found: ${informationid.print}")
     }
 
-  def failInformationItemPublication(
-    itemid: InformationItemId,
+  def failInformationPublication(
+    informationid: InformationId,
     target: String,
     message: Option[String] = None,
     knowledgeframeid: Option[KnowledgeFrameId] = None
   ): Consequence[InformationPublicationStatus] =
-    informationItemOption(itemid) match {
-      case Some(item) if item.state == InformationLifecycleState.Confirmed || item.state == InformationLifecycleState.Published =>
-        val publicationid = item.publicationId.getOrElse(InformationPublicationId(_next_id("info-publication", _snapshot.publicationStatuses.size + 1)))
+    getInformation(informationid) match {
+      case Some(information) if information.state == InformationLifecycleState.Confirmed || information.state == InformationLifecycleState.Published =>
+        val key = information.publicationStatuses.headOption.map(_.publicationKey).getOrElse(_next_key("publication", 1))
         val publication = InformationPublicationStatus(
-          id = publicationid,
-          itemId = itemid,
+          publicationKey = key,
           state = InformationPublicationState.Failed,
           target = target,
           message = message,
           knowledgeFrameId = knowledgeframeid,
           publishedAt = Some(Instant.now())
         )
-        val faileditem = item.copy(
-          publicationId = Some(publication.id),
+        val failed = information.copy(
+          publicationStatuses = information.publicationStatuses.filterNot(_.publicationKey == key) :+ publication,
           updatedAt = Instant.now()
         )
-        _snapshot = _snapshot.copy(
-          items = _snapshot.items.map(x => if (x.id == itemid) faileditem else x),
-          publicationStatuses = _snapshot.publicationStatuses.filterNot(_.id == publication.id) :+ publication
-        )
+        _replace_information(failed)
         Consequence.success(publication)
       case Some(_) =>
-        Consequence.argumentInvalid(s"information item is not confirmed: ${itemid.print}")
+        Consequence.argumentInvalid(s"information is not confirmed: ${informationid.print}")
       case None =>
-        Consequence.argumentInvalid(s"information item not found: ${itemid.print}")
+        Consequence.argumentInvalid(s"information not found: ${informationid.print}")
     }
 
-  def publicationStatusOption(id: InformationPublicationId): Option[InformationPublicationStatus] =
-    _snapshot.publicationStatuses.find(_.id == id)
+  def publicationStatusOption(
+    informationid: InformationId,
+    publicationkey: String
+  ): Option[InformationPublicationStatus] =
+    getInformation(informationid).flatMap(_.publicationStatuses.find(_.publicationKey == publicationkey))
 
   def recordConflict(
-    itemid: InformationItemId,
+    informationid: InformationId,
     fieldpath: String,
     informationvalue: String,
     rdfvalue: String,
     severity: String = "warning"
   ): Consequence[InformationConflict] =
-    informationItemOption(itemid) match {
-      case Some(item) =>
+    getInformation(informationid) match {
+      case Some(information) =>
         val conflict = InformationConflict(
-          InformationConflictId(_next_id("info-conflict", _snapshot.conflicts.size + 1)),
-          itemid,
-          fieldpath,
-          informationvalue,
-          rdfvalue,
-          severity
+          conflictKey = _next_key("conflict", information.conflicts.size + 1),
+          fieldPath = fieldpath,
+          informationValue = informationvalue,
+          rdfValue = rdfvalue,
+          severity = severity
         )
-        _snapshot = _snapshot.copy(
-          items = _snapshot.items.map(x => if (x.id == itemid) item.copy(state = InformationLifecycleState.Conflict) else x),
-          conflicts = _snapshot.conflicts :+ conflict
+        val updated = information.copy(
+          state = InformationLifecycleState.Conflict,
+          conflicts = information.conflicts :+ conflict,
+          updatedAt = Instant.now()
         )
+        _replace_information(updated)
         Consequence.success(conflict)
       case None =>
-        Consequence.argumentInvalid(s"information item not found: ${itemid.print}")
+        Consequence.argumentInvalid(s"information not found: ${informationid.print}")
     }
 
-  def conflicts(filterstate: Option[InformationConflictState] = None): Vector[InformationConflict] =
+  def conflicts(filterstate: Option[InformationConflictState] = None): Vector[InformationConflict] = {
+    val values = _snapshot.information.flatMap(_.conflicts)
     filterstate match {
-      case Some(value) => _snapshot.conflicts.filter(_.state == value)
-      case None => _snapshot.conflicts
+      case Some(value) => values.filter(_.state == value)
+      case None => values
     }
-
-  def conflictOption(id: InformationConflictId): Option[InformationConflict] =
-    _snapshot.conflicts.find(_.id == id)
+  }
 
   def resolveConflict(
-    conflictid: InformationConflictId,
+    informationid: InformationId,
+    conflictkey: String,
     decision: String
   ): Consequence[InformationConflict] =
-    conflictOption(conflictid) match {
-      case Some(conflict) =>
-        val resolved = conflict.copy(
-          state = InformationConflictState.Resolved,
-          resolution = Some(decision)
-        )
-        val nextconflicts = _snapshot.conflicts.map(x => if (x.id == conflictid) resolved else x)
-        val itemconflicts = nextconflicts.filter(_.itemId == conflict.itemId)
-        val nextitems =
-          if (itemconflicts.forall(_.state == InformationConflictState.Resolved))
-            _snapshot.items.map { item =>
-              if (item.id == conflict.itemId)
-                item.copy(
-                  state = item.publicationId.fold(InformationLifecycleState.Confirmed)(_ => InformationLifecycleState.Published),
-                  updatedAt = Instant.now()
-                )
+    getInformation(informationid) match {
+      case Some(information) =>
+        information.conflicts.find(_.conflictKey == conflictkey) match {
+          case Some(conflict) =>
+            val resolved = conflict.copy(
+              state = InformationConflictState.Resolved,
+              resolution = Some(decision)
+            )
+            val conflicts = information.conflicts.map(x => if (x.conflictKey == conflictkey) resolved else x)
+            val state =
+              if (conflicts.forall(_.state == InformationConflictState.Resolved))
+                information.publicationStatuses.find(_.state == InformationPublicationState.Published).fold(InformationLifecycleState.Confirmed)(_ => InformationLifecycleState.Published)
               else
-                item
-            }
-          else
-            _snapshot.items
-        _snapshot = _snapshot.copy(
-          items = nextitems,
-          conflicts = nextconflicts
-        )
-        Consequence.success(resolved)
+                InformationLifecycleState.Conflict
+            _replace_information(information.copy(state = state, conflicts = conflicts, updatedAt = Instant.now()))
+            Consequence.success(resolved)
+          case None =>
+            Consequence.argumentInvalid(s"information conflict not found: $conflictkey")
+        }
       case None =>
-        Consequence.argumentInvalid(s"information conflict not found: ${conflictid.print}")
+        Consequence.argumentInvalid(s"information not found: ${informationid.print}")
     }
 
-  private def _update_record(
-    recordid: InformationRecordId
-  )(f: InformationImportRecord => InformationImportRecord): Consequence[InformationImportRecord] =
-    importRecordOption(recordid) match {
-      case Some(record) =>
-        val updated = f(record)
-        _snapshot = _snapshot.copy(records = _snapshot.records.map(x => if (x.id == recordid) updated else x))
-        Consequence.success(updated)
+  def materializeInformation(informationid: InformationId): Consequence[KnowledgeWorkingSetSnapshot] =
+    getInformation(informationid) match {
+      case Some(information) if information.state == InformationLifecycleState.Confirmed || information.state == InformationLifecycleState.Published =>
+        Consequence.success(InformationToKnowledgeProjection.materialize(information))
+      case Some(_) =>
+        Consequence.argumentInvalid(s"information is not knowledge-ready: ${informationid.print}")
       case None =>
-        Consequence.argumentInvalid(s"information record not found: ${recordid.print}")
+        Consequence.argumentInvalid(s"information not found: ${informationid.print}")
     }
 
-  private def _update_item(
-    itemid: InformationItemId
-  )(f: InformationItem => InformationItem): Consequence[InformationItem] =
-    informationItemOption(itemid) match {
-      case Some(item) =>
-        val updated = f(item)
-        _snapshot = _snapshot.copy(items = _snapshot.items.map(x => if (x.id == itemid) updated else x))
+  private def _update_information(
+    informationid: InformationId
+  )(f: Information => Information): Consequence[Information] =
+    getInformation(informationid) match {
+      case Some(information) =>
+        val updated = f(information)
+        _replace_information(updated)
         Consequence.success(updated)
       case None =>
-        Consequence.argumentInvalid(s"information item not found: ${itemid.print}")
+        Consequence.argumentInvalid(s"information not found: ${informationid.print}")
     }
+
+  private def _replace_information(information: Information): Unit =
+    _snapshot = _snapshot.copy(
+      information = _snapshot.information.map(x => if (x.id == information.id) information else x)
+    )
 
   private def _next_id(
     prefix: String,
@@ -440,102 +400,140 @@ final class InformationSpace {
   ): String =
     s"$prefix-$index"
 
-  private def _state_after_candidate_update(
-    record: InformationImportRecord,
-    candidates: Vector[InformationResolutionCandidate]
-  ): InformationLifecycleState =
-    if (record.state == InformationLifecycleState.Confirmed || record.state == InformationLifecycleState.Published)
-      record.state
-    else if (record.validationIssueIds.nonEmpty)
+  private def _next_key(
+    prefix: String,
+    index: Int
+  ): String =
+    s"$prefix-$index"
+
+  private def _state_after_candidate_update(information: Information): InformationLifecycleState =
+    if (information.state == InformationLifecycleState.Confirmed || information.state == InformationLifecycleState.Published)
+      information.state
+    else if (information.validationIssues.nonEmpty)
       InformationLifecycleState.Invalid
-    else {
-      val own = candidates.filter(_.recordId == record.id)
-      if (own.isEmpty)
-        InformationLifecycleState.Imported
-      else if (own.forall(_.selected))
-        InformationLifecycleState.ReadyForConfirmation
-      else
-        InformationLifecycleState.NeedsResolution
-    }
+    else if (information.resolutionCandidates.isEmpty)
+      InformationLifecycleState.Imported
+    else if (information.resolutionCandidates.forall(_.selected))
+      InformationLifecycleState.ReadyForConfirmation
+    else
+      InformationLifecycleState.NeedsResolution
+
+  private def _same_binding(
+    lhs: InformationIdentityBinding,
+    rhs: InformationIdentityBinding
+  ): Boolean =
+    lhs.rdfSubject == rhs.rdfSubject &&
+      lhs.externalIdentifiers == rhs.externalIdentifiers &&
+      lhs.entityBindings == rhs.entityBindings &&
+      lhs.knowledgeNodeId == rhs.knowledgeNodeId &&
+      lhs.authority == rhs.authority
 }
 
 object InformationSpace {
-  def validate(record: InformationImportRecord): Vector[InformationValidationIssue] =
-    record.domain match {
-      case "paper" => _validate_paper(record)
-      case "book" => _validate_book(record)
-      case "web-resource" => _validate_web_resource(record)
+  def validate(information: Information): Vector[InformationValidationIssue] =
+    information.domain match {
+      case "paper" => _validate_paper(information)
+      case "book" => _validate_book(information)
+      case "web-resource" => _validate_web_resource(information)
       case _ => Vector.empty
     }
 
-  def materializeItem(item: InformationItem): KnowledgeWorkingSetSnapshot =
-    InformationToKnowledgeProjection.materialize(item)
+  def materializeInformation(information: Information): KnowledgeWorkingSetSnapshot =
+    InformationToKnowledgeProjection.materialize(information)
 
-  private def _validate_paper(record: InformationImportRecord): Vector[InformationValidationIssue] = {
-    val paper = PaperInformation.from(record.workingData)
+  def materializeInformationWithTags(information: Information)(using ExecutionContext): Consequence[KnowledgeWorkingSetSnapshot] =
+    InformationTagging.knowledgeTagBindings(information.id).map { tagbindings =>
+      InformationToKnowledgeProjection.materialize(information, tagbindings)
+    }
+
+  private def _validate_paper(information: Information): Vector[InformationValidationIssue] = {
+    val paper = PaperInformation.from(information.workingData)
     val base = Vector.newBuilder[InformationValidationIssue]
     if (paper.title.isEmpty)
-      base += InformationValidationIssue(InformationValidationIssueId("pending"), record.id, "title", "error", "title is required")
+      base += InformationValidationIssue("title", "error", "title is required")
     base.result()
   }
 
-  private def _validate_book(record: InformationImportRecord): Vector[InformationValidationIssue] = {
-    val title = record.workingData.getString("title").getOrElse("").trim
+  private def _validate_book(information: Information): Vector[InformationValidationIssue] = {
+    val title = information.workingData.getString("title").getOrElse("").trim
     val base = Vector.newBuilder[InformationValidationIssue]
     if (title.isEmpty)
-      base += InformationValidationIssue(InformationValidationIssueId("pending"), record.id, "title", "error", "title is required")
+      base += InformationValidationIssue("title", "error", "title is required")
     base.result()
   }
 
-  private def _validate_web_resource(record: InformationImportRecord): Vector[InformationValidationIssue] = {
-    val webresource = WebResourceInformation.from(record.workingData)
+  private def _validate_web_resource(information: Information): Vector[InformationValidationIssue] = {
+    val webresource = WebResourceInformation.from(information.workingData)
     val base = Vector.newBuilder[InformationValidationIssue]
     if (webresource.title.isEmpty)
-      base += InformationValidationIssue(InformationValidationIssueId("pending"), record.id, "title", "error", "title is required")
+      base += InformationValidationIssue("title", "error", "title is required")
     if (webresource.url.isEmpty && webresource.canonicalUrl.isEmpty)
-      base += InformationValidationIssue(InformationValidationIssueId("pending"), record.id, "url", "error", "url or canonicalUrl is required")
+      base += InformationValidationIssue("url", "error", "url or canonicalUrl is required")
     base.result()
   }
 }
 
+object InformationTagging {
+  val TagSpace: String = InformationSpaceEditorProjection.InformationTagSpace
+  val Role: String = InformationSpaceEditorProjection.InformationTagRole
+
+  def workflow(tagspace: String = TagSpace): TaggingWorkflow =
+    TaggingWorkflow(tagSpace = tagspace)
+
+  def knowledgeTagBindings(
+    informationid: InformationId,
+    tagspace: String = TagSpace
+  )(using ExecutionContext): Consequence[Vector[KnowledgeTagBinding]] =
+    workflow(tagspace).listEntityTags(informationid.print, Some(Role)).map { summary =>
+      summary.tags.map(tag => KnowledgeTagBinding(tag.tagSpace, tag.id.value))
+    }
+}
+
 object InformationToKnowledgeProjection {
-  def materialize(item: InformationItem): KnowledgeWorkingSetSnapshot = {
+  def materialize(information: Information): KnowledgeWorkingSetSnapshot =
+    materialize(information, Vector.empty)
+
+  def materialize(
+    information: Information,
+    tagbindings: Vector[KnowledgeTagBinding]
+  ): KnowledgeWorkingSetSnapshot = {
     val provenance = KnowledgeProvenance(
-      KnowledgeProvenanceId(s"prov-${item.id.print}"),
+      KnowledgeProvenanceId(s"prov-${information.id.print}"),
       origin = "information-space",
       generatedBy = Some("information.materialize")
     )
     val evidence = KnowledgeEvidence(
-      KnowledgeEvidenceId(s"ev-${item.id.print}"),
-      "information-item",
-      KnowledgeSourceRef("information-item", item.id.print),
-      item.data.getString("title"),
+      KnowledgeEvidenceId(s"ev-${information.id.print}"),
+      "information",
+      KnowledgeSourceRef("information", information.id.print),
+      information.data.getString("title"),
       Some(provenance.id)
     )
     val node = KnowledgeNode(
-      id = KnowledgeNodeId(s"information-${item.id.print}"),
-      category = KnowledgeNodeCategory(item.domain),
+      id = KnowledgeNodeId(s"information-${information.id.print}"),
+      category = KnowledgeNodeCategory(information.domain),
       identity = KnowledgeNodeIdentity(
-        externalIdentifiers = Vector(ExternalKnowledgeIdentifier("cncf.information", item.id.print, Some(item.domain)))
+        externalIdentifiers = Vector(ExternalKnowledgeIdentifier("cncf.information", information.id.print, Some(information.domain)))
       ),
-      presentation = KnowledgeNodePresentation.label(item.data.getString("title").getOrElse(item.id.print)),
+      presentation = KnowledgeNodePresentation.label(information.data.getString("title").getOrElse(information.id.print)),
       sources = KnowledgeNodeSources(
         evidenceIds = Vector(evidence.id),
         provenanceIds = Vector(provenance.id)
       ),
-      attributes = KnowledgeAttributes("information_domain" -> item.domain)
+      bindings = KnowledgeNodeBindings(tagBindings = tagbindings),
+      attributes = KnowledgeAttributes("information_domain" -> information.domain)
     )
     val fact = KnowledgeFact(
-      id = KnowledgeFactId(s"fact-${item.id.print}-title"),
+      id = KnowledgeFactId(s"fact-${information.id.print}-title"),
       kind = KnowledgeFactKind.EntityDerived,
       subjectNodeId = Some(node.id),
       predicate = Some("information.title"),
-      value = item.data.getString("title"),
+      value = information.data.getString("title"),
       evidenceIds = Vector(evidence.id),
       provenanceId = Some(provenance.id)
     )
     val frame = KnowledgeFrame(
-      id = KnowledgeFrameId(s"frame-${item.id.print}"),
+      id = KnowledgeFrameId(s"frame-${information.id.print}"),
       kind = KnowledgeFrameKind.Curated,
       focusNodeIds = Vector(node.id),
       nodeIds = Vector(node.id),
@@ -548,7 +546,7 @@ object InformationToKnowledgeProjection {
         operation = Some("information.materialize"),
         provenanceId = Some(provenance.id)
       ),
-      sourceRefs = Vector(KnowledgeSourceRef("information-item", item.id.print)),
+      sourceRefs = Vector(KnowledgeSourceRef("information", information.id.print)),
       materializedAt = Some(Instant.now())
     )
     KnowledgeWorkingSetSnapshot(

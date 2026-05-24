@@ -6,7 +6,7 @@ import org.goldenport.cncf.subsystem.Subsystem
 
 /*
  * @since   May. 20, 2026
- * @version May. 24, 2026
+ * @version May. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 trait StaticFormAppRendererInformationPart {
@@ -28,15 +28,14 @@ trait StaticFormAppRendererInformationPart {
     val projections = InformationSpaceProjection.components(subsystem.components)
     val rows =
       if (projections.isEmpty)
-        admin_empty_table_cell(8, "No components are loaded.")
+        admin_empty_table_cell(7, "No components are loaded.")
       else
         projections.map { projection =>
           val path = escape_path_segment(projection.componentName)
           val counts = projection.counts
           s"""<tr>
              |  <td><a href="/web/system/admin/information/${path}">${escape(projection.componentName)}</a></td>
-             |  <td>${counts.recordCount}</td>
-             |  <td>${counts.itemCount}</td>
+             |  <td>${counts.informationCount}</td>
              |  <td>${counts.validationIssueCount}</td>
              |  <td>${counts.resolutionCandidateCount}</td>
              |  <td>${counts.identityBindingCount}</td>
@@ -55,7 +54,7 @@ trait StaticFormAppRendererInformationPart {
            |${admin_card(
              "InformationSpace Components",
              s"""<div class="table-responsive"><table class="table table-sm table-hover align-middle mb-0">
-                |  <thead><tr><th>Component</th><th>Information</th><th>Confirmed</th><th>Issues</th><th>Candidates</th><th>Bindings</th><th>Publications</th><th>Conflicts</th></tr></thead>
+                |  <thead><tr><th>Component</th><th>Information</th><th>Issues</th><th>Candidates</th><th>Bindings</th><th>Publications</th><th>Conflicts</th></tr></thead>
                 |  <tbody>${rows}</tbody>
                 |</table></div>""".stripMargin
            )}
@@ -71,34 +70,31 @@ trait StaticFormAppRendererInformationPart {
     val projection = InformationSpaceProjection.component(component)
     val snapshot = projection.snapshot
     val previewlimit = renderer_config.previewLimit
-    val records = snapshot.records.sortBy(_.id.print).take(previewlimit).map { record =>
+    val informationrows = snapshot.information.sortBy(_.id.print).take(previewlimit).map { information =>
       s"""<tr>
-         |  <td><code>${escape(record.id.print)}</code></td>
-         |  <td>${escape(record.domain)}</td>
-         |  <td><span class="badge text-bg-secondary">${escape(record.state.label)}</span></td>
-         |  <td>${record.validationIssueIds.size}</td>
-         |  <td>${record.resolutionCandidateIds.size}</td>
-         |  <td>${record.itemId.map(x => s"<code>${escape(x.print)}</code>").getOrElse("")}</td>
+         |  <td><code>${escape(information.id.print)}</code></td>
+         |  <td>${escape(information.domain)}</td>
+         |  <td><span class="badge text-bg-secondary">${escape(information.state.label)}</span></td>
+         |  <td>${escape(information.workingData.getString("title").getOrElse(""))}</td>
+         |  <td>${information.validationIssues.size}</td>
+         |  <td>${information.resolutionCandidates.size}</td>
+         |  <td>${information.publicationStatuses.headOption.map(x => s"<code>${escape(x.publicationKey)}</code>").getOrElse("")}</td>
          |</tr>""".stripMargin
     }.mkString("\n")
-    val items = snapshot.items.sortBy(_.id.print).take(previewlimit).map { item =>
-      s"""<tr>
-         |  <td><code>${escape(item.id.print)}</code></td>
-         |  <td>${escape(item.domain)}</td>
-         |  <td><span class="badge text-bg-secondary">${escape(item.state.label)}</span></td>
-         |  <td>${escape(item.data.getString("title").getOrElse(""))}</td>
-         |  <td>${item.identityBindingIds.size}</td>
-         |  <td>${item.publicationId.map(x => s"<code>${escape(x.print)}</code>").getOrElse("")}</td>
-         |</tr>""".stripMargin
+    val issues = snapshot.information.flatMap(information =>
+      information.validationIssues.map(issue => information -> issue)
+    ).sortBy(_._1.id.print).take(previewlimit).map { case (information, issue) =>
+      s"""<tr><td><code>${escape(information.id.print)}</code></td><td>${escape(issue.fieldPath)}</td><td>${escape(issue.severity)}</td><td>${escape(issue.message)}</td></tr>"""
     }.mkString("\n")
-    val issues = snapshot.validationIssues.sortBy(_.id.print).take(previewlimit).map { issue =>
-      s"""<tr><td><code>${escape(issue.id.print)}</code></td><td><code>${escape(issue.recordId.print)}</code></td><td>${escape(issue.fieldPath)}</td><td>${escape(issue.severity)}</td><td>${escape(issue.message)}</td></tr>"""
+    val publications = snapshot.information.flatMap(information =>
+      information.publicationStatuses.map(publication => information -> publication)
+    ).sortBy(x => (x._1.id.print, x._2.publicationKey)).take(previewlimit).map { case (information, publication) =>
+      s"""<tr><td><code>${escape(information.id.print)}</code></td><td><code>${escape(publication.publicationKey)}</code></td><td>${escape(publication.target)}</td><td>${escape(publication.state.label)}</td><td>${escape(publication.message.getOrElse(""))}</td></tr>"""
     }.mkString("\n")
-    val publications = snapshot.publicationStatuses.sortBy(_.id.print).take(previewlimit).map { publication =>
-      s"""<tr><td><code>${escape(publication.id.print)}</code></td><td><code>${escape(publication.itemId.print)}</code></td><td>${escape(publication.target)}</td><td>${escape(publication.state.label)}</td><td>${escape(publication.message.getOrElse(""))}</td></tr>"""
-    }.mkString("\n")
-    val conflicts = snapshot.conflicts.sortBy(_.id.print).take(previewlimit).map { conflict =>
-      s"""<tr><td><code>${escape(conflict.id.print)}</code></td><td><code>${escape(conflict.itemId.print)}</code></td><td>${escape(conflict.fieldPath)}</td><td>${escape(conflict.state.label)}</td><td>${escape(conflict.resolution.getOrElse(""))}</td></tr>"""
+    val conflicts = snapshot.information.flatMap(information =>
+      information.conflicts.map(conflict => information -> conflict)
+    ).sortBy(x => (x._1.id.print, x._2.conflictKey)).take(previewlimit).map { case (information, conflict) =>
+      s"""<tr><td><code>${escape(information.id.print)}</code></td><td><code>${escape(conflict.conflictKey)}</code></td><td>${escape(conflict.fieldPath)}</td><td>${escape(conflict.state.label)}</td><td>${escape(conflict.resolution.getOrElse(""))}</td></tr>"""
     }.mkString("\n")
     simple_page(
       title = s"System Information ${component.name}",
@@ -110,19 +106,17 @@ trait StaticFormAppRendererInformationPart {
            ))}
            |${admin_card("Counts", field_table(Vector(
              "Component" -> component.name,
-             "Information" -> projection.counts.recordCount.toString,
-             "Confirmed information" -> projection.counts.itemCount.toString,
+             "Information" -> projection.counts.informationCount.toString,
              "Validation issues" -> projection.counts.validationIssueCount.toString,
              "Resolution candidates" -> projection.counts.resolutionCandidateCount.toString,
              "Identity bindings" -> projection.counts.identityBindingCount.toString,
              "Publications" -> projection.counts.publicationStatusCount.toString,
              "Conflicts" -> projection.counts.conflictCount.toString
            )))}
-           |${admin_card("Editable information", information_table(records, 6, "No editable information is loaded.", "Information", "Domain", "State", "Issues", "Candidates", "Confirmed"))}
-           |${admin_card("Information items", information_table(items, 6, "No information items are loaded.", "Item", "Domain", "State", "Title", "Bindings", "Publication"))}
-           |${admin_card("Validation issues", information_table(issues, 5, "No validation issues are loaded.", "Issue", "Record", "Field", "Severity", "Message"))}
-           |${admin_card("Publication status", information_table(publications, 5, "No publication status records are loaded.", "Publication", "Item", "Target", "State", "Message"))}
-           |${admin_card("Conflicts", information_table(conflicts, 5, "No conflicts are loaded.", "Conflict", "Item", "Field", "State", "Resolution"))}""".stripMargin
+           |${admin_card("Information", information_table(informationrows, 7, "No information is loaded.", "Information", "Domain", "State", "Title", "Issues", "Candidates", "Publication"))}
+           |${admin_card("Validation issues", information_table(issues, 4, "No validation issues are loaded.", "Information", "Field", "Severity", "Message"))}
+           |${admin_card("Publication status", information_table(publications, 5, "No publication status records are loaded.", "Information", "Publication", "Target", "State", "Message"))}
+           |${admin_card("Conflicts", information_table(conflicts, 5, "No conflicts are loaded.", "Information", "Conflict", "Field", "State", "Resolution"))}""".stripMargin
     )
   }
 

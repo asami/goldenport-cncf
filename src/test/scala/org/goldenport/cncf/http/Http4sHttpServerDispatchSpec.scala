@@ -27,7 +27,7 @@ import org.typelevel.ci.CIStringSyntax
 /*
  * @since   Apr. 24, 2026
  *  version Apr. 25, 2026
- * @version May. 24, 2026
+ * @version May. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers {
@@ -731,8 +731,8 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers {
         case Consequence.Failure(conclusion) => fail(conclusion.toString)
       }
       val record = batch.headOption.getOrElse(fail("information record missing"))
-      component.informationSpace.validateInformationRecord(record.id)
-      component.informationSpace.confirmInformationRecord(record.id)
+      component.informationSpace.validateInformation(record.id)
+      component.informationSpace.confirmInformation(record.id)
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
       val app = server.routes(null.asInstanceOf[org.http4s.server.websocket.WebSocketBuilder2[IO]]).orNotFound
 
