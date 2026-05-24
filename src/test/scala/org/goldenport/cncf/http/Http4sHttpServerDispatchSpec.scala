@@ -747,6 +747,28 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers {
       unknowncomponent.status.code shouldBe 404
     }
 
+    "dispatch app-facing TagSpace routes" in {
+      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val app = server.routes(null.asInstanceOf[org.http4s.server.websocket.WebSocketBuilder2[IO]]).orNotFound
+
+      val response = app.run(HRequest[IO](
+        method = Method.GET,
+        uri = Uri.unsafeFromString("/web/tag/tags?tagSpace=information")
+      ).putHeaders(org.http4s.Header.Raw(ci"x-textus-session", "forged-session"))).unsafeRunSync()
+      val body = response.as[String].unsafeRunSync()
+
+      response.status.code shouldBe 200
+      body should include ("Application TagSpace browser and editor")
+      body should include ("TagSpace <span class=\"badge text-bg-secondary\">information</span>")
+      body should include ("action=\"/web/tag/tags\"")
+      body should include ("action=\"/web/tag/tags/create\"")
+      body should include ("Log in to create, update, or move Tags")
+      body should include ("disabled")
+      body should not include ("action=\"/web/tag/tags/update\"")
+      body should not include ("Raw tag tree")
+    }
+
     "accept JSON-RPC MCP requests over POST" in {
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))

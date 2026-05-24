@@ -1348,6 +1348,9 @@ Phase 27 active scope:
   space: lists can filter by tag, Information detail shows tag summaries, and
   local KnowledgeSpace materialization carries tag bindings into KnowledgeNode
   bindings.
+- CNCF builtin `TagComponent` now owns the application-facing TagSpace screen
+  at `/web/tag/tags`; TKE links to that screen with `tagSpace=information`
+  instead of implementing a separate Tag master editor.
 - The next target is a usability smoke for book, paper, and web-resource
   editing before Phase 27 closure.
 

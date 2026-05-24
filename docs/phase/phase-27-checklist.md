@@ -471,6 +471,9 @@ the selected paper/book/web workflows.
 - [x] Add v1 Information tag management using the dedicated `information` tag
       space, with tag filtering in TKE lists and tag bindings included in
       local KnowledgeSpace materialization.
+- [x] Add CNCF TagComponent application-facing TagSpace screen and link TKE to
+      `/web/tag/tags?tagSpace=information` for Information Tag master
+      reference/editing.
 - [ ] Run a book identifier import/editing smoke with DBpedia lookup.
 - [ ] Run a paper editing smoke if included in the closure scope.
 - [ ] Run a web knowledge editing smoke.
@@ -488,3 +491,6 @@ the selected paper/book/web workflows.
 - Information tags use the dedicated `information` tag space in v1. TKE can
   sync tags, filter lists by tag, show tag summaries in Information tables and
   detail projections, and materialize local Knowledge nodes with tag bindings.
+- Tag master reference/editing for application users is provided by CNCF
+  builtin `TagComponent` at `/web/tag/tags`; CNCF admin `/web/admin/tags`
+  remains the operator/admin surface.

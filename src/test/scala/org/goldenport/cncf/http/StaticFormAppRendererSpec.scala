@@ -1599,6 +1599,22 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       )
 
       val tagpage = _page_body(_renderer.renderAdminTags(subsystem, Map("tagSpace" -> "admin-tag-space")), "Tag admin page")
+      val apptagpage = _page_body(_renderer.renderAppTags(subsystem, Map("tagSpace" -> "admin-tag-space")), "app Tag page")
+      val editableapptagpage = _page_body(_renderer.renderAppTags(
+        subsystem,
+        Map("tagSpace" -> "admin-tag-space"),
+        Vector("pageContext.session.authenticated" -> "true", "x-textus-session" -> "session-1")
+      ), "editable app Tag page")
+      val forgedapptagpage = _page_body(_renderer.renderAppTags(
+        subsystem,
+        Map("tagSpace" -> "admin-tag-space"),
+        Vector("x-textus-session" -> "forged-session")
+      ), "forged app Tag page")
+      val forgedcreate = _renderer.renderAppTagCreateResult(
+        subsystem,
+        Map("tagSpace" -> "admin-tag-space", "key" -> "forged"),
+        Vector("x-textus-session" -> "forged-session")
+      )
       val searchpage = _page_body(_renderer.renderAdminTags(subsystem, Map(
         "tagSpace" -> "admin-tag-space",
         "component" -> "tag",
@@ -1606,6 +1622,13 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         "tagRef" -> rootPath,
         "role" -> "tag"
       )), "Tag search page")
+      val appsearchpage = _page_body(_renderer.renderAppTags(subsystem, Map(
+        "tagSpace" -> "admin-tag-space",
+        "component" -> "tag",
+        "entity" -> "tag",
+        "tagRef" -> rootPath,
+        "role" -> "tag"
+      )), "app Tag search page")
       val emptytagpage = _page_body(_renderer.renderAdminTags(subsystem, Map("tagSpace" -> "admin-empty-tag-space")), "empty Tag admin page")
       val emptysearchpage = _page_body(_renderer.renderAdminTags(subsystem, Map(
         "tagSpace" -> "admin-tag-space",
@@ -1641,6 +1664,21 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       tagpage should include ("<input type=\"hidden\" name=\"tagSpace\" value=\"admin-tag-space\">")
       tagpage should include ("name=\"includeDescendants\"")
       tagpage should include ("admin-tag-root.child")
+      apptagpage should include ("Application TagSpace browser and editor")
+      apptagpage should include ("TagSpace <span class=\"badge text-bg-secondary\">admin-tag-space</span>")
+      apptagpage should include ("action=\"/web/tag/tags\"")
+      apptagpage should include ("action=\"/web/tag/tags/create\"")
+      apptagpage should include ("data-textus-capability=\"tag:edit\"")
+      apptagpage should include ("data-textus-capability-policy=\"authenticated\"")
+      apptagpage should include ("disabled")
+      apptagpage should not include ("Raw tag tree")
+      apptagpage should not include ("action=\"/web/tag/tags/update\"")
+      editableapptagpage should include ("action=\"/web/tag/tags/update\"")
+      editableapptagpage should include ("action=\"/web/tag/tags/move\"")
+      editableapptagpage should not include ("Raw tag tree")
+      forgedapptagpage should include ("disabled")
+      forgedapptagpage should not include ("action=\"/web/tag/tags/update\"")
+      forgedcreate shouldBe a[Consequence.Failure[_]]
       emptytagpage should include ("No Tags are available for this TagSpace.")
       emptytagpage should include ("alert alert-secondary")
       searchpage should include ("admin-tag-root.child")
@@ -1648,6 +1686,9 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       searchpage should include ("/web/tag/admin/entities/tag/")
       searchpage should include ("Tag search result")
       searchpage should include ("class=\"badge text-bg-light border align-self-start\">")
+      appsearchpage should include ("Tag search result")
+      appsearchpage should include ("action=\"/web/tag/tags\"")
+      appsearchpage should not include ("Raw tag tree")
       emptysearchpage should include ("No visible Entities matched this Tag filter.")
       emptysearchpage should include ("alert alert-secondary")
       detail should include ("Tags")

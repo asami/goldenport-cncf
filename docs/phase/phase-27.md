@@ -79,7 +79,9 @@ Scope boundaries:
 - I (DONE): KE-09 — Publish/materialize flow and validation feedback.
 - J (ACTIVE): KE-10 — Usability smoke and Phase 27 closure, including the
   single-`Information` runtime cleanup and v1 Information tag support needed
-  before final usability validation.
+  before final usability validation. CNCF `TagComponent` provides the
+  app-facing TagSpace screen used by TKE for `information` Tag master
+  reference/editing.
 
 Resume hint:
 

@@ -178,6 +178,14 @@ For InformationSpace applications, prefer:
 - `information:reject`
 - `information:publish`
 
+When an application needs shared Tag master management, link to the CNCF
+builtin Tag application screen instead of building a local TagSpace editor. Use
+`/web/tag/tags?tagSpace=<space>` for ordinary app users and keep
+`/web/admin/tags` for operator/admin workflows. For example,
+`textus-knowledge-editor` links to `/web/tag/tags?tagSpace=information` and
+continues to use its own Information operations only for attaching/syncing tags
+to a selected Information.
+
 Do not implement application-specific JavaScript permission checks such as
 `data-myapp-write`. The HTML should declare CNCF capability requirements, the
 renderer should apply the visual state, and the operation layer should enforce

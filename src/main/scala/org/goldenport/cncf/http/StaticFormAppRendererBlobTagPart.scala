@@ -31,7 +31,7 @@ import io.circe.parser.parse
 
 /*
  * @since   May. 18, 2026
- * @version May. 18, 2026
+ * @version May. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 trait StaticFormAppRendererBlobTagPart {
@@ -295,21 +295,21 @@ trait StaticFormAppRendererBlobTagPart {
   def renderAdminTags(
     subsystem: Subsystem,
     params: Map[String, String] = Map.empty,
-    requestProperties: Vector[(String, String)] = Vector.empty
+    requestproperties: Vector[(String, String)] = Vector.empty
   ): Consequence[Page] =
     for {
-      tree <- admin_tag_record(subsystem, "tag_tree", admin_tag_tree_args(params), requestProperties)
-      search <- admin_tag_search_record(subsystem, params, requestProperties)
+      tree <- admin_tag_record(subsystem, "tag_tree", admin_tag_tree_args(params), requestproperties)
+      search <- admin_tag_search_record(subsystem, params, requestproperties)
     } yield {
       val tags = record_seq(tree.asMap.get("data"))
-      val tagSpace = params.get("tagSpace").filter(_.nonEmpty).getOrElse("default")
+      val tagspace = params.get("tagSpace").filter(_.nonEmpty).getOrElse("default")
       val table =
         if (tags.isEmpty)
           s"""<tbody>${admin_empty_table_cell(9, "No Tags are available for this TagSpace.")}</tbody>"""
         else
           s"""<tbody>${tags.map(admin_tag_row).mkString("\n")}</tbody>"""
-      val searchHtml = search.map(admin_tag_search_result(params, _)).getOrElse("")
-      val emptyAlert =
+      val searchhtml = search.map(admin_tag_search_result(params, _)).getOrElse("")
+      val emptyalert =
         if (tags.isEmpty) admin_tag_empty_alert("No Tags are available for this TagSpace.")
         else ""
       Page(simple_page(
@@ -322,7 +322,7 @@ trait StaticFormAppRendererBlobTagPart {
              |    <div class="d-flex flex-column flex-md-row justify-content-between gap-3 mb-3">
              |      <div>
              |        <h2 class="card-title h5 mb-1">TagSpace selector</h2>
-             |        <p class="text-body-secondary mb-0">Current TagSpace <span class="badge text-bg-secondary">${escape(tagSpace)}</span></p>
+             |        <p class="text-body-secondary mb-0">Current TagSpace <span class="badge text-bg-secondary">${escape(tagspace)}</span></p>
              |      </div>
              |      <div class="text-body-secondary small">Tags are shared master data inside the selected TagSpace.</div>
              |    </div>
@@ -347,17 +347,17 @@ trait StaticFormAppRendererBlobTagPart {
              |    </article>
              |  </div>
              |</div>
-             |${searchHtml}
+             |${searchhtml}
              |<article class="card admin-card">
              |  <div class="card-body">
              |    <div class="d-flex flex-column flex-md-row justify-content-between gap-2 mb-3">
              |      <div>
              |        <h2 class="card-title h5 mb-1">Tags</h2>
-             |        <p class="text-body-secondary mb-0">Browse, update, and move Tags in <span class="badge text-bg-secondary">${escape(tagSpace)}</span>.</p>
+             |        <p class="text-body-secondary mb-0">Browse, update, and move Tags in <span class="badge text-bg-secondary">${escape(tagspace)}</span>.</p>
              |      </div>
              |      <span class="badge text-bg-light border align-self-start">${tags.size} tags</span>
              |    </div>
-             |    ${emptyAlert}
+             |    ${emptyalert}
              |    <div class="table-responsive">
              |      <table class="table table-sm table-hover align-middle mb-0">
              |      <thead><tr><th>Path</th><th>Key</th><th>TagSpace</th><th>Usage</th><th>Sort</th><th>Title</th><th>Description</th><th>Update</th><th>Move</th></tr></thead>
@@ -367,6 +367,80 @@ trait StaticFormAppRendererBlobTagPart {
              |  </div>
              |</article>
              |${manual_raw_details("Raw tag tree", tree)}""".stripMargin
+      ))
+    }
+
+  def renderAppTags(
+    subsystem: Subsystem,
+    params: Map[String, String] = Map.empty,
+    requestproperties: Vector[(String, String)] = Vector.empty
+  ): Consequence[Page] =
+    for {
+      tree <- admin_tag_record(subsystem, "tag_tree", admin_tag_tree_args(params), requestproperties)
+      search <- admin_tag_search_record(subsystem, params, requestproperties)
+    } yield {
+      val tags = record_seq(tree.asMap.get("data"))
+      val tagspace = params.get("tagSpace").filter(_.nonEmpty).getOrElse("default")
+      val canedit = app_tag_can_edit(requestproperties)
+      val table =
+        if (tags.isEmpty)
+          s"""<tbody>${admin_empty_table_cell(if (canedit) 9 else 7, "No Tags are available for this TagSpace.")}</tbody>"""
+        else
+          s"""<tbody>${tags.map(tag => app_tag_row(tag, canedit)).mkString("\n")}</tbody>"""
+      val searchhtml = search.map(app_tag_search_result(params, _)).getOrElse("")
+      val editalert =
+        if (canedit)
+          ""
+        else
+          """<div class="alert alert-secondary mb-3">Log in to create, update, or move Tags. Tag browsing and search are available read-only.</div>"""
+      Page(simple_page(
+        title = "Tags",
+        subtitle = "Application TagSpace browser and editor",
+        body =
+          s"""${admin_nav_card(Vector("Tags" -> s"/web/tag/tags?tagSpace=${escapeQuery(tagspace)}", "System admin tags" -> s"/web/admin/tags?tagSpace=${escapeQuery(tagspace)}"))}
+             |<article class="card admin-card">
+             |  <div class="card-body">
+             |    <div class="d-flex flex-column flex-md-row justify-content-between gap-3 mb-3">
+             |      <div>
+             |        <h1 class="h4 mb-1">TagSpace <span class="badge text-bg-secondary">${escape(tagspace)}</span></h1>
+             |        <p class="text-body-secondary mb-0">Browse shared application Tags and maintain the strict Tag tree used by content and Information screens.</p>
+             |      </div>
+             |      <span class="badge text-bg-light border align-self-start">${tags.size} tags</span>
+             |    </div>
+             |    ${app_tag_filter_form(params)}
+             |  </div>
+             |</article>
+             |${editalert}
+             |<div class="row g-3">
+             |  <div class="col-12 col-xl-5">
+             |    <article class="card admin-card h-100">
+             |      <div class="card-body">
+             |        <h2 class="card-title h5">Create Tag</h2>
+             |        ${app_tag_create_form(params, canedit)}
+             |      </div>
+             |    </article>
+             |  </div>
+             |  <div class="col-12 col-xl-7">
+             |    <article class="card admin-card h-100">
+             |      <div class="card-body">
+             |        <h2 class="card-title h5">Find tagged records</h2>
+             |        ${app_tag_search_form(params)}
+             |      </div>
+             |    </article>
+             |  </div>
+             |</div>
+             |${searchhtml}
+             |<article class="card admin-card">
+             |  <div class="card-body">
+             |    <h2 class="card-title h5">Tag tree</h2>
+             |    <div class="table-responsive">
+             |      <table class="table table-sm table-hover align-middle mb-0">
+             |        <thead><tr><th>Path</th><th>Key</th><th>Usage</th><th>Sort</th><th>Title</th><th>Description</th>${if (canedit) "<th>Update</th><th>Move</th>" else ""}</tr></thead>
+             |        ${table}
+             |      </table>
+             |    </div>
+             |  </div>
+             |</article>""".stripMargin
       ))
     }
 
@@ -396,6 +470,42 @@ trait StaticFormAppRendererBlobTagPart {
     admin_tag_record(subsystem, "tag_move", admin_tag_move_args(form), requestProperties).map { record =>
       admin_tag_result_page("Tag Moved", "Tag path was updated", form, record)
     }
+
+  def renderAppTagCreateResult(
+    subsystem: Subsystem,
+    form: Map[String, String],
+    requestproperties: Vector[(String, String)] = Vector.empty
+  ): Consequence[Page] =
+    if (!app_tag_can_edit(requestproperties))
+      Consequence.securityPermissionDenied("Login is required to create Tags.")
+    else
+      admin_tag_record(subsystem, "tag_create", admin_tag_mutation_args(form, includeParent = true), requestproperties).map { record =>
+        app_tag_result_page("Tag Created", "Tag was created", form, record)
+      }
+
+  def renderAppTagUpdateResult(
+    subsystem: Subsystem,
+    form: Map[String, String],
+    requestproperties: Vector[(String, String)] = Vector.empty
+  ): Consequence[Page] =
+    if (!app_tag_can_edit(requestproperties))
+      Consequence.securityPermissionDenied("Login is required to update Tags.")
+    else
+      admin_tag_record(subsystem, "tag_update", admin_tag_update_args(form), requestproperties).map { record =>
+        app_tag_result_page("Tag Updated", "Tag metadata was updated", form, record)
+      }
+
+  def renderAppTagMoveResult(
+    subsystem: Subsystem,
+    form: Map[String, String],
+    requestproperties: Vector[(String, String)] = Vector.empty
+  ): Consequence[Page] =
+    if (!app_tag_can_edit(requestproperties))
+      Consequence.securityPermissionDenied("Login is required to move Tags.")
+    else
+      admin_tag_record(subsystem, "tag_move", admin_tag_move_args(form), requestproperties).map { record =>
+        app_tag_result_page("Tag Moved", "Tag path was updated", form, record)
+      }
 
   def renderAdminTagAttachResult(
     subsystem: Subsystem,
@@ -686,19 +796,50 @@ trait StaticFormAppRendererBlobTagPart {
   ): String = {
     val id = record.getString("id").getOrElse("")
     val path = record.getString("path").getOrElse("")
-    val tagSpace = record.getString("tagSpace").getOrElse("")
+    val tagspace = record.getString("tagSpace").getOrElse("")
     val usage = record.getString("usageKind").getOrElse("")
     val sort = record.getString("sortOrder").getOrElse("")
     s"""<tr>
        |  <td><div><code class="fw-semibold">${escape(path)}</code></div><div class="small text-body-secondary">${escape(id)}</div></td>
        |  <td><code>${escape(record.getString("key").getOrElse(""))}</code></td>
-       |  <td><span class="badge text-bg-secondary">${escape(tagSpace)}</span></td>
+       |  <td><span class="badge text-bg-secondary">${escape(tagspace)}</span></td>
        |  <td><span class="badge text-bg-light border">${escape(usage)}</span></td>
        |  <td>${if (sort.isEmpty) "" else s"""<span class="badge text-bg-light border">${escape(sort)}</span>"""}</td>
        |  <td>${escape(record.getString("title").getOrElse(""))}</td>
        |  <td>${escape(record.getString("description").getOrElse(""))}</td>
        |  <td>${admin_tag_update_form(record)}</td>
        |  <td>${admin_tag_move_form(record)}</td>
+       |</tr>""".stripMargin
+  }
+
+  protected def app_tag_can_edit(
+    requestproperties: Vector[(String, String)]
+  ): Boolean =
+    requestproperties.exists {
+      case (key, value) =>
+        key == "pageContext.session.authenticated" && value.trim.equalsIgnoreCase("true")
+    }
+
+  protected def app_tag_row(
+    record: Record,
+    canedit: Boolean
+  ): String = {
+    val path = record.getString("path").getOrElse("")
+    val usage = record.getString("usageKind").getOrElse("")
+    val sort = record.getString("sortOrder").getOrElse("")
+    val actions =
+      if (canedit)
+        s"""<td>${app_tag_update_form(record)}</td><td>${app_tag_move_form(record)}</td>"""
+      else
+        ""
+    s"""<tr>
+       |  <td><code class="fw-semibold">${escape(path)}</code></td>
+       |  <td><code>${escape(record.getString("key").getOrElse(""))}</code></td>
+       |  <td><span class="badge text-bg-light border">${escape(usage)}</span></td>
+       |  <td>${if (sort.isEmpty) "" else s"""<span class="badge text-bg-light border">${escape(sort)}</span>"""}</td>
+       |  <td>${escape(record.getString("title").getOrElse(""))}</td>
+       |  <td>${escape(record.getString("description").getOrElse(""))}</td>
+       |  ${actions}
        |</tr>""".stripMargin
   }
 
@@ -709,6 +850,15 @@ trait StaticFormAppRendererBlobTagPart {
        |  <div class="col-12 col-md-7"><label class="form-label" for="tagAdminTagSpace">TagSpace</label><input class="form-control" id="tagAdminTagSpace" name="tagSpace" value="${escape(params.getOrElse("tagSpace", ""))}" placeholder="default"><div class="form-text">Use blank to open the default TagSpace.</div></div>
        |  <div class="col-6 col-md-2"><button class="btn btn-primary w-100" type="submit">Open</button></div>
        |  <div class="col-6 col-md-2"><a class="btn btn-outline-secondary w-100" href="/web/admin/tags">Default</a></div>
+       |</form>""".stripMargin
+
+  protected def app_tag_filter_form(
+    params: Map[String, String]
+  ): String =
+    s"""<form method="get" action="/web/tag/tags" class="row g-2 align-items-end">
+       |  <div class="col-12 col-md-7"><label class="form-label" for="appTagSpace">TagSpace</label><input class="form-control" id="appTagSpace" name="tagSpace" value="${escape(params.getOrElse("tagSpace", ""))}" placeholder="default"></div>
+       |  <div class="col-6 col-md-2"><button class="btn btn-primary w-100" type="submit">Open</button></div>
+       |  <div class="col-6 col-md-2"><a class="btn btn-outline-secondary w-100" href="/web/tag/tags">Default</a></div>
        |</form>""".stripMargin
 
   protected def admin_tag_create_form(
@@ -726,6 +876,24 @@ trait StaticFormAppRendererBlobTagPart {
        |  <datalist id="tagUsageOptions"><option value="general"><option value="cms"><option value="navigation"><option value="powertype"></datalist>
        |</form>""".stripMargin
 
+  protected def app_tag_create_form(
+    params: Map[String, String],
+    canedit: Boolean
+  ): String = {
+    val disabled = if (canedit) "" else " disabled"
+    s"""<form method="post" action="/web/tag/tags/create" class="row g-2 align-items-end" data-textus-capability="tag:edit" data-textus-capability-mode="disable" data-textus-capability-policy="authenticated">
+       |  <div class="col-12 col-md-4"><label class="form-label" for="appTagCreateSpace">TagSpace</label><input class="form-control" id="appTagCreateSpace" name="tagSpace" value="${escape(params.getOrElse("tagSpace", ""))}" placeholder="default"${disabled}></div>
+       |  <div class="col-12 col-md-4"><label class="form-label" for="appTagCreateKey">Key</label><input class="form-control" id="appTagCreateKey" name="key" required${disabled}></div>
+       |  <div class="col-12 col-md-4"><label class="form-label" for="appTagCreateParent">Parent path/id</label><input class="form-control" id="appTagCreateParent" name="parentTagRef"${disabled}></div>
+       |  <div class="col-12 col-md-4"><label class="form-label" for="appTagCreateUsage">Usage</label><input class="form-control" id="appTagCreateUsage" name="usageKind" list="appTagUsageOptions" value="general"${disabled}></div>
+       |  <div class="col-12 col-md-3"><label class="form-label" for="appTagCreateSort">Sort</label><input class="form-control" id="appTagCreateSort" name="sortOrder"${disabled}></div>
+       |  <div class="col-12 col-md-5"><label class="form-label" for="appTagCreateTitle">Title</label><input class="form-control" id="appTagCreateTitle" name="title"${disabled}></div>
+       |  <div class="col-12"><label class="form-label" for="appTagCreateDescription">Description</label><input class="form-control" id="appTagCreateDescription" name="description"${disabled}></div>
+       |  <div class="col-12 d-flex justify-content-end"><button class="btn btn-primary" type="submit"${disabled}>Create Tag</button></div>
+       |  <datalist id="appTagUsageOptions"><option value="general"><option value="cms"><option value="navigation"><option value="powertype"></datalist>
+       |</form>""".stripMargin
+  }
+
   protected def admin_tag_update_form(
     record: Record
   ): String =
@@ -737,10 +905,31 @@ trait StaticFormAppRendererBlobTagPart {
        |  <div class="input-group input-group-sm"><span class="input-group-text">Usage</span><input class="form-control form-control-sm" name="usageKind" value="${escape(record.getString("usageKind").getOrElse("general"))}" list="tagUsageOptions"><span class="input-group-text">Sort</span><input class="form-control form-control-sm" name="sortOrder" value="${escape(record.getString("sortOrder").getOrElse(""))}" placeholder="Sort"><button class="btn btn-outline-primary btn-sm" type="submit">Save</button></div>
        |</form>""".stripMargin
 
+  protected def app_tag_update_form(
+    record: Record
+  ): String =
+    s"""<form method="post" action="/web/tag/tags/update" class="vstack gap-1" data-textus-capability="tag:edit" data-textus-capability-mode="disable" data-textus-capability-policy="authenticated">
+       |  <input type="hidden" name="tagRef" value="${escape(record.getString("id").getOrElse(""))}">
+       |  <input type="hidden" name="tagSpace" value="${escape(record.getString("tagSpace").getOrElse(""))}">
+       |  <div class="input-group input-group-sm"><span class="input-group-text">Title</span><input class="form-control form-control-sm" name="title" value="${escape(record.getString("title").getOrElse(""))}" placeholder="Title"></div>
+       |  <div class="input-group input-group-sm"><span class="input-group-text">Description</span><input class="form-control form-control-sm" name="description" value="${escape(record.getString("description").getOrElse(""))}" placeholder="Description"></div>
+       |  <div class="input-group input-group-sm"><span class="input-group-text">Usage</span><input class="form-control form-control-sm" name="usageKind" value="${escape(record.getString("usageKind").getOrElse("general"))}" list="appTagUsageOptions"><span class="input-group-text">Sort</span><input class="form-control form-control-sm" name="sortOrder" value="${escape(record.getString("sortOrder").getOrElse(""))}" placeholder="Sort"><button class="btn btn-outline-primary btn-sm" type="submit">Save</button></div>
+       |</form>""".stripMargin
+
   protected def admin_tag_move_form(
     record: Record
   ): String =
     s"""<form method="post" action="/web/admin/tags/move" class="vstack gap-1">
+       |  <input type="hidden" name="tagRef" value="${escape(record.getString("id").getOrElse(""))}">
+       |  <input type="hidden" name="tagSpace" value="${escape(record.getString("tagSpace").getOrElse(""))}">
+       |  <div class="input-group input-group-sm"><span class="input-group-text">Parent</span><input class="form-control form-control-sm" name="newParentTagRef" value="${escape(record.getString("parentTagId").getOrElse(""))}" placeholder="blank for root"></div>
+       |  <div class="input-group input-group-sm"><span class="input-group-text">Key</span><input class="form-control form-control-sm" name="newKey" value="${escape(record.getString("key").getOrElse(""))}" placeholder="New key"><button class="btn btn-outline-primary btn-sm" type="submit">Move</button></div>
+       |</form>""".stripMargin
+
+  protected def app_tag_move_form(
+    record: Record
+  ): String =
+    s"""<form method="post" action="/web/tag/tags/move" class="vstack gap-1" data-textus-capability="tag:edit" data-textus-capability-mode="disable" data-textus-capability-policy="authenticated">
        |  <input type="hidden" name="tagRef" value="${escape(record.getString("id").getOrElse(""))}">
        |  <input type="hidden" name="tagSpace" value="${escape(record.getString("tagSpace").getOrElse(""))}">
        |  <div class="input-group input-group-sm"><span class="input-group-text">Parent</span><input class="form-control form-control-sm" name="newParentTagRef" value="${escape(record.getString("parentTagId").getOrElse(""))}" placeholder="blank for root"></div>
@@ -760,17 +949,51 @@ trait StaticFormAppRendererBlobTagPart {
        |  <div class="col-md-1"><button class="btn btn-primary w-100" type="submit">Search</button></div>
        |</form>""".stripMargin
 
+  protected def app_tag_search_form(
+    params: Map[String, String]
+  ): String =
+    s"""<form method="get" action="/web/tag/tags" class="row g-2 align-items-end">
+       |  <div class="col-md-2"><label class="form-label" for="appTagSearchSpace">TagSpace</label><input class="form-control" id="appTagSearchSpace" name="tagSpace" value="${escape(params.getOrElse("tagSpace", ""))}" placeholder="default"></div>
+       |  <div class="col-md-2"><label class="form-label" for="appTagSearchComponent">Component</label><input class="form-control" id="appTagSearchComponent" name="component" value="${escape(params.getOrElse("component", ""))}" required></div>
+       |  <div class="col-md-2"><label class="form-label" for="appTagSearchEntity">Entity</label><input class="form-control" id="appTagSearchEntity" name="entity" value="${escape(params.getOrElse("entity", ""))}" required></div>
+       |  <div class="col-md-3"><label class="form-label" for="appTagSearchRef">Tag path</label><input class="form-control" id="appTagSearchRef" name="tagRef" value="${escape(params.getOrElse("tagRef", ""))}" required></div>
+       |  <div class="col-md-1"><label class="form-label" for="appTagSearchRole">Role</label><input class="form-control" id="appTagSearchRole" name="role" value="${escape(params.getOrElse("role", "tag"))}"></div>
+       |  <div class="col-md-1"><label class="form-label" for="appTagSearchDesc">Desc</label><select class="form-select" id="appTagSearchDesc" name="includeDescendants"><option value="true"${if (params.get("includeDescendants").forall(_ != "false")) " selected" else ""}>yes</option><option value="false"${if (params.get("includeDescendants").contains("false")) " selected" else ""}>no</option></select></div>
+       |  <div class="col-md-1"><button class="btn btn-primary w-100" type="submit">Search</button></div>
+       |</form>""".stripMargin
+
+  protected def app_tag_search_result(
+    params: Map[String, String],
+    record: Record
+  ): String =
+    admin_tag_search_result(params, record).replace("/web/admin/tags", "/web/tag/tags")
+
+  protected def app_tag_result_page(
+    title: String,
+    subtitle: String,
+    form: Map[String, String],
+    record: Record
+  ): Page =
+    Page(simple_page(
+      title = title,
+      subtitle = subtitle,
+      body =
+        s"""${admin_nav_card(Vector("Tags" -> s"/web/tag/tags?tagSpace=${escapeQuery(form.getOrElse("tagSpace", record.getString("tagSpace").getOrElse("")))}", "System admin tags" -> s"/web/admin/tags?tagSpace=${escapeQuery(form.getOrElse("tagSpace", record.getString("tagSpace").getOrElse("")))}"))}
+           |${admin_card("Tag result", field_table(record.asMap.toVector.map { case (k, v) => k -> display_value(v) }.sortBy(_._1)))}
+           |${admin_action_row(Vector("Back to Tags" -> s"/web/tag/tags?tagSpace=${escapeQuery(form.getOrElse("tagSpace", record.getString("tagSpace").getOrElse("")))}"))}""".stripMargin
+    ))
+
   protected def admin_tag_search_result(
     params: Map[String, String],
     record: Record
   ): String = {
     val component = params.getOrElse("component", "")
     val entity = params.getOrElse("entity", params.getOrElse("entityName", ""))
-    val tagRef = params.getOrElse("tagRef", params.getOrElse("tag", ""))
-    val tagSpace = params.get("tagSpace").filter(_.nonEmpty).getOrElse("default")
+    val tagref = params.getOrElse("tagRef", params.getOrElse("tag", ""))
+    val tagspace = params.get("tagSpace").filter(_.nonEmpty).getOrElse("default")
     val role = params.getOrElse("role", "tag")
     val rows = record_seq(record.asMap.get("data"))
-    val emptyAlert =
+    val emptyalert =
       if (rows.isEmpty) admin_tag_empty_alert("No visible Entities matched this Tag filter.")
       else ""
     val body =
@@ -783,11 +1006,11 @@ trait StaticFormAppRendererBlobTagPart {
        |    <div class="d-flex flex-column flex-md-row justify-content-between gap-2 mb-3">
        |      <div>
        |        <h2 class="card-title h5 mb-1">Tag search result</h2>
-       |        <p class="text-body-secondary mb-0">Tag <code>${escape(tagRef)}</code> in <span class="badge text-bg-secondary">${escape(tagSpace)}</span>, role <span class="badge text-bg-light border">${escape(role)}</span>.</p>
+       |        <p class="text-body-secondary mb-0">Tag <code>${escape(tagref)}</code> in <span class="badge text-bg-secondary">${escape(tagspace)}</span>, role <span class="badge text-bg-light border">${escape(role)}</span>.</p>
        |      </div>
        |      <span class="badge text-bg-light border align-self-start">${rows.size} entities</span>
        |    </div>
-       |    ${emptyAlert}
+       |    ${emptyalert}
        |    <div class="table-responsive">
        |      <table class="table table-sm table-hover align-middle mb-0">
        |        <thead><tr><th>Entity</th><th>Title/Name</th><th>Raw</th></tr></thead>
@@ -810,10 +1033,10 @@ trait StaticFormAppRendererBlobTagPart {
   ): String = {
     val id = record.getString("id").getOrElse("")
     val label = record.getString("title").orElse(record.getString("name")).orElse(record.getString("label")).getOrElse("")
-    val componentPath = NamingConventions.toNormalizedSegment(component)
-    val entityPath = NamingConventions.toNormalizedSegment(entity)
+    val componentpath = NamingConventions.toNormalizedSegment(component)
+    val entitypath = NamingConventions.toNormalizedSegment(entity)
     s"""<tr>
-       |  <td><a href="/web/${escape_path_segment(componentPath)}/admin/entities/${escape_path_segment(entityPath)}/${escape_path_segment(id)}"><code>${escape(id)}</code></a></td>
+       |  <td><a href="/web/${escape_path_segment(componentpath)}/admin/entities/${escape_path_segment(entitypath)}/${escape_path_segment(id)}"><code>${escape(id)}</code></a></td>
        |  <td>${escape(label)}</td>
        |  <td><code>${escape(record.toString)}</code></td>
        |</tr>""".stripMargin
@@ -925,18 +1148,18 @@ trait StaticFormAppRendererBlobTagPart {
     val domain = record.getString("associationDomain").getOrElse("")
     val source = record.getString("sourceEntityId").getOrElse("")
     val target = record.getString("targetEntityId").getOrElse("")
-    val targetKind = record.getString("targetKind").getOrElse("")
+    val targetkind = record.getString("targetKind").getOrElse("")
     val role = record.getString("role").getOrElse("")
     admin_confirm_post_form(
       action = "/web/admin/associations/detach",
       label = "Detach",
       title = "Detach Association",
-      message = s"Detach ${targetKind} ${target} from Entity ${source}?",
+      message = s"Detach ${targetkind} ${target} from Entity ${source}?",
       hiddenFields = Vector(
         "domain" -> domain,
         "sourceEntityId" -> source,
         "targetEntityId" -> target,
-        "targetKind" -> targetKind,
+        "targetKind" -> targetkind,
         "role" -> role
       )
     )
@@ -998,9 +1221,9 @@ trait StaticFormAppRendererBlobTagPart {
   ): String = {
     def value(key: String): String =
       escape(params.getOrElse(key, ""))
-    val domainValue = escape(params.getOrElse("domain", "association"))
+    val domainvalue = escape(params.getOrElse("domain", "association"))
     s"""<form method="get" action="/web/admin/associations" class="row g-2 align-items-end">
-       |  <div class="col-md-2"><label class="form-label" for="associationAdminDomain">Domain</label><input class="form-control" id="associationAdminDomain" name="domain" value="${domainValue}" required></div>
+       |  <div class="col-md-2"><label class="form-label" for="associationAdminDomain">Domain</label><input class="form-control" id="associationAdminDomain" name="domain" value="${domainvalue}" required></div>
        |  <div class="col-md-3"><label class="form-label" for="associationAdminSourceEntityId">Source entity</label><input class="form-control" id="associationAdminSourceEntityId" name="sourceEntityId" value="${value("sourceEntityId")}"></div>
        |  <div class="col-md-3"><label class="form-label" for="associationAdminTargetEntityId">Target entity</label><input class="form-control" id="associationAdminTargetEntityId" name="targetEntityId" value="${value("targetEntityId")}"></div>
        |  <div class="col-md-2"><label class="form-label" for="associationAdminTargetKind">Target kind</label><input class="form-control" id="associationAdminTargetKind" name="targetKind" value="${value("targetKind")}"></div>
@@ -1015,9 +1238,9 @@ trait StaticFormAppRendererBlobTagPart {
   ): String = {
     def value(key: String): String =
       escape(params.getOrElse(key, ""))
-    val domainValue = escape(params.getOrElse("domain", "association"))
+    val domainvalue = escape(params.getOrElse("domain", "association"))
     s"""<form method="post" action="/web/admin/associations/attach" class="row g-2 align-items-end">
-       |  <div class="col-md-2"><label class="form-label" for="associationAttachDomain">Domain</label><input class="form-control" id="associationAttachDomain" name="domain" value="${domainValue}" required></div>
+       |  <div class="col-md-2"><label class="form-label" for="associationAttachDomain">Domain</label><input class="form-control" id="associationAttachDomain" name="domain" value="${domainvalue}" required></div>
        |  <div class="col-md-3"><label class="form-label" for="associationAttachSourceEntityId">Source entity</label><input class="form-control" id="associationAttachSourceEntityId" name="sourceEntityId" value="${value("sourceEntityId")}" required></div>
        |  <div class="col-md-3"><label class="form-label" for="associationAttachTargetEntityId">Target entity</label><input class="form-control" id="associationAttachTargetEntityId" name="targetEntityId" value="${value("targetEntityId")}" required></div>
        |  <div class="col-md-2"><label class="form-label" for="associationAttachTargetKind">Target kind</label><input class="form-control" id="associationAttachTargetKind" name="targetKind" value="${value("targetKind")}" required></div>
@@ -1031,28 +1254,28 @@ trait StaticFormAppRendererBlobTagPart {
     record: Option[Record],
     fallbackId: String
   ): String = {
-    val sourceId = record.flatMap(_.getString("sourceEntityId")).orElse(record.flatMap(_.getString("id"))).getOrElse(fallbackId)
+    val sourceid = record.flatMap(_.getString("sourceEntityId")).orElse(record.flatMap(_.getString("id"))).getOrElse(fallbackId)
     val images = record.map(r => record_seq(r.getAny("images"))).getOrElse(Vector.empty)
     val representative = record.flatMap(_.getAny("representativeImage")).collect { case r: Record => r }
-    val representativeHtml = representative.map(admin_entity_representative_image).getOrElse(admin_empty_state("No representative image is currently derived."))
+    val representativehtml = representative.map(admin_entity_representative_image).getOrElse(admin_empty_state("No representative image is currently derived."))
     val table =
       if (images.isEmpty)
         s"""<tbody>${admin_empty_table_cell(7, "No BlobAttachment images are associated with this Entity.")}</tbody>"""
       else
-        s"""<tbody>${images.map(row => admin_entity_image_row(sourceId, row)).mkString("\n")}</tbody>"""
+        s"""<tbody>${images.map(row => admin_entity_image_row(sourceid, row)).mkString("\n")}</tbody>"""
     s"""<article class="card admin-card mt-3">
        |  <div class="card-body">
        |    <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-3">
        |      <h2 class="card-title mb-0">Images</h2>
-       |      <a class="btn btn-outline-secondary btn-sm" href="/web/blob/admin/associations?sourceEntityId=${escapeQuery(sourceId)}">Open Blob associations</a>
+       |      <a class="btn btn-outline-secondary btn-sm" href="/web/blob/admin/associations?sourceEntityId=${escapeQuery(sourceid)}">Open Blob associations</a>
        |    </div>
        |    <section class="mb-3">
        |      <h3 class="h6">Representative Image</h3>
-       |      ${representativeHtml}
+       |      ${representativehtml}
        |    </section>
        |    <section class="mb-3">
        |      <h3 class="h6">Attach Existing Blob</h3>
-       |      ${admin_entity_image_attach_form(sourceId)}
+       |      ${admin_entity_image_attach_form(sourceid)}
        |    </section>
        |    <section>
        |      <h3 class="h6">Associated Images</h3>
@@ -1146,21 +1369,21 @@ trait StaticFormAppRendererBlobTagPart {
     fallbackId: String,
     values: Map[String, String]
   ): String = {
-    val sourceId = record.flatMap(_.getString("sourceEntityId")).orElse(record.flatMap(_.getString("id"))).getOrElse(fallbackId)
-    val tagSpace = values.getOrElse("tagSpace", "")
+    val sourceid = record.flatMap(_.getString("sourceEntityId")).orElse(record.flatMap(_.getString("id"))).getOrElse(fallbackId)
+    val tagspace = values.getOrElse("tagSpace", "")
     val summary = admin_operation_record(
       subsystem,
       "/tag/tag/tag_list_entity_tags",
       Record.dataAuto(
-        "sourceEntityId" -> sourceId,
-        "tagSpace" -> tagSpace
+        "sourceEntityId" -> sourceid,
+        "tagSpace" -> tagspace
       )
     )
     val rows = summary.map { r =>
       val tags = record_seq(r.asMap.get("tags"))
       val associations = record_seq(r.asMap.get("associations"))
       tags.zipWithIndex.map { case (tag, index) =>
-        admin_entity_tag_row(sourceId, tagSpace, tag, associations.lift(index))
+        admin_entity_tag_row(sourceid, tagspace, tag, associations.lift(index))
       }
     }.getOrElse(Vector.empty)
     val table =
@@ -1172,11 +1395,11 @@ trait StaticFormAppRendererBlobTagPart {
        |  <div class="card-body">
        |    <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-3">
        |      <h2 class="card-title mb-0">Tags</h2>
-       |      <a class="btn btn-outline-secondary btn-sm" href="/web/admin/tags?tagSpace=${escapeQuery(tagSpace)}&amp;sourceEntityId=${escapeQuery(sourceId)}">Open Tags</a>
+       |      <a class="btn btn-outline-secondary btn-sm" href="/web/admin/tags?tagSpace=${escapeQuery(tagspace)}&amp;sourceEntityId=${escapeQuery(sourceid)}">Open Tags</a>
        |    </div>
        |    <section class="mb-3">
        |      <h3 class="h6">Attach Tag</h3>
-       |      ${admin_entity_tag_attach_form(sourceId, tagSpace)}
+       |      ${admin_entity_tag_attach_form(sourceid, tagspace)}
        |    </section>
        |    <section>
        |      <h3 class="h6">Attached Tags</h3>
@@ -1192,33 +1415,33 @@ trait StaticFormAppRendererBlobTagPart {
   }
 
   protected def admin_entity_tag_row(
-    sourceId: String,
-    tagSpace: String,
+    sourceid: String,
+    tagspace: String,
     record: Record,
     association: Option[Record]
   ): String = {
     val path = record.getString("path").getOrElse("")
     val role = association.flatMap(_.getString("role")).getOrElse("tag")
-    val sortOrder = association.flatMap(_.getString("sortOrder")).getOrElse("")
+    val sortorder = association.flatMap(_.getString("sortOrder")).getOrElse("")
     s"""<tr>
        |  <td><code>${escape(path)}</code></td>
-       |  <td>${escape(record.getString("tagSpace").getOrElse(tagSpace))}</td>
+       |  <td>${escape(record.getString("tagSpace").getOrElse(tagspace))}</td>
        |  <td>${escape(role)}</td>
-       |  <td>${escape(sortOrder)}</td>
+       |  <td>${escape(sortorder)}</td>
        |  <td>${escape(record.getString("usageKind").getOrElse(""))}</td>
        |  <td>${escape(record.getString("title").getOrElse(""))}</td>
        |  <td>${escape(record.getString("description").getOrElse(""))}</td>
-       |  <td>${admin_entity_tag_detach_form(sourceId, tagSpace, path, role)}</td>
+       |  <td>${admin_entity_tag_detach_form(sourceid, tagspace, path, role)}</td>
        |</tr>""".stripMargin
   }
 
   protected def admin_entity_tag_attach_form(
-    sourceId: String,
-    tagSpace: String
+    sourceid: String,
+    tagspace: String
   ): String =
     s"""<form method="post" action="/web/admin/tags/attach" class="row g-2 align-items-end">
-       |  <input type="hidden" name="sourceEntityId" value="${escape(sourceId)}">
-       |  <div class="col-md-3"><label class="form-label" for="entityTagAttachSpace">TagSpace</label><input class="form-control" id="entityTagAttachSpace" name="tagSpace" value="${escape(tagSpace)}" placeholder="default"></div>
+       |  <input type="hidden" name="sourceEntityId" value="${escape(sourceid)}">
+       |  <div class="col-md-3"><label class="form-label" for="entityTagAttachSpace">TagSpace</label><input class="form-control" id="entityTagAttachSpace" name="tagSpace" value="${escape(tagspace)}" placeholder="default"></div>
        |  <div class="col-md-4"><label class="form-label" for="entityTagAttachRef">Tag ref/path</label><input class="form-control" id="entityTagAttachRef" name="tagRef" required></div>
        |  <div class="col-md-2"><label class="form-label" for="entityTagAttachRole">Role</label><input class="form-control" id="entityTagAttachRole" name="role" value="tag" required></div>
        |  <div class="col-md-1"><label class="form-label" for="entityTagAttachSort">Sort</label><input class="form-control" id="entityTagAttachSort" name="sortOrder"></div>
@@ -1226,20 +1449,20 @@ trait StaticFormAppRendererBlobTagPart {
        |</form>""".stripMargin
 
   protected def admin_entity_tag_detach_form(
-    sourceId: String,
-    tagSpace: String,
-    tagRef: String,
+    sourceid: String,
+    tagspace: String,
+    tagref: String,
     role: String
   ): String =
     admin_confirm_post_form(
       action = "/web/admin/tags/detach",
       label = "Detach",
       title = "Detach Tag",
-      message = s"Detach Tag ${tagRef} from Entity ${sourceId}?",
+      message = s"Detach Tag ${tagref} from Entity ${sourceid}?",
       hiddenFields = Vector(
-        "sourceEntityId" -> sourceId,
-        "tagSpace" -> tagSpace,
-        "tagRef" -> tagRef,
+        "sourceEntityId" -> sourceid,
+        "tagSpace" -> tagspace,
+        "tagRef" -> tagref,
         "role" -> role
       )
     )
@@ -1255,24 +1478,24 @@ trait StaticFormAppRendererBlobTagPart {
     if (relationships.isEmpty)
       ""
     else {
-      val sourceId = record.flatMap(_.getString("sourceEntityId")).orElse(record.flatMap(_.getString("id"))).getOrElse(fallbackId)
-      val sourceIds = Vector(
+      val sourceid = record.flatMap(_.getString("sourceEntityId")).orElse(record.flatMap(_.getString("id"))).getOrElse(fallbackId)
+      val sourceids = Vector(
         record.flatMap(_.getString("sourceEntityId")),
         record.flatMap(_.getString("id")),
         Some(fallbackId)
       ).flatten.filter(_.nonEmpty).distinct
       val sections = relationships.map { relationship =>
         val rows = deduplicate_association_rows(
-          sourceIds.flatMap(id => admin_entity_association_rows(subsystem, relationship, id))
+          sourceids.flatMap(id => admin_entity_association_rows(subsystem, relationship, id))
         )
         val table =
           if (rows.isEmpty)
             s"""<tbody>${admin_empty_table_cell(8, "No Associations are currently linked for this relationship.")}</tbody>"""
           else
             s"""<tbody>${rows.map(row => admin_association_row(row, includeDetach = true)).mkString("\n")}</tbody>"""
-        val attach = admin_entity_association_attach_form(sourceId, relationship)
+        val attach = admin_entity_association_attach_form(sourceid, relationship)
         val openlink = relationship.associationDomain.filter(_.nonEmpty).map { domain =>
-          s"""<a class="btn btn-outline-secondary btn-sm" href="/web/admin/associations?domain=${escapeQuery(domain)}&amp;sourceEntityId=${escapeQuery(sourceId)}">Open Associations</a>"""
+          s"""<a class="btn btn-outline-secondary btn-sm" href="/web/admin/associations?domain=${escapeQuery(domain)}&amp;sourceEntityId=${escapeQuery(sourceid)}">Open Associations</a>"""
         }.getOrElse("")
         s"""<section class="mb-3">
            |  <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between">

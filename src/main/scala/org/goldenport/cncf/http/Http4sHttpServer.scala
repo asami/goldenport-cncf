@@ -2,7 +2,7 @@ package org.goldenport.cncf.http
 
 /*
  * @since   May. 18, 2026
- * @version May. 24, 2026
+ * @version May. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 import cats.effect.IO
@@ -58,7 +58,7 @@ import org.goldenport.observation.{Cause, Descriptor}
  *  version Jan. 21, 2026
  *  version Mar. 29, 2026
  *  version Apr. 30, 2026
- * @version May. 24, 2026
+ * @version May. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Http4sHttpServer(
@@ -247,6 +247,14 @@ final class Http4sHttpServer(
         if (_is_web_authorized("admin", "tags", "attach", Some(req), Some("admin.entity.update"))) _admin_tag_attach(req) else _forbidden_web(req, Some("admin"), Some("tags"), Some("attach"))
       case req @ POST -> Root / "web" / "admin" / "tags" / "detach" =>
         if (_is_web_authorized("admin", "tags", "detach", Some(req), Some("admin.entity.update"))) _admin_tag_detach(req) else _forbidden_web(req, Some("admin"), Some("tags"), Some("detach"))
+      case req @ GET -> Root / "web" / "tag" / "tags" =>
+        if (_is_web_authorized("tag", "tags", "index", Some(req))) _app_tags(req) else _forbidden_web(req, Some("tag"), Some("tags"), Some("index"))
+      case req @ POST -> Root / "web" / "tag" / "tags" / "create" =>
+        if (_is_web_authorized("tag", "tags", "create", Some(req))) _app_tag_create(req) else _forbidden_web(req, Some("tag"), Some("tags"), Some("create"))
+      case req @ POST -> Root / "web" / "tag" / "tags" / "update" =>
+        if (_is_web_authorized("tag", "tags", "update", Some(req))) _app_tag_update(req) else _forbidden_web(req, Some("tag"), Some("tags"), Some("update"))
+      case req @ POST -> Root / "web" / "tag" / "tags" / "move" =>
+        if (_is_web_authorized("tag", "tags", "move", Some(req))) _app_tag_move(req) else _forbidden_web(req, Some("tag"), Some("tags"), Some("move"))
       case GET -> Root / "web" / app / "dashboard" / "state" =>
         _dashboard_state(Some(app))
       case req @ GET -> Root / "web" / app / "jobs" =>
@@ -842,6 +850,81 @@ final class Http4sHttpServer(
         _static_form_app_renderer.renderAdminTagDetachResult(engine.runtimeSubsystem, form.asMap.map { case (k, v) => k -> v.toString }, _admin_request_properties(req)),
         Some("tags"),
         Some("detach")
+      )
+    } yield response
+
+  private def _app_tag_page(
+    req: HRequest[IO],
+    page: org.goldenport.Consequence[StaticFormAppRenderer.Page],
+    operation: Option[String]
+  ): IO[HResponse[IO]] =
+    page match {
+      case org.goldenport.Consequence.Success(p) =>
+        _html(p, Some("tag"))
+      case org.goldenport.Consequence.Failure(conclusion) =>
+        val error = StructuredHttpError.fromConclusion(
+          conclusion,
+          req.uri.path.renderString,
+          req.method.name,
+          _operation_mode,
+          component = Some("tag"),
+          service = Some("tags"),
+          operation = operation
+        )
+        _web_error_response(Some("tag"), error)
+    }
+
+  private def _app_tag_request_properties(
+    req: HRequest[IO]
+  ): Vector[(String, String)] = {
+    val subject = _web_authorization_subject_from_session(req)
+    val authenticated = subject.exists(_.authenticated)
+    val capabilities = subject.map(_.normalized.capabilities.toVector.sorted.mkString(",")).getOrElse("")
+    val session =
+      if (authenticated)
+        _session_id_(req).map("x-textus-session" -> _).toVector
+      else
+        Vector.empty
+    Vector(
+      "pageContext.session.authenticated" -> authenticated.toString,
+      "pageContext.security.capabilities" -> capabilities
+    ) ++ session
+  }
+
+  private def _app_tags(req: HRequest[IO]): IO[HResponse[IO]] =
+    _app_tag_page(
+      req,
+      _static_form_app_renderer.renderAppTags(engine.runtimeSubsystem, _query_values(req), _app_tag_request_properties(req)),
+      Some("index")
+    )
+
+  private def _app_tag_create(req: HRequest[IO]): IO[HResponse[IO]] =
+    for {
+      form <- _to_form_record(req)
+      response <- _app_tag_page(
+        req,
+        _static_form_app_renderer.renderAppTagCreateResult(engine.runtimeSubsystem, form.asMap.map { case (k, v) => k -> v.toString }, _app_tag_request_properties(req)),
+        Some("create")
+      )
+    } yield response
+
+  private def _app_tag_update(req: HRequest[IO]): IO[HResponse[IO]] =
+    for {
+      form <- _to_form_record(req)
+      response <- _app_tag_page(
+        req,
+        _static_form_app_renderer.renderAppTagUpdateResult(engine.runtimeSubsystem, form.asMap.map { case (k, v) => k -> v.toString }, _app_tag_request_properties(req)),
+        Some("update")
+      )
+    } yield response
+
+  private def _app_tag_move(req: HRequest[IO]): IO[HResponse[IO]] =
+    for {
+      form <- _to_form_record(req)
+      response <- _app_tag_page(
+        req,
+        _static_form_app_renderer.renderAppTagMoveResult(engine.runtimeSubsystem, form.asMap.map { case (k, v) => k -> v.toString }, _app_tag_request_properties(req)),
+        Some("move")
       )
     } yield response
 
