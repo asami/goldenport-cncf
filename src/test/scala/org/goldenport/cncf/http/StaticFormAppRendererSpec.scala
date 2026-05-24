@@ -8012,6 +8012,109 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should not include ("${result.contentType}")
     }
 
+    "render capability gated HTML controls" in {
+      val template =
+        """<main>
+          |  <a href="/edit" data-textus-capability="information:edit" data-textus-capability-mode="hide">Edit</a>
+          |  <form action="/save" data-textus-capability="information:edit" data-textus-capability-mode="disable">
+          |    <input name="title" value="Notice">
+          |    <button type="submit">Save</button>
+          |  </form>
+          |</main>""".stripMargin
+
+      val denied = _renderer.renderStaticTemplate(
+        "notice-board",
+        Vector("detail"),
+        template,
+        pageContext = WebPageContext(Map("pageContext.security.capabilities" -> "information:read"))
+      ).body
+      val allowed = _renderer.renderStaticTemplate(
+        "notice-board",
+        Vector("detail"),
+        template,
+        pageContext = WebPageContext(Map("pageContext.security.capabilities" -> "information:edit"))
+      ).body
+
+      denied should not include ("href=\"/edit\"")
+      denied should include ("textus-capability-disabled")
+      denied should include ("aria-disabled=\"true\"")
+      denied should include ("<input name=\"title\" value=\"Notice\" disabled>")
+      denied should include ("<button type=\"submit\" disabled>")
+      allowed should include ("href=\"/edit\"")
+      allowed should include ("<button type=\"submit\">")
+      allowed should not include ("textus-capability-disabled")
+    }
+
+    "render capability controls with authenticated policy" in {
+      val template =
+        """<main>
+          |  <a href="/import" data-textus-capability="information:import" data-textus-capability-policy="authenticated">Import</a>
+          |</main>""".stripMargin
+
+      val anonymous = _renderer.renderStaticTemplate(
+        "notice-board",
+        Vector("detail"),
+        template,
+        pageContext = WebPageContext(Map("pageContext.session.authenticated" -> "false"))
+      ).body
+      val authenticated = _renderer.renderStaticTemplate(
+        "notice-board",
+        Vector("detail"),
+        template,
+        pageContext = WebPageContext(Map("pageContext.session.authenticated" -> "true"))
+      ).body
+
+      anonymous should not include ("Import")
+      authenticated should include ("Import")
+    }
+
+    "render capability controls around nested same-name elements" in {
+      val template =
+        """<main>
+          |  <div data-textus-capability="information:edit" data-textus-capability-mode="hide">
+          |    <div class="inner">Secret</div>
+          |    <p>Tail</p>
+          |  </div>
+          |  <p>Visible</p>
+          |</main>""".stripMargin
+
+      val html = _renderer.renderStaticTemplate(
+        "notice-board",
+        Vector("detail"),
+        template,
+        pageContext = WebPageContext(Map("pageContext.security.capabilities" -> "information:read"))
+      ).body
+
+      html should not include ("Secret")
+      html should not include ("Tail")
+      html should include ("Visible")
+    }
+
+    "render capability message only when access is missing" in {
+      val template =
+        """<main>
+          |  <textus:capability-message capability="information:publish" policy="authenticated" login="true" login-href="/login">Log in to publish.</textus:capability-message>
+          |</main>""".stripMargin
+
+      val anonymous = _renderer.renderStaticTemplate(
+        "notice-board",
+        Vector("detail"),
+        template,
+        pageContext = WebPageContext(Map("pageContext.session.authenticated" -> "false"))
+      ).body
+      val authenticated = _renderer.renderStaticTemplate(
+        "notice-board",
+        Vector("detail"),
+        template,
+        pageContext = WebPageContext(Map("pageContext.session.authenticated" -> "true"))
+      ).body
+
+      anonymous should include ("Log in to publish.")
+      anonymous should include ("href=\"/login\"")
+      authenticated should not include ("Log in to publish.")
+      authenticated should not include ("textus:capability-message")
+    }
+
     "render form result properties from operation response and submitted values" in {
       val properties = StaticFormAppRenderer.FormResultProperties(
         StaticFormAppRenderer.FormPageProperties(

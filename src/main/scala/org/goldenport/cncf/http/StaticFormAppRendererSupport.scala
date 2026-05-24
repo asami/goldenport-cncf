@@ -31,7 +31,7 @@ import io.circe.parser.parse
 
 /*
  * @since   May. 18, 2026
- * @version May. 18, 2026
+ * @version May. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 object StaticFormAppRendererSupport {
@@ -314,6 +314,7 @@ object StaticFormAppRendererSupport {
 
   val defaultPageViewContextValues: Map[String, String] = Map(
     "pageContext.session.authenticated" -> "false",
+    "pageContext.security.capabilities" -> "",
     "pageContext.notification.available" -> "false",
     "pageContext.notification.unconfirmedCount" -> "0",
     "pageContext.notification.indicatorHidden" -> "hidden",

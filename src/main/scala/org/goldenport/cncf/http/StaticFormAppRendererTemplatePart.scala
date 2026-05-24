@@ -45,7 +45,8 @@ trait StaticFormAppRendererTemplatePart {
     defaultTableView: String = WebTableColumnResolver.defaultViewName
   ): String = {
     val widgets = render_widgets(template, properties, tableColumns, defaultTableView)
-    render_property_expansions(widgets, properties)
+    val gated = render_capability_controls(widgets, properties)
+    render_property_expansions(gated, properties)
   }
 
   protected def is_html_document(template: String): Boolean = {
@@ -118,6 +119,7 @@ trait StaticFormAppRendererTemplatePart {
     val knowledgesummary = """<textus(?::knowledge-summary|-knowledge-summary)\b([^>]*)></textus(?::knowledge-summary|-knowledge-summary)>""".r
     val descriptionList = """<textus(?::description-list|-description-list)\b([^>]*)></textus(?::description-list|-description-list)>""".r
     val htmlField = """<textus(?::html-field|-html-field)\b([^>]*)></textus(?::html-field|-html-field)>""".r
+    val capabilitymessage = """(?s)<textus(?::capability-message|-capability-message)\b([^>]*)>(.*?)</textus(?::capability-message|-capability-message)>""".r
     val propertyList = """<textus-property-list\s+source="([^"]+)"\s*></textus-property-list>""".r
     val errorPanel = """<textus-error-panel\s+source="([^"]+)"\s*></textus-error-panel>""".r
     val a = resultView.replaceAllIn(template, m =>
@@ -228,12 +230,330 @@ trait StaticFormAppRendererTemplatePart {
       val attrs = widget_attrs(m.group(1))
       java.util.regex.Matcher.quoteReplacement(render_html_field(attrs, properties))
     })
-    val n = propertyList.replaceAllIn(l2, m =>
+    val l3 = capabilitymessage.replaceAllIn(l2, m => {
+      val attrs = widget_attrs(m.group(1))
+      java.util.regex.Matcher.quoteReplacement(render_capability_message(attrs, m.group(2), properties))
+    })
+    val n = propertyList.replaceAllIn(l3, m =>
       java.util.regex.Matcher.quoteReplacement(render_property_list(m.group(1), properties))
     )
     errorPanel.replaceAllIn(n, m =>
       java.util.regex.Matcher.quoteReplacement(render_error_panel(m.group(1), properties))
     )
+  }
+
+  protected def render_capability_controls(
+    template: String,
+    properties: FormPageProperties
+  ): String = {
+    val out = new StringBuilder
+    var index = 0
+    while (index < template.length) {
+      find_next_capability_start(template, index) match {
+        case Some(start) =>
+          out.append(template.substring(index, start))
+          parse_start_tag(template, start) match {
+            case Some((tag, attrs, tagend, selfclosing)) =>
+              val end = {
+                if (selfclosing || is_void_html_tag(tag))
+                  tagend
+                else
+                  find_balanced_end_tag(template, tag, tagend).getOrElse(tagend)
+              }
+              val html = template.substring(start, end)
+              out.append(apply_capability_control(html, attrs, properties))
+              index = end
+            case None =>
+              out.append(template.charAt(start))
+              index = start + 1
+          }
+        case None =>
+          out.append(template.substring(index))
+          index = template.length
+      }
+    }
+    out.toString
+  }
+
+  protected def find_next_capability_start(
+    template: String,
+    from: Int
+  ): Option[Int] = {
+    var index = template.indexOf("<", from)
+    while (index >= 0) {
+      parse_start_tag(template, index) match {
+        case Some((_, attrs, _, _)) if has_capability_attr(attrs) =>
+          return Some(index)
+        case _ =>
+          index = template.indexOf("<", index + 1)
+      }
+    }
+    None
+  }
+
+  protected def parse_start_tag(
+    template: String,
+    start: Int
+  ): Option[(String, String, Int, Boolean)] = {
+    if (start + 1 >= template.length || !template.charAt(start + 1).isLetter)
+      None
+    else {
+      var index = start + 2
+      while (index < template.length && is_tag_name_char(template.charAt(index)))
+        index = index + 1
+      val tag = template.substring(start + 1, index)
+      val end = find_tag_end(template, index)
+      if (end < 0)
+        None
+      else {
+        val body = template.substring(index, end - 1)
+        val trimmed = body.trim
+        val selfclosing = trimmed.endsWith("/")
+        val attrs =
+          if (selfclosing) {
+            val slash = body.lastIndexOf("/")
+            if (slash >= 0) body.substring(0, slash) else body
+          } else {
+            body
+          }
+        Some((tag, attrs, end, selfclosing))
+      }
+    }
+  }
+
+  protected def find_balanced_end_tag(
+    template: String,
+    tag: String,
+    from: Int
+  ): Option[Int] = {
+    var depth = 1
+    var index = from
+    while (index < template.length) {
+      val next = template.indexOf("<", index)
+      if (next < 0)
+        return None
+      else if (tag_name_matches(template, next, tag, closing = true)) {
+        val end = find_tag_end(template, next + 2 + tag.length)
+        if (end < 0)
+          return None
+        depth = depth - 1
+        if (depth == 0)
+          return Some(end)
+        index = end
+      } else if (tag_name_matches(template, next, tag, closing = false)) {
+        parse_start_tag(template, next) match {
+          case Some((nestedtag, _, tagend, selfclosing)) =>
+            if (!selfclosing && !is_void_html_tag(nestedtag))
+              depth = depth + 1
+            index = tagend
+          case None =>
+            index = next + 1
+        }
+      } else {
+        index = next + 1
+      }
+    }
+    None
+  }
+
+  protected def tag_name_matches(
+    template: String,
+    start: Int,
+    tag: String,
+    closing: Boolean
+  ): Boolean = {
+    val prefix = if (closing) "</" else "<"
+    val tagstart = start + prefix.length
+    val tagend = tagstart + tag.length
+    template.regionMatches(true, start, prefix, 0, prefix.length) &&
+      tagend <= template.length &&
+      template.regionMatches(true, tagstart, tag, 0, tag.length) &&
+      (tagend == template.length || is_tag_boundary(template.charAt(tagend)))
+  }
+
+  protected def find_tag_end(
+    template: String,
+    from: Int
+  ): Int = {
+    var index = from
+    var quote: Char = 0.toChar
+    while (index < template.length) {
+      val c = template.charAt(index)
+      if (quote != 0.toChar) {
+        if (c == quote)
+          quote = 0.toChar
+      } else {
+        c match {
+          case '"' | '\'' => quote = c
+          case '>' => return index + 1
+          case _ =>
+        }
+      }
+      index = index + 1
+    }
+    -1
+  }
+
+  protected def has_capability_attr(
+    attrs: String
+  ): Boolean =
+    """(?i)\bdata-textus-capability\s*=""".r.findFirstIn(attrs).isDefined
+
+  protected def is_tag_name_char(c: Char): Boolean =
+    c.isLetterOrDigit || c == ':' || c == '-'
+
+  protected def is_tag_boundary(c: Char): Boolean =
+    c.isWhitespace || c == '>' || c == '/'
+
+  protected def is_void_html_tag(tag: String): Boolean =
+    tag.toLowerCase(java.util.Locale.ROOT) match {
+      case "area" | "base" | "br" | "col" | "embed" | "hr" | "img" |
+          "input" | "link" | "meta" | "param" | "source" | "track" | "wbr" => true
+      case _ => false
+    }
+
+  protected def render_capability_message(
+    attrs: Map[String, String],
+    inner: String,
+    properties: FormPageProperties
+  ): String = {
+    val capability = attrs.getOrElse("capability", "")
+    val policy = attrs.getOrElse("policy", "subject")
+    if (capability_allowed(capability, policy, properties))
+      ""
+    else {
+      val variant = attrs.get("variant").map(bootstrap_variant).getOrElse("info")
+      val login = attrs.get("login").exists(_.equalsIgnoreCase("true"))
+      val loginhref = attrs.get("login-href").orElse(attrs.get("href")).getOrElse("/web/textus-user-account/signin")
+      val action =
+        if (login)
+          s"""<div class="mt-2"><a class="btn btn-sm btn-outline-${escape(variant)}" href="${escape(loginhref)}">Log in</a></div>"""
+        else
+          ""
+      s"""<div class="alert alert-${escape(variant)} textus-capability-message" role="status">${inner}${action}</div>"""
+    }
+  }
+
+  protected def apply_capability_control(
+    html: String,
+    attrs: String,
+    properties: FormPageProperties
+  ): String = {
+    val parsed = widget_attrs(attrs)
+    val capability = parsed.getOrElse("data-textus-capability", "")
+    val policy = parsed.getOrElse("data-textus-capability-policy", "subject")
+    if (capability_allowed(capability, policy, properties))
+      html
+    else {
+      parsed.getOrElse("data-textus-capability-mode", "hide").trim.toLowerCase(java.util.Locale.ROOT) match {
+        case "disable" | "disabled" => disable_capability_html(html)
+        case _ => ""
+      }
+    }
+  }
+
+  protected def capability_allowed(
+    capability: String,
+    policy: String,
+    properties: FormPageProperties
+  ): Boolean = {
+    val normalizedcapability = normalize_capability_token(capability)
+    if (normalizedcapability.isEmpty)
+      true
+    else {
+      policy.trim.toLowerCase(java.util.Locale.ROOT) match {
+        case "authenticated" | "login" | "session" =>
+          properties.values.get("pageContext.session.authenticated").exists(_.equalsIgnoreCase("true"))
+        case _ =>
+          capability_tokens(properties.values.getOrElse("pageContext.security.capabilities", "")).contains(normalizedcapability)
+      }
+    }
+  }
+
+  protected def capability_tokens(
+    value: String
+  ): Set[String] =
+    value.split("[,\\s]+").iterator
+      .map(normalize_capability_token)
+      .filter(_.nonEmpty)
+      .toSet
+
+  protected def normalize_capability_token(
+    value: String
+  ): String =
+    value.trim.toLowerCase(java.util.Locale.ROOT).replace('-', '_')
+
+  protected def disable_capability_html(
+    html: String
+  ): String = {
+    val outer = add_attribute_to_first_tag(
+      add_class_to_first_tag(html, "textus-capability-disabled"),
+      "aria-disabled=\"true\""
+    )
+    val controls = """(?i)<(input|button|select|textarea)\b([^>]*)>""".r.replaceAllIn(outer, m => {
+      val tag = m.group(1)
+      val attrs = m.group(2)
+      val disabled =
+        if ("""(?i)\bdisabled\b""".r.findFirstIn(attrs).isDefined) ""
+        else " disabled"
+      java.util.regex.Matcher.quoteReplacement(s"<${tag}${attrs}${disabled}>")
+    })
+    """<a\b([^>]*)>""".r.replaceAllIn(controls, m => {
+      val attrs = m.group(1)
+      val nohref = """\s+href\s*=\s*(?:"[^"]*"|'[^']*')""".r.replaceAllIn(attrs, "")
+      val withclass = add_class_to_attrs(nohref, "disabled textus-capability-disabled")
+      val aria =
+        if ("""(?i)\baria-disabled\s*=""".r.findFirstIn(withclass).isDefined) ""
+        else " aria-disabled=\"true\""
+      val tabindex =
+        if ("""(?i)\btabindex\s*=""".r.findFirstIn(withclass).isDefined) ""
+        else " tabindex=\"-1\""
+      java.util.regex.Matcher.quoteReplacement(s"<a${withclass}${aria}${tabindex}>")
+    })
+  }
+
+  protected def add_class_to_first_tag(
+    html: String,
+    css: String
+  ): String = {
+    val pattern = """<([A-Za-z][A-Za-z0-9:-]*)([^>]*)>""".r
+    pattern.findFirstMatchIn(html).map { m =>
+      val replacement = s"<${m.group(1)}${add_class_to_attrs(m.group(2), css)}>"
+      html.substring(0, m.start) + replacement + html.substring(m.end)
+    }.getOrElse(html)
+  }
+
+  protected def add_attribute_to_first_tag(
+    html: String,
+    attribute: String
+  ): String = {
+    val pattern = """<([A-Za-z][A-Za-z0-9:-]*)([^>]*)>""".r
+    pattern.findFirstMatchIn(html).map { m =>
+      val attrs = m.group(2)
+      val key = attribute.takeWhile(c => c != '=' && !c.isWhitespace).toLowerCase(java.util.Locale.ROOT)
+      val exists = attrs.toLowerCase(java.util.Locale.ROOT).contains(s"${key}=")
+      val extra = if (exists) "" else s" ${attribute}"
+      val replacement = s"<${m.group(1)}${attrs}${extra}>"
+      html.substring(0, m.start) + replacement + html.substring(m.end)
+    }.getOrElse(html)
+  }
+
+  protected def add_class_to_attrs(
+    attrs: String,
+    css: String
+  ): String = {
+    val classpattern = """\bclass\s*=\s*(?:"([^"]*)"|'([^']*)')""".r
+    classpattern.findFirstMatchIn(attrs) match {
+      case Some(m) =>
+        val current = Option(m.group(1)).getOrElse(m.group(2))
+        val merged = (current.split("\\s+").toVector ++ css.split("\\s+").toVector)
+          .filter(_.nonEmpty)
+          .distinct
+          .mkString(" ")
+        classpattern.replaceFirstIn(attrs, java.util.regex.Matcher.quoteReplacement(s"""class="${merged}""""))
+      case None =>
+        s"""${attrs} class="${css}""""
+    }
   }
 
   protected def render_hidden_context(

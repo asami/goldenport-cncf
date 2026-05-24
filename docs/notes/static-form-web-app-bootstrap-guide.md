@@ -114,6 +114,75 @@ initialization rules. CNCF does not currently provide a `data-textus-island`
 standard attribute, island loader, island registry, or WebDescriptor island
 schema. SPA hosting and API gateway boundaries are separate deployment concerns.
 
+## Capability-Aware Write Controls
+
+Static Form Web Apps should make read flows available as ordinary pages and
+gate mutation flows at two levels:
+
+- operation/form authorization in `src/main/web-inf/form.yaml`;
+- visible HTML affordances in the page, using CNCF capability attributes.
+
+The page-level capability controls are a user-experience layer. They prevent a
+user from being led toward an action they cannot perform, but they do not
+replace operation authorization.
+
+Use capability attributes on mutation controls:
+
+```html
+<form
+  method="post"
+  action="/form/textus-knowledge-editor/book-editor/save-book"
+  data-textus-capability="information:edit"
+  data-textus-capability-mode="disable"
+  data-textus-capability-policy="authenticated">
+  ...
+  <button class="btn btn-primary" type="submit">Save</button>
+</form>
+```
+
+Supported attributes:
+
+- `data-textus-capability`: canonical capability name, for example
+  `information:edit`.
+- `data-textus-capability-mode`: `hide` or `disable`.
+- `data-textus-capability-policy`: `authenticated` for the current temporary
+  login-based policy, or `subject` for subject capability checks.
+
+Use `hide` for navigation links to write-only pages when anonymous users should
+not see that entry point. Use `disable` for inline forms when the page should
+show the available workflow but prevent submission. Keep read/detail/list links
+ungated unless the information itself is protected by separate read
+authorization.
+
+Show a capability message near write-focused pages or panels:
+
+```html
+<textus:capability-message
+  capability="information:edit"
+  policy="authenticated"
+  login="true"
+  login-href="/web/textus-user-account/signin?returnTo=%2Fweb%2Fmy-app">
+  Log in to edit this information.
+</textus:capability-message>
+```
+
+Use generic capability vocabulary from CNCF where possible. Application-specific
+capabilities are allowed only when the action is truly application-specific.
+For InformationSpace applications, prefer:
+
+- `information:import`
+- `information:edit`
+- `information:validate`
+- `information:resolve`
+- `information:confirm`
+- `information:reject`
+- `information:publish`
+
+Do not implement application-specific JavaScript permission checks such as
+`data-myapp-write`. The HTML should declare CNCF capability requirements, the
+renderer should apply the visual state, and the operation layer should enforce
+authorization.
+
 ## SPA / API Gateway Boundary
 
 Static Form Web App screens should not be designed as hidden SPA shells. The

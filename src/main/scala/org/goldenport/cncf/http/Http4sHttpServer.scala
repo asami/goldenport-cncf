@@ -3810,7 +3810,10 @@ final class Http4sHttpServer(
     page: Vector[String]
   ): WebPageContext = {
     val sessionid = req.flatMap(_session_id_(_))
-    val authenticated = req.exists(_is_page_context_authenticated)
+    val runtimeconfig = RuntimeConfig.from(engine.runtimeSubsystem.configuration)
+    val subject = req.map(r => _web_authorization_subject(Some(r), runtimeconfig))
+    val authenticated = subject.exists(_.authenticated)
+    val capabilities = subject.map(_.normalized.capabilities.toVector.sorted.mkString(",")).getOrElse("")
     val jobcounts =
       if (authenticated)
         req.flatMap(_application_job_badge_counts(_, webappname)).getOrElse(Http4sHttpServer.JobBadgeCounts.empty)
@@ -3824,16 +3827,12 @@ final class Http4sHttpServer(
       "pageContext.jobs.hidden" -> (if (authenticated) "" else "hidden"),
       "pageContext.jobs.activeBadgeHidden" -> (if (authenticated && jobcounts.active > 0) "" else "hidden"),
       "pageContext.jobs.unconfirmedBadgeHidden" -> (if (authenticated && jobcounts.unconfirmed > 0) "" else "hidden"),
+      "pageContext.security.capabilities" -> capabilities,
       "pageContext.app" -> webappname,
       "pageContext.page" -> (if (page.isEmpty) "index" else page.mkString("/"))
     ))
     base.merge(_page_context_from_providers(req, webappname, page, sessionid, authenticated))
   }
-
-  private def _is_page_context_authenticated(
-    req: org.http4s.Request[IO]
-  ): Boolean =
-    _web_authorization_subject_from_session(req).exists(_.authenticated)
 
   private def _form_page_view_context_values(
     req: org.http4s.Request[IO],

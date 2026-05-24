@@ -616,6 +616,80 @@ Additional explicit keys may be included with `keys`:
 The `keys` attribute is for application-defined page context. It must not be
 used to smuggle ordinary operation arguments around the form schema.
 
+## Capability Controls
+
+Static Form pages may declare capability requirements directly on ordinary HTML
+elements. This is a rendering contract for page affordances, not a replacement
+for operation authorization.
+
+Canonical attributes:
+
+- `data-textus-capability`
+- `data-textus-capability-mode`
+- `data-textus-capability-policy`
+
+Example:
+
+```html
+<a
+  class="btn btn-primary"
+  href="/web/my-app/edit"
+  data-textus-capability="information:edit"
+  data-textus-capability-mode="hide"
+  data-textus-capability-policy="authenticated">
+  Edit
+</a>
+```
+
+`data-textus-capability` contains the normalized CNCF capability name required
+for the element. `data-textus-capability-mode` controls unauthorized rendering:
+
+- `hide`: remove the element from the rendered output.
+- `disable`: render the element disabled. Form controls receive `disabled`;
+  links receive disabled styling and ARIA disabled metadata.
+
+`data-textus-capability-policy` selects the decision source:
+
+- `authenticated`: allowed when the page context says the user is logged in.
+- `subject`: allowed when the page context subject has the required capability.
+
+The default policy is `subject`; the default unauthorized mode is `hide`.
+
+Use these controls for write paths such as create, import, edit, validate,
+resolve, confirm, reject, publish, and materialize. Keep read/list/detail
+navigation independent from write capability unless the resource itself has
+read authorization.
+
+### `textus:capability-message`
+
+`textus:capability-message` renders its body only when the capability check is
+not satisfied. It is intended for explanatory login or permission messages near
+write-focused panels.
+
+Example:
+
+```html
+<textus:capability-message
+  capability="information:publish"
+  policy="authenticated"
+  login="true"
+  login-href="/web/textus-user-account/signin">
+  Log in to publish confirmed Information.
+</textus:capability-message>
+```
+
+Attributes:
+
+- `capability`: required capability name.
+- `policy`: `authenticated` or `subject`.
+- `login`: when `true`, append a Bootstrap login button.
+- `login-href` / `href`: login target used by the generated button.
+- `variant`: Bootstrap alert/button variant, default `info`.
+
+The body is trusted template HTML authored by the Web application. Raw provider
+payloads, raw RDF, raw JSON, raw vectors, and raw HTML bodies should not be
+displayed through this widget.
+
 ## Paging
 
 List widgets must reuse the existing paging and continuation model used by

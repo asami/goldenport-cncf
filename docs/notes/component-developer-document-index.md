@@ -166,6 +166,13 @@ under `src/main/web`, private layouts/partials/widgets under
 `src/main/web-inf/admin.yaml`. Packaged CAR `web/WEB-INF/*.yaml` files are
 generated runtime descriptors, not source files to edit directly.
 
+Mutation entry points in Static Form Web Apps should use both operation-level
+authorization and capability-aware page controls. Keep list/detail/read pages
+available when appropriate, but add `data-textus-capability` attributes and
+`textus:capability-message` to create/import/edit/publish forms and links so
+the rendered page reflects the current subject or login state before the user
+submits the operation.
+
 ## Content, Media, Tags, And Associations
 
 Use these when a component stores content, references media, or attaches
