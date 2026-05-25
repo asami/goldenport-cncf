@@ -50,7 +50,6 @@ import org.goldenport.cncf.component.ComponentFactory
 import org.goldenport.cncf.component.repository.{ComponentRepository, ComponentRepositorySpace}
 import org.goldenport.cncf.importer.StartupImport
 import org.goldenport.cncf.path.{AliasLoader, AliasResolver, PathPreNormalizer}
-import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.cncf.resolver.{CanonicalPath, PathResolution, PathResolutionResult}
 import org.goldenport.cncf.cli.RuntimeParameterParser
 import org.goldenport.cncf.cli.help.{CliHelpOperation, ClientCommandHelp, CommandProtocolHelp, HelpOperation, ServerCommandHelp}
@@ -64,7 +63,7 @@ import org.goldenport.cncf.subsystem.GenericSubsystemDescriptor
  *  version Jan. 31, 2026
  *  version Feb.  5, 2026
  *  version Apr. 30, 2026
- * @version May. 18, 2026
+ * @version May. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 object CncfRuntime extends GlobalObservable {
@@ -1269,9 +1268,11 @@ object CncfRuntime extends GlobalObservable {
   ): Subsystem => Seq[Component] =
     (subsystem: Subsystem) => {
       val descriptors = subsystem.descriptor.map(_.toComponentDescriptors).getOrElse(Vector.empty)
-      val params = ComponentCreate(subsystem, ComponentOrigin.Builtin, descriptors)
-      specs.flatMap { spec =>
+      specs.zipWithIndex.flatMap { case (spec, index) =>
         val origin = _origin_for_spec(spec)
+        val activedescriptors =
+          ComponentRepository.descriptorsForSpecification(spec, specs.take(index), descriptors)
+        val params = ComponentCreate(subsystem, origin, activedescriptors)
         spec.build(params.withOrigin(origin)).discover()
       }
     }

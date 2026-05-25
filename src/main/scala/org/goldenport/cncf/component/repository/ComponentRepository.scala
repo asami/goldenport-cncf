@@ -460,6 +460,10 @@ object ComponentRepository extends GlobalObservable {
       ): Option[ComponentDescriptor] =
         ComponentDevDirRepository.devComponentDescriptors(baseDir)
           .find(_matches_component_descriptor(_, componentName))
+          .orElse {
+            ComponentDevDirRepository.inferComponentDescriptors(baseDir)
+              .find(_matches_component_descriptor(_, componentName))
+          }
     }
 
     def runtimeClasspathFile(base: Path): Path =
@@ -750,6 +754,29 @@ object ComponentRepository extends GlobalObservable {
   ): Option[Path] =
     specs.iterator.flatMap(_.resolveComponentArchivePath(componentName)).toSeq.headOption
 
+  private[cncf] def descriptorsForSpecification(
+    spec: Specification,
+    previousspecs: Seq[Specification],
+    descriptors: Vector[ComponentDescriptor]
+  ): Vector[ComponentDescriptor] =
+    spec match {
+      case _: StandardRepository.Specification =>
+        descriptors.filterNot(d => _is_descriptor_satisfied_by_specs(d, previousspecs))
+      case _ =>
+        descriptors
+    }
+
+  private def _is_descriptor_satisfied_by_specs(
+    descriptor: ComponentDescriptor,
+    specs: Seq[Specification]
+  ): Boolean =
+    _component_descriptor_names(descriptor).exists { name =>
+      specs.filterNot(_.isInstanceOf[StandardRepository.Specification]).exists { spec =>
+        spec.resolveComponentDescriptor(name).exists(_matches_component_descriptor(_, name, descriptor.version)) ||
+          spec.resolveComponentArchivePath(name, descriptor.version).nonEmpty
+      }
+    }
+
   def resolveSubsystemDescriptorFromComponentDir(
     baseDir: Path,
     subsystemName: String
@@ -823,15 +850,22 @@ object ComponentRepository extends GlobalObservable {
 
   private def _matches_component_descriptor(
     descriptor: ComponentDescriptor,
-    componentName: String
+    componentname: String
   ): Boolean = {
-    val requested = componentName.trim
-    val names = Vector(
-      descriptor.componentName,
-      descriptor.name
-    ).flatten ++ descriptor.componentlets.map(_.name)
-    names.contains(requested)
+    val requested = componentname.trim
+    val names = _component_descriptor_names(descriptor)
+    names.exists { name =>
+      NamingConventions.equivalentByNormalized(name, requested)
+    }
   }
+
+  private def _matches_component_descriptor(
+    descriptor: ComponentDescriptor,
+    componentname: String,
+    version: Option[String]
+  ): Boolean =
+    _matches_component_descriptor(descriptor, componentname) &&
+      version.forall(v => descriptor.version.forall(_ == v))
 
   private def _component_descriptors_for_artifact(
     params: ComponentCreate,

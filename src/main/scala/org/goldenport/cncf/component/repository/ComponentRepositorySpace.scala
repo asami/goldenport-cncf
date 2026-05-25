@@ -17,7 +17,6 @@ import org.goldenport.cncf.subsystem.Subsystem
  *  version Feb.  5, 2026
  *  version Mar. 26, 2026
  *  version Apr. 25, 2026
- *  version May.  1, 2026
  * @version May. 25, 2026
  * @author  ASAMI, Tomoharu
  */
@@ -67,11 +66,16 @@ object ComponentRepositorySpace {
   private def _make_repositories(
     subsystem: Subsystem,
     specs: Seq[ComponentRepository.Specification],
-    componentDescriptors: Vector[ComponentDescriptor]
+    componentdescriptors: Vector[ComponentDescriptor]
   ): Seq[Slot] = {
-    specs.map { spec =>
+    specs.zipWithIndex.map { case (spec, index) =>
       val origin = _origin_for_spec(spec)
-      val params = ComponentCreate(subsystem, origin, componentDescriptors)
+      val descriptors = ComponentRepository.descriptorsForSpecification(
+        spec,
+        specs.take(index),
+        componentdescriptors
+      )
+      val params = ComponentCreate(subsystem, origin, descriptors)
       val repo = spec.build(params)
       Slot(repo, origin)
     }

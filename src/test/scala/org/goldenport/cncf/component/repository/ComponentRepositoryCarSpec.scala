@@ -1005,6 +1005,78 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
       }
     }
 
+    "not look up a requested main target CAR when component-dev-dir satisfies it" in {
+      val subsystem = new Subsystem(
+        name = "test-standard-repo-dev-main-target",
+        configuration = ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty)
+      )
+      _with_temp_dir { root =>
+        val componentdir = root.resolve("textus-knowledge-editor")
+        val classdir = componentdir.resolve("target").resolve("scala-3.3.7").resolve("classes")
+        Files.createDirectories(classdir)
+        _write_runtime_classpath(componentdir, classdir)
+        Files.createDirectories(componentdir.resolve("src").resolve("main").resolve("car"))
+        Files.writeString(
+          componentdir.resolve("src").resolve("main").resolve("car").resolve("component-descriptor.yaml"),
+          """name: TextusKnowledgeEditor
+            |version: 0.1.0-SNAPSHOT
+            |component: TextusKnowledgeEditor
+            |""".stripMargin
+        )
+        val space = ComponentRepositorySpace.create(
+          subsystem,
+          ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty),
+          Vector(
+            ComponentRepository.ComponentDevDirRepository.Specification(componentdir),
+            ComponentRepository.StandardRepository.Specification(
+              ComponentRepository.StandardRepositoryKind.Car,
+              root.resolve("remote").toUri.toString.stripSuffix("/"),
+              root.resolve("cache")
+            )
+          ),
+          Vector(ComponentDescriptor(
+            name = Some("TextusKnowledgeEditor"),
+            version = Some("0.1.0-SNAPSHOT"),
+            componentName = Some("TextusKnowledgeEditor")
+          ))
+        )
+
+        noException should be thrownBy space.discover()
+      }
+    }
+
+    "not look up a requested main target CAR when component-dev-dir infers it" in {
+      val subsystem = new Subsystem(
+        name = "test-standard-repo-dev-main-target-inferred",
+        configuration = ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty)
+      )
+      _with_temp_dir { root =>
+        val componentdir = root.resolve("devdirsample")
+        val classdir = componentdir.resolve("target").resolve("scala-3.3.7").resolve("classes")
+        _copy_devdir_sample_classes(classdir)
+        _write_runtime_classpath(componentdir, classdir)
+        val space = ComponentRepositorySpace.create(
+          subsystem,
+          ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty),
+          Vector(
+            ComponentRepository.ComponentDevDirRepository.Specification(componentdir),
+            ComponentRepository.StandardRepository.Specification(
+              ComponentRepository.StandardRepositoryKind.Car,
+              root.resolve("remote").toUri.toString.stripSuffix("/"),
+              root.resolve("cache")
+            )
+          ),
+          Vector(ComponentDescriptor(
+            name = Some("devdirsample"),
+            version = Some("0.1.0-SNAPSHOT"),
+            componentName = Some("devdirsample")
+          ))
+        )
+
+        noException should be thrownBy space.discover()
+      }
+    }
+
     "resolve a subsystem descriptor from the standard SAR repository layout" in {
       _with_temp_dir { repositoryroot =>
         val artifactdir = repositoryroot.resolve("sar").resolve("cwitter").resolve("0.1.0")
