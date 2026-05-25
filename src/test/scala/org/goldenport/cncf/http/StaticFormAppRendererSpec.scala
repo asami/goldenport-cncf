@@ -2673,6 +2673,94 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       lowerWebInf.status.code shouldBe 404
     }
 
+    "prefer the route target component layout for standalone app pages" in {
+      val descriptorroot = Files.createTempDirectory("cncf-app-layout-descriptor-")
+      val editorroot = Files.createTempDirectory("cncf-app-layout-editor-")
+      val notificationroot = Files.createTempDirectory("cncf-app-layout-notification-")
+      Files.createDirectories(editorroot.resolve("src").resolve("main").resolve("web").resolve("textus-knowledge-editor").resolve("WEB-INF").resolve("layouts"))
+      Files.createDirectories(editorroot.resolve("src").resolve("main").resolve("web").resolve("textus-knowledge-editor").resolve("WEB-INF").resolve("partials"))
+      Files.createDirectories(editorroot.resolve("src").resolve("main").resolve("web").resolve("textus-knowledge-editor"))
+      Files.createDirectories(notificationroot.resolve("src").resolve("main").resolve("web").resolve("notifications").resolve("WEB-INF").resolve("layouts"))
+      Files.createDirectories(notificationroot.resolve("src").resolve("main").resolve("web").resolve("notifications").resolve("WEB-INF").resolve("partials"))
+      Files.writeString(
+        descriptorroot.resolve("web-descriptor.yaml"),
+        """web:
+          |  apps:
+          |    - name: textus-knowledge-editor
+          |      layout: default
+          |      composition: disabled
+          |    - name: notifications
+          |      layout: default
+          |      composition: disabled
+          |  routes:
+          |    - path: /web/textus-knowledge-editor
+          |      target:
+          |        component: textus-knowledge-editor
+          |        app: textus-knowledge-editor
+          |    - path: /web/notifications
+          |      target:
+          |        component: textus-user-notification
+          |        app: notifications
+          |""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+      Files.writeString(
+        editorroot.resolve("src").resolve("main").resolve("web").resolve("textus-knowledge-editor").resolve("WEB-INF").resolve("layouts").resolve("default.html"),
+        """<!doctype html><html><head><title>TKE</title></head><body>${partial.topbar}<aside>${partial.sidebar}</aside><main>${content}</main></body></html>""",
+        StandardCharsets.UTF_8
+      )
+      Files.writeString(
+        editorroot.resolve("src").resolve("main").resolve("web").resolve("textus-knowledge-editor").resolve("WEB-INF").resolve("partials").resolve("topbar.html"),
+        "<header>Textus Knowledge Editor</header>",
+        StandardCharsets.UTF_8
+      )
+      Files.writeString(
+        editorroot.resolve("src").resolve("main").resolve("web").resolve("textus-knowledge-editor").resolve("WEB-INF").resolve("partials").resolve("sidebar.html"),
+        "<nav>TKE Sidebar</nav>",
+        StandardCharsets.UTF_8
+      )
+      Files.writeString(
+        editorroot.resolve("src").resolve("main").resolve("web").resolve("textus-knowledge-editor").resolve("dashboard.html"),
+        "<section>TKE Dashboard</section>",
+        StandardCharsets.UTF_8
+      )
+      Files.writeString(
+        notificationroot.resolve("src").resolve("main").resolve("web").resolve("notifications").resolve("WEB-INF").resolve("layouts").resolve("default.html"),
+        """<!doctype html><html><head><title>Notifications</title></head><body>${partial.topbar}<main>${content}</main></body></html>""",
+        StandardCharsets.UTF_8
+      )
+      Files.writeString(
+        notificationroot.resolve("src").resolve("main").resolve("web").resolve("notifications").resolve("WEB-INF").resolve("partials").resolve("topbar.html"),
+        "<header>Notifications</header>",
+        StandardCharsets.UTF_8
+      )
+      val subsystem = _management_console_fixture_subsystem(
+        Configuration(Map(
+          RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(descriptorroot.resolve("web-descriptor.yaml").toString)
+        ))
+      ).add(Vector(
+        TestComponentFactory.create("textus_knowledge_editor", Protocol.empty),
+        TestComponentFactory.create("textus_user_notification", Protocol.empty)
+      ))
+      subsystem.components.find(_.name == "textus_knowledge_editor").getOrElse(fail("editor component missing")).withArtifactMetadata(
+        org.goldenport.cncf.component.Component.ArtifactMetadata("test", "textus-knowledge-editor", "0.1.0", component = Some("textus-knowledge-editor"), archivePath = Some(editorroot.toString))
+      )
+      subsystem.components.find(_.name == "textus_user_notification").getOrElse(fail("notification component missing")).withArtifactMetadata(
+        org.goldenport.cncf.component.Component.ArtifactMetadata("test", "textus-user-notification", "0.1.0", component = Some("textus-user-notification"), archivePath = Some(notificationroot.toString))
+      )
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+
+      val response = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/textus-knowledge-editor/dashboard"))).unsafeRunSync()
+      val html = response.as[String].unsafeRunSync()
+
+      response.status.code shouldBe 200
+      html should include ("<title>TKE</title>")
+      html should include ("Textus Knowledge Editor")
+      html should include ("TKE Sidebar")
+      html should include ("TKE Dashboard")
+      html should not include ("<title>Notifications</title>")
+    }
+
     "compose component Web pages into a subsystem shell only when explicitly enabled" in {
       val root = Files.createTempDirectory("cncf-web-composition-root-")
       Files.writeString(
@@ -2754,6 +2842,82 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       standaloneHtml should include ("Standalone Screen")
       standaloneHtml should not include ("Subsystem Header")
       standaloneHtml should not include ("<article>")
+    }
+
+    "render article-capable component pages standalone when no subsystem shell is available" in {
+      val descriptorroot = Files.createTempDirectory("cncf-article-no-shell-descriptor-")
+      val notificationroot = Files.createTempDirectory("cncf-article-no-shell-notification-")
+      val editorroot = Files.createTempDirectory("cncf-article-no-shell-editor-")
+      Files.createDirectories(notificationroot.resolve("src").resolve("main").resolve("web").resolve("notifications").resolve("WEB-INF").resolve("layouts"))
+      Files.createDirectories(notificationroot.resolve("src").resolve("main").resolve("web").resolve("notifications").resolve("WEB-INF").resolve("partials"))
+      Files.createDirectories(notificationroot.resolve("src").resolve("main").resolve("web").resolve("notifications"))
+      Files.createDirectories(editorroot.resolve("src").resolve("main").resolve("web").resolve("editor"))
+      Files.writeString(
+        descriptorroot.resolve("web-descriptor.yaml"),
+        """web:
+          |  apps:
+          |    - name: notifications
+          |      layout: notifications
+          |      composition: article
+          |    - name: editor
+          |      layout: default
+          |      composition: disabled
+          |  pages:
+          |    index:
+          |      layout: notifications
+          |      mode: article
+          |  routes:
+          |    - path: /web/notifications
+          |      target:
+          |        component: textus-user-notification
+          |        app: notifications
+          |    - path: /web/editor
+          |      target:
+          |        component: editor
+          |        app: editor
+          |""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+      Files.writeString(
+        notificationroot.resolve("src").resolve("main").resolve("web").resolve("notifications").resolve("WEB-INF").resolve("layouts").resolve("notifications.html"),
+        """<!doctype html><html><head><title>Notifications</title></head><body>${partial.topbar}<main>${content}</main></body></html>""",
+        StandardCharsets.UTF_8
+      )
+      Files.writeString(
+        notificationroot.resolve("src").resolve("main").resolve("web").resolve("notifications").resolve("WEB-INF").resolve("partials").resolve("topbar.html"),
+        "<header>Notification Header</header>",
+        StandardCharsets.UTF_8
+      )
+      Files.writeString(
+        notificationroot.resolve("src").resolve("main").resolve("web").resolve("notifications").resolve("index.html"),
+        "<section>Notification Inbox</section>",
+        StandardCharsets.UTF_8
+      )
+      Files.writeString(editorroot.resolve("src").resolve("main").resolve("web").resolve("editor").resolve("index.html"), "<section>Editor</section>", StandardCharsets.UTF_8)
+      val subsystem = _management_console_fixture_subsystem(
+        Configuration(Map(
+          RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(descriptorroot.resolve("web-descriptor.yaml").toString)
+        ))
+      ).add(Vector(
+        TestComponentFactory.create("textus_user_notification", Protocol.empty),
+        TestComponentFactory.create("editor", Protocol.empty)
+      ))
+      subsystem.components.find(_.name == "textus_user_notification").getOrElse(fail("notification component missing")).withArtifactMetadata(
+        org.goldenport.cncf.component.Component.ArtifactMetadata("test", "textus-user-notification", "0.1.0", component = Some("textus-user-notification"), archivePath = Some(notificationroot.toString))
+      )
+      subsystem.components.find(_.name == "editor").getOrElse(fail("editor component missing")).withArtifactMetadata(
+        org.goldenport.cncf.component.Component.ArtifactMetadata("test", "editor", "0.1.0", component = Some("editor"), archivePath = Some(editorroot.toString))
+      )
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+
+      val response = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/notifications"))).unsafeRunSync()
+      val html = response.as[String].unsafeRunSync()
+
+      response.status.code shouldBe 200
+      html should include ("<title>Notifications</title>")
+      html should include ("Notification Header")
+      html should include ("Notification Inbox")
+      html should not include ("subsystem-shell-layout-not-found")
     }
 
     "merge subsystem Web app composition override without dropping component app assets" in {
@@ -5001,6 +5165,43 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       dispatcher.forms.last.getString("body") shouldBe Some("hello")
       dispatcher.forms.last.getString("accessToken") shouldBe Some("abc")
       dispatcher.forms.last.getString("crud.origin.href") shouldBe None
+    }
+
+    "reject duplicate canonical aliases before Form API operation dispatch" in {
+      val subsystem = _form_type_fixture_subsystem()
+      val selector = "notice-board.notice.post-secret-notice"
+      val descriptor = WebDescriptor(expose = Map(selector -> WebDescriptor.Exposure.Protected))
+      val dispatcher = new RecordingWebOperationDispatcher(
+        new StaticWebOperationDispatcher(
+          HttpResponse.Text(
+            HttpStatus.Ok,
+            ContentType(MimeType("text/plain"), Some(StandardCharsets.UTF_8)),
+            Bag.text("posted", StandardCharsets.UTF_8)
+          )
+        )
+      )
+      val server = new Http4sHttpServer(
+        new HttpExecutionEngine(subsystem, Some(descriptor)),
+        operationDispatcherOption = Some(dispatcher)
+      )
+
+      val response = server
+        ._submit_operation_form_api(
+          _post_form_request(
+            "/form-api/notice-board/notice/post-secret-notice",
+            "body=hello&accessToken=abc&access_token=def"
+          ),
+          "notice-board",
+          "notice",
+          "post-secret-notice"
+        )
+        .unsafeRunSync()
+      val body = response.as[String].unsafeRunSync()
+
+      response.status.code shouldBe 400
+      body should include ("Duplicate property aliases after canonical naming")
+      body should include ("accessToken")
+      dispatcher.forms shouldBe empty
     }
 
     "promote x-textus-session from form payload into Form API auth headers" in {

@@ -8,6 +8,7 @@ import org.goldenport.Consequence
 import org.goldenport.convert.StringEncodable
 import org.goldenport.text.Presentable
 import org.goldenport.record.Record
+import org.goldenport.record.RecordKeyNaming
 import org.goldenport.record.RecordPresentable
 import org.goldenport.record.io.RecordDecoder
 import org.goldenport.cncf.context.ExecutionContext
@@ -31,7 +32,8 @@ import org.goldenport.cncf.directive.{Query as EntityQuery}
  * @since   Mar. 12, 2026
  *  version Mar. 19, 2026
  *  version Mar. 31, 2026
- * @version May.  8, 2026
+ *  version May.  8, 2026
+ * @version May. 26, 2026
  * @author  ASAMI, Tomoharu
  */
 class SqlDataStore(
@@ -720,60 +722,11 @@ class SqlDataStore(
   private def _column_name(name: String): String =
     if (config.normalizeColumnNames) _to_column_name(name) else name
 
-  private def _to_column_name(name: String): String = {
-    val b = new StringBuilder(name.length + 8)
-    var i = 0
-    var prevUnderscore = false
-    while (i < name.length) {
-      val c = name.charAt(i)
-      if (c == '-' || c == '.' || c == ' ') {
-        if (!prevUnderscore && b.nonEmpty) {
-          b.append('_')
-          prevUnderscore = true
-        }
-      } else if (c.isUpper) {
-        if (b.nonEmpty && !prevUnderscore)
-          b.append('_')
-        b.append(c.toLower)
-        prevUnderscore = false
-      } else if (c == '_') {
-        if (!prevUnderscore && b.nonEmpty) {
-          b.append('_')
-          prevUnderscore = true
-        }
-      } else {
-        b.append(c.toLower)
-        prevUnderscore = false
-      }
-      i += 1
-    }
-    val raw = b.result()
-    raw.dropWhile(_ == '_').reverse.dropWhile(_ == '_').reverse
-  }
+  private def _to_column_name(name: String): String =
+    RecordKeyNaming.toSnakeColumnName(name)
 
-  private def _to_property_name(name: String): String = {
-    val lower = name.toLowerCase(java.util.Locale.ROOT)
-    if (!name.contains("_"))
-      name
-    else {
-      val b = new StringBuilder(lower.length)
-      var upper = false
-      var i = 0
-      while (i < lower.length) {
-        val c = lower.charAt(i)
-        if (c == '_') {
-          upper = true
-        } else if (upper) {
-          b.append(c.toUpper)
-          upper = false
-        } else {
-          b.append(c)
-        }
-        i += 1
-      }
-      b.result()
-    }
-  }
+  private def _to_property_name(name: String): String =
+    RecordKeyNaming.toCanonicalCamelName(name)
 }
 
 object SqlDataStore {

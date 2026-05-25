@@ -35,7 +35,7 @@ import org.http4s.multipart.Multipart
 import org.http4s.server.websocket.WebSocketBuilder2
 import org.http4s.websocket.WebSocketFrame
 import org.typelevel.ci.CIString
-import org.goldenport.record.{Record, RecordFormat}
+import org.goldenport.record.{Record, RecordFormat, RecordKeyNaming}
 import org.goldenport.record.io.RecordExportEncoder
 import org.goldenport.{Conclusion, Consequence}
 import org.goldenport.http.{HttpContext, HttpRequest, HttpResponse, HttpStatus}
@@ -58,7 +58,8 @@ import org.goldenport.observation.{Cause, Descriptor}
  *  version Jan. 21, 2026
  *  version Mar. 29, 2026
  *  version Apr. 30, 2026
- * @version May. 25, 2026
+ *  version May. 25, 2026
+ * @version May. 26, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Http4sHttpServer(
@@ -1424,6 +1425,8 @@ final class Http4sHttpServer(
     operation: String,
     values: Map[String, String],
     label: Option[String],
+    capability: Option[String],
+    capabilityPolicy: String,
     template: Option[String]
   )
 
@@ -1437,13 +1440,25 @@ final class Http4sHttpServer(
       service <- parsed.get("service").map(_.trim).filter(_.nonEmpty)
       operation <- parsed.get("operation").map(_.trim).filter(_.nonEmpty)
     } yield {
-      val reserved = Set("component", "app", "service", "operation", "debug-label", "debugLabel")
+      val reserved = Set(
+        "component",
+        "app",
+        "service",
+        "operation",
+        "debug-label",
+        "debugLabel",
+        "data-textus-capability",
+        "data-textus-capability-policy",
+        "data-textus-capability-mode"
+      )
       WebOperationResultWidget(
         component,
         service,
         operation,
         parsed.filterNot { case (key, _) => reserved.contains(key) },
         parsed.get("debug-label").orElse(parsed.get("debugLabel")),
+        parsed.get("data-textus-capability"),
+        parsed.getOrElse("data-textus-capability-policy", "subject"),
         template.map(_.trim).filter(_.nonEmpty)
       )
     }
@@ -1498,7 +1513,9 @@ final class Http4sHttpServer(
     val app = widget.component
     val service = widget.service
     val operation = widget.operation
-    if (!_is_form_enabled(app, service, operation))
+    if (!_web_operation_result_capability_allowed(req, widget))
+      ""
+    else if (!_is_form_enabled(app, service, operation))
       _web_inline_error("Static Form operation-result operation not found")
     else if (!_is_web_authorized(app, service, operation, Some(req)))
       _web_inline_error("Static Form operation-result operation is not authorized")
@@ -1508,40 +1525,61 @@ final class Http4sHttpServer(
       val form = Record.create(values.toVector)
       val query = _query_record(req)
       val header = _web_operation_result_header(req, query, form, widget.label.getOrElse(s"${service}.${operation}"))
-      val result = _dispatch_operation_result(
-        app,
-        service,
-        operation,
-        HttpRequest.fromPath(
-          method = HttpRequest.POST,
-          path = s"/${app}/${service}/${operation}",
-          query = query,
-          header = header,
-          form = _operation_dispatch_form(form)
-        )
-      )
-      val res = result.response
-      val continuation = _create_form_continuation(app, service, operation, form, res, _form_chunk_size(form))
-      val resultvalues = values ++ _continuation_values(continuation)
-      val properties = _form_result_properties(
-        app,
-        service,
-        operation,
-        result,
-        resultvalues,
-        _form_page_view_context_values(req, app, service, operation, resultvalues)
-      )
-      _static_form_app_renderer.renderFormResultFragment(
-        properties,
-        widget.template.getOrElse(_default_web_operation_result_inline_template)
-      )
+      _operation_dispatch_form(app, service, operation, form) match {
+        case Consequence.Success(dispatchform) =>
+          val result = _dispatch_operation_result(
+            app,
+            service,
+            operation,
+            HttpRequest.fromPath(
+              method = HttpRequest.POST,
+              path = s"/${app}/${service}/${operation}",
+              query = query,
+              header = header,
+              form = dispatchform
+            )
+          )
+          val res = result.response
+          val continuation = _create_form_continuation(app, service, operation, form, res, _form_chunk_size(form))
+          val resultvalues = values ++ _continuation_values(continuation)
+          val properties = _form_result_properties(
+            app,
+            service,
+            operation,
+            result,
+            resultvalues,
+            _form_page_view_context_values(req, app, service, operation, resultvalues)
+          )
+          _static_form_app_renderer.renderFormResultFragment(
+            properties,
+            widget.template.getOrElse(_default_web_operation_result_inline_template)
+          )
+        case Consequence.Failure(conclusion) =>
+          _web_inline_error(conclusion.display)
+      }
     }
   }
+
+  private def _web_operation_result_capability_allowed(
+    req: org.http4s.Request[IO],
+    widget: WebOperationResultWidget
+  ): Boolean =
+    widget.capability.map(_.trim).filter(_.nonEmpty) match {
+      case None => true
+      case Some(capability) =>
+        val runtimeconfig = RuntimeConfig.from(engine.runtimeSubsystem.configuration)
+        val subject = _web_authorization_subject(Some(req), runtimeconfig)
+        widget.capabilityPolicy.trim.toLowerCase(java.util.Locale.ROOT) match {
+          case "authenticated" | "login" | "session" => subject.authenticated
+          case _ =>
+            val normalizedcapability = org.goldenport.cncf.security.SecuritySubject.normalize(capability)
+            subject.capabilities.map(org.goldenport.cncf.security.SecuritySubject.normalize).contains(normalizedcapability)
+        }
+    }
 
   private def _default_web_operation_result_inline_template: String =
     """<textus:operation-panel title="${operation.label}">
       |  <textus-error-panel source="error"></textus-error-panel>
-      |  <textus:knowledge-summary source="result.body.data"></textus:knowledge-summary>
       |  <textus:card-list source="result.body.data.records" title="title" subtitle="state" columns="record_id:Record,state:State,title:Title" empty="No records"></textus:card-list>
       |</textus:operation-panel>""".stripMargin
 
@@ -1597,39 +1635,44 @@ final class Http4sHttpServer(
       val form = Record.create(values.toVector)
       val query = _query_record(req)
       val header = _web_operation_result_header(req, query, form, widget.label.getOrElse(s"${service}.${operation}"))
-      val result = _dispatch_operation_result(
-        app,
-        service,
-        operation,
-        HttpRequest.fromPath(
-          method = HttpRequest.POST,
-          path = s"/${app}/${service}/${operation}",
-          query = query,
-          header = header,
-          form = _operation_dispatch_form(form)
-        )
-      )
-      val res = result.response
-      val continuation = _create_form_continuation(app, service, operation, form, res, _form_chunk_size(form))
-      val resultvalues = values ++ _continuation_values(continuation)
-      val properties = _form_result_properties(
-        app,
-        service,
-        operation,
-        result,
-        resultvalues,
-        _form_page_view_context_values(req, app, service, operation, resultvalues)
-      )
-      _prepared_form_result_template(app, service, operation, res.code, properties.page.values) match {
-        case Consequence.Success(template) =>
-          _html(_static_form_app_renderer.renderFormResult(properties, template), Some(webappname)).map { response =>
-            RuntimeDashboardMetrics.recordHtmlRequest(
-              req.method.name,
-              req.uri.path.renderString,
-              res.code,
-              (System.nanoTime() - started) / 1000000L
+      _operation_dispatch_form(app, service, operation, form) match {
+        case Consequence.Success(dispatchform) =>
+          val result = _dispatch_operation_result(
+            app,
+            service,
+            operation,
+            HttpRequest.fromPath(
+              method = HttpRequest.POST,
+              path = s"/${app}/${service}/${operation}",
+              query = query,
+              header = header,
+              form = dispatchform
             )
-            response
+          )
+          val res = result.response
+          val continuation = _create_form_continuation(app, service, operation, form, res, _form_chunk_size(form))
+          val resultvalues = values ++ _continuation_values(continuation)
+          val properties = _form_result_properties(
+            app,
+            service,
+            operation,
+            result,
+            resultvalues,
+            _form_page_view_context_values(req, app, service, operation, resultvalues)
+          )
+          _prepared_form_result_template(app, service, operation, res.code, properties.page.values) match {
+            case Consequence.Success(template) =>
+              _html(_static_form_app_renderer.renderFormResult(properties, template), Some(webappname)).map { response =>
+                RuntimeDashboardMetrics.recordHtmlRequest(
+                  req.method.name,
+                  req.uri.path.renderString,
+                  res.code,
+                  (System.nanoTime() - started) / 1000000L
+                )
+                response
+              }
+            case Consequence.Failure(conclusion) =>
+              _web_error_response(Some(webappname), conclusion, req.uri.path.renderString, req.method.name)
           }
         case Consequence.Failure(conclusion) =>
           _web_error_response(Some(webappname), conclusion, req.uri.path.renderString, req.method.name)
@@ -1988,47 +2031,51 @@ final class Http4sHttpServer(
     val started = System.nanoTime()
     for {
       form <- _to_form_record(req)
-      operationValues = _operation_form_values(form)
       pagevalues = _form_values(form)
-      validation = _static_form_app_renderer.validateOperationForm(
-        engine.runtimeSubsystem,
-        app,
-        service,
-        operation,
-        operationValues,
-        engine.webDescriptor
-      )
       response <-
-        validation match {
-          case Some(result) if !result.valid =>
-            val page = _static_form_app_renderer.renderOperationForm(
+        _operation_form_values(app, service, operation, form) match {
+          case Consequence.Success(operationvalues) =>
+            val validation = _static_form_app_renderer.validateOperationForm(
               engine.runtimeSubsystem,
               app,
               service,
               operation,
-              engine.webDescriptor,
-              _with_form_debug_panel_flag(pagevalues),
-              Some(result),
-              _operation_mode,
-              showExecutionDebugPanel = true
-            ).getOrElse(_static_form_app_renderer.renderFormResult(
-              _form_result_properties(app, service, operation, HttpResponse.Text(
-                HttpStatus.BadRequest,
-                ContentType(MimeType("text/plain"), Some(StandardCharsets.UTF_8)),
-                Bag.text("Validation failed.", StandardCharsets.UTF_8)
-              ), pagevalues, _form_page_view_context_values(req, app, service, operation, pagevalues))
-            ))
-            _html_status(page, HStatus.BadRequest, Some(app)).map { html =>
-              RuntimeDashboardMetrics.recordHtmlRequest(
-                req.method.name,
-                req.uri.path.renderString,
-                HStatus.BadRequest.code,
-                (System.nanoTime() - started) / 1000000L
-              )
-              html
+              operationvalues,
+              engine.webDescriptor
+            )
+            validation match {
+              case Some(result) if !result.valid =>
+                val page = _static_form_app_renderer.renderOperationForm(
+                  engine.runtimeSubsystem,
+                  app,
+                  service,
+                  operation,
+                  engine.webDescriptor,
+                  _with_form_debug_panel_flag(pagevalues),
+                  Some(result),
+                  _operation_mode,
+                  showExecutionDebugPanel = true
+                ).getOrElse(_static_form_app_renderer.renderFormResult(
+                  _form_result_properties(app, service, operation, HttpResponse.Text(
+                    HttpStatus.BadRequest,
+                    ContentType(MimeType("text/plain"), Some(StandardCharsets.UTF_8)),
+                    Bag.text("Validation failed.", StandardCharsets.UTF_8)
+                  ), pagevalues, _form_page_view_context_values(req, app, service, operation, pagevalues))
+                ))
+                _html_status(page, HStatus.BadRequest, Some(app)).map { html =>
+                  RuntimeDashboardMetrics.recordHtmlRequest(
+                    req.method.name,
+                    req.uri.path.renderString,
+                    HStatus.BadRequest.code,
+                    (System.nanoTime() - started) / 1000000L
+                  )
+                  html
+                }
+              case _ =>
+                _submit_valid_operation_form(req, app, service, operation, form, pagevalues, started)
             }
-          case _ =>
-            _submit_valid_operation_form(req, app, service, operation, form, pagevalues, started)
+          case Consequence.Failure(conclusion) =>
+            _web_error_response(Some(app), conclusion, req.uri.path.renderString, req.method.name)
         }
     } yield {
       response
@@ -2047,38 +2094,43 @@ final class Http4sHttpServer(
     val query = _query_record(req)
     _stage_job_input_form(app, service, operation, form) match {
       case Consequence.Success(dispatchform0) =>
-        val result = _dispatch_operation_result(
-          app,
-          service,
-          operation,
-          HttpRequest.fromPath(
-            method = HttpRequest.POST,
-            path = s"/${app}/${service}/${operation}",
-            query = query,
-            header = _development_form_header_record(req, query, dispatchform0),
-            form = _operation_dispatch_form(dispatchform0)
-          )
-        )
-        _annotate_application_job(result, app, service, operation)
-        val res = result.response
-        val continuation = _create_form_continuation(app, service, operation, dispatchform0, res, _form_chunk_size(dispatchform0))
-        val resultvalues = values ++ _continuation_values(continuation)
-        val properties = _form_result_properties(
-          app,
-          service,
-          operation,
-          result,
-          resultvalues,
-          _form_page_view_context_values(req, app, service, operation, resultvalues)
-        )
-        _form_transition_response(app, service, operation, dispatchform0, res, properties).map { response =>
-          RuntimeDashboardMetrics.recordHtmlRequest(
-            req.method.name,
-            req.uri.path.renderString,
-            res.code,
-            (System.nanoTime() - started) / 1000000L
-          )
-          response
+        _operation_dispatch_form(app, service, operation, dispatchform0) match {
+          case Consequence.Success(dispatchform) =>
+            val result = _dispatch_operation_result(
+              app,
+              service,
+              operation,
+              HttpRequest.fromPath(
+                method = HttpRequest.POST,
+                path = s"/${app}/${service}/${operation}",
+                query = query,
+                header = _development_form_header_record(req, query, dispatchform0),
+                form = dispatchform
+              )
+            )
+            _annotate_application_job(result, app, service, operation)
+            val res = result.response
+            val continuation = _create_form_continuation(app, service, operation, dispatchform0, res, _form_chunk_size(dispatchform0))
+            val resultvalues = values ++ _continuation_values(continuation)
+            val properties = _form_result_properties(
+              app,
+              service,
+              operation,
+              result,
+              resultvalues,
+              _form_page_view_context_values(req, app, service, operation, resultvalues)
+            )
+            _form_transition_response(app, service, operation, dispatchform0, res, properties).map { response =>
+              RuntimeDashboardMetrics.recordHtmlRequest(
+                req.method.name,
+                req.uri.path.renderString,
+                res.code,
+                (System.nanoTime() - started) / 1000000L
+              )
+              response
+            }
+          case Consequence.Failure(conclusion) =>
+            _web_error_response(Some(app), conclusion, req.uri.path.renderString, req.method.name)
         }
       case Consequence.Failure(conclusion) =>
         _web_error_response(Some(app), conclusion, req.uri.path.renderString, req.method.name)
@@ -2235,36 +2287,41 @@ final class Http4sHttpServer(
         form <- _to_form_record(req)
         query = _query_record(req)
         header = _development_form_header_record(req, query, form)
-        componentSegment = _dispatch_component_segment(app)
-        result = _dispatch_operation_result(
-          componentSegment,
-          service,
-          operation,
-          HttpRequest.fromPath(
-            method = HttpRequest.POST,
-            path = s"/${componentSegment}/${service}/${operation}",
-            query = query,
-            header = header,
-            form = _operation_dispatch_form(form)
-          )
-        )
-        res = result.response
-        out <- _to_http_execution_response(
-          result,
-          Some(req),
-          component = Some(app),
-          service = Some(service),
-          operation = Some(operation)
-        )
-      } yield {
-        RuntimeDashboardMetrics.recordHtmlRequest(
-          req.method.name,
-          req.uri.path.renderString,
-          res.code,
-          (System.nanoTime() - started) / 1000000L
-        )
-        out
-      }
+        out <- _operation_dispatch_form(app, service, operation, form) match {
+          case Consequence.Success(dispatchform) =>
+            val componentsegment = _dispatch_component_segment(app)
+            val result = _dispatch_operation_result(
+              componentsegment,
+              service,
+              operation,
+              HttpRequest.fromPath(
+                method = HttpRequest.POST,
+                path = s"/${componentsegment}/${service}/${operation}",
+                query = query,
+                header = header,
+                form = dispatchform
+              )
+            )
+            val res = result.response
+            _to_http_execution_response(
+              result,
+              Some(req),
+              component = Some(app),
+              service = Some(service),
+              operation = Some(operation)
+            ).map { response =>
+              RuntimeDashboardMetrics.recordHtmlRequest(
+                req.method.name,
+                req.uri.path.renderString,
+                res.code,
+                (System.nanoTime() - started) / 1000000L
+              )
+              response
+            }
+          case Consequence.Failure(conclusion) =>
+            _operation_conclusion_api_response(req, conclusion, Some(app), Some(service), Some(operation))
+        }
+      } yield out
     }
 
   private[http] def _validate_operation_form_api(
@@ -2280,16 +2337,21 @@ final class Http4sHttpServer(
     } else {
       for {
         form <- _to_plain_form_record(req)
-        response <- _static_form_app_renderer.renderOperationFormValidation(
-          engine.runtimeSubsystem,
-          app,
-          service,
-          operation,
-          _operation_form_values(form),
-          engine.webDescriptor
-        ) match {
-          case Some(p) => _json(p)
-          case None => _not_found_api_response(req, "Operation form validation API not found", Some(app), Some(service), Some(operation))
+        response <- _operation_form_values(app, service, operation, form) match {
+          case Consequence.Success(operationvalues) =>
+            _static_form_app_renderer.renderOperationFormValidation(
+              engine.runtimeSubsystem,
+              app,
+              service,
+              operation,
+              operationvalues,
+              engine.webDescriptor
+            ) match {
+              case Some(p) => _json(p)
+              case None => _not_found_api_response(req, "Operation form validation API not found", Some(app), Some(service), Some(operation))
+            }
+          case Consequence.Failure(conclusion) =>
+            _operation_conclusion_api_response(req, conclusion, Some(app), Some(service), Some(operation))
         }
       } yield response
     }
@@ -2406,8 +2468,11 @@ final class Http4sHttpServer(
   }
 
   private def _operation_dispatch_form(
+    app: String,
+    service: String,
+    operation: String,
     form: Record
-  ): Record = {
+  ): Consequence[Record] = {
     val admincontext = Vector(
       "textus.admin.principalId" -> "principalId",
       "textus.admin.subjectId" -> "subjectId",
@@ -2415,13 +2480,18 @@ final class Http4sHttpServer(
     ).flatMap { case (source, target) =>
       form.getString(source).filter(_.nonEmpty).map(target -> _)
     }
-    Record.create((_strip_framework_form_values(form.asMap) ++ admincontext).toVector)
+    _normalize_boundary_record(app, service, operation, Record.create(_strip_framework_form_values(form.asMap).toVector)).map { operationform =>
+      Record(operationform.fields ++ Record.create(admincontext).fields)
+    }
   }
 
   private def _operation_dispatch_record(
+    app: String,
+    service: String,
+    operation: String,
     record: Record
-  ): Record =
-    Record.create(_strip_framework_form_values(record.asMap).toVector)
+  ): Consequence[Record] =
+    _normalize_boundary_record(app, service, operation, Record.create(_strip_framework_form_values(record.asMap).toVector))
 
   private[http] def _submit_component_admin_entity_update(
     req: org.http4s.Request[IO],
@@ -2763,53 +2833,57 @@ final class Http4sHttpServer(
     } else if (!_is_web_authorized(app, service, operation, Some(req))) {
       _forbidden_web(req, Some(app), Some(service), Some(operation))
     } else {
-    val started = System.nanoTime()
-    val query = _operation_dispatch_record(_query_record(req))
-    val values = _query_values(req)
-    val result = _dispatch_operation_result(
-      app,
-      service,
-      operation,
-      HttpRequest.fromPath(
-        method = HttpRequest.GET,
-        path = s"/${app}/${service}/${operation}",
-        query = query,
-        header = _development_form_header_record(req, query)
-      )
-    )
-    _annotate_application_job(result, app, service, operation)
-    val res = result.response
-    _form_result_download_response(req, result) match {
-      case Some(response) =>
-        response
-      case None =>
-        _prepared_form_result_template(app, service, operation, res.code, values) match {
-          case Consequence.Success(template) =>
-            val page = _static_form_app_renderer.renderFormResult(
-              _form_result_properties(
-                app,
-                service,
-                operation,
-                result,
-                values,
-                _form_page_view_context_values(req, app, service, operation, values)
-              ),
-              template
+      val started = System.nanoTime()
+      _operation_dispatch_record(app, service, operation, _query_record(req)) match {
+        case Consequence.Success(query) =>
+          val values = _query_values(req)
+          val result = _dispatch_operation_result(
+            app,
+            service,
+            operation,
+            HttpRequest.fromPath(
+              method = HttpRequest.GET,
+              path = s"/${app}/${service}/${operation}",
+              query = query,
+              header = _development_form_header_record(req, query)
             )
-            _html(page, Some(app)).map { html =>
-              RuntimeDashboardMetrics.recordHtmlRequest(
-                req.method.name,
-                req.uri.path.renderString,
-                res.code,
-                (System.nanoTime() - started) / 1000000L
-              )
-              html
-            }
-          case Consequence.Failure(conclusion) =>
-            _web_error_response(Some(app), conclusion, req.uri.path.renderString, req.method.name)
-        }
+          )
+          _annotate_application_job(result, app, service, operation)
+          val res = result.response
+          _form_result_download_response(req, result) match {
+            case Some(response) =>
+              response
+            case None =>
+              _prepared_form_result_template(app, service, operation, res.code, values) match {
+                case Consequence.Success(template) =>
+                  val page = _static_form_app_renderer.renderFormResult(
+                    _form_result_properties(
+                      app,
+                      service,
+                      operation,
+                      result,
+                      values,
+                      _form_page_view_context_values(req, app, service, operation, values)
+                    ),
+                    template
+                  )
+                  _html(page, Some(app)).map { html =>
+                    RuntimeDashboardMetrics.recordHtmlRequest(
+                      req.method.name,
+                      req.uri.path.renderString,
+                      res.code,
+                      (System.nanoTime() - started) / 1000000L
+                    )
+                    html
+                  }
+                case Consequence.Failure(conclusion) =>
+                  _web_error_response(Some(app), conclusion, req.uri.path.renderString, req.method.name)
+              }
+          }
+        case Consequence.Failure(conclusion) =>
+          _web_error_response(Some(app), conclusion, req.uri.path.renderString, req.method.name)
+      }
     }
-  }
 
   private def _form_result_download_response(
     req: org.http4s.Request[IO],
@@ -3126,43 +3200,46 @@ final class Http4sHttpServer(
         "result.job.href" -> s"/form/${app}/${service}/${operation}/jobs/${jobId}/await"
       )
       _to_plain_form_record(req).flatMap { form =>
-        val dispatchform = Record.create(
-          (_operation_dispatch_form(form).asMap + ("id" -> jobId)).toVector
-        )
-        val result = _dispatch_operation_result(
-          "job_control",
-          "job",
-          "await_job_result",
-          HttpRequest.fromPath(
-            method = HttpRequest.POST,
-            path = "/job_control/job/await_job_result",
-            query = Record.empty,
-            header = _development_form_header_record(req, form = form),
-            form = dispatchform
-          )
-        )
-        val res = result.response
-        _prepared_form_result_template(app, service, operation, res.code, values) match {
-          case Consequence.Success(template) =>
-            val page = _static_form_app_renderer.renderFormResult(
-              _form_result_properties(
-                app,
-                service,
-                operation,
-                result,
-                values,
-                _form_page_view_context_values(req, app, service, operation, values)
-              ),
-              template
-            )
-            _html(page, Some(app)).map { html =>
-              RuntimeDashboardMetrics.recordHtmlRequest(
-                req.method.name,
-                req.uri.path.renderString,
-                res.code,
-                (System.nanoTime() - started) / 1000000L
+        _operation_dispatch_form(app, service, operation, form) match {
+          case Consequence.Success(baseform) =>
+            val dispatchform = Record.create((baseform.asMap + ("id" -> jobId)).toVector)
+            val result = _dispatch_operation_result(
+              "job_control",
+              "job",
+              "await_job_result",
+              HttpRequest.fromPath(
+                method = HttpRequest.POST,
+                path = "/job_control/job/await_job_result",
+                query = Record.empty,
+                header = _development_form_header_record(req, form = form),
+                form = dispatchform
               )
-              html
+            )
+            val res = result.response
+            _prepared_form_result_template(app, service, operation, res.code, values) match {
+              case Consequence.Success(template) =>
+                val page = _static_form_app_renderer.renderFormResult(
+                  _form_result_properties(
+                    app,
+                    service,
+                    operation,
+                    result,
+                    values,
+                    _form_page_view_context_values(req, app, service, operation, values)
+                  ),
+                  template
+                )
+                _html(page, Some(app)).map { html =>
+                  RuntimeDashboardMetrics.recordHtmlRequest(
+                    req.method.name,
+                    req.uri.path.renderString,
+                    res.code,
+                    (System.nanoTime() - started) / 1000000L
+                  )
+                  html
+                }
+              case Consequence.Failure(conclusion) =>
+                _web_error_response(Some(app), conclusion, req.uri.path.renderString, req.method.name)
             }
           case Consequence.Failure(conclusion) =>
             _web_error_response(Some(app), conclusion, req.uri.path.renderString, req.method.name)
@@ -3380,7 +3457,7 @@ final class Http4sHttpServer(
             service,
             operation,
             engine.webDescriptor,
-            _with_form_debug_panel_flag(_operation_form_values(form) ++ _error_values(response)),
+            _with_form_debug_panel_flag(_operation_form_values_for_rerender(app, service, operation, form) ++ _error_values(response)),
             operationMode = _operation_mode,
             showExecutionDebugPanel = true
           ).getOrElse(_static_form_app_renderer.renderFormResult(properties)), Some(app))
@@ -3594,7 +3671,8 @@ final class Http4sHttpServer(
     componentName: Option[String] = None
   ): Vector[WebResourceRoot] =
     scope match {
-      case WebTemplatePartScope.Default => _web_resource_roots()
+      case WebTemplatePartScope.Default =>
+        componentName.map(name => _component_content_web_roots(Some(name))).getOrElse(_web_resource_roots())
       case WebTemplatePartScope.ComponentContent => _component_content_web_roots(componentName)
       case WebTemplatePartScope.SubsystemShell => _subsystem_shell_web_roots()
     }
@@ -3996,7 +4074,26 @@ final class Http4sHttpServer(
     page: Vector[String]
   ): Boolean =
     engine.webDescriptor.appComposition(webappname).isArticle &&
-      engine.webDescriptor.staticPageMode(webappname, page) == WebDescriptor.PageMode.Article
+      engine.webDescriptor.staticPageMode(webappname, page) == WebDescriptor.PageMode.Article &&
+      _subsystem_shell_available(webappname)
+
+  private def _subsystem_shell_available(
+    webappname: String
+  ): Boolean =
+    engine.webDescriptor.shellComponentName.nonEmpty ||
+      _subsystem_shell_layout_available(webappname)
+
+  private def _subsystem_shell_layout_available(
+    webappname: String
+  ): Boolean = {
+    val shellappname = engine.webDescriptor.shellAppName.getOrElse(webappname)
+    val layoutnames = (engine.webDescriptor.shellLayoutName.toVector :+ "default").distinct
+    _subsystem_shell_web_roots().exists { root =>
+      layoutnames.exists { name =>
+        _web_inf_layout_candidates(shellappname, name).exists(root.readText(_).isDefined)
+      }
+    }
+  }
 
   private[http] def _web_app_static_html_candidates(
     webappname: String,
@@ -5111,6 +5208,26 @@ final class Http4sHttpServer(
   ): IO[HResponse[IO]] =
     _structured_error_response(req, _forbidden_error(req, component, service, operation))
 
+  private def _operation_conclusion_api_response(
+    req: org.http4s.Request[IO],
+    conclusion: Conclusion,
+    component: Option[String],
+    service: Option[String],
+    operation: Option[String]
+  ): IO[HResponse[IO]] =
+    _structured_error_response(
+      req,
+      StructuredHttpError.fromConclusion(
+        conclusion,
+        req.uri.path.renderString,
+        req.method.name,
+        _operation_mode,
+        component = component,
+        service = service,
+        operation = operation
+      )
+    )
+
   private[http] def _web_error_response(
     app: Option[String],
     status: HStatus,
@@ -5207,9 +5324,47 @@ final class Http4sHttpServer(
     _strip_security_form_values(form.asMap)
       .map { case (k, v) => k -> v.toString }
 
-  private def _operation_form_values(form: Record): Map[String, String] =
-    _strip_framework_form_values(form.asMap)
-      .map { case (k, v) => k -> v.toString }
+  private def _operation_form_values(
+    app: String,
+    service: String,
+    operation: String,
+    form: Record
+  ): Consequence[Map[String, String]] =
+    _normalize_boundary_record(app, service, operation, Record.create(_strip_framework_form_values(form.asMap).toVector)).map { record =>
+      record.asMap.map { case (k, v) => k -> v.toString }
+    }
+
+  private def _operation_form_values_for_rerender(
+    app: String,
+    service: String,
+    operation: String,
+    form: Record
+  ): Map[String, String] =
+    _operation_form_values(app, service, operation, form) match {
+      case Consequence.Success(values) => values
+      case Consequence.Failure(_) => _form_values(form)
+    }
+
+  private def _normalize_boundary_record(
+    app: String,
+    service: String,
+    operation: String,
+    record: Record
+  ): Consequence[Record] =
+    RecordKeyNaming.normalizeKnownKeys(record, _operation_known_keys(app, service, operation))
+
+  private def _operation_known_keys(
+    app: String,
+    service: String,
+    operation: String
+  ): Set[String] =
+    (for {
+      component <- _component(app)
+      servicedef <- component.protocol.services.services.find(s => NamingConventions.equivalentByNormalized(s.name, service))
+      operationdef <- servicedef.operations.operations.find(o => NamingConventions.equivalentByNormalized(o.name, operation))
+    } yield {
+      operationdef.specification.request.parameters.toVector.map(_.name).toSet
+    }).getOrElse(Set.empty)
 
   private def _strip_framework_form_values(
     values: Map[String, Any]

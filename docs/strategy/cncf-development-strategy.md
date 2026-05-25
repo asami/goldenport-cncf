@@ -656,8 +656,9 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Latest closed phase dashboard: `docs/phase/phase-26.md`
 - Latest closed phase checklist: `docs/phase/phase-26-checklist.md`
 - Candidate next phase areas after Phase 27: Web UI DSL / Bootstrap Core /
-  Material Design / UX Profile implementation; AwsComponent/S3 BlobStore
-  provider; Search/index planning; DB migration tooling.
+  Material Design / UX Profile implementation; Web UI multi-locale message
+  control; AwsComponent/S3 BlobStore provider; Search/index planning; DB
+  migration tooling.
 - Status interpretation rules: `docs/rules/stage-status-and-checklist-convention.md`
 
 ## 6. Explicit Non-Goals
@@ -1172,6 +1173,7 @@ independent 9.x items below rather than adding broad bullets back into 9.1.
 - `9.23 Component-owned Admin Surface Discovery`
 - `9.24 Application Notification UX`
 - `9.25 Structured Web/API Error Presentation`
+- `9.26 Web UI Multi-locale Message Control`
 
 ### 9.2 Event Mechanism Follow-ups
 Future event/runtime development item.
@@ -1836,3 +1838,38 @@ Future Web/API polish development item.
   - `Conclusion` / Observation semantic redesign;
   - frontend toast/notification framework;
   - application-specific error copywriting system.
+
+### 9.26 Web UI Multi-locale Message Control
+Future Web/platform UX development item.
+
+- Trigger:
+  - `textus-user-account` signup validation showed that focus can move to the
+    invalid field while the user-facing reason remains uncontrolled or
+    browser-locale dependent.
+- Goal: make CNCF Web UI messages locale-aware across Static Form pages,
+  component-owned Web pages, authentication screens, validation messages, and
+  structured error presentation.
+- Scope:
+  - define the Web locale resolution order, for example explicit route/query
+    language, authenticated user/session locale, request `Accept-Language`, and
+    application default;
+  - add reusable message catalog/key lookup for common Web UI strings,
+    validation messages, capability messages, and operation result summaries;
+  - replace browser-native validation text dependency with CNCF/application
+    controlled messages based on validity reason keys such as required,
+    type-mismatch, pattern-mismatch, and range errors;
+  - align server-side structured error messages with client-visible localized
+    summaries without exposing raw diagnostics to ordinary users;
+  - keep user profile `locale` as account data while defining how it becomes a
+    session/display locale after authentication.
+- First implementation direction:
+  - start with authentication/account pages and Static Form validation widgets;
+  - introduce a small locale/message resolver shared by generated pages and
+    component-owned pages;
+  - keep page markup language tags, message keys, and fallback strings explicit
+    so untranslated pages degrade predictably.
+- Deferred scope:
+  - rich multilingual document body management, which remains SmartDox/Textus
+    content work;
+  - automatic machine translation;
+  - production translation workflow, translator UI, or terminology management.

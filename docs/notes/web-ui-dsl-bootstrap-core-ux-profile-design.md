@@ -118,6 +118,37 @@ Textus widgets render to Bootstrap Core DOM. Applications may add local CSS,
 but generated HTML must remain usable with the CNCF local Bootstrap assets
 alone.
 
+### Standard JavaScript Modules
+
+Textus/CNCF standard JavaScript should be organized by responsibility, not as
+one hand-written catch-all file.
+
+Source modules should remain small and independently understandable:
+
+```text
+textus-form-validation.js
+textus-capability.js
+textus-job.js
+textus-notification.js
+textus-islands.js
+```
+
+The runtime may later serve a bundled asset such as `textus-web.js`, but that
+bundle is a packaging optimization. It must not become the source-level design
+unit.
+
+Initial responsibility boundaries:
+
+- `textus-widgets.js`: generic widget behavior and widget rendering support;
+- `textus-form-validation.js`: Bootstrap-compatible field validation display,
+  summary alerts, `is-invalid`, `invalid-feedback`, and accessibility wiring;
+- `textus-app-shell.js`: header/session/logout/job/notification badge support;
+- `textus-islands.js`: future island loader and island lifecycle support.
+
+Application-local JavaScript may still exist for app-specific assistance, but
+shared behavior that recurs across Static Form pages, authentication pages, and
+component-owned Web pages should move into these Textus modules.
+
 ### UX Profile
 
 UX Profile is the presentation and interaction policy applied on top of

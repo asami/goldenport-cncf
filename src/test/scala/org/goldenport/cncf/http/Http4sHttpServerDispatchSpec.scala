@@ -427,6 +427,50 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers {
       body should not include "Debug app sign in required"
     }
 
+    "render operation-result widgets without knowledge summary by default" in {
+      val root = Files.createTempDirectory("http4s-http-server-operation-result-default-spec")
+      Files.createDirectories(root.resolve("debug-app"))
+      Files.writeString(
+        root.resolve("web.yaml"),
+        """expose:
+          |  debug.http.echo: enabled
+          |form:
+          |  debug.http.echo:
+          |    enabled: true
+          |""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+      Files.writeString(
+        root.resolve("debug-app").resolve("index.html"),
+        """<textus:operation-result component="debug" service="http" operation="echo" body="hello"></textus:operation-result>""",
+        StandardCharsets.UTF_8
+      )
+      val configuration = ResolvedConfiguration(
+        Configuration(
+          Map(
+            RuntimeConfig.WebDescriptorKey ->
+              ConfigurationValue.StringValue(root.resolve("web.yaml").toString)
+          )
+        ),
+        ConfigurationTrace.empty
+      )
+      val subsystem = DefaultSubsystemFactory.default(None, configuration)
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+
+      val response = server
+        ._component_web_app(
+          "debug",
+          "debug-app",
+          Vector.empty,
+          Some(HRequest[IO](method = Method.GET, uri = Uri.unsafeFromString("/web/debug-app")))
+        )
+        .unsafeRunSync()
+      val body = response.as[String].unsafeRunSync()
+
+      response.status.code shouldBe 200
+      body should not include "KnowledgeSpace"
+    }
+
     "dispatch static Web app page aliases below the app root" in {
       val root = Files.createTempDirectory("http4s-http-server-web-page-alias-spec")
       Files.createDirectories(root.resolve("debug-app"))

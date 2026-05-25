@@ -336,6 +336,13 @@ Management Console, Manual, and Static Form App pages should use that note for
 layout and responsive UI conventions while keeping their runtime contracts
 unchanged.
 
+Textus standard JavaScript is a shared asset family, not a single monolithic
+source file. CNCF may serve bundled runtime assets later, but source
+responsibility should stay split into focused modules such as form validation,
+capability controls, job/notification shell helpers, widget behavior, and
+future island loading. Component-owned pages can opt into those modules while
+keeping the server-rendered HTML/form path authoritative.
+
 ## Static Form App Model
 
 A Static Form App is a web app instance made from CML metadata, static HTML

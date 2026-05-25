@@ -367,9 +367,9 @@ object GenericSubsystemFactory {
     values match {
       case Some(value) =>
         _parse_repository_specs(value)
-          .getOrElse(Vector(_default_repository_spec))
+          .getOrElse(_default_repository_specs)
       case None =>
-        Vector(_default_repository_spec)
+        _default_repository_specs
     }
   }
 
@@ -396,8 +396,12 @@ object GenericSubsystemFactory {
   ): Option[Vector[ComponentRepository.Specification]] =
     ComponentRepository.parseSpecs(_normalize_repository_spec_value(value), Paths.get("").toAbsolutePath.normalize).toOption
 
-  private def _default_repository_spec: ComponentRepository.Specification =
-    ComponentRepository.ComponentDirRepository.Specification(ComponentRepository.defaultStandardRepositoryDir())
+  private def _default_repository_specs: Vector[ComponentRepository.Specification] =
+    Vector(
+      ComponentRepository.defaultLocalComponentRepositoryDir(),
+      ComponentRepository.defaultLocalSubsystemRepositoryDir(),
+      ComponentRepository.defaultStandardRepositoryDir()
+    ).map(ComponentRepository.ComponentDirRepository.Specification.apply)
 
   private def _with_assembly_descriptor_override(
     descriptor: GenericSubsystemDescriptor,

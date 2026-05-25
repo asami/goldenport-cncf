@@ -16,7 +16,8 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Mar. 12, 2026
  *  version Mar. 12, 2026
- * @version Apr. 26, 2026
+ *  version Apr. 26, 2026
+ * @version May. 26, 2026
  * @author  ASAMI, Tomoharu
  */
 class SqliteDataStoreSpec
@@ -206,6 +207,37 @@ class SqliteDataStoreSpec
         Then("the record is removed")
         deleted should be_success
         deleted shouldBe Consequence.success(None)
+      }
+    }
+
+    "store physical snake columns and return canonical camel keys" in {
+      val path = Files.createTempFile("cncf-sqlite-normalized", ".db").toString
+      val datastore = SqlDataStore.sqlite(path, config = SqlDataStore.Config(normalizeColumnNames = true))
+      val collection = DataStore.CollectionId("normalized")
+      val ctx = ExecutionContext.create()
+      given ExecutionContext = ctx
+
+      val entryid = DataStore.StringEntryId("u1")
+      datastore.create(
+        collection,
+        entryid,
+        Record.data(
+          "loginName" -> "alice",
+          "passwordHash" -> "hashed"
+        )
+      ) should be_success
+
+      val loaded = datastore.load(collection, entryid)
+
+      loaded should be_success
+      loaded match {
+        case Consequence.Success(Some(record)) =>
+          record.getString("loginName") shouldBe Some("alice")
+          record.getString("passwordHash") shouldBe Some("hashed")
+          record.getString("login_name") shouldBe None
+          record.getString("password_hash") shouldBe None
+        case other =>
+          fail(s"unexpected result: $other")
       }
     }
 

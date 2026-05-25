@@ -93,9 +93,9 @@ object TextusIdentitySubsystemFactory {
     values match {
       case Some(value) =>
         _parse_repository_specs(value)
-          .getOrElse(Vector(_default_repository_spec))
+          .getOrElse(_default_repository_specs)
       case None =>
-        Vector(_default_repository_spec)
+        _default_repository_specs
     }
   }
 
@@ -119,8 +119,12 @@ object TextusIdentitySubsystemFactory {
       }
       .mkString(",")
 
-  private def _default_repository_spec: ComponentRepository.Specification =
-    ComponentRepository.ComponentDirRepository.Specification(ComponentRepository.defaultStandardRepositoryDir())
+  private def _default_repository_specs: Vector[ComponentRepository.Specification] =
+    Vector(
+      ComponentRepository.defaultLocalComponentRepositoryDir(),
+      ComponentRepository.defaultLocalSubsystemRepositoryDir(),
+      ComponentRepository.defaultStandardRepositoryDir()
+    ).map(ComponentRepository.ComponentDirRepository.Specification.apply)
 
   private def _matches_descriptor_component(
     component: Component,

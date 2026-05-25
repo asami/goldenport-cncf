@@ -79,6 +79,22 @@ Fragment templates are normally wrapped by the built-in Bootstrap page shell.
 Full document templates that opt out of that shell are responsible for
 including equivalent local assets.
 
+Textus standard JavaScript should be split by source responsibility and may be
+bundled for runtime delivery later. Do not grow `textus-widgets.js` into an
+unstructured catch-all. Reusable behaviors should be introduced as named
+modules such as:
+
+```text
+textus-form-validation.js
+textus-capability.js
+textus-job.js
+textus-notification.js
+textus-islands.js
+```
+
+The preferred future runtime bundle name is `textus-web.js`, but that bundle is
+a delivery artifact. Source ownership remains module-based.
+
 ## JavaScript Enhancement Boundary
 
 Static Form Web Apps may use application-local JavaScript to improve the user
