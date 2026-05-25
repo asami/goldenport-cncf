@@ -30,7 +30,7 @@ import org.goldenport.configuration.{Configuration, ConfigurationTrace, Resolved
  *  version Feb.  5, 2026
  *  version Mar. 22, 2026
  *  version Apr. 25, 2026
- * @version May. 18, 2026
+ * @version May. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 sealed abstract class ComponentRepository {
@@ -111,7 +111,16 @@ object ComponentRepository extends GlobalObservable {
   }
 
   def defaultStandardRepositoryDir(): Path =
-    Paths.get(sys.props.getOrElse("user.home", "."), ".cncf", "repository").normalize
+    Paths.get(sys.props.getOrElse("user.home", "."), ".cncf", "cache").normalize
+
+  def defaultLocalRepositoryDir(): Path =
+    Paths.get(sys.props.getOrElse("user.home", "."), ".cncf", "local").normalize
+
+  def defaultLocalComponentRepositoryDir(): Path =
+    defaultLocalRepositoryDir().resolve("repository").resolve("car")
+
+  def defaultLocalSubsystemRepositoryDir(): Path =
+    defaultLocalRepositoryDir().resolve("repository").resolve("sar")
 
   def standardComponentRepositoryUrl(): String =
     _standard_component_repository_url
@@ -285,7 +294,8 @@ object ComponentRepository extends GlobalObservable {
   final class ComponentDirRepository(
     baseDir: Path,
     params: ComponentCreate,
-    packagePrefixes: Seq[String]
+    packagePrefixes: Seq[String],
+    releaseonly: Boolean = false
   ) extends ComponentRepository {
     def discover(): Seq[Component] = {
       if (!Files.exists(baseDir)) {
@@ -293,12 +303,12 @@ object ComponentRepository extends GlobalObservable {
       } else {
         val log = PersistentBootstrapLog.forClass(classOf[ComponentDirRepository], ObservabilityScopeDefaults.Bootstrap)
         val origin = ComponentOrigin.Repository("component-dir")
-        val artifacts = _requested_component_artifacts(baseDir, params)
+        val artifacts = _requested_component_artifacts(baseDir, params, releaseonly)
         val components =
           if (artifacts.nonEmpty)
             artifacts.flatMap(_discover_artifact(_, params, origin, log))
           else
-            _discover_from_artifacts(basedir = baseDir, params = params, origin = origin, log = log)
+            _discover_from_artifacts(basedir = baseDir, params = params, origin = origin, log = log, releaseonly = releaseonly)
         if (components.nonEmpty) {
           components
         } else {
@@ -632,16 +642,17 @@ object ComponentRepository extends GlobalObservable {
   ) extends ComponentRepository {
     def discover(): Seq[Component] = {
       _ensure_requested_component_artifacts()
-      new ComponentDirRepository(cacheRoot, params, packagePrefixes).discover()
+      new ComponentDirRepository(cacheRoot, params, packagePrefixes, releaseonly = true).discover()
     }
 
     private def _ensure_requested_component_artifacts(): Unit =
       kind match {
         case StandardRepositoryKind.Car =>
-          _requested_components(params).filterNot { case (name, _) =>
+          _requested_components(params).filterNot { case (name, version) =>
+            version.exists(_is_snapshot_version) ||
             _satisfied_by_active_development_component(params, name)
           }.foreach { case (name, version) =>
-            val resolved = _resolve_standard_component_artifact(cacheRoot, name, version)
+            val resolved = _resolve_standard_component_artifact(cacheRoot, name, version, releaseonly = true)
               .orElse(_fetch_standard_component_artifact(baseUrl, cacheRoot, name, version))
             if (resolved.isEmpty) {
               val versiontext = version.getOrElse("latest")
@@ -684,7 +695,7 @@ object ComponentRepository extends GlobalObservable {
       ): Option[GenericSubsystemDescriptor] =
         kind match {
           case StandardRepositoryKind.Sar =>
-            _resolve_standard_subsystem_descriptor(cacheRoot, subsystemName)
+            _resolve_standard_subsystem_descriptor(cacheRoot, subsystemName, releaseonly = true)
               .orElse(_fetch_standard_subsystem_descriptor(baseUrl, cacheRoot, subsystemName))
           case _ =>
             None
@@ -695,7 +706,7 @@ object ComponentRepository extends GlobalObservable {
       ): Option[ComponentDescriptor] =
         kind match {
           case StandardRepositoryKind.Car =>
-            _resolve_standard_component_descriptor(cacheRoot, componentName)
+            _resolve_standard_component_descriptor(cacheRoot, componentName, releaseonly = true)
               .orElse(_fetch_standard_component_descriptor(baseUrl, cacheRoot, componentName))
           case _ =>
             None
@@ -712,7 +723,7 @@ object ComponentRepository extends GlobalObservable {
       ): Option[Path] =
         kind match {
           case StandardRepositoryKind.Car =>
-            _resolve_standard_component_artifact(cacheRoot, componentName, version)
+            _resolve_standard_component_artifact(cacheRoot, componentName, version, releaseonly = true)
               .orElse(_fetch_standard_component_artifact(baseUrl, cacheRoot, componentName, version))
               .collect { case Artifact(path, ArtifactKind.Car) => path }
           case _ =>
@@ -879,9 +890,10 @@ object ComponentRepository extends GlobalObservable {
     basedir: Path,
     params: ComponentCreate,
     origin: ComponentOrigin,
-    log: BootstrapLog
+    log: BootstrapLog,
+    releaseonly: Boolean = false
   ): Seq[Component] = {
-    val artifacts = _list_artifacts(basedir)
+    val artifacts = _list_artifacts(basedir).filterNot(artifact => releaseonly && _is_snapshot_artifact(artifact))
     artifacts.flatMap { artifact =>
       artifact.kind match {
         case ArtifactKind.Jar => _discover_component_from_jar(artifact.path, params, origin, log)
@@ -936,10 +948,11 @@ object ComponentRepository extends GlobalObservable {
 
   private def _requested_component_artifacts(
     basedir: Path,
-    params: ComponentCreate
+    params: ComponentCreate,
+    releaseonly: Boolean = false
   ): Vector[Artifact] = {
     _requested_components(params).flatMap { case (name, version) =>
-      _resolve_requested_component_artifact(basedir, name, version)
+      _resolve_requested_component_artifact(basedir, name, version, releaseonly)
     }.distinct
   }
 
@@ -968,13 +981,19 @@ object ComponentRepository extends GlobalObservable {
   private def _resolve_requested_component_artifact(
     basedir: Path,
     componentName: String,
-    version: Option[String]
+    version: Option[String],
+    releaseonly: Boolean = false
   ): Vector[Artifact] = {
     val flat = _list_matching_artifacts(basedir, componentName, version)
-    if (flat.nonEmpty)
-      flat
+    val artifacts =
+      if (flat.nonEmpty)
+        flat
+      else
+        _resolve_standard_component_artifact(basedir, componentName, version, releaseonly).toVector
+    if (releaseonly)
+      artifacts.filterNot(_is_snapshot_artifact)
     else
-      _resolve_standard_component_artifact(basedir, componentName, version).toVector
+      artifacts
   }
 
   private def _list_matching_artifacts(
@@ -998,9 +1017,10 @@ object ComponentRepository extends GlobalObservable {
 
   private def _resolve_standard_component_descriptor(
     basedir: Path,
-    componentName: String
+    componentName: String,
+    releaseonly: Boolean = false
   ): Option[ComponentDescriptor] =
-    _resolve_standard_component_artifact(basedir, componentName, None).iterator.flatMap {
+    _resolve_standard_component_artifact(basedir, componentName, None, releaseonly).iterator.flatMap {
       case Artifact(path, ArtifactKind.Car) =>
         ComponentDescriptorLoader.loadArchive(path).toOption
       case Artifact(path, ArtifactKind.CarDir) =>
@@ -1012,17 +1032,19 @@ object ComponentRepository extends GlobalObservable {
   private def _resolve_standard_component_artifact(
     basedir: Path,
     componentName: String,
-    version: Option[String]
+    version: Option[String],
+    releaseonly: Boolean = false
   ): Option[Artifact] =
     _standard_component_repository_roots(basedir).iterator.flatMap { root =>
-      _resolve_standard_artifact(root, componentName, version, ".car", ArtifactKind.Car)
+      _resolve_standard_artifact(root, componentName, version, ".car", ArtifactKind.Car, releaseonly)
     }.toSeq.headOption
 
   private def _resolve_standard_subsystem_descriptor(
     basedir: Path,
-    subsystemName: String
+    subsystemName: String,
+    releaseonly: Boolean = false
   ): Option[GenericSubsystemDescriptor] =
-    _resolve_standard_subsystem_artifact(basedir, subsystemName).flatMap {
+    _resolve_standard_subsystem_artifact(basedir, subsystemName, releaseonly).flatMap {
       case Artifact(path, ArtifactKind.Sar) => GenericSubsystemDescriptor.load(path).toOption
       case Artifact(path, ArtifactKind.SarDir) => GenericSubsystemDescriptor.load(path).toOption
       case _ => None
@@ -1030,41 +1052,49 @@ object ComponentRepository extends GlobalObservable {
 
   private def _resolve_standard_subsystem_artifact(
     basedir: Path,
-    subsystemName: String
+    subsystemName: String,
+    releaseonly: Boolean = false
   ): Option[Artifact] =
     _standard_subsystem_repository_roots(basedir).iterator.flatMap { root =>
-      _resolve_standard_artifact(root, subsystemName, None, ".sar", ArtifactKind.Sar)
+      _resolve_standard_artifact(root, subsystemName, None, ".sar", ArtifactKind.Sar, releaseonly)
     }.toSeq.headOption
 
   private def _standard_component_repository_roots(
     basedir: Path
   ): Vector[Path] =
     Vector(
+      basedir,
+      basedir.resolve("repository").resolve(_standard_component_repository_path),
       basedir.resolve(_standard_component_repository_path),
       basedir.resolve(_legacy_standard_component_repository_path)
-    )
+    ).distinct
 
   private def _standard_subsystem_repository_roots(
     basedir: Path
   ): Vector[Path] =
     Vector(
+      basedir,
+      basedir.resolve("repository").resolve(_standard_subsystem_repository_path),
       basedir.resolve(_standard_subsystem_repository_path),
       basedir.resolve(_legacy_standard_subsystem_repository_path)
-    )
+    ).distinct
 
   private def _resolve_standard_artifact(
     repositoryroot: Path,
     name: String,
     version: Option[String],
     suffix: String,
-    kind: ArtifactKind
+    kind: ArtifactKind,
+    releaseonly: Boolean = false
   ): Option[Artifact] = {
     val artifactroot = repositoryroot.resolve(name)
     if (!Files.isDirectory(artifactroot)) {
       None
     } else {
-      val versions =
+      val versions0 =
         version.map(v => Vector(v)).getOrElse(_version_dirs_desc(artifactroot))
+      val versions =
+        if (releaseonly) versions0.filterNot(_is_snapshot_version) else versions0
       versions.iterator.flatMap { v =>
         val artifact = artifactroot.resolve(v).resolve(s"${name}-${v}${suffix}")
         if (Files.isRegularFile(artifact)) Some(Artifact(artifact, kind)) else None
@@ -1136,10 +1166,13 @@ object ComponentRepository extends GlobalObservable {
     name: String,
     version: Option[String]
   ): Vector[String] =
-    version.map(Vector(_)).getOrElse {
+    version match {
+      case Some(v) if _is_snapshot_version(v) => Vector.empty
+      case Some(v) => Vector(v)
+      case None =>
       val local = {
         val artifactroot = repositoryroot.resolve(name)
-        if (Files.isDirectory(artifactroot)) _version_dirs_desc(artifactroot) else Vector.empty
+        if (Files.isDirectory(artifactroot)) _version_dirs_desc(artifactroot).filterNot(_is_snapshot_version) else Vector.empty
       }
       if (local.nonEmpty) local else _fetch_standard_metadata_versions(baseurl, name)
     }
@@ -1151,8 +1184,18 @@ object ComponentRepository extends GlobalObservable {
     _read_remote_text(_join_url(baseurl, name, "maven-metadata.xml")).map { text =>
       val latest = _first_xml_tag(text, "latest").orElse(_first_xml_tag(text, "release")).toVector
       val versions = "<version>([^<]+)</version>".r.findAllMatchIn(text).map(_.group(1).trim).filter(_.nonEmpty).toVector
-      (latest ++ versions.reverse).distinct
+      (latest ++ versions.reverse).distinct.filterNot(_is_snapshot_version)
     }.getOrElse(Vector.empty)
+
+  private def _is_snapshot_version(
+    version: String
+  ): Boolean =
+    version.toUpperCase(java.util.Locale.ROOT).endsWith("-SNAPSHOT")
+
+  private def _is_snapshot_artifact(
+    artifact: Artifact
+  ): Boolean =
+    artifact.path.getFileName.toString.toUpperCase(java.util.Locale.ROOT).contains("-SNAPSHOT")
 
   private def _fetch_standard_artifact(
     baseurl: String,

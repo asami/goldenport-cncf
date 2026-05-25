@@ -23,7 +23,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Apr.  8, 2026
  *  version Apr. 10, 2026
  *  version Apr. 24, 2026
- * @version May.  1, 2026
+ * @version May. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with BeforeAndAfterAll {
@@ -215,16 +215,16 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
 
     "resolve descriptor components from the default standard repository using name and version without repository config" in {
       _with_temp_dir { homedir =>
-        val cachedir = homedir.resolve(".cncf").resolve("repository").resolve("org").resolve("simplemodeling").resolve("car").resolve("textus-user-account").resolve("0.1.0-SNAPSHOT")
+        val cachedir = homedir.resolve(".cncf").resolve("cache").resolve("car").resolve("textus-user-account").resolve("0.1.0")
         Files.createDirectories(cachedir)
         val fakecomponentjar = _create_fake_component_jar(homedir.resolve("assets").resolve("component-main.jar"))
         val componentDescriptor = homedir.resolve("component-descriptor.json")
         Files.writeString(
           componentDescriptor,
-          """{"name":"textus-user-account","version":"0.1.0-SNAPSHOT","componentName":"textus-user-account"}"""
+          """{"name":"textus-user-account","version":"0.1.0","componentName":"textus-user-account"}"""
         )
         _create_car(
-          cachedir.resolve("textus-user-account-0.1.0-SNAPSHOT.car"),
+          cachedir.resolve("textus-user-account-0.1.0.car"),
           Seq(
             "component/main.jar" -> fakecomponentjar,
             "component-descriptor.json" -> componentDescriptor
@@ -238,7 +238,7 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
             |version: 0.1.0-SNAPSHOT
             |components:
             |  - name: textus-user-account
-            |    version: 0.1.0-SNAPSHOT
+            |    version: 0.1.0
             |""".stripMargin,
           StandardCharsets.UTF_8
         )

@@ -24,7 +24,7 @@ import org.goldenport.configuration.ConfigurationTrace
 /*
  * @since   Feb.  4, 2026
  *  version Apr. 25, 2026
- * @version May. 18, 2026
+ * @version May. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAndAfterAll {
@@ -65,6 +65,162 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
 
         resolved should contain (ComponentRepository.standardComponentRepositorySpec())
         resolved should contain (ComponentRepository.standardSubsystemRepositorySpec())
+      }
+    }
+
+    "use cache as the default standard repository root" in {
+      val root = ComponentRepository.defaultStandardRepositoryDir()
+
+      root.toString should include (".cncf")
+      root.toString should include ("cache")
+    }
+
+    "append existing local CNCF repository dirs before standard repositories" in {
+      _with_temp_dir { home =>
+        val oldhome = System.getProperty("user.home")
+        try {
+          System.setProperty("user.home", home.toString)
+          val car = ComponentRepository.defaultLocalComponentRepositoryDir()
+          Files.createDirectories(car)
+
+          val resolved = ComponentRepositorySpace.appendDefaultSearchRepositories(
+            Right(Vector.empty),
+            active = Vector.empty,
+            home,
+            noDefault = false
+          ).toOption.get
+
+          resolved should contain (ComponentRepository.ComponentDirRepository.Specification(car))
+          assert(
+            resolved.indexOf(ComponentRepository.ComponentDirRepository.Specification(car)) <
+              resolved.indexOf(ComponentRepository.standardComponentRepositorySpec())
+          )
+        } finally {
+          if (oldhome == null) System.clearProperty("user.home")
+          else System.setProperty("user.home", oldhome)
+        }
+      }
+    }
+
+    "not append cache as a plain component directory" in {
+      _with_temp_dir { home =>
+        val oldhome = System.getProperty("user.home")
+        try {
+          System.setProperty("user.home", home.toString)
+          val cache = ComponentRepository.defaultStandardRepositoryDir()
+          Files.createDirectories(cache)
+
+          val resolved = ComponentRepositorySpace.appendDefaultSearchRepositories(
+            Right(Vector.empty),
+            active = Vector.empty,
+            home,
+            noDefault = false
+          ).toOption.get
+
+          resolved should not contain ComponentRepository.ComponentDirRepository.Specification(cache)
+          resolved should contain (ComponentRepository.standardComponentRepositorySpec())
+        } finally {
+          if (oldhome == null) System.clearProperty("user.home")
+          else System.setProperty("user.home", oldhome)
+        }
+      }
+    }
+
+    "does not resolve snapshots from the standard cache repository" in {
+      _with_temp_dir { cache =>
+        val snapshotdir = cache.resolve("car").resolve("sample-component").resolve("0.1.1-SNAPSHOT")
+        Files.createDirectories(snapshotdir)
+        Files.writeString(snapshotdir.resolve("sample-component-0.1.1-SNAPSHOT.car"), "")
+        val spec = ComponentRepository.StandardRepository.Specification(
+          ComponentRepository.StandardRepositoryKind.Car,
+          "https://example.invalid/repository/car",
+          cache
+        )
+
+        spec.resolveComponentArchivePath("sample-component", Some("0.1.1-SNAPSHOT")) shouldBe None
+      }
+    }
+
+    "does not discover requested snapshots from the standard cache repository" in {
+      val subsystem = new Subsystem(
+        name = "test-standard-repo-snapshot",
+        configuration = ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty)
+      )
+      val origin = ComponentOrigin.Repository("component-dir")
+      _with_temp_dir { cache =>
+        val snapshotdir = cache.resolve("car").resolve("sample-component").resolve("0.1.1-SNAPSHOT")
+        Files.createDirectories(snapshotdir)
+        val fakecomponentjar = _create_fake_component_jar(cache.resolve("assets").resolve("component-main-snapshot.jar"))
+        val descriptor = cache.resolve("component-descriptor-snapshot.json")
+        Files.writeString(
+          descriptor,
+          """{"name":"sample-component","version":"0.1.1-SNAPSHOT","component":"sample-component"}"""
+        )
+        _create_car(
+          snapshotdir.resolve("sample-component-0.1.1-SNAPSHOT.car"),
+          Seq(
+            "component/main.jar" -> fakecomponentjar,
+            "component-descriptor.json" -> descriptor
+          )
+        )
+        val repository = ComponentRepository.StandardRepository.Specification(
+          ComponentRepository.StandardRepositoryKind.Car,
+          "https://example.invalid/repository/car",
+          cache
+        ).build(
+          ComponentCreate(
+            subsystem,
+            origin,
+            Vector(ComponentDescriptor(name = Some("sample-component"), version = Some("0.1.1-SNAPSHOT"), componentName = Some("sample-component")))
+          )
+        )
+
+        repository.discover().flatMap(_.componentDescriptors.flatMap(_.componentName)) should not contain "sample-component"
+      }
+    }
+
+    "does not let standard repository block a requested local snapshot component" in {
+      val subsystem = new Subsystem(
+        name = "test-local-snapshot-standard-fallback",
+        configuration = ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty)
+      )
+      _with_temp_dir { root =>
+        val localcar = root.resolve("local").resolve("repository").resolve("car")
+        val artifactdir = localcar.resolve("sample-component").resolve("0.1.1-SNAPSHOT")
+        Files.createDirectories(artifactdir)
+        val fakecomponentjar = _create_fake_component_jar(root.resolve("assets").resolve("component-main-local-snapshot.jar"))
+        val descriptor = root.resolve("component-descriptor-local-snapshot.json")
+        Files.writeString(
+          descriptor,
+          """{"name":"sample-component","version":"0.1.1-SNAPSHOT","component":"sample-component"}"""
+        )
+        _create_car(
+          artifactdir.resolve("sample-component-0.1.1-SNAPSHOT.car"),
+          Seq(
+            "component/main.jar" -> fakecomponentjar,
+            "component-descriptor.json" -> descriptor
+          )
+        )
+        val descriptors = Vector(
+          ComponentDescriptor(name = Some("sample-component"), version = Some("0.1.1-SNAPSHOT"), componentName = Some("sample-component"))
+        )
+        val space = ComponentRepositorySpace.create(
+          subsystem,
+          ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty),
+          Vector(
+            ComponentRepository.ComponentDirRepository.Specification(localcar),
+            ComponentRepository.StandardRepository.Specification(
+              ComponentRepository.StandardRepositoryKind.Car,
+              "https://example.invalid/repository/car",
+              root.resolve("cache")
+            )
+          ),
+          descriptors
+        )
+
+        val components = space.discover()
+
+        components.flatMap(_.componentDescriptors.flatMap(_.componentName)) should contain ("sample-component")
       }
     }
 
@@ -719,16 +875,16 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
       )
       val origin = ComponentOrigin.Repository("component-dir")
       _with_temp_dir { repositoryroot =>
-        val artifactdir = repositoryroot.resolve("car").resolve("textus-user-account").resolve("0.1.0-SNAPSHOT")
+        val artifactdir = repositoryroot.resolve("car").resolve("textus-user-account").resolve("0.1.0")
         Files.createDirectories(artifactdir)
         val fakecomponentjar = _create_fake_component_jar(repositoryroot.resolve("assets").resolve("component-main-standard.jar"))
         val descriptor = repositoryroot.resolve("component-descriptor-standard.json")
         Files.writeString(
           descriptor,
-          """{"name":"textus-user-account","version":"0.1.0-SNAPSHOT","component":"textus-user-account"}"""
+          """{"name":"textus-user-account","version":"0.1.0","component":"textus-user-account"}"""
         )
         _create_car(
-          artifactdir.resolve("textus-user-account-0.1.0-SNAPSHOT.car"),
+          artifactdir.resolve("textus-user-account-0.1.0.car"),
           Seq(
             "component/main.jar" -> fakecomponentjar,
             "component-descriptor.json" -> descriptor
@@ -742,7 +898,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
           ComponentCreate(
             subsystem,
             origin,
-            Vector(ComponentDescriptor(name = Some("textus-user-account"), version = Some("0.1.0-SNAPSHOT"), componentName = Some("textus-user-account")))
+            Vector(ComponentDescriptor(name = Some("textus-user-account"), version = Some("0.1.0"), componentName = Some("textus-user-account")))
           )
         )
         val components = repository.discover()

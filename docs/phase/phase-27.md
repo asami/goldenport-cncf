@@ -87,6 +87,11 @@ Resume hint:
 
 - Start from KE-10. Do not reopen Phase 26 KI items unless fixing a regression.
 
+Next development candidate after Phase 27:
+
+- Web UI DSL / Bootstrap Core / UX Profile implementation, based on
+  `docs/notes/web-ui-dsl-bootstrap-core-ux-profile-design.md`.
+
 ## 4. Development Items
 
 - [x] KE-01: Open Phase 27 and freeze editor scope.
@@ -99,6 +104,10 @@ Resume hint:
 - [x] KE-08: Web knowledge editor vertical slice.
 - [x] KE-09: Publish/materialize flow and validation feedback.
 - [ ] KE-10: Usability smoke and Phase 27 closure.
+
+Next development candidate after Phase 27:
+
+- [ ] Web UI DSL / Bootstrap Core / UX Profile implementation.
 
 Detailed task breakdown and progress tracking are recorded in
 `phase-27-checklist.md`.

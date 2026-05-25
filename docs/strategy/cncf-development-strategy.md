@@ -655,7 +655,8 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Current active phase checklist: `docs/phase/phase-27-checklist.md`
 - Latest closed phase dashboard: `docs/phase/phase-26.md`
 - Latest closed phase checklist: `docs/phase/phase-26-checklist.md`
-- Candidate next phase areas after Phase 27: AwsComponent/S3 BlobStore
+- Candidate next phase areas after Phase 27: Web UI DSL / Bootstrap Core /
+  Material Design / UX Profile implementation; AwsComponent/S3 BlobStore
   provider; Search/index planning; DB migration tooling.
 - Status interpretation rules: `docs/rules/stage-status-and-checklist-convention.md`
 
@@ -1158,29 +1159,19 @@ Current development item:
     book-first validation path.
 
 ### 9.1 Web Next Stage Follow-ups
-Future Web/platform development item.
+Web/platform follow-up index.
 
-- Production-grade CNCF-hosted SPA mode remains future work. CNCF can host a
-  minimal same-origin static SPA for internal/prototype use, but first-class SPA
-  mode still needs app-scoped History API fallback, SPA asset lifecycle,
-  auth/session/CSRF policy, REST exposure policy, and a dedicated SPA-mode
-  developer guide.
-- Island Architecture runtime remains deferred. CNCF does not yet provide a
-  `data-textus-island` standard attribute, core island loader, registry,
-  WebDescriptor island schema, or island asset dependency resolution.
-- External API gateway runtime remains deferred. REST remains the operation
-  execution surface, but gateway concerns such as public API exposure policy,
-  rate limiting, authentication translation, and cross-origin policy need their
-  own explicit design.
-- Component-owned admin page discovery beyond explicit Web composition remains
-  future work.
-- Full application notification UX remains future work beyond the Phase 22
-  provider/forwarding/badge baseline. This includes richer user inbox
-  operations, read/dismiss workflows, multicast/broadcast audience operations,
-  and operator-facing notification administration as application UX rather than
-  Job core behavior.
-- Structured Web/API error presentation polish remains future work after
-  application feedback on the Phase 23 projection baseline.
+Phase 21 deferred Web items are now tracked as independent development items
+instead of a broad umbrella backlog. New Web work should select one of the
+independent 9.x items below rather than adding broad bullets back into 9.1.
+
+- `9.19 Web UI DSL / Bootstrap Core / Material Design / UX Profile`
+- `9.20 CNCF-hosted SPA Mode`
+- `9.21 Web Island Architecture Runtime`
+- `9.22 API Gateway and Public REST Exposure Policy`
+- `9.23 Component-owned Admin Surface Discovery`
+- `9.24 Application Notification UX`
+- `9.25 Structured Web/API Error Presentation`
 
 ### 9.2 Event Mechanism Follow-ups
 Future event/runtime development item.
@@ -1585,3 +1576,263 @@ Future platform hardening item.
 - Remove or migrate remaining fixture and generated-code assumptions that still
   use `sys/sys` where they are not deliberately testing legacy compatibility or
   a different non-EntityId namespace axis.
+
+### 9.18 CAR Capability Sandbox and Managed Execution Boundary
+Future component-runtime and execution-governance item.
+
+- Design notes:
+  - `docs/journal/2026/05/car-capability-sandbox.md`
+  - `docs/notes/car-capability-sandbox-design.md`
+- Goal: introduce a capability-oriented execution boundary for CARs so
+  component code cannot access the external world directly and must instead use
+  CNCF-managed runtime capability facades.
+- This item extends the existing Docker Component direction from the execution
+  layer expansion. It is not a competing execution model: the same CAR
+  capability declaration and governance model should apply to both in-JVM soft
+  sandbox execution and Docker-backed hard sandbox execution.
+- This is not a JVM `SecurityManager` revival and does not treat ClassLoader
+  isolation as a complete hostile-code security sandbox.
+- Soft sandbox scope:
+  - CAR capability declaration in metadata;
+  - deployment/subsystem policy grant of requested capabilities;
+  - ClassLoader isolation for namespace/dependency/governance boundaries;
+  - bytecode reference scanning for hard-forbidden, direct-external-access,
+    suspicious, value-only, and runtime-facade API classes;
+  - runtime `CarCapabilityScope` bound to OperationCall/internal DSL execution;
+  - managed capability facades for external access such as file, HTTP, event,
+    queue, datastore, Blob, and Knowledge providers;
+  - structured observability and `Consequence` / `Conclusion` failures for
+    requested/granted/denied/used/violation events.
+- Hard sandbox scope:
+  - Docker/process isolation for native execution, process execution, GPU or
+    inference runtimes, unrestricted IO, external tools, and untrusted CARs;
+  - hard sandbox still uses CNCF capability declarations, but process/container
+    isolation is the security boundary;
+  - Docker Component is the intended hard-sandbox execution form, while CAR
+    capability declarations remain the shared governance surface.
+- Capability model boundary:
+  - CAR execution capabilities are distinct from subject/resource
+    authorization capabilities.
+  - A subject may be authorized for an operation only when the subject
+    capability/resource policy passes; the component may use an external
+    backend only when the CAR execution capability is granted.
+- First implementation direction:
+  - define CAR capability manifest model;
+  - add capability id/resource pattern parsing;
+  - add soft sandbox profile metadata;
+  - add bytecode scanner skeleton and reject obvious hard-forbidden APIs;
+  - add runtime capability scope model;
+  - implement one managed facade with deterministic executable specs;
+  - emit observability records for capability grant/use/denial.
+- Deferred scope:
+  - complete hostile-code security sandbox;
+  - Docker execution bridge;
+  - production policy UI;
+  - all capability families;
+  - source-code static analysis;
+  - dependency mediation redesign.
+
+### 9.19 Web UI DSL / Bootstrap Core / Material Design / UX Profile
+Future Web/platform development item.
+
+- Design note:
+  - `docs/notes/web-ui-dsl-bootstrap-core-ux-profile-design.md`
+- Goal: promote Web UI DSL, Bootstrap Core DOM conventions, Material Design
+  profile support, and selectable UX profiles into a first-class CNCF
+  Web/platform development item rather than a Phase 27 knowledge-editor
+  follow-up.
+- Motivation:
+  - Static Form Web Apps and generated screens need semantic widgets, stable
+    Bootstrap-oriented DOM, a Material Design-capable profile path, and
+    selectable UX profiles without application-local UI hacks.
+  - Knowledge Editor screens are a concrete driver, but the feature belongs to
+    CNCF Web/platform because it affects generated/admin/manual/application
+    screens across components.
+- Scope:
+  - define the Web UI DSL authoring vocabulary and generated projection shape;
+  - define Bootstrap Core DOM/class conventions as a stable generated-screen
+    contract;
+  - define UX profile selection for generated/admin/application screens;
+  - treat Material Design as a first-class UX profile target layered on the
+    semantic widget model rather than as a separate Web runtime;
+  - support semantic widgets such as list/detail/action/result forms,
+    validation/issue panels, empty states, capability messages, and
+    operator/data-entry affordances;
+  - align capability-aware controls with the existing CNCF authorization model;
+  - keep generated UI metadata operation-centric rather than application-local.
+- First implementation direction:
+  - start with reusable widgets needed by InformationSpace / Knowledge Editor
+    pages;
+  - generalize them into Web UI DSL, Bootstrap Core, Material Design profile,
+    and UX profile metadata;
+  - preserve Static Form Web App compatibility;
+  - add executable rendering/projection specs before broad visual polish.
+- Deferred scope:
+  - full SPA framework integration;
+  - custom application design-system compiler;
+  - island architecture runtime;
+  - frontend package/dependency lifecycle beyond the Bootstrap Core baseline;
+  - production-grade visual theme marketplace.
+
+### 9.20 CNCF-hosted SPA Mode
+Future Web/platform development item.
+
+- Design note:
+  - `docs/notes/cncf-hosted-spa-boundary-note.md`
+- Goal: evolve the current minimal same-origin static SPA hosting shape into a
+  production-grade CNCF-hosted SPA mode while preserving the operation-centric
+  runtime.
+- Scope:
+  - app-scoped History API fallback routing without a global `/web` catch-all;
+  - explicit SPA entry/bundle packaging, cache headers, versioned assets, and
+    deploy/rollback behavior;
+  - separation between Static Form assets, component app assets, and SPA bundle
+    assets;
+  - SPA-oriented authentication, session, CSRF, login/logout/refresh, and
+    failure behavior;
+  - REST exposure policy for application operations, including public,
+    internal, and admin API classification;
+  - SPA-facing error handling for validation, authorization, async job tickets,
+    optimistic-lock/version conflicts, and unexpected errors;
+  - production Web security headers and developer guidance.
+- First implementation direction:
+  - keep hash-routing/static same-origin SPA as the compatibility baseline;
+  - add explicit app-scoped fallback and asset lifecycle metadata before broad
+    frontend framework support;
+  - verify SPA requests still use the normal REST/Form/Operation authorization
+    paths.
+- Deferred scope:
+  - replacing Static Form as CNCF's default Web mode;
+  - application-wide client router for generated/admin pages;
+  - separate application API layer that bypasses Operation execution;
+  - cross-origin public gateway hardening, which belongs to 9.22.
+
+### 9.21 Web Island Architecture Runtime
+Future Web/platform development item.
+
+- Design references:
+  - `docs/design/web-layer.md`
+  - `docs/design/static-form-ui-generation-contract.md`
+- Goal: introduce a first-class optional island runtime for progressive
+  enhancement on top of Static Form pages.
+- Scope:
+  - standard `data-textus-island` attribute and server-rendered mount points;
+  - island registry, props schema, and component-local asset dependency
+    resolution;
+  - no-JS fallback preservation for links, forms, result pages, and operation
+    execution;
+  - authorization-safe enhancement boundary where client-side code cannot
+    become the source of domain behavior, persistence, or admission control;
+  - island diagnostics for missing assets, unknown islands, invalid props, and
+    disabled enhancement.
+- First implementation direction:
+  - start with low-risk page-local widgets such as async job status,
+    autocomplete/lookup assistance, dashboard refresh, or table filtering;
+  - keep server-rendered HTML and Operation/Form API contracts authoritative;
+  - add renderer and browser smoke specs for fallback and enhancement paths.
+- Deferred scope:
+  - SPA runtime;
+  - application-wide client state store;
+  - domain behavior moving client-side;
+  - island marketplace or arbitrary third-party frontend dependency loading.
+
+### 9.22 API Gateway and Public REST Exposure Policy
+Future Web/platform development item.
+
+- Goal: define CNCF policy for exposing REST/Form APIs through an external or
+  CNCF-managed gateway without weakening Operation authorization.
+- Scope:
+  - public/internal/admin API classification for operations and components;
+  - REST exposure metadata and descriptor projection;
+  - authentication translation and subject/capability/scope projection;
+  - CORS and cross-origin policy;
+  - rate-limit and request-size hooks;
+  - gateway diagnostics, audit, and structured admission failures;
+  - alignment with SPA mode when REST endpoints become browser-facing public
+    APIs.
+- First implementation direction:
+  - add read-only exposure metadata and diagnostics before enforcing a gateway
+    runtime;
+  - verify REST/Form entry roots still converge on Operation authorization and
+    UnitOfWork/resource authorization;
+  - keep management/admin endpoints protected by existing admin policy.
+- Deferred scope:
+  - bypassing Operation dispatch;
+  - separate application API layer inside CNCF;
+  - full API management product features;
+  - public developer portal.
+
+### 9.23 Component-owned Admin Surface Discovery
+Future Web/platform development item.
+
+- Design references:
+  - `docs/design/management-console.md`
+  - `docs/notes/cncf-web-static-form-app-contract.md`
+- Goal: improve discovery and diagnostics for component-owned admin pages
+  beyond explicit Web composition while preserving declared-page authorization.
+- Scope:
+  - descriptor/index discovery for component-owned admin pages;
+  - application/system admin grouping and audience metadata;
+  - component ownership and route diagnostics;
+  - authorization metadata projection for admin entries;
+  - broken-link/missing-template diagnostics;
+  - admin index rendering that remains operation-centric and descriptor-backed.
+- First implementation direction:
+  - add discovery/projection diagnostics for declared admin pages;
+  - keep canonical routes under `/web/{component}/admin/{page}`;
+  - fail undeclared or missing pages deterministically with structured Web
+    errors.
+- Deferred scope:
+  - serving undeclared arbitrary admin routes;
+  - replacing operation-backed admin pages with direct runtime mutation pages;
+  - app-specific admin navigation systems unrelated to component descriptors.
+
+### 9.24 Application Notification UX
+Future Web/application UX development item.
+
+- Related completed baseline:
+  - Phase 22 Job Management and notification provider/event-forwarding
+    baseline.
+- Goal: complete application-facing notification UX on top of the provider and
+  event-routing baseline without moving notification logic back into JobEngine.
+- Scope:
+  - user inbox/list/detail views;
+  - read, unread, dismiss, and preference workflows;
+  - multicast/broadcast audience operations;
+  - operator-facing notification administration;
+  - notification badges, job-result affordances, and async command UX;
+  - delivery attempt visibility and failure diagnostics.
+- First implementation direction:
+  - use provider-owned notification operations and component-owned Web pages;
+  - integrate Job/Event lifecycle signals through provider boundaries;
+  - keep JobEngine limited to lifecycle/recovery events, not user notification
+    records.
+- Deferred scope:
+  - full marketing/campaign notification platform;
+  - mobile push provider hardening;
+  - cross-tenant notification policy administration.
+
+### 9.25 Structured Web/API Error Presentation
+Future Web/API polish development item.
+
+- Goal: make Web/API error presentation consistently reflect structured
+  `Conclusion` data across REST, Form API, HTML forms, and Static Form pages.
+- Scope:
+  - validation failure presentation;
+  - authorization denial presentation;
+  - optimistic-lock/version conflict presentation;
+  - async job ticket and await failure presentation;
+  - unexpected error display and operator diagnostics linkout;
+  - REST/Form/HTML alignment for status, summary, details, and remediation
+    actions.
+- First implementation direction:
+  - project common `Conclusion` diagnostics into reusable Web/API error view
+    models;
+  - add Static Form and REST/Form API specs for validation, authorization, and
+    conflict examples;
+  - keep operator-only diagnostics gated by admin authorization.
+- Deferred scope:
+  - error taxonomy redesign;
+  - `Conclusion` / Observation semantic redesign;
+  - frontend toast/notification framework;
+  - application-specific error copywriting system.

@@ -18,7 +18,7 @@ import org.goldenport.cncf.subsystem.Subsystem
  *  version Mar. 26, 2026
  *  version Apr. 25, 2026
  *  version May.  1, 2026
- * @version May. 14, 2026
+ * @version May. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 class ComponentRepositorySpace(
@@ -433,11 +433,6 @@ object ComponentRepositorySpace {
     if (Files.isDirectory(dir)) Some(dir) else None
   }
 
-  private def _default_standard_repository_dir(): Option[Path] = {
-    val dir = ComponentRepository.defaultStandardRepositoryDir()
-    if (Files.isDirectory(dir)) Some(dir) else None
-  }
-
   private def _default_component_target_dir(cwd: Path): Option[Path] = {
     val dir = cwd.resolve("component").resolve("target").normalize
     if (Files.isDirectory(dir)) Some(dir) else None
@@ -477,23 +472,28 @@ object ComponentRepositorySpace {
         case None =>
           specs
       }
+    val withlocal =
+      _default_local_repository_dirs().foldLeft(withSearch) { (z, dir) =>
+        _append_spec_if_missing(z, ComponentRepository.ComponentDirRepository.Specification(dir))
+      }
     val withstandard =
       Vector(
         ComponentRepository.standardComponentRepositorySpec(),
         ComponentRepository.standardSubsystemRepositorySpec()
-      ).foldLeft(withSearch)(_append_spec_if_missing)
-    _default_standard_repository_dir() match {
-      case Some(dir) =>
-        Right(_append_spec_if_missing(withstandard, ComponentRepository.ComponentDirRepository.Specification(dir)))
-      case None =>
-        Right(withstandard)
-    }
+      ).foldLeft(withlocal)(_append_spec_if_missing)
+    Right(withstandard)
   }
 
   private def _is_url(
     value: String
   ): Boolean =
     value.startsWith("http://") || value.startsWith("https://")
+
+  private def _default_local_repository_dirs(): Vector[Path] =
+    Vector(
+      ComponentRepository.defaultLocalComponentRepositoryDir(),
+      ComponentRepository.defaultLocalSubsystemRepositoryDir()
+    ).filter(Files.isDirectory(_))
 
   def component_extra_function(
     specs: Seq[ComponentRepository.Specification]

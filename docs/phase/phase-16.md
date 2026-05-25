@@ -29,7 +29,7 @@ This document is a progress dashboard, not a design journal.
   - `textus-user-account` = separate `CAR`
   - local development uses `repository.d/*.car` as a component search source
   - production resolves by standard repository using `name + version`
-    from the default local cache root `~/.cncf/repository`
+    from the runtime-managed cache root `~/.cncf/cache`
 
 Current semantic direction:
 

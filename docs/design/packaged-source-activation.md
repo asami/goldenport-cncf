@@ -77,11 +77,13 @@ The standard component repository is also a packaged search source.
   `https://www.simplemodeling.org/repository/car`
 - standard SAR repository URL:
   `https://www.simplemodeling.org/repository/sar`
-- default local cache root: `~/.cncf/repository`
+- default remote artifact cache root: `~/.cncf/cache`
+- default developer local publish root: `~/.cncf/local`
 - standard URL repositories are part of the default search set. Runtime
-  resolution uses the local cache first and may fetch versioned artifacts or
-  metadata from the standard URL when the local cache does not contain the
-  requested artifact.
+  resolution uses developer local publish state first, then the remote artifact
+  cache, and may fetch release artifacts or metadata from the standard URL when
+  the cache does not contain the requested artifact. Snapshot artifacts are
+  local-only by default.
 - standard component cache layout:
   - `car/<name>/<version>/<name>-<version>.car`
 - standard subsystem cache layout:
@@ -154,7 +156,7 @@ component name or subsystem name instead of passing direct artifact paths.
 Example repository layout:
 
 ```text
-~/.cncf/repository/
+~/.cncf/local/repository/
   car/textus-user-account/<version>/textus-user-account-<version>.car
   car/cwitter/<version>/cwitter-<version>.car
   sar/cwitter/<version>/cwitter-<version>.sar

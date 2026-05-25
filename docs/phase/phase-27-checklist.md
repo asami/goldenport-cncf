@@ -494,3 +494,36 @@ the selected paper/book/web workflows.
 - Tag master reference/editing for application users is provided by CNCF
   builtin `TagComponent` at `/web/tag/tags`; CNCF admin `/web/admin/tags`
   remains the operator/admin surface.
+
+---
+
+## Next Development Candidate After Phase 27: Web UI DSL / Bootstrap Core / UX Profile
+
+Status: QUEUED
+
+### Objective
+
+After Phase 27 later closes, turn the Web UI DSL design note into the next
+implementation slice so Static Form Web Apps and generated CNCF screens can use
+semantic Textus widgets, stable Bootstrap Core DOM, and selectable UX profiles.
+
+This is not part of KE-10 and does not imply Phase 27 is already ready to
+close.
+
+### Planned Tasks
+
+- [ ] Select the final `web.yaml` metadata key for UX Profile selection.
+- [ ] Add the minimal UX Profile model and default `bootstrap` profile.
+- [ ] Normalize current Static Form widgets around canonical `textus:` widget
+      names.
+- [ ] Keep Bootstrap Core output stable and covered by renderer specs.
+- [ ] Move reusable TKE layout/density/mobile decisions into profile or layout
+      metadata where they are broadly useful.
+- [ ] Add or extend widgets when screens need new output shape, instead of
+      adding application-local JavaScript rendering.
+- [ ] Add Web developer documentation for authoring with the DSL/profile model.
+
+### Source Notes
+
+- `docs/notes/web-ui-dsl-bootstrap-core-ux-profile-design.md`
+- `docs/journal/2026/05/bootstrap-core-ux-profile-architecture.md`
