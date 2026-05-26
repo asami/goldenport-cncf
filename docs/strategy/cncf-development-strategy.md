@@ -1333,6 +1333,12 @@ Phase 27 active scope:
   candidate, publication, KnowledgeFrame, KnowledgeNode, relationship, fact,
   evidence, provenance, and KnowledgeSpace count summaries without exposing raw
   RDF/vector/provider payloads.
+- RDF node naming now distinguishes CNCF/Textus internal node names from
+  published RDF URIs. The built-in prefixes are `test` for local/test use and
+  `sm` for `https://www.simplemodeling.org`; additional project-specific
+  prefix/namespace mappings must be configurable so generic editors such as
+  `textus-knowledge-editor` can select the active knowledge namespace without
+  code changes.
 - CNCF Information runtime and TKE editor APIs now use a single `Information`
   entity with lifecycle state instead of public record/item identity split.
   Validation issues, resolver candidates, identity bindings, publication
@@ -1362,6 +1368,10 @@ scope:
   records with rich structural knowledge.
 - Tag-to-knowledge projection and optional graph expansion while preserving
   `TagSpace` strict-tree behavior.
+- Application-facing RDF prefix/namespace management for knowledge editors:
+  maintain a project namespace registry, select the active Knowledge namespace
+  prefix, show internal RDF node names and published RDF URIs consistently, and
+  keep namespace selection distinct from external RDF anchor candidates.
 - Public API/operation surfaces for KnowledgeSpace loading/querying if needed
   beyond system admin/debug and application-internal Scala helpers.
 - Additional MCP transport and live-client validation beyond the generic CNCF
@@ -1660,6 +1670,9 @@ Future Web/platform development item.
   - support semantic widgets such as list/detail/action/result forms,
     validation/issue panels, empty states, capability messages, and
     operator/data-entry affordances;
+  - include reusable selector/display patterns for project-level knowledge
+    settings such as RDF prefix/namespace registries where application screens
+    need to show or choose the active namespace;
   - align capability-aware controls with the existing CNCF authorization model;
   - keep generated UI metadata operation-centric rather than application-local.
 - First implementation direction:
