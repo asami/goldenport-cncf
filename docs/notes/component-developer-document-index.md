@@ -87,6 +87,11 @@ mechanics.
 Use these when working on component instantiation, ports, packaging, or runtime
 assembly:
 
+- `docs/notes/launcher-config-and-operation.md`
+  - `cncf` / `textus` launcher configuration, local/cache repository operation,
+    and development startup routes.
+- `docs/notes/cncf-textus-option-namespace-boundary.md`
+  - `cncf.*` and `textus.*` option/config namespace responsibility split.
 - `docs/design/cncf-component.md`
   - CNCF component design.
 - `docs/design/component-factory.md`
