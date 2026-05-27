@@ -44,6 +44,16 @@ fix the scope as application-grade knowledge editing on top of CNCF
 - Book knowledge is the first vertical slice.
 - Book knowledge is organized as a 1.5hop+ meaning neighborhood centered on a
   CNCF `KnowledgeNode`, not as a flat bibliographic record.
+- Book knowledge is not complete if contributor and publisher identities
+  remain plain strings. Person and Organization knowledge must be available as
+  surrounding Information/Knowledge candidates for authors, editors,
+  translators, publishers, imprints, and related institutions.
+- Multi-volume and edition-oriented books need explicit Work / Edition /
+  Series / Volume structure. For example, a nine-volume Iwanami edition of
+  Genji monogatari should be modeled as source work, concrete edition or
+  publication set, series/publisher context, and individual volume nodes such
+  as Genji monogatari (1) through Genji monogatari (9), not as unrelated book
+  records.
 - Common semantic-neighborhood structure is reusable CNCF knowledge structure;
   book-specific identifiers, roles, and bibliographic relations are a domain
   profile extension on top of it.
@@ -454,14 +464,14 @@ materialization.
 
 ---
 
-## KE-10: Usability Smoke and Phase 27 Closure
+## KE-10: Information Runtime Cleanup and Tag Support
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
-Close Phase 27 only after the editor can be used without a separate manual for
-the selected paper/book/web workflows.
+Finish the Information identity cleanup and v1 tag support needed before the
+final Phase 27 usability path can use one consistent `Information` entity.
 
 ### Initial Tasks
 
@@ -474,12 +484,6 @@ the selected paper/book/web workflows.
 - [x] Add CNCF TagComponent application-facing TagSpace screen and link TKE to
       `/web/tag/tags?tagSpace=information` for Information Tag master
       reference/editing.
-- [ ] Run a book identifier import/editing smoke with DBpedia lookup.
-- [ ] Run a paper editing smoke if included in the closure scope.
-- [ ] Run a web knowledge editing smoke.
-- [ ] Verify field guidance and validation messages are visible in the UI.
-- [ ] Verify published knowledge appears in KnowledgeSpace.
-- [ ] Record deferred hardening in strategy.
 
 ### Completion Notes
 
@@ -494,6 +498,229 @@ the selected paper/book/web workflows.
 - Tag master reference/editing for application users is provided by CNCF
   builtin `TagComponent` at `/web/tag/tags`; CNCF admin `/web/admin/tags`
   remains the operator/admin surface.
+- Book Knowledge materialization now explicitly depends on surrounding
+  Person/Organization and Work/Edition/Series/Volume knowledge when those
+  concepts are present in the source. This keeps author, publisher, and
+  multi-volume edition structure out of untyped strings and makes the
+  1.5hop+ KnowledgeFrame the closure unit for book understanding.
+
+---
+
+## KE-11: Person and Organization Knowledge Support
+
+Status: DONE
+
+### Objective
+
+Add book-adjacent Person and Organization knowledge so contributors,
+publishers, imprints, and related institutions are not reduced to untyped
+strings during book editing and materialization.
+
+### Initial Tasks
+
+- [x] Add or confirm Information profiles for Person and Organization in the
+      editor-facing vocabulary.
+- [x] Add Person fields for author, editor, translator, annotator/commentator,
+      contributor, and cited or related creator roles.
+- [x] Add Organization fields for publisher, imprint, institution, series owner,
+      library/authority organization, and source authority provider roles.
+- [x] Add external identifier and RDF anchor handling for Person and
+      Organization candidates, including Wikidata, DBpedia, VIAF, ISNI, ORCID,
+      LCNAF, NDL authority ids, ROR, and publisher-local ids where applicable.
+- [x] Extend book editing/materialization so contributor and publisher strings
+      can produce unresolved, selected, confirmed, or materialized
+      Person/Organization knowledge candidates.
+- [x] Show Person/Organization candidate state in book detail and materialized
+      Knowledge summary without exposing raw provider payloads.
+- [x] Add focused TKE executable specifications for a book whose author and
+      publisher become separate knowledge candidates.
+
+### Completion Notes
+
+- CNCF now exposes `person` and `organization` Information editor profiles.
+- Book author, editor, and publisher descriptors explain that resolved names
+  become Person/Organization authority candidates.
+- TKE local resolver creates reviewable author/editor Person candidates and
+  publisher Organization candidates from supplied book fields.
+- DBpedia resolver preserves candidate field path and kind for book, person, or
+  organization lookup results.
+- Selected book author/editor/publisher candidates materialize into surrounding
+  Person/Organization Knowledge nodes with `authored-by`, `edited-by`, or
+  `published-by` relationships.
+- Detailed policy notes are recorded in
+  `docs/journal/2026/05/phase-27-ke-11-person-organization-authority-policy.md`.
+
+---
+
+## KE-12: Work / Edition / Series / Volume Book Structure Expansion
+
+Status: ACTIVE
+
+### Objective
+
+Extend book knowledge from a single publication node into explicit Work,
+Edition, Series, and Volume structures, including multi-volume publications
+such as a nine-volume Iwanami Genji monogatari edition.
+
+### Initial Tasks
+
+- [ ] Add or confirm Information profiles for Work, Edition, Series, and Volume.
+- [ ] Define editable fields for work title, original/source work, edition
+      title, edition contributors, series title, volume title, volume number,
+      total volume count, publisher/imprint, publication date, and ISBN-bearing
+      publication unit.
+- [ ] Define relationship mapping for `volume-of`, `realizes-work`,
+      `part-of-series`, `published-by`, `authored-by`, `edited-by`, and
+      `translated-by`.
+- [ ] Extend book import/enrichment so multi-volume metadata can be staged as
+      reviewable Information rather than flattened into one title string.
+- [ ] Extend Knowledge materialization summaries so missing, unresolved,
+      selected, or materialized Work/Edition/Series/Volume nodes are visible in
+      the 1.5hop+ book KnowledgeFrame.
+- [ ] Add focused TKE executable specifications for a multi-volume book
+      example, using Iwanami Genji monogatari style structure as the reference
+      scenario.
+
+### Completion Notes
+
+- Pending.
+
+---
+
+## KE-13: Relationship / Role / Qualifier Editing
+
+Status: PENDING
+
+### Objective
+
+Add explicit relationship editing so Person, Organization, Work, Edition,
+Series, Volume, citation, and subject knowledge can be connected with roles,
+order, qualifiers, confidence, evidence, and provenance instead of being
+flattened into untyped fields.
+
+### Initial Tasks
+
+- [ ] Define the editor-facing relationship model for book-adjacent
+      relationships such as `authored-by`, `edited-by`, `translated-by`,
+      `published-by`, `volume-of`, `realizes-work`, `part-of-series`,
+      `has-part`, `citation`, and `subject`.
+- [ ] Add qualifier fields for author/contributor order, contributor role,
+      edition number, volume number, chapter/section order, translation
+      language, citation context, page range, confidence, evidence, and source
+      provenance.
+- [ ] Add relationship editing surfaces that let users review, add, update, and
+      remove relationship candidates without editing raw RDF triples.
+- [ ] Keep canonical relationship/fact data in Information/Knowledge
+      relationship structures, while node/detail pages expose derived traversal
+      convenience summaries.
+- [ ] Add focused executable specifications for role-qualified authorship,
+      translator/editor attribution, publisher/imprint relationship, and
+      volume/series relationship editing.
+
+### Completion Notes
+
+- Pending.
+
+---
+
+## KE-14: Authority Resolution Merge/Split Workflow
+
+Status: PENDING
+
+### Objective
+
+Add the workflow needed to handle same-name/different-entity and
+different-name/same-entity authority problems for Person, Organization, Work,
+Edition, Series, Volume, and publication candidates.
+
+### Initial Tasks
+
+- [ ] Add duplicate/similar candidate detection and unresolved authority queues
+      for Person, Organization, Work, Edition, Series, Volume, and book
+      publication candidates.
+- [ ] Add merge workflow for candidates confirmed to represent the same
+      knowledge object, while preserving external identifiers, evidence, and
+      provenance.
+- [ ] Add split/unmerge workflow for candidates that were incorrectly linked or
+      should remain separate.
+- [ ] Show selected, unresolved, merged, split, and rejected authority states in
+      editor projections and Knowledge summaries.
+- [ ] Ensure merge/split decisions do not collapse `Information.id`, external
+      RDF URI, `KnowledgeNodeId`, application Entity id, ISBN, DOI, or authority
+      ids into one identifier.
+- [ ] Add focused executable specifications for same-name Person conflict,
+      publisher alias merge, and mistaken authority split.
+
+### Completion Notes
+
+- Pending.
+
+---
+
+## KE-15: Multi-Volume / Book-Set Import Workflow
+
+Status: PENDING
+
+### Objective
+
+Add a book-set import workflow so ISBN lists, CSV/Excel files, or other import
+sources can create a coordinated Work / Edition / Series / Volume structure as
+one Job-backed work unit.
+
+### Initial Tasks
+
+- [ ] Add import input shape for book sets and multi-volume publications,
+      including work title, edition title, series title, volume title, volume
+      number, total volumes, ISBN, publication date, publisher/imprint, and
+      contributor columns.
+- [ ] Use CNCF Job import units so a multi-volume import can be listed,
+      inspected, retried within retention policy, and used as a work-unit
+      filter for created Information.
+- [ ] Map imported rows into related Information objects for Work, Edition,
+      Series, Volume, Person, Organization, and publication/book records.
+- [ ] Provide import result summaries showing created, updated, skipped,
+      unresolved, and candidate-linked Information counts.
+- [ ] Add list/detail navigation from an import Job to the Information created
+      by that import.
+- [ ] Add focused executable specifications using an Iwanami Genji monogatari
+      style multi-volume import fixture.
+
+### Completion Notes
+
+- Pending.
+
+---
+
+## KE-16: Usability Smoke and Phase 27 Closure
+
+Status: PENDING
+
+### Objective
+
+Close Phase 27 only after the editor can be used without a separate manual for
+the selected book/paper/web workflows, including the expanded book knowledge
+structure added in KE-11 through KE-15.
+
+### Initial Tasks
+
+- [ ] Run a book identifier import/editing smoke with DBpedia lookup.
+- [ ] Run a Person/Organization book-adjacent knowledge smoke.
+- [ ] Run a Work/Edition/Series/Volume multi-volume book structure smoke.
+- [ ] Run a relationship/role/qualifier editing smoke.
+- [ ] Run an authority merge/split workflow smoke.
+- [ ] Run a multi-volume/book-set import Job smoke.
+- [ ] Verify the book materialization summary can explain when author,
+      publisher, work, edition, series, or volume knowledge is missing,
+      unresolved, or materialized as part of the 1.5hop+ neighborhood.
+- [ ] Run a paper editing smoke if included in the closure scope.
+- [ ] Run a web knowledge editing smoke.
+- [ ] Verify field guidance and validation messages are visible in the UI.
+- [ ] Verify published knowledge appears in KnowledgeSpace.
+- [ ] Record deferred hardening in strategy.
+
+### Completion Notes
+
+- Pending.
 
 ---
 
@@ -507,7 +734,7 @@ After Phase 27 later closes, turn the Web UI DSL design note into the next
 implementation slice so Static Form Web Apps and generated CNCF screens can use
 semantic Textus widgets, stable Bootstrap Core DOM, and selectable UX profiles.
 
-This is not part of KE-10 and does not imply Phase 27 is already ready to
+This is not part of KE-16 and does not imply Phase 27 is already ready to
 close.
 
 ### Planned Tasks

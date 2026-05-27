@@ -1,14 +1,14 @@
 package org.goldenport.cncf.information
 
 import org.goldenport.Consequence
-import org.goldenport.cncf.knowledge.{KnowledgeNodeId, KnowledgeTagBinding, KnowledgeWorkingSet}
+import org.goldenport.cncf.knowledge.{ExternalKnowledgeIdentifier, KnowledgeNodeId, KnowledgeTagBinding, KnowledgeWorkingSet, RdfNodeName}
 import org.goldenport.record.Record
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   May. 20, 2026
- * @version May. 26, 2026
+ * @version May. 27, 2026
  * @author  ASAMI, Tomoharu
  */
 final class InformationToKnowledgeProjectionSpec
@@ -54,6 +54,51 @@ final class InformationToKnowledgeProjectionSpec
       val node = workingset.nodeOption(KnowledgeNodeId(s"information-${information.id.print}")).getOrElse(fail("missing materialized node"))
 
       node.bindings.tagBindings should contain (KnowledgeTagBinding("information", "knowledge/book"))
+    }
+
+    "materialize selected book person and organization candidates as surrounding nodes" in {
+      val space = new InformationSpace
+      val batch = _success(space.registerInformation("book", Vector(Record.data("title" -> "The Tale of Genji", "authors" -> "Murasaki Shikibu", "publisher" -> "Iwanami Shoten"))))
+      val informationid = batch.head.id
+      val author = _success(space.addResolutionCandidate(
+        informationid,
+        "authors",
+        "Murasaki Shikibu",
+        InformationIdentityBinding(
+          rdfSubject = Some(RdfNodeName("http://dbpedia.org/resource/Murasaki_Shikibu")),
+          externalIdentifiers = Vector(ExternalKnowledgeIdentifier("dbpedia", "http://dbpedia.org/resource/Murasaki_Shikibu", Some("person"))),
+          authority = Some("dbpedia"),
+          confidence = Some(0.82)
+        ),
+        Some(0.82),
+        Some("author name match")
+      ))
+      val publisher = _success(space.addResolutionCandidate(
+        informationid,
+        "publisher",
+        "Iwanami Shoten",
+        InformationIdentityBinding(
+          rdfSubject = Some(RdfNodeName("http://dbpedia.org/resource/Iwanami_Shoten")),
+          externalIdentifiers = Vector(ExternalKnowledgeIdentifier("dbpedia", "http://dbpedia.org/resource/Iwanami_Shoten", Some("organization"))),
+          authority = Some("dbpedia"),
+          confidence = Some(0.80)
+        ),
+        Some(0.80),
+        Some("publisher name match")
+      ))
+      _success(space.selectResolutionCandidate(informationid, author.candidateKey))
+      _success(space.selectResolutionCandidate(informationid, publisher.candidateKey))
+      _success(space.validateInformation(informationid))
+      val information = _success(space.confirmInformation(informationid))
+
+      val snapshot = InformationSpace.materializeInformation(information)
+      val nodecategories = snapshot.nodes.map(_.category.print).toSet
+      val relationshipkinds = snapshot.relationships.map(_.kind.print).toSet
+
+      nodecategories should contain allOf ("book", "person", "organization")
+      relationshipkinds should contain allOf ("authored-by", "published-by")
+      snapshot.frames.headOption.map(_.nodeIds.size) shouldBe Some(3)
+      snapshot.frames.headOption.map(_.relationshipIds.size) shouldBe Some(2)
     }
 
     "use built-in and configured RDF namespace prefixes" in {

@@ -137,6 +137,120 @@ It can group the focal book node, selected surrounding nodes, relationships,
 facts, evidence, and provenance that make the book meaning operationally
 usable.
 
+## Person and Organization Knowledge Dependency
+
+Book Knowledge cannot stop at plain string fields for contributors and
+publishers. A materialized book neighborhood needs adjacent Person and
+Organization knowledge when those identities are present or resolvable.
+
+Person knowledge is required for:
+
+- author;
+- editor;
+- translator;
+- annotator/commentator;
+- contributor;
+- cited or related creator when relevant to the book neighborhood.
+
+Organization knowledge is required for:
+
+- publisher;
+- imprint;
+- institution;
+- series owner;
+- library or authority organization when it is part of the evidence trail.
+
+These nodes are not embedded values of the book node. They are separate
+Information/Knowledge candidates linked to the book through relationships and
+evidence:
+
+```text
+Book Information
+  -> authored-by -> Person Information / KnowledgeNode
+  -> edited-by -> Person Information / KnowledgeNode
+  -> translated-by -> Person Information / KnowledgeNode
+  -> published-by -> Organization Information / KnowledgeNode
+```
+
+Identifiers for Person and Organization knowledge should remain separate from
+book identifiers. Useful external anchors include Wikidata, DBpedia, VIAF,
+ISNI, ORCID, LCNAF, NDL authority ids, ROR, and publisher-local ids. Imported
+author or publisher names remain editable/candidate Information until authority
+resolution confirms the binding.
+
+The editor should therefore show unresolved contributor/publisher names as
+resolution work, not as complete knowledge. A book can still be edited with
+plain text, but Knowledge materialization should explain whether the
+corresponding Person/Organization nodes are confirmed, unresolved, or omitted.
+
+## Work, Edition, Series, and Volume Structure
+
+Book identity also requires more than a single publication title when the
+source represents an edition, series, or multi-volume set.
+
+Example:
+
+```text
+Work:
+  Genji monogatari
+
+Edition / publication set:
+  Iwanami edition of Genji monogatari
+
+Volumes:
+  Genji monogatari (1)
+  Genji monogatari (2)
+  ...
+  Genji monogatari (9)
+
+Organization:
+  Iwanami Shoten
+
+Person:
+  Murasaki Shikibu
+  editors / annotators / translators where applicable
+```
+
+The operational model should distinguish:
+
+| Concept | Role |
+| --- | --- |
+| Work | Abstract intellectual work, such as Genji monogatari. |
+| Edition | Specific publication/editorial realization of the work. |
+| Series | Publication series or collection context, such as Iwanami Bunko. |
+| Volume | One member of a multi-volume edition or publication set. |
+| Publication/book item | ISBN-bearing publication unit, often aligned with a volume. |
+
+The first TKE book UI does not need to implement a full FRBR/LRM model, but it
+must not erase these distinctions. The book profile should allow fields or
+resolver candidates such as:
+
+- work title;
+- edition title;
+- series title;
+- volume title;
+- volume number;
+- total volumes;
+- source/original work;
+- edition contributor roles;
+- publisher/imprint organization.
+
+Knowledge materialization should represent these distinctions as nodes and
+relationships when they are known:
+
+```text
+Volume --volume-of--> Edition
+Edition --realizes-work--> Work
+Edition --published-by--> Organization
+Volume --part-of-series--> Series
+Book/Volume --authored-by--> Person
+```
+
+This means book Knowledge is not "one ISBN input -> one isolated
+KnowledgeNode". It is "one focal publication or volume -> a bibliographic
+meaning neighborhood". The closure unit is the `KnowledgeFrame`, not a single
+flat node.
+
 ### Common Semantic Neighborhood
 
 The common semantic neighborhood should be domain-neutral. It is the shared

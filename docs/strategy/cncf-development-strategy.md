@@ -1156,8 +1156,11 @@ Current development item:
     or other publication identifiers, link/enrich it through multiple external
     ids and RDF-node candidates such as DBpedia and Wikidata, edit it through
     self-explanatory Web authoring screens, then publish/materialize that
-    knowledge into `KnowledgeSpace`. Paper and web knowledge follow after the
-    book-first validation path.
+    knowledge into `KnowledgeSpace`. Book materialization is now treated as a
+    1.5hop+ bibliographic meaning neighborhood that may include Person,
+    Organization, Work, Edition, Series, and Volume knowledge around the focal
+    publication/book node. Paper and web knowledge follow after the book-first
+    validation path.
 
 ### 9.1 Web Next Stage Follow-ups
 Web/platform follow-up index.
@@ -1286,9 +1289,20 @@ Phase 26 completed scope:
 
 Phase 27 active scope:
 
-- KE-01 through KE-09 are done. Current focus is KE-10:
-  usability smoke and Phase 27 closure after publish/materialize feedback is
-  visible for book, paper, and web resource editor flows.
+- KE-01 through KE-11 are done. Current focus is KE-12:
+  expand book structure with explicit Work / Edition / Series /
+  Volume knowledge, including multi-volume editions such as a nine-volume
+  Iwanami Genji monogatari publication.
+- KE-13 will add relationship / role / qualifier editing so contributor,
+  publisher, citation, part-whole, series, edition, and volume facts are not
+  flattened into untyped fields.
+- KE-14 will add authority resolution merge/split workflow for Person,
+  Organization, Work, Edition, Series, Volume, and publication candidates.
+- KE-15 will add multi-volume / book-set import workflow using Job-backed
+  import units.
+- KE-16 will run usability smoke and Phase 27 closure after the expanded book
+  structure and publish/materialize feedback are visible for book, paper, and
+  web resource editor flows.
 - Book-first domain knowledge editing through `textus-knowledge-editor`, with
   paper and web knowledge following after the book path is validated.
 - ISBN and other publication identifiers as import/seed keys for creating CNCF
@@ -1299,6 +1313,25 @@ Phase 27 active scope:
 - 1.5hop+ meaning-neighborhood materialization centered on the CNCF book
   `KnowledgeNode`, with semantically essential surrounding nodes,
   relationships, facts, evidence, and provenance grouped as a `KnowledgeFrame`.
+- Person and Organization knowledge support is now implemented for
+  author/editor/translator/contributor, publisher/imprint, institution, and
+  authority-provider roles around book knowledge.
+- Work / Edition / Series / Volume knowledge is now active Phase 27 work for
+  edition-aware and multi-volume book structure, rather than flattening
+  publications such as Iwanami Genji monogatari volumes into unrelated title
+  strings.
+- Relationship / Role / Qualifier editing is planned as the connective layer
+  for authorship, editor/translator attribution, publisher/imprint links,
+  citations, part-whole structure, series membership, edition realization, and
+  volume ordering.
+- Authority merge/split workflow is planned so same-name/different-entity and
+  different-name/same-entity candidates can be resolved without collapsing
+  Information ids, external RDF URIs, KnowledgeNode ids, application Entity ids,
+  or bibliographic identifiers.
+- Multi-volume / book-set import is planned as a Job-backed work-unit workflow
+  for importing ISBN lists, CSV/Excel files, or similar sources into coordinated
+  Work / Edition / Series / Volume / Person / Organization / publication
+  Information.
 - Separation between the reusable common semantic-neighborhood contract and
   the book-oriented extension profile for bibliographic identifiers, roles,
   relations, and authority/source mappings.

@@ -13,7 +13,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   May. 21, 2026
- * @version May. 25, 2026
+ * @version May. 27, 2026
  * @author  ASAMI, Tomoharu
  */
 final class InformationEditorProjectionSpec
@@ -72,6 +72,17 @@ final class InformationEditorProjectionSpec
         confidence = Some(0.85)
       )
       _success(component.informationSpace.addResolutionCandidate(recordid, "dbpediaUri", "Domain-driven design", binding, Some(0.85), Some("title match")))
+      _success(component.informationSpace.appendFieldEvent(recordid, InformationFieldEvent(
+        fieldPath = "title",
+        state = InformationFieldState.Imported,
+        source = "dbpedia",
+        operation = Some("resolveBook"),
+        provider = Some("provider:dbpedia.book.lookup"),
+        transformation = Some("label-normalized"),
+        valueAfter = Some("Domain-Driven Design"),
+        evidence = Some("title match"),
+        note = Some("Imported from resolver.")
+      )))
 
       val projection = _success(InformationSpaceEditorProjection.component(component, "book"))
       val record = projection.information.headOption.getOrElse(fail("record projection missing"))
@@ -84,7 +95,27 @@ final class InformationEditorProjectionSpec
       record.state shouldBe InformationLifecycleState.NeedsResolution
       record.actions.find(_.name == "resolve").map(_.enabled) shouldBe Some(true)
       title.value shouldBe Some("Domain-Driven Design")
+      title.status.map(_.state) shouldBe Some(InformationFieldState.Imported)
+      title.events.map(_.source) shouldBe Vector("dbpedia")
+      title.events.headOption.flatMap(_.transformation) shouldBe Some("label-normalized")
       dbpedia.resolutionCandidates.map(_.label) shouldBe Vector("Domain-driven design")
+    }
+
+    "provide person and organization field descriptors" in {
+      val person = InformationSpaceEditorProjection.profileOption("person").getOrElse(fail("person profile missing"))
+      val organization = InformationSpaceEditorProjection.profileOption("organization").getOrElse(fail("organization profile missing"))
+
+      val personname = _field(person, "name")
+      val orcid = _field(person, "orcidId")
+      val organizationname = _field(organization, "name")
+      val ror = _field(organization, "rorId")
+
+      personname.requiredness shouldBe "required"
+      personname.mappings.map(_.targetPath) should contain ("presentation.labels")
+      orcid.mappings.map(_.targetPath) should contain ("identity.externalIdentifiers")
+      organizationname.requiredness shouldBe "required"
+      organizationname.mappings.map(_.profileLayer) should contain ("organization-profile-extension")
+      ror.resolverAssisted shouldBe true
     }
 
     "provide paper field descriptors and knowledge mapping metadata" in {

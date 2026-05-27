@@ -10,7 +10,7 @@ import org.goldenport.cncf.naming.NamingConventions
 /*
  * @since   Apr. 10, 2026
  *  version Apr. 11, 2026
- * @version May.  6, 2026
+ * @version May. 27, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class AssemblyWarning(
@@ -111,7 +111,8 @@ object AssemblyReport {
     _priority(component.origin.label)
 
   private def _priority(origin: String): Int =
-    if (origin.contains(":sar:") || origin.contains(":sar-dir:")) 400
+    if (origin == "component-dev-dir" || origin.startsWith("component-dev-dir:")) 500
+    else if (origin.contains(":sar:") || origin.contains(":sar-dir:")) 400
     else if (origin.contains(":car:") || origin.contains(":car-dir:")) 300
     else if (origin == "builtin") 200
     else if (origin == "main") 100

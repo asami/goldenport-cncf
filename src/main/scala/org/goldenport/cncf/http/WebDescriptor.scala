@@ -13,7 +13,7 @@ import org.goldenport.record.Record
 /*
  * @since   Apr. 14, 2026
  *  version Apr. 25, 2026
- * @version May. 21, 2026
+ * @version May. 27, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class WebDescriptor(
@@ -54,6 +54,20 @@ final case class WebDescriptor(
         }
       }
     }
+    def _merge_form_(
+      lhs: Map[String, WebDescriptor.Form],
+      rhs: Map[String, WebDescriptor.Form]
+    ): Map[String, WebDescriptor.Form] = {
+      val keys = (lhs.keys ++ rhs.keys).toVector.distinct
+      keys.flatMap { key =>
+        (lhs.get(key), rhs.get(key)) match {
+          case (Some(left), Some(right)) => Some(key -> left.mergeOverride(right))
+          case (Some(left), None) => Some(key -> left)
+          case (None, Some(right)) => Some(key -> right)
+          case _ => None
+        }
+      }.toMap
+    }
 
     copy(
       defaultView =
@@ -64,7 +78,7 @@ final case class WebDescriptor(
         if (rhs.auth == WebDescriptor.Auth()) auth
         else rhs.auth,
       authorization = authorization ++ rhs.authorization,
-      form = form ++ rhs.form,
+      form = _merge_form_(form, rhs.form),
       apps = _merge_apps_(apps, rhs.apps),
       routes = _merge_vector_(routes, rhs.routes)(_.normalizedPathText),
       shell = rhs.shell.orElse(shell),
@@ -418,7 +432,19 @@ object WebDescriptor {
     layout: Option[String] = None,
     assets: Assets = Assets(),
     controls: Map[String, FormControl] = Map.empty
-  )
+  ) {
+    def mergeOverride(rhs: Form): Form =
+      Form(
+        enabled = rhs.enabled.orElse(enabled),
+        successRedirect = rhs.successRedirect.orElse(successRedirect),
+        failureRedirect = rhs.failureRedirect.orElse(failureRedirect),
+        stayOnError = stayOnError || rhs.stayOnError,
+        resultTemplate = rhs.resultTemplate.orElse(resultTemplate),
+        layout = rhs.layout.orElse(layout),
+        assets = assets.merge(rhs.assets),
+        controls = controls ++ rhs.controls
+      )
+  }
 
   final case class FormControl(
     controlType: Option[String] = None,

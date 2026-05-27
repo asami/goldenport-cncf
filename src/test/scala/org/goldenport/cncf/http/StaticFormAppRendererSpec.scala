@@ -2,7 +2,7 @@ package org.goldenport.cncf.http
 
 /*
  * @since   May. 18, 2026
- * @version May. 25, 2026
+ * @version May. 27, 2026
  * @author  ASAMI, Tomoharu
  */
 import scala.collection.mutable.ListBuffer
@@ -64,7 +64,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr. 12, 2026
- * @version May. 25, 2026
+ * @version May. 27, 2026
  * @author  ASAMI, Tomoharu
  */
 final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
@@ -2641,6 +2641,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         """<section>
           |  <textus-include name="navigation"></textus-include>
           |  <h1>${app}</h1>
+          |  <p>${noticeKind}</p>
+          |  <p>${query.noticeKind}</p>
           |</section>""".stripMargin,
         StandardCharsets.UTF_8
       )
@@ -2651,7 +2653,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       )
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
 
-      val response = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/board/publicblogs"))).unsafeRunSync()
+      val response = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/board/publicblogs?noticeKind=import"))).unsafeRunSync()
       val html = response.as[String].unsafeRunSync()
       val webInf = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/board/WEB-INF/layouts/default.html"))).unsafeRunSync()
       val lowerWebInf = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/board/web-inf/layouts/lower-private.html"))).unsafeRunSync()
@@ -2667,6 +2669,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("Shared Footer")
       html should include ("<main class=\"container\">")
       html should include ("<h1>notice-board</h1>")
+      html should include ("<p>import</p>")
       html should not include ("<textus-include")
       html should not include ("${content}")
       webInf.status.code shouldBe 404
@@ -2980,6 +2983,43 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       singleServer._subsystem_shell_web_roots().map(_.name) should contain (singleRoot.resolve("src").resolve("main").resolve("web").toString)
       multiServer._subsystem_shell_web_roots().map(_.name) should not contain firstRoot.resolve("src").resolve("main").resolve("web").toString
       multiServer._subsystem_shell_web_roots().map(_.name) should not contain secondRoot.resolve("src").resolve("main").resolve("web").toString
+    }
+
+    "prefer main project Web root over same-name repository CAR root" in {
+      val mainroot = Files.createDirectories(Files.createTempDirectory("cncf-main-web-root-").resolve("textus-knowledge-editor"))
+      val carroot = Files.createTempDirectory("cncf-car-web-root-")
+      Files.createDirectories(mainroot.resolve("src").resolve("main").resolve("web"))
+      Files.createDirectories(carroot.resolve("src").resolve("main").resolve("web"))
+      val maincomponent = new org.goldenport.cncf.component.Component() {}
+      val carcomponent = new org.goldenport.cncf.component.Component() {}
+      _initialize_component_with_id(
+        "textus_knowledge_editor",
+        "textus_knowledge_editor_main",
+        maincomponent,
+        origin = org.goldenport.cncf.component.ComponentOrigin.Main
+      ).withArtifactMetadata(
+        org.goldenport.cncf.component.Component.ArtifactMetadata("test", "textus-knowledge-editor", "0.1.0-SNAPSHOT", component = Some("textus-knowledge-editor"), archivePath = Some(mainroot.toString))
+      )
+      _initialize_component_with_id(
+        "textus_knowledge_editor",
+        "textus_knowledge_editor_car",
+        carcomponent,
+        origin = org.goldenport.cncf.component.ComponentOrigin.Repository("standard-repository:car")
+      ).withArtifactMetadata(
+        org.goldenport.cncf.component.Component.ArtifactMetadata("test", "textus-knowledge-editor", "0.1.0-SNAPSHOT", component = Some("textus-knowledge-editor"), archivePath = Some(carroot.toString))
+      )
+      val subsystem = _management_console_fixture_subsystem(
+        Configuration(Map(RuntimeConfig.ComponentDevDirKey -> ConfigurationValue.StringValue(mainroot.toString)))
+      ).add(Vector(maincomponent, carcomponent))
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+
+      val roots = server._component_web_roots("textus-knowledge-editor").map(_.name)
+      val allroots = server._component_web_roots().map(_.name)
+
+      roots should contain (mainroot.resolve("src").resolve("main").resolve("web").toString)
+      roots should not contain carroot.resolve("src").resolve("main").resolve("web").toString
+      allroots should contain (mainroot.resolve("src").resolve("main").resolve("web").toString)
+      allroots should not contain carroot.resolve("src").resolve("main").resolve("web").toString
     }
 
     "compose child component article pages with an explicit subsystem shell owner" in {
@@ -4312,6 +4352,15 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       FormResultMetadata.fromBody("""{"result":{"outcome":"created","message":"Notice created"}}""").toTemplateValues shouldBe Map(
         "result.outcome" -> "created",
         "result.message" -> "Notice created"
+      )
+      FormResultMetadata.fromBody(
+        """{"data":{"action_status":"seeded","resolver_status":"resolved","added_candidate_count":2,"suggested_field_count":4,"current":{"information_id":"single-global-entity-information-1"}}}"""
+      ).toTemplateValues should contain allOf (
+        "result.id" -> "single-global-entity-information-1",
+        "result.outcome" -> "seeded",
+        "result.resolverStatus" -> "resolved",
+        "result.candidateCount" -> "2",
+        "result.suggestedFieldCount" -> "4"
       )
       FormResultMetadata.fromBody("cncf-job-job-1776566553930-2NnWI1ze2dLoQU4t6hALAa").toTemplateValues shouldBe Map(
         "result.job.id" -> "cncf-job-job-1776566553930-2NnWI1ze2dLoQU4t6hALAa"
@@ -7533,6 +7582,20 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("aggregate-updated:notice_1")
       html should not include ("Descriptor Result")
       dispatcher.forms.lastOption.flatMap(_.getString("textus.form.page")) shouldBe None
+
+      val pagecontexthtml = server
+        ._prepared_form_result_template(
+          "notice-board",
+          "notice-aggregate",
+          "approve-notice-aggregate",
+          200,
+          Map("pageContext.page" -> "new")
+        )
+        .toOption
+        .flatten
+        .getOrElse(fail("page context result template is missing"))
+      pagecontexthtml should include ("New Page Success")
+      pagecontexthtml should not include ("Descriptor Result")
     }
 
     "expand result body JSON paths in static result templates" in {
@@ -8332,6 +8395,46 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("Visible")
     }
 
+    "render conditional HTML controls from page properties" in {
+      val template =
+        """<main>
+          |  <section data-textus-render-if-any="noticeKind,noticeStatus">
+          |    <h2>Activity notice</h2>
+          |    <p>${noticeKind}</p>
+          |  </section>
+          |  <section data-textus-render-if-all="noticeKind,noticeStatus">
+          |    <h2>Complete notice</h2>
+          |  </section>
+          |  <p>Visible</p>
+          |</main>""".stripMargin
+
+      val empty = _renderer.renderStaticTemplate(
+        "notice-board",
+        Vector("detail"),
+        template
+      ).body
+      val partial = _renderer.renderStaticTemplate(
+        "notice-board",
+        Vector("detail"),
+        template,
+        pageContext = WebPageContext(Map("noticeKind" -> "import"))
+      ).body
+      val complete = _renderer.renderStaticTemplate(
+        "notice-board",
+        Vector("detail"),
+        template,
+        pageContext = WebPageContext(Map("noticeKind" -> "import", "noticeStatus" -> "seeded"))
+      ).body
+
+      empty should not include ("Activity notice")
+      empty should include ("Visible")
+      partial should include ("Activity notice")
+      partial should not include ("Complete notice")
+      partial should include ("import")
+      complete should include ("Activity notice")
+      complete should include ("Complete notice")
+    }
+
     "render capability message only when access is missing" in {
       val template =
         """<main>
@@ -8391,6 +8494,36 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("admin-action-row")
       html should include ("btn btn-primary")
       html should not include ("${operation.label}")
+    }
+
+    "expose execution CallTree metadata as result template values" in {
+      val metadata = RuntimeContext.ExecutionMetadata(
+        inlineCallTree = Some(Record.data(
+          "calltree" -> Vector(
+            Record.data(
+              "label" -> "action:notice.post-notice",
+              "kind" -> "action",
+              "flow" -> Vector(
+                Record.data(
+                  "label" -> "provider:openbd.book.isbn.lookup",
+                  "kind" -> "provider"
+                ),
+                Record.data(
+                  "label" -> "provider:openbd.parse",
+                  "kind" -> "provider-step"
+                )
+              )
+            )
+          )
+        ))
+      )
+
+      val values = FormResultMetadata.executionTemplateValues(metadata)
+
+      values("result.execution.calltree.captured") shouldBe "true"
+      values("result.execution.calltree.href") shouldBe "/rest/v1/admin/execution/calltree"
+      values("result.execution.history.href") shouldBe "/rest/v1/admin/execution/history"
+      values("result.execution.providers") shouldBe "provider:openbd.book.isbn.lookup"
     }
 
     "render textus action link from operation result actions" in {
@@ -11252,7 +11385,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
     name: String,
     componentIdName: String,
     component: org.goldenport.cncf.component.Component,
-    protocol: Protocol = Protocol.empty
+    protocol: Protocol = Protocol.empty,
+    origin: org.goldenport.cncf.component.ComponentOrigin = org.goldenport.cncf.component.ComponentOrigin.Builtin
   ): org.goldenport.cncf.component.Component = {
     val componentId = org.goldenport.cncf.component.ComponentId(componentIdName)
     val instanceId = org.goldenport.cncf.component.ComponentInstanceId.default(componentId)
@@ -11271,7 +11405,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       org.goldenport.cncf.component.ComponentInit(
         TestComponentFactory.emptySubsystem("test"),
         core,
-        org.goldenport.cncf.component.ComponentOrigin.Builtin
+        origin
       )
     )
   }

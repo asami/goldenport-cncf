@@ -31,7 +31,7 @@ import io.circe.parser.parse
 
 /*
  * @since   May. 18, 2026
- * @version May. 24, 2026
+ * @version May. 27, 2026
  * @author  ASAMI, Tomoharu
  */
 trait StaticFormAppRendererTemplatePart {
@@ -45,7 +45,8 @@ trait StaticFormAppRendererTemplatePart {
     defaultTableView: String = WebTableColumnResolver.defaultViewName
   ): String = {
     val widgets = render_widgets(template, properties, tableColumns, defaultTableView)
-    val gated = render_capability_controls(widgets, properties)
+    val conditional = render_render_condition_controls(widgets, properties)
+    val gated = render_capability_controls(conditional, properties)
     render_property_expansions(gated, properties)
   }
 
@@ -275,6 +276,55 @@ trait StaticFormAppRendererTemplatePart {
     out.toString
   }
 
+  protected def render_render_condition_controls(
+    template: String,
+    properties: FormPageProperties
+  ): String = {
+    val out = new StringBuilder
+    var index = 0
+    while (index < template.length) {
+      find_next_render_condition_start(template, index) match {
+        case Some(start) =>
+          out.append(template.substring(index, start))
+          parse_start_tag(template, start) match {
+            case Some((tag, attrs, tagend, selfclosing)) =>
+              val end = {
+                if (selfclosing || is_void_html_tag(tag))
+                  tagend
+                else
+                  find_balanced_end_tag(template, tag, tagend).getOrElse(tagend)
+              }
+              val html = template.substring(start, end)
+              out.append(apply_render_condition_control(html, attrs, properties))
+              index = end
+            case None =>
+              out.append(template.charAt(start))
+              index = start + 1
+          }
+        case None =>
+          out.append(template.substring(index))
+          index = template.length
+      }
+    }
+    out.toString
+  }
+
+  protected def find_next_render_condition_start(
+    template: String,
+    from: Int
+  ): Option[Int] = {
+    var index = template.indexOf("<", from)
+    while (index >= 0) {
+      parse_start_tag(template, index) match {
+        case Some((_, attrs, _, _)) if has_render_condition_attr(attrs) =>
+          return Some(index)
+        case _ =>
+          index = template.indexOf("<", index + 1)
+      }
+    }
+    None
+  }
+
   protected def find_next_capability_start(
     template: String,
     from: Int
@@ -399,6 +449,11 @@ trait StaticFormAppRendererTemplatePart {
   ): Boolean =
     """(?i)\bdata-textus-capability\s*=""".r.findFirstIn(attrs).isDefined
 
+  protected def has_render_condition_attr(
+    attrs: String
+  ): Boolean =
+    """(?i)\bdata-textus-render-if(?:-(?:any|all))?\s*=""".r.findFirstIn(attrs).isDefined
+
   protected def is_tag_name_char(c: Char): Boolean =
     c.isLetterOrDigit || c == ':' || c == '-'
 
@@ -433,6 +488,43 @@ trait StaticFormAppRendererTemplatePart {
       s"""<div class="alert alert-${escape(variant)} textus-capability-message" role="status">${inner}${action}</div>"""
     }
   }
+
+  protected def apply_render_condition_control(
+    html: String,
+    attrs: String,
+    properties: FormPageProperties
+  ): String = {
+    val parsed = widget_attrs(attrs)
+    val allowed = parsed.get("data-textus-render-if-any").map { value =>
+      render_condition_keys(value).exists(property_has_value(_, properties))
+    }.orElse(parsed.get("data-textus-render-if-all").map { value =>
+      val keys = render_condition_keys(value)
+      keys.nonEmpty && keys.forall(property_has_value(_, properties))
+    }).orElse(parsed.get("data-textus-render-if").map { value =>
+      property_has_value(value, properties)
+    }).getOrElse(true)
+    if (allowed) html else ""
+  }
+
+  protected def render_condition_keys(value: String): Vector[String] =
+    value.split("[,\\s]+").iterator.map(_.trim).filter(_.nonEmpty).toVector
+
+  protected def property_has_value(
+    key: String,
+    properties: FormPageProperties
+  ): Boolean =
+    properties.values.get(key).exists(_.trim.nonEmpty) ||
+      source_json(key, properties).exists(json_has_value)
+
+  protected def json_has_value(json: Json): Boolean =
+    json.fold(
+      false,
+      _ => true,
+      _ => true,
+      value => value.trim.nonEmpty,
+      values => values.nonEmpty,
+      fields => fields.nonEmpty
+    )
 
   protected def apply_capability_control(
     html: String,
@@ -616,6 +708,9 @@ trait StaticFormAppRendererTemplatePart {
         val requiredness = json_string(descriptor, "requiredness").getOrElse("")
         val hint = json_string(descriptor, "validation_hint").getOrElse("")
         val candidates = map.get("resolution_candidates").flatMap(_.asArray).map(_.size).getOrElse(0)
+        val fieldstate = json_string(map, "field_state")
+        val eventsummary = json_string(map, "field_event_summary")
+        val eventcount = map.get("field_event_count").flatMap(_.asNumber).flatMap(_.toLong).getOrElse(0L)
         val requiredhtml =
           if (requiredness.isEmpty)
             ""
@@ -626,6 +721,14 @@ trait StaticFormAppRendererTemplatePart {
             ""
           else
             s"""<span class="badge text-bg-info">${candidates} candidates</span>"""
+        val statehtml = fieldstate.fold("")(x => s"""<span class="badge text-bg-secondary">${escape(x)}</span>""")
+        val eventhtml =
+          if (eventcount == 0)
+            ""
+          else {
+            val summary = eventsummary.filter(_.nonEmpty).map(x => s" ${escape(x)}").getOrElse("")
+            s"""<p class="small text-secondary mb-0">Event:${summary}</p>"""
+          }
         val descriptionhtml =
           if (description.isEmpty)
             ""
@@ -636,7 +739,7 @@ trait StaticFormAppRendererTemplatePart {
             ""
           else
             s"""<p class="small text-secondary mb-0">${escape(hint)}</p>"""
-        s"""<article class="textus-field-list-item border rounded p-3"><div class="d-flex flex-wrap justify-content-between gap-2"><div><h4 class="h6 mb-1">${escape(label)}</h4><p class="small text-secondary mb-2">${escape(path)}</p></div><div class="d-flex flex-wrap gap-1">${requiredhtml}${candidatehtml}</div></div>${descriptionhtml}<p class="mb-1"><strong>${escape(value)}</strong></p>${hinthtml}</article>"""
+        s"""<article class="textus-field-list-item border rounded p-3"><div class="d-flex flex-wrap justify-content-between gap-2"><div><h4 class="h6 mb-1">${escape(label)}</h4><p class="small text-secondary mb-2">${escape(path)}</p></div><div class="d-flex flex-wrap gap-1">${requiredhtml}${candidatehtml}${statehtml}</div></div>${descriptionhtml}<p class="mb-1"><strong>${escape(value)}</strong></p>${hinthtml}${eventhtml}</article>"""
       }
       s"""<div class="textus-field-list d-grid gap-2">${items.mkString("\n")}</div>"""
     }

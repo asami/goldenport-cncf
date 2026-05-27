@@ -38,8 +38,15 @@ This document is a phase dashboard, not a design journal.
 - Define the concrete `KnowledgeNode` attributes that edited/imported domain
   knowledge publishes/materializes into.
 - Organize edited/imported book knowledge as a 1.5hop+ meaning neighborhood:
-  the focal book `KnowledgeNode` plus semantically essential surrounding
-  identifiers, RDF anchors, relationships, facts, evidence, and provenance.
+  the focal book/publication `KnowledgeNode` plus semantically essential
+  surrounding Person, Organization, Work, Edition, Series, Volume, identifier,
+  RDF anchor, relationship, fact, evidence, and provenance nodes.
+- Treat book KnowledgeSpace materialization as a bibliographic meaning
+  neighborhood, not as one ISBN record mapped to one isolated book node.
+  Author/editor/translator Person nodes, publisher/imprint Organization nodes,
+  source Work, concrete Edition, publication Series, and multi-volume Volume
+  nodes are first-class candidates when they are required to understand the
+  book.
 - Separate the reusable common semantic-neighborhood contract from the
   book-oriented extension profile, so CNCF core knowledge projection does not
   hard-code bibliographic assumptions.
@@ -77,15 +84,25 @@ Scope boundaries:
 - G (DONE): KE-07 — Paper editor follow-up.
 - H (DONE): KE-08 — Web knowledge editor vertical slice.
 - I (DONE): KE-09 — Publish/materialize flow and validation feedback.
-- J (ACTIVE): KE-10 — Usability smoke and Phase 27 closure, including the
-  single-`Information` runtime cleanup and v1 Information tag support needed
-  before final usability validation. CNCF `TagComponent` provides the
-  app-facing TagSpace screen used by TKE for `information` Tag master
-  reference/editing.
+- J (DONE): KE-10 — Information runtime cleanup, v1 Information tags, and
+  TagComponent app-facing TagSpace screen integration.
+- K (DONE): KE-11 — Person and Organization knowledge support for book
+  contributors, publishers, imprints, and related authority candidates.
+- L (ACTIVE): KE-12 — Work / Edition / Series / Volume book structure
+  expansion, including multi-volume editions such as a nine-volume Iwanami
+  Genji monogatari publication.
+- M (PENDING): KE-13 — Relationship / Role / Qualifier editing for
+  contributor, publisher, citation, part-whole, series, edition, and volume
+  facts.
+- N (PENDING): KE-14 — Authority resolution merge/split workflow for Person,
+  Organization, Work, Edition, Series, Volume, and book publication candidates.
+- O (PENDING): KE-15 — Multi-volume / book-set import workflow using Job-based
+  import units.
+- P (PENDING): KE-16 — Usability smoke and Phase 27 closure.
 
 Resume hint:
 
-- Start from KE-10. Do not reopen Phase 26 KI items unless fixing a regression.
+- Start from KE-12. Do not reopen Phase 26 KI items unless fixing a regression.
 
 Next development candidate after Phase 27:
 
@@ -103,7 +120,14 @@ Next development candidate after Phase 27:
 - [x] KE-07: Paper editor follow-up.
 - [x] KE-08: Web knowledge editor vertical slice.
 - [x] KE-09: Publish/materialize flow and validation feedback.
-- [ ] KE-10: Usability smoke and Phase 27 closure.
+- [x] KE-10: Information runtime cleanup, v1 Information tags, and
+      TagComponent app-facing TagSpace screen integration.
+- [x] KE-11: Person and Organization knowledge support.
+- [ ] KE-12: Work / Edition / Series / Volume book structure expansion.
+- [ ] KE-13: Relationship / Role / Qualifier editing.
+- [ ] KE-14: Authority resolution merge/split workflow.
+- [ ] KE-15: Multi-volume / book-set import workflow.
+- [ ] KE-16: Usability smoke and Phase 27 closure.
 
 Next development candidate after Phase 27:
 
@@ -123,7 +147,9 @@ Phase 27 can close when:
   authority/enrichment candidates for book records when matching data is
   available.
 - Book KnowledgeSpace materialization can produce a 1.5hop+ `KnowledgeFrame`
-  centered on the book `KnowledgeNode`.
+  centered on the book/publication `KnowledgeNode`, with Person,
+  Organization, Work, Edition, Series, and Volume support nodes included when
+  they are semantically required.
 - Paper and web knowledge follow-up paths are implemented or explicitly scoped
   as deferred after the book-first validation.
 - The field model for each knowledge type is concrete enough for validation,

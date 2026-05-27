@@ -22,8 +22,12 @@ import org.goldenport.cncf.knowledge.{
   KnowledgeNodeIdentity,
   KnowledgeNodePresentation,
   KnowledgeNodeSources,
+  KnowledgeRelationship,
+  KnowledgeRelationshipId,
+  KnowledgeRelationshipKind,
   KnowledgeProvenance,
   KnowledgeProvenanceId,
+  RdfPredicateName,
   RdfNodeName,
   KnowledgeSourceRef,
   KnowledgeTagBinding,
@@ -36,7 +40,7 @@ import org.goldenport.record.Record
 
 /*
  * @since   May. 20, 2026
- * @version May. 26, 2026
+ * @version May. 27, 2026
  * @author  ASAMI, Tomoharu
  */
 final class InformationSpace {
@@ -92,6 +96,28 @@ final class InformationSpace {
         workingData = workingdata,
         state = InformationLifecycleState.Imported,
         validationIssues = Vector.empty,
+        updatedAt = Instant.now()
+      )
+    }
+
+  def appendFieldEvent(
+    informationid: InformationId,
+    event: InformationFieldEvent
+  ): Consequence[Information] =
+    _update_information(informationid) { information =>
+      information.copy(
+        fieldEvents = information.fieldEvents :+ event,
+        updatedAt = Instant.now()
+      )
+    }
+
+  def appendFieldEvents(
+    informationid: InformationId,
+    events: Vector[InformationFieldEvent]
+  ): Consequence[Information] =
+    _update_information(informationid) { information =>
+      information.copy(
+        fieldEvents = information.fieldEvents ++ events,
         updatedAt = Instant.now()
       )
     }
@@ -437,6 +463,8 @@ object InformationSpace {
       case "paper" => _validate_paper(information)
       case "book" => _validate_book(information)
       case "web-resource" => _validate_web_resource(information)
+      case "person" => _validate_named_information(information)
+      case "organization" => _validate_named_information(information)
       case _ => Vector.empty
     }
 
@@ -472,6 +500,14 @@ object InformationSpace {
     if (webresource.url.isEmpty && webresource.canonicalUrl.isEmpty)
       base += InformationValidationIssue("url", "error", "url or canonicalUrl is required")
     base.result()
+  }
+
+  private def _validate_named_information(information: Information): Vector[InformationValidationIssue] = {
+    val name = information.workingData.getString("name").getOrElse("").trim
+    if (name.isEmpty)
+      Vector(InformationValidationIssue("name", "error", "name is required"))
+    else
+      Vector.empty
   }
 }
 
@@ -751,11 +787,13 @@ object InformationToKnowledgeProjection {
       evidenceIds = Vector(evidence.id),
       provenanceId = Some(provenance.id)
     )
+    val support = _book_support_nodes_and_relationships(information, node.id, evidence.id, provenance.id)
     val frame = KnowledgeFrame(
       id = KnowledgeFrameId(s"frame-${information.id.print}"),
       kind = KnowledgeFrameKind.Curated,
       focusNodeIds = Vector(node.id),
-      nodeIds = Vector(node.id),
+      nodeIds = Vector(node.id) ++ support.map(_._1.id),
+      relationshipIds = support.map(_._2.id),
       factIds = Vector(fact.id),
       evidenceIds = Vector(evidence.id),
       provenanceIds = Vector(provenance.id),
@@ -769,11 +807,91 @@ object InformationToKnowledgeProjection {
       materializedAt = Some(Instant.now())
     )
     KnowledgeWorkingSetSnapshot(
-      nodes = Vector(node),
+      nodes = Vector(node) ++ support.map(_._1),
+      relationships = support.map(_._2),
       evidence = Vector(evidence),
       provenance = Vector(provenance),
       frames = Vector(frame),
       facts = Vector(fact)
     )
+  }
+
+  private def _book_support_nodes_and_relationships(
+    information: Information,
+    booknodeid: KnowledgeNodeId,
+    evidenceid: KnowledgeEvidenceId,
+    provenanceid: KnowledgeProvenanceId
+  ): Vector[(KnowledgeNode, KnowledgeRelationship)] =
+    if (information.domain != "book")
+      Vector.empty
+    else
+      information.resolutionCandidates
+        .filter(_.selected)
+        .filter(candidate => Set("authors", "editors", "publisher").contains(candidate.fieldPath))
+        .zipWithIndex
+        .map { case (candidate, index) =>
+          val domain = _candidate_domain(candidate)
+          val relationship = _candidate_relationship(candidate.fieldPath)
+          val suffix = _safe_key(candidate.candidateKey, index)
+          val targetnodeid = KnowledgeNodeId(s"information-${information.id.print}-${domain}-$suffix")
+          val node = KnowledgeNode(
+            id = targetnodeid,
+            category = KnowledgeNodeCategory(domain),
+            identity = KnowledgeNodeIdentity(
+              rdfNode = candidate.binding.rdfSubject,
+              externalIdentifiers = candidate.binding.externalIdentifiers
+            ),
+            presentation = KnowledgeNodePresentation.label(candidate.label),
+            sources = KnowledgeNodeSources(
+              evidenceIds = Vector(evidenceid),
+              provenanceIds = Vector(provenanceid)
+            ),
+            attributes = KnowledgeAttributes(
+              "information_domain" -> domain,
+              "source_information_id" -> information.id.print,
+              "source_field" -> candidate.fieldPath,
+              "candidate_key" -> candidate.candidateKey
+            )
+          )
+          val relation = KnowledgeRelationship(
+            id = KnowledgeRelationshipId(s"rel-${information.id.print}-${relationship}-$suffix"),
+            kind = KnowledgeRelationshipKind(relationship),
+            sourceNodeId = booknodeid,
+            targetNodeId = targetnodeid,
+            rdfPredicate = Some(RdfPredicateName(relationship)),
+            evidenceIds = Vector(evidenceid),
+            provenanceId = Some(provenanceid),
+            attributes = KnowledgeAttributes(
+              "source_field" -> candidate.fieldPath,
+              "candidate_key" -> candidate.candidateKey
+            )
+          )
+          node -> relation
+        }
+
+  private def _candidate_domain(candidate: InformationResolutionCandidate): String = {
+    val kinds = candidate.binding.externalIdentifiers.flatMap(_.kind).map(_.toLowerCase)
+    if (candidate.fieldPath == "publisher" || kinds.exists(_.contains("organization")))
+      "organization"
+    else
+      "person"
+  }
+
+  private def _candidate_relationship(fieldpath: String): String =
+    fieldpath match {
+      case "publisher" => "published-by"
+      case "editors" => "edited-by"
+      case _ => "authored-by"
+    }
+
+  private def _safe_key(
+    value: String,
+    index: Int
+  ): String = {
+    val normalized = value.trim.toLowerCase.replaceAll("[^a-z0-9]+", "-").replaceAll("(^-+|-+$)", "")
+    if (normalized.nonEmpty)
+      normalized
+    else
+      s"candidate-${index + 1}"
   }
 }

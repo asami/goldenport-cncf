@@ -2,7 +2,7 @@ package org.goldenport.cncf.http
 
 /*
  * @since   May. 18, 2026
- * @version May. 25, 2026
+ * @version May. 27, 2026
  * @author  ASAMI, Tomoharu
  */
 import cats.effect.IO
@@ -3448,7 +3448,7 @@ final class Http4sHttpServer(
         descriptor.flatMap(_.failureRedirect)
     redirect match {
       case Some(template) =>
-        IO.pure(_see_other(_render_redirect_template(template, app, service, operation, form, response)))
+        IO.pure(_see_other(_render_redirect_template(template, app, service, operation, form, response, properties.executionMetadata)))
       case None =>
         if (!ok && descriptor.exists(_.stayOnError))
           _html(_static_form_app_renderer.renderOperationForm(
@@ -3607,7 +3607,9 @@ final class Http4sHttpServer(
   ): Option[String] =
     values.get("textus.form.page")
       .orElse(values.get("cncf.form.page"))
+      .orElse(values.get("pageContext.page"))
       .map(_.trim)
+      .filterNot(_ == "index")
       .filter(_.nonEmpty)
       .map(_.stripSuffix(".html"))
       .filter(_safe_form_result_page_name)
@@ -3719,21 +3721,51 @@ final class Http4sHttpServer(
 
   private[http] def _component_web_roots(): Vector[WebResourceRoot] =
     engine.runtimeSubsystem.components
+      .groupBy(component => NamingConventions.toNormalizedSegment(component.name))
+      .values
+      .toVector
+      .sortBy(_.headOption.map(_.name).getOrElse(""))
+      .flatMap(_highest_priority_components)
       .flatMap(_component_web_roots)
 
   private[http] def _component_web_roots(
     componentName: String
   ): Vector[WebResourceRoot] = {
     val normalized = NamingConventions.toNormalizedSegment(componentName)
-    engine.runtimeSubsystem.components
+    val candidates = engine.runtimeSubsystem.components
       .filter(component => _component_matches(component, normalized))
+    val active = _highest_priority_components(candidates)
+    active
       .flatMap(_component_web_roots)
+  }
+
+  private def _highest_priority_components(
+    components: Vector[org.goldenport.cncf.component.Component]
+  ): Vector[org.goldenport.cncf.component.Component] =
+    if (components.isEmpty)
+      components
+    else {
+      val priority = components.map(_component_origin_priority).max
+      components.filter(component => _component_origin_priority(component) == priority)
+    }
+
+  private def _component_origin_priority(
+    component: org.goldenport.cncf.component.Component
+  ): Int = {
+    val origin = component.origin.label
+    if (origin == "main") 600
+    else if (origin == "component-dev-dir" || origin.startsWith("component-dev-dir:")) 500
+    else if (origin.contains(":sar:") || origin.contains(":sar-dir:")) 400
+    else if (origin.contains(":car:") || origin.contains(":car-dir:")) 300
+    else if (origin == "builtin") 200
+    else 0
   }
 
   private def _component_web_roots(
     component: org.goldenport.cncf.component.Component
   ): Vector[WebResourceRoot] =
-    component.artifactMetadata.toVector
+    (_configured_component_dev_dir_web_roots(component) ++
+      component.artifactMetadata.toVector
       .flatMap(_.archivePath)
       .map(path => Paths.get(path).toAbsolutePath.normalize)
       .distinct
@@ -3746,7 +3778,7 @@ final class Http4sHttpServer(
             path.resolve("src").resolve("main").resolve("web"),
             path.resolve("web")
           ).filter(Files.isDirectory(_)).map(WebResourceRoot.directory)
-      }
+      }).distinct
 
   private def _component_matches(
     component: org.goldenport.cncf.component.Component,
@@ -3759,6 +3791,45 @@ final class Http4sHttpServer(
         normalize(metadata.name) == normalizedName ||
           metadata.component.exists(value => normalize(value) == normalizedName)
       }
+  }
+
+  private def _configured_component_dev_dir_web_roots(
+    component: org.goldenport.cncf.component.Component
+  ): Vector[WebResourceRoot] =
+    _configured_component_dev_dirs()
+      .filter(_configured_component_dev_dir_matches(component, _))
+      .flatMap { path =>
+        Vector(
+          path.resolve("src").resolve("main").resolve("web"),
+          path.resolve("web")
+        ).filter(Files.isDirectory(_)).map(WebResourceRoot.directory)
+      }
+
+  private def _configured_component_dev_dirs(): Vector[Path] =
+    Vector(
+      RuntimeConfig.ComponentDevDirKey,
+      "cncf.component.dev.dir"
+    ).flatMap(key => RuntimeConfig.getString(engine.runtimeSubsystem.configuration, key).toVector)
+      .flatMap(_.split(",").toVector.map(_.trim).filter(_.nonEmpty))
+      .map { value =>
+        if (value.startsWith("component-dev-dir:"))
+          value.stripPrefix("component-dev-dir:").trim
+        else
+          value
+      }
+      .filter(_.nonEmpty)
+      .map(path => Paths.get(path).toAbsolutePath.normalize)
+      .distinct
+
+  private def _configured_component_dev_dir_matches(
+    component: org.goldenport.cncf.component.Component,
+    path: Path
+  ): Boolean = {
+    val dirname = NamingConventions.toNormalizedSegment(path.getFileName.toString)
+    val names =
+      Vector(component.name) ++
+        component.artifactMetadata.toVector.flatMap(metadata => Vector(Some(metadata.name), metadata.component).flatten)
+    names.exists(name => NamingConventions.toNormalizedSegment(name) == dirname)
   }
 
   private[http] def _web_app_asset_content(
@@ -3980,7 +4051,8 @@ final class Http4sHttpServer(
         req.flatMap(_application_job_badge_counts(_, webappname)).getOrElse(Http4sHttpServer.JobBadgeCounts.empty)
       else
         Http4sHttpServer.JobBadgeCounts.empty
-    val base = WebPageContext(Map(
+    val queryvalues = _page_query_context_values(req)
+    val base = WebPageContext(queryvalues ++ Map(
       "pageContext.session.authenticated" -> authenticated.toString,
       "pageContext.jobs.activeCount" -> jobcounts.active.toString,
       "pageContext.jobs.unconfirmedCount" -> jobcounts.unconfirmed.toString,
@@ -3994,6 +4066,14 @@ final class Http4sHttpServer(
     ))
     base.merge(_page_context_from_providers(req, webappname, page, sessionid, authenticated))
   }
+
+  private def _page_query_context_values(
+    req: Option[org.http4s.Request[IO]]
+  ): Map[String, String] =
+    req.map { request =>
+      val params = request.uri.query.params.toMap
+      params ++ params.map { case (key, value) => s"query.${key}" -> value }
+    }.getOrElse(Map.empty)
 
   private def _form_page_view_context_values(
     req: org.http4s.Request[IO],
@@ -4605,7 +4685,8 @@ final class Http4sHttpServer(
     service: String,
     operation: String,
     form: Record,
-    response: HttpResponse
+    response: HttpResponse,
+    executionMetadata: RuntimeContext.ExecutionMetadata = RuntimeContext.ExecutionMetadata.empty
   ): String = {
     val formvalues = _form_values(form)
     val resultvalues = _result_values(response)
@@ -4617,7 +4698,9 @@ final class Http4sHttpServer(
         "operation" -> operation,
         "result.status" -> response.code.toString,
         "result.body" -> response.getString.getOrElse("")
-      ) ++ resultvalues ++ resultid.map("result.id" -> _).toMap
+      ) ++ resultvalues ++
+        resultid.map("result.id" -> _).toMap ++
+        FormResultMetadata.executionTemplateValues(executionMetadata)
     """\$\{([A-Za-z0-9_.-]+)\}""".r.replaceAllIn(template, m =>
       java.util.regex.Matcher.quoteReplacement(values.getOrElse(m.group(1), ""))
     )

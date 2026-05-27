@@ -17,7 +17,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Apr. 14, 2026
  *  version Apr. 25, 2026
- * @version May. 21, 2026
+ * @version May. 27, 2026
  * @author  ASAMI, Tomoharu
  */
 final class WebDescriptorSpec extends AnyWordSpec with Matchers {
@@ -406,6 +406,59 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
       descriptor.isFormEnabled("notice-board.notice.search-notices") shouldBe true
     }
 
+    "discover direct src/main/web-inf/form.yaml metadata without a web wrapper" in {
+      val root = Files.createTempDirectory("cncf-web-descriptor-source-direct-web-inf-root")
+      val web = Files.createDirectories(root.resolve("src").resolve("main").resolve("web-inf"))
+      Files.writeString(
+        web.resolve("form.yaml"),
+        """expose:
+          |  notice-board.notice.search-notices: public
+          |form:
+          |  notice-board.notice.search-notices:
+          |    enabled: true
+          |    successRedirect: /web/notice-board/detail?id=${result.id}
+          |    controls:
+          |      query:
+          |        type: text
+          |        required: false
+          |""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+
+      val descriptor = WebDescriptor.load(root).toOption.get
+      val form = descriptor.form("notice-board.notice.search-notices")
+
+      descriptor.expose("notice-board.notice.search-notices") shouldBe WebDescriptor.Exposure.Public
+      form.enabled shouldBe Some(true)
+      form.successRedirect shouldBe Some("/web/notice-board/detail?id=${result.id}")
+      form.controls.keySet should contain ("query")
+    }
+
+    "merge split form descriptor metadata without losing redirect or controls" in {
+      val selector = "notice-board.notice.search-notices"
+      val base = WebDescriptor(form = Map(
+        selector -> WebDescriptor.Form(
+          successRedirect = Some("/web/notice-board/detail?id=${result.id}"),
+          stayOnError = true,
+          controls = Map("query" -> WebDescriptor.FormControl(controlType = Some("text")))
+        )
+      ))
+      val supplement = WebDescriptor(form = Map(
+        selector -> WebDescriptor.Form(
+          enabled = Some(true),
+          assets = WebDescriptor.Assets(css = Vector("/web/notice-board/search.css"))
+        )
+      ))
+
+      val form = base.mergeOverride(supplement).form(selector)
+
+      form.enabled shouldBe Some(true)
+      form.successRedirect shouldBe Some("/web/notice-board/detail?id=${result.id}")
+      form.stayOnError shouldBe true
+      form.controls.keySet should contain ("query")
+      form.assets.css should contain ("/web/notice-board/search.css")
+    }
+
     "merge src/main/web-inf/web.yaml form.yaml and admin.yaml from a development project root" in {
       val root = Files.createTempDirectory("cncf-web-descriptor-source-web-inf-split-root")
       val web = Files.createDirectories(root.resolve("src").resolve("main").resolve("web-inf"))
@@ -745,6 +798,37 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
       val descriptor = WebDescriptorResolver.resolve(configuration).toOption.get
 
       descriptor shouldBe WebDescriptor.empty
+    }
+
+    "resolve component dev source form metadata from runtime configuration" in {
+      val root = Files.createTempDirectory("cncf-web-descriptor-configured-component-dev-root")
+      val web = Files.createDirectories(root.resolve("src").resolve("main").resolve("web-inf"))
+      Files.writeString(
+        web.resolve("form.yaml"),
+        """form:
+          |  notice-board.notice.search-notices:
+          |    enabled: true
+          |    successRedirect: /web/notice-board/detail?id=${result.id}
+          |""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+      val configuration = ResolvedConfiguration(
+        Configuration(
+          Map(
+            RuntimeConfig.ComponentDevDirKey -> ConfigurationValue.StringValue(root.toString)
+          )
+        ),
+        ConfigurationTrace.empty
+      )
+      val subsystem = new Subsystem(
+        name = "notice-board",
+        configuration = configuration
+      )
+
+      val descriptor = WebDescriptorResolver.resolve(subsystem).toOption.get
+
+      descriptor.form("notice-board.notice.search-notices").successRedirect shouldBe
+        Some("/web/notice-board/detail?id=${result.id}")
     }
 
     "treat exposure as the contract gate for public Web form surfaces" in {

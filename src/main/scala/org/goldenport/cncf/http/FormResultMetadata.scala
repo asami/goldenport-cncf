@@ -5,12 +5,14 @@ import io.circe.HCursor
 import io.circe.Json
 import io.circe.parser.parse
 import org.goldenport.http.HttpResponse
+import org.goldenport.record.Record
+import org.goldenport.cncf.context.RuntimeContext
 import org.goldenport.cncf.naming.NamingConventions
 
 /*
  * @since   Apr. 15, 2026
  *  version Apr. 21, 2026
- * @version May.  9, 2026
+ * @version May. 27, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class FormResultMetadata(
@@ -19,6 +21,9 @@ final case class FormResultMetadata(
   jobStatus: Option[String] = None,
   outcome: Option[String] = None,
   message: Option[String] = None,
+  resolverStatus: Option[String] = None,
+  candidateCount: Option[Long] = None,
+  suggestedFieldCount: Option[Long] = None,
   totalCount: Option[Long] = None,
   fetchedCount: Option[Long] = None,
   limit: Option[Long] = None,
@@ -36,6 +41,9 @@ final case class FormResultMetadata(
         jobStatus.map("result.job.status" -> _).toMap ++
         outcome.map("result.outcome" -> _).toMap ++
         message.map("result.message" -> _).toMap ++
+        resolverStatus.map("result.resolverStatus" -> _).toMap ++
+        candidateCount.map(x => "result.candidateCount" -> x.toString).toMap ++
+        suggestedFieldCount.map(x => "result.suggestedFieldCount" -> x.toString).toMap ++
         totalCount.map(x => "result.totalCount" -> x.toString).toMap ++
         totalCount.map(x => "paging.total" -> x.toString).toMap ++
         fetchedCount.map(x => "result.fetchedCount" -> x.toString).toMap ++
@@ -92,15 +100,41 @@ object FormResultMetadata {
       )
     )
 
+  def executionTemplateValues(
+    metadata: RuntimeContext.ExecutionMetadata
+  ): Map[String, String] = {
+    val calltree = metadata.inlineCallTree
+    val providers = calltree.toVector.flatMap(_provider_labels).distinct
+    metadata.sagaId.map("result.execution.saga.id" -> _).toMap ++
+      metadata.executionJobId.map("result.execution.job.id" -> _).toMap ++
+      metadata.executionTaskId.map("result.execution.task.id" -> _).toMap ++
+      calltree.map(_ => "result.execution.calltree.captured" -> "true").toMap ++
+      calltree.map(_ => "result.execution.calltree.href" -> "/rest/v1/admin/execution/calltree").toMap ++
+      (if (calltree.nonEmpty) Map("result.execution.history.href" -> "/rest/v1/admin/execution/history") else Map.empty) ++
+      (if (providers.nonEmpty) Map("result.execution.providers" -> providers.mkString(",")) else Map.empty)
+  }
+
   private def _json_metadata_or_empty(body: String): Option[FormResultMetadata] =
     parse(body).toOption.map { json =>
       val cursor = json.hcursor
       FormResultMetadata(
-        id = _first_string(cursor, Vector("id", "result.id", "item.id")),
+        id = _first_string(cursor, Vector(
+          "id",
+          "result.id",
+          "item.id",
+          "data.id",
+          "data.informationId",
+          "data.information_id",
+          "data.current.informationId",
+          "data.current.information_id"
+        )),
         jobId = _first_string(cursor, Vector("jobId", "job-id", "job.id", "result.jobId", "result.job-id", "result.job.id")),
         jobStatus = _first_string(cursor, Vector("jobStatus", "job-status", "job.status", "result.jobStatus", "result.job-status", "result.job.status")),
-        outcome = _first_string(cursor, Vector("outcome", "result.outcome")),
+        outcome = _first_string(cursor, Vector("outcome", "result.outcome", "data.actionStatus", "data.action_status")),
         message = _first_string(cursor, Vector("message", "result.message", "error.message")),
+        resolverStatus = _first_string(cursor, Vector("resolverStatus", "resolver_status", "data.resolverStatus", "data.resolver_status")),
+        candidateCount = _first_long(cursor, Vector("candidateCount", "candidate_count", "data.addedCandidateCount", "data.added_candidate_count")),
+        suggestedFieldCount = _first_long(cursor, Vector("suggestedFieldCount", "suggested_field_count", "data.suggestedFieldCount", "data.suggested_field_count")),
         totalCount = _first_long(cursor, Vector(
           "totalCount",
           "total_count",
@@ -203,5 +237,22 @@ object FormResultMetadata {
           method = _first_string(c, Vector("method"))
         )
         Option.when(action.toTemplateValues("x").nonEmpty)(action)
+    }
+
+  private def _provider_labels(record: Record): Vector[String] = {
+    val here =
+      if (record.getString("kind").contains("provider"))
+        record.getString("label").filter(_.startsWith("provider:")).toVector
+      else
+        Vector.empty
+    here ++ record.asMap.values.toVector.flatMap(_provider_labels)
+  }
+
+  private def _provider_labels(value: Any): Vector[String] =
+    value match {
+      case r: Record => _provider_labels(r)
+      case xs: Iterable[?] => xs.toVector.flatMap(_provider_labels)
+      case xs: Array[?] => xs.toVector.flatMap(_provider_labels)
+      case _ => Vector.empty
     }
 }

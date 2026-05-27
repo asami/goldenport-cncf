@@ -191,6 +191,34 @@ package = org.goldenport.cncf.information.value
 | state            | InformationConflictState | 1            |
 | resolution       | String                   | ?            |
 
+## InformationFieldEvent
+
+Per-field source, transformation, and state event.
+
+Information field state is event-sourced: imported values, manual edits,
+provider enrichment, and user completion marks are appended as events. The
+current field state is calculated from the latest event for that field. Raw
+provider JSON, RDF, HTML, or vector payloads remain outside Information.
+
+package = org.goldenport.cncf.information.value
+
+### ATTRIBUTE
+
+| name           | type              | multiplicity |
+| ---            | ---               | ---          |
+| fieldPath      | String            | 1            |
+| state          | InformationFieldState | 1        |
+| source         | String            | 1            |
+| operation      | String            | ?            |
+| provider       | String            | ?            |
+| transformation | String            | ?            |
+| valueBefore    | String            | ?            |
+| valueAfter     | String            | ?            |
+| evidence       | String            | ?            |
+| note           | String            | ?            |
+| occurredAt     | java.time.Instant | 1            |
+| actor          | String            | ?            |
+
 # ENTITY
 
 ## Information
@@ -227,6 +255,7 @@ package = org.goldenport.cncf.information
 | identityBindings     | InformationIdentityBinding      | *            |
 | publicationStatuses  | InformationPublicationStatus    | *            |
 | conflicts            | InformationConflict             | *            |
+| fieldEvents          | InformationFieldEvent           | *            |
 | confirmedAt          | java.time.Instant                                      | ?            |
 | updatedAt            | java.time.Instant                                      | 1            |
 
@@ -328,6 +357,18 @@ package = org.goldenport.cncf.information.value
 | ---      | ---      |
 | open     | Open     |
 | resolved | Resolved |
+
+## InformationFieldState
+
+Per-field curation state.
+
+package = org.goldenport.cncf.information.value
+
+| name      | label     |
+| ---       | ---       |
+| imported  | Imported  |
+| editing   | Editing   |
+| completed | Completed |
 
 # STATEMACHINE
 

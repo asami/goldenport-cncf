@@ -9,7 +9,7 @@ import org.goldenport.record.Record
 
 /*
  * @since   May. 21, 2026
- * @version May. 25, 2026
+ * @version May. 27, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class InformationFieldMappingDescriptor(
@@ -61,7 +61,9 @@ final case class InformationEditorFieldProjection(
   value: Option[String],
   validationIssues: Vector[InformationValidationIssue],
   resolutionCandidates: Vector[InformationResolutionCandidate],
-  conflicts: Vector[InformationConflict]
+  conflicts: Vector[InformationConflict],
+  status: Option[InformationFieldEvent] = None,
+  events: Vector[InformationFieldEvent] = Vector.empty
 )
 
 final case class InformationEditorRecordProjection(
@@ -95,16 +97,22 @@ object InformationEditorProfile {
   val BOOK_DOMAIN = "book"
   val PAPER_DOMAIN = "paper"
   val WEB_RESOURCE_DOMAIN = "web-resource"
+  val PERSON_DOMAIN = "person"
+  val ORGANIZATION_DOMAIN = "organization"
   val COMMON_NEIGHBORHOOD = "common-neighborhood"
   val BOOK_PROFILE_EXTENSION = "book-profile-extension"
   val PAPER_PROFILE_EXTENSION = "paper-profile-extension"
   val WEB_RESOURCE_PROFILE_EXTENSION = "web-resource-profile-extension"
+  val PERSON_PROFILE_EXTENSION = "person-profile-extension"
+  val ORGANIZATION_PROFILE_EXTENSION = "organization-profile-extension"
 
   def forDomain(domain: String): Option[InformationEditorProfile] =
     domain match {
       case BOOK_DOMAIN => Some(book)
       case PAPER_DOMAIN => Some(paper)
       case WEB_RESOURCE_DOMAIN => Some(webResource)
+      case PERSON_DOMAIN => Some(person)
+      case ORGANIZATION_DOMAIN => Some(organization)
       case _ => None
     }
 
@@ -211,7 +219,7 @@ object InformationEditorProfile {
         _field(
           "authors",
           "Authors",
-          "People or organizations credited as authors. Preserve order when known.",
+          "People or organizations credited as authors. Preserve order when known. Resolved names become Person or Organization knowledge candidates around the book.",
           Some("Eric Evans"),
           "recommended",
           Some("Author order and role are relationship qualifiers."),
@@ -222,7 +230,7 @@ object InformationEditorProfile {
         _field(
           "editors",
           "Editors",
-          "People or organizations credited as editors.",
+          "People or organizations credited as editors. Resolved names become Person or Organization knowledge candidates around the book.",
           None,
           "optional",
           Some("Editor role is explicit relationship metadata."),
@@ -232,7 +240,7 @@ object InformationEditorProfile {
         _field(
           "publisher",
           "Publisher",
-          "Publisher organization or agent.",
+          "Publisher organization, imprint, or agent. Resolved names become Organization knowledge candidates around the book.",
           Some("Addison-Wesley"),
           "recommended",
           Some("Resolvable publishers should become relationship targets."),
@@ -653,6 +661,66 @@ object InformationEditorProfile {
       )
     )
 
+  val person: InformationEditorProfile =
+    InformationEditorProfile(
+      PERSON_DOMAIN,
+      Vector(
+        _field(
+          "name",
+          "Name",
+          "Canonical person name used for display, authority lookup, and relationship targets.",
+          Some("Murasaki Shikibu"),
+          "required",
+          Some("Required before confirmation."),
+          resolverassisted = true,
+          _mapping("knowledge-node-section", "presentation.labels", COMMON_NEIGHBORHOOD, "Display label for the Person node."),
+          _mapping("relationship", "authority.same-person", PERSON_PROFILE_EXTENSION, "Authority correspondence candidate.")
+        ),
+        _field("sortName", "Sort name", "Name form used for sorting and authority matching.", Some("Shikibu, Murasaki"), "optional", None, true, _mapping("knowledge-node-section", "presentation.names", PERSON_PROFILE_EXTENSION, "Sortable or canonical name form.")),
+        _field("localizedNames", "Localized names", "Language-tagged or script-specific person name variants.", Some("ja: 紫式部"), "optional", Some("Preserve language tags where known."), true, _mapping("knowledge-node-section", "presentation.labels", COMMON_NEIGHBORHOOD, "Localized labels.")),
+        _field("roles", "Roles", "Book-related roles such as author, editor, translator, commentator, or contributor.", Some("author, translator"), "recommended", Some("Relationship role/order qualifiers are edited in KE-13."), false, _mapping("knowledge-node-section", "semantics.roles", PERSON_PROFILE_EXTENSION, "Person role hints for relationship materialization.")),
+        _field("wikidataId", "Wikidata QID", "External authority id for the person.", Some("Q12345"), "optional", Some("External id only; do not use as a CNCF id."), true, _mapping("knowledge-node-section", "identity.externalIdentifiers", PERSON_PROFILE_EXTENSION, "External identifier.")),
+        _field("dbpediaUri", "DBpedia URI", "DBpedia resource URI used as an RDF enrichment anchor for the person.", Some("http://dbpedia.org/resource/Murasaki_Shikibu"), "optional", Some("Treat as candidate until confirmed in InformationSpace."), true, _mapping("knowledge-node-section", "identity.externalIdentifiers", PERSON_PROFILE_EXTENSION, "External RDF anchor candidate."), _mapping("evidence", "sources.evidenceIds", COMMON_NEIGHBORHOOD, "Resolver evidence.")),
+        _field("viafId", "VIAF ID", "VIAF authority identifier.", Some("123456"), "optional", None, true, _mapping("knowledge-node-section", "identity.externalIdentifiers", PERSON_PROFILE_EXTENSION, "External authority identifier.")),
+        _field("isniId", "ISNI ID", "ISNI authority identifier.", Some("0000 0001 2345 6789"), "optional", None, true, _mapping("knowledge-node-section", "identity.externalIdentifiers", PERSON_PROFILE_EXTENSION, "External authority identifier.")),
+        _field("orcidId", "ORCID ID", "ORCID researcher identifier.", Some("0000-0002-1825-0097"), "optional", None, true, _mapping("knowledge-node-section", "identity.externalIdentifiers", PERSON_PROFILE_EXTENSION, "External authority identifier.")),
+        _field("lccn", "LCCN", "Library of Congress authority identifier.", None, "optional", None, true, _mapping("knowledge-node-section", "identity.externalIdentifiers", PERSON_PROFILE_EXTENSION, "External authority identifier.")),
+        _field("ndl", "NDL authority ID", "National Diet Library authority identifier.", None, "optional", None, true, _mapping("knowledge-node-section", "identity.externalIdentifiers", PERSON_PROFILE_EXTENSION, "External authority identifier.")),
+        _field("sourceUrl", "Source URL", "Source page or authority record URL used as evidence.", None, "recommended", None, true, _mapping("evidence", "sources.sourceRefs", COMMON_NEIGHBORHOOD, "Source reference.")),
+        _field("reviewerNote", "Reviewer note", "Human editor note about this person authority candidate.", None, "optional", None, false, _mapping("provenance", "curation.note", COMMON_NEIGHBORHOOD, "Human curation note."))
+      )
+    )
+
+  val organization: InformationEditorProfile =
+    InformationEditorProfile(
+      ORGANIZATION_DOMAIN,
+      Vector(
+        _field(
+          "name",
+          "Name",
+          "Canonical organization name used for display, authority lookup, and relationship targets.",
+          Some("Iwanami Shoten"),
+          "required",
+          Some("Required before confirmation."),
+          resolverassisted = true,
+          _mapping("knowledge-node-section", "presentation.labels", COMMON_NEIGHBORHOOD, "Display label for the Organization node."),
+          _mapping("relationship", "authority.same-organization", ORGANIZATION_PROFILE_EXTENSION, "Authority correspondence candidate.")
+        ),
+        _field("localizedNames", "Localized names", "Language-tagged or script-specific organization name variants.", Some("ja: 岩波書店"), "optional", Some("Preserve language tags where known."), true, _mapping("knowledge-node-section", "presentation.labels", COMMON_NEIGHBORHOOD, "Localized labels.")),
+        _field("organizationType", "Organization type", "Organization category such as publisher, imprint, institution, authority provider, or series owner.", Some("publisher"), "recommended", None, false, _mapping("knowledge-node-section", "semantics.roles", ORGANIZATION_PROFILE_EXTENSION, "Organization role hints.")),
+        _field("wikidataId", "Wikidata QID", "External authority id for the organization.", Some("Q12345"), "optional", Some("External id only; do not use as a CNCF id."), true, _mapping("knowledge-node-section", "identity.externalIdentifiers", ORGANIZATION_PROFILE_EXTENSION, "External identifier.")),
+        _field("dbpediaUri", "DBpedia URI", "DBpedia resource URI used as an RDF enrichment anchor for the organization.", Some("http://dbpedia.org/resource/Iwanami_Shoten"), "optional", Some("Treat as candidate until confirmed in InformationSpace."), true, _mapping("knowledge-node-section", "identity.externalIdentifiers", ORGANIZATION_PROFILE_EXTENSION, "External RDF anchor candidate.")),
+        _field("viafId", "VIAF ID", "VIAF authority identifier.", None, "optional", None, true, _mapping("knowledge-node-section", "identity.externalIdentifiers", ORGANIZATION_PROFILE_EXTENSION, "External authority identifier.")),
+        _field("isniId", "ISNI ID", "ISNI authority identifier.", None, "optional", None, true, _mapping("knowledge-node-section", "identity.externalIdentifiers", ORGANIZATION_PROFILE_EXTENSION, "External authority identifier.")),
+        _field("rorId", "ROR ID", "Research Organization Registry identifier.", Some("https://ror.org/..."), "optional", None, true, _mapping("knowledge-node-section", "identity.externalIdentifiers", ORGANIZATION_PROFILE_EXTENSION, "External authority identifier.")),
+        _field("lccn", "LCCN", "Library of Congress authority identifier.", None, "optional", None, true, _mapping("knowledge-node-section", "identity.externalIdentifiers", ORGANIZATION_PROFILE_EXTENSION, "External authority identifier.")),
+        _field("ndl", "NDL authority ID", "National Diet Library authority identifier.", None, "optional", None, true, _mapping("knowledge-node-section", "identity.externalIdentifiers", ORGANIZATION_PROFILE_EXTENSION, "External authority identifier.")),
+        _field("publisherId", "Publisher ID", "Publisher-local or catalog-specific organization identifier.", None, "optional", None, true, _mapping("knowledge-node-section", "identity.externalIdentifiers", ORGANIZATION_PROFILE_EXTENSION, "External source identifier.")),
+        _field("sourceUrl", "Source URL", "Source page or authority record URL used as evidence.", None, "recommended", None, true, _mapping("evidence", "sources.sourceRefs", COMMON_NEIGHBORHOOD, "Source reference.")),
+        _field("reviewerNote", "Reviewer note", "Human editor note about this organization authority candidate.", None, "optional", None, false, _mapping("provenance", "curation.note", COMMON_NEIGHBORHOOD, "Human curation note."))
+      )
+    )
+
   private def _field(
     fieldpath: String,
     label: String,
@@ -775,8 +843,16 @@ object InformationSpaceEditorProjection {
       _value(information.workingData, field.fieldPath),
       information.validationIssues.filter(_.fieldPath == field.fieldPath),
       information.resolutionCandidates.filter(_.fieldPath == field.fieldPath).sortBy(_.candidateKey),
-      information.conflicts.filter(_.fieldPath == field.fieldPath).sortBy(_.conflictKey)
+      information.conflicts.filter(_.fieldPath == field.fieldPath).sortBy(_.conflictKey),
+      _field_events(information, field).headOption,
+      _field_events(information, field)
     )
+
+  private def _field_events(
+    information: Information,
+    field: InformationFieldDescriptor
+  ): Vector[InformationFieldEvent] =
+    information.fieldEvents.filter(_.fieldPath == field.fieldPath).sortBy(_.occurredAt.toEpochMilli).reverse
 
   private def _information_actions(information: Information): Vector[InformationEditorActionDescriptor] =
     Vector(
@@ -799,7 +875,7 @@ object InformationSpaceEditorProjection {
     InformationEditorActionDescriptor(name, label, enabled, if (enabled) None else reason)
 
   private def _title(record: Record): Option[String] =
-    _value(record, "title")
+    _value(record, "title").orElse(_value(record, "name"))
 
   private def _value(
     record: Record,

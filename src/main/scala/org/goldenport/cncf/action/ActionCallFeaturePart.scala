@@ -2,6 +2,7 @@ package org.goldenport.cncf.action
 
 import cats.free.Free
 import cats.syntax.flatMap.*
+import cats.syntax.functor.*
 import io.circe.Json
 import org.goldenport.Consequence
 import org.goldenport.ConsequenceT
@@ -38,6 +39,8 @@ import org.goldenport.cncf.cli.RunMode
 import org.goldenport.cncf.action.AggregateBehavior
 import org.goldenport.cncf.information.{
   InformationConflict,
+  InformationFieldEvent,
+  InformationFieldState,
   Information,
   InformationId,
   InformationIdentityBinding,
@@ -871,6 +874,24 @@ trait BehaviorInformationPart extends BehaviorFeaturePart { self: Behavior.Core.
   ): ExecUowM[Information] =
     exec_from_calltree("uow:information:update", _information_attributes("update", informationid)) {
       _information_space.flatMap(_.updateInformation(informationid, workingdata))
+    }
+
+  protected final def information_append_field_event(
+    informationid: InformationId,
+    event: InformationFieldEvent
+  ): ExecUowM[Information] =
+    exec_from_calltree("uow:information:field-event:append", _information_attributes("field-event-append", informationid) + ("field_path" -> event.fieldPath) + ("state" -> event.state.value) + ("source" -> event.source)) {
+      _information_space.flatMap(_.appendFieldEvent(informationid, event))
+    }
+
+  protected final def information_append_field_events(
+    informationid: InformationId,
+    events: Vector[InformationFieldEvent]
+  ): ExecUowM[Unit] =
+    events.foldLeft(exec_pure(())) { (z, event) =>
+      z.flatMap { _ =>
+        information_append_field_event(informationid, event).map(_ => ())
+      }
     }
 
   protected final def information_validate(

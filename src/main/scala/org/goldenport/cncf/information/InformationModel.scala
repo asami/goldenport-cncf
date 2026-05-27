@@ -16,7 +16,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 
 /*
  * @since   May. 20, 2026
- * @version May. 25, 2026
+ * @version May. 27, 2026
  * @author  ASAMI, Tomoharu
  */
 type InformationId = EntityId
@@ -76,6 +76,13 @@ object InformationConflictState {
   val Resolved: InformationConflictState = value.InformationConflictState.resolved
 }
 
+type InformationFieldState = value.InformationFieldState
+object InformationFieldState {
+  val Imported: InformationFieldState = value.InformationFieldState.imported
+  val Editing: InformationFieldState = value.InformationFieldState.editing
+  val Completed: InformationFieldState = value.InformationFieldState.completed
+}
+
 type InformationImportContext = value.InformationImportContext
 
 final case class Information(
@@ -90,6 +97,7 @@ final case class Information(
   identityBindings: Vector[InformationIdentityBinding] = Vector.empty,
   publicationStatuses: Vector[InformationPublicationStatus] = Vector.empty,
   conflicts: Vector[InformationConflict] = Vector.empty,
+  fieldEvents: Vector[InformationFieldEvent] = Vector.empty,
   confirmedAt: Option[Instant] = None,
   updatedAt: Instant = Instant.now()
 ) {
@@ -176,6 +184,21 @@ final case class InformationConflict(
   severity: String = "warning",
   state: InformationConflictState = InformationConflictState.Open,
   resolution: Option[String] = None
+)
+
+final case class InformationFieldEvent(
+  fieldPath: String,
+  state: InformationFieldState,
+  source: String,
+  operation: Option[String] = None,
+  provider: Option[String] = None,
+  transformation: Option[String] = None,
+  valueBefore: Option[String] = None,
+  valueAfter: Option[String] = None,
+  evidence: Option[String] = None,
+  note: Option[String] = None,
+  occurredAt: Instant = Instant.now(),
+  actor: Option[String] = None
 )
 
 final case class InformationSpaceSnapshot(

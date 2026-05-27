@@ -127,7 +127,9 @@ object StaticFormAppRendererSupport {
         "paging.pageSize" -> page.values.getOrElse("paging.pageSize", page.values.getOrElse("pageSize", page.values.getOrElse("limit", "20"))),
         "paging.chunkSize" -> page.values.getOrElse("paging.chunkSize", "1000"),
         "paging.href" -> page.values.getOrElse("paging.href", _default_paging_href)
-      ) ++ _framework_action_values(metadata) ++ metadata.toTemplateValues
+      ) ++ _framework_action_values(metadata) ++
+        metadata.toTemplateValues ++
+        FormResultMetadata.executionTemplateValues(executionMetadata)
       val base = page.copy(values = page.values ++ formValues ++ resultValues)
       if (status >= 400)
         base
