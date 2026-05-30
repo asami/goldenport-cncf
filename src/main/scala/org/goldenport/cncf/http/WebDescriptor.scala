@@ -13,7 +13,7 @@ import org.goldenport.record.Record
 /*
  * @since   Apr. 14, 2026
  *  version Apr. 25, 2026
- * @version May. 27, 2026
+ * @version May. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class WebDescriptor(
@@ -25,6 +25,7 @@ final case class WebDescriptor(
   apps: Vector[WebDescriptor.App] = Vector.empty,
   routes: Vector[WebDescriptor.Route] = Vector.empty,
   shell: Option[WebDescriptor.Shell] = None,
+  componentPage: WebDescriptor.ComponentPage = WebDescriptor.ComponentPage(),
   pages: Map[String, WebDescriptor.PageCustomization] = Map.empty,
   theme: WebDescriptor.Theme = WebDescriptor.Theme(),
   assets: WebDescriptor.Assets = WebDescriptor.Assets(),
@@ -82,6 +83,9 @@ final case class WebDescriptor(
       apps = _merge_apps_(apps, rhs.apps),
       routes = _merge_vector_(routes, rhs.routes)(_.normalizedPathText),
       shell = rhs.shell.orElse(shell),
+      componentPage =
+        if (rhs.componentPage == WebDescriptor.ComponentPage()) componentPage
+        else rhs.componentPage,
       pages = pages ++ rhs.pages,
       theme = theme.merge(rhs.theme),
       assets = assets.merge(rhs.assets),
@@ -97,6 +101,7 @@ final case class WebDescriptor(
       apps.nonEmpty ||
       routes.nonEmpty ||
       shell.nonEmpty ||
+      componentPage != WebDescriptor.ComponentPage() ||
       theme != WebDescriptor.Theme() ||
       assets != WebDescriptor.Assets() ||
       admin.nonEmpty ||
@@ -199,6 +204,30 @@ final case class WebDescriptor(
     staticPageCustomization(appName, page)
       .flatMap(_.mode)
       .getOrElse(WebDescriptor.PageMode.Article)
+
+  def staticPageDisplay(
+    appName: String,
+    page: Vector[String]
+  ): WebDescriptor.PageDisplay =
+    staticPageCustomization(appName, page).flatMap(_.display)
+      .orElse(appFor(appName).flatMap(_.pageDisplay))
+      .orElse(componentPage.display)
+      .getOrElse(WebDescriptor.PageDisplay.ApplicationShell)
+
+  def staticPageBackButton(
+    appName: String,
+    page: Vector[String]
+  ): Boolean =
+    staticPageCustomization(appName, page).flatMap(_.backButton)
+      .orElse(appFor(appName).flatMap(_.pageBackButton))
+      .orElse(componentPage.backButton)
+      .getOrElse(true)
+
+  def appFor(name: String): Option[WebDescriptor.App] =
+    apps.find(app =>
+      app.matches(name, Vector.empty) ||
+        app.normalizedName == org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(name)
+    )
 
   def themeFor(appName: Option[String] = None): WebDescriptor.Theme =
     appName
@@ -468,9 +497,38 @@ object WebDescriptor {
     layout: Option[String] = None,
     mode: Option[PageMode] = None,
     modeRaw: Option[String] = None,
+    display: Option[PageDisplay] = None,
+    displayRaw: Option[String] = None,
+    backButton: Option[Boolean] = None,
     submitLabel: Option[String] = None,
     fields: Vector[String] = Vector.empty,
     controls: Map[String, FormControl] = Map.empty
+  )
+
+  enum PageDisplay {
+    case ApplicationShell
+    case Standalone
+
+    def name: String =
+      this match {
+        case ApplicationShell => "shell"
+        case Standalone => "standalone"
+      }
+  }
+
+  object PageDisplay {
+    def parse(value: String): Option[PageDisplay] =
+      value.trim.toLowerCase(java.util.Locale.ROOT) match {
+        case "shell" | "application-shell" | "app-shell" | "embedded" | "embed" => Some(ApplicationShell)
+        case "standalone" | "independent" | "page" | "own-page" => Some(Standalone)
+        case _ => None
+      }
+  }
+
+  final case class ComponentPage(
+    display: Option[PageDisplay] = None,
+    displayRaw: Option[String] = None,
+    backButton: Option[Boolean] = None
   )
 
   enum PageMode {
@@ -634,7 +692,10 @@ object WebDescriptor {
     theme: Theme = Theme(),
     layout: Option[String] = None,
     composition: ComponentWebComposition = ComponentWebComposition.Disabled,
-    compositionRaw: Option[String] = None
+    compositionRaw: Option[String] = None,
+    pageDisplay: Option[PageDisplay] = None,
+    pageDisplayRaw: Option[String] = None,
+    pageBackButton: Option[Boolean] = None
   ) {
     def normalizedName: String =
       _normalize_app_segment(name)
@@ -664,7 +725,10 @@ object WebDescriptor {
         theme = theme.merge(rhs.theme),
         layout = rhs.layout.orElse(layout),
         composition = rhs.compositionRaw.map(_ => rhs.composition).getOrElse(composition),
-        compositionRaw = rhs.compositionRaw.orElse(compositionRaw)
+        compositionRaw = rhs.compositionRaw.orElse(compositionRaw),
+        pageDisplay = rhs.pageDisplayRaw.map(_ => rhs.pageDisplay).getOrElse(pageDisplay),
+        pageDisplayRaw = rhs.pageDisplayRaw.orElse(pageDisplayRaw),
+        pageBackButton = rhs.pageBackButton.orElse(pageBackButton)
       )
 
     def effectivePath: String =
@@ -872,6 +936,7 @@ object WebDescriptor {
       apps = _apps(web),
       routes = _routes(web),
       shell = _shell(web),
+      componentPage = _component_page(web),
       pages = _pages(web),
       theme = _theme(web),
       assets = _assets(web),
@@ -1059,6 +1124,7 @@ object WebDescriptor {
   private def _page_customization(record: Record): PageCustomization =
   {
     val modeRaw = _string(record, "mode").orElse(_string(record, "pageMode")).orElse(_string(record, "page-mode"))
+    val displayraw = _string(record, "display").orElse(_string(record, "pageDisplay")).orElse(_string(record, "page-display"))
     PageCustomization(
       title = _string(record, "title"),
       heading = _string(record, "heading"),
@@ -1066,6 +1132,9 @@ object WebDescriptor {
       layout = _string(record, "layout"),
       mode = modeRaw.flatMap(PageMode.parse),
       modeRaw = modeRaw,
+      display = displayraw.flatMap(PageDisplay.parse),
+      displayRaw = displayraw,
+      backButton = _boolean(record, "backButton").orElse(_boolean(record, "back-button")).orElse(_boolean(record, "back_button")),
       submitLabel = _string(record, "submitLabel").orElse(_string(record, "submit-label")),
       fields = _string_vector(record, "fields"),
       controls = _form_controls(record)
@@ -1088,6 +1157,11 @@ object WebDescriptor {
         _string(record, "composition")
           .orElse(_string(record, "webComposition"))
           .orElse(_string(record, "web-composition"))
+      val pagedisplayraw =
+        _string(record, "pageDisplay")
+          .orElse(_string(record, "page-display"))
+          .orElse(_string(record, "componentPageDisplay"))
+          .orElse(_string(record, "component-page-display"))
       App(
         name = name,
         path = record.getString("path").map(_.trim).filter(_.nonEmpty).orElse(root).getOrElse(""),
@@ -1098,7 +1172,10 @@ object WebDescriptor {
         assets = _assets(record),
         layout = _string(record, "layout"),
         composition = compositionRaw.flatMap(ComponentWebComposition.parse).getOrElse(ComponentWebComposition.Disabled),
-        compositionRaw = compositionRaw
+        compositionRaw = compositionRaw,
+        pageDisplay = pagedisplayraw.flatMap(PageDisplay.parse),
+        pageDisplayRaw = pagedisplayraw,
+        pageBackButton = _boolean(record, "pageBackButton").orElse(_boolean(record, "page-back-button")).orElse(_boolean(record, "page_back_button"))
       )
     }
 
@@ -1120,6 +1197,24 @@ object WebDescriptor {
           layout = _string(r, "layout")
         )
       }
+
+  private def _component_page(record: Record): ComponentPage =
+    _record_value(record, "componentPage")
+      .orElse(_record_value(record, "component-page"))
+      .orElse(_record_value(record, "componentPages"))
+      .orElse(_record_value(record, "component-pages"))
+      .map { r =>
+        val displayraw =
+          _string(r, "display")
+            .orElse(_string(r, "pageDisplay"))
+            .orElse(_string(r, "page-display"))
+        ComponentPage(
+          display = displayraw.flatMap(PageDisplay.parse),
+          displayRaw = displayraw,
+          backButton = _boolean(r, "backButton").orElse(_boolean(r, "back-button")).orElse(_boolean(r, "back_button"))
+        )
+      }
+      .getOrElse(ComponentPage())
 
   private def _assets(record: Record): Assets =
     _record_value(record, "assets")

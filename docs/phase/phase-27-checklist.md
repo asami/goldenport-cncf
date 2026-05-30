@@ -552,7 +552,57 @@ strings during book editing and materialization.
 
 ---
 
-## KE-12: Work / Edition / Series / Volume Book Structure Expansion
+## KE-12: Person and Organization Editor Screens
+
+Status: DONE
+
+### Objective
+
+Add full app-facing editor screen sets for `person` and `organization`
+Information, equivalent in structure to the existing book/paper/web-resource
+flows. Person and Organization are no longer only book-adjacent authority
+candidates; they must be directly searchable, editable, confirmable,
+publishable, and materializable Information domains.
+
+### Initial Tasks
+
+- [x] Add `PersonEditor` and `OrganizationEditor` services to
+      `textus-knowledge-editor.cml`.
+- [x] Add dashboard, list, detail, edit, seed/create, resolve, validate,
+      confirm, reject, reopen, publish, and materialize operations for both
+      domains.
+- [x] Add Static Form Web pages and metadata for person and organization
+      dashboard/list/detail/edit flows.
+- [x] Use CNCF `person` and `organization` InformationEditorProfiles so field
+      guidance, external identifiers, RDF anchors, validation, and mapping
+      metadata are displayed from the shared projection contract.
+- [x] Connect book contributor/publisher candidate flows to Person/Organization
+      Information creation or editing links, without adding TKE-specific
+      duplicate authority UI.
+- [x] Add list/search filters for name, external identifier, tag, lifecycle
+      state, and updated time.
+- [x] Add focused executable specifications for creating, editing, validating,
+      confirming, publishing, and materializing Person and Organization
+      Information.
+
+### Completion Notes
+
+- `PersonEditor` and `OrganizationEditor` services are available in
+  `textus-knowledge-editor.cml`.
+- TKE now exposes Person and Organization dashboards, lists, detail pages, edit
+  pages, seed/create forms, and bulk import forms.
+- Person and Organization bulk import is Job-backed with `execution ::
+  async-job`.
+- Local and DBpedia authority resolver candidates are supported without storing
+  raw provider payloads.
+- Overall dashboard counts and recent Information sections include Person and
+  Organization.
+- Detailed implementation notes are recorded in
+  `docs/journal/2026/05/phase-27-ke-12-person-organization-editor-screens.md`.
+
+---
+
+## KE-13: Work / Edition / Series / Volume Book Structure Expansion
 
 Status: ACTIVE
 
@@ -561,6 +611,18 @@ Status: ACTIVE
 Extend book knowledge from a single publication node into explicit Work,
 Edition, Series, and Volume structures, including multi-volume publications
 such as a nine-volume Iwanami Genji monogatari edition.
+
+Reference direction:
+
+- `docs/journal/2026/05/book-knowledge-materialization-genji.md`
+- `docs/journal/2026/05/rdf-centric-knowledge-expansion.md`
+
+These notes define the intended expansion style: ISBN/openBD metadata remains
+the physical publication layer, while Work, Edition, Series, Volume, Person,
+Organization, subject, cultural, research, and RDF anchor knowledge form the
+broader meaning neighborhood. TKE should materialize stable local
+KnowledgeNodes and RDF links, not copy complete external RDF graphs into local
+Information.
 
 ### Initial Tasks
 
@@ -577,6 +639,9 @@ such as a nine-volume Iwanami Genji monogatari edition.
 - [ ] Extend Knowledge materialization summaries so missing, unresolved,
       selected, or materialized Work/Edition/Series/Volume nodes are visible in
       the 1.5hop+ book KnowledgeFrame.
+- [ ] Make RDF anchor state visible for Work/Edition/Series/Volume nodes,
+      distinguishing local Textus KnowledgeNodes from sameAs/exactMatch/
+      closeMatch/source-alignment links to external RDF spaces.
 - [ ] Add focused TKE executable specifications for a multi-volume book
       example, using Iwanami Genji monogatari style structure as the reference
       scenario.
@@ -587,7 +652,7 @@ such as a nine-volume Iwanami Genji monogatari edition.
 
 ---
 
-## KE-13: Relationship / Role / Qualifier Editing
+## KE-14: Relationship / Role / Qualifier Editing
 
 Status: PENDING
 
@@ -623,7 +688,7 @@ flattened into untyped fields.
 
 ---
 
-## KE-14: Authority Resolution Merge/Split Workflow
+## KE-15: Authority Resolution Merge/Split Workflow
 
 Status: PENDING
 
@@ -657,7 +722,7 @@ Edition, Series, Volume, and publication candidates.
 
 ---
 
-## KE-15: Multi-Volume / Book-Set Import Workflow
+## KE-16: Multi-Volume / Book-Set Import Workflow
 
 Status: PENDING
 
@@ -678,6 +743,10 @@ one Job-backed work unit.
       filter for created Information.
 - [ ] Map imported rows into related Information objects for Work, Edition,
       Series, Volume, Person, Organization, and publication/book records.
+- [ ] Preserve source-layer distinctions in the import result: ISBN/openBD
+      physical publication metadata, library/authority metadata, RDF anchors,
+      and inferred Work/Edition/Series/Volume structure must be reviewable
+      separately before merge/materialization.
 - [ ] Provide import result summaries showing created, updated, skipped,
       unresolved, and candidate-linked Information counts.
 - [ ] Add list/detail navigation from an import Job to the Information created
@@ -691,7 +760,7 @@ one Job-backed work unit.
 
 ---
 
-## KE-16: Usability Smoke and Phase 27 Closure
+## KE-17: Usability Smoke and Phase 27 Closure
 
 Status: PENDING
 
@@ -699,7 +768,7 @@ Status: PENDING
 
 Close Phase 27 only after the editor can be used without a separate manual for
 the selected book/paper/web workflows, including the expanded book knowledge
-structure added in KE-11 through KE-15.
+structure added in KE-11 through KE-16.
 
 ### Initial Tasks
 
@@ -734,7 +803,7 @@ After Phase 27 later closes, turn the Web UI DSL design note into the next
 implementation slice so Static Form Web Apps and generated CNCF screens can use
 semantic Textus widgets, stable Bootstrap Core DOM, and selectable UX profiles.
 
-This is not part of KE-16 and does not imply Phase 27 is already ready to
+This is not part of KE-17 and does not imply Phase 27 is already ready to
 close.
 
 ### Planned Tasks

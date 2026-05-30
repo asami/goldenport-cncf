@@ -2,7 +2,7 @@ package org.goldenport.cncf.http
 
 /*
  * @since   May. 18, 2026
- * @version May. 27, 2026
+ * @version May. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 import cats.effect.IO
@@ -256,6 +256,16 @@ final class Http4sHttpServer(
         if (_is_web_authorized("tag", "tags", "update", Some(req))) _app_tag_update(req) else _forbidden_web(req, Some("tag"), Some("tags"), Some("update"))
       case req @ POST -> Root / "web" / "tag" / "tags" / "move" =>
         if (_is_web_authorized("tag", "tags", "move", Some(req))) _app_tag_move(req) else _forbidden_web(req, Some("tag"), Some("tags"), Some("move"))
+      case req @ GET -> Root / "web" / app / "tags" =>
+        if (_is_web_authorized(app, "tags", "index", Some(req))) _app_tags_in_shell(req, app) else _forbidden_web(req, Some(app), Some("tags"), Some("index"))
+      case req @ POST -> Root / "web" / app / "tags" / "create" =>
+        if (_is_web_authorized(app, "tags", "create", Some(req))) _app_tag_create_in_shell(req, app) else _forbidden_web(req, Some(app), Some("tags"), Some("create"))
+      case req @ POST -> Root / "web" / app / "tags" / "update" =>
+        if (_is_web_authorized(app, "tags", "update", Some(req))) _app_tag_update_in_shell(req, app) else _forbidden_web(req, Some(app), Some("tags"), Some("update"))
+      case req @ POST -> Root / "web" / app / "tags" / "move" =>
+        if (_is_web_authorized(app, "tags", "move", Some(req))) _app_tag_move_in_shell(req, app) else _forbidden_web(req, Some(app), Some("tags"), Some("move"))
+      case req @ GET -> Root / "web" / app / "notifications" =>
+        if (_is_web_authorized(app, "notifications", "index", Some(req))) _app_notifications_in_shell(req, app) else _forbidden_web(req, Some(app), Some("notifications"), Some("index"))
       case GET -> Root / "web" / app / "dashboard" / "state" =>
         _dashboard_state(Some(app))
       case req @ GET -> Root / "web" / app / "jobs" =>
@@ -1168,7 +1178,7 @@ final class Http4sHttpServer(
         _session_id_(req).foreach { sessionid =>
           _application_job_seen_at.update((sessionid, NamingConventions.toNormalizedSegment(app)), Instant.now)
         }
-        _html(_static_form_app_renderer.renderApplicationJobs(app, jobs), Some(app))
+        _html_in_app_shell(req, app, Vector("jobs"), _static_form_app_renderer.renderApplicationJobs(app, jobs))
       case Consequence.Failure(conclusion) =>
         val error = StructuredHttpError.fromConclusion(
           conclusion,
@@ -1180,6 +1190,98 @@ final class Http4sHttpServer(
           operation = Some("index")
         )
         _html_status(_static_form_app_renderer.renderStructuredErrorPage(Some(app), error), _http_status(error))
+    }
+
+  private def _app_tags_in_shell(
+    req: org.http4s.Request[IO],
+    app: String
+  ): IO[HResponse[IO]] =
+    _static_form_app_renderer.renderAppTags(engine.runtimeSubsystem, _query_values(req), _app_tag_request_properties(req)) match {
+      case Consequence.Success(page) =>
+        _html_in_app_shell(req, app, Vector("tags"), page)
+      case Consequence.Failure(conclusion) =>
+        _web_error_response(Some(app), conclusion, s"/web/${app}/tags")
+    }
+
+  private def _app_tag_create_in_shell(
+    req: org.http4s.Request[IO],
+    app: String
+  ): IO[HResponse[IO]] =
+    for {
+      form <- _to_form_record(req)
+      response <- _app_tag_result_in_shell(
+        req,
+        app,
+        "create",
+        _static_form_app_renderer.renderAppTagCreateResult(engine.runtimeSubsystem, form.asMap.map { case (k, v) => k -> v.toString }, _app_tag_request_properties(req))
+      )
+    } yield response
+
+  private def _app_tag_update_in_shell(
+    req: org.http4s.Request[IO],
+    app: String
+  ): IO[HResponse[IO]] =
+    for {
+      form <- _to_form_record(req)
+      response <- _app_tag_result_in_shell(
+        req,
+        app,
+        "update",
+        _static_form_app_renderer.renderAppTagUpdateResult(engine.runtimeSubsystem, form.asMap.map { case (k, v) => k -> v.toString }, _app_tag_request_properties(req))
+      )
+    } yield response
+
+  private def _app_tag_move_in_shell(
+    req: org.http4s.Request[IO],
+    app: String
+  ): IO[HResponse[IO]] =
+    for {
+      form <- _to_form_record(req)
+      response <- _app_tag_result_in_shell(
+        req,
+        app,
+        "move",
+        _static_form_app_renderer.renderAppTagMoveResult(engine.runtimeSubsystem, form.asMap.map { case (k, v) => k -> v.toString }, _app_tag_request_properties(req))
+      )
+    } yield response
+
+  private def _app_tag_result_in_shell(
+    req: org.http4s.Request[IO],
+    app: String,
+    operation: String,
+    page: Consequence[StaticFormAppRenderer.Page]
+  ): IO[HResponse[IO]] =
+    page match {
+      case Consequence.Success(p) =>
+        _html_in_app_shell(req, app, Vector("tags"), p)
+      case Consequence.Failure(conclusion) =>
+        val error = StructuredHttpError.fromConclusion(
+          conclusion,
+          req.uri.path.renderString,
+          req.method.name,
+          _operation_mode,
+          component = Some(app),
+          service = Some("tags"),
+          operation = Some(operation)
+        )
+        _web_error_response(Some(app), error)
+    }
+
+  private def _app_notifications_in_shell(
+    req: org.http4s.Request[IO],
+    app: String
+  ): IO[HResponse[IO]] =
+    _web_app_static_html_content(Some("textus-user-notification"), "notifications", Vector.empty) match {
+      case Some(content) =>
+        val expanded = _web_operation_result_inline_content(Some(req), "textus-user-notification", "notifications", Vector.empty, content)
+        _html_in_app_shell(req, app, Vector("notifications"), StaticFormAppRenderer.Page(expanded))
+      case None =>
+        _web_error_response(
+          Some(app),
+          HStatus.NotFound,
+          "Notification Web app page not found",
+          s"/web/${app}/notifications"
+        )
     }
 
   private def _application_job(
@@ -4011,21 +4113,30 @@ final class Http4sHttpServer(
       requireLayout = composesubsystemarticle,
       componentName = componentName
     ).map { composed =>
+      val expandedhtml = req.map { request =>
+        _web_operation_result_inline_content(
+          Some(request),
+          componentName.getOrElse(webappname),
+          webappname,
+          page,
+          composed.html
+        )
+      }.getOrElse(composed.html)
       val needstemplaterendering =
         composed.appliedLayout ||
-          _static_form_app_renderer.hasTextusMarkup(composed.html) ||
-          _has_textus_include(composed.html) ||
-          (!_static_form_app_renderer.isHtmlDocumentTemplate(composed.html) && _has_property_placeholder(composed.html))
+          _static_form_app_renderer.hasTextusMarkup(expandedhtml) ||
+          _has_textus_include(expandedhtml) ||
+          (!_static_form_app_renderer.isHtmlDocumentTemplate(expandedhtml) && _has_property_placeholder(expandedhtml))
       if (needstemplaterendering)
         _static_form_app_renderer.renderStaticTemplate(
           webappname,
           page,
-          composed.html,
+          expandedhtml,
           _web_app_asset_completion(webappname),
           _page_view_context(req, webappname, page)
         )
       else
-        StaticFormAppRenderer.Page(composed.html)
+        StaticFormAppRenderer.Page(expandedhtml)
     }
   }
 
@@ -4356,7 +4467,7 @@ final class Http4sHttpServer(
       if (remaining <= 0)
         value
       else {
-        val next = _expand_textus_includes(webappname, page, _expand_partial_placeholders(webappname, page, value, scope, componentName), scope, componentName)
+        val next = _expand_textus_includes(webappname, page, _expand_textus_widgets(webappname, page, _expand_partial_placeholders(webappname, page, value, scope, componentName), scope, componentName), scope, componentName)
         if (next == value) next else loop(next, remaining - 1)
       }
     loop(template, 8)
@@ -4389,8 +4500,31 @@ final class Http4sHttpServer(
     })
   }
 
+  private def _expand_textus_widgets(
+    webappname: String,
+    page: Vector[String],
+    template: String,
+    scope: WebTemplatePartScope,
+    componentName: Option[String] = None
+  ): String = {
+    val widget = """<textus(?::widget|-widget)\b([^>]*)></textus(?::widget|-widget)>""".r
+    widget.replaceAllIn(template, m => {
+      val attrs = _template_attrs(m.group(1))
+      val content = attrs.get("name").flatMap(_widget_content(webappname, page, _, scope, componentName)).getOrElse("")
+      java.util.regex.Matcher.quoteReplacement(_apply_widget_attrs(content, attrs))
+    })
+  }
+
+  private def _apply_widget_attrs(
+    template: String,
+    attrs: Map[String, String]
+  ): String =
+    """\$\{widget\.([A-Za-z0-9_.:-]+)\}""".r.replaceAllIn(template, m =>
+      java.util.regex.Matcher.quoteReplacement(attrs.getOrElse(m.group(1), ""))
+    )
+
   private def _has_textus_include(template: String): Boolean =
-    """<textus(?::include|-include)\b""".r.findFirstIn(template).nonEmpty
+    """<textus(?:(?::include|-include)|(?::widget|-widget))\b""".r.findFirstIn(template).nonEmpty
 
   private def _has_property_placeholder(template: String): Boolean =
     """\$\{[A-Za-z0-9_.-]+\}""".r.findFirstIn(template).nonEmpty
@@ -4420,6 +4554,20 @@ final class Http4sHttpServer(
     else
       _web_resource_roots(scope, componentName).view.flatMap { root =>
         _web_inf_partial_candidates(_template_part_app_name(webappname, scope), page, name, scope).view.flatMap(root.readText)
+      }.headOption
+
+  private def _widget_content(
+    webappname: String,
+    page: Vector[String],
+    name: String,
+    scope: WebTemplatePartScope = WebTemplatePartScope.Default,
+    componentName: Option[String] = None
+  ): Option[String] =
+    if (!_safe_template_part_name(name))
+      None
+    else
+      _web_resource_roots(scope, componentName).view.flatMap { root =>
+        _web_inf_widget_candidates(_template_part_app_name(webappname, scope), page, name, scope).view.flatMap(root.readText)
       }.headOption
 
   private def _template_part_app_name(
@@ -4460,6 +4608,33 @@ final class Http4sHttpServer(
     }
     val globalflat = Vector(Paths.get("WEB-INF", "partials", s"${name}.html"))
     val globalapp = Vector(Paths.get(webapppath, "WEB-INF", "partials", s"${name}.html"))
+    scope match {
+      case WebTemplatePartScope.ComponentContent =>
+        localapp ++ localflat ++ globalapp ++ globalflat
+      case _ =>
+        if (_is_flat_web_root_app(webappname))
+          localflat ++ localapp ++ globalflat ++ globalapp
+        else
+          localapp ++ localflat ++ globalapp ++ globalflat
+    }
+  }
+
+  private def _web_inf_widget_candidates(
+    webappname: String,
+    page: Vector[String],
+    name: String,
+    scope: WebTemplatePartScope
+  ): Vector[Path] = {
+    val webapppath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(webappname)
+    val localpage = _web_inf_page_path(page)
+    val localflat = localpage.toVector.map { pagePath =>
+      _relative_path(Vector("WEB-INF", "widgets") ++ pagePath :+ s"${name}.html")
+    }
+    val localapp = localpage.toVector.map { pagePath =>
+      _relative_path(webapppath +: (Vector("WEB-INF", "widgets") ++ pagePath :+ s"${name}.html"))
+    }
+    val globalflat = Vector(Paths.get("WEB-INF", "widgets", s"${name}.html"))
+    val globalapp = Vector(Paths.get(webapppath, "WEB-INF", "widgets", s"${name}.html"))
     scope match {
       case WebTemplatePartScope.ComponentContent =>
         localapp ++ localflat ++ globalapp ++ globalflat
@@ -5488,6 +5663,60 @@ final class Http4sHttpServer(
     appName: Option[String]
   ): IO[HResponse[IO]] =
     _html_content(p.body, appName)
+
+  private def _html_in_app_shell(
+    req: org.http4s.Request[IO],
+    app: String,
+    page: Vector[String],
+    sourcePage: StaticFormAppRenderer.Page
+  ): IO[HResponse[IO]] = {
+    val content = _app_shell_rewrite_links(_html_body_fragment(sourcePage.body), app)
+    engine.webDescriptor.staticPageDisplay(app, page) match {
+      case WebDescriptor.PageDisplay.ApplicationShell =>
+        _web_app_static_page(Some(app), app, page, content, Some(req)) match {
+          case Consequence.Success(page) =>
+            _html_content(page.body, Some(app), Some(app))
+          case Consequence.Failure(conclusion) =>
+            _web_error_response(Some(app), conclusion, s"/web/${app}/${page.mkString("/")}")
+        }
+      case WebDescriptor.PageDisplay.Standalone =>
+        val body =
+          if (engine.webDescriptor.staticPageBackButton(app, page))
+            _standalone_back_button(app) + content
+          else
+            content
+        _html_content(body, Some(app), Some(app))
+    }
+  }
+
+  private def _standalone_back_button(
+    app: String
+  ): String =
+    s"""<section class="container-fluid px-4 pt-3"><a class="btn btn-outline-secondary btn-sm" href="/web/${_escape_html(NamingConventions.toNormalizedSegment(app))}">Back to application</a></section>"""
+
+  private def _html_body_fragment(
+    html: String
+  ): String = {
+    val pattern = "(?is).*<body[^>]*>(.*)</body>.*".r
+    val body = html match {
+      case pattern(body) => body.trim
+      case _ => html
+    }
+    body.
+      replaceAll("(?is)<script[^>]*>.*?</script>", "").
+      replaceAll("(?is)</?main\\b[^>]*>", "").
+      trim
+  }
+
+  private def _app_shell_rewrite_links(
+    html: String,
+    app: String
+  ): String = {
+    val appbase = s"/web/${NamingConventions.toNormalizedSegment(app)}"
+    html.
+      replace("""href="/web/tag/tags""", s"""href="${appbase}/tags""").
+      replace("""action="/web/tag/tags""", s"""action="${appbase}/tags""")
+  }
 
   private def _html_content(
     body: String,

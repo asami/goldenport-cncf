@@ -47,6 +47,13 @@ This document is a phase dashboard, not a design journal.
   source Work, concrete Edition, publication Series, and multi-volume Volume
   nodes are first-class candidates when they are required to understand the
   book.
+- Use the Genji materialization and RDF-centric expansion journal notes as the
+  working direction for KE-13 and later: ISBN/openBD metadata is only the
+  physical-book metadata layer, while Work, Edition, Series, Volume, Person,
+  Organization, subject, cultural, research, and RDF anchor links form the
+  broader knowledge neighborhood. Local `KnowledgeSpace` should establish
+  stable semantic anchors and link them to external RDF identifiers rather than
+  copying entire external knowledge graphs.
 - Separate the reusable common semantic-neighborhood contract from the
   book-oriented extension profile, so CNCF core knowledge projection does not
   hard-code bibliographic assumptions.
@@ -88,21 +95,24 @@ Scope boundaries:
   TagComponent app-facing TagSpace screen integration.
 - K (DONE): KE-11 — Person and Organization knowledge support for book
   contributors, publishers, imprints, and related authority candidates.
-- L (ACTIVE): KE-12 — Work / Edition / Series / Volume book structure
+- L (DONE): KE-12 — Person and Organization editor screens.
+- M (ACTIVE): KE-13 — Work / Edition / Series / Volume book structure
   expansion, including multi-volume editions such as a nine-volume Iwanami
-  Genji monogatari publication.
-- M (PENDING): KE-13 — Relationship / Role / Qualifier editing for
+  Genji monogatari publication. Direction notes:
+  `docs/journal/2026/05/book-knowledge-materialization-genji.md` and
+  `docs/journal/2026/05/rdf-centric-knowledge-expansion.md`.
+- N (PENDING): KE-14 — Relationship / Role / Qualifier editing for
   contributor, publisher, citation, part-whole, series, edition, and volume
   facts.
-- N (PENDING): KE-14 — Authority resolution merge/split workflow for Person,
+- O (PENDING): KE-15 — Authority resolution merge/split workflow for Person,
   Organization, Work, Edition, Series, Volume, and book publication candidates.
-- O (PENDING): KE-15 — Multi-volume / book-set import workflow using Job-based
+- P (PENDING): KE-16 — Multi-volume / book-set import workflow using Job-based
   import units.
-- P (PENDING): KE-16 — Usability smoke and Phase 27 closure.
+- Q (PENDING): KE-17 — Usability smoke and Phase 27 closure.
 
 Resume hint:
 
-- Start from KE-12. Do not reopen Phase 26 KI items unless fixing a regression.
+- Start from KE-13. Do not reopen Phase 26 KI items unless fixing a regression.
 
 Next development candidate after Phase 27:
 
@@ -123,11 +133,12 @@ Next development candidate after Phase 27:
 - [x] KE-10: Information runtime cleanup, v1 Information tags, and
       TagComponent app-facing TagSpace screen integration.
 - [x] KE-11: Person and Organization knowledge support.
-- [ ] KE-12: Work / Edition / Series / Volume book structure expansion.
-- [ ] KE-13: Relationship / Role / Qualifier editing.
-- [ ] KE-14: Authority resolution merge/split workflow.
-- [ ] KE-15: Multi-volume / book-set import workflow.
-- [ ] KE-16: Usability smoke and Phase 27 closure.
+- [x] KE-12: Person and Organization editor screens.
+- [ ] KE-13: Work / Edition / Series / Volume book structure expansion.
+- [ ] KE-14: Relationship / Role / Qualifier editing.
+- [ ] KE-15: Authority resolution merge/split workflow.
+- [ ] KE-16: Multi-volume / book-set import workflow.
+- [ ] KE-17: Usability smoke and Phase 27 closure.
 
 Next development candidate after Phase 27:
 

@@ -31,7 +31,7 @@ import io.circe.parser.parse
 
 /*
  * @since   May. 18, 2026
- * @version May. 27, 2026
+ * @version May. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 trait StaticFormAppRendererTemplatePart {
@@ -1168,7 +1168,11 @@ trait StaticFormAppRendererTemplatePart {
     val source = attrs.getOrElse("source", "result.body")
     val columns = table_columns(attrs.get("columns")).orElse(table_columns(source, attrs, tableColumns, defaultTableView))
     source_json(source, properties).flatMap(record_json).flatMap(_.asObject).map { obj =>
-      record_card_html(obj.toMap, columns, attrs)
+      val map = obj.toMap
+      if (map.isEmpty)
+        empty_state(attrs.getOrElse("empty", "No record"))
+      else
+        record_card_html(map, columns, attrs)
     }.getOrElse(empty_state(attrs.getOrElse("empty", "No record")))
   }
 

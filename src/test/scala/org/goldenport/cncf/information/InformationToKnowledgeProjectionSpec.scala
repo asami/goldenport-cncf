@@ -1,14 +1,14 @@
 package org.goldenport.cncf.information
 
 import org.goldenport.Consequence
-import org.goldenport.cncf.knowledge.{ExternalKnowledgeIdentifier, KnowledgeNodeId, KnowledgeTagBinding, KnowledgeWorkingSet, RdfNodeName}
+import org.goldenport.cncf.knowledge.{ExternalKnowledgeIdentifier, KnowledgeNodeId, KnowledgeRelationshipKind, KnowledgeTagBinding, KnowledgeWorkingSet, RdfNodeName}
 import org.goldenport.record.Record
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   May. 20, 2026
- * @version May. 27, 2026
+ * @version May. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final class InformationToKnowledgeProjectionSpec
@@ -99,6 +99,40 @@ final class InformationToKnowledgeProjectionSpec
       relationshipkinds should contain allOf ("authored-by", "published-by")
       snapshot.frames.headOption.map(_.nodeIds.size) shouldBe Some(3)
       snapshot.frames.headOption.map(_.relationshipIds.size) shouldBe Some(2)
+    }
+
+    "materialize book classification entries as concept nodes and relationships" in {
+      val space = new InformationSpace
+      val entries = Vector(
+        "entryKey=ndc-913-36; kind=library; system=ndc; code=913.36; label=NDC 913.36; rdfUri=test:classification/ndc/913.36; source=manual; evidence=reviewed NDC%3B source%3Dmanual; state=stable; primary=true",
+        "entryKey=subject-genji; kind=subject; system=openlibrary; label=Genji; source=subjects; evidence=subjects=Genji; state=stable",
+        "entryKey=genre-classic; kind=genre; system=local; label=Classic; source=manual; state=editing",
+        "entryKey=domain-japanese-literature; kind=knowledge-domain; system=wikidata; rdfUri=https://www.wikidata.org/entity/Q8274; label=Japanese literature; state=stable"
+      ).mkString("\n")
+      val batch = _success(space.registerInformation("book", Vector(Record.data(
+        "title" -> "The Tale of Genji",
+        "classificationEntries" -> entries
+      ))))
+      val informationid = batch.head.id
+      _success(space.validateInformation(informationid))
+      val information = _success(space.confirmInformation(informationid))
+
+      val snapshot = InformationSpace.materializeInformation(information)
+      val workingset = _success(KnowledgeWorkingSet.load(snapshot))
+      val booknodeid = KnowledgeNodeId(s"information-${information.id.print}")
+      val booknode = workingset.nodeOption(booknodeid).getOrElse(fail("missing book node"))
+      val relationshipkinds = snapshot.relationships.map(_.kind.print).toSet
+      val conceptlabels = snapshot.nodes.filter(_.category.print == "concept").flatMap(_.presentation.defaultLabel).toSet
+
+      relationshipkinds should contain allOf (
+        KnowledgeRelationshipKind.ClassifiedBy.print,
+        "has-subject",
+        "has-knowledge-domain"
+      )
+      relationshipkinds should not contain "has-genre"
+      conceptlabels should contain allOf ("NDC 913.36", "Genji", "Japanese literature")
+      booknode.structure.classifications.primary.map(_.print) should contain ("classification-ndc-913-36")
+      booknode.structure.classifications.additional.map(_.print) should contain ("classification-ndc-913-36")
     }
 
     "use built-in and configured RDF namespace prefixes" in {

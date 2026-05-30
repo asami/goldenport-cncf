@@ -9,7 +9,7 @@ import org.goldenport.record.Record
 
 /*
  * @since   May. 21, 2026
- * @version May. 27, 2026
+ * @version May. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class InformationFieldMappingDescriptor(
@@ -206,6 +206,17 @@ object InformationEditorProfile {
           _mapping("knowledge-node-section", "presentation.labels", BOOK_PROFILE_EXTENSION, "Additional display title.")
         ),
         _field(
+          "originalTitle",
+          "Original title",
+          "Original title before translation, adaptation, or localized edition naming.",
+          Some("源氏物語"),
+          "optional",
+          Some("Keep this separate from edition or localized display titles."),
+          resolverassisted = true,
+          _mapping("knowledge-node-section", "presentation.labels", BOOK_PROFILE_EXTENSION, "Original title label for work/edition interpretation."),
+          _mapping("fact", "information.originalTitle", BOOK_PROFILE_EXTENSION, "Original title fact with source evidence.")
+        ),
+        _field(
           "localizedTitles",
           "Localized titles",
           "Language-tagged titles or translated title variants.",
@@ -248,25 +259,121 @@ object InformationEditorProfile {
           _mapping("relationship", "published-by", BOOK_PROFILE_EXTENSION, "Canonical publisher relationship.")
         ),
         _field(
-          "publicationDate",
-          "Publication date",
-          "Publication or edition date. Preserve precision when only year or month is known.",
-          Some("2003-08-30"),
+          "authorInformationIds",
+          "Author Information IDs",
+          "Line-oriented Person or Organization Information ids selected as author authority targets for this book.",
+          Some("single-global-entity-information-..."),
+          "optional",
+          Some("Use this after creating or selecting Person/Organization Information for author authority control."),
+          resolverassisted = true,
+          _mapping("relationship", "authored-by.targetInformation", BOOK_PROFILE_EXTENSION, "Reference from book Information to author Person/Organization Information."),
+          _mapping("frame", "book.contributor-neighborhood", BOOK_PROFILE_EXTENSION, "Author Information references for 1.5hop+ materialization.")
+        ),
+        _field(
+          "editorInformationIds",
+          "Editor Information IDs",
+          "Line-oriented Person or Organization Information ids selected as editor authority targets for this book.",
+          None,
+          "optional",
+          Some("Use this after creating or selecting Person/Organization Information for editor authority control."),
+          resolverassisted = true,
+          _mapping("relationship", "edited-by.targetInformation", BOOK_PROFILE_EXTENSION, "Reference from book Information to editor Person/Organization Information.")
+        ),
+        _field(
+          "publisherInformationIds",
+          "Publisher Information IDs",
+          "Line-oriented Organization Information ids selected as publisher, imprint, or institution authority targets for this book.",
+          Some("single-global-entity-information-..."),
+          "optional",
+          Some("Publisher associations should normally point to Organization Information."),
+          resolverassisted = true,
+          _mapping("relationship", "published-by.targetInformation", BOOK_PROFILE_EXTENSION, "Reference from book Information to publisher Organization Information.")
+        ),
+        _field(
+          "associationNote",
+          "Association note",
+          "Human curation note for Person/Organization Information associations and unresolved authority ambiguity.",
+          None,
+          "optional",
+          None,
+          resolverassisted = false,
+          _mapping("provenance", "curation.associationNote", COMMON_NEIGHBORHOOD, "Curation note for related Information references.")
+        ),
+        _field(
+          "publicationYear",
+          "Publication year",
+          "Publication or edition year.",
+          Some("2003"),
           "recommended",
           None,
           resolverassisted = true,
           _mapping("knowledge-node-section", "semantics.temporal", COMMON_NEIGHBORHOOD, "Publication temporal value."),
-          _mapping("fact", "publication.date", BOOK_PROFILE_EXTENSION, "Publication fact with evidence.")
+          _mapping("fact", "publication.year", BOOK_PROFILE_EXTENSION, "Publication year fact with evidence.")
+        ),
+        _field(
+          "publicationMonth",
+          "Publication month",
+          "Publication or edition month when source precision includes a month.",
+          Some("08"),
+          "optional",
+          Some("Keep empty when only a year is known."),
+          resolverassisted = true,
+          _mapping("knowledge-node-section", "semantics.temporal", COMMON_NEIGHBORHOOD, "Publication temporal value."),
+          _mapping("fact", "publication.month", BOOK_PROFILE_EXTENSION, "Publication month fact with evidence.")
+        ),
+        _field(
+          "publicationDay",
+          "Publication day",
+          "Publication or edition day when source precision includes a day.",
+          Some("30"),
+          "optional",
+          Some("Keep empty when only a year or month is known."),
+          resolverassisted = true,
+          _mapping("knowledge-node-section", "semantics.temporal", COMMON_NEIGHBORHOOD, "Publication temporal value."),
+          _mapping("fact", "publication.day", BOOK_PROFILE_EXTENSION, "Publication day fact with evidence.")
         ),
         _field(
           "language",
           "Language",
-          "Primary language of the book or edition.",
+          "Primary language of the book or edition. Domain rules may infer this from identifiers when no source provides an explicit value.",
           Some("en"),
           "recommended",
           Some("Affects labels, descriptions, and resolver matching."),
           resolverassisted = true,
           _mapping("knowledge-node-section", "semantics.roles", BOOK_PROFILE_EXTENSION, "Language-related semantic metadata.")
+        ),
+        _field(
+          "edition",
+          "Edition",
+          "Edition label or statement for the concrete published book.",
+          Some("2nd edition"),
+          "optional",
+          Some("Keep edition separate from work title and volume."),
+          resolverassisted = true,
+          _mapping("knowledge-node-section", "structure.work-edition.edition", BOOK_PROFILE_EXTENSION, "Edition value in the work/edition structure."),
+          _mapping("fact", "publication.edition", BOOK_PROFILE_EXTENSION, "Edition fact with source evidence.")
+        ),
+        _field(
+          "volume",
+          "Volume",
+          "Volume number or label within a series or multi-volume work.",
+          Some("3"),
+          "optional",
+          Some("Do not drop numeric suffixes from source titles; review whether they are volume values."),
+          resolverassisted = true,
+          _mapping("knowledge-node-section", "structure.series-volume.volume", BOOK_PROFILE_EXTENSION, "Volume value for series or multi-volume work structure."),
+          _mapping("fact", "publication.volume", BOOK_PROFILE_EXTENSION, "Volume fact with source evidence.")
+        ),
+        _field(
+          "series",
+          "Series",
+          "Series, collection, or edition family that groups related book volumes.",
+          Some("Iwanami Bunko"),
+          "optional",
+          Some("Series should eventually connect to Series/Work/Edition knowledge."),
+          resolverassisted = true,
+          _mapping("relationship", "part-of-series", BOOK_PROFILE_EXTENSION, "Series relationship candidate."),
+          _mapping("frame", "book.series-neighborhood", BOOK_PROFILE_EXTENSION, "Series and volume context in the book frame.")
         ),
         _field(
           "summary",
@@ -299,6 +406,19 @@ object InformationEditorProfile {
           Some("Subjects may become classification nodes."),
           resolverassisted = true,
           _mapping("relationship", "classified-by", COMMON_NEIGHBORHOOD, "Canonical classification relationship."),
+          _mapping("knowledge-node-section", "structure.classifications", COMMON_NEIGHBORHOOD, "Derived classification traversal.")
+        ),
+        _field(
+          "classificationEntries",
+          "Classification entries",
+          "Canonical line-oriented ClassificationEntry list. Each entry is one independent concept link with kind, system, code, label, RDF URI, source, evidence, state, and primary marker.",
+          Some("entryKey=ndc-913-36; kind=library; system=ndc; code=913.36; label=NDC 913.36; rdfUri=test:classification/ndc/913.36; state=stable; primary=true"),
+          "recommended",
+          Some("Legacy scalar classification fields and provider subjects normalize into entries; stable or primary entries materialize as concept KnowledgeNodes."),
+          resolverassisted = true,
+          _mapping("relationship", "classified-by", COMMON_NEIGHBORHOOD, "Library classification relationship from book to concept node."),
+          _mapping("relationship", "has-subject", COMMON_NEIGHBORHOOD, "Subject classification relationship from book to concept node."),
+          _mapping("relationship", "has-genre", COMMON_NEIGHBORHOOD, "Genre classification relationship from book to concept node."),
           _mapping("knowledge-node-section", "structure.classifications", COMMON_NEIGHBORHOOD, "Derived classification traversal.")
         ),
         _field(

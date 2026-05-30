@@ -16,7 +16,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 
 /*
  * @since   May. 20, 2026
- * @version May. 27, 2026
+ * @version May. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 type InformationId = EntityId
@@ -78,9 +78,11 @@ object InformationConflictState {
 
 type InformationFieldState = value.InformationFieldState
 object InformationFieldState {
+  val Untouched: InformationFieldState = value.InformationFieldState.untouched
+  val Inferred: InformationFieldState = value.InformationFieldState.inferred
   val Imported: InformationFieldState = value.InformationFieldState.imported
   val Editing: InformationFieldState = value.InformationFieldState.editing
-  val Completed: InformationFieldState = value.InformationFieldState.completed
+  val Stable: InformationFieldState = value.InformationFieldState.stable
 }
 
 type InformationImportContext = value.InformationImportContext

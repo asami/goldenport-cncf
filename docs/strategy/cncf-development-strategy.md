@@ -1289,18 +1289,20 @@ Phase 26 completed scope:
 
 Phase 27 active scope:
 
-- KE-01 through KE-11 are done. Current focus is KE-12:
+- KE-01 through KE-12 are done. Current focus is KE-13:
   expand book structure with explicit Work / Edition / Series /
   Volume knowledge, including multi-volume editions such as a nine-volume
-  Iwanami Genji monogatari publication.
-- KE-13 will add relationship / role / qualifier editing so contributor,
+  Iwanami Genji monogatari publication. The working direction is captured in
+  `docs/journal/2026/05/book-knowledge-materialization-genji.md` and
+  `docs/journal/2026/05/rdf-centric-knowledge-expansion.md`.
+- KE-14 will add relationship / role / qualifier editing so contributor,
   publisher, citation, part-whole, series, edition, and volume facts are not
   flattened into untyped fields.
-- KE-14 will add authority resolution merge/split workflow for Person,
+- KE-15 will add authority resolution merge/split workflow for Person,
   Organization, Work, Edition, Series, Volume, and publication candidates.
-- KE-15 will add multi-volume / book-set import workflow using Job-backed
+- KE-16 will add multi-volume / book-set import workflow using Job-backed
   import units.
-- KE-16 will run usability smoke and Phase 27 closure after the expanded book
+- KE-17 will run usability smoke and Phase 27 closure after the expanded book
   structure and publish/materialize feedback are visible for book, paper, and
   web resource editor flows.
 - Book-first domain knowledge editing through `textus-knowledge-editor`, with
@@ -1316,10 +1318,21 @@ Phase 27 active scope:
 - Person and Organization knowledge support is now implemented for
   author/editor/translator/contributor, publisher/imprint, institution, and
   authority-provider roles around book knowledge.
+- Person and Organization editor screens are implemented so those Information
+  domains have the same app-facing editing workflow as book, paper, and web
+  resource domains.
 - Work / Edition / Series / Volume knowledge is now active Phase 27 work for
   edition-aware and multi-volume book structure, rather than flattening
   publications such as Iwanami Genji monogatari volumes into unrelated title
   strings.
+- Genji-oriented book materialization should treat ISBN/openBD data as the
+  physical publication metadata layer only. The broader knowledge neighborhood
+  includes source works, editions, series, volumes, people, organizations,
+  subjects, research/cultural references, and RDF anchors.
+- RDF-centric expansion is the default architecture for large external
+  knowledge: local `KnowledgeSpace` establishes stable semantic anchors and
+  explicit RDF links, while external RDF/Linked Data spaces provide ongoing
+  graph expansion instead of being copied wholesale into local Information.
 - Relationship / Role / Qualifier editing is planned as the connective layer
   for authorship, editor/translator attribution, publisher/imprint links,
   citations, part-whole structure, series membership, edition realization, and

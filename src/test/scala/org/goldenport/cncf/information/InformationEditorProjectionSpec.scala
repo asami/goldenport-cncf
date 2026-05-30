@@ -13,7 +13,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   May. 21, 2026
- * @version May. 27, 2026
+ * @version May. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final class InformationEditorProjectionSpec
@@ -25,6 +25,9 @@ final class InformationEditorProjectionSpec
       val profile = InformationSpaceEditorProjection.profileOption("book").getOrElse(fail("book profile missing"))
 
       val title = _field(profile, "title")
+      val originaltitle = _field(profile, "originalTitle")
+      val volume = _field(profile, "volume")
+      val series = _field(profile, "series")
       val isbn = _field(profile, "isbn13")
       val authors = _field(profile, "authors")
       val subjects = _field(profile, "subjects")
@@ -34,6 +37,14 @@ final class InformationEditorProjectionSpec
       title.label shouldBe "Title"
       title.requiredness shouldBe "required"
       title.mappings.map(_.targetPath) should contain allOf ("presentation.labels", "information.title")
+      originaltitle.label shouldBe "Original title"
+      originaltitle.resolverAssisted shouldBe true
+      originaltitle.mappings.map(_.targetPath) should contain ("information.originalTitle")
+      volume.label shouldBe "Volume"
+      volume.resolverAssisted shouldBe true
+      volume.mappings.map(_.targetPath) should contain ("publication.volume")
+      series.label shouldBe "Series"
+      series.mappings.map(_.targetKind) should contain allOf ("relationship", "frame")
       isbn.resolverAssisted shouldBe true
       isbn.mappings.map(_.targetPath) should contain ("identity.externalIdentifiers")
       authors.mappings.map(_.targetKind) should contain ("relationship")
@@ -83,11 +94,22 @@ final class InformationEditorProjectionSpec
         evidence = Some("title match"),
         note = Some("Imported from resolver.")
       )))
+      _success(component.informationSpace.appendFieldEvent(recordid, InformationFieldEvent(
+        fieldPath = "language",
+        state = InformationFieldState.Inferred,
+        source = "domain-rule",
+        operation = Some("seedBook"),
+        transformation = Some("isbn-language-inference"),
+        valueAfter = Some("en"),
+        evidence = Some("isbn13=9780134685991; isbnGroup=0; language=en"),
+        note = Some("Language inferred from ISBN registration group.")
+      )))
 
       val projection = _success(InformationSpaceEditorProjection.component(component, "book"))
       val record = projection.information.headOption.getOrElse(fail("record projection missing"))
       val dbpedia = record.fields.find(_.descriptor.fieldPath == "dbpediaUri").getOrElse(fail("dbpedia field missing"))
       val title = record.fields.find(_.descriptor.fieldPath == "title").getOrElse(fail("title field missing"))
+      val language = record.fields.find(_.descriptor.fieldPath == "language").getOrElse(fail("language field missing"))
 
       projection.componentName shouldBe component.name
       projection.domain shouldBe "book"
@@ -98,6 +120,8 @@ final class InformationEditorProjectionSpec
       title.status.map(_.state) shouldBe Some(InformationFieldState.Imported)
       title.events.map(_.source) shouldBe Vector("dbpedia")
       title.events.headOption.flatMap(_.transformation) shouldBe Some("label-normalized")
+      language.status.map(_.state) shouldBe Some(InformationFieldState.Inferred)
+      language.events.headOption.flatMap(_.transformation) shouldBe Some("isbn-language-inference")
       dbpedia.resolutionCandidates.map(_.label) shouldBe Vector("Domain-driven design")
     }
 

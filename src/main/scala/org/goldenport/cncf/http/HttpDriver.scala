@@ -12,7 +12,8 @@ import org.slf4j.LoggerFactory
 /*
  * @since   Jan. 11, 2026
  *  version Feb.  7, 2026
- * @version Apr. 29, 2026
+ *  version Apr. 29, 2026
+ * @version May. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 trait HttpDriver {
@@ -26,6 +27,9 @@ trait HttpDriver {
 final class UrlConnectionHttpDriver(
   baseurl: String
 ) extends HttpDriver {
+  private val _connect_timeout_ms = 10000
+  private val _read_timeout_ms = 10000
+
   def get(path: String, headers: Map[String, String] = Map.empty): HttpResponse = {
     val conn = _open_connection(_build_url(path), "GET")
     headers.foreach { case (k, v) => conn.setRequestProperty(k, v) }
@@ -70,6 +74,8 @@ final class UrlConnectionHttpDriver(
   ): HttpURLConnection = {
     val conn = url.openConnection().asInstanceOf[HttpURLConnection]
     conn.setRequestMethod(method)
+    conn.setConnectTimeout(_connect_timeout_ms)
+    conn.setReadTimeout(_read_timeout_ms)
     if (method == "PUT" || method == "POST") {
       conn.setDoOutput(true)
     }

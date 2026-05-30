@@ -40,7 +40,7 @@ import org.goldenport.record.Record
 
 /*
  * @since   May. 20, 2026
- * @version May. 27, 2026
+ * @version May. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final class InformationSpace {
@@ -825,7 +825,30 @@ object InformationToKnowledgeProjection {
     if (information.domain != "book")
       Vector.empty
     else
-      information.resolutionCandidates
+      _book_candidate_support_nodes_and_relationships(information, booknodeid, evidenceid, provenanceid) ++
+        _book_information_association_nodes_and_relationships(information, booknodeid, evidenceid, provenanceid) ++
+        _book_classification_nodes_and_relationships(information, booknodeid, evidenceid, provenanceid)
+
+  private final case class BookClassificationEntry(
+    entryKey: String,
+    kind: String,
+    system: String,
+    code: String,
+    label: String,
+    rdfUri: String,
+    source: String,
+    evidence: String,
+    state: String,
+    primary: Boolean
+  )
+
+  private def _book_candidate_support_nodes_and_relationships(
+    information: Information,
+    booknodeid: KnowledgeNodeId,
+    evidenceid: KnowledgeEvidenceId,
+    provenanceid: KnowledgeProvenanceId
+  ): Vector[(KnowledgeNode, KnowledgeRelationship)] =
+    information.resolutionCandidates
         .filter(_.selected)
         .filter(candidate => Set("authors", "editors", "publisher").contains(candidate.fieldPath))
         .zipWithIndex
@@ -868,6 +891,214 @@ object InformationToKnowledgeProjection {
           )
           node -> relation
         }
+
+  private def _book_information_association_nodes_and_relationships(
+    information: Information,
+    booknodeid: KnowledgeNodeId,
+    evidenceid: KnowledgeEvidenceId,
+    provenanceid: KnowledgeProvenanceId
+  ): Vector[(KnowledgeNode, KnowledgeRelationship)] =
+    Vector(
+      ("authorInformationIds", "person", "authored-by"),
+      ("editorInformationIds", "person", "edited-by"),
+      ("publisherInformationIds", "organization", "published-by")
+    ).flatMap { case (fieldpath, domain, relationship) =>
+      _line_values(information.data.getString(fieldpath).getOrElse("")).zipWithIndex.map { case (targetinformationid, index) =>
+        val suffix = _safe_key(targetinformationid, index)
+        val targetnodeid = KnowledgeNodeId(s"information-${information.id.print}-${domain}-information-$suffix")
+        val node = KnowledgeNode(
+          id = targetnodeid,
+          category = KnowledgeNodeCategory(domain),
+          presentation = KnowledgeNodePresentation.label(targetinformationid),
+          sources = KnowledgeNodeSources(
+            evidenceIds = Vector(evidenceid),
+            provenanceIds = Vector(provenanceid)
+          ),
+          attributes = KnowledgeAttributes(
+            "information_domain" -> domain,
+            "source_information_id" -> information.id.print,
+            "target_information_id" -> targetinformationid,
+            "source_field" -> fieldpath
+          )
+        )
+        val relation = KnowledgeRelationship(
+          id = KnowledgeRelationshipId(s"rel-${information.id.print}-${relationship}-information-$suffix"),
+          kind = KnowledgeRelationshipKind(relationship),
+          sourceNodeId = booknodeid,
+          targetNodeId = targetnodeid,
+          rdfPredicate = Some(RdfPredicateName(relationship)),
+          evidenceIds = Vector(evidenceid),
+          provenanceId = Some(provenanceid),
+          attributes = KnowledgeAttributes(
+            "source_field" -> fieldpath,
+            "target_information_id" -> targetinformationid
+          )
+        )
+        node -> relation
+      }
+    }
+
+  private def _line_values(value: String): Vector[String] =
+    value.linesIterator.toVector.map(_.trim).filter(_.nonEmpty).distinct
+
+  private def _book_classification_nodes_and_relationships(
+    information: Information,
+    booknodeid: KnowledgeNodeId,
+    evidenceid: KnowledgeEvidenceId,
+    provenanceid: KnowledgeProvenanceId
+  ): Vector[(KnowledgeNode, KnowledgeRelationship)] =
+    _book_classification_entries(information).filter(entry =>
+      entry.primary || entry.state == "stable"
+    ).zipWithIndex.map { case (entry, index) =>
+      val relationship = _classification_relationship(entry.kind)
+      val suffix = _safe_key(Vector(entry.code, entry.rdfUri, entry.label, entry.entryKey).find(_.nonEmpty).getOrElse(entry.kind), index)
+      val nodeid = KnowledgeNodeId(s"classification-${entry.system}-$suffix")
+      val identifiers =
+        Vector(
+          Option.when(entry.code.nonEmpty)(ExternalKnowledgeIdentifier(entry.system, entry.code, Some(entry.kind))),
+          Option.when(entry.rdfUri.nonEmpty)(ExternalKnowledgeIdentifier("rdf", entry.rdfUri, Some("classification")))
+        ).flatten
+      val node = KnowledgeNode(
+        id = nodeid,
+        category = KnowledgeNodeCategory.Concept,
+        identity = KnowledgeNodeIdentity(
+          rdfNode = Option.when(entry.rdfUri.nonEmpty)(RdfNodeName(entry.rdfUri)),
+          externalIdentifiers = identifiers
+        ),
+        presentation = KnowledgeNodePresentation.label(entry.label),
+        sources = KnowledgeNodeSources(
+          evidenceIds = Vector(evidenceid),
+          provenanceIds = Vector(provenanceid)
+        ),
+        attributes = KnowledgeAttributes(
+          "classification_entry_key" -> entry.entryKey,
+          "classification_kind" -> entry.kind,
+          "classification_system" -> entry.system,
+          "classification_code" -> entry.code,
+          "classification_source" -> entry.source,
+          "classification_evidence" -> entry.evidence
+        )
+      )
+      val relation = KnowledgeRelationship(
+        id = KnowledgeRelationshipId(s"rel-${information.id.print}-${relationship}-${suffix}"),
+        kind = KnowledgeRelationshipKind(relationship),
+        sourceNodeId = booknodeid,
+        targetNodeId = nodeid,
+        rdfPredicate = Some(RdfPredicateName(relationship)),
+        evidenceIds = Vector(evidenceid),
+        provenanceId = Some(provenanceid),
+        attributes = KnowledgeAttributes(
+          "classification_entry_key" -> entry.entryKey,
+          "classification_kind" -> entry.kind,
+          "classification_system" -> entry.system,
+          "classification_code" -> entry.code,
+          "classification_source" -> entry.source
+        )
+      )
+      node -> relation
+    }
+
+  private def _book_classification_entries(information: Information): Vector[BookClassificationEntry] =
+    information.data.getString("classificationEntries").toVector.flatMap { value =>
+      value.linesIterator.toVector.flatMap(_book_classification_entry)
+    }
+
+  private def _book_classification_entry(line: String): Option[BookClassificationEntry] = {
+    val fields = line.split(";").toVector.map(_.trim).filter(_.nonEmpty).flatMap { segment =>
+      segment.indexOf("=") match {
+        case -1 => None
+        case index => Some(segment.take(index).trim -> _classification_value_decode(segment.drop(index + 1).trim))
+      }
+    }.toMap
+    val kind = _classification_kind(fields.getOrElse("kind", "subject"))
+    val system = _classification_system(fields.getOrElse("system", "local"))
+    val code = fields.getOrElse("code", "").trim
+    val label = fields.getOrElse("label", "").trim match {
+      case "" if system == "ndc" && code.nonEmpty => s"NDC $code"
+      case "" => code
+      case x => x
+    }
+    val rdfuri = fields.get("rdfUri").orElse(fields.get("rdfURI")).orElse(fields.get("rdf")).map(_.trim).getOrElse("")
+    val entrykey = fields.getOrElse("entryKey", _safe_key(Vector(system, code, label, rdfuri).find(_.nonEmpty).getOrElse(kind), 0)).trim
+    if (entrykey.isEmpty || (code.isEmpty && label.isEmpty && rdfuri.isEmpty))
+      None
+    else
+      Some(BookClassificationEntry(
+        entryKey = entrykey,
+        kind = kind,
+        system = system,
+        code = code,
+        label = label,
+        rdfUri = rdfuri,
+        source = fields.getOrElse("source", "").trim,
+        evidence = fields.getOrElse("evidence", "").trim,
+        state = fields.getOrElse("state", "editing").trim.toLowerCase,
+        primary = fields.get("primary").exists(value => value == "true" || value == "on" || value == "1")
+      ))
+  }
+
+  private def _classification_value_decode(value: String): String = {
+    val builder = new StringBuilder
+    var i = 0
+    while (i < value.length) {
+      if (value.charAt(i) == '%' && i + 2 < value.length) {
+        value.substring(i + 1, i + 3).toLowerCase(java.util.Locale.ROOT) match {
+          case "25" =>
+            builder.append('%')
+            i += 3
+          case "3b" =>
+            builder.append(';')
+            i += 3
+          case "3d" =>
+            builder.append('=')
+            i += 3
+          case "0a" =>
+            builder.append('\n')
+            i += 3
+          case "0d" =>
+            builder.append('\r')
+            i += 3
+          case _ =>
+            builder.append(value.charAt(i))
+            i += 1
+        }
+      } else {
+        builder.append(value.charAt(i))
+        i += 1
+      }
+    }
+    builder.toString
+  }
+
+  private def _classification_kind(value: String): String =
+    value.trim.toLowerCase.replace("_", "-") match {
+      case "library" => "library"
+      case "subject" => "subject"
+      case "genre" => "genre"
+      case "commercial" => "commercial"
+      case "knowledge-domain" | "knowledgedomain" | "domain" => "knowledge-domain"
+      case _ => "subject"
+    }
+
+  private def _classification_system(value: String): String =
+    value.trim.toLowerCase.replace(" ", "").replace("_", "-") match {
+      case "open-library" => "openlibrary"
+      case "nippondecimalclassification" => "ndc"
+      case "deweydecimalclassification" => "ddc"
+      case "libraryofcongressclassification" => "lcc"
+      case "libraryofcongresssubjectheadings" => "lcsh"
+      case x if Set("ndc", "ddc", "lcc", "lcsh", "fast", "bisac", "wikidata", "dbpedia", "openlibrary", "local").contains(x) => x
+      case _ => "local"
+    }
+
+  private def _classification_relationship(kind: String): String =
+    kind match {
+      case "library" => KnowledgeRelationshipKind.ClassifiedBy.print
+      case "genre" => "has-genre"
+      case "commercial" => "has-commercial-category"
+      case "knowledge-domain" => "has-knowledge-domain"
+      case _ => "has-subject"
+    }
 
   private def _candidate_domain(candidate: InformationResolutionCandidate): String = {
     val kinds = candidate.binding.externalIdentifiers.flatMap(_.kind).map(_.toLowerCase)
