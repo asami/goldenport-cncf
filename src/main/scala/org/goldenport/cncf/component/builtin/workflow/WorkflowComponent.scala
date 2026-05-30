@@ -16,7 +16,7 @@ import org.goldenport.value.BaseContent
 
 /*
  * @since   Apr. 22, 2026
- * @version Apr. 22, 2026
+ * @version May. 31, 2026
  * @author  ASAMI, Tomoharu
  */
 final class WorkflowComponent() extends Component {
@@ -201,7 +201,7 @@ object WorkflowComponent {
 
   private abstract class SyncWorkflowAction extends CommandAction {
     override def commandExecutionMode: org.goldenport.cncf.action.CommandExecutionMode =
-      org.goldenport.cncf.action.CommandExecutionMode.SyncDirectNoJob
+      org.goldenport.cncf.action.CommandExecutionMode.Sync
   }
 
   private final case class ListWorkflowDefinitionsCall(core: ActionCall.Core) extends ProcedureActionCall {

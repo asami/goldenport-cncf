@@ -13,7 +13,7 @@ import org.goldenport.cncf.operation.{AssociationBindingOperationDefinition, Chi
 
 /*
  * @since   Mar.  5, 2026
- * @version May.  8, 2026
+ * @version May. 31, 2026
  * @author  ASAMI, Tomoharu
  */
 private[projection] object MetaProjectionSupport {
@@ -402,7 +402,7 @@ private[projection] object MetaProjectionSupport {
           commandKind = x.commandKind,
           commandExecutionProperties = x.commandExecutionProperties,
           commandExecutionPolicy = x.commandExecutionPolicyRecord,
-          effectiveCommandExecutionMode = x.effectiveCommandExecutionPolicy.legacyModeLabel,
+          effectiveCommandExecutionMode = x.effectiveCommandExecutionPolicy.modeLabel,
           commandExecutionPolicySource = x.commandExecutionPolicy
             .map(_ => "typed-policy")
             .orElse(x.execution.map(_ => "legacy-execution"))

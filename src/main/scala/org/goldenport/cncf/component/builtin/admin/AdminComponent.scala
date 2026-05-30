@@ -53,7 +53,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
  * @since   Jan.  7, 2026
  *  version Jan. 20, 2026
  *  version Feb. 19, 2026
- * @version May.  5, 2026
+ * @version May. 31, 2026
  * @author  ASAMI, Tomoharu
  */
 class AdminComponent() extends Component {
@@ -884,7 +884,7 @@ object AdminComponent {
   ) extends ProcedureActionCall {
     def execute(): Consequence[OperationResponse] = {
       val comps = subsystem.components
-      val text = _component_lines_(comps, "Components")
+      val text = _component_lines(comps, "Components")
       Consequence.success(OperationResponse.Scalar(text))
     }
   }
@@ -904,7 +904,7 @@ object AdminComponent {
     subsystem: Subsystem
   ) extends ProcedureActionCall {
     def execute(): Consequence[OperationResponse] = {
-      _config_snapshot_().map { text =>
+      _config_snapshot().map { text =>
         OperationResponse.Scalar(text)
       }
     }
@@ -915,7 +915,7 @@ object AdminComponent {
     subsystem: Subsystem
   ) extends CommandAction() {
     override def commandExecutionMode: CommandExecutionMode =
-      CommandExecutionMode.SyncDirectNoJob
+      CommandExecutionMode.Sync
 
     def createCall(core: ActionCall.Core): ActionCall =
       EntityCreateActionCall(core, subsystem)
@@ -926,7 +926,7 @@ object AdminComponent {
     subsystem: Subsystem
   ) extends CommandAction() {
     override def commandExecutionMode: CommandExecutionMode =
-      CommandExecutionMode.SyncDirectNoJob
+      CommandExecutionMode.Sync
 
     def createCall(core: ActionCall.Core): ActionCall =
       EntityUpdateActionCall(core, subsystem)
@@ -985,7 +985,7 @@ object AdminComponent {
     subsystem: Subsystem
   ) extends CommandAction() {
     override def commandExecutionMode: CommandExecutionMode =
-      CommandExecutionMode.SyncDirectNoJob
+      CommandExecutionMode.Sync
 
     def createCall(core: ActionCall.Core): ActionCall =
       DataCreateActionCall(core, subsystem)
@@ -996,7 +996,7 @@ object AdminComponent {
     subsystem: Subsystem
   ) extends CommandAction() {
     override def commandExecutionMode: CommandExecutionMode =
-      CommandExecutionMode.SyncDirectNoJob
+      CommandExecutionMode.Sync
 
     def createCall(core: ActionCall.Core): ActionCall =
       DataUpdateActionCall(core, subsystem)
@@ -1047,7 +1047,7 @@ object AdminComponent {
     subsystem: Subsystem
   ) extends CommandAction() {
     override def commandExecutionMode: CommandExecutionMode =
-      CommandExecutionMode.SyncDirectNoJob
+      CommandExecutionMode.Sync
 
     def createCall(core: ActionCall.Core): ActionCall =
       AssociationAttachActionCall(core, subsystem)
@@ -1058,7 +1058,7 @@ object AdminComponent {
     subsystem: Subsystem
   ) extends CommandAction() {
     override def commandExecutionMode: CommandExecutionMode =
-      CommandExecutionMode.SyncDirectNoJob
+      CommandExecutionMode.Sync
 
     def createCall(core: ActionCall.Core): ActionCall =
       AssociationDetachActionCall(core, subsystem)
@@ -1243,7 +1243,7 @@ object AdminComponent {
         GlobalRuntimeContext.current
           .map(_.assemblyReport.toRecord)
           .getOrElse(subsystem.globalRuntimeContext.assemblyReport.toRecord)
-      val wiring = _subsystem_wiring_(subsystem)
+      val wiring = _subsystem_wiring(subsystem)
       val ports = subsystem.descriptor.map(_.declaredPorts).getOrElse(Vector.empty)
       val wiringBindings = subsystem.descriptor.map(_.resolvedWiringBindings).getOrElse(Vector.empty)
       val components = org.goldenport.record.Record.data(
@@ -1278,21 +1278,21 @@ object AdminComponent {
       val components = subsystem.components.toVector
       val descriptorComponents = components.filterNot(_.origin == ComponentOrigin.Builtin)
       val builtinComponents = components.filter(_.origin == ComponentOrigin.Builtin)
-      val sourceWiring = _subsystem_wiring_(subsystem)
-      val resolvedWiring = subsystem.descriptor.map(_.resolvedWiringBindings).getOrElse(Vector.empty)
+      val sourcewiring = _subsystem_wiring(subsystem)
+      val resolvedwiring = subsystem.descriptor.map(_.resolvedWiringBindings).getOrElse(Vector.empty)
       val descriptor = org.goldenport.record.Record.data(
         "kind" -> "assembly-descriptor",
         "subsystem" -> subsystem.name,
         "version" -> subsystem.version.getOrElse(""),
-        "components" -> descriptorComponents.map(_assembly_component_record_),
+        "components" -> descriptorComponents.map(_assembly_component_record),
         "ports" -> subsystem.descriptor.map(_.declaredPorts).getOrElse(Vector.empty),
-        "wiring" -> resolvedWiring,
+        "wiring" -> resolvedwiring,
         "source" -> org.goldenport.record.Record.data(
-          "wiring" -> sourceWiring,
-          "assembly_descriptor" -> subsystem.descriptor.flatMap(_.assemblyDescriptor).map(_assembly_descriptor_source_record_).getOrElse(Record.empty)
+          "wiring" -> sourcewiring,
+          "assembly_descriptor" -> subsystem.descriptor.flatMap(_.assemblyDescriptor).map(_assembly_descriptor_source_record).getOrElse(Record.empty)
         ),
         "runtime" -> org.goldenport.record.Record.data(
-          "builtin_components" -> builtinComponents.map(_assembly_component_record_)
+          "builtin_components" -> builtinComponents.map(_assembly_component_record)
         ),
         "diagnostics" -> org.goldenport.record.Record.data(
           "warnings" -> warnings
@@ -1307,7 +1307,7 @@ object AdminComponent {
     subsystem: Subsystem
   ) extends ProcedureActionCall {
     def execute(): Consequence[OperationResponse] =
-      Consequence.success(OperationResponse.Scalar(_assembly_mermaid_(subsystem)))
+      Consequence.success(OperationResponse.Scalar(_assembly_mermaid(subsystem)))
   }
 
   private final case class ExecutionCalltreeActionCall(
@@ -1331,15 +1331,15 @@ object AdminComponent {
     historyRequest: Request
   ) extends ProcedureActionCall {
     def execute(): Consequence[OperationResponse] = {
-      val operationFilter = _request_property_(historyRequest, "operation")
-        .orElse(_request_property_(historyRequest, "operation_contains"))
-      val entries = ObservabilityEngine.executionHistory(operationFilter)
+      val operationfilter = _request_property(historyRequest, "operation")
+        .orElse(_request_property(historyRequest, "operation_contains"))
+      val entries = ObservabilityEngine.executionHistory(operationfilter)
       val config = ObservabilityEngine.executionHistoryConfig
       val record = Record.data(
         "recent_limit" -> config.recentLimit,
         "filtered_limit" -> config.filteredLimit,
         "filter_count" -> config.filters.size,
-        "operation_filter" -> operationFilter.getOrElse(""),
+        "operation_filter" -> operationfilter.getOrElse(""),
         "count" -> entries.size,
         "executions" -> entries.map(_.toRecord)
       )
@@ -1351,13 +1351,13 @@ object AdminComponent {
     core: ActionCall.Core
   ) extends ProcedureActionCall {
     def execute(): Consequence[OperationResponse] =
-      Consequence.success(OperationResponse.RecordResponse(_execution_diagnostics_record_()))
+      Consequence.success(OperationResponse.RecordResponse(_execution_diagnostics_record()))
   }
 
-  private def _request_property_(request: Request, name: String): Option[String] =
+  private def _request_property(request: Request, name: String): Option[String] =
     request.properties.find(_.name == name).map(_.value.toString).filter(_.nonEmpty)
 
-  private def _execution_diagnostics_record_(): Record =
+  private def _execution_diagnostics_record(): Record =
     Record.data(
       "kind" -> "phase-13-execution-diagnostics",
       "summary" -> "Use workflow surfaces for workflow definitions and instances; use event surfaces for queued dispatch contract and persisted event metadata; use job surfaces for final child-job lineage and async failure disposition.",
@@ -1495,13 +1495,13 @@ object AdminComponent {
       )
     )
 
-  private def _assembly_component_record_(comp: Component): Record =
+  private def _assembly_component_record(comp: Component): Record =
     org.goldenport.record.Record.data(
       "name" -> comp.name,
       "origin" -> ComponentOriginLabel.userLabel(comp.origin.label)
     )
 
-  private def _assembly_descriptor_source_record_(rec: Record): Record =
+  private def _assembly_descriptor_source_record(rec: Record): Record =
     org.goldenport.record.Record.data(
       "present" -> true,
       "kind" -> rec.getString("kind").getOrElse(""),
@@ -1509,7 +1509,7 @@ object AdminComponent {
       "version" -> rec.getString("version").getOrElse("")
     )
 
-  private def _assembly_descriptor_source_record_(
+  private def _assembly_descriptor_source_record(
     src: GenericSubsystemAssemblyDescriptorSource
   ): Record =
     org.goldenport.record.Record.data(
@@ -1521,38 +1521,38 @@ object AdminComponent {
       "version" -> src.record.getString("version").getOrElse("")
     )
 
-  private def _assembly_mermaid_(subsystem: Subsystem): String = {
+  private def _assembly_mermaid(subsystem: Subsystem): String = {
     val components = subsystem.components.toVector
     val appComponents = components.filterNot(_.origin == ComponentOrigin.Builtin)
     val builtinComponents = components.filter(_.origin == ComponentOrigin.Builtin)
     val bindings = subsystem.descriptor.map(_.resolvedWiring).getOrElse(Vector.empty)
     val lines = scala.collection.mutable.ArrayBuffer[String]()
     lines += "flowchart LR"
-    lines += s"  subgraph ${_mermaid_id_(subsystem.name)}[\"${_mermaid_label_(subsystem.name)}\"]"
+    lines += s"  subgraph ${_mermaid_id(subsystem.name)}[\"${_mermaid_label(subsystem.name)}\"]"
     appComponents.foreach { comp =>
-      lines += s"    ${_mermaid_id_(comp.name)}[\"${_mermaid_label_(comp.name)}\"]"
+      lines += s"    ${_mermaid_id(comp.name)}[\"${_mermaid_label(comp.name)}\"]"
     }
     if (builtinComponents.nonEmpty) {
       lines += "    subgraph runtime_builtins[\"runtime builtins\"]"
       builtinComponents.foreach { comp =>
-        lines += s"      ${_mermaid_id_(s"builtin_${comp.name}")}[[\"${_mermaid_label_(comp.name)}\"]]"
+        lines += s"      ${_mermaid_id(s"builtin_${comp.name}")}[[\"${_mermaid_label(comp.name)}\"]]"
       }
       lines += "    end"
     }
     bindings.foreach { binding =>
-      val from = _mermaid_id_(binding.fromComponent)
-      val to = _mermaid_id_(binding.toComponent)
+      val from = _mermaid_id(binding.fromComponent)
+      val to = _mermaid_id(binding.toComponent)
       val api = binding.fromApi.filter(_.nonEmpty).getOrElse(binding.fromOperation)
       val spi = binding.toSpi.filter(_.nonEmpty).getOrElse(binding.toOperation)
       val glue = if (binding.glue.isEmpty) "" else " / glue"
       val label = s"${api} -> ${spi}${glue}"
-      lines += s"    ${from} -->|\"${_mermaid_label_(label)}\"| ${to}"
+      lines += s"    ${from} -->|\"${_mermaid_label(label)}\"| ${to}"
     }
     lines += "  end"
     lines.mkString("\n")
   }
 
-  private def _mermaid_id_(name: String): String =
+  private def _mermaid_id(name: String): String =
     name.map {
       case c if c.isLetterOrDigit => c
       case _ => '_'
@@ -1562,18 +1562,18 @@ object AdminComponent {
       case s => s
     }
 
-  private def _mermaid_label_(name: String): String =
+  private def _mermaid_label(name: String): String =
     name.replace("\\", "\\\\").replace("\"", "\\\"")
 
-  private def _subsystem_wiring_(subsystem: Subsystem): Record =
+  private def _subsystem_wiring(subsystem: Subsystem): Record =
     subsystem.descriptor.map(_.wiring).filterNot(_.isEmpty).getOrElse {
       subsystem.descriptor.flatMap { descriptor =>
-        _load_descriptor_record_(descriptor.path).map(_wiring_from_record_).filterNot(_.isEmpty)
-          .orElse(_load_wiring_from_text_(descriptor.path))
+        _load_descriptor_record(descriptor.path).map(_wiring_from_record).filterNot(_.isEmpty)
+          .orElse(_load_wiring_from_text(descriptor.path))
       }.getOrElse(Record.empty)
     }
 
-  private def _load_descriptor_record_(path: java.nio.file.Path): Option[Record] = {
+  private def _load_descriptor_record(path: java.nio.file.Path): Option[Record] = {
     val name = path.getFileName.toString.toLowerCase
     if (name.endsWith(".sar") || name.endsWith(".zip")) {
       val uri = URI.create(s"jar:${path.toUri}")
@@ -1595,7 +1595,7 @@ object AdminComponent {
     }
   }
 
-  private def _wiring_from_record_(rec: Record): Record =
+  private def _wiring_from_record(rec: Record): Record =
     rec.getRecord("wiring").orElse {
       val entries = rec.asMap.iterator.collect {
         case (k, v) if k.startsWith("wiring/") =>
@@ -1606,7 +1606,7 @@ object AdminComponent {
       if (entries.isEmpty) None else Some(Record.create(entries))
     }.getOrElse(Record.empty)
 
-  private def _load_wiring_from_text_(path: java.nio.file.Path): Option[Record] = {
+  private def _load_wiring_from_text(path: java.nio.file.Path): Option[Record] = {
     def parse(text: String): Option[Record] = {
       val entries = text.linesIterator.flatMap { line =>
         val trimmed = line.trim
@@ -1665,8 +1665,8 @@ object AdminComponent {
     subsystem: Subsystem
   ) extends ProcedureActionCall {
     def execute(): Consequence[OperationResponse] = {
-      _config_snapshot_().map { text =>
-        OperationResponse.Scalar(_variation_lines_(text))
+      _config_snapshot().map { text =>
+        OperationResponse.Scalar(_variation_lines(text))
       }
     }
   }
@@ -1677,7 +1677,7 @@ object AdminComponent {
   ) extends ProcedureActionCall {
     def execute(): Consequence[OperationResponse] = {
       val key = describeRequest.arguments.headOption.map(_.printValue)
-        .orElse(_request_property_(describeRequest, "key"))
+        .orElse(_request_property(describeRequest, "key"))
         .getOrElse("")
       _declared_runtime_variation_points.find(_.key == key) match {
         case Some(point) =>
@@ -1714,16 +1714,16 @@ object AdminComponent {
 
     def execute(): Consequence[OperationResponse] = {
       val comps = subsystem.components
-      val text = _extension_lines_(comps)
+      val text = _extension_lines(comps)
       Consequence.success(OperationResponse.Scalar(text))
     }
   }
 
-  private def _component_origin_(comp: Component): String = {
+  private def _component_origin(comp: Component): String = {
     ComponentOriginLabel.userLabel(comp.origin.label)
   }
 
-  private def _component_lines_(
+  private def _component_lines(
     comps: Seq[Component],
     header: String
   ): String = {
@@ -1731,7 +1731,7 @@ object AdminComponent {
     lines += s"${header} (total: ${comps.size})"
     lines += ""
     comps.foreach { comp =>
-      val origin = _component_origin_(comp)
+      val origin = _component_origin(comp)
       lines += s"- ${comp.name}"
       lines += s"  class : ${comp.getClass.getName}"
       lines += s"  origin: ${origin}"
@@ -1740,17 +1740,17 @@ object AdminComponent {
     lines.result().mkString("\n").trim
   }
 
-  private def _config_snapshot_(): Consequence[String] = {
+  private def _config_snapshot(): Consequence[String] = {
     val cwd = Paths.get("").toAbsolutePath.normalize
-    val sources = _standard_configuration_sources_(cwd)
+    val sources = _standard_configuration_sources(cwd)
     ConfigurationResolver.default.resolve(sources).map { resolved =>
       val lines = Vector.newBuilder[String]
       lines += "Config Snapshot"
       lines += ""
       resolved.configuration.values.toVector.sortBy(_._1).foreach {
         case (key, value) =>
-          val source = resolved.trace.get(key).map(r => _origin_(r.origin)).getOrElse("unknown")
-          lines += s"${key} = ${_value_(value)}"
+          val source = resolved.trace.get(key).map(r => _origin(r.origin)).getOrElse("unknown")
+          lines += s"${key} = ${_value(value)}"
           lines += s"  source: ${source}"
           lines += ""
       }
@@ -1758,13 +1758,13 @@ object AdminComponent {
     }
   }
 
-  private def _standard_configuration_sources_(cwd: java.nio.file.Path): ConfigurationSources = {
+  private def _standard_configuration_sources(cwd: java.nio.file.Path): ConfigurationSources = {
     val compatibility = ConfigurationSources.standard(cwd, applicationname = "cncf")
     val primary = ConfigurationSources.standard(cwd, applicationname = "textus")
     ConfigurationSources(compatibility.sources ++ primary.sources)
   }
 
-  private def _variation_lines_(
+  private def _variation_lines(
     configSnapshot: String
   ): String = {
     val lines = Vector.newBuilder[String]
@@ -1838,14 +1838,14 @@ object AdminComponent {
       )
   }
 
-  private def _extension_lines_(
+  private def _extension_lines(
     comps: Seq[Component]
   ): String = {
     val lines = Vector.newBuilder[String]
     lines += "Extension Points"
     lines += ""
     comps.foreach { comp =>
-      val origin = _component_origin_(comp)
+      val origin = _component_origin(comp)
       lines += s"- component: ${comp.name}"
       lines += s"  class : ${comp.getClass.getName}"
       lines += s"  origin: ${origin}"
@@ -3276,19 +3276,19 @@ object AdminComponent {
   ): Boolean =
     conclusion.observation.taxonomy.symptom == org.goldenport.observation.Taxonomy.Symptom.NotImplemented
 
-  private def _value_(value: ConfigurationValue): String = {
+  private def _value(value: ConfigurationValue): String = {
     value match {
       case ConfigurationValue.StringValue(v) => v
       case ConfigurationValue.NumberValue(v) => v.toString
       case ConfigurationValue.BooleanValue(v) => v.toString
-      case ConfigurationValue.ListValue(vs) => vs.map(_value_).mkString("[", ", ", "]")
+      case ConfigurationValue.ListValue(vs) => vs.map(_value).mkString("[", ", ", "]")
       case ConfigurationValue.ObjectValue(vs) =>
-        vs.map { case (k, v) => s"${k}=${_value_(v)}" }.mkString("{", ", ", "}")
+        vs.map { case (k, v) => s"${k}=${_value(v)}" }.mkString("{", ", ", "}")
       case ConfigurationValue.NullValue => "null"
     }
   }
 
-  private def _origin_(origin: ConfigurationOrigin): String = {
+  private def _origin(origin: ConfigurationOrigin): String = {
     origin match {
       case ConfigurationOrigin.Arguments => "cli"
       case ConfigurationOrigin.Environment => "env"

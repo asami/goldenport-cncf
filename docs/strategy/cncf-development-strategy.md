@@ -993,7 +993,8 @@ Completed in Phase 22.
 - Closed checklist: `docs/phase/phase-22-checklist.md`
 - Completed scope:
   - Command execution policy normalization around explicit interface timing,
-    Job run timing, and managed-by-Job policy, with synchronous direct/no-Job
+    Job run timing, managed-by-Job policy, and canonical `Sync`, `JobSync`,
+    `JobAsync`, and `JobSyncWithAsyncCont` modes, with synchronous direct/no-Job
     as the ordinary default.
   - Job SimpleEntity management as a CNCF `entityKind = system` runtime
     management projection synchronized from JobEngine lifecycle snapshots.
@@ -1005,8 +1006,10 @@ Completed in Phase 22.
   - Execution record boundary for lightweight Job Entity records, full
     timeline, Task Execution Tree, task-local calltree, large result body, and
     raw event history.
-  - Task transaction and explicit compensation boundary inside managed Jobs,
-    including recovery-required diagnostics for incomplete cleanup.
+  - Task/transaction semantics inside managed Jobs, including strict default
+    Event same-transaction requirements, explicit relaxation policies,
+    same-Job async continuation Tasks for `JobSyncWithAsyncCont`, and
+    recovery-required diagnostics for incomplete cleanup.
   - User Job notification provider SPI plus Event-based forwarding so JobEngine
     emits lifecycle/recovery events while notification creation remains a
     provider concern.
@@ -1290,7 +1293,7 @@ Phase 26 completed scope:
 Phase 27 active scope:
 
 - KE-01 through KE-12 are done. Current focus is KE-13:
-  expand book structure with explicit Work / Edition / Series /
+  expand book structure with explicit Textual Work / Edition / Series /
   Volume knowledge, including multi-volume editions such as a nine-volume
   Iwanami Genji monogatari publication. The working direction is captured in
   `docs/journal/2026/05/book-knowledge-materialization-genji.md` and
@@ -1321,10 +1324,10 @@ Phase 27 active scope:
 - Person and Organization editor screens are implemented so those Information
   domains have the same app-facing editing workflow as book, paper, and web
   resource domains.
-- Work / Edition / Series / Volume knowledge is now active Phase 27 work for
-  edition-aware and multi-volume book structure, rather than flattening
-  publications such as Iwanami Genji monogatari volumes into unrelated title
-  strings.
+- Textual Work / Edition / Series / Volume knowledge is now active Phase 27
+  work for edition-aware and multi-volume book structure, rather than
+  flattening publications such as Iwanami Genji monogatari volumes into
+  unrelated title strings.
 - Genji-oriented book materialization should treat ISBN/openBD data as the
   physical publication metadata layer only. The broader knowledge neighborhood
   includes source works, editions, series, volumes, people, organizations,
@@ -1343,8 +1346,13 @@ Phase 27 active scope:
   or bibliographic identifiers.
 - Multi-volume / book-set import is planned as a Job-backed work-unit workflow
   for importing ISBN lists, CSV/Excel files, or similar sources into coordinated
-  Work / Edition / Series / Volume / Person / Organization / publication
-  Information.
+  Textual Work / Edition / Series / Volume / Person / Organization /
+  publication Information.
+- A common cultural-resource / creative-entity model is a follow-up direction
+  for museum collections and other non-book resources. Sculpture, paintings,
+  buildings, physical objects, holdings, and collection items should use shared
+  cultural semantics plus domain-specific materialization profiles, not the
+  book-domain Textual Work node type.
 - Separation between the reusable common semantic-neighborhood contract and
   the book-oriented extension profile for bibliographic identifiers, roles,
   relations, and authority/source mappings.

@@ -15,7 +15,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
  * SimpleEntity-compatible record used for search, admin, and management views.
  *
  * @since   May.  7, 2026
- * @version May. 24, 2026
+ * @version May. 31, 2026
  * @author  ASAMI, Tomoharu
  */
 object JobEntityCollections {
@@ -368,6 +368,9 @@ object JobEntity {
       "declaredProfile" -> model.debug.declaredProfile.map(_.toRecord),
       "jobDefinitionSnapshot" -> model.debug.jobDefinitionSnapshot.map(_.toParameters).map(xs => Record.data(xs.toVector.sortBy(_._1)*)),
       "lineage" -> _lineage_record(model.lineage),
+      "continuationTaskIds" -> model.continuation.taskIds.map(_.value),
+      "continuationTasks" -> model.continuation.tasks.map(_continuation_task_record),
+      "continuation" -> _continuation_record(model.continuation),
       "retry" -> _retry_record(model.retry),
       "taskSummary" -> _task_summary_record(model),
       "timelineSummary" -> _timeline_summary_record(model)
@@ -424,6 +427,22 @@ object JobEntity {
       "sagaRelation" -> lineage.sagaRelation,
       "failurePolicy" -> lineage.failurePolicy,
       "failureDisposition" -> lineage.failureDisposition.print
+    )
+
+  private def _continuation_record(continuation: JobContinuationSummary): Record =
+    Record.dataAuto(
+      "mode" -> continuation.mode,
+      "policy" -> continuation.policy,
+      "taskIds" -> continuation.taskIds.map(_.value),
+      "tasks" -> continuation.tasks.map(_continuation_task_record)
+    )
+
+  private def _continuation_task_record(task: JobContinuationTaskRef): Record =
+    Record.dataAuto(
+      "taskId" -> task.taskId.value,
+      "status" -> task.status,
+      "action" -> task.action,
+      "parentTaskId" -> task.parentTaskId.map(_.value)
     )
 
   private def _task_summary_record(model: JobQueryReadModel): Record =

@@ -6,7 +6,7 @@ import org.goldenport.cncf.naming.NamingConventions
 
 /*
  * @since   Mar.  5, 2026
- * @version May.  7, 2026
+ * @version May. 31, 2026
  * @author  ASAMI, Tomoharu
  */
 object DescribeProjection {
@@ -119,7 +119,7 @@ object DescribeProjection {
               "commandKind" -> x.commandKind,
               "commandExecutionProperties" -> x.commandExecutionProperties,
               "commandExecutionPolicy" -> x.commandExecutionPolicyRecord,
-              "effectiveCommandExecutionMode" -> x.effectiveCommandExecutionPolicy.legacyModeLabel,
+              "effectiveCommandExecutionMode" -> x.effectiveCommandExecutionPolicy.modeLabel,
               "jobDefinitionRef" -> x.jobDefinitionRef
             )),
           "childEntityBindings" -> childentitybindings,

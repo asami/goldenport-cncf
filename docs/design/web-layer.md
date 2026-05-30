@@ -144,6 +144,29 @@ The API boundary is operation-centric:
 - Static Form assets, component app assets, and any future SPA bundle assets are
   distinct packaging concerns.
 
+Canonical success/accepted response envelopes reserve `data` for the operation's
+business payload. Other top-level roots are metadata grouped by genre:
+
+```yaml
+data: ...
+execution: ...
+job: ...
+continuation: ...
+page: ...
+diagnostics: ...
+debug: ...
+links: ...
+```
+
+`execution` carries operation execution metadata such as mode, interface,
+component, service, and operation. `job` carries primary Job metadata.
+`continuation` carries residual async continuation metadata, for example
+`mode: event-async-same-job-task` for `JobSyncWithAsyncCont`. `page`,
+`diagnostics`, `debug`, and `links` carry pagination, warnings/diagnostics,
+debug-only details, and navigation links respectively. `result` is not a CNCF
+response-envelope root; protocol adapters such as JSON-RPC/MCP may still use it
+only where the external protocol requires it.
+
 Static Form page rendering uses an Application-tier page view context for
 screen chrome and other display support values that are backed by domain state.
 The Web tier should not fetch notification counts, job badges, session display

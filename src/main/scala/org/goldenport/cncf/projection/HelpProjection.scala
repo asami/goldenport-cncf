@@ -11,7 +11,7 @@ import org.goldenport.datatype.I18nString
  * @since   Mar.  5, 2026
  *  version Mar. 28, 2026
  *  version Apr. 30, 2026
- * @version May.  7, 2026
+ * @version May. 31, 2026
  * @author  ASAMI, Tomoharu
  */
 object HelpProjection {
@@ -196,7 +196,7 @@ object HelpProjection {
           "commandKind" -> x.commandKind,
           "commandExecutionProperties" -> x.commandExecutionProperties,
           "commandExecutionPolicy" -> x.commandExecutionPolicyRecord,
-          "effectiveCommandExecutionMode" -> x.effectiveCommandExecutionPolicy.legacyModeLabel,
+          "effectiveCommandExecutionMode" -> x.effectiveCommandExecutionPolicy.modeLabel,
           "jobDefinitionRef" -> x.jobDefinitionRef
         )
       }

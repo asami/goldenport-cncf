@@ -60,14 +60,16 @@ Normalize Command sync/async execution policy before broadening Job usage.
 
 ### Completion Notes
 
-- `CommandExecutionPolicy` is now the canonical three-axis policy surface:
-  caller interface mode, Job run mode, and managed-by-Job.
+- `CommandExecutionPolicy` is now the canonical policy surface: caller
+  interface mode, Job run mode, managed-by-Job, and async continuation intent.
 - The default Command path is synchronous direct execution without Job
   management.
-- Legacy `CommandExecutionMode` and `execution=sync|async` remain compatibility
-  inputs.
+- Canonical production modes are `Sync`, `JobSync`, `JobAsync`, and
+  `JobSyncWithAsyncCont`.
+- Legacy `CommandExecutionMode`, `execution=sync|async`, `AsyncJobAndAwait`,
+  and `SyncJobAsyncInterface` remain compatibility inputs.
 - Projection/help output exposes command execution metadata and the effective
-  legacy mode label.
+  canonical mode label.
 
 ---
 
@@ -257,13 +259,21 @@ Status: DONE
 
 ### Objective
 
-Define Task as the transaction unit inside a Job and establish compensation
-boundaries between Tasks.
+Define Task as the observable execution step inside a Job, define how a Task
+owns or joins a transaction, and establish compensation boundaries between
+Tasks. Task and transaction are related but not identical runtime objects.
 
 ### Detailed Tasks
 
 - [x] Treat Aggregate execution as a Task target in Job task metadata.
 - [x] Define Task transactional success and failure semantics.
+- [x] Define Command/Event transaction semantics:
+  - `JoinCaller` default for synchronous Command phases;
+  - `Required` default for Event-driven same-transaction handling;
+  - explicit `BestEffort`, `Ignore`, or `NewTransaction` relaxation;
+  - conservative Event/EventReception transaction capability composition.
+- [x] Define `JobSyncWithAsyncCont` as same-Job async continuation Task with
+      a new transaction and traceability through the primary `job.id`.
 - [x] Define explicit compensation between Tasks.
 - [x] Connect incomplete cleanup with recovery-required events and human
       recovery diagnostics.
@@ -272,6 +282,8 @@ boundaries between Tasks.
 ### Expected Output
 
 - Job internals have explicit transactional boundaries.
+- Default Command/Event handling is transactionally strict unless the operation
+  designer explicitly relaxes it.
 - Compensation behavior is inspectable and recoverable when automated cleanup
   cannot complete.
 - `job_control` exposes Task Execution Tree and Task detail diagnostics.

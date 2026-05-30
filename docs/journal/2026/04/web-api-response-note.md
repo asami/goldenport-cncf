@@ -4,6 +4,17 @@ CNCF REST API Response Specification (Draft)
 status=draft
 category=web / api / response
 
+Supersession Note
+-----------------
+
+This draft predates the canonical CNCF response envelope finalized later in
+the Web layer design. The current CNCF envelope uses `data` as the only
+business payload root and groups metadata under roots such as `execution`,
+`job`, `continuation`, `page`, `diagnostics`, `debug`, and `links`. The
+`result` root described below is not canonical CNCF response shape; it remains
+appropriate only at external protocol adapter boundaries such as JSON-RPC/MCP
+where the protocol requires it.
+
 Overview
 --------
 

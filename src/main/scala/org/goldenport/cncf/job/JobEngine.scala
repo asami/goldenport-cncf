@@ -26,7 +26,7 @@ import org.goldenport.cncf.observability.{DiagnosticPayloadExternalizer, Observa
 /*
  * @since   Jan.  4, 2026
  *  version Mar. 30, 2026
- * @version May. 24, 2026
+ * @version May. 31, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class JobId(
@@ -192,6 +192,8 @@ trait JobTask {
   def taskKind: String = "action"
   def targetKind: Option[String] = None
   def relation: Option[String] = None
+  def transactionRole: Option[String] = None
+  def transactionScope: Option[String] = None
   def compensationActionRef: Option[String] = None
   def compensationTask: Option[JobTask] = None
   def componentName: Option[String] = None
@@ -460,6 +462,8 @@ final case class JobTaskReadModel(
   taskKind: String = "action",
   targetKind: Option[String] = None,
   relation: Option[String] = None,
+  transactionRole: Option[String] = None,
+  transactionScope: Option[String] = None,
   transactionOutcome: Option[String] = None,
   compensationActionRef: Option[String] = None,
   compensatesTaskId: Option[TaskId] = None,
@@ -518,6 +522,30 @@ final case class JobEventLineage(
     eventName.nonEmpty || receptionRule.nonEmpty || receptionPolicy.nonEmpty
 }
 
+final case class JobContinuationTaskRef(
+  taskId: TaskId,
+  status: String,
+  action: Option[String],
+  parentTaskId: Option[TaskId]
+)
+
+final case class JobContinuationSummary(
+  mode: Option[String],
+  policy: Option[String],
+  tasks: Vector[JobContinuationTaskRef]
+) {
+  def taskIds: Vector[TaskId] =
+    tasks.map(_.taskId)
+
+  def hasContinuation: Boolean =
+    mode.nonEmpty || tasks.nonEmpty
+}
+
+object JobContinuationSummary {
+  val empty: JobContinuationSummary =
+    JobContinuationSummary(None, None, Vector.empty)
+}
+
 final case class JobTimelinePage(
   offset: Int,
   limit: Int,
@@ -540,6 +568,8 @@ final case class JobTraceTaskNode(
   taskKind: String,
   relation: Option[String],
   status: JobTaskStatus,
+  transactionRole: Option[String],
+  transactionScope: Option[String],
   transactionOutcome: Option[String],
   compensationStatus: Option[String],
   recoveryRequired: Boolean,
@@ -599,6 +629,7 @@ final case class JobQueryReadModel(
   debug: JobDebugInfo,
   input: Option[JobInput],
   lineage: JobEventLineage,
+  continuation: JobContinuationSummary,
   retry: JobRetryState,
   resultSummary: JobResultSummary,
   calltree: Option[Record],
@@ -1669,6 +1700,8 @@ final class InMemoryJobEngine(
         taskKind = taskdef.taskKind,
         targetKind = taskdef.targetKind,
         relation = relation.orElse(taskdef.relation),
+        transactionRole = taskdef.transactionRole.orElse(_task_transaction_role(record.debug.parameters)),
+        transactionScope = taskdef.transactionScope.orElse(record.debug.parameters.get("command.job-transaction-scope")),
         transactionOutcome = Some(JobTaskTransactionOutcome.Running.print),
         compensationActionRef = taskdef.compensationActionRef,
         compensatesTaskId = compensatesTaskId
@@ -2039,6 +2072,8 @@ final class InMemoryJobEngine(
             taskKind = task.taskKind,
             relation = task.relation,
             status = task.status,
+            transactionRole = task.transactionRole,
+            transactionScope = task.transactionScope,
             transactionOutcome = task.transactionOutcome,
             compensationStatus = task.compensationStatus,
             recoveryRequired = task.recoveryRequired,
@@ -2105,6 +2140,63 @@ final class InMemoryJobEngine(
     )
   }
 
+  private def _task_transaction_role(
+    parameters: Map[String, String]
+  ): Option[String] =
+    parameters.get("reception.transactionRelation")
+      .map(_.trim.toLowerCase(java.util.Locale.ROOT))
+      .collect {
+        case "same-transaction" => org.goldenport.cncf.action.TaskTransactionRole.Join.print
+        case "new-transaction" => org.goldenport.cncf.action.TaskTransactionRole.Own.print
+      }
+      .orElse {
+        parameters.get("command.caller-transaction-policy")
+          .map(_.trim.toLowerCase(java.util.Locale.ROOT))
+          .collect {
+            case "join-caller" => org.goldenport.cncf.action.TaskTransactionRole.Join.print
+            case "new-transaction" => org.goldenport.cncf.action.TaskTransactionRole.Own.print
+          }
+      }
+
+  private def _continuation_summary(
+    record: JobRecord
+  ): JobContinuationSummary = {
+    val queued = record.timeline
+      .filter(_.kind == "job.same-job-async.queued")
+      .flatMap(_.taskId)
+      .toSet
+    val tasks = queued.toVector.sortBy(_.value).map { taskid =>
+      record.taskReadModels.find(_.taskId == taskid) match {
+        case Some(task) =>
+          val action = Vector(task.service, task.operation).flatten match {
+            case service +: operation +: _ => Some(s"$service.$operation")
+            case _ => task.operation.orElse(task.service).orElse(task.component)
+          }
+          JobContinuationTaskRef(
+            taskId = taskid,
+            status = task.status.toString,
+            action = action,
+            parentTaskId = task.parentTaskId
+          )
+        case None =>
+          val timeline = record.timeline.find(e => e.kind == "job.same-job-async.queued" && e.taskId.contains(taskid))
+          JobContinuationTaskRef(
+            taskId = taskid,
+            status = "Queued",
+            action = timeline.flatMap(_.note),
+            parentTaskId = timeline.flatMap(_.parentTaskId)
+          )
+      }
+    }
+    val mode = record.debug.parameters.get("command.async-continuation")
+      .orElse(if (tasks.nonEmpty) Some("event-async-same-job-task") else None)
+    val policy = mode.collect {
+      case "event-async-same-job-task" => "async-same-job"
+      case "event-async-new-job" => "async-new-job"
+    }
+    JobContinuationSummary(mode, policy, tasks)
+  }
+
   private final case class _Page[A](
     offset: Int,
     limit: Int,
@@ -2161,6 +2253,7 @@ final class InMemoryJobEngine(
       debug = record.debug,
       input = record.input,
       lineage = _event_lineage(record),
+      continuation = _continuation_summary(record),
       retry = record.retry,
       resultSummary = _result_summary(record),
       calltree = record.debug.calltree,

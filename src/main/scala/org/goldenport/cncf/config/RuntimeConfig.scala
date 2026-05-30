@@ -21,7 +21,7 @@ import org.goldenport.cncf.blob.BlobStoreConfig
  *  version Feb.  1, 2026
  *  version Mar. 28, 2026
  *  version Apr. 30, 2026
- * @version May. 18, 2026
+ * @version May. 31, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class RuntimeConfig(
@@ -406,11 +406,14 @@ object RuntimeConfig {
     value: String
   ): Option[CommandExecutionMode] = {
     value.trim.toLowerCase match {
-      case "async" | "async-job" => Some(CommandExecutionMode.AsyncJob)
+      case "sync" | "sync-direct" | "sync-direct-no-job" => Some(CommandExecutionMode.Sync)
+      case "job-sync" => Some(CommandExecutionMode.JobSync)
+      case "job-async" => Some(CommandExecutionMode.JobAsync)
+      case "job-sync-with-async-cont" | "job-sync-with-async-continuation" => Some(CommandExecutionMode.JobSyncWithAsyncCont)
+      case "async" | "async-job" => Some(CommandExecutionMode.JobAsync)
       case "async-job-and-await" => Some(CommandExecutionMode.AsyncJobAndAwait)
-      case "sync-job" => Some(CommandExecutionMode.SyncJob)
+      case "sync-job" => Some(CommandExecutionMode.JobSync)
       case "sync-job-async-interface" => Some(CommandExecutionMode.SyncJobAsyncInterface)
-      case "sync" | "sync-direct" | "sync-direct-no-job" => Some(CommandExecutionMode.SyncDirectNoJob)
       case _ => None
     }
   }

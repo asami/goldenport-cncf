@@ -17,7 +17,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Mar. 21, 2026
  *  version Apr. 22, 2026
- * @version May. 11, 2026
+ * @version May. 31, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EventReceptionSpec
@@ -27,6 +27,14 @@ final class EventReceptionSpec
   with JobEngineTestFixture {
 
   "EventReception" should {
+    "compose event transaction capabilities conservatively" in {
+      EventTransactionCapability.compose(EventTransactionCapability.Supported, EventTransactionCapability.Supported) shouldBe EventTransactionCapability.Supported
+      EventTransactionCapability.compose(EventTransactionCapability.Supported, EventTransactionCapability.Available) shouldBe EventTransactionCapability.Available
+      EventTransactionCapability.compose(EventTransactionCapability.Available, EventTransactionCapability.Available) shouldBe EventTransactionCapability.Available
+      EventTransactionCapability.compose(EventTransactionCapability.Unsupported, EventTransactionCapability.Supported) shouldBe EventTransactionCapability.Unsupported
+      EventTransactionCapability.compose(EventTransactionCapability.Available, EventTransactionCapability.Unsupported) shouldBe EventTransactionCapability.Unsupported
+    }
+
     "route target event to ActionCall dispatcher deterministically" in {
       Given("reception with CML event definition and action route")
       val fixture = _event_fixture()
@@ -638,7 +646,8 @@ final class EventReceptionSpec
           attributes = Map(
             "targetId" -> "o1",
             EventReception.StandardAttribute.SourceSubsystem -> "billing",
-            EventReception.StandardAttribute.SagaId -> "saga-order-approved"
+            EventReception.StandardAttribute.SagaId -> "saga-order-approved",
+            EventReception.StandardAttribute.operationEventTransactionRequirement -> "ignore"
           )
         )
       )
@@ -660,6 +669,113 @@ final class EventReceptionSpec
       attrs.head.get(EventReception.StandardAttribute.PolicySource) shouldBe Some("explicit-rule")
       attrs.head.get(EventReception.StandardAttribute.SagaRelation) shouldBe Some("same-saga")
       attrs.head.get(EventReception.StandardAttribute.SagaId) shouldBe Some("saga-order-approved")
+    }
+
+    "reject unsupported async transaction policy under default Required operation semantics" in {
+      Given("external async reception without operation-level relaxation")
+      val fixture = _event_fixture()
+      val jobengine = _recording_job_engine()
+      val reception = EventReception.default(
+        eventBus = fixture.bus,
+        dispatcher = new _RecordingDispatcher(ArrayBuffer.empty),
+        currentSubsystemName = Some("inventory"),
+        jobEngine = Some(jobengine)
+      )
+      reception.register(CmlEventDefinition("shipment.arrived", CmlEventCategory.NonActionEvent, Some("arrived")))
+      reception.registerSubscription(
+        CmlSubscriptionDefinition(
+          name = "shipment-import",
+          eventName = "shipment.arrived",
+          route = DispatchRoute.Unicast,
+          target = Some("targetId"),
+          actionName = "shipment.import"
+        )
+      )
+      reception.registerRule(
+        EventReceptionRule(
+          name = "shipment-external-async",
+          condition = EventReceptionCondition(
+            originBoundary = Some(EventOriginBoundary.ExternalSubsystem),
+            eventName = Some("shipment.arrived")
+          ),
+          policy = EventReceptionExecutionPolicy.AsyncNewJobSameSaga
+        )
+      )
+      given ExecutionContext = fixture.executionContext()
+
+      When("receiving an external event")
+      val result = reception.receiveAuthorized(
+        ReceptionInput(
+          name = "shipment.arrived",
+          kind = "arrived",
+          attributes = Map(
+            "targetId" -> "s1",
+            EventReception.StandardAttribute.SourceSubsystem -> "warehouse"
+          )
+        )
+      )
+
+      Then("Required fails deterministically instead of silently switching transactions")
+      result shouldBe a[Consequence.Failure[_]]
+      result match {
+        case Consequence.Failure(c) =>
+          c.show should include ("same-transaction requirement is unsupported")
+        case _ =>
+          fail("expected failure")
+      }
+      jobengine.submissionCount shouldBe 0
+    }
+
+    "allow unsupported async transaction policy when operation semantics are BestEffort" in {
+      Given("external async reception with explicit BestEffort relaxation")
+      val fixture = _event_fixture()
+      val jobengine = _manual_job_engine()
+      val calls = ArrayBuffer.empty[String]
+      val reception = EventReception.default(
+        eventBus = fixture.bus,
+        dispatcher = new _RecordingDispatcher(calls),
+        currentSubsystemName = Some("inventory"),
+        jobEngine = Some(jobengine)
+      )
+      reception.register(CmlEventDefinition("shipment.indexed", CmlEventCategory.NonActionEvent, Some("indexed")))
+      reception.registerSubscription(
+        CmlSubscriptionDefinition(
+          name = "shipment-index",
+          eventName = "shipment.indexed",
+          route = DispatchRoute.Unicast,
+          target = Some("targetId"),
+          actionName = "shipment.index"
+        )
+      )
+      reception.registerRule(
+        EventReceptionRule(
+          name = "shipment-index-async",
+          condition = EventReceptionCondition(
+            originBoundary = Some(EventOriginBoundary.ExternalSubsystem),
+            eventName = Some("shipment.indexed")
+          ),
+          policy = EventReceptionExecutionPolicy.AsyncNewJobSameSaga
+        )
+      )
+      given ExecutionContext = fixture.executionContext()
+
+      When("receiving an explicitly relaxed event")
+      val result = reception.receiveAuthorized(
+        ReceptionInput(
+          name = "shipment.indexed",
+          kind = "indexed",
+          attributes = Map(
+            "targetId" -> "s2",
+            EventReception.StandardAttribute.SourceSubsystem -> "warehouse",
+            EventReception.StandardAttribute.operationEventTransactionRequirement -> "best-effort"
+          )
+        )
+      )
+      jobengine.drainAll() should be >= 1
+
+      Then("BestEffort preserves the async new-transaction reception policy")
+      result shouldBe Consequence.success(ReceptionResult(ReceptionOutcome.Routed, 1, persisted = false))
+      calls.toVector shouldBe Vector("shipment.index")
     }
 
     "drop duplicated replay event deterministically" in {
@@ -862,7 +978,8 @@ final class EventReceptionSpec
           kind = "updated",
           attributes = Map(
             "targetId" -> "a1",
-            EventReception.StandardAttribute.SourceSubsystem -> "accounting"
+            EventReception.StandardAttribute.SourceSubsystem -> "accounting",
+            EventReception.StandardAttribute.commandAsyncContinuation -> "true"
           )
         )
       )
@@ -883,6 +1000,8 @@ final class EventReceptionSpec
       attrs.head.get(EventReception.StandardAttribute.ReceptionRuleName) shouldBe Some("default:same-subsystem")
       attrs.head.get(EventReception.StandardAttribute.ReceptionPolicy) shouldBe Some(EventReceptionExecutionPolicy.SameSubsystemDefault.modeName)
       attrs.head.get(EventReception.StandardAttribute.PolicySource) shouldBe Some("subsystem-default")
+      attrs.head.get(EventReception.StandardAttribute.operationEventTransactionRequirement) shouldBe Some("required")
+      attrs.head.get(EventReception.StandardAttribute.transactionCapability) shouldBe Some("available")
       attrs.head.get(EventReception.StandardAttribute.CorrelationId).nonEmpty shouldBe true
       attrs.head.get(EventReception.StandardAttribute.SagaId) shouldBe attrs.head.get(EventReception.StandardAttribute.CorrelationId)
       attrs.head.get(EventReception.StandardAttribute.CausationId).nonEmpty shouldBe true
@@ -943,7 +1062,8 @@ final class EventReceptionSpec
           attributes = Map(
             "targetId" -> "n1",
             EventReception.StandardAttribute.SourceSubsystem -> "inventory",
-            EventReception.StandardAttribute.SourceComponent -> "publisher"
+            EventReception.StandardAttribute.SourceComponent -> "publisher",
+            EventReception.StandardAttribute.operationEventTransactionRequirement -> "ignore"
           ),
           persistent = true
         )
@@ -1115,7 +1235,8 @@ final class EventReceptionSpec
           kind = "published",
           attributes = Map(
             "targetId" -> "n3",
-            EventReception.StandardAttribute.SourceSubsystem -> "inventory"
+            EventReception.StandardAttribute.SourceSubsystem -> "inventory",
+            EventReception.StandardAttribute.operationEventTransactionRequirement -> "ignore"
           )
         )
       )
@@ -1248,7 +1369,8 @@ final class EventReceptionSpec
           attributes = Map(
             "targetId" -> "n-async",
             EventReception.StandardAttribute.SourceSubsystem -> "inventory",
-            EventReception.StandardAttribute.SourceComponent -> "public-notice"
+            EventReception.StandardAttribute.SourceComponent -> "public-notice",
+            EventReception.StandardAttribute.operationEventTransactionRequirement -> "ignore"
           )
         )
       )
@@ -1314,7 +1436,8 @@ final class EventReceptionSpec
           kind = "published",
           attributes = Map(
             "targetId" -> "n-unsupported",
-            EventReception.StandardAttribute.SourceSubsystem -> "inventory"
+            EventReception.StandardAttribute.SourceSubsystem -> "inventory",
+            EventReception.StandardAttribute.operationEventTransactionRequirement -> "ignore"
           )
         )
       )
@@ -1383,7 +1506,8 @@ final class EventReceptionSpec
           kind = "published",
           attributes = Map(
             "targetId" -> "n4",
-            EventReception.StandardAttribute.SourceSubsystem -> "remote-system"
+            EventReception.StandardAttribute.SourceSubsystem -> "remote-system",
+            EventReception.StandardAttribute.operationEventTransactionRequirement -> "ignore"
           )
         )
       )
@@ -1468,7 +1592,8 @@ final class EventReceptionSpec
           attributes = Map(
             "targetId" -> "s1",
             "source" -> "csv",
-            EventReception.StandardAttribute.SourceSubsystem -> "backoffice"
+            EventReception.StandardAttribute.SourceSubsystem -> "backoffice",
+            EventReception.StandardAttribute.operationEventTransactionRequirement -> "ignore"
           )
         )
       )
@@ -1604,7 +1729,8 @@ final class EventReceptionSpec
               "targetId" -> "na-2",
               "dispatchRole" -> "reviewer",
               EventReception.StandardAttribute.SourceSubsystem -> "inventory",
-              EventReception.StandardAttribute.SourceComponent -> "public-notice"
+              EventReception.StandardAttribute.SourceComponent -> "public-notice",
+              EventReception.StandardAttribute.operationEventTransactionRequirement -> "ignore"
             )
           )
         )

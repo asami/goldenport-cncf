@@ -12,9 +12,16 @@ observability relate inside the component.
 
 ## Definitions
 - UnitOfWork (UoW): action-scoped execution boundary for changes.
+- Task: observable execution step such as ActionCall or Event handler.
 - Transaction: datastore-level atomic boundary local to a component.
 - Event: fact produced by execution (domain/system).
 - Observability: diagnostic outputs (logs/traces/metrics) correlated to execution.
+
+Task and transaction are not identical. A Task may own a new UnitOfWork /
+transaction or join an active caller/worker transaction. The default Command
+semantics are strict: synchronous phases join the caller transaction when one
+exists, and Event-driven handlers must run in the same active transaction unless
+the operation explicitly relaxes that requirement.
 
 ## Internal Execution Boundary (Action ↔ UnitOfWork)
 - Action execution is bound to an ActionCall with an explicit ExecutionContext.

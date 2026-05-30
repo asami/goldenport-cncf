@@ -15,7 +15,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Mar. 21, 2026
  *  version Apr. 22, 2026
- * @version May.  7, 2026
+ * @version May. 31, 2026
  * @author  ASAMI, Tomoharu
  */
 final class JobCommandSyncAndTaskFirstSpec
@@ -52,7 +52,7 @@ final class JobCommandSyncAndTaskFirstSpec
         val action = new CommandAction() {
           val request = org.goldenport.protocol.Request.ofOperation("taskfirst")
           override def commandExecutionMode: CommandExecutionMode =
-            CommandExecutionMode.AsyncJob
+            CommandExecutionMode.JobAsync
 
           override def createCall(core: ActionCall.Core): ActionCall = {
             val self = this

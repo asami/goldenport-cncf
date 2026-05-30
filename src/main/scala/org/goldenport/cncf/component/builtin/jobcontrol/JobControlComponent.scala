@@ -27,7 +27,7 @@ import org.goldenport.value.BaseContent
  * @since   Mar. 28, 2026
  *  version Mar. 29, 2026
  *  version Apr. 22, 2026
- * @version May. 11, 2026
+ * @version May. 31, 2026
  * @author  ASAMI, Tomoharu
  */
 final class JobControlComponent() extends Component {
@@ -1253,7 +1253,7 @@ object JobControlComponent {
 
   private abstract class SyncJobAction extends CommandAction {
     override def commandExecutionMode: org.goldenport.cncf.action.CommandExecutionMode =
-      org.goldenport.cncf.action.CommandExecutionMode.SyncDirectNoJob
+      org.goldenport.cncf.action.CommandExecutionMode.Sync
   }
 
   private final case class GetJobStatusCall(
@@ -1651,6 +1651,10 @@ object JobControlComponent {
       "saga-relation" -> model.lineage.sagaRelation.getOrElse(""),
       "failure-policy" -> model.lineage.failurePolicy.getOrElse(""),
       "failure-disposition" -> model.lineage.failureDisposition.print,
+      "continuation-task-ids" -> model.continuation.taskIds.map(_.value),
+      "continuation-tasks" -> model.continuation.tasks.map(_continuation_task_record),
+      "continuation-mode" -> model.continuation.mode.getOrElse(""),
+      "continuation-policy" -> model.continuation.policy.getOrElse(""),
       "retry-kind" -> model.retry.kind.print,
       "retry-attempt-count" -> model.retry.attemptCount,
       "retry-max-attempts" -> model.retry.maxAttempts,
@@ -1675,6 +1679,16 @@ object JobControlComponent {
       "debug-parameters" -> model.debug.parameters.toVector.sortBy(_._1).map { case (k, v) =>
         s"$k=$v"
       }
+    )
+
+  private def _continuation_task_record(
+    task: org.goldenport.cncf.job.JobContinuationTaskRef
+  ): Record =
+    Record.dataAuto(
+      "task-id" -> task.taskId.value,
+      "status" -> task.status,
+      "action" -> task.action,
+      "parent-task-id" -> task.parentTaskId.map(_.value)
     )
 
   private def _timeline_record(
@@ -1739,6 +1753,8 @@ object JobControlComponent {
       "parent-task-id" -> node.parentTaskId.map(_.value).getOrElse(""),
       "task-kind" -> node.taskKind,
       "relation" -> node.relation.getOrElse(""),
+      "transaction-role" -> node.transactionRole.getOrElse(""),
+      "transaction-scope" -> node.transactionScope.getOrElse(""),
       "status" -> node.status.toString,
       "transaction-outcome" -> node.transactionOutcome.getOrElse(""),
       "compensation-status" -> node.compensationStatus.getOrElse(""),
@@ -1762,6 +1778,8 @@ object JobControlComponent {
       "task-kind" -> task.taskKind,
       "target-kind" -> task.targetKind.getOrElse(""),
       "relation" -> task.relation.getOrElse(""),
+      "transaction-role" -> task.transactionRole.getOrElse(""),
+      "transaction-scope" -> task.transactionScope.getOrElse(""),
       "transaction-outcome" -> task.transactionOutcome.getOrElse(""),
       "compensation-action-ref" -> task.compensationActionRef.getOrElse(""),
       "compensates-task-id" -> task.compensatesTaskId.map(_.value).getOrElse(""),

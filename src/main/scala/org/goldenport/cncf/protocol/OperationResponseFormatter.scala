@@ -7,6 +7,7 @@ import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.record.Record
 import org.goldenport.record.io.RecordEncoder
 import org.goldenport.cncf.cli.RunMode
+import org.goldenport.cncf.action.CommandExecutionPolicy
 import org.goldenport.cncf.context.GlobalRuntimeContext
 import org.goldenport.cncf.config.RuntimeDefaults
 import org.goldenport.cncf.config.RuntimeConfig
@@ -17,7 +18,7 @@ import scala.xml.{Elem, NodeSeq, Text}
  * @since   Mar. 13, 2026
  *  version Mar. 28, 2026
  *  version Apr. 30, 2026
- * @version May. 10, 2026
+ * @version May. 31, 2026
  * @author  ASAMI, Tomoharu
  */
 object OperationResponseFormatter {
@@ -45,16 +46,17 @@ object OperationResponseFormatter {
       case OperationResponse.RecordResponse(record) =>
         val data = _output_record(record)
         val payload =
-          _with_inline_debug(data, metadata).getOrElse {
-            if (shape == "envelope") _envelope_record(request, _execution_record_for_record, data)
+          _with_inline_debug(request, data, metadata).getOrElse {
+            if (shape == "envelope") _envelope_record(request, data, metadata, _execution_record_for_record(request))
             else data
           }
         _record_response(_structured_format(format, shape), payload)
       case scalar: OperationResponse.Scalar[?] if shape == "envelope" =>
-        val payload = _with_inline_debug(_scalar_data(scalar.print), metadata).getOrElse(_envelope_scalar(request, scalar.print))
+        val payload = _with_inline_debug(request, _scalar_data(scalar.print, envelope = true), metadata)
+          .getOrElse(_envelope_scalar(request, scalar.print, metadata))
         _record_response(_structured_format(format, shape), payload)
       case scalar: OperationResponse.Scalar[?] =>
-        _with_inline_debug(scalar.print, metadata) match {
+        _with_inline_debug(request, scalar.print, metadata) match {
           case Some(payload) =>
             _record_response(_structured_format(format, shape), payload)
           case None =>
@@ -200,32 +202,58 @@ object OperationResponseFormatter {
 
   private def _envelope_scalar(
     request: Request,
-    value: String
+    value: String,
+    metadata: RuntimeContext.ExecutionMetadata
   ): Record =
-    _envelope_record(request, _execution_record_for_scalar(request, value), _scalar_data(value))
+    _response_envelope(
+      request,
+      _scalar_data(value, envelope = true),
+      metadata,
+      _execution_record_for_scalar(request, value),
+      None,
+      if (_is_job_id(value)) Some(value) else None
+    )
 
   private def _envelope_record(
     request: Request,
-    execution: Record,
-    data: Any
+    data: Any,
+    metadata: RuntimeContext.ExecutionMetadata,
+    execution: Record
   ): Record =
-    Record.data(
-      "textus-execution" -> execution,
-      "data" -> data
-    )
+    _response_envelope(request, data, metadata, execution, None)
 
   private def _with_inline_debug(
+    request: Request,
     data: Any,
     metadata: RuntimeContext.ExecutionMetadata
   ): Option[Record] =
     metadata.inlineCallTree.map { calltree =>
-      Record.data(
-        "data" -> data,
-        "debug" -> Record.data(
-          "calltree" -> _debug_calltree_payload(calltree)
-        )
+      _response_envelope(
+        request,
+        data,
+        metadata,
+        _execution_record_for_data(request, data),
+        Some(Record.data("calltree" -> _debug_calltree_payload(calltree)))
       )
     }
+
+  private def _response_envelope(
+    request: Request,
+    data: Any,
+    metadata: RuntimeContext.ExecutionMetadata,
+    execution: Record,
+    debug: Option[Record],
+    acceptedjobid: Option[String] = None
+  ): Record = {
+    val roots =
+      Vector(
+        Some("execution" -> execution),
+        _job_record(data, metadata, acceptedjobid).map("job" -> _),
+        _continuation_record(request).map("continuation" -> _),
+        debug.map("debug" -> _)
+      ).flatten
+    Record.createFull(Vector("data" -> data) ++ roots)
+  }
 
   private def _debug_calltree_payload(
     calltree: Record
@@ -242,31 +270,53 @@ object OperationResponseFormatter {
     Record.dataAuto(fields*)
   }
 
-  private def _execution_record_for_record: Record =
-    Record.data(
-      "interface-shape" -> "record"
-    )
+  private def _execution_record_for_record(
+    request: Request
+  ): Record =
+    _execution_record(request, "record")
 
   private def _execution_record_for_scalar(
     request: Request,
     value: String
   ): Record = {
-    val interfaceShape =
+    val interfaceshape =
       if (_is_job_id(value))
         "job"
       else
         "scalar"
-    _requested_execution_mode_record(request) match {
-      case Some(mode) =>
-        Record.data(
-          "interface-shape" -> interfaceShape,
-          "requested-mode" -> mode
-        )
-      case None =>
-        Record.data(
-          "interface-shape" -> interfaceShape
-        )
+    _execution_record(request, interfaceshape)
+  }
+
+  private def _execution_record_for_data(
+    request: Request,
+    data: Any
+  ): Record = {
+    val interfaceshape = data match {
+      case _: Record => "record"
+      case null => "none"
+      case _ => "scalar"
     }
+    _execution_record(request, interfaceshape)
+  }
+
+  private def _execution_record(
+    request: Request,
+    interfaceshape: String
+  ): Record = {
+    val base =
+      Vector(
+        "interfaceShape" -> interfaceshape,
+        "operation" -> request.operation
+      ) ++ request.component.map("component" -> _) ++ request.service.map("service" -> _)
+    val policy = _requested_execution_policy(request)
+    Record.dataAuto(
+      (base ++ Vector(
+        "mode" -> policy.map(_.modeLabel),
+        "interface" -> policy.map(_.interfaceMode.toString.toLowerCase(java.util.Locale.ROOT)),
+        "managedByJob" -> policy.map(_.managedByJob),
+        "asyncContinuation" -> policy.map(_.asyncContinuation)
+      ))*
+    )
   }
 
   private def _requested_execution_mode_record(
@@ -283,10 +333,42 @@ object OperationResponseFormatter {
       .orElse(_configuration_string(RuntimeConfig.CommandExecutionModeKey))
       .orElse(GlobalRuntimeContext.current.flatMap(_.commandExecutionMode).map(_.toString))
 
+  private def _requested_execution_policy(
+    request: Request
+  ): Option[CommandExecutionPolicy] =
+    _requested_execution_mode_record(request).flatMap(CommandExecutionPolicy.parse)
+
+  private def _job_record(
+    data: Any,
+    metadata: RuntimeContext.ExecutionMetadata,
+    acceptedjobid: Option[String]
+  ): Option[Record] = {
+    val datajobid = acceptedjobid.orElse(data match {
+      case value: String if _is_job_id(value) => Some(value)
+      case _ => None
+    })
+    metadata.responseJobId.orElse(metadata.debugJobId).orElse(datajobid).map { jobid =>
+      Record.dataAuto(
+        "id" -> jobid,
+        "status" -> acceptedjobid.map(_ => "accepted")
+      )
+    }
+  }
+
+  private def _continuation_record(
+    request: Request
+  ): Option[Record] =
+    _requested_execution_policy(request)
+      .filter(_.asyncContinuation)
+      .map(_ => Record.data("mode" -> "event-async-same-job-task", "policy" -> "async-same-job"))
+
   private def _scalar_data(
-    value: String
+    value: String,
+    envelope: Boolean = false
   ): Any =
-    if (_is_job_id(value))
+    if (envelope && _is_job_id(value))
+      null
+    else if (_is_job_id(value))
       Record.data("job-id" -> value)
     else
       value

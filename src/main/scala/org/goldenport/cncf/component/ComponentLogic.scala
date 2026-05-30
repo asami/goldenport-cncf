@@ -14,7 +14,7 @@ import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.backend.collaborator.Collaborator
 import org.goldenport.cncf.datastore.DataStore
 import org.goldenport.cncf.entity.EntityStore
-import org.goldenport.cncf.event.{EventEngine, EventStore, ReceptionInput}
+import org.goldenport.cncf.event.{EventEngine, EventReception, EventStore, ReceptionInput}
 import org.goldenport.cncf.http.HttpDriver
 import org.goldenport.cncf.job.{ActionId, ActionTask, JobBatchDefinition, JobControlPolicy, JobControlRequest, JobControlResponse, JobDefinitionEntity, JobDefinitionSnapshot, JobEngine, JobFailureHook, JobId, JobInput, JobInputPayload, JobInputRetentionPolicy, JobPersistencePolicy, JobResult, JobRunMode, JobStatus, JobSubmitOption, JobTask}
 import org.goldenport.cncf.subsystem.resolver.OperationResolver
@@ -30,7 +30,7 @@ import org.goldenport.cncf.operation.CmlOperationDefinition
  *  version Feb. 25, 2026
  *  version Mar. 31, 2026
  *  version Apr. 24, 2026
- * @version May. 24, 2026
+ * @version May. 31, 2026
  * @author  ASAMI, Tomoharu
  */
 /**
@@ -190,8 +190,9 @@ case class ComponentLogic(
           .orElse(_operation_execution_policy(action.request.operation))
           .getOrElse(CommandExecutionPolicy.default)
     }
+    val policyctx = ExecutionContext.withFrameworkCommandExecutionPolicy(ctx, policy)
     if (!policy.managedByJob) {
-      execute(createActionCall(action, ctx))
+      execute(createActionCall(action, policyctx))
     } else {
       val runmode = policy.jobRunMode match {
         case CommandJobRunMode.Sync => JobRunMode.Sync
@@ -201,12 +202,13 @@ case class ComponentLogic(
       val option0 = _default_submit_option(List(task)).copy(
         runMode = runmode,
         input = jobinput,
-        parameters = _job_debug_parameters(action, jobinput)
+        parameters = _job_debug_parameters(action, jobinput) ++ _command_execution_parameters(policy),
+        executionNotes = _command_execution_notes(policy)
       )
-      _job_definition_submit_binding(action, option0, ctx).flatMap { binding =>
-        _task_with_compensation(task, binding.compensation, action, ctx).flatMap { task1 =>
-          submitJob(List(task1), ctx, binding.option).flatMap { jobid =>
-            _note_job_response(ctx, jobid)
+      _job_definition_submit_binding(action, option0, policyctx).flatMap { binding =>
+        _task_with_compensation(task, binding.compensation, action, policyctx).flatMap { task1 =>
+          submitJob(List(task1), policyctx, binding.option).flatMap { jobid =>
+            _note_job_response(policyctx, jobid)
             policy.interfaceMode match {
               case CommandInterfaceMode.Async =>
                 Consequence.success(OperationResponse.Scalar(jobid.value))
@@ -319,6 +321,26 @@ case class ComponentLogic(
       case None => _load_job_definition_from_job_control(ref, ctx)
     }
   }
+
+  private def _command_execution_parameters(
+    policy: CommandExecutionPolicy
+  ): Map[String, String] =
+    Map(
+      "command.execution.mode" -> policy.modeLabel,
+      "command.caller-transaction-policy" -> policy.callerTransactionPolicy.print,
+      "command.event-transaction-requirement" -> policy.eventTransactionRequirement.print,
+      "command.job-transaction-scope" -> policy.jobTransactionScope.print,
+      "command.continuation-event-transaction-requirement" -> policy.continuationEventTransactionRequirement.print
+    ) ++
+      (if (policy.asyncContinuation) Map("command.async-continuation" -> "event-async-same-job-task") else Map.empty)
+
+  private def _command_execution_notes(
+    policy: CommandExecutionPolicy
+  ): Vector[String] =
+    if (policy.asyncContinuation)
+      Vector("command execution mode: JobSyncWithAsyncCont", "async continuation via Event reception same-job task")
+    else
+      Vector.empty
 
   private def _load_job_definition_from_job_control(
     ref: String,
@@ -552,7 +574,7 @@ case class ComponentLogic(
         JobSubmitOption(persistence = JobPersistencePolicy.Persistent)
     }
 
-  // private def _ping_action_(
+  // private def _ping_action(
   //   request: Request
   // ): Option[Consequence[OperationRequest]] = {
   //   val isping =
@@ -664,7 +686,7 @@ object ComponentLogic {
                 name = definition.name,
                 kind = definition.kind.getOrElse("domain-event"),
                 payload = _payload,
-                attributes = definition.selectors,
+                attributes = definition.selectors ++ _event_transaction_attributes,
                 persistent = false
               )
               given ExecutionContext = _execution_context
@@ -683,6 +705,19 @@ object ComponentLogic {
         case None =>
           Consequence.serviceUnavailable("event reception is not initialized")
       }
+
+    private def _event_transaction_attributes: Map[String, String] =
+      _execution_context.framework.commandExecutionPolicy.map { policy =>
+        val base = Map(
+          EventReception.StandardAttribute.continuationEventTransactionRequirement -> policy.continuationEventTransactionRequirement.print,
+          EventReception.StandardAttribute.callerTransactionPolicy -> policy.callerTransactionPolicy.print,
+          EventReception.StandardAttribute.jobTransactionScope -> policy.jobTransactionScope.print
+        )
+        if (policy.asyncContinuation)
+          base + (EventReception.StandardAttribute.commandAsyncContinuation -> "true")
+        else
+          base + (EventReception.StandardAttribute.operationEventTransactionRequirement -> policy.eventTransactionRequirement.print)
+      }.getOrElse(Map.empty)
   }
 
   private final case class RecordEffectActionCall(

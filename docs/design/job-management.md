@@ -58,6 +58,105 @@ Entities.
 
 
 ----------------------------------------------------------------------
+2.1 Command Execution Modes
+----------------------------------------------------------------------
+
+The canonical production Command execution modes are:
+
+    - `Sync`
+    - `JobSync`
+    - `JobAsync`
+    - `JobSyncWithAsyncCont`
+
+`Sync` executes the Command directly and returns the result synchronously. It
+does not create a Job record.
+
+`JobSync` executes the Command under Job management, runs the primary Job
+synchronously, records the Job lifecycle, and returns the final result
+synchronously.
+
+`JobAsync` executes the Command under Job management, schedules the Job
+asynchronously, and returns a Job id / accepted response.
+
+`JobSyncWithAsyncCont` executes the primary Command as `JobSync` and returns
+the primary result synchronously. Residual work is represented by existing
+Event reception policies and same-Job async continuation Tasks, so the
+returned primary Job id can be used to inspect both the synchronous primary Task
+and residual continuation Tasks. It must not be implemented as a fire-and-forget
+thread or as an untraceable child Job boundary.
+
+The canonical execution model has four layers:
+
+    - `Job`: execution lifecycle and tracking container;
+    - `Task`: observable execution step for an ActionCall, Aggregate execution,
+      or Event handler;
+    - `Transaction`: consistency boundary that a Task owns or joins;
+    - `Event`: signal/fact that Event reception maps to Task execution.
+
+`Task != Transaction`. A Task is the runtime execution step; a transaction is
+the consistency boundary used by that step. A Task may own a new transaction or
+join an active caller/worker transaction.
+
+Canonical Command modes have strict default Event transaction semantics:
+
+| Mode / phase | Interface | Job tracking | Caller transaction policy | Job transaction scope | Event transaction requirement |
+| --- | --- | --- | --- | --- | --- |
+| `Sync` | sync result | none | `JoinCaller` | none | `Required` |
+| `JobSync` primary | sync result | primary Job | `JoinCaller` | `PerTask` default, `WholeJob` opt-in | `Required` |
+| `JobAsync` worker | returns JobId | primary Job | not applicable | `PerTask` default, `WholeJob` opt-in | worker-side `Required` |
+| `JobSyncWithAsyncCont` primary | sync primary result | primary Job | `JoinCaller` | `PerTask` default, `WholeJob` opt-in | `Required` |
+| `JobSyncWithAsyncCont` async continuation | async residual | same Job | not applicable | continuation Task owns a new transaction | continuation-side `Required` |
+
+`CallerTransactionPolicy.JoinCaller` means a synchronous phase joins the caller
+transaction/UnitOfWork when one is active, otherwise it creates an operation
+transaction. `CallerTransactionPolicy.NewTransaction` creates a new operation
+transaction instead of joining the caller. The policy applies only to `Sync`,
+`JobSync` primary execution, and the `JobSyncWithAsyncCont` primary phase.
+`JobAsync` and async continuation Tasks are detached from the caller
+transaction.
+
+`OperationEventTransactionRequirement.Required` is the default for all
+canonical modes. Under `Required`, Event-driven handlers must run in the same
+active transaction of the current phase. `BestEffort` uses the same transaction
+when possible but allows Event reception to fall back to its default/new
+transaction policy. `Ignore` delegates completely to Event reception policy.
+Relaxing from `Required` is an explicit operation design decision.
+
+Event and EventReception each declare an `EventTransactionCapability`:
+
+    - `Supported`: same-transaction reception is natural;
+    - `Available`: same-transaction reception is technically possible;
+    - `Unsupported`: same-transaction reception is impossible.
+
+The effective capability is conservative: any `Unsupported` wins; otherwise
+any `Available` yields `Available`; only `Supported + Supported` yields
+`Supported`. Default Event capability is `Available`. Local same-subsystem
+synchronous reception defaults to `Supported`; external, new-Job, or async
+boundaries default to `Unsupported`.
+
+Resolution is deterministic:
+
+    - `Required + Supported/Available` resolves to
+      `sync + same-job + same-transaction`;
+    - `Required + Unsupported` fails deterministically;
+    - `BestEffort + Supported/Available` resolves to same transaction;
+    - `BestEffort + Unsupported` preserves EventReception default/new
+      transaction policy;
+    - `Ignore` preserves EventReception policy;
+    - `async + same-transaction` is invalid.
+
+For `JobSyncWithAsyncCont`, the primary result and primary `job.id` are returned
+synchronously. Residual async work is a same-Job continuation Task with its own
+new transaction. The returned Job id is the tracking root for both primary and
+continuation Tasks.
+
+The deprecated compatibility modes `AsyncJobAndAwait` and
+`SyncJobAsyncInterface` remain accepted only for migration and test fixtures.
+New production descriptors and tests should use the canonical modes. Tests that
+need an async interface should use `JobAsync` plus an explicit await helper.
+
+
+----------------------------------------------------------------------
 3. What a Job Is Not
 ----------------------------------------------------------------------
 
@@ -271,10 +370,11 @@ Compensation:
 Job management coordinates execution state,
 not business compensation logic.
 
-JM-04 fixes the Task boundary as the transaction boundary inside a managed Job.
-For CNCF runtime purposes, an ActionTask or Aggregate execution is recorded as
-one Task. The ActionEngine / UnitOfWork path still owns the actual commit and
-abort mechanics; JobEngine records the transaction outcome as Task diagnostics:
+JM-04 fixes Task/transaction observability without equating Task and
+transaction. For CNCF runtime purposes, an ActionTask or Aggregate execution is
+recorded as one Task. The ActionEngine / UnitOfWork path still owns the actual
+commit and abort mechanics; JobEngine records the transaction outcome as Task
+diagnostics:
 
     - `committed` when the Task completed successfully;
     - `failed` when the Task failed;

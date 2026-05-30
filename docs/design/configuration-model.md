@@ -746,6 +746,31 @@ Prefer a concrete semantic owner:
 - `textus.logging.level`
 - `textus.logging.file.path`
 
+`textus.command.execution-mode` accepts the canonical production values
+`sync`, `job-sync`, `job-async`, and `job-sync-with-async-cont`. The long alias
+`job-sync-with-async-continuation` is also accepted. Legacy values such as
+`sync-direct-no-job`, `sync-job`, and `async-job` remain compatibility inputs.
+`async-job-and-await` and `sync-job-async-interface` are deprecated
+compatibility/test modes and should not be used in new configuration.
+
+Descriptor-level `commandExecutionPolicy` may also specify transaction
+semantics. The default is strict:
+
+- `callerTransactionPolicy = join-caller`
+- `eventTransactionRequirement = required`
+- `jobTransactionScope = per-task`
+- `continuationEventTransactionRequirement = required`
+
+Relaxing event handling to `best-effort` or `ignore`, or forcing a synchronous
+phase to use `new-transaction`, is an explicit operation design decision.
+
+`textus.output.shape=envelope` / `cncf.output.shape=envelope` returns the
+canonical CNCF response envelope. The `data` root is the business payload;
+metadata is grouped under roots such as `execution`, `job`, `continuation`,
+`page`, `diagnostics`, `debug`, and `links`. `textus-execution` is no longer a
+canonical envelope root, and `result` is reserved for external protocol
+adapters that require it.
+
 `textus.debug.calltree` controls the operation result calltree projection
 described in `docs/design/observability/calltree-runtime-result.md`.
 

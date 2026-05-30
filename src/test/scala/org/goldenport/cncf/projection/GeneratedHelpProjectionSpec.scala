@@ -12,7 +12,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Mar. 25, 2026
  *  version Mar. 28, 2026
  *  version Apr.  6, 2026
- * @version May.  7, 2026
+ * @version May. 31, 2026
  * @author  ASAMI, Tomoharu
  */
 final class GeneratedHelpProjectionSpec
@@ -75,8 +75,9 @@ final class GeneratedHelpProjectionSpec
       operationHelp.details("arguments") shouldBe Vector.empty
       operationHelp.details("returns") shouldBe Vector("LookupAddressResult")
       val commandExecution = operationHelp.commandExecution.getOrElse(fail("command execution metadata is missing"))
+      commandExecution.getRecord("commandExecutionPolicy").flatMap(_.getString("mode")) shouldBe Some("Sync")
       commandExecution.getRecord("commandExecutionPolicy").flatMap(_.getString("legacyMode")) shouldBe Some("SyncDirectNoJob")
-      commandExecution.getString("effectiveCommandExecutionMode") shouldBe Some("SyncDirectNoJob")
+      commandExecution.getString("effectiveCommandExecutionMode") shouldBe Some("Sync")
       operationHelp.usage shouldBe Vector("command domain.address.lookup-address")
 
       And("the CLI renderers can emit meta.help output from the same model")

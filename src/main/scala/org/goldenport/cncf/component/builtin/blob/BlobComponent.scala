@@ -42,7 +42,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
  * Builtin Blob user-facing component.
  *
  * @since   Apr. 26, 2026
- * @version May. 11, 2026
+ * @version May. 31, 2026
  * @author  ASAMI, Tomoharu
  */
 final class BlobComponent() extends Component {
@@ -119,7 +119,7 @@ object BlobComponent {
   val name: String = "blob"
   val componentId: ComponentId = ComponentId(name)
   val BlobCollectionId: EntityCollectionId = BlobRepository.CollectionId
-  private val BlobStoreResourceName: String = "blobstore"
+  private val _blob_store_resource_name: String = "blobstore"
 
   def componentDescriptors: Vector[ComponentDescriptor] =
     Vector(ComponentDescriptor(
@@ -624,7 +624,7 @@ object BlobComponent {
     registerRequest: RegisterBlobRequest
   ) extends CommandAction {
     override def commandExecutionMode: CommandExecutionMode =
-      CommandExecutionMode.SyncDirectNoJob
+      CommandExecutionMode.Sync
 
     def createCall(core: ActionCall.Core): ActionCall =
       RegisterBlobActionCall(core, registerRequest)
@@ -659,7 +659,7 @@ object BlobComponent {
     attachRequest: AttachBlobRequest
   ) extends CommandAction {
     override def commandExecutionMode: CommandExecutionMode =
-      CommandExecutionMode.SyncDirectNoJob
+      CommandExecutionMode.Sync
 
     def createCall(core: ActionCall.Core): ActionCall =
       AttachBlobToEntityActionCall(core, attachRequest)
@@ -670,7 +670,7 @@ object BlobComponent {
     detachRequest: DetachBlobRequest
   ) extends CommandAction {
     override def commandExecutionMode: CommandExecutionMode =
-      CommandExecutionMode.SyncDirectNoJob
+      CommandExecutionMode.Sync
 
     def createCall(core: ActionCall.Core): ActionCall =
       DetachBlobFromEntityActionCall(core, detachRequest)
@@ -720,7 +720,7 @@ object BlobComponent {
     deleteRequest: AdminDeleteBlobRequest
   ) extends CommandAction {
     override def commandExecutionMode: CommandExecutionMode =
-      CommandExecutionMode.SyncDirectNoJob
+      CommandExecutionMode.Sync
 
     def createCall(core: ActionCall.Core): ActionCall =
       AdminDeleteBlobActionCall(core, deleteRequest)
@@ -731,7 +731,7 @@ object BlobComponent {
     attachRequest: AttachBlobRequest
   ) extends CommandAction {
     override def commandExecutionMode: CommandExecutionMode =
-      CommandExecutionMode.SyncDirectNoJob
+      CommandExecutionMode.Sync
 
     def createCall(core: ActionCall.Core): ActionCall =
       AdminAttachBlobToEntityActionCall(core, attachRequest)
@@ -742,7 +742,7 @@ object BlobComponent {
     detachRequest: DetachBlobRequest
   ) extends CommandAction {
     override def commandExecutionMode: CommandExecutionMode =
-      CommandExecutionMode.SyncDirectNoJob
+      CommandExecutionMode.Sync
 
     def createCall(core: ActionCall.Core): ActionCall =
       AdminDetachBlobFromEntityActionCall(core, detachRequest)
@@ -1497,7 +1497,7 @@ object BlobComponent {
     protected final def _authorize_blob_store_access(
       accessKind: String
     ): ExecUowM[Unit] =
-      _exec_uow(UnitOfWorkOp.Authorize(_store_authorization(BlobStoreResourceName, accessKind, system = false)))
+      _exec_uow(UnitOfWorkOp.Authorize(_store_authorization(_blob_store_resource_name, accessKind, system = false)))
 
     private def _authorize_source_entity(
       sourceEntityId: String,
@@ -1778,7 +1778,7 @@ object BlobComponent {
       attributes = Map.empty
     )
 
-  private val ContentTypePattern =
+  private val _content_type_pattern =
     """^[A-Za-z0-9!#$&^_.+-]+/[A-Za-z0-9!#$&^_.+-]+(?:\s*;\s*[A-Za-z0-9!#$&^_.+-]+=(?:"[^"]*"|[A-Za-z0-9!#$&^_.+-]+))*$""".r
 
   private def _optional_content_type(req: Request): Consequence[Option[ContentType]] =
@@ -1796,7 +1796,7 @@ object BlobComponent {
   }
 
   private def _is_valid_content_type(value: String): Boolean =
-    ContentTypePattern.pattern.matcher(value.trim).matches()
+    _content_type_pattern.pattern.matcher(value.trim).matches()
 
   private def _is_valid_sha256_digest(value: String): Boolean =
     value.trim.toLowerCase(java.util.Locale.ROOT).matches("[0-9a-f]{64}")

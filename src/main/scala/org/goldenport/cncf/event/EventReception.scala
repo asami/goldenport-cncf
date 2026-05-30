@@ -8,6 +8,7 @@ import org.goldenport.Consequence
 import org.goldenport.Conclusion
 import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.cncf.action.{JobTransactionScope, OperationEventTransactionRequirement, TaskTransactionRole}
 import org.simplemodeling.model.datatype.EntityId
 import org.goldenport.cncf.entity.runtime.EntitySpace
 import org.goldenport.cncf.job.{ActionId, JobEngine, JobPersistencePolicy, JobSubmitOption, JobTask, TaskOutcome, TaskSucceeded}
@@ -25,7 +26,7 @@ import org.goldenport.observation.{Cause, Taxonomy}
  * @since   Mar. 21, 2026
  *  version Mar. 24, 2026
  *  version Apr. 22, 2026
- * @version May. 11, 2026
+ * @version May. 31, 2026
  * @author  ASAMI, Tomoharu
  */
 enum CmlEventCategory {
@@ -39,7 +40,8 @@ final case class CmlEventDefinition(
   kind: Option[String] = None,
   selectors: Map[String, String] = Map.empty,
   actionName: Option[String] = None,
-  priority: Int = 0
+  priority: Int = 0,
+  transactionCapability: Option[EventTransactionCapability] = None
 ) {
   def matches(input: ReceptionInput): Boolean = {
     val kindok = kind.forall(_ == input.kind)
@@ -75,7 +77,8 @@ final case class CmlSubscriptionDefinition(
   actionName: String,
   declaredTargetUpperBound: Int = 1,
   activation: Option[EntityActivationMode] = None,
-  continuationMode: Option[EventContinuationMode] = None
+  continuationMode: Option[EventContinuationMode] = None,
+  transactionCapability: Option[EventTransactionCapability] = None
 ) {
   def matches(event: ReceptionDomainEvent): Boolean =
     eventName == event.name
@@ -239,6 +242,43 @@ enum EventTransactionRelation {
   case NewTransaction
 }
 
+enum EventTransactionCapability {
+  case Supported
+  case Available
+  case Unsupported
+
+  def print: String = this match {
+    case EventTransactionCapability.Supported => "supported"
+    case EventTransactionCapability.Available => "available"
+    case EventTransactionCapability.Unsupported => "unsupported"
+  }
+}
+
+object EventTransactionCapability {
+  def parse(value: String): Option[EventTransactionCapability] =
+    value.trim.toLowerCase(java.util.Locale.ROOT) match {
+      case "supported" | "support" | "natural" =>
+        Some(Supported)
+      case "available" | "possible" | "can" =>
+        Some(Available)
+      case "unsupported" | "impossible" | "none" =>
+        Some(Unsupported)
+      case _ =>
+        None
+    }
+
+  def compose(
+    event: EventTransactionCapability,
+    reception: EventTransactionCapability
+  ): EventTransactionCapability =
+    if (event == Unsupported || reception == Unsupported)
+      Unsupported
+    else if (event == Available || reception == Available)
+      Available
+    else
+      Supported
+}
+
 enum EventFailurePolicy {
   case Fail
   case Retry
@@ -326,7 +366,8 @@ final case class EventReceptionRule(
   name: String,
   condition: EventReceptionCondition,
   policy: EventReceptionExecutionPolicy,
-  priority: Int = 0
+  priority: Int = 0,
+  transactionCapability: Option[EventTransactionCapability] = None
 )
 
 final case class ReceptionInput(
@@ -459,6 +500,14 @@ object EventReception {
     val DispatchStatus = "cncf.event.dispatchStatus"
     val TaskRelation = "cncf.event.taskRelation"
     val TransactionRelation = "cncf.event.transactionRelation"
+    val transactionCapability = "cncf.event.transactionCapability"
+    val eventTransactionCapability = "cncf.event.definition.transactionCapability"
+    val receptionTransactionCapability = "cncf.event.reception.transactionCapability"
+    val operationEventTransactionRequirement = "cncf.operation.eventTransactionRequirement"
+    val continuationEventTransactionRequirement = "cncf.operation.continuationEventTransactionRequirement"
+    val callerTransactionPolicy = "cncf.operation.callerTransactionPolicy"
+    val jobTransactionScope = "cncf.job.transactionScope"
+    val commandAsyncContinuation = "cncf.command.asyncContinuation"
     val SagaRelation = "cncf.event.sagaRelation"
     val SagaId = "cncf.event.sagaId"
     val Replay = "cncf.event.replay"
@@ -1436,7 +1485,11 @@ object EventReception {
       policy: EventReceptionExecutionPolicy,
       boundary: EventOriginBoundary,
       compatibilityMode: EventContinuationMode,
-      policySource: EventReceptionPolicySource
+      policySource: EventReceptionPolicySource,
+      eventTransactionRequirement: OperationEventTransactionRequirement,
+      eventTransactionCapability: EventTransactionCapability,
+      receptionTransactionCapability: EventTransactionCapability,
+      effectiveTransactionCapability: EventTransactionCapability
     )
 
     private def _resolve_continuation_mode(
@@ -1451,18 +1504,24 @@ object EventReception {
       subscription: CmlSubscriptionDefinition,
       event: ReceptionDomainEvent
     )(using ExecutionContext): Consequence[_ResolvedExecutionPolicy] = {
-      val category = definitions.find(_.name == event.name).map(_.category)
+      val eventdef = definitions.find(_.name == event.name)
+      val category = eventdef.map(_.category)
       _resolve_origin_boundary(event).flatMap { boundary =>
         _select_rule(event, boundary, category) match {
           case Some((rule, _)) =>
-            val resolved = _ResolvedExecutionPolicy(
+            val policy = rule.policy
+            val base = _ResolvedExecutionPolicy(
               ruleName = rule.name,
-              policy = rule.policy,
+              policy = policy,
               boundary = boundary,
-              compatibilityMode = _compatibility_mode(rule.policy, boundary),
-              policySource = EventReceptionPolicySource.ExplicitRule
+              compatibilityMode = _compatibility_mode(policy, boundary),
+              policySource = EventReceptionPolicySource.ExplicitRule,
+              eventTransactionRequirement = _operation_event_transaction_requirement(event, policy),
+              eventTransactionCapability = _event_transaction_capability(eventdef, event),
+              receptionTransactionCapability = _reception_transaction_capability(Some(rule), subscription, boundary, policy),
+              effectiveTransactionCapability = EventTransactionCapability.Available
             )
-            _validate_supported_policy(resolved).map(_ => resolved)
+            _resolve_transaction_requirement(base)
           case None =>
             val compatibility = _resolve_continuation_mode(subscription, event)
             val explicitcompat = _has_explicit_compatibility_mode(subscription, event)
@@ -1477,17 +1536,95 @@ object EventReception {
                 s"compatibility:${_continuation_mode_name(compatibility)}"
               else
                 s"default:${_origin_boundary_name(boundary)}"
-            val resolved = _ResolvedExecutionPolicy(
+            val base = _ResolvedExecutionPolicy(
               ruleName = rulename,
               policy = policy,
               boundary = boundary,
               compatibilityMode = compatibility,
-              policySource = source
+              policySource = source,
+              eventTransactionRequirement = _operation_event_transaction_requirement(event, policy),
+              eventTransactionCapability = _event_transaction_capability(eventdef, event),
+              receptionTransactionCapability = _reception_transaction_capability(None, subscription, boundary, policy),
+              effectiveTransactionCapability = EventTransactionCapability.Available
             )
-            _validate_supported_policy(resolved).map(_ => resolved)
+            _resolve_transaction_requirement(base)
         }
       }
     }
+
+    private def _resolve_transaction_requirement(
+      base: _ResolvedExecutionPolicy
+    ): Consequence[_ResolvedExecutionPolicy] = {
+      val effectivecapability = EventTransactionCapability.compose(
+        base.eventTransactionCapability,
+        base.receptionTransactionCapability
+      )
+      val prepared = base.copy(effectiveTransactionCapability = effectivecapability)
+      val resolved = base.eventTransactionRequirement match {
+        case OperationEventTransactionRequirement.Required =>
+          effectivecapability match {
+            case EventTransactionCapability.Unsupported =>
+              return _failure(s"event same-transaction requirement is unsupported: ${base.ruleName}")
+            case EventTransactionCapability.Supported | EventTransactionCapability.Available =>
+              prepared.copy(policy = EventReceptionExecutionPolicy.SameSubsystemDefault)
+          }
+        case OperationEventTransactionRequirement.BestEffort =>
+          effectivecapability match {
+            case EventTransactionCapability.Unsupported =>
+              prepared
+            case EventTransactionCapability.Supported | EventTransactionCapability.Available =>
+              prepared.copy(policy = EventReceptionExecutionPolicy.SameSubsystemDefault)
+          }
+        case OperationEventTransactionRequirement.Ignore =>
+          prepared
+      }
+      _validate_supported_policy(resolved).map(_ => resolved)
+    }
+
+    private def _operation_event_transaction_requirement(
+      event: ReceptionDomainEvent,
+      policy: EventReceptionExecutionPolicy
+    ): OperationEventTransactionRequirement =
+      _read_first(event.attributes, Vector(StandardAttribute.operationEventTransactionRequirement))
+        .flatMap(OperationEventTransactionRequirement.parse)
+        .orElse {
+          val continuation =
+            _read_boolean(event.attributes, Vector(StandardAttribute.commandAsyncContinuation)) &&
+              policy.timing == EventExecutionTiming.Async &&
+              policy.jobRelation == EventJobRelation.SameJob
+          Option.when(continuation)(OperationEventTransactionRequirement.Ignore)
+        }
+        .getOrElse(OperationEventTransactionRequirement.Required)
+
+    private def _event_transaction_capability(
+      definition: Option[CmlEventDefinition],
+      event: ReceptionDomainEvent
+    ): EventTransactionCapability =
+      _read_first(event.attributes, Vector(StandardAttribute.eventTransactionCapability, StandardAttribute.transactionCapability))
+        .flatMap(EventTransactionCapability.parse)
+        .orElse(definition.flatMap(_.transactionCapability))
+        .getOrElse(EventTransactionCapability.Available)
+
+    private def _reception_transaction_capability(
+      rule: Option[EventReceptionRule],
+      subscription: CmlSubscriptionDefinition,
+      boundary: EventOriginBoundary,
+      policy: EventReceptionExecutionPolicy
+    ): EventTransactionCapability =
+      rule.flatMap(_.transactionCapability)
+        .orElse(subscription.transactionCapability)
+        .getOrElse(_default_reception_transaction_capability(boundary, policy))
+
+    private def _default_reception_transaction_capability(
+      boundary: EventOriginBoundary,
+      policy: EventReceptionExecutionPolicy
+    ): EventTransactionCapability =
+      if (boundary == EventOriginBoundary.SameSubsystem &&
+        policy.timing == EventExecutionTiming.Sync &&
+        policy.jobRelation == EventJobRelation.SameJob)
+        EventTransactionCapability.Supported
+      else
+        EventTransactionCapability.Unsupported
 
     private def _validate_supported_policy(
       resolved: _ResolvedExecutionPolicy
@@ -1530,10 +1667,10 @@ object EventReception {
           if (!rule.condition.matches(event, boundary, category))
             false
           else
-            _abac_matches_(rule, event)
+            _abac_matches(rule, event)
         }
 
-    private def _abac_matches_(
+    private def _abac_matches(
       rule: EventReceptionRule,
       event: ReceptionDomainEvent
     )(using ctx: ExecutionContext): Boolean =
@@ -1542,7 +1679,7 @@ object EventReception {
         if (evaluation.matched)
           true
         else {
-          _emit_abac_non_match_(rule, evaluation, event)
+          _emit_abac_non_match(rule, evaluation, event)
           false
         }
       }
@@ -1616,7 +1753,7 @@ object EventReception {
       event: ReceptionDomainEvent,
       resolved: _ResolvedExecutionPolicy
     )(using ctx: ExecutionContext): Consequence[Unit] = {
-      val eventwithsaga = _with_saga_identity_(ctx, event, resolved)
+      val eventwithsaga = _with_saga_identity(ctx, event, resolved)
       val dispatchctx = _dispatch_execution_context(ctx, eventwithsaga, resolved)
       jobEngine match {
         case Some(engine) if resolved.policy.jobRelation == EventJobRelation.SameJob =>
@@ -1717,6 +1854,10 @@ object EventReception {
         "reception.jobRelation" -> resolved.policy.jobRelation.toString.toLowerCase(java.util.Locale.ROOT),
         "reception.taskRelation" -> _task_relation_name(resolved.policy),
         "reception.transactionRelation" -> _transaction_relation_name(resolved.policy),
+        "reception.transactionRequirement" -> resolved.eventTransactionRequirement.print,
+        "reception.transactionCapability" -> resolved.receptionTransactionCapability.print,
+        "event.transactionCapability" -> resolved.eventTransactionCapability.print,
+        "effective.transactionCapability" -> resolved.effectiveTransactionCapability.print,
         "saga.relation" -> _saga_relation_name(resolved.policy.sagaRelation),
         "saga.id" -> event.attributes.getOrElse(StandardAttribute.SagaId, ""),
         "failure.policy" -> resolved.policy.failurePolicy.toString.toLowerCase(java.util.Locale.ROOT)
@@ -1728,7 +1869,7 @@ object EventReception {
       targetid: String,
       resolved: _ResolvedExecutionPolicy
     )(using ctx: ExecutionContext): Consequence[ReceptionDomainEvent] = {
-      val withSaga = _with_saga_identity_(ctx, event, resolved)
+      val withSaga = _with_saga_identity(ctx, event, resolved)
       val attrs0 = withSaga.attributes + ("targetId" -> targetid) + ("target" -> targetid)
       val attrs1 = subscription.entityName match {
         case Some(name) =>
@@ -1752,6 +1893,10 @@ object EventReception {
         Some(StandardAttribute.DispatchStatus -> _initial_dispatch_status_name(resolved.policy)),
         Some(StandardAttribute.TaskRelation -> _task_relation_name(resolved.policy)),
         Some(StandardAttribute.TransactionRelation -> _transaction_relation_name(resolved.policy)),
+        Some(StandardAttribute.operationEventTransactionRequirement -> resolved.eventTransactionRequirement.print),
+        Some(StandardAttribute.eventTransactionCapability -> resolved.eventTransactionCapability.print),
+        Some(StandardAttribute.receptionTransactionCapability -> resolved.receptionTransactionCapability.print),
+        Some(StandardAttribute.transactionCapability -> resolved.effectiveTransactionCapability.print),
         Some(StandardAttribute.SagaRelation -> _saga_relation_name(resolved.policy.sagaRelation)),
         _read_first(withSaga.attributes, Vector(StandardAttribute.SagaId, StandardAttribute.CorrelationId)).map(x => StandardAttribute.SagaId -> x),
         currentSubsystemName.filter(_.nonEmpty).map(x => StandardAttribute.TargetSubsystem -> x),
@@ -1919,11 +2064,11 @@ object EventReception {
             ctx.observability.copy(sagaId = sagaid)
           )
         case EventSagaRelation.NewSaga =>
-          val sagaid = event.attributes.get(StandardAttribute.SagaId).filter(_.nonEmpty).orElse(ctx.observability.sagaId).getOrElse(_generated_saga_boundary_(event))
+          val sagaid = event.attributes.get(StandardAttribute.SagaId).filter(_.nonEmpty).orElse(ctx.observability.sagaId).getOrElse(_generated_saga_boundary(event))
           currentSubsystemName match {
             case Some(name) =>
               val observability = ctx.observability.copy(
-                correlationId = Some(org.goldenport.cncf.context.CorrelationId(name, _correlation_minor_(sagaid))),
+                correlationId = Some(org.goldenport.cncf.context.CorrelationId(name, _correlation_minor(sagaid))),
                 sagaId = Some(sagaid)
               )
               ExecutionContext.withObservabilityContext(ctx, observability)
@@ -1945,13 +2090,13 @@ object EventReception {
         case EventSagaRelation.SameSaga =>
           ctx.observability.copy(sagaId = sagaid)
         case EventSagaRelation.NewSaga =>
-          val nextsaga = sagaid.getOrElse(_generated_saga_boundary_(event))
+          val nextsaga = sagaid.getOrElse(_generated_saga_boundary(event))
           ctx.observability.copy(sagaId = Some(nextsaga))
       }
       ExecutionContext.withObservabilityContext(ctx, observability)
     }
 
-    private def _with_saga_identity_(
+    private def _with_saga_identity(
       ctx: ExecutionContext,
       event: ReceptionDomainEvent,
       resolved: _ResolvedExecutionPolicy
@@ -1961,23 +2106,23 @@ object EventReception {
           event.attributes.get(StandardAttribute.SagaId)
             .orElse(ctx.observability.sagaId)
             .orElse(ctx.observability.correlationId.map(_.print))
-            .getOrElse(_generated_saga_boundary_(event))
+            .getOrElse(_generated_saga_boundary(event))
         case EventSagaRelation.NewSaga =>
-          _generated_saga_boundary_(event)
+          _generated_saga_boundary(event)
       }
       val attrs = event.attributes ++ Map(
         StandardAttribute.SagaId -> sagaid,
-        StandardAttribute.CorrelationId -> _correlation_value_for_saga_(ctx, event, resolved, sagaid)
+        StandardAttribute.CorrelationId -> _correlation_value_for_saga(ctx, event, resolved, sagaid)
       )
       event.copy(attributes = attrs)
     }
 
-    private def _generated_saga_boundary_(
+    private def _generated_saga_boundary(
       event: ReceptionDomainEvent
     ): String =
       s"event_${event.name.replace('.', '_')}_${java.lang.Long.toUnsignedString(Instant.now().toEpochMilli, 36)}"
 
-    private def _correlation_minor_(sagaid: String): String = {
+    private def _correlation_minor(sagaid: String): String = {
       val normalized = Option(sagaid).getOrElse("")
         .trim
         .map { c =>
@@ -1991,7 +2136,7 @@ object EventReception {
         s"saga_$body"
     }
 
-    private def _correlation_value_for_saga_(
+    private def _correlation_value_for_saga(
       ctx: ExecutionContext,
       event: ReceptionDomainEvent,
       resolved: _ResolvedExecutionPolicy,
@@ -2005,13 +2150,13 @@ object EventReception {
         case EventSagaRelation.NewSaga =>
           currentSubsystemName match {
             case Some(name) =>
-              org.goldenport.cncf.context.CorrelationId(name, _correlation_minor_(sagaid)).print
+              org.goldenport.cncf.context.CorrelationId(name, _correlation_minor(sagaid)).print
             case None =>
               sagaid
           }
       }
 
-    private def _emit_abac_non_match_(
+    private def _emit_abac_non_match(
       rule: EventReceptionRule,
       evaluation: EventReceptionAbacEvaluation,
       event: ReceptionDomainEvent
@@ -2033,6 +2178,17 @@ object EventReception {
       event: ReceptionDomainEvent
     ) extends JobTask {
       val actionId: ActionId = ActionId.generate()
+      override val transactionRole: Option[String] =
+        event.attributes.get(StandardAttribute.TransactionRelation)
+          .map(_.trim.toLowerCase(java.util.Locale.ROOT))
+          .collect {
+            case "same-transaction" => TaskTransactionRole.Join.print
+            case "new-transaction" => TaskTransactionRole.Own.print
+          }
+      override val transactionScope: Option[String] =
+        event.attributes.get(StandardAttribute.jobTransactionScope)
+          .flatMap(JobTransactionScope.parse)
+          .map(_.print)
       override val componentName: Option[String] =
         event.attributes.get(StandardAttribute.TargetComponent).filter(_.nonEmpty)
       override val serviceName: Option[String] =

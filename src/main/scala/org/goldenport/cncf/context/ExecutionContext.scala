@@ -9,7 +9,7 @@ import org.goldenport.id.{UniversalId as CoreUniversalId}
 import org.goldenport.log.Logger
 import org.goldenport.Consequence
 import org.goldenport.cncf.component.Component
-import org.goldenport.cncf.action.CommandExecutionMode
+import org.goldenport.cncf.action.{CommandExecutionMode, CommandExecutionPolicy}
 import org.goldenport.cncf.config.OperationMode
 import org.goldenport.cncf.http.{FakeHttpDriver, HttpDriver}
 import org.goldenport.cncf.datastore.DataStoreSpace
@@ -36,7 +36,6 @@ import cats.~>
  *
  * Helpers such as create()/test() exist only for specs and demos to inject fake or in-memory RuntimeContext.
  * Production execution paths must supply real RuntimeContext instances.
- * @version May. 10, 2026
  */
 /*
  * @since   Dec. 21, 2025
@@ -44,7 +43,7 @@ import cats.~>
  *  version Jan. 20, 2026
  *  version Feb. 25, 2026
  *  version Apr. 25, 2026
- * @version May.  5, 2026
+ * @version May. 31, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class ExecutionContext
@@ -131,6 +130,7 @@ object ExecutionContext {
 
   final case class FrameworkParameter(
     commandExecutionMode: Option[CommandExecutionMode] = None,
+    commandExecutionPolicy: Option[CommandExecutionPolicy] = None,
     workingSetEnabled: Boolean = true,
     callTreeEnabled: Boolean = false,
     inlineCallTree: Boolean = false,
@@ -174,7 +174,7 @@ object ExecutionContext {
     val core = _core()
     val security = _security_context(privilege)
     val observability = _observability_context(core)
-    lazy val runtime: RuntimeContext = _testRuntimeContext(() => context, observability) // TODO
+    lazy val runtime: RuntimeContext = _test_runtime_context(() => context, observability) // TODO
     lazy val context: ExecutionContext = Instance(
       core = core,
       cncfCore = CncfCore(
@@ -322,6 +322,22 @@ object ExecutionContext {
         cncfCore = i.cncfCore.copy(
           framework = i.cncfCore.framework.copy(
             commandExecutionMode = Some(mode)
+          )
+        )
+      )
+    case _ =>
+      ctx
+  }
+
+  def withFrameworkCommandExecutionPolicy(
+    ctx: ExecutionContext,
+    policy: CommandExecutionPolicy
+  ): ExecutionContext = ctx match {
+    case i: Instance =>
+      i.copy(
+        cncfCore = i.cncfCore.copy(
+          framework = i.cncfCore.framework.copy(
+            commandExecutionPolicy = Some(policy)
           )
         )
       )
@@ -572,7 +588,7 @@ object ExecutionContext {
       sagaId = None
     )
 
-  private def _testRuntimeContext(
+  private def _test_runtime_context(
     context: () => ExecutionContext,
     observability: ObservabilityContext
   ): RuntimeContext = {

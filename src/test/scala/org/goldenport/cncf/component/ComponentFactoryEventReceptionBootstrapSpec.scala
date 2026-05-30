@@ -20,7 +20,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Mar. 21, 2026
  *  version Apr. 10, 2026
- * @version Apr. 21, 2026
+ * @version May. 31, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactoryEventReceptionBootstrapSpec
@@ -177,7 +177,8 @@ final class ComponentFactoryEventReceptionBootstrapSpec
                 eventName = Some("person.created"),
                 eventKind = Some("created")
               ),
-              policy = EventReceptionExecutionPolicy.SameSubsystemDefault
+              policy = EventReceptionExecutionPolicy.SameSubsystemDefault,
+              transactionCapability = Some(EventTransactionCapability.Supported)
             )
           )
       }, subsystem)

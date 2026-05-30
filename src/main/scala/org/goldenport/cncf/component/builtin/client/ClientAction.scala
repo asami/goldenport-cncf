@@ -13,13 +13,14 @@ import cats.Functor
  *  version Jan. 21, 2026
  *  version Feb. 19, 2026
  *  version Mar. 29, 2026
- * @version Apr. 29, 2026
+ *  version Apr. 29, 2026
+ * @version May. 31, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class HttpCommand(
 ) extends CommandAction() {
   override def commandExecutionMode: CommandExecutionMode =
-    CommandExecutionMode.SyncDirectNoJob
+    CommandExecutionMode.Sync
 }
 
 abstract class HttpQuery(
