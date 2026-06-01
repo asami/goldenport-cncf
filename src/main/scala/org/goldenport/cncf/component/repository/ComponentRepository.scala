@@ -420,7 +420,7 @@ object ComponentRepository extends GlobalObservable {
             tolerant = true
           ) match {
             case Consequence.Success(components) =>
-              components.map(_.withArtifactMetadata(_dev_artifact_metadata(baseDir)))
+              components.map(component => component.withArtifactMetadata(_dev_artifact_metadata(baseDir, component)))
             case Consequence.Failure(conclusion) =>
               log.warn(s"[component-dev-dir] discovery failed cause=${conclusion.show}")
               Vector.empty
@@ -429,13 +429,17 @@ object ComponentRepository extends GlobalObservable {
       }
     }
 
-    private def _dev_artifact_metadata(base: Path): Component.ArtifactMetadata = {
+    private def _dev_artifact_metadata(
+      base: Path,
+      component: Component
+    ): Component.ArtifactMetadata = {
       val descriptor = ComponentDevDirRepository.devComponentDescriptors(base).headOption
+      val componentname = component.core.name
       Component.ArtifactMetadata(
         sourceType = "component-dev-dir",
-        name = descriptor.flatMap(_.name).orElse(descriptor.flatMap(_.componentName)).getOrElse(base.getFileName.toString),
+        name = descriptor.flatMap(_.name).orElse(descriptor.flatMap(_.componentName)).getOrElse(componentname),
         version = descriptor.flatMap(_.version).getOrElse("0.1.0"),
-        component = descriptor.flatMap(_.componentName),
+        component = descriptor.flatMap(_.componentName).orElse(Some(componentname)),
         subsystem = descriptor.flatMap(_.subsystemName),
         archivePath = Some(base.toString),
         effectiveExtensions = descriptor.map(_.extensions).getOrElse(Map.empty),
