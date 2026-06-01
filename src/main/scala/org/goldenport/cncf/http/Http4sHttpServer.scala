@@ -2,7 +2,8 @@ package org.goldenport.cncf.http
 
 /*
  * @since   May. 18, 2026
- * @version May. 30, 2026
+ *  version May. 30, 2026
+ * @version Jun. 01, 2026
  * @author  ASAMI, Tomoharu
  */
 import cats.effect.IO
@@ -43,7 +44,7 @@ import org.goldenport.cncf.component.builtin.auth.AuthComponent
 import org.goldenport.cncf.context.{ExecutionContext, RuntimeContext, ScopeContext, ScopeKind}
 import org.goldenport.cncf.config.{OperationMode, RuntimeConfig}
 import org.goldenport.cncf.blob.{BlobKind, BlobPayloadSupport, BlobRepository, BlobStoreFactory, BlobStorageRef}
-import org.goldenport.cncf.naming.NamingConventions
+import org.goldenport.cncf.naming.{NamingConventions, PropertyValueResolver}
 import org.goldenport.cncf.job.{JobId, JobInput, JobInputRetentionPolicy, JobQueryReadModel, JobStatus}
 import org.goldenport.cncf.observability.{ConclusionDiagnostics, DiagnosticPayloadReferenceCodec, DslChokepointContext, DslChokepointPhase, DslChokepointRunner}
 import org.goldenport.cncf.mcp.McpJsonRpcAdapter
@@ -59,7 +60,7 @@ import org.goldenport.observation.{Cause, Descriptor}
  *  version Mar. 29, 2026
  *  version Apr. 30, 2026
  *  version May. 25, 2026
- * @version May. 26, 2026
+ * @version Jun. 01, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Http4sHttpServer(
@@ -1445,9 +1446,9 @@ final class Http4sHttpServer(
       case Some(route) =>
         engine.webDescriptor.appKind(route.target.normalizedApp).map(_.toLowerCase) match {
           case Some("static-form") if route.remainingPath.isEmpty =>
-            if (_web_app_static_html_content(Some(route.target.normalizedComponent), route.target.normalizedApp, Vector.empty).nonEmpty)
+            if (_web_app_static_html_content(Some(route.target.component), route.target.normalizedApp, Vector.empty).nonEmpty)
               _component_web_app(
-                route.target.normalizedComponent,
+                route.target.component,
                 route.target.normalizedApp,
                 Vector.empty,
                 Some(req)
@@ -1456,14 +1457,14 @@ final class Http4sHttpServer(
               _static_form_app(route.target.normalizedApp, Vector.empty).map(Some(_))
           case Some("static-form") =>
             _component_web_app(
-              route.target.normalizedComponent,
+              route.target.component,
               route.target.normalizedApp,
               route.remainingPath,
               Some(req)
             ).map(Some(_))
           case _ =>
             _component_web_app(
-              route.target.normalizedComponent,
+              route.target.component,
               route.target.normalizedApp,
               route.remainingPath,
               Some(req)
@@ -1485,7 +1486,7 @@ final class Http4sHttpServer(
   ): IO[HResponse[IO]] =
     engine.webDescriptor.webRouteFor(Vector("web", app)) match {
       case Some(route) if route.remainingPath.isEmpty =>
-        _web_app_asset(route.target.normalizedComponent, route.target.normalizedApp, assetPath)
+        _web_app_asset(route.target.component, route.target.normalizedApp, assetPath)
       case _ =>
         _static_form_app(app, "assets" +: assetPath)
     }
@@ -1815,7 +1816,7 @@ final class Http4sHttpServer(
       _component_web_app(first, second, Vector.empty, req)
     else engine.webDescriptor.webRouteFor(Vector("web", first, second)) match {
       case Some(route) =>
-        _component_web_app(route.target.normalizedComponent, route.target.normalizedApp, route.remainingPath, req)
+        _component_web_app(route.target.component, route.target.normalizedApp, route.remainingPath, req)
       case None =>
       _static_form_app(first, Vector(second))
     }
@@ -4877,7 +4878,7 @@ final class Http4sHttpServer(
         resultid.map("result.id" -> _).toMap ++
         FormResultMetadata.executionTemplateValues(executionMetadata)
     """\$\{([A-Za-z0-9_.-]+)\}""".r.replaceAllIn(template, m =>
-      java.util.regex.Matcher.quoteReplacement(values.getOrElse(m.group(1), ""))
+      java.util.regex.Matcher.quoteReplacement(PropertyValueResolver.value(values, m.group(1)).getOrElse(""))
     )
   }
 
@@ -4938,7 +4939,7 @@ final class Http4sHttpServer(
         "result.body" -> result.message
       ) ++ id.map("id" -> _).toMap ++ resultid.map("result.id" -> _).toMap
     """\$\{([A-Za-z0-9_.-]+)\}""".r.replaceAllIn(template, m =>
-      java.util.regex.Matcher.quoteReplacement(values.getOrElse(m.group(1), ""))
+      java.util.regex.Matcher.quoteReplacement(PropertyValueResolver.value(values, m.group(1)).getOrElse(""))
     )
   }
 

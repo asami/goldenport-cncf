@@ -9,6 +9,7 @@ import org.goldenport.Consequence
 import org.goldenport.cncf.http.HttpDriver
 import org.goldenport.cncf.config.{OperationMode, ResolvedParameters, RuntimeConfig}
 import org.goldenport.cncf.entity.EntityCreateDefaultsPolicy
+import org.goldenport.cncf.naming.PropertyValueResolver
 import org.goldenport.cncf.unitofwork.{UnitOfWork, UnitOfWorkInterpreter, UnitOfWorkOp}
 import org.goldenport.cncf.statemachine.TransitionValidationHook
 import org.goldenport.cncf.context.{DataStoreContext, EntitySpaceContext, EntityStoreContext}
@@ -21,7 +22,8 @@ import org.goldenport.util.StringUtils
  *  version Jan. 18, 2026
  *  version Mar. 31, 2026
  *  version Apr. 28, 2026
- * @version May. 10, 2026
+ *  version May. 10, 2026
+ * @version Jun. 01, 2026
  * @author  ASAMI, Tomoharu
  */
 final class RuntimeContext(
@@ -194,6 +196,9 @@ object RuntimeContext {
       canonicalName: String
     ): String =
       aliases(canonicalName).find(keyset.contains).getOrElse(outputName(canonicalName))
+
+    def resolver: PropertyValueResolver =
+      PropertyValueResolver(this)
 
     def transformRecord(record: Record): Record =
       Record(record.fields.map(_transform_field))

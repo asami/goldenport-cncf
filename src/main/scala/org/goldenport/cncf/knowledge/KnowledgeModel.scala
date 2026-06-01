@@ -82,6 +82,16 @@ object KnowledgeNodeCategory {
   val Chunk: KnowledgeNodeCategory = KnowledgeNodeCategory("chunk")
   val ExternalSubject: KnowledgeNodeCategory = KnowledgeNodeCategory("external-subject")
   val Generated: KnowledgeNodeCategory = KnowledgeNodeCategory("generated")
+  val Publication: KnowledgeNodeCategory = KnowledgeNodeCategory("publication")
+  val TextualWork: KnowledgeNodeCategory = KnowledgeNodeCategory("textual-work")
+  val Edition: KnowledgeNodeCategory = KnowledgeNodeCategory("edition")
+  val Series: KnowledgeNodeCategory = KnowledgeNodeCategory("series")
+  val Volume: KnowledgeNodeCategory = KnowledgeNodeCategory("volume")
+  val VisualWork: KnowledgeNodeCategory = KnowledgeNodeCategory("visual-work")
+  val BuiltWork: KnowledgeNodeCategory = KnowledgeNodeCategory("built-work")
+  val PhysicalObject: KnowledgeNodeCategory = KnowledgeNodeCategory("physical-object")
+  val CollectionItem: KnowledgeNodeCategory = KnowledgeNodeCategory("collection-item")
+  val Holding: KnowledgeNodeCategory = KnowledgeNodeCategory("holding")
 }
 
 final case class KnowledgeRelationshipKind(value: String) {

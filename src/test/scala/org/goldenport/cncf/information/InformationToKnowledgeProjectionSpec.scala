@@ -8,7 +8,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   May. 20, 2026
- * @version May. 30, 2026
+ * @version May. 31, 2026
  * @author  ASAMI, Tomoharu
  */
 final class InformationToKnowledgeProjectionSpec
@@ -58,7 +58,14 @@ final class InformationToKnowledgeProjectionSpec
 
     "materialize selected book person and organization candidates as surrounding nodes" in {
       val space = new InformationSpace
-      val batch = _success(space.registerInformation("book", Vector(Record.data("title" -> "The Tale of Genji", "authors" -> "Murasaki Shikibu", "publisher" -> "Iwanami Shoten"))))
+      val batch = _success(space.registerInformation("book", Vector(Record.data(
+        "title" -> "The Tale of Genji",
+        "workTitle" -> "The Tale of Genji",
+        "editionTitle" -> "Iwanami edition The Tale of Genji",
+        "volume" -> "3",
+        "authors" -> "Murasaki Shikibu",
+        "publisher" -> "Iwanami Shoten"
+      ))))
       val informationid = batch.head.id
       val author = _success(space.addResolutionCandidate(
         informationid,
@@ -95,16 +102,77 @@ final class InformationToKnowledgeProjectionSpec
       val nodecategories = snapshot.nodes.map(_.category.print).toSet
       val relationshipkinds = snapshot.relationships.map(_.kind.print).toSet
 
-      nodecategories should contain allOf ("book", "person", "organization")
-      relationshipkinds should contain allOf ("authored-by", "published-by")
-      snapshot.frames.headOption.map(_.nodeIds.size) shouldBe Some(3)
-      snapshot.frames.headOption.map(_.relationshipIds.size) shouldBe Some(2)
+      nodecategories should contain allOf ("publication", "textual-work", "edition", "volume", "person", "organization")
+      relationshipkinds should contain allOf ("publication-of", "volume-of", "edition-of", "authored-by", "published-by")
+      snapshot.nodes
+        .filter(node => Set("publication", "textual-work", "edition", "volume").contains(node.category.print))
+        .foreach { node =>
+          node.attributes.values.get("resource_family") should contain ("cultural-resource")
+          node.attributes.values.get("cultural_resource_kind") should contain (node.category.print)
+          node.attributes.values.get("domain_profile") should contain ("book")
+        }
+      snapshot.relationships.find(_.kind.print == "authored-by").map(_.sourceNodeId.print) should contain ("textual-work-the-tale-of-genji")
+      snapshot.relationships.find(_.kind.print == "published-by").map(_.sourceNodeId.print) should contain (s"information-${information.id.print}")
+      snapshot.frames.headOption.map(_.nodeIds.size) shouldBe Some(6)
+      snapshot.frames.headOption.map(_.relationshipIds.size) shouldBe Some(5)
+    }
+
+    "materialize an ordinary single-volume book as publication and textual work" in {
+      val space = new InformationSpace
+      val batch = _success(space.registerInformation("book", Vector(Record.data("title" -> "Effective Java"))))
+      val informationid = batch.head.id
+      _success(space.validateInformation(informationid))
+      val information = _success(space.confirmInformation(informationid))
+
+      val snapshot = InformationSpace.materializeInformation(information)
+      val nodecategories = snapshot.nodes.map(_.category.print).toSet
+      val relationshipkinds = snapshot.relationships.map(_.kind.print).toSet
+
+      nodecategories should contain allOf ("publication", "textual-work")
+      nodecategories should not contain "volume"
+      nodecategories should not contain "edition"
+      relationshipkinds should contain ("publication-of")
+      relationshipkinds should not contain "volume-of"
+      relationshipkinds should not contain "edition-of"
+    }
+
+    "materialize Genji Iwanami volume into publication volume edition textual work layers" in {
+      val space = new InformationSpace
+      val batch = _success(space.registerInformation("book", Vector(Record.data(
+        "title" -> "源氏物語",
+        "workTitle" -> "源氏物語",
+        "editionTitle" -> "岩波版 源氏物語",
+        "volume" -> "3",
+        "isbn13" -> "9784003510179",
+        "isbn10" -> "4003510178",
+        "publicationYear" -> "2018",
+        "publicationMonth" -> "03"
+      ))))
+      val informationid = batch.head.id
+      _success(space.validateInformation(informationid))
+      val information = _success(space.confirmInformation(informationid))
+
+      val snapshot = InformationSpace.materializeInformation(information)
+      val nodecategories = snapshot.nodes.map(_.category.print).toSet
+      val relationshipkinds = snapshot.relationships.map(_.kind.print).toSet
+      val labels = snapshot.nodes.flatMap(_.presentation.defaultLabel).toSet
+
+      nodecategories should contain allOf ("publication", "textual-work", "edition", "volume")
+      relationshipkinds should contain allOf ("publication-of", "volume-of", "edition-of")
+      labels should contain allOf ("源氏物語", "岩波版 源氏物語", "源氏物語 3")
+      snapshot.nodes
+        .filter(node => Set("publication", "textual-work", "edition", "volume").contains(node.category.print))
+        .foreach { node =>
+          node.attributes.values.get("resource_family") should contain ("cultural-resource")
+          node.attributes.values.get("cultural_resource_kind") should contain (node.category.print)
+          node.attributes.values.get("domain_profile") should contain ("book")
+        }
     }
 
     "materialize book classification entries as concept nodes and relationships" in {
       val space = new InformationSpace
       val entries = Vector(
-        "entryKey=ndc-913-36; kind=library; system=ndc; code=913.36; label=NDC 913.36; rdfUri=test:classification/ndc/913.36; source=manual; evidence=reviewed NDC%3B source%3Dmanual; state=stable; primary=true",
+        "entryKey=ndc-913-36; kind=library; system=ndc; code=913.36; label=NDC 913.36; source=manual; evidence=reviewed NDC%3B source%3Dmanual; state=stable; primary=true",
         "entryKey=subject-genji; kind=subject; system=openlibrary; label=Genji; source=subjects; evidence=subjects=Genji; state=stable",
         "entryKey=genre-classic; kind=genre; system=local; label=Classic; source=manual; state=editing",
         "entryKey=domain-japanese-literature; kind=knowledge-domain; system=wikidata; rdfUri=https://www.wikidata.org/entity/Q8274; label=Japanese literature; state=stable"
@@ -131,6 +199,11 @@ final class InformationToKnowledgeProjectionSpec
       )
       relationshipkinds should not contain "has-genre"
       conceptlabels should contain allOf ("NDC 913.36", "Genji", "Japanese literature")
+      val ndcnode = snapshot.nodes.find(_.presentation.defaultLabel.contains("NDC 913.36")).getOrElse(fail("missing NDC concept node"))
+      ndcnode.identity.rdfNode shouldBe None
+      ndcnode.identity.externalIdentifiers should contain (ExternalKnowledgeIdentifier("ndc", "913.36", Some("library")))
+      val wikidatanode = snapshot.nodes.find(_.presentation.defaultLabel.contains("Japanese literature")).getOrElse(fail("missing Wikidata concept node"))
+      wikidatanode.identity.rdfNode.map(_.print) should contain ("https://www.wikidata.org/entity/Q8274")
       booknode.structure.classifications.primary.map(_.print) should contain ("classification-ndc-913-36")
       booknode.structure.classifications.additional.map(_.print) should contain ("classification-ndc-913-36")
     }

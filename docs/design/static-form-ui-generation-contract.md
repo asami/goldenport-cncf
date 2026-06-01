@@ -39,6 +39,42 @@ Reusable shell composition is provided by the WN-10 `WEB-INF` convention:
 - `${content}` is the layout content slot;
 - `${partial.name}` resolves private `WEB-INF/partials` HTML files.
 
+## Template Property Naming
+
+Static Form templates are a presentation boundary. Runtime projections expose
+logical data with canonical `camelCase` property names, while template authors
+may use `camelCase`, `snake_case`, or `kebab-case` references according to the
+local surface they are writing.
+
+Examples that must resolve to the same canonical property:
+
+- `${result.workTitle}`
+- `${result.work_title}`
+- `${result.work-title}`
+
+The renderer resolves template property paths segment by segment through the
+runtime property-name policy. The canonical target is the schema/projection
+field, not a set of duplicated aliases in the projection data. For example,
+`work_title` and `work-title` should resolve to `workTitle`; the projection
+should not need to output all three keys.
+
+Schema-aware mapping is required for acronyms, initialisms, and numeric suffixes
+such as `rdfUri`, `dbpediaUri`, and `isbn13`, where simple separator conversion
+is not enough to determine the canonical name in every case.
+
+Generated templates should prefer readable names for their target surface:
+
+- route and path names usually use `kebab-case`;
+- HTML form control names and template properties may use `camelCase`,
+  `snake_case`, or `kebab-case`;
+- runtime operation arguments, records, and projections remain canonical
+  `camelCase` after boundary normalization.
+
+If multiple template references or input fields map to the same canonical
+property in a write boundary, the request must fail with a deterministic
+collision error. Read-only rendering should report ambiguous lookup as a
+development diagnostic instead of silently selecting a value.
+
 Subsystem Web composition is provided by the WN-12 component-Web contract:
 
 - Component Web apps opt in with `apps[].composition: article`.

@@ -9,6 +9,7 @@ import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.component.ComponentOrigin
 import org.goldenport.cncf.context.RuntimeContext
 import org.goldenport.cncf.naming.NamingConventions
+import org.goldenport.cncf.naming.PropertyValueResolver
 import org.goldenport.cncf.job.JobQueryReadModel
 import org.goldenport.cncf.knowledge.{KnowledgeNodeId, KnowledgeSpaceProjection}
 import org.goldenport.cncf.metrics.RuntimeMetricPoint
@@ -31,7 +32,8 @@ import io.circe.parser.parse
 
 /*
  * @since   May. 18, 2026
- * @version May. 24, 2026
+ *  version May. 24, 2026
+ * @version Jun. 01, 2026
  * @author  ASAMI, Tomoharu
  */
 object StaticFormAppRendererSupport {
@@ -86,7 +88,7 @@ object StaticFormAppRendererSupport {
       copy(values = values + (name -> value))
 
     def value(name: String): String =
-      values.getOrElse(name, "")
+      PropertyValueResolver.value(values, name).getOrElse("")
   }
   final case class FormResultProperties(
     page: FormPageProperties,

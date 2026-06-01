@@ -72,6 +72,8 @@ This applies to:
 - record field names
 - query parameters
 - input payload field names
+- configuration property names
+- Web template property references
 
 ### Design Principle
 
@@ -93,6 +95,45 @@ External input:
 - accepts camel/snake/kebab
 
 This avoids leaking transport or storage naming decisions into domain model definitions.
+
+### Web Template Property Naming
+
+Static Form Web templates are also a boundary.
+
+The canonical logical property name remains `camelCase`, but template authors
+may reference the same property in the naming style that best fits the template
+surface:
+
+- `workTitle`
+- `work_title`
+- `work-title`
+
+Template property resolution should normalize each property path segment through
+`PropertyNameContext` and resolve it to the canonical `camelCase` field exposed
+by the runtime projection. This means a template path such as
+`${book.work-title}` or `${book.work_title}` resolves to the same canonical
+field as `${book.workTitle}`.
+
+Runtime projections should not emit duplicate aliases only for template
+convenience. A projection should expose the canonical field once, and the Static
+Form renderer should handle template-side naming normalization.
+
+Schema-aware resolution is required for names that cannot be reconstructed by a
+pure separator conversion, such as:
+
+- `rdfUri`
+- `dbpediaUri`
+- `isbn13`
+
+When a schema or projection descriptor is available, it is the authority for
+mapping external reference forms to canonical logical names. If two input names
+normalize to the same canonical property in a write/input boundary, CNCF should
+raise a deterministic collision error. For read-only template rendering,
+ambiguous lookup should be treated as a renderer diagnostics issue rather than
+silently choosing one value.
+
+This keeps the template author free to use `snake_case`, `kebab-case`, or
+`camelCase` while preserving a single canonical runtime model.
 
 ### Current State
 
@@ -182,6 +223,11 @@ Current behavior:
   - drives structured output key conversion
   - normalizes query/input field names across camel/snake/kebab
   - is used by entity-store and collection paths for key alias resolution
+- `PropertyValueResolver`
+  - centralizes value lookup for `Map`, `Record`, and JSON objects
+  - resolves property path segments across camel/snake/kebab
+  - is used by Static Form template property expansion so projections do not
+    need duplicate alias keys
 - `FormattingContext`
   - is part of `RuntimeContext.Context`
   - transforms structured output values

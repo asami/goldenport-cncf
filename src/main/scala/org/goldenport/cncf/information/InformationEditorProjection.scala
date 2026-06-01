@@ -9,7 +9,7 @@ import org.goldenport.record.Record
 
 /*
  * @since   May. 21, 2026
- * @version May. 30, 2026
+ * @version May. 31, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class InformationFieldMappingDescriptor(
@@ -99,12 +99,14 @@ object InformationEditorProfile {
   val WEB_RESOURCE_DOMAIN = "web-resource"
   val PERSON_DOMAIN = "person"
   val ORGANIZATION_DOMAIN = "organization"
+  val TEXTUAL_WORK_DOMAIN = "textual-work"
   val COMMON_NEIGHBORHOOD = "common-neighborhood"
   val BOOK_PROFILE_EXTENSION = "book-profile-extension"
   val PAPER_PROFILE_EXTENSION = "paper-profile-extension"
   val WEB_RESOURCE_PROFILE_EXTENSION = "web-resource-profile-extension"
   val PERSON_PROFILE_EXTENSION = "person-profile-extension"
   val ORGANIZATION_PROFILE_EXTENSION = "organization-profile-extension"
+  val TEXTUAL_WORK_PROFILE_EXTENSION = "textual-work-profile-extension"
 
   def forDomain(domain: String): Option[InformationEditorProfile] =
     domain match {
@@ -113,6 +115,7 @@ object InformationEditorProfile {
       case WEB_RESOURCE_DOMAIN => Some(webResource)
       case PERSON_DOMAIN => Some(person)
       case ORGANIZATION_DOMAIN => Some(organization)
+      case TEXTUAL_WORK_DOMAIN => Some(textualWork)
       case _ => None
     }
 
@@ -343,6 +346,17 @@ object InformationEditorProfile {
           _mapping("knowledge-node-section", "semantics.roles", BOOK_PROFILE_EXTENSION, "Language-related semantic metadata.")
         ),
         _field(
+          "textualWorkInformationId",
+          "Textual Work Information ID",
+          "Information id of the linked Textual Work stored in the shared Information collection with domain textual-work.",
+          Some("single-global-entity-information-..."),
+          "optional",
+          Some("Use this to keep the general textual work separate from editions, volumes, and ISBN publications."),
+          resolverassisted = true,
+          _mapping("relationship", "edition-of.targetInformation", BOOK_PROFILE_EXTENSION, "Reference from book Information to Textual Work Information."),
+          _mapping("knowledge-node-section", "culturalResource.textualWork", BOOK_PROFILE_EXTENSION, "Textual Work layer identity.")
+        ),
+        _field(
           "edition",
           "Edition",
           "Edition label or statement for the concrete published book.",
@@ -411,8 +425,8 @@ object InformationEditorProfile {
         _field(
           "classificationEntries",
           "Classification entries",
-          "Canonical line-oriented ClassificationEntry list. Each entry is one independent concept link with kind, system, code, label, RDF URI, source, evidence, state, and primary marker.",
-          Some("entryKey=ndc-913-36; kind=library; system=ndc; code=913.36; label=NDC 913.36; rdfUri=test:classification/ndc/913.36; state=stable; primary=true"),
+          "Canonical line-oriented ClassificationEntry list. Each entry is one independent concept link with kind, system, code, label, optional reference URI, source, evidence, state, and primary marker.",
+          Some("entryKey=ndc-913-36; kind=library; system=ndc; code=913.36; label=NDC 913.36; state=stable; primary=true"),
           "recommended",
           Some("Legacy scalar classification fields and provider subjects normalize into entries; stable or primary entries materialize as concept KnowledgeNodes."),
           resolverassisted = true,
@@ -838,6 +852,33 @@ object InformationEditorProfile {
         _field("publisherId", "Publisher ID", "Publisher-local or catalog-specific organization identifier.", None, "optional", None, true, _mapping("knowledge-node-section", "identity.externalIdentifiers", ORGANIZATION_PROFILE_EXTENSION, "External source identifier.")),
         _field("sourceUrl", "Source URL", "Source page or authority record URL used as evidence.", None, "recommended", None, true, _mapping("evidence", "sources.sourceRefs", COMMON_NEIGHBORHOOD, "Source reference.")),
         _field("reviewerNote", "Reviewer note", "Human editor note about this organization authority candidate.", None, "optional", None, false, _mapping("provenance", "curation.note", COMMON_NEIGHBORHOOD, "Human curation note."))
+      )
+    )
+
+  val textualWork: InformationEditorProfile =
+    InformationEditorProfile(
+      TEXTUAL_WORK_DOMAIN,
+      Vector(
+        _field(
+          "title",
+          "Textual work title",
+          "Canonical title for the textual work independent of a specific edition, volume, or ISBN publication.",
+          Some("The Tale of Genji"),
+          "required",
+          Some("Required before confirmation."),
+          resolverassisted = true,
+          _mapping("knowledge-node-section", "presentation.labels", COMMON_NEIGHBORHOOD, "Display label for the Textual Work node."),
+          _mapping("knowledge-node-section", "culturalResource.textualWork", TEXTUAL_WORK_PROFILE_EXTENSION, "Textual Work profile under CulturalResource.")
+        ),
+        _field("alternativeTitles", "Alternative titles", "Line-separated alternate titles, translated titles, or historical title variants.", Some("Genji Monogatari"), "optional", None, true, _mapping("knowledge-node-section", "presentation.aliases", TEXTUAL_WORK_PROFILE_EXTENSION, "Alternate labels.")),
+        _field("originalTitle", "Original title", "Original-language title when different from the canonical display title.", Some("源氏物語"), "optional", None, true, _mapping("knowledge-node-section", "presentation.originalTitle", TEXTUAL_WORK_PROFILE_EXTENSION, "Original title.")),
+        _field("language", "Language", "Primary language of the textual work.", Some("ja"), "recommended", None, true, _mapping("knowledge-node-section", "semantics.language", TEXTUAL_WORK_PROFILE_EXTENSION, "Primary work language.")),
+        _field("summary", "Summary", "Short work-level summary that is not tied to one edition or publication.", None, "optional", None, false, _mapping("knowledge-node-section", "content.summary", TEXTUAL_WORK_PROFILE_EXTENSION, "Work summary.")),
+        _field("wikidataId", "Wikidata QID", "External authority id for the textual work.", Some("Q12345"), "optional", Some("External id only; do not use as a CNCF id."), true, _mapping("knowledge-node-section", "identity.externalIdentifiers", TEXTUAL_WORK_PROFILE_EXTENSION, "External identifier.")),
+        _field("dbpediaUri", "DBpedia URI", "DBpedia resource URI used as an RDF enrichment anchor for the textual work.", Some("http://dbpedia.org/resource/The_Tale_of_Genji"), "optional", Some("Treat as candidate until confirmed in InformationSpace."), true, _mapping("knowledge-node-section", "identity.externalIdentifiers", TEXTUAL_WORK_PROFILE_EXTENSION, "External RDF anchor candidate.")),
+        _field("ndl", "NDL authority ID", "National Diet Library authority identifier for the work when available.", None, "optional", None, true, _mapping("knowledge-node-section", "identity.externalIdentifiers", TEXTUAL_WORK_PROFILE_EXTENSION, "External authority identifier.")),
+        _field("sourceUrl", "Source URL", "Source page or authority record URL used as evidence.", None, "recommended", None, true, _mapping("evidence", "sources.sourceRefs", COMMON_NEIGHBORHOOD, "Source reference.")),
+        _field("reviewerNote", "Reviewer note", "Human editor note about this textual work authority candidate.", None, "optional", None, false, _mapping("provenance", "curation.note", COMMON_NEIGHBORHOOD, "Human curation note."))
       )
     )
 

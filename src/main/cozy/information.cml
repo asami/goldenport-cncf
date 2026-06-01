@@ -195,14 +195,17 @@ package = org.goldenport.cncf.information.value
 
 Per-field source, transformation, and state event.
 
-Information field state is event-sourced: untouched fields, inferred values,
-imported values, manual edits, provider-sourced values, and user completion
-marks are appended as events. Inferred events come from domain rules that derive
-weak values from identifiers or context. Provider-sourced events record where
-the value came from through source, provider, evidence, and transformation
-metadata; they are not modeled as editor commands. The current field state is
-calculated from the latest event for that field. Raw provider JSON, RDF, HTML,
-or vector payloads remain outside Information.
+Information field state is event-sourced: untouched fields, unresolved required
+fields, inferred values, imported values, manual edits, provider-sourced
+values, and user completion marks are appended as events. Unresolved events
+mean a required field still needs a value or authority resolution. Candidate
+availability is represented by resolver candidates and evidence, not by a
+separate field state. Inferred events come from domain rules that derive weak
+values from identifiers or context. Provider-sourced events record where the
+value came from through source, provider, evidence, and transformation metadata;
+they are not modeled as editor commands. The current field state is calculated
+from the latest event for that field. Raw provider JSON, RDF, HTML, or vector
+payloads remain outside Information.
 
 package = org.goldenport.cncf.information.value
 
@@ -371,6 +374,7 @@ package = org.goldenport.cncf.information.value
 | name      | label     |
 | ---       | ---       |
 | untouched | Untouched |
+| unresolved | Unresolved |
 | inferred  | Inferred  |
 | imported  | Imported  |
 | editing   | Editing   |

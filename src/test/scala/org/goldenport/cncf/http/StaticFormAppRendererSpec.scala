@@ -2,7 +2,8 @@ package org.goldenport.cncf.http
 
 /*
  * @since   May. 18, 2026
- * @version May. 27, 2026
+ *  version May. 27, 2026
+ * @version Jun. 01, 2026
  * @author  ASAMI, Tomoharu
  */
 import scala.collection.mutable.ListBuffer
@@ -64,7 +65,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr. 12, 2026
- * @version May. 27, 2026
+ *  version May. 27, 2026
+ * @version Jun. 01, 2026
  * @author  ASAMI, Tomoharu
  */
 final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
@@ -7487,6 +7489,38 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should not include ("Submitted Values")
       html should not include ("${form.id}")
       html should not include ("<textus-result-view")
+    }
+
+    "resolve Static Form template properties across camel, snake, and kebab names" in {
+      val properties = StaticFormAppRenderer.FormResultProperties(
+        StaticFormAppRenderer.FormPageProperties(
+          "notice-board",
+          "notice",
+          "approve-notice",
+          Map("pageContext.sessionAuthenticated" -> "true")
+        ),
+        200,
+        "application/json",
+        """{"data":{"current":{"workTitle":"源氏物語","textualWorkInformationId":"info-1","rdfUri":"https://example.test/book/1","isbn13":"9784003510179"}}}"""
+      )
+
+      val html = _renderer.renderFormResult(
+        properties,
+        """<article>
+          |<p>${result.body.data.current.work_title}</p>
+          |<p>${result.body.data.current.textual-work-information-id}</p>
+          |<p>${result.body.data.current.rdf_uri}</p>
+          |<p>${result.body.data.current.isbn-13}</p>
+          |<p>${pageContext.session-authenticated}</p>
+          |</article>""".stripMargin
+      ).body
+
+      html should include ("源氏物語")
+      html should include ("info-1")
+      html should include ("https://example.test/book/1")
+      html should include ("9784003510179")
+      html should include ("true")
+      html should not include ("${result.body.data.current.work_title}")
     }
 
     "render operation form result through static success template convention before descriptor template" in {

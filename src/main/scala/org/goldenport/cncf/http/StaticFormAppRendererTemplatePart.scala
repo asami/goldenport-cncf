@@ -7,8 +7,8 @@ import org.goldenport.Consequence
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.component.ComponentOrigin
-import org.goldenport.cncf.context.RuntimeContext
 import org.goldenport.cncf.naming.NamingConventions
+import org.goldenport.cncf.naming.PropertyValueResolver
 import org.goldenport.cncf.job.JobQueryReadModel
 import org.goldenport.cncf.knowledge.{KnowledgeNodeId, KnowledgeSpaceProjection}
 import org.goldenport.cncf.metrics.RuntimeMetricPoint
@@ -31,7 +31,8 @@ import io.circe.parser.parse
 
 /*
  * @since   May. 18, 2026
- * @version May. 30, 2026
+ *  version May. 30, 2026
+ * @version Jun. 01, 2026
  * @author  ASAMI, Tomoharu
  */
 trait StaticFormAppRendererTemplatePart {
@@ -80,7 +81,7 @@ trait StaticFormAppRendererTemplatePart {
     """\$\{([A-Za-z0-9_.-]+)\}""".r.replaceAllIn(template, m =>
       java.util.regex.Matcher.quoteReplacement(
         escape(
-          properties.values.get(m.group(1))
+          property_value(properties, m.group(1))
             .orElse(source_json(m.group(1), properties).map(json_cell))
             .getOrElse("")
         )
@@ -513,7 +514,7 @@ trait StaticFormAppRendererTemplatePart {
     key: String,
     properties: FormPageProperties
   ): Boolean =
-    properties.values.get(key).exists(_.trim.nonEmpty) ||
+    property_value(properties, key).exists(_.trim.nonEmpty) ||
       source_json(key, properties).exists(json_has_value)
 
   protected def json_has_value(json: Json): Boolean =
@@ -555,9 +556,9 @@ trait StaticFormAppRendererTemplatePart {
     else {
       policy.trim.toLowerCase(java.util.Locale.ROOT) match {
         case "authenticated" | "login" | "session" =>
-          properties.values.get("pageContext.session.authenticated").exists(_.equalsIgnoreCase("true"))
+          property_value(properties, "pageContext.session.authenticated").exists(_.equalsIgnoreCase("true"))
         case _ =>
-          capability_tokens(properties.values.getOrElse("pageContext.security.capabilities", "")).contains(normalizedcapability)
+          capability_tokens(property_value(properties, "pageContext.security.capabilities").getOrElse("")).contains(normalizedcapability)
       }
     }
   }
@@ -657,7 +658,7 @@ trait StaticFormAppRendererTemplatePart {
     }.sortBy(_._1)
     val standardKeys = standard.map(_._1).toSet
     val explicit = attrs.get("keys").toVector.flatMap(hidden_context_keys).flatMap { key =>
-      properties.values.get(key).filter(_.nonEmpty).map(key -> _)
+      property_value(properties, key).filter(_.nonEmpty).map(key -> _)
     }.filterNot { case (key, _) => standardKeys.contains(key) }
     (standard ++ explicit).map { case (key, value) =>
       s"""<input type="hidden" name="${escape(key)}" value="${escape(value)}">"""
@@ -926,7 +927,7 @@ trait StaticFormAppRendererTemplatePart {
   ): Vector[String] =
     attrs.get("actions").map(_.split(',').toVector.map(_.trim).filter(_.nonEmpty)).filter(_.nonEmpty)
       .getOrElse {
-        val count = properties.value("result.actions.count").toIntOption.getOrElse(0)
+        val count = property_value(properties, "result.actions.count").flatMap(_.toIntOption).getOrElse(0)
         if (count > 0)
           (0 until count).map(_.toString).toVector
         else
@@ -972,7 +973,7 @@ trait StaticFormAppRendererTemplatePart {
     properties: FormPageProperties
   ): Option[ActionWidgetValue] = {
     val source = attrs.getOrElse("source", "result.action.primary")
-    val href = properties.value(s"${source}.href")
+    val href = property_value(properties, s"${source}.href").getOrElse("")
     Option.when(href.nonEmpty) {
       val label = attrs.get("label")
         .orElse(property_non_empty(properties, s"${source}.label"))
@@ -1015,14 +1016,14 @@ trait StaticFormAppRendererTemplatePart {
     properties: FormPageProperties,
     name: String
   ): Option[String] =
-    properties.values.get(name).map(_.trim).filter(_.nonEmpty)
+    property_value(properties, name).map(_.trim).filter(_.nonEmpty)
 
   protected def render_form_link(
     hrefPath: String,
     label: String,
     properties: FormPageProperties
   ): String =
-    properties.values.get(hrefPath).filter(_.nonEmpty) match {
+    property_value(properties, hrefPath).filter(_.nonEmpty) match {
       case Some(href) =>
         s"""<p><a class="btn btn-outline-primary" href="${escape(href)}">${escape(label)}</a></p>"""
       case None =>
@@ -1052,7 +1053,7 @@ trait StaticFormAppRendererTemplatePart {
     val page = int_property(properties, pagePath, 1)
     val pageSize = int_property(properties, pageSizePath, 20)
     val total = optional_int_property(properties, totalPath)
-    val href = properties.value(hrefPath)
+    val href = property_value(properties, hrefPath).getOrElse("")
     val table = json_table(source, properties, page, pageSize, columns, attrs).getOrElse("")
     val download = render_table_download(attrs, properties, source)
     if (widget_bool(attrs, "pagination", default = true))
@@ -1373,8 +1374,8 @@ trait StaticFormAppRendererTemplatePart {
     properties: FormPageProperties
   ): String = {
     val source = attrs.getOrElse("source", "result.job")
-    val jobId = properties.value(s"${source}.id")
-    if (jobId.isEmpty)
+    val jobid = property_value(properties, s"${source}.id").getOrElse("")
+    if (jobid.isEmpty)
       ""
     else {
       val title = attr_value(attrs, "title", properties).getOrElse("Job accepted")
@@ -1388,7 +1389,7 @@ trait StaticFormAppRendererTemplatePart {
           render_job_actions(attrs, properties)
         else
           ""
-      s"""<article class="card textus-job-ticket border-${escape(variant)} mb-3"><div class="card-body"><div class="d-flex flex-wrap align-items-start justify-content-between gap-2"><div><h3 class="h5 card-title mb-1">${escape(title)}</h3><p class="text-secondary mb-2">${escape(message)}</p></div><span class="badge text-bg-${escape(variant)}">${escape(status)}</span></div><dl class="row mb-3"><dt class="col-sm-3">Job ID</dt><dd class="col-sm-9"><code>${escape(jobId)}</code></dd></dl>${actions}</div></article>"""
+      s"""<article class="card textus-job-ticket border-${escape(variant)} mb-3"><div class="card-body"><div class="d-flex flex-wrap align-items-start justify-content-between gap-2"><div><h3 class="h5 card-title mb-1">${escape(title)}</h3><p class="text-secondary mb-2">${escape(message)}</p></div><span class="badge text-bg-${escape(variant)}">${escape(status)}</span></div><dl class="row mb-3"><dt class="col-sm-3">Job ID</dt><dd class="col-sm-9"><code>${escape(jobid)}</code></dd></dl>${actions}</div></article>"""
     }
   }
 
@@ -1397,8 +1398,8 @@ trait StaticFormAppRendererTemplatePart {
     properties: FormPageProperties
   ): String = {
     val source = attrs.getOrElse("source", "result.job")
-    val jobId = properties.value(s"${source}.id")
-    if (jobId.isEmpty)
+    val jobid = property_value(properties, s"${source}.id").getOrElse("")
+    if (jobid.isEmpty)
       ""
     else {
       val title = attr_value(attrs, "title", properties).getOrElse("Command accepted")
@@ -1406,18 +1407,18 @@ trait StaticFormAppRendererTemplatePart {
         .orElse(attr_value(attrs, "subtitle", properties))
         .orElse(property_non_empty(properties, "result.message"))
         .getOrElse("The command is running asynchronously.")
-      val ticketAttrs = attrs + ("actions" -> "false")
-      val ticket = render_job_ticket(ticketAttrs, properties)
+      val ticketattrs = attrs + ("actions" -> "false")
+      val ticket = render_job_ticket(ticketattrs, properties)
       val actions = render_job_actions(attrs, properties)
-      val appHref = properties.value(s"${source}.href")
-      val appJobsHref = properties.value("result.jobs.href")
-      val systemHref = s"/web/system/jobs/${escape_path_segment(jobId)}"
-      val adminHref = s"/web/system/admin/jobs/${escape_path_segment(jobId)}"
-      val appLinks = Vector(
-        Option.when(appHref.nonEmpty)(s"""<a class="btn btn-outline-primary btn-sm" href="${escape(appHref)}">Open job result</a>"""),
-        Option.when(appJobsHref.nonEmpty)(s"""<a class="btn btn-outline-secondary btn-sm" href="${escape(appJobsHref)}">My jobs</a>""")
+      val apphref = property_value(properties, s"${source}.href").getOrElse("")
+      val appjobshref = property_value(properties, "result.jobs.href").getOrElse("")
+      val systemhref = s"/web/system/jobs/${escape_path_segment(jobid)}"
+      val adminhref = s"/web/system/admin/jobs/${escape_path_segment(jobid)}"
+      val applinks = Vector(
+        Option.when(apphref.nonEmpty)(s"""<a class="btn btn-outline-primary btn-sm" href="${escape(apphref)}">Open job result</a>"""),
+        Option.when(appjobshref.nonEmpty)(s"""<a class="btn btn-outline-secondary btn-sm" href="${escape(appjobshref)}">My jobs</a>""")
       ).flatten.mkString
-      s"""<section class="textus-job-panel border rounded p-3 mb-3 bg-light"><div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3"><div><h3 class="h5 mb-1">${escape(title)}</h3><p class="text-secondary mb-0">${escape(description)}</p></div><div class="d-flex flex-wrap gap-2">${appLinks}<a class="btn btn-outline-secondary btn-sm" href="${escape(systemHref)}">System job page</a><a class="btn btn-outline-secondary btn-sm" href="${escape(adminHref)}">Debug detail</a></div></div>${ticket}${actions}</section>"""
+      s"""<section class="textus-job-panel border rounded p-3 mb-3 bg-light"><div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3"><div><h3 class="h5 mb-1">${escape(title)}</h3><p class="text-secondary mb-0">${escape(description)}</p></div><div class="d-flex flex-wrap gap-2">${applinks}<a class="btn btn-outline-secondary btn-sm" href="${escape(systemhref)}">System job page</a><a class="btn btn-outline-secondary btn-sm" href="${escape(adminhref)}">Debug detail</a></div></div>${ticket}${actions}</section>"""
     }
   }
 
@@ -1531,8 +1532,8 @@ trait StaticFormAppRendererTemplatePart {
   ): String = {
     val propertyPattern = """^\$\{([A-Za-z0-9_.-]+)\}$""".r
     value match {
-      case propertyPattern(name) => properties.value(name)
-      case _ => properties.values.get(value).filter(_.nonEmpty).getOrElse(value)
+      case propertyPattern(name) => property_value(properties, name).getOrElse("")
+      case _ => property_value(properties, value).filter(_.nonEmpty).getOrElse(value)
     }
   }
 
@@ -1574,7 +1575,7 @@ trait StaticFormAppRendererTemplatePart {
     val page = int_property(properties, pagePath, 1)
     val pageSize = int_property(properties, pageSizePath, 20)
     val total = optional_int_property(properties, totalPath)
-    val href = properties.value(hrefPath)
+    val href = property_value(properties, hrefPath).getOrElse("")
     val hasNext = optional_bool_property(properties, hasNextPath)
     paging_nav(page, pageSize, total, href, hasNext)
   }
@@ -1818,14 +1819,14 @@ trait StaticFormAppRendererTemplatePart {
     source: String,
     properties: FormPageProperties
   ): Option[String] =
-    properties.values.get(source).orElse(source_json(source, properties).map(_.spaces2))
+    property_value(properties, source).orElse(source_json(source, properties).map(_.spaces2))
 
   protected def source_json(
     source: String,
     properties: FormPageProperties
   ): Option[Json] =
-    properties.values.get(source).flatMap(parse(_).toOption).orElse {
-      val body = properties.values.get("result.body")
+    property_value(properties, source).flatMap(parse(_).toOption).orElse {
+      val body = property_value(properties, "result.body")
       body.flatMap(parse(_).toOption).flatMap { json =>
         val path =
           if (source.startsWith("result.body."))
@@ -1846,9 +1847,15 @@ trait StaticFormAppRendererTemplatePart {
       z.flatMap { current =>
         current.asArray.flatMap { xs =>
           name.toIntOption.flatMap(i => xs.lift(i))
-        }.orElse(current.hcursor.downField(name).focus)
+        }.orElse(PropertyValueResolver.jsonField(current, name))
       }
     }
+
+  protected def property_value(
+    properties: FormPageProperties,
+    name: String
+  ): Option[String] =
+    PropertyValueResolver.value(properties.values, name)
 
   protected def page_rows(
     rows: Vector[Json],
@@ -1944,13 +1951,13 @@ trait StaticFormAppRendererTemplatePart {
     properties: FormPageProperties,
     name: String
   ): Option[Int] =
-    properties.value(name).toIntOption
+    property_value(properties, name).flatMap(_.toIntOption)
 
   protected def optional_bool_property(
     properties: FormPageProperties,
     name: String
   ): Option[Boolean] =
-    properties.value(name).trim.toLowerCase(java.util.Locale.ROOT) match {
+    property_value(properties, name).getOrElse("").trim.toLowerCase(java.util.Locale.ROOT) match {
       case "true" | "yes" | "on" | "1" => Some(true)
       case "false" | "no" | "off" | "0" => Some(false)
       case _ => None

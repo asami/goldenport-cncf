@@ -79,6 +79,7 @@ object InformationConflictState {
 type InformationFieldState = value.InformationFieldState
 object InformationFieldState {
   val Untouched: InformationFieldState = value.InformationFieldState.untouched
+  val Unresolved: InformationFieldState = value.InformationFieldState.unresolved
   val Inferred: InformationFieldState = value.InformationFieldState.inferred
   val Imported: InformationFieldState = value.InformationFieldState.imported
   val Editing: InformationFieldState = value.InformationFieldState.editing
