@@ -129,26 +129,28 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
       }
 
     case m: (UnitOfWorkOp.EntityStoreLoad[t] @unchecked) =>
-      _with_calltree("uow:entityspace:load", _entity_calltree_attributes(m.id, "entity-space", realIo = !_working_set_enabled)) {
-        _authorize(m.authorization, Some(() => _load_record(m.id))).flatMap { _ =>
+      val op = _canonical_load_op(m)
+      _with_calltree("uow:entityspace:load", _entity_calltree_attributes(op.id, "entity-space", realIo = !_working_set_enabled)) {
+        _authorize(op.authorization, Some(() => _load_record(op.id))).flatMap { _ =>
           val loaded =
             if (_working_set_enabled)
-              _entity_space_load(m)
+              _entity_space_load(op)
             else
-              _entity_store_space.load(m)
+              _entity_store_space.load(op)
           loaded.map(_.filter(entity =>
             org.goldenport.cncf.entity.EntityAccessScopePolicy.visibilityRecordVisible(
-              m.id.collection,
-              m.tc.toRecord(entity),
-              m.visibilityScope
+              op.id.collection,
+              op.tc.toRecord(entity),
+              op.visibilityScope
             )
           ))
         }
       }
 
     case m: (UnitOfWorkOp.EntityStoreLoadDirect[t] @unchecked) =>
-      _with_calltree("uow:entitystore:load:direct", _entity_calltree_attributes(m.id, "entity-store", realIo = true)) {
-        _entity_store_space.load(UnitOfWorkOp.EntityStoreLoad(m.id, m.tc))
+      val id = _canonical_entity_id(m.id)
+      _with_calltree("uow:entitystore:load:direct", _entity_calltree_attributes(id, "entity-store", realIo = true)) {
+        _entity_store_space.load(UnitOfWorkOp.EntityStoreLoad(id, m.tc))
       }
 
     case m: (UnitOfWorkOp.EntityStoreSave[t] @unchecked) =>
@@ -185,10 +187,12 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
 
     case m: (UnitOfWorkOp.EntityStoreUpdateById[t] @unchecked) =>
       _with_calltree("uow:entitystore:update:patch") {
-        _authorize(m.authorization, Some(() => _load_record(m.id))).flatMap(_ =>
+        val id = _canonical_entity_id(m.id)
+        val op = m.copy(id = id)
+        _authorize(op.authorization, Some(() => _load_record(op.id))).flatMap(_ =>
           _transition_validation_hook
-            .beforeUpdateById[t](m.id, m.patch, m.tc)
-            .flatMap(_ => _entity_store_space.updateById(m))
+            .beforeUpdateById[t](op.id, op.patch, op.tc)
+            .flatMap(_ => _entity_store_space.updateById(op))
             .map { r =>
               _view_space_invalidate_all()
               r
@@ -198,9 +202,11 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
 
     case m: UnitOfWorkOp.EntityStoreDelete =>
       _with_calltree("uow:entitystore:delete") {
-        _authorize(m.authorization, Some(() => _load_record(m.id))).flatMap(_ =>
-          _entity_store_space.delete(m).map { r =>
-            _entity_space_evict(m.id)
+        val id = _canonical_entity_id(m.id)
+        val op = m.copy(id = id)
+        _authorize(op.authorization, Some(() => _load_record(op.id))).flatMap(_ =>
+          _entity_store_space.delete(op).map { r =>
+            _entity_space_evict(op.id)
             _view_space_invalidate_all()
             r
           }
@@ -209,8 +215,10 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
 
     case m: UnitOfWorkOp.EntityStoreDeleteHard =>
       _with_calltree("uow:entitystore:delete:hard") {
-        _entity_store_space.deleteHard(m).map { r =>
-          _entity_space_evict(m.id)
+        val id = _canonical_entity_id(m.id)
+        val op = m.copy(id = id)
+        _entity_store_space.deleteHard(op).map { r =>
+          _entity_space_evict(op.id)
           _view_space_invalidate_all()
           r
         }
@@ -332,6 +340,27 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
   private def _data_store_space: DataStoreSpace = uow.executionContext.dataStoreSpace
 
   private def _entity_store_space: EntityStoreSpace = uow.executionContext.entityStoreSpace
+
+  private def _canonical_load_op[T](
+    op: UnitOfWorkOp.EntityStoreLoad[T]
+  ): UnitOfWorkOp.EntityStoreLoad[T] = {
+    val id = _canonical_entity_id(op.id)
+    if (id == op.id) op else op.copy(id = id)
+  }
+
+  private def _canonical_entity_id(
+    id: EntityId
+  ): EntityId =
+    _component_option
+      .flatMap(_.entitySpace.entityOption[Any](id.collection.name))
+      .map { collection =>
+        val cid = collection.descriptor.collectionId
+        if (id.collection == cid)
+          id
+        else
+          EntityId(id.major, id.minor, cid, id.timestamp, id.entropy)
+      }
+      .getOrElse(id)
 
   private def _entity_space_load[T](
     op: UnitOfWorkOp.EntityStoreLoad[T]

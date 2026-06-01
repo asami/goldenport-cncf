@@ -373,20 +373,52 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
     collection: org.goldenport.cncf.entity.runtime.EntityCollection[Any],
     id: EntityId
   ): Consequence[Option[Record]] = {
-    def torecord(entity: Any): Record =
-      collection.descriptor.persistent.toRecord(entity)
+    val effectiveid = _canonical_aggregate_entity_id(collection, id)
 
-    collection.resolve(id).map(x => Some(torecord(x))).recoverWith {
+    def _to_record_(entity: Any): Consequence[Record] =
+      _aggregate_raw_record(effectiveid).map {
+        case Some(record) =>
+          collection.descriptor.persistent.authorizationRecord(entity, record)
+        case None =>
+          collection.descriptor.persistent.authorizationRecord(entity)
+      }.recover {
+        case _ =>
+          collection.descriptor.persistent.authorizationRecord(entity)
+      }
+
+    collection.resolve(effectiveid).flatMap(x => _to_record_(x).map(Some(_))).recoverWith {
       case conclusion if _is_aggregate_record_not_found(conclusion) =>
         given EntityPersistent[Any] =
           collection.descriptor.persistent.asInstanceOf[EntityPersistent[Any]]
-        EntityStore.standard().load[Any](id)(using summon[EntityPersistent[Any]], execution_context).map {
-          _.map(torecord)
+        EntityStore.standard().load[Any](effectiveid)(using summon[EntityPersistent[Any]], execution_context).flatMap {
+          case Some(entity) => _to_record_(entity).map(Some(_))
+          case None => Consequence.success(None)
         }
       case conclusion =>
         Consequence.Failure(conclusion)
     }
   }
+
+  private def _canonical_aggregate_entity_id(
+    collection: org.goldenport.cncf.entity.runtime.EntityCollection[Any],
+    id: EntityId
+  ): EntityId = {
+    val cid = collection.descriptor.collectionId
+    if (id.collection == cid)
+      id
+    else
+      EntityId(id.major, id.minor, cid, id.timestamp, id.entropy)
+  }
+
+  private def _aggregate_raw_record(
+    id: EntityId
+  ): Consequence[Option[Record]] =
+    for {
+      cid <- execution_context.entityStoreSpace.dataStoreCollection(id)
+      dsid <- execution_context.entityStoreSpace.dataStoreEntryId(id)
+      ds <- execution_context.dataStoreSpace.dataStore(cid)
+      r <- ds.load(cid, dsid)(using execution_context)
+    } yield r
 
   private def _is_aggregate_record_not_found(
     conclusion: org.goldenport.Conclusion
@@ -1248,6 +1280,20 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
       message.contains("notfound")
   }
 
+  private def _canonical_entity_id(
+    id: EntityId
+  ): EntityId =
+    component
+      .flatMap(_.entitySpace.entityOption[Any](id.collection.name))
+      .map { collection =>
+        val cid = collection.descriptor.collectionId
+        if (id.collection == cid)
+          id
+        else
+          EntityId(id.major, id.minor, cid, id.timestamp, id.entropy)
+      }
+      .getOrElse(id)
+
   protected final def entity_create[T](
     entity: T
   )(using tc: EntityPersistentCreate[T]): ExecUowM[CreateResult[T]] = {
@@ -1263,31 +1309,32 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
   protected final def entity_load_option[T](
     id: EntityId
   )(using tc: EntityPersistent[T]): ExecUowM[Option[T]] = {
-    _emit_entity_access("entity.load.start", _entity_load_attributes(id, "unknown", "start"))
-    val effectivetc = _effective_entity_persistent(id.collection, tc)
+    val effectiveid = _canonical_entity_id(id)
+    _emit_entity_access("entity.load.start", _entity_load_attributes(effectiveid, "unknown", "start"))
+    val effectivetc = _effective_entity_persistent(effectiveid.collection, tc)
     if (!_working_set_enabled) {
-      _emit_entity_access("entity.load.bypass.entity-space", _entity_load_attributes(id, "entity-space", "bypass"))
+      _emit_entity_access("entity.load.bypass.entity-space", _entity_load_attributes(effectiveid, "entity-space", "bypass"))
       val op = UnitOfWorkOp.EntityStoreLoad(
-        id,
+        effectiveid,
         effectivetc,
-        _entity_uow_authorization(Some(id.collection.name), Some(id), "read"),
+        _entity_uow_authorization(Some(effectiveid.collection.name), Some(effectiveid), "read"),
         _declared_visibility_scope
       )
       return ConsequenceT.liftF(Free.liftF(op))
     }
-    component.flatMap(_.entitySpace.entityOption(id.collection).map(_.asInstanceOf[org.goldenport.cncf.entity.runtime.EntityCollection[T]])) match {
+    component.flatMap(_.entitySpace.entityOption(effectiveid.collection).map(_.asInstanceOf[org.goldenport.cncf.entity.runtime.EntityCollection[T]])) match {
       case Some(collection) =>
-        _emit_entity_access("entity.load.try.entity-space", _entity_load_attributes(id, "entity-space", "try"))
-        collection.resolve(id) match {
+        _emit_entity_access("entity.load.try.entity-space", _entity_load_attributes(effectiveid, "entity-space", "try"))
+        collection.resolve(effectiveid) match {
           case Consequence.Success(entity) =>
-            _emit_entity_access("entity.load.hit.entity-space", _entity_load_attributes(id, "entity-space", "hit"))
-            exec_from(_authorize_entity_load_hit(id, entity, effectivetc))
+            _emit_entity_access("entity.load.hit.entity-space", _entity_load_attributes(effectiveid, "entity-space", "hit"))
+            exec_from(_authorize_entity_load_hit(effectiveid, entity, effectivetc))
           case Consequence.Failure(conclusion) if _is_entity_not_found(conclusion) =>
-            _emit_entity_access("entity.load.fallback.entity-store", _entity_load_attributes(id, "entity-store", "fallback"))
+            _emit_entity_access("entity.load.fallback.entity-store", _entity_load_attributes(effectiveid, "entity-store", "fallback"))
             val op = UnitOfWorkOp.EntityStoreLoad(
-              id,
+              effectiveid,
               effectivetc,
-              _entity_uow_authorization(Some(id.collection.name), Some(id), "read"),
+              _entity_uow_authorization(Some(effectiveid.collection.name), Some(effectiveid), "read"),
               _declared_visibility_scope
             )
             ConsequenceT.liftF(Free.liftF(op))
@@ -1295,11 +1342,11 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
             exec_from(Consequence.Failure(conclusion))
         }
       case None =>
-        _emit_entity_access("entity.load.fallback.entity-store", _entity_load_attributes(id, "entity-store", "fallback"))
+        _emit_entity_access("entity.load.fallback.entity-store", _entity_load_attributes(effectiveid, "entity-store", "fallback"))
         val op = UnitOfWorkOp.EntityStoreLoad(
-          id,
+          effectiveid,
           effectivetc,
-          _entity_uow_authorization(Some(id.collection.name), Some(id), "read"),
+          _entity_uow_authorization(Some(effectiveid.collection.name), Some(effectiveid), "read"),
           _declared_visibility_scope
         )
         ConsequenceT.liftF(Free.liftF(op))
@@ -1358,11 +1405,13 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
 
   protected final def entity_load_option_internal[T](
     id: EntityId
-  )(using tc: EntityPersistent[T]): ExecUowM[Option[T]] =
+  )(using tc: EntityPersistent[T]): ExecUowM[Option[T]] = {
+    val effectiveid = _canonical_entity_id(id)
     ConsequenceT.liftF(Free.liftF(UnitOfWorkOp.EntityStoreLoadDirect(
-      id,
-      _effective_entity_persistent(id.collection, tc)
+      effectiveid,
+      _effective_entity_persistent(effectiveid.collection, tc)
     )))
+  }
 
   protected final def entity_save[T](
     entity: T
@@ -1394,25 +1443,27 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
     id: EntityId,
     patch: T
   )(using tc: EntityPersistentUpdate[T]): ExecUowM[Unit] = {
+    val effectiveid = _canonical_entity_id(id)
     val op = UnitOfWorkOp.EntityStoreUpdateById(
-      id,
+      effectiveid,
       patch,
       tc,
-      _entity_uow_authorization(Some(id.collection.name), Some(id), "update")
+      _entity_uow_authorization(Some(effectiveid.collection.name), Some(effectiveid), "update")
     )
     ConsequenceT.liftF(Free.liftF(op))
   }
 
   protected final def entity_delete(id: EntityId): ExecUowM[Unit] = {
+    val effectiveid = _canonical_entity_id(id)
     val op = UnitOfWorkOp.EntityStoreDelete(
-      id,
-      _entity_uow_authorization(Some(id.collection.name), Some(id), "delete")
+      effectiveid,
+      _entity_uow_authorization(Some(effectiveid.collection.name), Some(effectiveid), "delete")
     )
     ConsequenceT.liftF(Free.liftF(op))
   }
 
   protected final def entity_delete_hard(id: EntityId): ExecUowM[Unit] = {
-    val op = UnitOfWorkOp.EntityStoreDeleteHard(id)
+    val op = UnitOfWorkOp.EntityStoreDeleteHard(_canonical_entity_id(id))
     ConsequenceT.liftF(Free.liftF(op))
   }
 

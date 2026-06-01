@@ -3399,17 +3399,53 @@ class CncfRuntime() extends GlobalObservable {
 
   def startServer(subsystem: Subsystem, req: Request): Int = {
     val args = _make_args(req)
-    val engine = new HttpExecutionEngine(subsystem)
-    val server = new Http4sHttpServer(engine)
-    server.start(args)
-    0
+    _server_port(subsystem) match {
+      case Consequence.Success(port) =>
+        val engine = new HttpExecutionEngine(subsystem)
+        val server = new Http4sHttpServer(engine, port)
+        server.start(args)
+        0
+      case Consequence.Failure(conclusion) =>
+        _print_error(conclusion)
+        _exit_code(Consequence.Failure(conclusion))
+    }
   }
 
   def startServer(subsystem: Subsystem, args: Array[String]): Unit = {
-    val engine = new HttpExecutionEngine(subsystem)
-    val server = new Http4sHttpServer(engine)
-    server.start(args)
+    _server_port(subsystem) match {
+      case Consequence.Success(port) =>
+        val engine = new HttpExecutionEngine(subsystem)
+        val server = new Http4sHttpServer(engine, port)
+        server.start(args)
+      case Consequence.Failure(conclusion) =>
+        _print_error(conclusion)
+    }
   }
+
+  private def _server_port(
+    subsystem: Subsystem
+  ): Consequence[Int] =
+    _configuration_int(subsystem.configuration, "textus.server.port").flatMap {
+      case Some(port) => Consequence.success(port)
+      case None =>
+        _configuration_int(subsystem.configuration, "cncf.server.port").map {
+          _.getOrElse(Http4sHttpServer.defaultPort)
+        }
+    }
+
+  private def _configuration_int(
+    configuration: ResolvedConfiguration,
+    key: String
+  ): Consequence[Option[Int]] =
+    ConfigurationAccess.getString(configuration, key) match {
+      case Some(value) =>
+        scala.util.Try(value.trim.toInt).toOption match {
+          case Some(port) => Consequence.success(Some(port))
+          case None => Consequence.argumentInvalid(s"invalid integer configuration: ${key}=${value}")
+        }
+      case None =>
+        Consequence.success(None)
+    }
 
   def executeClient(subsystem: Subsystem, req: Request): Int = {
     val args = _make_args(req)
@@ -4181,17 +4217,21 @@ class CncfRuntime() extends GlobalObservable {
       case Left(code) => return code
       case Right(xs) => xs
     }
-    val result = _to_request(subsystem, normalizedargs).flatMap { req =>
-      subsystem.executeResponseWithMetadata(req)
+    try {
+      val result = _to_request(subsystem, normalizedargs).flatMap { req =>
+        subsystem.executeResponseWithMetadata(req)
+      }
+      result match {
+        case Consequence.Success(res) =>
+          _print_response(res.response)
+          _print_debug_job_reference(res.metadata)
+        case Consequence.Failure(conclusion) =>
+          _print_error(conclusion)
+      }
+      _exit_code(result)
+    } finally {
+      subsystem.shutdown()
     }
-    result match {
-      case Consequence.Success(res) =>
-        _print_response(res.response)
-        _print_debug_job_reference(res.metadata)
-      case Consequence.Failure(conclusion) =>
-        _print_error(conclusion)
-    }
-    _exit_code(result)
   }
 
   private def _command_args_from_request(req: Request): Array[String] = {
