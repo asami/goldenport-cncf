@@ -1160,10 +1160,10 @@ Current development item:
     ids and RDF-node candidates such as DBpedia and Wikidata, edit it through
     self-explanatory Web authoring screens, then publish/materialize that
     knowledge into `KnowledgeSpace`. Book materialization is now treated as a
-    1.5hop+ bibliographic meaning neighborhood that may include Person,
-    Organization, Work, Edition, Series, and Volume knowledge around the focal
-    publication/book node. Paper and web knowledge follow after the book-first
-    validation path.
+    1.5hop+ bibliographic meaning neighborhood and `CulturalResource` book
+    profile that may include Person, Organization, Textual Work, Edition,
+    Series, and Volume knowledge around the focal publication/book node. Paper
+    and web knowledge follow after the book-first validation path.
 
 ### 9.1 Web Next Stage Follow-ups
 Web/platform follow-up index.
@@ -1294,15 +1294,19 @@ Phase 27 active scope:
 
 - KE-01 through KE-12 are done. Current focus is KE-13:
   expand book structure with explicit Textual Work / Edition / Series /
-  Volume knowledge, including multi-volume editions such as a nine-volume
-  Iwanami Genji monogatari publication. The working direction is captured in
+  Volume knowledge and establish the `CulturalResource` foundation, including
+  multi-volume editions such as a nine-volume Iwanami Genji monogatari
+  publication. The working direction is captured in
   `docs/journal/2026/05/book-knowledge-materialization-genji.md` and
-  `docs/journal/2026/05/rdf-centric-knowledge-expansion.md`.
+  `docs/journal/2026/05/rdf-centric-knowledge-expansion.md`, with
+  `docs/journal/2026/06/book-edition-volume-publication-note.md` defining Book
+  as the concrete publication layer and Textual Volume as optional.
 - KE-14 will add relationship / role / qualifier editing so contributor,
   publisher, citation, part-whole, series, edition, and volume facts are not
   flattened into untyped fields.
 - KE-15 will add authority resolution merge/split workflow for Person,
-  Organization, Work, Edition, Series, Volume, and publication candidates.
+  Organization, Textual Work, Edition, Series, Volume, and publication
+  candidates.
 - KE-16 will add multi-volume / book-set import workflow using Job-backed
   import units.
 - KE-17 will run usability smoke and Phase 27 closure after the expanded book
@@ -1328,9 +1332,24 @@ Phase 27 active scope:
   work for edition-aware and multi-volume book structure, rather than
   flattening publications such as Iwanami Genji monogatari volumes into
   unrelated title strings.
+- `Book` remains the v1 Information domain for concrete textual publications
+  such as ISBN books, EPUBs, and Kindle editions. A separate `Textual
+  Publication` Information domain is deferred until a non-book publication
+  profile such as magazine/periodical issue needs it.
+- `Textual Volume` is optional: use it when a logical volume groups multiple
+  concrete publications or otherwise has independent meaning; otherwise keep
+  volume number/title on the Book publication Information.
+- Work-internal structures such as Genji monogatari chapters/parts (`花散里`,
+  `須磨`, and similar 帖) are not Textual Volumes. They are future `Textual
+  Part` / `Chapter` concepts under `Textual Work`; Edition and Volume nodes can
+  later link to the parts they include.
+- `CulturalResource` is the shared KnowledgeSpace family for cultural resource
+  materialization. Book profile nodes keep concrete categories such as
+  `publication`, `volume`, `edition`, and `textual-work` while carrying shared
+  cultural-resource attributes.
 - Genji-oriented book materialization should treat ISBN/openBD data as the
   physical publication metadata layer only. The broader knowledge neighborhood
-  includes source works, editions, series, volumes, people, organizations,
+  includes textual works, editions, series, volumes, people, organizations,
   subjects, research/cultural references, and RDF anchors.
 - RDF-centric expansion is the default architecture for large external
   knowledge: local `KnowledgeSpace` establishes stable semantic anchors and
@@ -1348,11 +1367,12 @@ Phase 27 active scope:
   for importing ISBN lists, CSV/Excel files, or similar sources into coordinated
   Textual Work / Edition / Series / Volume / Person / Organization /
   publication Information.
-- A common cultural-resource / creative-entity model is a follow-up direction
-  for museum collections and other non-book resources. Sculpture, paintings,
-  buildings, physical objects, holdings, and collection items should use shared
-  cultural semantics plus domain-specific materialization profiles, not the
-  book-domain Textual Work node type.
+- Museum collections and other non-book resources are a follow-up
+  `CulturalResource` profile direction. Sculpture, paintings, buildings,
+  physical objects, holdings, and collection items should use shared cultural
+  semantics plus domain-specific materialization profiles such as
+  `visual-work`, `built-work`, `physical-object`, `holding`, and
+  `collection-item`, not the book-domain Textual Work node type.
 - Separation between the reusable common semantic-neighborhood contract and
   the book-oriented extension profile for bibliographic identifiers, roles,
   relations, and authority/source mappings.

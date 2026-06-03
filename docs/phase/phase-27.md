@@ -39,24 +39,38 @@ This document is a phase dashboard, not a design journal.
   knowledge publishes/materializes into.
 - Organize edited/imported book knowledge as a 1.5hop+ meaning neighborhood:
   the focal book/publication `KnowledgeNode` plus semantically essential
-  surrounding Person, Organization, Work, Edition, Series, Volume, identifier,
-  RDF anchor, relationship, fact, evidence, and provenance nodes.
+  surrounding Person, Organization, Textual Work, Edition, Series, Volume,
+  identifier, RDF anchor, relationship, fact, evidence, and provenance nodes.
 - Treat book KnowledgeSpace materialization as a bibliographic meaning
   neighborhood, not as one ISBN record mapped to one isolated book node.
   Author/editor/translator Person nodes, publisher/imprint Organization nodes,
-  source Work, concrete Edition, publication Series, and multi-volume Volume
-  nodes are first-class candidates when they are required to understand the
-  book.
+  source Textual Work, concrete Edition, publication Series, and multi-volume
+  Volume nodes are first-class candidates when they are required to understand
+  the book.
+- Treat `Book` Information as the concrete textual publication layer for v1.
+  Do not add a separate `Textual Publication` Information domain in Phase 27.
+  `Textual Volume` is available only when a logical volume needs to sit between
+  a Textual Edition and one or more concrete Book publications; simple books may
+  keep volume number/title directly on Book.
+- Treat work-internal units such as Genji monogatari chapters/parts (`花散里`,
+  `須磨`, and similar 帖) separately from publication volumes. These are future
+  `Textual Part` / `Chapter` concepts under `Textual Work`; Edition/Volume
+  nodes can later link to the parts they include.
 - Use the Genji materialization and RDF-centric expansion journal notes as the
   working direction for KE-13 and later: ISBN/openBD metadata is only the
-  physical-book metadata layer, while Work, Edition, Series, Volume, Person,
-  Organization, subject, cultural, research, and RDF anchor links form the
-  broader knowledge neighborhood. Local `KnowledgeSpace` should establish
-  stable semantic anchors and link them to external RDF identifiers rather than
-  copying entire external knowledge graphs.
-- Separate the reusable common semantic-neighborhood contract from the
-  book-oriented extension profile, so CNCF core knowledge projection does not
-  hard-code bibliographic assumptions.
+  physical-book metadata layer, while book-domain Textual Work, Edition,
+  Series, Volume, Person, Organization, subject, cultural, research, and RDF
+  anchor links form the broader knowledge neighborhood. Local `KnowledgeSpace`
+  should establish stable semantic anchors and link them to external RDF
+  identifiers rather than copying entire external knowledge graphs.
+- Separate the reusable common semantic-neighborhood contract and
+  `CulturalResource` foundation from the book-oriented extension profile, so
+  CNCF core knowledge projection does not hard-code bibliographic assumptions.
+- Add a follow-up common cultural-resource model for domains beyond books.
+  Sculpture, paintings, buildings, and museum collection items should not be
+  forced into the book-domain Textual Work concept. They use the shared
+  `CulturalResource` family with domain-specific materialization profiles such
+  as visual work, built work, physical object, holding, and collection item.
 - Preserve the Phase 26 split:
   - `InformationSpace` owns editing, validation, resolution, confirmation, and
     publication state.
@@ -96,16 +110,19 @@ Scope boundaries:
 - K (DONE): KE-11 — Person and Organization knowledge support for book
   contributors, publishers, imprints, and related authority candidates.
 - L (DONE): KE-12 — Person and Organization editor screens.
-- M (ACTIVE): KE-13 — Work / Edition / Series / Volume book structure
-  expansion, including multi-volume editions such as a nine-volume Iwanami
-  Genji monogatari publication. Direction notes:
+- M (ACTIVE): KE-13 — Textual Work / Edition / Series / Volume book structure
+  expansion plus `CulturalResource` foundation, including multi-volume editions
+  such as a nine-volume Iwanami Genji monogatari publication. Direction notes:
   `docs/journal/2026/05/book-knowledge-materialization-genji.md` and
-  `docs/journal/2026/05/rdf-centric-knowledge-expansion.md`.
+  `docs/journal/2026/05/rdf-centric-knowledge-expansion.md`, with
+  `docs/journal/2026/06/book-edition-volume-publication-note.md` defining Book
+  as the concrete publication layer and Textual Volume as optional.
 - N (PENDING): KE-14 — Relationship / Role / Qualifier editing for
   contributor, publisher, citation, part-whole, series, edition, and volume
   facts.
 - O (PENDING): KE-15 — Authority resolution merge/split workflow for Person,
-  Organization, Work, Edition, Series, Volume, and book publication candidates.
+  Organization, Textual Work, Edition, Series, Volume, and book publication
+  candidates.
 - P (PENDING): KE-16 — Multi-volume / book-set import workflow using Job-based
   import units.
 - Q (PENDING): KE-17 — Usability smoke and Phase 27 closure.
@@ -134,7 +151,8 @@ Next development candidate after Phase 27:
       TagComponent app-facing TagSpace screen integration.
 - [x] KE-11: Person and Organization knowledge support.
 - [x] KE-12: Person and Organization editor screens.
-- [ ] KE-13: Work / Edition / Series / Volume book structure expansion.
+- [ ] KE-13: Textual Work / Edition / Series / Volume book structure expansion
+      plus `CulturalResource` foundation.
 - [ ] KE-14: Relationship / Role / Qualifier editing.
 - [ ] KE-15: Authority resolution merge/split workflow.
 - [ ] KE-16: Multi-volume / book-set import workflow.
@@ -143,6 +161,8 @@ Next development candidate after Phase 27:
 Next development candidate after Phase 27:
 
 - [ ] Web UI DSL / Bootstrap Core / UX Profile implementation.
+- [ ] CulturalResource collection-item profile for museum collections, visual
+      works, built works, physical objects, and holdings.
 
 Detailed task breakdown and progress tracking are recorded in
 `phase-27-checklist.md`.
@@ -159,8 +179,8 @@ Phase 27 can close when:
   available.
 - Book KnowledgeSpace materialization can produce a 1.5hop+ `KnowledgeFrame`
   centered on the book/publication `KnowledgeNode`, with Person,
-  Organization, Work, Edition, Series, and Volume support nodes included when
-  they are semantically required.
+  Organization, Textual Work, Edition, Series, and Volume support nodes
+  included when they are semantically required.
 - Paper and web knowledge follow-up paths are implemented or explicitly scoped
   as deferred after the book-first validation.
 - The field model for each knowledge type is concrete enough for validation,

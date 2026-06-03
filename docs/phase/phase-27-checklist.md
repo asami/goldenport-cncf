@@ -48,12 +48,12 @@ fix the scope as application-grade knowledge editing on top of CNCF
   remain plain strings. Person and Organization knowledge must be available as
   surrounding Information/Knowledge candidates for authors, editors,
   translators, publishers, imprints, and related institutions.
-- Multi-volume and edition-oriented books need explicit Work / Edition /
+- Multi-volume and edition-oriented books need explicit Textual Work / Edition /
   Series / Volume structure. For example, a nine-volume Iwanami edition of
-  Genji monogatari should be modeled as source work, concrete edition or
-  publication set, series/publisher context, and individual volume nodes such
-  as Genji monogatari (1) through Genji monogatari (9), not as unrelated book
-  records.
+  Genji monogatari should be modeled as source textual work, concrete edition
+  or publication set, series/publisher context, and individual volume nodes
+  such as Genji monogatari (1) through Genji monogatari (9), not as unrelated
+  book records.
 - Common semantic-neighborhood structure is reusable CNCF knowledge structure;
   book-specific identifiers, roles, and bibliographic relations are a domain
   profile extension on top of it.
@@ -499,10 +499,10 @@ final Phase 27 usability path can use one consistent `Information` entity.
   builtin `TagComponent` at `/web/tag/tags`; CNCF admin `/web/admin/tags`
   remains the operator/admin surface.
 - Book Knowledge materialization now explicitly depends on surrounding
-  Person/Organization and Work/Edition/Series/Volume knowledge when those
-  concepts are present in the source. This keeps author, publisher, and
-  multi-volume edition structure out of untyped strings and makes the
-  1.5hop+ KnowledgeFrame the closure unit for book understanding.
+  Person/Organization and Textual Work/Edition/Series/Volume knowledge when
+  those concepts are present in the source. This keeps author, publisher, and
+  multi-volume edition structure out of untyped strings and makes the 1.5hop+
+  KnowledgeFrame the closure unit for book understanding.
 
 ---
 
@@ -602,31 +602,69 @@ publishable, and materializable Information domains.
 
 ---
 
-## KE-13: Work / Edition / Series / Volume Book Structure Expansion
+## KE-13: Textual Work / Edition / Series / Volume + CulturalResource Foundation
 
 Status: ACTIVE
 
 ### Objective
 
-Extend book knowledge from a single publication node into explicit Work,
-Edition, Series, and Volume structures, including multi-volume publications
-such as a nine-volume Iwanami Genji monogatari edition.
+Extend book knowledge from a single publication node into explicit
+book-domain Textual Work, Edition, Series, and Volume structures, including
+multi-volume publications such as a nine-volume Iwanami Genji monogatari
+edition. Establish the shared `CulturalResource` family at the same time so
+later museum collection-item, visual-work, built-work, physical-object, and
+holding profiles do not have to reuse the book-only Textual Work concept.
 
 Reference direction:
 
 - `docs/journal/2026/05/book-knowledge-materialization-genji.md`
 - `docs/journal/2026/05/rdf-centric-knowledge-expansion.md`
+- `docs/journal/2026/06/book-edition-volume-publication-note.md`
 
 These notes define the intended expansion style: ISBN/openBD metadata remains
-the physical publication layer, while Work, Edition, Series, Volume, Person,
-Organization, subject, cultural, research, and RDF anchor knowledge form the
-broader meaning neighborhood. TKE should materialize stable local
-KnowledgeNodes and RDF links, not copy complete external RDF graphs into local
-Information.
+the concrete Book publication layer, while Textual Work, Edition, optional
+Volume, Person, Organization, subject, cultural, research, and RDF anchor
+knowledge form the broader meaning neighborhood. TKE should materialize stable
+local KnowledgeNodes and RDF links, not copy complete external RDF graphs into
+local Information.
+
+Terminology boundary:
+
+- `Textual Work` is the book/text domain abstraction for a work such as
+  `源氏物語`; avoid using a global `Work` category for all knowledge domains.
+- `CulturalResource` is the shared family for cultural knowledge materialized
+  into KnowledgeSpace. Book profile nodes such as `publication`, `volume`,
+  `edition`, and `textual-work` keep their categories but carry
+  `resource_family=cultural-resource`.
+- `Book` is the v1 Information domain for concrete textual publications. A
+  separate `Textual Publication` Information domain is deferred.
+- `Textual Volume` is a first-class Information domain only when a logical
+  volume needs to sit between an edition and one or more concrete publications;
+  simple one-publication volumes may remain Book fields.
+- `Textual Part` / `Chapter` is the future work-internal structure for units
+  such as Genji monogatari `花散里` or `須磨`. These are parts of a Textual Work,
+  not Textual Volumes. Editions and volumes may later link to the parts they
+  include.
+- Sculpture, paintings, buildings, and museum collection objects are future
+  domain profiles under the same family: `visual-work`, `built-work`,
+  `physical-object`, `holding`, and `collection-item`.
+- The common model classifies shared semantics, while materialization still
+  creates domain-appropriate nodes instead of collapsing all cultural resources
+  into one `Work` type.
 
 ### Initial Tasks
 
-- [ ] Add or confirm Information profiles for Work, Edition, Series, and Volume.
+- [ ] Add `CulturalResource` vocabulary to Knowledge materialization with
+      family `cultural-resource` and kinds `textual-work`, `edition`,
+      `series`, `volume`, `publication`, `visual-work`, `built-work`,
+      `physical-object`, `collection-item`, and `holding`.
+- [ ] Keep Book as the concrete textual publication Information domain and do
+      not add a separate `Textual Publication` domain in this slice.
+- [ ] Add Textual Work and Textual Edition as first-class Information domains;
+      add Textual Volume as an optional first-class domain for meaningful
+      logical volume grouping, not a required layer for every Book.
+- [ ] Add cultural-resource attributes to materialized Book layer nodes while
+      preserving their existing `KnowledgeNode.category` values.
 - [ ] Define editable fields for work title, original/source work, edition
       title, edition contributors, series title, volume title, volume number,
       total volume count, publisher/imprint, publication date, and ISBN-bearing
@@ -634,12 +672,15 @@ Information.
 - [ ] Define relationship mapping for `volume-of`, `realizes-work`,
       `part-of-series`, `published-by`, `authored-by`, `edited-by`, and
       `translated-by`.
+- [ ] Define the boundary for work-internal `Textual Part` / `Chapter`
+      concepts and keep them distinct from edition/publication-side
+      `Textual Volume`.
 - [ ] Extend book import/enrichment so multi-volume metadata can be staged as
       reviewable Information rather than flattened into one title string.
 - [ ] Extend Knowledge materialization summaries so missing, unresolved,
-      selected, or materialized Work/Edition/Series/Volume nodes are visible in
-      the 1.5hop+ book KnowledgeFrame.
-- [ ] Make RDF anchor state visible for Work/Edition/Series/Volume nodes,
+      selected, or materialized Textual Work/Edition/Series/Volume nodes are
+      visible in the 1.5hop+ book KnowledgeFrame.
+- [ ] Make RDF anchor state visible for Textual Work/Edition/Series/Volume nodes,
       distinguishing local Textus KnowledgeNodes from sameAs/exactMatch/
       closeMatch/source-alignment links to external RDF spaces.
 - [ ] Add focused TKE executable specifications for a multi-volume book
@@ -658,9 +699,9 @@ Status: PENDING
 
 ### Objective
 
-Add explicit relationship editing so Person, Organization, Work, Edition,
-Series, Volume, citation, and subject knowledge can be connected with roles,
-order, qualifiers, confidence, evidence, and provenance instead of being
+Add explicit relationship editing so Person, Organization, Textual Work,
+Edition, Series, Volume, citation, and subject knowledge can be connected with
+roles, order, qualifiers, confidence, evidence, and provenance instead of being
 flattened into untyped fields.
 
 ### Initial Tasks
@@ -695,13 +736,13 @@ Status: PENDING
 ### Objective
 
 Add the workflow needed to handle same-name/different-entity and
-different-name/same-entity authority problems for Person, Organization, Work,
-Edition, Series, Volume, and publication candidates.
+different-name/same-entity authority problems for Person, Organization,
+Textual Work, Edition, Series, Volume, and publication candidates.
 
 ### Initial Tasks
 
 - [ ] Add duplicate/similar candidate detection and unresolved authority queues
-      for Person, Organization, Work, Edition, Series, Volume, and book
+      for Person, Organization, Textual Work, Edition, Series, Volume, and book
       publication candidates.
 - [ ] Add merge workflow for candidates confirmed to represent the same
       knowledge object, while preserving external identifiers, evidence, and
@@ -729,8 +770,8 @@ Status: PENDING
 ### Objective
 
 Add a book-set import workflow so ISBN lists, CSV/Excel files, or other import
-sources can create a coordinated Work / Edition / Series / Volume structure as
-one Job-backed work unit.
+sources can create a coordinated Textual Work / Edition / Series / Volume
+structure as one Job-backed work unit.
 
 ### Initial Tasks
 
@@ -741,11 +782,12 @@ one Job-backed work unit.
 - [ ] Use CNCF Job import units so a multi-volume import can be listed,
       inspected, retried within retention policy, and used as a work-unit
       filter for created Information.
-- [ ] Map imported rows into related Information objects for Work, Edition,
-      Series, Volume, Person, Organization, and publication/book records.
+- [ ] Map imported rows into related Information objects for Textual Work,
+      Edition, Series, Volume, Person, Organization, and publication/book
+      records.
 - [ ] Preserve source-layer distinctions in the import result: ISBN/openBD
       physical publication metadata, library/authority metadata, RDF anchors,
-      and inferred Work/Edition/Series/Volume structure must be reviewable
+      and inferred Textual Work/Edition/Series/Volume structure must be reviewable
       separately before merge/materialization.
 - [ ] Provide import result summaries showing created, updated, skipped,
       unresolved, and candidate-linked Information counts.
@@ -774,7 +816,7 @@ structure added in KE-11 through KE-16.
 
 - [ ] Run a book identifier import/editing smoke with DBpedia lookup.
 - [ ] Run a Person/Organization book-adjacent knowledge smoke.
-- [ ] Run a Work/Edition/Series/Volume multi-volume book structure smoke.
+- [ ] Run a Textual Work/Edition/Series/Volume multi-volume book structure smoke.
 - [ ] Run a relationship/role/qualifier editing smoke.
 - [ ] Run an authority merge/split workflow smoke.
 - [ ] Run a multi-volume/book-set import Job smoke.
