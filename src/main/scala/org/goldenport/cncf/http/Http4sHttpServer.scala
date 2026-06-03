@@ -3,7 +3,7 @@ package org.goldenport.cncf.http
 /*
  * @since   May. 18, 2026
  *  version May. 30, 2026
- * @version Jun. 01, 2026
+ * @version Jun.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 import cats.effect.IO
@@ -5386,15 +5386,17 @@ final class Http4sHttpServer(
   private def _web_authorization_subject_from_session(
     req: org.http4s.Request[IO]
   ): Option[WebDescriptorAuthorization.Subject] =
-    _session_id_(req).flatMap { sessionid =>
-      _auth_service.flatMap { service =>
-        given ExecutionContext = ExecutionContext.create()
-        service.currentSession(_session_authentication_request(sessionid)) match {
-          case org.goldenport.Consequence.Success(summary) if summary.authenticated =>
-            Some(_web_authorization_subject(summary))
-          case _ =>
-            None
-        }
+    _auth_service.flatMap { service =>
+      val authrequest =
+        _session_id_(req)
+          .map(_session_authentication_request)
+          .getOrElse(AuthenticationRequest(_request_attributes(req)))
+      given ExecutionContext = ExecutionContext.create()
+      service.currentSession(authrequest) match {
+        case org.goldenport.Consequence.Success(summary) if summary.authenticated =>
+          Some(_web_authorization_subject(summary))
+        case _ =>
+          None
       }
     }
 

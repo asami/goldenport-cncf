@@ -11,7 +11,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Apr. 18, 2026
  *  version Apr. 28, 2026
- * @version May. 18, 2026
+ * @version Jun.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 final class RuntimeConfigSpec extends AnyWordSpec with Matchers {
@@ -74,6 +74,59 @@ final class RuntimeConfigSpec extends AnyWordSpec with Matchers {
       config.webProductionAdminSystemRoles shouldBe Vector("system_admin", "platform_admin")
       config.webProductionAdminComponentRoles shouldBe Vector("component_operator", "system_admin")
       config.webProductionAdminJobsRoles shouldBe Vector("audit_viewer", "system_admin")
+    }
+
+    "keep debug auth disabled by default" in {
+      val config = RuntimeConfig.from(ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty))
+
+      config.debugAuthConfig.enabled shouldBe false
+      config.debugAuthConfig.seedAccountEnabled shouldBe false
+      config.debugAuthConfig.autoLoginEnabled shouldBe false
+      config.debugAuthConfig.loginName shouldBe "test"
+      config.debugAuthConfig.email shouldBe "test@example.com"
+    }
+
+    "parse debug auth configuration and aliases" in {
+      val configuration = ResolvedConfiguration(
+        Configuration(Map(
+          RuntimeConfig.RUNTIME_DEBUG_AUTH_ENABLED_KEY -> ConfigurationValue.StringValue("true"),
+          RuntimeConfig.RUNTIME_DEBUG_AUTH_SEED_ACCOUNT_ENABLED_KEY -> ConfigurationValue.StringValue("true"),
+          RuntimeConfig.RUNTIME_DEBUG_AUTH_AUTO_LOGIN_ENABLED_KEY -> ConfigurationValue.StringValue("true"),
+          RuntimeConfig.RUNTIME_DEBUG_AUTH_ACCOUNT_LOGIN_NAME_KEY -> ConfigurationValue.StringValue("debug-user"),
+          RuntimeConfig.RUNTIME_DEBUG_AUTH_ACCOUNT_EMAIL_KEY -> ConfigurationValue.StringValue("debug@example.com"),
+          RuntimeConfig.RUNTIME_DEBUG_AUTH_ACCOUNT_PASSWORD_KEY -> ConfigurationValue.StringValue("debug-password"),
+          RuntimeConfig.RUNTIME_DEBUG_AUTH_ACCOUNT_STATUS_KEY -> ConfigurationValue.StringValue("verified")
+        )),
+        ConfigurationTrace.empty
+      )
+
+      RuntimeConfig.getString(configuration, RuntimeConfig.DEBUG_AUTH_ENABLED_KEY) shouldBe Some("true")
+      val config = RuntimeConfig.from(configuration).debugAuthConfig
+      config.enabled shouldBe true
+      config.seedAccountEnabled shouldBe true
+      config.autoLoginEnabled shouldBe true
+      config.effectiveSeedAccountEnabled shouldBe true
+      config.effectiveAutoLoginEnabled shouldBe true
+      config.loginName shouldBe "debug-user"
+      config.email shouldBe "debug@example.com"
+      config.password shouldBe "debug-password"
+      config.status shouldBe "verified"
+    }
+
+    "reject debug auth in production operation mode" in {
+      val configuration = ResolvedConfiguration(
+        Configuration(Map(
+          RuntimeConfig.OperationModeKey -> ConfigurationValue.StringValue("production"),
+          RuntimeConfig.DEBUG_AUTH_ENABLED_KEY -> ConfigurationValue.StringValue("true")
+        )),
+        ConfigurationTrace.empty
+      )
+
+      val thrown = intercept[IllegalArgumentException] {
+        RuntimeConfig.from(configuration)
+      }
+      thrown.getMessage should include ("textus.debug.auth.enabled")
+      RuntimeConfig.create(configuration) shouldBe a[org.goldenport.Consequence.Failure[_]]
     }
 
     "keep CSV parsing for execution history filters independent from admin role token parsing" in {

@@ -21,7 +21,7 @@ import org.goldenport.cncf.blob.BlobStoreConfig
  *  version Feb.  1, 2026
  *  version Mar. 28, 2026
  *  version Apr. 30, 2026
- * @version May. 31, 2026
+ * @version Jun.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class RuntimeConfig(
@@ -40,6 +40,7 @@ final case class RuntimeConfig(
   webProductionAdminSystemRoles: Vector[String] = RuntimeConfig.DefaultWebProductionAdminSystemRoles,
   webProductionAdminComponentRoles: Vector[String] = RuntimeConfig.DefaultWebProductionAdminComponentRoles,
   webProductionAdminJobsRoles: Vector[String] = RuntimeConfig.DefaultWebProductionAdminJobsRoles,
+  debugAuthConfig: RuntimeConfig.DebugAuthConfig = RuntimeConfig.DebugAuthConfig(),
   commandExecutionMode: Option[CommandExecutionMode] = None,
   executionHistoryConfig: ObservabilityEngine.ExecutionHistoryConfig =
     ObservabilityEngine.ExecutionHistoryConfig(),
@@ -54,6 +55,28 @@ final case class RuntimeConfig(
 )
 
 object RuntimeConfig {
+  final case class DebugAuthConfig(
+    enabled: Boolean = false,
+    seedAccountEnabled: Boolean = false,
+    autoLoginEnabled: Boolean = false,
+    loginName: String = RuntimeConfig.DEFAULT_DEBUG_AUTH_LOGIN_NAME,
+    email: String = RuntimeConfig.DEFAULT_DEBUG_AUTH_EMAIL,
+    password: String = RuntimeConfig.DEFAULT_DEBUG_AUTH_PASSWORD,
+    status: String = RuntimeConfig.DEFAULT_DEBUG_AUTH_STATUS
+  ) {
+    def effectiveSeedAccountEnabled: Boolean =
+      enabled && seedAccountEnabled
+
+    def effectiveAutoLoginEnabled: Boolean =
+      enabled && autoLoginEnabled
+
+    def validationError(operationmode: OperationMode): Option[String] =
+      if (enabled && !operationmode.allowsDebugAuth)
+        Some("textus.debug.auth.enabled is only allowed in develop or test operation mode")
+      else
+        None
+  }
+
   val ServerEmulatorBaseUrlKey = "textus.server-emulator.baseurl"
   val RuntimeServerEmulatorBaseUrlKey = "textus.runtime.server-emulator.baseurl"
   val HttpDriverKey = "textus.http.driver"
@@ -74,6 +97,20 @@ object RuntimeConfig {
   val RuntimeDebugTraceJobKey = "textus.runtime.debug.trace-job"
   val DebugSaveCallTreeKey = "textus.debug.save-calltree"
   val RuntimeDebugSaveCallTreeKey = "textus.runtime.debug.save-calltree"
+  val DEBUG_AUTH_ENABLED_KEY = "textus.debug.auth.enabled"
+  val RUNTIME_DEBUG_AUTH_ENABLED_KEY = "textus.runtime.debug.auth.enabled"
+  val DEBUG_AUTH_SEED_ACCOUNT_ENABLED_KEY = "textus.debug.auth.seed-account.enabled"
+  val RUNTIME_DEBUG_AUTH_SEED_ACCOUNT_ENABLED_KEY = "textus.runtime.debug.auth.seed-account.enabled"
+  val DEBUG_AUTH_AUTO_LOGIN_ENABLED_KEY = "textus.debug.auth.auto-login.enabled"
+  val RUNTIME_DEBUG_AUTH_AUTO_LOGIN_ENABLED_KEY = "textus.runtime.debug.auth.auto-login.enabled"
+  val DEBUG_AUTH_ACCOUNT_LOGIN_NAME_KEY = "textus.debug.auth.account.login-name"
+  val RUNTIME_DEBUG_AUTH_ACCOUNT_LOGIN_NAME_KEY = "textus.runtime.debug.auth.account.login-name"
+  val DEBUG_AUTH_ACCOUNT_EMAIL_KEY = "textus.debug.auth.account.email"
+  val RUNTIME_DEBUG_AUTH_ACCOUNT_EMAIL_KEY = "textus.runtime.debug.auth.account.email"
+  val DEBUG_AUTH_ACCOUNT_PASSWORD_KEY = "textus.debug.auth.account.password"
+  val RUNTIME_DEBUG_AUTH_ACCOUNT_PASSWORD_KEY = "textus.runtime.debug.auth.account.password"
+  val DEBUG_AUTH_ACCOUNT_STATUS_KEY = "textus.debug.auth.account.status"
+  val RUNTIME_DEBUG_AUTH_ACCOUNT_STATUS_KEY = "textus.runtime.debug.auth.account.status"
   val ExecutionHistoryRecentLimitKey = "textus.execution.history.recent-limit"
   val RuntimeExecutionHistoryRecentLimitKey = "textus.runtime.execution.history.recent-limit"
   val ExecutionHistoryFilteredLimitKey = "textus.execution.history.filtered-limit"
@@ -215,6 +252,10 @@ object RuntimeConfig {
   val DefaultWebProductionAdminSystemRoles = Vector("system_admin")
   val DefaultWebProductionAdminComponentRoles = Vector("component_operator", "system_admin")
   val DefaultWebProductionAdminJobsRoles = Vector("system_admin", "audit_viewer")
+  val DEFAULT_DEBUG_AUTH_LOGIN_NAME = "test"
+  val DEFAULT_DEBUG_AUTH_EMAIL = "test@example.com"
+  val DEFAULT_DEBUG_AUTH_PASSWORD = "test"
+  val DEFAULT_DEBUG_AUTH_STATUS = "active"
   val DefaultIdNamespace: IdGenerationContext.IdNamespace = IdGenerationContext.DefaultNamespace
 
   val default: RuntimeConfig =
@@ -234,6 +275,7 @@ object RuntimeConfig {
       webProductionAdminSystemRoles = DefaultWebProductionAdminSystemRoles,
       webProductionAdminComponentRoles = DefaultWebProductionAdminComponentRoles,
       webProductionAdminJobsRoles = DefaultWebProductionAdminJobsRoles,
+      debugAuthConfig = DebugAuthConfig(),
       commandExecutionMode = None,
       executionHistoryConfig = ObservabilityEngine.ExecutionHistoryConfig(),
       diagnosticPayloadExternalizationConfig = DiagnosticPayloadExternalizationConfig(),
@@ -341,6 +383,7 @@ object RuntimeConfig {
           case Vector() => DefaultWebProductionAdminJobsRoles
           case roles => roles
         }
+    val debugauthconfig = _debug_auth_config(configuration)
     ObservabilityEngine.updateExecutionHistoryConfig(executionHistoryConfig)
     val config = RuntimeConfig(
       logbackend,
@@ -358,6 +401,7 @@ object RuntimeConfig {
       webProductionAdminSystemRoles = webProductionAdminSystemRoles,
       webProductionAdminComponentRoles = webProductionAdminComponentRoles,
       webProductionAdminJobsRoles = webProductionAdminJobsRoles,
+      debugAuthConfig = debugauthconfig,
       commandExecutionMode = commandExecutionMode,
       executionHistoryConfig = executionHistoryConfig,
       diagnosticPayloadExternalizationConfig = diagnosticPayloadExternalizationConfig,
@@ -398,6 +442,9 @@ object RuntimeConfig {
       throw new IllegalArgumentException(message)
     }
     config.staticFormAppRendererConfig.validationError.foreach { message =>
+      throw new IllegalArgumentException(message)
+    }
+    config.debugAuthConfig.validationError(config.operationMode).foreach { message =>
       throw new IllegalArgumentException(message)
     }
   }
@@ -532,6 +579,23 @@ object RuntimeConfig {
     )
   }
 
+  private def _debug_auth_config(
+    configuration: ResolvedConfiguration
+  ): DebugAuthConfig =
+    DebugAuthConfig(
+      enabled = _get_boolean(configuration, DEBUG_AUTH_ENABLED_KEY).getOrElse(false),
+      seedAccountEnabled = _get_boolean(configuration, DEBUG_AUTH_SEED_ACCOUNT_ENABLED_KEY).getOrElse(false),
+      autoLoginEnabled = _get_boolean(configuration, DEBUG_AUTH_AUTO_LOGIN_ENABLED_KEY).getOrElse(false),
+      loginName = _get_string(configuration, DEBUG_AUTH_ACCOUNT_LOGIN_NAME_KEY)
+        .map(_.trim).filter(_.nonEmpty).getOrElse(DEFAULT_DEBUG_AUTH_LOGIN_NAME),
+      email = _get_string(configuration, DEBUG_AUTH_ACCOUNT_EMAIL_KEY)
+        .map(_.trim).filter(_.nonEmpty).getOrElse(DEFAULT_DEBUG_AUTH_EMAIL),
+      password = _get_string(configuration, DEBUG_AUTH_ACCOUNT_PASSWORD_KEY)
+        .map(_.trim).filter(_.nonEmpty).getOrElse(DEFAULT_DEBUG_AUTH_PASSWORD),
+      status = _get_string(configuration, DEBUG_AUTH_ACCOUNT_STATUS_KEY)
+        .map(_.trim).filter(_.nonEmpty).getOrElse(DEFAULT_DEBUG_AUTH_STATUS)
+    )
+
   private def _id_namespace(
     configuration: ResolvedConfiguration
   ): IdGenerationContext.IdNamespace = {
@@ -567,6 +631,13 @@ object RuntimeConfig {
         case DebugCallTreeKey => Vector(RuntimeDebugCallTreeKey)
         case DebugTraceJobKey => Vector(RuntimeDebugTraceJobKey)
         case DebugSaveCallTreeKey => Vector(RuntimeDebugSaveCallTreeKey)
+        case DEBUG_AUTH_ENABLED_KEY => Vector(RUNTIME_DEBUG_AUTH_ENABLED_KEY)
+        case DEBUG_AUTH_SEED_ACCOUNT_ENABLED_KEY => Vector(RUNTIME_DEBUG_AUTH_SEED_ACCOUNT_ENABLED_KEY)
+        case DEBUG_AUTH_AUTO_LOGIN_ENABLED_KEY => Vector(RUNTIME_DEBUG_AUTH_AUTO_LOGIN_ENABLED_KEY)
+        case DEBUG_AUTH_ACCOUNT_LOGIN_NAME_KEY => Vector(RUNTIME_DEBUG_AUTH_ACCOUNT_LOGIN_NAME_KEY)
+        case DEBUG_AUTH_ACCOUNT_EMAIL_KEY => Vector(RUNTIME_DEBUG_AUTH_ACCOUNT_EMAIL_KEY)
+        case DEBUG_AUTH_ACCOUNT_PASSWORD_KEY => Vector(RUNTIME_DEBUG_AUTH_ACCOUNT_PASSWORD_KEY)
+        case DEBUG_AUTH_ACCOUNT_STATUS_KEY => Vector(RUNTIME_DEBUG_AUTH_ACCOUNT_STATUS_KEY)
         case ExecutionHistoryRecentLimitKey => Vector(RuntimeExecutionHistoryRecentLimitKey)
         case ExecutionHistoryFilteredLimitKey => Vector(RuntimeExecutionHistoryFilteredLimitKey)
         case ExecutionHistoryFilterOperationContainsKey => Vector(RuntimeExecutionHistoryFilterOperationContainsKey)
@@ -645,6 +716,9 @@ enum OperationMode(val name: String) {
   case Test extends OperationMode("test")
 
   def allowsDevelopAnonymousAdmin: Boolean =
+    this == OperationMode.Develop || this == OperationMode.Test
+
+  def allowsDebugAuth: Boolean =
     this == OperationMode.Develop || this == OperationMode.Test
 }
 

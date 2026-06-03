@@ -100,6 +100,8 @@ object InformationEditorProfile {
   val PERSON_DOMAIN = "person"
   val ORGANIZATION_DOMAIN = "organization"
   val TEXTUAL_WORK_DOMAIN = "textual-work"
+  val TEXTUAL_EDITION_DOMAIN = "textual-edition"
+  val TEXTUAL_VOLUME_DOMAIN = "textual-volume"
   val COMMON_NEIGHBORHOOD = "common-neighborhood"
   val BOOK_PROFILE_EXTENSION = "book-profile-extension"
   val PAPER_PROFILE_EXTENSION = "paper-profile-extension"
@@ -107,6 +109,8 @@ object InformationEditorProfile {
   val PERSON_PROFILE_EXTENSION = "person-profile-extension"
   val ORGANIZATION_PROFILE_EXTENSION = "organization-profile-extension"
   val TEXTUAL_WORK_PROFILE_EXTENSION = "textual-work-profile-extension"
+  val TEXTUAL_EDITION_PROFILE_EXTENSION = "textual-edition-profile-extension"
+  val TEXTUAL_VOLUME_PROFILE_EXTENSION = "textual-volume-profile-extension"
 
   def forDomain(domain: String): Option[InformationEditorProfile] =
     domain match {
@@ -116,6 +120,8 @@ object InformationEditorProfile {
       case PERSON_DOMAIN => Some(person)
       case ORGANIZATION_DOMAIN => Some(organization)
       case TEXTUAL_WORK_DOMAIN => Some(textualWork)
+      case TEXTUAL_EDITION_DOMAIN => Some(textualEdition)
+      case TEXTUAL_VOLUME_DOMAIN => Some(textualVolume)
       case _ => None
     }
 
@@ -355,6 +361,28 @@ object InformationEditorProfile {
           resolverassisted = true,
           _mapping("relationship", "edition-of.targetInformation", BOOK_PROFILE_EXTENSION, "Reference from book Information to Textual Work Information."),
           _mapping("knowledge-node-section", "culturalResource.textualWork", BOOK_PROFILE_EXTENSION, "Textual Work layer identity.")
+        ),
+        _field(
+          "textualEditionInformationId",
+          "Textual Edition Information ID",
+          "Information id of the linked Textual Edition stored in the shared Information collection with domain textual-edition.",
+          Some("single-global-entity-information-..."),
+          "optional",
+          Some("Use this to keep the edition layer separate from the ISBN publication."),
+          resolverassisted = true,
+          _mapping("relationship", "volume-of.targetInformation", BOOK_PROFILE_EXTENSION, "Reference from book Information to Textual Edition Information."),
+          _mapping("knowledge-node-section", "culturalResource.textualEdition", BOOK_PROFILE_EXTENSION, "Textual Edition layer identity.")
+        ),
+        _field(
+          "textualVolumeInformationId",
+          "Textual Volume Information ID",
+          "Information id of the linked Textual Volume stored in the shared Information collection with domain textual-volume.",
+          Some("single-global-entity-information-..."),
+          "optional",
+          Some("Use this to keep the volume layer separate from the ISBN publication."),
+          resolverassisted = true,
+          _mapping("relationship", "publication-of.targetInformation", BOOK_PROFILE_EXTENSION, "Reference from book Information to Textual Volume Information."),
+          _mapping("knowledge-node-section", "culturalResource.textualVolume", BOOK_PROFILE_EXTENSION, "Textual Volume layer identity.")
         ),
         _field(
           "edition",
@@ -879,6 +907,61 @@ object InformationEditorProfile {
         _field("ndl", "NDL authority ID", "National Diet Library authority identifier for the work when available.", None, "optional", None, true, _mapping("knowledge-node-section", "identity.externalIdentifiers", TEXTUAL_WORK_PROFILE_EXTENSION, "External authority identifier.")),
         _field("sourceUrl", "Source URL", "Source page or authority record URL used as evidence.", None, "recommended", None, true, _mapping("evidence", "sources.sourceRefs", COMMON_NEIGHBORHOOD, "Source reference.")),
         _field("reviewerNote", "Reviewer note", "Human editor note about this textual work authority candidate.", None, "optional", None, false, _mapping("provenance", "curation.note", COMMON_NEIGHBORHOOD, "Human curation note."))
+      )
+    )
+
+  val textualEdition: InformationEditorProfile =
+    InformationEditorProfile(
+      TEXTUAL_EDITION_DOMAIN,
+      Vector(
+        _field(
+          "title",
+          "Textual edition title",
+          "Canonical title for an edition or edition series of a textual work.",
+          Some("Iwanami edition The Tale of Genji"),
+          "required",
+          Some("Required before confirmation."),
+          resolverassisted = true,
+          _mapping("knowledge-node-section", "presentation.labels", COMMON_NEIGHBORHOOD, "Display label for the Textual Edition node."),
+          _mapping("knowledge-node-section", "culturalResource.textualEdition", TEXTUAL_EDITION_PROFILE_EXTENSION, "Textual Edition profile under CulturalResource.")
+        ),
+        _field("textualWorkInformationId", "Textual Work Information ID", "Linked Textual Work Information id for this edition.", None, "recommended", None, true, _mapping("relationship", "edition-of.targetInformation", TEXTUAL_EDITION_PROFILE_EXTENSION, "Parent textual work reference.")),
+        _field("series", "Series", "Series or edition family label.", Some("Iwanami Bunko"), "optional", None, true, _mapping("knowledge-node-section", "structure.series", TEXTUAL_EDITION_PROFILE_EXTENSION, "Edition series label.")),
+        _field("edition", "Edition", "Edition statement or edition number.", Some("3rd edition"), "optional", None, true, _mapping("knowledge-node-section", "structure.edition", TEXTUAL_EDITION_PROFILE_EXTENSION, "Edition statement.")),
+        _field("language", "Language", "Primary language for this edition.", Some("ja"), "recommended", None, true, _mapping("knowledge-node-section", "semantics.language", TEXTUAL_EDITION_PROFILE_EXTENSION, "Edition language.")),
+        _field("publisherDisplayText", "Publisher display text", "Publisher display text projected from linked publication or association evidence.", Some("岩波書店"), "optional", None, true, _mapping("relationship", "published-by.projection", TEXTUAL_EDITION_PROFILE_EXTENSION, "Publisher display projection.")),
+        _field("openLibraryEditionId", "Open Library Edition ID", "Open Library edition identifier for this edition layer.", Some("OL12345M"), "optional", None, true, _mapping("knowledge-node-section", "identity.externalIdentifiers", TEXTUAL_EDITION_PROFILE_EXTENSION, "External source identifier.")),
+        _field("openLibraryWorkId", "Open Library Work ID", "Open Library work identifier when supplied as source evidence.", Some("OL12345W"), "optional", None, true, _mapping("knowledge-node-section", "identity.externalIdentifiers", TEXTUAL_EDITION_PROFILE_EXTENSION, "External source identifier.")),
+        _field("wikidataId", "Wikidata QID", "External authority id for the edition when available.", Some("Q12345"), "optional", Some("External id only; do not use as a CNCF id."), true, _mapping("knowledge-node-section", "identity.externalIdentifiers", TEXTUAL_EDITION_PROFILE_EXTENSION, "External identifier.")),
+        _field("dbpediaUri", "DBpedia URI", "DBpedia resource URI used as an RDF enrichment anchor for the edition.", None, "optional", Some("Treat as candidate until confirmed in InformationSpace."), true, _mapping("knowledge-node-section", "identity.externalIdentifiers", TEXTUAL_EDITION_PROFILE_EXTENSION, "External RDF anchor candidate.")),
+        _field("sourceUrl", "Source URL", "Source page or authority record URL used as evidence.", None, "recommended", None, true, _mapping("evidence", "sources.sourceRefs", COMMON_NEIGHBORHOOD, "Source reference.")),
+        _field("reviewerNote", "Reviewer note", "Human editor note about this textual edition candidate.", None, "optional", None, false, _mapping("provenance", "curation.note", COMMON_NEIGHBORHOOD, "Human curation note."))
+      )
+    )
+
+  val textualVolume: InformationEditorProfile =
+    InformationEditorProfile(
+      TEXTUAL_VOLUME_DOMAIN,
+      Vector(
+        _field(
+          "title",
+          "Textual volume title",
+          "Canonical title for a volume within a textual work or edition.",
+          Some("The Tale of Genji 3"),
+          "required",
+          Some("Required before confirmation."),
+          resolverassisted = true,
+          _mapping("knowledge-node-section", "presentation.labels", COMMON_NEIGHBORHOOD, "Display label for the Textual Volume node."),
+          _mapping("knowledge-node-section", "culturalResource.textualVolume", TEXTUAL_VOLUME_PROFILE_EXTENSION, "Textual Volume profile under CulturalResource.")
+        ),
+        _field("textualWorkInformationId", "Textual Work Information ID", "Linked Textual Work Information id for this volume.", None, "recommended", None, true, _mapping("relationship", "volume-of.targetWorkInformation", TEXTUAL_VOLUME_PROFILE_EXTENSION, "Parent textual work reference.")),
+        _field("textualEditionInformationId", "Textual Edition Information ID", "Linked Textual Edition Information id for this volume.", None, "recommended", None, true, _mapping("relationship", "volume-of.targetEditionInformation", TEXTUAL_VOLUME_PROFILE_EXTENSION, "Parent textual edition reference.")),
+        _field("volume", "Volume", "Volume number or label.", Some("3"), "recommended", None, true, _mapping("knowledge-node-section", "structure.volume", TEXTUAL_VOLUME_PROFILE_EXTENSION, "Volume value.")),
+        _field("volumeTitle", "Volume title", "Volume-level title when it differs from the canonical title.", Some("Wakamurasaki"), "optional", None, true, _mapping("knowledge-node-section", "presentation.volumeTitle", TEXTUAL_VOLUME_PROFILE_EXTENSION, "Volume title.")),
+        _field("language", "Language", "Primary language for this volume.", Some("ja"), "recommended", None, true, _mapping("knowledge-node-section", "semantics.language", TEXTUAL_VOLUME_PROFILE_EXTENSION, "Volume language.")),
+        _field("openLibraryWorkId", "Open Library Work ID", "Open Library work identifier when supplied as source evidence.", Some("OL12345W"), "optional", None, true, _mapping("knowledge-node-section", "identity.externalIdentifiers", TEXTUAL_VOLUME_PROFILE_EXTENSION, "External source identifier.")),
+        _field("sourceUrl", "Source URL", "Source page or authority record URL used as evidence.", None, "recommended", None, true, _mapping("evidence", "sources.sourceRefs", COMMON_NEIGHBORHOOD, "Source reference.")),
+        _field("reviewerNote", "Reviewer note", "Human editor note about this textual volume candidate.", None, "optional", None, false, _mapping("provenance", "curation.note", COMMON_NEIGHBORHOOD, "Human curation note."))
       )
     )
 

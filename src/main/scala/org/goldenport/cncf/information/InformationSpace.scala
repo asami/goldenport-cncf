@@ -466,6 +466,8 @@ object InformationSpace {
       case "person" => _validate_named_information(information)
       case "organization" => _validate_named_information(information)
       case "textual-work" => _validate_textual_work(information)
+      case "textual-edition" => _validate_textual_work(information)
+      case "textual-volume" => _validate_textual_work(information)
       case _ => Vector.empty
     }
 
@@ -818,7 +820,7 @@ object InformationToKnowledgeProjection {
         Map("information_domain" -> information.domain) ++
           Option.when(information.domain == "book")("knowledge_layer" -> "publication") ++
           (if (information.domain == "book") _cultural_resource_attributes("publication", BOOK_DOMAIN_PROFILE) else Map.empty) ++
-          (if (information.domain == "textual-work") _cultural_resource_attributes("textual-work", "textual-work") else Map.empty)
+          _information_cultural_resource_attributes(information.domain)
       )
     )
     val fact = KnowledgeFact(
@@ -896,14 +898,18 @@ object InformationToKnowledgeProjection {
   ): BookCulturalResourceLayers = {
     val textualworktitle = _book_textual_work_title(information)
     val textualworkid = information.data.getString("textualWorkInformationId").map(_.trim).filter(_.nonEmpty)
+    val textualeditionid = information.data.getString("textualEditionInformationId").map(_.trim).filter(_.nonEmpty)
+    val textualvolumeid = information.data.getString("textualVolumeInformationId").map(_.trim).filter(_.nonEmpty)
     val editiontitle = _book_edition_title(information, textualworktitle)
     val volume = _book_volume(information)
     BookCulturalResourceLayers(
       publicationnodeid,
       textualworkid.map(id => KnowledgeNodeId(s"information-$id")).
         orElse(textualworktitle.map(title => KnowledgeNodeId(s"textual-work-${_safe_key(title, 0)}"))),
-      editiontitle.map(title => KnowledgeNodeId(s"edition-${_safe_key(title, 0)}")),
-      volume.map(value => KnowledgeNodeId(s"volume-${_safe_key(Vector(textualworktitle, Some(value)).flatten.mkString("-"), 0)}"))
+      textualeditionid.map(id => KnowledgeNodeId(s"information-$id")).
+        orElse(editiontitle.map(title => KnowledgeNodeId(s"edition-${_safe_key(title, 0)}"))),
+      textualvolumeid.map(id => KnowledgeNodeId(s"information-$id")).
+        orElse(volume.map(value => KnowledgeNodeId(s"volume-${_safe_key(Vector(textualworktitle, Some(value)).flatten.mkString("-"), 0)}")))
     )
   }
 
@@ -1017,6 +1023,16 @@ object InformationToKnowledgeProjection {
       "domain_profile" -> profile
     )
   }
+
+  private def _information_cultural_resource_attributes(
+    domain: String
+  ): Map[String, String] =
+    domain match {
+      case "textual-work" => _cultural_resource_attributes("textual-work", "textual-work")
+      case "textual-edition" => _cultural_resource_attributes("edition", "textual-edition")
+      case "textual-volume" => _cultural_resource_attributes("volume", "textual-volume")
+      case _ => Map.empty
+    }
 
   private def _book_layer_relationship(
     information: Information,
