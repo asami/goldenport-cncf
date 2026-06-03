@@ -3,7 +3,7 @@ package org.goldenport.cncf.http
 /*
  * @since   May. 18, 2026
  *  version May. 30, 2026
- * @version Jun.  3, 2026
+ * @version Jun.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 import cats.effect.IO
@@ -60,7 +60,7 @@ import org.goldenport.observation.{Cause, Descriptor}
  *  version Mar. 29, 2026
  *  version Apr. 30, 2026
  *  version May. 25, 2026
- * @version Jun. 01, 2026
+ * @version Jun.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Http4sHttpServer(
@@ -3948,12 +3948,12 @@ final class Http4sHttpServer(
     _web_app_asset_content(None, webappname, assetPath)
 
   private[http] def _web_app_asset_content(
-    componentName: Option[String],
+    componentname: Option[String],
     webappname: String,
     assetPath: Vector[String]
   ): Option[(BinaryBag, MediaType)] =
-    _web_app_asset_candidates(webappname, assetPath).view.flatMap { path =>
-      _component_content_web_roots(componentName).view.flatMap { root =>
+    _web_app_asset_candidates(webappname, assetPath, componentname).view.flatMap { path =>
+      _component_content_web_roots(componentname).view.flatMap { root =>
         root.readBinary(path).map(_ -> _asset_media_type(assetPath.lastOption.getOrElse("")))
       }
     }.headOption
@@ -4001,7 +4001,8 @@ final class Http4sHttpServer(
 
   private def _web_app_asset_candidates(
     webappname: String,
-    assetPath: Vector[String]
+    assetPath: Vector[String],
+    componentname: Option[String] = None
   ): Vector[Path] = {
     val webapppath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(webappname)
     val flat = Vector(
@@ -4009,7 +4010,7 @@ final class Http4sHttpServer(
       _relative_path(webapppath +: "assets" +: assetPath)
     )
     val appnamed = flat.reverse
-    if (_is_flat_web_root_app(webappname)) flat else appnamed
+    if (_is_flat_web_root_app(webappname, componentname)) flat else appnamed
   }
 
   private[http] def _web_global_asset_content(
@@ -4073,15 +4074,15 @@ final class Http4sHttpServer(
     _web_app_static_html_content(None, webappname, page)
 
   private[http] def _web_app_static_html_content(
-    componentName: Option[String],
+    componentname: Option[String],
     webappname: String,
     page: Vector[String]
   ): Option[String] =
     if (!_safe_web_page_path(page))
       None
     else
-      _web_app_static_html_candidates(webappname, page).view.flatMap { path =>
-        _component_content_web_roots(componentName).view.flatMap(_.readText(path))
+      _web_app_static_html_candidates(webappname, page, componentname).view.flatMap { path =>
+        _component_content_web_roots(componentname).view.flatMap(_.readText(path))
       }.headOption
 
   private[http] def _web_app_static_page(
@@ -4289,14 +4290,15 @@ final class Http4sHttpServer(
 
   private[http] def _web_app_static_html_candidates(
     webappname: String,
-    page: Vector[String]
+    page: Vector[String],
+    componentname: Option[String] = None
   ): Vector[Path] = {
     val webapppath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(webappname)
     if (page.isEmpty)
       _flat_or_app_named_candidates(webappname, Vector(
         Paths.get("index.html"),
         Paths.get(webapppath, "index.html")
-      ))
+      ), componentname)
     else {
       val normalized = page.map(_normalize_web_page_segment)
       val exact =
@@ -4304,7 +4306,7 @@ final class Http4sHttpServer(
           _flat_or_app_named_candidates(webappname, Vector(
             _relative_path(normalized),
             _relative_path(webapppath +: normalized)
-          ))
+          ), componentname)
         else
           Vector.empty
       val html =
@@ -4315,12 +4317,12 @@ final class Http4sHttpServer(
           _flat_or_app_named_candidates(webappname, Vector(
             _relative_path(withhtml),
             _relative_path(webapppath +: withhtml)
-          ))
+          ), componentname)
         }
       val index = _flat_or_app_named_candidates(webappname, Vector(
         _relative_path(normalized :+ "index.html"),
         _relative_path(webapppath +: (normalized :+ "index.html"))
-      ))
+      ), componentname)
       exact ++ html ++ index
     }
   }
@@ -4540,7 +4542,7 @@ final class Http4sHttpServer(
       None
     else
       _web_resource_roots(scope, componentName).view.flatMap { root =>
-        _web_inf_layout_candidates(_template_part_app_name(webappname, scope), name).view.flatMap(root.readText)
+        _web_inf_layout_candidates(_template_part_app_name(webappname, scope), name, componentName).view.flatMap(root.readText)
       }.headOption
 
   private def _partial_content(
@@ -4554,7 +4556,7 @@ final class Http4sHttpServer(
       None
     else
       _web_resource_roots(scope, componentName).view.flatMap { root =>
-        _web_inf_partial_candidates(_template_part_app_name(webappname, scope), page, name, scope).view.flatMap(root.readText)
+        _web_inf_partial_candidates(_template_part_app_name(webappname, scope), page, name, scope, componentName).view.flatMap(root.readText)
       }.headOption
 
   private def _widget_content(
@@ -4568,7 +4570,7 @@ final class Http4sHttpServer(
       None
     else
       _web_resource_roots(scope, componentName).view.flatMap { root =>
-        _web_inf_widget_candidates(_template_part_app_name(webappname, scope), page, name, scope).view.flatMap(root.readText)
+        _web_inf_widget_candidates(_template_part_app_name(webappname, scope), page, name, scope, componentName).view.flatMap(root.readText)
       }.headOption
 
   private def _template_part_app_name(
@@ -4584,20 +4586,22 @@ final class Http4sHttpServer(
 
   private def _web_inf_layout_candidates(
     webappname: String,
-    name: String
+    name: String,
+    componentname: Option[String] = None
   ): Vector[Path] = {
     val webapppath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(webappname)
     _flat_or_app_named_candidates(webappname, Vector(
       Paths.get("WEB-INF", "layouts", s"${name}.html"),
       Paths.get(webapppath, "WEB-INF", "layouts", s"${name}.html")
-    ))
+    ), componentname)
   }
 
   private def _web_inf_partial_candidates(
     webappname: String,
     page: Vector[String],
     name: String,
-    scope: WebTemplatePartScope
+    scope: WebTemplatePartScope,
+    componentname: Option[String] = None
   ): Vector[Path] = {
     val webapppath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(webappname)
     val localpage = _web_inf_page_path(page)
@@ -4613,7 +4617,7 @@ final class Http4sHttpServer(
       case WebTemplatePartScope.ComponentContent =>
         localapp ++ localflat ++ globalapp ++ globalflat
       case _ =>
-        if (_is_flat_web_root_app(webappname))
+        if (_is_flat_web_root_app(webappname, componentname))
           localflat ++ localapp ++ globalflat ++ globalapp
         else
           localapp ++ localflat ++ globalapp ++ globalflat
@@ -4624,7 +4628,8 @@ final class Http4sHttpServer(
     webappname: String,
     page: Vector[String],
     name: String,
-    scope: WebTemplatePartScope
+    scope: WebTemplatePartScope,
+    componentname: Option[String] = None
   ): Vector[Path] = {
     val webapppath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(webappname)
     val localpage = _web_inf_page_path(page)
@@ -4640,7 +4645,7 @@ final class Http4sHttpServer(
       case WebTemplatePartScope.ComponentContent =>
         localapp ++ localflat ++ globalapp ++ globalflat
       case _ =>
-        if (_is_flat_web_root_app(webappname))
+        if (_is_flat_web_root_app(webappname, componentname))
           localflat ++ localapp ++ globalflat ++ globalapp
         else
           localapp ++ localflat ++ globalapp ++ globalflat
@@ -4698,16 +4703,26 @@ final class Http4sHttpServer(
 
   private def _flat_or_app_named_candidates(
     webappname: String,
-    flatFirst: Vector[Path]
+    flatfirst: Vector[Path],
+    componentname: Option[String] = None
   ): Vector[Path] =
-    if (_is_flat_web_root_app(webappname)) flatFirst else flatFirst.reverse
+    if (_is_flat_web_root_app(webappname, componentname)) flatfirst else flatfirst.reverse
 
   private def _is_flat_web_root_app(
     webappname: String
+  ): Boolean =
+    _is_flat_web_root_app(webappname, None)
+
+  private def _is_flat_web_root_app(
+    webappname: String,
+    componentname: Option[String]
   ): Boolean = {
     val normalized = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(webappname)
     val staticapps = engine.webDescriptor.apps.filter(app => app.effectiveKind.equalsIgnoreCase("static-form"))
-    staticapps.size == 1 && staticapps.head.normalizedName == normalized
+    (staticapps.size == 1 && staticapps.head.normalizedName == normalized) ||
+      componentname.exists { component =>
+        engine.webDescriptor.routeAppsForComponent(component) == Vector(normalized)
+      }
   }
 
   private def _normalize_web_page_segment(
