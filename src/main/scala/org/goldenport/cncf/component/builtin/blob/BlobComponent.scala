@@ -42,7 +42,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
  * Builtin Blob user-facing component.
  *
  * @since   Apr. 26, 2026
- * @version May. 31, 2026
+ * @version Jun.  5, 2026
  * @author  ASAMI, Tomoharu
  */
 final class BlobComponent() extends Component {
@@ -1392,10 +1392,15 @@ object BlobComponent {
       )
 
     private def _blob_delete(id: EntityId, system: Boolean): ExecUowM[Unit] = {
+      val blobid = BlobRepository.canonicalId(id)
       _exec_uow(UnitOfWorkOp.EntityStoreDelete(
         id,
         Some(_authorization(id.collection, Some(id), "delete", system))
-      ))
+      )).flatMap(_ =>
+        exec_from(core.executionContext.entityStoreSpace.deleteHard(
+          UnitOfWorkOp.EntityStoreDeleteHard(blobid)
+        )(using core.executionContext))
+      )
     }
 
     private def _association_create(create: AssociationCreate, system: Boolean): ExecUowM[Association] = {

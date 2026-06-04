@@ -14,7 +14,7 @@ import org.goldenport.cncf.context.{Capability, ExecutionContext, Principal, Pri
  * - Failure means the provider matched but authentication failed operationally.
  *
  * @since   Apr.  9, 2026
- * @version Apr. 23, 2026
+ * @version Jun.  5, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class AuthenticationRequest(
@@ -32,6 +32,11 @@ final case class AuthenticationRequest(
   def sessionId: Option[String] =
     AuthenticationRequest.findFirst(attributes, AuthenticationRequest.SessionIdKeys)
       .orElse(AuthenticationRequest.findCookieSession(attributes))
+      .flatMap(SessionId.option)
+      .map(_.value)
+
+  def typedSessionId: Option[SessionId] =
+    sessionId.flatMap(SessionId.option)
 }
 
 object AuthenticationRequest {
@@ -56,7 +61,7 @@ object AuthenticationRequest {
     "cncf.session"
   )
 
-  private val CookieHeaderKeys: Vector[String] = Vector(
+  private val _cookie_header_keys: Vector[String] = Vector(
     "cookie"
   )
 
@@ -73,7 +78,7 @@ object AuthenticationRequest {
     p.trim.toLowerCase.replace("_", "").replace("-", "")
 
   def findCookieSession(attributes: Map[String, String]): Option[String] =
-    findFirst(attributes, CookieHeaderKeys).flatMap(_session_cookie_id)
+    findFirst(attributes, _cookie_header_keys).flatMap(_session_cookie_id)
 
   private def _session_cookie_id(value: String): Option[String] =
     Option(value)
@@ -94,6 +99,58 @@ object AuthenticationRequest {
       key.startsWith("textus-session-") ||
       key.startsWith("cncf-session-")
   }
+}
+
+final case class SessionId private (value: String) {
+  override def toString: String = value
+}
+
+object SessionId {
+  val LENGTH_MIN = 1
+  val LENGTH_MAX = 64
+
+  def option(value: String): Option[SessionId] =
+    Option(value)
+      .map(_.trim)
+      .filter(isValid)
+      .map(new SessionId(_))
+
+  def create(value: String): Consequence[SessionId] =
+    option(value)
+      .map(Consequence.success)
+      .getOrElse(Consequence.valueInvalid(s"Invalid SessionId length: ${Option(value).map(_.length).getOrElse(0)}"))
+
+  def unsafe(value: String): SessionId =
+    option(value).getOrElse(throw new IllegalArgumentException(s"Invalid SessionId length: ${Option(value).map(_.length).getOrElse(0)}"))
+
+  def isValid(value: String): Boolean =
+    value.nonEmpty && value.length >= LENGTH_MIN && value.length <= LENGTH_MAX
+}
+
+final case class PublicPrincipalId private (value: String) {
+  override def toString: String = value
+}
+
+object PublicPrincipalId {
+  val LENGTH_MIN = 1
+  val LENGTH_MAX = 64
+
+  def option(value: String): Option[PublicPrincipalId] =
+    Option(value)
+      .map(_.trim)
+      .filter(isValid)
+      .map(new PublicPrincipalId(_))
+
+  def create(value: String): Consequence[PublicPrincipalId] =
+    option(value)
+      .map(Consequence.success)
+      .getOrElse(Consequence.valueInvalid(s"Invalid PublicPrincipalId length: ${Option(value).map(_.length).getOrElse(0)}"))
+
+  def unsafe(value: String): PublicPrincipalId =
+    option(value).getOrElse(throw new IllegalArgumentException(s"Invalid PublicPrincipalId length: ${Option(value).map(_.length).getOrElse(0)}"))
+
+  def isValid(value: String): Boolean =
+    value.nonEmpty && value.length >= LENGTH_MIN && value.length <= LENGTH_MAX
 }
 
 final case class AuthenticationResult(

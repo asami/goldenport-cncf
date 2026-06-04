@@ -689,7 +689,12 @@ Terminology boundary:
 
 ### Completion Notes
 
-- Pending.
+- 2026-06-05 progress: TKE KE-13 execution checklist sections 1-4 are
+  implemented and locally validated in the driver repository:
+  Book/Publication UI, Associations, Identifiers, and Classification.
+- Remaining KE-13 work is still active: RDF anchor cleanup, KnowledgeSpace
+  materialization behavior, status vocabulary cleanup, Phase 27/strategy
+  documentation, and browser smoke validation.
 
 ---
 

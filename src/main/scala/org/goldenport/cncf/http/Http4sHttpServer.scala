@@ -3,7 +3,7 @@ package org.goldenport.cncf.http
 /*
  * @since   May. 18, 2026
  *  version May. 30, 2026
- * @version Jun.  4, 2026
+ * @version Jun.  5, 2026
  * @author  ASAMI, Tomoharu
  */
 import cats.effect.IO
@@ -49,7 +49,7 @@ import org.goldenport.cncf.job.{JobId, JobInput, JobInputRetentionPolicy, JobQue
 import org.goldenport.cncf.observability.{ConclusionDiagnostics, DiagnosticPayloadReferenceCodec, DslChokepointContext, DslChokepointPhase, DslChokepointRunner}
 import org.goldenport.cncf.mcp.McpJsonRpcAdapter
 import org.goldenport.cncf.openapi.OpenApiProjector
-import org.goldenport.cncf.security.{AuthenticationRequest, IngressSecurityResolver}
+import org.goldenport.cncf.security.{AuthenticationRequest, IngressSecurityResolver, SessionId}
 import org.goldenport.bag.{Bag, BinaryBag}
 import org.goldenport.datatype.{ContentType, MimeBody, MimeType}
 import org.goldenport.observation.{Cause, Descriptor}
@@ -60,7 +60,7 @@ import org.goldenport.observation.{Cause, Descriptor}
  *  version Mar. 29, 2026
  *  version Apr. 30, 2026
  *  version May. 25, 2026
- * @version Jun.  4, 2026
+ * @version Jun.  5, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Http4sHttpServer(
@@ -899,6 +899,10 @@ final class Http4sHttpServer(
         Vector.empty
     Vector(
       "pageContext.session.authenticated" -> authenticated.toString,
+      "pageContext.session.loginHidden" -> (if (authenticated) "hidden" else ""),
+      "pageContext.session.signupHidden" -> (if (authenticated) "hidden" else ""),
+      "pageContext.session.logoutHidden" -> (if (authenticated) "" else "hidden"),
+      "pageContext.session.displayName" -> "",
       "pageContext.security.capabilities" -> capabilities
     ) ++ session
   }
@@ -4167,6 +4171,10 @@ final class Http4sHttpServer(
     val queryvalues = _page_query_context_values(req)
     val base = WebPageContext(queryvalues ++ Map(
       "pageContext.session.authenticated" -> authenticated.toString,
+      "pageContext.session.loginHidden" -> (if (authenticated) "hidden" else ""),
+      "pageContext.session.signupHidden" -> (if (authenticated) "hidden" else ""),
+      "pageContext.session.logoutHidden" -> (if (authenticated) "" else "hidden"),
+      "pageContext.session.displayName" -> "",
       "pageContext.jobs.activeCount" -> jobcounts.active.toString,
       "pageContext.jobs.unconfirmedCount" -> jobcounts.unconfirmed.toString,
       "pageContext.jobs.visible" -> authenticated.toString,
@@ -5113,7 +5121,11 @@ final class Http4sHttpServer(
     _auth_service match {
       case Some(service) =>
         given ExecutionContext = ExecutionContext.create()
-        service.currentSession(AuthenticationRequest(_request_attributes(req))) match {
+        val authrequest =
+          _session_id_(req)
+            .map(_session_authentication_request)
+            .getOrElse(AuthenticationRequest(_request_attributes(req)))
+        service.currentSession(authrequest) match {
           case org.goldenport.Consequence.Success(summary) =>
             _json(StaticFormAppRenderer.Page(summary.toJson.noSpaces))
           case org.goldenport.Consequence.Failure(c) =>
@@ -5172,16 +5184,22 @@ final class Http4sHttpServer(
     query: Record = Record.empty,
     form: Record = Record.empty
   ): Record = {
-    val base = req.headers.headers.map(h => h.name.toString -> h.value).toVector
+    val base = req.headers.headers
+      .filterNot(h => _is_raw_session_header(h.name.toString))
+      .map(h => h.name.toString -> h.value).toVector
     val enriched =
       _session_id_(req, query, form) match {
-        case Some(sessionid) if !base.exists { case (k, _) => k.equalsIgnoreCase("x-textus-session") } =>
+        case Some(sessionid) =>
           base :+ ("x-textus-session" -> sessionid)
         case _ =>
           base
       }
     Record.create(enriched)
   }
+
+  private def _is_raw_session_header(name: String): Boolean =
+    val lower = name.trim.toLowerCase(java.util.Locale.ROOT)
+    lower == "cookie" || lower == "set-cookie" || lower == "x-textus-session"
 
   private def _request_execution_context(
     req: org.http4s.Request[IO]
@@ -5229,22 +5247,25 @@ final class Http4sHttpServer(
     req: org.http4s.Request[IO],
     query: Record = Record.empty,
     form: Record = Record.empty
-  ): Option[String] =
-    req.headers.headers
-      .collectFirst {
-        case h if h.name.toString.equalsIgnoreCase("x-textus-session") => h.value
-      }
-      .map(_.trim)
-      .filter(_.nonEmpty)
-      .orElse {
-        _session_cookie_names(req).collectFirst(Function.unlift { name =>
+  ): Option[String] = {
+    val candidates =
+      req.headers.headers
+        .collectFirst {
+          case h if h.name.toString.equalsIgnoreCase("x-textus-session") => h.value
+        }
+        .toVector ++
+        _session_cookie_names(req).flatMap { name =>
           req.cookies.collectFirst {
             case cookie if cookie.name.equalsIgnoreCase(name) => cookie.content
-          }.map(_.trim).filter(_.nonEmpty)
-        })
-      }
-      .orElse(form.getString("x-textus-session").map(_.trim).filter(_.nonEmpty))
-      .orElse(query.getString("x-textus-session").map(_.trim).filter(_.nonEmpty))
+          }.toVector
+        } ++
+        form.getString("x-textus-session").toVector ++
+        query.getString("x-textus-session").toVector
+    candidates.iterator.map(_.trim).flatMap(_valid_session_id).nextOption()
+  }
+
+  private def _valid_session_id(value: String): Option[String] =
+    SessionId.option(value).map(_.value)
 
   private def _session_cookie_names(req: org.http4s.Request[IO]): Vector[String] =
     (_session_cookie_name +: _web_app_session_cookie_name(req).toVector).distinct
@@ -5418,7 +5439,9 @@ final class Http4sHttpServer(
   private def _session_authentication_request(
     sessionid: String
   ): AuthenticationRequest =
-    AuthenticationRequest(Map("x-textus-session" -> sessionid))
+    SessionId.option(sessionid)
+      .map(id => AuthenticationRequest(Map("x-textus-session" -> id.value)))
+      .getOrElse(AuthenticationRequest(Map.empty))
 
   private def _web_authorization_subject(
     summary: AuthComponent.SessionSummary

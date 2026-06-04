@@ -1301,6 +1301,11 @@ Phase 27 active scope:
   `docs/journal/2026/05/rdf-centric-knowledge-expansion.md`, with
   `docs/journal/2026/06/book-edition-volume-publication-note.md` defining Book
   as the concrete publication layer and Textual Volume as optional.
+- KE-13 implementation progress: TKE Book/Publication UI, Association,
+  Identifier, and Classification cleanup are implemented in the driver
+  repository. RDF anchor cleanup, KnowledgeSpace materialization, status
+  vocabulary, remaining documentation, and browser smoke validation remain
+  active.
 - KE-14 will add relationship / role / qualifier editing so contributor,
   publisher, citation, part-whole, series, edition, and volume facts are not
   flattened into untyped fields.

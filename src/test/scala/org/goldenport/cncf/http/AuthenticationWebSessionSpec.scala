@@ -9,7 +9,7 @@ import org.goldenport.Consequence
 import org.goldenport.cncf.component.{Component, ComponentId, ComponentInstanceId}
 import org.goldenport.cncf.context.{ExecutionContext, PrincipalId, SessionContext}
 import org.goldenport.cncf.config.RuntimeConfig
-import org.goldenport.cncf.security.{AuthenticationProvider, AuthenticationRequest, AuthenticationResult}
+import org.goldenport.cncf.security.{AuthenticationProvider, AuthenticationRequest, AuthenticationResult, PublicPrincipalId, SessionId}
 import org.goldenport.cncf.subsystem.DefaultSubsystemFactory
 import org.goldenport.configuration.{Configuration, ConfigurationTrace, ResolvedConfiguration}
 import org.goldenport.protocol.{Property, Protocol, Request}
@@ -22,7 +22,8 @@ import org.typelevel.ci.CIStringSyntax
 
 /*
  * @since   Apr. 23, 2026
- * @version May. 10, 2026
+ *  version May. 10, 2026
+ * @version Jun.  5, 2026
  * @author  ASAMI, Tomoharu
  */
 final class AuthenticationWebSessionSpec extends AnyWordSpec with Matchers {
@@ -143,6 +144,67 @@ final class AuthenticationWebSessionSpec extends AnyWordSpec with Matchers {
       }
     }
 
+    "summarize long internal principal ids with safe public identifiers" in {
+      val internalid = "single-global-entity-user_account-1780527539701-7CtuvcCpxcWarnFB0XvpQm"
+      val provider = new _SessionProvider(
+        Map.empty,
+        Map("sess-long" -> internalid),
+        publicPrincipalIds = Map(internalid -> "debug-user"),
+        userAccountIds = Map(internalid -> internalid)
+      )
+      val subsystem = _subsystem(provider)
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+
+      val response = server.routes(null).orNotFound.run(
+        _get_request("/web/cwitter/session").putHeaders(Header.Raw(ci"x-textus-session", "sess-long"))
+      ).unsafeRunSync()
+
+      response.status.code shouldBe 200
+      val json = parse(response.as[String].unsafeRunSync()).getOrElse(fail("invalid session json"))
+      json.hcursor.get[String]("principalId").toOption shouldBe Some("debug-user")
+      json.hcursor.downField("attributes").get[String]("userAccountId").toOption shouldBe None
+      json.hcursor.downField("attributes").get[String]("user_account_id").toOption shouldBe None
+
+      val current = subsystem.executeOperationResponse(
+        Request
+          .of(component = "auth", service = "auth", operation = "session")
+          .copy(properties = List(Property("x-textus-session", "sess-long", None)))
+      )
+      current shouldBe a[Consequence.Success[_]]
+      current.toOption.get match {
+        case OperationResponse.RecordResponse(record) =>
+          record.getString("principalId") shouldBe Some("debug-user")
+          record.getRecord("attributes").flatMap(_.getString("userAccountId")) shouldBe None
+        case other =>
+          fail(s"unexpected response: $other")
+      }
+    }
+
+    "ignore oversized cookie session ids before provider authentication" in {
+      val oversized = "s" * (SessionId.LENGTH_MAX + 1)
+      val provider = new _SessionProvider(Map.empty, Map(oversized -> "alice"))
+      val subsystem = _subsystem(provider)
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+
+      val response = server.routes(null).orNotFound.run(
+        _get_request("/web/cwitter/session").putHeaders(
+          Header.Raw(ci"Cookie", s"${_cookie_name(subsystem)}=$oversized")
+        )
+      ).unsafeRunSync()
+
+      response.status.code shouldBe 200
+      val json = parse(response.as[String].unsafeRunSync()).getOrElse(fail("invalid session json"))
+      json.hcursor.get[Boolean]("authenticated").toOption shouldBe Some(false)
+      json.hcursor.get[String]("principalId").toOption shouldBe Some("anonymous")
+    }
+
+    "define dedicated length limits for public auth identifiers" in {
+      SessionId.option("s" * SessionId.LENGTH_MAX).map(_.value) shouldBe Some("s" * SessionId.LENGTH_MAX)
+      SessionId.option("s" * (SessionId.LENGTH_MAX + 1)) shouldBe None
+      PublicPrincipalId.option("p" * PublicPrincipalId.LENGTH_MAX).map(_.value) shouldBe Some("p" * PublicPrincipalId.LENGTH_MAX)
+      PublicPrincipalId.option("p" * (PublicPrincipalId.LENGTH_MAX + 1)) shouldBe None
+    }
+
     "delegate exact login alias routes to provider-owned UI when configured" in {
       val provider = new _SessionProvider(Map("alice" -> "secret"), Map.empty)
       val webroot = _web_root(
@@ -213,6 +275,18 @@ final class AuthenticationWebSessionSpec extends AnyWordSpec with Matchers {
       server._session_id_(request) shouldBe Some("notification-session")
     }
 
+    "ignore invalid long session cookies and use the next valid session candidate" in {
+      val provider = new _SessionProvider(Map.empty, Map.empty)
+      val subsystem = _subsystem(provider)
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val stalesession = "s" * 72
+      val request = _post_form_request("/form-api/cwitter/timeline/create-post", "body=hello")
+        .putHeaders(Header.Raw(ci"Cookie", s"${_cookie_name(subsystem)}=${stalesession}"))
+      val form = org.goldenport.record.Record.create(Vector("x-textus-session" -> "form-session"))
+
+      server._session_id_(request, org.goldenport.record.Record.empty, form) shouldBe Some("form-session")
+    }
+
     "promote fallback form-api session id into the auth header record" in {
       val provider = new _SessionProvider(Map.empty, Map.empty)
       val subsystem = _subsystem(provider)
@@ -225,6 +299,35 @@ final class AuthenticationWebSessionSpec extends AnyWordSpec with Matchers {
       )
 
       headers.getString("x-textus-session") shouldBe Some("form-session")
+    }
+
+    "replace invalid session headers with the next valid session candidate in header records" in {
+      val provider = new _SessionProvider(Map.empty, Map.empty)
+      val subsystem = _subsystem(provider)
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val stalesession = "s" * 72
+      val request = _post_form_request("/form-api/cwitter/timeline/create-post", "body=hello")
+        .putHeaders(Header.Raw(ci"x-textus-session", stalesession))
+      val form = org.goldenport.record.Record.create(Vector("x-textus-session" -> "form-session"))
+
+      val headers = server._request_header_record(request, org.goldenport.record.Record.empty, form)
+
+      headers.getString("x-textus-session") shouldBe Some("form-session")
+    }
+
+    "extract session cookies without copying raw Cookie header into header records" in {
+      val provider = new _SessionProvider(Map.empty, Map.empty)
+      val subsystem = _subsystem(provider)
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val request = _get_request("/web/cwitter/session").putHeaders(
+        Header.Raw(ci"Cookie", s"${_cookie_name(subsystem)}=cookie-session")
+      )
+
+      val headers = server._request_header_record(request)
+
+      headers.getString("x-textus-session") shouldBe Some("cookie-session")
+      headers.getString("Cookie") shouldBe None
+      headers.getString("cookie") shouldBe None
     }
   }
 
@@ -286,7 +389,9 @@ final class AuthenticationWebSessionSpec extends AnyWordSpec with Matchers {
 
   private final class _SessionProvider(
     credentials: Map[String, String],
-    seededSessions: Map[String, String]
+    seededSessions: Map[String, String],
+    publicPrincipalIds: Map[String, String] = Map.empty,
+    userAccountIds: Map[String, String] = Map.empty
   ) extends AuthenticationProvider {
     private var _sessions: Map[String, String] = seededSessions
 
@@ -297,7 +402,7 @@ final class AuthenticationWebSessionSpec extends AnyWordSpec with Matchers {
         case Some(sessionid) =>
           _sessions.get(sessionid) match {
             case Some(principalid) =>
-              Consequence.success(Some(_result_(principalid, sessionid)))
+              Consequence.success(Some(_result(principalid, sessionid)))
             case None =>
               Consequence.argumentInvalid("invalid session")
           }
@@ -312,7 +417,7 @@ final class AuthenticationWebSessionSpec extends AnyWordSpec with Matchers {
         case Some(expected) if expected == password =>
           val sessionid = s"session-${username}"
           _sessions = _sessions.updated(sessionid, username)
-          Consequence.success(Some(_result_(username, sessionid)))
+          Consequence.success(Some(_result(username, sessionid)))
         case _ =>
           Consequence.argumentInvalid("invalid credentials")
       }
@@ -334,17 +439,20 @@ final class AuthenticationWebSessionSpec extends AnyWordSpec with Matchers {
         case (sessionid, principal) if principal == principalid => sessionid
       }
 
-    private def _result_(principalid: String, sessionid: String): AuthenticationResult =
+    private def _result(principalid: String, sessionid: String): AuthenticationResult =
+      val publicid = publicPrincipalIds.getOrElse(principalid, principalid)
       AuthenticationResult(
         principalId = PrincipalId(principalid),
         attributes = Map(
-          "login_name" -> principalid,
-          "handle" -> principalid,
-          "shortid" -> s"${principalid}-short",
-          "email" -> s"${principalid}@example.com",
-          "access_token" -> s"access-${principalid}",
-          "refresh_token" -> s"refresh-${principalid}"
-        ),
+          "publicPrincipalId" -> publicid,
+          "login_name" -> publicid,
+          "handle" -> publicid,
+          "shortid" -> s"${publicid}-short",
+          "email" -> s"${publicid}@example.com",
+          "userAccountId" -> userAccountIds.getOrElse(principalid, ""),
+          "access_token" -> s"access-${publicid}",
+          "refresh_token" -> s"refresh-${publicid}"
+        ).filter(_._2.nonEmpty),
         session = Some(SessionContext(sessionId = Some(sessionid)))
       )
   }
