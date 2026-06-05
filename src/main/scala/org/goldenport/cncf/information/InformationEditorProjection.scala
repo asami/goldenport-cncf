@@ -9,7 +9,7 @@ import org.goldenport.record.Record
 
 /*
  * @since   May. 21, 2026
- * @version May. 31, 2026
+ * @version Jun.  5, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class InformationFieldMappingDescriptor(
@@ -485,7 +485,7 @@ object InformationEditorProfile {
           _mapping("evidence", "sources.sourceRefs", COMMON_NEIGHBORHOOD, "Source reference for evidence and provenance."),
           _mapping("provenance", "origin.source", COMMON_NEIGHBORHOOD, "Origin metadata for imported information.")
         )
-      )
+      ) ++ _rdf_anchor_fields(BOOK_PROFILE_EXTENSION)
     )
 
   val paper: InformationEditorProfile =
@@ -850,7 +850,7 @@ object InformationEditorProfile {
         _field("ndl", "NDL authority ID", "National Diet Library authority identifier.", None, "optional", None, true, _mapping("knowledge-node-section", "identity.externalIdentifiers", PERSON_PROFILE_EXTENSION, "External authority identifier.")),
         _field("sourceUrl", "Source URL", "Source page or authority record URL used as evidence.", None, "recommended", None, true, _mapping("evidence", "sources.sourceRefs", COMMON_NEIGHBORHOOD, "Source reference.")),
         _field("reviewerNote", "Reviewer note", "Human editor note about this person authority candidate.", None, "optional", None, false, _mapping("provenance", "curation.note", COMMON_NEIGHBORHOOD, "Human curation note."))
-      )
+      ) ++ _rdf_anchor_fields(PERSON_PROFILE_EXTENSION)
     )
 
   val organization: InformationEditorProfile =
@@ -880,7 +880,7 @@ object InformationEditorProfile {
         _field("publisherId", "Publisher ID", "Publisher-local or catalog-specific organization identifier.", None, "optional", None, true, _mapping("knowledge-node-section", "identity.externalIdentifiers", ORGANIZATION_PROFILE_EXTENSION, "External source identifier.")),
         _field("sourceUrl", "Source URL", "Source page or authority record URL used as evidence.", None, "recommended", None, true, _mapping("evidence", "sources.sourceRefs", COMMON_NEIGHBORHOOD, "Source reference.")),
         _field("reviewerNote", "Reviewer note", "Human editor note about this organization authority candidate.", None, "optional", None, false, _mapping("provenance", "curation.note", COMMON_NEIGHBORHOOD, "Human curation note."))
-      )
+      ) ++ _rdf_anchor_fields(ORGANIZATION_PROFILE_EXTENSION)
     )
 
   val textualWork: InformationEditorProfile =
@@ -907,7 +907,7 @@ object InformationEditorProfile {
         _field("ndl", "NDL authority ID", "National Diet Library authority identifier for the work when available.", None, "optional", None, true, _mapping("knowledge-node-section", "identity.externalIdentifiers", TEXTUAL_WORK_PROFILE_EXTENSION, "External authority identifier.")),
         _field("sourceUrl", "Source URL", "Source page or authority record URL used as evidence.", None, "recommended", None, true, _mapping("evidence", "sources.sourceRefs", COMMON_NEIGHBORHOOD, "Source reference.")),
         _field("reviewerNote", "Reviewer note", "Human editor note about this textual work authority candidate.", None, "optional", None, false, _mapping("provenance", "curation.note", COMMON_NEIGHBORHOOD, "Human curation note."))
-      )
+      ) ++ _rdf_anchor_fields(TEXTUAL_WORK_PROFILE_EXTENSION)
     )
 
   val textualEdition: InformationEditorProfile =
@@ -936,7 +936,7 @@ object InformationEditorProfile {
         _field("dbpediaUri", "DBpedia URI", "DBpedia resource URI used as an RDF enrichment anchor for the edition.", None, "optional", Some("Treat as candidate until confirmed in InformationSpace."), true, _mapping("knowledge-node-section", "identity.externalIdentifiers", TEXTUAL_EDITION_PROFILE_EXTENSION, "External RDF anchor candidate.")),
         _field("sourceUrl", "Source URL", "Source page or authority record URL used as evidence.", None, "recommended", None, true, _mapping("evidence", "sources.sourceRefs", COMMON_NEIGHBORHOOD, "Source reference.")),
         _field("reviewerNote", "Reviewer note", "Human editor note about this textual edition candidate.", None, "optional", None, false, _mapping("provenance", "curation.note", COMMON_NEIGHBORHOOD, "Human curation note."))
-      )
+      ) ++ _rdf_anchor_fields(TEXTUAL_EDITION_PROFILE_EXTENSION)
     )
 
   val textualVolume: InformationEditorProfile =
@@ -962,6 +962,83 @@ object InformationEditorProfile {
         _field("openLibraryWorkId", "Open Library Work ID", "Open Library work identifier when supplied as source evidence.", Some("OL12345W"), "optional", None, true, _mapping("knowledge-node-section", "identity.externalIdentifiers", TEXTUAL_VOLUME_PROFILE_EXTENSION, "External source identifier.")),
         _field("sourceUrl", "Source URL", "Source page or authority record URL used as evidence.", None, "recommended", None, true, _mapping("evidence", "sources.sourceRefs", COMMON_NEIGHBORHOOD, "Source reference.")),
         _field("reviewerNote", "Reviewer note", "Human editor note about this textual volume candidate.", None, "optional", None, false, _mapping("provenance", "curation.note", COMMON_NEIGHBORHOOD, "Human curation note."))
+      ) ++ _rdf_anchor_fields(TEXTUAL_VOLUME_PROFILE_EXTENSION)
+    )
+
+  private def _rdf_anchor_fields(
+    profileextension: String
+  ): Vector[InformationFieldDescriptor] =
+    Vector(
+      _field(
+        "primaryRdfUri",
+        "Primary RDF URI",
+        "Primary external RDF resource URI selected as the main semantic anchor for this Information.",
+        Some("https://dbpedia.org/resource/..."),
+        "optional",
+        Some("Use only for an explicit external RDF resource. Do not generate classification-code fallback URIs."),
+        resolverassisted = true,
+        _mapping("knowledge-node-section", "identity.rdfAnchor.primary", profileextension, "Primary external RDF anchor."),
+        _mapping("relationship", "structure.correspondences.sameResources", COMMON_NEIGHBORHOOD, "Confirmed same-resource or same-concept link.")
+      ),
+      _field(
+        "linkedRdfNodes",
+        "Linked RDF nodes",
+        "Line-separated RDF resource URIs linked to this Information as external anchors.",
+        Some("https://www.wikidata.org/entity/Q12345"),
+        "optional",
+        Some("Use for reviewed anchors only; graph traversal and import are deferred."),
+        resolverassisted = true,
+        _mapping("knowledge-node-section", "identity.rdfAnchor.linkedNodes", profileextension, "Additional external RDF anchors.")
+      ),
+      _field(
+        "sameAsUris",
+        "sameAs URIs",
+        "Line-separated owl:sameAs targets for reviewed same-resource correspondences.",
+        None,
+        "optional",
+        Some("Use when the linked RDF node denotes the same entity or concept."),
+        resolverassisted = true,
+        _mapping("relationship", "owl:sameAs", COMMON_NEIGHBORHOOD, "Reviewed same-resource RDF correspondence.")
+      ),
+      _field(
+        "exactMatchUris",
+        "exactMatch URIs",
+        "Line-separated SKOS exactMatch targets for reviewed concept correspondences.",
+        None,
+        "optional",
+        Some("Use for concept-level exact matches such as authority or classification concepts."),
+        resolverassisted = true,
+        _mapping("relationship", "skos:exactMatch", COMMON_NEIGHBORHOOD, "Reviewed exact concept match.")
+      ),
+      _field(
+        "closeMatchUris",
+        "closeMatch URIs",
+        "Line-separated SKOS closeMatch targets for approximate external concept correspondences.",
+        None,
+        "optional",
+        Some("Use when the external concept is useful but not identical."),
+        resolverassisted = true,
+        _mapping("relationship", "skos:closeMatch", COMMON_NEIGHBORHOOD, "Reviewed close concept match.")
+      ),
+      _field(
+        "rdfTypes",
+        "RDF types",
+        "Line-separated RDF type hints such as schema:Book or schema:CreativeWork.",
+        Some("schema:CreativeWork"),
+        "optional",
+        Some("Type hints guide publication/materialization only; they do not import graph data."),
+        resolverassisted = false,
+        _mapping("knowledge-node-section", "semantics.rdfTypes", profileextension, "RDF type hints for materialization.")
+      ),
+      _field(
+        "rdfNote",
+        "RDF note",
+        "Human curation note explaining RDF anchor choices and deferred expansion work.",
+        None,
+        "optional",
+        None,
+        resolverassisted = false,
+        _mapping("provenance", "curation.rdfNote", COMMON_NEIGHBORHOOD, "Human curation note for RDF anchors.")
       )
     )
 

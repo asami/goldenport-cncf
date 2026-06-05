@@ -13,7 +13,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   May. 21, 2026
- * @version May. 30, 2026
+ * @version Jun.  5, 2026
  * @author  ASAMI, Tomoharu
  */
 final class InformationEditorProjectionSpec
@@ -140,6 +140,30 @@ final class InformationEditorProjectionSpec
       organizationname.requiredness shouldBe "required"
       organizationname.mappings.map(_.profileLayer) should contain ("organization-profile-extension")
       ror.resolverAssisted shouldBe true
+    }
+
+    "provide shared RDF anchor fields for cultural resource and authority profiles" in {
+      val domains = Vector("book", "person", "organization", "textual-work", "textual-edition", "textual-volume")
+      val anchorfields = Vector(
+        "primaryRdfUri",
+        "linkedRdfNodes",
+        "sameAsUris",
+        "exactMatchUris",
+        "closeMatchUris",
+        "rdfTypes",
+        "rdfNote"
+      )
+
+      domains.foreach { domain =>
+        val profile = InformationSpaceEditorProjection.profileOption(domain).getOrElse(fail(s"$domain profile missing"))
+        anchorfields.foreach { fieldpath =>
+          val field = _field(profile, fieldpath)
+          field.requiredness shouldBe "optional"
+        }
+        _field(profile, "primaryRdfUri").mappings.map(_.targetPath) should contain ("identity.rdfAnchor.primary")
+        _field(profile, "linkedRdfNodes").validationHint.getOrElse("") should include ("graph traversal and import are deferred")
+        _field(profile, "rdfNote").resolverAssisted shouldBe false
+      }
     }
 
     "provide paper field descriptors and knowledge mapping metadata" in {
