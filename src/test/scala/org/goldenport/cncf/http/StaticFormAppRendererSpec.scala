@@ -3,7 +3,7 @@ package org.goldenport.cncf.http
 /*
  * @since   May. 18, 2026
  *  version May. 27, 2026
- * @version Jun. 01, 2026
+ * @version Jun.  7, 2026
  * @author  ASAMI, Tomoharu
  */
 import scala.collection.mutable.ListBuffer
@@ -3474,12 +3474,15 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
 
       val index = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/board"))).unsafeRunSync()
+      val indexslash = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/board/"))).unsafeRunSync()
       val about = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/board/about"))).unsafeRunSync()
       val asset = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/board/assets/app.css"))).unsafeRunSync()
       val default = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web"))).unsafeRunSync()
 
       index.status.code shouldBe 200
       index.as[String].unsafeRunSync() should include ("Aliased Notice Board")
+      indexslash.status.code shouldBe 307
+      indexslash.headers.get[org.http4s.headers.Location].map(_.uri.renderString) shouldBe Some("/web/board")
       about.status.code shouldBe 200
       about.as[String].unsafeRunSync() should include ("Aliased About")
       asset.status.code shouldBe 200

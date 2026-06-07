@@ -3,7 +3,7 @@ package org.goldenport.cncf.http
 /*
  * @since   May. 18, 2026
  *  version May. 30, 2026
- * @version Jun.  5, 2026
+ * @version Jun.  7, 2026
  * @author  ASAMI, Tomoharu
  */
 import cats.effect.IO
@@ -342,6 +342,8 @@ final class Http4sHttpServer(
         }
       case GET -> Root / "web" / "" =>
         IO.pure(_temporary_redirect("/web"))
+      case req @ GET -> Root / "web" / app / "" =>
+        IO.pure(_temporary_redirect(_redirect_target_with_query(req, s"/web/$app")))
       case req @ GET -> _ if _web_component_asset_path(req).nonEmpty =>
         val (component, webApp, assetPath) = _web_component_asset_path(req).get
         _web_app_asset(component, webApp, assetPath)
