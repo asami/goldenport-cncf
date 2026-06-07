@@ -27,7 +27,8 @@ import org.typelevel.ci.CIStringSyntax
 /*
  * @since   Apr. 24, 2026
  *  version Apr. 25, 2026
- * @version May. 25, 2026
+ *  version May. 25, 2026
+ * @version Jun.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers {
@@ -100,6 +101,29 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers {
       body should include ("url: \"https://example.test/a b\"")
       body should not include ("Knowledge%20Import%20Paper")
       body should not include ("https%3A%2F%2Fexample.test")
+    }
+
+    "serve GET-backed HEAD responses without response bodies" in {
+      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val app = server.routes(null.asInstanceOf[org.http4s.server.websocket.WebSocketBuilder2[IO]]).orNotFound
+
+      val getweb = app.run(HRequest[IO](method = Method.GET, uri = Uri.unsafeFromString("/web"))).unsafeRunSync()
+      val headweb = app.run(HRequest[IO](method = Method.HEAD, uri = Uri.unsafeFromString("/web"))).unsafeRunSync()
+      val headasset = app.run(HRequest[IO](method = Method.HEAD, uri = Uri.unsafeFromString("/web/assets/bootstrap.min.css"))).unsafeRunSync()
+      val postonly = app.run(HRequest[IO](method = Method.HEAD, uri = Uri.unsafeFromString("/web/blob/admin/associations/attach"))).unsafeRunSync()
+      val headmcp = app.run(HRequest[IO](method = Method.HEAD, uri = Uri.unsafeFromString("/mcp"))).unsafeRunSync()
+
+      headweb.status shouldBe getweb.status
+      headweb.contentType.map(_.mediaType) shouldBe getweb.contentType.map(_.mediaType)
+      headweb.body.compile.to(Array).unsafeRunSync().toVector shouldBe Vector.empty
+      headasset.status.code shouldBe 200
+      headasset.contentType.map(_.mediaType) shouldBe Some(MediaType.text.css)
+      headasset.body.compile.to(Array).unsafeRunSync().toVector shouldBe Vector.empty
+      postonly.status.code shouldBe 404
+      postonly.body.compile.to(Array).unsafeRunSync().toVector shouldBe Vector.empty
+      headmcp.status.code shouldBe 404
+      headmcp.body.compile.to(Array).unsafeRunSync().toVector shouldBe Vector.empty
     }
 
     "download form result source as CSV attachment" in {

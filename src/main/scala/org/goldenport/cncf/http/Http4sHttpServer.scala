@@ -3,7 +3,7 @@ package org.goldenport.cncf.http
 /*
  * @since   May. 18, 2026
  *  version May. 30, 2026
- * @version Jun.  7, 2026
+ * @version Jun.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 import cats.effect.IO
@@ -25,7 +25,7 @@ import com.comcast.ip4s.Host
 import com.comcast.ip4s.Port
 import io.circe.Json
 import io.circe.parser.parse
-import org.http4s.{HttpRoutes, MediaType, Request as HRequest, Response as HResponse, ResponseCookie, SameSite, Status as HStatus, Uri}
+import org.http4s.{HttpRoutes, MediaType, Method, Request as HRequest, Response as HResponse, ResponseCookie, SameSite, Status as HStatus, Uri}
 import org.http4s.Header
 import org.http4s.ember.server.EmberServerBuilder
 import org.http4s.headers.{`Content-Type`, Location}
@@ -120,7 +120,12 @@ final class Http4sHttpServer(
       }
   }
 
-  private[http] def routes(wsb: WebSocketBuilder2[IO]) = HttpRoutes.of[IO] {
+  private[http] def routes(wsb: WebSocketBuilder2[IO]): HttpRoutes[IO] = HttpRoutes.of[IO] {
+      case req if req.method == Method.HEAD =>
+        if (_is_head_excluded_request(req))
+          IO.pure(_head_response(HResponse[IO](HStatus.NotFound)))
+        else
+          routes(wsb).orNotFound.run(req.withMethod(Method.GET)).map(_head_response)
       case req if _is_root_request(req) =>
         IO.pure(_temporary_redirect(_redirect_target_with_query(req, "/web")))
       case GET -> Root / "mcp" =>
@@ -4973,6 +4978,12 @@ final class Http4sHttpServer(
 
   private def _temporary_redirect(path: String): HResponse[IO] =
     HResponse[IO](HStatus.TemporaryRedirect).putHeaders(Location(Uri.unsafeFromString(path)))
+
+  private def _head_response(response: HResponse[IO]): HResponse[IO] =
+    response.withBodyStream(Stream.empty)
+
+  private def _is_head_excluded_request(req: org.http4s.Request[IO]): Boolean =
+    req.uri.path.renderString == "/mcp"
 
   private def _is_root_request(req: org.http4s.Request[IO]): Boolean = {
     val path = req.uri.path.renderString

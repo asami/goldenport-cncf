@@ -3,7 +3,7 @@ package org.goldenport.cncf.http
 /*
  * @since   May. 18, 2026
  *  version May. 27, 2026
- * @version Jun.  7, 2026
+ * @version Jun.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 import scala.collection.mutable.ListBuffer
@@ -516,7 +516,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       store.as[String].unsafeRunSync() should include ("BlobStore backend status")
     }
 
-    "serve managed Blob payloads through the CNCF content route" in {
+    "serve managed Blob payloads and GET-backed HEAD through the CNCF content route" in {
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       val bytes = "route image".getBytes(StandardCharsets.UTF_8)
       val blob = _blob_record(_success(subsystem.executeOperationResponse(_blob_request(
@@ -550,6 +550,15 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       download.status.code shouldBe 200
       header(download, "Content-Disposition") shouldBe Some("""attachment; filename="route.png"""")
       download.body.compile.to(Array).unsafeRunSync().toVector shouldBe bytes.toVector
+      val headinline = server.routes(null).orNotFound.run(_head_request(displayUrl)).unsafeRunSync()
+      headinline.status.code shouldBe 200
+      header(headinline, "Content-Disposition") shouldBe header(inline, "Content-Disposition")
+      header(headinline, "ETag") shouldBe header(inline, "ETag")
+      header(headinline, "Last-Modified") shouldBe header(inline, "Last-Modified")
+      header(headinline, "Content-Length") shouldBe header(inline, "Content-Length")
+      header(headinline, "Cache-Control") shouldBe header(inline, "Cache-Control")
+      header(headinline, "X-Content-Type-Options") shouldBe header(inline, "X-Content-Type-Options")
+      headinline.body.compile.to(Array).unsafeRunSync().toVector shouldBe Vector.empty
 
       val notModified = server.routes(null).orNotFound.run(
         _get_request(displayUrl).putHeaders(
@@ -559,6 +568,14 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       notModified.status.code shouldBe 304
       header(notModified, "ETag") shouldBe header(inline, "ETag")
       notModified.body.compile.to(Array).unsafeRunSync().toVector shouldBe Vector.empty
+      val headnotmodified = server.routes(null).orNotFound.run(
+        _head_request(displayUrl).putHeaders(
+          org.http4s.Header.Raw(org.typelevel.ci.CIString("If-None-Match"), header(inline, "ETag").get)
+        )
+      ).unsafeRunSync()
+      headnotmodified.status.code shouldBe 304
+      header(headnotmodified, "ETag") shouldBe header(inline, "ETag")
+      headnotmodified.body.compile.to(Array).unsafeRunSync().toVector shouldBe Vector.empty
 
       _success(subsystem.executeOperationResponse(_blob_request(
         "admin_delete_blob",
@@ -572,6 +589,9 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       ).unsafeRunSync()
       missing.status.code shouldBe 404
       RuntimeDashboardMetrics.blobDiagnosticCounts.getOrElse("not_found", 0L) should be >= 1L
+      val headmissing = server.routes(null).orNotFound.run(_head_request(displayUrl)).unsafeRunSync()
+      headmissing.status.code shouldBe 404
+      headmissing.body.compile.to(Array).unsafeRunSync().toVector shouldBe Vector.empty
 
       val refRoute = server.routes(null).orNotFound.run(_get_request("/web/blob/content/default/storage-key")).unsafeRunSync()
       refRoute.status.code shouldBe 404
@@ -587,6 +607,9 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       val externalId = external.getString("id").getOrElse(fail("external Blob id is missing"))
       val externalContent = server.routes(null).orNotFound.run(_get_request(s"/web/blob/content/$externalId")).unsafeRunSync()
       externalContent.status.code shouldBe 400
+      val externalhead = server.routes(null).orNotFound.run(_head_request(s"/web/blob/content/$externalId")).unsafeRunSync()
+      externalhead.status.code shouldBe 400
+      externalhead.body.compile.to(Array).unsafeRunSync().toVector shouldBe Vector.empty
 
       val unsafeBlob = _blob_record(_success(subsystem.executeOperationResponse(_blob_request(
         "register_blob",
@@ -10835,6 +10858,14 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
   ): Request[IO] =
     Request[IO](
       method = Method.GET,
+      uri = Uri.unsafeFromString(path)
+    )
+
+  private def _head_request(
+    path: String
+  ): Request[IO] =
+    Request[IO](
+      method = Method.HEAD,
       uri = Uri.unsafeFromString(path)
     )
 
