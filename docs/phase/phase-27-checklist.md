@@ -604,7 +604,7 @@ publishable, and materializable Information domains.
 
 ## KE-13: Textual Work / Edition / Series / Volume + CulturalResource Foundation
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
@@ -665,25 +665,27 @@ Terminology boundary:
       logical volume grouping, not a required layer for every Book.
 - [x] Add cultural-resource attributes to materialized Book layer nodes while
       preserving their existing `KnowledgeNode.category` values.
-- [ ] Define editable fields for work title, original/source work, edition
+- [x] Define editable fields for work title, original/source work, edition
       title, edition contributors, series title, volume title, volume number,
       total volume count, publisher/imprint, publication date, and ISBN-bearing
       publication unit.
-- [ ] Define relationship mapping for `volume-of`, `realizes-work`,
-      `part-of-series`, `published-by`, `authored-by`, `edited-by`, and
-      `translated-by`.
-- [ ] Define the boundary for work-internal `Textual Part` / `Chapter`
+- [x] Define the KE-13 structural relationship baseline for publication,
+      Textual Volume, Textual Edition, Textual Work, Person, and Organization
+      links; defer qualifier-rich relationship editing to KE-14.
+- [x] Define the boundary for work-internal `Textual Part` / `Chapter`
       concepts and keep them distinct from edition/publication-side
       `Textual Volume`.
-- [ ] Extend book import/enrichment so multi-volume metadata can be staged as
-      reviewable Information rather than flattened into one title string.
-- [ ] Extend Knowledge materialization summaries so missing, unresolved,
+- [x] Extend book import/enrichment so ISBN/imported volume metadata can be
+      staged as reviewable Textual Work / Edition / Volume Information rather
+      than flattened into one title string; defer coordinated book-set Job
+      import to KE-16.
+- [x] Extend Knowledge materialization summaries so missing, unresolved,
       selected, or materialized Textual Work/Edition/Series/Volume nodes are
       visible in the 1.5hop+ book KnowledgeFrame.
-- [ ] Make RDF anchor state visible for Textual Work/Edition/Series/Volume nodes,
+- [x] Make RDF anchor state visible for Textual Work/Edition/Series/Volume nodes,
       distinguishing local Textus KnowledgeNodes from sameAs/exactMatch/
       closeMatch/source-alignment links to external RDF spaces.
-- [ ] Add focused TKE executable specifications for a multi-volume book
+- [x] Add focused TKE executable specifications for a multi-volume book
       example, using Iwanami Genji monogatari style structure as the reference
       scenario.
 
@@ -698,17 +700,20 @@ Terminology boundary:
   Information when links are present, preserves title-based fallback when they
   are absent, and carries `CulturalResource` family/kind attributes plus
   `domain_profile=book` on materialized book-layer nodes.
-- 2026-06-08 progress: TKE status vocabulary cleanup and KE-13 documentation
-  cleanup are implemented in the driver repository. KE-13 remains active
-  because browser smoke validation still needs to cover the Book update,
-  Association, Identifier, Classification, and linked Textual Work / Edition /
-  Volume pages.
+- 2026-06-08 completion: TKE KE-13 execution checklist sections 1-9 are
+  complete. Browser smoke covered ISBN import, Book update, Association,
+  Identifier, Classification, linked Textual Work / Edition / Volume pages, and
+  Information/RDF graph projection. TKE commit `167a5db` records the driver
+  checklist completion.
+- Relationship qualifier editing, authority merge/split, and coordinated
+  multi-volume/book-set Job import remain intentionally outside KE-13 and move
+  to KE-14, KE-15, and KE-16 respectively.
 
 ---
 
 ## KE-14: Relationship / Role / Qualifier Editing
 
-Status: PENDING
+Status: ACTIVE
 
 ### Objective
 

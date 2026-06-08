@@ -112,14 +112,14 @@ Scope boundaries:
 - K (DONE): KE-11 — Person and Organization knowledge support for book
   contributors, publishers, imprints, and related authority candidates.
 - L (DONE): KE-12 — Person and Organization editor screens.
-- M (ACTIVE): KE-13 — Textual Work / Edition / Series / Volume book structure
+- M (DONE): KE-13 — Textual Work / Edition / Series / Volume book structure
   expansion plus `CulturalResource` foundation, including multi-volume editions
   such as a nine-volume Iwanami Genji monogatari publication. Direction notes:
   `docs/journal/2026/05/book-knowledge-materialization-genji.md` and
   `docs/journal/2026/05/rdf-centric-knowledge-expansion.md`, with
   `docs/journal/2026/06/book-edition-volume-publication-note.md` defining Book
   as the concrete publication layer and Textual Volume as optional.
-- N (PENDING): KE-14 — Relationship / Role / Qualifier editing for
+- N (ACTIVE): KE-14 — Relationship / Role / Qualifier editing for
   contributor, publisher, citation, part-whole, series, edition, and volume
   facts.
 - O (PENDING): KE-15 — Authority resolution merge/split workflow for Person,
@@ -131,7 +131,7 @@ Scope boundaries:
 
 Resume hint:
 
-- Start from KE-13. Do not reopen Phase 26 KI items unless fixing a regression.
+- Start from KE-14. Do not reopen Phase 26 KI items unless fixing a regression.
 
 Next development candidate after Phase 27:
 
@@ -153,7 +153,7 @@ Next development candidate after Phase 27:
       TagComponent app-facing TagSpace screen integration.
 - [x] KE-11: Person and Organization knowledge support.
 - [x] KE-12: Person and Organization editor screens.
-- [ ] KE-13: Textual Work / Edition / Series / Volume book structure expansion
+- [x] KE-13: Textual Work / Edition / Series / Volume book structure expansion
       plus `CulturalResource` foundation.
 - [ ] KE-14: Relationship / Role / Qualifier editing.
 - [ ] KE-15: Authority resolution merge/split workflow.

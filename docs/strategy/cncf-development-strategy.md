@@ -1292,21 +1292,21 @@ Phase 26 completed scope:
 
 Phase 27 active scope:
 
-- KE-01 through KE-12 are done. Current focus is KE-13:
-  expand book structure with explicit Textual Work / Edition / Series /
-  Volume knowledge and establish the `CulturalResource` foundation, including
-  multi-volume editions such as a nine-volume Iwanami Genji monogatari
-  publication. The working direction is captured in
+- KE-01 through KE-13 are done. KE-13 expanded book structure with explicit
+  Textual Work / Edition / Series / Volume knowledge and established the
+  `CulturalResource` foundation, including multi-volume editions such as a
+  nine-volume Iwanami Genji monogatari publication. The completed direction is
+  captured in
   `docs/journal/2026/05/book-knowledge-materialization-genji.md` and
   `docs/journal/2026/05/rdf-centric-knowledge-expansion.md`, with
   `docs/journal/2026/06/book-edition-volume-publication-note.md` defining Book
   as the concrete publication layer and Textual Volume as optional.
-- KE-13 implementation progress: TKE Book/Publication UI, Association,
-  Identifier, Classification, RDF anchor, linked Information-first Book
-  KnowledgeSpace materialization, status vocabulary, and documentation cleanup
-  are implemented in the driver repository. Browser smoke validation remains
-  before the KE-13 slice can be treated as complete.
-- KE-14 will add relationship / role / qualifier editing so contributor,
+- KE-13 completion: TKE Book/Publication UI, Association, Identifier,
+  Classification, RDF anchor, linked Information-first Book KnowledgeSpace
+  materialization, status vocabulary, documentation cleanup, and browser smoke
+  validation are implemented in the driver repository.
+- Current focus moves to KE-14, which will add relationship / role / qualifier
+  editing so contributor,
   publisher, citation, part-whole, series, edition, and volume facts are not
   flattened into untyped fields.
 - KE-15 will add authority resolution merge/split workflow for Person,
