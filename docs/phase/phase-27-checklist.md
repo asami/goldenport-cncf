@@ -764,7 +764,7 @@ flattened into untyped fields.
 
 ## KE-15: Authority Resolution Merge/Split Workflow
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
@@ -809,7 +809,16 @@ Textual Work, Edition, Series, Volume, and publication candidates.
   review-only queue. Reasons include duplicate labels, same identifiers, same
   RDF anchors, similar labels, and conflicts. The queue recommends existing
   merge or confirm/link actions but does not change saved state by itself.
-- Browser smoke remains before closing KE-15.
+- Browser smoke completed in TKE with ISBN `9784003510179`: authority-edit
+  showed review-only duplicate/similar queue behavior, merge/split/reject/
+  re-resolve actions returned to authority-edit, source evidence stayed
+  visible, and graph projection excluded rejected/superseded/conflict authority
+  candidates as final targets.
+- During smoke, TKE Person / Organization / Textual Work / Textual Edition /
+  Textual Volume edit save forms were corrected to render current data inside
+  an operation-result scope, so linked/created authority target Information can
+  be reviewed and edited after creation.
+- Next active work is KE-16 multi-volume / book-set import workflow.
 
 ---
 
@@ -858,7 +867,7 @@ controls, and redirect metadata.
 
 ## KE-16: Multi-Volume / Book-Set Import Workflow
 
-Status: PENDING
+Status: ACTIVE
 
 ### Objective
 

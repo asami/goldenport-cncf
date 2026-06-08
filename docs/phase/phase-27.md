@@ -122,19 +122,19 @@ Scope boundaries:
 - N (DONE): KE-14 — Relationship / Role / Qualifier editing for
   contributor, publisher, citation, part-whole, series, edition, and volume
   facts.
-- O (ACTIVE): KE-15 — Authority resolution merge/split workflow for Person,
+- O (DONE): KE-15 — Authority resolution merge/split workflow for Person,
   Organization, Textual Work, Edition, Series, Volume, and book publication
   candidates.
 - O1 (DONE): KE-15.1 — CML / Cozy form descriptor generation cleanup so
   operation form exposure and redirects are not hand-maintained separately in
   `form.yaml`.
-- P (PENDING): KE-16 — Multi-volume / book-set import workflow using Job-based
+- P (ACTIVE): KE-16 — Multi-volume / book-set import workflow using Job-based
   import units.
 - Q (PENDING): KE-17 — Usability smoke and Phase 27 closure.
 
 Resume hint:
 
-- Start from KE-15. Do not reopen Phase 26 KI items unless fixing a regression.
+- Start from KE-16. Do not reopen Phase 26 KI items unless fixing a regression.
 
 Next development candidate after Phase 27:
 
@@ -159,7 +159,7 @@ Next development candidate after Phase 27:
 - [x] KE-13: Textual Work / Edition / Series / Volume book structure expansion
       plus `CulturalResource` foundation.
 - [x] KE-14: Relationship / Role / Qualifier editing.
-- [ ] KE-15: Authority resolution merge/split workflow.
+- [x] KE-15: Authority resolution merge/split workflow.
 - [x] KE-15.1: CML / Cozy form descriptor generation cleanup.
 - [ ] KE-16: Multi-volume / book-set import workflow.
 - [ ] KE-17: Usability smoke and Phase 27 closure.

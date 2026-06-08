@@ -1292,7 +1292,7 @@ Phase 26 completed scope:
 
 Phase 27 active scope:
 
-- KE-01 through KE-14 are done. KE-13 expanded book structure with explicit
+- KE-01 through KE-15 are done. KE-13 expanded book structure with explicit
   Textual Work / Edition / Series / Volume knowledge and established the
   `CulturalResource` foundation, including multi-volume editions such as a
   nine-volume Iwanami Genji monogatari publication. The completed direction is
@@ -1308,15 +1308,17 @@ Phase 27 active scope:
 - KE-14 added relationship / role / qualifier editing so contributor,
   publisher, citation, part-whole, series, edition, and volume facts are not
   flattened into untyped fields.
-- Current focus moves to KE-15, which will add authority resolution
-  merge/split workflow for Person,
+- KE-15 added authority resolution merge/split workflow for Person,
   Organization, Textual Work, Edition, Series, Volume, and publication
-  candidates.
+  candidates. Browser smoke verified review-only duplicate/similar queues,
+  non-destructive merge/split/reject/re-resolve decisions, target Information
+  review pages, and materialization/graph filtering for non-final candidates.
 - KE-15.1 cleaned up CML / Cozy operation form descriptor generation so
   runtime form exposure, access, controls, and redirect metadata can be
   synchronized from operation metadata instead of hand-maintained as a separate
   `form.yaml` source.
-- KE-16 will add multi-volume / book-set import workflow using Job-backed
+- Current focus moves to KE-16, which will add multi-volume / book-set import
+  workflow using Job-backed
   import units.
 - KE-17 will run usability smoke and Phase 27 closure after the expanded book
   structure and publish/materialize feedback are visible for book, paper, and
