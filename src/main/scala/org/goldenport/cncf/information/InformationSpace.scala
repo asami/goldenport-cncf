@@ -234,6 +234,38 @@ final class InformationSpace {
         Consequence.argumentInvalid(s"information not found: ${informationid.print}")
     }
 
+  def updateResolutionCandidateStatus(
+    informationid: InformationId,
+    candidatekey: String,
+    status: InformationBindingStatus,
+    selected: Option[Boolean] = None
+  ): Consequence[InformationResolutionCandidate] =
+    getInformation(informationid) match {
+      case Some(information) =>
+        information.resolutionCandidates.find(_.candidateKey == candidatekey) match {
+          case Some(candidate) =>
+            val nextselected = selected.getOrElse(status == InformationBindingStatus.Selected || status == InformationBindingStatus.Confirmed)
+            val nextbinding = candidate.binding.copy(status = status)
+            val nextcandidate = candidate.copy(binding = nextbinding, selected = nextselected)
+            val candidates = information.resolutionCandidates.map(x => if (x.candidateKey == candidatekey) nextcandidate else x)
+            val bindings = information.identityBindings.map { binding =>
+              if (_same_binding(binding, candidate.binding)) nextbinding else binding
+            }
+            val updated = information.copy(
+              state = _state_after_candidate_update(information.copy(resolutionCandidates = candidates)),
+              resolutionCandidates = candidates,
+              identityBindings = bindings,
+              updatedAt = Instant.now()
+            )
+            _replace_information(updated)
+            Consequence.success(nextcandidate)
+          case None =>
+            Consequence.argumentInvalid(s"information resolution candidate not found: $candidatekey")
+        }
+      case None =>
+        Consequence.argumentInvalid(s"information not found: ${informationid.print}")
+    }
+
   def confirmInformation(informationid: InformationId): Consequence[Information] =
     getInformation(informationid) match {
       case Some(information) if information.state == InformationLifecycleState.Invalid =>
@@ -1256,6 +1288,7 @@ object InformationToKnowledgeProjection {
   ): Vector[(KnowledgeNode, KnowledgeRelationship)] =
     information.resolutionCandidates
         .filter(_.selected)
+        .filter(candidate => _is_active_candidate_status(candidate.binding.status))
         .filter(candidate => Set("authors", "editors", "publisher").contains(candidate.fieldPath))
         .zipWithIndex
         .map { case (candidate, index) =>
@@ -1298,6 +1331,11 @@ object InformationToKnowledgeProjection {
           )
           node -> relation
         }
+
+  private def _is_active_candidate_status(status: InformationBindingStatus): Boolean =
+    status == InformationBindingStatus.Candidate ||
+      status == InformationBindingStatus.Selected ||
+      status == InformationBindingStatus.Confirmed
 
   private def _book_information_association_nodes_and_relationships(
     information: Information,

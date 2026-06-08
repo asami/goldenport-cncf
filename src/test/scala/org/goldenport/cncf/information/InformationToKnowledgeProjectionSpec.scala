@@ -118,6 +118,64 @@ final class InformationToKnowledgeProjectionSpec
       snapshot.frames.headOption.map(_.relationshipIds.size) shouldBe Some(5)
     }
 
+    "exclude rejected and superseded book authority candidates from materialization" in {
+      val space = new InformationSpace
+      val batch = _success(space.registerInformation("book", Vector(Record.data(
+        "title" -> "Authority Decisions",
+        "workTitle" -> "Authority Decisions",
+        "authors" -> "Alice Example, Alice E.",
+        "publisher" -> "Example Press"
+      ))))
+      val informationid = batch.head.id
+      val author = _success(space.addResolutionCandidate(
+        informationid,
+        "authors",
+        "Alice Example",
+        InformationIdentityBinding(
+          externalIdentifiers = Vector(ExternalKnowledgeIdentifier("local", "alice-example", Some("person"))),
+          authority = Some("local")
+        ),
+        Some(0.90),
+        Some("selected author evidence")
+      ))
+      val supersededauthor = _success(space.addResolutionCandidate(
+        informationid,
+        "authors",
+        "Alice E.",
+        InformationIdentityBinding(
+          externalIdentifiers = Vector(ExternalKnowledgeIdentifier("local", "alice-e", Some("person"))),
+          authority = Some("local")
+        ),
+        Some(0.70),
+        Some("superseded author evidence")
+      ))
+      val rejectedpublisher = _success(space.addResolutionCandidate(
+        informationid,
+        "publisher",
+        "Example Press",
+        InformationIdentityBinding(
+          externalIdentifiers = Vector(ExternalKnowledgeIdentifier("local", "example-press", Some("organization"))),
+          authority = Some("local")
+        ),
+        Some(0.70),
+        Some("rejected publisher evidence")
+      ))
+      _success(space.selectResolutionCandidate(informationid, author.candidateKey))
+      _success(space.updateResolutionCandidateStatus(informationid, supersededauthor.candidateKey, InformationBindingStatus.Superseded, Some(false)))
+      _success(space.updateResolutionCandidateStatus(informationid, rejectedpublisher.candidateKey, InformationBindingStatus.Rejected, Some(false)))
+      val information = space.getInformation(informationid).getOrElse(fail("missing book information"))
+
+      val snapshot = InformationSpace.materializeInformation(information)
+      val labels = snapshot.nodes.flatMap(_.presentation.defaultLabel).toSet
+      val relationshipkinds = snapshot.relationships.map(_.kind.print).toSet
+
+      labels should contain ("Alice Example")
+      labels should not contain "Alice E."
+      labels should not contain "Example Press"
+      relationshipkinds should contain ("authored-by")
+      relationshipkinds should not contain "published-by"
+    }
+
     "materialize an ordinary single-volume book as publication and textual work" in {
       val space = new InformationSpace
       val batch = _success(space.registerInformation("book", Vector(Record.data("title" -> "Effective Java"))))

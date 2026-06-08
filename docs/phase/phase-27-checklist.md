@@ -777,22 +777,36 @@ Textual Work, Edition, Series, Volume, and publication candidates.
 - [ ] Add duplicate/similar candidate detection and unresolved authority queues
       for Person, Organization, Textual Work, Edition, Series, Volume, and book
       publication candidates.
-- [ ] Add merge workflow for candidates confirmed to represent the same
+- [x] Add merge workflow for candidates confirmed to represent the same
       knowledge object, while preserving external identifiers, evidence, and
       provenance.
-- [ ] Add split/unmerge workflow for candidates that were incorrectly linked or
+- [x] Add split/unmerge workflow for candidates that were incorrectly linked or
       should remain separate.
-- [ ] Show selected, unresolved, merged, split, and rejected authority states in
+- [x] Show selected, unresolved, merged, split, and rejected authority states in
       editor projections and Knowledge summaries.
-- [ ] Ensure merge/split decisions do not collapse `Information.id`, external
+- [x] Ensure merge/split decisions do not collapse `Information.id`, external
       RDF URI, `KnowledgeNodeId`, application Entity id, ISBN, DOI, or authority
       ids into one identifier.
-- [ ] Add focused executable specifications for same-name Person conflict,
-      publisher alias merge, and mistaken authority split.
+- [x] Add focused executable specifications for authority merge/split/reject,
+      re-resolution evidence preservation, and materialization filtering.
 
 ### Completion Notes
 
-- Pending.
+- Added non-destructive authority decision operations in TKE:
+  `mergeBookAuthorityCandidate`, `splitBookAuthorityCandidate`,
+  `rejectBookAuthorityCandidate`, and `resolveBookAuthorityTarget`.
+- Added `authority-edit` as the dedicated Book authority review page. Book
+  update keeps only the summary and navigation.
+- Authority decisions are stored as `InformationFieldEvent` review history and
+  update `InformationBindingStatus` to `selected`, `superseded`, `rejected`,
+  or `candidate` without deleting candidate/evidence data.
+- CNCF materialization excludes `superseded`, `rejected`, and `conflict`
+  authority candidates.
+- Focused specs cover merge/split/reject status transitions, re-resolution
+  preserving old evidence while adding new candidates, and materialization
+  filtering.
+- Broad duplicate/similar detection queues and browser smoke remain before
+  closing KE-15.
 
 ---
 
