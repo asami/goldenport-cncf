@@ -713,7 +713,7 @@ Terminology boundary:
 
 ## KE-14: Relationship / Role / Qualifier Editing
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
@@ -724,32 +724,47 @@ flattened into untyped fields.
 
 ### Initial Tasks
 
-- [ ] Define the editor-facing relationship model for book-adjacent
+- [x] Define the editor-facing relationship model for book-adjacent
       relationships such as `authored-by`, `edited-by`, `translated-by`,
-      `published-by`, `volume-of`, `realizes-work`, `part-of-series`,
-      `has-part`, `citation`, and `subject`.
-- [ ] Add qualifier fields for author/contributor order, contributor role,
+      `published-by`, `publication-of`, `volume-of`, `edition-of`,
+      `part-of-series`, `has-part`, `cites`, and `has-subject`.
+- [x] Add qualifier fields for author/contributor order, contributor role,
       edition number, volume number, chapter/section order, translation
       language, citation context, page range, confidence, evidence, and source
       provenance.
-- [ ] Add relationship editing surfaces that let users review, add, update, and
+- [x] Add relationship editing surfaces that let users review, add, update, and
       remove relationship candidates without editing raw RDF triples.
-- [ ] Keep canonical relationship/fact data in Information/Knowledge
+- [x] Keep canonical relationship/fact data in Information/Knowledge
       relationship structures, while node/detail pages expose derived traversal
       convenience summaries.
-- [ ] Add focused executable specifications for role-qualified authorship,
+- [x] Add focused executable specifications for role-qualified authorship,
       translator/editor attribution, publisher/imprint relationship, and
       volume/series relationship editing.
 
 ### Completion Notes
 
-- Pending.
+- KE-14 adds a Book `Relationships` summary and dedicated
+  `relationship-edit` page in `textus-knowledge-editor`.
+- Relationship edits are stored as `InformationFieldEvent` review events with
+  `fieldPath=relationships` and `transformation=book-relationship-review`.
+- Book materialization applies explicit relationship reviews before KE-13
+  association/link fallback relationships, and copies reviewed values into
+  `KnowledgeRelationship.qualifiers`.
+- v1 qualifier keys are string values: `order`, `role`, `editionNumber`,
+  `volumeNumber`, `language`, `pageRange`, `citationContext`, `confidence`,
+  `source`, and `evidenceSummary`.
+- TKE policy is recorded in
+  `/Users/asami/src/dev2026/textus-knowledge-editor/docs/notes/book-relationship-qualifier-policy.md`.
+- Focused CNCF and TKE specs cover reviewed author qualifier persistence and
+  materialization.
+- Authority merge/split remains KE-15; multi-volume/book-set import remains
+  KE-16.
 
 ---
 
 ## KE-15: Authority Resolution Merge/Split Workflow
 
-Status: PENDING
+Status: ACTIVE
 
 ### Objective
 

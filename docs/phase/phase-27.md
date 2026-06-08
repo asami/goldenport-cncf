@@ -119,10 +119,10 @@ Scope boundaries:
   `docs/journal/2026/05/rdf-centric-knowledge-expansion.md`, with
   `docs/journal/2026/06/book-edition-volume-publication-note.md` defining Book
   as the concrete publication layer and Textual Volume as optional.
-- N (ACTIVE): KE-14 — Relationship / Role / Qualifier editing for
+- N (DONE): KE-14 — Relationship / Role / Qualifier editing for
   contributor, publisher, citation, part-whole, series, edition, and volume
   facts.
-- O (PENDING): KE-15 — Authority resolution merge/split workflow for Person,
+- O (ACTIVE): KE-15 — Authority resolution merge/split workflow for Person,
   Organization, Textual Work, Edition, Series, Volume, and book publication
   candidates.
 - P (PENDING): KE-16 — Multi-volume / book-set import workflow using Job-based
@@ -131,7 +131,7 @@ Scope boundaries:
 
 Resume hint:
 
-- Start from KE-14. Do not reopen Phase 26 KI items unless fixing a regression.
+- Start from KE-15. Do not reopen Phase 26 KI items unless fixing a regression.
 
 Next development candidate after Phase 27:
 
@@ -155,7 +155,7 @@ Next development candidate after Phase 27:
 - [x] KE-12: Person and Organization editor screens.
 - [x] KE-13: Textual Work / Edition / Series / Volume book structure expansion
       plus `CulturalResource` foundation.
-- [ ] KE-14: Relationship / Role / Qualifier editing.
+- [x] KE-14: Relationship / Role / Qualifier editing.
 - [ ] KE-15: Authority resolution merge/split workflow.
 - [ ] KE-16: Multi-volume / book-set import workflow.
 - [ ] KE-17: Usability smoke and Phase 27 closure.

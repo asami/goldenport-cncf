@@ -9,7 +9,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   May. 20, 2026
  *  version May. 31, 2026
- * @version Jun.  8, 2026
+ * @version Jun.  9, 2026
  * @author  ASAMI, Tomoharu
  */
 final class InformationToKnowledgeProjectionSpec
@@ -135,6 +135,54 @@ final class InformationToKnowledgeProjectionSpec
       relationshipkinds should contain ("publication-of")
       relationshipkinds should not contain "volume-of"
       relationshipkinds should not contain "edition-of"
+    }
+
+    "materialize reviewed book relationship qualifiers" in {
+      val space = new InformationSpace
+      val batch = _success(space.registerInformation("book", Vector(Record.data(
+        "title" -> "The Tale of Genji",
+        "workTitle" -> "The Tale of Genji",
+        "authors" -> "Murasaki Shikibu"
+      ))))
+      val informationid = batch.head.id
+      val author = _success(space.addResolutionCandidate(
+        informationid,
+        "authors",
+        "Murasaki Shikibu",
+        InformationIdentityBinding(authority = Some("openlibrary"), confidence = Some(0.75)),
+        Some(0.75),
+        Some("author source evidence")
+      ))
+      _success(space.selectResolutionCandidate(informationid, author.candidateKey))
+      _success(space.appendFieldEvent(informationid, InformationFieldEvent(
+        fieldPath = "relationships",
+        state = InformationFieldState.Stable,
+        source = "manual",
+        operation = Some("saveBook"),
+        transformation = Some("book-relationship-review"),
+        valueAfter = Some("authored-by"),
+        evidence = Some(s"relationshipKey=association:${author.candidateKey}; kind=authored-by; order=1; role=author; confidence=0.95; source=openlibrary; evidenceSummary=reviewed%20author%3B%20source%20fragment")
+      )))
+      _success(space.appendFieldEvent(informationid, InformationFieldEvent(
+        fieldPath = "relationships",
+        state = InformationFieldState.Stable,
+        source = "manual",
+        operation = Some("saveBook"),
+        transformation = Some("book-relationship-review"),
+        valueAfter = Some("not-a-relationship-kind"),
+        evidence = Some(s"relationshipKey=association:${author.candidateKey}; kind=not-a-relationship-kind; order=99")
+      )))
+      _success(space.validateInformation(informationid))
+      val information = _success(space.confirmInformation(informationid))
+
+      val snapshot = InformationSpace.materializeInformation(information)
+      val relationship = snapshot.relationships.find(_.kind.print == "authored-by").getOrElse(fail("authored-by relationship missing"))
+
+      relationship.qualifiers.values should contain ("order" -> "1")
+      relationship.qualifiers.values should contain ("role" -> "author")
+      relationship.qualifiers.values should contain ("confidence" -> "0.95")
+      relationship.qualifiers.values should contain ("evidenceSummary" -> "reviewed author; source fragment")
+      relationship.attributes.values.get("relationship_review_state") should contain ("stable")
     }
 
     "materialize Genji Iwanami volume into publication volume edition textual work layers" in {

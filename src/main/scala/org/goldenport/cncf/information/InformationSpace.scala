@@ -25,6 +25,7 @@ import org.goldenport.cncf.knowledge.{
   KnowledgeRelationship,
   KnowledgeRelationshipId,
   KnowledgeRelationshipKind,
+  KnowledgeRelationshipQualifiers,
   KnowledgeProvenance,
   KnowledgeProvenanceId,
   RdfPredicateName,
@@ -41,7 +42,7 @@ import org.goldenport.record.Record
 /*
  * @since   May. 20, 2026
  *  version May. 31, 2026
- * @version Jun.  8, 2026
+ * @version Jun.  9, 2026
  * @author  ASAMI, Tomoharu
  */
 final class InformationSpace {
@@ -913,14 +914,137 @@ object InformationToKnowledgeProjection {
     evidenceid: KnowledgeEvidenceId,
     provenanceid: KnowledgeProvenanceId,
     naming: InformationRdfNodeNaming
-  ): Vector[(KnowledgeNode, KnowledgeRelationship)] =
+  ): Vector[(KnowledgeNode, KnowledgeRelationship)] = {
     if (information.domain != "book")
       Vector.empty
-    else
-      _book_layer_nodes_and_relationships(information, layers, evidenceid, provenanceid, naming) ++
+    else {
+      val generated = _book_layer_nodes_and_relationships(information, layers, evidenceid, provenanceid, naming) ++
         _book_candidate_support_nodes_and_relationships(information, layers, evidenceid, provenanceid) ++
         _book_information_association_nodes_and_relationships(information, layers, evidenceid, provenanceid) ++
         _book_classification_nodes_and_relationships(information, layers.publicationNodeId, evidenceid, provenanceid)
+      val reviews = _book_relationship_reviews(information)
+      generated.map { case (node, relationship) =>
+        node -> _apply_book_relationship_review(relationship, reviews)
+      }
+    }
+  }
+
+  private final case class BookRelationshipReview(
+    relationshipKey: String,
+    kind: Option[String],
+    state: Option[String],
+    qualifiers: Map[String, String],
+    source: Option[String],
+    evidenceSummary: Option[String]
+  )
+
+  private def _book_relationship_reviews(
+    information: Information
+  ): Map[String, BookRelationshipReview] =
+    information.fieldEvents.
+      filter(_.fieldPath == "relationships").
+      filter(_.transformation.contains("book-relationship-review")).
+      flatMap(_book_relationship_review).
+      groupBy(_.relationshipKey).
+      view.mapValues(_.last).toMap
+
+  private def _book_relationship_review(
+    event: InformationFieldEvent
+  ): Option[BookRelationshipReview] = {
+    val values = _key_value_pairs(event.evidence.getOrElse(""))
+    for {
+      key <- values.get("relationshipKey")
+      kind <- values.get("kind").flatMap(_normalize_book_relationship_kind)
+    } yield {
+      val qualifiers = _book_relationship_qualifier_keys.flatMap { name =>
+        values.get(name).map(name -> _)
+      }.toMap
+      BookRelationshipReview(
+        relationshipKey = key,
+        kind = Some(kind),
+        state = Some(event.state.value),
+        qualifiers = qualifiers,
+        source = values.get("source").map(_.trim).filter(_.nonEmpty),
+        evidenceSummary = values.get("evidenceSummary").map(_.trim).filter(_.nonEmpty)
+      )
+    }
+  }
+
+  private val _book_relationship_allowed_kinds: Set[String] =
+    Set(
+      "authored-by",
+      "edited-by",
+      "translated-by",
+      "published-by",
+      "publication-of",
+      "volume-of",
+      "edition-of",
+      "part-of-series",
+      "has-part",
+      "cites",
+      "has-subject"
+    )
+
+  private def _normalize_book_relationship_kind(value: String): Option[String] = {
+    val normalized = value.trim.toLowerCase
+    _book_relationship_allowed_kinds.find(_ == normalized)
+  }
+
+  private val _book_relationship_qualifier_keys: Vector[String] =
+    Vector(
+      "order",
+      "role",
+      "editionNumber",
+      "volumeNumber",
+      "language",
+      "pageRange",
+      "citationContext",
+      "confidence",
+      "source",
+      "evidenceSummary"
+    )
+
+  private def _apply_book_relationship_review(
+    relationship: KnowledgeRelationship,
+    reviews: Map[String, BookRelationshipReview]
+  ): KnowledgeRelationship = {
+    val key = _book_relationship_key(relationship)
+    reviews.get(key).map { review =>
+      relationship.copy(
+        kind = review.kind.map(KnowledgeRelationshipKind.apply).getOrElse(relationship.kind),
+        rdfPredicate = review.kind.map(RdfPredicateName.apply).orElse(relationship.rdfPredicate),
+        qualifiers = KnowledgeRelationshipQualifiers(relationship.qualifiers.values ++ review.qualifiers),
+        attributes = KnowledgeAttributes(relationship.attributes.values ++ Map(
+          "relationship_key" -> key,
+          "relationship_review_state" -> review.state.getOrElse(""),
+          "relationship_review_source" -> review.source.getOrElse("manual"),
+          "relationship_evidence_summary" -> review.evidenceSummary.getOrElse("")
+        ))
+      )
+    }.getOrElse(relationship.copy(
+      attributes = KnowledgeAttributes(relationship.attributes.values ++ Map("relationship_key" -> key))
+    ))
+  }
+
+  private def _book_relationship_key(
+    relationship: KnowledgeRelationship
+  ): String =
+    relationship.attributes.values.get("candidate_key").
+      map(x => s"association:$x").
+      orElse {
+        for {
+          field <- relationship.attributes.values.get("source_field")
+          target <- relationship.attributes.values.get("target_information_id")
+        } yield s"information:$field:$target"
+      }.
+      orElse {
+        for {
+          source <- relationship.attributes.values.get("source_layer")
+          target <- relationship.attributes.values.get("target_layer")
+        } yield s"layer:$source:$target"
+      }.
+      orElse(relationship.attributes.values.get("classification_entry_key").map(x => s"classification:$x")).
+      getOrElse(relationship.id.print)
 
   private final case class BookClassificationEntry(
     entryKey: String,
@@ -1427,6 +1551,26 @@ object InformationToKnowledgeProjection {
       else
         result :+ relationship
     }
+
+  private def _key_value_pairs(value: String): Map[String, String] =
+    value.split(";").toVector.flatMap { segment =>
+      val trimmed = segment.trim
+      val index = trimmed.indexOf("=")
+      if (index <= 0)
+        None
+      else
+        Some(trimmed.take(index).trim -> _relationship_value_decode(trimmed.drop(index + 1).trim))
+    }.toMap
+
+  private def _relationship_value_decode(value: String): String =
+    if (value.contains("%"))
+      try {
+        java.net.URLDecoder.decode(value, java.nio.charset.StandardCharsets.UTF_8)
+      } catch {
+        case _: IllegalArgumentException => value
+      }
+    else
+      value
 
   private def _safe_key(
     value: String,
