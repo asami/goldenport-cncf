@@ -698,9 +698,11 @@ Terminology boundary:
   Information when links are present, preserves title-based fallback when they
   are absent, and carries `CulturalResource` family/kind attributes plus
   `domain_profile=book` on materialized book-layer nodes.
-- Remaining KE-13 work is still active: status vocabulary cleanup, remaining
-  documentation, relationship/role/qualifier editing, authority merge/split,
-  and browser smoke validation.
+- 2026-06-08 progress: TKE status vocabulary cleanup and KE-13 documentation
+  cleanup are implemented in the driver repository. KE-13 remains active
+  because browser smoke validation still needs to cover the Book update,
+  Association, Identifier, Classification, and linked Textual Work / Edition /
+  Volume pages.
 
 ---
 

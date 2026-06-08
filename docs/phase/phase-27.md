@@ -71,6 +71,8 @@ This document is a phase dashboard, not a design journal.
   forced into the book-domain Textual Work concept. They use the shared
   `CulturalResource` family with domain-specific materialization profiles such
   as visual work, built work, physical object, holding, and collection item.
+  In Phase 27 this is foundation-only: Visual Work, Physical Object, Holding,
+  and Collection Item editor profiles remain deferred.
 - Preserve the Phase 26 split:
   - `InformationSpace` owns editing, validation, resolution, confirmation, and
     publication state.

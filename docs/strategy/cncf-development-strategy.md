@@ -1302,11 +1302,10 @@ Phase 27 active scope:
   `docs/journal/2026/06/book-edition-volume-publication-note.md` defining Book
   as the concrete publication layer and Textual Volume as optional.
 - KE-13 implementation progress: TKE Book/Publication UI, Association,
-  Identifier, and Classification cleanup are implemented in the driver
-  repository. RDF anchor cleanup and linked Information-first Book
-  KnowledgeSpace materialization have implementation slices in place. Status
-  vocabulary cleanup, remaining documentation, relationship/role/qualifier
-  editing, authority merge/split, and browser smoke validation remain active.
+  Identifier, Classification, RDF anchor, linked Information-first Book
+  KnowledgeSpace materialization, status vocabulary, and documentation cleanup
+  are implemented in the driver repository. Browser smoke validation remains
+  before the KE-13 slice can be treated as complete.
 - KE-14 will add relationship / role / qualifier editing so contributor,
   publisher, citation, part-whole, series, edition, and volume facts are not
   flattened into untyped fields.
