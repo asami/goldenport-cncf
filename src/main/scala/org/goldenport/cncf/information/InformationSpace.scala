@@ -40,7 +40,8 @@ import org.goldenport.record.Record
 
 /*
  * @since   May. 20, 2026
- * @version May. 31, 2026
+ *  version May. 31, 2026
+ * @version Jun.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 final class InformationSpace {
@@ -398,7 +399,7 @@ final class InformationSpace {
   def materializeInformation(informationid: InformationId): Consequence[KnowledgeWorkingSetSnapshot] =
     getInformation(informationid) match {
       case Some(information) if information.state == InformationLifecycleState.Confirmed || information.state == InformationLifecycleState.Published =>
-        Consequence.success(InformationToKnowledgeProjection.materialize(information))
+        Consequence.success(InformationToKnowledgeProjection.materializeWithRelated(information, _snapshot.information))
       case Some(_) =>
         Consequence.argumentInvalid(s"information is not knowledge-ready: ${informationid.print}")
       case None =>
@@ -474,9 +475,23 @@ object InformationSpace {
   def materializeInformation(information: Information): KnowledgeWorkingSetSnapshot =
     InformationToKnowledgeProjection.materialize(information)
 
+  def materializeInformation(
+    information: Information,
+    relatedInformation: Vector[Information]
+  ): KnowledgeWorkingSetSnapshot =
+    InformationToKnowledgeProjection.materializeWithRelated(information, relatedInformation)
+
   def materializeInformationWithTags(information: Information)(using ExecutionContext): Consequence[KnowledgeWorkingSetSnapshot] =
     InformationTagging.knowledgeTagBindings(information.id).map { tagbindings =>
       InformationToKnowledgeProjection.materialize(information, tagbindings, InformationRdfNodeNaming.fromExecutionContext)
+    }
+
+  def materializeInformationWithTags(
+    information: Information,
+    relatedInformation: Vector[Information]
+  )(using ExecutionContext): Consequence[KnowledgeWorkingSetSnapshot] =
+    InformationTagging.knowledgeTagBindings(information.id).map { tagbindings =>
+      InformationToKnowledgeProjection.materializeWithRelated(information, tagbindings, relatedInformation, InformationRdfNodeNaming.fromExecutionContext)
     }
 
   private def _validate_paper(information: Information): Vector[InformationValidationIssue] = {
@@ -776,18 +791,45 @@ object InformationToKnowledgeProjection {
     publicationNodeId: KnowledgeNodeId,
     textualWorkNodeId: Option[KnowledgeNodeId],
     editionNodeId: Option[KnowledgeNodeId],
-    volumeNodeId: Option[KnowledgeNodeId]
+    volumeNodeId: Option[KnowledgeNodeId],
+    linkedInformationById: Map[String, Information] = Map.empty
   ) {
     def authorshipSourceNodeId: KnowledgeNodeId =
       textualWorkNodeId.getOrElse(publicationNodeId)
 
     def publisherSourceNodeId: KnowledgeNodeId =
       publicationNodeId
+
+    def textualWorkInformation: Option[Information] =
+      _linked_information("textualWorkInformationId")
+
+    def editionInformation: Option[Information] =
+      _linked_information("textualEditionInformationId")
+
+    def volumeInformation: Option[Information] =
+      _linked_information("textualVolumeInformationId")
+
+    private def _linked_information(fieldpath: String): Option[Information] =
+      linkedInformationById.get(fieldpath)
   }
 
   def materialize(
     information: Information,
     tagbindings: Vector[KnowledgeTagBinding],
+    naming: InformationRdfNodeNaming = InformationRdfNodeNaming.default
+  ): KnowledgeWorkingSetSnapshot =
+    materializeWithRelated(information, tagbindings, Vector.empty, naming)
+
+  def materializeWithRelated(
+    information: Information,
+    relatedInformation: Vector[Information]
+  ): KnowledgeWorkingSetSnapshot =
+    materializeWithRelated(information, Vector.empty, relatedInformation, InformationRdfNodeNaming.default)
+
+  def materializeWithRelated(
+    information: Information,
+    tagbindings: Vector[KnowledgeTagBinding],
+    relatedInformation: Vector[Information],
     naming: InformationRdfNodeNaming = InformationRdfNodeNaming.default
   ): KnowledgeWorkingSetSnapshot = {
     val provenance = KnowledgeProvenance(
@@ -802,7 +844,7 @@ object InformationToKnowledgeProjection {
       information.data.getString("title"),
       Some(provenance.id)
     )
-    val booklayers = _book_knowledge_layers(information, KnowledgeNodeId(s"information-${information.id.print}"))
+    val booklayers = _book_knowledge_layers(information, KnowledgeNodeId(s"information-${information.id.print}"), relatedInformation)
     val node = KnowledgeNode(
       id = KnowledgeNodeId(s"information-${information.id.print}"),
       category = KnowledgeNodeCategory(if (information.domain == "book") "publication" else information.domain),
@@ -832,7 +874,7 @@ object InformationToKnowledgeProjection {
       evidenceIds = Vector(evidence.id),
       provenanceId = Some(provenance.id)
     )
-    val support = _book_support_nodes_and_relationships(information, booklayers, evidence.id, provenance.id)
+    val support = _book_support_nodes_and_relationships(information, booklayers, evidence.id, provenance.id, naming)
     val supportnodes = _distinct_nodes(support.map(_._1))
     val supportrelationships = _distinct_relationships(support.map(_._2))
     val frame = KnowledgeFrame(
@@ -869,12 +911,13 @@ object InformationToKnowledgeProjection {
     information: Information,
     layers: BookCulturalResourceLayers,
     evidenceid: KnowledgeEvidenceId,
-    provenanceid: KnowledgeProvenanceId
+    provenanceid: KnowledgeProvenanceId,
+    naming: InformationRdfNodeNaming
   ): Vector[(KnowledgeNode, KnowledgeRelationship)] =
     if (information.domain != "book")
       Vector.empty
     else
-      _book_layer_nodes_and_relationships(information, layers, evidenceid, provenanceid) ++
+      _book_layer_nodes_and_relationships(information, layers, evidenceid, provenanceid, naming) ++
         _book_candidate_support_nodes_and_relationships(information, layers, evidenceid, provenanceid) ++
         _book_information_association_nodes_and_relationships(information, layers, evidenceid, provenanceid) ++
         _book_classification_nodes_and_relationships(information, layers.publicationNodeId, evidenceid, provenanceid)
@@ -894,7 +937,8 @@ object InformationToKnowledgeProjection {
 
   private def _book_knowledge_layers(
     information: Information,
-    publicationnodeid: KnowledgeNodeId
+    publicationnodeid: KnowledgeNodeId,
+    relatedInformation: Vector[Information] = Vector.empty
   ): BookCulturalResourceLayers = {
     val textualworktitle = _book_textual_work_title(information)
     val textualworkid = information.data.getString("textualWorkInformationId").map(_.trim).filter(_.nonEmpty)
@@ -902,14 +946,21 @@ object InformationToKnowledgeProjection {
     val textualvolumeid = information.data.getString("textualVolumeInformationId").map(_.trim).filter(_.nonEmpty)
     val editiontitle = _book_edition_title(information, textualworktitle)
     val volume = _book_volume(information)
+    val relatedbyid = relatedInformation.map(x => x.id.print -> x).toMap
+    val linked = Vector(
+      textualworkid.flatMap(relatedbyid.get).filter(_.domain == "textual-work").map("textualWorkInformationId" -> _),
+      textualeditionid.flatMap(relatedbyid.get).filter(_.domain == "textual-edition").map("textualEditionInformationId" -> _),
+      textualvolumeid.flatMap(relatedbyid.get).filter(_.domain == "textual-volume").map("textualVolumeInformationId" -> _)
+    ).flatten.toMap
     BookCulturalResourceLayers(
       publicationnodeid,
-      textualworkid.map(id => KnowledgeNodeId(s"information-$id")).
+      linked.get("textualWorkInformationId").map(x => KnowledgeNodeId(s"information-${x.id.print}")).
         orElse(textualworktitle.map(title => KnowledgeNodeId(s"textual-work-${_safe_key(title, 0)}"))),
-      textualeditionid.map(id => KnowledgeNodeId(s"information-$id")).
+      linked.get("textualEditionInformationId").map(x => KnowledgeNodeId(s"information-${x.id.print}")).
         orElse(editiontitle.map(title => KnowledgeNodeId(s"edition-${_safe_key(title, 0)}"))),
-      textualvolumeid.map(id => KnowledgeNodeId(s"information-$id")).
-        orElse(volume.map(value => KnowledgeNodeId(s"volume-${_safe_key(Vector(textualworktitle, Some(value)).flatten.mkString("-"), 0)}")))
+      linked.get("textualVolumeInformationId").map(x => KnowledgeNodeId(s"information-${x.id.print}")).
+        orElse(volume.map(value => KnowledgeNodeId(s"volume-${_safe_key(Vector(textualworktitle, Some(value)).flatten.mkString("-"), 0)}"))),
+      linked
     )
   }
 
@@ -934,7 +985,8 @@ object InformationToKnowledgeProjection {
     information: Information,
     layers: BookCulturalResourceLayers,
     evidenceid: KnowledgeEvidenceId,
-    provenanceid: KnowledgeProvenanceId
+    provenanceid: KnowledgeProvenanceId,
+    naming: InformationRdfNodeNaming
   ): Vector[(KnowledgeNode, KnowledgeRelationship)] = {
     val textualworktitle = _book_textual_work_title(information)
     val editiontitle = _book_edition_title(information, textualworktitle)
@@ -943,16 +995,16 @@ object InformationToKnowledgeProjection {
       orElse(volume.map(v => Vector(textualworktitle.getOrElse("Volume"), v).mkString(" ")))
     val textualwork = for {
       nodeid <- layers.textualWorkNodeId
-      label <- textualworktitle
-    } yield _book_layer_node(information, nodeid, "textual-work", label, evidenceid, provenanceid, Map("textual_work_title" -> label))
+      label <- layers.textualWorkInformation.flatMap(_information_label).orElse(textualworktitle)
+    } yield _book_layer_node(information, nodeid, "textual-work", label, evidenceid, provenanceid, Map("textual_work_title" -> label), layers.textualWorkInformation, naming)
     val edition = for {
       nodeid <- layers.editionNodeId
-      label <- editiontitle
-    } yield _book_layer_node(information, nodeid, "edition", label, evidenceid, provenanceid, Map("edition_title" -> label))
+      label <- layers.editionInformation.flatMap(_information_label).orElse(editiontitle)
+    } yield _book_layer_node(information, nodeid, "edition", label, evidenceid, provenanceid, Map("edition_title" -> label), layers.editionInformation, naming)
     val volumenode = for {
       nodeid <- layers.volumeNodeId
-      label <- volumetitle
-    } yield _book_layer_node(information, nodeid, "volume", label, evidenceid, provenanceid, Map("volume" -> volume.getOrElse(""), "volume_title" -> label))
+      label <- layers.volumeInformation.flatMap(_information_label).orElse(volumetitle)
+    } yield _book_layer_node(information, nodeid, "volume", label, evidenceid, provenanceid, Map("volume" -> volume.getOrElse(""), "volume_title" -> label), layers.volumeInformation, naming)
     val relations =
       (for {
         volumeid <- layers.volumeNodeId
@@ -980,7 +1032,10 @@ object InformationToKnowledgeProjection {
       } yield _book_layer_relationship(information, "volume-of", volumeid, workid, evidenceid, provenanceid, Map("source_layer" -> "volume", "target_layer" -> "textual-work"))).toVector
     val nodes = textualwork.toVector ++ edition.toVector ++ volumenode.toVector
     val nodemap = nodes.map(node => node.id -> node).toMap
-    relations.flatMap { relation =>
+    val knownnodeids = nodemap.keySet + layers.publicationNodeId
+    relations.filter(relation =>
+      knownnodeids.contains(relation.sourceNodeId) && knownnodeids.contains(relation.targetNodeId)
+    ).flatMap { relation =>
       nodemap.get(relation.targetNodeId).orElse(nodemap.get(relation.sourceNodeId)).map(_ -> relation)
     }
   }
@@ -992,13 +1047,18 @@ object InformationToKnowledgeProjection {
     label: String,
     evidenceid: KnowledgeEvidenceId,
     provenanceid: KnowledgeProvenanceId,
-    attributes: Map[String, String]
+    attributes: Map[String, String],
+    linkedInformation: Option[Information],
+    naming: InformationRdfNodeNaming
   ): KnowledgeNode =
     KnowledgeNode(
       id = nodeid,
       category = KnowledgeNodeCategory(layer),
       identity = KnowledgeNodeIdentity(
-        externalIdentifiers = Vector(ExternalKnowledgeIdentifier("cncf.information", information.id.print, Some(s"book-$layer")))
+        rdfNode = linkedInformation.map(naming.rdfNodeName),
+        externalIdentifiers = linkedInformation.
+          map(x => Vector(ExternalKnowledgeIdentifier("cncf.information", x.id.print, Some(x.domain)))).
+          getOrElse(Vector(ExternalKnowledgeIdentifier("cncf.information", information.id.print, Some(s"book-$layer"))))
       ),
       presentation = KnowledgeNodePresentation.label(label),
       sources = KnowledgeNodeSources(
@@ -1006,11 +1066,21 @@ object InformationToKnowledgeProjection {
         provenanceIds = Vector(provenanceid)
       ),
       attributes = KnowledgeAttributes(attributes ++ Map(
-        "information_domain" -> "book",
+        "information_domain" -> linkedInformation.map(_.domain).getOrElse("book"),
         "source_information_id" -> information.id.print,
+        "source_information_domain" -> "book",
         "knowledge_layer" -> layer
-      ) ++ _cultural_resource_attributes(layer, BOOK_DOMAIN_PROFILE))
+      ) ++ linkedInformation.map(x => Map(
+        "linked_information_id" -> x.id.print,
+        "linked_information_domain" -> x.domain
+      )).getOrElse(Map.empty) ++ _cultural_resource_attributes(layer, BOOK_DOMAIN_PROFILE))
     )
+
+  private def _information_label(information: Information): Option[String] =
+    information.data.getString("title").map(_.trim).filter(_.nonEmpty).
+      orElse(information.data.getString("displayTitle").map(_.trim).filter(_.nonEmpty)).
+      orElse(information.data.getString("label").map(_.trim).filter(_.nonEmpty)).
+      orElse(information.data.getString("name").map(_.trim).filter(_.nonEmpty))
 
   private def _cultural_resource_attributes(
     kind: String,

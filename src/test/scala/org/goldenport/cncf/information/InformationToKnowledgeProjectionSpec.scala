@@ -8,7 +8,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   May. 20, 2026
- * @version May. 31, 2026
+ *  version May. 31, 2026
+ * @version Jun.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 final class InformationToKnowledgeProjectionSpec
@@ -167,6 +168,97 @@ final class InformationToKnowledgeProjectionSpec
           node.attributes.values.get("cultural_resource_kind") should contain (node.category.print)
           node.attributes.values.get("domain_profile") should contain ("book")
         }
+    }
+
+    "prefer linked Textual Work Edition and Volume Information during book materialization" in {
+      val space = new InformationSpace
+      val work = _success(space.registerInformation("textual-work", Vector(Record.data(
+        "title" -> "源氏物語"
+      )))).head
+      val edition = _success(space.registerInformation("textual-edition", Vector(Record.data(
+        "title" -> "岩波文庫 源氏物語",
+        "textualWorkInformationId" -> work.id.print
+      )))).head
+      val volume = _success(space.registerInformation("textual-volume", Vector(Record.data(
+        "title" -> "源氏物語 三",
+        "volume" -> "3",
+        "textualWorkInformationId" -> work.id.print,
+        "textualEditionInformationId" -> edition.id.print
+      )))).head
+      val book = _success(space.registerInformation("book", Vector(Record.data(
+        "title" -> "Provider raw title",
+        "workTitle" -> "Wrong fallback work",
+        "editionTitle" -> "Wrong fallback edition",
+        "volume" -> "3",
+        "textualWorkInformationId" -> work.id.print,
+        "textualEditionInformationId" -> edition.id.print,
+        "textualVolumeInformationId" -> volume.id.print
+      )))).head
+      _success(space.validateInformation(work.id))
+      val confirmedwork = _success(space.confirmInformation(work.id))
+      _success(space.validateInformation(edition.id))
+      val confirmededition = _success(space.confirmInformation(edition.id))
+      _success(space.validateInformation(volume.id))
+      val confirmedvolume = _success(space.confirmInformation(volume.id))
+      _success(space.validateInformation(book.id))
+      val confirmedbook = _success(space.confirmInformation(book.id))
+
+      val snapshot = _success(space.materializeInformation(confirmedbook.id))
+      val workingset = _success(KnowledgeWorkingSet.load(snapshot))
+      val worknode = workingset.nodeOption(KnowledgeNodeId(s"information-${confirmedwork.id.print}")).getOrElse(fail("missing linked work node"))
+      val editionnode = workingset.nodeOption(KnowledgeNodeId(s"information-${confirmededition.id.print}")).getOrElse(fail("missing linked edition node"))
+      val volumenode = workingset.nodeOption(KnowledgeNodeId(s"information-${confirmedvolume.id.print}")).getOrElse(fail("missing linked volume node"))
+      val relationshipkinds = snapshot.relationships.map(_.kind.print).toSet
+
+      worknode.presentation.defaultLabel shouldBe Some("源氏物語")
+      editionnode.presentation.defaultLabel shouldBe Some("岩波文庫 源氏物語")
+      volumenode.presentation.defaultLabel shouldBe Some("源氏物語 三")
+      worknode.identity.rdfNode should contain (InformationRdfNodeNaming.default.rdfNodeName(confirmedwork))
+      editionnode.identity.rdfNode should contain (InformationRdfNodeNaming.default.rdfNodeName(confirmededition))
+      volumenode.identity.rdfNode should contain (InformationRdfNodeNaming.default.rdfNodeName(confirmedvolume))
+      relationshipkinds should contain allOf ("publication-of", "volume-of", "edition-of")
+      snapshot.relationships.find(_.kind.print == "publication-of").map(_.targetNodeId) should contain (volumenode.id)
+      snapshot.relationships.find(_.kind.print == "volume-of").map(_.targetNodeId) should contain (editionnode.id)
+      snapshot.relationships.find(_.kind.print == "edition-of").map(_.targetNodeId) should contain (worknode.id)
+      Vector(worknode, editionnode, volumenode).foreach { node =>
+        node.attributes.values.get("resource_family") should contain ("cultural-resource")
+        node.attributes.values.get("domain_profile") should contain ("book")
+      }
+      worknode.attributes.values.get("information_domain") should contain ("textual-work")
+      editionnode.attributes.values.get("information_domain") should contain ("textual-edition")
+      volumenode.attributes.values.get("information_domain") should contain ("textual-volume")
+      worknode.attributes.values.get("cultural_resource_kind") should contain ("textual-work")
+      editionnode.attributes.values.get("cultural_resource_kind") should contain ("edition")
+      volumenode.attributes.values.get("cultural_resource_kind") should contain ("volume")
+    }
+
+    "fall back to title-based book layers when linked Information is absent" in {
+      val space = new InformationSpace
+      val batch = _success(space.registerInformation("book", Vector(Record.data(
+        "title" -> "Provider raw title",
+        "workTitle" -> "Fallback Work",
+        "editionTitle" -> "Fallback Edition",
+        "volume" -> "1",
+        "textualWorkInformationId" -> "missing-work",
+        "textualEditionInformationId" -> "missing-edition",
+        "textualVolumeInformationId" -> "missing-volume"
+      ))))
+      val informationid = batch.head.id
+      _success(space.validateInformation(informationid))
+      val information = _success(space.confirmInformation(informationid))
+
+      val snapshot = _success(space.materializeInformation(information.id))
+      val nodeids = snapshot.nodes.map(_.id).toSet
+      val labels = snapshot.nodes.flatMap(_.presentation.defaultLabel).toSet
+
+      labels should contain allOf ("Fallback Work", "Fallback Edition", "Fallback Work 1")
+      nodeids.map(_.print) should not contain "information-missing-work"
+      nodeids.map(_.print) should not contain "information-missing-edition"
+      nodeids.map(_.print) should not contain "information-missing-volume"
+      snapshot.relationships.foreach { relationship =>
+        nodeids should contain (relationship.sourceNodeId)
+        nodeids should contain (relationship.targetNodeId)
+      }
     }
 
     "materialize book classification entries as concept nodes and relationships" in {

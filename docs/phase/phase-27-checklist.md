@@ -654,16 +654,16 @@ Terminology boundary:
 
 ### Initial Tasks
 
-- [ ] Add `CulturalResource` vocabulary to Knowledge materialization with
+- [x] Add `CulturalResource` vocabulary to Knowledge materialization with
       family `cultural-resource` and kinds `textual-work`, `edition`,
       `series`, `volume`, `publication`, `visual-work`, `built-work`,
       `physical-object`, `collection-item`, and `holding`.
-- [ ] Keep Book as the concrete textual publication Information domain and do
+- [x] Keep Book as the concrete textual publication Information domain and do
       not add a separate `Textual Publication` domain in this slice.
-- [ ] Add Textual Work and Textual Edition as first-class Information domains;
+- [x] Add Textual Work and Textual Edition as first-class Information domains;
       add Textual Volume as an optional first-class domain for meaningful
       logical volume grouping, not a required layer for every Book.
-- [ ] Add cultural-resource attributes to materialized Book layer nodes while
+- [x] Add cultural-resource attributes to materialized Book layer nodes while
       preserving their existing `KnowledgeNode.category` values.
 - [ ] Define editable fields for work title, original/source work, edition
       title, edition contributors, series title, volume title, volume number,
@@ -692,9 +692,15 @@ Terminology boundary:
 - 2026-06-05 progress: TKE KE-13 execution checklist sections 1-4 are
   implemented and locally validated in the driver repository:
   Book/Publication UI, Associations, Identifiers, and Classification.
-- Remaining KE-13 work is still active: RDF anchor cleanup, KnowledgeSpace
-  materialization behavior, status vocabulary cleanup, Phase 27/strategy
-  documentation, and browser smoke validation.
+- 2026-06-08 progress: linked Information-first Book materialization is
+  implemented in CNCF and connected from TKE. Book publication materialization
+  now prefers related Textual Work, Textual Edition, and Textual Volume
+  Information when links are present, preserves title-based fallback when they
+  are absent, and carries `CulturalResource` family/kind attributes plus
+  `domain_profile=book` on materialized book-layer nodes.
+- Remaining KE-13 work is still active: status vocabulary cleanup, remaining
+  documentation, relationship/role/qualifier editing, authority merge/split,
+  and browser smoke validation.
 
 ---
 
