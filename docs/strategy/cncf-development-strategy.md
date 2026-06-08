@@ -1312,6 +1312,9 @@ Phase 27 active scope:
   merge/split workflow for Person,
   Organization, Textual Work, Edition, Series, Volume, and publication
   candidates.
+- KE-15.1 will clean up CML / Cozy operation form descriptor generation so
+  runtime form exposure and redirect metadata are not hand-maintained as a
+  separate `form.yaml` source.
 - KE-16 will add multi-volume / book-set import workflow using Job-backed
   import units.
 - KE-17 will run usability smoke and Phase 27 closure after the expanded book

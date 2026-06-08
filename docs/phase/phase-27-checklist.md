@@ -774,7 +774,7 @@ Textual Work, Edition, Series, Volume, and publication candidates.
 
 ### Initial Tasks
 
-- [ ] Add duplicate/similar candidate detection and unresolved authority queues
+- [x] Add duplicate/similar candidate detection and unresolved authority queues
       for Person, Organization, Textual Work, Edition, Series, Volume, and book
       publication candidates.
 - [x] Add merge workflow for candidates confirmed to represent the same
@@ -805,8 +805,45 @@ Textual Work, Edition, Series, Volume, and publication candidates.
 - Focused specs cover merge/split/reject status transitions, re-resolution
   preserving old evidence while adding new candidates, and materialization
   filtering.
-- Broad duplicate/similar detection queues and browser smoke remain before
-  closing KE-15.
+- TKE `authority-edit` now projects duplicate/similar authority hints as a
+  review-only queue. Reasons include duplicate labels, same identifiers, same
+  RDF anchors, similar labels, and conflicts. The queue recommends existing
+  merge or confirm/link actions but does not change saved state by itself.
+- Browser smoke remains before closing KE-15.
+
+---
+
+## KE-15.1: CML / Cozy Form Descriptor Generation Cleanup
+
+Status: PENDING
+
+### Objective
+
+Remove the duplicated maintenance boundary between CML operation definitions
+and `src/main/web-inf/form.yaml` for operation form exposure, protection, input
+controls, and redirect metadata.
+
+### Initial Tasks
+
+- [ ] Decide the source of truth for operation form exposure and redirect
+      metadata: CML annotations, Cozy generation rules, or a small declarative
+      operation-form model that CML can carry.
+- [ ] Generate or synchronize `form.yaml` entries for operation forms from that
+      source of truth, including protected/public exposure, controls, and
+      success redirects.
+- [ ] Keep hand-written `form.yaml` only for pages that need deliberate custom
+      web-form behavior not expressible in the operation model.
+- [ ] Add generation/packaging tests so a CML operation exposed through the
+      form surface is present in CAR `web/WEB-INF/form.yaml`.
+- [ ] Remove TKE-specific hand-maintained authority operation form entries when
+      generated/synchronized descriptors cover them.
+
+### Completion Notes
+
+- This item was split out of KE-15 after `authority-edit` needed additional
+  operation form entries in `form.yaml`. The current KE-15 implementation keeps
+  the minimal descriptor fix so the existing runtime form surface works; this
+  item owns the structural cleanup.
 
 ---
 
