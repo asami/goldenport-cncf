@@ -13,11 +13,13 @@ import org.goldenport.record.Record
 /*
  * @since   Apr. 14, 2026
  *  version Apr. 25, 2026
- * @version May. 30, 2026
+ *  version May. 30, 2026
+ * @version Jun.  9, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class WebDescriptor(
   defaultView: String = WebTableColumnResolver.defaultViewName,
+  defaultFormAccess: Option[WebDescriptor.Exposure] = None,
   expose: Map[String, WebDescriptor.Exposure] = Map.empty,
   auth: WebDescriptor.Auth = WebDescriptor.Auth(),
   authorization: Map[String, WebDescriptor.Authorization] = Map.empty,
@@ -74,6 +76,7 @@ final case class WebDescriptor(
       defaultView =
         if (rhs.defaultView == WebTableColumnResolver.defaultViewName) defaultView
         else rhs.defaultView,
+      defaultFormAccess = rhs.defaultFormAccess.orElse(defaultFormAccess),
       expose = expose ++ rhs.expose,
       auth =
         if (rhs.auth == WebDescriptor.Auth()) auth
@@ -107,10 +110,22 @@ final case class WebDescriptor(
       admin.nonEmpty ||
       adminPages.nonEmpty ||
       defaultView != WebTableColumnResolver.defaultViewName ||
+      defaultFormAccess.nonEmpty ||
       auth != WebDescriptor.Auth()
 
   def exposureOf(selector: String): WebDescriptor.Exposure =
-    expose.getOrElse(selector, WebDescriptor.Exposure.Internal)
+    form.get(selector)
+      .filterNot(_.enabled.contains(false))
+      .flatMap(_.access)
+      .orElse(expose.get(selector))
+      .orElse(form.get(selector).filterNot(_.enabled.contains(false)).map(_ => effectiveDefaultFormAccess))
+      .getOrElse(WebDescriptor.Exposure.Internal)
+
+  def effectiveDefaultFormAccess: WebDescriptor.Exposure =
+    defaultFormAccess.getOrElse {
+      if (auth.mode.trim.equalsIgnoreCase("none")) WebDescriptor.Exposure.Public
+      else WebDescriptor.Exposure.Protected
+    }
 
   def isFormEnabled(selector: String): Boolean =
     form.get(selector).flatMap(_.enabled) match {
@@ -431,6 +446,8 @@ object WebDescriptor {
         case "internal" => Some(Internal)
         case "protected" => Some(Protected)
         case "public" => Some(Public)
+        case "authenticated" => Some(Protected)
+        case "anonymous" => Some(Public)
         case _ => None
       }
   }
@@ -454,6 +471,7 @@ object WebDescriptor {
 
   final case class Form(
     enabled: Option[Boolean] = None,
+    access: Option[Exposure] = None,
     successRedirect: Option[String] = None,
     failureRedirect: Option[String] = None,
     stayOnError: Boolean = false,
@@ -465,6 +483,7 @@ object WebDescriptor {
     def mergeOverride(rhs: Form): Form =
       Form(
         enabled = rhs.enabled.orElse(enabled),
+        access = rhs.access.orElse(access),
         successRedirect = rhs.successRedirect.orElse(successRedirect),
         failureRedirect = rhs.failureRedirect.orElse(failureRedirect),
         stayOnError = stayOnError || rhs.stayOnError,
@@ -929,6 +948,7 @@ object WebDescriptor {
       defaultView = _string(web, "defaultView")
         .orElse(_string(web, "default-view"))
         .getOrElse(WebTableColumnResolver.defaultViewName),
+      defaultFormAccess = _default_form_access(web),
       expose = _expose(web),
       auth = _auth(web),
       authorization = _authorization(web),
@@ -1020,6 +1040,14 @@ object WebDescriptor {
       }.toMap)
       .getOrElse(Map.empty)
 
+  private def _default_form_access(record: Record): Option[Exposure] =
+    _record_value(record, "default").flatMap { default =>
+      val nested = _record_value(default, "form").flatMap { form =>
+        _string(form, "access").flatMap(Exposure.parse)
+      }
+      nested.orElse(_string(default, "form.access").flatMap(Exposure.parse))
+    }
+
   private def _auth(record: Record): Auth =
     Auth(
       mode = _record_value(record, "auth").flatMap(_.getString("mode")).getOrElse("none")
@@ -1075,20 +1103,30 @@ object WebDescriptor {
     _record_value(record, "form")
       .map(_.asMap.toVector.flatMap {
         case (key, value) =>
-          _any_to_record(value).map { r =>
-            key -> Form(
-              enabled = _boolean(r, "enabled"),
-              successRedirect = _string(r, "successRedirect").orElse(_string(r, "success-redirect")),
-              failureRedirect = _string(r, "failureRedirect").orElse(_string(r, "failure-redirect")),
-              stayOnError = _boolean(r, "stayOnError").orElse(_boolean(r, "stay-on-error")).getOrElse(false),
-              resultTemplate = _string(r, "resultTemplate").orElse(_string(r, "result-template")),
-              layout = _string(r, "layout"),
-              assets = _assets(r),
-              controls = _form_controls(r)
-            )
-          }
+          _form_value(value).map(key -> _)
       }.toMap)
       .getOrElse(Map.empty)
+
+  private def _form_value(value: Any): Option[Form] =
+    value match {
+      case null => Some(Form())
+      case x: Boolean => Some(Form(enabled = Some(x)))
+      case x: java.lang.Boolean => Some(Form(enabled = Some(x.booleanValue)))
+      case _ =>
+        _any_to_record(value).map { r =>
+          Form(
+            enabled = _boolean(r, "enabled"),
+            access = _string(r, "access").orElse(_string(r, "expose")).flatMap(Exposure.parse),
+            successRedirect = _string(r, "successRedirect").orElse(_string(r, "success-redirect")),
+            failureRedirect = _string(r, "failureRedirect").orElse(_string(r, "failure-redirect")),
+            stayOnError = _boolean(r, "stayOnError").orElse(_boolean(r, "stay-on-error")).getOrElse(false),
+            resultTemplate = _string(r, "resultTemplate").orElse(_string(r, "result-template")),
+            layout = _string(r, "layout"),
+            assets = _assets(r),
+            controls = _form_controls(r)
+          )
+        }
+    }
 
   private def _form_controls(record: Record): Map[String, FormControl] =
     _record_value(record, "controls")

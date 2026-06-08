@@ -11,13 +11,15 @@ import org.goldenport.cncf.component.{Component, ComponentId, ComponentInstanceI
 import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.subsystem.{GenericSubsystemDescriptor, Subsystem}
 import org.goldenport.configuration.{Configuration, ConfigurationTrace, ConfigurationValue, ResolvedConfiguration}
+import org.goldenport.record.Record
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr. 14, 2026
  *  version Apr. 25, 2026
- * @version May. 27, 2026
+ *  version May. 27, 2026
+ * @version Jun.  9, 2026
  * @author  ASAMI, Tomoharu
  */
 final class WebDescriptorSpec extends AnyWordSpec with Matchers {
@@ -432,6 +434,78 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
       form.enabled shouldBe Some(true)
       form.successRedirect shouldBe Some("/web/notice-board/detail?id=${result.id}")
       form.controls.keySet should contain ("query")
+    }
+
+    "derive operation exposure from form access and defaults" in {
+      val descriptor = WebDescriptor.fromRecord(Record.dataAuto(
+        "default" -> Record.dataAuto(
+          "form" -> Record.dataAuto(
+            "access" -> "authenticated"
+          )
+        ),
+        "form" -> Record.dataAuto(
+          "notice-board.notice.post-notice" -> Record.dataAuto(
+            "successRedirect" -> "/web/notice-board/detail?id=${result.id}"
+          ),
+          "notice-board.notice.search-notices" -> Record.dataAuto(
+            "access" -> "anonymous"
+          ),
+          "notice-board.notice.disabled-command" -> Record.dataAuto(
+            "enabled" -> false,
+            "access" -> "authenticated"
+          )
+        )
+      ))
+
+      descriptor.isFormEnabled("notice-board.notice.post-notice") shouldBe true
+      descriptor.exposureOf("notice-board.notice.post-notice") shouldBe WebDescriptor.Exposure.Protected
+      descriptor.isFormEnabled("notice-board.notice.search-notices") shouldBe true
+      descriptor.exposureOf("notice-board.notice.search-notices") shouldBe WebDescriptor.Exposure.Public
+      descriptor.isFormEnabled("notice-board.notice.disabled-command") shouldBe false
+      descriptor.exposureOf("notice-board.notice.disabled-command") shouldBe WebDescriptor.Exposure.Internal
+    }
+
+    "accept default dotted form access shorthand and legacy expose values" in {
+      val descriptor = WebDescriptor.fromRecord(Record.dataAuto(
+        "default" -> Record.dataAuto(
+          "form.access" -> "authenticated"
+        ),
+        "expose" -> Record.dataAuto(
+          "notice-board.notice.legacy-public" -> "public",
+          "notice-board.notice.legacy-protected" -> "protected"
+        ),
+        "form" -> Record.dataAuto(
+          "notice-board.notice.legacy-public" -> Record.dataAuto(),
+          "notice-board.notice.legacy-protected" -> Record.dataAuto(),
+          "notice-board.notice.form-expose" -> Record.dataAuto(
+            "expose" -> "anonymous"
+          )
+        )
+      ))
+
+      descriptor.exposureOf("notice-board.notice.legacy-public") shouldBe WebDescriptor.Exposure.Public
+      descriptor.exposureOf("notice-board.notice.legacy-protected") shouldBe WebDescriptor.Exposure.Protected
+      descriptor.exposureOf("notice-board.notice.form-expose") shouldBe WebDescriptor.Exposure.Public
+    }
+
+    "default form access to anonymous when no authentication mode is configured" in {
+      val path = Files.createTempFile("cncf-web-descriptor-form-default-access", ".yaml")
+      Files.writeString(
+        path,
+        """web:
+          |  auth:
+          |    mode: none
+          |  form:
+          |    notice-board.notice.search-notices:
+          |      stayOnError: true
+          |""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+
+      val descriptor = WebDescriptor.load(path).toOption.get
+
+      descriptor.exposureOf("notice-board.notice.search-notices") shouldBe WebDescriptor.Exposure.Public
+      descriptor.isFormEnabled("notice-board.notice.search-notices") shouldBe true
     }
 
     "merge split form descriptor metadata without losing redirect or controls" in {

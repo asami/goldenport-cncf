@@ -815,35 +815,44 @@ Textual Work, Edition, Series, Volume, and publication candidates.
 
 ## KE-15.1: CML / Cozy Form Descriptor Generation Cleanup
 
-Status: PENDING
+Status: DONE
 
 ### Objective
 
 Remove the duplicated maintenance boundary between CML operation definitions
-and `src/main/web-inf/form.yaml` for operation form exposure, protection, input
+and `src/main/web-inf/form.yaml` for operation form exposure, access, input
 controls, and redirect metadata.
 
 ### Initial Tasks
 
-- [ ] Decide the source of truth for operation form exposure and redirect
+- [x] Decide the source of truth for operation form exposure and redirect
       metadata: CML annotations, Cozy generation rules, or a small declarative
       operation-form model that CML can carry.
-- [ ] Generate or synchronize `form.yaml` entries for operation forms from that
-      source of truth, including protected/public exposure, controls, and
+- [x] Generate or synchronize `form.yaml` entries for operation forms from that
+      source of truth, including authenticated/anonymous access, controls, and
       success redirects.
-- [ ] Keep hand-written `form.yaml` only for pages that need deliberate custom
+- [x] Keep hand-written `form.yaml` only for pages that need deliberate custom
       web-form behavior not expressible in the operation model.
-- [ ] Add generation/packaging tests so a CML operation exposed through the
+- [x] Add generation/packaging tests so a CML operation exposed through the
       form surface is present in CAR `web/WEB-INF/form.yaml`.
-- [ ] Remove TKE-specific hand-maintained authority operation form entries when
+- [x] Remove TKE-specific hand-maintained authority operation form entries when
       generated/synchronized descriptors cover them.
 
 ### Completion Notes
 
-- This item was split out of KE-15 after `authority-edit` needed additional
-  operation form entries in `form.yaml`. The current KE-15 implementation keeps
-  the minimal descriptor fix so the existing runtime form surface works; this
-  item owns the structural cleanup.
+- CML operation metadata is the source of truth for operation form exposure,
+  redirect behavior, and input-control adjustments.
+- CML supports `WEB` concern sections and `web.*` shorthand. `# WEB` carries
+  default form settings such as `default.form.access`.
+- Runtime `form.yaml` remains the descriptor consumed by CNCF runtime, but
+  sbt-cozy now synchronizes generated form entries from CML metadata.
+- The canonical access vocabulary is `authenticated` / `anonymous`. Legacy
+  `protected` / `public` descriptor inputs remain compatibility aliases.
+- TKE authority operations now use generated descriptor entries with
+  `access: authenticated`, hidden id/key fields, textarea reason controls, and
+  authority-edit redirects.
+- Focused coverage is in CNCF `WebDescriptorSpec`, sbt-cozy
+  `CozyWebDescriptorSyncSpec`, and TKE `ComponentFactorySpec`.
 
 ---
 

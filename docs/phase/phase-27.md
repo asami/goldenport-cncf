@@ -125,7 +125,7 @@ Scope boundaries:
 - O (ACTIVE): KE-15 — Authority resolution merge/split workflow for Person,
   Organization, Textual Work, Edition, Series, Volume, and book publication
   candidates.
-- O1 (PENDING): KE-15.1 — CML / Cozy form descriptor generation cleanup so
+- O1 (DONE): KE-15.1 — CML / Cozy form descriptor generation cleanup so
   operation form exposure and redirects are not hand-maintained separately in
   `form.yaml`.
 - P (PENDING): KE-16 — Multi-volume / book-set import workflow using Job-based
@@ -160,7 +160,7 @@ Next development candidate after Phase 27:
       plus `CulturalResource` foundation.
 - [x] KE-14: Relationship / Role / Qualifier editing.
 - [ ] KE-15: Authority resolution merge/split workflow.
-- [ ] KE-15.1: CML / Cozy form descriptor generation cleanup.
+- [x] KE-15.1: CML / Cozy form descriptor generation cleanup.
 - [ ] KE-16: Multi-volume / book-set import workflow.
 - [ ] KE-17: Usability smoke and Phase 27 closure.
 
