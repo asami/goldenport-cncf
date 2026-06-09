@@ -4947,6 +4947,34 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       submitted.getString("textus.admin.privilege") shouldBe None
     }
 
+    "stage pasted fileContent as managed job input before operation dispatch" in {
+      val subsystem = _aggregate_fixture_subsystem()
+      val engine = new HttpExecutionEngine(subsystem)
+      val dispatcher = new RecordingWebOperationDispatcher(WebOperationDispatcher.Local(engine))
+      val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
+
+      server
+        ._submit_operation_form(
+          _post_form_request(
+            "/form/notice-board/notice-aggregate/approve-notice-aggregate",
+            "id=notice_1&fileName=fixture.csv&fileContent=a%2Cb%0A1%2C2%0A"
+          ),
+          "notice-board",
+          "notice-aggregate",
+          "approve-notice-aggregate"
+        )
+        .flatMap(_.as[String])
+        .unsafeRunSync()
+
+      val submitted = dispatcher.forms.lastOption.getOrElse(fail("operation form was not dispatched"))
+      submitted.getString("id") shouldBe Some("notice_1")
+      submitted.getString("fileContent") shouldBe None
+      submitted.getString("cncf.job.input.fieldName") shouldBe Some("fileContent")
+      submitted.getString("cncf.job.input.filename") shouldBe Some("fixture.csv")
+      submitted.getString("cncf.job.input.storage") shouldBe Some("inline")
+      submitted.getString("cncf.job.input.inlineBase64").map(java.util.Base64.getDecoder.decode).map(new String(_, StandardCharsets.UTF_8)) shouldBe Some("a,b\n1,2\n")
+    }
+
     "preserve hidden form context for result templates without dispatching it as operation arguments" in {
       val subsystem = _aggregate_http_fixture_subsystem()
       val selector = "notice-board.notice-aggregate.approve-notice-aggregate"

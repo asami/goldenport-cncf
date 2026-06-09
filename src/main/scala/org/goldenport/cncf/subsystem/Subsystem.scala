@@ -52,7 +52,7 @@ import org.goldenport.cncf.metrics.EntityAccessMetricsRegistry
  *  version Jan. 31, 2026
  *  version Feb.  4, 2026
  *  version Apr. 30, 2026
- * @version May. 10, 2026
+ * @version Jun.  9, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Subsystem(
@@ -860,6 +860,8 @@ final class Subsystem(
   ): Boolean =
     if (name == null)
       false
+    else if (_is_job_input_property(name))
+      false
     else {
       val lower = name.toLowerCase(java.util.Locale.ROOT)
       name.startsWith("textus.") ||
@@ -867,6 +869,11 @@ final class Subsystem(
         lower == "x-textus-session" ||
         lower.startsWith("x-textus-debug-")
     }
+
+  private def _is_job_input_property(
+    name: String
+  ): Boolean =
+    name == "cncf.job.input" || name.startsWith("cncf.job.input.")
 
   private def _is_framework_or_security_argument(
     name: String
@@ -1137,6 +1144,9 @@ final class Subsystem(
       case (name, value) if _is_http_framework_key(name) =>
         Property(name, value.toString, None)
     }
+    val form = _http_form_framework_passthrough_keys.flatMap { name =>
+      req.form.getString(name).filter(_.nonEmpty).map(value => Property(name, value, None))
+    }
     val header = req.header.asMap.toVector.collect {
       case (name, value) if name.equalsIgnoreCase("x-textus-debug-calltree") =>
         Property("x-textus-debug-calltree", value.toString, None)
@@ -1149,7 +1159,7 @@ final class Subsystem(
       case (name, value) if name.equalsIgnoreCase("x-textus-session") =>
         Property("x-textus-session", value.toString, None)
     }
-    (query ++ header).toList
+    (query ++ form ++ header).toList
   }
 
   private def _http_query_record(
@@ -1194,6 +1204,22 @@ final class Subsystem(
     name.startsWith("textus.") ||
       name.startsWith("cncf.") ||
       name.startsWith("query.")
+
+  private def _http_form_framework_passthrough_keys: Vector[String] =
+    Vector(
+      "cncf.job.input",
+      "cncf.job.input.fieldName",
+      "cncf.job.input.filename",
+      "cncf.job.input.contentType",
+      "cncf.job.input.byteSize",
+      "cncf.job.input.sha256",
+      "cncf.job.input.retention",
+      "cncf.job.input.ttlSeconds",
+      "cncf.job.input.createdAt",
+      "cncf.job.input.storage",
+      "cncf.job.input.inlineBase64",
+      "cncf.job.input.blobId"
+    )
 
   private def _not_found(): HttpResponse =
     HttpResponse.notFound()

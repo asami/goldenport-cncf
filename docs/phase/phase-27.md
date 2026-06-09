@@ -128,13 +128,13 @@ Scope boundaries:
 - O1 (DONE): KE-15.1 — CML / Cozy form descriptor generation cleanup so
   operation form exposure and redirects are not hand-maintained separately in
   `form.yaml`.
-- P (ACTIVE): KE-16 — Multi-volume / book-set import workflow using Job-based
+- P (DONE): KE-16 — Multi-volume / book-set import workflow using Job-based
   import units.
-- Q (PENDING): KE-17 — Usability smoke and Phase 27 closure.
+- Q (ACTIVE): KE-17 — Usability smoke and Phase 27 closure.
 
 Resume hint:
 
-- Start from KE-16. Do not reopen Phase 26 KI items unless fixing a regression.
+- Start from KE-17. Do not reopen Phase 26 KI items unless fixing a regression.
 
 Next development candidate after Phase 27:
 
@@ -161,7 +161,7 @@ Next development candidate after Phase 27:
 - [x] KE-14: Relationship / Role / Qualifier editing.
 - [x] KE-15: Authority resolution merge/split workflow.
 - [x] KE-15.1: CML / Cozy form descriptor generation cleanup.
-- [ ] KE-16: Multi-volume / book-set import workflow.
+- [x] KE-16: Multi-volume / book-set import workflow.
 - [ ] KE-17: Usability smoke and Phase 27 closure.
 
 Next development candidate after Phase 27:

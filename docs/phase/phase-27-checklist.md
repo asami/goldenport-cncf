@@ -867,7 +867,7 @@ controls, and redirect metadata.
 
 ## KE-16: Multi-Volume / Book-Set Import Workflow
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
@@ -877,36 +877,49 @@ structure as one Job-backed work unit.
 
 ### Initial Tasks
 
-- [ ] Add import input shape for book sets and multi-volume publications,
+- [x] Add import input shape for book sets and multi-volume publications,
       including work title, edition title, series title, volume title, volume
       number, total volumes, ISBN, publication date, publisher/imprint, and
       contributor columns.
-- [ ] Use CNCF Job import units so a multi-volume import can be listed,
+- [x] Use CNCF Job import units so a multi-volume import can be listed,
       inspected, retried within retention policy, and used as a work-unit
       filter for created Information.
-- [ ] Map imported rows into related Information objects for Textual Work,
-      Edition, Series, Volume, Person, Organization, and publication/book
-      records.
-- [ ] Preserve source-layer distinctions in the import result: ISBN/openBD
+- [x] Map imported rows into related Information objects for Textual Work,
+      Edition, Volume, and publication/book records. Series remains source /
+      edition evidence in KE-16 rather than a first-class Information domain.
+- [x] Preserve source-layer distinctions in the import result: ISBN/openBD
       physical publication metadata, library/authority metadata, RDF anchors,
       and inferred Textual Work/Edition/Series/Volume structure must be reviewable
       separately before merge/materialization.
-- [ ] Provide import result summaries showing created, updated, skipped,
+- [x] Provide import result summaries showing created, updated, skipped,
       unresolved, and candidate-linked Information counts.
-- [ ] Add list/detail navigation from an import Job to the Information created
+- [x] Add list/detail navigation from an import Job to the Information created
       by that import.
-- [ ] Add focused executable specifications using an Iwanami Genji monogatari
+- [x] Add focused executable specifications using an Iwanami Genji monogatari
       style multi-volume import fixture.
 
 ### Completion Notes
 
-- Pending.
+- TKE implements Job-backed book-set import for structured CSV/Excel-style
+  rows while preserving ISBN-lines import behavior.
+- Browser smoke on Jun. 9, 2026 used a Genji / Iwanami-style CSV fixture and
+  verified `book_set_count=1`, two Book publications, one shared Textual Work,
+  one shared Textual Edition, two Textual Volumes, and zero skipped rows.
+- Saved data inspection verified each Book carries `textualWorkInformationId`,
+  `textualEditionInformationId`, `textualVolumeInformationId`, row/volume
+  context, and source evidence; Work/Edition remain shared group-level
+  Information.
+- Book update, association, identifier, classification, relationship,
+  Information graph, and RDF graph routes remained usable after book-set
+  import.
+- Materialization verified the linked Information-first chain
+  `Publication -> Textual Volume -> Textual Edition -> Textual Work`.
 
 ---
 
 ## KE-17: Usability Smoke and Phase 27 Closure
 
-Status: PENDING
+Status: ACTIVE
 
 ### Objective
 

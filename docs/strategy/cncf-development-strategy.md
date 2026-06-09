@@ -1292,7 +1292,7 @@ Phase 26 completed scope:
 
 Phase 27 active scope:
 
-- KE-01 through KE-15 are done. KE-13 expanded book structure with explicit
+- KE-01 through KE-16 are done. KE-13 expanded book structure with explicit
   Textual Work / Edition / Series / Volume knowledge and established the
   `CulturalResource` foundation, including multi-volume editions such as a
   nine-volume Iwanami Genji monogatari publication. The completed direction is
@@ -1317,10 +1317,12 @@ Phase 27 active scope:
   runtime form exposure, access, controls, and redirect metadata can be
   synchronized from operation metadata instead of hand-maintained as a separate
   `form.yaml` source.
-- Current focus moves to KE-16, which will add multi-volume / book-set import
-  workflow using Job-backed
-  import units.
-- KE-17 will run usability smoke and Phase 27 closure after the expanded book
+- KE-16 added multi-volume / book-set import workflow using Job-backed import
+  units. Browser smoke verified structured CSV input, shared Textual Work /
+  Edition / Volume creation, Book publication links, import result counts, and
+  linked Information-first materialization.
+- Current focus moves to KE-17, which will run usability smoke and Phase 27
+  closure after the expanded book
   structure and publish/materialize feedback are visible for book, paper, and
   web resource editor flows.
 - Book-first domain knowledge editing through `textus-knowledge-editor`, with

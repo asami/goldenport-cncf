@@ -3,7 +3,7 @@ package org.goldenport.cncf.http
 /*
  * @since   May. 18, 2026
  *  version May. 30, 2026
- * @version Jun.  8, 2026
+ * @version Jun.  9, 2026
  * @author  ASAMI, Tomoharu
  */
 import cats.effect.IO
@@ -50,6 +50,7 @@ import org.goldenport.cncf.observability.{ConclusionDiagnostics, DiagnosticPaylo
 import org.goldenport.cncf.mcp.McpJsonRpcAdapter
 import org.goldenport.cncf.openapi.OpenApiProjector
 import org.goldenport.cncf.security.{AuthenticationRequest, IngressSecurityResolver, SessionId}
+import org.goldenport.protocol.spec.OperationDefinition
 import org.goldenport.bag.{Bag, BinaryBag}
 import org.goldenport.datatype.{ContentType, MimeBody, MimeType}
 import org.goldenport.observation.{Cause, Descriptor}
@@ -2264,7 +2265,7 @@ final class Http4sHttpServer(
     operation: String,
     form: Record
   ): Consequence[Record] =
-    if (!_is_async_job_operation(app, service, operation))
+    if (!_should_stage_job_input_form(app, service, operation, form))
       Consequence.success(form)
     else
       _job_input_source(form) match {
@@ -2301,19 +2302,53 @@ final class Http4sHttpServer(
           }
       }
 
+  private def _should_stage_job_input_form(
+    app: String,
+    service: String,
+    operation: String,
+    form: Record
+  ): Boolean =
+    _job_input_source(form).isDefined
+
   private def _is_async_job_operation(
     app: String,
     service: String,
     operation: String
   ): Boolean =
+    _operation_definition_for_route(app, service, operation)
+      .exists(_.effectiveCommandExecutionPolicy.managedByJob)
+
+  private def _operation_definition_for_route(
+    app: String,
+    service: String,
+    operation: String
+  ): Option[org.goldenport.cncf.operation.CmlOperationDefinition] = {
+    val canonicaloperation = RecordKeyNaming.toCanonicalCamelName(operation)
     _component(app).flatMap { component =>
-      component.protocol.services.services.find(s => NamingConventions.equivalentByNormalized(s.name, service))
-        .flatMap { servicedef =>
-          servicedef.operations.operations
-            .find(d => NamingConventions.equivalentByNormalized(d.name, operation))
-            .flatMap(_ => component.operationDefinitions.find(d => NamingConventions.equivalentByNormalized(d.name, operation)))
-        }
-    }.exists(_.effectiveCommandExecutionPolicy.managedByJob)
+      _protocol_operation_definition_for_route(component, service, operation).flatMap { op =>
+        component.operationDefinitions.find(d =>
+          NamingConventions.equivalentByNormalized(d.name, operation) ||
+            NamingConventions.equivalentByNormalized(d.name, canonicaloperation) ||
+            NamingConventions.equivalentByNormalized(d.name, op.name)
+        )
+      }
+    }
+  }
+
+  private def _protocol_operation_definition_for_route(
+    component: org.goldenport.cncf.component.Component,
+    service: String,
+    operation: String
+  ): Option[OperationDefinition] = {
+    val canonicaloperation = RecordKeyNaming.toCanonicalCamelName(operation)
+    component.protocol.services.services.find(s => NamingConventions.equivalentByNormalized(s.name, service))
+      .flatMap { servicedef =>
+        servicedef.operations.operations.find(d =>
+          NamingConventions.equivalentByNormalized(d.name, operation) ||
+            NamingConventions.equivalentByNormalized(d.name, canonicaloperation)
+        )
+      }
+  }
 
   private def _job_input_source(form: Record): Option[_JobInputSource] =
     form.asMap.get("file") match {
@@ -2325,7 +2360,7 @@ final class Http4sHttpServer(
           contenttype
         ))
       case _ =>
-        form.getString("fileContent").filter(_.nonEmpty).map { text =>
+        _form_field_text(form, "fileContent").filter(_.nonEmpty).map { text =>
           _JobInputSource(
             "fileContent",
             text.getBytes(StandardCharsets.UTF_8),
@@ -2334,6 +2369,12 @@ final class Http4sHttpServer(
           )
         }
     }
+
+  private def _form_field_text(
+    form: Record,
+    key: String
+  ): Option[String] =
+    form.getString(key).orElse(form.asMap.get(key).map(_.toString))
 
   private def _stage_job_input_blob(
     app: String,
@@ -2594,8 +2635,9 @@ final class Http4sHttpServer(
     ).flatMap { case (source, target) =>
       form.getString(source).filter(_.nonEmpty).map(target -> _)
     }
+    val frameworkcontext = _framework_passthrough_form_values(form)
     _normalize_boundary_record(app, service, operation, Record.create(_strip_framework_form_values(form.asMap).toVector)).map { operationform =>
-      Record(operationform.fields ++ Record.create(admincontext).fields)
+      Record(operationform.fields ++ Record.create(admincontext ++ frameworkcontext).fields)
     }
   }
 
@@ -5672,16 +5714,38 @@ final class Http4sHttpServer(
   ): Set[String] =
     (for {
       component <- _component(app)
-      servicedef <- component.protocol.services.services.find(s => NamingConventions.equivalentByNormalized(s.name, service))
-      operationdef <- servicedef.operations.operations.find(o => NamingConventions.equivalentByNormalized(o.name, operation))
+      operationdef <- _protocol_operation_definition_for_route(component, service, operation)
     } yield {
       operationdef.specification.request.parameters.toVector.map(_.name).toSet
-    }).getOrElse(Set.empty)
+    }).getOrElse(Set.empty) ++ _job_input_form_keys
+
+  private def _job_input_form_keys: Set[String] =
+    Set(
+      "cncf.job.input",
+      "cncf.job.input.fieldName",
+      "cncf.job.input.filename",
+      "cncf.job.input.contentType",
+      "cncf.job.input.byteSize",
+      "cncf.job.input.sha256",
+      "cncf.job.input.retention",
+      "cncf.job.input.ttlSeconds",
+      "cncf.job.input.createdAt",
+      "cncf.job.input.storage",
+      "cncf.job.input.inlineBase64",
+      "cncf.job.input.blobId"
+    )
 
   private def _strip_framework_form_values(
     values: Map[String, Any]
   ): Map[String, Any] =
     values.filterNot { case (k, _) => _is_framework_or_security_form_key(k) || _is_form_context_key(k) }
+
+  private def _framework_passthrough_form_values(
+    form: Record
+  ): Vector[(String, String)] =
+    _job_input_form_keys.toVector.flatMap { key =>
+      form.getString(key).filter(_.nonEmpty).map(key -> _)
+    }
 
   private def _strip_security_form_values(
     values: Map[String, Any]

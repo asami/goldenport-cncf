@@ -2,6 +2,7 @@ package org.goldenport.cncf.component
 
 import org.goldenport.Consequence
 import org.goldenport.Conclusion
+import org.goldenport.datatype.PathName
 import org.goldenport.http.{HttpRequest, HttpResponse}
 import org.goldenport.protocol.{Argument, Request}
 import org.goldenport.protocol.Response
@@ -30,7 +31,7 @@ import org.goldenport.cncf.operation.CmlOperationDefinition
  *  version Feb. 25, 2026
  *  version Mar. 31, 2026
  *  version Apr. 24, 2026
- * @version May. 31, 2026
+ * @version Jun.  9, 2026
  * @author  ASAMI, Tomoharu
  */
 /**
@@ -435,38 +436,39 @@ case class ComponentLogic(
   }
 
   private def _job_input(action: Action): Option[JobInput] = {
-    val params = (action.arguments.map(x => x.name -> x.value.toString) ++
+    val flatparams = (action.arguments.map(x => x.name -> x.value.toString) ++
       action.properties.map(x => x.name -> x.value.toString)).toMap
-    params.get("cncf.job.input.storage").map(_.trim).filter(_.nonEmpty).map { storage =>
-      val created = params.get("cncf.job.input.createdAt")
+    val record = action.request.toRecord
+    def param(key: String): Option[String] =
+      flatparams.get(key)
+        .orElse(record.getString(key))
+        .orElse(record.getString(PathName(key.split("\\.").toVector)))
+        .map(_.trim)
+        .filter(_.nonEmpty)
+    param("cncf.job.input.storage").map { storage =>
+      val created = param("cncf.job.input.createdAt")
         .flatMap(x => scala.util.Try(java.time.Instant.parse(x)).toOption)
         .getOrElse(java.time.Instant.now())
       val payload = JobInputPayload(
         storage = storage,
-        fieldName = _job_input_string(params, "cncf.job.input.fieldName"),
-        filename = _job_input_string(params, "cncf.job.input.filename"),
-        contentType = _job_input_string(params, "cncf.job.input.contentType"),
-        byteSize = params.get("cncf.job.input.byteSize").flatMap(x => scala.util.Try(x.toLong).toOption),
-        sha256 = _job_input_string(params, "cncf.job.input.sha256"),
-        inlineBase64 = _job_input_string(params, "cncf.job.input.inlineBase64"),
-        blobId = _job_input_string(params, "cncf.job.input.blobId"),
+        fieldName = param("cncf.job.input.fieldName"),
+        filename = param("cncf.job.input.filename"),
+        contentType = param("cncf.job.input.contentType"),
+        byteSize = param("cncf.job.input.byteSize").flatMap(x => scala.util.Try(x.toLong).toOption),
+        sha256 = param("cncf.job.input.sha256"),
+        inlineBase64 = param("cncf.job.input.inlineBase64"),
+        blobId = param("cncf.job.input.blobId"),
         createdAt = created
       )
-      val retention = params.get("cncf.job.input.retention")
+      val retention = param("cncf.job.input.retention")
         .flatMap(JobInputRetentionPolicy.parse)
         .getOrElse(JobInputRetentionPolicy.Ttl)
-      val ttl = params.get("cncf.job.input.ttlSeconds")
+      val ttl = param("cncf.job.input.ttlSeconds")
         .flatMap(x => scala.util.Try(java.time.Duration.ofSeconds(x.toLong)).toOption)
         .getOrElse(JobInput.DefaultTtl)
       JobInput(Vector(payload), retention, ttl, created)
     }
   }
-
-  private def _job_input_string(
-    params: Map[String, String],
-    key: String
-  ): Option[String] =
-    params.get(key).map(_.trim).filter(_.nonEmpty)
 
   private def _is_job_input_raw_key(key: String): Boolean = {
     val k = key.trim
