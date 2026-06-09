@@ -1,6 +1,6 @@
 # Phase 27 — Knowledge Editor and Domain Knowledge Authoring
 
-status = active
+status = completed
 
 ## 1. Purpose of This Document
 
@@ -130,11 +130,12 @@ Scope boundaries:
   `form.yaml`.
 - P (DONE): KE-16 — Multi-volume / book-set import workflow using Job-based
   import units.
-- Q (ACTIVE): KE-17 — Usability smoke and Phase 27 closure.
+- Q (DONE): KE-17 — Usability smoke and Phase 27 closure.
 
 Resume hint:
 
-- Start from KE-17. Do not reopen Phase 26 KI items unless fixing a regression.
+- Phase 27 is closed. Do not reopen Phase 26 KI items or Phase 27 KE items
+  unless fixing a regression.
 
 Next development candidate after Phase 27:
 
@@ -162,7 +163,7 @@ Next development candidate after Phase 27:
 - [x] KE-15: Authority resolution merge/split workflow.
 - [x] KE-15.1: CML / Cozy form descriptor generation cleanup.
 - [x] KE-16: Multi-volume / book-set import workflow.
-- [ ] KE-17: Usability smoke and Phase 27 closure.
+- [x] KE-17: Usability smoke and Phase 27 closure.
 
 Next development candidate after Phase 27:
 

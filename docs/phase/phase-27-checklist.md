@@ -919,7 +919,7 @@ structure as one Job-backed work unit.
 
 ## KE-17: Usability Smoke and Phase 27 Closure
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
@@ -929,24 +929,48 @@ structure added in KE-11 through KE-16.
 
 ### Initial Tasks
 
-- [ ] Run a book identifier import/editing smoke with DBpedia lookup.
-- [ ] Run a Person/Organization book-adjacent knowledge smoke.
-- [ ] Run a Textual Work/Edition/Series/Volume multi-volume book structure smoke.
-- [ ] Run a relationship/role/qualifier editing smoke.
-- [ ] Run an authority merge/split workflow smoke.
-- [ ] Run a multi-volume/book-set import Job smoke.
-- [ ] Verify the book materialization summary can explain when author,
+- [x] Run a book identifier import/editing smoke with DBpedia lookup.
+- [x] Run a Person/Organization book-adjacent knowledge smoke.
+- [x] Run a Textual Work/Edition/Series/Volume multi-volume book structure smoke.
+- [x] Run a relationship/role/qualifier editing smoke.
+- [x] Run an authority merge/split workflow smoke.
+- [x] Run a multi-volume/book-set import Job smoke.
+- [x] Verify the book materialization summary can explain when author,
       publisher, work, edition, series, or volume knowledge is missing,
       unresolved, or materialized as part of the 1.5hop+ neighborhood.
-- [ ] Run a paper editing smoke if included in the closure scope.
-- [ ] Run a web knowledge editing smoke.
-- [ ] Verify field guidance and validation messages are visible in the UI.
-- [ ] Verify published knowledge appears in KnowledgeSpace.
-- [ ] Record deferred hardening in strategy.
+- [x] Run a paper editing smoke if included in the closure scope.
+- [x] Run a web knowledge editing smoke.
+- [x] Verify field guidance and validation messages are visible in the UI.
+- [x] Verify published knowledge appears in KnowledgeSpace.
+- [x] Record deferred hardening in strategy.
 
 ### Completion Notes
 
-- Pending.
+- Browser smoke completed on Jun. 9, 2026 against
+  `/Users/asami/src/dev2026/textus-knowledge-editor`.
+- TKE shell/sidebar, debug-auth access, ISBN `9784003510179` import, Book
+  update, association, identifier, classification, RDF, relationship, and
+  authority edit pages were verified in the browser.
+- Saved data inspection verified linked Textual Work / Edition / Volume
+  Information, Person and Organization target Information, local RDF nodes,
+  source/evidence retention, RDF candidate/anchor projection, and Information /
+  RDF graph output.
+- A closure-blocking TKE defect found during smoke was fixed in commit
+  `1512285`: Person and Organization target Information created from Book
+  authority candidates now store `title` as well as `name`, so list/admin/edit
+  projections show the created authority target labels.
+- Book-set import smoke used a Genji / Iwanami-style CSV fixture and verified
+  shared Textual Work / Edition / Volume creation/reuse and linked
+  Information-first publication materialization. Async Job result navigation
+  remains a follow-up hardening item for the broader Web/API error and job UX
+  track, not a Phase 27 knowledge-model blocker.
+- Paper and Web Resource seed/edit/materialization-preview smoke verified that
+  the book-first editor shell, field status, validation feedback, and
+  materialization changes did not break the non-book editor flows.
+- Validation passed in TKE: `sbt --batch test`, `sbt --batch cozyBuildCar`,
+  and `git diff --check`.
+- Phase 27 is closed. The next development candidate is Web UI DSL / Bootstrap
+  Core / UX Profile implementation.
 
 ---
 
@@ -956,12 +980,12 @@ Status: QUEUED
 
 ### Objective
 
-After Phase 27 later closes, turn the Web UI DSL design note into the next
+After Phase 27 closes, turn the Web UI DSL design note into the next
 implementation slice so Static Form Web Apps and generated CNCF screens can use
 semantic Textus widgets, stable Bootstrap Core DOM, and selectable UX profiles.
 
-This is not part of KE-17 and does not imply Phase 27 is already ready to
-close.
+This is not part of KE-17; it is the next candidate after the closed Phase 27
+knowledge-editor phase.
 
 ### Planned Tasks
 

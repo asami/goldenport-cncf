@@ -650,12 +650,13 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Notes contain execution details and results for each phase.
 
 ## Process Status Pointers
-- Current phase selection: Phase 27 — Knowledge Editor and Domain Knowledge Authoring.
-- Current active phase dashboard: `docs/phase/phase-27.md`
-- Current active phase checklist: `docs/phase/phase-27-checklist.md`
-- Latest closed phase dashboard: `docs/phase/phase-26.md`
-- Latest closed phase checklist: `docs/phase/phase-26-checklist.md`
-- Candidate next phase areas after Phase 27: Web UI DSL / Bootstrap Core /
+- Current phase selection: Web UI DSL / Bootstrap Core / UX Profile
+  implementation candidate.
+- Latest closed phase dashboard: `docs/phase/phase-27.md`
+- Latest closed phase checklist: `docs/phase/phase-27-checklist.md`
+- Previous closed phase dashboard: `docs/phase/phase-26.md`
+- Previous closed phase checklist: `docs/phase/phase-26-checklist.md`
+- Candidate next phase areas: Web UI DSL / Bootstrap Core /
   Material Design / UX Profile implementation; Web UI multi-locale message
   control; AwsComponent/S3 BlobStore provider; Search/index planning; DB
   migration tooling.
@@ -692,7 +693,7 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Phase 24: closed (`docs/phase/phase-24.md`)
 - Phase 25: closed (`docs/phase/phase-25.md`)
 - Phase 26: closed (`docs/phase/phase-26.md`)
-- Phase 27: active (`docs/phase/phase-27.md`)
+- Phase 27: closed (`docs/phase/phase-27.md`)
 
 ## 8. Completed Development Item History
 
@@ -1150,20 +1151,12 @@ corresponding completed-history entry.
 
 Current development item:
 
-- Phase 27 — Knowledge Editor and Domain Knowledge Authoring.
-  - Dashboard: `docs/phase/phase-27.md`
-  - Checklist: `docs/phase/phase-27-checklist.md`
-  - Driver: `/Users/asami/src/dev2026/textus-knowledge-editor`
-  - Goal: build `textus-knowledge-editor` on the CNCF `InformationSpace`
-    foundation so users can start with book knowledge, import/seed it from ISBN
-    or other publication identifiers, link/enrich it through multiple external
-    ids and RDF-node candidates such as DBpedia and Wikidata, edit it through
-    self-explanatory Web authoring screens, then publish/materialize that
-    knowledge into `KnowledgeSpace`. Book materialization is now treated as a
-    1.5hop+ bibliographic meaning neighborhood and `CulturalResource` book
-    profile that may include Person, Organization, Textual Work, Edition,
-    Series, and Volume knowledge around the focal publication/book node. Paper
-    and web knowledge follow after the book-first validation path.
+- Web UI DSL / Bootstrap Core / UX Profile implementation candidate.
+  - Source note:
+    `docs/notes/web-ui-dsl-bootstrap-core-ux-profile-design.md`.
+  - Goal: turn the editor UI lessons from Phase 27 into reusable generated Web
+    metadata, Bootstrap Core DOM, semantic widgets, and selectable UX profiles
+    for Static Form Web Apps and application-owned screens.
 
 ### 9.1 Web Next Stage Follow-ups
 Web/platform follow-up index.
@@ -1246,8 +1239,8 @@ Phase 26 completed the upstream curated information lifecycle: domain authoring
 input, `InformationSpace` staging/edit/resolve/confirm/publish, RDF/vector
 publication through `textus-sie`, and `KnowledgeSpace` materialization.
 Completed Phase 26 scope is recorded in section 8.16.
-Phase 27 now uses `textus-knowledge-editor` as the development driver to add
-the application-grade knowledge editing surface on top of the Phase 26
+Phase 27 used `textus-knowledge-editor` as the development driver to add the
+application-grade knowledge editing surface on top of the Phase 26
 InformationSpace foundation.
 
 Phase 26 documents:
@@ -1290,9 +1283,9 @@ Phase 26 completed scope:
 - KI-10 closed Phase 26 with Docker-backed Fuseki / SIE-compatible Chroma
   validation through `docker/ks-14/scripts/run-ki10-smoke.sh`.
 
-Phase 27 active scope:
+Phase 27 completed scope:
 
-- KE-01 through KE-16 are done. KE-13 expanded book structure with explicit
+- KE-01 through KE-17 are done. KE-13 expanded book structure with explicit
   Textual Work / Edition / Series / Volume knowledge and established the
   `CulturalResource` foundation, including multi-volume editions such as a
   nine-volume Iwanami Genji monogatari publication. The completed direction is
@@ -1321,10 +1314,11 @@ Phase 27 active scope:
   units. Browser smoke verified structured CSV input, shared Textual Work /
   Edition / Volume creation, Book publication links, import result counts, and
   linked Information-first materialization.
-- Current focus moves to KE-17, which will run usability smoke and Phase 27
-  closure after the expanded book
-  structure and publish/materialize feedback are visible for book, paper, and
-  web resource editor flows.
+- KE-17 completed the usability smoke and Phase 27 closure. Browser and saved
+  data checks covered ISBN import, Book update, association/identifier/
+  classification/RDF/relationship/authority edit flows, Textual Work / Edition /
+  Volume pages, graph views, book-set import, and Paper/Web Resource seed/edit
+  materialization-preview paths.
 - Book-first domain knowledge editing through `textus-knowledge-editor`, with
   paper and web knowledge following after the book path is validated.
 - ISBN and other publication identifiers as import/seed keys for creating CNCF
@@ -1341,8 +1335,8 @@ Phase 27 active scope:
 - Person and Organization editor screens are implemented so those Information
   domains have the same app-facing editing workflow as book, paper, and web
   resource domains.
-- Textual Work / Edition / Series / Volume knowledge is now active Phase 27
-  work for edition-aware and multi-volume book structure, rather than
+- Textual Work / Edition / Series / Volume knowledge is implemented for
+  edition-aware and multi-volume book structure, rather than
   flattening publications such as Iwanami Genji monogatari volumes into
   unrelated title strings.
 - `Book` remains the v1 Information domain for concrete textual publications
@@ -1372,14 +1366,14 @@ Phase 27 active scope:
   for authorship, editor/translator attribution, publisher/imprint links,
   citations, part-whole structure, series membership, edition realization, and
   volume ordering.
-- Authority merge/split workflow is planned so same-name/different-entity and
-  different-name/same-entity candidates can be resolved without collapsing
+- Authority merge/split workflow is implemented so same-name/different-entity
+  and different-name/same-entity candidates can be resolved without collapsing
   Information ids, external RDF URIs, KnowledgeNode ids, application Entity ids,
   or bibliographic identifiers.
-- Multi-volume / book-set import is planned as a Job-backed work-unit workflow
-  for importing ISBN lists, CSV/Excel files, or similar sources into coordinated
-  Textual Work / Edition / Series / Volume / Person / Organization /
-  publication Information.
+- Multi-volume / book-set import is implemented as a Job-backed work-unit
+  workflow for importing ISBN lists, CSV/Excel files, or similar sources into
+  coordinated Textual Work / Edition / Series / Volume / Person / Organization
+  / publication Information.
 - Museum collections and other non-book resources are a follow-up
   `CulturalResource` profile direction. Sculpture, paintings, buildings,
   physical objects, holdings, and collection items should use shared cultural
@@ -1437,11 +1431,10 @@ Phase 27 active scope:
 - CNCF builtin `TagComponent` now owns the application-facing TagSpace screen
   at `/web/tag/tags`; TKE links to that screen with `tagSpace=information`
   instead of implementing a separate Tag master editor.
-- The next target is a usability smoke for book, paper, and web-resource
-  editing before Phase 27 closure.
+- KE-17 completed usability smoke for book, paper, and web-resource editing and
+  closed Phase 27.
 
-Future follow-ups outside the closed Phase 26 baseline and active Phase 27
-scope:
+Future follow-ups outside the closed Phase 26 and Phase 27 baselines:
 
 - Production hardening for Fuseki/Chroma deployment, credentials,
   authorization, retention, import governance, and operational lifecycle.
