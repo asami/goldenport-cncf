@@ -1,7 +1,7 @@
 schemaVersion: 1
-generatedAt: 2026-05-21T21:01:01.661718Z
-recommended: 0.4.9
-latestStable: 0.4.9
+generatedAt: 2026-06-09T20:17:16.191124Z
+recommended: 0.4.10
+latestStable: 0.4.10
 latestSnapshot: 0.4.10-SNAPSHOT
 mavenRepositories:
   - https://www.simplemodeling.org/repository/maven
@@ -71,3 +71,10 @@ versions:
       removed: []
       changed: []
       note: baseProvided is derived from Compile / libraryDependencies from 0.4.10-SNAPSHOT.
+  - version: 0.4.10
+    channel: stable
+    status: active
+    scalaBinaryVersion: "3"
+    module: org.goldenport:goldenport-cncf_3:0.4.10
+    publishedAt: 2026-06-09T20:17:16.191124Z
+    metadataUrl: https://www.simplemodeling.org/repository/maven/org/goldenport/goldenport-cncf_3/maven-metadata.xml

@@ -62,6 +62,33 @@ def textusRuntimeCatalogText(
     _flush_()
     blocks.result()
   }
+  def _version_block_(version: String): Option[String] =
+    _version_blocks_(existingtext).find(_._1 == version).map(_._2)
+  def _version_value_(version: String, key: String): Option[String] =
+    _version_block_(version).flatMap { block =>
+      block.linesIterator
+        .map(_.trim)
+        .find(_.startsWith(s"$key:"))
+        .map(_.drop(key.length + 1).trim)
+        .filter(_.nonEmpty)
+    }
+  def _boolean_(value: String): Option[Boolean] =
+    value.toLowerCase(java.util.Locale.ROOT) match {
+      case "true" | "yes" | "on" | "1" => Some(true)
+      case "false" | "no" | "off" | "0" => Some(false)
+      case _ => None
+    }
+  def _runtime_recommended_opt_out_(): Boolean = {
+    val configured =
+      sys.props.get("textus.runtime.catalog.recommended")
+        .orElse(sys.env.get("TEXTUS_RUNTIME_CATALOG_RECOMMENDED"))
+        .flatMap(_boolean_)
+    val versionblock =
+      _version_value_(cncfversion, "recommended")
+        .orElse(_version_value_(cncfversion, "recommend"))
+        .flatMap(_boolean_)
+    configured.orElse(versionblock).contains(false)
+  }
   def _preserved_version_lines_(version: String): Vector[String] = {
     val generatedkeys =
       Set("channel", "status", "scalaBinaryVersion", "module", "publishedAt", "metadataUrl")
@@ -87,8 +114,13 @@ def textusRuntimeCatalogText(
     baseprovidedmodules.map(module => s"  - $module").mkString("baseProvided:\n", "\n", "")
   val channel =
     if (cncfversion.endsWith("-SNAPSHOT")) "snapshot" else "stable"
+  val recommendcurrent =
+    channel == "stable" && !_runtime_recommended_opt_out_()
   val recommended =
-    _existing_value_("recommended").getOrElse(cncfversion)
+    if (recommendcurrent)
+      cncfversion
+    else
+      _existing_value_("recommended").getOrElse(cncfversion)
   val lateststable =
     if (channel == "stable") cncfversion else _existing_value_("latestStable").getOrElse("")
   val latestsnapshot =
