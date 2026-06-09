@@ -50,48 +50,48 @@ The release is intentionally projectized because launcher/runtime/channel compat
 
 ## sbt-cozy
 
-- [ ] Remove SNAPSHOT version.
-- [ ] Run `sbt --batch test`.
-- [ ] Publish `sbt-cozy` to the public Maven repository.
+- [x] Remove SNAPSHOT version.
+- [x] Run `sbt --batch test`.
+- [x] Publish `sbt-cozy` to the public Maven repository.
 - [ ] Verify the published plugin can be resolved by a clean dependent project.
 
 ## Cozy Runtime
 
-- [ ] Update `project/plugins.sbt` to the released `sbt-cozy` version.
-- [ ] Remove SNAPSHOT version.
-- [ ] Run `sbt --batch test`.
-- [ ] Publish `org.simplemodeling:cozy_2.12`.
-- [ ] Verify `repository/cozy/coursier-channel.json` contains or preserves `cozy-runtime`.
-- [ ] Verify `cozy-runtime` points to `org.simplemodeling:cozy_2.12:<release-version>`.
+- [x] Update `project/plugins.sbt` to the released `sbt-cozy` version.
+- [x] Remove SNAPSHOT version.
+- [x] Run `sbt --batch test`.
+- [x] Publish `org.simplemodeling:cozy_2.12`.
+- [x] Verify `repository/cozy/coursier-channel.json` contains or preserves `cozy-runtime`.
+- [x] Verify `cozy-runtime` points to `org.simplemodeling:cozy_2.12:<release-version>`.
 
 ## Cozy Launcher
 
-- [ ] Update `project/plugins.sbt` to the released `sbt-cozy` version.
-- [ ] Remove SNAPSHOT version.
-- [ ] Run `sbt --batch test`.
-- [ ] Publish `org.simplemodeling:cozy-launcher_3`.
-- [ ] Verify `repository/cozy/coursier-channel.json` contains or preserves `cozy`.
-- [ ] Verify `cozy` points to `org.simplemodeling:cozy-launcher_3:<release-version>`.
-- [ ] Confirm the channel contains both `cozy` and `cozy-runtime` entries.
+- [x] Update `project/plugins.sbt` to the released `sbt-cozy` version.
+- [x] Remove SNAPSHOT version.
+- [x] Run `sbt --batch test`.
+- [x] Publish `org.simplemodeling:cozy-launcher_3`.
+- [x] Verify `repository/cozy/coursier-channel.json` contains or preserves `cozy`.
+- [x] Verify `cozy` points to `org.simplemodeling:cozy-launcher_3:<release-version>`.
+- [x] Confirm the channel contains both `cozy` and `cozy-runtime` entries.
 
 ## CNCF Launcher
 
-- [ ] Update `project/plugins.sbt` to the released `sbt-cozy` version.
-- [ ] Remove SNAPSHOT version.
-- [ ] Run `sbt --batch test`.
-- [ ] Publish `org.goldenport:cncf_3`.
-- [ ] Verify `repository/textus/coursier-channel.json` contains or preserves `cncf`.
-- [ ] Verify `cncf` points to `org.goldenport:cncf_3:<release-version>`.
+- [x] Update `project/plugins.sbt` to the released `sbt-cozy` version.
+- [x] Remove SNAPSHOT version.
+- [x] Run `sbt --batch test`.
+- [x] Publish `org.goldenport:cncf_3`.
+- [x] Verify `repository/textus/coursier-channel.json` contains or preserves `cncf`.
+- [x] Verify `cncf` points to `org.goldenport:cncf_3:<release-version>`.
 
 ## Textus Launcher
 
-- [ ] Update `project/plugins.sbt` to the released `sbt-cozy` version.
-- [ ] Remove SNAPSHOT version.
-- [ ] Run `sbt --batch test`.
-- [ ] Publish `org.goldenport:textus_3`.
-- [ ] Verify `repository/textus/coursier-channel.json` contains or preserves `textus`.
-- [ ] Verify `textus` points to `org.goldenport:textus_3:<release-version>`.
-- [ ] Confirm the channel contains both `cncf` and `textus` entries.
+- [x] Update `project/plugins.sbt` to the released `sbt-cozy` version.
+- [x] Remove SNAPSHOT version.
+- [x] Run `sbt --batch test`.
+- [x] Publish `org.goldenport:textus_3`.
+- [x] Verify `repository/textus/coursier-channel.json` contains or preserves `textus`.
+- [x] Verify `textus` points to `org.goldenport:textus_3:<release-version>`.
+- [x] Confirm the channel contains both `cncf` and `textus` entries.
 
 ## Application CARs
 
