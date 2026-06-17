@@ -23,7 +23,7 @@ import org.goldenport.util.StringUtils
  *  version Mar. 31, 2026
  *  version Apr. 28, 2026
  *  version May. 10, 2026
- * @version Jun. 01, 2026
+ * @version Jun. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 final class RuntimeContext(
@@ -139,6 +139,17 @@ final class RuntimeContext(
       executionTaskId = taskId
     ))
 
+  def noteExecutionDiagnostics(
+    traceId: Option[String],
+    executionId: Option[String],
+    failure: Option[String]
+  ): Unit =
+    updateExecutionMetadata(_.copy(
+      traceId = traceId,
+      executionId = executionId,
+      failure = failure
+    ))
+
   def clearExecutionMetadata(): Unit =
     _execution_metadata = RuntimeContext.ExecutionMetadata.empty
 }
@@ -150,7 +161,10 @@ object RuntimeContext {
     inlineCallTree: Option[Record] = None,
     sagaId: Option[String] = None,
     executionJobId: Option[String] = None,
-    executionTaskId: Option[String] = None
+    executionTaskId: Option[String] = None,
+    traceId: Option[String] = None,
+    executionId: Option[String] = None,
+    failure: Option[String] = None
   )
 
   object ExecutionMetadata {

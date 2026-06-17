@@ -33,7 +33,7 @@ import io.circe.parser.parse
 /*
  * @since   May. 18, 2026
  *  version May. 24, 2026
- * @version Jun.  5, 2026
+ * @version Jun. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 object StaticFormAppRendererSupport {
@@ -89,6 +89,9 @@ object StaticFormAppRendererSupport {
 
     def value(name: String): String =
       PropertyValueResolver.value(values, name).getOrElse("")
+
+    lazy val resultBodyJson: Option[Json] =
+      PropertyValueResolver.value(values, "result.body").flatMap(parse(_).toOption)
   }
   final case class FormResultProperties(
     page: FormPageProperties,

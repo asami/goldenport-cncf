@@ -1758,6 +1758,10 @@ Future Web/platform development item.
 - First implementation direction:
   - start with reusable widgets needed by InformationSpace / Knowledge Editor
     pages;
+  - provide a generic aggregate edit context for staged, partial editor updates
+    before explicit save/discard;
+  - keep development form diagnostics tied to the triggering execution and
+    CallTree, instead of relying on a mutable global latest execution;
   - generalize them into Web UI DSL, Bootstrap Core, Material Design profile,
     and UX profile metadata;
   - preserve Static Form Web App compatibility;

@@ -4,15 +4,19 @@ import io.circe.ACursor
 import io.circe.HCursor
 import io.circe.Json
 import io.circe.parser.parse
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
 import org.goldenport.http.HttpResponse
 import org.goldenport.record.Record
+import org.goldenport.record.io.RecordEncoder
 import org.goldenport.cncf.context.RuntimeContext
 import org.goldenport.cncf.naming.NamingConventions
 
 /*
  * @since   Apr. 15, 2026
  *  version Apr. 21, 2026
- * @version May. 27, 2026
+ *  version May. 27, 2026
+ * @version Jun. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class FormResultMetadata(
@@ -105,14 +109,42 @@ object FormResultMetadata {
   ): Map[String, String] = {
     val calltree = metadata.inlineCallTree
     val providers = calltree.toVector.flatMap(_provider_labels).distinct
+    val hasdiagnostics =
+      calltree.nonEmpty ||
+        metadata.traceId.nonEmpty ||
+        metadata.executionId.nonEmpty ||
+        metadata.failure.nonEmpty
     metadata.sagaId.map("result.execution.saga.id" -> _).toMap ++
       metadata.executionJobId.map("result.execution.job.id" -> _).toMap ++
       metadata.executionTaskId.map("result.execution.task.id" -> _).toMap ++
+      metadata.traceId.map("result.execution.trace.id" -> _).toMap ++
+      metadata.executionId.map("result.execution.id" -> _).toMap ++
+      metadata.failure.map("result.execution.failure" -> _).toMap ++
       calltree.map(_ => "result.execution.calltree.captured" -> "true").toMap ++
-      calltree.map(_ => "result.execution.calltree.href" -> "/rest/v1/admin/execution/calltree").toMap ++
-      (if (calltree.nonEmpty) Map("result.execution.history.href" -> "/rest/v1/admin/execution/history") else Map.empty) ++
+      calltree.map(x => "result.execution.calltree.json" -> RecordEncoder.json(x)).toMap ++
+      (if (hasdiagnostics) Map("result.execution.calltree.href" -> _execution_href("/rest/v1/admin/execution/calltree", metadata)) else Map.empty) ++
+      (if (hasdiagnostics) Map("result.execution.history.href" -> _execution_href("/rest/v1/admin/execution/history", metadata)) else Map.empty) ++
       (if (providers.nonEmpty) Map("result.execution.providers" -> providers.mkString(",")) else Map.empty)
   }
+
+  private def _execution_href(
+    base: String,
+    metadata: RuntimeContext.ExecutionMetadata
+  ): String = {
+    val params = Vector(
+      metadata.executionId.map("executionId" -> _),
+      metadata.traceId.map("traceId" -> _)
+    ).flatten
+    if (params.isEmpty)
+      base
+    else
+      base + "?" + params.map { case (key, value) =>
+        s"${_url_encode(key)}=${_url_encode(value)}"
+      }.mkString("&")
+  }
+
+  private def _url_encode(value: String): String =
+    URLEncoder.encode(value, StandardCharsets.UTF_8)
 
   private def _json_metadata_or_empty(body: String): Option[FormResultMetadata] =
     parse(body).toOption.map { json =>

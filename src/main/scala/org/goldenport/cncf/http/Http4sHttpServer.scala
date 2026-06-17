@@ -3,7 +3,7 @@ package org.goldenport.cncf.http
 /*
  * @since   May. 18, 2026
  *  version May. 30, 2026
- * @version Jun.  9, 2026
+ * @version Jun. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 import cats.effect.IO
@@ -3613,7 +3613,7 @@ final class Http4sHttpServer(
             service,
             operation,
             engine.webDescriptor,
-            _with_form_debug_panel_flag(_operation_form_values_for_rerender(app, service, operation, form) ++ _error_values(response)),
+            _with_form_debug_panel_flag(_operation_form_values_for_rerender(app, service, operation, form) ++ _error_values(response, properties.executionMetadata)),
             operationMode = _operation_mode,
             showExecutionDebugPanel = true
           ).getOrElse(_static_form_app_renderer.renderFormResult(properties)), Some(app))
@@ -4984,6 +4984,15 @@ final class Http4sHttpServer(
       "error.status" -> response.code.toString,
       "error.body" -> response.getString.getOrElse("")
     )
+
+  private def _error_values(
+    response: HttpResponse,
+    metadata: RuntimeContext.ExecutionMetadata
+  ): Map[String, String] =
+    _error_values(response) ++
+      FormResultMetadata.executionTemplateValues(metadata).map { case (key, value) =>
+        s"error.diagnostic.${key.stripPrefix("result.execution.")}" -> value
+      }
 
   private def _result_values(response: HttpResponse): Map[String, String] = {
     FormResultMetadata.fromHttpResponse(response).toTemplateValues

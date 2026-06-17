@@ -4,10 +4,11 @@ import org.goldenport.Consequence
 import org.goldenport.cncf.composite.{CompositeQueryEngine, CompositeQueryRequest, CompositeQueryResponse, NamedQuery}
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.subsystem.Subsystem
+import org.goldenport.protocol.Property
 
 /*
  * @since   May. 10, 2026
- * @version May. 10, 2026
+ * @version Jun. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class WebPageContextRequest(
@@ -48,6 +49,8 @@ trait WebPageContextProvider {
 }
 
 object WebPageContextProviderRuntime {
+  private val _page_context_origin_slot = "page-context"
+
   def providers(subsystem: Subsystem): Vector[WebPageContextProvider] =
     subsystem.components.flatMap(_.webPageContextProviders)
 
@@ -56,7 +59,7 @@ object WebPageContextProviderRuntime {
     request: WebPageContextRequest
   )(using ExecutionContext): WebPageContext = {
     val ps = providers(subsystem)
-    val queries = ps.flatMap(_.queries(request))
+    val queries = ps.flatMap(_.queries(request)).map(_with_page_context_origin_slot)
     val response =
       if (queries.isEmpty)
         CompositeQueryResponse(Vector.empty)
@@ -87,5 +90,15 @@ object WebPageContextProviderRuntime {
           acc.merge(WebPageContext(diagnostics = Vector(conclusion.toString)))
       }
     }
+  }
+
+  private def _with_page_context_origin_slot(query: NamedQuery): NamedQuery = {
+    val properties = query.request.properties
+    if (properties.exists(_.name.equalsIgnoreCase("textus.operation.origin.slot")))
+      query
+    else
+      query.copy(request = query.request.copy(
+        properties = properties :+ Property("textus.operation.origin.slot", _page_context_origin_slot, None)
+      ))
   }
 }

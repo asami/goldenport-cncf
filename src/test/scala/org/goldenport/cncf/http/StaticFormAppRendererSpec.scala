@@ -3,7 +3,7 @@ package org.goldenport.cncf.http
 /*
  * @since   May. 18, 2026
  *  version May. 27, 2026
- * @version Jun.  8, 2026
+ * @version Jun. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 import scala.collection.mutable.ListBuffer
@@ -34,6 +34,7 @@ import org.goldenport.protocol.handler.projection.ProjectionCollection
 import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
 import org.goldenport.protocol.spec as spec
 import org.goldenport.record.Record
+import org.goldenport.record.io.RecordEncoder
 import org.goldenport.observation.{Cause, Descriptor, Taxonomy}
 import org.goldenport.schema.{Column, Multiplicity, Schema, ValueDomain, WebColumn, WebValidationHints, XBoolean, XDateTime, XInt, XString}
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
@@ -5753,8 +5754,28 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         service.name,
         operation.name,
         values = Map(
-          "error.status" -> "400",
-          "error.body" -> "Operation.Invalid[missing subject]",
+          "error.status" -> "500",
+          "error.body" -> "openlibrary.org",
+          "error.diagnostic.trace.id" -> "test-runtime-trace-1",
+          "error.diagnostic.id" -> "test-runtime-correlation-1",
+          "error.diagnostic.failure" -> "openlibrary.org",
+          "error.diagnostic.providers" -> "provider:openbd.book.isbn.lookup,provider:openlibrary.book.isbn.lookup",
+          "error.diagnostic.calltree.json" -> RecordEncoder.json(Record.data(
+            "calltree" -> Vector(
+              Record.data(
+                "label" -> "action:TextusKnowledgeEditor.BookEditor.seedBook",
+                "kind" -> "action",
+                "flow" -> Vector(
+                  Record.data(
+                    "label" -> "provider:openlibrary.book.isbn.lookup",
+                    "kind" -> "provider"
+                  )
+                )
+              )
+            )
+          )),
+          "error.diagnostic.calltree.href" -> "/rest/v1/admin/execution/calltree",
+          "error.diagnostic.history.href" -> "/rest/v1/admin/execution/history",
           "textus.debug.executionPanel" -> "true"
         ),
         operationMode = OperationMode.Develop,
@@ -5763,8 +5784,15 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
 
       html should include ("Form submission failed.")
       html should include ("textus-execution-debug-panel")
-      html should include ("CallTree was not captured for this response.")
-      html should include ("Operation.Invalid[missing subject]")
+      html should not include ("error.diagnostic.trace.id")
+      html should not include ("error.diagnostic.providers")
+      html should include ("Execution path")
+      html should include ("test-runtime-trace-1")
+      html should include ("test-runtime-correlation-1")
+      html should include ("provider:openlibrary.book.isbn.lookup")
+      html should include ("data-textus-calltree")
+      html should include ("action:TextusKnowledgeEditor.BookEditor.seedBook")
+      html should include ("openlibrary.org")
     }
 
     "ignore external debug panel flags on operation form input pages" in {
@@ -7577,6 +7605,33 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should not include ("${result.body.data.current.work_title}")
     }
 
+    "resolve legacy result.body.data paths against unwrapped JSON response bodies" in {
+      val properties = StaticFormAppRenderer.FormResultProperties(
+        StaticFormAppRenderer.FormPageProperties(
+          "book-editor",
+          "book",
+          "get-book"
+        ),
+        200,
+        "application/json",
+        """{"current":{"title":"源氏物語"},"counts":{"information_count":2},"information":[{"title":"Book A"}]}"""
+      )
+
+      val html = _renderer.renderFormResult(
+        properties,
+        """<article>
+          |<p>${result.body.data.current.title}</p>
+          |<textus:summary-card title="Information" source="result.body.data.counts.information_count"></textus:summary-card>
+          |<textus:table source="result.body.data.information" pagination="false"></textus:table>
+          |</article>""".stripMargin
+      ).body
+
+      html should include ("源氏物語")
+      html should include ("<strong class=\"display-6 text-primary\">2</strong>")
+      html should include ("Book A")
+      html should not include ("${result.body.data.current.title}")
+    }
+
     "render operation form result through static success template convention before descriptor template" in {
       val subsystem = _aggregate_http_fixture_subsystem(
         Configuration(Map(
@@ -8586,6 +8641,9 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
 
     "expose execution CallTree metadata as result template values" in {
       val metadata = RuntimeContext.ExecutionMetadata(
+        traceId = Some("trace-1"),
+        executionId = Some("execution-1"),
+        failure = Some("openlibrary.org"),
         inlineCallTree = Some(Record.data(
           "calltree" -> Vector(
             Record.data(
@@ -8608,9 +8666,12 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
 
       val values = FormResultMetadata.executionTemplateValues(metadata)
 
+      values("result.execution.trace.id") shouldBe "trace-1"
+      values("result.execution.id") shouldBe "execution-1"
+      values("result.execution.failure") shouldBe "openlibrary.org"
       values("result.execution.calltree.captured") shouldBe "true"
-      values("result.execution.calltree.href") shouldBe "/rest/v1/admin/execution/calltree"
-      values("result.execution.history.href") shouldBe "/rest/v1/admin/execution/history"
+      values("result.execution.calltree.href") shouldBe "/rest/v1/admin/execution/calltree?executionId=execution-1&traceId=trace-1"
+      values("result.execution.history.href") shouldBe "/rest/v1/admin/execution/history?executionId=execution-1&traceId=trace-1"
       values("result.execution.providers") shouldBe "provider:openbd.book.isbn.lookup"
     }
 
@@ -9180,7 +9241,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       js should include ("function debugRecordKey")
       js should include ("function shouldReplaceRecord")
       js should include ("data-debug-event-key")
-      js should include ("""kind === "page-render" || kind === "background"""")
+      js should include ("""kind === "page-render"""")
+      js should include ("function ensureEventSlot")
+      js should include ("data-debug-slot")
+      js should include ("Operation origin slot")
       js should not include ("UoW</span>")
       js should include ("window.TextusCallTree.enhanceAll")
     }
@@ -9830,6 +9894,34 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("Page 1")
       html should not include ("hidden")
       html should not include ("<textus:card-list")
+    }
+
+    "render textus line-list from result rows" in {
+      val properties = StaticFormAppRenderer.FormResultProperties(
+        StaticFormAppRenderer.FormPageProperties(
+          "notice-board",
+          "notice",
+          "search-notices"
+        ),
+        200,
+        "application/json",
+        """{"data":[{"id":"notice_1","title":"Phase12","summary":"Static form validation","recipient_name":"Bob","state":"stable"},{"id":"notice_2","title":"Second","summary":"Follow up","recipient_name":"Alice","state":"editing"}]}"""
+      )
+
+      val html = _renderer.renderFormResult(
+        properties,
+        """<article><textus:line-list source="result.body.data" title="title" subtitle="summary" columns="recipient_name:Recipient,state:State" badge="state" detail-href="/notice/{id}" detail-label="Open" click-row="true"></textus:line-list></article>"""
+      ).body
+
+      html should include ("textus-line-list")
+      html should include ("textus-line-list-item")
+      html should include ("<strong>Phase12</strong>")
+      html should include ("<p class=\"text-secondary mb-1\">Static form validation</p>")
+      html should include ("<dt class=\"col-sm-3\">Recipient</dt><dd class=\"col-sm-9\">Bob</dd>")
+      html should include ("<span class=\"badge text-bg-success\">stable</span>")
+      html should include ("data-textus-row-href=\"/notice/notice_1\"")
+      html should include ("href=\"/notice/notice_1\"")
+      html should not include ("<textus:line-list")
     }
 
     "render table and card detail actions from record fields" in {

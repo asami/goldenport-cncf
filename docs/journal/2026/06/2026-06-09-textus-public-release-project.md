@@ -79,18 +79,18 @@ The release is intentionally projectized because launcher/runtime/channel compat
 - [x] Update `project/plugins.sbt` to the released `sbt-cozy` version.
 - [x] Remove SNAPSHOT version.
 - [x] Run `sbt --batch test`.
-- [x] Publish `org.goldenport:cncf_3`.
+- [x] Publish `org.goldenport:cncf-launcher_3`.
 - [x] Verify `repository/textus/coursier-channel.json` contains or preserves `cncf`.
-- [x] Verify `cncf` points to `org.goldenport:cncf_3:<release-version>`.
+- [x] Verify `cncf` points to `org.goldenport:cncf-launcher_3:<release-version>`.
 
 ## Textus Launcher
 
 - [x] Update `project/plugins.sbt` to the released `sbt-cozy` version.
 - [x] Remove SNAPSHOT version.
 - [x] Run `sbt --batch test`.
-- [x] Publish `org.goldenport:textus_3`.
+- [x] Publish `org.goldenport:textus-launcher_3`.
 - [x] Verify `repository/textus/coursier-channel.json` contains or preserves `textus`.
-- [x] Verify `textus` points to `org.goldenport:textus_3:<release-version>`.
+- [x] Verify `textus` points to `org.goldenport:textus-launcher_3:<release-version>`.
 - [x] Confirm the channel contains both `cncf` and `textus` entries.
 
 ## Application CARs

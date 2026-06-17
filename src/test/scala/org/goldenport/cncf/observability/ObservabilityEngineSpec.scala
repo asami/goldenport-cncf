@@ -23,7 +23,8 @@ import org.goldenport.configuration.{Configuration, ConfigurationTrace, Configur
  * @since   Jan.  8, 2026
  *  version Jan. 20, 2026
  *  version Apr. 15, 2026
- * @version May. 11, 2026
+ *  version May. 11, 2026
+ * @version Jun. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 class ObservabilityEngineSpec extends AnyWordSpec with Matchers with BeforeAndAfterEach {
@@ -536,6 +537,54 @@ class ObservabilityEngineSpec extends AnyWordSpec with Matchers with BeforeAndAf
 
       backend.lines.exists(_.contains("debug-event")) shouldBe false
       backend.lines.exists(_.contains("info-event")) shouldBe true
+    }
+  }
+
+  "execution history origin slots" should {
+    "keep background JavaScript polling from replacing the default latest execution" in {
+      ObservabilityEngine.clearExecutionHistory()
+
+      ObservabilityEngine.recordActionExecution(
+        operation = "BookEditor.getBook",
+        parameters = Record.empty,
+        parametersText = "",
+        outcome = Right(OperationResponse.Scalar("page")),
+        originSlot = "page-render"
+      )
+      ObservabilityEngine.recordActionExecution(
+        operation = "UserNotification.Notification.getNotificationSummary",
+        parameters = Record.empty,
+        parametersText = "",
+        outcome = Right(OperationResponse.Scalar("notification")),
+        originSlot = "background-js"
+      )
+
+      ObservabilityEngine.latestExecution.map(_.operation) shouldBe Some("BookEditor.getBook")
+      ObservabilityEngine.latestExecution(Some("background-js")).map(_.operation) shouldBe Some("UserNotification.Notification.getNotificationSummary")
+      ObservabilityEngine.executionHistory(None, Some("background-js")).map(_.originSlot) shouldBe Vector("background-js")
+    }
+
+    "keep page context provider queries from replacing the default latest execution" in {
+      ObservabilityEngine.clearExecutionHistory()
+
+      ObservabilityEngine.recordActionExecution(
+        operation = "BookEditor.getBook",
+        parameters = Record.empty,
+        parametersText = "",
+        outcome = Right(OperationResponse.Scalar("page")),
+        originSlot = "page-render"
+      )
+      ObservabilityEngine.recordActionExecution(
+        operation = "UserNotification.Notification.getNotificationSummary",
+        parameters = Record.empty,
+        parametersText = "",
+        outcome = Right(OperationResponse.Scalar("notification")),
+        originSlot = "page-context"
+      )
+
+      ObservabilityEngine.latestExecution.map(_.operation) shouldBe Some("BookEditor.getBook")
+      ObservabilityEngine.latestExecution(Some("page-context")).map(_.operation) shouldBe Some("UserNotification.Notification.getNotificationSummary")
+      ObservabilityEngine.executionHistory(None, Some("page-context")).map(_.originSlot) shouldBe Vector("page-context")
     }
   }
 

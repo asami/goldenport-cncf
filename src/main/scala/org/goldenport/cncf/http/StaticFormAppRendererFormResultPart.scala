@@ -31,7 +31,8 @@ import io.circe.parser.parse
 
 /*
  * @since   May. 18, 2026
- * @version May. 24, 2026
+ *  version May. 24, 2026
+ * @version Jun. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 trait StaticFormAppRendererFormResultPart {
@@ -109,13 +110,16 @@ trait StaticFormAppRendererFormResultPart {
   def renderFormResultFragment(
     properties: FormResultProperties,
     template: String
-  ): String =
-    render_template(
+  ): String = {
+    val pageproperties = properties.nextPageProperties
+    val rendered = render_template(
       template,
-      properties.nextPageProperties,
+      pageproperties,
       properties.tableColumns,
       properties.defaultTableView
     )
+    append_execution_debug_panel(rendered, properties, pageproperties)
+  }
 
   def renderErrorTemplate(
     app: Option[String],
@@ -276,15 +280,47 @@ trait StaticFormAppRendererFormResultPart {
       val metadata = properties.executionMetadata
       val calltreeHtml = metadata.inlineCallTree.map(debug_calltree_html).getOrElse("")
       val jobid = metadata.responseJobId.orElse(metadata.debugJobId)
-      val executionJobId = metadata.executionJobId.orElse(jobid)
-      val sagaId = metadata.sagaId
-      val taskId = metadata.executionTaskId
+      val executionjobid = metadata.executionJobId
+        .orElse(jobid)
+        .orElse(debug_page_value(pageProperties, "result.execution.job.id", "error.diagnostic.job.id"))
+      val sagaid = metadata.sagaId
+        .orElse(debug_page_value(pageProperties, "result.execution.saga.id", "error.diagnostic.saga.id"))
+      val taskid = metadata.executionTaskId
+        .orElse(debug_page_value(pageProperties, "result.execution.task.id", "error.diagnostic.task.id"))
+      val traceid = metadata.traceId
+        .orElse(debug_page_value(pageProperties, "result.execution.trace.id", "error.diagnostic.trace.id"))
+      val executionid = metadata.executionId
+        .orElse(debug_page_value(pageProperties, "result.execution.id", "error.diagnostic.id"))
+      val failure = metadata.failure
+        .orElse(debug_page_value(pageProperties, "result.execution.failure", "error.diagnostic.failure"))
+      val providerpath = debug_page_value(pageProperties, "result.execution.providers", "error.diagnostic.providers")
+        .map(_.split(",").toVector.map(_.trim).filter(_.nonEmpty))
+        .getOrElse(Vector.empty)
+      val calltreehref = debug_page_value(pageProperties, "result.execution.calltree.href", "error.diagnostic.calltree.href")
+      val historyhref = debug_page_value(pageProperties, "result.execution.history.href", "error.diagnostic.history.href")
       val joblinks = jobid.map { id =>
-        val appHref = pageProperties.value("result.job.href")
-        val systemHref = s"/web/system/admin/jobs/${escape_path_segment(id)}"
-        val app = if (appHref.nonEmpty) s"""<a class="btn btn-sm btn-outline-primary" href="${escape(appHref)}">Application job</a>""" else ""
-        s"""<div class="d-flex flex-wrap gap-2 mt-2">${app}<a class="btn btn-sm btn-outline-secondary" href="${escape(systemHref)}">System debug job</a></div>"""
+          val apphref = pageProperties.value("result.job.href")
+          val systemhref = s"/web/system/admin/jobs/${escape_path_segment(id)}"
+          val app = if (apphref.nonEmpty) s"""<a class="btn btn-sm btn-outline-primary" href="${escape(apphref)}">Application job</a>""" else ""
+          s"""<div class="d-flex flex-wrap gap-2 mt-2">${app}<a class="btn btn-sm btn-outline-secondary" href="${escape(systemhref)}">System debug job</a></div>"""
       }.getOrElse("")
+      val executionpathhtml =
+        if (providerpath.isEmpty && failure.isEmpty)
+          ""
+        else {
+          val provideritems = providerpath.map(provider =>
+            s"""<li><span class="text-secondary">Provider</span> <code>${escape(provider)}</code></li>"""
+          ).mkString("\n")
+          val failureitem = failure.map(x =>
+            s"""<li><span class="text-secondary">Failure</span> <code>${escape(x)}</code></li>"""
+          ).getOrElse("")
+          s"""<h3 class="h6 mt-3">Execution path</h3>
+             |<ol class="mb-0">
+             |  <li><span class="text-secondary">Operation</span> <code>${escape(properties.operationLabel)}</code></li>
+             |  ${provideritems}
+             |  ${failureitem}
+             |</ol>""".stripMargin
+        }
       val arguments = debug_operation_arguments(pageProperties, properties.fieldConfidentiality)
       val argumentsHtml =
         if (arguments.nonEmpty)
@@ -294,6 +330,12 @@ trait StaticFormAppRendererFormResultPart {
       val effectiveCalltreeHtml =
         if (calltreeHtml.nonEmpty)
           calltreeHtml
+        else if (calltreehref.nonEmpty || historyhref.nonEmpty)
+          s"""<p class="text-secondary mb-2">CallTree was not embedded in this response. Open the captured execution diagnostics below.</p>
+             |<div class="d-flex flex-wrap gap-2">
+             |  ${debug_link_button(calltreehref, "Open execution CallTree")}
+             |  ${debug_link_button(historyhref, "Open execution history")}
+             |</div>""".stripMargin
         else
           """<p class="text-secondary mb-0">CallTree was not captured for this response.</p>"""
       val debugVariant =
@@ -306,9 +348,12 @@ trait StaticFormAppRendererFormResultPart {
            |  <dt class="col-sm-3">Operation</dt><dd class="col-sm-9"><code>${escape(properties.operationLabel)}</code></dd>
            |  <dt class="col-sm-3">HTTP status</dt><dd class="col-sm-9">${properties.status}</dd>
            |  <dt class="col-sm-3">Mode</dt><dd class="col-sm-9">${escape(properties.operationMode.name)}</dd>
-           |  <dt class="col-sm-3">Saga</dt><dd class="col-sm-9">${debug_context_value(sagaId)}</dd>
-           |  <dt class="col-sm-3">Job</dt><dd class="col-sm-9">${debug_context_value(executionJobId)}</dd>
-           |  <dt class="col-sm-3">Task</dt><dd class="col-sm-9">${debug_context_value(taskId)}</dd>
+           |  <dt class="col-sm-3">Saga</dt><dd class="col-sm-9">${debug_context_value(sagaid)}</dd>
+           |  <dt class="col-sm-3">Job</dt><dd class="col-sm-9">${debug_context_value(executionjobid)}</dd>
+           |  <dt class="col-sm-3">Task</dt><dd class="col-sm-9">${debug_context_value(taskid)}</dd>
+           |  <dt class="col-sm-3">Trace ID</dt><dd class="col-sm-9">${debug_context_value(traceid)}</dd>
+           |  <dt class="col-sm-3">Execution ID</dt><dd class="col-sm-9">${debug_context_value(executionid)}</dd>
+           |  <dt class="col-sm-3">Failure</dt><dd class="col-sm-9">${debug_context_value(failure)}</dd>
            |</dl>""".stripMargin
       s"""<section class="container my-4 textus-execution-debug-panel">
          |  <details class="border border-${debugVariant._1} border-2 border-start border-start-4 rounded bg-${debugVariant._1}-subtle shadow-sm">
@@ -316,6 +361,7 @@ trait StaticFormAppRendererFormResultPart {
          |    <div class="border-top border-${debugVariant._1} p-3 bg-${debugVariant._1}-subtle">
          |      ${summary}
          |      ${joblinks}
+         |      ${executionpathhtml}
          |      <h3 class="h6 mt-3">Operation arguments</h3>
          |      ${argumentsHtml}
          |      <h3 class="h6 mt-3">Result body</h3>
@@ -333,6 +379,21 @@ trait StaticFormAppRendererFormResultPart {
     value.filter(_.trim.nonEmpty)
       .map(x => s"""<code>${escape(x)}</code>""")
       .getOrElse("""<span class="text-secondary">none</span>""")
+
+  protected def debug_page_value(
+    pageProperties: FormPageProperties,
+    names: String*
+  ): Option[String] =
+    names.toVector
+      .map(pageProperties.value)
+      .find(_.trim.nonEmpty)
+
+  protected def debug_link_button(
+    href: Option[String],
+    label: String
+  ): String =
+    href.map(x => s"""<a class="btn btn-sm btn-outline-secondary" href="${escape(x)}">${escape(label)}</a>""")
+      .getOrElse("")
 
   protected def is_development_operation_mode(
     mode: OperationMode

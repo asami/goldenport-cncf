@@ -28,7 +28,7 @@ import org.typelevel.ci.CIStringSyntax
  * @since   Apr. 24, 2026
  *  version Apr. 25, 2026
  *  version May. 25, 2026
- * @version Jun.  8, 2026
+ * @version Jun. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers {
@@ -662,6 +662,8 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers {
       StaticFormAppAssets.textusFormDebugJs should include ("url.searchParams.set")
       StaticFormAppAssets.textusFormDebugJs should include ("[redacted]")
       StaticFormAppAssets.textusFormDebugJs should include ("data-debug-events")
+      StaticFormAppAssets.textusFormDebugJs should include ("Operation origin slot")
+      StaticFormAppAssets.textusFormDebugJs should include ("data-debug-slot")
       StaticFormAppAssets.textusFormDebugJs should include ("Request label")
       StaticFormAppAssets.textusFormDebugJs should include ("Optional")
       StaticFormAppAssets.textusFormDebugJs should include ("Timestamp")

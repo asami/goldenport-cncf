@@ -27,7 +27,7 @@ import org.goldenport.cncf.service.{Service, ServiceGroup}
 import org.goldenport.cncf.receptor.{Receptor, ReceptorGroup}
 import org.goldenport.cncf.cli.RunMode
 import org.goldenport.cncf.cli.renderer.{CliTreeJsonRenderer, CliTreeYamlRenderer}
-import org.goldenport.cncf.entity.aggregate.{AggregateCollection, AggregateSpace, Repository, AggregateDefinition}
+import org.goldenport.cncf.entity.aggregate.{AggregateCollection, AggregateEditContextSpace, AggregateSpace, Repository, AggregateDefinition}
 import org.goldenport.cncf.entity.runtime.{EntityCollection, EntitySpace}
 import org.goldenport.cncf.entity.view.{Browser, ViewCollection, ViewSpace, ViewDefinition}
 import org.goldenport.cncf.information.InformationSpace
@@ -54,7 +54,8 @@ import org.goldenport.schema.{DataType, XString}
  *  version Feb. 17, 2026
  *  version Mar. 30, 2026
  *  version Apr. 30, 2026
- * @version May. 20, 2026
+ *  version May. 20, 2026
+ * @version Jun. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class Component() extends Component.Core.Holder {
@@ -82,6 +83,7 @@ abstract class Component() extends Component.Core.Holder {
   private var _collections_bootstrapped: Boolean = false
   val entitySpace: EntitySpace = new EntitySpace()
   val aggregateSpace: AggregateSpace = new AggregateSpace()
+  val aggregateEditContextSpace: AggregateEditContextSpace = new AggregateEditContextSpace()
   val viewSpace: ViewSpace = new ViewSpace()
   val knowledgeSpace: KnowledgeSpace = new KnowledgeSpace()
   val informationSpace: InformationSpace = new InformationSpace()

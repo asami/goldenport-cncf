@@ -53,7 +53,8 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
  * @since   Jan.  7, 2026
  *  version Jan. 20, 2026
  *  version Feb. 19, 2026
- * @version May. 31, 2026
+ *  version May. 31, 2026
+ * @version Jun. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 class AdminComponent() extends Component {
@@ -1196,7 +1197,7 @@ object AdminComponent {
     request: Request
   ) extends QueryAction() {
     def createCall(core: ActionCall.Core): ActionCall =
-      ExecutionCalltreeActionCall(core)
+      ExecutionCalltreeActionCall(core, request)
   }
 
   private final case class ExecutionHistoryAction(
@@ -1311,15 +1312,27 @@ object AdminComponent {
   }
 
   private final case class ExecutionCalltreeActionCall(
-    core: ActionCall.Core
+    core: ActionCall.Core,
+    calltreeRequest: Request
   ) extends ProcedureActionCall {
     def execute(): Consequence[OperationResponse] = {
-      val record = ObservabilityEngine.latestExecution
+      val originslot = _request_value(calltreeRequest, "originSlot")
+        .orElse(_request_value(calltreeRequest, "origin_slot"))
+        .orElse(_request_value(calltreeRequest, "requestKind"))
+        .orElse(_request_value(calltreeRequest, "request_kind"))
+      val executionid = _request_value(calltreeRequest, "executionId")
+        .orElse(_request_value(calltreeRequest, "execution_id"))
+      val traceid = _request_value(calltreeRequest, "traceId")
+        .orElse(_request_value(calltreeRequest, "trace_id"))
+      val record = ObservabilityEngine.findExecution(executionid, traceid, originslot)
+        .orElse(ObservabilityEngine.latestExecution(originslot))
         .map(_.calltreeRecord)
         .getOrElse(
           Record.data(
             "status" -> "empty",
-            "message" -> "No retained action execution is available."
+            "message" -> originslot
+              .map(slot => s"No retained action execution is available for origin slot: $slot.")
+              .getOrElse("No retained non-background action execution is available.")
           )
         )
       Consequence.success(OperationResponse.RecordResponse(record))
@@ -1331,15 +1344,31 @@ object AdminComponent {
     historyRequest: Request
   ) extends ProcedureActionCall {
     def execute(): Consequence[OperationResponse] = {
-      val operationfilter = _request_property(historyRequest, "operation")
-        .orElse(_request_property(historyRequest, "operation_contains"))
-      val entries = ObservabilityEngine.executionHistory(operationfilter)
+      val operationfilter = _request_value(historyRequest, "operation")
+        .orElse(_request_value(historyRequest, "operation_contains"))
+      val originslot = _request_value(historyRequest, "originSlot")
+        .orElse(_request_value(historyRequest, "origin_slot"))
+        .orElse(_request_value(historyRequest, "requestKind"))
+        .orElse(_request_value(historyRequest, "request_kind"))
+      val executionid = _request_value(historyRequest, "executionId")
+        .orElse(_request_value(historyRequest, "execution_id"))
+      val traceid = _request_value(historyRequest, "traceId")
+        .orElse(_request_value(historyRequest, "trace_id"))
+      val entries = executionid.orElse(traceid) match {
+        case Some(_) =>
+          ObservabilityEngine.findExecution(executionid, traceid, originslot).toVector
+        case None =>
+          ObservabilityEngine.executionHistory(operationfilter, originslot)
+      }
       val config = ObservabilityEngine.executionHistoryConfig
       val record = Record.data(
         "recent_limit" -> config.recentLimit,
         "filtered_limit" -> config.filteredLimit,
         "filter_count" -> config.filters.size,
         "operation_filter" -> operationfilter.getOrElse(""),
+        "origin_slot_filter" -> originslot.getOrElse(""),
+        "trace_id_filter" -> traceid.getOrElse(""),
+        "execution_id_filter" -> executionid.getOrElse(""),
         "count" -> entries.size,
         "executions" -> entries.map(_.toRecord)
       )
@@ -1354,8 +1383,11 @@ object AdminComponent {
       Consequence.success(OperationResponse.RecordResponse(_execution_diagnostics_record()))
   }
 
-  private def _request_property(request: Request, name: String): Option[String] =
-    request.properties.find(_.name == name).map(_.value.toString).filter(_.nonEmpty)
+  private def _request_value(request: Request, name: String): Option[String] =
+    (request.properties.find(_.name.equalsIgnoreCase(name)) orElse
+      request.arguments.find(_.name.equalsIgnoreCase(name)))
+      .map(_.value.toString.trim)
+      .filter(_.nonEmpty)
 
   private def _execution_diagnostics_record(): Record =
     Record.data(
@@ -1677,7 +1709,7 @@ object AdminComponent {
   ) extends ProcedureActionCall {
     def execute(): Consequence[OperationResponse] = {
       val key = describeRequest.arguments.headOption.map(_.printValue)
-        .orElse(_request_property(describeRequest, "key"))
+        .orElse(_request_value(describeRequest, "key"))
         .getOrElse("")
       _declared_runtime_variation_points.find(_.key == key) match {
         case Some(point) =>

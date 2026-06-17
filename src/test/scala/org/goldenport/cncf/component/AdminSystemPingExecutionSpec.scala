@@ -14,7 +14,7 @@ import org.goldenport.cncf.subsystem.resolver.OperationResolver
 import org.goldenport.cncf.subsystem.resolver.OperationResolver.ResolutionResult
 import org.goldenport.cncf.CncfVersion
 import org.goldenport.configuration.{Configuration, ConfigurationValue}
-import org.goldenport.protocol.Request
+import org.goldenport.protocol.{Argument, Request}
 import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.record.Record
 import org.goldenport.schema.DataConfidentiality
@@ -27,7 +27,8 @@ import org.scalatest.wordspec.AnyWordSpec
  *  version Mar. 28, 2026
  *  version Apr. 11, 2026
  *  version Apr. 14, 2026
- * @version May. 11, 2026
+ *  version May. 11, 2026
+ * @version Jun. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 final class AdminSystemPingExecutionSpec
@@ -128,6 +129,97 @@ final class AdminSystemPingExecutionSpec
             record.getAny("calltree") shouldBe defined
           case other =>
             fail(s"expected execution calltree record but got $other")
+        }
+      }
+    }
+
+    "filter admin execution inspection by origin slot request arguments" in {
+      withAliasContext(RunMode.Command, Configuration.empty) { (_, _) =>
+        ObservabilityEngine.clearExecutionHistory()
+        ObservabilityEngine.recordActionExecution(
+          operation = "app.page.render",
+          parameters = Record.empty,
+          parametersText = "",
+          outcome = Right(OperationResponse.Scalar("page")),
+          calltree = None,
+          traceId = Some("trace-page"),
+          executionId = Some("execution-page"),
+          originSlot = "operation"
+        )
+        ObservabilityEngine.recordActionExecution(
+          operation = "app.session.poll",
+          parameters = Record.empty,
+          parametersText = "",
+          outcome = Right(OperationResponse.Scalar("poll")),
+          calltree = None,
+          traceId = Some("trace-poll"),
+          executionId = Some("execution-poll"),
+          originSlot = "background-js"
+        )
+
+        val subsystem = DefaultSubsystemFactory.default(Some("command"))
+        val admincomponent = subsystem.components
+          .collectFirst { case comp if comp.name == "admin" => comp }
+          .getOrElse(fail("admin component not found"))
+        val resolver = subsystem.resolver
+        val calltreerequest = buildRequest(resolver, "admin.execution.calltree")
+        val backgroundcalltreerequest =
+          calltreerequest.copy(arguments = List(Argument("originSlot", "background-js", None)))
+        val backgroundhistoryrequest =
+          buildRequest(resolver, "admin.execution.history")
+            .copy(arguments = List(Argument("originSlot", "background-js", None)))
+        val executioncalltreerequest =
+          calltreerequest.copy(arguments = List(Argument("executionId", "execution-page", None)))
+        val executionhistoryrequest =
+          buildRequest(resolver, "admin.execution.history")
+            .copy(arguments = List(Argument("executionId", "execution-page", None)))
+
+        _execute_operation(admincomponent, calltreerequest) match {
+          case Consequence.Success(OperationResponse.RecordResponse(record)) =>
+            record.getString("operation") shouldBe Some("app.page.render")
+            record.getString("origin_slot") shouldBe Some("operation")
+          case other =>
+            fail(s"expected default execution calltree record but got $other")
+        }
+
+        _execute_operation(admincomponent, backgroundcalltreerequest) match {
+          case Consequence.Success(OperationResponse.RecordResponse(record)) =>
+            record.getString("operation") shouldBe Some("app.session.poll")
+            record.getString("origin_slot") shouldBe Some("background-js")
+          case other =>
+            fail(s"expected background execution calltree record but got $other")
+        }
+
+        _execute_operation(admincomponent, backgroundhistoryrequest) match {
+          case Consequence.Success(OperationResponse.RecordResponse(record)) =>
+            record.getString("origin_slot_filter") shouldBe Some("background-js")
+            record.getString("count") shouldBe Some("1")
+            val executions = record.getAny("executions").collect { case xs: Seq[?] => xs }.getOrElse(fail("executions missing"))
+            val execution = executions.head.asInstanceOf[org.goldenport.record.Record]
+            execution.getString("operation") shouldBe Some("app.session.poll")
+            execution.getString("origin_slot") shouldBe Some("background-js")
+          case other =>
+            fail(s"expected background execution history record but got $other")
+        }
+
+        _execute_operation(admincomponent, executioncalltreerequest) match {
+          case Consequence.Success(OperationResponse.RecordResponse(record)) =>
+            record.getString("operation") shouldBe Some("app.page.render")
+            record.getString("execution_id") shouldBe Some("execution-page")
+          case other =>
+            fail(s"expected execution-specific calltree record but got $other")
+        }
+
+        _execute_operation(admincomponent, executionhistoryrequest) match {
+          case Consequence.Success(OperationResponse.RecordResponse(record)) =>
+            record.getString("execution_id_filter") shouldBe Some("execution-page")
+            record.getString("count") shouldBe Some("1")
+            val executions = record.getAny("executions").collect { case xs: Seq[?] => xs }.getOrElse(fail("executions missing"))
+            val execution = executions.head.asInstanceOf[org.goldenport.record.Record]
+            execution.getString("operation") shouldBe Some("app.page.render")
+            execution.getString("execution_id") shouldBe Some("execution-page")
+          case other =>
+            fail(s"expected execution-specific history record but got $other")
         }
       }
     }

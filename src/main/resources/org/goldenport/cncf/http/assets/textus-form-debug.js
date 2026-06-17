@@ -537,7 +537,7 @@
       '<details class="card border-secondary-subtle bg-body-tertiary">',
       '<summary class="card-header fw-semibold">Development execution diagnostics</summary>',
       '<div class="card-body">',
-      '<p class="text-secondary small">CNCF development-only diagnostics for Form API requests made by this page.</p>',
+      '<p class="text-secondary small">CNCF development-only diagnostics grouped by operation origin slot. Repeated JavaScript requests are kept as history within their slot.</p>',
       '<div class="d-flex flex-column gap-3" data-debug-events></div>',
       '</div>',
       '</details>'
@@ -642,7 +642,7 @@
 
   function shouldReplaceRecord(record) {
     const kind = record.kind || "interactive";
-    return kind === "page-render" || kind === "background";
+    return kind === "page-render";
   }
 
   function replaceExistingRecord(events, key) {
@@ -652,17 +652,55 @@
     });
   }
 
+  function debugSlotKey(record) {
+    return record.kind || "interactive";
+  }
+
+  function ensureEventSlot(events, record) {
+    const key = debugSlotKey(record);
+    let slot = events.querySelector('[data-debug-slot="' + cssEscape(key) + '"]');
+    if (!slot) {
+      slot = document.createElement("section");
+      slot.className = "border rounded bg-white";
+      slot.setAttribute("data-debug-slot", key);
+      slot.innerHTML = [
+        '<div class="px-3 py-2 border-bottom d-flex flex-wrap align-items-center gap-2">',
+        '<span class="fw-semibold">Operation origin slot</span>',
+        '<code>' + escapeHtml(key) + '</code>',
+        '<span class="badge text-bg-secondary ms-auto" data-debug-slot-count>0</span>',
+        '</div>',
+        '<div class="p-2 d-flex flex-column gap-2" data-debug-slot-events></div>'
+      ].join("");
+      events.appendChild(slot);
+    }
+    return slot.querySelector("[data-debug-slot-events]") || slot;
+  }
+
+  function cssEscape(value) {
+    if (window.CSS && typeof window.CSS.escape === "function") return window.CSS.escape(String(value || ""));
+    return String(value || "").replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+  }
+
+  function updateSlotCount(slotEvents) {
+    const slot = slotEvents && slotEvents.closest("[data-debug-slot]");
+    if (!slot) return;
+    const count = slot.querySelectorAll("[data-debug-event-key]").length;
+    const badge = slot.querySelector("[data-debug-slot-count]");
+    if (badge) badge.textContent = String(count);
+  }
+
   function renderRecord(record) {
     const panel = ensurePanel();
     if (!panel) return;
     const events = panel.querySelector("[data-debug-events]");
+    const slotEvents = ensureEventSlot(events, record);
     const ok = Boolean(record.ok);
     const variant = ok ? "success" : "danger";
     const body = record.body || "";
     const args = JSON.stringify(record.arguments || {}, null, 2);
     const calltree = callTreeHtml(record.calltree);
     const key = debugRecordKey(record);
-    if (shouldReplaceRecord(record)) replaceExistingRecord(events, key);
+    if (shouldReplaceRecord(record)) replaceExistingRecord(slotEvents, key);
     const event = document.createElement("details");
     event.className = "card border-" + variant + "-subtle bg-" + variant + "-subtle";
     event.open = false;
@@ -692,7 +730,8 @@
       '</div>',
       '</details>'
     ].join("");
-    events.appendChild(event);
+    slotEvents.appendChild(event);
+    updateSlotCount(slotEvents);
     bindPayloadToggles(event);
     closeDiagnosticsDetails(panel);
     if (record.calltree && window.TextusCallTree && typeof window.TextusCallTree.enhanceAll === "function") {

@@ -23,6 +23,7 @@ import org.goldenport.protocol.{Argument, Property, Request as ProtocolRequest}
 import org.goldenport.protocol.spec.ParameterDefinition
 import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.record.Record
+import org.goldenport.record.io.RecordDecoder
 import org.goldenport.value.BaseContent
 import org.goldenport.schema.{DataConfidentiality, Multiplicity, ValueDomain, XBoolean, XDateTime, XInt, XString}
 import org.simplemodeling.model.datatype.EntityId
@@ -31,7 +32,7 @@ import io.circe.parser.parse
 
 /*
  * @since   May. 18, 2026
- * @version May. 18, 2026
+ * @version Jun. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 trait StaticFormAppRendererFormPart {
@@ -477,7 +478,10 @@ trait StaticFormAppRendererFormPart {
     }
 
   protected def form_error_panel(values: Map[String, String]): String = {
-    val xs = values.filter { case (key, _) => key == "error" || key.startsWith("error.") }
+    val xs = values.filter { case (key, _) =>
+      (key == "error" || key.startsWith("error.")) &&
+        !key.startsWith("error.diagnostic.")
+    }
     if (xs.isEmpty) ""
     else
       s"""<div class="alert alert-danger admin-feedback" role="alert">
@@ -527,11 +531,22 @@ trait StaticFormAppRendererFormPart {
         context.operationName,
         values
       )
+      val executionmetadata = RuntimeContext.ExecutionMetadata(
+        sagaId = values.get("error.diagnostic.saga.id"),
+        executionJobId = values.get("error.diagnostic.job.id"),
+        executionTaskId = values.get("error.diagnostic.task.id"),
+        traceId = values.get("error.diagnostic.trace.id"),
+        executionId = values.get("error.diagnostic.id"),
+        failure = values.get("error.diagnostic.failure"),
+        inlineCallTree = values.get("error.diagnostic.calltree.json")
+          .flatMap(x => new RecordDecoder().json(x).toOption)
+      )
       execution_debug_panel(FormResultProperties(
         pageProperties,
         status,
         "text/plain",
         body,
+        executionMetadata = executionmetadata,
         operationMode = operationMode,
         fieldConfidentiality = field_confidentiality(context.webSchema)
       ), pageProperties)

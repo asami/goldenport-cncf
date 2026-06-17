@@ -724,16 +724,18 @@ flattened into untyped fields.
 
 ### Initial Tasks
 
-- [x] Define the editor-facing relationship model for book-adjacent
-      relationships such as `authored-by`, `edited-by`, `translated-by`,
-      `published-by`, `publication-of`, `volume-of`, `edition-of`,
-      `part-of-series`, `has-part`, `cites`, and `has-subject`.
+- [x] Define the editor-facing Information Link semantic model for
+      book-adjacent links such as `authored-by`, `edited-by`,
+      `translated-by`, `published-by`, `publication-of`, `volume-of`,
+      `edition-of`, `part-of-series`, `has-part`, `cites`, and
+      `has-subject`.
 - [x] Add qualifier fields for author/contributor order, contributor role,
       edition number, volume number, chapter/section order, translation
       language, citation context, page range, confidence, evidence, and source
       provenance.
-- [x] Add relationship editing surfaces that let users review, add, update, and
-      remove relationship candidates without editing raw RDF triples.
+- [x] Add Information Link editing surfaces that let users review target
+      Information, RDF predicates, Knowledge relationship kind, qualifiers, and
+      evidence without editing raw RDF triples.
 - [x] Keep canonical relationship/fact data in Information/Knowledge
       relationship structures, while node/detail pages expose derived traversal
       convenience summaries.
@@ -743,18 +745,19 @@ flattened into untyped fields.
 
 ### Completion Notes
 
-- KE-14 adds a Book `Relationships` summary and dedicated
-  `relationship-edit` page in `textus-knowledge-editor`.
-- Relationship edits are stored as `InformationFieldEvent` review events with
-  `fieldPath=relationships` and `transformation=book-relationship-review`.
-- Book materialization applies explicit relationship reviews before KE-13
-  association/link fallback relationships, and copies reviewed values into
-  `KnowledgeRelationship.qualifiers`.
+- KE-14 was consolidated after implementation: TKE no longer has a separate
+  `Relationships` accordion or `relationship-edit` page. The canonical Book
+  editing surface is `Information Links`.
+- Information Link semantic edits are stored as `InformationFieldEvent` review
+  events with `fieldPath=informationLinks` and
+  `transformation=information-link-review`.
+- Book materialization applies explicit Information Link reviews first and
+  copies reviewed values into generated `KnowledgeRelationship.qualifiers`.
 - v1 qualifier keys are string values: `order`, `role`, `editionNumber`,
   `volumeNumber`, `language`, `pageRange`, `citationContext`, `confidence`,
   `source`, and `evidenceSummary`.
 - TKE policy is recorded in
-  `/Users/asami/src/dev2026/textus-knowledge-editor/docs/notes/book-relationship-qualifier-policy.md`.
+  `/Users/asami/src/dev2026/textus-knowledge-editor/docs/notes/book-information-link-policy.md`.
 - Focused CNCF and TKE specs cover reviewed author qualifier persistence and
   materialization.
 - Authority merge/split remains KE-15; multi-volume/book-set import remains
@@ -998,6 +1001,10 @@ knowledge-editor phase.
       metadata where they are broadly useful.
 - [ ] Add or extend widgets when screens need new output shape, instead of
       adding application-local JavaScript rendering.
+- [x] Add generic aggregate edit context support for staged editor updates
+      before explicit save/discard.
+- [x] Keep development form diagnostics linked to the triggering execution and
+      CallTree instead of a mutable global latest execution.
 - [ ] Add Web developer documentation for authoring with the DSL/profile model.
 
 ### Source Notes

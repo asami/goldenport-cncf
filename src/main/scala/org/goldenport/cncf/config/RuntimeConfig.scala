@@ -21,7 +21,7 @@ import org.goldenport.cncf.blob.BlobStoreConfig
  *  version Feb.  1, 2026
  *  version Mar. 28, 2026
  *  version Apr. 30, 2026
- * @version Jun.  3, 2026
+ * @version Jun. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class RuntimeConfig(
@@ -72,7 +72,7 @@ object RuntimeConfig {
 
     def validationError(operationmode: OperationMode): Option[String] =
       if (enabled && !operationmode.allowsDebugAuth)
-        Some("textus.debug.auth.enabled is only allowed in develop or test operation mode")
+        Some("textus.debug.auth.enabled is only allowed in demo, develop, or test operation mode")
       else
         None
   }
@@ -719,7 +719,7 @@ enum OperationMode(val name: String) {
     this == OperationMode.Develop || this == OperationMode.Test
 
   def allowsDebugAuth: Boolean =
-    this == OperationMode.Develop || this == OperationMode.Test
+    this == OperationMode.Demo || this == OperationMode.Develop || this == OperationMode.Test
 }
 
 object OperationMode {

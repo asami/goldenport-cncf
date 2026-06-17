@@ -52,7 +52,7 @@ import org.goldenport.cncf.metrics.EntityAccessMetricsRegistry
  *  version Jan. 31, 2026
  *  version Feb.  4, 2026
  *  version Apr. 30, 2026
- * @version Jun.  9, 2026
+ * @version Jun. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Subsystem(
@@ -287,6 +287,12 @@ final class Subsystem(
     _execute_with_metadata(request, None)
   }
 
+  def executeWithMetadata(
+    request: Request,
+    httpRequest: HttpRequest
+  ): Consequence[ExecutionResult] =
+    _execute_with_metadata(request, Some(httpRequest))
+
   def executeQueryOnlyWithMetadata(request: Request): Consequence[ExecutionResult] = {
     _execute_query_only_with_metadata(request, None)
   }
@@ -295,14 +301,19 @@ final class Subsystem(
     request: Request,
     httpRequest: Option[HttpRequest]
   ): Consequence[ExecutionResult] = {
+    val requestwithhttpproperties =
+      httpRequest
+        .map(req => request.copy(properties = request.properties ++ _framework_properties_from_http(req)))
+        .getOrElse(request)
+    var lastexecutionmetadata = RuntimeContext.ExecutionMetadata.empty
     val r: Consequence[ExecutionResult] = for {
-      route <- _resolve_route(request) match {
+      route <- _resolve_route(requestwithhttpproperties) match {
         case Some(r) =>
           Consequence.success(r)
         case None =>
           Consequence.operationNotFound("operation route")
       }
-      normalizedRequest <- _prepare_filebundle_parameters(route._3, request)
+      normalizedRequest <- _prepare_filebundle_parameters(route._3, requestwithhttpproperties)
       response <- {
         val (component, _, _) = route
         val domainRequest = _domain_request(normalizedRequest)
@@ -322,19 +333,34 @@ final class Subsystem(
             oprequest.flatMap {
               case action: Action =>
                 component.logic.executeAction(action, executionContext).flatMap { response =>
+                  lastexecutionmetadata = executionContext.runtime.executionMetadata
                   _apply_operation_association_bindings(route, domainRequest, response, executionContext).map { bound =>
-                    ExecutionResult(bound, executionContext.runtime.executionMetadata)
+                    lastexecutionmetadata = executionContext.runtime.executionMetadata
+                    ExecutionResult(bound, lastexecutionmetadata)
                   }
+                }.recoverWith { conclusion =>
+                  lastexecutionmetadata = executionContext.runtime.executionMetadata
+                  Consequence.Failure(conclusion)
                 }
               case _ =>
                 Consequence.argumentInvalid("OperationRequest must be Action")
-              }
+            }
           }
         }
       }
     } yield response
-    _observe_execute_failure(request, r)
-    r
+    _observe_execute_failure(requestwithhttpproperties, r)
+    httpRequest match {
+      case Some(_) =>
+        r.recover { conclusion =>
+          ExecutionResult(
+            OperationResponse.Http(_failure_response(conclusion)),
+            lastexecutionmetadata
+          )
+        }
+      case None =>
+        r
+    }
   }
 
   private def _execute_query_only_with_metadata(
@@ -862,6 +888,8 @@ final class Subsystem(
       false
     else if (_is_job_input_property(name))
       false
+    else if (_is_operation_origin_slot_property(name))
+      false
     else {
       val lower = name.toLowerCase(java.util.Locale.ROOT)
       name.startsWith("textus.") ||
@@ -869,6 +897,15 @@ final class Subsystem(
         lower == "x-textus-session" ||
         lower.startsWith("x-textus-debug-")
     }
+
+  private def _is_operation_origin_slot_property(
+    name: String
+  ): Boolean = {
+    val lower = Option(name).getOrElse("").toLowerCase(java.util.Locale.ROOT)
+      _http_name_matches(lower, "x-textus-debug-request-kind") ||
+      _http_name_matches(lower, "x-textus-operation-origin-slot") ||
+      _http_name_matches(lower, "textus.operation.origin.slot")
+  }
 
   private def _is_job_input_property(
     name: String
@@ -1148,15 +1185,19 @@ final class Subsystem(
       req.form.getString(name).filter(_.nonEmpty).map(value => Property(name, value, None))
     }
     val header = req.header.asMap.toVector.collect {
-      case (name, value) if name.equalsIgnoreCase("x-textus-debug-calltree") =>
+      case (name, value) if _http_name_matches(name, "x-textus-debug-calltree") =>
         Property("x-textus-debug-calltree", value.toString, None)
-      case (name, value) if name.equalsIgnoreCase("x-textus-debug-trace-job") =>
+      case (name, value) if _http_name_matches(name, "x-textus-debug-trace-job") =>
         Property("x-textus-debug-trace-job", value.toString, None)
-      case (name, value) if name.equalsIgnoreCase("x-textus-debug-save-calltree") =>
+      case (name, value) if _http_name_matches(name, "x-textus-debug-save-calltree") =>
         Property("x-textus-debug-save-calltree", value.toString, None)
-      case (name, value) if name.equalsIgnoreCase("x-textus-debug-calltree-sql") =>
+      case (name, value) if _http_name_matches(name, "x-textus-debug-calltree-sql") =>
         Property("x-textus-debug-calltree-sql", value.toString, None)
-      case (name, value) if name.equalsIgnoreCase("x-textus-session") =>
+      case (name, value) if _http_name_matches(name, "x-textus-debug-request-kind") =>
+        Property("x-textus-debug-request-kind", value.toString, None)
+      case (name, value) if _http_name_matches(name, "x-textus-operation-origin-slot") =>
+        Property("x-textus-operation-origin-slot", value.toString, None)
+      case (name, value) if _http_name_matches(name, "x-textus-session") =>
         Property("x-textus-session", value.toString, None)
     }
     (query ++ form ++ header).toList
@@ -1204,6 +1245,18 @@ final class Subsystem(
     name.startsWith("textus.") ||
       name.startsWith("cncf.") ||
       name.startsWith("query.")
+
+  private def _http_name_matches(
+    name: String,
+    canonical: String
+  ): Boolean =
+    _http_name_key(name) == _http_name_key(canonical)
+
+  private def _http_name_key(name: String): String =
+    Option(name)
+      .getOrElse("")
+      .toLowerCase(java.util.Locale.ROOT)
+      .filter(_.isLetterOrDigit)
 
   private def _http_form_framework_passthrough_keys: Vector[String] =
     Vector(

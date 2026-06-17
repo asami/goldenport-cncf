@@ -18,7 +18,8 @@ import org.goldenport.observation.calltree.CallTree
  * @since   Jan.  7, 2026
  *  version Jan. 29, 2026
  *  version Apr. 25, 2026
- * @version May. 11, 2026
+ *  version May. 11, 2026
+ * @version Jun. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class OperationContext(
@@ -36,10 +37,12 @@ object ObservabilityEngine {
     )
 
   final case class ExecutionHistoryFilter(
-    operationContains: Option[String] = None
+    operationContains: Option[String] = None,
+    originSlot: Option[String] = None
   ) {
     def matches(entry: ExecutionHistoryEntry): Boolean =
-      operationContains.forall(entry.operation.contains)
+      operationContains.forall(entry.operation.contains) &&
+        originSlot.forall(_ == entry.originSlot)
   }
 
   final case class ExecutionHistoryConfig(
@@ -62,6 +65,9 @@ object ObservabilityEngine {
     resultSummaryRecord: Record,
     capturedAt: Instant,
     jobId: Option[String],
+    traceId: Option[String],
+    executionId: Option[String],
+    originSlot: String,
     calltree: Option[CallTree]
   ) {
     def toRecord: Record =
@@ -76,7 +82,10 @@ object ObservabilityEngine {
         "result_summary" -> resultSummary,
         "result_summary_record" -> resultSummaryRecord,
         "captured_at" -> capturedAt.toString,
-        "job_id" -> jobId.getOrElse("")
+        "job_id" -> jobId.getOrElse(""),
+        "trace_id" -> traceId.getOrElse(""),
+        "execution_id" -> executionId.getOrElse(""),
+        "origin_slot" -> originSlot
         )
       ) ++ calltree.map(tree => Record.data("calltree" -> _calltree_nodes(tree.toRecord))).getOrElse(Record.empty)
 
@@ -93,6 +102,9 @@ object ObservabilityEngine {
         "result_summary_record" -> resultSummaryRecord,
         "captured_at" -> capturedAt.toString,
         "job_id" -> jobId.getOrElse(""),
+        "trace_id" -> traceId.getOrElse(""),
+        "execution_id" -> executionId.getOrElse(""),
+        "origin_slot" -> originSlot,
         "calltree" -> calltree.map(tree => _calltree_nodes(tree.toRecord)).getOrElse(Vector.empty)
         )
       )
@@ -121,14 +133,14 @@ object ObservabilityEngine {
     def attributes: Map[String, String] =
       enterAttributes ++ leaveAttributes
 
-    private def hasRealIo: Boolean =
+    private def _has_real_io: Boolean =
       attributes.get("real_io").exists(_.equalsIgnoreCase("true")) ||
         _semantic_kind(attributes) == "io" ||
-        children.exists(_.hasRealIo) ||
+        children.exists(_._has_real_io) ||
         observations.exists(_.hasRealIo)
 
     def toRecord: Record = {
-      val highlights = _node_highlights(attributes, if (hasRealIo) Vector("real_io") else Vector.empty)
+      val highlights = _node_highlights(attributes, if (_has_real_io) Vector("real_io") else Vector.empty)
       val merged = attributes - "real_io"
       val scalarFields = _ordered_scalar_fields(merged)
       val fields =
@@ -431,20 +443,66 @@ object ObservabilityEngine {
   def executionHistory(
     operationContains: Option[String]
   ): Vector[ExecutionHistoryEntry] =
+    executionHistory(operationContains, None)
+
+  def executionHistory(
+    operationContains: Option[String],
+    originSlot: Option[String]
+  ): Vector[ExecutionHistoryEntry] =
     synchronized {
+      val normalizedslot = originSlot.map(_normalize_origin_slot)
       (_recent_execution_history ++ _filtered_execution_history)
         .groupBy(_.id)
         .values
         .flatMap(_.headOption)
         .toVector
         .filter(entry => operationContains.forall(entry.operation.contains))
+        .filter(entry => normalizedslot.forall(_ == entry.originSlot))
         .sortBy(_.id)
     }
 
   def latestExecution: Option[ExecutionHistoryEntry] =
+    latestExecution(None)
+
+  def latestExecution(
+    originSlot: Option[String]
+  ): Option[ExecutionHistoryEntry] =
     synchronized {
-      _recent_execution_history.lastOption.orElse(_filtered_execution_history.lastOption)
+      val normalizedslot = originSlot.map(_normalize_origin_slot)
+      val entries = (_recent_execution_history ++ _filtered_execution_history)
+        .groupBy(_.id)
+        .values
+        .flatMap(_.headOption)
+        .toVector
+        .filter(entry => normalizedslot.forall(_ == entry.originSlot))
+        .filter(entry => normalizedslot.nonEmpty || !_is_background_origin_slot(entry.originSlot))
+        .sortBy(_.id)
+      entries.lastOption
     }
+
+  def findExecution(
+    executionId: Option[String],
+    traceId: Option[String],
+    originSlot: Option[String] = None
+  ): Option[ExecutionHistoryEntry] =
+    synchronized {
+      val normalizedslot = originSlot.map(_normalize_origin_slot)
+      val entries = (_recent_execution_history ++ _filtered_execution_history)
+        .groupBy(_.id)
+        .values
+        .flatMap(_.headOption)
+        .toVector
+        .filter(entry => normalizedslot.forall(_ == entry.originSlot))
+        .filter { entry =>
+          executionId.exists(id => entry.executionId.contains(id)) ||
+            traceId.exists(id => entry.traceId.contains(id))
+        }
+        .sortBy(_.id)
+      entries.lastOption
+    }
+
+  private def _is_background_origin_slot(value: String): Boolean =
+    value == "background-js" || value == "page-context"
 
   def recordActionExecution(
     operation: String,
@@ -453,7 +511,10 @@ object ObservabilityEngine {
     outcome: Either[Conclusion, OperationResponse],
     resultConfidentiality: Map[String, DataConfidentiality] = Map.empty,
     jobId: Option[String] = None,
-    calltree: Option[CallTree]
+    traceId: Option[String] = None,
+    executionId: Option[String] = None,
+    originSlot: String = "operation",
+    calltree: Option[CallTree] = None
   ): Unit =
     synchronized {
       if (!_is_execution_admin_operation(operation)) {
@@ -464,11 +525,14 @@ object ObservabilityEngine {
           parameters = parameters,
           parametersText = parametersText,
           outcome = outcome.fold(_ => "failure", _ => "success"),
-          resultType = outcome.fold(_ => "Conclusion", _result_type_),
-          resultSummary = outcome.fold(_failure_summary_, _result_summary_text_(_, resultConfidentiality)),
-          resultSummaryRecord = outcome.fold(_failure_summary_record_, _result_summary_record_(_, resultConfidentiality)),
+          resultType = outcome.fold(_ => "Conclusion", _result_type),
+          resultSummary = outcome.fold(_failure_summary, _result_summary_text(_, resultConfidentiality)),
+          resultSummaryRecord = outcome.fold(_failure_summary_record, _result_summary_record(_, resultConfidentiality)),
           capturedAt = Instant.now(),
           jobId = jobId,
+          traceId = traceId,
+          executionId = executionId,
+          originSlot = _normalize_origin_slot(originSlot),
           calltree = calltree
         )
         val config = _execution_history_config
@@ -481,16 +545,30 @@ object ObservabilityEngine {
   private def _is_execution_admin_operation(operation: String): Boolean =
     operation == "admin.execution.history" || operation == "admin.execution.calltree"
 
-  private def _result_type_(response: OperationResponse): String =
+  private def _normalize_origin_slot(value: String): String = {
+    val normalized = Option(value).map(_.trim.toLowerCase(Locale.ROOT)).getOrElse("")
+      .map {
+        case c if c.isLetterOrDigit => c
+        case '-' | '_' | '.' => '-'
+        case _ => '-'
+      }
+      .mkString
+      .replaceAll("-+", "-")
+      .stripPrefix("-")
+      .stripSuffix("-")
+    if (normalized.isEmpty) "operation" else normalized
+  }
+
+  private def _result_type(response: OperationResponse): String =
     response.getClass.getSimpleName.stripSuffix("$")
 
-  private def _result_summary_(
+  private def _result_summary(
     response: OperationResponse,
     confidentiality: Map[String, DataConfidentiality] = Map.empty
   ): Record =
-    _result_summary_record_(response, confidentiality)
+    _result_summary_record(response, confidentiality)
 
-  private def _result_summary_record_(
+  private def _result_summary_record(
     response: OperationResponse,
     confidentiality: Map[String, DataConfidentiality] = Map.empty
   ): Record = {
@@ -555,16 +633,16 @@ object ObservabilityEngine {
     }
   }
 
-  private def _result_summary_text_(
+  private def _result_summary_text(
     response: OperationResponse,
     confidentiality: Map[String, DataConfidentiality] = Map.empty
   ): String =
-    _payload_display_text(_result_summary_record_(response, confidentiality))
+    _payload_display_text(_result_summary_record(response, confidentiality))
 
-  private def _failure_summary_(conclusion: Conclusion): String =
-    _payload_display_text(_failure_summary_record_(conclusion))
+  private def _failure_summary(conclusion: Conclusion): String =
+    _payload_display_text(_failure_summary_record(conclusion))
 
-  private def _failure_summary_record_(conclusion: Conclusion): Record =
+  private def _failure_summary_record(conclusion: Conclusion): Record =
     DiagnosticPayloadSummary.textSummary("conclusion", conclusion.display, includeInline = false).toRecord ++
       Record.dataAuto(
         "status" -> conclusion.status.webCode.code.toString,
@@ -795,11 +873,11 @@ object ObservabilityEngine {
     cause: Option[Throwable]
   ): Unit = {
     val text = _message(context, name)
-    _log_backend_(level, scope, text, attributes)
+    _log_backend(level, scope, text, attributes)
     val _ = cause
   }
 
-  private def _log_backend_(
+  private def _log_backend(
     level: String,
     scope: ScopeContext,
     message: String,

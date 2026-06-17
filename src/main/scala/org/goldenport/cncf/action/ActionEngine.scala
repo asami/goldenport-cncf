@@ -30,7 +30,8 @@ import org.goldenport.schema.DataConfidentiality
  *  version Feb.  6, 2026
  *  version Mar. 13, 2026
  *  version Apr. 25, 2026
- * @version May. 17, 2026
+ *  version May. 17, 2026
+ * @version Jun. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 class ActionEngine(
@@ -150,12 +151,20 @@ class ActionEngine(
             } finally {
               calltree.leave(leaveAttributes)
               val builtCallTree = calltree.build()
+              ec.runtime.noteExecutionContext(
+                ec.observability.sagaId,
+                ec.jobContext.jobId.map(_.value),
+                ec.jobContext.currentTask.orElse(ec.jobContext.taskId).map(_.value)
+              )
+              ec.runtime.noteExecutionDiagnostics(
+                traceId = Some(ec.observability.traceId.value),
+                executionId = ec.observability.correlationId.map(_.value),
+                failure = executionOutcome.flatMap {
+                  case Left(conclusion) => Some(conclusion.display)
+                  case Right(_) => None
+                }
+              )
               if (ec.framework.inlineCallTree) {
-                ec.runtime.noteExecutionContext(
-                  ec.observability.sagaId,
-                  ec.jobContext.jobId.map(_.value),
-                  ec.jobContext.currentTask.orElse(ec.jobContext.taskId).map(_.value)
-                )
                 builtCallTree.foreach { tree =>
                   ec.runtime.noteInlineCallTree(
                     ObservabilityEngine.callTreeRecord(tree, ec.jobContext.jobId.map(_.value))
@@ -185,6 +194,9 @@ class ActionEngine(
                   outcome = outcome,
                   resultConfidentiality = call.resultFieldConfidentiality,
                   jobId = ec.jobContext.jobId.map(_.value),
+                  traceId = Some(ec.observability.traceId.value),
+                  executionId = ec.observability.correlationId.map(_.value),
+                  originSlot = _operation_origin_slot(call),
                   calltree = builtCallTree
                 )
       }
@@ -232,7 +244,7 @@ class ActionEngine(
   ): Unit = {
     // Execution observation hook (not persisted).
     val params = _parameter_source_text(call).getOrElse("")
-    _log_backend_("debug", Some(call.action.name), params, None, Some(call))
+    _log_backend("debug", Some(call.action.name), params, None, Some(call))
     observe_debug("Action started", call)
   }
 
@@ -243,14 +255,31 @@ class ActionEngine(
     // Execution observation hook (not persisted).
     result match {
       case Consequence.Success(_) =>
-        _log_backend_("debug", Some(call.action.name), "", None, Some(call)) // TODO
+        _log_backend("debug", Some(call.action.name), "", None, Some(call)) // TODO
         observe_debug("Action completed successfully", call)
       case Consequence.Failure(conclusion) =>
-        _log_backend_("error", Some(call.action.name), "", None, Some(call)) // TODO
+        _log_backend("error", Some(call.action.name), "", None, Some(call)) // TODO
         val message = s"Action failed: ${conclusion.show}"
         observe_error(message, conclusion.getException, call)
     }
   }
+
+  private def _operation_origin_slot(
+    call: ActionCall
+  ): String =
+    _request_property(call, "textus.operation.origin.slot")
+      .orElse(_request_property(call, "x-textus-operation-origin-slot"))
+      .orElse(_request_property(call, "x-textus-debug-request-kind"))
+      .getOrElse("operation")
+
+  private def _request_property(
+    call: ActionCall,
+    name: String
+  ): Option[String] =
+    call.request.properties
+      .find(p => p.name.equalsIgnoreCase(name))
+      .map(p => Option(p.value).map(_.toString).getOrElse("").trim)
+      .filter(_.nonEmpty)
 
   protected def security_authorize(
     call: ActionCall,
@@ -339,7 +368,7 @@ class ActionEngine(
     val ctx = _observation_context(call)
     val text = if (ctx.isEmpty) message else s"$message $ctx"
     val actionname = call.map(_.action.name)
-    _log_backend_(level, actionname, text, cause, call) // TODO
+    _log_backend(level, actionname, text, cause, call) // TODO
   }
 
   private def _observation_context(
@@ -359,7 +388,7 @@ class ActionEngine(
     if (parts.isEmpty) "" else parts.mkString("[", " ", "]")
   }
 
-  private def _log_backend_( // TODO
+  private def _log_backend( // TODO
     level: String,
     actionname: Option[String],
     message: String,
@@ -422,12 +451,17 @@ class ActionEngine(
         calltree.failure("io:error", conclusion.display, _calltree_error_attributes(conclusion) + ("calltree_kind" -> "io-error"))
       } finally {
         calltree.leave(_calltree_error_attributes(conclusion) + ("outcome" -> "failure"))
+        ec.runtime.noteExecutionContext(
+          ec.observability.sagaId,
+          ec.jobContext.jobId.map(_.value),
+          ec.jobContext.currentTask.orElse(ec.jobContext.taskId).map(_.value)
+        )
+        ec.runtime.noteExecutionDiagnostics(
+          traceId = Some(ec.observability.traceId.value),
+          executionId = ec.observability.correlationId.map(_.value),
+          failure = Some(conclusion.display)
+        )
         if (ec.framework.inlineCallTree) {
-          ec.runtime.noteExecutionContext(
-            ec.observability.sagaId,
-            ec.jobContext.jobId.map(_.value),
-            ec.jobContext.currentTask.orElse(ec.jobContext.taskId).map(_.value)
-          )
           calltree.build().foreach { tree =>
             ec.runtime.noteInlineCallTree(
               ObservabilityEngine.callTreeRecord(tree, ec.jobContext.jobId.map(_.value))

@@ -11,7 +11,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Apr. 18, 2026
  *  version Apr. 28, 2026
- * @version Jun.  3, 2026
+ * @version Jun. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 final class RuntimeConfigSpec extends AnyWordSpec with Matchers {
@@ -127,6 +127,24 @@ final class RuntimeConfigSpec extends AnyWordSpec with Matchers {
       }
       thrown.getMessage should include ("textus.debug.auth.enabled")
       RuntimeConfig.create(configuration) shouldBe a[org.goldenport.Consequence.Failure[_]]
+    }
+
+    "allow debug auth in demo operation mode" in {
+      val configuration = ResolvedConfiguration(
+        Configuration(Map(
+          RuntimeConfig.OperationModeKey -> ConfigurationValue.StringValue("demo"),
+          RuntimeConfig.DEBUG_AUTH_ENABLED_KEY -> ConfigurationValue.StringValue("true"),
+          RuntimeConfig.DEBUG_AUTH_SEED_ACCOUNT_ENABLED_KEY -> ConfigurationValue.StringValue("true"),
+          RuntimeConfig.DEBUG_AUTH_AUTO_LOGIN_ENABLED_KEY -> ConfigurationValue.StringValue("true")
+        )),
+        ConfigurationTrace.empty
+      )
+
+      val config = RuntimeConfig.from(configuration)
+      config.operationMode shouldBe OperationMode.Demo
+      config.debugAuthConfig.enabled shouldBe true
+      config.debugAuthConfig.effectiveSeedAccountEnabled shouldBe true
+      config.debugAuthConfig.effectiveAutoLoginEnabled shouldBe true
     }
 
     "keep CSV parsing for execution history filters independent from admin role token parsing" in {
@@ -363,6 +381,13 @@ final class RuntimeConfigSpec extends AnyWordSpec with Matchers {
       OperationMode.Demo.allowsDevelopAnonymousAdmin shouldBe false
       OperationMode.Develop.allowsDevelopAnonymousAdmin shouldBe true
       OperationMode.Test.allowsDevelopAnonymousAdmin shouldBe true
+    }
+
+    "allow debug auth in demo develop and test operation modes" in {
+      OperationMode.Production.allowsDebugAuth shouldBe false
+      OperationMode.Demo.allowsDebugAuth shouldBe true
+      OperationMode.Develop.allowsDebugAuth shouldBe true
+      OperationMode.Test.allowsDebugAuth shouldBe true
     }
 
     "suppress console log backends during executable specs while preserving file logging" in {

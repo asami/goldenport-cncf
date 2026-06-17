@@ -32,7 +32,7 @@ import io.circe.parser.parse
 /*
  * @since   May. 18, 2026
  *  version May. 30, 2026
- * @version Jun. 01, 2026
+ * @version Jun. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 trait StaticFormAppRendererTemplatePart {
@@ -99,6 +99,7 @@ trait StaticFormAppRendererTemplatePart {
     val card = """(?s)<textus(?::card(?!-)|-card(?!-))\b([^>]*)>(.*?)</textus(?::card|-card)>""".r
     val recordCard = """<textus(?::record-card|-record-card)\b([^>]*)></textus(?::record-card|-record-card)>""".r
     val cardList = """<textus(?::card-list|-card-list)\b([^>]*)></textus(?::card-list|-card-list)>""".r
+    val linelist = """<textus(?::line-list|-line-list)\b([^>]*)></textus(?::line-list|-line-list)>""".r
     val summaryCard = """<textus(?::summary-card|-summary-card)\b([^>]*)></textus(?::summary-card|-summary-card)>""".r
     val actionCard = """<textus(?::action-card|-action-card)\b([^>]*)></textus(?::action-card|-action-card)>""".r
     val actionGroup = """<textus(?::action-group|-action-group)\b([^>]*)></textus(?::action-group|-action-group)>""".r
@@ -143,7 +144,11 @@ trait StaticFormAppRendererTemplatePart {
       val attrs = widget_attrs(m.group(1))
       java.util.regex.Matcher.quoteReplacement(render_card_list(attrs, properties, tableColumns, defaultTableView))
     })
-    val e = summaryCard.replaceAllIn(d, m => {
+    val d1 = linelist.replaceAllIn(d, m => {
+      val attrs = widget_attrs(m.group(1))
+      java.util.regex.Matcher.quoteReplacement(render_line_list(attrs, properties, tableColumns, defaultTableView))
+    })
+    val e = summaryCard.replaceAllIn(d1, m => {
       val attrs = widget_attrs(m.group(1))
       java.util.regex.Matcher.quoteReplacement(render_summary_card(attrs, properties))
     })
@@ -1206,6 +1211,57 @@ trait StaticFormAppRendererTemplatePart {
       cards
   }
 
+  protected def render_line_list(
+    attrs: Map[String, String],
+    properties: FormPageProperties,
+    tableColumns: Map[String, Vector[TableColumn]],
+    defaultTableView: String
+  ): String = {
+    val source = attrs.getOrElse("source", "result.body")
+    val columns = table_columns(attrs.get("columns")).orElse(table_columns(source, attrs, tableColumns, defaultTableView))
+    source_json(source, properties).flatMap(table_rows).map { rows =>
+      val objects = rows.flatMap(_.asObject).map(_.toMap)
+      if (objects.isEmpty)
+        empty_state(attrs.getOrElse("empty", "No records"))
+      else
+        s"""<ul class="list-group textus-line-list">${objects.map(line_list_item_html(_, columns, attrs)).mkString("\n")}</ul>"""
+    }.getOrElse(empty_state(attrs.getOrElse("empty", "No records")))
+  }
+
+  protected def line_list_item_html(
+    obj: Map[String, Json],
+    columns: Option[Vector[TableColumn]],
+    attrs: Map[String, String]
+  ): String = {
+    val fields = columns.getOrElse(obj.keys.toVector.map(name => TableColumn(name, name)))
+    val titlefield = attrs.get("title").orElse(first_existing_field(obj, Vector("title", "subject", "name", "label", "id")))
+    val subtitlefield = attrs.get("subtitle").orElse(first_existing_field(obj, Vector("summary", "description", "state", "status", "updated_at")))
+    val badgefield = attrs.get("badge")
+    val title = titlefield.flatMap(obj.get).map(json_cell).filter(_.nonEmpty).getOrElse(attrs.getOrElse("label", "Record"))
+    val subtitle = subtitlefield.flatMap(obj.get).map(json_cell).filter(_.nonEmpty)
+    val badge = badgefield.flatMap(obj.get).map(json_cell).filter(_.nonEmpty)
+    val excluded = (titlefield.toSet ++ subtitlefield.toSet ++ badgefield.toSet)
+    val details = fields.filterNot(column => excluded.contains(column.name)).map { column =>
+      val value = obj.get(column.name).map(json_cell).getOrElse("")
+      s"""<dt class="col-sm-3">${escape(column.label)}</dt><dd class="col-sm-9">${escape(value)}</dd>"""
+    }.mkString
+    val subtitlehtml = subtitle.map(x => s"""<p class="text-secondary mb-1">${escape(x)}</p>""").getOrElse("")
+    val badgehtml = badge.map { x =>
+      s"""<span class="badge text-bg-${escape(status_variant(x))}">${escape(x)}</span>"""
+    }.getOrElse("")
+    val detailhtml =
+      if (details.isEmpty)
+        ""
+      else
+        s"""<dl class="row mb-0 mt-2 textus-line-list-fields">${details}</dl>"""
+    val actionhtml = record_action_html(obj, attrs)
+    val href = attrs.get("detail-href").flatMap(record_href(_, obj, attrs))
+    val rowhref = href.filter(_ => widget_bool(attrs, "click-row", default = false)).
+      map(x => s""" data-textus-row-href="${escape(x)}" tabindex="0" role="link"""").
+      getOrElse("")
+    s"""<li class="list-group-item textus-line-list-item"$rowhref><div class="d-flex align-items-start justify-content-between gap-3"><div><strong>${escape(title)}</strong>${subtitlehtml}</div>${badgehtml}</div>${detailhtml}${actionhtml}</li>"""
+  }
+
   protected def card_list_row_class(
     attrs: Map[String, String]
   ): String = {
@@ -1556,10 +1612,10 @@ trait StaticFormAppRendererTemplatePart {
     value: String
   ): String =
     value.trim.toLowerCase(java.util.Locale.ROOT) match {
-      case "ok" | "success" | "succeeded" | "done" | "completed" | "published" | "active" => "success"
-      case "warn" | "warning" | "pending" | "queued" | "running" | "draft" => "warning"
-      case "error" | "failed" | "failure" | "denied" | "rejected" | "inactive" => "danger"
-      case "info" | "accepted" => "primary"
+      case "ok" | "success" | "succeeded" | "done" | "completed" | "published" | "active" | "stable" => "success"
+      case "warn" | "warning" | "pending" | "queued" | "running" | "draft" | "editing" | "imported" => "warning"
+      case "error" | "failed" | "failure" | "denied" | "rejected" | "inactive" | "unresolved" => "danger"
+      case "info" | "accepted" | "review" => "primary"
       case _ => "secondary"
     }
 
@@ -1826,8 +1882,7 @@ trait StaticFormAppRendererTemplatePart {
     properties: FormPageProperties
   ): Option[Json] =
     property_value(properties, source).flatMap(parse(_).toOption).orElse {
-      val body = property_value(properties, "result.body")
-      body.flatMap(parse(_).toOption).flatMap { json =>
+      properties.resultBodyJson.flatMap { json =>
         val path =
           if (source.startsWith("result.body."))
             source.stripPrefix("result.body.").split('.').toVector
@@ -1835,7 +1890,15 @@ trait StaticFormAppRendererTemplatePart {
             source.stripPrefix("result.").split('.').toVector
           else
             Vector.empty
-        if (path.isEmpty) None else json_at(json, path)
+        if (path.isEmpty)
+          None
+        else
+          json_at(json, path).orElse {
+            if (path.headOption.contains("data"))
+              json_at(json, path.tail)
+            else
+              None
+          }
       }
     }
 

@@ -42,7 +42,7 @@ import org.goldenport.record.Record
 /*
  * @since   May. 20, 2026
  *  version May. 31, 2026
- * @version Jun.  9, 2026
+ * @version Jun. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 final class InformationSpace {
@@ -954,46 +954,48 @@ object InformationToKnowledgeProjection {
         _book_candidate_support_nodes_and_relationships(information, layers, evidenceid, provenanceid) ++
         _book_information_association_nodes_and_relationships(information, layers, evidenceid, provenanceid) ++
         _book_classification_nodes_and_relationships(information, layers.publicationNodeId, evidenceid, provenanceid)
-      val reviews = _book_relationship_reviews(information)
+      val reviews = _book_information_link_reviews(information)
       generated.map { case (node, relationship) =>
-        node -> _apply_book_relationship_review(relationship, reviews)
+        node -> _apply_book_information_link_review(relationship, reviews)
       }
     }
   }
 
-  private final case class BookRelationshipReview(
-    relationshipKey: String,
+  private final case class BookInformationLinkReview(
+    linkKey: String,
     kind: Option[String],
+    rdfPredicate: Option[String],
     state: Option[String],
     qualifiers: Map[String, String],
     source: Option[String],
     evidenceSummary: Option[String]
   )
 
-  private def _book_relationship_reviews(
+  private def _book_information_link_reviews(
     information: Information
-  ): Map[String, BookRelationshipReview] =
+  ): Map[String, BookInformationLinkReview] =
     information.fieldEvents.
-      filter(_.fieldPath == "relationships").
-      filter(_.transformation.contains("book-relationship-review")).
-      flatMap(_book_relationship_review).
-      groupBy(_.relationshipKey).
+      filter(_.fieldPath == "informationLinks").
+      filter(_.transformation.contains("information-link-review")).
+      flatMap(_book_information_link_review).
+      groupBy(_.linkKey).
       view.mapValues(_.last).toMap
 
-  private def _book_relationship_review(
+  private def _book_information_link_review(
     event: InformationFieldEvent
-  ): Option[BookRelationshipReview] = {
+  ): Option[BookInformationLinkReview] = {
     val values = _key_value_pairs(event.evidence.getOrElse(""))
     for {
-      key <- values.get("relationshipKey")
-      kind <- values.get("kind").flatMap(_normalize_book_relationship_kind)
+      key <- values.get("linkKey")
+      kind <- values.get("kind").flatMap(_normalize_book_information_link_kind)
     } yield {
-      val qualifiers = _book_relationship_qualifier_keys.flatMap { name =>
+      val qualifiers = _book_information_link_qualifier_keys.flatMap { name =>
         values.get(name).map(name -> _)
       }.toMap
-      BookRelationshipReview(
-        relationshipKey = key,
+      BookInformationLinkReview(
+        linkKey = key,
         kind = Some(kind),
+        rdfPredicate = values.get("rdfPredicate").map(_.trim).filter(_.nonEmpty),
         state = Some(event.state.value),
         qualifiers = qualifiers,
         source = values.get("source").map(_.trim).filter(_.nonEmpty),
@@ -1002,11 +1004,12 @@ object InformationToKnowledgeProjection {
     }
   }
 
-  private val _book_relationship_allowed_kinds: Set[String] =
+  private val _book_information_link_allowed_kinds: Set[String] =
     Set(
       "authored-by",
       "edited-by",
       "translated-by",
+      "contributed-by",
       "published-by",
       "publication-of",
       "volume-of",
@@ -1017,12 +1020,12 @@ object InformationToKnowledgeProjection {
       "has-subject"
     )
 
-  private def _normalize_book_relationship_kind(value: String): Option[String] = {
+  private def _normalize_book_information_link_kind(value: String): Option[String] = {
     val normalized = value.trim.toLowerCase
-    _book_relationship_allowed_kinds.find(_ == normalized)
+    _book_information_link_allowed_kinds.find(_ == normalized)
   }
 
-  private val _book_relationship_qualifier_keys: Vector[String] =
+  private val _book_information_link_qualifier_keys: Vector[String] =
     Vector(
       "order",
       "role",
@@ -1036,29 +1039,31 @@ object InformationToKnowledgeProjection {
       "evidenceSummary"
     )
 
-  private def _apply_book_relationship_review(
+  private def _apply_book_information_link_review(
     relationship: KnowledgeRelationship,
-    reviews: Map[String, BookRelationshipReview]
+    reviews: Map[String, BookInformationLinkReview]
   ): KnowledgeRelationship = {
-    val key = _book_relationship_key(relationship)
+    val key = _book_information_link_key(relationship)
     reviews.get(key).map { review =>
       relationship.copy(
         kind = review.kind.map(KnowledgeRelationshipKind.apply).getOrElse(relationship.kind),
-        rdfPredicate = review.kind.map(RdfPredicateName.apply).orElse(relationship.rdfPredicate),
+        rdfPredicate = review.rdfPredicate.map(RdfPredicateName.apply).
+          orElse(review.kind.map(RdfPredicateName.apply)).
+          orElse(relationship.rdfPredicate),
         qualifiers = KnowledgeRelationshipQualifiers(relationship.qualifiers.values ++ review.qualifiers),
         attributes = KnowledgeAttributes(relationship.attributes.values ++ Map(
-          "relationship_key" -> key,
-          "relationship_review_state" -> review.state.getOrElse(""),
-          "relationship_review_source" -> review.source.getOrElse("manual"),
-          "relationship_evidence_summary" -> review.evidenceSummary.getOrElse("")
+          "information_link_key" -> key,
+          "information_link_review_state" -> review.state.getOrElse(""),
+          "information_link_review_source" -> review.source.getOrElse("manual"),
+          "information_link_evidence_summary" -> review.evidenceSummary.getOrElse("")
         ))
       )
     }.getOrElse(relationship.copy(
-      attributes = KnowledgeAttributes(relationship.attributes.values ++ Map("relationship_key" -> key))
+      attributes = KnowledgeAttributes(relationship.attributes.values ++ Map("information_link_key" -> key))
     ))
   }
 
-  private def _book_relationship_key(
+  private def _book_information_link_key(
     relationship: KnowledgeRelationship
   ): String =
     relationship.attributes.values.get("candidate_key").

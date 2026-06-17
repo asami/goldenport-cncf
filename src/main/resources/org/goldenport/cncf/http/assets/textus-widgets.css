@@ -28,6 +28,18 @@
   --bs-gutter-y: 1rem;
 }
 
+.textus-line-list {
+  margin-top: 1rem;
+}
+
+.textus-line-list-item {
+  min-width: 0;
+}
+
+.textus-line-list-fields {
+  font-size: .925rem;
+}
+
 .textus-clickable-row {
   cursor: pointer;
 }
