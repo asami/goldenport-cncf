@@ -54,7 +54,7 @@ Scope boundaries:
 ## 3. Active Work Stack
 
 - A (DONE): WU-01 — Open Phase 28 and freeze Web UI DSL scope.
-- B (OPEN): WU-02 — Web UI DSL vocabulary and projection contract.
+- B (DONE): WU-02 — Web UI DSL vocabulary and projection contract.
 - C (OPEN): WU-03 — Bootstrap Core DOM and semantic selector contract.
 - D (OPEN): WU-04 — UX Profile model with Bootstrap and Material profile
   support.
@@ -69,14 +69,14 @@ Scope boundaries:
 
 Resume hint:
 
-- Continue with WU-02. Keep Phase 27 closed and treat Knowledge Editor screens
+- Continue with WU-03. Keep Phase 27 closed and treat Knowledge Editor screens
   as drivers for CNCF Web/platform infrastructure, not as the owner of the Web
   UI architecture.
 
 ## 4. Development Items
 
 - [x] WU-01: Open Phase 28 and freeze Web UI DSL scope.
-- [ ] WU-02: Web UI DSL vocabulary and projection contract.
+- [x] WU-02: Web UI DSL vocabulary and projection contract.
 - [ ] WU-03: Bootstrap Core DOM and semantic selector contract.
 - [ ] WU-04: UX Profile model with Bootstrap and Material profile support.
 - [ ] WU-05: Static Form renderer integration vertical slice.

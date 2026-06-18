@@ -82,7 +82,7 @@ infrastructure, not as a Phase 27 Knowledge Editor continuation.
 
 ## WU-02: Web UI DSL Vocabulary and Projection Contract
 
-Status: OPEN
+Status: DONE
 
 ### Objective
 
@@ -91,21 +91,34 @@ generated CNCF Web screens.
 
 ### Initial Tasks
 
-- [ ] Inventory existing widgets and classify them as display, action,
-      feedback, layout, or form-edit widgets.
-- [ ] Preserve existing display widget behavior for `textus:table`,
+- [x] Inventory existing widgets and classify them as display, layout, action,
+      feedback, form-edit, or runtime-helper widgets.
+- [x] Preserve existing display widget behavior for `textus:table`,
       `textus:card-list`, `textus:line-list`, `textus:summary-card`,
       `textus:action-form`, and `textus:error-panel`.
-- [ ] Define the first editable widget vocabulary entry for
+- [x] Define the first editable widget vocabulary entry for
       `textus:editable-line-list`.
-- [ ] Define how widget metadata is projected from CML, WebDescriptor,
-      operation metadata, and page context.
-- [ ] Add executable specs for the vocabulary shape selected in this slice.
+- [x] Define how widget metadata is projected from CML/schema/view metadata,
+      WebDescriptor/form descriptor metadata, operation result/page context,
+      and widget attributes.
+- [x] Add executable specs for the vocabulary shape selected in this slice.
 
 ### Expected Output
 
 - A stable vocabulary baseline that implementation slices can render without
   ad hoc application-local UI contracts.
+
+### Completion Notes
+
+- `docs/spec/textus-widget.md` now contains the normative WU-02 vocabulary
+  classification and projection contract.
+- CNCF has a lightweight typed vocabulary/projection model:
+  `TextusWidgetDefinition`, `TextusWidgetVocabulary`, and
+  `TextusWidgetProjection`.
+- `textus:line-list` remains display-only.
+- `textus:editable-line-list` is a known `form-edit` vocabulary entry, but
+  full renderer behavior remains deferred to WU-06.
+- Focused vocabulary specs and existing renderer compatibility specs pass.
 
 ---
 

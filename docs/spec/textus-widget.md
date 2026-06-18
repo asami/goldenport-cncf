@@ -18,6 +18,11 @@ widgets, navigation lists, and dialog-style confirmation actions. Future widgets
 may extend this vocabulary, but implemented widget output is part of the Static
 Form Bootstrap/Textus compatibility contract.
 
+Phase 28 WU-02 makes the vocabulary explicit as a Web UI DSL projection
+contract. The renderer remains behaviorally compatible in WU-02; the typed
+vocabulary and projection model define how later renderer and demo-assist work
+recognizes widget semantics.
+
 ## Notation
 
 The canonical notation is namespace style:
@@ -36,8 +41,94 @@ Both forms are semantically equivalent. Renderers should prefer the namespace
 form in generated examples and documentation. The dash form exists for HTML
 tooling compatibility.
 
+New widgets use namespace notation only unless a specific compatibility need is
+accepted. Dash notation remains a compatibility alias for existing widgets.
+`textus-editable-line-list` is therefore not a WU-02 alias for
+`textus:editable-line-list`.
+
 Unexpanded `textus:` or `textus-` elements in the final HTTP response are
 rendering defects.
+
+## WU-02 Vocabulary Contract
+
+The Web UI DSL vocabulary is classified by widget purpose. A widget definition
+records:
+
+- canonical name;
+- accepted compatibility aliases;
+- category;
+- required and optional attributes;
+- whether it supports source binding, view metadata, columns, action metadata,
+  or navigation metadata;
+- whether the current renderer implements it.
+
+The built-in category names are:
+
+- `display`: read-only information rendering.
+- `layout`: visual grouping or navigation structure without primary data
+  editing semantics.
+- `action`: command or navigation submission widgets.
+- `feedback`: status, error, issue, or empty-state widgets.
+- `form-edit`: widgets whose primary role is editing submitted form values.
+- `runtime-helper`: runtime-specific helper widgets that expose context,
+  jobs, candidates, or other platform state.
+
+The WU-02 baseline vocabulary is:
+
+| Category | Widgets |
+| --- | --- |
+| `display` | `textus:result-view`, `textus:table`, `textus:record-card`, `textus:card-list`, `textus:line-list`, `textus:field-list`, `textus:description-list`, `textus:html-field`, `textus:property-list` |
+| `layout` | `textus:card`, `textus:summary-card`, `textus:pagination`, `textus:nav-list` |
+| `action` | `textus:action-link`, `textus:action-form`, `textus:action-group`, `textus:action-card`, `textus:confirm-action` |
+| `feedback` | `textus:error-panel`, `textus:alert`, `textus:empty-state`, `textus:status-badge`, `textus:capability-message` |
+| `form-edit` | `textus:editable-line-list` |
+| `runtime-helper` | `textus:hidden-context`, `textus:operation-panel`, `textus:job-panel`, `textus:job-ticket`, `textus:job-actions`, `textus:candidate-list`, `textus:knowledge-summary` |
+
+`textus:line-list` is display-only. It must not be repurposed into editable
+repeated-row input. Editable repeated-row form behavior uses
+`textus:editable-line-list`, which is a known `form-edit` vocabulary entry in
+WU-02 but does not require full renderer behavior until WU-06.
+
+Existing widget compatibility aliases include only the dash forms that the
+current renderer already expands, such as `textus-result-view`,
+`textus-card-list`, `textus-line-list`, `textus-summary-card`,
+`textus-action-form`, `textus-property-list`, and `textus-error-panel`.
+`textus-table` is not a WU-02 alias for `textus:table`. Generated examples
+should still prefer the canonical namespace form.
+
+Unknown widgets fail closed. A renderer or projection consumer must either
+reject the unknown widget deterministically or report an unsupported projection;
+it must not silently treat unknown Textus markup as a supported widget.
+
+## Projection Contract
+
+`TextusWidgetProjection` is the normalized metadata shape consumed by renderer
+tests, generated-screen specs, and future demo-assist manifests. A projection
+contains:
+
+- requested widget name;
+- canonical widget name;
+- category;
+- implemented/not implemented flag;
+- accepted aliases;
+- required and optional attributes;
+- actual widget attributes supplied by the page/template;
+- supported binding capabilities;
+- metadata sources considered for the projection.
+
+Projection metadata can come from:
+
+- CML schema and view metadata;
+- `WebDescriptor` and form descriptor metadata;
+- operation result metadata;
+- page context;
+- widget attributes.
+
+Source binding uses `source`. View metadata uses `view`. Column selection uses
+`columns` or schema/view field order. Action and navigation support use the
+existing action metadata, `href`, `detail-href`, `row-link`, and related
+widget-specific attributes. Field order remains deterministic and comes from
+resolved schema/view metadata when available.
 
 ## Rendering Model
 
