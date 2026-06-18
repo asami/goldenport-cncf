@@ -123,6 +123,7 @@ trait StaticFormAppRendererFormPart {
   ): Option[Page] =
     resolve_operation_web_schema_context(subsystem, componentName, serviceName, operationName, webDescriptor).map { context =>
       val action = s"/form/${context.componentPath}/${context.servicePath}/${context.operationPath}"
+      val formselector = Vector(context.componentPath, context.servicePath, context.operationPath).mkString(".")
       val effectiveValues = operation_form_prefill_values(subsystem, context, values)
       val effectiveValidation = validation.filter(_.webSchema.selector == context.webSchema.selector)
       val controls = operation_form_controls(context, effectiveValues, effectiveValidation)
@@ -134,17 +135,17 @@ trait StaticFormAppRendererFormPart {
         title = s"${escape(context.component.name)}.${escape(context.serviceName)}.${escape(context.operationName)}",
         subtitle = "HTML form operation",
         body =
-          s"""<article class="card admin-card">
+          s"""<article class="card admin-card" data-textus-page="static-form-operation" data-textus-section="operation-form">
              |  <div class="card-body">
-             |    ${errorPanel}
-             |    <form method="post" action="${escape(action)}"${enctype}>
+             |    <div data-textus-section="form-errors">${errorPanel}</div>
+             |    <form method="post" action="${escape(action)}"${enctype} data-textus-form="${escape(formselector)}">
              |      <div class="row g-3">
-             |        <div class="col-12">${controls}</div>
+             |        <div class="col-12" data-textus-section="form-controls">${controls}</div>
              |      </div>
              |      ${hiddenContext}
-             |      <div class="admin-action-row d-flex flex-wrap gap-2 mt-3">
-             |        <button type="submit" class="btn btn-primary">Run</button>
-             |        <a class="btn btn-outline-secondary" href="/form/${context.componentPath}">Operations</a>
+             |      <div class="admin-action-row d-flex flex-wrap gap-2 mt-3" data-textus-section="form-actions">
+             |        <button type="submit" class="btn btn-primary" data-textus-action="submit">Run</button>
+             |        <a class="btn btn-outline-secondary" href="/form/${context.componentPath}" data-textus-action="operations">Operations</a>
              |      </div>
              |    </form>
              |  </div>
@@ -617,7 +618,7 @@ trait StaticFormAppRendererFormPart {
 
   protected def hidden_form_context_inputs(values: Map[String, String]): String =
     hidden_form_context_values(values).map { case (key, value) =>
-      s"""<input type="hidden" name="${escape(key)}" value="${escape(value)}">"""
+      s"""<input type="hidden" name="${escape(key)}" value="${escape(value)}" data-textus-field="${escape(key)}">"""
     }.mkString("\n")
 
   protected def hidden_form_context_query_suffix(values: Map[String, String]): String =
@@ -837,7 +838,8 @@ trait StaticFormAppRendererFormPart {
           readonly = field.readonly,
           placeholder = field.placeholder,
           label = field.label,
-          validationMessages = fieldMessages
+          validationMessages = fieldMessages,
+          textusfieldselector = true
         )
       }.mkString("\n")
       val extraValues = visible_form_values(values).filterNot { case (key, _) =>
@@ -1649,9 +1651,11 @@ trait StaticFormAppRendererFormPart {
     readonly: Boolean = false,
     placeholder: Option[String] = None,
     label: Option[String] = None,
-    validationMessages: Vector[FormValidationMessage] = Vector.empty
+    validationMessages: Vector[FormValidationMessage] = Vector.empty,
+    textusfieldselector: Boolean = false
   ): String = {
     val displayLabel = label.orElse(descriptor.flatMap(_.label)).getOrElse(name)
+    val fieldselector = if (textusfieldselector) s""" data-textus-field="${escape(name)}"""" else ""
     val invalidClass = if (validationMessages.nonEmpty) " is-invalid" else ""
     val validationAttr = validation_attribute_text(descriptor.map(_.validation).getOrElse(org.goldenport.schema.WebValidationHints.empty))
     val feedback =
@@ -1660,7 +1664,7 @@ trait StaticFormAppRendererFormPart {
       else
         s"""<div class="invalid-feedback">${escape(validationMessages.map(_.message).mkString(" "))}</div>"""
     if (descriptor.exists(_.hidden) || inputType == "hidden") {
-      s"""<input type="hidden" id="${escape(id)}" name="${escape(name)}" value="${escape(value)}">"""
+      s"""<input type="hidden" id="${escape(id)}" name="${escape(name)}" value="${escape(value)}"${fieldselector}>"""
     } else if (inputType == "select" || descriptor.exists(_.values.nonEmpty)) {
       val multiple = if (descriptor.exists(_.multiple)) " multiple" else ""
       val disabled = if (readonly) " disabled" else ""
@@ -1679,7 +1683,7 @@ trait StaticFormAppRendererFormPart {
         val selected = if (candidate == value) " selected" else ""
         s"""<option value="${escape(candidate)}"${selected}>${escape(candidate)}</option>"""
       }).mkString("\n")
-      s"""<div class="mb-3">
+      s"""<div class="mb-3"${fieldselector}>
          |  <label class="form-label" for="${escape(id)}">${escape(displayLabel)}</label>
          |  <select class="form-select${invalidClass}" id="${escape(id)}" name="${escape(name)}"${required}${multiple}${disabled}${validationAttr}>
          |    ${options}
@@ -1691,7 +1695,7 @@ trait StaticFormAppRendererFormPart {
       val checked =
         if (Set("true", "on", "1", "yes").contains(value.toLowerCase)) " checked" else ""
       val disabled = if (readonly) " disabled" else ""
-      s"""<div class="mb-3 form-check">
+      s"""<div class="mb-3 form-check"${fieldselector}>
          |  <input type="hidden" name="${escape(name)}" value="false">
          |  <input class="form-check-input${invalidClass}" id="${escape(id)}" name="${escape(name)}" type="checkbox" value="true"${checked}${required}${disabled}${validationAttr}>
          |  <label class="form-check-label" for="${escape(id)}">${escape(displayLabel)}</label>
@@ -1701,7 +1705,7 @@ trait StaticFormAppRendererFormPart {
     } else if (inputType == "textarea") {
       val readonlyAttr = if (readonly) " readonly" else ""
       val placeholderAttr = placeholder.map(x => s""" placeholder="${escape(x)}"""").getOrElse("")
-      s"""<div class="mb-3">
+      s"""<div class="mb-3"${fieldselector}>
          |  <label class="form-label" for="${escape(id)}">${escape(displayLabel)}</label>
          |  <textarea class="form-control${invalidClass}" id="${escape(id)}" name="${escape(name)}" rows="5"${required}${readonlyAttr}${placeholderAttr}${validationAttr}>${escape(value)}</textarea>
          |  ${feedback}
@@ -1709,7 +1713,7 @@ trait StaticFormAppRendererFormPart {
          |</div>""".stripMargin
     } else if (inputType == "file") {
       val disabled = if (readonly) " disabled" else ""
-      s"""<div class="mb-3">
+      s"""<div class="mb-3"${fieldselector}>
          |  <label class="form-label" for="${escape(id)}">${escape(displayLabel)}</label>
          |  <input class="form-control${invalidClass}" id="${escape(id)}" name="${escape(name)}" type="file"${required}${disabled}${validationAttr}>
          |  ${feedback}
@@ -1718,7 +1722,7 @@ trait StaticFormAppRendererFormPart {
     } else {
       val readonlyAttr = if (readonly) " readonly" else ""
       val placeholderAttr = placeholder.map(x => s""" placeholder="${escape(x)}"""").getOrElse("")
-      s"""<div class="mb-3">
+      s"""<div class="mb-3"${fieldselector}>
          |  <label class="form-label" for="${escape(id)}">${escape(displayLabel)}</label>
          |  <input class="form-control${invalidClass}" id="${escape(id)}" name="${escape(name)}" type="${escape(inputType)}" value="${escape(value)}"${required}${readonlyAttr}${placeholderAttr}${validationAttr}>
          |  ${feedback}
@@ -1762,7 +1766,7 @@ trait StaticFormAppRendererFormPart {
     rows: Int = 6
   ): String = {
     val initialFields = form_initial_fields(values)
-    s"""<div class="mb-3">
+    s"""<div class="mb-3" data-textus-field="fields">
        |  <label class="form-label" for="formFields">${escape(label)}</label>
        |  <textarea class="form-control" id="formFields" name="fields" rows="${rows}" placeholder="name=value&#10;keyword=sample">${initialFields}</textarea>
        |  <div class="form-text">Use one name=value pair per line. Query-style values are also accepted.</div>

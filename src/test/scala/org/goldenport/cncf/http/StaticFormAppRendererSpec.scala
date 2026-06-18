@@ -3,7 +3,7 @@ package org.goldenport.cncf.http
 /*
  * @since   May. 18, 2026
  *  version May. 27, 2026
- * @version Jun. 18, 2026
+ * @version Jun. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 import scala.collection.mutable.ListBuffer
@@ -5729,16 +5729,28 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
       val service = component.protocol.services.services.headOption.getOrElse(fail("service is missing"))
       val operation = service.operations.operations.toVector.headOption.getOrElse(fail("operation is missing"))
+      val componentpath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)
+      val servicepath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(service.name)
+      val operationpath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(operation.name)
 
       val html = _renderer.renderOperationForm(subsystem, component.name, service.name, operation.name).map(_.body).getOrElse(fail("operation form is missing"))
 
       html should include ("<form method=\"post\"")
+      html should include ("data-textus-page=\"static-form-operation\"")
+      html should include ("data-textus-section=\"operation-form\"")
+      html should include ("data-textus-section=\"form-errors\"")
+      html should include ("data-textus-section=\"form-controls\"")
+      html should include ("data-textus-section=\"form-actions\"")
+      html should include (s"""data-textus-form="${componentpath}.${servicepath}.${operationpath}"""")
+      html should include ("data-textus-field=\"fields\"")
+      html should include ("data-textus-action=\"submit\"")
+      html should include ("data-textus-action=\"operations\"")
       html should include ("card admin-card")
       html should include ("row g-3")
       html should include ("admin-action-row")
       html should include ("name=\"fields\"")
       html should include ("class=\"form-control\"")
-      html should include (s"/form/${org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)}/${org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(service.name)}/${org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(operation.name)}")
+      html should include (s"/form/${componentpath}/${servicepath}/${operationpath}")
       html should not include ("cdn.jsdelivr")
     }
 
@@ -9914,6 +9926,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       ).body
 
       html should include ("textus-line-list")
+      html should include ("data-textus-widget=\"textus:line-list\"")
       html should include ("textus-line-list-item")
       html should include ("<strong>Phase12</strong>")
       html should include ("<p class=\"text-secondary mb-1\">Static form validation</p>")
@@ -9922,6 +9935,25 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("data-textus-row-href=\"/notice/notice_1\"")
       html should include ("href=\"/notice/notice_1\"")
       html should not include ("<textus:line-list")
+
+      val emptyproperties = StaticFormAppRenderer.FormResultProperties(
+        StaticFormAppRenderer.FormPageProperties(
+          "notice-board",
+          "notice",
+          "search-notices"
+        ),
+        200,
+        "application/json",
+        """{"data":[]}"""
+      )
+      val emptyhtml = _renderer.renderFormResult(
+        emptyproperties,
+        """<article><textus:line-list source="result.body.data" empty="No notices"></textus:line-list></article>"""
+      ).body
+
+      emptyhtml should include ("data-textus-widget=\"textus:line-list\"")
+      emptyhtml should include ("No notices")
+      emptyhtml should not include ("<textus:line-list")
     }
 
     "render table and card detail actions from record fields" in {
@@ -9989,6 +10021,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       ).body
 
       html should include ("class=\"card h-100 textus-summary-card border-success\"")
+      html should include ("data-textus-widget=\"textus:summary-card\"")
+      html should include ("data-textus-widget=\"textus:alert\"")
+      html should include ("data-textus-widget=\"textus:empty-state\"")
+      html should include ("data-textus-widget=\"textus:status-badge\"")
       html should include ("<strong class=\"display-6 text-success\">42</strong>")
       html should include ("Notices loaded")
       html should include ("class=\"alert alert-info textus-alert\"")
@@ -9997,7 +10033,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("Search failed")
       html should include ("No missing records")
       html should include ("""<a class="btn btn-sm btn-primary" href="/form/notice-board/notice/post-notice">Create notice</a>""")
-      html should include ("""<span class="badge text-bg-secondary textus-status-badge">mystery</span>""")
+      html should include ("""<span class="badge text-bg-secondary textus-status-badge" data-textus-widget="textus:status-badge">mystery</span>""")
       html should not include ("No notices")
       html should not include ("<textus:summary-card")
       html should not include ("<textus-alert")

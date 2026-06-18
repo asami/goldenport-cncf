@@ -437,6 +437,35 @@ Widget output must be responsive by default. Dense list output should use
 `.table-responsive` or Bootstrap grid/card layout. Action groups must wrap on
 narrow screens.
 
+## Bootstrap Core DOM And Semantic Selectors
+
+Generated CNCF Web HTML must expose semantic `data-textus-*` selectors for
+tests, demo tooling, accessibility checks, and AI-assisted authoring. These
+selectors are stable contracts; Bootstrap classes remain presentation
+substrate and should not be the primary automation selector.
+
+WU-03 defines the first selector baseline for Static Form operation forms and
+representative Textus widgets:
+
+- `data-textus-page`: generated page root. Operation forms use
+  `static-form-operation`.
+- `data-textus-section`: semantic page section. Initial operation form section
+  names are `operation-form`, `form-errors`, `form-controls`, and
+  `form-actions`.
+- `data-textus-form`: normalized form selector. Operation forms use
+  `{componentPath}.{servicePath}.{operationPath}`.
+- `data-textus-field`: canonical field or parameter name on the visible field
+  wrapper, hidden field input, or additional-fields wrapper.
+- `data-textus-action`: user action name. Operation forms expose `submit` and
+  `operations`.
+- `data-textus-widget`: canonical Textus widget name from the WU-02
+  vocabulary, such as `textus:line-list`.
+
+WU-03 intentionally does not require every generated page or every widget to
+carry the complete selector set. It establishes the contract through operation
+forms and representative widgets. Broader generated-page coverage belongs to
+the renderer integration slices that follow.
+
 ## Existing Widgets
 
 The following widgets are the baseline compatibility set:

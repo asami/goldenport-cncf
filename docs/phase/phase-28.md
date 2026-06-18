@@ -38,6 +38,9 @@ This document is a phase dashboard, not a design journal.
   concrete pressure, while CNCF owns the reusable Web UI DSL, widget, DOM, and
   UX profile contracts for Static Form Web Apps and generated
   admin/application screens.
+- Treat TKE source fragment composition/fragments editor repeated-row editing
+  as a concrete `textus:editable-line-list` migration driver, replacing
+  application-local JavaScript as the primary editing model where appropriate.
 - Add a Web Demo Assist Manifest for cozy video and demo script generation.
 
 Scope boundaries:
@@ -55,7 +58,7 @@ Scope boundaries:
 
 - A (DONE): WU-01 — Open Phase 28 and freeze Web UI DSL scope.
 - B (DONE): WU-02 — Web UI DSL vocabulary and projection contract.
-- C (OPEN): WU-03 — Bootstrap Core DOM and semantic selector contract.
+- C (DONE): WU-03 — Bootstrap Core DOM and semantic selector contract.
 - D (OPEN): WU-04 — UX Profile model with Bootstrap and Material profile
   support.
 - E (OPEN): WU-05 — Static Form renderer integration vertical slice.
@@ -69,7 +72,7 @@ Scope boundaries:
 
 Resume hint:
 
-- Continue with WU-03. Keep Phase 27 closed and treat Knowledge Editor screens
+- Continue with WU-04. Keep Phase 27 closed and treat Knowledge Editor screens
   as drivers for CNCF Web/platform infrastructure, not as the owner of the Web
   UI architecture.
 
@@ -77,7 +80,7 @@ Resume hint:
 
 - [x] WU-01: Open Phase 28 and freeze Web UI DSL scope.
 - [x] WU-02: Web UI DSL vocabulary and projection contract.
-- [ ] WU-03: Bootstrap Core DOM and semantic selector contract.
+- [x] WU-03: Bootstrap Core DOM and semantic selector contract.
 - [ ] WU-04: UX Profile model with Bootstrap and Material profile support.
 - [ ] WU-05: Static Form renderer integration vertical slice.
 - [ ] WU-06: Editable line-list widget vertical slice.
@@ -107,6 +110,8 @@ Phase 28 can close when:
   authorization, data binding, or server-side execution paths.
 - TKE InformationSpace / Knowledge Editor driver screens exercise the new
   widget and DOM contracts.
+- TKE fragments editor/source fragment composition repeated-row editing is
+  covered as an editable-line-list migration target.
 - The Web Demo Assist Manifest can expose page/section/form/field/action/widget
   selector mappings when demo mode is explicitly enabled.
 - Demo assist does not expose hidden sensitive values, session tokens, raw

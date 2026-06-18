@@ -124,7 +124,7 @@ generated CNCF Web screens.
 
 ## WU-03: Bootstrap Core DOM and Semantic Selector Contract
 
-Status: OPEN
+Status: DONE
 
 ### Objective
 
@@ -133,18 +133,31 @@ machine-readable by tests, demo tooling, and AI-assisted authoring.
 
 ### Initial Tasks
 
-- [ ] Standardize `data-textus-page`, `data-textus-section`,
+- [x] Standardize `data-textus-page`, `data-textus-section`,
       `data-textus-form`, `data-textus-field`, `data-textus-action`, and
       `data-textus-widget`.
-- [ ] Prefer semantic selectors over brittle generated CSS paths.
-- [ ] Define Bootstrap Core DOM conventions for pages, sections, forms,
+- [x] Prefer semantic selectors over brittle generated CSS paths.
+- [x] Define Bootstrap Core DOM conventions for pages, sections, forms,
       fields, actions, widgets, empty states, and validation messages.
-- [ ] Add renderer specs proving generated pages expose stable selectors.
+- [x] Add renderer specs proving generated pages expose stable selectors.
 
 ### Expected Output
 
 - A selector and DOM contract that can support renderer specs, demo manifest
   generation, and future UX profiles.
+
+### Completion Notes
+
+- `docs/spec/textus-widget.md` now defines the WU-03 Bootstrap Core DOM and
+  semantic selector contract.
+- Static Form operation forms expose stable `data-textus-page`,
+  `data-textus-section`, `data-textus-form`, `data-textus-field`, and
+  `data-textus-action` selectors without changing form names, routes, methods,
+  or validation behavior.
+- Representative Textus widgets now expose `data-textus-widget` on their root
+  elements for `textus:line-list`, `textus:summary-card`, `textus:alert`,
+  `textus:empty-state`, and `textus:status-badge`.
+- Focused renderer specs and the full CNCF test suite pass.
 
 ---
 
@@ -214,6 +227,9 @@ display-oriented `textus:line-list` widget.
 - [ ] Define stable repeated-field naming.
 - [ ] Render row-level and field-level validation anchors.
 - [ ] Preserve no-JS fallback.
+- [ ] Cover the TKE source fragment composition/editor pattern as a target
+      use case so repeated source fragments do not require application-local
+      JavaScript for the main add/delete/edit workflow.
 - [ ] Defer drag-and-drop ordering, nested line-list, complex conditional rows,
       and advanced client-side editing.
 
@@ -239,7 +255,12 @@ Web UI DSL and editable-line-list behavior.
       driver repository for this slice.
 - [ ] Select one or more editor fields such as authors, identifiers,
       relationships, or qualifiers.
+- [ ] Include the TKE fragments editor/source fragment composition screen as a
+      driver for replacing remaining application-local JavaScript repeated-row
+      editing with `textus:editable-line-list`.
 - [ ] Render those fields through the common editable-line-list widget.
+- [ ] Keep any TKE-specific JavaScript as optional progressive enhancement
+      around the common widget, not as the primary repeated-row editing model.
 - [ ] Keep Knowledge Editor application code as a driver, not the owner of the
       CNCF Web UI DSL contract.
 - [ ] Add smoke coverage for the selected driver screen.

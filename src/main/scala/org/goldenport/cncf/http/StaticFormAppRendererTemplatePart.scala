@@ -61,12 +61,12 @@ trait StaticFormAppRendererTemplatePart {
     rendered: String,
     options: StaticFormAppLayout.AssetCompletionOptions
   ): String = {
-    val hasTextusWidgets = has_textus_widgets(template)
+    val hastextuswidgets = has_textus_widgets(template)
     StaticFormAppLayout.completeWidgetAssets(
       rendered,
       options.copy(
-        requiresBootstrap = hasTextusWidgets,
-        requiresTextusWidgets = hasTextusWidgets
+        requiresBootstrap = hastextuswidgets,
+        requiresTextusWidgets = hastextuswidgets
       )
     )
   }
@@ -94,38 +94,38 @@ trait StaticFormAppRendererTemplatePart {
     tableColumns: Map[String, Vector[TableColumn]],
     defaultTableView: String
   ): String = {
-    val resultView = """<textus-result-view\s+source="([^"]+)"\s*></textus-result-view>""".r
+    val resultview = """<textus-result-view\s+source="([^"]+)"\s*></textus-result-view>""".r
     val table = """<textus:table\b([^>]*)></textus:table>""".r
     val card = """(?s)<textus(?::card(?!-)|-card(?!-))\b([^>]*)>(.*?)</textus(?::card|-card)>""".r
-    val recordCard = """<textus(?::record-card|-record-card)\b([^>]*)></textus(?::record-card|-record-card)>""".r
-    val cardList = """<textus(?::card-list|-card-list)\b([^>]*)></textus(?::card-list|-card-list)>""".r
+    val recordcard = """<textus(?::record-card|-record-card)\b([^>]*)></textus(?::record-card|-record-card)>""".r
+    val cardlist = """<textus(?::card-list|-card-list)\b([^>]*)></textus(?::card-list|-card-list)>""".r
     val linelist = """<textus(?::line-list|-line-list)\b([^>]*)></textus(?::line-list|-line-list)>""".r
-    val summaryCard = """<textus(?::summary-card|-summary-card)\b([^>]*)></textus(?::summary-card|-summary-card)>""".r
-    val actionCard = """<textus(?::action-card|-action-card)\b([^>]*)></textus(?::action-card|-action-card)>""".r
-    val actionGroup = """<textus(?::action-group|-action-group)\b([^>]*)></textus(?::action-group|-action-group)>""".r
-    val confirmAction = """<textus(?::confirm-action|-confirm-action)\b([^>]*)></textus(?::confirm-action|-confirm-action)>""".r
-    val jobPanel = """<textus(?::job-panel|-job-panel)\b([^>]*)></textus(?::job-panel|-job-panel)>""".r
-    val jobTicket = """<textus(?::job-ticket|-job-ticket)\b([^>]*)></textus(?::job-ticket|-job-ticket)>""".r
-    val jobActions = """<textus(?::job-actions|-job-actions)\b([^>]*)></textus(?::job-actions|-job-actions)>""".r
+    val summarycard = """<textus(?::summary-card|-summary-card)\b([^>]*)></textus(?::summary-card|-summary-card)>""".r
+    val actioncard = """<textus(?::action-card|-action-card)\b([^>]*)></textus(?::action-card|-action-card)>""".r
+    val actiongroup = """<textus(?::action-group|-action-group)\b([^>]*)></textus(?::action-group|-action-group)>""".r
+    val confirmaction = """<textus(?::confirm-action|-confirm-action)\b([^>]*)></textus(?::confirm-action|-confirm-action)>""".r
+    val jobpanel = """<textus(?::job-panel|-job-panel)\b([^>]*)></textus(?::job-panel|-job-panel)>""".r
+    val jobticket = """<textus(?::job-ticket|-job-ticket)\b([^>]*)></textus(?::job-ticket|-job-ticket)>""".r
+    val jobactions = """<textus(?::job-actions|-job-actions)\b([^>]*)></textus(?::job-actions|-job-actions)>""".r
     val alert = """<textus(?::alert|-alert)\b([^>]*)></textus(?::alert|-alert)>""".r
-    val emptyState = """<textus(?::empty-state|-empty-state)\b([^>]*)></textus(?::empty-state|-empty-state)>""".r
-    val statusBadge = """<textus(?::status-badge|-status-badge)\b([^>]*)></textus(?::status-badge|-status-badge)>""".r
+    val emptystate = """<textus(?::empty-state|-empty-state)\b([^>]*)></textus(?::empty-state|-empty-state)>""".r
+    val statusbadge = """<textus(?::status-badge|-status-badge)\b([^>]*)></textus(?::status-badge|-status-badge)>""".r
     val pagination = """<textus(?::pagination|-pagination)\b([^>]*)></textus(?::pagination|-pagination)>""".r
-    val navList = """<textus(?::nav-list|-nav-list)\b([^>]*)></textus(?::nav-list|-nav-list)>""".r
-    val formLink = """<textus-form-link\s+href="([^"]+)"\s+label="([^"]+)"\s*></textus-form-link>""".r
-    val actionLink = """<textus(?::action-link|-action-link)\b([^>]*)></textus(?::action-link|-action-link)>""".r
-    val actionForm = """<textus(?::action-form|-action-form)\b([^>]*)></textus(?::action-form|-action-form)>""".r
+    val navlist = """<textus(?::nav-list|-nav-list)\b([^>]*)></textus(?::nav-list|-nav-list)>""".r
+    val formlink = """<textus-form-link\s+href="([^"]+)"\s+label="([^"]+)"\s*></textus-form-link>""".r
+    val actionlink = """<textus(?::action-link|-action-link)\b([^>]*)></textus(?::action-link|-action-link)>""".r
+    val actionform = """<textus(?::action-form|-action-form)\b([^>]*)></textus(?::action-form|-action-form)>""".r
     val operationpanel = """<textus(?::operation-panel|-operation-panel)\b([^>]*)>(.*?)</textus(?::operation-panel|-operation-panel)>""".r
-    val hiddenContext = """<textus(?::hidden-context|-hidden-context)\b([^>]*)></textus(?::hidden-context|-hidden-context)>""".r
+    val hiddencontext = """<textus(?::hidden-context|-hidden-context)\b([^>]*)></textus(?::hidden-context|-hidden-context)>""".r
     val fieldlist = """<textus(?::field-list|-field-list)\b([^>]*)></textus(?::field-list|-field-list)>""".r
     val candidatelist = """<textus(?::candidate-list|-candidate-list)\b([^>]*)></textus(?::candidate-list|-candidate-list)>""".r
     val knowledgesummary = """<textus(?::knowledge-summary|-knowledge-summary)\b([^>]*)></textus(?::knowledge-summary|-knowledge-summary)>""".r
-    val descriptionList = """<textus(?::description-list|-description-list)\b([^>]*)></textus(?::description-list|-description-list)>""".r
-    val htmlField = """<textus(?::html-field|-html-field)\b([^>]*)></textus(?::html-field|-html-field)>""".r
+    val descriptionlist = """<textus(?::description-list|-description-list)\b([^>]*)></textus(?::description-list|-description-list)>""".r
+    val htmlfield = """<textus(?::html-field|-html-field)\b([^>]*)></textus(?::html-field|-html-field)>""".r
     val capabilitymessage = """(?s)<textus(?::capability-message|-capability-message)\b([^>]*)>(.*?)</textus(?::capability-message|-capability-message)>""".r
-    val propertyList = """<textus-property-list\s+source="([^"]+)"\s*></textus-property-list>""".r
-    val errorPanel = """<textus-error-panel\s+source="([^"]+)"\s*></textus-error-panel>""".r
-    val a = resultView.replaceAllIn(template, m =>
+    val propertylist = """<textus-property-list\s+source="([^"]+)"\s*></textus-property-list>""".r
+    val errorpanel = """<textus-error-panel\s+source="([^"]+)"\s*></textus-error-panel>""".r
+    val a = resultview.replaceAllIn(template, m =>
       java.util.regex.Matcher.quoteReplacement(render_result_view(m.group(1), properties))
     )
     val b = table.replaceAllIn(a, m => {
@@ -136,11 +136,11 @@ trait StaticFormAppRendererTemplatePart {
       val attrs = widget_attrs(m.group(1))
       java.util.regex.Matcher.quoteReplacement(render_card(attrs, m.group(2), properties))
     })
-    val c = recordCard.replaceAllIn(b1, m => {
+    val c = recordcard.replaceAllIn(b1, m => {
       val attrs = widget_attrs(m.group(1))
       java.util.regex.Matcher.quoteReplacement(render_record_card(attrs, properties, tableColumns, defaultTableView))
     })
-    val d = cardList.replaceAllIn(c, m => {
+    val d = cardlist.replaceAllIn(c, m => {
       val attrs = widget_attrs(m.group(1))
       java.util.regex.Matcher.quoteReplacement(render_card_list(attrs, properties, tableColumns, defaultTableView))
     })
@@ -148,33 +148,33 @@ trait StaticFormAppRendererTemplatePart {
       val attrs = widget_attrs(m.group(1))
       java.util.regex.Matcher.quoteReplacement(render_line_list(attrs, properties, tableColumns, defaultTableView))
     })
-    val e = summaryCard.replaceAllIn(d1, m => {
+    val e = summarycard.replaceAllIn(d1, m => {
       val attrs = widget_attrs(m.group(1))
       java.util.regex.Matcher.quoteReplacement(render_summary_card(attrs, properties))
     })
-    val e1 = actionCard.replaceAllIn(e, m => {
+    val e1 = actioncard.replaceAllIn(e, m => {
       val attrs = widget_attrs(m.group(1))
       java.util.regex.Matcher.quoteReplacement(render_action_card(attrs, properties))
     })
-    val e1a = actionGroup.replaceAllIn(e1, m => {
+    val e1a = actiongroup.replaceAllIn(e1, m => {
       val attrs = widget_attrs(m.group(1))
       java.util.regex.Matcher.quoteReplacement(render_action_group(attrs, properties))
     })
-    var confirmActionIndex = 0
-    val e1b = confirmAction.replaceAllIn(e1a, m => {
-      confirmActionIndex = confirmActionIndex + 1
+    var confirmactionindex = 0
+    val e1b = confirmaction.replaceAllIn(e1a, m => {
+      confirmactionindex = confirmactionindex + 1
       val attrs = widget_attrs(m.group(1))
-      java.util.regex.Matcher.quoteReplacement(render_confirm_action(attrs, properties, confirmActionIndex))
+      java.util.regex.Matcher.quoteReplacement(render_confirm_action(attrs, properties, confirmactionindex))
     })
-    val e2 = jobPanel.replaceAllIn(e1b, m => {
+    val e2 = jobpanel.replaceAllIn(e1b, m => {
       val attrs = widget_attrs(m.group(1))
       java.util.regex.Matcher.quoteReplacement(render_job_panel(attrs, properties))
     })
-    val f0 = jobTicket.replaceAllIn(e2, m => {
+    val f0 = jobticket.replaceAllIn(e2, m => {
       val attrs = widget_attrs(m.group(1))
       java.util.regex.Matcher.quoteReplacement(render_job_ticket(attrs, properties))
     })
-    val f1 = jobActions.replaceAllIn(f0, m => {
+    val f1 = jobactions.replaceAllIn(f0, m => {
       val attrs = widget_attrs(m.group(1))
       java.util.regex.Matcher.quoteReplacement(render_job_actions(attrs, properties))
     })
@@ -182,11 +182,11 @@ trait StaticFormAppRendererTemplatePart {
       val attrs = widget_attrs(m.group(1))
       java.util.regex.Matcher.quoteReplacement(render_alert(attrs, properties))
     })
-    val g = emptyState.replaceAllIn(f, m => {
+    val g = emptystate.replaceAllIn(f, m => {
       val attrs = widget_attrs(m.group(1))
       java.util.regex.Matcher.quoteReplacement(render_empty_state(attrs, properties))
     })
-    val g1 = statusBadge.replaceAllIn(g, m => {
+    val g1 = statusbadge.replaceAllIn(g, m => {
       val attrs = widget_attrs(m.group(1))
       java.util.regex.Matcher.quoteReplacement(render_status_badge(attrs, properties))
     })
@@ -194,18 +194,18 @@ trait StaticFormAppRendererTemplatePart {
       val attrs = widget_attrs(m.group(1))
       java.util.regex.Matcher.quoteReplacement(render_pagination(attrs, properties))
     })
-    val h1 = navList.replaceAllIn(h, m => {
+    val h1 = navlist.replaceAllIn(h, m => {
       val attrs = widget_attrs(m.group(1))
       java.util.regex.Matcher.quoteReplacement(render_nav_list(attrs, properties))
     })
-    val i = formLink.replaceAllIn(h1, m =>
+    val i = formlink.replaceAllIn(h1, m =>
       java.util.regex.Matcher.quoteReplacement(render_form_link(m.group(1), m.group(2), properties))
     )
-    val j = actionLink.replaceAllIn(i, m => {
+    val j = actionlink.replaceAllIn(i, m => {
       val attrs = widget_attrs(m.group(1))
       java.util.regex.Matcher.quoteReplacement(render_action_link(attrs, properties))
     })
-    val k = actionForm.replaceAllIn(j, m => {
+    val k = actionform.replaceAllIn(j, m => {
       val attrs = widget_attrs(m.group(1))
       java.util.regex.Matcher.quoteReplacement(render_action_form(attrs, properties))
     })
@@ -213,7 +213,7 @@ trait StaticFormAppRendererTemplatePart {
       val attrs = widget_attrs(m.group(1))
       java.util.regex.Matcher.quoteReplacement(render_operation_panel(attrs, m.group(2), properties))
     })
-    val l = hiddenContext.replaceAllIn(k1, m => {
+    val l = hiddencontext.replaceAllIn(k1, m => {
       val attrs = widget_attrs(m.group(1))
       java.util.regex.Matcher.quoteReplacement(render_hidden_context(attrs, properties))
     })
@@ -229,11 +229,11 @@ trait StaticFormAppRendererTemplatePart {
       val attrs = widget_attrs(m.group(1))
       java.util.regex.Matcher.quoteReplacement(render_knowledge_summary(attrs, properties))
     })
-    val l1 = descriptionList.replaceAllIn(l1c, m => {
+    val l1 = descriptionlist.replaceAllIn(l1c, m => {
       val attrs = widget_attrs(m.group(1))
       java.util.regex.Matcher.quoteReplacement(render_description_list(attrs, properties, tableColumns, defaultTableView))
     })
-    val l2 = htmlField.replaceAllIn(l1, m => {
+    val l2 = htmlfield.replaceAllIn(l1, m => {
       val attrs = widget_attrs(m.group(1))
       java.util.regex.Matcher.quoteReplacement(render_html_field(attrs, properties))
     })
@@ -241,10 +241,10 @@ trait StaticFormAppRendererTemplatePart {
       val attrs = widget_attrs(m.group(1))
       java.util.regex.Matcher.quoteReplacement(render_capability_message(attrs, m.group(2), properties))
     })
-    val n = propertyList.replaceAllIn(l3, m =>
+    val n = propertylist.replaceAllIn(l3, m =>
       java.util.regex.Matcher.quoteReplacement(render_property_list(m.group(1), properties))
     )
-    errorPanel.replaceAllIn(n, m =>
+    errorpanel.replaceAllIn(n, m =>
       java.util.regex.Matcher.quoteReplacement(render_error_panel(m.group(1), properties))
     )
   }
@@ -1222,10 +1222,10 @@ trait StaticFormAppRendererTemplatePart {
     source_json(source, properties).flatMap(table_rows).map { rows =>
       val objects = rows.flatMap(_.asObject).map(_.toMap)
       if (objects.isEmpty)
-        empty_state(attrs.getOrElse("empty", "No records"))
+        empty_state(attrs.getOrElse("empty", "No records"), None, Some("textus:line-list"))
       else
-        s"""<ul class="list-group textus-line-list">${objects.map(line_list_item_html(_, columns, attrs)).mkString("\n")}</ul>"""
-    }.getOrElse(empty_state(attrs.getOrElse("empty", "No records")))
+        s"""<ul class="list-group textus-line-list" data-textus-widget="textus:line-list">${objects.map(line_list_item_html(_, columns, attrs)).mkString("\n")}</ul>"""
+    }.getOrElse(empty_state(attrs.getOrElse("empty", "No records"), None, Some("textus:line-list")))
   }
 
   protected def line_list_item_html(
@@ -1385,12 +1385,14 @@ trait StaticFormAppRendererTemplatePart {
 
   protected def empty_state(
     message: String,
-    action: Option[(String, String)]
+    action: Option[(String, String)],
+    widget: Option[String] = None
   ): String = {
     val actionhtml = action.map { case (label, href) =>
       s"""<div class="mt-2"><a class="btn btn-sm btn-primary" href="${escape(href)}">${escape(label)}</a></div>"""
     }.getOrElse("")
-    s"""<div class="alert alert-secondary textus-empty-state" role="status">${escape(message)}${actionhtml}</div>"""
+    val widgetattr = widget.map(x => s""" data-textus-widget="${escape(x)}"""").getOrElse("")
+    s"""<div class="alert alert-secondary textus-empty-state" role="status"${widgetattr}>${escape(message)}${actionhtml}</div>"""
   }
 
   protected def render_summary_card(
@@ -1406,7 +1408,7 @@ trait StaticFormAppRendererTemplatePart {
     val subtitlehtml = subtitle.filter(_.nonEmpty).map { x =>
       s"""<p class="text-secondary mb-0">${escape(x)}</p>"""
     }.getOrElse("")
-    s"""<article class="card h-100 textus-summary-card border-${escape(variant)}"><div class="card-body"><p class="text-secondary mb-1">${escape(title)}</p><strong class="display-6 text-${escape(variant)}">${escape(value)}</strong>${subtitlehtml}</div></article>"""
+    s"""<article class="card h-100 textus-summary-card border-${escape(variant)}" data-textus-widget="textus:summary-card"><div class="card-body"><p class="text-secondary mb-1">${escape(title)}</p><strong class="display-6 text-${escape(variant)}">${escape(value)}</strong>${subtitlehtml}</div></article>"""
   }
 
   protected def render_action_card(
@@ -1529,7 +1531,7 @@ trait StaticFormAppRendererTemplatePart {
       .getOrElse("")
     if (title.exists(_.nonEmpty) || message.nonEmpty) {
       val titlehtml = title.filter(_.nonEmpty).map(x => s"""<p class="alert-heading fw-semibold mb-1">${escape(x)}</p>""").getOrElse("")
-      s"""<div class="alert alert-${escape(variant)} textus-alert" role="alert">${titlehtml}${escape(message)}</div>"""
+      s"""<div class="alert alert-${escape(variant)} textus-alert" role="alert" data-textus-widget="textus:alert">${titlehtml}${escape(message)}</div>"""
     } else {
       ""
     }
@@ -1551,7 +1553,7 @@ trait StaticFormAppRendererTemplatePart {
         label <- attr_value(attrs, "action-label", properties)
         href <- attr_value(attrs, "action-href", properties)
       } yield label -> href
-      empty_state(message, action)
+      empty_state(message, action, Some("textus:empty-state"))
     } else {
       ""
     }
@@ -1571,7 +1573,7 @@ trait StaticFormAppRendererTemplatePart {
     else {
       val variant = attrs.get("variant").map(bootstrap_variant).getOrElse(status_variant(value))
       val label = attrs.get("label").map(resolve_attr_value(_, properties)).filter(_.nonEmpty).getOrElse(value)
-      s"""<span class="badge text-bg-${escape(variant)} textus-status-badge">${escape(label)}</span>"""
+      s"""<span class="badge text-bg-${escape(variant)} textus-status-badge" data-textus-widget="textus:status-badge">${escape(label)}</span>"""
     }
   }
 
