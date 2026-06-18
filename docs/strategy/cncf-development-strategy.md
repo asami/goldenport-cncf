@@ -650,16 +650,17 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Notes contain execution details and results for each phase.
 
 ## Process Status Pointers
-- Current phase selection: Web UI DSL / Bootstrap Core / UX Profile
-  implementation candidate.
+- Current phase selection: Phase 28 — Web UI DSL / Bootstrap Core /
+  Material Design / UX Profile.
+- Current phase dashboard: `docs/phase/phase-28.md`
+- Current phase checklist: `docs/phase/phase-28-checklist.md`
 - Latest closed phase dashboard: `docs/phase/phase-27.md`
 - Latest closed phase checklist: `docs/phase/phase-27-checklist.md`
 - Previous closed phase dashboard: `docs/phase/phase-26.md`
 - Previous closed phase checklist: `docs/phase/phase-26-checklist.md`
-- Candidate next phase areas: Web UI DSL / Bootstrap Core /
-  Material Design / UX Profile implementation; Web UI multi-locale message
+- Candidate next phase areas after Phase 28: Web UI multi-locale message
   control; AwsComponent/S3 BlobStore provider; Search/index planning; DB
-  migration tooling.
+  migration tooling; CulturalResource collection-item profile.
 - Status interpretation rules: `docs/rules/stage-status-and-checklist-convention.md`
 
 ## 6. Explicit Non-Goals
@@ -694,6 +695,7 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Phase 25: closed (`docs/phase/phase-25.md`)
 - Phase 26: closed (`docs/phase/phase-26.md`)
 - Phase 27: closed (`docs/phase/phase-27.md`)
+- Phase 28: active (`docs/phase/phase-28.md`)
 
 ## 8. Completed Development Item History
 
@@ -1151,12 +1153,19 @@ corresponding completed-history entry.
 
 Current development item:
 
-- Web UI DSL / Bootstrap Core / UX Profile implementation candidate.
+- Phase 28 implements `9.19 Web UI DSL / Bootstrap Core / Material Design /
+  UX Profile`.
+  - Dashboard: `docs/phase/phase-28.md`
+  - Checklist: `docs/phase/phase-28-checklist.md`
   - Source note:
     `docs/notes/web-ui-dsl-bootstrap-core-ux-profile-design.md`.
   - Goal: turn the editor UI lessons from Phase 27 into reusable generated Web
-    metadata, Bootstrap Core DOM, semantic widgets, and selectable UX profiles
-    for Static Form Web Apps and application-owned screens.
+    metadata, Bootstrap Core DOM, semantic widgets, editable repeated-row
+    controls, selectable UX profiles, and demo-assist metadata for Static Form
+    Web Apps and application-owned screens.
+  - Driver: `/Users/asami/src/dev2026/textus-knowledge-editor` provides the
+    concrete InformationSpace / Knowledge Editor screens; CNCF owns the reusable
+    Web UI DSL, widget, DOM, and UX profile contracts generalized from them.
 
 ### 9.1 Web Next Stage Follow-ups
 Web/platform follow-up index.
@@ -1725,10 +1734,13 @@ Future component-runtime and execution-governance item.
   - dependency mediation redesign.
 
 ### 9.19 Web UI DSL / Bootstrap Core / Material Design / UX Profile
-Future Web/platform development item.
+Active Web/platform development item implemented by Phase 28.
 
 - Design note:
   - `docs/notes/web-ui-dsl-bootstrap-core-ux-profile-design.md`
+- Active work documents:
+  - `docs/phase/phase-28.md`
+  - `docs/phase/phase-28-checklist.md`
 - Goal: promote Web UI DSL, Bootstrap Core DOM conventions, Material Design
   profile support, and selectable UX profiles into a first-class CNCF
   Web/platform development item rather than a Phase 27 knowledge-editor
@@ -1750,16 +1762,32 @@ Future Web/platform development item.
   - support semantic widgets such as list/detail/action/result forms,
     validation/issue panels, empty states, capability messages, and
     operator/data-entry affordances;
+  - preserve existing display widgets such as `textus:table`,
+    `textus:card-list`, `textus:line-list`, `textus:summary-card`,
+    `textus:action-form`, and `textus:error-panel`;
+  - add a distinct editable repeated-row widget for authors, identifiers,
+    relationships, qualifiers, and similar form-edit collections;
+  - standardize semantic DOM markers such as `data-textus-page`,
+    `data-textus-section`, `data-textus-form`, `data-textus-field`,
+    `data-textus-action`, and `data-textus-widget`;
+  - expose an opt-in Web Demo Assist Manifest for cozy video and demo script
+    generation when demo mode is explicitly enabled;
   - include reusable selector/display patterns for project-level knowledge
     settings such as RDF prefix/namespace registries where application screens
     need to show or choose the active namespace;
   - align capability-aware controls with the existing CNCF authorization model;
   - keep generated UI metadata operation-centric rather than application-local.
 - First implementation direction:
-  - start with reusable widgets needed by InformationSpace / Knowledge Editor
-    pages;
+  - use `/Users/asami/src/dev2026/textus-knowledge-editor` as the first
+    application driver and start with reusable widgets needed by
+    InformationSpace / Knowledge Editor pages;
+  - treat existing `textus:line-list` as display-oriented and add a separate
+    editable-line-list widget for repeated form rows;
   - provide a generic aggregate edit context for staged, partial editor updates
     before explicit save/discard;
+  - add a JSON demo manifest endpoint controlled by runtime config, with
+    selectors derived from semantic `data-textus-*` attributes and sensitive
+    values omitted;
   - keep development form diagnostics tied to the triggering execution and
     CallTree, instead of relying on a mutable global latest execution;
   - generalize them into Web UI DSL, Bootstrap Core, Material Design profile,
