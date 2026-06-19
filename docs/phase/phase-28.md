@@ -62,7 +62,7 @@ Scope boundaries:
 - D (DONE): WU-04 — UX Profile model with Bootstrap and Material profile
   support.
 - E (DONE): WU-05 — Static Form renderer integration vertical slice.
-- F (OPEN): WU-06 — Editable line-list widget vertical slice.
+- F (DONE): WU-06 — Editable line-list widget vertical slice.
 - G (OPEN): WU-07 — TKE / InformationSpace / Knowledge Editor driver
   integration.
 - H (OPEN): WU-08 — Validation, issue, capability, and empty-state widget
@@ -72,7 +72,7 @@ Scope boundaries:
 
 Resume hint:
 
-- Continue with WU-06. Keep Phase 27 closed and treat Knowledge Editor screens
+- Continue with WU-07. Keep Phase 27 closed and treat Knowledge Editor screens
   as drivers for CNCF Web/platform infrastructure, not as the owner of the Web
   UI architecture.
 
@@ -83,7 +83,7 @@ Resume hint:
 - [x] WU-03: Bootstrap Core DOM and semantic selector contract.
 - [x] WU-04: UX Profile model with Bootstrap and Material profile support.
 - [x] WU-05: Static Form renderer integration vertical slice.
-- [ ] WU-06: Editable line-list widget vertical slice.
+- [x] WU-06: Editable line-list widget vertical slice.
 - [ ] WU-07: TKE / InformationSpace / Knowledge Editor driver integration.
 - [ ] WU-08: Validation, issue, capability, and empty-state widget alignment.
 - [ ] WU-09: Web Demo Assist Manifest for cozy video and demo tooling.
@@ -102,9 +102,9 @@ Phase 28 can close when:
   `data-textus-*` selectors for pages, sections, forms, fields, actions, and
   widgets.
 - Existing display widgets remain compatible.
-- The editable repeated-row widget supports add row, delete row, hidden
-  template row, stable field names, row-level validation anchors, field-level
-  validation anchors, and no-JS fallback.
+- The editable repeated-row widget supports add row, template-defined delete
+  controls, hidden template row, stable field names, row-level validation
+  anchors, field-level validation anchors, and no-JS fallback.
 - UX profile selection supports at least the Bootstrap baseline and a Material
   profile path without changing operation selectors, form field names,
   authorization, data binding, or server-side execution paths.

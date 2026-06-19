@@ -36,12 +36,13 @@ final class TextusWidgetVocabularySpec extends AnyWordSpec with Matchers {
       definition.actionBinding shouldBe false
     }
 
-    "classify editable-line-list as form-edit vocabulary without renderer implementation" in {
+    "classify editable-line-list as implemented form-edit vocabulary" in {
       val definition = TextusWidgetVocabulary.lookup("textus:editable-line-list").get
 
       definition.category shouldBe TextusWidgetCategory.FormEdit
-      definition.implemented shouldBe false
+      definition.implemented shouldBe true
       definition.sourceBinding shouldBe true
+      definition.optionalAttributes should contain ("add-label")
       TextusWidgetVocabulary.lookup("textus-editable-line-list") shouldBe None
     }
 

@@ -240,16 +240,16 @@ display-oriented `textus:line-list` widget.
 
 ### Initial Tasks
 
-- [ ] Add `textus:editable-line-list` or the final selected widget name.
-- [ ] Support add row and delete row.
-- [ ] Render a hidden template row.
-- [ ] Define stable repeated-field naming.
-- [ ] Render row-level and field-level validation anchors.
-- [ ] Preserve no-JS fallback.
-- [ ] Cover the TKE source fragment composition/editor pattern as a target
+- [x] Add `textus:editable-line-list` or the final selected widget name.
+- [x] Support add row and template-defined delete row controls.
+- [x] Render a hidden template row.
+- [x] Define stable repeated-field naming.
+- [x] Render row-level and field-level validation anchors.
+- [x] Preserve no-JS fallback.
+- [x] Cover the TKE source fragment composition/editor pattern as a target
       use case so repeated source fragments do not require application-local
       JavaScript for the main add/delete/edit workflow.
-- [ ] Defer drag-and-drop ordering, nested line-list, complex conditional rows,
+- [x] Defer drag-and-drop ordering, nested line-list, complex conditional rows,
       and advanced client-side editing.
 
 ### Expected Output

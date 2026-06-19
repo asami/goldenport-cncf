@@ -152,11 +152,11 @@ object TextusWidgetVocabulary {
       canonicalName = "textus:editable-line-list",
       category = TextusWidgetCategory.FormEdit,
       requiredAttributes = Vector("name"),
-      optionalAttributes = Vector("source", "view", "columns", "row-template"),
+      optionalAttributes = Vector("source", "view", "columns", "row-template", "key", "add", "add-label", "new-rows", "empty", "colspan"),
       sourceBinding = true,
       viewBinding = true,
       columnsBinding = true,
-      implemented = false
+      implemented = true
     )
   )
 

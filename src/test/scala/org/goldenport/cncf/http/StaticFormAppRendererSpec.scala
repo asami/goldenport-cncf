@@ -10036,6 +10036,53 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       emptyhtml should not include ("<textus:line-list")
     }
 
+    "render textus editable-line-list from result row template" in {
+      val properties = StaticFormAppRenderer.FormResultProperties(
+        StaticFormAppRenderer.FormPageProperties(
+          "notice-board",
+          "notice",
+          "edit-notices"
+        ),
+        200,
+        "application/json",
+        """{"data":{"rows":[{"id":"row_1","label":"First","enabled":true,"mergeOptions":[{"value":"","label":"Keep as entry","selected":false},{"value":"row_2","label":"Second","selected":true}]},{"id":"row_2","label":"Second","enabled":false,"mergeOptions":[{"value":"","label":"Keep as entry","selected":true}]}],"rowsJson":"[{\"id\":\"json_1\",\"label\":\"JSON source\",\"enabled\":true,\"mergeOptions\":[{\"value\":\"\",\"label\":\"Keep as entry\",\"selected\":true}]}]"}}"""
+      )
+
+      val html = _renderer.renderFormResult(
+        properties,
+        """<table><tbody><textus:editable-line-list name="noticeRows" source="result.body.data.rows" key="id" empty="No rows" colspan="3">
+          |<tr><td><input name="noticeLabel_${row.id}" value="${row.label}" data-textus-field="label"></td><td><input type="checkbox" name="noticeEnabled_${row.id}" value="true" ${row.enabled:checked}></td><td><select name="noticeMerge_${row.id}" data-textus-options="row.mergeOptions"></select></td></tr>
+          |</textus:editable-line-list></tbody></table>""".stripMargin
+      ).body
+
+      html should include ("data-textus-widget=\"textus:editable-line-list\"")
+      html should include ("data-textus-list=\"noticeRows\"")
+      html should include ("data-textus-row=\"row_1\"")
+      html should include ("name=\"noticeLabel_row_1\"")
+      html should include ("value=\"First\"")
+      html should include ("name=\"noticeEnabled_row_1\" value=\"true\"  checked")
+      html should include ("<option value=\"row_2\" selected>Second</option>")
+      html should not include ("<textus:editable-line-list")
+      html should not include ("data-textus-options")
+
+      val jsonhtml = _renderer.renderFormResult(
+        properties,
+        """<table><tbody><textus:editable-line-list name="jsonRows" source="result.body.data.rowsJson" key="id"><tr><td>${row.label}</td></tr></textus:editable-line-list></tbody></table>"""
+      ).body
+      jsonhtml should include ("JSON source")
+      jsonhtml should include ("data-textus-row=\"json_1\"")
+
+      val fallbackhtml = _renderer.renderFormResult(
+        properties,
+        """<table><tbody><textus:editable-line-list name="newRows" source="result.body.data.missingRows" key="id" add="true" new-rows="1"><tr><td><input name="newLabel___new_index__" value="${row.label}"></td></tr></textus:editable-line-list></tbody></table>"""
+      ).body
+      fallbackhtml should include ("data-textus-action=\"add-row\"")
+      fallbackhtml should include ("data-textus-template=\"newRows\"")
+      fallbackhtml should include ("data-textus-add-row=\"newRows\"")
+      fallbackhtml should include ("data-textus-row=\"new_1\"")
+      fallbackhtml should include ("name=\"newLabel_new_1\"")
+    }
+
     "render table and card detail actions from record fields" in {
       val columns = Vector(
         StaticFormAppRenderer.TableColumn("title", "Title"),
@@ -10652,6 +10699,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       StaticFormAppAssets.textusWidgetsCss should include ("textus-clickable-row")
       StaticFormAppAssets.textusWidgetsJs should include ("textusWidgets")
       StaticFormAppAssets.textusWidgetsJs should include ("data-textus-row-href")
+      StaticFormAppAssets.textusWidgetsJs should include ("data-textus-add-row")
     }
 
     "render textus table from result body object data" in {

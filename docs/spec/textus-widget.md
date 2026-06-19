@@ -86,8 +86,30 @@ The WU-02 baseline vocabulary is:
 
 `textus:line-list` is display-only. It must not be repurposed into editable
 repeated-row input. Editable repeated-row form behavior uses
-`textus:editable-line-list`, which is a known `form-edit` vocabulary entry in
-WU-02 but does not require full renderer behavior until WU-06.
+`textus:editable-line-list`, which is a `form-edit` vocabulary entry. WU-06
+implements the first renderer slice for row-template based repeated-row editing.
+
+`textus:editable-line-list` uses canonical namespace notation only; the
+compatibility dash alias `textus-editable-line-list` is intentionally not
+defined. The widget accepts a `source` that resolves to either a JSON array or a
+string containing a JSON array. Each source object is exposed to the body row
+template as `row.<field>`. `${row.field}` is HTML escaped, and
+`${row.field:checked}` emits a checked boolean attribute when the row field is
+true. A `<select data-textus-options="row.options">` element expands an array of
+`{value,label,selected}` records into option elements.
+
+The renderer annotates generated rows with
+`data-textus-widget="textus:editable-line-list"`, `data-textus-list`, and
+`data-textus-row`. `add="true"` emits a hidden template row with
+`data-textus-action="add-row"` and an add-row control with
+`data-textus-add-row`; `add-label` can override the default control label.
+The generic add-row script clones the hidden row and replaces
+`__new_index__` placeholders with a generated row key. `new-rows` can render
+visible no-JS fallback rows. Delete controls remain template-defined in WU-06:
+the widget preserves the field names and checked state supplied by the row
+template, but it does not impose a generic delete action. Drag-and-drop
+ordering, nested editable lists, and complex conditional row logic remain
+outside the WU-06 slice.
 
 Existing widget compatibility aliases include only the dash forms that the
 current renderer already expands, such as `textus-result-view`,

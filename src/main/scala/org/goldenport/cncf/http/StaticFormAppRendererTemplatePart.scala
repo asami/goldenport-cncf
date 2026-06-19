@@ -32,7 +32,7 @@ import io.circe.parser.parse
 /*
  * @since   May. 18, 2026
  *  version May. 30, 2026
- * @version Jun. 18, 2026
+ * @version Jun. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 trait StaticFormAppRendererTemplatePart {
@@ -100,6 +100,7 @@ trait StaticFormAppRendererTemplatePart {
     val recordcard = """<textus(?::record-card|-record-card)\b([^>]*)></textus(?::record-card|-record-card)>""".r
     val cardlist = """<textus(?::card-list|-card-list)\b([^>]*)></textus(?::card-list|-card-list)>""".r
     val linelist = """<textus(?::line-list|-line-list)\b([^>]*)></textus(?::line-list|-line-list)>""".r
+    val editablelinelist = """(?s)<textus:editable-line-list\b([^>]*)>(.*?)</textus:editable-line-list>""".r
     val summarycard = """<textus(?::summary-card|-summary-card)\b([^>]*)></textus(?::summary-card|-summary-card)>""".r
     val actioncard = """<textus(?::action-card|-action-card)\b([^>]*)></textus(?::action-card|-action-card)>""".r
     val actiongroup = """<textus(?::action-group|-action-group)\b([^>]*)></textus(?::action-group|-action-group)>""".r
@@ -148,7 +149,11 @@ trait StaticFormAppRendererTemplatePart {
       val attrs = widget_attrs(m.group(1))
       java.util.regex.Matcher.quoteReplacement(render_line_list(attrs, properties, tableColumns, defaultTableView))
     })
-    val e = summarycard.replaceAllIn(d1, m => {
+    val d2 = editablelinelist.replaceAllIn(d1, m => {
+      val attrs = widget_attrs(m.group(1))
+      java.util.regex.Matcher.quoteReplacement(render_editable_line_list(attrs, m.group(2), properties))
+    })
+    val e = summarycard.replaceAllIn(d2, m => {
       val attrs = widget_attrs(m.group(1))
       java.util.regex.Matcher.quoteReplacement(render_summary_card(attrs, properties))
     })
@@ -1226,6 +1231,148 @@ trait StaticFormAppRendererTemplatePart {
       else
         s"""<ul class="list-group textus-line-list" data-textus-widget="textus:line-list">${objects.map(line_list_item_html(_, columns, attrs)).mkString("\n")}</ul>"""
     }.getOrElse(empty_state(attrs.getOrElse("empty", "No records"), None, Some("textus:line-list")))
+  }
+
+  protected def render_editable_line_list(
+    attrs: Map[String, String],
+    rowtemplate: String,
+    properties: FormPageProperties
+  ): String = {
+    val name = attrs.getOrElse("name", "items")
+    val source = attrs.getOrElse("source", "result.body")
+    val keyfield = attrs.getOrElse("key", "id")
+    val rows = editable_line_list_rows(source, properties)
+    val fallback = editable_line_list_fallback_rows(attrs, name, rowtemplate)
+    val body =
+      if (rows.isEmpty && fallback.nonEmpty)
+        ""
+      else if (rows.isEmpty)
+        editable_line_list_empty_row(attrs)
+      else
+        rows.map(row => editable_line_list_row_html(name, keyfield, rowtemplate, row)).mkString("\n")
+    val template =
+      if (widget_bool(attrs, "add", default = false))
+        editable_line_list_template_html(attrs, name, rowtemplate)
+      else
+        ""
+    s"${body}${template}${fallback}"
+  }
+
+  protected def editable_line_list_rows(
+    source: String,
+    properties: FormPageProperties
+  ): Vector[Map[String, Json]] =
+    source_json(source, properties).flatMap { json =>
+      table_rows(json).orElse {
+        json.asString.flatMap(text => parse(text).toOption.flatMap(table_rows))
+      }
+    }.getOrElse(Vector.empty).flatMap(_.asObject.map(_.toMap))
+
+  protected def editable_line_list_row_html(
+    name: String,
+    keyfield: String,
+    rowtemplate: String,
+    row: Map[String, Json]
+  ): String = {
+    val key = row.get(keyfield).map(json_cell).filter(_.nonEmpty)
+      .orElse(row.get("candidateKey").map(json_cell).filter(_.nonEmpty))
+      .orElse(row.get("key").map(json_cell).filter(_.nonEmpty))
+      .getOrElse("")
+    val expandedoptions = editable_line_list_select_options(rowtemplate, row)
+    val expanded = editable_line_list_interpolate(expandedoptions, row)
+    editable_line_list_annotate_row(expanded, name, key)
+  }
+
+  protected def editable_line_list_empty_row(
+    attrs: Map[String, String]
+  ): String = {
+    val colspan = attrs.getOrElse("colspan", "1")
+    val empty = attrs.getOrElse("empty", "No rows")
+    s"""<tr data-textus-widget="textus:editable-line-list" data-textus-empty="true"><td colspan="${escape(colspan)}" class="text-secondary">${escape(empty)}</td></tr>"""
+  }
+
+  protected def editable_line_list_template_html(
+    attrs: Map[String, String],
+    name: String,
+    rowtemplate: String
+  ): String = {
+    val row = editable_line_list_annotate_row(
+      editable_line_list_interpolate(rowtemplate, Map.empty),
+      name,
+      "__new_index__"
+    )
+    val replacement = s"""<tr hidden data-textus-template="${escape(name)}" data-textus-action="add-row""""
+    val template = row.replaceFirst("<tr\\b", java.util.regex.Matcher.quoteReplacement(replacement))
+    val colspan = attrs.getOrElse("colspan", "1")
+    val label = attrs.getOrElse("add-label", "Add row")
+    val button = s"""<tr data-textus-add-row-controls="${escape(name)}"><td colspan="${escape(colspan)}"><button type="button" class="btn btn-sm btn-outline-primary" data-textus-add-row="${escape(name)}">${escape(label)}</button></td></tr>"""
+    s"${template}\n${button}"
+  }
+
+  protected def editable_line_list_fallback_rows(
+    attrs: Map[String, String],
+    name: String,
+    rowtemplate: String
+  ): String = {
+    val count = attrs.get("new-rows").flatMap(x => scala.util.Try(x.trim.toInt).toOption).getOrElse(0)
+    if (count <= 0)
+      ""
+    else
+      (1 to count).map { index =>
+        val key = s"new_$index"
+        editable_line_list_annotate_row(
+          editable_line_list_interpolate(rowtemplate.replace("__new_index__", key), Map.empty),
+          name,
+          key
+        )
+      }.mkString("\n")
+  }
+
+  protected def editable_line_list_annotate_row(
+    html: String,
+    name: String,
+    key: String
+  ): String = {
+    val attrs = s""" data-textus-widget="textus:editable-line-list" data-textus-list="${escape(name)}" data-textus-row="${escape(key)}""""
+    if (html.trim.startsWith("<tr"))
+      html.replaceFirst("<tr\\b", java.util.regex.Matcher.quoteReplacement(s"<tr$attrs"))
+    else
+      s"""<div$attrs>${html}</div>"""
+  }
+
+  protected def editable_line_list_select_options(
+    template: String,
+    row: Map[String, Json]
+  ): String = {
+    val select = """(?s)<select\b([^>]*)\bdata-textus-options="row\.([A-Za-z0-9_.-]+)"([^>]*)>(.*?)</select>""".r
+    select.replaceAllIn(template, m => {
+      val field = m.group(2)
+      val options = row.get(field).flatMap(_.asArray).getOrElse(Vector.empty)
+      val html = options.flatMap(_.asObject.map(_.toMap)).map(editable_line_list_option_html).mkString
+      java.util.regex.Matcher.quoteReplacement(s"<select${m.group(1)}${m.group(3)}>${html}</select>")
+    })
+  }
+
+  protected def editable_line_list_option_html(
+    option: Map[String, Json]
+  ): String = {
+    val value = option.get("value").map(json_cell).getOrElse("")
+    val label = option.get("label").map(json_cell).filter(_.nonEmpty).getOrElse(value)
+    val selected = option.get("selected").flatMap(_.asBoolean).getOrElse(false)
+    val selectedattr = if (selected) """ selected""" else ""
+    s"""<option value="${escape(value)}"$selectedattr>${escape(label)}</option>"""
+  }
+
+  protected def editable_line_list_interpolate(
+    template: String,
+    row: Map[String, Json]
+  ): String = {
+    val checked = """\$\{row\.([A-Za-z0-9_.-]+):checked\}""".r.replaceAllIn(template, m =>
+      if (row.get(m.group(1)).flatMap(_.asBoolean).getOrElse(false)) " checked" else ""
+    )
+    """\$\{row\.([A-Za-z0-9_.-]+)\}""".r.replaceAllIn(checked, m =>
+      java.util.regex.Matcher.quoteReplacement(escape(row.get(m.group(1)).map(json_cell).getOrElse("")))
+    )
   }
 
   protected def line_list_item_html(
