@@ -325,7 +325,7 @@ contracts.
 
 ## WU-09: Web Demo Assist Manifest for Cozy Video and Demo Tooling
 
-Status: OPEN
+Status: DONE
 
 ### Objective
 
@@ -334,14 +334,14 @@ manifest for cozy video and demo script generation.
 
 ### Initial Tasks
 
-- [ ] Add runtime configuration for demo assist, with default disabled.
-- [ ] Add a JSON manifest endpoint for enabled demo mode.
-- [ ] Include page, sections, forms, fields, actions, widgets, and recommended
+- [x] Add runtime configuration for demo assist, with default disabled.
+- [x] Add a JSON manifest endpoint for enabled demo mode.
+- [x] Include page, sections, forms, fields, actions, widgets, and recommended
       selectors.
-- [ ] Prefer semantic `data-textus-*` selectors in the manifest.
-- [ ] Redact or omit hidden sensitive values, session tokens, raw provider
+- [x] Prefer semantic `data-textus-*` selectors in the manifest.
+- [x] Redact or omit hidden sensitive values, session tokens, raw provider
       payloads, and confidential field values.
-- [ ] Add specs for disabled and enabled behavior.
+- [x] Add specs for disabled and enabled behavior.
 
 ### Expected Output
 

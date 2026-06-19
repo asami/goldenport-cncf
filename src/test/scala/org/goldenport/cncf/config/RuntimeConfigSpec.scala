@@ -11,7 +11,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Apr. 18, 2026
  *  version Apr. 28, 2026
- * @version Jun. 18, 2026
+ * @version Jun. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 final class RuntimeConfigSpec extends AnyWordSpec with Matchers {
@@ -21,11 +21,24 @@ final class RuntimeConfigSpec extends AnyWordSpec with Matchers {
 
       config.operationMode shouldBe OperationMode.Develop
       config.webDevelopAnonymousAdmin shouldBe true
+      config.webDemoAssistEnabled shouldBe false
       config.webProductionAdminEnabled shouldBe false
       config.webProductionAdminSystemRoles shouldBe Vector("system_admin")
       config.webProductionAdminComponentRoles shouldBe Vector("component_operator", "system_admin")
       config.webProductionAdminJobsRoles shouldBe Vector("system_admin", "audit_viewer")
       config.idNamespace shouldBe IdGenerationContext.DefaultNamespace
+    }
+
+    "parse web demo assist configuration and cncf alias" in {
+      val configuration = ResolvedConfiguration(
+        Configuration(Map(
+          "cncf.web.demo-assist.enabled" -> ConfigurationValue.StringValue("true")
+        )),
+        ConfigurationTrace.empty
+      )
+
+      RuntimeConfig.getString(configuration, RuntimeConfig.WEB_DEMO_ASSIST_ENABLED_KEY) shouldBe Some("true")
+      RuntimeConfig.from(configuration).webDemoAssistEnabled shouldBe true
     }
 
     "parse id namespace configuration and aliases" in {

@@ -20,6 +20,7 @@ import org.goldenport.configuration.{Configuration, ConfigurationTrace, Configur
 import org.goldenport.record.Record
 import org.http4s.{MediaType, Method, Request as HRequest, Uri}
 import org.http4s.headers.`Content-Type`
+import io.circe.parser.parse
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 import org.typelevel.ci.CIStringSyntax
@@ -28,7 +29,7 @@ import org.typelevel.ci.CIStringSyntax
  * @since   Apr. 24, 2026
  *  version Apr. 25, 2026
  *  version May. 25, 2026
- * @version Jun. 18, 2026
+ * @version Jun. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers {
@@ -124,6 +125,95 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers {
       postonly.body.compile.to(Array).unsafeRunSync().toVector shouldBe Vector.empty
       headmcp.status.code shouldBe 404
       headmcp.body.compile.to(Array).unsafeRunSync().toVector shouldBe Vector.empty
+    }
+
+    "keep web demo assist manifest disabled by default" in {
+      val root = Files.createTempDirectory("http4s-http-server-demo-assist-disabled-spec")
+      val web = root.resolve("web.yaml")
+      Files.writeString(
+        web,
+        """expose:
+          |  debug.http.echo: protected
+          |form:
+          |  debug.http.echo:
+          |    enabled: true
+          |""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+      val configuration = ResolvedConfiguration(
+        Configuration(
+          Map(
+            RuntimeConfig.WebDescriptorKey ->
+              ConfigurationValue.StringValue(web.toString)
+          )
+        ),
+        ConfigurationTrace.empty
+      )
+      val subsystem = DefaultSubsystemFactory.default(None, configuration)
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val app = server.routes(null.asInstanceOf[org.http4s.server.websocket.WebSocketBuilder2[IO]]).orNotFound
+
+      val response = app
+        .run(HRequest[IO](
+          method = Method.GET,
+          uri = Uri.unsafeFromString("/form/debug/http/echo/result?textus.demo.manifest=json&body=secret-input")
+        ))
+        .unsafeRunSync()
+
+      response.status.code shouldBe 404
+      response.as[String].unsafeRunSync() should not include ("secret-input")
+    }
+
+    "serve safe web demo assist manifest when explicitly enabled" in {
+      val root = Files.createTempDirectory("http4s-http-server-demo-assist-enabled-spec")
+      val web = root.resolve("web.yaml")
+      Files.writeString(
+        web,
+        """expose:
+          |  debug.http.echo: public
+          |form:
+          |  debug.http.echo:
+          |    enabled: true
+          |""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+      val configuration = ResolvedConfiguration(
+        Configuration(
+          Map(
+            RuntimeConfig.WebDescriptorKey ->
+              ConfigurationValue.StringValue(web.toString),
+            "cncf.web.demo-assist.enabled" ->
+              ConfigurationValue.StringValue("true")
+          )
+        ),
+        ConfigurationTrace.empty
+      )
+      val subsystem = DefaultSubsystemFactory.default(None, configuration)
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val app = server.routes(null.asInstanceOf[org.http4s.server.websocket.WebSocketBuilder2[IO]]).orNotFound
+
+      val response = app
+        .run(HRequest[IO](
+          method = Method.GET,
+          uri = Uri.unsafeFromString("/form/debug/http/echo?textus.demo.manifest=json&body=secret-input")
+        ))
+        .unsafeRunSync()
+      val body = response.as[String].unsafeRunSync()
+      val json = parse(body).getOrElse(fail(s"invalid manifest JSON: $body"))
+      val entries = json.hcursor.downField("entries").focus.flatMap(_.asArray).getOrElse(Vector.empty)
+      val entrykinds = entries.flatMap(_.hcursor.get[String]("kind").toOption).toSet
+      val selectors = entries.flatMap(_.hcursor.get[String]("selector").toOption).toSet
+
+      response.status.code shouldBe 200
+      response.contentType.map(_.mediaType) shouldBe Some(MediaType.application.json)
+      json.hcursor.get[Int]("version") shouldBe Right(1)
+      entrykinds should contain allOf ("page", "section", "form", "field", "action", "ux-profile")
+      selectors should contain ("""[data-textus-page="static-form-operation"]""")
+      selectors should contain ("""[data-textus-action="submit"]""")
+      selectors should contain ("""[data-textus-action="operations"]""")
+      body should not include ("secret-input")
+      body should not include ("<html")
+      body should not include ("type=\"hidden\"")
     }
 
     "download form result source as CSV attachment" in {

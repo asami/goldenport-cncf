@@ -21,7 +21,7 @@ import org.goldenport.cncf.blob.BlobStoreConfig
  *  version Feb.  1, 2026
  *  version Mar. 28, 2026
  *  version Apr. 30, 2026
- * @version Jun. 18, 2026
+ * @version Jun. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class RuntimeConfig(
@@ -36,6 +36,7 @@ final case class RuntimeConfig(
   webOperationDispatcher: String = RuntimeConfig.DefaultWebOperationDispatcher,
   webOperationDispatcherRestBaseUrl: Option[String] = None,
   webDevelopAnonymousAdmin: Boolean = RuntimeConfig.DefaultWebDevelopAnonymousAdmin,
+  webDemoAssistEnabled: Boolean = RuntimeConfig.DEFAULT_WEB_DEMO_ASSIST_ENABLED,
   webProductionAdminEnabled: Boolean = RuntimeConfig.DefaultWebProductionAdminEnabled,
   webProductionAdminSystemRoles: Vector[String] = RuntimeConfig.DefaultWebProductionAdminSystemRoles,
   webProductionAdminComponentRoles: Vector[String] = RuntimeConfig.DefaultWebProductionAdminComponentRoles,
@@ -218,6 +219,8 @@ object RuntimeConfig {
   val RuntimeWebOperationDispatcherRestBaseUrlKey = "textus.runtime.web.operation.dispatcher.rest.base-url"
   val WebDevelopAnonymousAdminKey = "textus.web.develop.anonymous-admin"
   val RuntimeWebDevelopAnonymousAdminKey = "textus.runtime.web.develop.anonymous-admin"
+  val WEB_DEMO_ASSIST_ENABLED_KEY = "textus.web.demo-assist.enabled"
+  val RUNTIME_WEB_DEMO_ASSIST_ENABLED_KEY = "textus.runtime.web.demo-assist.enabled"
   val WebProductionAdminEnabledKey = "textus.web.production.admin.enabled"
   val RuntimeWebProductionAdminEnabledKey = "textus.runtime.web.production.admin.enabled"
   val WebProductionAdminSystemRolesKey = "textus.web.production.admin.system.roles"
@@ -248,6 +251,7 @@ object RuntimeConfig {
   val DefaultLogFilePath = ".textus/data.d/trace.log"
   val DefaultWebOperationDispatcher = "local"
   val DefaultWebDevelopAnonymousAdmin = true
+  val DEFAULT_WEB_DEMO_ASSIST_ENABLED = false
   val DefaultWebProductionAdminEnabled = false
   val DefaultWebProductionAdminSystemRoles = Vector("system_admin")
   val DefaultWebProductionAdminComponentRoles = Vector("component_operator", "system_admin")
@@ -271,6 +275,7 @@ object RuntimeConfig {
       webOperationDispatcher = DefaultWebOperationDispatcher,
       webOperationDispatcherRestBaseUrl = None,
       webDevelopAnonymousAdmin = DefaultWebDevelopAnonymousAdmin,
+      webDemoAssistEnabled = DEFAULT_WEB_DEMO_ASSIST_ENABLED,
       webProductionAdminEnabled = DefaultWebProductionAdminEnabled,
       webProductionAdminSystemRoles = DefaultWebProductionAdminSystemRoles,
       webProductionAdminComponentRoles = DefaultWebProductionAdminComponentRoles,
@@ -362,6 +367,9 @@ object RuntimeConfig {
     val webDevelopAnonymousAdmin =
       _get_boolean(configuration, WebDevelopAnonymousAdminKey)
         .getOrElse(DefaultWebDevelopAnonymousAdmin)
+    val webdemoassistenabled =
+      _get_boolean(configuration, WEB_DEMO_ASSIST_ENABLED_KEY)
+        .getOrElse(DEFAULT_WEB_DEMO_ASSIST_ENABLED)
     val webProductionAdminEnabled =
       _get_boolean(configuration, WebProductionAdminEnabledKey)
         .getOrElse(DefaultWebProductionAdminEnabled)
@@ -397,6 +405,7 @@ object RuntimeConfig {
       webOperationDispatcher = webOperationDispatcher,
       webOperationDispatcherRestBaseUrl = webOperationDispatcherRestBaseUrl,
       webDevelopAnonymousAdmin = webDevelopAnonymousAdmin,
+      webDemoAssistEnabled = webdemoassistenabled,
       webProductionAdminEnabled = webProductionAdminEnabled,
       webProductionAdminSystemRoles = webProductionAdminSystemRoles,
       webProductionAdminComponentRoles = webProductionAdminComponentRoles,
@@ -688,6 +697,7 @@ object RuntimeConfig {
         case WebOperationDispatcherKey => Vector(RuntimeWebOperationDispatcherKey)
         case WebOperationDispatcherRestBaseUrlKey => Vector(RuntimeWebOperationDispatcherRestBaseUrlKey)
         case WebDevelopAnonymousAdminKey => Vector(RuntimeWebDevelopAnonymousAdminKey)
+        case WEB_DEMO_ASSIST_ENABLED_KEY => Vector(RUNTIME_WEB_DEMO_ASSIST_ENABLED_KEY)
         case WebProductionAdminEnabledKey => Vector(RuntimeWebProductionAdminEnabledKey)
         case WebProductionAdminSystemRolesKey => Vector(RuntimeWebProductionAdminSystemRolesKey)
         case WebProductionAdminComponentRolesKey => Vector(RuntimeWebProductionAdminComponentRolesKey)

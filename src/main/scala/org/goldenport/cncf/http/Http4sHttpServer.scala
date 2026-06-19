@@ -364,7 +364,7 @@ final class Http4sHttpServer(
           case None =>
             _component_default_web_app_redirect(app) match {
               case Some(response) => IO.pure(response)
-              case None => _static_form_app(app, Vector.empty)
+              case None => _static_form_app(Some(req), app, Vector.empty)
             }
         }
       case req @ GET -> Root / "web" / first / second =>
@@ -1466,7 +1466,7 @@ final class Http4sHttpServer(
                 Some(req)
               ).map(Some(_))
             else
-              _static_form_app(route.target.normalizedApp, Vector.empty).map(Some(_))
+              _static_form_app(Some(req), route.target.normalizedApp, Vector.empty).map(Some(_))
           case Some("static-form") =>
             _component_web_app(
               route.target.component,
@@ -1517,7 +1517,7 @@ final class Http4sHttpServer(
           val expanded = _web_operation_result_inline_content(req, componentName, webappname, page, content)
           _web_app_static_page(Some(componentName), webappname, page, expanded, req) match {
             case Consequence.Success(page) =>
-              _html_content(page.body, Some(webappname), Some(componentName))
+              _html_content(req, page.body, Some(webappname), Some(componentName))
             case Consequence.Failure(conclusion) =>
               _web_error_response(
                 Some(webappname),
@@ -1830,7 +1830,7 @@ final class Http4sHttpServer(
       case Some(route) =>
         _component_web_app(route.target.component, route.target.normalizedApp, route.remainingPath, req)
       case None =>
-      _static_form_app(first, Vector(second))
+        _static_form_app(req, first, Vector(second))
     }
 
   private def _component_default_web_app_redirect(
@@ -1981,8 +1981,15 @@ final class Http4sHttpServer(
     app: String,
     page: Vector[String]
   ): IO[HResponse[IO]] =
+    _static_form_app(None, app, page)
+
+  private[http] def _static_form_app(
+    req: Option[org.http4s.Request[IO]],
+    app: String,
+    page: Vector[String]
+  ): IO[HResponse[IO]] =
     _static_form_app_renderer.render(engine.runtimeSubsystem, app, page, engine.webDescriptor) match {
-      case Some(p) => _html(p, Some(app))
+      case Some(p) => _html(req, p, Some(app))
       case None =>
         _web_error_response(
           Some(app),
@@ -2010,7 +2017,7 @@ final class Http4sHttpServer(
       _forbidden_web(req, Some(app), Some(service), Some(operation))
     else _static_form_app_renderer.renderOperationForm(engine.runtimeSubsystem, app, service, operation, engine.webDescriptor, _query_values(req)) match {
       case Some(p) =>
-        _html(p, Some(app))
+        _html(Some(req), p, Some(app))
       case None =>
         IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Operation form not found"))
     }
@@ -2984,7 +2991,9 @@ final class Http4sHttpServer(
     service: String,
     operation: String
   ): IO[HResponse[IO]] =
-    if (!_is_form_enabled(app, service, operation)) {
+    if (_is_demo_assist_manifest_disabled(req)) {
+      IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Web demo assist manifest is disabled"))
+    } else if (!_is_form_enabled(app, service, operation)) {
       IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Operation form not found"))
     } else if (!_is_web_authorized(app, service, operation, Some(req))) {
       _forbidden_web(req, Some(app), Some(service), Some(operation))
@@ -3023,7 +3032,7 @@ final class Http4sHttpServer(
                     ),
                     template
                   )
-                  _html(page, Some(app)).map { html =>
+                  _html(Some(req), page, Some(app)).map { html =>
                     RuntimeDashboardMetrics.recordHtmlRequest(
                       req.method.name,
                       req.uri.path.renderString,
@@ -5793,6 +5802,13 @@ final class Http4sHttpServer(
   ): IO[HResponse[IO]] =
     _html_content(p.body, appName)
 
+  private def _html(
+    req: Option[org.http4s.Request[IO]],
+    p: StaticFormAppRenderer.Page,
+    appname: Option[String]
+  ): IO[HResponse[IO]] =
+    _html_content(req, p.body, appname, None)
+
   private def _html_in_app_shell(
     req: org.http4s.Request[IO],
     app: String,
@@ -5804,7 +5820,7 @@ final class Http4sHttpServer(
       case WebDescriptor.PageDisplay.ApplicationShell =>
         _web_app_static_page(Some(app), app, page, content, Some(req)) match {
           case Consequence.Success(page) =>
-            _html_content(page.body, Some(app), Some(app))
+            _html_content(Some(req), page.body, Some(app), Some(app))
           case Consequence.Failure(conclusion) =>
             _web_error_response(Some(app), conclusion, s"/web/${app}/${page.mkString("/")}")
         }
@@ -5814,7 +5830,7 @@ final class Http4sHttpServer(
             _standalone_back_button(app) + content
           else
             content
-        _html_content(body, Some(app), Some(app))
+        _html_content(Some(req), body, Some(app), Some(app))
     }
   }
 
@@ -5863,6 +5879,51 @@ final class Http4sHttpServer(
         .withEntity(_themed_html(body, appName, componentName))
         .withContentType(`Content-Type`(MediaType.text.html, Some(Charset.`UTF-8`)))
     )
+
+  private def _html_content(
+    req: Option[org.http4s.Request[IO]],
+    body: String,
+    appname: Option[String],
+    componentname: Option[String]
+  ): IO[HResponse[IO]] = {
+    val html = _themed_html(body, appname, componentname)
+    req match {
+      case Some(request) if _is_demo_assist_manifest_request(request) =>
+        _demo_assist_manifest_response(html)
+      case _ =>
+        IO.pure(
+          HResponse[IO](HStatus.Ok)
+            .withEntity(html)
+            .withContentType(`Content-Type`(MediaType.text.html, Some(Charset.`UTF-8`)))
+        )
+    }
+  }
+
+  private def _is_demo_assist_manifest_request(
+    req: org.http4s.Request[IO]
+  ): Boolean =
+    req.uri.query.params
+      .get(Http4sHttpServer.DEMO_ASSIST_MANIFEST_QUERY_KEY)
+      .exists(_.trim.equalsIgnoreCase("json"))
+
+  private def _is_demo_assist_manifest_disabled(
+    req: org.http4s.Request[IO]
+  ): Boolean =
+    _is_demo_assist_manifest_request(req) && !_runtime_config.webDemoAssistEnabled
+
+  private def _demo_assist_manifest_response(
+    html: String
+  ): IO[HResponse[IO]] =
+    if (!_runtime_config.webDemoAssistEnabled)
+      IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Web demo assist manifest is disabled"))
+    else {
+      val json = WebDemoAssistManifest.fromHtml(html).toJson.noSpaces
+      IO.pure(
+        HResponse[IO](HStatus.Ok)
+          .withEntity(json)
+          .withContentType(`Content-Type`(MediaType.application.json, Some(Charset.`UTF-8`)))
+      )
+    }
 
   private def _html_status(p: StaticFormAppRenderer.Page, status: HStatus): IO[HResponse[IO]] =
     _html_status(p, status, None)
@@ -6579,6 +6640,7 @@ object Http4sHttpServer {
 
   val PORT_PROPERTY_KEY = "textus.server.port"
   val LEGACY_PORT_PROPERTY_KEY = "cncf.server.port"
+  val DEMO_ASSIST_MANIFEST_QUERY_KEY = "textus.demo.manifest"
 
   private[http] def fallbackHttpDiagnosticRecord(
     status: Int

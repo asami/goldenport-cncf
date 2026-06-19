@@ -566,6 +566,32 @@ selector contract. The renderer must preserve existing Bootstrap classes,
 routes, field names, authorization checks, and form submission behavior while
 adding these semantic markers.
 
+## Web Demo Assist Manifest
+
+WU-09 exposes the semantic selector contract as a server-side JSON manifest for
+demo script and video tooling. Append `textus.demo.manifest=json` to a
+supported generated HTML route to request the manifest for that rendered page.
+
+The manifest endpoint is disabled by default. Runtime configuration
+`cncf.web.demo-assist.enabled=true` enables it; disabled requests return
+`404 Not Found`.
+
+Manifest entries are extracted from the final rendered HTML and include:
+
+- `kind`: `page`, `section`, `form`, `field`, `action`, `widget`,
+  `validation`, `issue`, `empty-state`, `capability`, or `ux-profile`.
+- `name`: the value of the matched `data-textus-*` attribute.
+- `selector`: a semantic CSS selector such as
+  `[data-textus-action="submit"]`.
+- `scope`: the nearest known page, section, or form selector scope.
+- `label`: a short visible label when it can be obtained from the same element
+  without reading input values.
+
+The manifest is structural metadata only. It must not include raw HTML, input
+values, hidden field values, session tokens, CSRF tokens, cookies, raw provider
+payloads, or confidential field values. Form fields are represented by name and
+selector, not by current value.
+
 ## Existing Widgets
 
 The following widgets are the baseline compatibility set:

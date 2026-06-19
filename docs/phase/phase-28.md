@@ -65,14 +65,14 @@ Scope boundaries:
 - F (DONE): WU-06 — Editable line-list widget vertical slice.
 - G (DONE): WU-07 — TKE / InformationSpace / Knowledge Editor driver
   integration.
-- H (OPEN): WU-08 — Validation, issue, capability, and empty-state widget
+- H (DONE): WU-08 — Validation, issue, capability, and empty-state widget
   alignment.
-- I (OPEN): WU-09 — Web Demo Assist Manifest for cozy video and demo tooling.
+- I (DONE): WU-09 — Web Demo Assist Manifest for cozy video and demo tooling.
 - J (OPEN): WU-10 — Phase 28 verification and closure.
 
 Resume hint:
 
-- Continue with WU-08. Keep Phase 27 closed and treat Knowledge Editor screens
+- Continue with WU-10. Keep Phase 27 closed and treat Knowledge Editor screens
   as drivers for CNCF Web/platform infrastructure, not as the owner of the Web
   UI architecture.
 
@@ -86,7 +86,7 @@ Resume hint:
 - [x] WU-06: Editable line-list widget vertical slice.
 - [x] WU-07: TKE / InformationSpace / Knowledge Editor driver integration.
 - [x] WU-08: Validation, issue, capability, and empty-state widget alignment.
-- [ ] WU-09: Web Demo Assist Manifest for cozy video and demo tooling.
+- [x] WU-09: Web Demo Assist Manifest for cozy video and demo tooling.
 - [ ] WU-10: Phase 28 verification and closure.
 
 Detailed task breakdown and progress tracking are recorded in
