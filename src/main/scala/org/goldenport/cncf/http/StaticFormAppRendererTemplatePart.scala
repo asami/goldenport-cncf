@@ -496,7 +496,7 @@ trait StaticFormAppRendererTemplatePart {
           s"""<div class="mt-2"><a class="btn btn-sm btn-outline-${escape(variant)}" href="${escape(loginhref)}">Log in</a></div>"""
         else
           ""
-      s"""<div class="alert alert-${escape(variant)} textus-capability-message" role="status">${inner}${action}</div>"""
+      s"""<div class="alert alert-${escape(variant)} textus-capability-message" role="status" data-textus-widget="textus:capability-message" data-textus-capability-message="denied" data-textus-capability-required="${escape(capability)}" data-textus-capability-policy="${escape(policy)}">${inner}${action}</div>"""
     }
   }
 
@@ -590,8 +590,11 @@ trait StaticFormAppRendererTemplatePart {
     html: String
   ): String = {
     val outer = add_attribute_to_first_tag(
-      add_class_to_first_tag(html, "textus-capability-disabled"),
-      "aria-disabled=\"true\""
+      add_attribute_to_first_tag(
+        add_class_to_first_tag(html, "textus-capability-disabled"),
+        "aria-disabled=\"true\""
+      ),
+      "data-textus-capability-state=\"denied\""
     )
     val controls = """(?i)<(input|button|select|textarea)\b([^>]*)>""".r.replaceAllIn(outer, m => {
       val tag = m.group(1)
@@ -1288,7 +1291,7 @@ trait StaticFormAppRendererTemplatePart {
   ): String = {
     val colspan = attrs.getOrElse("colspan", "1")
     val empty = attrs.getOrElse("empty", "No rows")
-    s"""<tr data-textus-widget="textus:editable-line-list" data-textus-empty="true"><td colspan="${escape(colspan)}" class="text-secondary">${escape(empty)}</td></tr>"""
+    s"""<tr data-textus-widget="textus:editable-line-list" data-textus-empty-state="true" data-textus-empty="true"><td colspan="${escape(colspan)}" class="text-secondary">${escape(empty)}</td></tr>"""
   }
 
   protected def editable_line_list_template_html(
@@ -1539,7 +1542,7 @@ trait StaticFormAppRendererTemplatePart {
       s"""<div class="mt-2"><a class="btn btn-sm btn-primary" href="${escape(href)}">${escape(label)}</a></div>"""
     }.getOrElse("")
     val widgetattr = widget.map(x => s""" data-textus-widget="${escape(x)}"""").getOrElse("")
-    s"""<div class="alert alert-secondary textus-empty-state" role="status"${widgetattr}>${escape(message)}${actionhtml}</div>"""
+    s"""<div class="alert alert-secondary textus-empty-state" role="status"${widgetattr} data-textus-empty-state="true">${escape(message)}${actionhtml}</div>"""
   }
 
   protected def render_summary_card(

@@ -85,7 +85,7 @@ Resume hint:
 - [x] WU-05: Static Form renderer integration vertical slice.
 - [x] WU-06: Editable line-list widget vertical slice.
 - [x] WU-07: TKE / InformationSpace / Knowledge Editor driver integration.
-- [ ] WU-08: Validation, issue, capability, and empty-state widget alignment.
+- [x] WU-08: Validation, issue, capability, and empty-state widget alignment.
 - [ ] WU-09: Web Demo Assist Manifest for cozy video and demo tooling.
 - [ ] WU-10: Phase 28 verification and closure.
 

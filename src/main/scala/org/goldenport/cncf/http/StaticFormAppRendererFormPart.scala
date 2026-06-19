@@ -503,13 +503,13 @@ trait StaticFormAppRendererFormPart {
     validation match {
       case Some(result) if !result.valid =>
         val errors =
-          result.errors.map(x => s"""<li>${escape(x.message)}</li>""").mkString("\n")
+          result.errors.map(x => s"""<li${validation_summary_message_attrs(x, "error")}>${escape(x.message)}</li>""").mkString("\n")
         val warnings =
           if (result.warnings.isEmpty)
             ""
           else
-            s"""<p class="mb-1">Warnings</p><ul>${result.warnings.map(x => s"<li>${escape(x.message)}</li>").mkString("\n")}</ul>"""
-        s"""<div class="alert alert-danger admin-feedback" role="alert">
+            s"""<p class="mb-1">Warnings</p><ul>${result.warnings.map(x => s"<li${validation_summary_message_attrs(x, "warning")}>${escape(x.message)}</li>").mkString("\n")}</ul>"""
+        s"""<div class="alert alert-danger admin-feedback" role="alert" data-textus-validation-summary="form" data-textus-issue-scope="form">
            |  <p class="alert-heading fw-semibold mb-2">Validation failed.</p>
            |  <ul class="mb-0">${errors}</ul>
            |  ${warnings}
@@ -517,6 +517,14 @@ trait StaticFormAppRendererFormPart {
       case _ =>
         ""
     }
+
+  protected def validation_summary_message_attrs(
+    message: FormValidationMessage,
+    severity: String
+  ): String = {
+    val field = message.field.map(x => s""" data-textus-validation-field="${escape(x)}"""").getOrElse("")
+    s""" data-textus-validation-message="${escape(severity)}" data-textus-validation-code="${escape(message.code)}" data-textus-issue-scope="form"$field"""
+  }
 
   protected def operation_form_debug_panel(
     context: OperationWebSchemaContext,
@@ -1667,8 +1675,10 @@ trait StaticFormAppRendererFormPart {
     val feedback =
       if (validationMessages.isEmpty)
         ""
-      else
-        s"""<div class="invalid-feedback">${escape(validationMessages.map(_.message).mkString(" "))}</div>"""
+      else {
+        val codes = validationMessages.map(_.code).distinct.mkString(",")
+        s"""<div class="invalid-feedback" data-textus-validation-message="field" data-textus-validation-field="${escape(name)}" data-textus-validation-code="${escape(codes)}" data-textus-issue-scope="field">${escape(validationMessages.map(_.message).mkString(" "))}</div>"""
+      }
     if (descriptor.exists(_.hidden) || inputType == "hidden") {
       s"""<input type="hidden" id="${escape(id)}" name="${escape(name)}" value="${escape(value)}"${fieldselector}>"""
     } else if (inputType == "select" || descriptor.exists(_.values.nonEmpty)) {

@@ -31,7 +31,7 @@ import io.circe.parser.parse
 
 /*
  * @since   May. 18, 2026
- * @version May. 18, 2026
+ * @version Jun. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 trait StaticFormAppRendererComponentAdminPart {
@@ -1147,7 +1147,7 @@ trait StaticFormAppRendererComponentAdminPart {
     message: String,
     cssClass: String = "web-empty-state"
   ): String =
-    s"""<div class="alert alert-info ${escape(cssClass)}" role="status">
+    s"""<div class="alert alert-info ${escape(cssClass)}" role="status" data-textus-empty-state="true">
        |  <p class="mb-0">${escape(message)}</p>
        |</div>""".stripMargin
 
@@ -1155,7 +1155,7 @@ trait StaticFormAppRendererComponentAdminPart {
     colspan: Int,
     message: String
   ): String =
-    s"""<tr><td colspan="${colspan}"><div class="admin-empty-state text-body-secondary py-3">${escape(message)}</div></td></tr>"""
+    s"""<tr data-textus-empty-state="true"><td colspan="${colspan}"><div class="admin-empty-state text-body-secondary py-3" data-textus-empty-state="true">${escape(message)}</div></td></tr>"""
 
   protected def admin_nav_card(
     links: Vector[(String, String)]

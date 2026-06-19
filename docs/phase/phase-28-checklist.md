@@ -292,7 +292,7 @@ Web UI DSL and editable-line-list behavior.
 
 ## WU-08: Validation, Issue, Capability, and Empty-State Widget Alignment
 
-Status: OPEN
+Status: DONE
 
 ### Objective
 
@@ -301,14 +301,25 @@ contracts.
 
 ### Initial Tasks
 
-- [ ] Standardize validation summary and field validation feedback markers.
-- [ ] Standardize row-level issue display for editable-line-list.
-- [ ] Align capability-aware controls with existing authorization metadata.
-- [ ] Align empty-state rendering for tables, lists, and editable collections.
+- [x] Standardize validation summary and field validation feedback markers.
+- [x] Standardize row-level issue display for editable-line-list.
+- [x] Align capability-aware controls with existing authorization metadata.
+- [x] Align empty-state rendering for tables, lists, and editable collections.
 
 ### Expected Output
 
 - Consistent feedback and affordance widgets across generated pages.
+
+### Completion Notes
+
+- Form validation summaries and field validation feedback now expose stable
+  `data-textus-validation-*` and `data-textus-issue-scope` selectors.
+- Editable-line-list rows can carry row issue markers, and generated empty rows
+  expose `data-textus-empty-state`.
+- Capability messages and disabled controls expose semantic capability state
+  without changing authorization behavior.
+- TKE related Information editors use the standardized row issue and
+  empty-state hooks as the application driver.
 
 ---
 

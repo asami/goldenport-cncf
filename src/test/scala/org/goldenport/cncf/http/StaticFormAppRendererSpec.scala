@@ -1935,6 +1935,12 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       response.status.code shouldBe 400
       html should include ("Edit Notice")
       html should include ("Validation failed.")
+      html should include ("data-textus-validation-summary=\"form\"")
+      html should include ("data-textus-validation-message=\"error\"")
+      html should include ("data-textus-validation-field=\"title\"")
+      html should include ("data-textus-validation-code=\"required\"")
+      html should include ("data-textus-issue-scope=\"form\"")
+      html should include ("data-textus-issue-scope=\"field\"")
       html should include ("admin-feedback")
       html should include ("title is required.")
       html should include ("is-invalid")
@@ -8496,6 +8502,11 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       response.status.code shouldBe 400
       html should include ("HTML form operation")
       html should include ("Validation failed.")
+      html should include ("data-textus-validation-summary=\"form\"")
+      html should include ("data-textus-validation-message=\"error\"")
+      html should include ("data-textus-validation-field=\"body\"")
+      html should include ("data-textus-validation-code=\"required\"")
+      html should include ("data-textus-issue-scope=\"field\"")
       html should include ("Notice body is required.")
       html should include ("is-invalid")
       html should include ("value=\"abc\"")
@@ -8577,6 +8588,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
 
       denied should not include ("href=\"/edit\"")
       denied should include ("textus-capability-disabled")
+      denied should include ("data-textus-capability-state=\"denied\"")
       denied should include ("aria-disabled=\"true\"")
       denied should include ("<input name=\"title\" value=\"Notice\" disabled>")
       denied should include ("<button type=\"submit\" disabled>")
@@ -8691,6 +8703,9 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
 
       anonymous should include ("Log in to publish.")
       anonymous should include ("href=\"/login\"")
+      anonymous should include ("data-textus-widget=\"textus:capability-message\"")
+      anonymous should include ("data-textus-capability-message=\"denied\"")
+      anonymous should include ("data-textus-capability-required=\"information:publish\"")
       authenticated should not include ("Log in to publish.")
       authenticated should not include ("textus:capability-message")
     }
@@ -10051,13 +10066,15 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       val html = _renderer.renderFormResult(
         properties,
         """<table><tbody><textus:editable-line-list name="noticeRows" source="result.body.data.rows" key="id" empty="No rows" colspan="3">
-          |<tr><td><input name="noticeLabel_${row.id}" value="${row.label}" data-textus-field="label"></td><td><input type="checkbox" name="noticeEnabled_${row.id}" value="true" ${row.enabled:checked}></td><td><select name="noticeMerge_${row.id}" data-textus-options="row.mergeOptions"></select></td></tr>
+          |<tr><td><input name="noticeLabel_${row.id}" value="${row.label}" data-textus-field="label"><div class="small text-secondary" data-textus-row-issue data-textus-issue-scope="row">${row.issueMessage}</div></td><td><input type="checkbox" name="noticeEnabled_${row.id}" value="true" ${row.enabled:checked}></td><td><select name="noticeMerge_${row.id}" data-textus-options="row.mergeOptions"></select></td></tr>
           |</textus:editable-line-list></tbody></table>""".stripMargin
       ).body
 
       html should include ("data-textus-widget=\"textus:editable-line-list\"")
       html should include ("data-textus-list=\"noticeRows\"")
       html should include ("data-textus-row=\"row_1\"")
+      html should include ("data-textus-row-issue")
+      html should include ("data-textus-issue-scope=\"row\"")
       html should include ("name=\"noticeLabel_row_1\"")
       html should include ("value=\"First\"")
       html should include ("name=\"noticeEnabled_row_1\" value=\"true\"  checked")
@@ -10081,6 +10098,14 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       fallbackhtml should include ("data-textus-add-row=\"newRows\"")
       fallbackhtml should include ("data-textus-row=\"new_1\"")
       fallbackhtml should include ("name=\"newLabel_new_1\"")
+
+      val emptyhtml = _renderer.renderFormResult(
+        properties,
+        """<table><tbody><textus:editable-line-list name="emptyRows" source="result.body.data.missingRows" key="id" empty="No rows" colspan="3"><tr><td>${row.label}</td></tr></textus:editable-line-list></tbody></table>"""
+      ).body
+      emptyhtml should include ("data-textus-widget=\"textus:editable-line-list\"")
+      emptyhtml should include ("data-textus-empty-state=\"true\"")
+      emptyhtml should include ("No rows")
     }
 
     "render table and card detail actions from record fields" in {
@@ -10151,6 +10176,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("data-textus-widget=\"textus:summary-card\"")
       html should include ("data-textus-widget=\"textus:alert\"")
       html should include ("data-textus-widget=\"textus:empty-state\"")
+      html should include ("data-textus-empty-state=\"true\"")
       html should include ("data-textus-widget=\"textus:status-badge\"")
       html should include ("<strong class=\"display-6 text-success\">42</strong>")
       html should include ("Notices loaded")
