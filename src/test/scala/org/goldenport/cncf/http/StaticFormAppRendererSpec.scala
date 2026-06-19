@@ -67,7 +67,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Apr. 12, 2026
  *  version May. 27, 2026
- * @version Jun. 01, 2026
+ * @version Jun. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
@@ -5741,6 +5741,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("data-textus-section=\"form-errors\"")
       html should include ("data-textus-section=\"form-controls\"")
       html should include ("data-textus-section=\"form-actions\"")
+      html should include ("data-textus-ux-profile=\"bootstrap\"")
       html should include (s"""data-textus-form="${componentpath}.${servicepath}.${operationpath}"""")
       html should include ("data-textus-field=\"fields\"")
       html should include ("data-textus-action=\"submit\"")
@@ -5752,6 +5753,36 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("class=\"form-control\"")
       html should include (s"/form/${componentpath}/${servicepath}/${operationpath}")
       html should not include ("cdn.jsdelivr")
+    }
+
+    "render operation form UX profile metadata" in {
+      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
+      val service = component.protocol.services.services.headOption.getOrElse(fail("service is missing"))
+      val operation = service.operations.operations.toVector.headOption.getOrElse(fail("operation is missing"))
+      val componentpath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)
+      val selector = WebDescriptor.formSelector(component.name, service.name, operation.name)
+      val globaldescriptor = WebDescriptor(
+        profile = Some(WebUxProfile.Compact),
+        profileRaw = Some("compact"),
+        expose = Map(selector -> WebDescriptor.Exposure.Protected)
+      )
+      val appdescriptor = WebDescriptor(
+        expose = Map(selector -> WebDescriptor.Exposure.Protected),
+        apps = Vector(WebDescriptor.App(componentpath, profile = Some(WebUxProfile.Material), profileRaw = Some("material")))
+      )
+      val formdescriptor = WebDescriptor(
+        expose = Map(selector -> WebDescriptor.Exposure.Protected),
+        form = Map(selector -> WebDescriptor.Form(profile = Some(WebUxProfile.Admin), profileRaw = Some("admin")))
+      )
+
+      val globalhtml = _renderer.renderOperationForm(subsystem, component.name, service.name, operation.name, webDescriptor = globaldescriptor).map(_.body).getOrElse(fail("operation form is missing"))
+      val apphtml = _renderer.renderOperationForm(subsystem, component.name, service.name, operation.name, webDescriptor = appdescriptor).map(_.body).getOrElse(fail("operation form is missing"))
+      val formhtml = _renderer.renderOperationForm(subsystem, component.name, service.name, operation.name, webDescriptor = formdescriptor).map(_.body).getOrElse(fail("operation form is missing"))
+
+      globalhtml should include ("data-textus-ux-profile=\"compact\"")
+      apphtml should include ("data-textus-ux-profile=\"material\"")
+      formhtml should include ("data-textus-ux-profile=\"admin\"")
     }
 
     "append development debug panel to operation form error redisplay" in {
@@ -7615,6 +7646,55 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("9784003510179")
       html should include ("true")
       html should not include ("${result.body.data.current.work_title}")
+    }
+
+    "render operation result UX profile metadata" in {
+      val properties = StaticFormAppRenderer.FormResultProperties(
+        StaticFormAppRenderer.FormPageProperties("notice-board", "notice", "approve-notice"),
+        200,
+        "text/plain",
+        "ok",
+        uxProfile = WebUxProfile.Material
+      )
+
+      val html = _renderer.renderFormResult(properties).body
+
+      html should include ("data-textus-ux-profile=\"material\"")
+    }
+
+    "render static template UX profile metadata" in {
+      val descriptor = WebDescriptor(
+        profile = Some(WebUxProfile.Bootstrap),
+        profileRaw = Some("bootstrap"),
+        apps = Vector(WebDescriptor.App(
+          "console",
+          profile = Some(WebUxProfile.Compact),
+          profileRaw = Some("compact")
+        )),
+        pages = Map(
+          "console.detail" -> WebDescriptor.PageCustomization(
+            profile = Some(WebUxProfile.Material),
+            profileRaw = Some("material")
+          )
+        )
+      )
+
+      val apphtml = _renderer.renderStaticTemplate(
+        "console",
+        Vector("index"),
+        """<article data-textus-page="static">${textus.uxProfile}</article>""",
+        webdescriptor = descriptor
+      ).body
+      val pagehtml = _renderer.renderStaticTemplate(
+        "console",
+        Vector("detail"),
+        """<article data-textus-page="static" data-textus-ux-profile="${page.uxProfile}">${textus.uxProfile}</article>""",
+        webdescriptor = descriptor
+      ).body
+
+      apphtml should include ("compact")
+      pagehtml should include ("data-textus-ux-profile=\"material\"")
+      pagehtml should include (">material</article>")
     }
 
     "resolve legacy result.body.data paths against unwrapped JSON response bodies" in {
@@ -10843,26 +10923,29 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
     "render descriptor-declared component admin pages on component admin home" in {
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
-      val componentPath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)
+      val componentpath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)
       val descriptor = WebDescriptor(
+        profile = Some(WebUxProfile.Material),
+        profileRaw = Some("material"),
         adminPages = Vector(WebDescriptor.AdminPage(
           name = "notifications",
           label = "Notification Admin",
-          href = s"/web/${componentPath}/admin/notifications",
+          href = s"/web/${componentpath}/admin/notifications",
           description = "Manage notification records.",
           permission = Some("admin.entity.read"),
-          component = Some(componentPath)
+          component = Some(componentpath)
         ))
       )
 
-      val html = _renderer.renderComponentAdmin(subsystem, componentPath, descriptor).map(_.body).getOrElse(fail("component admin is missing"))
+      val html = _renderer.renderComponentAdmin(subsystem, componentpath, descriptor).map(_.body).getOrElse(fail("component admin is missing"))
 
       html should include ("Component Admin Pages")
       html should include ("Notification Admin")
-      html should include (s"""href="/web/${componentPath}/admin/notifications"""")
+      html should include (s"""href="/web/${componentpath}/admin/notifications"""")
       html should include ("Manage notification records.")
       html should include ("admin.entity.read")
       html should include ("list-group")
+      html should include ("data-textus-ux-profile=\"material\"")
     }
 
     "render Application Admin separately from System Admin diagnostics" in {

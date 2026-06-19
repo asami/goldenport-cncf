@@ -193,13 +193,13 @@ Material Design as a profile path over the same semantic widget model.
 - `WebDescriptor` loads, validates, merges, and resolves profile metadata for
   global, app, form, page, and admin generated-page scopes.
 - Material remains metadata-only in WU-04; renderer class/asset changes remain
-  open for WU-05 and later.
+  open for later profile-rendering work.
 
 ---
 
 ## WU-05: Static Form Renderer Integration Vertical Slice
 
-Status: OPEN
+Status: DONE
 
 ### Objective
 
@@ -208,14 +208,24 @@ Static Form renderer through one executable vertical slice.
 
 ### Initial Tasks
 
-- [ ] Select a small generated page or form as the first renderer driver.
-- [ ] Emit the standardized semantic DOM markers.
-- [ ] Preserve existing Static Form routes, field names, and submit behavior.
-- [ ] Add focused renderer specs before broad visual polish.
+- [x] Select a small generated page or form as the first renderer driver.
+- [x] Emit the standardized semantic DOM markers.
+- [x] Preserve existing Static Form routes, field names, and submit behavior.
+- [x] Add focused renderer specs before broad visual polish.
 
 ### Expected Output
 
 - A concrete renderer path that proves the Phase 28 contracts are executable.
+
+### Completion Notes
+
+- Static Form operation forms and default operation result pages now emit the
+  resolved UX profile as `data-textus-ux-profile` on their semantic page roots.
+- Static page templates receive `page.uxProfile` and `textus.uxProfile` so
+  descriptor-resolved profile metadata can be placed by the template.
+- Representative admin/generated pages emit `WebDescriptor.adminProfile`
+  metadata without changing Bootstrap classes, routes, field names, or
+  execution behavior.
 
 ---
 

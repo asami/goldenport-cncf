@@ -32,7 +32,7 @@ import io.circe.parser.parse
 /*
  * @since   May. 18, 2026
  *  version May. 24, 2026
- * @version Jun. 18, 2026
+ * @version Jun. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 trait StaticFormAppRendererFormResultPart {
@@ -58,7 +58,7 @@ trait StaticFormAppRendererFormResultPart {
     template: Option[String]
   ): Page = {
     val effectiveTemplate = template.getOrElse(
-      s"""<article class="card admin-card">
+      s"""<article class="card admin-card"${ux_profile_attr(properties.uxProfile)}>
          |  <div class="card-body">
          |  <h2 class="card-title">$${operation.label} Result</h2>
          |  <p>Content-Type $${result.contentType}</p>

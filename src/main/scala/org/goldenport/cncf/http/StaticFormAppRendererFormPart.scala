@@ -32,7 +32,7 @@ import io.circe.parser.parse
 
 /*
  * @since   May. 18, 2026
- * @version Jun. 18, 2026
+ * @version Jun. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 trait StaticFormAppRendererFormPart {
@@ -131,11 +131,17 @@ trait StaticFormAppRendererFormPart {
       val errorPanel = form_error_panel(effectiveValues) + form_validation_panel(effectiveValidation)
       val enctype = operation_form_enctype(context.webSchema, context.imageBinding)
       val debugPanel = operation_form_debug_panel(context, values, operationMode, showExecutionDebugPanel)
+      val profile = webDescriptor.operationProfile(
+        Some(context.componentPath),
+        context.component.name,
+        context.serviceName,
+        context.operationName
+      )
       Page(simple_page(
         title = s"${escape(context.component.name)}.${escape(context.serviceName)}.${escape(context.operationName)}",
         subtitle = "HTML form operation",
         body =
-          s"""<article class="card admin-card" data-textus-page="static-form-operation" data-textus-section="operation-form">
+          s"""<article class="card admin-card" data-textus-page="static-form-operation" data-textus-section="operation-form"${ux_profile_attr(profile)}>
              |  <div class="card-body">
              |    <div data-textus-section="form-errors">${errorPanel}</div>
              |    <form method="post" action="${escape(action)}"${enctype} data-textus-form="${escape(formselector)}">

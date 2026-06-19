@@ -33,7 +33,7 @@ import io.circe.parser.parse
 /*
  * @since   May. 18, 2026
  *  version May. 24, 2026
- * @version Jun. 18, 2026
+ * @version Jun. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 object StaticFormAppRendererSupport {
@@ -55,9 +55,9 @@ object StaticFormAppRendererSupport {
         Vector("totalCountPolicy" -> totalCountPolicy.name) ++
         (if (effectiveIncludeTotal) Vector("includeTotal" -> true) else Vector.empty)
 
-    def href(basePath: String): String = {
+    def href(basepath: String): String = {
       val total = if (effectiveIncludeTotal) "&includeTotal=true" else ""
-      s"${basePath}?page={page}&pageSize={pageSize}${total}"
+      s"${basepath}?page={page}&pageSize={pageSize}${total}"
     }
 
     def withTotalCountPolicy(policy: WebDescriptor.TotalCountPolicy): PageRequest =
@@ -105,7 +105,8 @@ object StaticFormAppRendererSupport {
     executionMetadata: RuntimeContext.ExecutionMetadata =
       RuntimeContext.ExecutionMetadata.empty,
     operationMode: OperationMode = RuntimeConfig.DefaultOperationMode,
-    fieldConfidentiality: Map[String, DataConfidentiality] = Map.empty
+    fieldConfidentiality: Map[String, DataConfidentiality] = Map.empty,
+    uxProfile: WebUxProfile = WebUxProfile.default
   ) {
     def componentName: String = page.componentName
     def serviceName: String = page.serviceName

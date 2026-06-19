@@ -3,7 +3,7 @@ package org.goldenport.cncf.http
 /*
  * @since   May. 18, 2026
  *  version May. 30, 2026
- * @version Jun. 18, 2026
+ * @version Jun. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 import cats.effect.IO
@@ -61,7 +61,7 @@ import org.goldenport.observation.{Cause, Descriptor}
  *  version Mar. 29, 2026
  *  version Apr. 30, 2026
  *  version May. 25, 2026
- * @version Jun.  5, 2026
+ * @version Jun. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Http4sHttpServer(
@@ -3446,7 +3446,8 @@ final class Http4sHttpServer(
       _form_result_asset_completion_options(app, service, operation),
       result.metadata,
       _operation_mode,
-      _form_result_field_confidentiality(app, service, operation)
+      _form_result_field_confidentiality(app, service, operation),
+      engine.webDescriptor.operationProfile(Some(app), app, service, operation)
     )
   }
 
@@ -4188,7 +4189,8 @@ final class Http4sHttpServer(
           page,
           expandedhtml,
           _web_app_asset_completion(webappname),
-          _page_view_context(req, webappname, page)
+          _page_view_context(req, webappname, page),
+          engine.webDescriptor
         )
       else
         StaticFormAppRenderer.Page(expandedhtml)

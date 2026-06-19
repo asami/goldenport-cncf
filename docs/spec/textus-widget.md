@@ -179,7 +179,16 @@ silently fall back to `bootstrap`.
 WU-04 is a metadata and contract step. It must not change Bootstrap DOM,
 operation routes, form field names, authorization, source binding, or
 server-side execution paths. Profile-specific renderer class/asset changes are
-deferred to WU-05 and later work.
+deferred to later profile-rendering work.
+
+WU-05 wires the resolved profile into the Static Form renderer as semantic DOM
+metadata. Generated operation forms and default operation result pages emit
+`data-textus-ux-profile="<profile>"` on their semantic page root. Static page
+templates receive `page.uxProfile` and `textus.uxProfile` properties so the
+template can place the same attribute on its own page root. Representative
+admin/generated pages emit the resolved admin profile on a generated admin card
+root. This metadata does not change Bootstrap classes, assets, form routes,
+field names, authorization, binding, or operation execution.
 
 ## Rendering Model
 

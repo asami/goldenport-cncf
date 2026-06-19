@@ -31,7 +31,7 @@ import io.circe.parser.parse
 
 /*
  * @since   May. 18, 2026
- * @version May. 18, 2026
+ * @version Jun. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 trait StaticFormAppRendererCorePart {
@@ -68,11 +68,13 @@ trait StaticFormAppRendererCorePart {
     template: String,
     assetCompletion: StaticFormAppLayout.AssetCompletionOptions =
       StaticFormAppLayout.AssetCompletionOptions(),
-    pageContext: WebPageContext = WebPageContext.empty
+    pageContext: WebPageContext = WebPageContext.empty,
+    webdescriptor: WebDescriptor = WebDescriptor.empty
   ): Page = {
     val pageName =
       if (page.isEmpty) "index"
       else page.mkString("/")
+    val profile = webdescriptor.staticPageProfile(app, page)
     val properties = FormPageProperties(
       app,
       "web",
@@ -80,7 +82,9 @@ trait StaticFormAppRendererCorePart {
       Map(
         "app" -> app,
         "page.name" -> pageName,
-        "page.path" -> ("/web/" + (app +: page).mkString("/"))
+        "page.path" -> ("/web/" + (app +: page).mkString("/")),
+        "page.uxProfile" -> profile.name,
+        "textus.uxProfile" -> profile.name
       ) ++ page_context_properties(pageContext)
     )
     val rendered = render_template(template, properties, Map.empty)
@@ -133,6 +137,9 @@ trait StaticFormAppRendererCorePart {
       .replace(">", "&gt;")
       .replace("\"", "&quot;")
       .replace("'", "&#39;")
+
+  protected def ux_profile_attr(profile: WebUxProfile): String =
+    s""" data-textus-ux-profile="${escape(profile.name)}""""
 
   protected def title_label(
     segment: String

@@ -31,7 +31,8 @@ import io.circe.parser.parse
 
 /*
  * @since   May. 18, 2026
- * @version May. 20, 2026
+ *  version May. 20, 2026
+ * @version Jun. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 trait StaticFormAppRendererSystemAdminPart {
@@ -48,11 +49,11 @@ trait StaticFormAppRendererSystemAdminPart {
   def renderComponentDashboard(component: Component): Page =
     renderComponentDashboard(component, NamingConventions.toNormalizedSegment(component.name))
 
-  def renderComponentDashboard(component: Component, componentPath: String): Page =
+  def renderComponentDashboard(component: Component, componentpath: String): Page =
     Page(dashboard_shell(
       title = s"${escape(component.name)} Dashboard",
       subtitle = "Component health",
-      statePath = s"/web/${componentPath}/dashboard/state"
+      statePath = s"/web/${componentpath}/dashboard/state"
     ))
 
   def renderDashboardState(
@@ -479,6 +480,7 @@ trait StaticFormAppRendererSystemAdminPart {
       operationalDetails: Option[String],
       componentFormsPath: Option[String]
   ): String = {
+    val profile = webDescriptor.adminProfile
     val descriptorPath = componentFormsPath
       .map(_.stripPrefix("/form/"))
       .map(componentPath => s"/web/${componentPath}/admin/descriptor")
@@ -586,7 +588,8 @@ trait StaticFormAppRendererSystemAdminPart {
       title = title,
       subtitle = subtitle,
       body =
-        s"""${runtimeCard}
+        s"""<section data-textus-page="generated-admin" data-textus-section="admin-root"${ux_profile_attr(profile)}>
+           |${runtimeCard}
            |${admin_nav_card(primaryNav)}
            |${componentInventory}
            |${admin_operational_details(operationalDetails)}
@@ -594,7 +597,8 @@ trait StaticFormAppRendererSystemAdminPart {
            |${admin_card("Web Descriptor", web_descriptor_summary(webDescriptor, descriptorPath))}
            |${admin_runtime_configuration(runtimeConfiguration)}
            |${admin_job_control(runtimeConfiguration)}
-           |${componentBlocks}""".stripMargin
+           |${componentBlocks}
+           |</section>""".stripMargin
     )
   }
 
@@ -2724,8 +2728,8 @@ trait StaticFormAppRendererSystemAdminPart {
        |</div>""".stripMargin
   }
 
-  protected def json_to_yaml(jsonText: String): String =
-    io.circe.parser.parse(jsonText).toOption.map(json_to_yaml).getOrElse(jsonText)
+  protected def json_to_yaml(jsontext: String): String =
+    io.circe.parser.parse(jsontext).toOption.map(json_to_yaml).getOrElse(jsontext)
 
   protected def json_to_yaml(json: Json): String = {
     def go(value: Json, indent: Int): String = {
