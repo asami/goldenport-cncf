@@ -19,7 +19,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Apr. 14, 2026
  *  version Apr. 25, 2026
  *  version May. 27, 2026
- * @version Jun.  9, 2026
+ * @version Jun. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 final class WebDescriptorSpec extends AnyWordSpec with Matchers {
@@ -29,6 +29,8 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
       Files.writeString(
         path,
         """web:
+          |  profile: bootstrap
+          |
           |  expose:
           |    notice-board.notice.search-notices: public
           |    notice-board.notice.post-notice: protected
@@ -48,6 +50,7 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
           |  form:
           |    notice-board.notice.search-notices:
           |      enabled: true
+          |      profile: compact
           |      successRedirect: /web/${component}/admin/aggregates/${service}/${result.id}
           |      failureRedirect: /form/${component}/${service}/${operation}
           |      stayOnError: true
@@ -108,6 +111,7 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
           |    - name: console
           |      path: /web/console
           |      kind: console
+          |      profile: material
           |      theme:
           |        css:
           |          - /web/console/assets/console-theme.css
@@ -136,6 +140,7 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
           |    textus-user-account.signup:
           |      title: Create account
           |      heading: Create account
+          |      profile: admin
           |      subtitle: Use a shared Textus account for this application.
           |      submitLabel: Create account
           |      fields:
@@ -175,6 +180,8 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
 
       val descriptor = WebDescriptor.load(path).toOption.get
 
+      descriptor.profile shouldBe Some(WebUxProfile.Bootstrap)
+      descriptor.effectiveProfile shouldBe WebUxProfile.Bootstrap
       descriptor.expose("notice-board.notice.search-notices") shouldBe WebDescriptor.Exposure.Public
       descriptor.expose("notice-board.notice.post-notice") shouldBe WebDescriptor.Exposure.Protected
       descriptor.auth.mode shouldBe "session"
@@ -187,6 +194,7 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
         Vector(org.goldenport.cncf.config.OperationMode.Develop)
       descriptor.authorization("notice-board.notice.post-notice").allowAnonymous shouldBe true
       descriptor.form("notice-board.notice.search-notices").enabled shouldBe Some(true)
+      descriptor.form("notice-board.notice.search-notices").profile shouldBe Some(WebUxProfile.Compact)
       descriptor.form("notice-board.notice.search-notices").successRedirect shouldBe Some("/web/${component}/admin/aggregates/${service}/${result.id}")
       descriptor.form("notice-board.notice.search-notices").failureRedirect shouldBe Some("/form/${component}/${service}/${operation}")
       descriptor.form("notice-board.notice.search-notices").stayOnError shouldBe true
@@ -228,6 +236,7 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
       descriptor.adminFields("notice_board", "data", "audit").map(_.name) shouldBe Vector("id", "action", "actor")
       descriptor.apps.map(_.name) shouldBe Vector("document", "console")
       descriptor.apps.map(_.path) shouldBe Vector("/web/document", "/web/console")
+      descriptor.apps(1).profile shouldBe Some(WebUxProfile.Material)
       descriptor.apps(1).theme.css shouldBe Vector("/web/console/assets/console-theme.css")
       descriptor.apps(1).theme.variables("primary") shouldBe "#0f766e"
       descriptor.apps(1).assets.css shouldBe Vector("/web/console/assets/console.css")
@@ -241,6 +250,7 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
       descriptor.webRouteFor(Vector("web", "notice-board", "about")).map(_.remainingPath) shouldBe Some(Vector("about"))
       descriptor.pages("textus-user-account.signup").title shouldBe Some("Create account")
       descriptor.pages("textus-user-account.signup").heading shouldBe Some("Create account")
+      descriptor.pages("textus-user-account.signup").profile shouldBe Some(WebUxProfile.Admin)
       descriptor.pages("textus-user-account.signup").subtitle shouldBe Some("Use a shared Textus account for this application.")
       descriptor.pages("textus-user-account.signup").submitLabel shouldBe Some("Create account")
       descriptor.pages("textus-user-account.signup").fields shouldBe Vector("loginName", "email", "password")
@@ -249,6 +259,14 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
       descriptor.pages("textus-user-account.signup").controls("loginName").placeholder shouldBe Some("example_user")
       descriptor.pages("textus-user-account.signup").controls("title").defaultValue shouldBe Some("member")
       descriptor.pageCustomization(Some("textus-user-account"), Some("signup")).flatMap(_.title) shouldBe Some("Create account")
+      descriptor.operationProfile("notice-board", "notice", "search-notices") shouldBe WebUxProfile.Compact
+      descriptor.operationProfile("console", "notice", "search-notices") shouldBe WebUxProfile.Material
+      descriptor.operationProfile(Some("console"), "notice-board", "notice", "search-notices") shouldBe WebUxProfile.Compact
+      descriptor.operationProfile(Some("console"), "notice-board", "notice", "list-notices") shouldBe WebUxProfile.Material
+      descriptor.staticPageProfile("textus-user-account", Vector("signup")) shouldBe WebUxProfile.Admin
+      descriptor.staticPageProfile("console", Vector("unknown")) shouldBe WebUxProfile.Material
+      WebDescriptor().operationProfile("notice-board", "notice", "search-notices") shouldBe WebUxProfile.Bootstrap
+      WebDescriptor().adminProfile shouldBe WebUxProfile.Admin
       descriptor.webRouteFor(Vector("web", "notice-board", "about")).map(_.kind) shouldBe Some(WebDescriptor.RouteKind.Alias)
       descriptor.webRouteFor(Vector("web", "other")).map(_.kind) shouldBe Some(WebDescriptor.RouteKind.Default)
       descriptor.assets.autoComplete shouldBe false
@@ -533,6 +551,58 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
       form.assets.css should contain ("/web/notice-board/search.css")
     }
 
+    "merge UX profile overrides by descriptor scope" in {
+      val selector = "notice-board.notice.search-notices"
+      val base = WebDescriptor(
+        profile = Some(WebUxProfile.Bootstrap),
+        profileRaw = Some("bootstrap"),
+        form = Map(
+          selector -> WebDescriptor.Form(
+            profile = Some(WebUxProfile.Material),
+            profileRaw = Some("material")
+          )
+        ),
+        apps = Vector(WebDescriptor.App(
+          "notice-board",
+          profile = Some(WebUxProfile.Material),
+          profileRaw = Some("material")
+        ))
+      )
+      val supplement = WebDescriptor(
+        profile = Some(WebUxProfile.Compact),
+        profileRaw = Some("compact"),
+        form = Map(
+          selector -> WebDescriptor.Form(
+            profile = Some(WebUxProfile.Admin),
+            profileRaw = Some("admin")
+          )
+        ),
+        apps = Vector(WebDescriptor.App(
+          "notice-board",
+          profile = Some(WebUxProfile.Compact),
+          profileRaw = Some("compact")
+        ))
+      )
+
+      val descriptor = base.mergeOverride(supplement)
+
+      descriptor.effectiveProfile shouldBe WebUxProfile.Compact
+      descriptor.appProfile("notice-board") shouldBe Some(WebUxProfile.Compact)
+      descriptor.formProfile("notice-board", "notice", "search-notices") shouldBe Some(WebUxProfile.Admin)
+      descriptor.operationProfile("notice-board", "notice", "search-notices") shouldBe WebUxProfile.Admin
+    }
+
+    "keep UX profile metadata out of form exposure controls" in {
+      val descriptor = WebDescriptor(
+        profile = Some(WebUxProfile.Material),
+        profileRaw = Some("material")
+      )
+
+      descriptor.hasControls shouldBe false
+      descriptor.isFormEnabled("notice-board.notice.search-notices") shouldBe true
+      descriptor.operationProfile("notice-board", "notice", "search-notices") shouldBe WebUxProfile.Material
+    }
+
     "merge src/main/web-inf/web.yaml form.yaml and admin.yaml from a development project root" in {
       val root = Files.createTempDirectory("cncf-web-descriptor-source-web-inf-split-root")
       val web = Files.createDirectories(root.resolve("src").resolve("main").resolve("web-inf"))
@@ -678,6 +748,28 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
       app.route shouldBe Some("/web/notice-board/notice-board")
       app.effectiveKind shouldBe "static-form"
       app.matches("notice-board", Vector.empty) shouldBe true
+    }
+
+    "reject unknown UX profile names during descriptor load" in {
+      val path = Files.createTempFile("cncf-web-descriptor-invalid-profile", ".yaml")
+      Files.writeString(
+        path,
+        """web:
+          |  profile: neon
+          |""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+
+      val result = WebDescriptor.load(path)
+
+      result shouldBe a[org.goldenport.Consequence.Failure[_]]
+      result match {
+        case org.goldenport.Consequence.Failure(conclusion) =>
+          conclusion.show should include ("invalid web UX profile")
+          conclusion.show should include ("web.profile=neon")
+        case _ =>
+          fail("expected descriptor UX profile failure")
+      }
     }
 
     "reject conflicting Web route aliases during descriptor load" in {

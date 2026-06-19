@@ -163,7 +163,7 @@ machine-readable by tests, demo tooling, and AI-assisted authoring.
 
 ## WU-04: UX Profile Model with Bootstrap and Material Profile Support
 
-Status: OPEN
+Status: DONE
 
 ### Objective
 
@@ -172,19 +172,28 @@ Material Design as a profile path over the same semantic widget model.
 
 ### Initial Tasks
 
-- [ ] Define initial profile names: `bootstrap`, `material`, `compact`, and
+- [x] Define initial profile names: `bootstrap`, `material`, `compact`, and
       `admin`.
-- [ ] Add profile configuration at WebDescriptor/app/page level where it fits
-      existing Web configuration.
-- [ ] Keep Bootstrap rendering as the baseline profile.
-- [ ] Add Material profile metadata/assets/classes without changing runtime
-      operation semantics.
-- [ ] Add deterministic behavior for unknown profile names.
+- [x] Add profile configuration at WebDescriptor global/app/form/page level
+      where it fits existing Web configuration.
+- [x] Keep Bootstrap rendering as the baseline profile.
+- [x] Add Material profile metadata and contract support without changing
+      runtime operation semantics.
+- [x] Add deterministic behavior for unknown profile names.
 
 ### Expected Output
 
 - A profile mechanism that changes presentation while preserving form,
   operation, authorization, and binding contracts.
+
+### Completion Notes
+
+- `WebUxProfile` defines the fixed built-in `bootstrap`, `material`,
+  `compact`, and `admin` profile names.
+- `WebDescriptor` loads, validates, merges, and resolves profile metadata for
+  global, app, form, page, and admin generated-page scopes.
+- Material remains metadata-only in WU-04; renderer class/asset changes remain
+  open for WU-05 and later.
 
 ---
 

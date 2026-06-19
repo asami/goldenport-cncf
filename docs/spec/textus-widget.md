@@ -130,6 +130,57 @@ existing action metadata, `href`, `detail-href`, `row-link`, and related
 widget-specific attributes. Field order remains deterministic and comes from
 resolved schema/view metadata when available.
 
+## UX Profiles
+
+A Web UX profile is a rendering-policy contract for generated Web pages. It is
+separate from `theme`: profile selects the structural presentation family,
+while theme supplies colors, CSS assets, and visual variables within that
+family.
+
+WU-04 defines the initial fixed profile names:
+
+- `bootstrap`: default generated Web profile and the current renderer baseline.
+- `material`: Material Design profile path metadata. WU-04 does not replace
+  Bootstrap classes or assets with Material assets.
+- `compact`: denser generated UI profile for repeated admin/operator work.
+- `admin`: generated admin UI profile. Admin/generated pages default to this
+  profile where the renderer already represents an admin surface and no global
+  profile is configured.
+
+Profile configuration is declared in `WebDescriptor`:
+
+```yaml
+web:
+  profile: bootstrap
+  apps:
+    - name: console
+      profile: material
+  form:
+    notice-board.notice.search-notices:
+      profile: compact
+  pages:
+    textus-user-account.signup:
+      profile: bootstrap
+```
+
+Resolution is deterministic and more-specific scopes override broader scopes:
+
+- Operation form/result pages: `web.profile` -> matching `web.apps[].profile`
+  -> `web.form.<selector>.profile`.
+- Static pages: `web.profile` -> matching `web.apps[].profile` ->
+  `web.pages.<page>.profile`.
+- Admin/generated pages: `web.profile` -> `admin` default for admin renderer
+  surfaces.
+
+If no applicable profile is configured, generated Web pages use `bootstrap`.
+Unknown profile names are descriptor validation errors; the runtime must not
+silently fall back to `bootstrap`.
+
+WU-04 is a metadata and contract step. It must not change Bootstrap DOM,
+operation routes, form field names, authorization, source binding, or
+server-side execution paths. Profile-specific renderer class/asset changes are
+deferred to WU-05 and later work.
+
 ## Rendering Model
 
 Widget rendering is server-side and happens before the final HTML response is

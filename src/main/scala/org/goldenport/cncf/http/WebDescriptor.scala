@@ -14,7 +14,7 @@ import org.goldenport.record.Record
  * @since   Apr. 14, 2026
  *  version Apr. 25, 2026
  *  version May. 30, 2026
- * @version Jun.  9, 2026
+ * @version Jun. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class WebDescriptor(
@@ -29,6 +29,8 @@ final case class WebDescriptor(
   shell: Option[WebDescriptor.Shell] = None,
   componentPage: WebDescriptor.ComponentPage = WebDescriptor.ComponentPage(),
   pages: Map[String, WebDescriptor.PageCustomization] = Map.empty,
+  profile: Option[WebUxProfile] = None,
+  profileRaw: Option[String] = None,
   theme: WebDescriptor.Theme = WebDescriptor.Theme(),
   assets: WebDescriptor.Assets = WebDescriptor.Assets(),
   admin: Map[String, WebDescriptor.AdminSurface] = Map.empty,
@@ -90,6 +92,10 @@ final case class WebDescriptor(
         if (rhs.componentPage == WebDescriptor.ComponentPage()) componentPage
         else rhs.componentPage,
       pages = pages ++ rhs.pages,
+      profile =
+        if (rhs.profileRaw.nonEmpty || rhs.profile.nonEmpty) rhs.profile
+        else profile,
+      profileRaw = rhs.profileRaw.orElse(profileRaw),
       theme = theme.merge(rhs.theme),
       assets = assets.merge(rhs.assets),
       admin = admin ++ rhs.admin,
@@ -243,6 +249,58 @@ final case class WebDescriptor(
       app.matches(name, Vector.empty) ||
         app.normalizedName == org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(name)
     )
+
+  def effectiveProfile: WebUxProfile =
+    profile.getOrElse(WebUxProfile.default)
+
+  def appProfile(name: String): Option[WebUxProfile] =
+    appFor(name).flatMap(_.profile)
+
+  def formProfile(
+    componentName: String,
+    serviceName: String,
+    operationName: String
+  ): Option[WebUxProfile] =
+    form.get(WebDescriptor.formSelector(componentName, serviceName, operationName)).flatMap(_.profile)
+
+  def operationProfile(
+    componentName: String,
+    serviceName: String,
+    operationName: String
+  ): WebUxProfile =
+    _operation_profile(None, componentName, serviceName, operationName)
+
+  def operationProfile(
+    appName: Option[String],
+    componentName: String,
+    serviceName: String,
+    operationName: String
+  ): WebUxProfile =
+    _operation_profile(appName, componentName, serviceName, operationName)
+
+  private def _operation_profile(
+    appName: Option[String],
+    componentName: String,
+    serviceName: String,
+    operationName: String
+  ): WebUxProfile =
+    formProfile(componentName, serviceName, operationName)
+      .orElse(appName.flatMap(appProfile))
+      .orElse(appProfile(componentName))
+      .orElse(profile)
+      .getOrElse(WebUxProfile.default)
+
+  def staticPageProfile(
+    appName: String,
+    page: Vector[String]
+  ): WebUxProfile =
+    staticPageCustomization(appName, page).flatMap(_.profile)
+      .orElse(appProfile(appName))
+      .orElse(profile)
+      .getOrElse(WebUxProfile.default)
+
+  def adminProfile: WebUxProfile =
+    profile.getOrElse(WebUxProfile.Admin)
 
   def themeFor(appName: Option[String] = None): WebDescriptor.Theme =
     appName
@@ -477,6 +535,8 @@ object WebDescriptor {
     stayOnError: Boolean = false,
     resultTemplate: Option[String] = None,
     layout: Option[String] = None,
+    profile: Option[WebUxProfile] = None,
+    profileRaw: Option[String] = None,
     assets: Assets = Assets(),
     controls: Map[String, FormControl] = Map.empty
   ) {
@@ -489,6 +549,10 @@ object WebDescriptor {
         stayOnError = stayOnError || rhs.stayOnError,
         resultTemplate = rhs.resultTemplate.orElse(resultTemplate),
         layout = rhs.layout.orElse(layout),
+        profile =
+          if (rhs.profileRaw.nonEmpty || rhs.profile.nonEmpty) rhs.profile
+          else profile,
+        profileRaw = rhs.profileRaw.orElse(profileRaw),
         assets = assets.merge(rhs.assets),
         controls = controls ++ rhs.controls
       )
@@ -518,6 +582,8 @@ object WebDescriptor {
     modeRaw: Option[String] = None,
     display: Option[PageDisplay] = None,
     displayRaw: Option[String] = None,
+    profile: Option[WebUxProfile] = None,
+    profileRaw: Option[String] = None,
     backButton: Option[Boolean] = None,
     submitLabel: Option[String] = None,
     fields: Vector[String] = Vector.empty,
@@ -714,6 +780,8 @@ object WebDescriptor {
     compositionRaw: Option[String] = None,
     pageDisplay: Option[PageDisplay] = None,
     pageDisplayRaw: Option[String] = None,
+    profile: Option[WebUxProfile] = None,
+    profileRaw: Option[String] = None,
     pageBackButton: Option[Boolean] = None
   ) {
     def normalizedName: String =
@@ -747,6 +815,10 @@ object WebDescriptor {
         compositionRaw = rhs.compositionRaw.orElse(compositionRaw),
         pageDisplay = rhs.pageDisplayRaw.map(_ => rhs.pageDisplay).getOrElse(pageDisplay),
         pageDisplayRaw = rhs.pageDisplayRaw.orElse(pageDisplayRaw),
+        profile =
+          if (rhs.profileRaw.nonEmpty || rhs.profile.nonEmpty) rhs.profile
+          else profile,
+        profileRaw = rhs.profileRaw.orElse(profileRaw),
         pageBackButton = rhs.pageBackButton.orElse(pageBackButton)
       )
 
@@ -958,6 +1030,8 @@ object WebDescriptor {
       shell = _shell(web),
       componentPage = _component_page(web),
       pages = _pages(web),
+      profile = _profile(web),
+      profileRaw = _profile_raw(web),
       theme = _theme(web),
       assets = _assets(web),
       admin = _admin(web),
@@ -969,11 +1043,49 @@ object WebDescriptor {
     descriptor: WebDescriptor,
     path: Path
   ): Consequence[WebDescriptor] =
-    _validate_web_composition(descriptor, path).flatMap { descriptor =>
+    _validate_profiles(descriptor, path).flatMap { descriptor =>
+      _validate_web_composition(descriptor, path)
+    }.flatMap { descriptor =>
       _validate_routes(descriptor.routes, path).map { routes =>
         descriptor.copy(routes = routes)
       }
     }
+
+  private def _validate_profiles(
+    descriptor: WebDescriptor,
+    path: Path
+  ): Consequence[WebDescriptor] = {
+    val invalidglobal =
+      descriptor.profileRaw.flatMap(raw => _invalid_profile_message(path, "web.profile", raw))
+    val invalidapp =
+      descriptor.apps.collectFirst {
+        case app if app.profileRaw.exists(raw => WebUxProfile.parse(raw).isEmpty) =>
+          s"invalid web UX profile in ${path}: apps.${app.name}.profile=${app.profileRaw.get}"
+      }
+    val invalidform =
+      descriptor.form.collectFirst {
+        case (name, form) if form.profileRaw.exists(raw => WebUxProfile.parse(raw).isEmpty) =>
+          s"invalid web UX profile in ${path}: form.${name}.profile=${form.profileRaw.get}"
+      }
+    val invalidpage =
+      descriptor.pages.collectFirst {
+        case (name, page) if page.profileRaw.exists(raw => WebUxProfile.parse(raw).isEmpty) =>
+          s"invalid web UX profile in ${path}: pages.${name}.profile=${page.profileRaw.get}"
+      }
+    invalidglobal.orElse(invalidapp).orElse(invalidform).orElse(invalidpage) match {
+      case Some(message) => Consequence.resourceInvalid(message)
+      case None => Consequence.success(descriptor)
+    }
+  }
+
+  private def _invalid_profile_message(
+    path: Path,
+    scope: String,
+    raw: String
+  ): Option[String] =
+    Option.when(WebUxProfile.parse(raw).isEmpty)(
+      s"invalid web UX profile in ${path}: ${scope}=${raw}"
+    )
 
   private def _validate_web_composition(
     descriptor: WebDescriptor,
@@ -1122,6 +1234,8 @@ object WebDescriptor {
             stayOnError = _boolean(r, "stayOnError").orElse(_boolean(r, "stay-on-error")).getOrElse(false),
             resultTemplate = _string(r, "resultTemplate").orElse(_string(r, "result-template")),
             layout = _string(r, "layout"),
+            profile = _profile(r),
+            profileRaw = _profile_raw(r),
             assets = _assets(r),
             controls = _form_controls(r)
           )
@@ -1163,6 +1277,7 @@ object WebDescriptor {
   {
     val modeRaw = _string(record, "mode").orElse(_string(record, "pageMode")).orElse(_string(record, "page-mode"))
     val displayraw = _string(record, "display").orElse(_string(record, "pageDisplay")).orElse(_string(record, "page-display"))
+    val profileraw = _profile_raw(record)
     PageCustomization(
       title = _string(record, "title"),
       heading = _string(record, "heading"),
@@ -1172,6 +1287,8 @@ object WebDescriptor {
       modeRaw = modeRaw,
       display = displayraw.flatMap(PageDisplay.parse),
       displayRaw = displayraw,
+      profile = profileraw.flatMap(WebUxProfile.parse),
+      profileRaw = profileraw,
       backButton = _boolean(record, "backButton").orElse(_boolean(record, "back-button")).orElse(_boolean(record, "back_button")),
       submitLabel = _string(record, "submitLabel").orElse(_string(record, "submit-label")),
       fields = _string_vector(record, "fields"),
@@ -1200,6 +1317,7 @@ object WebDescriptor {
           .orElse(_string(record, "page-display"))
           .orElse(_string(record, "componentPageDisplay"))
           .orElse(_string(record, "component-page-display"))
+      val profileraw = _profile_raw(record)
       App(
         name = name,
         path = record.getString("path").map(_.trim).filter(_.nonEmpty).orElse(root).getOrElse(""),
@@ -1213,6 +1331,8 @@ object WebDescriptor {
         compositionRaw = compositionRaw,
         pageDisplay = pagedisplayraw.flatMap(PageDisplay.parse),
         pageDisplayRaw = pagedisplayraw,
+        profile = profileraw.flatMap(WebUxProfile.parse),
+        profileRaw = profileraw,
         pageBackButton = _boolean(record, "pageBackButton").orElse(_boolean(record, "page-back-button")).orElse(_boolean(record, "page_back_button"))
       )
     }
@@ -1447,6 +1567,14 @@ object WebDescriptor {
         case _ => None
       }
     }
+
+  private def _profile(record: Record): Option[WebUxProfile] =
+    _profile_raw(record).flatMap(WebUxProfile.parse)
+
+  private def _profile_raw(record: Record): Option[String] =
+    _string(record, "profile")
+      .orElse(_string(record, "uxProfile"))
+      .orElse(_string(record, "ux-profile"))
 
   private def _string(record: Record, key: String): Option[String] =
     record.getString(key).map(_.trim).filter(_.nonEmpty)
