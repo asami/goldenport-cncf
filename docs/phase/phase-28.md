@@ -1,10 +1,10 @@
 # Phase 28 — Web UI DSL / Bootstrap Core / Material Design / UX Profile
 
-status = active
+status = closed
 
 ## 1. Purpose of This Document
 
-This work document records Phase 28, which implements the active `9.19 Web UI
+This work document records Phase 28, which implemented the `9.19 Web UI
 DSL / Bootstrap Core / Material Design / UX Profile` development item.
 
 Phase 27 closed the Knowledge Editor and Domain Knowledge Authoring baseline.
@@ -68,13 +68,12 @@ Scope boundaries:
 - H (DONE): WU-08 — Validation, issue, capability, and empty-state widget
   alignment.
 - I (DONE): WU-09 — Web Demo Assist Manifest for cozy video and demo tooling.
-- J (OPEN): WU-10 — Phase 28 verification and closure.
+- J (DONE): WU-10 — Phase 28 verification and closure.
 
 Resume hint:
 
-- Continue with WU-10. Keep Phase 27 closed and treat Knowledge Editor screens
-  as drivers for CNCF Web/platform infrastructure, not as the owner of the Web
-  UI architecture.
+- Phase 28 is closed. Select a new independent 9.x Web/platform or runtime
+  development item before opening the next phase.
 
 ## 4. Development Items
 
@@ -87,7 +86,7 @@ Resume hint:
 - [x] WU-07: TKE / InformationSpace / Knowledge Editor driver integration.
 - [x] WU-08: Validation, issue, capability, and empty-state widget alignment.
 - [x] WU-09: Web Demo Assist Manifest for cozy video and demo tooling.
-- [ ] WU-10: Phase 28 verification and closure.
+- [x] WU-10: Phase 28 verification and closure.
 
 Detailed task breakdown and progress tracking are recorded in
 `phase-28-checklist.md`.
@@ -118,3 +117,22 @@ Phase 28 can close when:
   provider payloads, or confidential field values.
 - Deferred Web work remains tracked under the independent 9.x Web/platform
   development items.
+
+## 6. Closure Result
+
+Phase 28 closed after WU-10 verification. The completed baseline includes:
+
+- Web UI DSL vocabulary and projection contracts.
+- Bootstrap Core DOM and semantic `data-textus-*` selectors.
+- UX profile metadata for `bootstrap`, `material`, `compact`, and `admin`.
+- `textus:editable-line-list` as the repeated-row form-edit widget.
+- Validation, issue, capability, and empty-state semantic hooks.
+- Web Demo Assist Manifest gated by runtime configuration.
+
+Deferred work remains outside Phase 28:
+
+- Material visual rendering and profile-specific assets.
+- Broader generated-page selector coverage beyond the Phase 28 vertical slices.
+- Web Island Architecture Runtime.
+- API Gateway and public REST exposure policy.
+- Production visual theme marketplace.

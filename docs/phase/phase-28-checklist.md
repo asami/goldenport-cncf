@@ -41,7 +41,7 @@ infrastructure, not as a Phase 27 Knowledge Editor continuation.
 
 ### Decisions
 
-- Phase 28 owns the active `9.19` Web/platform development item.
+- Phase 28 owned the `9.19` Web/platform development item through closure.
 - `textus:line-list` remains a display-oriented widget.
 - Editable repeated-row form editing uses a distinct semantic widget,
   tentatively `textus:editable-line-list`.
@@ -352,7 +352,7 @@ manifest for cozy video and demo script generation.
 
 ## WU-10: Phase 28 Verification and Closure
 
-Status: OPEN
+Status: DONE
 
 ### Objective
 
@@ -361,12 +361,21 @@ remaining work under independent future development items.
 
 ### Initial Tasks
 
-- [ ] Confirm phase and strategy documents match implemented behavior.
-- [ ] Run focused Web UI DSL / renderer / demo manifest specs.
-- [ ] Run `sbt --batch Test/compile`.
-- [ ] Run `git diff --check`.
-- [ ] Record deferred work under the appropriate 9.x development item.
+- [x] Confirm phase and strategy documents match implemented behavior.
+- [x] Run focused Web UI DSL / renderer / demo manifest specs.
+- [x] Run `sbt --batch test`.
+- [x] Run `git diff --check`.
+- [x] Record deferred work under the appropriate 9.x development item.
 
 ### Expected Output
 
 - Phase 28 can close without hidden Web UI DSL implementation debt.
+
+### Closure Result
+
+- Phase 28 is closed.
+- WU-01 through WU-09 remain documented as complete and covered by executable
+  specs.
+- Deferred Material visual rendering, broader generated-page selector coverage,
+  Web Island Architecture Runtime, API Gateway / public REST exposure policy,
+  and production visual theme marketplace remain outside Phase 28.

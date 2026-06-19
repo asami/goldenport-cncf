@@ -650,14 +650,13 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Notes contain execution details and results for each phase.
 
 ## Process Status Pointers
-- Current phase selection: Phase 28 — Web UI DSL / Bootstrap Core /
-  Material Design / UX Profile.
-- Current phase dashboard: `docs/phase/phase-28.md`
-- Current phase checklist: `docs/phase/phase-28-checklist.md`
-- Latest closed phase dashboard: `docs/phase/phase-27.md`
-- Latest closed phase checklist: `docs/phase/phase-27-checklist.md`
-- Previous closed phase dashboard: `docs/phase/phase-26.md`
-- Previous closed phase checklist: `docs/phase/phase-26-checklist.md`
+- Current phase selection: none selected after Phase 28 closure.
+- Current phase dashboard: none.
+- Current phase checklist: none.
+- Latest closed phase dashboard: `docs/phase/phase-28.md`
+- Latest closed phase checklist: `docs/phase/phase-28-checklist.md`
+- Previous closed phase dashboard: `docs/phase/phase-27.md`
+- Previous closed phase checklist: `docs/phase/phase-27-checklist.md`
 - Candidate next phase areas after Phase 28: Web UI multi-locale message
   control; AwsComponent/S3 BlobStore provider; Search/index planning; DB
   migration tooling; CulturalResource collection-item profile.
@@ -695,7 +694,7 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Phase 25: closed (`docs/phase/phase-25.md`)
 - Phase 26: closed (`docs/phase/phase-26.md`)
 - Phase 27: closed (`docs/phase/phase-27.md`)
-- Phase 28: active (`docs/phase/phase-28.md`)
+- Phase 28: closed (`docs/phase/phase-28.md`)
 
 ## 8. Completed Development Item History
 
@@ -1144,6 +1143,25 @@ Completed in Phase 26.
 - Deferred scope remains under 9.5 Knowledge Structure Follow-ups and future
   application/production hardening.
 
+### 8.17 Web UI DSL / Bootstrap Core / Material Design / UX Profile
+Completed in Phase 28.
+
+- Closed dashboard: `docs/phase/phase-28.md`
+- Closed checklist: `docs/phase/phase-28-checklist.md`
+- Design note: `docs/notes/web-ui-dsl-bootstrap-core-ux-profile-design.md`
+- Completed scope:
+  - Web UI DSL vocabulary and projection contracts.
+  - Bootstrap Core DOM and semantic `data-textus-*` selector contracts.
+  - UX profile metadata for `bootstrap`, `material`, `compact`, and `admin`.
+  - `textus:editable-line-list` repeated-row form-edit widget baseline.
+  - TKE InformationSpace / Knowledge Editor driver integration.
+  - validation, issue, capability, and empty-state semantic hooks.
+  - Web Demo Assist Manifest gated by runtime configuration.
+- Deferred scope remains under independent 9.x Web/platform items, including
+  Material visual rendering, broader generated-page selector coverage, Web
+  Island Architecture Runtime, API Gateway / public REST exposure policy, and
+  production visual theme marketplace.
+
 ## 9. Development Item Status
 
 This final section lists planned active and future development areas only.
@@ -1153,19 +1171,7 @@ corresponding completed-history entry.
 
 Current development item:
 
-- Phase 28 implements `9.19 Web UI DSL / Bootstrap Core / Material Design /
-  UX Profile`.
-  - Dashboard: `docs/phase/phase-28.md`
-  - Checklist: `docs/phase/phase-28-checklist.md`
-  - Source note:
-    `docs/notes/web-ui-dsl-bootstrap-core-ux-profile-design.md`.
-  - Goal: turn the editor UI lessons from Phase 27 into reusable generated Web
-    metadata, Bootstrap Core DOM, semantic widgets, editable repeated-row
-    controls, selectable UX profiles, and demo-assist metadata for Static Form
-    Web Apps and application-owned screens.
-  - Driver: `/Users/asami/src/dev2026/textus-knowledge-editor` provides the
-    concrete InformationSpace / Knowledge Editor screens; CNCF owns the reusable
-    Web UI DSL, widget, DOM, and UX profile contracts generalized from them.
+- None selected. Select one independent 9.x item before opening the next phase.
 
 ### 9.1 Web Next Stage Follow-ups
 Web/platform follow-up index.
@@ -1174,7 +1180,6 @@ Phase 21 deferred Web items are now tracked as independent development items
 instead of a broad umbrella backlog. New Web work should select one of the
 independent 9.x items below rather than adding broad bullets back into 9.1.
 
-- `9.19 Web UI DSL / Bootstrap Core / Material Design / UX Profile`
 - `9.20 CNCF-hosted SPA Mode`
 - `9.21 Web Island Architecture Runtime`
 - `9.22 API Gateway and Public REST Exposure Policy`
@@ -1732,77 +1737,6 @@ Future component-runtime and execution-governance item.
   - all capability families;
   - source-code static analysis;
   - dependency mediation redesign.
-
-### 9.19 Web UI DSL / Bootstrap Core / Material Design / UX Profile
-Active Web/platform development item implemented by Phase 28.
-
-- Design note:
-  - `docs/notes/web-ui-dsl-bootstrap-core-ux-profile-design.md`
-- Active work documents:
-  - `docs/phase/phase-28.md`
-  - `docs/phase/phase-28-checklist.md`
-- Current implementation status:
-  - WU-01 through WU-09 are complete. WU-10 phase verification and closure is
-    the active next slice.
-- Goal: promote Web UI DSL, Bootstrap Core DOM conventions, Material Design
-  profile support, and selectable UX profiles into a first-class CNCF
-  Web/platform development item rather than a Phase 27 knowledge-editor
-  follow-up.
-- Motivation:
-  - Static Form Web Apps and generated screens need semantic widgets, stable
-    Bootstrap-oriented DOM, a Material Design-capable profile path, and
-    selectable UX profiles without application-local UI hacks.
-  - Knowledge Editor screens are a concrete driver, but the feature belongs to
-    CNCF Web/platform because it affects generated/admin/manual/application
-    screens across components.
-- Scope:
-  - define the Web UI DSL authoring vocabulary and generated projection shape;
-  - define Bootstrap Core DOM/class conventions as a stable generated-screen
-    contract;
-  - define UX profile selection for generated/admin/application screens;
-  - treat Material Design as a first-class UX profile target layered on the
-    semantic widget model rather than as a separate Web runtime;
-  - support semantic widgets such as list/detail/action/result forms,
-    validation/issue panels, empty states, capability messages, and
-    operator/data-entry affordances;
-  - preserve existing display widgets such as `textus:table`,
-    `textus:card-list`, `textus:line-list`, `textus:summary-card`,
-    `textus:action-form`, and `textus:error-panel`;
-  - add a distinct editable repeated-row widget for authors, identifiers,
-    relationships, qualifiers, and similar form-edit collections;
-  - standardize semantic DOM markers such as `data-textus-page`,
-    `data-textus-section`, `data-textus-form`, `data-textus-field`,
-    `data-textus-action`, and `data-textus-widget`;
-  - expose an opt-in Web Demo Assist Manifest for cozy video and demo script
-    generation when demo mode is explicitly enabled;
-  - include reusable selector/display patterns for project-level knowledge
-    settings such as RDF prefix/namespace registries where application screens
-    need to show or choose the active namespace;
-  - align capability-aware controls with the existing CNCF authorization model;
-  - keep generated UI metadata operation-centric rather than application-local.
-- First implementation direction:
-  - use `/Users/asami/src/dev2026/textus-knowledge-editor` as the first
-    application driver and start with reusable widgets needed by
-    InformationSpace / Knowledge Editor pages;
-  - treat existing `textus:line-list` as display-oriented and add a separate
-    editable-line-list widget for repeated form rows;
-  - provide a generic aggregate edit context for staged, partial editor updates
-    before explicit save/discard;
-  - add a JSON demo manifest endpoint controlled by runtime config, with
-    selectors derived from semantic `data-textus-*` attributes and sensitive
-    values omitted;
-  - keep development form diagnostics tied to the triggering execution and
-    CallTree, instead of relying on a mutable global latest execution;
-  - generalize them into Web UI DSL, Bootstrap Core, Material Design profile,
-    and UX profile metadata;
-  - preserve Static Form Web App compatibility;
-  - add executable rendering/projection specs before broad visual polish.
-- Deferred scope:
-  - full SPA framework integration;
-  - custom application design-system compiler;
-  - island architecture runtime;
-  - frontend package/dependency lifecycle beyond the Bootstrap Core baseline;
-  - production-grade visual theme marketplace.
 
 ### 9.20 CNCF-hosted SPA Mode
 Future Web/platform development item.
