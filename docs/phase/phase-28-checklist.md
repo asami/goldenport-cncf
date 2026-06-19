@@ -231,7 +231,7 @@ Static Form renderer through one executable vertical slice.
 
 ## WU-06: Editable Line-List Widget Vertical Slice
 
-Status: OPEN
+Status: DONE
 
 ### Objective
 
@@ -261,7 +261,7 @@ display-oriented `textus:line-list` widget.
 
 ## WU-07: TKE / InformationSpace / Knowledge Editor Driver Integration
 
-Status: OPEN
+Status: DONE
 
 ### Objective
 
@@ -270,19 +270,19 @@ Web UI DSL and editable-line-list behavior.
 
 ### Initial Tasks
 
-- [ ] Use `/Users/asami/src/dev2026/textus-knowledge-editor` as the concrete
+- [x] Use `/Users/asami/src/dev2026/textus-knowledge-editor` as the concrete
       driver repository for this slice.
-- [ ] Select one or more editor fields such as authors, identifiers,
+- [x] Select one or more editor fields such as authors, identifiers,
       relationships, or qualifiers.
-- [ ] Include the TKE fragments editor/source fragment composition screen as a
+- [x] Include the TKE fragments editor/source fragment composition screen as a
       driver for replacing remaining application-local JavaScript repeated-row
       editing with `textus:editable-line-list`.
-- [ ] Render those fields through the common editable-line-list widget.
-- [ ] Keep any TKE-specific JavaScript as optional progressive enhancement
+- [x] Render those fields through the common editable-line-list widget.
+- [x] Keep any TKE-specific JavaScript as optional progressive enhancement
       around the common widget, not as the primary repeated-row editing model.
-- [ ] Keep Knowledge Editor application code as a driver, not the owner of the
+- [x] Keep Knowledge Editor application code as a driver, not the owner of the
       CNCF Web UI DSL contract.
-- [ ] Add smoke coverage for the selected driver screen.
+- [x] Add smoke coverage for the selected driver screen.
 
 ### Expected Output
 

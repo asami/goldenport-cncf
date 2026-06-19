@@ -1742,8 +1742,8 @@ Active Web/platform development item implemented by Phase 28.
   - `docs/phase/phase-28.md`
   - `docs/phase/phase-28-checklist.md`
 - Current implementation status:
-  - WU-01 through WU-05 are complete. WU-06 editable-line-list remains the
-    active next slice.
+  - WU-01 through WU-07 are complete. WU-08 validation, issue, capability, and
+    empty-state widget alignment is the active next slice.
 - Goal: promote Web UI DSL, Bootstrap Core DOM conventions, Material Design
   profile support, and selectable UX profiles into a first-class CNCF
   Web/platform development item rather than a Phase 27 knowledge-editor

@@ -63,7 +63,7 @@ Scope boundaries:
   support.
 - E (DONE): WU-05 — Static Form renderer integration vertical slice.
 - F (DONE): WU-06 — Editable line-list widget vertical slice.
-- G (OPEN): WU-07 — TKE / InformationSpace / Knowledge Editor driver
+- G (DONE): WU-07 — TKE / InformationSpace / Knowledge Editor driver
   integration.
 - H (OPEN): WU-08 — Validation, issue, capability, and empty-state widget
   alignment.
@@ -72,7 +72,7 @@ Scope boundaries:
 
 Resume hint:
 
-- Continue with WU-07. Keep Phase 27 closed and treat Knowledge Editor screens
+- Continue with WU-08. Keep Phase 27 closed and treat Knowledge Editor screens
   as drivers for CNCF Web/platform infrastructure, not as the owner of the Web
   UI architecture.
 
@@ -84,7 +84,7 @@ Resume hint:
 - [x] WU-04: UX Profile model with Bootstrap and Material profile support.
 - [x] WU-05: Static Form renderer integration vertical slice.
 - [x] WU-06: Editable line-list widget vertical slice.
-- [ ] WU-07: TKE / InformationSpace / Knowledge Editor driver integration.
+- [x] WU-07: TKE / InformationSpace / Knowledge Editor driver integration.
 - [ ] WU-08: Validation, issue, capability, and empty-state widget alignment.
 - [ ] WU-09: Web Demo Assist Manifest for cozy video and demo tooling.
 - [ ] WU-10: Phase 28 verification and closure.
