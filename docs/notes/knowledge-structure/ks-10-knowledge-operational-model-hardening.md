@@ -498,7 +498,10 @@ RDF object literal        -> typed value, unless profile promotes it to a node
 
 Mapping is profile-driven.
 
-Core CNCF can provide small default mappings for common predicates such as:
+Core CNCF can provide small default mappings for common predicates. The same
+set is the generic `cncf-rdf-1.5-hop-v1` predicate profile used by focused
+RDF/knowledge node explanation. It is role-based and provider-overridable.
+Common predicates include:
 
 - `rdf:type`
 - `rdfs:label`
