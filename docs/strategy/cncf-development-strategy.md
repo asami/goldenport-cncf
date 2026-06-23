@@ -659,7 +659,8 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Previous closed phase checklist: `docs/phase/phase-27-checklist.md`
 - Candidate next phase areas after Phase 28: Web UI multi-locale message
   control; AwsComponent/S3 BlobStore provider; Search/index planning; DB
-  migration tooling; CulturalResource collection-item profile.
+  migration tooling; CulturalResource collection-item profile; Rule Engine and
+  Inference Runtime.
 - Status interpretation rules: `docs/rules/stage-status-and-checklist-convention.md`
 
 ## 6. Explicit Non-Goals
@@ -1935,3 +1936,80 @@ Future Web/platform UX development item.
     content work;
   - automatic machine translation;
   - production translation workflow, translator UI, or terminology management.
+
+### 9.27 Rule Engine and Inference Runtime
+Future domain logic / runtime / knowledge / automation development item.
+
+- Goal: add a CNCF-owned Rule / Inference model and SPI for domain-logic
+  rules, constraint rules, calculation rules, and inference rules without
+  making CNCF core depend on JESS, RETE, Drools, or any specific rule engine
+  implementation.
+- Positioning:
+  - the first slice starts from the common Rule / Inference model and provider
+    SPI, not from a concrete JESS-compatible runtime;
+  - domain logic is a primary driver: tax calculation, pricing tables,
+    eligibility checks, validation constraints, derivation rules, and similar
+    business rules should be expressible as rules instead of being hard-coded
+    in component implementation code;
+  - Knowledge reasoning is also an important driver, but the model is CNCF
+    runtime infrastructure and must be usable by domain logic, Event, Job,
+    Entity validation, diagnostics, and automation flows;
+  - business-process engine integration is a future target, but this item
+    starts by standardizing basic rule handling before introducing process
+    orchestration semantics;
+  - authorization may consume rule-derived facts or recommendations later, but
+    the initial rule engine must not replace `OperationAccessPolicy` or bypass
+    authorization guards.
+- Scope:
+  - define `RuleSet`, `Rule`, `Fact`, `WorkingMemory`, `Agenda`,
+    `RuleEvaluationResult`, and `RuleFireResult` as CNCF model concepts;
+  - define rule families for at least constraint rules, calculation rules,
+    derivation rules, decision-table rules, production rules, and inference
+    rules;
+  - support table-oriented rules such as product price lists, tax rates,
+    tiered discounts, fee schedules, and lookup/derivation tables as first
+    class rule-set shapes;
+  - support expression-oriented calculation rules such as consumption-tax
+    calculation, totals, discounts, eligibility scores, and derived domain
+    attributes;
+  - support constraint rules that produce validation issues or structured
+    `Conclusion` failures without performing side effects;
+  - define how basic rules are declared, versioned, evaluated, explained,
+    tested, projected, and observed before mapping them into business-process
+    execution;
+  - define a `RuleEngine` / `InferenceEngine` SPI for evaluating rules,
+    explaining matches, and firing rule actions through CNCF execution
+    boundaries;
+  - define rule actions as planned `ActionCall`, Event, Job, or recommendation
+    outputs rather than direct repository mutations;
+  - attach rule execution to CallTree, Observability, Job/Task diagnostics, and
+    structured explanation records;
+  - support an initial deterministic simple forward-chaining implementation for
+    executable specs before adding RETE-style optimization or external
+    providers;
+  - define descriptor/config loading for rule sets without making ordinary
+    applications embed arbitrary executable code.
+- First implementation direction:
+  - create the model and SPI under a CNCF rule/inference package;
+  - add a restricted YAML/Record-shaped rule-set representation with simple
+    condition patterns, decision-table rows, calculation expressions, and
+    action plans;
+  - add a simple in-memory matcher that can evaluate facts and produce an
+    explainable agenda;
+  - add a deterministic table-rule evaluator for price-list and tax-rate style
+    rules before adding a full RETE engine;
+  - route fired actions through ActionCall / Event / Job chokepoints so
+    authorization, UnitOfWork, and observability remain active;
+  - add read-only projection/manual/admin visibility for rule sets and fire
+    traces.
+- Deferred scope:
+  - JESS compatibility layer;
+  - RETE provider implementation;
+  - Drools or other external provider integration;
+  - business-process engine implementation;
+  - BPMN-like process authoring, process-state management, and human-task
+    workflow;
+  - rule authoring UI;
+  - untrusted rule sandboxing beyond the existing CAR capability sandbox
+    direction;
+  - using rules as the primary authorization engine.
