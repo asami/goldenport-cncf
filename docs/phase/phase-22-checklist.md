@@ -499,3 +499,21 @@ Closure validation for JM-06 is docs-only:
 
 - `git diff --check`
 - Phase 22 status `rg` check over the phase/checklist/strategy files.
+
+---
+
+## Post-Closure Maintenance
+
+### Jun. 27, 2026 — Execution Envelope Contract Alignment
+
+Status: DONE
+
+- [x] Emit public execution envelope keys in kebab-case for XML/JSON/YAML
+      consumers: `interface-shape`, `requested-mode`, `managed-by-job`, and
+      `async-continuation`.
+- [x] Preserve the requested command execution mode token in `requested-mode`
+      instead of exposing an internal enum label.
+- [x] Keep the compatibility execution modes usable for downstream Cozy and
+      sbt-cozy scripted validation.
+- [x] Validate with CNCF `sbt --batch test` and downstream Cozy focused
+      scripted checks.

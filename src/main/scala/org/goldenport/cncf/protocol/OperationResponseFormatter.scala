@@ -18,7 +18,8 @@ import scala.xml.{Elem, NodeSeq, Text}
  * @since   Mar. 13, 2026
  *  version Mar. 28, 2026
  *  version Apr. 30, 2026
- * @version May. 31, 2026
+ *  version May. 31, 2026
+ * @version Jun. 27, 2026
  * @author  ASAMI, Tomoharu
  */
 object OperationResponseFormatter {
@@ -305,16 +306,17 @@ object OperationResponseFormatter {
   ): Record = {
     val base =
       Vector(
-        "interfaceShape" -> interfaceshape,
+        "interface-shape" -> interfaceshape,
         "operation" -> request.operation
       ) ++ request.component.map("component" -> _) ++ request.service.map("service" -> _)
-    val policy = _requested_execution_policy(request)
+    val requestedmode = _requested_execution_mode_record(request)
+    val policy = requestedmode.flatMap(CommandExecutionPolicy.parse)
     Record.dataAuto(
       (base ++ Vector(
-        "mode" -> policy.map(_.modeLabel),
+        "requested-mode" -> requestedmode,
         "interface" -> policy.map(_.interfaceMode.toString.toLowerCase(java.util.Locale.ROOT)),
-        "managedByJob" -> policy.map(_.managedByJob),
-        "asyncContinuation" -> policy.map(_.asyncContinuation)
+        "managed-by-job" -> policy.map(_.managedByJob),
+        "async-continuation" -> policy.map(_.asyncContinuation)
       ))*
     )
   }

@@ -11,7 +11,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 28, 2026
- * @version May. 31, 2026
+ *  version May. 31, 2026
+ * @version Jun. 27, 2026
  * @author  ASAMI, Tomoharu
  */
 final class OperationResponseFormatterXmlSpec
@@ -56,7 +57,7 @@ final class OperationResponseFormatterXmlSpec
 
       Then("the protocol response is XML")
       formatted shouldBe Response.Xml(
-        "<record><data><type>component</type><name>domain</name><summary>Component domain</summary></data><execution><interfaceShape>record</interfaceShape><operation>domain.meta.describe</operation></execution></record>"
+        "<record><data><type>component</type><name>domain</name><summary>Component domain</summary></data><execution><interface-shape>record</interface-shape><operation>domain.meta.describe</operation></execution></record>"
       )
     }
 
@@ -117,7 +118,7 @@ final class OperationResponseFormatterXmlSpec
       formatted match {
         case Response.Json(value) =>
           value should include (""""data":{"status":"ok"}""")
-          value should include (""""execution":{"interfaceShape":"record","operation":"domain.command","mode":"JobSyncWithAsyncCont","interface":"sync","managedByJob":true,"asyncContinuation":true}""")
+          value should include (""""execution":{"interface-shape":"record","operation":"domain.command","requested-mode":"job-sync-with-async-cont","interface":"sync","managed-by-job":true,"async-continuation":true}""")
           value should include (""""job":{"id":"cncf-job-primary"}""")
           value should include (""""continuation":{"mode":"event-async-same-job-task","policy":"async-same-job"}""")
           value should not include ("textus-execution")

@@ -662,6 +662,10 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
   migration tooling; CulturalResource collection-item profile; Rule Engine and
   Inference Runtime.
 - Status interpretation rules: `docs/rules/stage-status-and-checklist-convention.md`
+- Latest post-closure maintenance: Jun. 27, 2026 Phase 22 execution envelope
+  contract alignment for downstream Cozy/sbt-cozy scripted use. The public
+  execution metadata keys are kebab-case and `requested-mode` keeps the
+  requested contract token.
 
 ## 6. Explicit Non-Goals
 - No skipping phases.

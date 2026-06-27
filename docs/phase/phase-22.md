@@ -166,6 +166,13 @@ Phase 22 is closed with the following completed baseline:
 - Page-view support data has a query-only CompositeQuery boundary for
   server-rendered Web context aggregation.
 
+Post-closure maintenance recorded on Jun. 27, 2026 keeps the external
+execution envelope contract aligned with downstream Cozy/sbt-cozy scripted
+usage: execution metadata is emitted with kebab-case public keys such as
+`interface-shape`, `requested-mode`, `managed-by-job`, and
+`async-continuation`, and `requested-mode` preserves the requested contract
+token instead of an internal enum label.
+
 Deferred items are not active Phase 22 work. They are recorded as future
 development candidates in `docs/strategy/cncf-development-strategy.md`,
 including Job Management follow-ups, observability externalization, distributed
