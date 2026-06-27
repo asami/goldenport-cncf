@@ -662,7 +662,12 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
   migration tooling; CulturalResource collection-item profile; Rule Engine and
   Inference Runtime.
 - Status interpretation rules: `docs/rules/stage-status-and-checklist-convention.md`
-- Latest post-closure maintenance: Jun. 27, 2026 Phase 22 execution envelope
+- Latest post-closure maintenance: Jun. 28, 2026 launcher/runtime version
+  reporting alignment for development-runtime validation. CNCF now exposes a
+  runtime `version` command backed by generated build metadata so `cozy`,
+  `cncf`, and `textus` launchers can report the selected development runtime
+  version without resolving a published runtime artifact.
+- Previous post-closure maintenance: Jun. 27, 2026 Phase 22 execution envelope
   contract alignment for downstream Cozy/sbt-cozy scripted use. The public
   execution metadata keys are kebab-case and `requested-mode` keeps the
   requested contract token.

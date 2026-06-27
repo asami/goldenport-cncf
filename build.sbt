@@ -162,6 +162,26 @@ def textusRuntimeCatalogText(
      |""".stripMargin
 }
 
+def cncfBuildInfoSource(
+  targetdir: File,
+  packagename: String,
+  cncfversion: String
+): File = {
+  val file = targetdir / packagename.replace('.', '/') / "CncfBuildInfo.scala"
+  IO.createDirectory(file.getParentFile)
+  IO.write(
+    file,
+    s"""package $packagename
+       |
+       |object CncfBuildInfo {
+       |  val name: String = "cncf"
+       |  val version: String = "$cncfversion"
+       |}
+       |""".stripMargin
+  )
+  file
+}
+
 def cncfRuntimeDescriptorText(
   cncfversion: String,
   scalabinaryversion: String,
@@ -298,7 +318,7 @@ lazy val root = project
   .settings(
     organization := "org.goldenport",
     name := "goldenport-cncf",
-    version := "0.4.12",
+    version := "0.4.13-SNAPSHOT",
 
     scalaVersion := scala3version,
 
@@ -419,6 +439,10 @@ lazy val root = project
 
     Compile / resourceGenerators += Def.task {
       Seq(generateCncfRuntimeDescriptor.value)
+    }.taskValue,
+
+    Compile / sourceGenerators += Def.task {
+      Seq(cncfBuildInfoSource((Compile / sourceManaged).value, "org.goldenport.cncf", version.value))
     }.taskValue,
 
     Compile / sourceGenerators += generateInformationCmlModel.taskValue,

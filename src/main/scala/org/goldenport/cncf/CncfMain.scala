@@ -9,7 +9,8 @@ import org.goldenport.cncf.observability.global.GlobalObservable
  *  version Jan. 23, 2026
  *  version Feb.  1, 2026
  *  version Mar. 26, 2026
- * @version Apr. 10, 2026
+ *  version Apr. 10, 2026
+ * @version Jun. 27, 2026
  * @author  ASAMI, Tomoharu
  */
 object CncfMain extends GlobalObservable {
@@ -18,6 +19,11 @@ object CncfMain extends GlobalObservable {
       with scala.util.control.NoStackTrace
 
   def main(args: Array[String]): Unit = {
+    if (args.toVector == Vector("version") || args.toVector == Vector("--version")) {
+      println(s"${CncfBuildInfo.name} ${CncfBuildInfo.version}")
+      return
+    }
+
     val cwd = Paths.get("").toAbsolutePath.normalize
     val bootstrap = CncfRuntime.bootstrap(cwd, args)
 

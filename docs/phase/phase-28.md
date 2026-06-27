@@ -136,3 +136,11 @@ Deferred work remains outside Phase 28:
 - Web Island Architecture Runtime.
 - API Gateway and public REST exposure policy.
 - Production visual theme marketplace.
+
+
+## 7. Post-closure Maintenance
+
+Phase 28 remains closed. Post-closure runtime maintenance on Jun. 28, 2026
+added CNCF build-version metadata and a runtime `version` command so launcher
+development-runtime paths can report the selected CNCF runtime version without
+falling back to a published artifact lookup.

@@ -379,3 +379,19 @@ remaining work under independent future development items.
 - Deferred Material visual rendering, broader generated-page selector coverage,
   Web Island Architecture Runtime, API Gateway / public REST exposure policy,
   and production visual theme marketplace remain outside Phase 28.
+
+
+---
+
+## Post-closure Maintenance
+
+Status: DONE
+
+### Runtime Version Reporting Alignment
+
+- [x] Keep Phase 28 closed.
+- [x] Add CNCF generated build-version metadata.
+- [x] Add runtime `version` / `--version` handling before component repository
+      bootstrap.
+- [x] Validate that launchers can use the CNCF development-runtime version
+      command without resolving a published runtime artifact.
