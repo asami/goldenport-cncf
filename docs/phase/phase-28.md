@@ -144,3 +144,22 @@ Phase 28 remains closed. Post-closure runtime maintenance on Jun. 28, 2026
 added CNCF build-version metadata and a runtime `version` command so launcher
 development-runtime paths can report the selected CNCF runtime version without
 falling back to a published artifact lookup.
+
+Post-closure runtime maintenance on Jun. 29, 2026 aligned the CAR component
+developer startup path and launcher command installation path:
+
+- CNCF command-mode parsing keeps `component.service.operation` as the
+  canonical command selector and rejects the old three-token
+  `component service operation` command form.
+- CNCF still supports operation-leaf selection when runtime selector resolution
+  can disambiguate a leaf operation name.
+- `cncf-launcher` owns target-first convenience syntax and translates it to the
+  runtime mode-first command contract.
+- `cncf install-cli` installs development commands that pin the resolved runtime
+  and fixed project target.
+- `textus install-cli` installs operation-facing user commands for packaged CAR
+  artifact operation.
+- `docs/notes/car-development-start-guide.md` records the CAR development
+  startup procedure for component developers.
+
+Remaining work stays under independent future development items.

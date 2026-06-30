@@ -2,7 +2,9 @@ package org.goldenport.cncf.cli.help
 
 /*
  * @since   Mar.  6, 2026
- * @version Mar. 19, 2026
+ *  version Mar. 19, 2026
+ *  version Jun. 29, 2026
+ * @version Jul.  1, 2026
  * @author  ASAMI, Tomoharu
  */
 object CommandProtocolHelp {
@@ -40,27 +42,21 @@ object CommandProtocolHelp {
   // Left(exitCode): handled as standalone help output
   // Right(args): proceed with command protocol execution using rewritten args
   def normalizeArgs(args: Array[String]): Either[Int, Array[String]] = {
-    val normalized = _normalize_help_aliases(args)
-    normalized.toVector match {
+    args.toVector match {
       case Vector("help") =>
         Console.out.println(text)
         Left(0)
       case Vector("help", selector, tail @ _*) =>
-        Right(Array("help", selector) ++ tail)
+        Right(Array(rewriteSelector(selector)) ++ tail)
+      case Vector(flag) if _help_flags.contains(flag) =>
+        Console.out.println(text)
+        Left(0)
+      case Vector(selector, flag) if _help_flags.contains(flag) && selector.nonEmpty =>
+        Right(Array("help", selector))
       case _ =>
-        Right(normalized)
+        Right(args)
     }
   }
-
-  private def _normalize_help_aliases(args: Array[String]): Array[String] =
-    args.toVector match {
-      case Vector(flag) if _help_flags.contains(flag) =>
-        Array("help")
-      case Vector(selector, flag) if _help_flags.contains(flag) && selector.nonEmpty =>
-        Array("help", selector)
-      case _ =>
-        args
-    }
 
   def rewriteSelector(selector: String): String =
     selector match {

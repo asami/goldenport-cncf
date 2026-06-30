@@ -5,10 +5,16 @@ import scala.xml.{Elem, Node, NodeSeq, Text}
 
 /*
  * @since   Apr. 30, 2026
- * @version Apr. 30, 2026
+ * @version Jul.  1, 2026
  * @author  ASAMI, Tomoharu
  */
 object AtomFeedRenderer {
+  // Atom feed rendering intentionally remains in CNCF.
+  // Generic Record XML serialization belongs to goldenport core, but AtomFeed is
+  // a CNCF Web/feed projection model with feed-specific semantics such as entry
+  // links, author metadata, HTML content handling, and application site URLs.
+  // Move this to core only if Atom feed itself becomes a core protocol model,
+  // not merely because it emits XML.
   def render(feed: AtomFeed): String =
     _feed(feed).toString
 

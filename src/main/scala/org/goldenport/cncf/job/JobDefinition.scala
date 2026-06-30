@@ -3,11 +3,12 @@ package org.goldenport.cncf.job
 import scala.jdk.CollectionConverters.*
 import org.goldenport.Consequence
 import org.goldenport.record.Record
-import org.yaml.snakeyaml.Yaml
+import org.goldenport.record.io.RecordDecoder
 
 /*
  * @since   Apr. 22, 2026
- * @version May.  7, 2026
+ *  version May.  7, 2026
+ * @version Jul.  1, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class JobWorkflowTarget(
@@ -128,13 +129,11 @@ final case class JobBatchSubmissionResult(
 
 object JobBatchDefinition {
   def parseYaml(body: String): Consequence[JobBatchDefinition] =
-    try {
-      val yaml = new Yaml()
-      val loaded = yaml.load[Any](body)
-      _parse_root(loaded)
-    } catch {
-      case e: Exception =>
-        Consequence.argumentInvalid(s"invalid JCL YAML: ${Option(e.getMessage).getOrElse(e.getClass.getSimpleName)}")
+    RecordDecoder().yaml(body) match {
+      case Consequence.Success(record) =>
+        _parse_root(record)
+      case Consequence.Failure(conclusion) =>
+        Consequence.argumentInvalid(s"invalid JCL YAML: ${conclusion.show}")
     }
 
   private def _parse_root(p: Any): Consequence[JobBatchDefinition] =
@@ -465,6 +464,8 @@ object JobBatchDefinition {
     path: String
   ): Consequence[Map[String, Any]] =
     p match {
+      case r: Record =>
+        Consequence.success(r.fields.map(field => field.key -> field.value.single).toMap)
       case m: java.util.Map[?, ?] =>
         Consequence.success(m.asScala.toMap.map { case (k, v) => k.toString -> v })
       case m: Map[?, ?] =>
@@ -479,7 +480,7 @@ object JobBatchDefinition {
   ): Consequence[Vector[Any]] =
     p match {
       case xs: java.util.List[?] => Consequence.success(xs.asScala.toVector)
-      case xs: Seq[?] => Consequence.success(xs.toVector.asInstanceOf[Vector[Any]])
+      case xs: Iterable[?] => Consequence.success(xs.toVector.asInstanceOf[Vector[Any]])
       case _ => Consequence.argumentInvalid(s"$path must be a list")
     }
 

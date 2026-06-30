@@ -350,7 +350,6 @@ lazy val root = project
       "io.circe" %% "circe-core"    % "0.14.6",
       "io.circe" %% "circe-generic" % "0.14.6",
       "io.circe" %% "circe-parser"  % "0.14.6",
-      "org.yaml" % "snakeyaml" % "2.4",
       "com.vladsch.flexmark" % "flexmark" % "0.62.2",
       "com.vladsch.flexmark" % "flexmark-ext-tables" % "0.62.2",
       "com.vladsch.flexmark" % "flexmark-ext-gfm-strikethrough" % "0.62.2",

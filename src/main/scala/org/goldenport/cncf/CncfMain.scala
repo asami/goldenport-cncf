@@ -1,5 +1,7 @@
 package org.goldenport.cncf
 
+import java.io.PrintStream
+import java.nio.charset.StandardCharsets
 import java.nio.file.Paths
 import org.goldenport.cncf.cli.{CncfRuntime, RunMode}
 import org.goldenport.cncf.observability.global.GlobalObservable
@@ -10,7 +12,8 @@ import org.goldenport.cncf.observability.global.GlobalObservable
  *  version Feb.  1, 2026
  *  version Mar. 26, 2026
  *  version Apr. 10, 2026
- * @version Jun. 27, 2026
+ *  version Jun. 29, 2026
+ * @version Jul.  1, 2026
  * @author  ASAMI, Tomoharu
  */
 object CncfMain extends GlobalObservable {
@@ -19,6 +22,8 @@ object CncfMain extends GlobalObservable {
       with scala.util.control.NoStackTrace
 
   def main(args: Array[String]): Unit = {
+    _ensure_utf8_stdio()
+
     if (args.toVector == Vector("version") || args.toVector == Vector("--version")) {
       println(s"${CncfBuildInfo.name} ${CncfBuildInfo.version}")
       return
@@ -52,5 +57,10 @@ object CncfMain extends GlobalObservable {
     } else {
       ()
     }
+  }
+
+  private def _ensure_utf8_stdio(): Unit = {
+    System.setOut(new PrintStream(System.out, true, StandardCharsets.UTF_8))
+    System.setErr(new PrintStream(System.err, true, StandardCharsets.UTF_8))
   }
 }

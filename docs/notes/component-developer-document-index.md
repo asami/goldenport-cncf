@@ -18,19 +18,22 @@ packaging, or operating CNCF components.
 
 Read these first when starting component development:
 
-1. `docs/spec/glossary.md`
+1. `docs/notes/car-development-start-guide.md`
+   - Concrete CAR project initialization procedure using Cozy scaffold, CNCF
+     runtime development loop, packaging, and publication checks.
+2. `docs/spec/glossary.md`
    - Basic CNCF vocabulary: Component, Componentlet, OperationCall, UnitOfWork,
      and ExecutionContext.
-2. `docs/design/component-model.md`
+3. `docs/design/component-model.md`
    - Stable component boundary and responsibility split.
-3. `docs/design/component-and-application-responsibilities.md`
+4. `docs/design/component-and-application-responsibilities.md`
    - What belongs in the framework, the component, and application code.
-4. `docs/notes/cml-application-modeling-guideline.md`
+5. `docs/notes/cml-application-modeling-guideline.md`
    - How to write application CML without duplicating SimpleEntity concerns.
-5. `docs/notes/application-logic-guideline.md`
+6. `docs/notes/application-logic-guideline.md`
    - How handwritten/generated ActionCall logic should use CNCF internal DSL
      and value types.
-6. `docs/notes/unitofwork-guideline.md`
+7. `docs/notes/unitofwork-guideline.md`
    - UnitOfWork usage and persistence/authorization boundary guidance.
 
 After these, choose the task-specific section below.
@@ -87,6 +90,9 @@ mechanics.
 Use these when working on component instantiation, ports, packaging, or runtime
 assembly:
 
+- `docs/notes/car-development-start-guide.md`
+  - CAR project initialization, Cozy scaffold command, development loop,
+    packaging, and startup checklist.
 - `docs/notes/launcher-config-and-operation.md`
   - `cncf` / `textus` launcher configuration, local/cache repository operation,
     and development startup routes.

@@ -9,7 +9,7 @@ import org.goldenport.cncf.event.{EventId, EventLane, EventRecord}
 import org.goldenport.cncf.job.{ActionId, ActionTask, JobId, JobRunMode, JobSubmitOption, JobTask, TaskOutcome, TaskSucceeded, TaskFailed}
 import org.goldenport.cncf.subsystem.DefaultSubsystemFactory
 import org.goldenport.conclusion.Disposition
-import org.goldenport.protocol.{Argument, Request, Response}
+import org.goldenport.protocol.{Argument, Request}
 import org.goldenport.protocol.operation.OperationResponse
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -17,7 +17,8 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Mar. 28, 2026
  *  version Apr. 22, 2026
- * @version May. 11, 2026
+ *  version May. 11, 2026
+ * @version Jul.  1, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EventComponentSpec extends AnyWordSpec with Matchers {
@@ -25,7 +26,6 @@ final class EventComponentSpec extends AnyWordSpec with Matchers {
     "expose event read and job event observation routes" in {
       val subsystem = DefaultSubsystemFactory.default(mode = Some("command"))
       val admin = subsystem.components.find(_.name == "admin").get
-      val event = subsystem.components.find(_.name == "event").get
       val ctx = ExecutionContext.create()
       val jobId = admin.logic.submitJob(
         List(SleepTask(ActionId.generate(), 10L)),

@@ -27,7 +27,6 @@ baseProvided:
   - io.circe:circe-core_3
   - io.circe:circe-generic_3
   - io.circe:circe-parser_3
-  - org.yaml:snakeyaml
   - com.vladsch.flexmark:flexmark
   - com.vladsch.flexmark:flexmark-ext-tables
   - com.vladsch.flexmark:flexmark-ext-gfm-strikethrough

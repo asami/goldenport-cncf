@@ -63,7 +63,9 @@ import org.goldenport.cncf.subsystem.GenericSubsystemDescriptor
  *  version Jan. 31, 2026
  *  version Feb.  5, 2026
  *  version Apr. 30, 2026
- * @version May. 25, 2026
+ *  version May. 25, 2026
+ *  version Jun. 29, 2026
+ * @version Jul.  1, 2026
  * @author  ASAMI, Tomoharu
  */
 object CncfRuntime extends GlobalObservable {
@@ -835,7 +837,7 @@ object CncfRuntime extends GlobalObservable {
                 new CncfRuntime().executeClient(subsystem, launch.domainArgs.drop(1))
               case Some(RunMode.Command) =>
                 val subsystem = buildSubsystem(extracomponents, Some(RunMode.Command), args)
-                new CncfRuntime().executeCommand(subsystem, launch.actualArgs.drop(1))
+                new CncfRuntime().executeCommand(subsystem, launch.domainArgs.drop(1))
               case Some(RunMode.ServerEmulator) =>
                 executeServerEmulator(launch.domainArgs.drop(1), extracomponents)
               case Some(RunMode.Script) =>
@@ -889,7 +891,7 @@ object CncfRuntime extends GlobalObservable {
                 new CncfRuntime().executeClient(subsystem, (launch.runtimeParse.consumed ++ launch.domainArgs.drop(1)).toArray)
               case Some(RunMode.Command) =>
                 val subsystem = buildSubsystem(mode = Some(RunMode.Command), args = args)
-                new CncfRuntime().executeCommand(subsystem, launch.actualArgs.drop(1))
+                new CncfRuntime().executeCommand(subsystem, launch.domainArgs.drop(1))
               case Some(RunMode.ServerEmulator) =>
                 executeServerEmulator(launch.domainArgs.drop(1))
               case Some(RunMode.Script) =>
@@ -2210,7 +2212,8 @@ object CncfRuntime extends GlobalObservable {
     RuntimeOptionsParser.properties(options, mode)
 
   private def _selector_and_arguments(
-    args: Seq[String]
+    args: Seq[String],
+    mode: RunMode
   ): Consequence[(String, Seq[String])] = {
     args.toVector match {
       case Vector() =>
@@ -2219,7 +2222,7 @@ object CncfRuntime extends GlobalObservable {
         _selector_from_path(single, "/").map(_ -> rest.toVector)
       case Vector(single, rest @ _*) if single.contains(".") =>
         Consequence.success((single, rest.toVector))
-      case Vector(component, service, operation, rest @ _*) =>
+      case Vector(component, service, operation, rest @ _*) if mode != RunMode.Command =>
         Consequence.success((s"$component.$service.$operation", rest.toVector))
       case Vector(single, rest @ _*) =>
         Consequence.success((single, rest.toVector))
@@ -3550,7 +3553,7 @@ class CncfRuntime() extends GlobalObservable {
       case Vector("http") =>
         Consequence.argumentMissing("client http operation/path")
       case _ =>
-        _to_request(subsystem, args.toArray, RunMode.Command).flatMap(_command_request_to_client_request(subsystem, _))
+        _to_request(subsystem, args.toArray, RunMode.Client).flatMap(_command_request_to_client_request(subsystem, _))
     }
   }
 
@@ -4302,7 +4305,7 @@ class CncfRuntime() extends GlobalObservable {
     mode: RunMode = RunMode.Command
   ): Consequence[Request] =
     _extract_runtime_options(args.toIndexedSeq) match { case (runtimeOptions, clean) =>
-    _selector_and_arguments(clean).flatMap { case (selector0, tail) =>
+    _selector_and_arguments(clean, mode).flatMap { case (selector0, tail) =>
       val normalized = _normalize_meta_selector(subsystem, selector0, tail.toVector)
       val aliasresolver =
         if (subsystem.aliasResolver ne AliasResolver.empty) subsystem.aliasResolver
@@ -4531,7 +4534,8 @@ class CncfRuntime() extends GlobalObservable {
       .getOrElse(AliasResolver.empty)
 
   private def _selector_and_arguments(
-    args: Seq[String]
+    args: Seq[String],
+    mode: RunMode
   ): Consequence[(String, Seq[String])] = {
     args.toVector match {
       case Vector() =>
@@ -4540,7 +4544,7 @@ class CncfRuntime() extends GlobalObservable {
         _selector_from_path(single, "/").map(_ -> rest.toVector)
       case Vector(single, rest @ _*) if single.contains(".") =>
         Consequence.success((single, rest.toVector))
-      case Vector(component, service, operation, rest @ _*) =>
+      case Vector(component, service, operation, rest @ _*) if mode != RunMode.Command =>
         Consequence.success((s"$component.$service.$operation", rest.toVector))
       case Vector(single, rest @ _*) =>
         Consequence.success((single, rest.toVector))

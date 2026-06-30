@@ -15,9 +15,12 @@ This directory does **not** contain design details or thinking processes.
 
 Current baseline:
 
-- Active phase: `phase-16.md`
-- Active checklist: `phase-16-checklist.md`
-- Active theme: authentication baseline with `Cwitter`
+- Active phase: none selected after Phase 28 closure.
+- Active checklist: none.
+- Latest closed phase: `phase-28.md`
+- Latest closed checklist: `phase-28-checklist.md`
+- Latest post-closure maintenance: Jun. 29, 2026 CAR development and CLI
+  install alignment for CNCF/Textus launcher use.
 - Closed phase set currently includes:
   - `phase-4.md`
   - `phase-5.md`
@@ -30,6 +33,19 @@ Current baseline:
   - `phase-13.md`
   - `phase-14.md`
   - `phase-15.md`
+  - `phase-16.md`
+  - `phase-17.md`
+  - `phase-18.md`
+  - `phase-19.md`
+  - `phase-20.md`
+  - `phase-21.md`
+  - `phase-22.md`
+  - `phase-23.md`
+  - `phase-24.md`
+  - `phase-25.md`
+  - `phase-26.md`
+  - `phase-27.md`
+  - `phase-28.md`
 
 ## Related Rules
 

@@ -12,7 +12,8 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Mar. 28, 2026
  *  version May. 31, 2026
- * @version Jun. 27, 2026
+ *  version Jun. 29, 2026
+ * @version Jul.  1, 2026
  * @author  ASAMI, Tomoharu
  */
 final class OperationResponseFormatterXmlSpec
@@ -21,6 +22,30 @@ final class OperationResponseFormatterXmlSpec
   with GivenWhenThen {
 
   "OperationResponseFormatter XML support" should {
+    "render a YAML RecordResponse without replacing Unicode characters" in {
+      Given("a record response with Japanese text and yaml request format")
+      val request = _request("domain.prompt", format = "yaml")
+      val response = OperationResponse.RecordResponse(
+        Record.dataAuto(
+          "title" -> "府中散歩",
+          "prompt" -> "府中散歩をSVGに描画してください。"
+        )
+      )
+
+      When("formatting the response")
+      val formatted = OperationResponseFormatter.toResponse(request, response, RunMode.Command)
+
+      Then("the YAML response preserves Unicode text")
+      formatted match {
+        case Response.Yaml(value) =>
+          value should include ("府中散歩")
+          value should include ("SVG")
+          value should not include ("????")
+        case other =>
+          fail(s"unexpected response: ${other}")
+      }
+    }
+
     "render a RecordResponse as XML" in {
       Given("a record response and an xml request format")
       val request = _request("domain.meta.describe")

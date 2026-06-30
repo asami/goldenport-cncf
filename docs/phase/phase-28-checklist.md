@@ -395,3 +395,16 @@ Status: DONE
       bootstrap.
 - [x] Validate that launchers can use the CNCF development-runtime version
       command without resolving a published runtime artifact.
+
+### CAR Development CLI Alignment
+
+- [x] Keep Phase 28 closed.
+- [x] Document the CNCF-side CAR development startup procedure.
+- [x] Keep CNCF runtime command parsing on the canonical
+      `component.service.operation` selector form.
+- [x] Keep target-first launcher syntax in the launchers rather than the CNCF
+      runtime.
+- [x] Add development CLI installation through `cncf install-cli`.
+- [x] Add user-facing CLI installation through `textus install-cli`.
+- [x] Validate the command/help parser, launcher install, and Sanpomap
+      development-driver specs.

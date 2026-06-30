@@ -22,21 +22,21 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Jan.  9, 2026
  *  version Jan. 18, 2026
- * @version May.  2, 2026
+ *  version May.  2, 2026
+ *  version Jun. 29, 2026
+ * @version Jul.  1, 2026
  * @author  ASAMI, Tomoharu
  */
 class CommandExecuteComponentSpec extends AnyWordSpec with Matchers {
 
   "CncfRuntime.parseCommandArgs" should {
-    "parse component service operation form" in {
+    "reject component service operation token form" in {
       val subsystem = DefaultSubsystemFactory.default(Some("command"))
       CncfRuntime.parseCommandArgs(subsystem, Array("admin", "system", "ping")) match {
         case Consequence.Success(req: Request) =>
-          req.component.getOrElse(fail("missing component")).shouldBe("admin")
-          req.service.getOrElse(fail("missing service")).shouldBe("system")
-          req.operation.shouldBe("ping")
-        case Consequence.Failure(c) =>
-          fail(s"unexpected failure: ${c}")
+          fail(s"unexpected success: ${req}")
+        case Consequence.Failure(_) =>
+          succeed
       }
     }
 
@@ -73,6 +73,22 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers {
           req.service.getOrElse(fail("missing service")).shouldBe("system")
           req.operation.shouldBe("ping")
           req.properties.exists(p => p.name == "name" && p.value == "taro") shouldBe true
+        case Consequence.Failure(c) =>
+          fail(s"unexpected failure: ${c}")
+      }
+    }
+
+    "parse operation leaf followed by property arguments" in {
+      val subsystem = _subsystem_with_presentation_ops()
+      CncfRuntime.parseCommandArgs(
+        subsystem,
+        Array("validate-presentation", "--presentationDsl", "presentation:")
+      ) match {
+        case Consequence.Success(req: Request) =>
+          req.component.getOrElse(fail("missing component")).shouldBe("sample")
+          req.service.getOrElse(fail("missing service")).shouldBe("presentation")
+          req.operation.shouldBe("validatePresentation")
+          req.properties.exists(p => p.name == "presentationDsl" && p.value == "presentation:") shouldBe true
         case Consequence.Failure(c) =>
           fail(s"unexpected failure: ${c}")
       }
@@ -457,7 +473,8 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers {
         )
       }
       code shouldBe 0
-      out.toLowerCase.contains("help") shouldBe true
+      out.contains("type: component") shouldBe true
+      out.contains("name: domain") shouldBe true
     }
 
     "rewrite run command help domain.entity to domain.entity.meta.help" in {
@@ -483,7 +500,8 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers {
         )
       }
       code shouldBe 0
-      out.toLowerCase.contains("help") shouldBe true
+      out.contains("type: service") shouldBe true
+      out.contains("name: entity") shouldBe true
     }
 
     "render command output as YAML for --format yaml" in {
@@ -584,8 +602,8 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers {
         Seq("admin", "system", "ping"),
         RuntimeConfig.default.serverEmulatorBaseUrl
       )
-      val httpReq = normalized.flatMap(HttpRequest.fromCurlLike)
-      httpReq match {
+      val httpreq = normalized.flatMap(HttpRequest.fromCurlLike)
+      httpreq match {
         case Consequence.Success(req: HttpRequest) =>
           val res = subsystem.executeHttp(req)
           val expected = GlobalRuntimeContext.formatPingValue(
@@ -607,8 +625,8 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers {
         Seq("admin.system.ping"),
         RuntimeConfig.default.serverEmulatorBaseUrl
       )
-      val httpReq = normalized.flatMap(HttpRequest.fromCurlLike)
-      httpReq match {
+      val httpreq = normalized.flatMap(HttpRequest.fromCurlLike)
+      httpreq match {
         case Consequence.Success(req: HttpRequest) =>
           val res = subsystem.executeHttp(req)
           val expected = GlobalRuntimeContext.formatPingValue(
@@ -636,6 +654,35 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers {
     )
     val subsystem = DefaultSubsystemFactory.default(Seq(domain), Some("command"))
     domain.initialize(ComponentInit(subsystem, domain.core, ComponentOrigin.Main))
+    subsystem
+  }
+
+  private def _subsystem_with_presentation_ops() = {
+    val validate = spec.OperationDefinition(
+      content = BaseContent.simple("validatePresentation"),
+      request = spec.RequestDefinition(
+        parameters = List(
+          spec.ParameterDefinition(
+            content = BaseContent.simple("presentationDsl"),
+            kind = spec.ParameterDefinition.Kind.Property
+          )
+        )
+      ),
+      response = spec.ResponseDefinition.void
+    )
+    val summarize = spec.OperationDefinition(
+      content = BaseContent.simple("summarizePresentation"),
+      request = spec.RequestDefinition(),
+      response = spec.ResponseDefinition.void
+    )
+    val service = spec.ServiceDefinition(
+      name = "presentation",
+      operations = spec.OperationDefinitionGroup(NonEmptyVector.of(validate, summarize))
+    )
+    val protocol = Protocol(services = spec.ServiceDefinitionGroup(Vector(service)))
+    val sample = TestComponentFactory.create("sample", protocol)
+    val subsystem = DefaultSubsystemFactory.default(Seq(sample), Some("command"))
+    sample.initialize(ComponentInit(subsystem, sample.core, ComponentOrigin.Main))
     subsystem
   }
 
