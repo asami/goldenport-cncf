@@ -1,11 +1,15 @@
 package org.goldenport.cncf.component
 
+import org.goldenport.Consequence
 import org.goldenport.protocol.Protocol
 import org.goldenport.record.Record
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
+import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.entity.EntityPersistable
 import org.goldenport.cncf.entity.runtime.{EntityMemoryPolicy, EntityRuntimePlan, PartitionStrategy, WorkingSetDefinition}
 import org.goldenport.cncf.component.repository.ComponentRepositorySpace
+import org.goldenport.cncf.spi.{SpiContract, SpiProvider, SpiProviderComponent, SpiSelection}
+import org.goldenport.cncf.spi.ai.runner.{AiChatRequest, AiChatResponse, AiGenerateRequest, AiGenerateResponse, AiMessage, AiRunner, AiRunnerSocket}
 import org.goldenport.cncf.testutil.TestComponentFactory
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
@@ -15,7 +19,8 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Mar. 21, 2026
  *  version Mar. 24, 2026
  *  version Apr. 24, 2026
- * @version May.  3, 2026
+ *  version May.  3, 2026
+ * @version Jul.  2, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactoryRuntimePlanActivationSpec
@@ -67,6 +72,38 @@ final class ComponentFactoryRuntimePlanActivationSpec
       collection.storage.storeRealm.values.size shouldBe 2
       resolved.workingSetEntityNames should contain("person")
     }
+
+    "resolve SPI sockets after repository discovery and bootstrap" in {
+      Given("a discovered provider component and a discovered socket component")
+      val subsystem = TestComponentFactory.emptySubsystem("spi_discover_bootstrap")
+      val provider = _initialized_component(
+        subsystem,
+        "spi_provider",
+        new Component() with SpiProviderComponent {
+          def spiProviders: Vector[SpiProvider[?]] =
+            Vector(_AiRunnerProvider("factory"))
+        }
+      )
+      val consumer = _initialized_component(
+        subsystem,
+        "spi_consumer",
+        new Component() with AiRunnerSocket {}
+      )
+      val space = new ComponentRepositorySpace() {
+        override def discover(): Vector[Component] = Vector(provider, consumer)
+      }
+      val factory = new ComponentFactory(space)
+
+      When("ComponentFactory discover bootstraps and resolves loaded components")
+      val discovered = factory.discover()
+      val socket = discovered.collectFirst {
+        case m: AiRunnerSocket => m
+      }.getOrElse(fail("missing AI runner socket component"))
+
+      Then("the socket receives the provider SPI")
+      given ExecutionContext = ExecutionContext.create()
+      socket.aiRunner.generate(AiGenerateRequest("hello")).toOption.get.text shouldBe "factory:hello"
+    }
   }
 
   private def _eventually_int(value: => Int, expected: Int): Unit = {
@@ -78,16 +115,16 @@ final class ComponentFactoryRuntimePlanActivationSpec
 
   private def _component_with_runtime_plan(): Component = {
     val component = new Component() with EntityRuntimePlanProvider {
-      private val cid = EntityCollectionId("sys", "sys", "person")
-      private val first = _Entity(EntityId("tokyo", "sales", cid), "taro")
-      private val second = _Entity(EntityId("tokyo", "sales", cid), "jiro")
+      private val _cid = EntityCollectionId("sys", "sys", "person")
+      private val _first = _Entity(EntityId("tokyo", "sales", _cid), "taro")
+      private val _second = _Entity(EntityId("tokyo", "sales", _cid), "jiro")
 
       override def entityRuntimePlans: Vector[EntityRuntimePlan[Any]] =
         Vector(
           EntityRuntimePlan[Any](
             entityName = "person",
             memoryPolicy = EntityMemoryPolicy.LoadToMemory,
-            workingSet = Some(WorkingSetDefinition[Any]("person", Vector(first, second))),
+            workingSet = Some(WorkingSetDefinition[Any]("person", Vector(_first, _second))),
             partitionStrategy = PartitionStrategy.byOrganizationMonthUTC,
             maxPartitions = 2,
             maxEntitiesPerPartition = 1
@@ -110,16 +147,16 @@ final class ComponentFactoryRuntimePlanActivationSpec
 
   private def _component_factory_bundle(): Component.SinglePrimaryBundleFactory =
     new Component.SinglePrimaryBundleFactory with EntityRuntimePlanProvider {
-      private val cid = EntityCollectionId("sys", "sys", "person")
-      private val first = _Entity(EntityId("tokyo", "sales", cid), "taro")
-      private val second = _Entity(EntityId("tokyo", "sales", cid), "jiro")
+      private val _cid = EntityCollectionId("sys", "sys", "person")
+      private val _first = _Entity(EntityId("tokyo", "sales", _cid), "taro")
+      private val _second = _Entity(EntityId("tokyo", "sales", _cid), "jiro")
 
       override def entityRuntimePlans: Vector[EntityRuntimePlan[Any]] =
         Vector(
           EntityRuntimePlan[Any](
             entityName = "person",
             memoryPolicy = EntityMemoryPolicy.LoadToMemory,
-            workingSet = Some(WorkingSetDefinition[Any]("person", Vector(first, second))),
+            workingSet = Some(WorkingSetDefinition[Any]("person", Vector(_first, _second))),
             partitionStrategy = PartitionStrategy.byOrganizationMonthUTC,
             maxPartitions = 2,
             maxEntitiesPerPartition = 1
@@ -141,6 +178,53 @@ final class ComponentFactoryRuntimePlanActivationSpec
           factory = this
         )
     }
+
+  private def _initialized_component(
+    subsystem: org.goldenport.cncf.subsystem.Subsystem,
+    name: String,
+    component: Component
+  ): Component = {
+    val componentid = ComponentId(name)
+    val core = Component.Core.create(
+      name = name,
+      componentid = componentid,
+      instanceid = ComponentInstanceId.default(componentid),
+      protocol = Protocol.empty
+    )
+    val params = ComponentInit(
+      subsystem = subsystem,
+      core = core,
+      origin = ComponentOrigin.Builtin
+    )
+    component.initialize(params)
+  }
+
+  private final case class _AiRunnerProvider(
+    name: String
+  ) extends SpiProvider[AiRunner] {
+    def supports(
+      contract: SpiContract[AiRunner],
+      selection: SpiSelection
+    )(using ExecutionContext): Boolean =
+      contract.name == "ai-runner" &&
+        contract.runtimeClass == classOf[AiRunner]
+
+    def provide(
+      contract: SpiContract[AiRunner],
+      selection: SpiSelection
+    )(using ExecutionContext): Consequence[AiRunner] =
+      Consequence.success(_AiRunner(name))
+  }
+
+  private final case class _AiRunner(
+    name: String
+  ) extends AiRunner {
+    def generate(req: AiGenerateRequest)(using ExecutionContext): Consequence[AiGenerateResponse] =
+      Consequence.success(AiGenerateResponse(s"$name:${req.prompt}"))
+
+    def chat(req: AiChatRequest)(using ExecutionContext): Consequence[AiChatResponse] =
+      Consequence.success(AiChatResponse(AiMessage("assistant", name)))
+  }
 
   private final case class _Entity(
     id: EntityId,

@@ -662,7 +662,13 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
   migration tooling; CulturalResource collection-item profile; Rule Engine and
   Inference Runtime.
 - Status interpretation rules: `docs/rules/stage-status-and-checklist-convention.md`
-- Latest post-closure maintenance: Jul. 1, 2026 JCL definition input now uses
+- Latest post-closure maintenance: Jul. 2, 2026 provider-neutral SPI baseline.
+  CNCF now exposes canonical `org.goldenport.cncf.spi` contracts and an
+  `org.goldenport.cncf.spi.ai.runner.AiRunner` socket/provider protocol, with
+  bootstrap-time resolution across already loaded components. `textus-ai`
+  publishes the first AI runner provider adapter while retaining its existing
+  generate/chat operations.
+- Previous post-closure maintenance: Jul. 1, 2026 JCL definition input now uses
   the shared record/config loading path for YAML, JSON, XML, HOCON, and
   properties-style files, preserving the selected JCL format on JobDefinition
   records so later compensation/profile handling can parse the original source

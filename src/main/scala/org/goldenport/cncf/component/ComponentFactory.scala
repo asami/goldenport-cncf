@@ -27,6 +27,7 @@ import org.goldenport.cncf.entity.view.{Browser, ContextualBrowserCount, Context
 import org.goldenport.cncf.security.IngressSecurityResolver
 import org.goldenport.cncf.statemachine.{CollectionStateMachinePlanner, CollectionStateMachinePlannerProvider, CollectionTransitionRule, CollectionTransitionRuleProvider, TransitionTrigger, TransitionRule}
 import org.goldenport.cncf.naming.NamingConventions
+import org.goldenport.cncf.spi.SpiResolver
 import org.goldenport.schema.{Column, Multiplicity, Schema, ValueDomain, WebColumn, XString}
 import org.goldenport.cncf.workflow.WorkflowDefinition
 import org.simplemodeling.model.value.BaseContent
@@ -39,7 +40,8 @@ import scala.util.Try
  *  version Mar. 31, 2026
  *  version Apr. 25, 2026
  *  version Apr. 26, 2026
- * @version May.  7, 2026
+ *  version May.  7, 2026
+ * @version Jul.  2, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactory(
@@ -50,7 +52,8 @@ final class ComponentFactory(
 ) {
   def discover(): Vector[Component] = {
     val cs = _component_repository_space.discover()
-    cs.map(bootstrap)
+    given ExecutionContext = ExecutionContext.create()
+    SpiResolver.resolveOrRaise(cs.map(bootstrap))
   }
 
   def bootstrap(component: Component): Component =
@@ -65,8 +68,8 @@ final class ComponentFactory(
         val entryOpt = _collaborators.resolve(m.core.name).orElse(_collaborators.entries.headOption)
         entryOpt match {
           case Some(entry) =>
-            val collaboratorImpl = _wrapCollaborator(entry.collaborator)
-            val init = CollaboratorComponentInit(CollaboratorComponent.Core(collaboratorImpl))
+            val collaboratorimpl = _wrap_collaborator(entry.collaborator)
+            val init = CollaboratorComponentInit(CollaboratorComponent.Core(collaboratorimpl))
             m.initialize(init)
           case None =>
             m
@@ -74,10 +77,10 @@ final class ComponentFactory(
       case m => m
     }
 
-  private def _wrapCollaborator(apiCollaborator: api.Collaborator): Collaborator = new Collaborator {
-    private val delegate = Collaborator.Instance(Collaborator.Core(apiCollaborator))
+  private def _wrap_collaborator(apicollaborator: api.Collaborator): Collaborator = new Collaborator {
+    private val _delegate = Collaborator.Instance(Collaborator.Core(apicollaborator))
     def execute(ctx: org.goldenport.cncf.context.ExecutionContext, request: org.goldenport.protocol.Request) =
-      delegate.execute(ctx, request)
+      _delegate.execute(ctx, request)
   }
 
   private def _bootstrap_collections(component: Component): Component = {

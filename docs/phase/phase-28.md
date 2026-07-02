@@ -145,6 +145,19 @@ added CNCF build-version metadata and a runtime `version` command so launcher
 development-runtime paths can report the selected CNCF runtime version without
 falling back to a published artifact lookup.
 
+Post-closure platform maintenance on Jul. 2, 2026 added the canonical CNCF SPI
+baseline:
+
+- `org.goldenport.cncf.spi` owns provider-neutral SPI contracts, provider
+  publication, socket injection, and already-loaded component resolution.
+- `org.goldenport.cncf.spi.ai.runner.AiRunner` defines the first canonical AI
+  runner SPI, with `generate` and `chat` executed under CNCF
+  `ExecutionContext`.
+- Components that mix in SPI socket traits can receive compatible providers
+  from dependency components during bootstrap.
+- `textus-ai` is the first provider driver and publishes an AI runner adapter
+  without replacing its existing public generate/chat operations.
+
 Post-closure runtime maintenance on Jun. 29, 2026 aligned the CAR component
 developer startup path and launcher command installation path:
 

@@ -16,6 +16,23 @@ It complements the summary-level phase document (`phase-28.md`).
 
 ---
 
+## Post-closure Maintenance
+
+Phase 28 remains closed. The following post-closure platform maintenance has
+been recorded without reopening the Web UI DSL phase:
+
+- [x] Jul. 2, 2026: Add canonical CNCF SPI contracts under
+      `org.goldenport.cncf.spi`.
+- [x] Add bootstrap-time SPI resolver support for already loaded dependency
+      components.
+- [x] Add the provider-neutral AI runner SPI under
+      `org.goldenport.cncf.spi.ai.runner`.
+- [x] Keep AI runner methods explicitly scoped by CNCF `ExecutionContext`.
+- [x] Use `textus-ai` as the first AI runner provider driver while preserving
+      its existing operation API.
+
+---
+
 ## WU-01: Open Phase 28 and Freeze Web UI DSL Scope
 
 Status: DONE

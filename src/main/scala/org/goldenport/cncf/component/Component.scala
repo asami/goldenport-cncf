@@ -55,7 +55,8 @@ import org.goldenport.schema.{DataType, XString}
  *  version Mar. 30, 2026
  *  version Apr. 30, 2026
  *  version May. 20, 2026
- * @version Jun. 18, 2026
+ *  version Jun. 18, 2026
+ * @version Jul.  2, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class Component() extends Component.Core.Holder {
@@ -534,12 +535,14 @@ object Component {
 
   trait Port {
     def get[T: ClassTag]: Option[T]
+    def entries: Vector[Any]
     def orElse(other: Port): Port
   }
 
   object Port {
     val empty: Port = new Port {
       def get[T: ClassTag]: Option[T] = None
+      def entries: Vector[Any] = Vector.empty
       def orElse(other: Port): Port = other
     }
 
@@ -552,6 +555,7 @@ object Component {
             case service if clazz.isInstance(service) => service.asInstanceOf[T]
           }
         }
+        def entries: Vector[Any] = _services
         def orElse(other: Port): Port = Port.combined(this, other)
       }
 
@@ -559,6 +563,8 @@ object Component {
       new Port {
         def get[T: ClassTag]: Option[T] =
           primary.get[T].orElse(secondary.get[T])
+        def entries: Vector[Any] =
+          primary.entries ++ secondary.entries
         def orElse(other: Port): Port =
           Port.combined(this, other)
       }
