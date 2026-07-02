@@ -20,6 +20,7 @@ import org.goldenport.protocol.handler.ProtocolHandler
 import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
 import org.goldenport.protocol.spec as spec
 import org.goldenport.record.Record
+import org.goldenport.record.RecordFormat
 import org.goldenport.schema.DataType
 import org.goldenport.value.BaseContent
 
@@ -27,7 +28,8 @@ import org.goldenport.value.BaseContent
  * @since   Mar. 28, 2026
  *  version Mar. 29, 2026
  *  version Apr. 22, 2026
- * @version May. 31, 2026
+ *  version May. 31, 2026
+ * @version Jul.  1, 2026
  * @author  ASAMI, Tomoharu
  */
 final class JobControlComponent() extends Component {
@@ -44,13 +46,13 @@ object JobControlComponent {
     def getTaskDetail(jobId: JobId, taskId: TaskId)(using org.goldenport.cncf.context.ExecutionContext): Consequence[JobTaskDetail]
     def getJobResult(jobId: JobId)(using org.goldenport.cncf.context.ExecutionContext): Consequence[JobResult]
     def awaitJobResult(jobId: JobId)(using org.goldenport.cncf.context.ExecutionContext): Consequence[OperationResponse]
-    def describeJobDefinition(body: String): Consequence[JobBatchDefinition]
-    def submitJobDefinition(body: String)(using org.goldenport.cncf.context.ExecutionContext): Consequence[JobBatchSubmissionResult]
-    def submitJobBatch(body: String)(using org.goldenport.cncf.context.ExecutionContext): Consequence[JobBatchSubmissionResult]
+    def describeJobDefinition(body: String, format: RecordFormat): Consequence[JobBatchDefinition]
+    def submitJobDefinition(body: String, format: RecordFormat)(using org.goldenport.cncf.context.ExecutionContext): Consequence[JobBatchSubmissionResult]
+    def submitJobBatch(body: String, format: RecordFormat)(using org.goldenport.cncf.context.ExecutionContext): Consequence[JobBatchSubmissionResult]
     def compareJobProfile(jobId: JobId)(using org.goldenport.cncf.context.ExecutionContext): Consequence[Record]
     def reconstructJobProfile(jobId: JobId)(using org.goldenport.cncf.context.ExecutionContext): Consequence[Record]
-    def createJobDefinition(key: String, body: String, status: Option[String])(using org.goldenport.cncf.context.ExecutionContext): Consequence[Record]
-    def updateJobDefinition(key: String, body: String, status: Option[String])(using org.goldenport.cncf.context.ExecutionContext): Consequence[Record]
+    def createJobDefinition(key: String, body: String, format: RecordFormat, status: Option[String])(using org.goldenport.cncf.context.ExecutionContext): Consequence[Record]
+    def updateJobDefinition(key: String, body: String, format: RecordFormat, status: Option[String])(using org.goldenport.cncf.context.ExecutionContext): Consequence[Record]
     def activateJobDefinition(key: String)(using org.goldenport.cncf.context.ExecutionContext): Consequence[Record]
     def retireJobDefinition(key: String)(using org.goldenport.cncf.context.ExecutionContext): Consequence[Record]
     def getJobDefinition(key: String)(using org.goldenport.cncf.context.ExecutionContext): Consequence[Record]
@@ -214,7 +216,10 @@ object JobControlComponent {
 
     private def _body_request: spec.RequestDefinition =
       spec.RequestDefinition(
-        parameters = List(spec.ParameterDefinition(content = BaseContent.simple("body"), kind = spec.ParameterDefinition.Kind.Argument))
+        parameters = List(
+          spec.ParameterDefinition(content = BaseContent.simple("body"), kind = spec.ParameterDefinition.Kind.Argument),
+          spec.ParameterDefinition(content = BaseContent.simple("jclFormat"), kind = spec.ParameterDefinition.Kind.Argument)
+        )
       )
 
     private def _job_task_request: spec.RequestDefinition =
@@ -230,6 +235,7 @@ object JobControlComponent {
         parameters = List(
           spec.ParameterDefinition(content = BaseContent.simple("key"), kind = spec.ParameterDefinition.Kind.Argument),
           spec.ParameterDefinition(content = BaseContent.simple("body"), kind = spec.ParameterDefinition.Kind.Argument),
+          spec.ParameterDefinition(content = BaseContent.simple("jclFormat"), kind = spec.ParameterDefinition.Kind.Argument),
           spec.ParameterDefinition(content = BaseContent.simple("status"), kind = spec.ParameterDefinition.Kind.Argument)
         )
       )
@@ -309,17 +315,17 @@ object JobControlComponent {
         case None => Consequence.operationNotFound(s"job:${jobId.value}")
       }
 
-    def describeJobDefinition(body: String): Consequence[JobBatchDefinition] =
-      JobBatchDefinition.parseYaml(body)
+    def describeJobDefinition(body: String, format: RecordFormat): Consequence[JobBatchDefinition] =
+      JobBatchDefinition.parse(body, format)
 
-    def submitJobDefinition(body: String)(using org.goldenport.cncf.context.ExecutionContext): Consequence[JobBatchSubmissionResult] =
+    def submitJobDefinition(body: String, format: RecordFormat)(using org.goldenport.cncf.context.ExecutionContext): Consequence[JobBatchSubmissionResult] =
       _submit_definition_ref(body) match {
         case Some(ref) =>
           _definition_by_ref(ref).flatMap { definition =>
             _submit_definition_entity(definition)
           }
         case None =>
-          JobBatchDefinition.parseYaml(body).flatMap { batch =>
+          JobBatchDefinition.parse(body, format).flatMap { batch =>
             if (batch.jobs.size != 1)
               Consequence.argumentInvalid("submit_job_definition requires exactly one job in jobs[]")
             else
@@ -327,8 +333,8 @@ object JobControlComponent {
           }
       }
 
-    def submitJobBatch(body: String)(using org.goldenport.cncf.context.ExecutionContext): Consequence[JobBatchSubmissionResult] =
-      JobBatchDefinition.parseYaml(body).flatMap(_submit_batch(_, None))
+    def submitJobBatch(body: String, format: RecordFormat)(using org.goldenport.cncf.context.ExecutionContext): Consequence[JobBatchSubmissionResult] =
+      JobBatchDefinition.parse(body, format).flatMap(_submit_batch(_, None))
 
     def compareJobProfile(jobId: JobId)(using org.goldenport.cncf.context.ExecutionContext): Consequence[Record] =
       component.jobEngine.queryVisible(jobId).flatMap {
@@ -350,26 +356,29 @@ object JobControlComponent {
     def createJobDefinition(
       key: String,
       body: String,
+      format: RecordFormat,
       status: Option[String]
     )(using org.goldenport.cncf.context.ExecutionContext): Consequence[Record] =
       if (_definitions.contains(_normalize_definition_key(key)))
         Consequence.stateConflict(s"JobDefinition already exists: $key")
       else
-        _definition_entity(key, body, status.getOrElse("draft")).flatMap { entity =>
+        _definition_entity(key, body, format, status.getOrElse("draft")).flatMap { entity =>
           _save_definition(entity).map(_.toRecord())
         }
 
     def updateJobDefinition(
       key: String,
       body: String,
+      format: RecordFormat,
       status: Option[String]
     )(using org.goldenport.cncf.context.ExecutionContext): Consequence[Record] =
       _definition_by_ref(key).flatMap { current =>
         for {
-          parsed <- _definition_payload(key, body, status)
+          parsed <- _definition_payload(key, body, format, status)
           updated = JobDefinitionEntity.updated(
             current = current,
             jclSource = body,
+            jclformat = JobBatchDefinition.formatName(format),
             profile = parsed._1.profile,
             flowSource = parsed._1.flow.map(_.show),
             eventsSource = parsed._1.events.map(_.show),
@@ -591,7 +600,7 @@ object JobControlComponent {
       if (!entity.isActive)
         Consequence.argumentInvalid(s"JobDefinition is not active: ${entity.key}")
       else
-        JobBatchDefinition.parseYaml(entity.jclSource).flatMap { batch =>
+        JobBatchDefinition.parse(entity.jclSource, _entity_format(entity)).flatMap { batch =>
           if (batch.jobs.size != 1)
             Consequence.argumentInvalid(s"JobDefinition must contain exactly one job: ${entity.key}")
           else
@@ -601,12 +610,14 @@ object JobControlComponent {
     private def _definition_entity(
       key: String,
       body: String,
+      format: RecordFormat,
       status: String
     )(using org.goldenport.cncf.context.ExecutionContext): Consequence[JobDefinitionEntity] =
-      _definition_payload(key, body, Some(status)).map { case (job, parsedStatus) =>
+      _definition_payload(key, body, format, Some(status)).map { case (job, parsedStatus) =>
         JobDefinitionEntity.create(
           key = key,
           jclSource = body,
+          jclformat = JobBatchDefinition.formatName(format),
           profile = job.profile,
           flowSource = job.flow.map(_.show),
           eventsSource = job.events.map(_.show),
@@ -619,11 +630,12 @@ object JobControlComponent {
     private def _definition_payload(
       key: String,
       body: String,
+      format: RecordFormat,
       status: Option[String]
     )(using org.goldenport.cncf.context.ExecutionContext): Consequence[(JobDefinition, Option[JobDefinitionStatus])] =
       for {
         parsedStatus <- status.map(s => JobDefinitionStatus.parse(s).map(Some(_))).getOrElse(Consequence.success(None))
-        batch <- JobBatchDefinition.parseYaml(body)
+        batch <- JobBatchDefinition.parse(body, format)
         _ <- if (batch.jobs.size == 1) Consequence.unit else Consequence.argumentInvalid(s"JobDefinition must contain exactly one job: $key")
       } yield (batch.jobs.head, parsedStatus)
 
@@ -891,7 +903,10 @@ object JobControlComponent {
       )
 
     def createOperationRequest(req: Request): Consequence[OperationRequest] =
-      _body(req).map(DescribeJobDefinitionAction(req, _))
+      for {
+        body <- _body(req)
+        format <- _jcl_format(req)
+      } yield DescribeJobDefinitionAction(req, body, format)
   }
 
   private final class SubmitJobDefinitionOperationDefinition(
@@ -906,7 +921,10 @@ object JobControlComponent {
       )
 
     def createOperationRequest(req: Request): Consequence[OperationRequest] =
-      _body(req).map(SubmitJobDefinitionAction(req, _))
+      for {
+        body <- _body(req)
+        format <- _jcl_format(req)
+      } yield SubmitJobDefinitionAction(req, body, format)
   }
 
   private final class SubmitJobBatchOperationDefinition(
@@ -921,7 +939,10 @@ object JobControlComponent {
       )
 
     def createOperationRequest(req: Request): Consequence[OperationRequest] =
-      _body(req).map(SubmitJobBatchAction(req, _))
+      for {
+        body <- _body(req)
+        format <- _jcl_format(req)
+      } yield SubmitJobBatchAction(req, body, format)
   }
 
   private final class CompareJobProfileOperationDefinition(
@@ -969,7 +990,8 @@ object JobControlComponent {
       for {
         key <- _key(req)
         body <- _body(req)
-      } yield CreateJobDefinitionAction(req, key, body, _status(req))
+        format <- _jcl_format(req)
+      } yield CreateJobDefinitionAction(req, key, body, format, _status(req))
   }
 
   private final class UpdateJobDefinitionOperationDefinition(
@@ -987,7 +1009,8 @@ object JobControlComponent {
       for {
         key <- _key(req)
         body <- _body(req)
-      } yield UpdateJobDefinitionAction(req, key, body, _status(req))
+        format <- _jcl_format(req)
+      } yield UpdateJobDefinitionAction(req, key, body, format, _status(req))
   }
 
   private final class ActivateJobDefinitionOperationDefinition(
@@ -1145,26 +1168,29 @@ object JobControlComponent {
 
   private final case class DescribeJobDefinitionAction(
     request: Request,
-    body: String
+    body: String,
+    format: RecordFormat
   ) extends SyncJobAction {
     def createCall(core: ActionCall.Core): ActionCall =
-      DescribeJobDefinitionCall(core, body)
+      DescribeJobDefinitionCall(core, body, format)
   }
 
   private final case class SubmitJobDefinitionAction(
     request: Request,
-    body: String
+    body: String,
+    format: RecordFormat
   ) extends SyncJobAction {
     def createCall(core: ActionCall.Core): ActionCall =
-      SubmitJobDefinitionCall(core, body)
+      SubmitJobDefinitionCall(core, body, format)
   }
 
   private final case class SubmitJobBatchAction(
     request: Request,
-    body: String
+    body: String,
+    format: RecordFormat
   ) extends SyncJobAction {
     def createCall(core: ActionCall.Core): ActionCall =
-      SubmitJobBatchCall(core, body)
+      SubmitJobBatchCall(core, body, format)
   }
 
   private final case class CompareJobProfileAction(
@@ -1187,20 +1213,22 @@ object JobControlComponent {
     request: Request,
     key: String,
     body: String,
+    format: RecordFormat,
     status: Option[String]
   ) extends SyncJobAction {
     def createCall(core: ActionCall.Core): ActionCall =
-      CreateJobDefinitionCall(core, key, body, status)
+      CreateJobDefinitionCall(core, key, body, format, status)
   }
 
   private final case class UpdateJobDefinitionAction(
     request: Request,
     key: String,
     body: String,
+    format: RecordFormat,
     status: Option[String]
   ) extends SyncJobAction {
     def createCall(core: ActionCall.Core): ActionCall =
-      UpdateJobDefinitionCall(core, key, body, status)
+      UpdateJobDefinitionCall(core, key, body, format, status)
   }
 
   private final case class ActivateJobDefinitionAction(
@@ -1363,12 +1391,13 @@ object JobControlComponent {
 
   private final case class DescribeJobDefinitionCall(
     core: ActionCall.Core,
-    body: String
+    body: String,
+    format: RecordFormat
   ) extends ProcedureActionCall {
     def execute(): Consequence[OperationResponse] =
       core.component match {
         case Some(component) =>
-          component.port.get[JobService].map(_.describeJobDefinition(body)) match {
+          component.port.get[JobService].map(_.describeJobDefinition(body, format)) match {
             case Some(result) => result.map(model => OperationResponse.RecordResponse(model.toRecord))
             case None => Consequence.serviceUnavailable("job service is not available")
           }
@@ -1379,18 +1408,20 @@ object JobControlComponent {
 
   private final case class SubmitJobDefinitionCall(
     core: ActionCall.Core,
-    body: String
+    body: String,
+    format: RecordFormat
   ) extends ProcedureActionCall {
     def execute(): Consequence[OperationResponse] =
-      _jcl_submission_response(core, _.submitJobDefinition(body)(using core.executionContext))
+      _jcl_submission_response(core, _.submitJobDefinition(body, format)(using core.executionContext))
   }
 
   private final case class SubmitJobBatchCall(
     core: ActionCall.Core,
-    body: String
+    body: String,
+    format: RecordFormat
   ) extends ProcedureActionCall {
     def execute(): Consequence[OperationResponse] =
-      _jcl_submission_response(core, _.submitJobBatch(body)(using core.executionContext))
+      _jcl_submission_response(core, _.submitJobBatch(body, format)(using core.executionContext))
   }
 
   private final case class CompareJobProfileCall(
@@ -1413,20 +1444,22 @@ object JobControlComponent {
     core: ActionCall.Core,
     key: String,
     body: String,
+    format: RecordFormat,
     status: Option[String]
   ) extends ProcedureActionCall {
     def execute(): Consequence[OperationResponse] =
-      _job_profile_response(core, _.createJobDefinition(key, body, status)(using core.executionContext))
+      _job_profile_response(core, _.createJobDefinition(key, body, format, status)(using core.executionContext))
   }
 
   private final case class UpdateJobDefinitionCall(
     core: ActionCall.Core,
     key: String,
     body: String,
+    format: RecordFormat,
     status: Option[String]
   ) extends ProcedureActionCall {
     def execute(): Consequence[OperationResponse] =
-      _job_profile_response(core, _.updateJobDefinition(key, body, status)(using core.executionContext))
+      _job_profile_response(core, _.updateJobDefinition(key, body, format, status)(using core.executionContext))
   }
 
   private final case class ActivateJobDefinitionCall(
@@ -1603,6 +1636,16 @@ object JobControlComponent {
 
   private def _status(req: Request): Option[String] =
     _string_argument(req, "status")
+
+  private def _jcl_format(req: Request): Consequence[RecordFormat] =
+    JobBatchDefinition.parseFormat(
+      _string_argument(req, "jclFormat")
+        .orElse(_string_argument(req, "jcl-format"))
+        .orElse(_string_argument(req, "format"))
+    )
+
+  private def _entity_format(entity: JobDefinitionEntity): RecordFormat =
+    JobBatchDefinition.parseFormat(entity.jclFormat).toOption.getOrElse(JobBatchDefinition.DefaultFormat)
 
   private def _string_argument(req: Request, name: String): Option[String] =
     req.arguments.find(_.name == name).map(_.value.toString).filter(_.trim.nonEmpty)

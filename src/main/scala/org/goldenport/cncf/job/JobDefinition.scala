@@ -3,7 +3,8 @@ package org.goldenport.cncf.job
 import scala.jdk.CollectionConverters.*
 import org.goldenport.Consequence
 import org.goldenport.record.Record
-import org.goldenport.record.io.RecordDecoder
+import org.goldenport.record.RecordFormat
+import org.goldenport.record.io.RecordSourceLoader
 
 /*
  * @since   Apr. 22, 2026
@@ -128,13 +129,52 @@ final case class JobBatchSubmissionResult(
 }
 
 object JobBatchDefinition {
-  def parseYaml(body: String): Consequence[JobBatchDefinition] =
-    RecordDecoder().yaml(body) match {
+  val DefaultFormat: RecordFormat =
+    RecordFormat.Yaml
+
+  val DefaultFormatName: String =
+    formatName(DefaultFormat)
+
+  def parse(body: String, format: RecordFormat = DefaultFormat): Consequence[JobBatchDefinition] =
+    RecordSourceLoader.load(body, format) match {
       case Consequence.Success(record) =>
         _parse_root(record)
       case Consequence.Failure(conclusion) =>
-        Consequence.argumentInvalid(s"invalid JCL YAML: ${conclusion.show}")
+        Consequence.argumentInvalid(s"invalid JCL ${formatName(format)}: ${conclusion.show}")
     }
+
+  def parseYaml(body: String): Consequence[JobBatchDefinition] =
+    parse(body, RecordFormat.Yaml)
+
+  def parseFormat(value: String): Consequence[RecordFormat] = {
+    val normalized = value.trim.toLowerCase(java.util.Locale.ROOT)
+    val format = normalized match {
+      case "json" => Some(RecordFormat.Json)
+      case "yaml" | "yml" => Some(RecordFormat.Yaml)
+      case "xml" => Some(RecordFormat.Xml)
+      case "hocon" | "conf" => Some(RecordFormat.Hocon)
+      case other => RecordFormat.fromSuffix(s".$other")
+    }
+    format.filter(_supported_formats.contains) match {
+      case Some(format) => Consequence.success(format)
+      case None => Consequence.argumentInvalid(s"unsupported JCL format: $value")
+    }
+  }
+
+  def parseFormat(value: Option[String]): Consequence[RecordFormat] =
+    value.map(parseFormat).getOrElse(Consequence.success(DefaultFormat))
+
+  def formatName(format: RecordFormat): String =
+    format match {
+      case RecordFormat.Json => "json"
+      case RecordFormat.Yaml => "yaml"
+      case RecordFormat.Xml => "xml"
+      case RecordFormat.Hocon => "hocon"
+      case other => other.toString.toLowerCase(java.util.Locale.ROOT)
+    }
+
+  private val _supported_formats: Set[RecordFormat] =
+    Set(RecordFormat.Json, RecordFormat.Yaml, RecordFormat.Xml, RecordFormat.Hocon)
 
   private def _parse_root(p: Any): Consequence[JobBatchDefinition] =
     _object_map(p, "JCL root").flatMap { m =>

@@ -31,7 +31,8 @@ import org.goldenport.cncf.operation.CmlOperationDefinition
  *  version Feb. 25, 2026
  *  version Mar. 31, 2026
  *  version Apr. 24, 2026
- * @version Jun.  9, 2026
+ *  version Jun.  9, 2026
+ * @version Jul.  1, 2026
  * @author  ASAMI, Tomoharu
  */
 /**
@@ -301,7 +302,10 @@ case class ComponentLogic(
   private def _job_definition_compensation(
     entity: JobDefinitionEntity
   ): Consequence[Option[JobFailureHook]] =
-    JobBatchDefinition.parseYaml(entity.jclSource).flatMap { batch =>
+    JobBatchDefinition.parse(
+      entity.jclSource,
+      JobBatchDefinition.parseFormat(entity.jclFormat).toOption.getOrElse(JobBatchDefinition.DefaultFormat)
+    ).flatMap { batch =>
       batch.jobs.headOption match {
         case Some(job) if batch.jobs.size == 1 =>
           Consequence.success(job.compensation)

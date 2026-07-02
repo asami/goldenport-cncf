@@ -15,7 +15,8 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
  * SimpleEntity-compatible record used for search, admin, and management views.
  *
  * @since   May.  7, 2026
- * @version May. 31, 2026
+ *  version May. 31, 2026
+ * @version Jul.  1, 2026
  * @author  ASAMI, Tomoharu
  */
 object JobEntityCollections {
@@ -51,6 +52,7 @@ final case class JobDefinitionEntity(
   id: EntityId,
   key: String,
   jclSource: String,
+  jclFormat: String,
   normalizedProfile: Option[JobDeclaredProfile],
   flowSource: Option[String],
   eventsSource: Option[String],
@@ -76,6 +78,7 @@ final case class JobDefinitionEntity(
       "name" -> key,
       "title" -> key,
       "jclSource" -> jclSource,
+      "jclFormat" -> jclFormat,
       "normalizedProfile" -> normalizedProfile.map(_.toRecord),
       "flow" -> flowSource,
       "events" -> eventsSource,
@@ -100,7 +103,8 @@ final case class JobDefinitionEntity(
       "jobDefinitionRevision" -> revision,
       "jobDefinitionHash" -> hash,
       "declaredProfile" -> normalizedProfile.map(_.toRecord),
-      "jclSource" -> jclSource
+      "jclSource" -> jclSource,
+      "jclFormat" -> jclFormat
     )
 }
 
@@ -111,6 +115,7 @@ object JobDefinitionEntity {
   def create(
     key: String,
     jclSource: String,
+    jclformat: String = JobBatchDefinition.DefaultFormatName,
     profile: Option[JobDeclaredProfile],
     flowSource: Option[String],
     eventsSource: Option[String],
@@ -123,6 +128,7 @@ object JobDefinitionEntity {
       id = entityId(key),
       key = _normalize_key(key),
       jclSource = jclSource,
+      jclFormat = _normalize_jcl_format(jclformat),
       normalizedProfile = profile,
       flowSource = flowSource,
       eventsSource = eventsSource,
@@ -142,6 +148,7 @@ object JobDefinitionEntity {
   def updated(
     current: JobDefinitionEntity,
     jclSource: String,
+    jclformat: String = JobBatchDefinition.DefaultFormatName,
     profile: Option[JobDeclaredProfile],
     flowSource: Option[String],
     eventsSource: Option[String],
@@ -150,10 +157,12 @@ object JobDefinitionEntity {
     targetAction: Option[String],
     now: Instant = Instant.now()
   ): JobDefinitionEntity = {
+    val normalizedformat = _normalize_jcl_format(jclformat)
     val newhash = hashOf(jclSource)
-    val changed = newhash != current.hash
+    val changed = newhash != current.hash || normalizedformat != current.jclFormat
     current.copy(
       jclSource = jclSource,
+      jclFormat = normalizedformat,
       normalizedProfile = profile,
       flowSource = flowSource,
       eventsSource = eventsSource,
@@ -174,13 +183,15 @@ object JobDefinitionEntity {
     for {
       key <- _required(record, "key")
       jcl <- _required(record, "jclSource")
+      jclformat <- _jcl_format(record)
       status <- JobDefinitionStatus.parse(record.getString("definitionStatus").getOrElse("draft"))
       id <- EntityId.createC(record).map(_.copy(collection = JobEntityCollections.JobDefinition))
-      parsed = JobBatchDefinition.parseYaml(jcl).toOption.flatMap(_.jobs.headOption)
+      parsed = JobBatchDefinition.parse(jcl, jclformat).toOption.flatMap(_.jobs.headOption)
     } yield JobDefinitionEntity(
       id = id,
       key = _normalize_key(key),
       jclSource = jcl,
+      jclFormat = JobBatchDefinition.formatName(jclformat),
       normalizedProfile = parsed.flatMap(_.profile),
       flowSource = record.getString("flow").orElse(parsed.flatMap(_.flow.map(_.show))),
       eventsSource = record.getString("events").orElse(parsed.flatMap(_.events.map(_.show))),
@@ -231,6 +242,12 @@ object JobDefinitionEntity {
       case None => Consequence.argumentMissing(key)
     }
 
+  private def _jcl_format(record: Record): Consequence[org.goldenport.record.RecordFormat] =
+    JobBatchDefinition.parseFormat(record.getString("jclFormat"))
+
+  private def _normalize_jcl_format(format: String): String =
+    JobBatchDefinition.parseFormat(format).toOption.map(JobBatchDefinition.formatName).getOrElse(JobBatchDefinition.DefaultFormatName)
+
   private def _target_part(action: String, index: Int): Option[String] =
     action.split("\\.").toVector.lift(index).filter(_.nonEmpty)
 }
@@ -242,7 +259,8 @@ final case class JobDefinitionSnapshot(
   revision: Int,
   hash: String,
   profile: Option[JobDeclaredProfile],
-  jclSource: Option[String]
+  jclSource: Option[String],
+  jclFormat: Option[String]
 ) {
   def toParameters: Map[String, String] =
     Map(
@@ -251,7 +269,7 @@ final case class JobDefinitionSnapshot(
       "jcl.jobDefinition.version" -> version.toString,
       "jcl.jobDefinition.revision" -> revision.toString,
       "jcl.jobDefinition.hash" -> hash
-    ) ++ jclSource.map("jcl.jobDefinition.source" -> _)
+    ) ++ jclSource.map("jcl.jobDefinition.source" -> _) ++ jclFormat.map("jcl.jobDefinition.format" -> _)
 }
 
 object JobDefinitionSnapshot {
@@ -263,7 +281,8 @@ object JobDefinitionSnapshot {
       revision = entity.revision,
       hash = entity.hash,
       profile = entity.normalizedProfile,
-      jclSource = Some(entity.jclSource)
+      jclSource = Some(entity.jclSource),
+      jclFormat = Some(entity.jclFormat)
     )
 }
 

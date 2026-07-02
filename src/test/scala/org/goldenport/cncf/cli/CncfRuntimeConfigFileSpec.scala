@@ -8,7 +8,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr. 15, 2026
- * @version Apr. 25, 2026
+ *  version Apr. 25, 2026
+ * @version Jul.  1, 2026
  * @author  ASAMI, Tomoharu
  */
 final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers {
@@ -143,12 +144,13 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers {
       RuntimeConfig.getString(bootstrap.configuration, RuntimeConfig.WebDescriptorKey) shouldBe Some("config/from-yaml.yaml")
     }
 
-    "resolve standard configuration files in conf properties json yaml xml order" in {
+    "resolve standard configuration files in conf props properties json yaml xml order" in {
       val cwd = Files.createTempDirectory("textus-standard-order")
       val configdir = cwd.resolve(".textus")
       Files.createDirectories(configdir)
       Files.writeString(configdir.resolve("config.conf"), "textus.web.descriptor = config/from-conf.yaml\n")
-      Files.writeString(configdir.resolve("config.properties"), "textus.web.descriptor = config/from-properties.yaml\n")
+      Files.writeString(configdir.resolve("config.props"), "textus.web.descriptor=config/from-props.yaml\n")
+      Files.writeString(configdir.resolve("config.properties"), "textus.web.descriptor=config/from-properties.yaml\n")
       Files.writeString(configdir.resolve("config.json"), """{"textus":{"web":{"descriptor":"config/from-json.yaml"}}}""")
       Files.writeString(
         configdir.resolve("config.yaml"),

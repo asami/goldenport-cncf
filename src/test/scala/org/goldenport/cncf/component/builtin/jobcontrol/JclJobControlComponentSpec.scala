@@ -28,7 +28,8 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 
 /*
  * @since   Apr. 22, 2026
- * @version May.  7, 2026
+ *  version May.  7, 2026
+ * @version Jul.  1, 2026
  * @author  ASAMI, Tomoharu
  */
 final class JclJobControlComponentSpec
@@ -78,6 +79,114 @@ final class JclJobControlComponentSpec
       jobs.head.getRecord("submit").flatMap(_.getString("persistence")) shouldBe Some("Ephemeral")
       jobs.head.getRecord("on-failure").flatMap(_.getString("action")) shouldBe Some("jcl_fixture.command.hook")
       jobs.head.getRecord("compensation").flatMap(_.getString("action")) shouldBe Some("jcl_fixture.command.compensate")
+      }
+    }
+
+    "describe JCL from non-YAML structured formats" in {
+      Given("valid JSON, XML, and HOCON JCL definitions")
+      _with_fixture() { fixture =>
+      val json =
+        """{
+          |  "jobs": [
+          |    {
+          |      "name": "json-first",
+          |      "target": {
+          |        "action": "jcl_fixture.command.ok"
+          |      },
+          |      "parameters": {
+          |        "orderId": "json-1"
+          |      }
+          |    }
+          |  ]
+          |}""".stripMargin
+      val xml =
+        """<root>
+          |  <job>
+          |    <name>xml-first</name>
+          |    <target>
+          |      <action>jcl_fixture.command.ok</action>
+          |    </target>
+          |    <parameters>
+          |      <orderId>xml-1</orderId>
+          |    </parameters>
+          |  </job>
+          |</root>""".stripMargin
+      val hocon =
+        """jobs = [
+          |  {
+          |    name = "hocon-first"
+          |    target {
+          |      action = "jcl_fixture.command.ok"
+          |    }
+          |    parameters {
+          |      orderId = "hocon-1"
+          |    }
+          |  }
+          |]
+          |""".stripMargin
+
+      When("describe_job_definition is invoked with explicit JCL formats")
+      val jsonResponse = _execute(
+        fixture.subsystem,
+        "job_control.job.describe_job_definition",
+        arguments = List(Argument("body", json), Argument("jclFormat", "json"))
+      )
+      val xmlResponse = _execute(
+        fixture.subsystem,
+        "job_control.job.describe_job_definition",
+        arguments = List(Argument("body", xml), Argument("jclFormat", "xml"))
+      )
+      val hoconResponse = _execute(
+        fixture.subsystem,
+        "job_control.job.describe_job_definition",
+        arguments = List(Argument("body", hocon), Argument("jclFormat", "hocon"))
+      )
+
+      Then("both inputs are normalized to the same JCL record surface")
+      _records(_record(jsonResponse).asMap("jobs")).head.getString("name") shouldBe Some("json-first")
+      _record(xmlResponse).getRecord("job").flatMap(_.getString("name")) shouldBe Some("xml-first")
+      _records(_record(hoconResponse).asMap("jobs")).head.getString("name") shouldBe Some("hocon-first")
+      }
+    }
+
+    "store and submit a JSON JobDefinition without reparsing it as YAML" in {
+      Given("a JSON JCL job definition")
+      _with_fixture() { fixture =>
+      given ExecutionContext = ExecutionContext.test(SecurityContext.Privilege.ApplicationContentManager)
+      val json =
+        """{
+          |  "job": {
+          |    "name": "stored-json",
+          |    "target": {
+          |      "action": "jcl_fixture.command.ok"
+          |    },
+          |    "parameters": {
+          |      "orderId": "stored-json-1"
+          |    }
+          |  }
+          |}""".stripMargin
+
+      When("the definition is created with jclFormat=json and submitted by reference")
+      val created = _execute(
+        fixture.subsystem,
+        "job_control.job.create_job_definition",
+        arguments = List(
+          Argument("key", "stored-json"),
+          Argument("status", "active"),
+          Argument("jclFormat", "json"),
+          Argument("body", json)
+        )
+      )
+      val submitted = _execute(
+        fixture.subsystem,
+        "job_control.job.submit_job_definition",
+        arguments = List(Argument("body", "jobDefinitionRef: stored-json"))
+      )
+
+      Then("the stored format is retained and the referenced definition runs")
+      _record(created).getString("jclFormat") shouldBe Some("json")
+      _strings(_record(submitted), "submitted-job-ids").size shouldBe 1
+      fixture.trace.toVector.lastOption shouldBe Some("ok:orderId=stored-json-1")
       }
     }
 

@@ -662,7 +662,12 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
   migration tooling; CulturalResource collection-item profile; Rule Engine and
   Inference Runtime.
 - Status interpretation rules: `docs/rules/stage-status-and-checklist-convention.md`
-- Latest post-closure maintenance: Jun. 29, 2026 CAR development and CLI install
+- Latest post-closure maintenance: Jul. 1, 2026 JCL definition input now uses
+  the shared record/config loading path for YAML, JSON, XML, HOCON, and
+  properties-style files, preserving the selected JCL format on JobDefinition
+  records so later compensation/profile handling can parse the original source
+  correctly.
+- Previous post-closure maintenance: Jun. 29, 2026 CAR development and CLI install
   alignment. CNCF keeps command execution on canonical
   `component.service.operation` selectors, `cncf-launcher` and
   `textus-launcher` own target-first convenience syntax and generated command
