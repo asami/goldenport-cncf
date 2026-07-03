@@ -6,7 +6,8 @@ import org.goldenport.configuration.{ConfigurationValue, ResolvedConfiguration}
 /*
  * @since   Mar. 13, 2026
  *  version Mar. 24, 2026
- * @version Apr. 15, 2026
+ *  version Apr. 15, 2026
+ * @version Jul.  2, 2026
  * @author  ASAMI, Tomoharu
  */
 object ConfigurationAccess {
@@ -18,7 +19,7 @@ object ConfigurationAccess {
       .orElse(_from_object_path(conf, key))
       .orElse(_from_system_property(key))
       .orElse(_from_system_config_file(key))
-      .map(_normalize_string)
+      .flatMap(value => Option(value).map(_normalize_string))
 
   private def _from_system_property(
     key: String

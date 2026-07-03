@@ -1,5 +1,6 @@
 package org.goldenport.cncf.action
 
+import java.nio.file.Path
 import cats.free.Free
 import cats.syntax.flatMap.*
 import cats.syntax.functor.*
@@ -8,6 +9,7 @@ import org.goldenport.Consequence
 import org.goldenport.ConsequenceT
 import org.goldenport.id.UniversalId
 import org.goldenport.record.Record
+import org.goldenport.protocol.Property
 import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.http.HttpResponse
 import org.goldenport.process.{ShellCommand, ShellCommandResult}
@@ -15,6 +17,7 @@ import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.unitofwork.{ExecUowM, UnitOfWork, UnitOfWorkAuthorization}
 import org.goldenport.cncf.unitofwork.UnitOfWorkInterpreter
 import org.goldenport.cncf.unitofwork.UnitOfWorkOp
+import org.goldenport.cncf.embedded.{EmbeddedDataStore, EmbeddedStatement, EmbeddedUpdateResult}
 import org.goldenport.cncf.security.{AggregateAuthorization, EntityAbacCondition, EntityAccessMode, EntityAccessRelation, EntityApplicationDomain, EntityAuthorizationProfile, EntityOperationKind, EntityUsageKind, OperationAccessPolicy, ServiceOperationModel}
 import org.goldenport.cncf.Program
 import org.simplemodeling.model.datatype.EntityId
@@ -53,6 +56,9 @@ import org.goldenport.cncf.information.{
 import org.goldenport.cncf.knowledge.{KnowledgeFrameId, KnowledgeWorkingSetSnapshot}
 import org.goldenport.cncf.observability.{CallTreeValueSummary, DslChokepointContext, DslChokepointPhase, DslChokepointRunner}
 import org.goldenport.configuration.ConfigurationValue
+import org.goldenport.configuration.Configuration
+import org.goldenport.configuration.source.file.ConfigTextDecoder
+import org.goldenport.cncf.config.RuntimeFileConfigLoader
 
 /*
  * @since   Jan.  6, 2026
@@ -61,7 +67,7 @@ import org.goldenport.configuration.ConfigurationValue
  *  version Mar. 30, 2026
  *  version Apr. 29, 2026
  *  version May. 25, 2026
- * @version Jun. 18, 2026
+ * @version Jul.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 trait BehaviorFeaturePart { self: Behavior.Core.Holder =>
@@ -148,6 +154,107 @@ trait ActionCallFeaturePart extends BehaviorFeaturePart { self: ActionCall.Core.
       action_property_string(name),
       s"Property not found: $name"
     )
+
+  protected final def execution_property_string(name: String): Option[String] =
+    executionContext.runtime.resolvedParameters.get(name)
+      .flatMap(parameter => _configuration_value_string(parameter.value))
+
+  protected final def execution_property_string(
+    primary: String,
+    compatibility: String
+  ): Option[String] =
+    execution_property_string(primary).orElse(execution_property_string(compatibility))
+
+  protected final def config_string(key: String): Option[String] =
+    action_property_string(key)
+      .orElse(
+        component
+          .flatMap(_.subsystem)
+          .flatMap(_.configurationValue(key))
+          .flatMap(_configuration_value_string)
+      )
+      .orElse(
+        executionContext.runtime.resolvedParameters.get(key)
+          .flatMap(parameter => _configuration_value_string(parameter.value))
+      )
+
+  protected final def config_string(
+    primary: String,
+    compatibility: String
+  ): Option[String] =
+    config_string(primary).orElse(config_string(compatibility))
+
+  protected final def config_int(key: String): Option[Int] =
+    config_string(key).flatMap(_.toIntOption)
+
+  protected final def config_double(key: String): Option[Double] =
+    config_string(key).flatMap(_.toDoubleOption)
+
+  protected final def config_boolean(key: String): Option[Boolean] =
+    config_string(key).flatMap(_config_boolean)
+
+  protected final def parse_dsl_document(
+    path: Path
+  ): Consequence[Configuration] =
+    consequence_with_calltree(
+      "cncf:dsl:parse",
+      Map("source" -> path.toString)
+    ) {
+      new RuntimeFileConfigLoader().load(path)
+    }
+
+  protected final def parse_dsl_document(
+    filename: String,
+    content: String
+  ): Consequence[Configuration] =
+    consequence_with_calltree(
+      "cncf:dsl:parse",
+      Map("source" -> filename)
+    ) {
+      ConfigTextDecoder.decode(filename, content)
+    }
+
+  protected final def parse_dsl_content(
+    format: String,
+    content: String
+  ): Consequence[Configuration] = {
+    val normalized = Option(format).map(_.trim).filter(_.nonEmpty).getOrElse("yaml")
+    consequence_with_calltree(
+      "cncf:dsl:parse",
+      Map("format" -> normalized)
+    ) {
+      ConfigTextDecoder.decode(s"inline.$normalized", content)
+    }
+  }
+
+  protected final def parse_dsl_content_json(
+    content: String
+  ): Consequence[Configuration] =
+    parse_dsl_content("json", content)
+
+  protected final def parse_dsl_content_yaml(
+    content: String
+  ): Consequence[Configuration] =
+    parse_dsl_content("yaml", content)
+
+  private def _configuration_value_string(
+    value: ConfigurationValue
+  ): Option[String] =
+    value match {
+      case ConfigurationValue.StringValue(v) => Option(v).map(_.trim).filter(_.nonEmpty)
+      case ConfigurationValue.NumberValue(v) => Some(v.toString)
+      case ConfigurationValue.BooleanValue(v) => Some(v.toString)
+      case _ => None
+    }
+
+  private def _config_boolean(value: String): Option[Boolean] = {
+    val normalized = value.trim.toLowerCase(java.util.Locale.ROOT)
+    normalized match {
+      case "true" | "yes" | "on" | "1" => Some(true)
+      case "false" | "no" | "off" | "0" => Some(false)
+      case _ => None
+    }
+  }
 
   protected final def resolve_aggregate_behavior(
   ): Consequence[AggregateBehavior[?]] =
@@ -905,116 +1012,132 @@ trait BehaviorHttpPart extends BehaviorFeaturePart { self: Behavior.Core.Holder 
   // Declarative DSL (UoW / Free)
   protected final def http_get(
     path: String,
-    headers: Map[String, String] = Map.empty
+    headers: Map[String, String] = Map.empty,
+    properties: Vector[Property] = Vector.empty
   ): ExecUowM[HttpResponse] = {
-    val op = _op_http_get(path, headers)
+    val op = _op_http_get(path, headers, properties)
     ConsequenceT.liftF(Free.liftF(op))
   }
 
   protected final def http_post(
     path: String,
     body: Option[String] = None,
-    headers: Map[String, String] = Map.empty
+    headers: Map[String, String] = Map.empty,
+    properties: Vector[Property] = Vector.empty
   ): ExecUowM[HttpResponse] = {
-    val op = _op_http_post(path, body, headers)
+    val op = _op_http_post(path, body, headers, properties)
     ConsequenceT.liftF(Free.liftF(op))
   }
 
   protected final def http_post_bag(
     path: String,
     body: Option[org.goldenport.bag.Bag] = None,
-    headers: Map[String, String] = Map.empty
+    headers: Map[String, String] = Map.empty,
+    properties: Vector[Property] = Vector.empty
   ): ExecUowM[HttpResponse] = {
-    val op = _op_http_post_bag(path, body, headers)
+    val op = _op_http_post_bag(path, body, headers, properties)
     ConsequenceT.liftF(Free.liftF(op))
   }
 
   protected final def http_put(
     path: String,
     body: Option[String] = None,
-    headers: Map[String, String] = Map.empty
+    headers: Map[String, String] = Map.empty,
+    properties: Vector[Property] = Vector.empty
   ): ExecUowM[HttpResponse] = {
-    val op = _op_http_put(path, body, headers)
+    val op = _op_http_put(path, body, headers, properties)
     ConsequenceT.liftF(Free.liftF(op))
   }
 
   protected final def http_get_c(
-    path: String
+    path: String,
+    headers: Map[String, String] = Map.empty,
+    properties: Vector[Property] = Vector.empty
   )(using uow: UnitOfWork, http: org.goldenport.cncf.http.HttpDriver): Consequence[HttpResponse] = {
-    val op = _op_http_get(path)
+    val op = _op_http_get(path, headers, properties)
     exec_c(op)
   }
 
   protected final def http_get_or_throw(
-    path: String
+    path: String,
+    headers: Map[String, String] = Map.empty,
+    properties: Vector[Property] = Vector.empty
   )(using uow: UnitOfWork, http: org.goldenport.cncf.http.HttpDriver): HttpResponse = {
-    val op = _op_http_get(path)
+    val op = _op_http_get(path, headers, properties)
     exec_or_throw(op)
   }
 
   protected final def http_post_c(
     path: String,
     body: Option[String] = None,
-    headers: Map[String, String] = Map.empty
+    headers: Map[String, String] = Map.empty,
+    properties: Vector[Property] = Vector.empty
   )(using uow: UnitOfWork, http: org.goldenport.cncf.http.HttpDriver): Consequence[HttpResponse] = {
-    val op = _op_http_post(path, body, headers)
+    val op = _op_http_post(path, body, headers, properties)
     exec_c(op)
   }
 
   protected final def http_post_or_throw(
     path: String,
     body: Option[String] = None,
-    headers: Map[String, String] = Map.empty
+    headers: Map[String, String] = Map.empty,
+    properties: Vector[Property] = Vector.empty
   )(using uow: UnitOfWork, http: org.goldenport.cncf.http.HttpDriver): HttpResponse = {
-    val op = _op_http_post(path, body, headers)
+    val op = _op_http_post(path, body, headers, properties)
     exec_or_throw(op)
   }
 
   protected final def http_put_c(
     path: String,
     body: Option[String] = None,
-    headers: Map[String, String] = Map.empty
+    headers: Map[String, String] = Map.empty,
+    properties: Vector[Property] = Vector.empty
   )(using uow: UnitOfWork, http: org.goldenport.cncf.http.HttpDriver): Consequence[HttpResponse] = {
-    val op = _op_http_put(path, body, headers)
+    val op = _op_http_put(path, body, headers, properties)
     exec_c(op)
   }
 
   protected final def http_put_or_throw(
     path: String,
     body: Option[String] = None,
-    headers: Map[String, String] = Map.empty
+    headers: Map[String, String] = Map.empty,
+    properties: Vector[Property] = Vector.empty
   )(using uow: UnitOfWork, http: org.goldenport.cncf.http.HttpDriver): HttpResponse = {
-    val op = _op_http_put(path, body, headers)
+    val op = _op_http_put(path, body, headers, properties)
     exec_or_throw(op)
   }
 
   // Private helpers to build UnitOfWorkOp
   private def _op_http_get(
     path: String,
-    headers: Map[String, String] = Map.empty
+    headers: Map[String, String] = Map.empty,
+    properties: Vector[Property] = Vector.empty
   ): UnitOfWorkOp[HttpResponse] =
-    UnitOfWorkOp.HttpGet(path, headers)
+    UnitOfWorkOp.HttpGet(path, headers, properties)
 
   private def _op_http_post(
     path: String,
     body: Option[String],
-    headers: Map[String, String]
+    headers: Map[String, String],
+    properties: Vector[Property] = Vector.empty
   ): UnitOfWorkOp[HttpResponse] =
-    UnitOfWorkOp.HttpPost(path, body, headers)
+    UnitOfWorkOp.HttpPost(path, body, headers, properties)
 
   private def _op_http_post_bag(
     path: String,
     body: Option[org.goldenport.bag.Bag],
-    headers: Map[String, String]
+    headers: Map[String, String],
+    properties: Vector[Property] = Vector.empty
   ): UnitOfWorkOp[HttpResponse] =
-    UnitOfWorkOp.HttpPostBag(path, body, headers)
+    UnitOfWorkOp.HttpPostBag(path, body, headers, properties)
 
   private def _op_http_put(
     path: String,
     body: Option[String],
-    headers: Map[String, String]
+    headers: Map[String, String],
+    properties: Vector[Property] = Vector.empty
   ): UnitOfWorkOp[HttpResponse] =
-    UnitOfWorkOp.HttpPut(path, body, headers)
+    UnitOfWorkOp.HttpPut(path, body, headers, properties)
 }
 
 trait BehaviorInformationPart extends BehaviorFeaturePart { self: Behavior.Core.Holder =>
@@ -2218,6 +2341,53 @@ trait ActionCallDataStorePart extends ActionCallFeaturePart { self: ActionCall.C
     // TODO: Implement DataStoreDelete operation
     UnitOfWorkOp.DataStoreDelete(id)
   }
+}
+
+trait ActionCallEmbeddedDataStorePart extends ActionCallFeaturePart { self: ActionCall.Core.Holder =>
+
+  protected final def component_local_data_dir: ExecUowM[Path] =
+    component_local_data_dir(_embedded_datastore_component_name)
+
+  protected final def component_local_data_dir(
+    componentName: String
+  ): ExecUowM[Path] =
+    ConsequenceT.liftF(Free.liftF(UnitOfWorkOp.LocalDataDir(componentName)))
+
+  protected final def embedded_datastore(
+    name: String
+  ): ExecUowM[EmbeddedDataStore] =
+    embedded_datastore(_embedded_datastore_component_name, name)
+
+  protected final def embedded_datastore(
+    componentName: String,
+    name: String
+  ): ExecUowM[EmbeddedDataStore] =
+    ConsequenceT.liftF(Free.liftF(UnitOfWorkOp.EmbeddedDataStoreOpen(componentName, name)))
+
+  protected final def embedded_datastore_read(
+    store: EmbeddedDataStore,
+    statement: String,
+    params: Vector[Any] = Vector.empty
+  ): ExecUowM[Vector[Record]] =
+    ConsequenceT.liftF(Free.liftF(UnitOfWorkOp.EmbeddedDataStoreRead(store, EmbeddedStatement(statement, params))))
+
+  protected final def embedded_datastore_update(
+    store: EmbeddedDataStore,
+    statement: String,
+    params: Vector[Any] = Vector.empty
+  ): ExecUowM[EmbeddedUpdateResult] =
+    ConsequenceT.liftF(Free.liftF(UnitOfWorkOp.EmbeddedDataStoreUpdate(store, EmbeddedStatement(statement, params))))
+
+  protected final def embedded_datastore_migrate(
+    store: EmbeddedDataStore,
+    statements: Vector[String]
+  ): ExecUowM[Unit] =
+    ConsequenceT.liftF(Free.liftF(UnitOfWorkOp.EmbeddedDataStoreMigrate(store, statements)))
+
+  private def _embedded_datastore_component_name: String =
+    component_name_option
+      .orElse(action.request.component)
+      .getOrElse("component")
 }
 
 trait ActionCallShellCommandPart extends ActionCallFeaturePart { self: ActionCall.Core.Holder =>

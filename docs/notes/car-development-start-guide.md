@@ -142,10 +142,17 @@ target/
 
 For component logic rules, read:
 
+- `docs/notes/cncf-developer-guide.md`
 - `docs/notes/application-logic-guideline.md`
 - `docs/notes/internal-dsl-guideline.md`
 - `docs/notes/unitofwork-guideline.md`
 - `docs/design/component-and-application-responsibilities.md`
+
+Handwritten `ActionCall` logic should use protected CNCF internal DSL helpers
+for runtime concerns. In particular, use `config_*` helpers for configuration
+and `parse_dsl_document` for structured DSL/config parsing instead of directly
+reading runtime parameter maps, subsystem configuration, or low-level config
+loader classes.
 
 ## Development Loop
 

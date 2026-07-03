@@ -24,7 +24,8 @@ import org.goldenport.configuration.{Configuration, ConfigurationTrace, Configur
  *  version Jan. 20, 2026
  *  version Apr. 15, 2026
  *  version May. 11, 2026
- * @version Jun. 18, 2026
+ *  version Jun. 18, 2026
+ * @version Jul.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 class ObservabilityEngineSpec extends AnyWordSpec with Matchers with BeforeAndAfterEach {
@@ -34,16 +35,16 @@ class ObservabilityEngineSpec extends AnyWordSpec with Matchers with BeforeAndAf
     super.afterEach()
   }
 
-  private def _trace_id_(): TraceId =
+  private def _trace_id(): TraceId =
     TraceId("cncf", "test")
 
-  private def _scope_context_(): ScopeContext =
+  private def _scope_context(): ScopeContext =
     ScopeContext(
       kind = ScopeKind.Action,
       name = "ping",
       parent = None,
       observabilityContext = ObservabilityContext(
-        traceId = _trace_id_(),
+        traceId = _trace_id(),
         spanId = None,
         correlationId = None
       )
@@ -52,7 +53,7 @@ class ObservabilityEngineSpec extends AnyWordSpec with Matchers with BeforeAndAf
   "ObservabilityEngine.build" should {
     "include required keys for success outcome" in {
       val record = ObservabilityEngine.build(
-        scope = _scope_context_(),
+        scope = _scope_context(),
         http = None,
         operation = Some(OperationContext("admin.system.ping")),
         outcome = Right(())
@@ -66,7 +67,7 @@ class ObservabilityEngineSpec extends AnyWordSpec with Matchers with BeforeAndAf
 
     "include required keys for failure outcome" in {
       val record = ObservabilityEngine.build(
-        scope = _scope_context_(),
+        scope = _scope_context(),
         http = None,
         operation = Some(OperationContext("admin.system.ping")),
         outcome = Left(Conclusion.from(new RuntimeException("x")))
@@ -86,6 +87,40 @@ class ObservabilityEngineSpec extends AnyWordSpec with Matchers with BeforeAndAf
   }
 
   "ObservabilityEngine.callTreeRecord" should {
+    "redact sensitive values inside calltree prompt and response text" in {
+      val calltree = CallTreeContext.enabled
+      calltree.enter(
+        "provider:ai-runner:generate",
+        Map(
+          "calltree_kind" -> "provider-step",
+          "max_tokens" -> "1200",
+          "prompt" ->
+            """provider: openai
+              |api_key: sk-test-secret
+              |authorization=Bearer abc123
+              |query: visible location text
+              |""".stripMargin
+        )
+      )
+      calltree.leave(
+        Map(
+          "outcome" -> "success",
+          "response" -> """{"message":"ok","token":"response-secret","text":"visible answer"}"""
+        )
+      )
+
+      val record = ObservabilityEngine.callTreeRecord(calltree.build().get)
+      val nodes = record.asMap("calltree").asInstanceOf[Seq[Record]]
+      val node = nodes.head
+      node.getString("max_tokens") shouldBe Some("1200")
+      node.getString("prompt").get should include ("api_key: ***")
+      node.getString("prompt").get should include ("authorization=***")
+      node.getString("prompt").get should include ("visible location text")
+      val response = node.asMap("response").asInstanceOf[Record]
+      response.getString("token") shouldBe Some("***")
+      response.getString("text") shouldBe Some("visible answer")
+    }
+
     "project calltree nodes with stable action fields and flow" in {
       val calltree = CallTreeContext.enabled
       calltree.enter(
@@ -523,14 +558,14 @@ class ObservabilityEngineSpec extends AnyWordSpec with Matchers with BeforeAndAf
       ObservabilityEngine.updateVisibilityPolicy(VisibilityPolicy(minLevel = LogLevel.Info))
 
       ObservabilityEngine.emitDebug(
-        _scope_context_().observabilityContext,
-        _scope_context_(),
+        _scope_context().observabilityContext,
+        _scope_context(),
         "debug-event",
         Record.empty
       )
       ObservabilityEngine.emitInfo(
-        _scope_context_().observabilityContext,
-        _scope_context_(),
+        _scope_context().observabilityContext,
+        _scope_context(),
         "info-event",
         Record.empty
       )

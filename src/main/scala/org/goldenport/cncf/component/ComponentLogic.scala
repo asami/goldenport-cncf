@@ -32,7 +32,7 @@ import org.goldenport.cncf.operation.CmlOperationDefinition
  *  version Mar. 31, 2026
  *  version Apr. 24, 2026
  *  version Jun.  9, 2026
- * @version Jul.  1, 2026
+ * @version Jul.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 /**
@@ -648,20 +648,26 @@ case class ComponentLogic(
 
   private def _fallback_http_driver(): HttpDriver =
     new HttpDriver {
-      def get(path: String, headers: Map[String, String] = Map.empty): HttpResponse =
+      def get(
+        path: String,
+        headers: Map[String, String] = Map.empty,
+        properties: Vector[org.goldenport.protocol.Property] = Vector.empty
+      ): HttpResponse =
         throw new UnsupportedOperationException(s"HttpDriver not configured: GET ${path}")
 
       def post(
         path: String,
         body: Option[String],
-        headers: Map[String, String]
+        headers: Map[String, String],
+        properties: Vector[org.goldenport.protocol.Property] = Vector.empty
       ): HttpResponse =
         throw new UnsupportedOperationException(s"HttpDriver not configured: POST ${path}")
 
       def put(
         path: String,
         body: Option[String],
-        headers: Map[String, String]
+        headers: Map[String, String],
+        properties: Vector[org.goldenport.protocol.Property] = Vector.empty
       ): HttpResponse =
         throw new UnsupportedOperationException(s"HttpDriver not configured: PUT ${path}")
     }

@@ -3,7 +3,8 @@ package org.goldenport.cncf.http
 /*
  * @since   May. 18, 2026
  *  version May. 27, 2026
- * @version Jun. 19, 2026
+ *  version Jun. 19, 2026
+ * @version Jul.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 import scala.collection.mutable.ListBuffer
@@ -67,7 +68,8 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Apr. 12, 2026
  *  version May. 27, 2026
- * @version Jun. 19, 2026
+ *  version Jun. 19, 2026
+ * @version Jul.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
@@ -12313,7 +12315,11 @@ private final class RecordingRestDriver extends HttpDriver {
     _calls.toVector
   }
 
-  def get(path: String, headers: Map[String, String]): HttpResponse = {
+  def get(
+    path: String,
+    headers: Map[String, String],
+    properties: Vector[org.goldenport.protocol.Property] = Vector.empty
+  ): HttpResponse = {
     _record(Call("GET", path, None, headers))
     _response
   }
@@ -12321,7 +12327,8 @@ private final class RecordingRestDriver extends HttpDriver {
   def post(
     path: String,
     body: Option[String],
-    headers: Map[String, String]
+    headers: Map[String, String],
+    properties: Vector[org.goldenport.protocol.Property] = Vector.empty
   ): HttpResponse = {
     _record(Call("POST", path, body, headers))
     _response
@@ -12330,7 +12337,8 @@ private final class RecordingRestDriver extends HttpDriver {
   def put(
     path: String,
     body: Option[String],
-    headers: Map[String, String]
+    headers: Map[String, String],
+    properties: Vector[org.goldenport.protocol.Property] = Vector.empty
   ): HttpResponse = {
     _record(Call("PUT", path, body, headers))
     _response

@@ -1,13 +1,16 @@
 package org.goldenport.cncf.unitofwork
 
+import java.nio.file.Path
 import org.goldenport.http.HttpResponse
 import org.goldenport.id.UniversalId
 import org.goldenport.process.{ShellCommand, ShellCommandResult}
+import org.goldenport.protocol.Property
 import org.goldenport.record.Record
 import org.simplemodeling.model.datatype.*
 import org.goldenport.cncf.entity.*
 import org.goldenport.cncf.directive.*
 import org.goldenport.cncf.blob.{ContentReferenceAttachResult, ContentReferenceContent, ContentReferenceNormalizeResult, ContentRenderResult, InlineImageAttachResult, InlineImageContent, InlineImageNormalizeResult, InlineImageOccurrence}
+import org.goldenport.cncf.embedded.{EmbeddedDataStore, EmbeddedStatement, EmbeddedUpdateResult}
 import org.goldenport.value.{ContentAttributes, ContentReferenceOccurrence}
 
 /*
@@ -23,7 +26,8 @@ import org.goldenport.value.{ContentAttributes, ContentReferenceOccurrence}
  *  version Feb. 25, 2026
  *  version Mar. 24, 2026
  *  version Apr. 29, 2026
- * @version May.  4, 2026
+ *  version May.  4, 2026
+ * @version Jul.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 sealed trait UnitOfWorkOp[A]
@@ -43,25 +47,29 @@ object UnitOfWorkOp {
 
   final case class HttpGet(
     path: String,
-    headers: Map[String, String] = Map.empty
+    headers: Map[String, String] = Map.empty,
+    properties: Vector[Property] = Vector.empty
   ) extends UnitOfWorkOp[HttpResponse]
 
   final case class HttpPost(
     path: String,
     body: Option[String],
-    headers: Map[String, String]
+    headers: Map[String, String],
+    properties: Vector[Property] = Vector.empty
   ) extends UnitOfWorkOp[HttpResponse]
 
   final case class HttpPostBag(
     path: String,
     body: Option[org.goldenport.bag.Bag],
-    headers: Map[String, String]
+    headers: Map[String, String],
+    properties: Vector[Property] = Vector.empty
   ) extends UnitOfWorkOp[HttpResponse]
 
   final case class HttpPut(
     path: String,
     body: Option[String],
-    headers: Map[String, String]
+    headers: Map[String, String],
+    properties: Vector[Property] = Vector.empty
   ) extends UnitOfWorkOp[HttpResponse]
 
   final case class ShellCommandExec(
@@ -82,6 +90,34 @@ object UnitOfWorkOp {
 
   final case class DataStoreDelete(
     id: UniversalId
+  ) extends UnitOfWorkOp[Unit]
+
+  // ------------------------------------------------------------
+  // Component-local embedded datastore operations
+  // ------------------------------------------------------------
+  final case class LocalDataDir(
+    componentName: String
+  ) extends UnitOfWorkOp[Path]
+
+  final case class EmbeddedDataStoreOpen(
+    componentName: String,
+    name: String,
+    path: Option[Path] = None
+  ) extends UnitOfWorkOp[EmbeddedDataStore]
+
+  final case class EmbeddedDataStoreRead(
+    store: EmbeddedDataStore,
+    statement: EmbeddedStatement
+  ) extends UnitOfWorkOp[Vector[Record]]
+
+  final case class EmbeddedDataStoreUpdate(
+    store: EmbeddedDataStore,
+    statement: EmbeddedStatement
+  ) extends UnitOfWorkOp[EmbeddedUpdateResult]
+
+  final case class EmbeddedDataStoreMigrate(
+    store: EmbeddedDataStore,
+    statements: Vector[String]
   ) extends UnitOfWorkOp[Unit]
 
   // ------------------------------------------------------------

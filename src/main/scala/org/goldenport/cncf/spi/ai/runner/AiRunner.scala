@@ -3,6 +3,8 @@ package org.goldenport.cncf.spi.ai.runner
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.spi.{SpiContract, SpiSelection, SpiSocket}
+import org.goldenport.protocol.Property
+import org.goldenport.schema.DataConfidentiality
 
 /*
  * Provider-neutral AI runner SPI contract.
@@ -11,7 +13,7 @@ import org.goldenport.cncf.spi.{SpiContract, SpiSelection, SpiSocket}
  * SPI; consumer components depend only on this CNCF-owned protocol.
  *
  * @since   Jul.  2, 2026
- * @version Jul.  2, 2026
+ * @version Jul.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 trait AiRunner {
@@ -51,12 +53,25 @@ final case class AiRunnerRequirement(
   engine: Option[String] = None
 )
 
+final case class AiRunnerTracePolicy(
+  promptConfidentiality: DataConfidentiality = DataConfidentiality.Internal,
+  responseConfidentiality: DataConfidentiality = DataConfidentiality.Internal
+) {
+  def calltreePrompt(text: String): String =
+    if (promptConfidentiality.shouldRedactByDefault) "***" else text
+
+  def calltreeResponse(text: String): String =
+    if (responseConfidentiality.shouldRedactByDefault) "***" else text
+}
+
 final case class AiGenerateRequest(
   prompt: String,
   temperature: Option[Double] = None,
   maxTokens: Option[Int] = None,
   requirement: AiRunnerRequirement = AiRunnerRequirement(),
-  metadata: Map[String, String] = Map.empty
+  trace: AiRunnerTracePolicy = AiRunnerTracePolicy(),
+  metadata: Map[String, String] = Map.empty,
+  properties: Vector[Property] = Vector.empty
 )
 
 final case class AiGenerateResponse(
@@ -70,7 +85,9 @@ final case class AiChatRequest(
   temperature: Option[Double] = None,
   maxTokens: Option[Int] = None,
   requirement: AiRunnerRequirement = AiRunnerRequirement(),
-  metadata: Map[String, String] = Map.empty
+  trace: AiRunnerTracePolicy = AiRunnerTracePolicy(),
+  metadata: Map[String, String] = Map.empty,
+  properties: Vector[Property] = Vector.empty
 )
 
 final case class AiChatResponse(

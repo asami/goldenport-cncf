@@ -4,13 +4,15 @@ import org.goldenport.Consequence
 import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.spi.ai.runner.{AiGenerateRequest, AiGenerateResponse, AiRunner, AiRunnerSocket}
+import org.goldenport.cncf.spi.geo.resolver.{GeoResolver, GeoResolverSocket}
+import org.goldenport.cncf.spi.toolchain.runner.{ConvertSvgPagesToPdfRequest, ToolchainArtifactResponse, ToolchainRunner, ToolchainRunnerSocket}
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jul.  2, 2026
- * @version Jul.  2, 2026
+ * @version Jul.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 final class SpiSpec
@@ -96,6 +98,23 @@ final class SpiSpec
       result shouldBe a[Consequence.Success[_]]
       consumer.aiRunner.generate(AiGenerateRequest("hello")).toOption.get.text shouldBe "remote:hello"
     }
+
+    "inject GeoResolver and ToolchainRunner providers through CNCF-owned SPI contracts" in {
+      Given("provider components and consumer components for non-AI SPI contracts")
+      given ExecutionContext = ExecutionContext.create()
+      val geoprovider = _GeoResolverProviderComponent()
+      val geoconsumer = _GeoResolverConsumerComponent()
+      val toolprovider = _ToolchainRunnerProviderComponent()
+      val toolconsumer = _ToolchainRunnerConsumerComponent()
+
+      When("SPI resolution runs")
+      val result = SpiResolver.resolve(Vector(geoprovider, geoconsumer, toolprovider, toolconsumer))
+
+      Then("each socket receives its matching provider implementation")
+      result shouldBe a[Consequence.Success[_]]
+      geoconsumer.geoResolver.getClass.getName should include ("_GeoResolver")
+      toolconsumer.toolchainRunner.convertSvgPagesToPdf(ConvertSvgPagesToPdfRequest(Vector("a.svg"))).toOption.get.pageCount shouldBe 1
+    }
   }
 
   private final case class _ConsumerComponent(
@@ -147,5 +166,71 @@ final class SpiSpec
 
     def chat(req: org.goldenport.cncf.spi.ai.runner.AiChatRequest)(using ExecutionContext): Consequence[org.goldenport.cncf.spi.ai.runner.AiChatResponse] =
       Consequence.operationInvalid("chat is not used by this spec")
+  }
+
+  private final case class _GeoResolverConsumerComponent() extends Component with GeoResolverSocket
+
+  private final case class _GeoResolverProviderComponent() extends Component with SpiProviderComponent {
+    def spiProviders: Vector[SpiProvider[?]] =
+      Vector(_GeoResolverProvider())
+  }
+
+  private final case class _GeoResolverProvider() extends SpiProvider[GeoResolver] {
+    def supports(
+      contract: SpiContract[GeoResolver],
+      selection: SpiSelection
+    )(using ExecutionContext): Boolean =
+      contract.name == "geo-resolver" &&
+        contract.runtimeClass == classOf[GeoResolver]
+
+    def provide(
+      contract: SpiContract[GeoResolver],
+      selection: SpiSelection
+    )(using ExecutionContext): Consequence[GeoResolver] =
+      Consequence.success(_GeoResolver())
+  }
+
+  private final case class _GeoResolver() extends GeoResolver {
+    def resolveRoute(req: org.goldenport.cncf.spi.geo.resolver.GeoResolveRouteRequest)(using ExecutionContext): Consequence[org.goldenport.cncf.spi.geo.resolver.GeoResolveRouteResponse] =
+      Consequence.operationInvalid("resolveRoute is not used by this spec")
+
+    def buildMapContext(req: org.goldenport.cncf.spi.geo.resolver.GeoBuildMapContextRequest)(using ExecutionContext): Consequence[org.goldenport.cncf.spi.geo.resolver.GeoBuildMapContextResponse] =
+      Consequence.operationInvalid("buildMapContext is not used by this spec")
+
+    def investigateLocation(req: org.goldenport.cncf.spi.geo.resolver.GeoInvestigateLocationRequest)(using ExecutionContext): Consequence[org.goldenport.cncf.spi.geo.resolver.GeoInvestigateLocationResponse] =
+      Consequence.operationInvalid("investigateLocation is not used by this spec")
+
+    def researchLinearFeatureRoute(req: org.goldenport.cncf.spi.geo.resolver.GeoResearchLinearFeatureRouteRequest)(using ExecutionContext): Consequence[org.goldenport.cncf.spi.geo.resolver.GeoResearchLinearFeatureRouteResponse] =
+      Consequence.operationInvalid("researchLinearFeatureRoute is not used by this spec")
+  }
+
+  private final case class _ToolchainRunnerConsumerComponent() extends Component with ToolchainRunnerSocket
+
+  private final case class _ToolchainRunnerProviderComponent() extends Component with SpiProviderComponent {
+    def spiProviders: Vector[SpiProvider[?]] =
+      Vector(_ToolchainRunnerProvider())
+  }
+
+  private final case class _ToolchainRunnerProvider() extends SpiProvider[ToolchainRunner] {
+    def supports(
+      contract: SpiContract[ToolchainRunner],
+      selection: SpiSelection
+    )(using ExecutionContext): Boolean =
+      contract.name == "toolchain-runner" &&
+        contract.runtimeClass == classOf[ToolchainRunner]
+
+    def provide(
+      contract: SpiContract[ToolchainRunner],
+      selection: SpiSelection
+    )(using ExecutionContext): Consequence[ToolchainRunner] =
+      Consequence.success(_ToolchainRunner())
+  }
+
+  private final case class _ToolchainRunner() extends ToolchainRunner {
+    def convertSvgToPdf(req: org.goldenport.cncf.spi.toolchain.runner.ConvertSvgToPdfRequest)(using ExecutionContext): Consequence[ToolchainArtifactResponse] =
+      Consequence.operationInvalid("convertSvgToPdf is not used by this spec")
+
+    def convertSvgPagesToPdf(req: ConvertSvgPagesToPdfRequest)(using ExecutionContext): Consequence[ToolchainArtifactResponse] =
+      Consequence.success(ToolchainArtifactResponse(true, 0, 0, "ok", req.out, req.svgFiles.length, Some("test")))
   }
 }

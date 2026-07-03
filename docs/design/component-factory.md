@@ -81,6 +81,79 @@ Notes:
 - The Provider owns *mechanics* of instantiation.
 
 
+### Runtime Component.Factory And BundleFactory
+
+The runtime has two related factory concepts with different construction
+scopes.
+
+`Component.Factory` creates one runtime participant. It owns the generated or
+handwritten component construction policy for a single participant:
+
+- `createPrimary(params)` creates a primary participant.
+- `createComponentlet(params)` creates a componentlet participant.
+- `create_Component` creates the concrete `Component`.
+- `create_Core` supplies the `Component.Core`, including generated service and
+  operation metadata.
+
+Generated Cozy factories such as `FooComponent.Factory` are
+`Component.Factory` implementations. They are not mere boilerplate: they carry
+the generated component protocol, service/operation definitions, authorization
+hooks, projection hooks, and other component-local metadata used by
+`ActionCall` and internal DSL helpers.
+
+`Component.BundleFactory` creates a bundle:
+
+```scala
+primaryFactory: Component.PrimaryComponentFactory
+componentletFactories: Vector[Component.ComponentletFactory]
+```
+
+It is the correct abstraction when one packaged component entrypoint needs to
+produce a primary participant plus zero or more componentlets. Componentlets are
+the semantic reason to use a bundle factory. A single-primary component may use
+`Component.Factory` directly; using `SinglePrimaryBundleFactory` is a packaging
+convenience, not a replacement for the generated `FooComponent.Factory`.
+
+Use these rules:
+
+- For a single component with no componentlets, a `Component.Factory`
+  implementation is sufficient and natural.
+- For a component package that publishes componentlets, expose a
+  `BundleFactory` and delegate participant construction to
+  `PrimaryComponentFactory` / `ComponentletFactory` implementations.
+- If a generated `FooComponent.Factory` exists, prefer extending or delegating
+  to it. Do not bypass it with a raw `SinglePrimaryBundleFactory` unless the
+  generated protocol/core behavior is deliberately reimplemented.
+- `SinglePrimaryBundleFactory` reduces boilerplate for bundle publication with
+  no componentlets, but it still introduces the bundle entrypoint and
+  ServiceLoader shape. It does not make the development model identical to a
+  plain `Component.Factory`.
+
+### ServiceLoader Declaration Policy
+
+Java `ServiceLoader` metadata is not part of the ordinary CAR development
+path. A normal CAR should be discoverable through CAR metadata, class scanning,
+the `impl.ComponentFactory` naming convention, and the runtime
+`Component.Factory` / `Component.BundleFactory` type contract. Most component
+developers should not need to know about
+`META-INF/services/org.goldenport.cncf.component.Component$BundleFactory`.
+
+Use ServiceLoader metadata only as an explicit advanced loading policy:
+
+- when the factory is intentionally placed outside CNCF's normal discovery
+  paths;
+- when startup discovery cost needs to be reduced by naming the factory
+  directly;
+- when the project intentionally wants a strict explicit factory binding.
+
+The first case can make ServiceLoader declaration necessary. The latter two
+are valid operational choices, but they increase development surface area and
+are not the recommended default. If ServiceLoader metadata is present, it must
+point at an implementation of the declared service type. A
+`Component$BundleFactory` service declaration must therefore name a real
+`Component.BundleFactory`, not a plain `Component.Factory`.
+
+
 ### ComponentProvider
 
 The Provider is the instantiation mechanism:

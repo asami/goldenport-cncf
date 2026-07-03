@@ -1,12 +1,14 @@
 package org.goldenport.cncf.action
 
 import java.nio.charset.StandardCharsets
+import java.nio.file.Files
 import cats.free.Free
 import cats.~>
 import cats.syntax.all.*
 import org.goldenport.{Consequence, ConsequenceT}
 import org.goldenport.bag.Bag
 import org.goldenport.cncf.component.Component
+import org.goldenport.cncf.config.ResolvedParameters
 import org.goldenport.cncf.context.{CorrelationId, DataStoreContext, EntityStoreContext, ExecutionContext, ObservabilityContext, Principal, PrincipalId, RuntimeContext, ScopeContext, ScopeKind, SecurityContext, SecurityLevel, TraceId}
 import org.goldenport.cncf.datastore.DataStoreSpace
 import org.goldenport.cncf.entity.EntityStoreSpace
@@ -17,13 +19,15 @@ import org.goldenport.datatype.{ContentType, MimeType}
 import org.goldenport.http.{HttpResponse, HttpStatus}
 import org.goldenport.protocol.Property
 import org.goldenport.protocol.operation.OperationResponse
+import org.goldenport.configuration.{Configuration, ConfigurationTrace, ConfigurationValue, ResolvedConfiguration}
+import org.goldenport.record.{Field, Record}
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Dec. 23, 2025
  *  version Apr. 28, 2026
- * @version May. 23, 2026
+ * @version Jul.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 class ActionCallSpec extends AnyWordSpec with Matchers {
@@ -75,7 +79,7 @@ class ActionCallSpec extends AnyWordSpec with Matchers {
       val interpreter = new (UnitOfWorkOp ~> Consequence) {
         def apply[A](fa: UnitOfWorkOp[A]): Consequence[A] =
           fa match {
-            case UnitOfWorkOp.HttpGet("/procedure-dsl", _) =>
+            case UnitOfWorkOp.HttpGet("/procedure-dsl", _, _) =>
               Consequence.success(response.asInstanceOf[A])
             case other =>
               Consequence.operationIllegal("procedure_action_call_spec", s"unexpected op: $other")
@@ -123,7 +127,7 @@ class ActionCallSpec extends AnyWordSpec with Matchers {
       val interpreter = new (UnitOfWorkOp ~> Consequence) {
         def apply[A](fa: UnitOfWorkOp[A]): Consequence[A] =
           fa match {
-            case UnitOfWorkOp.HttpGet("/provider-dsl", _) =>
+            case UnitOfWorkOp.HttpGet("/provider-dsl", _, _) =>
               Consequence.success(response.asInstanceOf[A])
             case other =>
               Consequence.operationIllegal("provider_behavior_spec", s"unexpected op: $other")
@@ -143,6 +147,61 @@ class ActionCallSpec extends AnyWordSpec with Matchers {
       )
 
       behavior.run() shouldBe Consequence.success("200")
+    }
+
+    "provide ActionCall internal DSL helpers for config and structured text parsing" in {
+      val context = _execution_context(
+        principalId = "u1",
+        attrs = Map("authenticated" -> "true")
+      )
+      context.runtime.setResolvedParameters(
+        ResolvedParameters.fromResolvedConfiguration(
+          ResolvedConfiguration(
+            Configuration(Map(
+              "demo.message" -> ConfigurationValue.StringValue("runtime-value")
+            )),
+            ConfigurationTrace.empty
+          )
+        )
+      )
+      val call = _internal_dsl_call(
+        context,
+        List(Property("demo.message", "action-value", None))
+      )
+
+      call.execute() shouldBe Consequence.success(OperationResponse.RecordResponse(_record(
+        "message" -> "action-value",
+        "runtimeMessage" -> "runtime-value",
+        "title" -> "府中散歩",
+        "lat" -> "35.613528"
+      )))
+    }
+
+    "provide component-local embedded datastore helpers through UnitOfWork" in {
+      val root = Files.createTempDirectory("cncf-action-embedded-datastore")
+      val context = _execution_context(
+        principalId = "u1",
+        attrs = Map("authenticated" -> "true"),
+        realInterpreter = true
+      )
+      context.runtime.setResolvedParameters(
+        ResolvedParameters.fromResolvedConfiguration(
+          ResolvedConfiguration(
+            Configuration(Map(
+              "cncf.local-data.root" -> ConfigurationValue.StringValue(root.toString)
+            )),
+            ConfigurationTrace.empty
+          )
+        )
+      )
+      val call = _embedded_datastore_call(context)
+
+      call.execute() shouldBe Consequence.success(OperationResponse.RecordResponse(_record(
+        "dir" -> root.resolve("embedded-spec").toAbsolutePath.normalize.toString,
+        "db" -> root.resolve("embedded-spec").resolve("gazetteer.db").toAbsolutePath.normalize.toString,
+        "name" -> "長池見附橋",
+        "lat" -> "35.61178333"
+      )))
     }
   }
 
@@ -191,7 +250,8 @@ class ActionCallSpec extends AnyWordSpec with Matchers {
   private def _execution_context(
     principalId: String,
     attrs: Map[String, String],
-    interpreter: Option[UnitOfWorkOp ~> Consequence] = None
+    interpreter: Option[UnitOfWorkOp ~> Consequence] = None,
+    realInterpreter: Boolean = false
   ): ExecutionContext = {
     val datastorespace = DataStoreSpace.default()
     val entitystorespace = new EntityStoreSpace()
@@ -215,7 +275,10 @@ class ActionCallSpec extends AnyWordSpec with Matchers {
       unitOfWorkSupplier = () => new org.goldenport.cncf.unitofwork.UnitOfWork(context),
       unitOfWorkInterpreterFn = interpreter.getOrElse(new (org.goldenport.cncf.unitofwork.UnitOfWorkOp ~> Consequence) {
         def apply[A](fa: org.goldenport.cncf.unitofwork.UnitOfWorkOp[A]): Consequence[A] =
-          throw new UnsupportedOperationException("unitOfWorkInterpreter is not used in test context")
+          if (realInterpreter)
+            new org.goldenport.cncf.unitofwork.UnitOfWorkInterpreter(new org.goldenport.cncf.unitofwork.UnitOfWork(context)).interpret(fa)
+          else
+            throw new UnsupportedOperationException("unitOfWorkInterpreter is not used in test context")
       }),
       commitAction = _ => (),
       abortAction = _ => (),
@@ -271,6 +334,128 @@ class ActionCallSpec extends AnyWordSpec with Matchers {
         executeProgram(program).map(OperationResponse.Scalar.apply)
     }
   }
+
+  private def _internal_dsl_call(
+    context: ExecutionContext,
+    properties: List[Property]
+  ): ActionCall = {
+    val operationproperties = properties
+    val act = new CommandAction {
+      override def createCall(core: ActionCall.Core): ActionCall =
+        throw new UnsupportedOperationException("not used in ActionCallSpec")
+
+      override def request: org.goldenport.protocol.Request =
+        org.goldenport.protocol.Request(
+          component = None,
+          service = None,
+          operation = "internal_dsl",
+          arguments = Nil,
+          switches = Nil,
+          properties = operationproperties
+        )
+    }
+    new ProcedureActionCall with ActionCall.Core.Holder {
+      val core = ActionCall.Core(
+        action = act,
+        executionContext = context,
+        component = None,
+        correlationId = None
+      )
+
+      def execute(): Consequence[OperationResponse] =
+        for {
+          yaml <- parse_dsl_content_yaml(
+            """title: 府中散歩
+              |""".stripMargin
+          )
+          json <- parse_dsl_content_json(
+            """{"location_investigation":{"recommended":{"lat":35.613528,"lon":139.393111}}}"""
+          )
+        } yield {
+          val investigation = json.values.get("location_investigation").collect {
+            case value: ConfigurationValue.ObjectValue => value
+          }
+          val recommended = investigation.flatMap(_.values.get("recommended")).collect {
+            case value: ConfigurationValue.ObjectValue => value
+          }
+          OperationResponse.RecordResponse(_record(
+            "message" -> config_string("demo.message").getOrElse(""),
+            "runtimeMessage" -> execution_property_string("demo.message").getOrElse(""),
+            "title" -> yaml.values.get("title").collect {
+              case ConfigurationValue.StringValue(value) => value
+            }.getOrElse(""),
+            "lat" -> recommended.flatMap(_.values.get("lat")).collect {
+              case ConfigurationValue.NumberValue(value) => value.toString
+            }.getOrElse("")
+          ))
+      }
+    }
+  }
+
+  private def _embedded_datastore_call(
+    context: ExecutionContext
+  ): ActionCall = {
+    val act = new CommandAction {
+      override def createCall(core: ActionCall.Core): ActionCall =
+        throw new UnsupportedOperationException("not used in ActionCallSpec")
+
+      override def request: org.goldenport.protocol.Request =
+        org.goldenport.protocol.Request(
+          component = Some("embedded-spec"),
+          service = None,
+          operation = "embedded_datastore",
+          arguments = Nil,
+          switches = Nil,
+          properties = Nil
+        )
+    }
+    val testcomponent = new EmbeddedSpecComponent()
+    new FunctionalActionCall with ActionCall.Core.Holder with ActionCallEmbeddedDataStorePart {
+      val core = ActionCall.Core(
+        action = act,
+        executionContext = context,
+        component = Some(testcomponent),
+        correlationId = None
+      )
+
+      protected def build_Program: ExecUowM[OperationResponse] =
+        for {
+          dir <- component_local_data_dir
+          store <- embedded_datastore("gazetteer")
+          _ <- embedded_datastore_migrate(store, Vector(
+            """CREATE TABLE IF NOT EXISTS location_entry (
+              |  id TEXT PRIMARY KEY,
+              |  name TEXT NOT NULL,
+              |  lat REAL NOT NULL,
+              |  lon REAL NOT NULL
+              |)""".stripMargin
+          ))
+          _ <- embedded_datastore_update(
+            store,
+            "INSERT OR REPLACE INTO location_entry (id, name, lat, lon) VALUES (?, ?, ?, ?)",
+            Vector("nagaike-mitsuke-bridge", "長池見附橋", 35.61178333, 139.3925748)
+          )
+          rows <- embedded_datastore_read(
+            store,
+            "SELECT name, lat FROM location_entry WHERE id = ?",
+            Vector("nagaike-mitsuke-bridge")
+          )
+        } yield {
+          val row = rows.headOption.getOrElse(Record.empty)
+          OperationResponse.RecordResponse(_record(
+            "dir" -> dir.toString,
+            "db" -> store.path.toString,
+            "name" -> row.getString("name").getOrElse(""),
+            "lat" -> row.getDouble("lat").map(_.toString).getOrElse("")
+          ))
+        }
+    }
+  }
+
+  private final class EmbeddedSpecComponent extends Component
+
+  private def _record(values: (String, Any)*): Record =
+    Record(values.toVector.map { case (key, value) => Field(key, Field.Value.Single(value)) })
 
   private def _http_response_ok(): HttpResponse =
     HttpResponse.Text(

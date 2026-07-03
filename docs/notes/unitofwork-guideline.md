@@ -31,6 +31,15 @@ Entity invariants that must not vary by application include:
 `DataStore` is the physical persistence substrate. For entity data it is an
 implementation detail, not the normal `UnitOfWork` execution surface.
 
+Some internal DSL helpers, such as runtime configuration lookup and structured
+DSL parsing, are currently protected helper behavior rather than explicit
+`UnitOfWorkOp` values. They still belong to the same framework-owned boundary:
+application code calls the helper, and CNCF owns the interpretation,
+instrumentation, and future migration path. If such behavior begins to require
+authorization, lifecycle, persistence, or replay semantics, promote it into an
+explicit `UnitOfWork` intent instead of exposing lower-level runtime objects to
+component code.
+
 If `UnitOfWork` provides a direct entity operation, it should still preserve
 entity invariants unless the operation is explicitly named and documented as a
 raw repair/diagnostic path.
@@ -106,6 +115,12 @@ authorization, lifecycle, and raw-store avoidance can move downward into the
 internal DSL and `UnitOfWork` layers without changing the external operation
 model.
 
+Configuration and structured parsing helpers are also transitional in this
+sense. They are protected internal DSL entry points today, and their callers
+should not depend on concrete loader classes or runtime parameter storage
+because those implementation details may move into `UnitOfWork` or another
+framework execution algebra later.
+
 ## Review Checklist
 
 When reviewing `UnitOfWork` behavior, check:
@@ -121,6 +136,8 @@ When reviewing `UnitOfWork` behavior, check:
   `ExecutionContext` tenant scope?
 - If raw access is necessary, is the API explicitly named as raw/repair/
   diagnostic/seed/import/physical?
+- If a protected helper performs framework-owned effects without a
+  `UnitOfWorkOp`, is that deliberate and documented as transitional?
 
 ## Open Questions
 

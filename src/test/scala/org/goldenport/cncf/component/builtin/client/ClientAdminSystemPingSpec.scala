@@ -40,7 +40,8 @@ import org.scalatest.wordspec.AnyWordSpec
  *  version Feb. 15, 2026
  *  version Mar. 29, 2026
  *  version Apr. 11, 2026
- * @version May.  2, 2026
+ *  version May.  2, 2026
+ * @version Jul.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 class ClientAdminSystemPingSpec
@@ -299,7 +300,11 @@ class ClientAdminSystemPingSpec
     def calls: Vector[HttpCall] =
       _buffer.toVector
 
-    def get(path: String, headers: Map[String, String]): HttpResponse = {
+    def get(
+      path: String,
+      headers: Map[String, String],
+      properties: Vector[org.goldenport.protocol.Property] = Vector.empty
+    ): HttpResponse = {
       _buffer += HttpCall("GET", path, None, headers)
       response
     }
@@ -307,7 +312,8 @@ class ClientAdminSystemPingSpec
     def post(
       path: String,
       body: Option[String],
-      headers: Map[String, String]
+      headers: Map[String, String],
+      properties: Vector[org.goldenport.protocol.Property] = Vector.empty
     ): HttpResponse = {
       _buffer += HttpCall("POST", path, body, headers)
       response
@@ -316,7 +322,8 @@ class ClientAdminSystemPingSpec
     override def postBag(
       path: String,
       body: Option[Bag],
-      headers: Map[String, String]
+      headers: Map[String, String],
+      properties: Vector[org.goldenport.protocol.Property] = Vector.empty
     ): HttpResponse = {
       _buffer += HttpCall("POST", path, body.map(_bag_to_string), headers)
       response
@@ -325,7 +332,8 @@ class ClientAdminSystemPingSpec
     def put(
       path: String,
       body: Option[String],
-      headers: Map[String, String]
+      headers: Map[String, String],
+      properties: Vector[org.goldenport.protocol.Property] = Vector.empty
     ): HttpResponse = {
       _buffer += HttpCall("PUT", path, body, headers)
       response

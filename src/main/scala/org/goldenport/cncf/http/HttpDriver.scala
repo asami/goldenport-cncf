@@ -6,6 +6,7 @@ import java.nio.charset.{Charset, StandardCharsets}
 import org.goldenport.bag.Bag
 import org.goldenport.datatype.{ContentType, MimeType}
 import org.goldenport.http.{HttpResponse, HttpStatus}
+import org.goldenport.protocol.Property
 import org.goldenport.record.Record
 import org.slf4j.LoggerFactory
 
@@ -13,25 +14,30 @@ import org.slf4j.LoggerFactory
  * @since   Jan. 11, 2026
  *  version Feb.  7, 2026
  *  version Apr. 29, 2026
- * @version May. 30, 2026
+ *  version May. 30, 2026
+ * @version Jul.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 trait HttpDriver {
-  def get(path: String, headers: Map[String, String] = Map.empty): HttpResponse
-  def post(path: String, body: Option[String], headers: Map[String, String]): HttpResponse
-  def postBag(path: String, body: Option[Bag], headers: Map[String, String]): HttpResponse =
+  def get(path: String, headers: Map[String, String] = Map.empty, properties: Vector[Property] = Vector.empty): HttpResponse
+  def post(path: String, body: Option[String], headers: Map[String, String], properties: Vector[Property] = Vector.empty): HttpResponse
+  def postBag(path: String, body: Option[Bag], headers: Map[String, String], properties: Vector[Property] = Vector.empty): HttpResponse =
     throw new UnsupportedOperationException("HttpDriver.postBag is not implemented by this driver")
-  def put(path: String, body: Option[String], headers: Map[String, String]): HttpResponse
+  def put(path: String, body: Option[String], headers: Map[String, String], properties: Vector[Property] = Vector.empty): HttpResponse
 }
 
 final class UrlConnectionHttpDriver(
   baseurl: String
 ) extends HttpDriver {
-  private val _connect_timeout_ms = 10000
-  private val _read_timeout_ms = 10000
+  private val _default_connect_timeout_ms = 10000
+  private val _default_read_timeout_ms = 10000
 
-  def get(path: String, headers: Map[String, String] = Map.empty): HttpResponse = {
-    val conn = _open_connection(_build_url(path), "GET")
+  def get(
+    path: String,
+    headers: Map[String, String] = Map.empty,
+    properties: Vector[Property] = Vector.empty
+  ): HttpResponse = {
+    val conn = _open_connection(_build_url(path), "GET", properties)
     headers.foreach { case (k, v) => conn.setRequestProperty(k, v) }
     _execute(conn, None)
   }
@@ -39,9 +45,10 @@ final class UrlConnectionHttpDriver(
   def post(
     path: String,
     body: Option[String],
-    headers: Map[String, String]
+    headers: Map[String, String],
+    properties: Vector[Property] = Vector.empty
   ): HttpResponse = {
-    val conn = _open_connection(_build_url(path), "POST")
+    val conn = _open_connection(_build_url(path), "POST", properties)
     headers.foreach { case (k, v) => conn.setRequestProperty(k, v) }
     _execute(conn, body.map(Bag.text(_, StandardCharsets.UTF_8)))
   }
@@ -49,9 +56,10 @@ final class UrlConnectionHttpDriver(
   override def postBag(
     path: String,
     body: Option[Bag],
-    headers: Map[String, String]
+    headers: Map[String, String],
+    properties: Vector[Property] = Vector.empty
   ): HttpResponse = {
-    val conn = _open_connection(_build_url(path), "POST")
+    val conn = _open_connection(_build_url(path), "POST", properties)
     headers.foreach { case (k, v) => conn.setRequestProperty(k, v) }
     _execute(conn, body)
   }
@@ -59,9 +67,10 @@ final class UrlConnectionHttpDriver(
   def put(
     path: String,
     body: Option[String],
-    headers: Map[String, String]
+    headers: Map[String, String],
+    properties: Vector[Property] = Vector.empty
   ): HttpResponse = {
-    val conn = _open_connection(_build_url(path), "PUT")
+    val conn = _open_connection(_build_url(path), "PUT", properties)
     headers.foreach { case (k, v) => conn.setRequestProperty(k, v) }
     _execute(conn, body.map(Bag.text(_, StandardCharsets.UTF_8)))
   }
@@ -70,17 +79,57 @@ final class UrlConnectionHttpDriver(
 
   private def _open_connection(
     url: URL,
-    method: String
+    method: String,
+    properties: Vector[Property]
   ): HttpURLConnection = {
     val conn = url.openConnection().asInstanceOf[HttpURLConnection]
     conn.setRequestMethod(method)
-    conn.setConnectTimeout(_connect_timeout_ms)
-    conn.setReadTimeout(_read_timeout_ms)
+    conn.setConnectTimeout(_connect_timeout_ms(properties))
+    conn.setReadTimeout(_read_timeout_ms(properties))
     if (method == "PUT" || method == "POST") {
       conn.setDoOutput(true)
     }
     conn.setDoInput(true)
     conn
+  }
+
+  private def _connect_timeout_ms(
+    properties: Vector[Property]
+  ): Int =
+    _timeout_ms(properties, Vector("http.connect-timeout-ms"))
+      .orElse(_timeout_seconds(properties, Vector("http.connect-timeout-seconds", "http.timeout-seconds")))
+      .getOrElse(_default_connect_timeout_ms)
+
+  private def _read_timeout_ms(
+    properties: Vector[Property]
+  ): Int =
+    _timeout_ms(properties, Vector("http.read-timeout-ms"))
+      .orElse(_timeout_seconds(properties, Vector("http.read-timeout-seconds", "http.timeout-seconds")))
+      .getOrElse(_default_read_timeout_ms)
+
+  private def _timeout_ms(
+    properties: Vector[Property],
+    names: Vector[String]
+  ): Option[Int] =
+    _property_string(properties, names).flatMap(_.toIntOption).filter(_ > 0)
+
+  private def _timeout_seconds(
+    properties: Vector[Property],
+    names: Vector[String]
+  ): Option[Int] =
+    _property_string(properties, names).flatMap(_.toLongOption).filter(_ > 0).map { seconds =>
+      math.min(seconds * 1000L, Int.MaxValue.toLong).toInt
+    }
+
+  private def _property_string(
+    properties: Vector[Property],
+    names: Vector[String]
+  ): Option[String] = {
+    val keys = names.map(_.toLowerCase(java.util.Locale.ROOT)).toSet
+    properties.collectFirst {
+      case Property(name, value, _) if keys.contains(name.toLowerCase(java.util.Locale.ROOT)) =>
+        String.valueOf(value).trim
+    }.filter(_.nonEmpty)
   }
 
   private def _build_url(
@@ -117,10 +166,17 @@ final class UrlConnectionHttpDriver(
     }
     val code = conn.getResponseCode
     val stream = _response_stream(conn)
-    val text = _read_text(stream, StandardCharsets.UTF_8)
     val contentType = _content_type(conn.getContentType)
     val status = _status(code)
-    HttpResponse.Text(status, contentType, Bag.text(text, StandardCharsets.UTF_8))
+    val bytes = _read_bytes(stream)
+    val response =
+      if (contentType.mimeType.isText) {
+        val charset = contentType.charset.getOrElse(StandardCharsets.UTF_8)
+        HttpResponse.Text(status, contentType, Bag.text(new String(bytes, charset), charset))
+      } else {
+        HttpResponse.Binary(status, contentType, Bag.binary(bytes))
+      }
+    response
       .withHeader(_response_header(conn))
   }
 
@@ -147,6 +203,12 @@ final class UrlConnectionHttpDriver(
     stream: InputStream,
     charset: Charset
   ): String = {
+    new String(_read_bytes(stream), charset)
+  }
+
+  private def _read_bytes(
+    stream: InputStream
+  ): Array[Byte] = {
     val buffer = new ByteArrayOutputStream
     val bytes = new Array[Byte](8192)
     var read = stream.read(bytes)
@@ -155,7 +217,7 @@ final class UrlConnectionHttpDriver(
       read = stream.read(bytes)
     }
     stream.close()
-    new String(buffer.toByteArray, charset)
+    buffer.toByteArray
   }
 
   private def _content_type(
@@ -193,35 +255,42 @@ final class UrlConnectionHttpDriver(
 final class FakeHttpDriver(
   response: HttpResponse
 ) extends HttpDriver {
-  def get(path: String, headers: Map[String, String] = Map.empty): HttpResponse = {
-    val _ = (path, headers)
+  def get(
+    path: String,
+    headers: Map[String, String] = Map.empty,
+    properties: Vector[Property] = Vector.empty
+  ): HttpResponse = {
+    val _ = (path, headers, properties)
     response
   }
 
   def post(
     path: String,
     body: Option[String],
-    headers: Map[String, String]
+    headers: Map[String, String],
+    properties: Vector[Property] = Vector.empty
   ): HttpResponse = {
-    val _ = (path, body, headers)
+    val _ = (path, body, headers, properties)
     response
   }
 
   override def postBag(
     path: String,
     body: Option[Bag],
-    headers: Map[String, String]
+    headers: Map[String, String],
+    properties: Vector[Property] = Vector.empty
   ): HttpResponse = {
-    val _ = (path, body, headers)
+    val _ = (path, body, headers, properties)
     response
   }
 
   def put(
     path: String,
     body: Option[String],
-    headers: Map[String, String]
+    headers: Map[String, String],
+    properties: Vector[Property] = Vector.empty
   ): HttpResponse = {
-    val _ = (path, body, headers)
+    val _ = (path, body, headers, properties)
     response
   }
 }

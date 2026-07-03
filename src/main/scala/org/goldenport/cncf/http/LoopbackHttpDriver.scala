@@ -7,12 +7,14 @@ import org.goldenport.bag.Bag
 import org.goldenport.cncf.config.ClientConfig
 import org.goldenport.cncf.http.HttpDriver
 import org.goldenport.http.{HttpRequest, HttpResponse}
+import org.goldenport.protocol.Property
 import org.goldenport.record.Record
 
 /*
  * @since   Jan. 20, 2026
  *  version Feb.  7, 2026
- * @version Apr. 29, 2026
+ *  version Apr. 29, 2026
+ * @version Jul.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 final class LoopbackHttpDriver(
@@ -21,13 +23,18 @@ final class LoopbackHttpDriver(
   charset: Charset = StandardCharsets.UTF_8
 ) extends HttpDriver {
 
-  def get(path: String, headers: Map[String, String] = Map.empty): HttpResponse =
+  def get(
+    path: String,
+    headers: Map[String, String] = Map.empty,
+    properties: Vector[Property] = Vector.empty
+  ): HttpResponse =
     _execute(_build_request(HttpRequest.GET, path, None, headers))
 
   def post(
     path: String,
     body: Option[String],
-    headers: Map[String, String]
+    headers: Map[String, String],
+    properties: Vector[Property] = Vector.empty
   ): HttpResponse = {
     val bag = body.map(b => Bag.text(b, charset))
     _execute(_build_request(HttpRequest.POST, path, bag, headers))
@@ -36,14 +43,16 @@ final class LoopbackHttpDriver(
   override def postBag(
     path: String,
     body: Option[Bag],
-    headers: Map[String, String]
+    headers: Map[String, String],
+    properties: Vector[Property] = Vector.empty
   ): HttpResponse =
     _execute(_build_request(HttpRequest.POST, path, body, headers))
 
   def put(
     path: String,
     body: Option[String],
-    headers: Map[String, String]
+    headers: Map[String, String],
+    properties: Vector[Property] = Vector.empty
   ): HttpResponse = {
     val bag = body.map(b => Bag.text(b, charset))
     _execute(_build_request(HttpRequest.PUT, path, bag, headers))

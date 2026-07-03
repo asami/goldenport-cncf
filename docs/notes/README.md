@@ -11,6 +11,7 @@ Current security/authorization implementation notes:
 
 Component developer entry points:
 
+- `cncf-developer-guide.md`
 - `component-developer-document-index.md`
 - `car-development-start-guide.md`
 

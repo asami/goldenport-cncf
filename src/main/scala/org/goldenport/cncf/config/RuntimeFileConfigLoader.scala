@@ -1,5 +1,6 @@
 package org.goldenport.cncf.config
 
+import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path}
 import org.goldenport.Consequence
 import org.goldenport.observation.Descriptor
@@ -10,7 +11,7 @@ import org.goldenport.configuration.source.file.{ConfigTextDecoder, FileConfigLo
 /*
  * @since   Apr. 15, 2026
  *  version May. 11, 2026
- * @version Jul.  1, 2026
+ * @version Jul.  2, 2026
  * @author  ASAMI, Tomoharu
  */
 final class RuntimeFileConfigLoader extends FileConfigLoader {
@@ -27,7 +28,7 @@ final class RuntimeFileConfigLoader extends FileConfigLoader {
     path: Path
   ): Consequence[Configuration] =
     try {
-      ConfigTextDecoder.decode(path, Files.readString(path)) match {
+      ConfigTextDecoder.decode(path, Files.readString(path, StandardCharsets.UTF_8)) match {
         case Consequence.Success(config) =>
           Consequence.success(_with_flattened_objects(config))
         case Consequence.Failure(conclusion) =>

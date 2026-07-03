@@ -19,7 +19,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jan. 11, 2026
- * @version Feb. 27, 2026
+ *  version Feb. 27, 2026
+ * @version Jul.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 class ProcedureActionCallSpec
@@ -88,7 +89,11 @@ class ProcedureActionCallSpec
     def calls: Vector[HttpCall] =
       _buffer.toVector
 
-    def get(path: String, headers: Map[String, String]): HttpResponse = {
+    def get(
+      path: String,
+      headers: Map[String, String],
+      properties: Vector[org.goldenport.protocol.Property] = Vector.empty
+    ): HttpResponse = {
       _buffer += HttpCall("GET", path, None, headers)
       _response()
     }
@@ -96,7 +101,8 @@ class ProcedureActionCallSpec
     def post(
       path: String,
       body: Option[String],
-      headers: Map[String, String]
+      headers: Map[String, String],
+      properties: Vector[org.goldenport.protocol.Property] = Vector.empty
     ): HttpResponse = {
       _buffer += HttpCall("POST", path, body, headers)
       _response()
@@ -105,7 +111,8 @@ class ProcedureActionCallSpec
     def put(
       path: String,
       body: Option[String],
-      headers: Map[String, String]
+      headers: Map[String, String],
+      properties: Vector[org.goldenport.protocol.Property] = Vector.empty
     ): HttpResponse = {
       _buffer += HttpCall("PUT", path, body, headers)
       _response()

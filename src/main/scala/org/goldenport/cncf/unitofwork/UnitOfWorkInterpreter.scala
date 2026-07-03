@@ -1,13 +1,16 @@
 package org.goldenport.cncf.unitofwork
 
+import java.nio.file.{Files, Path, Paths}
 import cats.free.Free
 import cats.~>
 import org.goldenport.{Consequence, Conclusion, ConsequenceT}
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.blob.{BlobInlineImageWorkflow, ContentReferenceWorkflow, ContentRenderWorkflow}
+import org.goldenport.cncf.config.ConfigurationAccess
 import org.goldenport.cncf.http.HttpDriver
 import org.goldenport.cncf.datastore.*
+import org.goldenport.cncf.embedded.{EmbeddedDataStore, EmbeddedDataStoreRunner}
 import org.goldenport.cncf.entity.*
 import org.simplemodeling.model.datatype.EntityId
 import org.goldenport.cncf.directive.SearchResult
@@ -16,6 +19,7 @@ import org.goldenport.process.ShellCommandExecutor
 import org.goldenport.cncf.statemachine.TransitionValidationHook
 import org.goldenport.cncf.security.OperationAccessPolicy
 import org.goldenport.cncf.metrics.EntityAccessMetricsRegistry
+import org.goldenport.configuration.ConfigurationValue
 import org.goldenport.record.Record
 import org.goldenport.record.io.RecordEncoder
 
@@ -29,7 +33,8 @@ import org.goldenport.record.io.RecordEncoder
  *  version Feb. 25, 2026
  *  version Mar. 29, 2026
  *  version Apr. 29, 2026
- * @version May. 11, 2026
+ *  version May. 11, 2026
+ * @version Jul.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkInterpreter(uow: UnitOfWork) {
@@ -81,24 +86,24 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
         _authorize(Some(authorization))
       }
 
-    case UnitOfWorkOp.HttpGet(path, headers) =>
+    case UnitOfWorkOp.HttpGet(path, headers, properties) =>
       _with_calltree("uow:http:get") {
-        Consequence(_http_driver.get(path, headers))
+        Consequence(_http_driver.get(path, headers, properties))
       }
 
-    case UnitOfWorkOp.HttpPost(path, body, headers) =>
+    case UnitOfWorkOp.HttpPost(path, body, headers, properties) =>
       _with_calltree("uow:http:post") {
-        Consequence(_http_driver.post(path, body, headers))
+        Consequence(_http_driver.post(path, body, headers, properties))
       }
 
-    case UnitOfWorkOp.HttpPostBag(path, body, headers) =>
+    case UnitOfWorkOp.HttpPostBag(path, body, headers, properties) =>
       _with_calltree("uow:http:post") {
-        Consequence(_http_driver.postBag(path, body, headers))
+        Consequence(_http_driver.postBag(path, body, headers, properties))
       }
 
-    case UnitOfWorkOp.HttpPut(path, body, headers) =>
+    case UnitOfWorkOp.HttpPut(path, body, headers, properties) =>
       _with_calltree("uow:http:put") {
-        Consequence(_http_driver.put(path, body, headers))
+        Consequence(_http_driver.put(path, body, headers, properties))
       }
 
     case UnitOfWorkOp.DataStoreLoad(id) =>
@@ -114,6 +119,31 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
     case UnitOfWorkOp.DataStoreDelete(id) =>
       _with_calltree("uow:datastore:delete") {
         Consequence.dataStoreUnavailable("DataStore not wired: DataStoreDelete")
+      }
+
+    case UnitOfWorkOp.LocalDataDir(componentName) =>
+      _with_calltree("uow:local-data:dir", Map("component" -> componentName)) {
+        _local_data_dir(componentName)
+      }
+
+    case UnitOfWorkOp.EmbeddedDataStoreOpen(componentName, name, path) =>
+      _with_calltree("uow:embedded-datastore:open", Map("component" -> componentName, "name" -> name)) {
+        _embedded_datastore(componentName, name, path)
+      }
+
+    case UnitOfWorkOp.EmbeddedDataStoreRead(store, statement) =>
+      _with_calltree("uow:embedded-datastore:read", Map("component" -> store.componentName, "name" -> store.name)) {
+        EmbeddedDataStoreRunner.read(store, statement)
+      }
+
+    case UnitOfWorkOp.EmbeddedDataStoreUpdate(store, statement) =>
+      _with_calltree("uow:embedded-datastore:update", Map("component" -> store.componentName, "name" -> store.name)) {
+        EmbeddedDataStoreRunner.update(store, statement)
+      }
+
+    case UnitOfWorkOp.EmbeddedDataStoreMigrate(store, statements) =>
+      _with_calltree("uow:embedded-datastore:migrate", Map("component" -> store.componentName, "name" -> store.name, "statements" -> statements.size.toString)) {
+        EmbeddedDataStoreRunner.migrate(store, statements)
       }
 
     case m: (UnitOfWorkOp.EntityStoreCreate[t] @unchecked) =>
@@ -340,6 +370,93 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
   private def _data_store_space: DataStoreSpace = uow.executionContext.dataStoreSpace
 
   private def _entity_store_space: EntityStoreSpace = uow.executionContext.entityStoreSpace
+
+  private def _local_data_dir(
+    componentName: String
+  ): Consequence[Path] =
+    try {
+      val normalized = _normalized_local_data_component(componentName)
+      val path = _configured_path(Vector(
+        s"cncf.local-data.$normalized.dir",
+        s"textus.local-data.$normalized.dir"
+      )).getOrElse {
+        val root = _configured_path(Vector(
+          "cncf.local-data.root",
+          "textus.local-data.root"
+        )).getOrElse(Paths.get(System.getProperty("user.home"), ".cncf"))
+        root.resolve(normalized)
+      }.toAbsolutePath.normalize
+      Files.createDirectories(path)
+      Consequence.success(path)
+    } catch {
+      case e: Throwable => Consequence.Failure(Conclusion.from(e))
+    }
+
+  private def _embedded_datastore(
+    componentName: String,
+    name: String,
+    path: Option[Path]
+  ): Consequence[EmbeddedDataStore] =
+    _local_data_dir(componentName).map { dir =>
+      val normalizedcomponent = _normalized_local_data_component(componentName)
+      val normalizedname = _normalized_embedded_datastore_name(name)
+      val effectivepath =
+        path
+          .orElse(_configured_path(Vector(
+            s"cncf.local-data.$normalizedcomponent.$normalizedname.path",
+            s"textus.local-data.$normalizedcomponent.$normalizedname.path"
+          )))
+          .getOrElse(dir.resolve(s"$normalizedname.db"))
+          .toAbsolutePath
+          .normalize
+      EmbeddedDataStore(normalizedcomponent, normalizedname, effectivepath)
+    }
+
+  private def _configured_path(
+    keys: Vector[String]
+  ): Option[Path] =
+    keys.iterator.flatMap(_configuration_string).map(Paths.get(_)).find(_.toString.nonEmpty)
+
+  private def _configuration_string(
+    key: String
+  ): Option[String] =
+    _component_option
+      .flatMap(_.subsystem)
+      .flatMap(s => ConfigurationAccess.getString(s.configuration, key))
+      .orElse(
+        uow.executionContext.runtime.resolvedParameters.get(key)
+          .flatMap(parameter => _configuration_value_string(parameter.value))
+      )
+
+  private def _configuration_value_string(
+    value: ConfigurationValue
+  ): Option[String] =
+    value match {
+      case ConfigurationValue.StringValue(v) => Option(v).map(_.trim).filter(_.nonEmpty)
+      case ConfigurationValue.NumberValue(v) => Some(v.toString)
+      case ConfigurationValue.BooleanValue(v) => Some(v.toString)
+      case _ => None
+    }
+
+  private def _normalized_local_data_component(
+    value: String
+  ): String = {
+    val normalized = value.trim.toLowerCase(java.util.Locale.ROOT).map {
+      case c if c.isLetterOrDigit || c == '-' || c == '_' => c
+      case _ => '-'
+    }.mkString.replaceAll("-+", "-").stripPrefix("-").stripSuffix("-")
+    if (normalized.nonEmpty) normalized else "default"
+  }
+
+  private def _normalized_embedded_datastore_name(
+    value: String
+  ): String = {
+    val normalized = value.trim.toLowerCase(java.util.Locale.ROOT).map {
+      case c if c.isLetterOrDigit || c == '-' || c == '_' => c
+      case _ => '-'
+    }.mkString.replaceAll("-+", "-").stripPrefix("-").stripSuffix("-")
+    if (normalized.nonEmpty) normalized else "main"
+  }
 
   private def _canonical_load_op[T](
     op: UnitOfWorkOp.EntityStoreLoad[T]

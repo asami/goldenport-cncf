@@ -10,7 +10,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr. 25, 2026
- * @version Apr. 25, 2026
+ * @version Jul.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 final class HttpDriverSpec
@@ -44,6 +44,39 @@ final class HttpDriverSpec
         response.code shouldBe 200
         response.getString shouldBe Some("pong")
         response.headerValue("x-textus-job-id") shouldBe Some("job-url-1")
+      } finally {
+        server.stop(0)
+      }
+    }
+
+    "preserve non-text responses as binary bodies" in {
+      Given("an HTTP server that returns a PNG payload")
+      val server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0)
+      val payload = Array[Byte](0x89.toByte, 0x50.toByte, 0x4e.toByte, 0x47.toByte)
+      server.createContext("/map.png", new HttpHandler {
+        def handle(exchange: HttpExchange): Unit = {
+          exchange.getResponseHeaders.add("Content-Type", "image/png")
+          exchange.sendResponseHeaders(200, payload.length)
+          exchange.getResponseBody.write(payload)
+          exchange.close()
+        }
+      })
+      server.start()
+
+      try {
+        When("the URL connection driver executes the request")
+        val port = server.getAddress.getPort
+        val driver = new UrlConnectionHttpDriver(s"http://127.0.0.1:${port}")
+        val response = driver.get("/map.png")
+
+        Then("the protocol-level response exposes the payload as binary")
+        response.code shouldBe 200
+        response.getString shouldBe None
+        val in = response.getBinary.get.openInputStream()
+        try
+          in.readAllBytes() shouldBe payload
+        finally
+          in.close()
       } finally {
         server.stop(0)
       }

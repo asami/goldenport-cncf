@@ -23,6 +23,9 @@ Examples:
 - use association/blob/child binding DSL or workflows where available;
 - use framework service helpers for system concerns such as jobs, events, blob
   payloads, and HTTP calls.
+- use `config_string`, `config_int`, `config_double`, and `config_boolean`
+  for runtime/component/action configuration;
+- use `parse_dsl_document` for structured DSL/config input.
 
 Application logic should not:
 
@@ -32,9 +35,50 @@ Application logic should not:
   framework-owned DSL helper;
 - call `EntityStoreSpace` as an unrestricted store;
 - duplicate lifecycle checks such as logical delete filtering in component code.
+- directly read `ExecutionContext.runtime.resolvedParameters` for ordinary
+  application settings;
+- directly read `component.subsystem.configuration` as the primary
+  configuration route;
+- instantiate `RuntimeFileConfigLoader` or config decoder classes from
+  handwritten application logic.
 
 If application logic needs a capability that appears to require raw storage
 access, that is a signal to add or improve an internal DSL helper.
+
+The same signal applies to configuration and structured input. If application
+logic needs a runtime setting or needs to parse YAML/HOCON/XML/properties-like
+DSL text, use the `ActionCallFeaturePart` protected helpers. If those helpers
+are insufficient, improve the helper rather than duplicating parsing or
+configuration-resolution logic in the component.
+
+## Configuration And Structured DSL Input
+
+Configuration access in ordinary `ActionCall` logic should flow through
+`config_*` helpers.
+
+`config_string(key)` resolves:
+
+1. action request properties;
+2. component/subsystem configuration;
+3. resolved runtime parameters from `ExecutionContext`.
+
+Use typed helpers when the component expects scalar values:
+
+- `config_int(key)`;
+- `config_double(key)`;
+- `config_boolean(key)`.
+
+Use `config_string(primary, compatibility)` when migrating key names.
+
+Structured DSL/config input should flow through:
+
+- `parse_dsl_document(path)`;
+- `parse_dsl_document(filename, content)`.
+
+The component may still decide whether an input string is a path or inline
+content, but parsing itself should remain inside the protected helper. This
+preserves UTF-8 handling, CallTree instrumentation, and future CNCF policy
+changes.
 
 Identifier logic follows the same rule. Application code should not hand-roll
 raw searches to resolve or validate values such as `slug`, `shortid`, owner ids,
@@ -116,6 +160,9 @@ uses a domain object helper from an unexpected entry point.
 When reviewing application logic, check:
 
 - Does the code use internal DSL helpers instead of raw stores?
+- Does the code use `config_*` helpers instead of direct configuration maps?
+- Does the code use `parse_dsl_document` instead of direct config loader or
+  decoder use?
 - Is domain intent visible without persistence details leaking into the action?
 - Is `DataStoreSpace` absent from ordinary business logic?
 - Is `EntityStoreSpace` not treated as an unrestricted application store?
@@ -137,3 +184,5 @@ When reviewing application logic, check:
   construction?
 - Which application patterns need new internal DSL helpers to avoid storage
   escape hatches?
+- Which component patterns still parse structured input directly and should be
+  migrated to `parse_dsl_document`?

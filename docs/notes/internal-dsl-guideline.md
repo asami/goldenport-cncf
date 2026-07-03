@@ -34,6 +34,8 @@ engines and stores, such as:
 - job control;
 - event publication, replay, and introspection;
 - system configuration and diagnostics;
+- runtime/component/action configuration lookup;
+- structured DSL/config parsing;
 - runtime control and admin APIs.
 
 The same rule applies on both sides: application logic asks the internal DSL for
@@ -59,6 +61,70 @@ must be precise:
 Internal entity lookup for shortid, slug, owner checks, or post-operation binding
 should still use a safe entity path. If that path does not exist, add it to the
 DSL instead of reaching into `DataStoreSpace`.
+
+For runtime configuration, component logic should use protected scalar helpers
+instead of reading raw runtime maps or subsystem configuration directly. The
+current scalar helper family is:
+
+- `config_string(key)`;
+- `config_string(primary, compatibility)`;
+- `config_int(key)`;
+- `config_double(key)`;
+- `config_boolean(key)`.
+
+For structured DSL/config parsing, component logic should use:
+
+- `parse_dsl_document(path)`;
+- `parse_dsl_document(filename, content)`.
+
+These parsing helpers are part of the internal DSL boundary even though they do
+not necessarily emit a `UnitOfWork` operation in v1. They still centralize
+framework concerns: source naming, UTF-8 file handling, config decoder choice,
+CallTree classification, future provenance, and future security policy.
+
+For outbound HTTP, component and provider logic should use CNCF HTTP internal
+DSL routes instead of constructing an HTTP client directly:
+
+- `http_get(path, headers)`;
+- `http_post(path, body, headers)`;
+- `http_post_bag(path, body, headers)`;
+- `http_put(path, body, headers)`;
+- `UnitOfWorkOp.HttpGet`, `UnitOfWorkOp.HttpPost`, `UnitOfWorkOp.HttpPostBag`,
+  or `UnitOfWorkOp.HttpPut` through the current `ExecutionContext` when the
+  code is outside an `ActionCallFeaturePart` helper surface.
+
+Application and provider code must not instantiate direct outbound HTTP
+clients, such as `java.net.http.HttpClient`, for normal component behavior.
+The internal DSL route records the operation in the CallTree, gives the runtime
+HTTP driver a single chokepoint, and keeps future sandbox or egress policy
+inside CNCF. A provider service obtained through
+`ExtensionPoint.provide(...)(using ExecutionContext)` may capture that
+`ExecutionContext` and use it later to execute HTTP `UnitOfWork` operations.
+It should not keep a global HTTP client outside the CNCF runtime path.
+
+For component-local user data, component logic should use the embedded
+datastore helper family instead of opening files or embedded databases directly:
+
+- `component_local_data_dir`;
+- `component_local_data_dir(componentName)`;
+- `embedded_datastore(name)`;
+- `embedded_datastore(componentName, name)`;
+- `embedded_datastore_migrate(store, statements)`;
+- `embedded_datastore_read(store, statement, params)`;
+- `embedded_datastore_update(store, statement, params)`.
+
+The default location is `~/.cncf/<component-name>/<store-name>.db`. Runtime
+configuration may override either the component directory or an individual
+store path:
+
+- `cncf.local-data.root`;
+- `cncf.local-data.<component-name>.dir`;
+- `cncf.local-data.<component-name>.<store-name>.path`.
+
+The helper exposes an embedded datastore abstraction. The current backend is
+SQLite, but application/component logic should not depend on SQLite classes,
+JDBC connections, or file naming beyond the documented component-local
+datastore contract.
 
 For identity and uniqueness work, prefer purpose-specific DSL helpers over
 generic internal search. Examples include:
@@ -88,6 +154,10 @@ The intended flow is:
 4. `UnitOfWorkInterpreter` enforces the metadata before delegating to the
    storage/runtime layer.
 
+For helper families that do not yet emit `UnitOfWork`, the same chokepoint rule
+still applies: the helper is the framework-owned API and component logic should
+not bypass it with local parsing or configuration lookup.
+
 ## Review Checklist
 
 When reviewing an internal DSL helper, check:
@@ -102,6 +172,12 @@ When reviewing an internal DSL helper, check:
   instead of broad internal searches?
 - Is tenant scope resolved from `ExecutionContext` rather than assembled in
   application code?
+- Do runtime settings flow through `config_*` helpers?
+- Does structured input parsing flow through `parse_dsl_document`?
+- Does outbound HTTP flow through `http_*` helpers or `UnitOfWorkOp.Http*`
+  using the current `ExecutionContext`?
+- Does component-local durable user data flow through
+  `embedded_datastore_*` helpers?
 - Is raw access explicit, named, and limited to repair/diagnostic/seed/import
   style purposes?
 
@@ -111,5 +187,7 @@ When reviewing an internal DSL helper, check:
   framework-owned infrastructure?
 - Which internal DSL helpers are missing for common handwritten component
   patterns?
+- Which helper families should be moved from protected direct behavior to
+  explicit `UnitOfWork` intents?
 - Should `internal` and `direct` be renamed or split where their semantics are
   currently ambiguous?

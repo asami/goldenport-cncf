@@ -18,22 +18,25 @@ packaging, or operating CNCF components.
 
 Read these first when starting component development:
 
-1. `docs/notes/car-development-start-guide.md`
+1. `docs/notes/cncf-developer-guide.md`
+   - First-reading guide for component implementation rules, internal DSL
+     usage, configuration lookup, structured DSL parsing, SPI usage, and tests.
+2. `docs/notes/car-development-start-guide.md`
    - Concrete CAR project initialization procedure using Cozy scaffold, CNCF
      runtime development loop, packaging, and publication checks.
-2. `docs/spec/glossary.md`
+3. `docs/spec/glossary.md`
    - Basic CNCF vocabulary: Component, Componentlet, OperationCall, UnitOfWork,
      and ExecutionContext.
-3. `docs/design/component-model.md`
+4. `docs/design/component-model.md`
    - Stable component boundary and responsibility split.
-4. `docs/design/component-and-application-responsibilities.md`
+5. `docs/design/component-and-application-responsibilities.md`
    - What belongs in the framework, the component, and application code.
-5. `docs/notes/cml-application-modeling-guideline.md`
+6. `docs/notes/cml-application-modeling-guideline.md`
    - How to write application CML without duplicating SimpleEntity concerns.
-6. `docs/notes/application-logic-guideline.md`
+7. `docs/notes/application-logic-guideline.md`
    - How handwritten/generated ActionCall logic should use CNCF internal DSL
      and value types.
-7. `docs/notes/unitofwork-guideline.md`
+8. `docs/notes/unitofwork-guideline.md`
    - UnitOfWork usage and persistence/authorization boundary guidance.
 
 After these, choose the task-specific section below.

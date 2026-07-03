@@ -30,7 +30,8 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Jan. 10, 2026
  *  version Jan. 21, 2026
  *  version Feb. 25, 2026
- * @version Mar. 12, 2026
+ *  version Mar. 12, 2026
+ * @version Jul.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 class ClientComponentSpec
@@ -65,7 +66,11 @@ class ClientComponentSpec
     def calls: Vector[HttpCall] =
       _buffer.toVector
 
-    def get(path: String, headers: Map[String, String]): HttpResponse = {
+    def get(
+      path: String,
+      headers: Map[String, String],
+      properties: Vector[org.goldenport.protocol.Property] = Vector.empty
+    ): HttpResponse = {
       _buffer += HttpCall("GET", path, None, headers)
       HttpResponse.notFound()
     }
@@ -73,7 +78,8 @@ class ClientComponentSpec
     def post(
       path: String,
       body: Option[String],
-      headers: Map[String, String]
+      headers: Map[String, String],
+      properties: Vector[org.goldenport.protocol.Property] = Vector.empty
     ): HttpResponse = {
       _buffer += HttpCall("POST", path, body, headers)
       HttpResponse.notFound()
@@ -82,7 +88,8 @@ class ClientComponentSpec
     def put(
       path: String,
       body: Option[String],
-      headers: Map[String, String]
+      headers: Map[String, String],
+      properties: Vector[org.goldenport.protocol.Property] = Vector.empty
     ): HttpResponse = {
       _buffer += HttpCall("PUT", path, body, headers)
       HttpResponse.notFound()
