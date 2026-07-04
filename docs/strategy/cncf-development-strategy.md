@@ -662,7 +662,11 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
   migration tooling; CulturalResource collection-item profile; Rule Engine and
   Inference Runtime.
 - Status interpretation rules: `docs/rules/stage-status-and-checklist-convention.md`
-- Latest post-closure maintenance: Jul. 2, 2026 provider-neutral SPI baseline.
+- Latest post-closure maintenance: Jul. 5, 2026 AI runner per-call selection
+  metadata. `AiRunnerRequirement` now carries provider-neutral `purpose` and
+  `model` hints so downstream components can mix worker and judge AI calls
+  through one socket without provider-specific request properties.
+- Previous post-closure maintenance: Jul. 2, 2026 provider-neutral SPI baseline.
   CNCF now exposes canonical `org.goldenport.cncf.spi` contracts and an
   `org.goldenport.cncf.spi.ai.runner.AiRunner` socket/provider protocol, with
   bootstrap-time resolution across already loaded components. `textus-ai`

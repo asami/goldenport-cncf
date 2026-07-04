@@ -13,7 +13,7 @@ import org.goldenport.schema.DataConfidentiality
  * SPI; consumer components depend only on this CNCF-owned protocol.
  *
  * @since   Jul.  2, 2026
- * @version Jul.  3, 2026
+ * @version Jul.  5, 2026
  * @author  ASAMI, Tomoharu
  */
 trait AiRunner {
@@ -50,7 +50,11 @@ trait AiRunnerSocket extends SpiSocket[AiRunner] {
 final case class AiRunnerRequirement(
   provider: Option[String] = None,
   mode: Option[String] = None,
-  engine: Option[String] = None
+  engine: Option[String] = None,
+  // Purpose and model are per-call hints, so one component can mix cheap
+  // worker calls and expensive judge calls through the same AI runner socket.
+  purpose: Option[String] = None,
+  model: Option[String] = None
 )
 
 final case class AiRunnerTracePolicy(
