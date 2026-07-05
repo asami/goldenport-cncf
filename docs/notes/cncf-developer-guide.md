@@ -37,6 +37,41 @@ Read these documents in this order:
 Handwritten component logic should normally live in generated/custom
 `ComponentFactory` extension points and generated `ActionCall` subclasses.
 
+Keep `ComponentFactory` as a facade. Its role is to connect generated
+Component/Service/Operation metadata to handwritten behavior, create the
+component participant, install ports/SPI sockets, and return generated
+`ActionCall` implementations. It should not become the place where domain
+algorithms, provider-specific workflows, rendering, datastore schema logic, or
+large prompt/DSL transformations accumulate.
+
+When handwritten behavior grows beyond small action glue, move the behavior
+into a `*Logic` module in the component implementation package. A `*Logic`
+module is the domain/application behavior body behind the generated service
+factory surface. It may bind configuration, providers, policies, and runtime
+adapters so that behavior can vary without changing `ComponentFactory`.
+
+`*Logic` modules should not capture a request `ExecutionContext` as long-lived
+state. Bind stable behavior inputs there, but receive request/runtime context at
+the generated `ActionCall` boundary through `ActionCall.Core` and the protected
+internal DSL helpers. This keeps reusable behavior configuration-bound while
+authorization, CallTree, sandboxing, configuration precedence, and runtime
+effects remain per-call.
+
+Use more specific suffixes inside or beside a `*Logic` module when the role is
+clear:
+
+- `*Store` for component-local storage and schema/query mechanics;
+- `*Client` for typed access to another component or provider surface;
+- `*Strategy` for selectable algorithms or provider choice;
+- `*Policy` for decision rules;
+- `*Renderer` for rendering and layout output;
+- `*Workflow` for multi-step user-visible recovery or review flows.
+
+Do not use `*Factory` for extracted domain behavior. The `Factory` suffix is
+reserved for CNCF/Cozy construction and adapter concepts such as
+`Component.Factory`, generated `FooComponent.Factory`, `Component.BundleFactory`,
+and small factory adapters that connect generated metadata to logic.
+
 Inside an `ActionCall`, use protected CNCF helper methods before reaching for
 lower-level runtime objects. If a needed helper does not exist, add or improve
 an internal DSL helper instead of copying runtime mechanics into component

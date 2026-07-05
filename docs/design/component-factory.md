@@ -101,6 +101,27 @@ the generated component protocol, service/operation definitions, authorization
 hooks, projection hooks, and other component-local metadata used by
 `ActionCall` and internal DSL helpers.
 
+Factory code should remain a construction and binding layer. In generated CAR
+projects the handwritten `impl.ComponentFactory` should normally be a facade
+that creates the component participant, supplies `Component.Core`, installs
+ports/SPI surfaces, and connects generated service/operation metadata to
+handwritten behavior.
+
+Domain/application behavior that grows beyond small action glue belongs in
+component-local `*Logic` modules, not in the factory. A `*Logic` module is the
+behavior body that may bind configuration, providers, policies, and runtime
+adapters. More specific helper names such as `*Store`, `*Client`, `*Strategy`,
+`*Policy`, `*Renderer`, and `*Workflow` should be used when the role is clear.
+The `Factory` suffix should remain reserved for CNCF/Cozy construction or
+adapter concepts.
+
+`*Logic` is not a place to retain a request `ExecutionContext` as long-lived
+state. Request context is supplied by the generated action surface through
+`ActionCall.Core` and should be consumed via protected internal DSL helpers.
+This lets the logic module be behavior/configuration-bound while each operation
+call still receives the correct authorization, CallTree, configuration
+precedence, sandbox, and runtime effect context.
+
 `Component.BundleFactory` creates a bundle:
 
 ```scala

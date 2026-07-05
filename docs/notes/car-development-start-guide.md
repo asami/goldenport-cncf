@@ -136,9 +136,20 @@ target/
    by generated operation implementations.
 4. Implement handwritten action calls in the generated/custom `ComponentFactory`
    extension points.
-5. Keep operation inputs and outputs as CML values or records; avoid command-
+5. Keep `ComponentFactory` thin. Use it as the facade that connects generated
+   metadata to handwritten behavior. Move growing domain/application behavior
+   into `*Logic` modules under `src/main/scala/<package>/impl`.
+6. Bind stable config, provider, policy, and adapter choices in `*Logic`; keep
+   request `ExecutionContext` access at the generated `ActionCall` boundary via
+   `ActionCall.Core` and CNCF internal DSL helpers.
+7. Use role-specific helper modules below the logic layer when useful:
+   `*Store`, `*Client`, `*Strategy`, `*Policy`, `*Renderer`, and `*Workflow`.
+   Avoid naming domain behavior `*Factory`; factory names are reserved for
+   CNCF/Cozy construction and adapter points.
+8. Keep operation inputs and outputs as CML values or records; avoid command-
    local string parsing.
-6. Add tests around component factory creation and each handwritten operation.
+9. Add tests around component factory creation, facade boundaries, and each
+   handwritten operation or extracted logic module.
 
 For component logic rules, read:
 
