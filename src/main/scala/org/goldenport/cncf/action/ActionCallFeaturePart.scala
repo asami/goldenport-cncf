@@ -22,7 +22,7 @@ import org.goldenport.cncf.security.{AggregateAuthorization, EntityAbacCondition
 import org.goldenport.cncf.Program
 import org.simplemodeling.model.datatype.EntityId
 import org.simplemodeling.model.datatype.EntityCollectionId
-import org.goldenport.cncf.datastore.DataStore
+import org.goldenport.cncf.datastore.{ComponentDataStore, DataStore}
 import org.goldenport.cncf.entity.EntityPersistent
 import org.goldenport.cncf.entity.EntityPersistentCreate
 import org.goldenport.cncf.entity.EntityPersistentUpdate
@@ -57,6 +57,8 @@ import org.goldenport.cncf.knowledge.{KnowledgeFrameId, KnowledgeWorkingSetSnaps
 import org.goldenport.cncf.observability.{CallTreeValueSummary, DslChokepointContext, DslChokepointPhase, DslChokepointRunner}
 import org.goldenport.configuration.ConfigurationValue
 import org.goldenport.configuration.Configuration
+import org.goldenport.configuration.ConfigurationTrace
+import org.goldenport.configuration.ResolvedConfiguration
 import org.goldenport.configuration.source.file.ConfigTextDecoder
 import org.goldenport.cncf.config.RuntimeFileConfigLoader
 
@@ -67,7 +69,7 @@ import org.goldenport.cncf.config.RuntimeFileConfigLoader
  *  version Mar. 30, 2026
  *  version Apr. 29, 2026
  *  version May. 25, 2026
- * @version Jul.  3, 2026
+ * @version Jul.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 trait BehaviorFeaturePart { self: Behavior.Core.Holder =>
@@ -183,6 +185,64 @@ trait ActionCallFeaturePart extends BehaviorFeaturePart { self: ActionCall.Core.
     compatibility: String
   ): Option[String] =
     config_string(primary).orElse(config_string(compatibility))
+
+  private def _component_configuration: Option[ResolvedConfiguration] = {
+    val subsystemconfiguration = component.flatMap(_.subsystem).map(_.configuration)
+    val artifactconfig = component.flatMap(_.artifactMetadata).map(_.effectiveConfig).getOrElse(Map.empty)
+    if (artifactconfig.isEmpty)
+      subsystemconfiguration
+    else {
+      val artifactconfiguration = ResolvedConfiguration(
+        Configuration(artifactconfig.view.mapValues(ConfigurationValue.StringValue.apply).toMap),
+        ConfigurationTrace.empty
+      )
+      Some(
+        subsystemconfiguration
+          .map(configuration =>
+            ResolvedConfiguration(
+              Configuration(configuration.configuration.values ++ artifactconfiguration.configuration.values),
+              configuration.trace
+            )
+          )
+          .getOrElse(artifactconfiguration)
+      )
+    }
+  }
+
+  protected final def ensure_component_application_datastore(
+    name: String = "application"
+  ): Unit = {
+    val componentname =
+      component
+        .flatMap(_.coreOption.map(_.name))
+        .orElse(action.request.component)
+        .getOrElse("component")
+    executionContext.dataStoreSpace.bindApplicationDataStore(
+      ComponentDataStore.Environment(
+        executionContext.runtime.resolvedParameters,
+        _component_configuration
+      ),
+      componentname,
+      name
+    )
+  }
+
+  protected final def component_datastore(
+    name: String = "application"
+  ): DataStore = {
+    val componentname =
+      component
+        .flatMap(_.coreOption.map(_.name))
+        .orElse(action.request.component)
+        .getOrElse("component")
+    ComponentDataStore.resolve(
+      ComponentDataStore.Environment(
+        executionContext.runtime.resolvedParameters,
+        _component_configuration
+      ),
+      ComponentDataStore.Request(componentname, name)
+    )
+  }
 
   protected final def config_int(key: String): Option[Int] =
     config_string(key).flatMap(_.toIntOption)
@@ -1549,6 +1609,7 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
   protected final def entity_create[T](
     entity: T
   )(using tc: EntityPersistentCreate[T]): ExecUowM[CreateResult[T]] = {
+    ensure_component_application_datastore()
     val op = UnitOfWorkOp.EntityStoreCreate(
       entity,
       tc,
@@ -1561,6 +1622,7 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
   protected final def entity_load_option[T](
     id: EntityId
   )(using tc: EntityPersistent[T]): ExecUowM[Option[T]] = {
+    ensure_component_application_datastore()
     val effectiveid = _canonical_entity_id(id)
     _emit_entity_access("entity.load.start", _entity_load_attributes(effectiveid, "unknown", "start"))
     val effectivetc = _effective_entity_persistent(effectiveid.collection, tc)
@@ -1658,6 +1720,7 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
   protected final def entity_load_option_internal[T](
     id: EntityId
   )(using tc: EntityPersistent[T]): ExecUowM[Option[T]] = {
+    ensure_component_application_datastore()
     val effectiveid = _canonical_entity_id(id)
     ConsequenceT.liftF(Free.liftF(UnitOfWorkOp.EntityStoreLoadDirect(
       effectiveid,
@@ -1668,6 +1731,7 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
   protected final def entity_save[T](
     entity: T
   )(using tc: EntityPersistent[T]): ExecUowM[Unit] = {
+    ensure_component_application_datastore()
     val effectivetc = _effective_entity_persistent(tc.id(entity).collection, tc)
     val op = UnitOfWorkOp.EntityStoreSave(
       entity,
@@ -1680,6 +1744,7 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
   protected final def entity_update[T](
     changes: T
   )(using tc: EntityPersistent[T]): ExecUowM[Unit] = {
+    ensure_component_application_datastore()
     val effectivetc = _effective_entity_persistent(tc.id(changes).collection, tc)
     val op = UnitOfWorkOp.EntityStoreUpdate(
       changes,
@@ -1695,6 +1760,7 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
     id: EntityId,
     patch: T
   )(using tc: EntityPersistentUpdate[T]): ExecUowM[Unit] = {
+    ensure_component_application_datastore()
     val effectiveid = _canonical_entity_id(id)
     val op = UnitOfWorkOp.EntityStoreUpdateById(
       effectiveid,
@@ -1706,6 +1772,7 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
   }
 
   protected final def entity_delete(id: EntityId): ExecUowM[Unit] = {
+    ensure_component_application_datastore()
     val effectiveid = _canonical_entity_id(id)
     val op = UnitOfWorkOp.EntityStoreDelete(
       effectiveid,
@@ -1715,6 +1782,7 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
   }
 
   protected final def entity_delete_hard(id: EntityId): ExecUowM[Unit] = {
+    ensure_component_application_datastore()
     val op = UnitOfWorkOp.EntityStoreDeleteHard(_canonical_entity_id(id))
     ConsequenceT.liftF(Free.liftF(op))
   }
@@ -1722,6 +1790,7 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
   protected final def entity_search[T](
     query: EntityQuery[T]
   )(using tc: EntityPersistent[T]): ExecUowM[SearchResult[T]] = {
+    ensure_component_application_datastore()
     val effectivequery = _with_declared_visibility(query)
     _emit_entity_access("entity.search.start", _entity_search_attributes(effectivequery, "unknown", "start"))
     val effectivetc = _effective_entity_persistent(effectivequery.collection, tc)
@@ -1782,6 +1851,7 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
   protected final def entity_search_internal[T](
     query: EntityQuery[T]
   )(using tc: EntityPersistent[T]): ExecUowM[SearchResult[T]] = {
+    ensure_component_application_datastore()
     val effectivetc = _effective_entity_persistent(query.collection, tc)
     ConsequenceT.liftF(Free.liftF(UnitOfWorkOp.EntityStoreSearchInternal(query, effectivetc)))
   }
@@ -1793,7 +1863,8 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
     excludeId: Option[EntityId] = None,
     scope: EntityIdentityScope = EntityIdentityScope.CurrentContext,
     includeEntityIdEntropy: Boolean = false
-  )(using tc: EntityPersistent[T]): ExecUowM[Boolean] =
+  )(using tc: EntityPersistent[T]): ExecUowM[Boolean] = {
+    ensure_component_application_datastore()
     ConsequenceT.liftF(
       Free.liftF(
         UnitOfWorkOp.EntityStoreUniqueValueExists(
@@ -1807,6 +1878,7 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
         )
       )
     )
+  }
 
   protected final def entity_resolve_identity[T](
     collection: EntityCollectionId,
@@ -1814,7 +1886,8 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
     fieldNames: Vector[String],
     includeEntityIdEntropy: Boolean = true,
     scope: EntityIdentityScope = EntityIdentityScope.CurrentContext
-  )(using tc: EntityPersistent[T]): ExecUowM[Option[EntityId]] =
+  )(using tc: EntityPersistent[T]): ExecUowM[Option[EntityId]] = {
+    ensure_component_application_datastore()
     ConsequenceT.liftF(
       Free.liftF(
         UnitOfWorkOp.EntityStoreResolveIdentity(
@@ -1827,11 +1900,13 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
         )
       )
     )
+  }
 
   private def _entity_store_search[T](
     query: EntityQuery[T],
     tc: EntityPersistent[T]
   ): ExecUowM[SearchResult[T]] = {
+    ensure_component_application_datastore()
     val op = UnitOfWorkOp.EntityStoreSearch(
       _with_declared_visibility(query),
       tc,
@@ -1844,6 +1919,7 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
     id: EntityId,
     tc: EntityPersistent[T]
   ): ExecUowM[Option[T]] = {
+    ensure_component_application_datastore()
     _emit_entity_access("entity.load.bypass.entity-space", _entity_load_attributes(id, "entity-space", "bypass"))
     val op = UnitOfWorkOp.EntityStoreLoadDirect(id, tc)
     ConsequenceT.liftF(Free.liftF(op))
@@ -1853,6 +1929,7 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
     query: EntityQuery[T],
     tc: EntityPersistent[T]
   ): ExecUowM[SearchResult[T]] = {
+    ensure_component_application_datastore()
     val op = UnitOfWorkOp.EntityStoreSearchDirect(
       _with_declared_visibility(query),
       tc,

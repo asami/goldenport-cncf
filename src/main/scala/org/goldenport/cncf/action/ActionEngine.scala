@@ -31,7 +31,8 @@ import org.goldenport.schema.DataConfidentiality
  *  version Mar. 13, 2026
  *  version Apr. 25, 2026
  *  version May. 17, 2026
- * @version Jun. 18, 2026
+ *  version Jun. 18, 2026
+ * @version Jul.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 class ActionEngine(
@@ -423,11 +424,7 @@ class ActionEngine(
     call: ActionCall
   ): ResolvedParameters = {
     val runtimeparams = call.executionContext.runtime.resolvedParameters
-    val parent =
-      if (runtimeparams.hasLocalFramework("http"))
-        Some(runtimeparams)
-      else
-        GlobalRuntimeContext.current.map(_.resolvedParameters)
+    val parent = Some(runtimeparams)
     ResolvedParameters.forOperation(
       arguments = call.arguments,
       switches = call.switches,

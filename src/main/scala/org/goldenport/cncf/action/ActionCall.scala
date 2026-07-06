@@ -1,6 +1,6 @@
 package org.goldenport.cncf.action
 
-import org.goldenport.Consequence
+import org.goldenport.{Consequence, ConsequenceT}
 import org.goldenport.protocol.*
 import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.datatype.PathName
@@ -11,11 +11,13 @@ import org.goldenport.util.StringUtils.objectToSnakeName
 import org.goldenport.cncf.context.{CorrelationId, ExecutionContext}
 import org.goldenport.cncf.unitofwork.ExecUowM
 import org.goldenport.cncf.unitofwork.UnitOfWork
+import org.goldenport.cncf.unitofwork.UnitOfWorkOp
 import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.component.CollaboratorComponent
 import org.goldenport.cncf.backend.collaborator.Collaborator
 import org.goldenport.cncf.operation.OperationConfidentiality
 import org.goldenport.cncf.security.SecuritySubject
+import org.goldenport.cncf.Program
 
 /*
  * @since   Apr. 11, 2025
@@ -26,7 +28,8 @@ import org.goldenport.cncf.security.SecuritySubject
  *  version Jan. 22, 2026
  *  version Feb. 21, 2026
  *  version Apr. 28, 2026
- * @version May. 23, 2026
+ *  version May. 23, 2026
+ * @version Jul.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class ActionCall()
@@ -149,8 +152,20 @@ abstract class ActionCall()
 abstract class FunctionalActionCall extends ActionCall {
   protected def build_Program: ExecUowM[OperationResponse]
 
+  protected final def use_component_application_datastore(
+    name: String = "application"
+  ): ExecUowM[Unit] =
+    ConsequenceT.fromConsequence[[X] =>> Program[UnitOfWorkOp, X], Unit](Consequence {
+      ensure_component_application_datastore(name)
+      ()
+    })
+
   final override def execute(): Consequence[OperationResponse] =
-    build_Program.value.foldMap(executionContext.runtime.unitOfWorkInterpreter).flatMap(identity)
+    try {
+      build_Program.value.foldMap(executionContext.runtime.unitOfWorkInterpreter).flatMap(identity)
+    } finally {
+      executionContext.dataStoreSpace.clearBoundDataStore()
+    }
 }
 
 abstract class ProcedureActionCall extends ActionCall {

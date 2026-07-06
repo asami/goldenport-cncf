@@ -82,6 +82,8 @@ Examples of preferred helper routes:
 - configuration lookup: `config_string`, `config_int`, `config_double`,
   `config_boolean`;
 - structured DSL/config parsing: `parse_dsl_document`;
+- component application datastore selection:
+  `use_component_application_datastore`, `component_datastore`;
 - component-local user data: `component_local_data_dir`,
   `embedded_datastore`, `embedded_datastore_read`,
   `embedded_datastore_update`, `embedded_datastore_migrate`;
@@ -105,6 +107,103 @@ Component code should not:
   entity identity searches;
 - call raw `DataStoreSpace` / unrestricted `EntityStoreSpace` from business
   logic.
+
+## Component Application Datastore Selection
+
+When a component owns durable application records through generated entity
+operations, use `use_component_application_datastore` before generated
+EntityStore reads or writes. This keeps component code independent from a
+specific database product while still allowing deployment-time database
+selection.
+
+The selection order is:
+
+1. Resolve the datastore policy from runtime properties, then CAR component
+   config, then the framework default.
+2. Use a component named datastore when configured.
+3. Otherwise use the basic runtime datastore when it is configured as a
+   persistent datastore.
+4. Otherwise apply the policy fallback.
+
+Supported policies are:
+
+- `local-default`: use the user-local component datastore when neither a
+  named nor basic persistent datastore is configured.
+- `external-default`: use an in-memory datastore when neither a named nor
+  basic persistent datastore is configured. This is the framework default.
+- `external-required`: fail startup/operation selection when no persistent
+  datastore is configured.
+- `local-only`: always use the user-local component datastore and ignore
+  external datastore settings.
+
+CAR projects declare their default policy in `project.yaml` under
+`project.component.config` so the value is packaged into the component
+descriptor:
+
+```yaml
+project:
+  component:
+    config:
+      textus.component.<component>.datastores.application.policy: local-default
+```
+
+Named component datastore keys use the normalized component name and store
+name. The generated entity store uses the `application` store:
+
+```properties
+textus.component.<component>.datastores.application.kind=sqlite
+textus.component.<component>.datastores.application.sqlite.path=/path/to/component.db
+textus.component.<component>.datastores.application.sql.normalize-column-names=true
+```
+
+For MySQL/JDBC deployments:
+
+```properties
+textus.component.<component>.datastores.application.kind=mysql
+textus.component.<component>.datastores.application.jdbc.url=jdbc:mysql://localhost:3306/app
+textus.component.<component>.datastores.application.jdbc.user=app
+textus.component.<component>.datastores.application.jdbc.password=secret
+```
+
+The legacy `textus.component.<component>.datastore.*` alias remains accepted
+for the `application` store.
+
+The basic runtime datastore is used only when it is persistent, for example:
+
+```properties
+textus.datastore.sqlite.path=/path/to/runtime.db
+```
+
+An explicitly in-memory basic datastore is not considered suitable for
+component application records:
+
+```properties
+textus.datastore.kind=in-memory
+```
+
+If the policy falls back to local data storage, the default location is:
+
+```text
+~/.cncf/<component>/application.db
+```
+
+The fallback location can be redirected with the existing local-data keys:
+
+```properties
+textus.local-data.root=/path/to/root
+textus.local-data.<component>.dir=/path/to/component-dir
+textus.local-data.<component>.application.path=/path/to/application.db
+```
+
+Handwritten component code can request side-car stores through the internal
+DSL by passing a store name:
+
+```scala
+component_datastore("crawler-cache")
+```
+
+Use `cncf.*` keys only as compatibility aliases. New component code and
+documentation should prefer `textus.*`.
 
 ## Component Factory Shape
 

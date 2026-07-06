@@ -15,21 +15,62 @@ import org.goldenport.record.io.RecordEncoder
 /*
  * @since   Feb. 25, 2026
  *  version Apr. 15, 2026
- * @version May. 11, 2026
+ *  version May. 11, 2026
+ * @version Jul.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 class DataStoreSpace {
   private var _entity_stores: Vector[DataStore] = Vector.empty
   private val _inject_sequence = new AtomicLong(0L)
+  private val _scoped_entity_store = new ThreadLocal[DataStore]()
 
   def addDataStore(ds: DataStore): DataStoreSpace = {
     _entity_stores = _entity_stores :+ ds
     this
   }
 
+  def useDataStore(ds: DataStore): DataStoreSpace = {
+    _entity_stores = Vector(ds)
+    this
+  }
+
+  def bindDataStore(ds: DataStore): Unit =
+    _scoped_entity_store.set(ds)
+
+  def clearBoundDataStore(): Unit =
+    _scoped_entity_store.remove()
+
+  def useApplicationDataStore(
+    params: org.goldenport.cncf.config.ResolvedParameters,
+    componentName: String,
+    name: String = "application"
+  ): DataStoreSpace =
+    useApplicationDataStore(ComponentDataStore.Environment(params), componentName, name)
+
+  def useApplicationDataStore(
+    environment: ComponentDataStore.Environment,
+    componentName: String,
+    name: String
+  ): DataStoreSpace =
+    ComponentDataStore.resolveForDataStoreSpace(environment, ComponentDataStore.Request(componentName, name)) match {
+      case Some(datastore) => useDataStore(datastore)
+      case None => this
+    }
+
+  def bindApplicationDataStore(
+    environment: ComponentDataStore.Environment,
+    componentName: String,
+    name: String
+  ): Unit =
+    ComponentDataStore.resolveForDataStoreSpace(environment, ComponentDataStore.Request(componentName, name)) match {
+      case Some(datastore) => bindDataStore(datastore)
+      case None => clearBoundDataStore()
+    }
+
   def dataStore(cid: DataStore.CollectionId): Consequence[DataStore] =
     Consequence.successOrServiceProviderByKeyNotFound(
-      _entity_stores.find(_.isAccept(cid))
+      Option(_scoped_entity_store.get()).filter(_.isAccept(cid))
+        .orElse(_entity_stores.find(_.isAccept(cid)))
     )("datastore", cid.print)
 
   def search(

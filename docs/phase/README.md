@@ -19,8 +19,8 @@ Current baseline:
 - Active checklist: none.
 - Latest closed phase: `phase-28.md`
 - Latest closed checklist: `phase-28-checklist.md`
-- Latest post-closure maintenance: Jun. 29, 2026 CAR development and CLI
-  install alignment for CNCF/Textus launcher use.
+- Latest post-closure maintenance: Jul. 6, 2026 component datastore selection
+  and CAR-local persistence verification for ArtScene.
 - Closed phase set currently includes:
   - `phase-4.md`
   - `phase-5.md`

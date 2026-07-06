@@ -33,7 +33,8 @@ import org.goldenport.cncf.directive.{Query as EntityQuery}
  *  version Mar. 19, 2026
  *  version Mar. 31, 2026
  *  version May.  8, 2026
- * @version May. 26, 2026
+ *  version May. 26, 2026
+ * @version Jul.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 class SqlDataStore(
@@ -730,6 +731,23 @@ class SqlDataStore(
 }
 
 object SqlDataStore {
+  sealed trait DialectSelection {
+    def resolve(jdbcUrl: String): SqlDialectDriver
+  }
+  case object Auto extends DialectSelection {
+    def resolve(jdbcUrl: String): SqlDialectDriver =
+      dialectFromJdbcUrl(jdbcUrl) match {
+        case Auto => throw new IllegalArgumentException(s"Unsupported JDBC dialect: $jdbcUrl")
+        case other => other.resolve(jdbcUrl)
+      }
+  }
+  case object Sqlite extends DialectSelection {
+    def resolve(jdbcUrl: String): SqlDialectDriver = SqliteDialectDriver
+  }
+  case object Mysql extends DialectSelection {
+    def resolve(jdbcUrl: String): SqlDialectDriver = MySqlDialectDriver
+  }
+
   final case class SqlStatement(
     sql: String,
     params: Vector[Any] = Vector.empty
@@ -745,6 +763,35 @@ object SqlDataStore {
   final case class Config(
     normalizeColumnNames: Boolean = false
   )
+
+  def dialectFromJdbcUrl(jdbcUrl: String): DialectSelection = {
+    val lower = Option(jdbcUrl).getOrElse("").trim.toLowerCase(java.util.Locale.ROOT)
+    if (lower.startsWith("jdbc:mysql:") || lower.startsWith("jdbc:mariadb:"))
+      Mysql
+    else if (lower.startsWith("jdbc:sqlite:"))
+      Sqlite
+    else
+      Auto
+  }
+
+  def jdbc(
+    jdbcUrl: String,
+    dialect: DialectSelection = Auto,
+    username: Option[String] = None,
+    password: Option[String] = None,
+    driverClassName: Option[String] = None,
+    recorder: CommitRecorder = CommitRecorder.noop,
+    config: Config = Config()
+  ): SqlDataStore = {
+    val hikariconfig = new HikariConfig()
+    hikariconfig.setJdbcUrl(jdbcUrl)
+    username.foreach(hikariconfig.setUsername)
+    password.foreach(hikariconfig.setPassword)
+    driverClassName.foreach(hikariconfig.setDriverClassName)
+    hikariconfig.setMaximumPoolSize(4)
+    val datasource = new HikariDataSource(hikariconfig)
+    new SqlDataStore(dialect.resolve(jdbcUrl), datasource, recorder, config)
+  }
 
   def sqlite(
     path: String,

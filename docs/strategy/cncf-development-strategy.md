@@ -250,6 +250,8 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Define CAR/SAR packaging contract and precedence rules.
 - Implement packaging flow in `sbt-cozy`.
 - Align CNCF runtime/projection loading with packaged artifacts.
+- Preserve packaged component descriptor config as runtime-visible component
+  metadata for CAR-local runtime behavior.
 - Non-goals:
 - No new identity/account domain implementation.
 - No broad runtime redesign beyond grammar/packaging alignment.
