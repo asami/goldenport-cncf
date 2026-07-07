@@ -357,7 +357,18 @@ final class Http4sHttpServer(
       case GET -> Root / "web" / "" =>
         IO.pure(_temporary_redirect("/web"))
       case req @ GET -> Root / "web" / app / "" =>
-        IO.pure(_temporary_redirect(_redirect_target_with_query(req, s"/web/$app")))
+        _web_route_alias(req, Vector("web", app)).flatMap {
+          case Some(response) => IO.pure(response)
+          case None =>
+            _component_web_entry_app(app) match {
+              case Right(Some(entryapp)) =>
+                _component_web_app(app, entryapp.normalizedName, Vector.empty, Some(req))
+              case Left(message) =>
+                _web_error_response(Some(app), HStatus.InternalServerError, message, req.uri.path.renderString)
+              case Right(None) =>
+                IO.pure(_temporary_redirect(_redirect_target_with_query(req, s"/web/$app")))
+            }
+        }
       case req @ GET -> _ if _web_component_route_asset_path(req).nonEmpty =>
         val (component, webApp, assetPath) = _web_component_route_asset_path(req).get
         _web_app_asset(component, webApp, assetPath)
@@ -373,13 +384,7 @@ final class Http4sHttpServer(
       case req @ GET -> Root / "web" / app =>
         _web_route_alias(req, Vector("web", app)).flatMap {
           case Some(response) => IO.pure(response)
-          case None =>
-            _web_error_response(
-              Some(app),
-              HStatus.NotFound,
-              "Web app route not found",
-              req.uri.path.renderString
-            )
+          case None => _component_web_entry_or_not_found(app, Some(req))
         }
       case req @ GET -> Root / "web" / first / second =>
         _web_route_alias(req, Vector("web", first, second)).flatMap {
@@ -1864,7 +1869,9 @@ final class Http4sHttpServer(
     second: String,
     req: Option[org.http4s.Request[IO]] = None
   ): IO[HResponse[IO]] =
-    _component_web_app_route(first, Vector("web", first, second)) match {
+    if (_is_component_entry_page(second))
+      _component_web_entry_or_not_found(first, req)
+    else _component_web_app_route(first, Vector("web", first, second)) match {
       case Some(route) =>
         _component_web_app(route.target.component, route.target.normalizedApp, route.remainingPath, req)
       case None =>
@@ -1880,6 +1887,52 @@ final class Http4sHttpServer(
             )
         }
     }
+
+  private def _component_web_entry_or_not_found(
+    componentname: String,
+    req: Option[org.http4s.Request[IO]] = None
+  ): IO[HResponse[IO]] =
+    _component_web_entry_app(componentname) match {
+      case Right(Some(app)) =>
+        _component_web_app(componentname, app.normalizedName, Vector.empty, req)
+      case Right(None) =>
+        _web_error_response(
+          Some(componentname),
+          HStatus.NotFound,
+          "Web app route not found",
+          req.map(_.uri.path.renderString).getOrElse(s"/web/${componentname}")
+        )
+      case Left(message) =>
+        _web_error_response(
+          Some(componentname),
+          HStatus.InternalServerError,
+          message,
+          req.map(_.uri.path.renderString).getOrElse(s"/web/${componentname}")
+        )
+    }
+
+  private def _component_web_entry_app(
+    componentname: String
+  ): Either[String, Option[WebDescriptor.App]] =
+    if (!_component_exists(componentname))
+      Right(None)
+    else {
+      val candidates = engine.webDescriptor.componentEntryApps.filter { app =>
+        app.effectiveKind.equalsIgnoreCase("static-form") &&
+          _web_app_static_html_content(Some(componentname), app.normalizedName, Vector.empty).nonEmpty
+      }
+      candidates match {
+        case Vector() => Right(None)
+        case Vector(app) => Right(Some(app))
+        case xs =>
+          Left(s"Multiple component Web entry apps configured for ${componentname}: ${xs.map(_.normalizedName).mkString(", ")}")
+      }
+    }
+
+  private def _is_component_entry_page(
+    page: String
+  ): Boolean =
+    page == "index" || page == "index.html"
 
   private def _component_admin(app: String): IO[HResponse[IO]] =
     _static_form_app_renderer.renderComponentAdmin(engine.runtimeSubsystem, app, engine.webDescriptor) match {

@@ -164,6 +164,12 @@ apps use `/web/{component}/{webApp}` as the canonical route, generated form
 indexes use `/form/{component}`, and `/web/{webApp}` is valid only when a
 SAR/subsystem descriptor declares an explicit alias.
 
+Post-closure component entry route maintenance on Jul. 7, 2026 kept the same
+namespace separation while adding an explicit `entry: true` app option.
+Configured entry apps may serve `/web/{component}`,
+`/web/{component}/index`, and `/web/{component}/index.html` as short Web entry
+routes without restoring generated form-index fallback.
+
 Post-closure runtime maintenance on Jun. 29, 2026 aligned the CAR component
 developer startup path and launcher command installation path:
 

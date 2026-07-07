@@ -376,9 +376,19 @@ Component-owned Static Form Web apps use a component-scoped canonical route:
 
 For example, component `art-scene` with Web app `textus-art-scene` is exposed
 at `/web/art-scene/textus-art-scene`. Do not rely on `/web/{webApp}` or
-`/web/{component}` as implicit shortcuts. Short routes such as `/web/art` are
-valid only when the subsystem/SAR Web descriptor declares them explicitly as
-aliases.
+`/web/{component}` as implicit shortcuts. A component may expose
+`/web/{component}`, `/web/{component}/index`, and `/web/{component}/index.html`
+only by marking one Static Web app as the explicit component entry:
+
+```yaml
+web:
+  apps:
+    - name: textus-art-scene
+      entry: true
+```
+
+Short top-level routes such as `/web/art` are valid only when the subsystem/SAR
+Web descriptor declares them explicitly as aliases.
 
 Generated operation form indexes are separate from Web app routes. Use:
 
@@ -390,8 +400,9 @@ Generated operation form indexes are separate from Web app routes. Use:
 The `/web` namespace is for Web pages, admin/manual/dashboard pages, static
 assets, and explicit aliases. It must not fall back to generated component form
 indexes. If a component needs a human navigation page, provide a real Web app
-page under `/web/{component}/{webApp}` and link from that page to
-`/form/{component}` or operation-specific `/form/...` routes.
+page under `/web/{component}/{webApp}` or an explicit component entry app, and
+link from that page to `/form/{component}` or operation-specific `/form/...`
+routes.
 
 ## Component-Local Embedded Datastore
 

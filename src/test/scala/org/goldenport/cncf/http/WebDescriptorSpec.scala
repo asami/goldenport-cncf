@@ -312,6 +312,38 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
       app.effectivePath shouldBe "/web/notice-board"
       app.completed.root shouldBe Some("/web/notice-board")
       app.completed.route shouldBe Some("/web/{component}/notice-board")
+      app.entry shouldBe false
+    }
+
+    "decode component Web entry app aliases" in {
+      val path = Files.createTempFile("cncf-web-descriptor-entry-app", ".yaml")
+      Files.writeString(
+        path,
+        """web:
+          |  apps:
+          |    - name: notice-board
+          |      entry: true
+          |    - name: console
+          |      componentEntry: true
+          |    - name: gallery
+          |      component-entry: true
+          |""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+
+      val descriptor = WebDescriptor.load(path).toOption.get
+
+      descriptor.apps.map(app => app.normalizedName -> app.entry) shouldBe Vector(
+        "notice-board" -> true,
+        "console" -> true,
+        "gallery" -> true
+      )
+      descriptor.apps.map(app => app.normalizedName -> app.entryRaw) shouldBe Vector(
+        "notice-board" -> Some(true),
+        "console" -> Some(true),
+        "gallery" -> Some(true)
+      )
+      descriptor.componentEntryApps.map(_.normalizedName) shouldBe Vector("notice-board", "console", "gallery")
     }
 
     "merge scoped assets in global app and form order without duplicates" in {
@@ -591,6 +623,40 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
       descriptor.appProfile("notice-board") shouldBe Some(WebUxProfile.Compact)
       descriptor.formProfile("notice-board", "notice", "search-notices") shouldBe Some(WebUxProfile.Admin)
       descriptor.operationProfile("notice-board", "notice", "search-notices") shouldBe WebUxProfile.Admin
+    }
+
+    "merge component Web entry metadata without dropping it" in {
+      val base = WebDescriptor(apps = Vector(WebDescriptor.App("notice-board", entry = true)))
+      val supplement = WebDescriptor(apps = Vector(WebDescriptor.App(
+        "notice-board",
+        profile = Some(WebUxProfile.Material),
+        profileRaw = Some("material")
+      )))
+
+      val descriptor = base.mergeOverride(supplement)
+      val app = descriptor.apps.headOption.getOrElse(fail("app is missing"))
+
+      app.entry shouldBe true
+      app.profile shouldBe Some(WebUxProfile.Material)
+    }
+
+    "merge explicit component Web entry disable from an override descriptor" in {
+      val base = WebDescriptor(apps = Vector(WebDescriptor.App(
+        "notice-board",
+        entry = true,
+        entryRaw = Some(true)
+      )))
+      val supplement = WebDescriptor(apps = Vector(WebDescriptor.App(
+        "notice-board",
+        entry = false,
+        entryRaw = Some(false)
+      )))
+
+      val descriptor = base.mergeOverride(supplement)
+      val app = descriptor.apps.headOption.getOrElse(fail("app is missing"))
+
+      app.entry shouldBe false
+      app.entryRaw shouldBe Some(false)
     }
 
     "keep UX profile metadata out of form exposure controls" in {

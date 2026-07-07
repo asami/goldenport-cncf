@@ -668,7 +668,9 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
   hardening. Component-owned Static Form Web apps use canonical
   `/web/{component}/{webApp}` routes, generated form indexes live under
   `/form/{component}`, and `/web/{webApp}` is available only through explicit
-  SAR/subsystem aliases.
+  SAR/subsystem aliases. App-level `entry: true` may additionally expose a
+  component Web entry at `/web/{component}` without restoring `/form`
+  fallback.
 - Previous post-closure maintenance: Jul. 5, 2026 AI runner per-call selection
   metadata. `AiRunnerRequirement` now carries provider-neutral `purpose` and
   `model` hints so downstream components can mix worker and judge AI calls

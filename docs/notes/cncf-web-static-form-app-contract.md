@@ -127,6 +127,21 @@ the component-owned Web app. Top-level paths such as `/web/{webApp}` are valid
 only when a subsystem/SAR descriptor declares them explicitly as aliases.
 Generated component form indexes live under `/form/{component}`, not `/web`.
 
+A component may opt in to a shorter component entry route by setting
+`entry: true` on exactly one Static Web app with an available `index.html`.
+When configured, the following routes serve that app's index page:
+
+```text
+/web/{component}
+/web/{component}/
+/web/{component}/index
+/web/{component}/index.html
+```
+
+This is a Web route feature, not a form fallback. Reserved component routes such
+as `/web/{component}/admin`, `/web/{component}/dashboard`, and
+`/web/{component}/document` remain owned by their built-in handlers.
+
 Component dashboard routes are separate built-in operational routes:
 
 ```text
@@ -438,9 +453,10 @@ page. It does not execute operations inline. It links to component operation
 form indexes under `/form/{component}`. Operation form results first resolve
 static result pages by filename convention, then fall back to descriptor-provided
 or built-in result rendering.
-The Web namespace must not fall back to component form indexes: `/web/{component}`
-and `/web/{webApp}` resolve to Web routes or 404, while `/form/{component}` is
-the component form index.
+The Web namespace must not fall back to component form indexes:
+`/web/{component}` resolves only to an explicit component entry Web app or 404,
+`/web/{webApp}` resolves only to explicit aliases or 404, and
+`/form/{component}` is the component form index.
 
 Component admin pages also expose managed-data entry points for entity CRUD,
 data CRUD, aggregate CRUD, and view read. These are component-scoped management

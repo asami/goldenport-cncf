@@ -35,6 +35,9 @@ been recorded without reopening the Web UI DSL phase:
       `/web/{component}/{webApp}`, generated form indexes use
       `/form/{component}`, and `/web/{webApp}` requires an explicit
       SAR/subsystem alias.
+- [x] Jul. 7, 2026: Add explicit component Web entry routes with app-level
+      `entry: true`, so `/web/{component}` and `/web/{component}/index(.html)`
+      can serve a Static Web App index without reintroducing `/form` fallback.
 
 ---
 

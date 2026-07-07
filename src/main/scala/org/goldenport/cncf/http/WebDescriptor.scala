@@ -188,6 +188,9 @@ final case class WebDescriptor(
       case _ => None
     }
 
+  def componentEntryApps: Vector[WebDescriptor.App] =
+    apps.filter(_.entry)
+
   def routeAppForComponentPage(
     componentname: String,
     page: Vector[String]
@@ -785,7 +788,9 @@ object WebDescriptor {
     pageDisplayRaw: Option[String] = None,
     profile: Option[WebUxProfile] = None,
     profileRaw: Option[String] = None,
-    pageBackButton: Option[Boolean] = None
+    pageBackButton: Option[Boolean] = None,
+    entry: Boolean = false,
+    entryRaw: Option[Boolean] = None
   ) {
     def normalizedName: String =
       _normalize_app_segment(name)
@@ -822,7 +827,11 @@ object WebDescriptor {
           if (rhs.profileRaw.nonEmpty || rhs.profile.nonEmpty) rhs.profile
           else profile,
         profileRaw = rhs.profileRaw.orElse(profileRaw),
-        pageBackButton = rhs.pageBackButton.orElse(pageBackButton)
+        pageBackButton = rhs.pageBackButton.orElse(pageBackButton),
+        entry =
+          if (rhs.entry || rhs.entryRaw.contains(false)) rhs.entry
+          else entry,
+        entryRaw = rhs.entryRaw.orElse(entryRaw)
       )
 
     def effectivePath: String =
@@ -1321,6 +1330,9 @@ object WebDescriptor {
           .orElse(_string(record, "componentPageDisplay"))
           .orElse(_string(record, "component-page-display"))
       val profileraw = _profile_raw(record)
+      val entryraw = _boolean(record, "entry")
+        .orElse(_boolean(record, "componentEntry"))
+        .orElse(_boolean(record, "component-entry"))
       App(
         name = name,
         path = record.getString("path").map(_.trim).filter(_.nonEmpty).orElse(root).getOrElse(""),
@@ -1336,7 +1348,9 @@ object WebDescriptor {
         pageDisplayRaw = pagedisplayraw,
         profile = profileraw.flatMap(WebUxProfile.parse),
         profileRaw = profileraw,
-        pageBackButton = _boolean(record, "pageBackButton").orElse(_boolean(record, "page-back-button")).orElse(_boolean(record, "page_back_button"))
+        pageBackButton = _boolean(record, "pageBackButton").orElse(_boolean(record, "page-back-button")).orElse(_boolean(record, "page_back_button")),
+        entry = entryraw.getOrElse(false),
+        entryRaw = entryraw
       )
     }
 

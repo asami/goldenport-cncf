@@ -2624,6 +2624,129 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       formindex.as[String].unsafeRunSync() should include ("art_scene Forms")
     }
 
+    "serve explicit component Web entry app from the component root" in {
+      // Given
+      val root = Files.createTempDirectory("cncf-web-component-entry-root-")
+      Files.writeString(
+        root.resolve("web-descriptor.yaml"),
+        """web:
+          |  apps:
+          |    - name: textus-art-scene
+          |      entry: true
+          |""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+      Files.createDirectories(root.resolve("textus-art-scene"))
+      Files.writeString(root.resolve("textus-art-scene").resolve("index.html"), "<h1>Entry ArtScene</h1>", StandardCharsets.UTF_8)
+      val base = _management_console_fixture_subsystem(
+        Configuration(Map(
+          RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web-descriptor.yaml").toString)
+        ))
+      )
+      val subsystem = base.add(Vector(TestComponentFactory.create("art_scene", Protocol.empty)))
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val app = server.routes(null).orNotFound
+
+      // When
+      val componentroot = app.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/art-scene"))).unsafeRunSync()
+      val componentslash = app.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/art-scene/"))).unsafeRunSync()
+      val componentindex = app.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/art-scene/index"))).unsafeRunSync()
+      val componentindexhtml = app.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/art-scene/index.html"))).unsafeRunSync()
+      val canonical = app.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/art-scene/textus-art-scene"))).unsafeRunSync()
+      val admin = app.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/art-scene/admin"))).unsafeRunSync()
+      val formindex = app.run(Request[IO](Method.GET, Uri.unsafeFromString("/form/art-scene"))).unsafeRunSync()
+
+      // Then
+      Vector(componentroot, componentslash, componentindex, componentindexhtml, canonical).foreach { response =>
+        response.status.code shouldBe 200
+        response.as[String].unsafeRunSync() should include ("Entry ArtScene")
+      }
+      admin.as[String].unsafeRunSync() should not include ("Entry ArtScene")
+      formindex.status.code shouldBe 200
+      formindex.as[String].unsafeRunSync() should include ("art_scene Forms")
+    }
+
+    "prefer explicit Web route aliases over component Web entry shortcuts" in {
+      // Given
+      val root = Files.createTempDirectory("cncf-web-component-entry-alias-root-")
+      Files.writeString(
+        root.resolve("web-descriptor.yaml"),
+        """web:
+          |  apps:
+          |    - name: textus-art-scene
+          |      entry: true
+          |    - name: art-alias
+          |  routes:
+          |    - path: /web/art-scene
+          |      kind: alias
+          |      target:
+          |        component: art-scene
+          |        app: art-alias
+          |""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+      Files.createDirectories(root.resolve("textus-art-scene"))
+      Files.createDirectories(root.resolve("art-alias"))
+      Files.writeString(root.resolve("textus-art-scene").resolve("index.html"), "<h1>Entry ArtScene</h1>", StandardCharsets.UTF_8)
+      Files.writeString(root.resolve("art-alias").resolve("index.html"), "<h1>Alias ArtScene</h1>", StandardCharsets.UTF_8)
+      val base = _management_console_fixture_subsystem(
+        Configuration(Map(
+          RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web-descriptor.yaml").toString)
+        ))
+      )
+      val subsystem = base.add(Vector(TestComponentFactory.create("art_scene", Protocol.empty)))
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val app = server.routes(null).orNotFound
+
+      // When
+      val aliasroot = app.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/art-scene"))).unsafeRunSync()
+      val aliasslash = app.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/art-scene/"))).unsafeRunSync()
+      val aliasindex = app.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/art-scene/index"))).unsafeRunSync()
+
+      // Then
+      Vector(aliasroot, aliasslash, aliasindex).foreach { response =>
+        response.status.code shouldBe 200
+        val body = response.as[String].unsafeRunSync()
+        body should include ("Alias ArtScene")
+        body should not include ("Entry ArtScene")
+      }
+    }
+
+    "reject ambiguous component Web entry apps deterministically" in {
+      // Given
+      val root = Files.createTempDirectory("cncf-web-component-entry-ambiguous-root-")
+      Files.writeString(
+        root.resolve("web-descriptor.yaml"),
+        """web:
+          |  apps:
+          |    - name: textus-art-scene
+          |      entry: true
+          |    - name: art-gallery
+          |      componentEntry: true
+          |""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+      Files.createDirectories(root.resolve("textus-art-scene"))
+      Files.createDirectories(root.resolve("art-gallery"))
+      Files.writeString(root.resolve("textus-art-scene").resolve("index.html"), "<h1>Entry ArtScene</h1>", StandardCharsets.UTF_8)
+      Files.writeString(root.resolve("art-gallery").resolve("index.html"), "<h1>Entry Gallery</h1>", StandardCharsets.UTF_8)
+      val base = _management_console_fixture_subsystem(
+        Configuration(Map(
+          RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web-descriptor.yaml").toString)
+        ))
+      )
+      val subsystem = base.add(Vector(TestComponentFactory.create("art_scene", Protocol.empty)))
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val app = server.routes(null).orNotFound
+
+      // When
+      val response = app.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/art-scene"))).unsafeRunSync()
+
+      // Then
+      response.status.code shouldBe 500
+      response.as[String].unsafeRunSync() should include ("Multiple component Web entry apps")
+    }
+
     "serve top-level component Web app aliases only when the descriptor declares them" in {
       // Given
       val root = Files.createTempDirectory("cncf-web-explicit-alias-root-")
@@ -3631,8 +3754,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
 
       index.status.code shouldBe 200
       index.as[String].unsafeRunSync() should include ("Aliased Notice Board")
-      indexslash.status.code shouldBe 307
-      indexslash.headers.get[org.http4s.headers.Location].map(_.uri.renderString) shouldBe Some("/web/board")
+      indexslash.status.code shouldBe 200
+      indexslash.as[String].unsafeRunSync() should include ("Aliased Notice Board")
       about.status.code shouldBe 200
       about.as[String].unsafeRunSync() should include ("Aliased About")
       asset.status.code shouldBe 200

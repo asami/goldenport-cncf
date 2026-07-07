@@ -349,6 +349,11 @@ The implicit SAR keeps the canonical `/web/{component}/{webApp}` route. Form
 indexes are not exposed through `/web`; the component form index route is
 `/form/{component}`.
 
+Static Web apps may additionally declare one component entry app with
+`entry: true`. This makes `/web/{component}`, `/web/{component}/index`, and
+`/web/{component}/index.html` serve that app's index page without reintroducing
+generated form-index fallback.
+
 The descriptor route vocabulary is:
 
 ```yaml
@@ -591,6 +596,9 @@ URL: /web/{component}/{webApp}/{page}
 The asset lookup uses the same Web template root as result templates and keeps
 component ownership in the URL. An alias may point to the same app later, but
 the canonical component route remains the descriptor/debugging reference.
+
+Component entry pages still use canonical component app asset URLs:
+`/web/{component}/{webApp}/assets/{asset}`.
 
 The `config/` shape should be migrated to the canonical `/web` layout rather
 than preserved as a compatibility packaging contract. Packaged and generated
