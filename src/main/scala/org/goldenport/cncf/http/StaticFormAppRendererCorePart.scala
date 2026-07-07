@@ -31,7 +31,8 @@ import io.circe.parser.parse
 
 /*
  * @since   May. 18, 2026
- * @version Jun. 19, 2026
+ *  version Jun. 19, 2026
+ * @version Jul.  7, 2026
  * @author  ASAMI, Tomoharu
  */
 trait StaticFormAppRendererCorePart {
@@ -88,7 +89,7 @@ trait StaticFormAppRendererCorePart {
       ) ++ page_context_properties(pageContext)
     )
     val rendered = render_template(template, properties, Map.empty)
-    Page(complete_widget_assets(template, rendered, assetCompletion))
+    Page(complete_widget_assets(template, rendered, assetCompletion.copy(uxProfile = profile)))
   }
 
   protected def page_context_properties(

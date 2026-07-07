@@ -3,7 +3,8 @@ package org.goldenport.cncf.http
 /*
  * @since   Apr. 12, 2026
  *  version Apr. 25, 2026
- * @version May. 10, 2026
+ *  version May. 10, 2026
+ * @version Jul.  7, 2026
  * @author  ASAMI, Tomoharu
  */
 object StaticFormAppLayout {
@@ -13,7 +14,8 @@ object StaticFormAppLayout {
     requiresTextusWidgets: Boolean = false,
     declaredCss: Vector[String] = Vector.empty,
     declaredJs: Vector[String] = Vector.empty,
-    favicon: Option[String] = None
+    favicon: Option[String] = None,
+    uxProfile: WebUxProfile = WebUxProfile.default
   )
   final case class ThemeOptions(
     name: Option[String] = None,
@@ -73,49 +75,50 @@ object StaticFormAppLayout {
     html: String,
     options: AssetCompletionOptions
   ): String = {
-    val withFramework =
+    val withframework =
       if (!options.autoComplete || (!options.requiresBootstrap && !options.requiresTextusWidgets))
         html
       else {
-      val withBootstrapCss = _insert_css_if_needed(
+      val withbootstrapcss = _insert_css_if_needed(
         html,
         options.requiresBootstrap,
         _has_bootstrap_css(html, options.declaredCss),
         """/web/assets/bootstrap.min.css"""
       )
-      val withTextusCss = _insert_css_if_needed(
-        withBootstrapCss,
+      val withtextuscss = _insert_css_if_needed(
+        withbootstrapcss,
         options.requiresTextusWidgets,
-        _has_textus_widgets_css(withBootstrapCss, options.declaredCss),
+        _has_textus_widgets_css(withbootstrapcss, options.declaredCss),
         """/web/assets/textus-widgets.css"""
       )
-      val withBootstrapJs = _insert_js_if_needed(
-        withTextusCss,
+      val withbootstrapjs = _insert_js_if_needed(
+        withtextuscss,
         options.requiresBootstrap,
-        _has_bootstrap_js(withTextusCss, options.declaredJs),
+        _has_bootstrap_js(withtextuscss, options.declaredJs),
         """/web/assets/bootstrap.bundle.min.js"""
       )
       _insert_js_if_needed(
-        withBootstrapJs,
+        withbootstrapjs,
         options.requiresTextusWidgets,
-        _has_textus_widgets_js(withBootstrapJs, options.declaredJs),
+        _has_textus_widgets_js(withbootstrapjs, options.declaredJs),
         """/web/assets/textus-widgets.js"""
       )
     }
-    completeDeclaredAssets(withFramework, options)
+    completeDeclaredAssets(withframework, options)
   }
 
   def completeDeclaredAssets(
     html: String,
     options: AssetCompletionOptions
   ): String = {
-    val withFavicon = options.favicon
+    val withfavicon = options.favicon
       .map(_insert_favicon_asset_if_absent(html, _))
       .getOrElse(html)
-    val withCss = options.declaredCss.distinct.foldLeft(withFavicon) { (z, href) =>
+    val cssassets = (_profile_css_assets(options.uxProfile) ++ options.declaredCss).distinct
+    val withcss = cssassets.foldLeft(withfavicon) { (z, href) =>
       _insert_css_asset_if_absent(z, href)
     }
-    options.declaredJs.distinct.foldLeft(withCss) { (z, src) =>
+    options.declaredJs.distinct.foldLeft(withcss) { (z, src) =>
       _insert_js_asset_if_absent(z, src)
     }
   }
@@ -127,10 +130,10 @@ object StaticFormAppLayout {
     if (options.isEmpty)
       html
     else {
-      val withCss = options.css.distinct.foldLeft(html) { (z, href) =>
+      val withcss = options.css.distinct.foldLeft(html) { (z, href) =>
         _insert_css_asset_if_absent(z, href)
       }
-      _insert_theme_variables_if_absent(withCss, options)
+      _insert_theme_variables_if_absent(withcss, options)
     }
 
   def escape(value: String): String =
@@ -141,9 +144,21 @@ object StaticFormAppLayout {
       .replace("\"", "&quot;")
       .replace("'", "&#39;")
 
+  private def _profile_css_assets(
+    profile: WebUxProfile
+  ): Vector[String] =
+    profile match {
+      case WebUxProfile.BootstrapMaterial =>
+        Vector(
+          "/web/assets/textus-bootstrap-material.css",
+          "/web/assets/textus-material-icons.css"
+        )
+      case _ => Vector.empty
+    }
+
   private def _has_bootstrap_css(
     html: String,
-    declaredCss: Vector[String]
+    declaredcss: Vector[String]
   ): Boolean = {
     html.contains("/web/assets/bootstrap.min.css") ||
       html.toLowerCase(java.util.Locale.ROOT).contains("bootstrap.min.css")
@@ -151,7 +166,7 @@ object StaticFormAppLayout {
 
   private def _has_bootstrap_js(
     html: String,
-    declaredJs: Vector[String]
+    declaredjs: Vector[String]
   ): Boolean = {
     html.contains("/web/assets/bootstrap.bundle.min.js") ||
       html.toLowerCase(java.util.Locale.ROOT).contains("bootstrap.bundle.min.js")
@@ -159,33 +174,33 @@ object StaticFormAppLayout {
 
   private def _has_textus_widgets_css(
     html: String,
-    declaredCss: Vector[String]
+    declaredcss: Vector[String]
   ): Boolean = {
     _has_asset(html, "textus-widgets.css")
   }
 
   private def _has_textus_widgets_js(
     html: String,
-    declaredJs: Vector[String]
+    declaredjs: Vector[String]
   ): Boolean = {
     _has_asset(html, "textus-widgets.js")
   }
 
   private def _has_asset(
     html: String,
-    assetName: String
+    assetname: String
   ): Boolean = {
-    val name = assetName.toLowerCase(java.util.Locale.ROOT)
+    val name = assetname.toLowerCase(java.util.Locale.ROOT)
     html.toLowerCase(java.util.Locale.ROOT).contains(name)
   }
 
   private def _insert_css_if_needed(
     html: String,
     required: Boolean,
-    alreadySupplied: Boolean,
+    alreadysupplied: Boolean,
     href: String
   ): String =
-    if (!required || alreadySupplied)
+    if (!required || alreadysupplied)
       html
     else
       _insert_before(
@@ -198,10 +213,10 @@ object StaticFormAppLayout {
   private def _insert_js_if_needed(
     html: String,
     required: Boolean,
-    alreadySupplied: Boolean,
+    alreadysupplied: Boolean,
     src: String
   ): String =
-    if (!required || alreadySupplied)
+    if (!required || alreadysupplied)
       html
     else
       _insert_before(

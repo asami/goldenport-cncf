@@ -14,7 +14,8 @@ import org.goldenport.record.Record
  * @since   Apr. 14, 2026
  *  version Apr. 25, 2026
  *  version May. 30, 2026
- * @version Jun. 19, 2026
+ *  version Jun. 19, 2026
+ * @version Jul.  7, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class WebDescriptor(
@@ -173,44 +174,44 @@ final case class WebDescriptor(
         app.normalizedName == org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(name)
     ).map(_.composition).getOrElse(WebDescriptor.ComponentWebComposition.Disabled)
 
-  def routeAppsForComponent(componentName: String): Vector[String] = {
-    val normalized = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(componentName)
+  def routeAppsForComponent(componentname: String): Vector[String] = {
+    val normalized = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(componentname)
     routes
       .filter(_.target.normalizedComponent == normalized)
       .map(_.target.normalizedApp)
       .distinct
   }
 
-  def routeAppForComponent(componentName: String): Option[String] =
-    routeAppsForComponent(componentName) match {
+  def routeAppForComponent(componentname: String): Option[String] =
+    routeAppsForComponent(componentname) match {
       case Vector(app) => Some(app)
       case _ => None
     }
 
   def routeAppForComponentPage(
-    componentName: String,
+    componentname: String,
     page: Vector[String]
   ): Option[String] = {
-    val apps = routeAppsForComponent(componentName)
-    val pageName =
+    val apps = routeAppsForComponent(componentname)
+    val pagename =
       if (page.isEmpty) "index"
       else page.map(_.stripSuffix(".html")).map(WebDescriptor.normalizeSelector).mkString(".")
-    val pageSpecific = apps.filter { app =>
-      pages.contains(s"${WebDescriptor.normalizeSelector(app)}.${pageName}")
+    val pagespecific = apps.filter { app =>
+      pages.contains(s"${WebDescriptor.normalizeSelector(app)}.${pagename}")
     }
-    pageSpecific match {
+    pagespecific match {
       case Vector(app) => Some(app)
       case _ =>
         val composed = apps.filter(appComposition(_) != WebDescriptor.ComponentWebComposition.Disabled)
         composed match {
           case Vector(app) => Some(app)
-          case _ => routeAppForComponent(componentName)
+          case _ => routeAppForComponent(componentname)
         }
     }
   }
 
   def shellComponentName: Option[String] =
-    shell.flatMap(_.componentName)
+    shell.flatMap(_.componentname)
 
   def shellAppName: Option[String] =
     shell.map(_.effectiveAppName)
@@ -219,28 +220,28 @@ final case class WebDescriptor(
     shell.flatMap(_.layoutName)
 
   def staticPageMode(
-    appName: String,
+    appname: String,
     page: Vector[String]
   ): WebDescriptor.PageMode =
-    staticPageCustomization(appName, page)
+    staticPageCustomization(appname, page)
       .flatMap(_.mode)
       .getOrElse(WebDescriptor.PageMode.Article)
 
   def staticPageDisplay(
-    appName: String,
+    appname: String,
     page: Vector[String]
   ): WebDescriptor.PageDisplay =
-    staticPageCustomization(appName, page).flatMap(_.display)
-      .orElse(appFor(appName).flatMap(_.pageDisplay))
+    staticPageCustomization(appname, page).flatMap(_.display)
+      .orElse(appFor(appname).flatMap(_.pageDisplay))
       .orElse(componentPage.display)
       .getOrElse(WebDescriptor.PageDisplay.ApplicationShell)
 
   def staticPageBackButton(
-    appName: String,
+    appname: String,
     page: Vector[String]
   ): Boolean =
-    staticPageCustomization(appName, page).flatMap(_.backButton)
-      .orElse(appFor(appName).flatMap(_.pageBackButton))
+    staticPageCustomization(appname, page).flatMap(_.backButton)
+      .orElse(appFor(appname).flatMap(_.pageBackButton))
       .orElse(componentPage.backButton)
       .getOrElse(true)
 
@@ -257,53 +258,53 @@ final case class WebDescriptor(
     appFor(name).flatMap(_.profile)
 
   def formProfile(
-    componentName: String,
-    serviceName: String,
-    operationName: String
+    componentname: String,
+    servicename: String,
+    operationname: String
   ): Option[WebUxProfile] =
-    form.get(WebDescriptor.formSelector(componentName, serviceName, operationName)).flatMap(_.profile)
+    form.get(WebDescriptor.formSelector(componentname, servicename, operationname)).flatMap(_.profile)
 
   def operationProfile(
-    componentName: String,
-    serviceName: String,
-    operationName: String
+    componentname: String,
+    servicename: String,
+    operationname: String
   ): WebUxProfile =
-    _operation_profile(None, componentName, serviceName, operationName)
+    _operation_profile(None, componentname, servicename, operationname)
 
   def operationProfile(
-    appName: Option[String],
-    componentName: String,
-    serviceName: String,
-    operationName: String
+    appname: Option[String],
+    componentname: String,
+    servicename: String,
+    operationname: String
   ): WebUxProfile =
-    _operation_profile(appName, componentName, serviceName, operationName)
+    _operation_profile(appname, componentname, servicename, operationname)
 
   private def _operation_profile(
-    appName: Option[String],
-    componentName: String,
-    serviceName: String,
-    operationName: String
+    appname: Option[String],
+    componentname: String,
+    servicename: String,
+    operationname: String
   ): WebUxProfile =
-    formProfile(componentName, serviceName, operationName)
-      .orElse(appName.flatMap(appProfile))
-      .orElse(appProfile(componentName))
+    formProfile(componentname, servicename, operationname)
+      .orElse(appname.flatMap(appProfile))
+      .orElse(appProfile(componentname))
       .orElse(profile)
       .getOrElse(WebUxProfile.default)
 
   def staticPageProfile(
-    appName: String,
+    appname: String,
     page: Vector[String]
   ): WebUxProfile =
-    staticPageCustomization(appName, page).flatMap(_.profile)
-      .orElse(appProfile(appName))
+    staticPageCustomization(appname, page).flatMap(_.profile)
+      .orElse(appProfile(appname))
       .orElse(profile)
       .getOrElse(WebUxProfile.default)
 
   def adminProfile: WebUxProfile =
     profile.getOrElse(WebUxProfile.Admin)
 
-  def themeFor(appName: Option[String] = None): WebDescriptor.Theme =
-    appName
+  def themeFor(appname: Option[String] = None): WebDescriptor.Theme =
+    appname
       .flatMap(name => apps.find(app =>
         app.matches(name, Vector.empty) ||
           app.normalizedName == org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(name)
@@ -312,11 +313,11 @@ final case class WebDescriptor(
       .getOrElse(theme)
 
   def pageCustomization(
-    componentName: Option[String],
-    appName: Option[String]
+    componentname: Option[String],
+    appname: Option[String]
   ): Option[WebDescriptor.PageCustomization] = {
-    val app = appName.map(WebDescriptor.normalizeSelector)
-    val component = componentName.map(WebDescriptor.normalizeSelector)
+    val app = appname.map(WebDescriptor.normalizeSelector)
+    val component = componentname.map(WebDescriptor.normalizeSelector)
     val candidates =
       (for {
         c <- component.toVector
@@ -326,43 +327,43 @@ final case class WebDescriptor(
   }
 
   def staticPageCustomization(
-    appName: String,
+    appname: String,
     page: Vector[String]
   ): Option[WebDescriptor.PageCustomization] = {
-    val app = WebDescriptor.normalizeSelector(appName)
-    val pageName =
+    val app = WebDescriptor.normalizeSelector(appname)
+    val pagename =
       if (page.isEmpty) "index"
       else page.map(_.stripSuffix(".html")).map(WebDescriptor.normalizeSelector).mkString(".")
     val candidates =
       if (page.isEmpty)
-        Vector(s"${app}.${pageName}", app, pageName)
+        Vector(s"${app}.${pagename}", app, pagename)
       else
-        Vector(s"${app}.${pageName}", pageName, app)
+        Vector(s"${app}.${pagename}", pagename, app)
     candidates.collectFirst(Function.unlift(pages.get))
   }
 
   def formAssets(
-    componentName: String,
-    serviceName: String,
-    operationName: String
+    componentname: String,
+    servicename: String,
+    operationname: String
   ): WebDescriptor.Assets =
-    form.get(WebDescriptor.formSelector(componentName, serviceName, operationName))
+    form.get(WebDescriptor.formSelector(componentname, servicename, operationname))
       .map(_.assets)
       .getOrElse(WebDescriptor.Assets())
 
   def formIndexAssets(
-    componentName: String
+    componentname: String
   ): WebDescriptor.Assets =
-    assets.merge(appAssets(componentName))
+    assets.merge(appAssets(componentname))
 
   def resultAssets(
-    componentName: String,
-    serviceName: String,
-    operationName: String
+    componentname: String,
+    servicename: String,
+    operationname: String
   ): WebDescriptor.Assets =
     assets
-      .merge(appAssets(componentName))
-      .merge(formAssets(componentName, serviceName, operationName))
+      .merge(appAssets(componentname))
+      .merge(formAssets(componentname, servicename, operationname))
 
   def webRouteFor(path: Vector[String]): Option[WebDescriptor.ResolvedRoute] =
     routes.view
@@ -372,89 +373,91 @@ final case class WebDescriptor(
       .headOption
       .map(_._2)
 
-  def withImplicitSarRoutes(componentNames: Vector[String]): WebDescriptor =
-    if (routes.nonEmpty || apps.size != 1)
-      this
-    else {
-      val app = apps.head
-      _implicit_sar_component_name(app, componentNames) match {
-        case Some(componentName) =>
-          val target = WebDescriptor.RouteTarget(componentName, app.name)
-          copy(routes = Vector(
-            WebDescriptor.Route(s"/web/${app.normalizedName}", target, WebDescriptor.RouteKind.Alias),
-            WebDescriptor.Route("/web", target, WebDescriptor.RouteKind.Default)
-          ))
-        case None =>
-          this
-      }
-    }
-
-  private def _implicit_sar_component_name(
-    app: WebDescriptor.App,
-    componentNames: Vector[String]
-  ): Option[String] = {
+  def webAppRouteFor(
+    componentname: String,
+    path: Vector[String]
+  ): Option[WebDescriptor.ResolvedRoute] = {
+    val component = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(componentname)
     def normalize(value: String): String =
       org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(value)
-    val matched = componentNames.filter(name => normalize(name) == app.normalizedName)
-    matched match {
-      case Vector(name) => Some(normalize(name))
-      case _ if componentNames.size == 1 => componentNames.headOption.map(normalize)
-      case _ => None
-    }
+    val requestpath = path.map(normalize)
+    apps.view
+      .flatMap { app =>
+        val completed = app.completedFor(Some(component))
+        val routepath = completed.route.toVector
+          .flatMap(_.split("/").toVector.filter(_.nonEmpty).map(normalize))
+        Option.when(
+          routepath.nonEmpty &&
+            routepath.headOption.contains("web") &&
+            routepath.lift(1).contains(component) &&
+            requestpath.startsWith(routepath)
+        ) {
+          routepath.length ->
+            WebDescriptor.ResolvedRoute(
+              WebDescriptor.RouteTarget(component, app.normalizedName),
+              WebDescriptor.RouteKind.Default,
+              requestpath.drop(routepath.length)
+            )
+        }
+      }
+      .toVector
+      .sortBy { case (length, _) => -length }
+      .headOption
+      .map(_._2)
   }
 
   def adminTotalCountPolicy(
-    componentName: String,
+    componentname: String,
     surface: String,
-    collectionName: String
+    collectionname: String
   ): WebDescriptor.TotalCountPolicy =
-    adminSurface(componentName, surface, collectionName).map(_.totalCount).getOrElse(WebDescriptor.TotalCountPolicy.Disabled)
+    adminSurface(componentname, surface, collectionname).map(_.totalCount).getOrElse(WebDescriptor.TotalCountPolicy.Disabled)
 
   def adminFields(
-    componentName: String,
+    componentname: String,
     surface: String,
-    collectionName: String
+    collectionname: String
   ): Vector[WebDescriptor.AdminField] =
-    adminSurface(componentName, surface, collectionName).toVector.flatMap(_.fields)
+    adminSurface(componentname, surface, collectionname).toVector.flatMap(_.fields)
 
   def adminOperationFields(
-    componentName: String,
+    componentname: String,
     surface: String,
-    collectionName: String,
-    operationName: String
+    collectionname: String,
+    operationname: String
   ): Vector[WebDescriptor.AdminField] =
-    adminOperationSurface(componentName, surface, collectionName, operationName).toVector.flatMap(_.fields)
+    adminOperationSurface(componentname, surface, collectionname, operationname).toVector.flatMap(_.fields)
 
   def adminOperationSurface(
-    componentName: String,
+    componentname: String,
     surface: String,
-    collectionName: String,
-    operationName: String
+    collectionname: String,
+    operationname: String
   ): Option[WebDescriptor.AdminSurface] = {
     def normalize(value: String): String =
       value.trim.toLowerCase.replace("_", "-")
-    val component = normalize(componentName)
+    val component = normalize(componentname)
     val s = normalize(surface)
-    val collection = normalize(collectionName)
-    val operation = normalize(operationName)
+    val collection = normalize(collectionname)
+    val operation = normalize(operationname)
     Vector(
       s"${component}.${s}.${collection}.${operation}",
       s"${s}.${collection}.${operation}",
       s"${component}.${s}.${collection}.*",
       s"${s}.${collection}.*"
-    ).flatMap(admin.get).headOption.orElse(adminSurface(componentName, surface, collectionName))
+    ).flatMap(admin.get).headOption.orElse(adminSurface(componentname, surface, collectionname))
   }
 
   def adminSurface(
-    componentName: String,
+    componentname: String,
     surface: String,
-    collectionName: String
+    collectionname: String
   ): Option[WebDescriptor.AdminSurface] = {
     def normalize(value: String): String =
       value.trim.toLowerCase.replace("_", "-")
-    val component = normalize(componentName)
+    val component = normalize(componentname)
     val s = normalize(surface)
-    val collection = normalize(collectionName)
+    val collection = normalize(collectionname)
     Vector(
       s"${component}.${s}.${collection}",
       s"${s}.${collection}",
@@ -466,9 +469,9 @@ final case class WebDescriptor(
   }
 
   def adminPagesFor(
-    componentName: String
+    componentname: String
   ): Vector[WebDescriptor.AdminPage] =
-    adminPages.filter(_.matchesComponent(componentName))
+    adminPages.filter(_.matchesComponent(componentname))
 
   def adminPagesForAudience(
     audience: WebDescriptor.AdminAudience
@@ -476,11 +479,11 @@ final case class WebDescriptor(
     adminPages.filter(_.audience == audience)
 
   def adminPage(
-    componentName: String,
-    pageName: String
+    componentname: String,
+    pagename: String
   ): Option[WebDescriptor.AdminPage] = {
-    val page = WebDescriptor.normalizeSelector(pageName)
-    adminPagesFor(componentName).find(_.normalizedName == page)
+    val page = WebDescriptor.normalizeSelector(pagename)
+    adminPagesFor(componentname).find(_.normalizedName == page)
   }
 }
 
@@ -718,8 +721,8 @@ object WebDescriptor {
     def scopeKey: String =
       Vector(component.map(_normalize_app_segment).orElse(_href_component), Some(audience.name), Some(normalizedName)).flatten.mkString(":")
 
-    def matchesComponent(componentName: String): Boolean = {
-      val target = _normalize_app_segment(componentName)
+    def matchesComponent(componentname: String): Boolean = {
+      val target = _normalize_app_segment(componentname)
       component.map(_normalize_app_segment) match {
         case Some(value) => value == target
         case None => _href_component.contains(target)
@@ -736,7 +739,7 @@ object WebDescriptor {
     private def _href_component: Option[String] = {
       val parts = Option(href).map(_.trim).filter(_.nonEmpty).getOrElse("").split("/").toVector.filter(_.nonEmpty)
       parts match {
-        case Vector("web", componentName, "admin", _*) => Some(_normalize_app_segment(componentName))
+        case Vector("web", componentname, "admin", _*) => Some(_normalize_app_segment(componentname))
         case _ => None
       }
     }
@@ -833,9 +836,9 @@ object WebDescriptor {
         route = Some(effectiveRoute)
       )
 
-    def completedFor(componentSegment: Option[String]): App = {
+    def completedFor(componentsegment: Option[String]): App = {
       val c = completed
-      componentSegment.map(_.trim).filter(_.nonEmpty) match {
+      componentsegment.map(_.trim).filter(_.nonEmpty) match {
         case Some(component) =>
           c.copy(route = c.route.map(_.replace("{component}", component)))
         case None =>
@@ -843,13 +846,13 @@ object WebDescriptor {
       }
     }
 
-    def matches(requestName: String, requestPath: Vector[String]): Boolean = {
-      val normalizedRequestName = _normalize_app_segment(requestName)
-      val normalizedRequestPath = requestPath.map(_normalize_app_segment)
-      val appPath = effectivePath.split("/").toVector.filter(_.nonEmpty).map(_normalize_app_segment)
-      normalizedName == normalizedRequestName ||
-        appPath == ("web" +: normalizedRequestName +: normalizedRequestPath) ||
-        appPath == ("web" +: normalizedRequestName +: Vector(_normalize_app_segment(effectiveKind)))
+    def matches(requestname: String, requestpath: Vector[String]): Boolean = {
+      val normalizedrequestname = _normalize_app_segment(requestname)
+      val normalizedrequestpath = requestpath.map(_normalize_app_segment)
+      val apppath = effectivePath.split("/").toVector.filter(_.nonEmpty).map(_normalize_app_segment)
+      normalizedName == normalizedrequestname ||
+        apppath == ("web" +: normalizedrequestname +: normalizedrequestpath) ||
+        apppath == ("web" +: normalizedrequestname +: Vector(_normalize_app_segment(effectiveKind)))
     }
   }
 
@@ -858,14 +861,14 @@ object WebDescriptor {
     app: Option[String] = None,
     layout: Option[String] = None
   ) {
-    def componentName: Option[String] =
+    def componentname: Option[String] =
       component.map(_.trim).filter(_.nonEmpty).map(_normalize_app_segment)
 
-    def appName: Option[String] =
+    def appname: Option[String] =
       app.map(_.trim).filter(_.nonEmpty).map(_normalize_app_segment)
 
     def effectiveAppName: String =
-      appName.orElse(componentName).getOrElse("default")
+      appname.orElse(componentname).getOrElse("default")
 
     def layoutName: Option[String] =
       layout.map(_.trim).filter(_.nonEmpty)
@@ -916,18 +919,18 @@ object WebDescriptor {
     def conflictSignature: (RouteKind, String, String) =
       (kind, target.normalizedComponent, target.normalizedApp)
 
-    def resolve(requestPath: Vector[String]): Option[ResolvedRoute] = {
-      val routePath = normalizedPath
-      val normalizedRequest = requestPath.map(_normalize_app_segment)
+    def resolve(requestpath: Vector[String]): Option[ResolvedRoute] = {
+      val routepath = normalizedPath
+      val normalizedrequest = requestpath.map(_normalize_app_segment)
       Option.when(
-        routePath.nonEmpty &&
-          normalizedRequest.startsWith(routePath) &&
-          routePath.headOption.contains("web")
+        routepath.nonEmpty &&
+          normalizedrequest.startsWith(routepath) &&
+          routepath.headOption.contains("web")
       ) {
         ResolvedRoute(
           target,
           kind,
-          normalizedRequest.drop(routePath.length)
+          normalizedrequest.drop(routepath.length)
         )
       }
     }
@@ -973,11 +976,11 @@ object WebDescriptor {
   val empty: WebDescriptor = WebDescriptor()
 
   def formSelector(
-    componentName: String,
-    serviceName: String,
-    operationName: String
+    componentname: String,
+    servicename: String,
+    operationname: String
   ): String =
-    Vector(componentName, serviceName, operationName)
+    Vector(componentname, servicename, operationname)
       .map(org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment)
       .mkString(".")
 
@@ -1091,22 +1094,22 @@ object WebDescriptor {
     descriptor: WebDescriptor,
     path: Path
   ): Consequence[WebDescriptor] = {
-    val invalidApp =
+    val invalidapp =
       descriptor.apps.collectFirst {
         case app if app.compositionRaw.exists(raw => ComponentWebComposition.parse(raw).isEmpty) =>
           s"invalid app composition in ${path}: ${app.name}=${app.compositionRaw.get}"
       }
-    val invalidPage =
+    val invalidpage =
       descriptor.pages.collectFirst {
         case (name, page) if page.modeRaw.exists(raw => PageMode.parse(raw).isEmpty) =>
           s"invalid page mode in ${path}: ${name}=${page.modeRaw.get}"
       }
-    val invalidShell =
+    val invalidshell =
       descriptor.shell.collect {
         case shell if shell.component.exists(_.trim.isEmpty) =>
           s"invalid web shell in ${path}: component is empty"
       }
-    val invalidAdminPage =
+    val invalidadminpage =
       descriptor.adminPages.collectFirst {
         case page if page.name.trim.isEmpty =>
           s"invalid admin page in ${path}: name is required"
@@ -1116,7 +1119,7 @@ object WebDescriptor {
           val (declared, href) = page.componentHrefMismatch.get
           s"invalid admin page component in ${path}: ${page.name} component=${declared}, href component=${href}"
       }
-    invalidApp.orElse(invalidPage).orElse(invalidShell).orElse(invalidAdminPage) match {
+    invalidapp.orElse(invalidpage).orElse(invalidshell).orElse(invalidadminpage) match {
       case Some(message) => Consequence.resourceInvalid(message)
       case None => Consequence.success(descriptor)
     }
@@ -1130,16 +1133,16 @@ object WebDescriptor {
       .groupBy(_.normalizedPathText)
       .toVector
       .flatMap {
-        case (routePath, xs) =>
+        case (routepath, xs) =>
           val signatures = xs.map(_.conflictSignature).distinct
-          Option.when(signatures.size > 1)(routePath -> xs)
+          Option.when(signatures.size > 1)(routepath -> xs)
       }
     conflicts.headOption match {
-      case Some((routePath, xs)) =>
+      case Some((routepath, xs)) =>
         val targets = xs.map { route =>
           s"${route.kind.name}:${route.target.normalizedComponent}/${route.target.normalizedApp}"
         }.distinct.mkString(", ")
-        Consequence.resourceInvalid(s"web route conflict in ${path}: ${routePath} -> ${targets}")
+        Consequence.resourceInvalid(s"web route conflict in ${path}: ${routepath} -> ${targets}")
       case None =>
         Consequence.success(routes.distinctBy(route => route.normalizedPathText -> route.conflictSignature))
     }
@@ -1460,12 +1463,12 @@ object WebDescriptor {
 
   private def _admin_page(
     value: Any,
-    nameHint: Option[String]
+    namehint: Option[String]
   ): Option[AdminPage] =
     value match {
       case r: Record =>
         val name = _string(r, "name")
-          .orElse(nameHint.map(_.trim).filter(_.nonEmpty))
+          .orElse(namehint.map(_.trim).filter(_.nonEmpty))
           .getOrElse("")
         Some(AdminPage(
           name = name,
@@ -1477,10 +1480,10 @@ object WebDescriptor {
           audience = _string(r, "audience").flatMap(AdminAudience.parse).getOrElse(AdminAudience.Application),
           audienceRaw = _string(r, "audience")
         ))
-      case m: Map[?, ?] => _admin_page(_map_to_record(m), nameHint)
-      case m: java.util.Map[?, ?] => _admin_page(_map_to_record(m.asScala.toMap), nameHint)
+      case m: Map[?, ?] => _admin_page(_map_to_record(m), namehint)
+      case m: java.util.Map[?, ?] => _admin_page(_map_to_record(m.asScala.toMap), namehint)
       case s: String =>
-        val name = nameHint.getOrElse(s).trim
+        val name = namehint.getOrElse(s).trim
         Option.when(name.nonEmpty)(AdminPage(name = name, label = s.trim))
       case _ => None
     }
@@ -1494,9 +1497,9 @@ object WebDescriptor {
       case Some(other) => _admin_field(other, controls).toVector
       case None => Vector.empty
     }
-    val fieldNames = fields.map(_.name).toSet
+    val fieldnames = fields.map(_.name).toSet
     fields ++ controls.toVector.sortBy(_._1).collect {
-      case (name, control) if !fieldNames.contains(name) => AdminField(name, control)
+      case (name, control) if !fieldnames.contains(name) => AdminField(name, control)
     }
   }
 

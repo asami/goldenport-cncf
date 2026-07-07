@@ -171,7 +171,12 @@ Web applications should normally be designed as Web-tier applications over REST.
   - CNCF-hosted minimal SPA boundary and production SPA-mode gaps.
 
 Static Form Web Apps should use the local Bootstrap/Textus asset baseline and
-ordinary Bootstrap layout primitives before adding application CSS.
+ordinary Bootstrap layout primitives before adding application CSS. Built-in CAR
+Web UIs should use Bootstrap plus Material Design by default when the project
+has no stronger product-specific frontend requirement: Bootstrap for layout and
+controls, Material Icons or an equivalent icon set, Material Design visual
+language for status and interaction polish, and CAR-packaged local assets
+rather than CDN-only dependencies.
 
 For Web developers, editable Web source is split by role: public HTML/assets
 under `src/main/web`, private layouts/partials/widgets under
@@ -179,6 +184,13 @@ under `src/main/web`, private layouts/partials/widgets under
 `src/main/web-inf/web.yaml`, `src/main/web-inf/form.yaml`, and
 `src/main/web-inf/admin.yaml`. Packaged CAR `web/WEB-INF/*.yaml` files are
 generated runtime descriptors, not source files to edit directly.
+
+Component-owned Static Form Web apps are published under the canonical
+component-scoped route `/web/{component}/{webApp}`. Top-level routes such as
+`/web/{webApp}` or `/web/art` are subsystem/SAR aliases only when explicitly
+declared. Generated component form indexes are not Web app fallbacks; use
+`/form/{component}` for the form index and `/form/{component}/{service}/{operation}`
+for operation form submission.
 
 Mutation entry points in Static Form Web Apps should use both operation-level
 authorization and capability-aware page controls. Keep list/detail/read pages

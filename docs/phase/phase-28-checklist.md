@@ -30,6 +30,11 @@ been recorded without reopening the Web UI DSL phase:
 - [x] Keep AI runner methods explicitly scoped by CNCF `ExecutionContext`.
 - [x] Use `textus-ai` as the first AI runner provider driver while preserving
       its existing operation API.
+- [x] Jul. 7, 2026: Keep Phase 28 closed while hardening Web route
+      namespaces: component-owned Static Form Web apps use
+      `/web/{component}/{webApp}`, generated form indexes use
+      `/form/{component}`, and `/web/{webApp}` requires an explicit
+      SAR/subsystem alias.
 
 ---
 

@@ -1,0 +1,22 @@
+/* Local icon helpers for generated CNCF Web UIs. */
+.textus-icon,
+.textus-material-icon {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  vertical-align: -0.125em;
+  fill: currentColor;
+  flex: 0 0 auto;
+}
+
+.btn .textus-icon,
+.btn .textus-material-icon {
+  margin-right: 0.35rem;
+}
+
+.btn.icon-only .textus-icon,
+.btn.icon-only .textus-material-icon,
+.btn .textus-icon:last-child:first-child,
+.btn .textus-material-icon:last-child:first-child {
+  margin-right: 0;
+}

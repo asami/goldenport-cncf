@@ -3,7 +3,8 @@ package org.goldenport.cncf.http
 /*
  * @since   May. 18, 2026
  *  version May. 30, 2026
- * @version Jun. 19, 2026
+ *  version Jun. 19, 2026
+ * @version Jul.  7, 2026
  * @author  ASAMI, Tomoharu
  */
 import cats.effect.IO
@@ -61,7 +62,8 @@ import org.goldenport.observation.{Cause, Descriptor}
  *  version Mar. 29, 2026
  *  version Apr. 30, 2026
  *  version May. 25, 2026
- * @version Jun. 19, 2026
+ *  version Jun. 19, 2026
+ * @version Jul.  7, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Http4sHttpServer(
@@ -145,6 +147,12 @@ final class Http4sHttpServer(
         _textus_widgets_css()
       case GET -> Root / "web" / "assets" / "textus-widgets.js" =>
         _textus_widgets_js()
+      case GET -> Root / "web" / "assets" / "textus-bootstrap-material.css" =>
+        _textus_bootstrap_material_css()
+      case GET -> Root / "web" / "assets" / "textus-material-icons.css" =>
+        _textus_material_icons_css()
+      case GET -> Root / "web" / "assets" / "textus-material-icons.svg" =>
+        _textus_material_icons_svg()
       case GET -> Root / "web" / "assets" / "textus-calltree.js" =>
         _textus_calltree_js()
       case GET -> Root / "web" / "assets" / "textus-form-debug.js" =>
@@ -173,7 +181,7 @@ final class Http4sHttpServer(
       case req @ GET -> Root / "web" / app / "signup" =>
         _web_route_alias(req, Vector("web", app, "signup")).flatMap {
           case Some(response) => IO.pure(response)
-          case None => _component_web_app_or_static_form_app(app, "signup", Some(req))
+          case None => _component_web_app_or_not_found(app, "signup", Some(req))
         }
       case req @ POST -> Root / "web" / app / "login" =>
         _login_submit(req, app)
@@ -350,27 +358,33 @@ final class Http4sHttpServer(
         IO.pure(_temporary_redirect("/web"))
       case req @ GET -> Root / "web" / app / "" =>
         IO.pure(_temporary_redirect(_redirect_target_with_query(req, s"/web/$app")))
+      case req @ GET -> _ if _web_component_route_asset_path(req).nonEmpty =>
+        val (component, webApp, assetPath) = _web_component_route_asset_path(req).get
+        _web_app_asset(component, webApp, assetPath)
       case req @ GET -> _ if _web_component_asset_path(req).nonEmpty =>
         val (component, webApp, assetPath) = _web_component_asset_path(req).get
         _web_app_asset(component, webApp, assetPath)
       case req @ GET -> _ if _web_alias_asset_path(req).nonEmpty =>
         val (app, assetPath) = _web_alias_asset_path(req).get
         _web_route_alias_asset(app, assetPath)
-      case req @ GET -> Root / "web" / component / webApp / page =>
-        _component_web_app(component, webApp, Vector(page), Some(req))
+      case req @ GET -> _ if _web_component_app_route_path(req).nonEmpty =>
+        val (component, webApp, page) = _web_component_app_route_path(req).get
+        _component_web_app(component, webApp, page, Some(req))
       case req @ GET -> Root / "web" / app =>
         _web_route_alias(req, Vector("web", app)).flatMap {
           case Some(response) => IO.pure(response)
           case None =>
-            _component_default_web_app_redirect(app) match {
-              case Some(response) => IO.pure(response)
-              case None => _static_form_app(Some(req), app, Vector.empty)
-            }
+            _web_error_response(
+              Some(app),
+              HStatus.NotFound,
+              "Web app route not found",
+              req.uri.path.renderString
+            )
         }
       case req @ GET -> Root / "web" / first / second =>
         _web_route_alias(req, Vector("web", first, second)).flatMap {
           case Some(response) => IO.pure(response)
-          case None => _component_web_app_or_static_form_app(first, second, Some(req))
+          case None => _component_web_app_or_not_found(first, second, Some(req))
         }
       case GET -> Root / "form" / app =>
         _form_index(app)
@@ -493,6 +507,27 @@ final class Http4sHttpServer(
       HResponse[IO](HStatus.Ok)
         .withEntity(StaticFormAppAssets.textusWidgetsJs)
         .withContentType(`Content-Type`(MediaType.application.javascript, Some(Charset.`UTF-8`)))
+    )
+
+  private def _textus_bootstrap_material_css(): IO[HResponse[IO]] =
+    IO.pure(
+      HResponse[IO](HStatus.Ok)
+        .withEntity(StaticFormAppAssets.textusBootstrapMaterialCss)
+        .withContentType(`Content-Type`(MediaType.text.css, Some(Charset.`UTF-8`)))
+    )
+
+  private def _textus_material_icons_css(): IO[HResponse[IO]] =
+    IO.pure(
+      HResponse[IO](HStatus.Ok)
+        .withEntity(StaticFormAppAssets.textusMaterialIconsCss)
+        .withContentType(`Content-Type`(MediaType.text.css, Some(Charset.`UTF-8`)))
+    )
+
+  private def _textus_material_icons_svg(): IO[HResponse[IO]] =
+    IO.pure(
+      HResponse[IO](HStatus.Ok)
+        .withEntity(StaticFormAppAssets.textusMaterialIconsSvg)
+        .withContentType(`Content-Type`(_media_type("image/svg+xml"), Some(Charset.`UTF-8`)))
     )
 
   private def _textus_calltree_js(): IO[HResponse[IO]] =
@@ -1466,7 +1501,12 @@ final class Http4sHttpServer(
                 Some(req)
               ).map(Some(_))
             else
-              _static_form_app(Some(req), route.target.normalizedApp, Vector.empty).map(Some(_))
+              _web_error_response(
+                Some(route.target.normalizedApp),
+                HStatus.NotFound,
+                "Web app route not found",
+                req.uri.path.renderString
+              ).map(Some(_))
           case Some("static-form") =>
             _component_web_app(
               route.target.component,
@@ -1500,7 +1540,7 @@ final class Http4sHttpServer(
       case Some(route) if route.remainingPath.isEmpty =>
         _web_app_asset(route.target.component, route.target.normalizedApp, assetPath)
       case _ =>
-        _static_form_app(app, "assets" +: assetPath)
+        IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Web app asset not found"))
     }
 
   private[http] def _component_web_app(
@@ -1819,30 +1859,26 @@ final class Http4sHttpServer(
     }
   }
 
-  private[http] def _component_web_app_or_static_form_app(
+  private[http] def _component_web_app_or_not_found(
     first: String,
     second: String,
     req: Option[org.http4s.Request[IO]] = None
   ): IO[HResponse[IO]] =
-    if (_component_exists(first) && _web_app_static_html_content(Some(first), second, Vector.empty).nonEmpty)
-      _component_web_app(first, second, Vector.empty, req)
-    else engine.webDescriptor.webRouteFor(Vector("web", first, second)) match {
+    _component_web_app_route(first, Vector("web", first, second)) match {
       case Some(route) =>
         _component_web_app(route.target.component, route.target.normalizedApp, route.remainingPath, req)
       case None =>
-        _static_form_app(req, first, Vector(second))
-    }
-
-  private def _component_default_web_app_redirect(
-    componentName: String
-  ): Option[HResponse[IO]] =
-    if (!_component_exists(componentName))
-      None
-    else {
-      val normalizedcomponent = NamingConventions.toNormalizedSegment(componentName)
-      engine.webDescriptor.routeAppForComponent(componentName)
-        .filterNot(_ == normalizedcomponent)
-        .map(app => _temporary_redirect(s"/web/${app}"))
+        engine.webDescriptor.webRouteFor(Vector("web", first, second)) match {
+          case Some(route) =>
+            _component_web_app(route.target.component, route.target.normalizedApp, route.remainingPath, req)
+          case None =>
+            _web_error_response(
+              Some(first),
+              HStatus.NotFound,
+              "Web app route not found",
+              req.map(_.uri.path.renderString).getOrElse(s"/web/$first/$second")
+            )
+        }
     }
 
   private def _component_admin(app: String): IO[HResponse[IO]] =
@@ -3445,6 +3481,7 @@ final class Http4sHttpServer(
     val uservalues = debugvalues.filterNot { case (key, _) => key.startsWith("pageContext.") }
     val pagevalues =
       uservalues ++ StaticFormAppRenderer.defaultPageViewContextValues ++ pageContextValues
+    val uxprofile = engine.webDescriptor.operationProfile(Some(app), app, service, operation)
     StaticFormAppRenderer.FormResultProperties(
       StaticFormAppRenderer.FormPageProperties(app, service, operation, pagevalues),
       result.response.code,
@@ -3452,11 +3489,11 @@ final class Http4sHttpServer(
       result.response.getString.getOrElse(""),
       _form_result_table_columns(app, service, operation),
       engine.webDescriptor.defaultView,
-      _form_result_asset_completion_options(app, service, operation),
+      _form_result_asset_completion_options(app, service, operation).copy(uxProfile = uxprofile),
       result.metadata,
       _operation_mode,
       _form_result_field_confidentiality(app, service, operation),
-      engine.webDescriptor.operationProfile(Some(app), app, service, operation)
+      uxprofile
     )
   }
 
@@ -4122,8 +4159,7 @@ final class Http4sHttpServer(
               route.target.normalizedApp,
               tail.toVector
             )
-          case _ =>
-            _web_app_asset_content(None, app, tail.toVector)
+          case _ => None
         }
       case _ =>
         None
@@ -4867,6 +4903,49 @@ final class Http4sHttpServer(
       case _ =>
         None
     }
+
+  private def _web_component_route_asset_path(
+    req: org.http4s.Request[IO]
+  ): Option[(String, String, Vector[String])] =
+    _web_path_segments(req) match {
+      case Vector("web", component, tail*) if tail.nonEmpty =>
+        val segments = tail.toVector
+        segments.indexOf("assets") match {
+          case index if index >= 0 =>
+            val routepath = Vector("web", component) ++ segments.take(index)
+            val assetpath = segments.drop(index + 1)
+            _component_web_app_route(component, routepath).collect {
+              case route if route.remainingPath.isEmpty =>
+                (
+                  route.target.normalizedComponent,
+                  route.target.normalizedApp,
+                  assetpath
+                )
+            }
+          case _ =>
+            None
+        }
+      case _ =>
+        None
+    }
+
+  private def _web_component_app_route_path(
+    req: org.http4s.Request[IO]
+  ): Option[(String, String, Vector[String])] =
+    _web_path_segments(req) match {
+      case Vector("web", component, tail*) if tail.nonEmpty =>
+        _component_web_app_route(component, Vector("web", component) ++ tail.toVector).map { route =>
+          (route.target.normalizedComponent, route.target.normalizedApp, route.remainingPath)
+        }
+      case _ =>
+        None
+    }
+
+  private def _component_web_app_route(
+    component: String,
+    path: Vector[String]
+  ): Option[WebDescriptor.ResolvedRoute] =
+    engine.webDescriptor.webAppRouteFor(component, path)
 
   private def _web_alias_asset_path(
     req: org.http4s.Request[IO]

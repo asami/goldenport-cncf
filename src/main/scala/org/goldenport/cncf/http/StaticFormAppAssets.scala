@@ -5,7 +5,8 @@ import scala.io.Source
 /*
  * @since   Apr. 12, 2026
  *  version Apr. 20, 2026
- * @version May.  8, 2026
+ *  version May.  8, 2026
+ * @version Jul.  7, 2026
  * @author  ASAMI, Tomoharu
  */
 object StaticFormAppAssets {
@@ -22,6 +23,15 @@ object StaticFormAppAssets {
 
   val textusWidgetsJs: String =
     _resource_text("org/goldenport/cncf/http/assets/textus-widgets.js")
+
+  val textusBootstrapMaterialCss: String =
+    _resource_text("org/goldenport/cncf/http/assets/textus-bootstrap-material.css")
+
+  val textusMaterialIconsCss: String =
+    _resource_text("org/goldenport/cncf/http/assets/textus-material-icons.css")
+
+  val textusMaterialIconsSvg: String =
+    _resource_text("org/goldenport/cncf/http/assets/textus-material-icons.svg")
 
   val textusCalltreeJs: String =
     _resource_text("org/goldenport/cncf/http/assets/textus-calltree.js")

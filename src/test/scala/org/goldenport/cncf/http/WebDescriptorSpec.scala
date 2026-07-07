@@ -19,7 +19,8 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Apr. 14, 2026
  *  version Apr. 25, 2026
  *  version May. 27, 2026
- * @version Jun. 19, 2026
+ *  version Jun. 19, 2026
+ * @version Jul.  7, 2026
  * @author  ASAMI, Tomoharu
  */
 final class WebDescriptorSpec extends AnyWordSpec with Matchers {
@@ -925,13 +926,13 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
       descriptor.staticPageMode("blog", Vector.empty) shouldBe WebDescriptor.PageMode.Article
     }
 
-    "derive implicit SAR routes when a Web app matches one component among several candidates" in {
+    "not derive implicit SAR routes from Web app names" in {
       val descriptor = WebDescriptor(
         apps = Vector(WebDescriptor.App("notice-board"))
-      ).withImplicitSarRoutes(Vector("admin", "NoticeBoard", "metrics"))
+      )
 
-      descriptor.routes.map(_.path) shouldBe Vector("/web/notice-board", "/web")
-      descriptor.routes.map(_.target.component).distinct shouldBe Vector("notice-board")
+      descriptor.routes shouldBe Vector.empty
+      descriptor.webRouteFor(Vector("web", "notice-board")) shouldBe None
     }
 
     "resolve the runtime descriptor path from RuntimeConfig" in {

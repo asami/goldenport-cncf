@@ -29,7 +29,8 @@ import org.typelevel.ci.CIStringSyntax
  * @since   Apr. 24, 2026
  *  version Apr. 25, 2026
  *  version May. 25, 2026
- * @version Jun. 19, 2026
+ *  version Jun. 19, 2026
+ * @version Jul.  7, 2026
  * @author  ASAMI, Tomoharu
  */
 class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers {
@@ -112,6 +113,8 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers {
       val getweb = app.run(HRequest[IO](method = Method.GET, uri = Uri.unsafeFromString("/web"))).unsafeRunSync()
       val headweb = app.run(HRequest[IO](method = Method.HEAD, uri = Uri.unsafeFromString("/web"))).unsafeRunSync()
       val headasset = app.run(HRequest[IO](method = Method.HEAD, uri = Uri.unsafeFromString("/web/assets/bootstrap.min.css"))).unsafeRunSync()
+      val headmaterial = app.run(HRequest[IO](method = Method.HEAD, uri = Uri.unsafeFromString("/web/assets/textus-bootstrap-material.css"))).unsafeRunSync()
+      val headicons = app.run(HRequest[IO](method = Method.HEAD, uri = Uri.unsafeFromString("/web/assets/textus-material-icons.svg"))).unsafeRunSync()
       val postonly = app.run(HRequest[IO](method = Method.HEAD, uri = Uri.unsafeFromString("/web/blob/admin/associations/attach"))).unsafeRunSync()
       val headmcp = app.run(HRequest[IO](method = Method.HEAD, uri = Uri.unsafeFromString("/mcp"))).unsafeRunSync()
 
@@ -121,6 +124,12 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers {
       headasset.status.code shouldBe 200
       headasset.contentType.map(_.mediaType) shouldBe Some(MediaType.text.css)
       headasset.body.compile.to(Array).unsafeRunSync().toVector shouldBe Vector.empty
+      headmaterial.status.code shouldBe 200
+      headmaterial.contentType.map(_.mediaType) shouldBe Some(MediaType.text.css)
+      headmaterial.body.compile.to(Array).unsafeRunSync().toVector shouldBe Vector.empty
+      headicons.status.code shouldBe 200
+      headicons.contentType.map(ct => s"${ct.mediaType.mainType}/${ct.mediaType.subType}") shouldBe Some("image/svg+xml")
+      headicons.body.compile.to(Array).unsafeRunSync().toVector shouldBe Vector.empty
       postonly.status.code shouldBe 404
       postonly.body.compile.to(Array).unsafeRunSync().toVector shouldBe Vector.empty
       headmcp.status.code shouldBe 404

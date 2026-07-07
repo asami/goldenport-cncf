@@ -32,7 +32,8 @@ import io.circe.parser.parse
 /*
  * @since   May. 18, 2026
  *  version May. 24, 2026
- * @version Jun. 19, 2026
+ *  version Jun. 19, 2026
+ * @version Jul.  7, 2026
  * @author  ASAMI, Tomoharu
  */
 trait StaticFormAppRendererFormResultPart {
@@ -57,7 +58,7 @@ trait StaticFormAppRendererFormResultPart {
     properties: FormResultProperties,
     template: Option[String]
   ): Page = {
-    val effectiveTemplate = template.getOrElse(
+    val effectivetemplate = template.getOrElse(
       s"""<article class="card admin-card"${ux_profile_attr(properties.uxProfile)}>
          |  <div class="card-body">
          |  <h2 class="card-title">$${operation.label} Result</h2>
@@ -77,33 +78,33 @@ trait StaticFormAppRendererFormResultPart {
          |  </div>
          |</article>""".stripMargin
     )
-    renderFormResultTemplate(properties, effectiveTemplate)
+    renderFormResultTemplate(properties, effectivetemplate)
   }
 
   def renderFormResultTemplate(
     properties: FormResultProperties,
     template: String
   ): Page = {
-    val pageProperties = properties.nextPageProperties
+    val pageproperties = properties.nextPageProperties
     val rendered = render_template(
       template,
-      pageProperties,
+      pageproperties,
       properties.tableColumns,
       properties.defaultTableView
     )
-    val withJobPanel = append_default_job_panel(rendered, pageProperties)
-    val withDebug = append_execution_debug_panel(withJobPanel, properties, pageProperties)
-    val assetCompletion = execution_debug_asset_completion(properties, pageProperties)
+    val withjobpanel = append_default_job_panel(rendered, pageproperties)
+    val withdebug = append_execution_debug_panel(withjobpanel, properties, pageproperties)
+    val assetcompletion = execution_debug_asset_completion(properties, pageproperties).copy(uxProfile = properties.uxProfile)
     if (is_html_document(template))
-      Page(complete_widget_assets(template, withDebug, assetCompletion))
+      Page(complete_widget_assets(template, withdebug, assetcompletion))
     else
       Page(StaticFormAppLayout.completeDeclaredAssets(
         simple_page(
           title = s"${escape(properties.operationLabel)} Result",
           subtitle = s"HTTP ${properties.status}",
-          body = withDebug
+          body = withdebug
         ),
-        assetCompletion
+        assetcompletion
       ))
   }
 
@@ -138,16 +139,16 @@ trait StaticFormAppRendererFormResultPart {
     error: Option[StructuredHttpError],
     template: String
   ): Page = {
-    val appName = app.getOrElse("system")
+    val appname = app.getOrElse("system")
     val panel = error.map(renderStructuredErrorPanel).getOrElse("")
-    val errorValues = error.map(structured_error_values).getOrElse(Map.empty)
+    val errorvalues = error.map(structured_error_values).getOrElse(Map.empty)
     val properties = FormPageProperties(
-      appName,
+      appname,
       "web",
       "error",
       Map(
-        "app" -> appName,
-        "component" -> appName,
+        "app" -> appname,
+        "component" -> appname,
         "error.status" -> status.toString,
         "error.message" -> message,
         "error.body" -> message,
@@ -156,7 +157,7 @@ trait StaticFormAppRendererFormResultPart {
         "result.status" -> status.toString,
         "result.ok" -> "false",
         "result.body" -> message
-      ) ++ errorValues
+      ) ++ errorvalues
     )
     val rendered = render_template(template, properties, Map.empty)
     val body = append_structured_error_panel(rendered, panel)
@@ -243,9 +244,9 @@ trait StaticFormAppRendererFormResultPart {
   protected def append_execution_debug_panel(
     html: String,
     properties: FormResultProperties,
-    pageProperties: FormPageProperties
+    pageproperties: FormPageProperties
   ): String = {
-    val panel = execution_debug_panel(properties, pageProperties)
+    val panel = execution_debug_panel(properties, pageproperties)
     if (panel.isEmpty || html.contains("textus-execution-debug-panel"))
       html
     else {
@@ -260,46 +261,46 @@ trait StaticFormAppRendererFormResultPart {
 
   protected def append_default_job_panel(
     html: String,
-    pageProperties: FormPageProperties
+    pageproperties: FormPageProperties
   ): String =
-    if (pageProperties.value("result.job.id").isEmpty ||
+    if (pageproperties.value("result.job.id").isEmpty ||
         html.contains("textus-job-ticket") ||
         html.contains("textus-job-panel") ||
         html.contains("textus-job-actions"))
       html
     else
-      html + render_job_panel(Map("actions" -> "result,await,jobs"), pageProperties)
+      html + render_job_panel(Map("actions" -> "result,await,jobs"), pageproperties)
 
   protected def execution_debug_panel(
     properties: FormResultProperties,
-    pageProperties: FormPageProperties
+    pageproperties: FormPageProperties
   ): String =
-    if (!is_development_operation_mode(properties.operationMode) || !execution_debug_panel_enabled(properties, pageProperties))
+    if (!is_development_operation_mode(properties.operationMode) || !execution_debug_panel_enabled(properties, pageproperties))
       ""
     else {
       val metadata = properties.executionMetadata
-      val calltreeHtml = metadata.inlineCallTree.map(debug_calltree_html).getOrElse("")
+      val calltreehtml = metadata.inlineCallTree.map(debug_calltree_html).getOrElse("")
       val jobid = metadata.responseJobId.orElse(metadata.debugJobId)
       val executionjobid = metadata.executionJobId
         .orElse(jobid)
-        .orElse(debug_page_value(pageProperties, "result.execution.job.id", "error.diagnostic.job.id"))
+        .orElse(debug_page_value(pageproperties, "result.execution.job.id", "error.diagnostic.job.id"))
       val sagaid = metadata.sagaId
-        .orElse(debug_page_value(pageProperties, "result.execution.saga.id", "error.diagnostic.saga.id"))
+        .orElse(debug_page_value(pageproperties, "result.execution.saga.id", "error.diagnostic.saga.id"))
       val taskid = metadata.executionTaskId
-        .orElse(debug_page_value(pageProperties, "result.execution.task.id", "error.diagnostic.task.id"))
+        .orElse(debug_page_value(pageproperties, "result.execution.task.id", "error.diagnostic.task.id"))
       val traceid = metadata.traceId
-        .orElse(debug_page_value(pageProperties, "result.execution.trace.id", "error.diagnostic.trace.id"))
+        .orElse(debug_page_value(pageproperties, "result.execution.trace.id", "error.diagnostic.trace.id"))
       val executionid = metadata.executionId
-        .orElse(debug_page_value(pageProperties, "result.execution.id", "error.diagnostic.id"))
+        .orElse(debug_page_value(pageproperties, "result.execution.id", "error.diagnostic.id"))
       val failure = metadata.failure
-        .orElse(debug_page_value(pageProperties, "result.execution.failure", "error.diagnostic.failure"))
-      val providerpath = debug_page_value(pageProperties, "result.execution.providers", "error.diagnostic.providers")
+        .orElse(debug_page_value(pageproperties, "result.execution.failure", "error.diagnostic.failure"))
+      val providerpath = debug_page_value(pageproperties, "result.execution.providers", "error.diagnostic.providers")
         .map(_.split(",").toVector.map(_.trim).filter(_.nonEmpty))
         .getOrElse(Vector.empty)
-      val calltreehref = debug_page_value(pageProperties, "result.execution.calltree.href", "error.diagnostic.calltree.href")
-      val historyhref = debug_page_value(pageProperties, "result.execution.history.href", "error.diagnostic.history.href")
+      val calltreehref = debug_page_value(pageproperties, "result.execution.calltree.href", "error.diagnostic.calltree.href")
+      val historyhref = debug_page_value(pageproperties, "result.execution.history.href", "error.diagnostic.history.href")
       val joblinks = jobid.map { id =>
-          val apphref = pageProperties.value("result.job.href")
+          val apphref = pageproperties.value("result.job.href")
           val systemhref = s"/web/system/admin/jobs/${escape_path_segment(id)}"
           val app = if (apphref.nonEmpty) s"""<a class="btn btn-sm btn-outline-primary" href="${escape(apphref)}">Application job</a>""" else ""
           s"""<div class="d-flex flex-wrap gap-2 mt-2">${app}<a class="btn btn-sm btn-outline-secondary" href="${escape(systemhref)}">System debug job</a></div>"""
@@ -321,15 +322,15 @@ trait StaticFormAppRendererFormResultPart {
              |  ${failureitem}
              |</ol>""".stripMargin
         }
-      val arguments = debug_operation_arguments(pageProperties, properties.fieldConfidentiality)
-      val argumentsHtml =
+      val arguments = debug_operation_arguments(pageproperties, properties.fieldConfidentiality)
+      val argumentshtml =
         if (arguments.nonEmpty)
           s"""<pre class="bg-light border rounded p-3"><code>${escape(debug_record_pretty(Record.dataAuto(arguments.toVector.sortBy(_._1)*)))}</code></pre>"""
         else
           """<p class="text-secondary mb-0">No operation arguments were captured for this response.</p>"""
-      val effectiveCalltreeHtml =
-        if (calltreeHtml.nonEmpty)
-          calltreeHtml
+      val effectivecalltreehtml =
+        if (calltreehtml.nonEmpty)
+          calltreehtml
         else if (calltreehref.nonEmpty || historyhref.nonEmpty)
           s"""<p class="text-secondary mb-2">CallTree was not embedded in this response. Open the captured execution diagnostics below.</p>
              |<div class="d-flex flex-wrap gap-2">
@@ -338,7 +339,7 @@ trait StaticFormAppRendererFormResultPart {
              |</div>""".stripMargin
         else
           """<p class="text-secondary mb-0">CallTree was not captured for this response.</p>"""
-      val debugVariant =
+      val debugvariant =
         if (properties.status >= 200 && properties.status < 400)
           ("success", "text-success-emphasis")
         else
@@ -356,18 +357,18 @@ trait StaticFormAppRendererFormResultPart {
            |  <dt class="col-sm-3">Failure</dt><dd class="col-sm-9">${debug_context_value(failure)}</dd>
            |</dl>""".stripMargin
       s"""<section class="container my-4 textus-execution-debug-panel">
-         |  <details class="border border-${debugVariant._1} border-2 border-start border-start-4 rounded bg-${debugVariant._1}-subtle shadow-sm">
-         |    <summary class="p-3 fw-semibold ${debugVariant._2}">Development execution diagnostics</summary>
-         |    <div class="border-top border-${debugVariant._1} p-3 bg-${debugVariant._1}-subtle">
+         |  <details class="border border-${debugvariant._1} border-2 border-start border-start-4 rounded bg-${debugvariant._1}-subtle shadow-sm">
+         |    <summary class="p-3 fw-semibold ${debugvariant._2}">Development execution diagnostics</summary>
+         |    <div class="border-top border-${debugvariant._1} p-3 bg-${debugvariant._1}-subtle">
          |      ${summary}
          |      ${joblinks}
          |      ${executionpathhtml}
          |      <h3 class="h6 mt-3">Operation arguments</h3>
-         |      ${argumentsHtml}
+         |      ${argumentshtml}
          |      <h3 class="h6 mt-3">Result body</h3>
          |      <pre class="bg-light border rounded p-3"><code>${escape(debug_body_pretty(properties.body, properties.fieldConfidentiality).take(renderer_config.debugBodyPreviewChars))}</code></pre>
          |      <h3 class="h6 mt-3">CallTree</h3>
-         |      ${effectiveCalltreeHtml}
+         |      ${effectivecalltreehtml}
          |    </div>
          |  </details>
          |</section>""".stripMargin
@@ -381,11 +382,11 @@ trait StaticFormAppRendererFormResultPart {
       .getOrElse("""<span class="text-secondary">none</span>""")
 
   protected def debug_page_value(
-    pageProperties: FormPageProperties,
+    pageproperties: FormPageProperties,
     names: String*
   ): Option[String] =
     names.toVector
-      .map(pageProperties.value)
+      .map(pageproperties.value)
       .find(_.trim.nonEmpty)
 
   protected def debug_link_button(
@@ -402,17 +403,17 @@ trait StaticFormAppRendererFormResultPart {
 
   protected def execution_debug_panel_enabled(
     properties: FormResultProperties,
-    pageProperties: FormPageProperties
+    pageproperties: FormPageProperties
   ): Boolean =
-    pageProperties.value("textus.debug.executionPanel").equalsIgnoreCase("true") ||
+    pageproperties.value("textus.debug.executionPanel").equalsIgnoreCase("true") ||
       !execution_metadata_empty(properties.executionMetadata)
 
   protected def execution_debug_asset_completion(
     properties: FormResultProperties,
-    pageProperties: FormPageProperties
+    pageproperties: FormPageProperties
   ): StaticFormAppLayout.AssetCompletionOptions = {
     val base = properties.assetCompletion
-    if (execution_debug_calltree_asset_required(properties, pageProperties) &&
+    if (execution_debug_calltree_asset_required(properties, pageproperties) &&
         !base.declaredJs.contains(call_tree_js_asset))
       base.copy(declaredJs = base.declaredJs :+ call_tree_js_asset)
     else
@@ -421,10 +422,10 @@ trait StaticFormAppRendererFormResultPart {
 
   protected def execution_debug_calltree_asset_required(
     properties: FormResultProperties,
-    pageProperties: FormPageProperties
+    pageproperties: FormPageProperties
   ): Boolean =
     is_development_operation_mode(properties.operationMode) &&
-      execution_debug_panel_enabled(properties, pageProperties) &&
+      execution_debug_panel_enabled(properties, pageproperties) &&
       properties.executionMetadata.inlineCallTree.nonEmpty
 
   protected def execution_metadata_empty(
@@ -452,7 +453,7 @@ trait StaticFormAppRendererFormResultPart {
   ): Json =
     json.asObject.flatMap { obj =>
       obj("debug").flatMap(_.asObject).map { debug =>
-        val compactDebug =
+        val compactdebug =
           if (debug("calltree").nonEmpty)
             Json.fromJsonObject(JsonObject.fromIterable(
               debug.toIterable.map {
@@ -464,7 +465,7 @@ trait StaticFormAppRendererFormResultPart {
             Json.fromJsonObject(debug)
         Json.fromJsonObject(JsonObject.fromIterable(
           obj.toIterable.map {
-            case ("debug", _) => "debug" -> compactDebug
+            case ("debug", _) => "debug" -> compactdebug
             case x => x
           }
         ))
@@ -472,17 +473,17 @@ trait StaticFormAppRendererFormResultPart {
     }.getOrElse(json)
 
   protected def debug_operation_arguments(
-    pageProperties: FormPageProperties,
+    pageproperties: FormPageProperties,
     confidentiality: Map[String, DataConfidentiality] = Map.empty
   ): Map[String, String] = {
-    val formvalues = pageProperties.values.toVector.collect {
+    val formvalues = pageproperties.values.toVector.collect {
       case (key, value) if key.startsWith("form.") => key.stripPrefix("form.") -> value
     }.toMap
     val rawvalues =
       if (formvalues.nonEmpty)
         formvalues
       else
-        pageProperties.values.filterNot { case (key, _) =>
+        pageproperties.values.filterNot { case (key, _) =>
           key.contains(".") ||
             key == "component" ||
             key == "service" ||
@@ -540,8 +541,8 @@ trait StaticFormAppRendererFormResultPart {
         case m: scala.collection.Map[?, ?] =>
           m.toVector.map {
             case (k, v) =>
-              val childKey = Option(k).map(_.toString).getOrElse("")
-              childKey -> debug_redact_value(childKey, v, confidentiality)
+              val childkey = Option(k).map(_.toString).getOrElse("")
+              childkey -> debug_redact_value(childkey, v, confidentiality)
           }.toMap
         case _ =>
           value
@@ -561,8 +562,8 @@ trait StaticFormAppRendererFormResultPart {
       case m: scala.collection.Map[?, ?] =>
         m.toVector.map {
           case (k, v) =>
-            val childKey = Option(k).map(_.toString).getOrElse("")
-            childKey -> debug_redact_value(childKey, v, confidentiality)
+            val childkey = Option(k).map(_.toString).getOrElse("")
+            childkey -> debug_redact_value(childkey, v, confidentiality)
         }.toMap
       case _ =>
         value
@@ -609,15 +610,15 @@ trait StaticFormAppRendererFormResultPart {
     value: String,
     confidentiality: Map[String, DataConfidentiality] = Map.empty
   ): String = {
-    val metadataSensitive = confidentiality.collect {
+    val metadatasensitive = confidentiality.collect {
       case (key, level) if level.shouldRedactByDefault => java.util.regex.Pattern.quote(key)
     }.mkString("|")
-    val sensitiveBase = """password|passwd|secret|token|access[-_]?session[-_]?id|refresh[-_]?session[-_]?id|session[-_]?id|session|authorization|cookie|credential|api[-_]?key|private[-_]?key"""
-    val sensitive = if (metadataSensitive.isEmpty) sensitiveBase else s"$sensitiveBase|$metadataSensitive"
-    val jsonLike = s"""(?i)("(?:$sensitive)"\\s*:\\s*)"[^"]*"""".r
-    val formLike = s"""(?i)(^|[?&\\s,;])($sensitive)(\\s*[=:]\\s*)([^&\\s,;]+)""".r
-    val jsonRedacted = jsonLike.replaceAllIn(value, m => s"""${m.group(1)}"[redacted]"""")
-    formLike.replaceAllIn(jsonRedacted, m => s"${m.group(1)}${m.group(2)}${m.group(3)}[redacted]")
+    val sensitivebase = """password|passwd|secret|token|access[-_]?session[-_]?id|refresh[-_]?session[-_]?id|session[-_]?id|session|authorization|cookie|credential|api[-_]?key|private[-_]?key"""
+    val sensitive = if (metadatasensitive.isEmpty) sensitivebase else s"$sensitivebase|$metadatasensitive"
+    val jsonlike = s"""(?i)("(?:$sensitive)"\\s*:\\s*)"[^"]*"""".r
+    val formlike = s"""(?i)(^|[?&\\s,;])($sensitive)(\\s*[=:]\\s*)([^&\\s,;]+)""".r
+    val jsonredacted = jsonlike.replaceAllIn(value, m => s"""${m.group(1)}"[redacted]"""")
+    formlike.replaceAllIn(jsonredacted, m => s"${m.group(1)}${m.group(2)}${m.group(3)}[redacted]")
   }
 
   protected final case class DebugCallTreeEvent(
@@ -659,7 +660,7 @@ trait StaticFormAppRendererFormResultPart {
     attributes: Map[String, String],
     depth: Int,
     pair: String,
-    parentDisplayLabel: Option[String] = None,
+    parentdisplaylabel: Option[String] = None,
     observations: Vector[DebugCallTreeObservation] = Vector.empty
   )
 
@@ -688,9 +689,9 @@ trait StaticFormAppRendererFormResultPart {
       case Some(xs: Seq[?]) =>
         xs.toVector.map {
           case r: Record =>
-            val childLabel = r.getString("name").orElse(r.getString("label")).getOrElse("node")
-            val childAttrs = r.asMap.filterNot { case (key, _) => key == "name" || key == "label" || key == "children" }.map { case (key, value) => key -> value.toString }
-            DebugCallTreeNode(childLabel, childAttrs, childAttrs, childAttrs, 0L, None, Vector.empty)
+            val childlabel = r.getString("name").orElse(r.getString("label")).getOrElse("node")
+            val childattrs = r.asMap.filterNot { case (key, _) => key == "name" || key == "label" || key == "children" }.map { case (key, value) => key -> value.toString }
+            DebugCallTreeNode(childlabel, childattrs, childattrs, childattrs, 0L, None, Vector.empty)
           case x =>
             DebugCallTreeNode(x.toString, Map.empty, Map.empty, Map.empty, 0L, None, Vector.empty)
         }
@@ -714,20 +715,20 @@ trait StaticFormAppRendererFormResultPart {
       None
     else {
       val leaves = events.filter(is_debug_leave_event).groupBy(x => (x.label, x.startedAtNanos))
-      val spanNodes = events.zipWithIndex.collect { case (entry, index) if entry.kind == "enter" =>
+      val spannodes = events.zipWithIndex.collect { case (entry, index) if entry.kind == "enter" =>
         val leave = leaves.get((entry.label, entry.startedAtNanos)).flatMap(_.headOption)
-        val leaveAttrs = leave.map(_.attributes).getOrElse(Map.empty)
+        val leaveattrs = leave.map(_.attributes).getOrElse(Map.empty)
         index -> DebugCallTreeNode(
           entry.label,
-          entry.attributes ++ leaveAttrs,
+          entry.attributes ++ leaveattrs,
           entry.attributes,
-          leaveAttrs,
+          leaveattrs,
           entry.startedAtNanos,
           leave.flatMap(_.endedAtNanos).orElse(entry.endedAtNanos),
           Vector.empty
         )
       }
-      val markerNodes = events.zipWithIndex.collect {
+      val markernodes = events.zipWithIndex.collect {
         case (event, index) if event.kind != "enter" && !is_debug_leave_event(event) =>
           index -> DebugCallTreeNode(
             event.label,
@@ -739,11 +740,11 @@ trait StaticFormAppRendererFormResultPart {
             Vector.empty
           )
       }
-      val nodes = spanNodes ++ markerNodes
+      val nodes = spannodes ++ markernodes
       val byindex = nodes.toMap
-      val parentCandidates = spanNodes.toMap
-      val parentByIndex = nodes.map { case (index, node) =>
-        index -> parentCandidates.collect {
+      val parentcandidates = spannodes.toMap
+      val parentbyindex = nodes.map { case (index, node) =>
+        index -> parentcandidates.collect {
           case (parentIndex, parent) if parentIndex != index && debug_calltree_contains(parent, node) =>
             val span = parent.endedAtNanos.getOrElse(Long.MaxValue) - parent.startedAtNanos
             (parentIndex, span, parent.startedAtNanos)
@@ -751,13 +752,13 @@ trait StaticFormAppRendererFormResultPart {
       }.toMap
       def build(index: Int): DebugCallTreeNode = {
         val node = byindex(index)
-        val children = parentByIndex.collect { case (childIndex, Some(parentIndex)) if parentIndex == index => childIndex }
+        val children = parentbyindex.collect { case (childIndex, Some(parentIndex)) if parentIndex == index => childIndex }
           .toVector
           .sortBy(child => byindex(child).startedAtNanos)
           .map(build)
         node.copy(children = children)
       }
-      Some(parentByIndex.collect { case (index, None) => index }
+      Some(parentbyindex.collect { case (index, None) => index }
         .toVector
         .sortBy(index => byindex(index).startedAtNanos)
         .map(build))
@@ -785,13 +786,13 @@ trait StaticFormAppRendererFormResultPart {
   ): Option[DebugCallTreeNode] = {
     val label = record.getString("label").orElse(record.getString("name"))
     label.map { label =>
-      val topAttrs = debug_calltree_top_level_attributes(record)
-      val legacyAttrs = debug_calltree_attributes(record.asMap.get("attributes"))
-      val attrs = (if (legacyAttrs.nonEmpty) legacyAttrs else topAttrs) ++
+      val topattrs = debug_calltree_top_level_attributes(record)
+      val legacyattrs = debug_calltree_attributes(record.asMap.get("attributes"))
+      val attrs = (if (legacyattrs.nonEmpty) legacyattrs else topattrs) ++
         record.getString("kind").filter(_.nonEmpty).map("calltree_kind" -> _).toMap ++
         record.getString("display_label").filter(_.nonEmpty).map("display_label" -> _).toMap
-      val enterAttrs = debug_calltree_attributes(record.asMap.get("enter_attributes"))
-      val leaveAttrs = debug_calltree_attributes(record.asMap.get("leave_attributes"))
+      val enterattrs = debug_calltree_attributes(record.asMap.get("enter_attributes"))
+      val leaveattrs = debug_calltree_attributes(record.asMap.get("leave_attributes"))
       val (children, flowObservations) = debug_calltree_structured_flow(record)
       val observations = flowObservations ++ (record.asMap.get("observations") match {
         case Some(xs: Seq[?]) =>
@@ -802,8 +803,8 @@ trait StaticFormAppRendererFormResultPart {
       DebugCallTreeNode(
         label,
         attrs,
-        enterAttrs,
-        leaveAttrs,
+        enterattrs,
+        leaveattrs,
         attrs.get("started_at_nanos").flatMap(to_long_option).getOrElse(0L),
         attrs.get("ended_at_nanos").flatMap(to_long_option),
         children,
@@ -837,9 +838,9 @@ trait StaticFormAppRendererFormResultPart {
     record: Record
   ): Option[DebugCallTreeObservation] =
     record.getString("label").orElse(record.getString("name")).filterNot(debug_calltree_legacy_io_boundary).map { label =>
-      val topAttrs = debug_calltree_top_level_attributes(record)
-      val legacyAttrs = debug_calltree_attributes(record.asMap.get("attributes"))
-      val attrs = (if (legacyAttrs.nonEmpty) legacyAttrs else topAttrs) ++
+      val topattrs = debug_calltree_top_level_attributes(record)
+      val legacyattrs = debug_calltree_attributes(record.asMap.get("attributes"))
+      val attrs = (if (legacyattrs.nonEmpty) legacyattrs else topattrs) ++
         record.getString("kind").filter(_.nonEmpty).map("calltree_kind" -> _).toMap ++
         record.getString("display_label").filter(_.nonEmpty).map("display_label" -> _).toMap
       val node = DebugCallTreeNode(label, attrs, Map.empty, Map.empty, 0L, None, Vector.empty)
@@ -890,10 +891,10 @@ trait StaticFormAppRendererFormResultPart {
     parent: DebugCallTreeNode,
     child: DebugCallTreeNode
   ): Boolean = {
-    val parentEnd = parent.endedAtNanos.getOrElse(Long.MaxValue)
-    val childEnd = child.endedAtNanos.getOrElse(child.startedAtNanos)
-    parent.startedAtNanos <= child.startedAtNanos && childEnd <= parentEnd &&
-      (parent.startedAtNanos < child.startedAtNanos || parentEnd > childEnd)
+    val parentend = parent.endedAtNanos.getOrElse(Long.MaxValue)
+    val childend = child.endedAtNanos.getOrElse(child.startedAtNanos)
+    parent.startedAtNanos <= child.startedAtNanos && childend <= parentend &&
+      (parent.startedAtNanos < child.startedAtNanos || parentend > childend)
   }
 
   protected def debug_calltree_events(
@@ -965,12 +966,12 @@ trait StaticFormAppRendererFormResultPart {
     node: DebugCallTreeNode,
     depth: Int,
     path: Vector[Int],
-    parentDisplayLabel: Option[String] = None
+    parentdisplaylabel: Option[String] = None
   ): String = {
     val kind = debug_calltree_node_kind(node)
     val displayLabel = debug_calltree_display_label(node)
     val pair = path.mkString("-")
-    val line = DebugCallTreeLine("step", node.label, displayLabel, kind, debug_calltree_display_attributes(node, node.attributes), depth, pair, parentDisplayLabel, node.observations)
+    val line = DebugCallTreeLine("step", node.label, displayLabel, kind, debug_calltree_display_attributes(node, node.attributes), depth, pair, parentdisplaylabel, node.observations)
     val children = node.children.zipWithIndex.map { case (child, index) =>
       debug_calltree_node_html(child, depth + 1, path :+ (index + 1), Some(displayLabel))
     }.mkString
@@ -984,20 +985,20 @@ trait StaticFormAppRendererFormResultPart {
 
   protected def debug_calltree_line_html(
     line: DebugCallTreeLine,
-    childrenHtml: String
+    childrenhtml: String
   ): String = {
-    val childBlock =
-      if (childrenHtml.isEmpty)
+    val childblock =
+      if (childrenhtml.isEmpty)
         ""
       else
         s"""<div class="list-group mt-2 textus-calltree-children" data-calltree-children>
-           |${childrenHtml}
+           |${childrenhtml}
            |</div>""".stripMargin
     val attrs = debug_calltree_attributes_html(line.attributes)
     val observations = debug_calltree_observations_html(line.observations)
-    val body = attrs + observations + childBlock
+    val body = attrs + observations + childblock
     val badges = debug_calltree_badges(line)
-    val realIo = if (debug_calltree_has_highlight(line.attributes, "real_io")) "true" else ""
+    val realio = if (debug_calltree_has_highlight(line.attributes, "real_io")) "true" else ""
     val source = line.attributes
       .get("source")
       .orElse(line.attributes.get("cache_layer"))
@@ -1005,7 +1006,7 @@ trait StaticFormAppRendererFormResultPart {
       .getOrElse("")
     val style = s"padding-left:${if (line.depth == 0) 0.75 else 1.0}rem"
     val lane = if (line.depth == 0) "" else """<span class="textus-calltree-lane" aria-hidden="true"></span>"""
-    s"""<div class="list-group-item py-2 textus-calltree-row textus-calltree-row-${escape(line.role)}" style="${style}" data-calltree-node data-calltree-row data-calltree-${escape(line.role)}="true" data-calltree-pair="${escape(line.pair)}" data-calltree-depth="${line.depth}" data-calltree-kind="${escape(line.kind)}" data-calltree-real-io="${escape(realIo)}" data-calltree-source="${escape(source)}">
+    s"""<div class="list-group-item py-2 textus-calltree-row textus-calltree-row-${escape(line.role)}" style="${style}" data-calltree-node data-calltree-row data-calltree-${escape(line.role)}="true" data-calltree-pair="${escape(line.pair)}" data-calltree-depth="${line.depth}" data-calltree-kind="${escape(line.kind)}" data-calltree-real-io="${escape(realio)}" data-calltree-source="${escape(source)}">
        |  ${lane}
        |  <details${if (line.depth <= renderer_config.callTreeInitialOpenDepth) " open" else ""}>
        |    <summary class="d-flex flex-wrap align-items-center gap-2">
@@ -1027,13 +1028,13 @@ trait StaticFormAppRendererFormResultPart {
       val items = observations.map { observation =>
         val attrs = debug_calltree_attributes_html(observation.attributes)
         val badges = debug_calltree_badges(observation.attributes, observation.kind)
-        val realIo = if (debug_calltree_has_highlight(observation.attributes, "real_io")) "true" else ""
+        val realio = if (debug_calltree_has_highlight(observation.attributes, "real_io")) "true" else ""
         val source = observation.attributes
           .get("source")
           .orElse(observation.attributes.get("cache_layer"))
           .orElse(observation.attributes.get("datastore"))
           .getOrElse("")
-        s"""<div class="border-start border-2 ps-2 py-1 mb-1 textus-calltree-observation" data-calltree-observation data-calltree-observation-kind="${escape(observation.kind)}" data-calltree-observation-real-io="${escape(realIo)}" data-calltree-observation-source="${escape(source)}">
+        s"""<div class="border-start border-2 ps-2 py-1 mb-1 textus-calltree-observation" data-calltree-observation data-calltree-observation-kind="${escape(observation.kind)}" data-calltree-observation-real-io="${escape(realio)}" data-calltree-observation-source="${escape(source)}">
            |  <div class="d-flex flex-wrap align-items-center gap-2">
            |    <span class="badge text-bg-secondary">observation</span>
            |    <span class="fw-semibold" data-calltree-observation-label>${escape(observation.displayLabel)}</span>
@@ -1080,7 +1081,7 @@ trait StaticFormAppRendererFormResultPart {
     attributes: Map[String, String],
     kind: String
   ): String = {
-    val highlightBadges = debug_calltree_highlights(attributes).map { highlight =>
+    val highlightbadges = debug_calltree_highlights(attributes).map { highlight =>
       val variant = highlight match {
         case "real_io" => "text-bg-warning"
         case "cache_hit" => "text-bg-info"
@@ -1104,7 +1105,7 @@ trait StaticFormAppRendererFormResultPart {
         s"""<span class="badge ${variant} ms-2" data-calltree-badge>${escape(label)}</span>"""
       }
     }
-    (highlightBadges ++ badges).mkString
+    (highlightbadges ++ badges).mkString
   }
 
   protected def debug_calltree_highlights(
@@ -1162,8 +1163,8 @@ trait StaticFormAppRendererFormResultPart {
                s"""<pre class="bg-light border rounded p-2 mb-1"><code>${escape(value)}</code></pre>"""
              else
                s"""<code>${escape(value)}</code>"""
-           val longAttr = if (long) """ data-calltree-long-attribute="true"""" else ""
-           s"""<dt class="col-sm-3" data-calltree-attribute-key="${escape(key)}">${escape(key)}</dt><dd class="col-sm-9" data-calltree-attribute data-calltree-attribute-key="${escape(key)}"${longAttr}>${body}</dd>"""
+           val longattr = if (long) """ data-calltree-long-attribute="true"""" else ""
+           s"""<dt class="col-sm-3" data-calltree-attribute-key="${escape(key)}">${escape(key)}</dt><dd class="col-sm-9" data-calltree-attribute data-calltree-attribute-key="${escape(key)}"${longattr}>${body}</dd>"""
          }.mkString}
          |</dl>""".stripMargin
   }

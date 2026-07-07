@@ -158,6 +158,12 @@ baseline:
 - `textus-ai` is the first provider driver and publishes an AI runner adapter
   without replacing its existing public generate/chat operations.
 
+Post-closure Web route maintenance on Jul. 7, 2026 kept Phase 28 closed while
+hardening the Static Form Web App namespace. Component-owned Static Form Web
+apps use `/web/{component}/{webApp}` as the canonical route, generated form
+indexes use `/form/{component}`, and `/web/{webApp}` is valid only when a
+SAR/subsystem descriptor declares an explicit alias.
+
 Post-closure runtime maintenance on Jun. 29, 2026 aligned the CAR component
 developer startup path and launcher command installation path:
 

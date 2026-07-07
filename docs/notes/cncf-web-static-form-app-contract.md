@@ -113,17 +113,29 @@ server-emulator roots may reach the same Web/Form API mechanisms, but the
 effective admin policy is taken from `OperationMode` and the resolved runtime
 configuration.
 
-User-facing Static Form App HTML paths are under `/web`:
+User-facing component-owned Static Form App HTML paths are under `/web` with
+the component and Web app name:
 
 ```text
-/web/{componentName}
-/web/{componentName}/{page}
-/web/{componentName}/dashboard
-/web/{componentName}/dashboard/state
+/web/{component}/{webApp}
+/web/{component}/{webApp}/{page}
+/web/{component}/{webApp}/assets/{asset}
 ```
 
-The component name selects the application context. Built-in operational app
-contexts such as `console` and `manual` may also be mounted under `/web`.
+The component name selects the application context, and the Web app name selects
+the component-owned Web app. Top-level paths such as `/web/{webApp}` are valid
+only when a subsystem/SAR descriptor declares them explicitly as aliases.
+Generated component form indexes live under `/form/{component}`, not `/web`.
+
+Component dashboard routes are separate built-in operational routes:
+
+```text
+/web/{component}/dashboard
+/web/{component}/dashboard/state
+```
+
+Built-in operational app contexts such as `console` and `manual` may also be
+mounted under `/web`.
 
 Subsystem-wide operational pages use a separate namespace:
 
@@ -206,10 +218,11 @@ apps:
   - name: notice-board
 ```
 
-is visible to operators as a Static Form Web app with the default root
-`/web/notice-board` and canonical component route
+is visible to operators as a Static Form Web app with packaged resources under
+the `notice-board` app root and the canonical component route
 `/web/{component}/notice-board`. The configured descriptor is shown separately
-for comparison and troubleshooting.
+for comparison and troubleshooting. `/web/{webApp}` is not inferred from the
+app root; it requires an explicit SAR/subsystem alias.
 
 Component admin pages link to the component-scoped descriptor view:
 
@@ -351,22 +364,24 @@ applications and internal tools can be built in the CML+HTML range without
 writing Web framework code.
 
 Static Form App routing is file-layout based. A component may register one app
-and one route alias in `web.yaml`; it does not need to enumerate every page.
-For an app mounted at `/web/blog`, the runtime resolves pages from the component
-Web root:
+in `web.yaml`; it does not need to enumerate every page. The canonical runtime
+route is component-scoped. For component `blog` and app `blog`, the runtime
+resolves pages from the component Web root:
 
 ```text
-src/main/web/index.html          -> /web/blog
-src/main/web/publicblogs.html    -> /web/blog/publicblogs
-src/main/web/userblogs.html      -> /web/blog/userblogs
-src/main/web/new.html            -> /web/blog/new
-src/main/web/update.html         -> /web/blog/update
-src/main/web/assets/blog.css     -> /web/blog/assets/blog.css
+src/main/web/index.html          -> /web/blog/blog
+src/main/web/publicblogs.html    -> /web/blog/blog/publicblogs
+src/main/web/userblogs.html      -> /web/blog/blog/userblogs
+src/main/web/new.html            -> /web/blog/blog/new
+src/main/web/update.html         -> /web/blog/blog/update
+src/main/web/assets/blog.css     -> /web/blog/blog/assets/blog.css
 ```
 
 The extensionless URL is canonical, but `.html` URLs are accepted. The older
 `src/main/web/{app}/...` layout remains a fallback for existing samples; new
 component-owned Static Form Apps should prefer the flat Web root layout.
+Short aliases such as `/web/blog` are subsystem/SAR routes. They are valid only
+when declared explicitly and must not be inferred from the Web app name.
 
 Web developers edit source files, not packaged descriptors. Public pages and
 assets live under `src/main/web`, while private layouts, partials, widgets, and
@@ -423,6 +438,9 @@ page. It does not execute operations inline. It links to component operation
 form indexes under `/form/{component}`. Operation form results first resolve
 static result pages by filename convention, then fall back to descriptor-provided
 or built-in result rendering.
+The Web namespace must not fall back to component form indexes: `/web/{component}`
+and `/web/{webApp}` resolve to Web routes or 404, while `/form/{component}` is
+the component form index.
 
 Component admin pages also expose managed-data entry points for entity CRUD,
 data CRUD, aggregate CRUD, and view read. These are component-scoped management
@@ -437,7 +455,7 @@ write-side CRUD contract is defined.
 Phase 12 implements the shared web route first. Subsystem Dashboard and
 Component Dashboard are separate read-only operational surfaces backed by the
 same metadata class. Component Dashboard is mounted under
-`/web/{componentName}/dashboard` when a component needs a component-local view.
+`/web/{component}/dashboard` when a component needs a component-local view.
 
 ## Dashboard Validation Contract
 
@@ -1266,7 +1284,7 @@ list/detail/result context.
 
 The first runtime hook must be generic:
 
-- it may add an app HTML route such as `/web/{componentName}`
+- it may add an app HTML route such as `/web/{component}/{webApp}`
 - it may add a plain FORM submit route such as `/form/{component}/{service}/{operation}`
 - it may add a JSON Form API route such as `/form-api/{component}/{service}/{operation}`
 - it may add a subsystem HTML route such as `/web/system/dashboard`

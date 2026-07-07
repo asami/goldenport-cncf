@@ -77,6 +77,16 @@ lower-level runtime objects. If a needed helper does not exist, add or improve
 an internal DSL helper instead of copying runtime mechanics into component
 code.
 
+Locale, timezone, and formatting assumptions are runtime context, not domain
+logic defaults. Component logic should read them from the current
+`ExecutionContext` or protected runtime/context helpers, and operation inputs
+for locale or timezone should stay optional unless the domain contract requires
+the caller to choose them. Do not use JVM or host defaults such as
+`Locale.getDefault`, `ZoneId.systemDefault`, or default date/number/currency
+formatters in component behavior. When an entity needs a durable timezone or
+regional interpretation, resolve the omitted value from the execution context
+at creation time and persist the resolved value.
+
 Examples of preferred helper routes:
 
 - configuration lookup: `config_string`, `config_int`, `config_double`,
@@ -87,8 +97,9 @@ Examples of preferred helper routes:
 - component-local user data: `component_local_data_dir`,
   `embedded_datastore`, `embedded_datastore_read`,
   `embedded_datastore_update`, `embedded_datastore_migrate`;
-- entity, blob, association, child binding, job, event, HTTP, and shell
-  behavior through existing `ActionCallFeaturePart` helper families;
+- entity, blob, association, child binding, job, event, HTTP, locale,
+  timezone, formatting, and shell behavior through existing
+  `ActionCallFeaturePart` helper families;
 - persistence and entity behavior through internal DSL / `UnitOfWork`, not raw
   stores.
 
@@ -101,6 +112,8 @@ Component code should not:
   application logic;
 - instantiate outbound HTTP clients directly for normal component/provider
   behavior;
+- depend on JVM default locale, timezone, character encoding, date/time
+  formatting, number formatting, or currency formatting;
 - open component-local embedded databases or user data files directly when a
   CNCF internal DSL helper exists;
 - hand-roll tenant filters, lifecycle checks, logical delete filtering, or
@@ -318,9 +331,67 @@ effect still passes through CNCF's CallTree, runtime HTTP driver, and future
 sandbox or egress policy.
 
 Component code should not create `java.net.http.HttpClient`, sttp clients,
-requests clients, or similar direct outbound clients for normal runtime
-behavior. If a lower-level helper is missing, add the internal DSL helper or a
-small component-local adapter that delegates to `UnitOfWorkOp.Http*`.
+requests clients, curl-style subprocesses, or similar direct outbound clients
+for normal runtime behavior. HTTP driver selection, timeout policy,
+observability, sandboxing, egress control, retry behavior, and deterministic
+test substitution belong to CNCF runtime. If a lower-level helper is missing,
+add the internal DSL helper or a small component-local adapter that delegates
+to `UnitOfWorkOp.Http*`.
+
+## Built-In CAR Web UI
+
+When a CAR includes a built-in Web UI and the project has no stronger
+product-specific frontend requirement, use Bootstrap plus Material Design. This
+is a component developer recommendation, not a mandatory platform rule. It
+keeps built-in UIs aligned with CNCF Web packaging, generated admin surfaces,
+and the existing `textus-*` component style.
+
+Declare the CNCF Web UX profile as `bootstrap-material` when the CAR uses
+CNCF-hosted built-in Web UI:
+
+```yaml
+web:
+  profile: bootstrap-material
+```
+
+Use Bootstrap layout, forms, buttons, tables, cards, and utility classes as the
+HTML/CSS baseline. Use Material Icons or an equivalent Material icon set, and
+use Material Design visual language for spacing, color, controls, and status
+presentation. Package Web assets inside the CAR and serve them through CNCF Web
+packaging; do not require external CDN access for the built-in UI.
+
+Keep Web UI behavior on top of component operations, CNCF automatic REST,
+client, command, and generated admin behavior. Do not create a separate UI-only
+domain path. If a project needs a highly custom SPA, native frontend, or
+external product platform, place that Web tier outside CNCF and use the CAR's
+public operation surfaces.
+
+Component-owned Static Form Web apps use a component-scoped canonical route:
+
+```text
+/web/{component}/{webApp}
+/web/{component}/{webApp}/{page}
+/web/{component}/{webApp}/assets/{asset}
+```
+
+For example, component `art-scene` with Web app `textus-art-scene` is exposed
+at `/web/art-scene/textus-art-scene`. Do not rely on `/web/{webApp}` or
+`/web/{component}` as implicit shortcuts. Short routes such as `/web/art` are
+valid only when the subsystem/SAR Web descriptor declares them explicitly as
+aliases.
+
+Generated operation form indexes are separate from Web app routes. Use:
+
+```text
+/form/{component}
+/form/{component}/{service}/{operation}
+```
+
+The `/web` namespace is for Web pages, admin/manual/dashboard pages, static
+assets, and explicit aliases. It must not fall back to generated component form
+indexes. If a component needs a human navigation page, provide a real Web app
+page under `/web/{component}/{webApp}` and link from that page to
+`/form/{component}` or operation-specific `/form/...` routes.
 
 ## Component-Local Embedded Datastore
 

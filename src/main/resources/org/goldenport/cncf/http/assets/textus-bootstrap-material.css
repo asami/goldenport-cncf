@@ -1,0 +1,101 @@
+/*
+ * Bootstrap 5 + Material Design-style foundation for CNCF generated Web UIs.
+ * This file intentionally keeps Bootstrap as the DOM and component contract.
+ */
+:root {
+  --textus-md-primary: #1565c0;
+  --textus-md-primary-hover: #0d47a1;
+  --textus-md-surface: #ffffff;
+  --textus-md-background: #f5f7fb;
+  --textus-md-outline: #d7dde7;
+  --textus-md-on-surface: #1f2933;
+  --textus-md-muted: #627386;
+  --textus-md-radius: 8px;
+  --textus-md-shadow: 0 1px 2px rgba(15, 23, 42, 0.14), 0 1px 3px rgba(15, 23, 42, 0.10);
+  --textus-md-shadow-raised: 0 4px 12px rgba(15, 23, 42, 0.16);
+}
+
+body {
+  background: var(--textus-md-background);
+  color: var(--textus-md-on-surface);
+}
+
+.card,
+.modal-content,
+.dropdown-menu {
+  border-color: var(--textus-md-outline);
+  border-radius: var(--textus-md-radius);
+  box-shadow: var(--textus-md-shadow);
+}
+
+.btn {
+  border-radius: 6px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.btn-primary {
+  --bs-btn-bg: var(--textus-md-primary);
+  --bs-btn-border-color: var(--textus-md-primary);
+  --bs-btn-hover-bg: var(--textus-md-primary-hover);
+  --bs-btn-hover-border-color: var(--textus-md-primary-hover);
+  box-shadow: var(--textus-md-shadow);
+}
+
+.btn-outline-primary {
+  --bs-btn-color: var(--textus-md-primary);
+  --bs-btn-border-color: var(--textus-md-primary);
+  --bs-btn-hover-bg: var(--textus-md-primary);
+  --bs-btn-hover-border-color: var(--textus-md-primary);
+}
+
+.form-control,
+.form-select,
+.input-group-text {
+  border-color: var(--textus-md-outline);
+  border-radius: 6px;
+}
+
+.form-control:focus,
+.form-select:focus {
+  border-color: var(--textus-md-primary);
+  box-shadow: 0 0 0 0.2rem rgba(21, 101, 192, 0.16);
+}
+
+.table {
+  --bs-table-striped-bg: rgba(21, 101, 192, 0.035);
+  --bs-table-hover-bg: rgba(21, 101, 192, 0.075);
+}
+
+.table thead th {
+  color: var(--textus-md-muted);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.badge {
+  border-radius: 999px;
+  font-weight: 500;
+}
+
+.alert {
+  border-radius: var(--textus-md-radius);
+  border-color: var(--textus-md-outline);
+  box-shadow: var(--textus-md-shadow);
+}
+
+.nav-tabs .nav-link,
+.nav-pills .nav-link {
+  border-radius: 6px;
+}
+
+.textus-material-icon,
+.textus-icon {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  vertical-align: -0.125em;
+  fill: currentColor;
+}

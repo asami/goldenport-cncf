@@ -329,10 +329,9 @@ For example, an SAR containing component `abc` may route
 /web/...                     SAR default Web app route
 ```
 
-CAR-only execution creates an implicit SAR. That implicit SAR may apply the
-same alias rule so a single-component application can expose its primary Web
-app directly under `/web/{webApp}` or `/web` while preserving the canonical
-`/web/{component}/{webApp}` route.
+CAR-only execution keeps the canonical route. It does not infer public
+`/web/{webApp}` or `/web` aliases from the Component-local Web app name.
+Short routes must be declared as SAR/subsystem routes.
 
 Alias routes must not change resource ownership. Authorization, form dispatch,
 template lookup, and asset lookup still resolve to the original Component Web
@@ -341,15 +340,14 @@ Descriptor.
 
 Alias resolution is a SAR responsibility. The canonical component route is
 always present; SAR aliases are additional routes selected by the SAR
-descriptor or by the implicit SAR created for single-CAR execution. Alias
-resolution must run before the built-in Static Form App fallback so
-`/web/{webApp}` can select a component Web app when a SAR route explicitly
-binds that path. If multiple component Web apps could claim the same alias, the
-runtime must reject the descriptor unless one route is selected explicitly.
+descriptor. Component-local Web apps do not implicitly own `/web/{webApp}`.
+`/web/{webApp}` is valid only when a SAR/subsystem route explicitly binds that
+path. If multiple component Web apps could claim the same alias, the runtime
+must reject the descriptor unless one route is selected explicitly.
 
-The implicit SAR may provide a convenience alias only when it can prove that
-there is exactly one component and one exposed Web app. Otherwise it keeps only
-the canonical `/web/{component}/{webApp}` route.
+The implicit SAR keeps the canonical `/web/{component}/{webApp}` route. Form
+indexes are not exposed through `/web`; the component form index route is
+`/form/{component}`.
 
 The descriptor route vocabulary is:
 

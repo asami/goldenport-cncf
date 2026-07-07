@@ -94,13 +94,15 @@ DSL routes instead of constructing an HTTP client directly:
   code is outside an `ActionCallFeaturePart` helper surface.
 
 Application and provider code must not instantiate direct outbound HTTP
-clients, such as `java.net.http.HttpClient`, for normal component behavior.
-The internal DSL route records the operation in the CallTree, gives the runtime
-HTTP driver a single chokepoint, and keeps future sandbox or egress policy
-inside CNCF. A provider service obtained through
-`ExtensionPoint.provide(...)(using ExecutionContext)` may capture that
-`ExecutionContext` and use it later to execute HTTP `UnitOfWork` operations.
-It should not keep a global HTTP client outside the CNCF runtime path.
+clients, such as `java.net.http.HttpClient`, sttp clients, requests clients, or
+curl-style subprocesses, for normal component behavior. The internal DSL route
+records the operation in the CallTree, gives the runtime HTTP driver a single
+chokepoint, and keeps timeout policy, sandboxing, egress policy, metrics,
+retry, audit, and deterministic fixture substitution inside CNCF. A provider
+service obtained through `ExtensionPoint.provide(...)(using ExecutionContext)`
+may capture that `ExecutionContext` and use it later to execute HTTP
+`UnitOfWork` operations. It should not keep a global HTTP client outside the
+CNCF runtime path.
 
 For component-local user data, component logic should use the embedded
 datastore helper family instead of opening files or embedded databases directly:

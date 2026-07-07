@@ -170,6 +170,8 @@ WU-04 defines the initial fixed profile names:
 - `bootstrap`: default generated Web profile and the current renderer baseline.
 - `material`: Material Design profile path metadata. WU-04 does not replace
   Bootstrap classes or assets with Material assets.
+- `bootstrap-material`: Bootstrap 5 DOM and JavaScript with CNCF-provided
+  Material Design-style CSS and local icon assets.
 - `compact`: denser generated UI profile for repeated admin/operator work.
 - `admin`: generated admin UI profile. Admin/generated pages default to this
   profile where the renderer already represents an admin surface and no global
@@ -204,10 +206,11 @@ If no applicable profile is configured, generated Web pages use `bootstrap`.
 Unknown profile names are descriptor validation errors; the runtime must not
 silently fall back to `bootstrap`.
 
-WU-04 is a metadata and contract step. It must not change Bootstrap DOM,
-operation routes, form field names, authorization, source binding, or
-server-side execution paths. Profile-specific renderer class/asset changes are
-deferred to later profile-rendering work.
+WU-04 establishes the profile contract without changing operation routes,
+form field names, authorization, source binding, or server-side execution
+paths. `bootstrap-material` keeps Bootstrap DOM and JavaScript as the runtime
+component contract, then layers CNCF-owned local CSS and icon assets on top of
+that baseline.
 
 WU-05 wires the resolved profile into the Static Form renderer as semantic DOM
 metadata. Generated operation forms and default operation result pages emit
@@ -232,6 +235,21 @@ assets plus local Textus widget assets:
 /web/assets/bootstrap.bundle.min.js
 /web/assets/textus-widgets.css
 /web/assets/textus-widgets.js
+```
+
+When the resolved UX profile is `bootstrap-material`, the renderer also inserts
+these local profile CSS assets after the Bootstrap/Textus CSS baseline and before
+application-declared CSS:
+
+```text
+/web/assets/textus-bootstrap-material.css
+/web/assets/textus-material-icons.css
+```
+
+The local icon sprite is served as a packaged Web asset for explicit icon use:
+
+```text
+/web/assets/textus-material-icons.svg
 ```
 
 Applications may add local CSS, but widget output must not depend on CDN access

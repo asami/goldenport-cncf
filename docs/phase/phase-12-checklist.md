@@ -940,6 +940,11 @@ owns the portal route, while Component apps keep their component-scoped routes.
       Explicit descriptor aliases and implicit SAR convenience aliases are
       implemented when the target is unambiguous by single component or a unique
       component/Web-app name match.
+      Note (2026-07-07): later Web route hardening removed implicit
+      `/web/{webAppName}` aliases from runtime behavior. Component-owned Web
+      apps now use canonical `/web/{componentName}/{webAppName}` routes, while
+      `/web/{aliasName}` remains available only through explicit SAR/subsystem
+      descriptor routes.
 - [x] Migrate the current `config/web-descriptor.yaml` and `config/*.html`
       validation shape to the canonical `/web` layout.
       - Do not preserve `config/` as a packaging compatibility contract.
@@ -989,6 +994,9 @@ Completed scope:
 - Component Web apps are mounted under `/web/{component}/{webApp}`.
 - SAR routes can alias component Web apps to `/web/{webApp}` or `/web` without
   changing ownership, authorization, templates, or assets.
+- Note (2026-07-07): current runtime behavior requires these aliases to be
+  explicit descriptor routes. It no longer derives `/web/{webApp}` or `/web`
+  aliases from a single Component Web app.
 - filesystem and archive `/web` roots use the same descriptor/template/resource
   lookup rules.
 - `textus-sample-app` uses the canonical `/web` layout for Static Form Web App
@@ -2936,6 +2944,8 @@ notice-board runtime mapping.
   `/web/{component}/{webApp}` runtime route.
 - Confirm subsystem aliases can expose the same app at `/web/{webApp}` or
   `/web`.
+- Note (2026-07-07): this remains true only for explicit subsystem/SAR aliases;
+  implicit single-CAR convenience aliases were removed.
 - Confirm local assets resolve under both canonical and alias routes.
 - Confirm completed descriptor admin pages expose the effective route and asset
   composition.

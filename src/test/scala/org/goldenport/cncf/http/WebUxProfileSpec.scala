@@ -2,7 +2,7 @@ package org.goldenport.cncf.http
 
 /*
  * @since   Jun. 19, 2026
- * @version Jun. 19, 2026
+ * @version Jul.  7, 2026
  * @author  ASAMI, Tomoharu
  */
 import org.scalatest.matchers.should.Matchers
@@ -13,6 +13,7 @@ final class WebUxProfileSpec extends AnyWordSpec with Matchers {
     "resolve built-in profile names" in {
       WebUxProfile.parse("bootstrap") shouldBe Some(WebUxProfile.Bootstrap)
       WebUxProfile.parse("material") shouldBe Some(WebUxProfile.Material)
+      WebUxProfile.parse("bootstrap-material") shouldBe Some(WebUxProfile.BootstrapMaterial)
       WebUxProfile.parse("compact") shouldBe Some(WebUxProfile.Compact)
       WebUxProfile.parse("admin") shouldBe Some(WebUxProfile.Admin)
     }

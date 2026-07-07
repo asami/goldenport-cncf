@@ -2,7 +2,7 @@ package org.goldenport.cncf.http
 
 /*
  * @since   Jun. 19, 2026
- * @version Jun. 19, 2026
+ * @version Jul.  7, 2026
  * @author  ASAMI, Tomoharu
  */
 
@@ -17,6 +17,9 @@ object WebUxProfile {
   case object Material extends WebUxProfile {
     val name = "material"
   }
+  case object BootstrapMaterial extends WebUxProfile {
+    val name = "bootstrap-material"
+  }
   case object Compact extends WebUxProfile {
     val name = "compact"
   }
@@ -29,6 +32,7 @@ object WebUxProfile {
   val values: Vector[WebUxProfile] = Vector(
     Bootstrap,
     Material,
+    BootstrapMaterial,
     Compact,
     Admin
   )
