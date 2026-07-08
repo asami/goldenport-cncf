@@ -1,18 +1,20 @@
 package org.goldenport.cncf.spi
 
 import org.goldenport.Consequence
-import org.goldenport.cncf.component.Component
+import org.goldenport.protocol.Protocol
+import org.goldenport.cncf.component.{Component, ComponentId, ComponentInit, ComponentInstanceId, ComponentOrigin}
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.spi.ai.runner.{AiGenerateRequest, AiGenerateResponse, AiRunner, AiRunnerSocket}
 import org.goldenport.cncf.spi.geo.resolver.{GeoResolver, GeoResolverSocket}
 import org.goldenport.cncf.spi.toolchain.runner.{ConvertSvgPagesToPdfRequest, ToolchainArtifactResponse, ToolchainRunner, ToolchainRunnerSocket}
+import org.goldenport.cncf.testutil.TestComponentFactory
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jul.  2, 2026
- * @version Jul.  3, 2026
+ * @version Jul.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 final class SpiSpec
@@ -76,6 +78,46 @@ final class SpiSpec
       result shouldBe a[Consequence.Failure[_]]
     }
 
+    "select a test provider component from an explicit SPI binding" in {
+      Given("two equivalent providers and a consumer socket")
+      given ExecutionContext = ExecutionContext.create()
+      val subsystem = TestComponentFactory.emptySubsystem("spi_explicit_binding")
+      val prod = _initialized_component(subsystem, "prodprovider", _ProviderComponent("prod"))
+      val test = _initialized_component(subsystem, "testprovider", _ProviderComponent("test"))
+      val consumer = _initialized_component(subsystem, "consumer", _ConsumerComponent())
+      val binding = SpiRuntimeBinding(
+        socket = SpiSocketSelector(Some("consumer"), "ai-runner"),
+        provider = SpiProviderSelector(component = Some("testprovider")),
+        selection = SpiSelection()
+      )
+
+      When("SPI resolution runs with an explicit binding")
+      val result = SpiResolver.resolve(Vector(prod, test, consumer), Vector(binding))
+
+      Then("the provider from the bound component is installed")
+      result shouldBe a[Consequence.Success[_]]
+      consumer.aiRunner.generate(AiGenerateRequest("hello")).toOption.get.text shouldBe "test:hello"
+    }
+
+    "reject provider service bindings until service-level matching is supported" in {
+      Given("a binding that names an unsupported provider service selector")
+      given ExecutionContext = ExecutionContext.create()
+      val subsystem = TestComponentFactory.emptySubsystem("spi_provider_service_binding")
+      val provider = _initialized_component(subsystem, "testprovider", _ProviderComponent("test"))
+      val consumer = _initialized_component(subsystem, "consumer", _ConsumerComponent())
+      val binding = SpiRuntimeBinding(
+        socket = SpiSocketSelector(Some("consumer"), "ai-runner"),
+        provider = SpiProviderSelector(component = Some("testprovider"), service = Some("ai-runner-test")),
+        selection = SpiSelection()
+      )
+
+      When("SPI resolution runs")
+      val result = SpiResolver.resolve(Vector(provider, consumer), Vector(binding))
+
+      Then("resolution fails instead of ignoring the service selector")
+      result shouldBe a[Consequence.Failure[_]]
+    }
+
     "select a provider by mode and engine" in {
       Given("two providers with different selections")
       given ExecutionContext = ExecutionContext.create()
@@ -121,6 +163,27 @@ final class SpiSpec
     selection: SpiSelection = SpiSelection()
   ) extends Component with AiRunnerSocket {
     override def spiSelection: SpiSelection = selection
+  }
+
+  private def _initialized_component[A <: Component](
+    subsystem: org.goldenport.cncf.subsystem.Subsystem,
+    name: String,
+    component: A
+  ): A = {
+    val componentid = ComponentId(name)
+    val core = Component.Core.create(
+      name = name,
+      componentid = componentid,
+      instanceid = ComponentInstanceId.default(componentid),
+      protocol = Protocol.empty
+    )
+    val init = ComponentInit(
+      subsystem = subsystem,
+      core = core,
+      origin = ComponentOrigin.Builtin
+    )
+    component.initialize(init)
+    component
   }
 
   private final case class _ProviderComponent(

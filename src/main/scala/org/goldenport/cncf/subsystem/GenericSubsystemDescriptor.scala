@@ -11,11 +11,13 @@ import org.goldenport.cncf.component.ComponentDescriptor
 import org.goldenport.cncf.component.ComponentDescriptorLoader
 import org.goldenport.cncf.component.DescriptorRecordLoader
 import org.goldenport.cncf.security.{AuthorizationResourcePolicies, AuthorizationResourcePolicy, OperationAuthorizationRule, SecurityRoleDefinition, SecuritySubject}
+import org.goldenport.cncf.spi.{SpiProviderSelector, SpiRuntimeBinding, SpiSelection, SpiSocketSelector}
 
 /*
  * @since   Apr.  7, 2026
  *  version Apr. 28, 2026
- * @version May.  7, 2026
+ *  version May.  7, 2026
+ * @version Jul.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class GenericSubsystemAuthenticationProviderBinding(
@@ -313,13 +315,13 @@ object GenericSubsystemDescriptor {
 
   private def _merge_assembly_sources(
     defaults: Option[GenericSubsystemAssemblyDescriptorSource],
-    overrideSource: GenericSubsystemAssemblyDescriptorSource
+    overridesource: GenericSubsystemAssemblyDescriptorSource
   ): GenericSubsystemAssemblyDescriptorSource =
     defaults match {
       case Some(base) =>
-        overrideSource.copy(record = _merge_assembly_records(base.record, overrideSource.record))
+        overridesource.copy(record = _merge_assembly_records(base.record, overridesource.record))
       case None =>
-        overrideSource
+        overridesource
     }
 
   private def _merge_assembly_records(
@@ -329,11 +331,19 @@ object GenericSubsystemDescriptor {
     val base = defaults.asMap
     val over = overrides.asMap
     val wiring = _merge_assembly_wiring(base.get("wiring"), over.get("wiring"))
-    val entries = base.toVector ++ over.toVector.filterNot(_._1 == "wiring")
-    wiring match {
-      case Some(value) => Record.create(entries.filterNot(_._1 == "wiring") :+ ("wiring" -> value))
-      case None => Record.create(entries)
+    val spi = _merge_assembly_spi(base.get("spi"), over.get("spi"))
+    val entries = base.toVector ++ over.toVector.filterNot {
+      case (key, _) => key == "wiring" || key == "spi"
     }
+    val withwiring = wiring match {
+      case Some(value) => entries.filterNot(_._1 == "wiring") :+ ("wiring" -> value)
+      case None => entries
+    }
+    val withspi = spi match {
+      case Some(value) => withwiring.filterNot(_._1 == "spi") :+ ("spi" -> value)
+      case None => withwiring
+    }
+    Record.create(withspi)
   }
 
   private def _merge_assembly_wiring(
@@ -345,10 +355,50 @@ object GenericSubsystemDescriptor {
     if (base.isEmpty && over.isEmpty) {
       None
     } else {
-      val overrideKeys = over.flatMap(_wiring_binding_key).toSet
-      Some(base.filterNot(r => _wiring_binding_key(r).exists(overrideKeys.contains)) ++ over)
+      val overridekeys = over.flatMap(_wiring_binding_key).toSet
+      Some(base.filterNot(r => _wiring_binding_key(r).exists(overridekeys.contains)) ++ over)
     }
   }
+
+  private def _merge_assembly_spi(
+    defaults: Option[Any],
+    overrides: Option[Any]
+  ): Option[Record] =
+    (defaults.flatMap(_any_to_record), overrides.flatMap(_any_to_record)) match {
+      case (None, None) => None
+      case (Some(record), None) => Some(record)
+      case (None, Some(record)) => Some(record)
+      case (Some(base), Some(over)) =>
+        val bindings = _merge_assembly_spi_bindings(base.getAny("bindings"), over.getAny("bindings"))
+        val entries = base.asMap.toVector ++ over.asMap.toVector.filterNot(_._1 == "bindings")
+        bindings match {
+          case Some(value) => Some(Record.create(entries.filterNot(_._1 == "bindings") :+ ("bindings" -> value)))
+          case None => Some(Record.create(entries))
+        }
+    }
+
+  private def _merge_assembly_spi_bindings(
+    defaults: Option[Any],
+    overrides: Option[Any]
+  ): Option[Vector[Record]] = {
+    val base = _records_value(defaults)
+    val over = _records_value(overrides)
+    if (base.isEmpty && over.isEmpty) {
+      None
+    } else {
+      val overridekeys = over.flatMap(_spi_binding_key).toSet
+      Some(base.filterNot(r => _spi_binding_key(r).exists(overridekeys.contains)) ++ over)
+    }
+  }
+
+  private def _spi_binding_key(
+    rec: Record
+  ): Option[String] =
+    rec.getAny("socket").flatMap(_any_to_record).flatMap { socket =>
+      _string(socket, "contract").map { contract =>
+        Vector(_string(socket, "component").getOrElse(""), contract).map(_comparison_key).mkString("/")
+      }
+    }
 
   private def _wiring_records(value: Any): Vector[Record] =
     value match {
@@ -442,8 +492,8 @@ object GenericSubsystemDescriptor {
       case (Some(x), None) => Some(x)
       case (None, Some(x)) => Some(x)
       case (Some(a), Some(b)) =>
-        val overrideKeys = b.roles.keys.map(_comparison_key).toSet
-        val inherited = a.roles.filterNot { case (name, _) => overrideKeys.contains(_comparison_key(name)) }
+        val overridekeys = b.roles.keys.map(_comparison_key).toSet
+        val inherited = a.roles.filterNot { case (name, _) => overridekeys.contains(_comparison_key(name)) }
         Some(GenericSubsystemAuthorizationBinding(
           roles = inherited ++ b.roles,
           resources = a.resources.mergeOverride(b.resources)
@@ -502,8 +552,8 @@ object GenericSubsystemDescriptor {
     defaults: Vector[A],
     overrides: Vector[A]
   )(name: A => String): Vector[A] = {
-    val overrideKeys = overrides.map(x => _comparison_key(name(x))).toSet
-    defaults.filterNot(x => overrideKeys.contains(_comparison_key(name(x)))) ++ overrides
+    val overridekeys = overrides.map(x => _comparison_key(name(x))).toSet
+    defaults.filterNot(x => overridekeys.contains(_comparison_key(name(x)))) ++ overrides
   }
 
   private def _comparison_key(value: String): String =
@@ -990,6 +1040,142 @@ object GenericSubsystemDescriptor {
         case _ =>
           Vector.empty
       }
+    }
+
+  def resolveAssemblySpiBindings(
+    descriptor: GenericSubsystemDescriptor
+  ): Consequence[Vector[SpiRuntimeBinding]] =
+    descriptor.assemblyDescriptor.toVector.foldLeft(Consequence.success(Vector.empty[SpiRuntimeBinding])) {
+      case (result, source) =>
+        result.flatMap { xs =>
+          _assembly_spi_binding_records(source).flatMap { records =>
+            records.foldLeft(Consequence.success(Vector.empty[SpiRuntimeBinding])) { (bindings, record) =>
+              bindings.flatMap { current =>
+                _spi_binding_from_record(record).map(current :+ _)
+              }
+            }.map(xs ++ _)
+          }
+        }
+    }
+
+  private def _assembly_spi_binding_records(
+    source: GenericSubsystemAssemblyDescriptorSource
+  ): Consequence[Vector[Record]] =
+    source.record.getAny("spi") match {
+      case None => Consequence.success(Vector.empty)
+      case Some(value) =>
+        _any_to_record(value) match {
+          case Some(spi) =>
+            _records_value_c(spi.getAny("bindings"), "assembly.spi.bindings")
+          case None =>
+            Consequence.resourceInvalid(s"assembly.spi must be a record: ${source.path.map(_.toString).getOrElse(source.source)}")
+        }
+    }
+
+  private def _spi_binding_from_record(
+    rec: Record
+  ): Consequence[SpiRuntimeBinding] =
+    _record_field(rec, "socket").flatMap { socket =>
+      _required_string(socket, "contract").flatMap { contract =>
+        _optional_record_field(rec, "provider").flatMap { provider =>
+          val service = provider.flatMap(_string(_, "service"))
+          if (service.nonEmpty) {
+            Consequence.resourceInvalid("assembly.spi.bindings provider.service is not supported yet")
+          } else {
+            _optional_record_field(rec, "selection").map { selection =>
+              SpiRuntimeBinding(
+                socket = SpiSocketSelector(
+                  component = _string(socket, "component"),
+                  contract = contract
+                ),
+                provider = SpiProviderSelector(
+                  component = provider.flatMap(_string(_, "component")),
+                  service = service
+                ),
+                selection = _spi_selection(selection)
+              )
+            }
+          }
+        }
+      }
+    }
+
+  private def _spi_selection(
+    rec: Option[Record]
+  ): SpiSelection =
+    rec.map { record =>
+      SpiSelection(
+        provider = _string(record, "provider"),
+        mode = _string(record, "mode").orElse(_string(record, "profile")),
+        engine = _string(record, "engine")
+      )
+    }.getOrElse(SpiSelection())
+
+  private def _records_value(
+    value: Option[Any]
+  ): Vector[Record] =
+    value match {
+      case Some(xs: Seq[?]) => xs.toVector.flatMap(_any_to_record)
+      case Some(xs: java.util.List[?]) => xs.asScala.toVector.flatMap(_any_to_record)
+      case Some(record: Record) => Vector(record)
+      case _ => Vector.empty
+    }
+
+  private def _records_value_c(
+    value: Option[Any],
+    label: String
+  ): Consequence[Vector[Record]] =
+    value match {
+      case None => Consequence.success(Vector.empty)
+      case Some(record: Record) => Consequence.success(Vector(record))
+      case Some(xs: Seq[?]) => _records_from_values_c(xs.toVector, label)
+      case Some(xs: java.util.List[?]) => _records_from_values_c(xs.asScala.toVector, label)
+      case Some(_) => Consequence.resourceInvalid(s"${label} must be a record or list of records")
+    }
+
+  private def _records_from_values_c(
+    values: Vector[Any],
+    label: String
+  ): Consequence[Vector[Record]] =
+    values.zipWithIndex.foldLeft(Consequence.success(Vector.empty[Record])) {
+      case (result, (value, index)) =>
+        result.flatMap { xs =>
+          _any_to_record(value) match {
+            case Some(record) => Consequence.success(xs :+ record)
+            case None => Consequence.resourceInvalid(s"${label}[${index}] must be a record")
+          }
+        }
+    }
+
+  private def _record_field(
+    rec: Record,
+    key: String
+  ): Consequence[Record] =
+    _optional_record_field(rec, key).flatMap {
+      case Some(record) => Consequence.success(record)
+      case None => Consequence.resourceInvalid(s"assembly.spi.bindings.${key} is required")
+    }
+
+  private def _optional_record_field(
+    rec: Record,
+    key: String
+  ): Consequence[Option[Record]] =
+    rec.getAny(key) match {
+      case None => Consequence.success(None)
+      case Some(value) =>
+        _any_to_record(value) match {
+          case Some(record) => Consequence.success(Some(record))
+          case None => Consequence.resourceInvalid(s"assembly.spi.bindings.${key} must be a record")
+        }
+    }
+
+  private def _required_string(
+    rec: Record,
+    key: String
+  ): Consequence[String] =
+    _string(rec, key) match {
+      case Some(value) => Consequence.success(value)
+      case None => Consequence.resourceInvalid(s"assembly.spi.bindings.socket.${key} is required")
     }
 
   private def _resolved_wiring_binding_from_record(

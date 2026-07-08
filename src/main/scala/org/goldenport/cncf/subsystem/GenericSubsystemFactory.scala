@@ -6,16 +6,18 @@ import org.goldenport.cncf.assembly.AssemblyReport
 import org.goldenport.cncf.component.{Component, ComponentCreate, ComponentDescriptor, ComponentDescriptorLoader, ComponentOrigin}
 import org.goldenport.cncf.component.repository.ComponentRepository
 import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, ScopeContext, ScopeKind}
-import org.goldenport.cncf.config.{ConfigurationAccess, RuntimeConfig}
+import org.goldenport.cncf.config.{ConfigurationAccess, RuntimeConfig, RuntimeTestDescriptor}
 import org.goldenport.configuration.{Configuration, ConfigurationTrace, ResolvedConfiguration}
 import org.goldenport.cncf.path.AliasResolver
 import org.goldenport.Consequence
+import org.goldenport.cncf.spi.SpiResolver
 
 /*
  * @since   Apr.  7, 2026
  *  version Apr. 23, 2026
  *  version Apr. 25, 2026
- * @version May. 18, 2026
+ *  version May. 18, 2026
+ * @version Jul.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 object GenericSubsystemFactory {
@@ -76,9 +78,14 @@ object GenericSubsystemFactory {
   def loadDescriptor(
     configuration: ResolvedConfiguration
   ): Option[GenericSubsystemDescriptor] =
+    loadDescriptorC(configuration).toOption.flatten
+
+  def loadDescriptorC(
+    configuration: ResolvedConfiguration
+  ): Consequence[Option[GenericSubsystemDescriptor]] =
     descriptorPath(configuration).flatMap { path =>
-      GenericSubsystemDescriptor.load(path).toOption.map(_with_assembly_descriptor_override(_, configuration))
-    }
+      Some(GenericSubsystemDescriptor.load(path).flatMap(_with_assembly_descriptor_override_c(_, configuration)).map(Some(_)))
+    }.getOrElse(Consequence.success(None))
 
   def resolveDescriptor(
     configuration: ResolvedConfiguration
@@ -88,18 +95,25 @@ object GenericSubsystemFactory {
   def resolveDescriptorC(
     configuration: ResolvedConfiguration
   ): Consequence[Option[GenericSubsystemDescriptor]] =
-    _or_else(Consequence.success(loadDescriptor(configuration))) {
-      _or_else(Consequence.success(
-        subsystemName(configuration).flatMap { name =>
-          ComponentRepository.resolveSubsystemDescriptor(_repository_specs(configuration), name)
-            .map(_with_assembly_descriptor_override(_, configuration))
+    _or_else(loadDescriptorC(configuration)) {
+      _or_else(
+        subsystemName(configuration) match {
+          case Some(name) =>
+            ComponentRepository.resolveSubsystemDescriptor(_repository_specs(configuration), name) match {
+              case Some(descriptor) =>
+                _with_assembly_descriptor_override_c(descriptor, configuration).map(Some(_))
+              case None =>
+                Consequence.success(None)
+            }
+          case None =>
+            Consequence.success(None)
         }
-      )) {
+      ) {
         _or_else(
           componentArchivePath(configuration) match {
             case Some(path) =>
               GenericSubsystemDescriptor.loadComponentArchive(path)
-                .map(d => Some(_with_assembly_descriptor_override(d, configuration)))
+                .flatMap(d => _with_assembly_descriptor_override_c(d, configuration).map(Some(_)))
             case None => Consequence.success(None)
           }
         ) {
@@ -109,8 +123,9 @@ object GenericSubsystemFactory {
                 for
                   descriptor <- ComponentDescriptorLoader.loadArchive(path)
                   subsystem <- _component_descriptor_to_subsystem_c(path, descriptor)
+                  resolved <- _with_assembly_descriptor_override_c(subsystem, configuration)
                 yield
-                  Some(_with_assembly_descriptor_override(subsystem, configuration))
+                  Some(resolved)
               case None => Consequence.success(None)
             }
           ) {
@@ -121,24 +136,26 @@ object GenericSubsystemFactory {
                     _component_dev_car_root(path),
                     _load_dev_component_descriptor(path)
                       .getOrElse(_fallback_component_descriptor(path))
-                  ).map(d => Some(_with_assembly_descriptor_override(d, configuration)))
+                  ).flatMap(d => _with_assembly_descriptor_override_c(d, configuration).map(Some(_)))
                 case None => Consequence.success(None)
               }
             ) {
-              Consequence.success(
-                RuntimeConfig
-                  .getString(configuration, RuntimeConfig.ComponentNameKey)
-                  .orElse(RuntimeConfig.getString(configuration, RuntimeConfig.RuntimeComponentNameKey))
-                  .map(_.trim)
-                  .filter(_.nonEmpty)
-                  .map { name =>
+              RuntimeConfig
+                .getString(configuration, RuntimeConfig.ComponentNameKey)
+                .orElse(RuntimeConfig.getString(configuration, RuntimeConfig.RuntimeComponentNameKey))
+                .map(_.trim)
+                .filter(_.nonEmpty)
+                .map { name =>
+                  _with_assembly_descriptor_override_c(
                     GenericSubsystemDescriptor(
                       path = Paths.get(".").toAbsolutePath.normalize,
                       subsystemName = name,
                       componentBindings = Vector(GenericSubsystemComponentBinding(name))
-                    )
-                  }
-              )
+                    ),
+                    configuration
+                  ).map(Some(_))
+                }
+                .getOrElse(Consequence.success(None))
             }
           }
         }
@@ -353,7 +370,13 @@ object GenericSubsystemFactory {
       _repository_specs_for_descriptor(configuration, descriptor).flatMap(_.build(params).discover())
         .filter(component => descriptor.componentBindings.exists(binding => _matches_descriptor_component(component, binding.componentName)))
     val builtins = _builtin_components(subsystem, descriptor)
-    val components = _collapse_duplicate_components(builtins ++ components0)
+    given ExecutionContext = ExecutionContext.create()
+    val spibindings = GenericSubsystemDescriptor.resolveAssemblySpiBindings(descriptor) match {
+      case Consequence.Success(value) => value
+      case Consequence.Failure(conclusion) =>
+        throw new IllegalStateException(conclusion.display)
+    }
+    val components = SpiResolver.resolveOrRaise(_collapse_duplicate_components(builtins ++ components0), spibindings)
     subsystem.add(components)
     subsystem.withDescriptor(descriptor)
   }
@@ -403,14 +426,23 @@ object GenericSubsystemFactory {
       ComponentRepository.defaultStandardRepositoryDir()
     ).map(ComponentRepository.ComponentDirRepository.Specification.apply)
 
-  private def _with_assembly_descriptor_override(
+  private def _with_assembly_descriptor_override_c(
     descriptor: GenericSubsystemDescriptor,
     configuration: ResolvedConfiguration
-  ): GenericSubsystemDescriptor =
-    _assembly_descriptor_path(configuration)
+  ): Consequence[GenericSubsystemDescriptor] = {
+    val assemblydescriptor = _assembly_descriptor_path(configuration)
       .flatMap(GenericSubsystemDescriptor.loadAssemblyDescriptor)
-      .map(record => descriptor.copy(assemblyDescriptor = Some(record)))
+      .map(record => GenericSubsystemDescriptor.applyAssemblyOverride(descriptor, record))
       .getOrElse(descriptor)
+    RuntimeTestDescriptor.load(configuration).map {
+      case Some(testdescriptor) =>
+        testdescriptor.assembly
+          .map(source => GenericSubsystemDescriptor.applyAssemblyOverride(assemblydescriptor, source))
+          .getOrElse(assemblydescriptor)
+      case None =>
+        assemblydescriptor
+    }
+  }
 
   private def _assembly_descriptor_path(
     configuration: ResolvedConfiguration

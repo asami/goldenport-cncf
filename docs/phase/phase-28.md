@@ -170,6 +170,19 @@ Configured entry apps may serve `/web/{component}`,
 `/web/{component}/index`, and `/web/{component}/index.html` as short Web entry
 routes without restoring generated form-index fallback.
 
+Post-closure component integration-test maintenance on Jul. 8, 2026 added an
+explicit test descriptor overlay while keeping Phase 28 closed:
+
+- Test runs may pass `--textus.test.descriptor=<path>` or the `cncf.*` alias.
+- The descriptor may contribute runtime `config` values and an `assembly`
+  overlay, including `assembly.spi.bindings`.
+- Relative descriptor paths are normalized from the runtime cwd so config and
+  assembly overlays read the same file.
+- Malformed SPI bindings fail deterministically instead of being silently
+  dropped.
+- `provider.service` is reserved for future service-level provider matching and
+  is rejected when specified.
+
 Post-closure runtime maintenance on Jun. 29, 2026 aligned the CAR component
 developer startup path and launcher command installation path:
 

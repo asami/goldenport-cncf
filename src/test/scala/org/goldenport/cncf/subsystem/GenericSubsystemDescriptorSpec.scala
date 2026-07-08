@@ -6,13 +6,15 @@ import java.util.zip.{ZipEntry, ZipOutputStream}
 
 import org.goldenport.Consequence
 import org.goldenport.record.Record
+import org.goldenport.cncf.config.RuntimeTestDescriptor
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr.  8, 2026
  *  version Apr. 28, 2026
- * @version May.  7, 2026
+ *  version May.  7, 2026
+ * @version Jul.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 final class GenericSubsystemDescriptorSpec extends AnyWordSpec with Matchers {
@@ -487,7 +489,7 @@ final class GenericSubsystemDescriptorSpec extends AnyWordSpec with Matchers {
           ))
         ))
       )
-      val overrideSource = GenericSubsystemAssemblyDescriptorSource(
+      val overridesource = GenericSubsystemAssemblyDescriptorSource(
         Record.data(
           "security" -> Record.data(
             "authentication" -> Record.data(
@@ -506,7 +508,7 @@ final class GenericSubsystemDescriptorSpec extends AnyWordSpec with Matchers {
         path = Some(java.nio.file.Path.of("cwitter.sar"))
       )
 
-      val effective = GenericSubsystemDescriptor.applyAssemblyOverride(base, overrideSource)
+      val effective = GenericSubsystemDescriptor.applyAssemblyOverride(base, overridesource)
       val provider = effective.security.flatMap(_.authentication).toVector.flatMap(_.providers).headOption.get
 
       provider.name shouldBe "user-account"
@@ -530,7 +532,7 @@ final class GenericSubsystemDescriptorSpec extends AnyWordSpec with Matchers {
           path = Some(java.nio.file.Path.of("cwitter.car"))
         ))
       )
-      val overrideSource = GenericSubsystemAssemblyDescriptorSource(
+      val overridesource = GenericSubsystemAssemblyDescriptorSource(
         Record.data(
           "wiring" -> Vector(
             _wiring_record("cwitter", "account", "signin", "enterprise-user-account", "account", "signin")
@@ -540,11 +542,151 @@ final class GenericSubsystemDescriptorSpec extends AnyWordSpec with Matchers {
         path = Some(java.nio.file.Path.of("cwitter.sar"))
       )
 
-      val effective = GenericSubsystemDescriptor.applyAssemblyOverride(base, overrideSource)
+      val effective = GenericSubsystemDescriptor.applyAssemblyOverride(base, overridesource)
       val bindings = effective.resolvedWiring
 
       bindings.map(_.toComponent).toSet shouldBe Set("enterprise-user-account", "textus-message-delivery-stub")
       bindings.count(_.fromService == "account") shouldBe 1
+    }
+
+    "load test descriptor config and assembly SPI bindings" in {
+      val path = Files.createTempFile("cncf-test-descriptor", ".yaml")
+      Files.writeString(
+        path,
+        """kind: test-descriptor
+          |config:
+          |  textus.web.demo-assist.enabled: true
+          |assembly:
+          |  spi:
+          |    bindings:
+          |      - socket:
+          |          component: target-component
+          |          contract: ai-runner
+          |        provider:
+          |          component: target-component
+          |        selection:
+          |          mode: test
+          |""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+
+      val descriptor = RuntimeTestDescriptor.load(path).toOption.get
+      val subsystem = GenericSubsystemDescriptor(
+        path = path,
+        subsystemName = "target",
+        componentBindings = Vector(GenericSubsystemComponentBinding("target-component"))
+      )
+      val effective = descriptor.assembly
+        .map(GenericSubsystemDescriptor.applyAssemblyOverride(subsystem, _))
+        .getOrElse(subsystem)
+      val bindings = GenericSubsystemDescriptor.resolveAssemblySpiBindings(effective).toOption.get
+
+      descriptor.config shouldBe Map("textus.web.demo-assist.enabled" -> "true")
+      bindings.size shouldBe 1
+      bindings.head.socket.component shouldBe Some("target-component")
+      bindings.head.socket.contract shouldBe "ai-runner"
+      bindings.head.provider.component shouldBe Some("target-component")
+      bindings.head.selection.mode shouldBe Some("test")
+    }
+
+    "merge assembly SPI bindings by socket selector" in {
+      val base = GenericSubsystemDescriptor(
+        path = java.nio.file.Path.of("component.car"),
+        subsystemName = "target",
+        componentBindings = Vector(GenericSubsystemComponentBinding("target-component")),
+        assemblyDescriptor = Some(GenericSubsystemAssemblyDescriptorSource(
+          Record.data(
+            "spi" -> Record.data(
+              "bindings" -> Vector(
+                _spi_binding_record("target-component", "ai-runner", "prod-provider", "prod"),
+                _spi_binding_record("target-component", "geo-resolver", "geo-provider", "prod")
+              )
+            )
+          ),
+          source = "component-car",
+          path = Some(java.nio.file.Path.of("component.car"))
+        ))
+      )
+      val overridesource = GenericSubsystemAssemblyDescriptorSource(
+        Record.data(
+          "spi" -> Record.data(
+            "bindings" -> Vector(
+              _spi_binding_record("target-component", "ai-runner", "test-provider", "test")
+            )
+          )
+        ),
+        source = "test",
+        path = Some(java.nio.file.Path.of("test.yaml"))
+      )
+
+      val effective = GenericSubsystemDescriptor.applyAssemblyOverride(base, overridesource)
+      val bindings = GenericSubsystemDescriptor.resolveAssemblySpiBindings(effective).toOption.get
+
+      bindings.map(_.socket.contract).toSet shouldBe Set("ai-runner", "geo-resolver")
+      bindings.find(_.socket.contract == "ai-runner").flatMap(_.provider.component) shouldBe Some("test-provider")
+      bindings.find(_.socket.contract == "geo-resolver").flatMap(_.provider.component) shouldBe Some("geo-provider")
+    }
+
+    "reject invalid assembly SPI bindings instead of dropping them" in {
+      val descriptor = GenericSubsystemDescriptor(
+        path = java.nio.file.Path.of("component.car"),
+        subsystemName = "target",
+        componentBindings = Vector(GenericSubsystemComponentBinding("target-component")),
+        assemblyDescriptor = Some(GenericSubsystemAssemblyDescriptorSource(
+          Record.data(
+            "spi" -> Record.data(
+              "bindings" -> Vector(
+                Record.data(
+                  "socket" -> Record.data(
+                    "component" -> "target-component"
+                  ),
+                  "provider" -> Record.data(
+                    "component" -> "test-provider"
+                  )
+                )
+              )
+            )
+          ),
+          source = "test",
+          path = Some(java.nio.file.Path.of("test.yaml"))
+        ))
+      )
+
+      val result = GenericSubsystemDescriptor.resolveAssemblySpiBindings(descriptor)
+
+      result shouldBe a[Consequence.Failure[_]]
+    }
+
+    "reject provider service matching until it is supported" in {
+      val descriptor = GenericSubsystemDescriptor(
+        path = java.nio.file.Path.of("component.car"),
+        subsystemName = "target",
+        componentBindings = Vector(GenericSubsystemComponentBinding("target-component")),
+        assemblyDescriptor = Some(GenericSubsystemAssemblyDescriptorSource(
+          Record.data(
+            "spi" -> Record.data(
+              "bindings" -> Vector(
+                Record.data(
+                  "socket" -> Record.data(
+                    "component" -> "target-component",
+                    "contract" -> "ai-runner"
+                  ),
+                  "provider" -> Record.data(
+                    "component" -> "test-provider",
+                    "service" -> "ai-runner-test"
+                  )
+                )
+              )
+            )
+          ),
+          source = "test",
+          path = Some(java.nio.file.Path.of("test.yaml"))
+        ))
+      )
+
+      val result = GenericSubsystemDescriptor.resolveAssemblySpiBindings(descriptor)
+
+      result shouldBe a[Consequence.Failure[_]]
     }
 
     "load the textus-identity journal sample with security authentication wiring" in {
@@ -599,6 +741,25 @@ final class GenericSubsystemDescriptorSpec extends AnyWordSpec with Matchers {
         "component" -> toComponent,
         "service" -> toService,
         "operation" -> toOperation
+      )
+    )
+
+  private def _spi_binding_record(
+    socketcomponent: String,
+    contract: String,
+    providercomponent: String,
+    mode: String
+  ): Record =
+    Record.data(
+      "socket" -> Record.data(
+        "component" -> socketcomponent,
+        "contract" -> contract
+      ),
+      "provider" -> Record.data(
+        "component" -> providercomponent
+      ),
+      "selection" -> Record.data(
+        "mode" -> mode
       )
     )
 }

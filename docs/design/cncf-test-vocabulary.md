@@ -50,3 +50,46 @@ Consequences
 `goldenport-cncf` exposes a small test-support API from its main artifact. This
 is intentional and preferable to adding another dependency library while the
 shared vocabulary remains lightweight.
+
+
+Test Descriptor
+---------------
+
+CNCF component integration tests may also use an explicit test descriptor file
+such as `test.yaml` or `test.json`. This is a startup configuration surface, not
+an automatically discovered file. Tests should pass it explicitly, for example:
+
+```bash
+cncf dev command ... --textus.test.descriptor=./test.yaml
+```
+
+The intended descriptor shape combines runtime test parameters and assembly
+overrides:
+
+```yaml
+kind: test-descriptor
+
+config:
+  textus.some.runtime.key: value
+
+assembly:
+  spi:
+    bindings:
+      - socket:
+          component: target-component
+          contract: ai-runner
+        provider:
+          component: target-component
+```
+
+The first target use case is selecting a test SPI provider that is already
+packaged in the CAR under test. This keeps the production CAR shape intact and
+avoids creating a separate test CAR only to change provider wiring.
+
+The descriptor must not be treated as a way to add Scala traits, JVM methods,
+or compiled component APIs at runtime. It is a test-only runtime overlay for
+configuration, assembly wiring, and provider selection.
+
+Provider matching currently uses provider component plus the ordinary SPI
+contract and `provider` / `mode` / `engine` selection. `provider.service` is
+reserved for future service-level matching and is rejected when specified.

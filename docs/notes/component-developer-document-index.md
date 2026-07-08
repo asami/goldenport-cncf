@@ -112,7 +112,8 @@ assembly:
 - `docs/design/domain-component.md`
   - DomainComponent / Cozy integration contract.
 - `docs/design/assembly-descriptor.md`
-  - Runtime assembly descriptor and reproducible wiring.
+  - Runtime assembly descriptor, reproducible wiring, and explicit test
+    descriptor overlay for test-only assembly/config/SPI provider selection.
 - `docs/notes/subsystem-descriptor-note.md`
   - Subsystem descriptor guidance.
 - `docs/notes/cml-crud-domain-subsystem-bootstrap.md`
@@ -280,6 +281,9 @@ Use these when adding tests or validating changes:
 
 - `docs/spec/test-policy.md`
   - Test policy for CNCF.
+- `docs/design/cncf-test-vocabulary.md`
+  - Shared test vocabulary and explicit `test.yaml` / `test.json` descriptor
+    role for component integration tests.
 - `docs/rules/executable-spec-display-and-tagging-rules.md`
   - Executable spec display/tagging rules.
 - `docs/rules/stage-status-and-checklist-convention.md`

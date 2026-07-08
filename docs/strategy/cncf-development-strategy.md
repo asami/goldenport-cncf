@@ -664,7 +664,14 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
   migration tooling; CulturalResource collection-item profile; Rule Engine and
   Inference Runtime.
 - Status interpretation rules: `docs/rules/stage-status-and-checklist-convention.md`
-- Latest post-closure maintenance: Jul. 7, 2026 Web route namespace
+- Latest post-closure maintenance: Jul. 8, 2026 explicit test descriptor
+  overlay for component integration tests. Test runs may pass
+  `--textus.test.descriptor=<path>` / `--cncf.test.descriptor=<path>` to add
+  runtime test config and assembly SPI provider bindings without publishing a
+  separate test-only CAR. Descriptor paths are resolved from the runtime cwd,
+  malformed SPI bindings fail deterministically, and `provider.service` remains
+  reserved until service-level provider matching is implemented.
+- Previous post-closure maintenance: Jul. 7, 2026 Web route namespace
   hardening. Component-owned Static Form Web apps use canonical
   `/web/{component}/{webApp}` routes, generated form indexes live under
   `/form/{component}`, and `/web/{webApp}` is available only through explicit

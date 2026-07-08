@@ -78,7 +78,40 @@ Binding failures are explicit:
 - operation logic should fail explicitly if the expected service is absent from
   `Component.Port`.
 
-## 7. Validation
+## 7. Test-Time Provider Selection
+
+When a component CAR includes a test provider for one of its SPI or extension
+points, tests should select that provider through the explicit test descriptor
+overlay instead of publishing a separate test-only CAR.
+
+The descriptor-level intent is provider selection, not component type mutation:
+
+```yaml
+kind: test-descriptor
+
+assembly:
+  spi:
+    bindings:
+      - socket:
+          component: target-component
+          contract: ai-runner
+        provider:
+          component: target-component
+```
+
+This selects an already available provider service for the named socket
+contract during test startup. It does not create a new `PortApi`,
+`ExtensionPoint`, or Scala socket trait at runtime. Component authors should
+therefore keep the required socket or port API in normal component code and use
+the test descriptor only to change the provider selected for a particular test
+run.
+
+The initial implementation filters the provider side by component and then
+uses the normal SPI contract plus `provider` / `mode` / `engine` selection.
+`provider.service` is reserved for future service-level matching and is
+rejected when specified.
+
+## 8. Validation
 
 The canonical executable coverage is:
 

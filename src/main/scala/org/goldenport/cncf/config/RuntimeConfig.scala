@@ -21,7 +21,8 @@ import org.goldenport.cncf.blob.BlobStoreConfig
  *  version Feb.  1, 2026
  *  version Mar. 28, 2026
  *  version Apr. 30, 2026
- * @version Jun. 19, 2026
+ *  version Jun. 19, 2026
+ * @version Jul.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class RuntimeConfig(
@@ -203,6 +204,8 @@ object RuntimeConfig {
   val ComponentDevDirKey = "textus.component.dev.dir"
   val ComponentCarDirKey = "textus.component.car.dir"
   val AssemblyDescriptorKey = "textus.assembly.descriptor"
+  val TEST_DESCRIPTOR_KEY = "textus.test.descriptor"
+  val RUNTIME_TEST_DESCRIPTOR_KEY = "textus.runtime.test.descriptor"
   val WebDescriptorKey = "textus.web.descriptor"
   val RepositoryDirKey = "textus.repository.dir"
   val RepositoryComponentDevDirKey = "textus.repository.component.dev.dir"
@@ -691,6 +694,7 @@ object RuntimeConfig {
         case SubsystemDevDirKey => Vector(RuntimeSubsystemDevDirKey)
         case SubsystemSarDirKey => Vector(RuntimeSubsystemSarDirKey)
         case ComponentFileKey => Vector(RuntimeComponentFileKey)
+        case TEST_DESCRIPTOR_KEY => Vector(RUNTIME_TEST_DESCRIPTOR_KEY)
         case LogBackendKey => Vector(RuntimeLogBackendKey)
         case LogLevelKey => Vector(RuntimeLogLevelKey)
         case LogFilePathKey => Vector(RuntimeLogFilePathKey)

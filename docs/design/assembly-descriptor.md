@@ -75,11 +75,19 @@ Effective assembly precedence is:
 2. selected SAR `subsystem-descriptor.*`
 3. selected SAR `assembly-descriptor.*`
 4. configured `textus.assembly.descriptor`, including the `--textus.assembly.descriptor=<path>` CLI form
+5. explicit test descriptor assembly overlay, when a test run uses
+   `--textus.test.descriptor=<path>` or the `cncf.*` alias
 
 Later sources override earlier sources by the merge rules below. The effective
 assembly source keeps provenance for the selected descriptor while preserving
 merged defaults required for runtime wiring. When no assembly wiring is present,
 the runtime falls back to convention or subsystem descriptor wiring.
+
+The test descriptor overlay is a test-only startup surface. It is not a
+packaged deployment descriptor and is loaded only through an explicit startup
+parameter. CNCF does not auto-discover `test.yaml` or `test.json` from the
+current directory. This prevents local test provider wiring from becoming a
+production behavior by accident.
 
 
 ## Component Defaults And Deployment Overrides
@@ -98,11 +106,58 @@ Merge rules are field-oriented, not whole-document replacement:
 - `runtime.userNotification.providers` merge by provider name.
 - `operationAuthorization` merges by operation selector.
 - `wiring` merges by binding selector: `from.component`, `from.service`, `from.operation`, and optional `from.api`.
+- `spi.bindings` merges by socket selector: `socket.component` and
+  `socket.contract`.
 
 A SAR that uses the same user-account provider as the component default does not
 need to repeat that provider binding. A SAR that changes the provider can define
 an entry with the same provider name, such as `user-account`, and only that
 provider binding is replaced.
+
+## Test Descriptor Overlay
+
+Component tests may need runtime wiring that differs from the packaged
+assembly. The intended test descriptor shape is:
+
+```yaml
+kind: test-descriptor
+
+config:
+  textus.some.runtime.key: value
+
+assembly:
+  components: []
+  wiring: []
+  spi:
+    bindings:
+      - socket:
+          component: target-component
+          contract: ai-runner
+        provider:
+          component: target-component
+        selection:
+          mode: test
+```
+
+`config` contains runtime test parameters. `assembly` contains an assembly
+overlay and follows the same merge direction as an assembly descriptor, with
+test descriptor values winning over packaged and configured assembly sources.
+
+The `assembly.spi.bindings` section selects an SPI provider already present in
+the test runtime assembly. It is the preferred route for tests where the target
+CAR already carries a test provider implementation. This avoids producing a
+separate test-only CAR just to change SPI provider selection.
+
+The initial runtime matching uses provider component plus the ordinary SPI
+contract and `provider` / `mode` / `engine` selection. `provider.service` is
+reserved for a future service-level matching surface; specifying it currently
+fails deterministically. Use selection values when one component exposes
+multiple providers for the same contract.
+
+The overlay does not change a component's compiled JVM type. If component logic
+requires a socket trait method, the component must still implement that socket
+trait. Test descriptor wiring selects and configures runtime providers; it does
+not add Scala traits or methods to a loaded component.
 
 ## Current Shape
 

@@ -26,7 +26,7 @@ import org.goldenport.cncf.CncfVersion
 import org.goldenport.cncf.assembly.AssemblyReport
 import org.goldenport.cncf.component.{Component, ComponentCreate, ComponentInit, ComponentOrigin}
 import org.goldenport.cncf.naming.NamingConventions
-import org.goldenport.cncf.config.{ClientConfig, RuntimeConfig, RuntimeDefaults, RuntimeFileConfigLoader}
+import org.goldenport.cncf.config.{ClientConfig, RuntimeConfig, RuntimeDefaults, RuntimeFileConfigLoader, RuntimeTestDescriptor}
 import org.goldenport.cncf.config.ConfigurationAccess
 import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, RuntimeContext, ScopeContext, ScopeKind}
 import org.goldenport.cncf.context.GlobalContext
@@ -65,7 +65,7 @@ import org.goldenport.cncf.subsystem.GenericSubsystemDescriptor
  *  version Apr. 30, 2026
  *  version May. 25, 2026
  *  version Jun. 29, 2026
- * @version Jul.  1, 2026
+ * @version Jul.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 object CncfRuntime extends GlobalObservable {
@@ -2472,7 +2472,11 @@ object CncfRuntime extends GlobalObservable {
     )
     val explicitconfigs = _explicit_config_sources(cwd, configargs)
     val argsource = ConfigurationSource.args(configargs).toSeq
-    val sources = ConfigurationSources(basesources.sources ++ explicitconfigs ++ argsource)
+    val initialsources = ConfigurationSources(basesources.sources ++ explicitconfigs ++ argsource)
+    val testconfigs = _test_descriptor_config_sources(initialsources, cwd)
+    val sources = ConfigurationSources(
+      basesources.sources ++ explicitconfigs ++ testconfigs.configs ++ argsource ++ testconfigs.normalizedpathsource.toVector
+    )
     // TODO Phase 2.9+: define failure policy for configuration resolution.
     // - Preserve/emit ConfigurationTrace and error details for observability.
     // - Decide whether CLI should fail-fast vs fallback to empty configuration.
@@ -2482,6 +2486,37 @@ object CncfRuntime extends GlobalObservable {
       case Consequence.Failure(_) =>
         ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty)
     }
+  }
+
+  private def _test_descriptor_config_sources(
+    sources: ConfigurationSources,
+    cwd: Path
+  ): _TestDescriptorConfigSources =
+    ConfigurationResolver.default.resolve(sources) match {
+      case Consequence.Success(configuration) =>
+        RuntimeTestDescriptor.path(configuration).map { path =>
+          val normalized = if (path.isAbsolute) path.normalize else cwd.resolve(path).normalize
+          RuntimeTestDescriptor.load(normalized) match {
+            case Consequence.Success(descriptor) =>
+              _TestDescriptorConfigSources(
+                RuntimeTestDescriptor.configurationSource(descriptor).toVector,
+                ConfigurationSource.args(Map(RuntimeConfig.TEST_DESCRIPTOR_KEY -> normalized.toString))
+              )
+            case Consequence.Failure(conclusion) =>
+              throw new IllegalArgumentException(conclusion.display)
+          }
+        }.getOrElse(_TestDescriptorConfigSources.empty)
+      case Consequence.Failure(_) =>
+        _TestDescriptorConfigSources.empty
+    }
+
+  private final case class _TestDescriptorConfigSources(
+    configs: Vector[ConfigurationSource],
+    normalizedpathsource: Option[ConfigurationSource]
+  )
+
+  private object _TestDescriptorConfigSources {
+    val empty: _TestDescriptorConfigSources = _TestDescriptorConfigSources(Vector.empty, None)
   }
 
   private def _explicit_config_sources(

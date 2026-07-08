@@ -12,7 +12,7 @@ import org.goldenport.cncf.context.ExecutionContext
  * source compatible while new code can import org.goldenport.cncf.spi.*.
  *
  * @since   Jul.  2, 2026
- * @version Jul.  2, 2026
+ * @version Jul.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 type SpiContract[S] = ServiceContract[S]
@@ -75,3 +75,19 @@ final case class SpiSocketBinding[S](
       socket.installSpi(spi)
     }
 }
+
+final case class SpiProviderSelector(
+  component: Option[String] = None,
+  service: Option[String] = None
+)
+
+final case class SpiSocketSelector(
+  component: Option[String] = None,
+  contract: String
+)
+
+final case class SpiRuntimeBinding(
+  socket: SpiSocketSelector,
+  provider: SpiProviderSelector,
+  selection: SpiSelection = SpiSelection()
+)

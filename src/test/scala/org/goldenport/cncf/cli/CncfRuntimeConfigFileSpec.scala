@@ -2,14 +2,15 @@ package org.goldenport.cncf.cli
 
 import java.nio.file.Files
 import java.util.zip.{ZipEntry, ZipOutputStream}
-import org.goldenport.cncf.config.RuntimeConfig
+import org.goldenport.cncf.config.{RuntimeConfig, RuntimeTestDescriptor}
+import org.goldenport.cncf.subsystem.{GenericSubsystemDescriptor, GenericSubsystemFactory}
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr. 15, 2026
  *  version Apr. 25, 2026
- * @version Jul.  1, 2026
+ * @version Jul.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers {
@@ -92,6 +93,46 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers {
       )
 
       RuntimeConfig.getString(bootstrap.configuration, RuntimeConfig.WebDescriptorKey) shouldBe Some("config/web-descriptor.yaml")
+    }
+
+    "resolve explicit test descriptor config before command-line scalar overrides" in {
+      val cwd = Files.createTempDirectory("cncf-test-descriptor-config")
+      val testdescriptor = cwd.resolve("test.yaml")
+      Files.writeString(
+        testdescriptor,
+        """kind: test-descriptor
+          |config:
+          |  textus.web.demo-assist.enabled: true
+          |  textus.web.descriptor: config/from-test.yaml
+          |assembly:
+          |  spi:
+          |    bindings:
+          |      - socket:
+          |          component: target-component
+          |          contract: ai-runner
+          |        provider:
+          |          component: target-test-provider
+          |""".stripMargin
+      )
+
+      val bootstrap = CncfRuntime.bootstrap(
+        cwd,
+        Array(
+          "--discover=classes",
+          "--textus.test.descriptor=test.yaml",
+          "--textus.component=target-component",
+          "--textus.web.descriptor=config/from-cli.yaml",
+          "server"
+        )
+      )
+      val descriptorpath = RuntimeTestDescriptor.path(bootstrap.configuration).get
+      val descriptor = GenericSubsystemFactory.resolveDescriptorC(bootstrap.configuration).toOption.get.get
+      val bindings = GenericSubsystemDescriptor.resolveAssemblySpiBindings(descriptor).toOption.get
+
+      descriptorpath shouldBe testdescriptor.normalize
+      RuntimeConfig.getString(bootstrap.configuration, RuntimeConfig.WEB_DEMO_ASSIST_ENABLED_KEY) shouldBe Some("true")
+      RuntimeConfig.getString(bootstrap.configuration, RuntimeConfig.WebDescriptorKey) shouldBe Some("config/from-cli.yaml")
+      bindings.head.provider.component shouldBe Some("target-test-provider")
     }
 
     "prefer standard .textus configuration over legacy .cncf configuration" in {

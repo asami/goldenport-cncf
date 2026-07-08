@@ -467,6 +467,71 @@ ToolchainRunner integrations should use the CNCF-owned SPI contracts under
 those provider surfaces, but consumers should depend on the CNCF SPI request
 and response models rather than generated Textus operation classes.
 
+### Test SPI Selection
+
+When a component CAR already contains a test SPI provider, test execution should
+select that provider through a test descriptor instead of creating a separate
+test-only CAR. The intended startup shape is:
+
+```bash
+cncf dev command ... --textus.test.descriptor=./test.yaml
+```
+
+The descriptor is explicit and test-only. CNCF must not auto-load `test.yaml`
+or `test.json` from the working directory, because that would let test wiring
+leak into production startup.
+
+The preferred descriptor shape selects an existing provider binding:
+
+```yaml
+kind: test-descriptor
+
+assembly:
+  spi:
+    bindings:
+      - socket:
+          component: target-component
+          contract: ai-runner
+        provider:
+          component: target-component
+        selection:
+          mode: test
+```
+
+If the provider is packaged as another component in the same test assembly,
+the provider side should name that component explicitly:
+
+```yaml
+kind: test-descriptor
+
+assembly:
+  spi:
+    bindings:
+      - socket:
+          component: target-component
+          contract: ai-runner
+        provider:
+          component: target-test-spi
+```
+
+This mechanism selects a provider that is already present in the test runtime
+assembly. It does not add Scala traits or JVM methods to the component at
+runtime. If component logic calls a socket trait method directly, the component
+must still mix in that socket trait. The test descriptor controls runtime
+wiring and provider selection, not the component's compiled type.
+
+Use `assembly.spi.bindings` for the ordinary case where the component already
+declares or implements the needed socket and the test only wants to select a
+different provider. Reserve any future `assembly.spi.sockets` metadata for
+cases where the runtime needs explicit test-only socket metadata; it must not
+be used as a substitute for compiled component APIs.
+
+The initial implementation filters providers by provider component and then
+uses the ordinary SPI contract plus `provider` / `mode` / `engine` selection.
+`provider.service` is reserved for future service-level matching and is
+rejected when specified. Use selection values when a component carries multiple
+providers for the same SPI contract.
+
 ## Tests
 
 For every handwritten operation:

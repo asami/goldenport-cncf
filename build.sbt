@@ -1,7 +1,7 @@
 import sbt.TestFrameworks
 import sbt.Tests
 
-val scala3version = "3.3.7"
+val scala3version = "3.3.8"
 
 lazy val generateTextusRuntimeCatalog = taskKey[File]("Generate Textus runtime catalog metadata for the warehouse repository.")
 lazy val exportTextusRuntimeCatalog = taskKey[File]("Export Textus runtime catalog metadata for local development consumers.")
@@ -318,7 +318,7 @@ lazy val root = project
   .settings(
     organization := "org.goldenport",
     name := "goldenport-cncf",
-    version := "0.4.14-SNAPSHOT",
+    version := "0.5.0-SNAPSHOT",
 
     scalaVersion := scala3version,
 
@@ -420,8 +420,6 @@ lazy val root = project
     generateInformationCmlModel := {
       val input = baseDirectory.value / "src/main/cozy/information.cml"
       val outputdir = target.value / "cncf-information-cml"
-      val generatedroot =
-        outputdir / "target" / s"scala-${scalaVersion.value}" / "src_managed/main/scala"
       IO.delete(outputdir)
       IO.createDirectory(outputdir)
       val command = Seq("cozy", "modeler-scala-value", input.getAbsolutePath, s"--save=${outputdir.getAbsolutePath}")
@@ -429,7 +427,7 @@ lazy val root = project
       if (exitcode != 0)
         sys.error(s"failed to generate CNCF Information model from CML: ${input.getAbsolutePath}")
       val files =
-        (generatedroot ** "*.scala").get
+        ((outputdir / "target") ** "*.scala").get
           .sortBy(_.getAbsolutePath)
       if (files.isEmpty)
         sys.error(s"no CNCF Information CML sources generated from: ${input.getAbsolutePath}")

@@ -38,6 +38,13 @@ been recorded without reopening the Web UI DSL phase:
 - [x] Jul. 7, 2026: Add explicit component Web entry routes with app-level
       `entry: true`, so `/web/{component}` and `/web/{component}/index(.html)`
       can serve a Static Web App index without reintroducing `/form` fallback.
+- [x] Jul. 8, 2026: Add explicit `test.yaml` / `test.json` descriptor support
+      for component integration tests, including runtime `config` overlay and
+      `assembly.spi.bindings` provider selection.
+- [x] Normalize relative test descriptor paths from the runtime cwd so config
+      and assembly overlay loading use the same file.
+- [x] Reject malformed SPI binding records and reserved `provider.service`
+      values deterministically instead of dropping or ignoring them.
 
 ---
 

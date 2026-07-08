@@ -12,26 +12,29 @@ import org.goldenport.cncf.context.ExecutionContext
  * registry populated from an existing dependency.
  *
  * @since   Jul.  2, 2026
- * @version Jul.  2, 2026
+ * @version Jul.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 object SpiResolver {
   def resolve(
-    components: Vector[Component]
+    components: Vector[Component],
+    bindings: Vector[SpiRuntimeBinding] = Vector.empty
   )(using ExecutionContext): Consequence[Vector[Component]] = {
     val providers = _providers(components)
     val sockets = components.collect {
-      case socket: SpiSocket[?] if !socket.isSpiInstalled => socket
+      case socket: SpiSocket[?] if !socket.isSpiInstalled =>
+        _SocketSlot(socket.asInstanceOf[Component], socket)
     }
     sockets.foldLeft(Consequence.success(())) { (r, socket) =>
-      r.flatMap(_ => _install(socket, providers))
+      r.flatMap(_ => _install(socket, providers, bindings))
     }.map(_ => components)
   }
 
   def resolveOrRaise(
-    components: Vector[Component]
+    components: Vector[Component],
+    bindings: Vector[SpiRuntimeBinding] = Vector.empty
   )(using ExecutionContext): Vector[Component] =
-    resolve(components) match {
+    resolve(components, bindings) match {
       case Consequence.Success(value) => value
       case Consequence.Failure(conclusion) =>
         throw new IllegalStateException(conclusion.display)
@@ -39,7 +42,7 @@ object SpiResolver {
 
   private def _providers(
     components: Vector[Component]
-  ): Vector[SpiProvider[?]] =
+  ): Vector[_ProviderSlot] =
     components.flatMap { component =>
       val componentproviders = component match {
         case m: SpiProviderComponent => m.spiProviders
@@ -49,19 +52,33 @@ object SpiResolver {
         case m: ExtensionPoint[?] => m.asInstanceOf[SpiProvider[?]]
       }
       val directproviders = component.port.entries.map(_DirectSpiProvider(_))
-      componentproviders ++ portproviders ++ directproviders
+      (componentproviders ++ portproviders ++ directproviders).map(_ProviderSlot(component, _))
     }
 
   private def _install(
-    socket: SpiSocket[?],
-    providers: Vector[SpiProvider[?]]
+    socket: _SocketSlot,
+    providers: Vector[_ProviderSlot],
+    bindings: Vector[SpiRuntimeBinding]
   )(using ExecutionContext): Consequence[Unit] = {
-    val contract = socket.spiContract.asInstanceOf[SpiContract[Any]]
-    val selection = socket.spiSelection
-    val candidates = providers.collect {
-      case provider if provider.asInstanceOf[SpiProvider[Any]].supports(contract, selection) =>
-        provider.asInstanceOf[SpiProvider[Any]]
+    val rawsocket = socket.socket
+    val contract = rawsocket.spiContract.asInstanceOf[SpiContract[Any]]
+    _binding(socket, contract, bindings).flatMap { binding =>
+      val selection = _selection(rawsocket.spiSelection, binding)
+      val candidates = providers.collect {
+        case provider if _provider_matches_binding(provider, binding) &&
+            provider.provider.asInstanceOf[SpiProvider[Any]].supports(contract, selection) =>
+          provider.provider.asInstanceOf[SpiProvider[Any]]
+      }
+      _install_candidates(rawsocket, contract, selection, candidates)
     }
+  }
+
+  private def _install_candidates(
+    socket: SpiSocket[?],
+    contract: SpiContract[Any],
+    selection: SpiSelection,
+    candidates: Vector[SpiProvider[Any]]
+  )(using ExecutionContext): Consequence[Unit] =
     candidates match {
       case Vector(provider) =>
         provider.provide(contract, selection).map { service =>
@@ -76,7 +93,72 @@ object SpiResolver {
           s"ambiguous SPI providers: contract=${contract.name}, runtimeClass=${contract.runtimeClass.getName}, selection=$selection, candidates=${xs.size}"
         )
     }
+
+  private def _binding(
+    socket: _SocketSlot,
+    contract: SpiContract[Any],
+    bindings: Vector[SpiRuntimeBinding]
+  ): Consequence[Option[SpiRuntimeBinding]] = {
+    val matches = bindings.filter { binding =>
+      _matches_component(binding.socket.component, _component_name(socket.component)) &&
+        binding.socket.contract == contract.name
+    }
+    matches match {
+      case Vector() => Consequence.success(None)
+      case Vector(binding) =>
+        binding.provider.service match {
+          case Some(_) =>
+            Consequence.resourceInvalid("SPI provider service binding is not supported yet")
+          case None =>
+            Consequence.success(Some(binding))
+        }
+      case _ =>
+        Consequence.serviceUnavailable(
+          s"ambiguous SPI bindings: component=${_component_name(socket.component)}, contract=${contract.name}, bindings=${matches.size}"
+        )
+    }
   }
+
+  private def _provider_matches_binding(
+    provider: _ProviderSlot,
+    binding: Option[SpiRuntimeBinding]
+  ): Boolean =
+    binding.forall { binding =>
+      _matches_component(binding.provider.component, _component_name(provider.component))
+    }
+
+  private def _matches_component(
+    expected: Option[String],
+    actual: String
+  ): Boolean =
+    expected.forall(_.trim == actual.trim)
+
+  private def _selection(
+    socket: SpiSelection,
+    binding: Option[SpiRuntimeBinding]
+  ): SpiSelection =
+    binding.map(_.selection).map { selection =>
+      SpiSelection(
+        provider = selection.provider.orElse(socket.provider),
+        mode = selection.mode.orElse(socket.mode),
+        engine = selection.engine.orElse(socket.engine)
+      )
+    }.getOrElse(socket)
+
+  private def _component_name(
+    component: Component
+  ): String =
+    component.coreOption.map(_.name).getOrElse(component.getClass.getSimpleName)
+
+  private final case class _SocketSlot(
+    component: Component,
+    socket: SpiSocket[?]
+  )
+
+  private final case class _ProviderSlot(
+    component: Component,
+    provider: SpiProvider[?]
+  )
 
   private final case class _DirectSpiProvider(
     service: Any
