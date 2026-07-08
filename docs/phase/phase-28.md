@@ -210,6 +210,16 @@ closed while hardening packaged component loading:
 - cwd `component.d` is not auto-activated as a default active repository;
   packaged component directories remain explicit activation inputs.
 
+Post-closure CAR assembly dependency maintenance on Jul. 9, 2026 kept Phase 28
+closed while hardening `--component-file` and component-CAR startup:
+
+- CAR-local assembly descriptor component dependencies are activated from
+  active/search repositories before SPI socket resolution.
+- Missing declared component dependencies fail startup deterministically instead
+  of being hidden as later SPI binding or service lookup failures.
+- Startup diagnostics identify the missing component, requesting CAR/subsystem
+  descriptor, assembly descriptor, and configured repositories.
+
 Post-closure runtime maintenance on Jun. 29, 2026 aligned the CAR component
 developer startup path and launcher command installation path:
 

@@ -664,7 +664,14 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
   migration tooling; CulturalResource collection-item profile; Rule Engine and
   Inference Runtime.
 - Status interpretation rules: `docs/rules/stage-status-and-checklist-convention.md`
-- Latest post-closure maintenance: Jul. 8, 2026 CAR runtime intake and plain
+- Latest post-closure maintenance: Jul. 9, 2026 CAR assembly dependency
+  activation hardening. `--component-file` / component-CAR startup now honors
+  component dependencies declared by the CAR-local assembly descriptor, activates
+  them from active/search repositories, and fails startup deterministically when
+  a declared dependency is unresolved. The diagnostic identifies the missing
+  component, requesting CAR/subsystem descriptor, assembly descriptor, and
+  configured repositories.
+- Previous post-closure maintenance: Jul. 8, 2026 CAR runtime intake and plain
   factory SPI wiring hardening. Component CAR descriptors are now required to
   declare name, version, and component metadata; CAR discovery can instantiate
   plain `Component.Factory` implementations in addition to bundle factories;

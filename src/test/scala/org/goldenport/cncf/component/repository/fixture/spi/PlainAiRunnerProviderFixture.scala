@@ -8,10 +8,12 @@ import org.goldenport.protocol.Protocol
 
 /*
  * @since   Jul.  8, 2026
- * @version Jul.  8, 2026
+ * @version Jul.  9, 2026
  * @author  ASAMI, Tomoharu
  */
 final class PlainAiRunnerProviderComponent extends Component
+
+final class ArtSceneComponent extends Component
 
 final class PlainAiRunner extends AiRunner {
   def generate(req: AiGenerateRequest)(using ExecutionContext): Consequence[AiGenerateResponse] =
@@ -34,6 +36,23 @@ final class ComponentFactory extends Component.Factory {
       "plain-ai-runner-provider",
       ComponentId("plain_ai_runner_provider"),
       ComponentInstanceId.default(ComponentId("plain_ai_runner_provider")),
+      Protocol.empty,
+      this
+    )
+}
+
+final class ArtSceneComponentFactory extends Component.Factory {
+  protected def create_Component(params: ComponentCreate): Component =
+    new ArtSceneComponent()
+
+  protected def create_Core(
+    params: ComponentCreate,
+    comp: Component
+  ): Component.Core =
+    Component.Core.create(
+      "textus-art-scene",
+      ComponentId("textus_art_scene"),
+      ComponentInstanceId.default(ComponentId("textus_art_scene")),
       Protocol.empty,
       this
     )

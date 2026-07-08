@@ -29,7 +29,7 @@ import org.goldenport.configuration.ConfigurationTrace
  * @since   Feb.  4, 2026
  *  version Apr. 25, 2026
  *  version May. 25, 2026
- * @version Jul.  8, 2026
+ * @version Jul.  9, 2026
  * @author  ASAMI, Tomoharu
  */
 class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAndAfterAll with GivenWhenThen {
@@ -868,6 +868,151 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
 
         componentnames should contain ("app")
         componentnames should not contain ("textus-user-account")
+      }
+    }
+
+    "activate component-file assembly dependencies from search repositories" in {
+      Given("an application CAR whose assembly descriptor declares a provider component")
+      _with_temp_dir { root =>
+        val repositorydir = root.resolve("repository.d")
+        val appcar = root.resolve("textus-art-scene.car")
+        val appjar = _create_class_component_jar(
+          root.resolve("assets").resolve("art-scene-main.jar"),
+          Seq(
+            classOf[org.goldenport.cncf.component.repository.fixture.spi.ArtSceneComponentFactory],
+            classOf[org.goldenport.cncf.component.repository.fixture.spi.ArtSceneComponent]
+          )
+        )
+        val appdescriptor = root.resolve("component-descriptor-art-scene.json")
+        Files.writeString(
+          appdescriptor,
+          """{"name":"textus-art-scene","version":"0.1.0-SNAPSHOT","component":"textus-art-scene"}"""
+        )
+        val assemblydescriptor = root.resolve("assembly-descriptor-art-scene.yaml")
+        Files.writeString(
+          assemblydescriptor,
+          """subsystem: textus-art-scene
+            |version: 0.1.0
+            |components:
+            |  - name: textus-art-scene
+            |    version: 0.1.0-SNAPSHOT
+            |  - name: plain-ai-runner-provider
+            |    version: 0.1.0
+            |""".stripMargin
+        )
+        _create_car(
+          appcar,
+          Seq(
+            "component/main.jar" -> appjar,
+            "component-descriptor.json" -> appdescriptor,
+            "assembly-descriptor.yaml" -> assemblydescriptor
+          )
+        )
+
+        val providerjar = _create_class_component_jar(
+          root.resolve("assets").resolve("plain-ai-runner-main.jar"),
+          Seq(
+            classOf[org.goldenport.cncf.component.repository.fixture.spi.ComponentFactory],
+            classOf[org.goldenport.cncf.component.repository.fixture.spi.PlainAiRunnerProviderComponent],
+            classOf[org.goldenport.cncf.component.repository.fixture.spi.PlainAiRunner]
+          )
+        )
+        val providerdescriptor = root.resolve("component-descriptor-plain-ai.json")
+        Files.writeString(
+          providerdescriptor,
+          """{"name":"plain-ai-runner-provider","version":"0.1.0","component":"plain-ai-runner-provider"}"""
+        )
+        Files.createDirectories(repositorydir)
+        _create_car(
+          repositorydir.resolve("plain-ai-runner-provider-0.1.0.car"),
+          Seq(
+            "component/main.jar" -> providerjar,
+            "component-descriptor.json" -> providerdescriptor
+          )
+        )
+
+        When("CNCF initializes from the single application component file")
+        val initialized = new org.goldenport.cncf.cli.CncfRuntime().initializeForEmbedding(
+          cwd = root,
+          args = Array(
+            "--no-default-components",
+            "--component-file", appcar.toString,
+            "--repository-dir", repositorydir.toString,
+            "command", "textus-art-scene.main.noop"
+          ),
+          modeHint = Some(org.goldenport.cncf.cli.RunMode.Command)
+        ).TAKE
+
+        Then("the declared provider component is activated from the search repository")
+        initialized.descriptor.toVector.flatMap(_.componentBindings.map(_.componentName)) should contain ("plain-ai-runner-provider")
+        initialized.components.map { component =>
+          component.artifactMetadata.flatMap(_.component).getOrElse(component.name)
+        } should contain ("plain-ai-runner-provider")
+      }
+    }
+
+    "fail startup when a component-file assembly dependency is unresolved" in {
+      Given("an application CAR whose assembly descriptor declares a missing provider")
+      _with_temp_dir { root =>
+        val appcar = root.resolve("textus-art-scene.car")
+        val appjar = _create_class_component_jar(
+          root.resolve("assets").resolve("art-scene-main.jar"),
+          Seq(
+            classOf[org.goldenport.cncf.component.repository.fixture.spi.ArtSceneComponentFactory],
+            classOf[org.goldenport.cncf.component.repository.fixture.spi.ArtSceneComponent]
+          )
+        )
+        val appdescriptor = root.resolve("component-descriptor-art-scene.json")
+        Files.writeString(
+          appdescriptor,
+          """{"name":"textus-art-scene","version":"0.1.0-SNAPSHOT","component":"textus-art-scene"}"""
+        )
+        val assemblydescriptor = root.resolve("assembly-descriptor-art-scene.yaml")
+        Files.writeString(
+          assemblydescriptor,
+          """subsystem: textus-art-scene
+            |version: 0.1.0
+            |components:
+            |  - name: textus-art-scene
+            |    version: 0.1.0-SNAPSHOT
+            |  - name: missing-ai-runtime-for-component-file-spec
+            |    version: 0.2.0-SNAPSHOT
+            |""".stripMargin
+        )
+        _create_car(
+          appcar,
+          Seq(
+            "component/main.jar" -> appjar,
+            "component-descriptor.json" -> appdescriptor,
+            "assembly-descriptor.yaml" -> assemblydescriptor
+          )
+        )
+
+        When("CNCF initializes without a repository containing the dependency")
+        val result = new org.goldenport.cncf.cli.CncfRuntime().initializeForEmbedding(
+          cwd = root,
+          args = Array(
+            "--no-default-components",
+            "--component-file", appcar.toString,
+            "command", "textus-art-scene.main.noop"
+          ),
+          modeHint = Some(org.goldenport.cncf.cli.RunMode.Command)
+        )
+
+        Then("startup fails with the missing assembly component name and source")
+        val message = result match {
+          case Consequence.Failure(conclusion) => conclusion.display
+          case Consequence.Success(value) =>
+            val bindings = value.descriptor.toVector.flatMap(_.componentBindings.map(_.componentName))
+            val components = value.components.map { component =>
+              component.artifactMetadata.flatMap(_.component).getOrElse(component.name)
+            }
+            fail(s"expected component dependency failure but initialized bindings=${bindings.mkString(",")} components=${components.mkString(",")}")
+        }
+        message should include ("assembly component dependency not resolved")
+        message should include ("missing-ai-runtime-for-component-file-spec:0.2.0-SNAPSHOT")
+        message should include (appcar.toString)
+        message should include ("assembly-descriptor")
       }
     }
 

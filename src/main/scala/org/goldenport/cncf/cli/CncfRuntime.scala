@@ -66,7 +66,7 @@ import org.goldenport.cncf.spi.SpiResolver
  *  version Apr. 30, 2026
  *  version May. 25, 2026
  *  version Jun. 29, 2026
- * @version Jul.  8, 2026
+ * @version Jul.  9, 2026
  * @author  ASAMI, Tomoharu
  */
 object CncfRuntime extends GlobalObservable {
@@ -3225,6 +3225,7 @@ class CncfRuntime() extends GlobalObservable {
         subsystem.add(inheritedextras)
       }
     }
+    _verify_descriptor_components_available(subsystem, runtimespecs)
     _resolve_runtime_spi(subsystem)
     StartupImport.run(cwd, configuration, runconfig, subsystem) match {
       case Consequence.Success(_) =>
@@ -3234,6 +3235,80 @@ class CncfRuntime() extends GlobalObservable {
     }
     subsystem
   }
+
+  private def _verify_descriptor_components_available(
+    subsystem: Subsystem,
+    repositoryspecs: Vector[ComponentRepository.Specification]
+  ): Unit =
+    subsystem.descriptor.foreach { descriptor =>
+      val missing = descriptor.componentBindings.filterNot(binding =>
+        _has_descriptor_component(subsystem, binding.componentName)
+      )
+      if (missing.nonEmpty) {
+        val components = missing.map { binding =>
+          binding.componentVersion
+            .map(version => s"${binding.componentName}:${version}")
+            .getOrElse(binding.componentName)
+        }
+        val repositories = repositoryspecs.map(_repository_spec_label)
+        val requestedby = descriptor.path
+        val assemblydescriptor = descriptor.assemblyDescriptor.flatMap(_.path)
+        val message =
+          Vector(
+            s"assembly component dependency not resolved: ${components.mkString(", ")}",
+            s"subsystem=${descriptor.subsystemName}",
+            s"requestedBy=${requestedby}",
+            assemblydescriptor.map(path => s"assemblyDescriptor=${path}").getOrElse(""),
+            s"repositories=${repositories.mkString(",")}"
+          ).filter(_.nonEmpty).mkString(" ")
+        Consequence.resourceNotFound[Unit](
+          message,
+          Vector(
+            Facet.Component(components.mkString(",")),
+            Facet.Properties(Map(
+              "subsystem" -> descriptor.subsystemName,
+              "requestedBy" -> requestedby.toString,
+              "assemblyDescriptor" -> assemblydescriptor.map(_.toString).getOrElse(""),
+              "repositories" -> repositories.mkString(",")
+            ))
+          )
+        ).RAISE
+      }
+    }
+
+  private def _has_descriptor_component(
+    subsystem: Subsystem,
+    componentname: String
+  ): Boolean = {
+    val requested = NamingConventions.toComparisonKey(componentname)
+    subsystem.components.exists { component =>
+      val candidates =
+        Vector(
+          Some(component.core.name),
+          component.artifactMetadata.flatMap(_.component),
+          component.artifactMetadata.map(_.name)
+        ).flatten
+      candidates.exists(name => NamingConventions.toComparisonKey(name) == requested)
+    }
+  }
+
+  private def _repository_spec_label(
+    spec: ComponentRepository.Specification
+  ): String =
+    spec match {
+      case ComponentRepository.ComponentDirRepository.Specification(base) =>
+        s"component-dir:${base}"
+      case ComponentRepository.ComponentFileRepository.Specification(file) =>
+        s"component-file:${file}"
+      case ComponentRepository.ComponentDevDirRepository.Specification(base) =>
+        s"component-dev-dir:${base}"
+      case ComponentRepository.SubsystemDevDirRepository.Specification(base) =>
+        s"subsystem-dev-dir:${base}"
+      case ComponentRepository.StandardRepository.Specification(kind, baseurl, cache) =>
+        s"standard-repository:${kind}:${baseurl}:${cache}"
+      case ComponentRepository.ScalaCliRepository.Specification(base) =>
+        s"scala-cli:${base}"
+    }
 
   private def _resolve_runtime_spi(
     subsystem: Subsystem

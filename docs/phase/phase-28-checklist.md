@@ -57,6 +57,11 @@ been recorded without reopening the Web UI DSL phase:
       socket wiring for providers loaded from those CARs.
 - [x] Stop auto-activating cwd `component.d` as a default active repository;
       packaged component directories are explicit activation inputs.
+- [x] Jul. 9, 2026: Honor CAR-local assembly descriptor component dependencies
+      during `--component-file` / component-CAR startup.
+- [x] Fail startup deterministically when a declared assembly dependency cannot
+      be resolved from active/search repositories, with missing component,
+      requesting descriptor, assembly descriptor, and repository diagnostics.
 
 ---
 
