@@ -57,6 +57,7 @@ import org.goldenport.cncf.observability.{LogLevel, ObservabilityEngine, Visibil
 import org.goldenport.cncf.observability.global.{GlobalObservable, GlobalObservability, GlobalObservabilityGate, ObservabilityRoot}
 import org.goldenport.record.Record
 import org.goldenport.cncf.subsystem.GenericSubsystemDescriptor
+import org.goldenport.cncf.spi.SpiResolver
 
 /*
  * @since   Jan.  7, 2026
@@ -3224,6 +3225,7 @@ class CncfRuntime() extends GlobalObservable {
         subsystem.add(inheritedextras)
       }
     }
+    _resolve_runtime_spi(subsystem)
     StartupImport.run(cwd, configuration, runconfig, subsystem) match {
       case Consequence.Success(_) =>
         ()
@@ -3231,6 +3233,22 @@ class CncfRuntime() extends GlobalObservable {
         throw new IllegalStateException(conclusion.show)
     }
     subsystem
+  }
+
+  private def _resolve_runtime_spi(
+    subsystem: Subsystem
+  ): Unit = {
+    given ExecutionContext = ExecutionContext.create()
+    val bindings = subsystem.descriptor
+      .map { descriptor =>
+        GenericSubsystemDescriptor.resolveAssemblySpiBindings(descriptor) match {
+          case Consequence.Success(value) => value
+          case Consequence.Failure(conclusion) =>
+            throw new IllegalStateException(conclusion.display)
+        }
+      }
+      .getOrElse(Vector.empty)
+    SpiResolver.resolveOrRaise(subsystem.components.toVector, bindings)
   }
 
   private def _apply_component_assembly_defaults(

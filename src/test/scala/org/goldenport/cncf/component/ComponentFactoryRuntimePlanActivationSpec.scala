@@ -3,6 +3,7 @@ package org.goldenport.cncf.component
 import org.goldenport.Consequence
 import org.goldenport.protocol.Protocol
 import org.goldenport.record.Record
+import org.goldenport.cncf.cli.{CncfRuntime, RunMode}
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.entity.EntityPersistable
@@ -20,7 +21,7 @@ import org.scalatest.wordspec.AnyWordSpec
  *  version Mar. 24, 2026
  *  version Apr. 24, 2026
  *  version May.  3, 2026
- * @version Jul.  2, 2026
+ * @version Jul.  9, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactoryRuntimePlanActivationSpec
@@ -103,6 +104,42 @@ final class ComponentFactoryRuntimePlanActivationSpec
       Then("the socket receives the provider SPI")
       given ExecutionContext = ExecutionContext.create()
       socket.aiRunner.generate(AiGenerateRequest("hello")).toOption.get.text shouldBe "factory:hello"
+    }
+
+    "resolve SPI sockets after runtime extra components are added" in {
+      Given("a CNCF runtime receives an SPI provider and socket through runtime extra components")
+      var consumeropt: Option[AiRunnerSocket] = None
+      val extras = (subsystem: org.goldenport.cncf.subsystem.Subsystem) => {
+        val provider = _initialized_component(
+          subsystem,
+          "runtime_extra_spi_provider",
+          new Component() with SpiProviderComponent {
+            def spiProviders: Vector[SpiProvider[?]] =
+              Vector(_AiRunnerProvider("runtime-extra"))
+          }
+        )
+        val consumer = _initialized_component(
+          subsystem,
+          "runtime_extra_spi_consumer",
+          new Component() with AiRunnerSocket {}
+        ).asInstanceOf[Component & AiRunnerSocket]
+        consumeropt = Some(consumer)
+        Seq(provider, consumer)
+      }
+
+      When("the runtime builds a command subsystem and adds the extra components")
+      val subsystem = CncfRuntime.buildSubsystem(
+        extracomponents = extras,
+        mode = Some(RunMode.Command),
+        args = Array("--no-default-components")
+      )
+      val socket = consumeropt.getOrElse(fail("missing runtime extra consumer"))
+
+      Then("the runtime extra socket receives the provider SPI")
+      subsystem.components.toVector.map(_.name) should contain("runtime_extra_spi_consumer")
+      socket.isSpiInstalled shouldBe true
+      given ExecutionContext = ExecutionContext.create()
+      socket.aiRunner.generate(AiGenerateRequest("hello")).toOption.get.text shouldBe "runtime-extra:hello"
     }
   }
 

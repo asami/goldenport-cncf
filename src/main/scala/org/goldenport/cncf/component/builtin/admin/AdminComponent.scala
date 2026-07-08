@@ -34,6 +34,7 @@ import org.goldenport.cncf.operation.{AssociationBindingOperationDefinition, Cml
 import org.goldenport.cncf.projection.{SecurityDeploymentMarkdownProjection, SecurityDeploymentProjection}
 import org.goldenport.cncf.search.{SearchPlanningProfile, WebSearchQueryPlanner}
 import org.goldenport.cncf.security.{AdminAuthorizationPolicy, EntityAccessMode, OperationAuthorizationProvider, OperationAuthorizationRule}
+import org.goldenport.cncf.spi.SpiSocket
 import org.goldenport.cncf.subsystem.{GenericSubsystemAssemblyDescriptorSource, Subsystem}
 import org.goldenport.cncf.unitofwork.{UnitOfWorkAuthorization, UnitOfWorkOp}
 import org.goldenport.protocol.Protocol
@@ -54,7 +55,8 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
  *  version Jan. 20, 2026
  *  version Feb. 19, 2026
  *  version May. 31, 2026
- * @version Jun. 18, 2026
+ *  version Jun. 18, 2026
+ * @version Jul.  9, 2026
  * @author  ASAMI, Tomoharu
  */
 class AdminComponent() extends Component {
@@ -1247,6 +1249,7 @@ object AdminComponent {
       val wiring = _subsystem_wiring(subsystem)
       val ports = subsystem.descriptor.map(_.declaredPorts).getOrElse(Vector.empty)
       val wiringBindings = subsystem.descriptor.map(_.resolvedWiringBindings).getOrElse(Vector.empty)
+      val spisockets = _spi_socket_records(subsystem)
       val components = org.goldenport.record.Record.data(
         "loaded" -> subsystem.components.toVector.map { comp =>
           org.goldenport.record.Record.data(
@@ -1260,6 +1263,7 @@ object AdminComponent {
         "ports" -> ports,
         "wiring" -> wiring,
         "wiring_bindings" -> wiringBindings,
+        "spi_sockets" -> spisockets,
         "components" -> components,
         "warnings" -> warnings
       )
@@ -1302,6 +1306,21 @@ object AdminComponent {
       Consequence.success(OperationResponse.RecordResponse(descriptor))
     }
   }
+
+  private def _spi_socket_records(
+    subsystem: Subsystem
+  ): Vector[Record] =
+    subsystem.components.toVector.collect {
+      case socket: SpiSocket[?] =>
+        val component = socket.asInstanceOf[Component]
+        val contract = socket.spiContract
+        Record.data(
+          "component" -> component.name,
+          "contract" -> contract.name,
+          "runtime_class" -> contract.runtimeClass.getName,
+          "installed" -> socket.isSpiInstalled
+        )
+    }
 
   private final case class AssemblyDiagramActionCall(
     core: ActionCall.Core,
