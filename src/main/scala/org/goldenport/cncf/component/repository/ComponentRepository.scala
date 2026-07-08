@@ -30,7 +30,8 @@ import org.goldenport.configuration.{Configuration, ConfigurationTrace, Resolved
  *  version Feb.  5, 2026
  *  version Mar. 22, 2026
  *  version Apr. 25, 2026
- * @version May. 25, 2026
+ *  version May. 25, 2026
+ * @version Jul.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 sealed abstract class ComponentRepository {
@@ -244,13 +245,13 @@ object ComponentRepository extends GlobalObservable {
     def discover(): Seq[Component] = {
       val log = PersistentBootstrapLog.forClass(classOf[ScalaCliRepository], ObservabilityScopeDefaults.Bootstrap)
       log.info(s"scala-cli repository baseDir=${baseDir}")
-      val classDirs = _resolve_class_dirs()
-      log.info(s"classDirs=${classDirs.mkString(",")}")
-      if (classDirs.isEmpty) {
+      val classdirs = _resolve_class_dirs()
+      log.info(s"classdirs=${classdirs.mkString(",")}")
+      if (classdirs.isEmpty) {
         Nil
       } else {
-        val loader = _class_loader_from_paths(classDirs, getClass.getClassLoader)
-        _discover_by_scan_ordered(loader, params, classDirs, packagePrefixes, log) match {
+        val loader = _class_loader_from_paths(classdirs, getClass.getClassLoader)
+        _discover_by_scan_ordered(loader, params, classdirs, packagePrefixes, log) match {
           case Consequence.Success(comps) => comps
           case Consequence.Failure(conclusion) =>
             log.warn(s"component discovery failed: ${conclusion.show}")
@@ -405,15 +406,15 @@ object ComponentRepository extends GlobalObservable {
       }
       val classpath = ComponentDevDirRepository.devRuntimeClasspath(baseDir)
       {
-        val classDirs = classpath.filter(Files.isDirectory(_))
-        if (classDirs.isEmpty) {
+        val classdirs = classpath.filter(Files.isDirectory(_))
+        if (classdirs.isEmpty) {
           throw new IllegalStateException(ComponentDevDirRepository.noClassDirectoryMessage(baseDir))
         } else {
           val loader = _class_loader_from_paths(classpath, getClass.getClassLoader)
           _discover_components(
             loader,
             params,
-            classDirs,
+            classdirs,
             packagePrefixes,
             ComponentOrigin.Repository("component-dev-dir"),
             log,
@@ -845,10 +846,10 @@ object ComponentRepository extends GlobalObservable {
     subsystemName: String
   ): Boolean = {
     val requested = subsystemName.trim
-    val versionedName =
+    val versionedname =
       descriptor.version.map(v => s"${descriptor.subsystemName}-${v}")
     descriptor.subsystemName == requested ||
-      versionedName.contains(requested) ||
+      versionedname.contains(requested) ||
       descriptor.path.getFileName.toString.stripSuffix(".sar").stripSuffix(".zip") == requested
   }
 
@@ -907,7 +908,7 @@ object ComponentRepository extends GlobalObservable {
     params: ComponentCreate,
     origin: ComponentOrigin
   ): Vector[Component] = {
-    val withOrigin = params.withOrigin(origin)
+    val withorigin = params.withOrigin(origin)
     val components =
       ServiceLoader.load(classOf[Component], loader).iterator.asScala.toVector
     val factories =
@@ -916,10 +917,10 @@ object ComponentRepository extends GlobalObservable {
         .iterator
         .asScala
         .toVector
-    val fromFactories = factories.flatMap(_.create(withOrigin).participants)
-    val direct = components.map(_initialize_component(withOrigin))
-    if (fromFactories.nonEmpty)
-      fromFactories ++ direct.filterNot(d => fromFactories.exists(f => NamingConventions.equivalentByNormalized(f.name, d.name)))
+    val fromfactories = factories.flatMap(_.create(withorigin).participants)
+    val direct = components.map(_initialize_component(withorigin))
+    if (fromfactories.nonEmpty)
+      fromfactories ++ direct.filterNot(d => fromfactories.exists(f => NamingConventions.equivalentByNormalized(f.name, d.name)))
     else
       direct
   }
@@ -957,13 +958,13 @@ object ComponentRepository extends GlobalObservable {
           .iterator()
           .asScala
           .flatMap { p =>
-            val fileName = p.getFileName.toString
+            val filename = p.getFileName.toString
             if (Files.isRegularFile(p)) {
-              if (fileName.endsWith(".car")) {
+              if (filename.endsWith(".car")) {
                 Some(Artifact(p, ArtifactKind.Car))
-              } else if (fileName.endsWith(".sar")) {
+              } else if (filename.endsWith(".sar")) {
                 Some(Artifact(p, ArtifactKind.Sar))
-              } else if (fileName.endsWith(".jar")) {
+              } else if (filename.endsWith(".jar")) {
                 Some(Artifact(p, ArtifactKind.Jar))
               } else {
                 None
@@ -1381,12 +1382,12 @@ object ComponentRepository extends GlobalObservable {
     CarExtractor.withExtracted(carpath, areas) { extracted =>
       _discover_component_from_car_common(
         extracted = extracted,
-        artifactPath = carpath,
+        artifactpath = carpath,
         params = params,
         origin = origin,
         log = log,
         sarDescriptor = sarDescriptor,
-        sourceType = sarDescriptor.map(_ => "sar+car").getOrElse("car")
+        sourcetype = sarDescriptor.map(_ => "sar+car").getOrElse("car")
       )
     } match {
       case Consequence.Success(components) => components
@@ -1407,12 +1408,12 @@ object ComponentRepository extends GlobalObservable {
       case Consequence.Success(extracted) =>
         _discover_component_from_car_common(
           extracted = extracted,
-          artifactPath = cardir,
+          artifactpath = cardir,
           params = params,
           origin = origin,
           log = log,
           sarDescriptor = sarDescriptor,
-          sourceType = sarDescriptor.map(_ => "sar+car-dir").getOrElse("car-dir")
+          sourcetype = sarDescriptor.map(_ => "sar+car-dir").getOrElse("car-dir")
         ) match {
           case Consequence.Success(components) => components
           case Consequence.Failure(conclusion) =>
@@ -1426,77 +1427,117 @@ object ComponentRepository extends GlobalObservable {
 
   private def _discover_component_from_car_common(
     extracted: CarExtracted,
-    artifactPath: Path,
+    artifactpath: Path,
     params: ComponentCreate,
     origin: ComponentOrigin,
     log: BootstrapLog,
     sarDescriptor: Option[GenericSubsystemDescriptor],
-    sourceType: String
+    sourcetype: String
   ): Consequence[Vector[Component]] = {
-    val baseOrigin = _component_origin_for_archive(
-      repositoryType = origin.label,
-      carDescriptor = extracted.descriptor,
+    _required_car_descriptor_value(
+      extracted.descriptor.name.orElse(extracted.descriptor.componentName),
+      "name",
+      artifactpath
+    ).flatMap { carname =>
+      _required_car_descriptor_value(extracted.descriptor.version, "version", artifactpath).flatMap { carversion =>
+        _required_car_descriptor_value(
+          extracted.descriptor.componentName.orElse(extracted.descriptor.name),
+          "component",
+          artifactpath
+        ).flatMap { componentname =>
+          ComponentDependencyResolver.resolve(
+            extracted.root,
+            componentname,
+            params.subsystem.configuration
+          ).flatMap { dependencies =>
+            _discover_component_from_car_common(
+              extracted,
+              artifactpath,
+              params,
+              origin,
+              log,
+              sarDescriptor,
+              sourcetype,
+              carname,
+              carversion,
+              componentname,
+              dependencies
+            )
+          }
+        }
+      }
+    }
+  }
+
+  private def _discover_component_from_car_common(
+    extracted: CarExtracted,
+    artifactpath: Path,
+    params: ComponentCreate,
+    origin: ComponentOrigin,
+    log: BootstrapLog,
+    sarDescriptor: Option[GenericSubsystemDescriptor],
+    sourcetype: String,
+    carname: String,
+    carversion: String,
+    componentname: String,
+    dependencies: ComponentDependencyResolution
+  ): Consequence[Vector[Component]] = {
+    val baseorigin = _component_origin_for_archive(
+      repositorytype = origin.label,
+      carname = carname,
+      carversion = carversion,
       sarDescriptor = sarDescriptor,
       fallback = origin
     )
     val (effectiveExtensions, effectiveConfig) =
       _effective_extensions_config(extracted.descriptor, sarDescriptor)
-    val artifactMetadata = Component.ArtifactMetadata(
-      sourceType = sourceType,
-      name = extracted.descriptor.name.orElse(extracted.descriptor.componentName).getOrElse(artifactPath.getFileName.toString),
-      version = extracted.descriptor.version.getOrElse("0.1.0"),
-      component = extracted.descriptor.componentName,
+    val artifactmetadata = Component.ArtifactMetadata(
+      sourceType = sourcetype,
+      name = carname,
+      version = carversion,
+      component = Some(componentname),
       subsystem = sarDescriptor.map(_.subsystemName).orElse(extracted.descriptor.subsystemName),
-      archivePath = Some(artifactPath.toString),
+      archivePath = Some(artifactpath.toString),
       effectiveExtensions = effectiveExtensions,
       effectiveConfig = effectiveConfig
     )
-    val componentname =
-      extracted.descriptor.componentName.orElse(extracted.descriptor.name).getOrElse(artifactPath.getFileName.toString)
     val componentparams =
       params.withComponentDescriptors(_component_descriptors_for_artifact(params, extracted.descriptor))
-    val dependencyresolution = ComponentDependencyResolver.resolve(
-      extracted.root,
-      componentname,
-      params.subsystem.configuration
-    )
-    dependencyresolution.flatMap { dependencies =>
-      Using.resource(dependencies.componentClassLoader(Vector(extracted.componentMain), extracted.componentLibs, getClass.getClassLoader)) { componentLoader =>
-        val components0 =
-          _discover_component_from_artifact_with_loader(
-            artifactname = artifactPath.getFileName.toString,
-            loader = componentLoader,
-            // Scan only the component's main archive. Dependency jars may contain
-            // demo or builtin components that must not be treated as packaged
-            // component definitions for this CAR.
-            scanclasspath = Vector(extracted.componentMain),
-            params = componentparams,
-            origin = baseOrigin,
-            log = log
-          ).toVector
-        val components = components0.map(_.withArtifactMetadata(artifactMetadata))
-        val collaboratorcomponents = components.collect {
-          case comp: CollaboratorComponent => comp
-        }
-        if (collaboratorcomponents.isEmpty) {
-          Consequence.success(components)
-        } else {
-          extracted.collaboratorClasspath match {
-            case Some(paths) if paths.nonEmpty =>
-              Using.resource(CollaboratorClassLoader(paths)) { collaboratorLoader =>
-                CollaboratorFactory.create(collaboratorLoader, paths) match {
-                  case Consequence.Success(collaborator) =>
-                    collaboratorcomponents.foreach(_.setCollaborator(collaborator))
-                    Consequence.success(components)
-                  case Consequence.Failure(conclusion) =>
-                    log.warn(s"[component-dir] artifact=${artifactPath.getFileName} collaborator init failed cause=${conclusion.show}")
-                    Consequence.success(Vector.empty)
-                }
+    Using.resource(dependencies.componentClassLoader(Vector(extracted.componentMain), extracted.componentLibs, getClass.getClassLoader)) { componentLoader =>
+      val components0 =
+        _discover_component_from_artifact_with_loader(
+          artifactname = artifactpath.getFileName.toString,
+          loader = componentLoader,
+          // Scan only the component's main archive. Dependency jars may contain
+          // demo or builtin components that must not be treated as packaged
+          // component definitions for this CAR.
+          scanclasspath = Vector(extracted.componentMain),
+          params = componentparams,
+          origin = baseorigin,
+          log = log
+        ).toVector
+      val components = components0.map(_.withArtifactMetadata(artifactmetadata))
+      val collaboratorcomponents = components.collect {
+        case comp: CollaboratorComponent => comp
+      }
+      if (collaboratorcomponents.isEmpty) {
+        Consequence.success(components)
+      } else {
+        extracted.collaboratorClasspath match {
+          case Some(paths) if paths.nonEmpty =>
+            Using.resource(CollaboratorClassLoader(paths)) { collaboratorLoader =>
+              CollaboratorFactory.create(collaboratorLoader, paths) match {
+                case Consequence.Success(collaborator) =>
+                  collaboratorcomponents.foreach(_.setCollaborator(collaborator))
+                  Consequence.success(components)
+                case Consequence.Failure(conclusion) =>
+                  log.warn(s"[component-dir] artifact=${artifactpath.getFileName} collaborator init failed cause=${conclusion.show}")
+                  Consequence.success(Vector.empty)
               }
-            case _ =>
-              log.warn(s"[component-dir] artifact=${artifactPath.getFileName} collaborator classpath missing")
-              Consequence.success(Vector.empty)
-          }
+            }
+          case _ =>
+            log.warn(s"[component-dir] artifact=${artifactpath.getFileName} collaborator classpath missing")
+            Consequence.success(Vector.empty)
         }
       }
     }
@@ -1548,7 +1589,7 @@ object ComponentRepository extends GlobalObservable {
       log.warn(s"[component-dir] sar=${extracted.root.getFileName} contains no embedded component artifact")
       Consequence.success(Vector.empty)
     } else {
-      val fromCars = extracted.carArtifacts.sortBy(_.toString).toVector.flatMap { car =>
+      val fromcars = extracted.carArtifacts.sortBy(_.toString).toVector.flatMap { car =>
         _discover_component_from_car(
           carpath = car,
           params = params,
@@ -1557,7 +1598,7 @@ object ComponentRepository extends GlobalObservable {
           sarDescriptor = Some(extracted.descriptor)
         )
       }
-      val fromCarDirs = extracted.carDirectories.sortBy(_.toString).toVector.flatMap { cardir =>
+      val fromcardirs = extracted.carDirectories.sortBy(_.toString).toVector.flatMap { cardir =>
         _discover_component_from_car_dir(
           cardir = cardir,
           params = params,
@@ -1566,7 +1607,7 @@ object ComponentRepository extends GlobalObservable {
           sarDescriptor = Some(extracted.descriptor)
         )
       }
-      Consequence.success((fromCars ++ fromCarDirs).distinctBy(_.name))
+      Consequence.success((fromcars ++ fromcardirs).distinctBy(_.name))
     }
   }
 
@@ -1589,21 +1630,29 @@ object ComponentRepository extends GlobalObservable {
     (extensions, config)
   }
 
+  private def _required_car_descriptor_value(
+    value: Option[String],
+    field: String,
+    artifactpath: Path
+  ): Consequence[String] =
+    value.map(_.trim).filter(_.nonEmpty)
+      .map(Consequence.success)
+      .getOrElse(Consequence.resourceInvalid(s"CAR component-descriptor.json must declare ${field}: ${artifactpath}"))
+
   private def _component_origin_for_archive(
-    repositoryType: String,
-    carDescriptor: ComponentDescriptor,
+    repositorytype: String,
+    carname: String,
+    carversion: String,
     sarDescriptor: Option[GenericSubsystemDescriptor],
     fallback: ComponentOrigin
   ): ComponentOrigin =
     fallback match {
       case ComponentOrigin.Repository(_) =>
-        val carName = carDescriptor.name.orElse(carDescriptor.componentName).getOrElse("component")
-        val carVersion = carDescriptor.version.getOrElse("0.1.0")
         val label = sarDescriptor match {
           case Some(sar) =>
-            s"${repositoryType}:sar:${sar.subsystemName}:${sar.version.getOrElse("0.1.0")}:car:${carName}:${carVersion}"
+            s"${repositorytype}:sar:${sar.subsystemName}:${sar.version.getOrElse("0.1.0")}:car:${carname}:${carversion}"
           case None =>
-            s"${repositoryType}:car:${carName}:${carVersion}"
+            s"${repositorytype}:car:${carname}:${carversion}"
         }
         ComponentOrigin.Repository(label)
       case other =>
@@ -1637,35 +1686,35 @@ object ComponentRepository extends GlobalObservable {
     origin: ComponentOrigin,
     log: BootstrapLog
   ): Seq[Component] = {
-    val withOrigin = params.withOrigin(origin)
-    val classNames = _jar_class_names_from_paths(scanclasspath)
-    if (classNames.isEmpty) {
+    val withorigin = params.withOrigin(origin)
+    val classnames = _jar_class_names_from_paths(scanclasspath)
+    if (classnames.isEmpty) {
       log.warn(s"[component-dir] artifact=${artifactname} contains no class entries")
       Vector.empty
     } else {
-      val factoryComponents = _instantiate_factory_components(
+      val factorycomponents = _instantiate_factory_components(
         loader = loader,
-        classNames = classNames,
+        classnames = classnames,
         params = params,
         origin = origin,
         log = log,
         artifactname = artifactname,
-        repositoryType = _component_dir_type
+        repositorytype = _component_dir_type
       )
-      if (factoryComponents.nonEmpty) {
-        factoryComponents
+      if (factorycomponents.nonEmpty) {
+        factorycomponents
       } else {
-        _build_sources(classNames, loader, origin, log, tolerant = true) match {
+        _build_sources(classnames, loader, origin, log, tolerant = true) match {
           case Consequence.Success(sources) =>
-            _provide_components(sources, withOrigin, log) match {
+            _provide_components(sources, withorigin, log) match {
               case Consequence.Success(components) =>
                 components.headOption match {
                   case Some(first) =>
-                    val canonicalName =
+                    val canonicalname =
                       params.componentDescriptors.headOption
                         .flatMap(x => x.componentName.orElse(x.name))
                         .getOrElse(first.core.name)
-                    log.info(s"[component-dir] artifact=${artifactname} provides component=${canonicalName}")
+                    log.info(s"[component-dir] artifact=${artifactname} provides component=${canonicalname}")
                     Vector(first)
                   case None =>
                     log.warn(s"[component-dir] artifact=${artifactname} contains no valid components")
@@ -1698,50 +1747,50 @@ object ComponentRepository extends GlobalObservable {
   }
 
   private def _class_name_from_entry(entryname: String): String = {
-    val withoutExtension = entryname.substring(0, entryname.length - ".class".length)
-    withoutExtension.replace('/', '.')
+    val withoutextension = entryname.substring(0, entryname.length - ".class".length)
+    withoutextension.replace('/', '.')
   }
 
   private def _instantiate_factory_components(
     loader: URLClassLoader,
-    classNames: Seq[String],
+    classnames: Seq[String],
     params: ComponentCreate,
     origin: ComponentOrigin,
     log: BootstrapLog,
     artifactname: String,
-    repositoryType: String
+    repositorytype: String
   ): Seq[Component] = {
     _find_factory_class(
       loader = loader,
-      classNames = classNames,
+      classnames = classnames,
       artifactname = artifactname,
-      repositoryType = repositoryType
+      repositorytype = repositorytype
     ) match {
-      case Some(factoryClass) => _create_components_from_factory(factoryClass, params.withOrigin(origin), log)
+      case Some(factoryclass) => _create_components_from_factory(factoryclass, params.withOrigin(origin), log)
       case None => Vector.empty
     }
   }
 
   private def _find_factory_class(
     loader: URLClassLoader,
-    classNames: Seq[String],
+    classnames: Seq[String],
     artifactname: String,
-    repositoryType: String
-  ): Option[Class[_ <: Component.BundleFactory]] = {
-    val factories = classNames.view.flatMap { className =>
+    repositorytype: String
+  ): Option[Class[_]] = {
+    val factories = classnames.view.flatMap { classname =>
       _load_class(
-        className = className,
+        classname = classname,
         loader = loader,
         artifactname = artifactname,
-        repositoryType = repositoryType
+        repositorytype = repositorytype
       ).flatMap { cls =>
         if (
-          classOf[Component.BundleFactory].isAssignableFrom(cls) &&
+          _is_factory_class(cls) &&
           !cls.isInterface &&
           !Modifier.isAbstract(cls.getModifiers) &&
           !cls.getName.endsWith("$")
         ) {
-          Some(cls.asInstanceOf[Class[_ <: Component.BundleFactory]])
+          Some(cls)
         } else {
           None
         }
@@ -1750,58 +1799,67 @@ object ComponentRepository extends GlobalObservable {
     factories.sortBy(_factory_priority).headOption
   }
 
+  private def _is_factory_class(cls: Class[_]): Boolean =
+    classOf[Component.BundleFactory].isAssignableFrom(cls) ||
+      classOf[Component.Factory].isAssignableFrom(cls)
+
   private def _factory_priority(
-    factoryClass: Class[_ <: Component.BundleFactory]
-  ): (Int, String) = {
-    val name = factoryClass.getName
-    val nestedPenalty = if (name.contains("$") || factoryClass.getEnclosingClass != null) 1 else 0
-    (nestedPenalty, name)
+    factoryclass: Class[_]
+  ): (Int, Int, String) = {
+    val name = factoryclass.getName
+    val bundlepenalty = if (classOf[Component.BundleFactory].isAssignableFrom(factoryclass)) 0 else 1
+    val nestedpenalty = if (name.contains("$") || factoryclass.getEnclosingClass != null) 1 else 0
+    (bundlepenalty, nestedpenalty, name)
   }
 
   private def _create_components_from_factory(
-    factoryClass: Class[_ <: Component.BundleFactory],
+    factoryclass: Class[_],
     params: ComponentCreate,
     log: BootstrapLog
   ): Seq[Component] = {
     try {
-      val factory = factoryClass.getDeclaredConstructor().newInstance().asInstanceOf[Component.BundleFactory]
-      factory.create(params).participants
+      factoryclass.getDeclaredConstructor().newInstance() match {
+        case factory: Component.BundleFactory =>
+          factory.create(params).participants
+        case factory: Component.Factory =>
+          Vector(factory.createPrimary(params))
+      }
     } catch {
       case NonFatal(e) =>
-        log.warn(s"component factory initialization failed for ${factoryClass.getName}: ${e.getMessage}")
+        log.warn(s"component factory initialization failed for ${factoryclass.getName}: ${e.getMessage}")
         Vector.empty
     }
   }
 
   private def _load_class(
-    className: String,
+    classname: String,
     loader: URLClassLoader,
     artifactname: String,
-    repositoryType: String
+    repositorytype: String
   ): Option[Class[_]] = {
     try {
-      Some(Class.forName(className, false, loader))
+      Some(Class.forName(classname, false, loader))
     } catch {
       case e: ClassNotFoundException =>
-        _observe_component_load_error(className, e, artifactname, repositoryType)
+        _observe_component_load_error(classname, e, artifactname, repositorytype)
         None
       case e: NoClassDefFoundError =>
-        _observe_component_load_error(className, e, artifactname, repositoryType)
+        _observe_component_load_error(classname, e, artifactname, repositorytype)
         None
       case e: LinkageError =>
-        _observe_component_load_error(className, e, artifactname, repositoryType)
+        _observe_component_load_error(classname, e, artifactname, repositorytype)
         None
       case NonFatal(e) =>
-        _observe_component_load_error(className, e, artifactname, repositoryType)
+        _observe_component_load_error(classname, e, artifactname, repositorytype)
         None
     }
   }
 
   private def _observe_component_load_error(
-    className: String,
+    classname: String,
     e: Throwable,
     artifactname: String,
-    repositoryType: String
+    repositorytype: String
   ): Unit = {
     val taxonomy = e match {
       case _: ClassNotFoundException => Taxonomy.componentUnavailable
@@ -1811,9 +1869,9 @@ object ComponentRepository extends GlobalObservable {
     }
     val observation = Observation.failure(
       taxonomy,
-      Descriptor.Facet.ClassName(className),
+      Descriptor.Facet.ClassName(classname),
       Descriptor.Facet.Artifact(artifactname),
-      Descriptor.Facet.RepositoryType(repositoryType),
+      Descriptor.Facet.RepositoryType(repositorytype),
       Descriptor.Facet.Exception(e)
     )
     val message = ObservationRender.warnMessage(observation)
@@ -1823,21 +1881,21 @@ object ComponentRepository extends GlobalObservable {
   private def _discover_by_scan(
     loader: URLClassLoader,
     params: ComponentCreate,
-    classDirs: Seq[Path],
+    classdirs: Seq[Path],
     packagePrefixes: Seq[String],
     log: BootstrapLog
   ): Consequence[Vector[Component]] = {
-    _discover_components(loader, params, classDirs, packagePrefixes, ComponentOrigin.Repository("component-dir"), log)
+    _discover_components(loader, params, classdirs, packagePrefixes, ComponentOrigin.Repository("component-dir"), log)
   }
 
   private def _discover_by_scan_ordered(
     loader: URLClassLoader,
     params: ComponentCreate,
-    classDirs: Seq[Path],
+    classdirs: Seq[Path],
     packagePrefixes: Seq[String],
     log: BootstrapLog
   ): Consequence[Vector[Component]] = {
-    val names = _discover_class_names(classDirs, packagePrefixes)
+    val names = _discover_class_names(classdirs, packagePrefixes)
     val normalized = _normalize_class_names(names)
     log.info(s"normalizedCandidatesCount=${normalized.size}")
     log.info(s"normalizedCandidates=${normalized.mkString(",")}")
@@ -1858,13 +1916,13 @@ object ComponentRepository extends GlobalObservable {
   private def _discover_components(
     loader: URLClassLoader,
     params: ComponentCreate,
-    classDirs: Seq[Path],
+    classdirs: Seq[Path],
     packagePrefixes: Seq[String],
     origin: ComponentOrigin,
     log: BootstrapLog,
     tolerant: Boolean = false
   ): Consequence[Vector[Component]] = {
-    val names = _discover_class_names(classDirs, packagePrefixes)
+    val names = _discover_class_names(classdirs, packagePrefixes)
     _discover_components_with_names(
       loader,
       params,
@@ -1878,29 +1936,29 @@ object ComponentRepository extends GlobalObservable {
   private def _discover_components_with_names(
     loader: URLClassLoader,
     params: ComponentCreate,
-    classNames: Seq[String],
+    classnames: Seq[String],
     origin: ComponentOrigin,
     log: BootstrapLog,
     tolerant: Boolean
   ): Consequence[Vector[Component]] = {
-    val withOrigin = params.withOrigin(origin)
+    val withorigin = params.withOrigin(origin)
     for {
-      sources <- _build_sources(classNames, loader, origin, log, tolerant)
-      components <- _provide_components(sources, withOrigin, log)
+      sources <- _build_sources(classnames, loader, origin, log, tolerant)
+      components <- _provide_components(sources, withorigin, log)
     } yield components
   }
 
   private def _discover_class_names(
-    classDirs: Seq[Path],
+    classdirs: Seq[Path],
     packagePrefixes: Seq[String]
   ): Vector[String] = {
     val seen = mutable.Set.empty[String]
-    classDirs.foreach { root =>
-      _class_files(root).foreach { classFile =>
-        val className = _class_name(root, classFile)
-        val baseName = _base_class_name(className)
-        if (_accept_class(baseName, packagePrefixes) && !seen.contains(baseName)) {
-          seen += baseName
+    classdirs.foreach { root =>
+      _class_files(root).foreach { classfile =>
+        val classname = _class_name(root, classfile)
+        val basename = _base_class_name(classname)
+        if (_accept_class(basename, packagePrefixes) && !seen.contains(basename)) {
+          seen += basename
         }
       }
     }
@@ -1935,15 +1993,15 @@ object ComponentRepository extends GlobalObservable {
     }
   }
 
-  private def _class_name(root: Path, classFile: Path): String = {
-    val relative = root.relativize(classFile).toString
-    val noExt =
+  private def _class_name(root: Path, classfile: Path): String = {
+    val relative = root.relativize(classfile).toString
+    val noext =
       if (relative.endsWith(".class")) {
         relative.substring(0, relative.length - ".class".length)
       } else {
         relative
       }
-    noExt.replace('/', '.').replace('\\', '.')
+    noext.replace('/', '.').replace('\\', '.')
   }
 
   private def _normalize_class_names(
@@ -1955,12 +2013,12 @@ object ComponentRepository extends GlobalObservable {
       val base = n.trim
       val stripped = base.stripPrefix("main.")
       val prefixed = if (base.startsWith("main.")) "" else s"main.${base}"
-      val baseCandidates = Vector(base, stripped, prefixed).filter(_.nonEmpty)
-      val withDollar = baseCandidates.map { c =>
+      val basecandidates = Vector(base, stripped, prefixed).filter(_.nonEmpty)
+      val withdollar = basecandidates.map { c =>
         if (c.endsWith("$")) c else s"${c}$$"
       }
-      val withoutDollar = baseCandidates.map(_.stripSuffix("$"))
-      val candidates = baseCandidates ++ withDollar ++ withoutDollar
+      val withoutdollar = basecandidates.map(_.stripSuffix("$"))
+      val candidates = basecandidates ++ withdollar ++ withoutdollar
       candidates.foreach { c =>
         if (!seen.contains(c)) {
           seen += c
@@ -1998,24 +2056,24 @@ object ComponentRepository extends GlobalObservable {
   }
 
   private def _build_sources(
-    classNames: Seq[String],
+    classnames: Seq[String],
     loader: ClassLoader,
     origin: ComponentOrigin,
     log: BootstrapLog,
     tolerant: Boolean
   ): Consequence[Vector[ComponentSource]] =
-    classNames.foldLeft(Consequence.success(Vector.empty[ComponentSource])) { (result, className) =>
+    classnames.foldLeft(Consequence.success(Vector.empty[ComponentSource])) { (result, classname) =>
       result.flatMap { acc =>
-        log.info(s"candidate class=${className}")
-        ComponentFactory.build(Seq(className), loader, origin.label) match {
+        log.info(s"candidate class=${classname}")
+        ComponentFactory.build(Seq(classname), loader, origin.label) match {
           case Consequence.Success(sources) =>
             sources.foreach {
               case ComponentSource.ClassDef(_, _) =>
-                log.info(s"accepted component class=${className}")
+                log.info(s"accepted component class=${classname}")
             }
             Consequence.success(acc ++ sources)
           case Consequence.Failure(conclusion) =>
-            log.warn(s"failed to build source: ${className} cause=${conclusion.show}")
+            log.warn(s"failed to build source: ${classname} cause=${conclusion.show}")
             if (tolerant) {
               Consequence.success(acc)
             } else {

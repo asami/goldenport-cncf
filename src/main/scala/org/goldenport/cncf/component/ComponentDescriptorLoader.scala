@@ -20,7 +20,7 @@ import org.goldenport.record.RecordDecoder
  *  version Apr.  8, 2026
  *  version Apr. 14, 2026
  *  version Apr. 25, 2026
- * @version May.  1, 2026
+ * @version Jul.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 object ComponentDescriptorLoader {
@@ -63,12 +63,12 @@ object ComponentDescriptorLoader {
     else if (_is_non_component_archive_file(path))
       Consequence.resourceInvalid(s"component archive must be a CAR file: ${path}")
     else {
-      val descriptorPath =
+      val descriptorpath =
         if (Files.isDirectory(path)) _resolve_canonical_descriptor_files(path).headOption
         else Some(path)
-      descriptorPath match {
+      descriptorpath match {
         case Some(file) =>
-          _load_file(file).flatMap(_.headOption.map(Consequence.success).getOrElse(Consequence.resourceInvalid(s"component archive descriptor is empty: ${file}")))
+          _load_archive_descriptor_file(file, path)
         case None =>
           Consequence.resourceNotFound(s"component descriptor not found under canonical CAR layout: ${path}")
       }
@@ -122,11 +122,37 @@ object ComponentDescriptorLoader {
       val root = fs.getPath("/")
       _resolve_canonical_descriptor_files(root).headOption match {
         case Some(file) =>
-          _load_file(file).flatMap(_.headOption.map(Consequence.success).getOrElse(Consequence.resourceInvalid(s"component archive descriptor is empty: ${path}")))
+          _load_archive_descriptor_file(file, path)
         case None =>
           Consequence.resourceNotFound(s"component descriptor not found in archive: ${path}")
       }
     }
+  }
+
+  private def _load_archive_descriptor_file(
+    descriptorpath: Path,
+    archivepath: Path
+  ): Consequence[ComponentDescriptor] =
+    _load_file(descriptorpath).flatMap { descriptors =>
+      descriptors.headOption
+        .map(Consequence.success)
+        .getOrElse(Consequence.resourceInvalid(s"component archive descriptor is empty: ${archivepath}"))
+    }.flatMap { descriptor =>
+      _validate_archive_descriptor_contract(descriptor, archivepath).map(_ => descriptor)
+    }
+
+  private def _validate_archive_descriptor_contract(
+    descriptor: ComponentDescriptor,
+    archivepath: Path
+  ): Consequence[Unit] = {
+    def missing(field: String): Consequence[Unit] =
+      Consequence.resourceInvalid(s"CAR component-descriptor.json must declare ${field}: ${archivepath}")
+    descriptor.name.map(_.trim).filter(_.nonEmpty).map(_ => Consequence.success(())).getOrElse(missing("name"))
+      .flatMap { _ =>
+        descriptor.version.map(_.trim).filter(_.nonEmpty).map(_ => Consequence.success(())).getOrElse(missing("version"))
+      }.flatMap { _ =>
+        descriptor.componentName.map(_.trim).filter(_.nonEmpty).map(_ => Consequence.success(())).getOrElse(missing("component"))
+      }
   }
 
   private def _load_files(files: Vector[Path]): Consequence[Vector[ComponentDescriptor]] =

@@ -199,6 +199,17 @@ coverage:
   component-local assembly defaults source for wiring, SPI/provider defaults,
   and required provider component declarations.
 
+Post-closure CAR runtime intake maintenance on Jul. 8, 2026 kept Phase 28
+closed while hardening packaged component loading:
+
+- Component CAR descriptors must declare name, version, and component metadata.
+- CAR discovery supports plain `Component.Factory` implementations as well as
+  bundle factories.
+- Socket wiring is executable-spec covered for providers loaded from component
+  CARs.
+- cwd `component.d` is not auto-activated as a default active repository;
+  packaged component directories remain explicit activation inputs.
+
 Post-closure runtime maintenance on Jun. 29, 2026 aligned the CAR component
 developer startup path and launcher command installation path:
 

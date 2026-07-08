@@ -132,12 +132,14 @@ published components should stay repository-resolved.
 
 ### Packaged activation
 
-`component.d` is the local active packaged directory.
+`component.d` is the legacy local active packaged directory. It is not
+auto-activated by default; use it only through an explicit component-dir
+configuration or command-line option.
 
 - `--component-dir <path>`
   - adds packaged artifacts directly to the active set
 - packaged artifacts in `component.d`
-  - are treated as active inputs
+  - are treated as active inputs only when the directory is explicitly selected
 
 ## Name-Based Selection
 
@@ -272,7 +274,8 @@ The preferred operational model is:
 3. use `repository.d` when packaged artifacts should be searchable but not automatically active
 4. use local `.textus.conf` component development-directory overrides for
    sibling components being developed at the same time
-5. use `component.d` when packaged artifacts should be active inputs
+5. use explicit `--component-dir component.d` when legacy packaged artifacts
+   should be active inputs
 6. use `--component-dev-dir`, `--component-car-dir`, `--subsystem-dev-dir`,
    `--subsystem-sar-dir`, or `--discover=classes` for development-time workflows
 

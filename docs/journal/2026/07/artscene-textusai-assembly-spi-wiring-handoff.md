@@ -318,3 +318,64 @@ This should be verified in the TextusAi repo and then republished locally before
 ## Current Boundary
 
 Do not fix this by adding `SpiResolver.resolve(...)` in ArtScene. The issue should be fixed in CNCF runtime wiring and/or TextusAi provider packaging/configuration so ArtScene remains a normal socket consumer.
+
+
+## Update: 2026-07-08 Retry After CNCF Fix
+
+The user updated CNCF and asked to retry the ArtScene live fetch report. The retry was run outside the sandbox from the ArtScene repository:
+
+```sh
+scripts/check-stage5b-live-fetch-operation-report.sh
+```
+
+The script completed successfully and regenerated:
+
+- `/Users/asami/src/dev2026/textus-art-scene/target/cncf.d/stage5b-live-fetch-operation-report.json`
+- `/Users/asami/src/dev2026/textus-art-scene/target/cncf.d/stage5b-live-fetch-operation-report.md`
+
+The result did not change:
+
+```text
+facility_count: 49
+official_success: 8
+museum_or_jp_success: 29
+ai_success: 0
+unresolved: 12
+audit_error: 0
+```
+
+Every unresolved facility still ended with the same AI fallback error:
+
+```text
+AI fallback failed: AI fallback is unavailable: AI runner socket is not installed for ArtScene exhibition fallback.
+```
+
+The current CNCF admin report confirms that assembly loading itself works and that both components are present:
+
+```yaml
+components:
+  loaded:
+  - name: TextusAi
+    origin: active car textus-ai-runtime@0.1.0
+  - name: ArtScene
+    origin: component-dev-dir
+warnings:
+  status: ok
+```
+
+However, no runtime SPI binding is reported:
+
+```yaml
+wiring_bindings: []
+```
+
+Current conclusion: the CNCF fix makes or keeps assembly loading healthy, but it still does not install `TextusAi`/`AiRunner` into ArtScene's `AiRunnerSocket`. The remaining issue is runtime SPI binding, not ArtScene fetch-chain behavior and not missing assembly descriptor loading.
+
+For the next CNCF fix, the minimum acceptance check should be:
+
+1. `cncf --runtime-dev-dir /Users/asami/src/dev2025/cloud-native-component-framework . command admin.assembly.report --format yaml` shows a non-empty binding from `TextusAi` to ArtScene's `AiRunnerSocket`, or an equivalent diagnostic field that proves the socket was installed.
+2. Re-running ArtScene `scripts/check-stage5b-live-fetch-operation-report.sh` changes the last fallback failure away from `AI runner socket is not installed`.
+3. If no AI backend credentials/provider are configured, the expected next failure should be a structured AI provider/configuration error, not a socket installation error.
+4. If a deterministic/test AI provider is configured through normal CNCF assembly/test configuration, at least one previously unresolved facility should classify as `ai_success` with `fetch_source = ai_runner` and confidence metadata.
+
+Do not solve this by adding an ArtScene-level `SpiResolver.resolve(...)` fallback or by using a JVM system property to inject the provider. The intended standard path is assembly-driven provider loading plus CNCF runtime socket installation.

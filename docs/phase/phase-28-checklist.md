@@ -51,6 +51,12 @@ been recorded without reopening the Web UI DSL phase:
       CAR-root source directory to `src/main/car`.
 - [x] Clarify that `src/main/car/assembly-descriptor.yaml` is the standard
       component-local assembly defaults source.
+- [x] Jul. 8, 2026: Harden CAR runtime intake so component CAR descriptors
+      must declare name, version, and component metadata.
+- [x] Support plain `Component.Factory` discovery from component CARs and cover
+      socket wiring for providers loaded from those CARs.
+- [x] Stop auto-activating cwd `component.d` as a default active repository;
+      packaged component directories are explicit activation inputs.
 
 ---
 

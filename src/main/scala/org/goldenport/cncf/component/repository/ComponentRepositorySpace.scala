@@ -17,7 +17,8 @@ import org.goldenport.cncf.subsystem.Subsystem
  *  version Feb.  5, 2026
  *  version Mar. 26, 2026
  *  version Apr. 25, 2026
- * @version May. 25, 2026
+ *  version May. 25, 2026
+ * @version Jul.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 class ComponentRepositorySpace(
@@ -421,16 +422,11 @@ object ComponentRepositorySpace {
       case Right(specs) if noDefault => Right(specs)
       case Right(specs) if specs.nonEmpty => Right(specs)
       case Right(specs) =>
-        val defaults = Vector(_default_component_dir(cwd), _default_component_target_dir(cwd)).flatten
+        val defaults = Vector(_default_component_target_dir(cwd)).flatten
         Right(defaults.foldLeft(specs) { (z, dir) =>
           _append_spec_if_missing(z, ComponentRepository.ComponentDirRepository.Specification(dir))
         })
     }
-
-  private def _default_component_dir(cwd: Path): Option[Path] = {
-    val dir = cwd.resolve("component.d").normalize
-    if (Files.isDirectory(dir)) Some(dir) else None
-  }
 
   private def _default_repository_dir(cwd: Path): Option[Path] = {
     val dir = cwd.resolve("repository.d").normalize

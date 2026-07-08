@@ -7,6 +7,7 @@ import java.util.zip.{ZipEntry, ZipOutputStream}
 import scala.jdk.CollectionConverters._
 import scala.util.Using
 
+import org.scalatest.GivenWhenThen
 import org.scalatest.wordspec.AnyWordSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.BeforeAndAfterAll
@@ -15,7 +16,10 @@ import org.goldenport.{Consequence, ConsequenceException}
 import org.goldenport.cncf.context.GlobalContext
 import org.goldenport.cncf.workarea.WorkAreaSpace
 import org.goldenport.cncf.config.RuntimeConfig
-import org.goldenport.cncf.component.{CarExtractor, ComponentCreate, ComponentDependencyManifest, ComponentDependencyPool, ComponentDescriptor, ComponentDescriptorLoader, ComponentLocalFirstClassLoader, ComponentOrigin, CoursierComponentDependencyResolver}
+import org.goldenport.cncf.component.{CarExtractor, Component, ComponentCreate, ComponentDependencyManifest, ComponentDependencyPool, ComponentDescriptor, ComponentDescriptorLoader, ComponentLocalFirstClassLoader, ComponentOrigin, CoursierComponentDependencyResolver}
+import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.cncf.spi.SpiResolver
+import org.goldenport.cncf.spi.ai.runner.{AiGenerateRequest, AiRunnerSocket}
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.cncf.testutil.TestComponentFactory
 import org.goldenport.configuration.{Configuration, ConfigurationValue, ResolvedConfiguration}
@@ -24,13 +28,14 @@ import org.goldenport.configuration.ConfigurationTrace
 /*
  * @since   Feb.  4, 2026
  *  version Apr. 25, 2026
- * @version May. 25, 2026
+ *  version May. 25, 2026
+ * @version Jul.  8, 2026
  * @author  ASAMI, Tomoharu
  */
-class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAndAfterAll {
+class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAndAfterAll with GivenWhenThen {
   override def beforeAll(): Unit = {
-    val workArea = WorkAreaSpace.create(RuntimeConfig.default)
-    GlobalContext.set(GlobalContext(workArea))
+    val workarea = WorkAreaSpace.create(RuntimeConfig.default)
+    GlobalContext.set(GlobalContext(workarea))
   }
 
   "ComponentDirRepository" should {
@@ -91,10 +96,8 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
           ).toOption.get
 
           resolved should contain (ComponentRepository.ComponentDirRepository.Specification(car))
-          assert(
-            resolved.indexOf(ComponentRepository.ComponentDirRepository.Specification(car)) <
-              resolved.indexOf(ComponentRepository.standardComponentRepositorySpec())
-          )
+          resolved.indexOf(ComponentRepository.ComponentDirRepository.Specification(car)) should be <
+            resolved.indexOf(ComponentRepository.standardComponentRepositorySpec())
         } finally {
           if (oldhome == null) System.clearProperty("user.home")
           else System.setProperty("user.home", oldhome)
@@ -609,6 +612,23 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
       }
     }
 
+    "not auto-activate cwd component.d as a default active repository" in {
+      _with_temp_dir { cwd =>
+        Given("a current working directory with component.d")
+        Files.createDirectories(cwd.resolve("component.d"))
+
+        When("default active repositories are appended")
+        val resolved = ComponentRepositorySpace.appendDefaultActiveRepositories(
+          Right(Vector.empty),
+          cwd,
+          noDefault = false
+        ).toOption.get
+
+        Then("component.d is not auto-activated as an active repository")
+        resolved should not contain ComponentRepository.ComponentDirRepository.Specification(cwd.resolve("component.d").normalize)
+      }
+    }
+
     "not append default component target when an explicit component development directory is active" in {
       _with_temp_dir { cwd =>
         val devdir = cwd.resolve("component")
@@ -659,9 +679,9 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
     "resolve descriptor by componentlet name from a car directory" in {
       _with_temp_dir { componentdir =>
         _create_fake_component_jar(componentdir.resolve("component").resolve("main.jar"))
-        val descriptorPath = componentdir.resolve("component-descriptor.json")
+        val descriptorpath = componentdir.resolve("component-descriptor.json")
         Files.writeString(
-          descriptorPath,
+          descriptorpath,
           """{
             |  "component": {
             |    "name": "sample-component",
@@ -722,6 +742,89 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
       }
     }
 
+    "discover a plain Component.Factory from a component CAR" in {
+      Given("a component CAR containing a plain Component.Factory")
+      val subsystem = new Subsystem(
+        name = "test-plain-factory-car",
+        configuration = ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty)
+      )
+      val origin = ComponentOrigin.Repository("component-dir")
+      _with_temp_dir { componentdir =>
+        val carpath = componentdir.resolve("plain-factory-component.car")
+        val componentjar = _create_class_component_jar(
+          componentdir.resolve("assets").resolve("plain-factory-main.jar"),
+          Seq(
+            classOf[org.goldenport.cncf.component.repository.fixture.plain.ComponentFactory],
+            classOf[org.goldenport.cncf.component.repository.fixture.plain._PlainFactoryBackedComponent]
+          )
+        )
+        val descriptor = componentdir.resolve("component-descriptor-plain-factory.json")
+        Files.writeString(
+          descriptor,
+          """{"name":"plain-factory-component","version":"0.1.0","component":"plain-factory-component"}"""
+        )
+        _create_car(
+          carpath,
+          Seq(
+            "component/main.jar" -> componentjar,
+            "component-descriptor.json" -> descriptor
+          )
+        )
+
+        When("the component directory repository discovers the CAR")
+        val repository = new ComponentRepository.ComponentDirRepository(componentdir, ComponentCreate(subsystem, origin), ComponentRepository.resolvePackagePrefixes())
+        val components = repository.discover()
+
+        Then("the plain factory creates the primary component")
+        components.map(_.name) should contain ("plain-factory-primary")
+        components.find(_.name == "plain-factory-primary").flatMap(_.factoryOption) should not be empty
+      }
+    }
+
+    "wire a socket to a plain-factory provider loaded from a component CAR" in {
+      Given("a component CAR whose plain factory provides an AI runner socket provider")
+      given ExecutionContext = ExecutionContext.create()
+      val subsystem = new Subsystem(
+        name = "test-plain-factory-car-spi",
+        configuration = ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty)
+      )
+      val origin = ComponentOrigin.Repository("component-dir")
+      _with_temp_dir { componentdir =>
+        val carpath = componentdir.resolve("plain-ai-runner-provider.car")
+        val componentjar = _create_class_component_jar(
+          componentdir.resolve("assets").resolve("plain-ai-runner-main.jar"),
+          Seq(
+            classOf[org.goldenport.cncf.component.repository.fixture.spi.ComponentFactory],
+            classOf[org.goldenport.cncf.component.repository.fixture.spi.PlainAiRunnerProviderComponent],
+            classOf[org.goldenport.cncf.component.repository.fixture.spi.PlainAiRunner]
+          )
+        )
+        val descriptor = componentdir.resolve("component-descriptor-plain-ai.json")
+        Files.writeString(
+          descriptor,
+          """{"name":"plain-ai-runner-provider","version":"0.1.0","component":"plain-ai-runner-provider"}"""
+        )
+        _create_car(
+          carpath,
+          Seq(
+            "component/main.jar" -> componentjar,
+            "component-descriptor.json" -> descriptor
+          )
+        )
+
+        val repository = new ComponentRepository.ComponentDirRepository(componentdir, ComponentCreate(subsystem, origin), ComponentRepository.resolvePackagePrefixes())
+        val providercomponents = repository.discover().toVector
+        val consumer = new Component() with AiRunnerSocket
+
+        When("SPI resolver wires the CAR provider into the consumer socket")
+        val resolved = SpiResolver.resolve(providercomponents :+ consumer)
+
+        Then("the consumer uses the provider loaded from the CAR")
+        resolved shouldBe a[Consequence.Success[_]]
+        consumer.aiRunner.generate(AiGenerateRequest("hello")).toOption.get.text shouldBe "car:hello"
+      }
+    }
+
     "treat component-file CAR as one component and ignore embedded component.d contents" in {
       val subsystem = new Subsystem(
         name = "test-component-file-embedded",
@@ -761,10 +864,10 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
 
         val repository = new ComponentRepository.ComponentFileRepository(appcar, ComponentCreate(subsystem, origin), ComponentRepository.resolvePackagePrefixes())
         val components = repository.discover()
-        val componentNames = components.flatMap(_.artifactMetadata).flatMap(_.component).toSet
+        val componentnames = components.flatMap(_.artifactMetadata).flatMap(_.component).toSet
 
-        componentNames should contain ("app")
-        componentNames should not contain ("textus-user-account")
+        componentnames should contain ("app")
+        componentnames should not contain ("textus-user-account")
       }
     }
 
@@ -1175,17 +1278,46 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
 
     "reject a SAR file passed to the component archive descriptor loader" in {
       _with_temp_dir { componentdir =>
-        val descriptorPath = componentdir.resolve("component-descriptor.json")
-        Files.writeString(descriptorPath, """{"component":{"name":"wrong-kind"},"version":"0.1.0"}""")
+        val descriptorpath = componentdir.resolve("component-descriptor.json")
+        Files.writeString(descriptorpath, """{"component":{"name":"wrong-kind"},"version":"0.1.0"}""")
         val sarpath = componentdir.resolve("wrong-kind.sar")
         _create_zip(
           sarpath,
           Seq(
-            "component-descriptor.json" -> descriptorPath
+            "component-descriptor.json" -> descriptorpath
           )
         )
 
         ComponentDescriptorLoader.loadArchive(sarpath).toOption shouldBe empty
+      }
+    }
+
+    "reject a CAR file missing component descriptor version" in {
+      _with_temp_dir { componentdir =>
+        Given("a CAR whose component descriptor omits version")
+        val descriptorpath = componentdir.resolve("component-descriptor.json")
+        Files.writeString(descriptorpath, """{"name":"missing-version","component":"missing-version"}""")
+        val carpath = componentdir.resolve("missing-version.car")
+        _create_car(
+          carpath,
+          Seq(
+            "component/main.jar" -> _create_fake_component_jar(componentdir.resolve("assets").resolve("component-main.jar")),
+            "component-descriptor.json" -> descriptorpath
+          )
+        )
+
+        When("the archive descriptor loader reads the CAR")
+        val result = ComponentDescriptorLoader.loadArchive(carpath)
+
+        Then("the missing version is rejected as an invalid CAR descriptor")
+        result.toOption shouldBe empty
+        result match {
+          case Consequence.Failure(conclusion) =>
+            conclusion.display should include ("component-descriptor")
+            conclusion.display should include ("version")
+          case Consequence.Success(value) =>
+            fail(s"expected missing version failure but got ${value}")
+        }
       }
     }
 
@@ -1288,12 +1420,32 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
   }
 
   private def _create_fake_component_jar(target: Path): Path = {
-    val factoryClassEntry =
+    val factoryclassentry =
       "org/goldenport/cncf/component/builtin/specification/SpecificationComponent$Factory.class"
     Option(target.getParent).foreach(Files.createDirectories(_))
     Using.resource(new ZipOutputStream(Files.newOutputStream(target))) { zos =>
-      zos.putNextEntry(new ZipEntry(factoryClassEntry))
+      zos.putNextEntry(new ZipEntry(factoryclassentry))
       zos.closeEntry()
+    }
+    target
+  }
+
+  private def _create_class_component_jar(
+    target: Path,
+    classes: Seq[Class[?]]
+  ): Path = {
+    Option(target.getParent).foreach(Files.createDirectories(_))
+    Using.resource(new ZipOutputStream(Files.newOutputStream(target))) { zos =>
+      classes.foreach { cls =>
+        val entry = s"${cls.getName.replace('.', '/')}.class"
+        val resource = Option(getClass.getClassLoader.getResource(entry))
+          .getOrElse(fail(s"missing test class resource: ${entry}"))
+        zos.putNextEntry(new ZipEntry(entry))
+        Using.resource(resource.openStream()) { in =>
+          in.transferTo(zos)
+        }
+        zos.closeEntry()
+      }
     }
     target
   }
