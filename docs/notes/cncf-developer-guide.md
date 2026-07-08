@@ -121,6 +121,32 @@ Component code should not:
 - call raw `DataStoreSpace` / unrestricted `EntityStoreSpace` from business
   logic.
 
+## CAR Source Layout And Assembly Defaults
+
+For CAR projects, `packaging.kind: car` uses `src/main/car` as the default
+CAR-root source directory. Ordinary component projects should omit
+`packaging.car.source_dir`; set it only when the project deliberately uses a
+non-standard CAR-root source layout.
+
+Place component-local assembly defaults in:
+
+```text
+src/main/car/assembly-descriptor.yaml
+```
+
+That file is packaged as CAR-root `assembly-descriptor.yaml`. Use it to declare
+component-provided runtime assembly defaults, including required provider
+components, wiring defaults, and SPI/provider selection defaults. Do not embed
+provider CAR artifacts there or inside the application CAR. Provider CARs
+remain repository-resolved from the standard component repository,
+`repository.d`, or explicit development overrides.
+
+The assembly descriptor is part of component assembly, not handwritten domain
+logic. If a component works only because a provider is present, make that
+provider requirement visible in `assembly-descriptor.yaml` so development
+startup, packaged startup, tests, and deployment review use the same wiring
+model.
+
 ## Component Application Datastore Selection
 
 When a component owns durable application records through generated entity
@@ -255,6 +281,14 @@ project deliberately wants strict explicit factory binding. If it is used, the
 declared service and the implementation type must match: a
 `Component$BundleFactory` declaration must point at a real
 `Component.BundleFactory`.
+
+Reflection-discovered factories must expose a JVM-visible zero-argument
+constructor. Cozy-generated `impl.ComponentFactory` classes satisfy this by
+default. If handwritten code adds constructor parameters for provider injection,
+test fixtures, or configuration seams, Scala default parameters alone are not a
+portable discovery contract; keep an explicit auxiliary constructor such as
+`def this() = this(defaultProvider, None)` or provide an equivalent zero-argument
+factory entrypoint.
 
 ## Configuration Access
 

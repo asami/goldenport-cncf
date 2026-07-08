@@ -183,6 +183,22 @@ explicit test descriptor overlay while keeping Phase 28 closed:
 - `provider.service` is reserved for future service-level provider matching and
   is rejected when specified.
 
+Post-closure Help/Manual and CAR developer guidance maintenance on Jul. 8,
+2026 kept Phase 28 closed while aligning documentation and executable route
+coverage:
+
+- Generated Help and packaged Manual routes are canonicalized under `/help`
+  and `/man`.
+- These routes remain development/operator inspection surfaces and are hidden
+  in production operation mode.
+- Compatibility document routes under `/web/.../document` remain tested where
+  available, but new docs should prefer `/help` and `/man`.
+- CAR developer guidance now treats `src/main/car` as the default
+  `packaging.kind: car` source directory.
+- `src/main/car/assembly-descriptor.yaml` is documented as the standard
+  component-local assembly defaults source for wiring, SPI/provider defaults,
+  and required provider component declarations.
+
 Post-closure runtime maintenance on Jun. 29, 2026 aligned the CAR component
 developer startup path and launcher command installation path:
 

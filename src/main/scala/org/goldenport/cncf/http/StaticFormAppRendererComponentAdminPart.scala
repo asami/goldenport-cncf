@@ -31,7 +31,8 @@ import io.circe.parser.parse
 
 /*
  * @since   May. 18, 2026
- * @version Jun. 19, 2026
+ *  version Jun. 19, 2026
+ * @version Jul.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 trait StaticFormAppRendererComponentAdminPart {
@@ -99,8 +100,8 @@ trait StaticFormAppRendererComponentAdminPart {
       s"""${manual_card("Generated documents",
            s"""<p>CNCF-generated runtime documents expose implementation-facing specifications and machine-readable interface descriptions.</p>
               |${admin_link_list_group(Vector(
-                "Generated Specification" -> "/web/system/document/specification",
-                "OpenAPI JSON" -> "/web/system/document/specification/openapi.json",
+                "Generated Help" -> "/help/system",
+                "OpenAPI JSON" -> "/help/system/openapi.json",
                 "MCP endpoint" -> "/mcp",
                 "System dashboard" -> "/web/system/dashboard",
                 "Console" -> "/web/console"
@@ -134,7 +135,7 @@ trait StaticFormAppRendererComponentAdminPart {
          |    <strong>${escape(component.name)}</strong>
          |    ${admin_action_row(appLinks ++ Vector(
            "Admin" -> s"/web/${escape(path)}/admin",
-           "Document" -> s"/web/${escape(path)}/document"
+           "Manual" -> s"/man/${escape(path)}"
          ), primary = false)}
          |  </div>
          |</div>""".stripMargin
@@ -144,7 +145,8 @@ trait StaticFormAppRendererComponentAdminPart {
         admin_card(
           "Recommended Links",
           admin_link_list_group(Vector(
-            "System documents" -> "/web/system/document",
+            "System manuals" -> "/man/system",
+            "System help" -> "/help/system",
             "System admin" -> "/web/system/admin",
             "System dashboard" -> "/web/system/dashboard",
             "Performance" -> "/web/system/performance"
@@ -154,7 +156,8 @@ trait StaticFormAppRendererComponentAdminPart {
         admin_card(
           "Recommended Links",
           s"""${admin_link_list_group(Vector(
-               "System documents" -> "/web/system/document",
+               "System manuals" -> "/man/system",
+               "System help" -> "/help/system",
                "System admin" -> "/web/system/admin",
                "System dashboard" -> "/web/system/dashboard",
                "Performance" -> "/web/system/performance"
@@ -192,7 +195,7 @@ trait StaticFormAppRendererComponentAdminPart {
       subtitle = "Generated component specification",
       component = component,
       selector = Some(component.name),
-      currentPath = s"/web/${NamingConventions.toNormalizedSegment(componentName)}/document/specification",
+      currentPath = s"/help/${NamingConventions.toNormalizedSegment(componentName)}",
       childNames = component.protocol.services.services.map(_.name).toVector
     ))
 
@@ -207,8 +210,8 @@ trait StaticFormAppRendererComponentAdminPart {
       val componentPath = NamingConventions.toNormalizedSegment(componentName)
       val generated =
         Vector(
-          "Generated Specification" -> s"/web/${escape(componentPath)}/document/specification",
-          "OpenAPI JSON" -> "/web/system/document/specification/openapi.json",
+          "Generated Help" -> s"/help/${escape(componentPath)}",
+          "OpenAPI JSON" -> "/help/system/openapi.json",
           "MCP endpoint" -> "/mcp"
         )
       val packaged =
@@ -247,7 +250,7 @@ trait StaticFormAppRendererComponentAdminPart {
       subtitle = "Generated service specification",
       component = component,
       selector = Some(s"${component.name}.${service.name}"),
-      currentPath = s"/web/${NamingConventions.toNormalizedSegment(componentName)}/document/specification/${NamingConventions.toNormalizedSegment(service.name)}",
+      currentPath = s"/help/${NamingConventions.toNormalizedSegment(componentName)}/${NamingConventions.toNormalizedSegment(service.name)}",
       childNames = service.operations.operations.map(_.name).toVector
     ))
 
@@ -266,7 +269,7 @@ trait StaticFormAppRendererComponentAdminPart {
       subtitle = "Generated operation specification",
       component = component,
       selector = Some(s"${component.name}.${service.name}.${operation.name}"),
-      currentPath = s"/web/${NamingConventions.toNormalizedSegment(componentName)}/document/specification/${NamingConventions.toNormalizedSegment(service.name)}/${NamingConventions.toNormalizedSegment(operation.name)}",
+      currentPath = s"/help/${NamingConventions.toNormalizedSegment(componentName)}/${NamingConventions.toNormalizedSegment(service.name)}/${NamingConventions.toNormalizedSegment(operation.name)}",
       childNames = Vector.empty
     ))
 

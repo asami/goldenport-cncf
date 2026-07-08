@@ -32,7 +32,8 @@ import io.circe.parser.parse
 /*
  * @since   May. 18, 2026
  *  version May. 20, 2026
- * @version Jun. 19, 2026
+ *  version Jun. 19, 2026
+ * @version Jul.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 trait StaticFormAppRendererSystemAdminPart {
@@ -188,7 +189,7 @@ trait StaticFormAppRendererSystemAdminPart {
              "System dashboard" -> "/web/system/dashboard",
              "Admin configuration" -> "/web/system/admin",
              "Performance details" -> "/web/system/performance",
-             "Documents" -> "/web/system/document"
+             "Manuals" -> "/man/system"
            ))}
            |${admin_card(
              "Operation forms",
@@ -241,7 +242,7 @@ trait StaticFormAppRendererSystemAdminPart {
        |    <section class="row g-3 mb-3">
        |      <div class="col-12 col-lg-4"><article id="healthPanel" class="card h-100 shadow-sm border-success"><div class="card-body"><h2 class="h5 card-title">Health</h2><div class="big"><span id="healthText" class="badge text-bg-success">UP</span></div><p class="text-secondary mb-0 mt-2" id="healthNote">Starting</p></div></article></div>
        |      <div class="col-12 col-lg-4"><article class="card h-100 shadow-sm"><div class="card-body"><h2 class="h5 card-title">Subsystem</h2><p class="mb-1"><strong id="subsystemName">-</strong></p><p class="text-secondary mb-0" id="subsystemVersion">-</p></div></article></div>
-       |      <div class="col-12 col-lg-4"><article class="card h-100 shadow-sm"><div class="card-body"><h2 class="h5 card-title">CNCF</h2><p class="mb-1"><strong id="cncfVersion">-</strong></p><p class="mb-0"><a id="detailsLink" href="/web/system/admin">Admin details</a> · <a id="performanceLink" href="/web/system/performance">Performance details</a> · <a id="manualLink" href="/web/system/document">Documents</a> · <a id="consoleLink" href="/web/console">Console</a></p></div></article></div>
+       |      <div class="col-12 col-lg-4"><article class="card h-100 shadow-sm"><div class="card-body"><h2 class="h5 card-title">CNCF</h2><p class="mb-1"><strong id="cncfVersion">-</strong></p><p class="mb-0"><a id="detailsLink" href="/web/system/admin">Admin details</a> · <a id="performanceLink" href="/web/system/performance">Performance details</a> · <a id="manualLink" href="/man/system">Manuals</a> · <a id="consoleLink" href="/web/console">Console</a></p></div></article></div>
        |    </section>
        |    <section class="row g-3 mb-3">
        |      <div class="col-12"><article class="card shadow-sm"><div class="card-body">
@@ -581,7 +582,7 @@ trait StaticFormAppRendererSystemAdminPart {
       "Dashboard" -> dashboardPath,
       "Performance details" -> performancePath,
       "Observability" -> "/web/system/admin/observability",
-      "Documents" -> "/web/system/document",
+      "Manuals" -> "/man/system",
       "Console" -> "/web/console"
     )
     simple_page(
@@ -1806,7 +1807,7 @@ trait StaticFormAppRendererSystemAdminPart {
         |  <a class="nav-link border" href="/web/system/admin">Admin configuration</a>
         |  <a class="nav-link border" href="/web/system/admin/observability">Observability drill-down</a>
         |  <a class="nav-link border" href="/web/system/admin/observability/metrics">Metrics</a>
-        |  <a class="nav-link border" href="/web/system/document">Documents</a>
+        |  <a class="nav-link border" href="/man/system">Manuals</a>
         |  <a class="nav-link border" href="/web/console">Console</a>
         |</nav>""".stripMargin,
       Some("performance-navigation")
@@ -1923,7 +1924,7 @@ trait StaticFormAppRendererSystemAdminPart {
             |  <a class="btn btn-outline-primary" href="${escape(currentPath)}#help">Help</a>
             |  <a class="btn btn-outline-primary" href="${escape(currentPath)}#describe">Describe</a>
             |  <a class="btn btn-outline-primary" href="${escape(currentPath)}#schema">Schema</a>
-            |  <a class="btn btn-outline-secondary" href="/web/system/document/specification/openapi.json">OpenAPI JSON</a>
+            |  <a class="btn btn-outline-secondary" href="/help/system/openapi.json">OpenAPI JSON</a>
             |  <a class="btn btn-outline-secondary" href="/mcp">MCP endpoint</a>
             |  <a class="btn btn-outline-secondary" href="/web/console">Console</a>
             |</div>""".stripMargin)}
@@ -1952,16 +1953,16 @@ trait StaticFormAppRendererSystemAdminPart {
             |  <a class="btn btn-outline-primary" href="/web/system/dashboard">System dashboard</a>
             |  <a class="btn btn-outline-primary" href="/web/system/admin">Admin configuration</a>
             |  <a class="btn btn-outline-primary" href="/web/system/performance">Performance details</a>
-            |  <a class="btn btn-outline-secondary" href="/web/system/document/specification/openapi.json">OpenAPI JSON</a>
+            |  <a class="btn btn-outline-secondary" href="/help/system/openapi.json">OpenAPI JSON</a>
             |  <a class="btn btn-outline-secondary" href="/mcp">MCP endpoint</a>
             |  <a class="btn btn-outline-secondary" href="/web/console">Console</a>
             |</div>""".stripMargin)}
          |${manual_card("Components", componentLinks)}
          |${manual_card("Console handoff", """<p class="mb-0">Use <a href="/web/console">System Console</a> for controlled operation entry. Specification pages remain read-only and do not inline operation actions.</p>""")}
          |${manual_authorization_policy_section(describe)}
-         |${manual_projection_card("Help", "/web/system/document/specification", help, Some("help"))}
-         |${manual_projection_card("Describe", "/web/system/document/specification", describe, Some("describe"))}
-         |${manual_projection_card("Schema", "/web/system/document/specification", schema, Some("schema"))}""".stripMargin
+         |${manual_projection_card("Help", "/help/system", help, Some("help"))}
+         |${manual_projection_card("Describe", "/help/system", describe, Some("describe"))}
+         |${manual_projection_card("Schema", "/help/system", schema, Some("schema"))}""".stripMargin
     simple_page("System Specification", "Generated runtime specification", body)
   }
 
@@ -1973,7 +1974,7 @@ trait StaticFormAppRendererSystemAdminPart {
     else
       components.sortBy(_.name).map { component =>
         val segment = NamingConventions.toNormalizedSegment(component.name)
-        s"""<a class="btn btn-sm btn-outline-primary" href="/web/${escape(segment)}/document/specification">${escape(component.name)}</a>"""
+        s"""<a class="btn btn-sm btn-outline-primary" href="/help/${escape(segment)}">${escape(component.name)}</a>"""
       }.mkString("""<div class="d-flex flex-wrap gap-2">""", "\n", "</div>")
 
   protected def manual_component_document_links(
@@ -1984,7 +1985,7 @@ trait StaticFormAppRendererSystemAdminPart {
     else
       components.sortBy(_.name).map { component =>
         val segment = NamingConventions.toNormalizedSegment(component.name)
-        s"""<a class="btn btn-sm btn-outline-primary" href="/web/${escape(segment)}/document">${escape(component.name)}</a>"""
+        s"""<a class="btn btn-sm btn-outline-primary" href="/man/${escape(segment)}">${escape(component.name)}</a>"""
       }.mkString("""<div class="d-flex flex-wrap gap-2">""", "\n", "</div>")
 
   protected def manual_child_links(
@@ -2334,7 +2335,7 @@ trait StaticFormAppRendererSystemAdminPart {
          "REST" -> restPath,
          "Form" -> formPath,
          "Form API" -> formApiPath,
-       "OpenAPI JSON" -> "/web/system/document/specification/openapi.json"
+       "OpenAPI JSON" -> "/help/system/openapi.json"
       ))}
        |${manual_child_entity_binding_summary(record)}
        |${manual_association_binding_summary(record)}

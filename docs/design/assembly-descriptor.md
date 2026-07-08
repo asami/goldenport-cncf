@@ -43,6 +43,12 @@ component CARs are still resolved from the standard component repository or
 name, for example `cncf --textus.component=<component-name> server`, without
 embedding provider component CARs.
 
+For ordinary CAR projects, `packaging.kind: car` implies the CAR-root source
+directory `src/main/car`. Project metadata does not need to repeat
+`packaging.car.source_dir: src/main/car`; that setting is reserved for
+non-standard source layouts. Therefore `src/main/car/assembly-descriptor.yaml`
+is the standard source-managed location for component-local assembly defaults.
+
 The intended packaged layout is:
 
 ```text

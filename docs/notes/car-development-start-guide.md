@@ -103,6 +103,7 @@ conf/cncf/launcher.yaml               # shared launcher defaults, when needed
 src/main/cozy/<artifact>.cml           # component model
 src/main/scala/<package>/impl/...      # handwritten implementation hooks
 src/main/car/...                       # component-owned CAR-root resources
+src/main/car/assembly-descriptor.yaml  # optional component-local assembly defaults
 src/main/web/...                       # public Web app resources, when needed
 src/main/web-inf/web.yaml              # Web descriptor source, when needed
 src/main/web-inf/form.yaml             # Static Form descriptor source, when needed
@@ -114,6 +115,18 @@ Do not edit generated runtime descriptors inside a packaged CAR. Source Web
 metadata belongs under `src/main/web-inf`; private Web helper resources belong
 under `src/main/web/WEB-INF`; public pages and assets belong under
 `src/main/web`.
+
+For `packaging.kind: car`, the CAR-root source directory defaults to
+`src/main/car`. Do not repeat `packaging.car.source_dir: src/main/car` in
+ordinary CAR projects. Set `packaging.car.source_dir` only when the project
+intentionally uses a non-standard CAR-root source layout.
+
+Use `src/main/car/assembly-descriptor.yaml` when the component needs
+component-local assembly defaults. This file is packaged at the CAR root as
+`assembly-descriptor.yaml` and is the place for component-provided wiring,
+SPI/provider defaults, and required provider component declarations. It is not
+a place to embed provider CAR artifacts; those still come from the standard
+component repository, `repository.d`, or an explicit development override.
 
 Local-only files should stay out of git:
 
@@ -247,8 +260,6 @@ project:
 
 packaging:
   kind: car
-  car:
-    source_dir: src/main/car
 
 warehouse:
   repository_artifacts:
@@ -257,6 +268,10 @@ warehouse:
     modules:
       - textus-sanpomap
 ```
+
+`packaging.car.source_dir` is intentionally omitted here. The default CAR-root
+source for `kind: car` is `src/main/car`; only non-standard layouts should
+override it.
 
 ## Runtime Selection Rules
 

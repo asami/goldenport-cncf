@@ -21,6 +21,12 @@ The application CAR may contain component-local runtime defaults:
 - `web/web.yaml`
 - component-owned Web assets under `web/`
 
+In source form, component-local CAR-root resources live under `src/main/car`.
+For `packaging.kind: car`, this directory is the default CAR-root source and
+does not need to be repeated as `packaging.car.source_dir`. Therefore the
+source file for component-local assembly defaults is normally
+`src/main/car/assembly-descriptor.yaml`.
+
 The assembly descriptor inside the component CAR declares required components
 and wiring defaults. It does not contain provider component artifacts.
 

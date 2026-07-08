@@ -36,6 +36,11 @@ The following are development-time execution paths:
     when available, so `--textus.component` is not required
   - uses `src/main/car` as the canonical CAR-root resources that will be
     packaged into the CAR root
+  - for `packaging.kind: car`, `src/main/car` is also the default
+    `packaging.car.source_dir`; ordinary CAR projects should omit that setting
+    and override it only for non-standard source layouts
+  - reads component-local `assembly-descriptor.yaml` from `src/main/car` as
+    CAR-root assembly defaults when present
   - uses `src/main/web` as the development and packaging source for the Web app
     surface
   - does not package or activate `docs/`; component-facing documentation must
@@ -188,8 +193,12 @@ they are not embedded inside the application CAR.
   - packaged activation
 - `src/main/car`
   - canonical component-owned CAR-root resources
+  - default `packaging.car.source_dir` for `packaging.kind: car`
   - packaged into the CAR root by the build
   - used by `--component-dev-dir` without building a CAR first
+  - `assembly-descriptor.yaml` in this directory is the component-local
+    assembly default source and is packaged as CAR-root
+    `assembly-descriptor.yaml`
   - legacy Web descriptor metadata under `src/main/car/web` remains readable,
     but new Static Form Web metadata should use `src/main/web-inf`
   - `src/main/car/META-INF` is reserved for CAR-wide internal archive,

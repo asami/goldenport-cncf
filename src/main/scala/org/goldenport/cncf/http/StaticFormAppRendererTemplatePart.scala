@@ -32,7 +32,8 @@ import io.circe.parser.parse
 /*
  * @since   May. 18, 2026
  *  version May. 30, 2026
- * @version Jun. 19, 2026
+ *  version Jun. 19, 2026
+ * @version Jul.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 trait StaticFormAppRendererTemplatePart {
@@ -2210,8 +2211,8 @@ trait StaticFormAppRendererTemplatePart {
       if (scope == "component") s"/web/${NamingConventions.toNormalizedSegment(name)}/admin"
       else "/web/system/admin"
     val manualPath =
-      if (scope == "component") s"/web/${NamingConventions.toNormalizedSegment(name)}/document"
-      else "/web/system/document"
+      if (scope == "component") s"/man/${NamingConventions.toNormalizedSegment(name)}"
+      else "/man/system"
     s"""{"scope":"${json(scope)}","name":"${json(name)}","version":${version.map(v => "\"" + json(v) + "\"").getOrElse("null")},"observedAt":"${java.time.Instant.now.toString}","status":"UP","cncf":{"version":"${json(CncfVersion.current)}"},"subsystem":{"name":"${json(subsystemName)}","version":${subsystemVersion.map(v => "\"" + json(v) + "\"").getOrElse("null")}},"componentCount":${components.size},"serviceCount":${serviceCount},"operationCount":${operationCount},"actions":{"actionCalls":${snapshot_json(actionCalls, includeRecent = false)},"jobs":${jobs_json(running, queued, completed, failed)}},"dsl":{"chokepoints":${snapshot_json(dslChokepoints, includeRecent = false)},"validation":${snapshot_json(validation, includeRecent = false)},"validationDiagnostics":${string_long_map_json(validationDiagnostics)},"operationRequestValidation":${snapshot_json(operationRequestValidation, includeRecent = false)},"operationRequestValidationDiagnostics":${string_long_map_json(operationRequestValidationDiagnostics)}},"authorization":{"decisions":${snapshot_json(authorizationDecisions, includeRecent = false)},"diagnostics":${string_long_map_json(authorizationDiagnostics)}},"blob":{"operations":${snapshot_json(blobOperations, includeRecent = false)},"diagnostics":${string_long_map_json(blobDiagnostics)}},"assembly":{"warnings":{"count":${assemblyWarningCount}}},"html":{"requests":${snapshot_json(htmlRequests, includeRecent = true, Some(avgMillis))}},"links":{"admin":"${json(adminPath)}","performance":"/web/system/performance","manual":"${json(manualPath)}","console":"/web/console","assemblyWarnings":"/web/system/admin/assembly/warnings"},"components":${componentJson}}"""
   }
 

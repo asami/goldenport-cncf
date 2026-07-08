@@ -97,29 +97,48 @@ Subsystem Web composition is provided by the WN-12 component-Web contract:
 ## Document Surface
 
 Static Form Web exposes component documentation through a `document` surface.
-This surface separates generated technical metadata from human-authored
-component documents:
+The generated Help and packaged Manual surfaces separate technical metadata
+from human-authored component documents:
 
-- `Document` is the top-level Web page for a component or system.
-- `Specification` is the generated CNCF view derived from component, service,
+- `Help` is the generated CNCF view derived from component, service,
   operation, schema, OpenAPI, and projection metadata.
-- `User Guide` is a component-packaged task-oriented document for users.
+- `Manual` is the top-level component-packaged document surface.
+- `User Guide` is a component-packaged task-oriented document for component
+  developers or users.
 - `Reference Manual` is a component-packaged human-authored reference that
   complements the generated specification.
 
 Canonical routes are:
 
-- `/web/system/document`
-- `/web/system/document/specification`
-- `/web/system/document/specification/openapi.json`
-- `/web/{component}/document`
-- `/web/{component}/document/specification`
+- `/help`
+- `/help/system`
+- `/help/system/openapi.json`
+- `/help/{component}`
+- `/help/{component}/{service}`
+- `/help/{component}/{service}/{operation}`
+- `/man`
+- `/man/system`
+- `/man/{component}`
+- `/man/{component}/user-guide.md`
+- `/man/{component}/user-guide.html`
+- `/man/{component}/user-guide.pdf`
 
 Component-packaged documents are discovered from private component Web roots
 under `docs/` or `documents/`. Typical files are `user-guide.md`,
 `reference-manual.md`, and optional packaged `specification.md` or HTML/PDF
-variants. The older term `manual` is not the canonical Web surface name; it is
-reserved for human-authored packaged manuals such as a Reference Manual.
+variants. Compatibility routes under `/web/system/document` and
+`/web/{component}/document` may remain available, but new documentation should
+prefer `/help` and `/man`.
+
+Generated Help and packaged Manual routes are development/operator inspection
+surfaces. In production operation mode they are hidden and return not found;
+production applications should expose only intentional application Web/API
+surfaces.
+
+Markdown and PDF manual variants are direct resources. CLI clients can fetch
+them with normal HTTP requests, for example
+`GET /man/{component}/user-guide.md` or
+`GET /man/{component}/user-guide.pdf`.
 
 ## Page Kinds
 

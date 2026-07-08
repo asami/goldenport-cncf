@@ -45,6 +45,12 @@ been recorded without reopening the Web UI DSL phase:
       and assembly overlay loading use the same file.
 - [x] Reject malformed SPI binding records and reserved `provider.service`
       values deterministically instead of dropping or ignoring them.
+- [x] Jul. 8, 2026: Document `/help` and `/man` as canonical
+      Help/Manual inspection surfaces, with production operation mode hiding.
+- [x] Clarify CAR developer guidance: `packaging.kind: car` defaults the
+      CAR-root source directory to `src/main/car`.
+- [x] Clarify that `src/main/car/assembly-descriptor.yaml` is the standard
+      component-local assembly defaults source.
 
 ---
 

@@ -187,8 +187,17 @@ Provider is not responsible for deciding applicability.
 
 Provider guidelines:
 - Prefer Scala `object` singleton when present (Foo$ / MODULE$ pattern).
-- Else use zero-arg constructor if available.
+- Else use a JVM-visible zero-argument constructor if available.
+- Scala default constructor parameters are not a substitute for the zero-argument
+  reflection contract. If a handwritten factory adds constructor parameters,
+  keep an explicit no-arg auxiliary constructor or an equivalent no-arg factory
+  entrypoint for CAR/dev-dir discovery.
 - Else fail with a clear diagnostic (DbC-style in internal code, Consequence at boundary).
+
+Cozy-generated `impl.ComponentFactory` classes are expected to satisfy the
+zero-argument construction path. Handwritten extensions should preserve that
+property unless the component deliberately uses an explicit advanced loading
+policy.
 
 **Component generation scope**: For Phase 2.8 the Provider only handles concrete `Component` classes discovered on the classpath or from packaged/component sources. The previous `ComponentDefinition` / `GeneratedComponent` path has been removed, so the runtime no longer interprets DSL-based definitions. Every discovered artifact must resolve to an instantiable `Component` class, including script-generated classes or classes loaded from packaged search or active directories such as `repository.d` and `component.d`. Future automated component generation is expected to emit such concrete classes so the Provider can apply the documented reflection/constructor logic without additional semantic layers.
 

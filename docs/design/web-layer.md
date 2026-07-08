@@ -705,22 +705,56 @@ Current read/list Operations:
 - `admin.view.read`
 - `admin.aggregate.read`
 
-### Manual
+### Help And Manuals
 
-Manual is a read-only reference app.
+Help is a read-only generated reference surface. It is derived from component,
+service, operation, schema, OpenAPI, MCP, and runtime metadata. It must not
+render mutation forms or execute operations inline.
 
 Routes:
 
 ```text
-/web/system/manual
-/web/{component}/manual
-/web/{component}/manual/{service}
-/web/{component}/manual/{service}/{operation}
-/web/system/manual/openapi.json
+/help
+/help/system
+/help/system/openapi.json
+/help/{component}
+/help/{component}/{service}
+/help/{component}/{service}/{operation}
 ```
 
-Manual renders Help, Describe, Schema, OpenAPI, MCP, and navigation references.
-It must not render mutation forms or execute operations inline.
+Manuals are component-packaged, human-authored documents for component
+developers and operators. They are separate from CML-generated Help and from
+application Web UI routes.
+
+Routes:
+
+```text
+/man
+/man/system
+/man/{component}
+/man/{component}/user-guide.md
+/man/{component}/user-guide.html
+/man/{component}/user-guide.pdf
+/man/{component}/reference-manual.md
+```
+
+Markdown and PDF variants are ordinary HTTP resources, so command-line clients
+can fetch them directly:
+
+```sh
+curl -fsS http://localhost:8080/man/{component}/user-guide.md
+curl -fsS -o user-guide.pdf http://localhost:8080/man/{component}/user-guide.pdf
+```
+
+Compatibility routes under `/web/{component}/document` and
+`/web/{component}/document/specification` may remain available, but new
+documentation and examples should prefer `/man` for packaged manuals and
+`/help` for generated reference pages.
+
+Help and Manual routes are development/operator inspection surfaces. In
+production operation mode CNCF hides these routes and returns not found; a
+production application should publish only deliberate application Web/API
+surfaces.
 
 ### Performance
 

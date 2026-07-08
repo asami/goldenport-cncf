@@ -664,7 +664,15 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
   migration tooling; CulturalResource collection-item profile; Rule Engine and
   Inference Runtime.
 - Status interpretation rules: `docs/rules/stage-status-and-checklist-convention.md`
-- Latest post-closure maintenance: Jul. 8, 2026 explicit test descriptor
+- Latest post-closure maintenance: Jul. 8, 2026 Help/Manual and CAR developer
+  guidance alignment. Generated Help and packaged Manual routes are documented
+  as development/operator inspection surfaces, canonicalized under `/help` and
+  `/man`, and hidden in production operation mode. CAR developer guidance now
+  treats `src/main/car` as the default `packaging.kind: car` source directory
+  and highlights `src/main/car/assembly-descriptor.yaml` as the standard
+  component-local assembly defaults source for wiring, SPI/provider selection,
+  and required provider component declarations.
+- Previous post-closure maintenance: Jul. 8, 2026 explicit test descriptor
   overlay for component integration tests. Test runs may pass
   `--textus.test.descriptor=<path>` / `--cncf.test.descriptor=<path>` to add
   runtime test config and assembly SPI provider bindings without publishing a

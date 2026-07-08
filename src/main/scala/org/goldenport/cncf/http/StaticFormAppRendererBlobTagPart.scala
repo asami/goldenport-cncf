@@ -31,7 +31,8 @@ import io.circe.parser.parse
 
 /*
  * @since   May. 18, 2026
- * @version May. 25, 2026
+ *  version May. 25, 2026
+ * @version Jul.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 trait StaticFormAppRendererBlobTagPart {
@@ -58,7 +59,7 @@ trait StaticFormAppRendererBlobTagPart {
                |  <li><code>association:blob_attachment:create/delete/search/list</code> controls Blob attachment operations.</li>
                |  <li><code>store:blobstore:status</code> controls BlobStore status diagnostics.</li>
                |</ul>
-               |<p class="mb-0"><a href="/web/system/document/specification#authorization-policies">View effective authorization policies</a></p>""".stripMargin
+               |<p class="mb-0"><a href="/help/system#authorization-policies">View effective authorization policies</a></p>""".stripMargin
            )}""".stripMargin
     ))
 

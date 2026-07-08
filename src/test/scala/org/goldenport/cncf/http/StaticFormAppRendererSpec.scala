@@ -4,7 +4,7 @@ package org.goldenport.cncf.http
  * @since   May. 18, 2026
  *  version May. 27, 2026
  *  version Jun. 19, 2026
- * @version Jul.  7, 2026
+ * @version Jul.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 import scala.collection.mutable.ListBuffer
@@ -62,6 +62,7 @@ import org.goldenport.cncf.subsystem.DefaultSubsystemFactory
 import org.goldenport.cncf.testutil.TestComponentFactory
 import org.goldenport.cncf.unitofwork.{PrepareResult, TransactionContext}
 import org.goldenport.configuration.{Configuration, ConfigurationTrace, ConfigurationValue, ResolvedConfiguration}
+import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
@@ -69,10 +70,10 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Apr. 12, 2026
  *  version May. 27, 2026
  *  version Jun. 19, 2026
- * @version Jul.  7, 2026
+ * @version Jul.  8, 2026
  * @author  ASAMI, Tomoharu
  */
-final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
+final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _renderer = StaticFormAppRenderer()
   "StaticFormAppRenderer" should {
     "render subsystem dashboard state contract" in {
@@ -106,7 +107,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       c.downField("assembly").downField("warnings").get[Int]("count").isRight shouldBe true
       c.downField("links").get[String]("admin") shouldBe Right("/web/system/admin")
       c.downField("links").get[String]("performance") shouldBe Right("/web/system/performance")
-      c.downField("links").get[String]("manual") shouldBe Right("/web/system/document")
+      c.downField("links").get[String]("manual") shouldBe Right("/man/system")
       c.downField("links").get[String]("console") shouldBe Right("/web/console")
       c.downField("links").get[String]("assemblyWarnings") shouldBe Right("/web/system/admin/assembly/warnings")
     }
@@ -127,7 +128,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       c.downField("authorization").downField("decisions").downField("summary").downField("hour").get[Long]("errors").isRight shouldBe true
       c.downField("dsl").downField("chokepoints").downField("summary").downField("hour").get[Long]("errors").isRight shouldBe true
       c.downField("links").get[String]("admin") shouldBe Right(s"/web/${org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(componentname)}/admin")
-      c.downField("links").get[String]("manual") shouldBe Right(s"/web/${org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(componentname)}/document")
+      c.downField("links").get[String]("manual") shouldBe Right(s"/man/${org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(componentname)}")
     }
 
     "preserve fallback HTTP status in non-Conclusion diagnostic records" in {
@@ -161,7 +162,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should not include (".bars { display: grid")
       html should include ("/web/system/admin")
       html should include ("/web/system/performance")
-      html should include ("/web/system/document")
+      html should include ("/man/system")
     }
 
     "render system admin configuration detail page" in {
@@ -183,7 +184,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("Subsystem")
       html should include ("/web/system/dashboard")
       html should include ("/web/system/performance")
-      html should include ("/web/system/document")
+      html should include ("/man/system")
       html should include ("/web/console")
       html should include ("Component Management Console")
       html should include ("Component admin")
@@ -885,8 +886,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("configured")
       html should include ("notice-board.notice.search-notices")
       html should include ("public")
-      html should include ("document")
-      html should include ("/web/system/document")
+      html should include ("Manuals")
+      html should include ("/man/system")
       html should include ("Admin entries")
       html should include ("Management Console Controls")
       html should include ("Deferred or unsupported")
@@ -1039,7 +1040,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include (component.name)
       html should include (s"/web/${org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)}/dashboard")
       html should include ("/web/system/performance")
-      html should include ("/web/system/document")
+      html should include ("/man/system")
       html should include ("/web/console")
       html should include ("Component Admin")
       html should include ("/web/admin")
@@ -1171,17 +1172,19 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       val operationhtml = _renderer.renderComponentManualOperation(subsystem, "notice-board", "notice-aggregate", "approve-notice-aggregate").map(_.body).getOrElse(fail("operation specification is missing"))
 
       systemdocumenthtml should include ("System Documents")
-      systemdocumenthtml should include ("Generated Specification")
-      systemdocumenthtml should include ("/web/system/document/specification")
+      systemdocumenthtml should include ("Generated Help")
+      systemdocumenthtml should include ("/help/system")
+      systemdocumenthtml should include ("/help/system/openapi.json")
       systemdocumenthtml should include ("User Guide")
       componentdocumenthtml should include ("notice_board Documents")
-      componentdocumenthtml should include ("Generated Specification")
-      componentdocumenthtml should include ("/web/notice-board/document/specification")
+      componentdocumenthtml should include ("Generated Help")
+      componentdocumenthtml should include ("/help/notice-board")
+      componentdocumenthtml should include ("/help/system/openapi.json")
       componentdocumenthtml should include ("Reference Manual")
       systemhtml should include ("System Specification")
       systemhtml should include ("OpenAPI JSON")
       systemhtml should include ("MCP endpoint")
-      systemhtml should include ("/web/notice-board/document/specification")
+      systemhtml should include ("/help/notice-board")
       systemhtml should include ("class=\"card manual-card shadow-sm\"")
       componenthtml should include ("notice_board Specification")
       componenthtml should include ("Help")
@@ -1206,10 +1209,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       componenthtml should include ("scalar_attribute")
       componenthtml should include ("delegated_collection")
       componenthtml should not include ("<td><code>securityAttributes</code></td>")
-      componenthtml should include ("/web/notice-board/document/specification/notice-aggregate")
+      componenthtml should include ("/help/notice-board/notice-aggregate")
       componenthtml should include ("manual-summary-table")
       servicehtml should include ("Generated service specification")
-      servicehtml should include ("/web/notice-board/document/specification/notice-aggregate/approve-notice-aggregate")
+      servicehtml should include ("/help/notice-board/notice-aggregate/approve-notice-aggregate")
       operationhtml should include ("Generated operation specification")
       operationhtml should include ("/rest/v1/notice-board/notice-aggregate/approve-notice-aggregate")
       operationhtml should include ("Parameters")
@@ -1243,7 +1246,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       val adminhtml = _renderer.renderComponentAdmin(subsystem, "notice-admin").map(_.body).getOrElse(fail("component admin is missing"))
       val formhtml = _renderer.renderFormIndex(subsystem, "notice-admin").map(_.body).getOrElse(fail("form index is missing"))
 
-      manualhtml should include ("/web/notice-admin/document/specification/notice-aggregate")
+      manualhtml should include ("/help/notice-admin/notice-aggregate")
       adminhtml should include ("/web/notice-admin/dashboard")
       adminhtml should include ("/form/notice-admin")
       formhtml should include ("/web/notice-admin/dashboard")
@@ -1259,10 +1262,12 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       _renderer.renderFormIndex(subsystem, "notice-admin") shouldBe None
     }
 
-    "serve document specification routes and OpenAPI JSON through Web HTML paths" in {
+    "serve generated help and packaged manual routes through standard and compatibility paths" in {
+      Given("a subsystem with aggregate componentlet metadata")
       val subsystem = _aggregate_http_fixture_subsystem_with_componentlets()
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
 
+      When("generated help and packaged manual routes are requested")
       val manualresponse = server
         .routes(null)
         .orNotFound
@@ -1281,7 +1286,26 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         .run(_get_request("/web/system/document/specification/openapi.json"))
         .unsafeRunSync()
       val openapijson = openapiresponse.as[String].unsafeRunSync()
+      val helpresponse = server
+        .routes(null)
+        .orNotFound
+        .run(_get_request("/help/notice-board/notice-aggregate/approve-notice-aggregate"))
+        .unsafeRunSync()
+      val helphtml = helpresponse.as[String].unsafeRunSync()
+      val helpopenapiresponse = server
+        .routes(null)
+        .orNotFound
+        .run(_get_request("/help/system/openapi.json"))
+        .unsafeRunSync()
+      val helpopenapijson = helpopenapiresponse.as[String].unsafeRunSync()
+      val manresponse = server
+        .routes(null)
+        .orNotFound
+        .run(_get_request("/man/notice-board"))
+        .unsafeRunSync()
+      val manhtml = manresponse.as[String].unsafeRunSync()
 
+      Then("standard and compatibility routes render generated help, OpenAPI, and manuals")
       manualresponse.status.code shouldBe 200
       manualhtml should include ("Generated operation specification")
       manualhtml should include ("approve-notice-aggregate")
@@ -1292,6 +1316,44 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       openapiresponse.status.code shouldBe 200
       openapijson should include (""""openapi"""")
       openapijson should include ("/rest/v1/notice-board/notice-aggregate/approve-notice-aggregate")
+      helpresponse.status.code shouldBe 200
+      helphtml should include ("Generated operation specification")
+      helphtml should include ("approve-notice-aggregate")
+      helpopenapiresponse.status.code shouldBe 200
+      helpopenapijson should include (""""openapi"""")
+      manresponse.status.code shouldBe 200
+      manhtml should include ("notice_board Documents")
+      manhtml should include ("Packaged component documents")
+    }
+
+    "hide generated help and packaged manuals in production operation mode" in {
+      Given("a production-mode subsystem")
+      val subsystem = _aggregate_http_fixture_subsystem_with_componentlets(
+        Configuration(Map(RuntimeConfig.OperationModeKey -> ConfigurationValue.StringValue("production")))
+      )
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+
+      When("generated help, packaged manuals, and compatibility document routes are requested")
+      val helpresponse = server.routes(null).orNotFound.run(_get_request("/help/notice-board")).unsafeRunSync()
+      val manresponse = server.routes(null).orNotFound.run(_get_request("/man/notice-board")).unsafeRunSync()
+      val systemhelpresponse = server.routes(null).orNotFound.run(_get_request("/help/system")).unsafeRunSync()
+      val systemopenapiresponse = server.routes(null).orNotFound.run(_get_request("/help/system/openapi.json")).unsafeRunSync()
+      val systemmanresponse = server.routes(null).orNotFound.run(_get_request("/man/system")).unsafeRunSync()
+      val compatssystemhelpresponse = server.routes(null).orNotFound.run(_get_request("/web/system/document/specification")).unsafeRunSync()
+      val compatssystemmanresponse = server.routes(null).orNotFound.run(_get_request("/web/system/document")).unsafeRunSync()
+      val compathelpresponse = server.routes(null).orNotFound.run(_get_request("/web/notice-board/document/specification")).unsafeRunSync()
+      val compatmanresponse = server.routes(null).orNotFound.run(_get_request("/web/notice-board/document")).unsafeRunSync()
+
+      Then("CNCF hides the inspection surfaces")
+      helpresponse.status.code shouldBe 404
+      manresponse.status.code shouldBe 404
+      systemhelpresponse.status.code shouldBe 404
+      systemopenapiresponse.status.code shouldBe 404
+      systemmanresponse.status.code shouldBe 404
+      compatssystemhelpresponse.status.code shouldBe 404
+      compatssystemmanresponse.status.code shouldBe 404
+      compathelpresponse.status.code shouldBe 404
+      compatmanresponse.status.code shouldBe 404
     }
 
     "render component entity administration page" in {
@@ -3783,7 +3845,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       webslash.headers.get[org.http4s.headers.Location].map(_.uri.renderString) shouldBe Some("/web")
       web.status.code shouldBe 200
       webhtml should include ("CNCF Runtime Help")
-      webhtml should include ("/web/system/document")
+      webhtml should include ("/man/system")
       webhtml should include ("/web/notice-board")
       webhtml should not include ("/form/notice-board")
     }
@@ -5796,7 +5858,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("/web/system/admin/observability")
       html should include ("/web/system/admin/observability/metrics")
       html should include ("/web/system/admin/observability/diagnostics/authorization/capability")
-      html should include ("/web/system/document")
+      html should include ("/man/system")
       html should include ("/web/console")
     }
 
@@ -5919,11 +5981,11 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       manual should include ("System Documents")
       manual should include ("/web/system/dashboard")
       manual should include ("/web/console")
-      manual should include ("Generated Specification")
+      manual should include ("Generated Help")
       manual should include ("Component documents")
       console should include ("System Console")
       console should include ("/web/system/dashboard")
-      console should include ("/web/system/document")
+      console should include ("/man/system")
       console should include ("/form/")
       console should include ("Console links to operation forms")
       console should include ("does not execute operations inline")

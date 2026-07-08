@@ -4,7 +4,7 @@ package org.goldenport.cncf.http
  * @since   May. 18, 2026
  *  version May. 30, 2026
  *  version Jun. 19, 2026
- * @version Jul.  7, 2026
+ * @version Jul.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 import cats.effect.IO
@@ -63,7 +63,7 @@ import org.goldenport.observation.{Cause, Descriptor}
  *  version Apr. 30, 2026
  *  version May. 25, 2026
  *  version Jun. 19, 2026
- * @version Jul.  7, 2026
+ * @version Jul.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Http4sHttpServer(
@@ -168,11 +168,55 @@ final class Http4sHttpServer(
       case req @ GET -> Root / "web" / "system" / "performance" =>
         if (_is_web_authorized("system", "performance", "index", Some(req), Some("admin.system.performance"))) _system_performance() else _forbidden_web(req, Some("system"), Some("performance"), Some("index"))
       case req @ GET -> Root / "web" / "system" / "document" =>
-        if (_is_web_authorized("system", "document", "index", Some(req), Some("admin.system.document"))) _system_document() else _forbidden_web(req, Some("system"), Some("document"), Some("index"))
+        if (_is_production_operation_mode) _document_unavailable_in_production("System documents")
+        else if (_is_web_authorized("system", "document", "index", Some(req), Some("admin.system.document"))) _system_document()
+        else _forbidden_web(req, Some("system"), Some("document"), Some("index"))
       case req @ GET -> Root / "web" / "system" / "document" / "specification" =>
-        if (_is_web_authorized("system", "document", "specification", Some(req), Some("admin.system.document"))) _system_manual() else _forbidden_web(req, Some("system"), Some("document"), Some("specification"))
+        if (_is_production_operation_mode) _document_unavailable_in_production("System help")
+        else if (_is_web_authorized("system", "document", "specification", Some(req), Some("admin.system.document"))) _system_manual()
+        else _forbidden_web(req, Some("system"), Some("document"), Some("specification"))
       case req @ GET -> Root / "web" / "system" / "document" / "specification" / "openapi.json" =>
-        if (_is_web_authorized("system", "document", "openapi", Some(req), Some("admin.system.document"))) _system_manual_openapi() else _forbidden_web(req, Some("system"), Some("document"), Some("openapi"))
+        if (_is_production_operation_mode) _document_unavailable_in_production("System help")
+        else if (_is_web_authorized("system", "document", "openapi", Some(req), Some("admin.system.document"))) _system_manual_openapi()
+        else _forbidden_web(req, Some("system"), Some("document"), Some("openapi"))
+      case req @ GET -> Root / "help" =>
+        if (_is_production_operation_mode) _document_unavailable_in_production("System help")
+        else if (_is_web_authorized("system", "help", "index", Some(req), Some("admin.system.document"))) _system_manual()
+        else _forbidden_web(req, Some("system"), Some("help"), Some("index"))
+      case req @ GET -> Root / "help" / "system" =>
+        if (_is_production_operation_mode) _document_unavailable_in_production("System help")
+        else if (_is_web_authorized("system", "help", "system", Some(req), Some("admin.system.document"))) _system_manual()
+        else _forbidden_web(req, Some("system"), Some("help"), Some("system"))
+      case req @ GET -> Root / "help" / "system" / "openapi.json" =>
+        if (_is_production_operation_mode) _document_unavailable_in_production("System help")
+        else if (_is_web_authorized("system", "help", "openapi", Some(req), Some("admin.system.document"))) _system_manual_openapi()
+        else _forbidden_web(req, Some("system"), Some("help"), Some("openapi"))
+      case GET -> Root / "help" / app =>
+        if (_is_production_operation_mode) _document_unavailable_in_production("Component help")
+        else _component_manual(app)
+      case GET -> Root / "help" / app / service =>
+        if (_is_production_operation_mode) _document_unavailable_in_production("Component help")
+        else _component_manual_service(app, service)
+      case GET -> Root / "help" / app / service / operation =>
+        if (_is_production_operation_mode) _document_unavailable_in_production("Component help")
+        else _component_manual_operation(app, service, operation)
+      case req @ GET -> Root / "man" =>
+        if (_is_production_operation_mode) _document_unavailable_in_production("System manuals")
+        else if (_is_web_authorized("system", "man", "index", Some(req), Some("admin.system.document"))) _system_document()
+        else _forbidden_web(req, Some("system"), Some("man"), Some("index"))
+      case req @ GET -> Root / "man" / "system" =>
+        if (_is_production_operation_mode) _document_unavailable_in_production("System manuals")
+        else if (_is_web_authorized("system", "man", "system", Some(req), Some("admin.system.document"))) _system_document()
+        else _forbidden_web(req, Some("system"), Some("man"), Some("system"))
+      case GET -> Root / "man" / app =>
+        if (_is_production_operation_mode) _document_unavailable_in_production("Component manuals")
+        else _component_document(app)
+      case GET -> Root / "man" / app / documentPath =>
+        if (_is_production_operation_mode) _document_unavailable_in_production("Component manuals")
+        else _component_document_asset(app, Vector(documentPath))
+      case GET -> Root / "man" / app / documentPath / documentName =>
+        if (_is_production_operation_mode) _document_unavailable_in_production("Component manuals")
+        else _component_document_asset(app, Vector(documentPath, documentName))
       case req @ GET -> Root / "web" / app / "login" =>
         _web_route_alias(req, Vector("web", app, "login")).flatMap {
           case Some(response) => IO.pure(response)
@@ -334,17 +378,23 @@ final class Http4sHttpServer(
             IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component admin page not found"))
         }
       case GET -> Root / "web" / app / "document" =>
-        _component_document(app)
+        if (_is_production_operation_mode) _document_unavailable_in_production("Component documents")
+        else _component_document(app)
       case GET -> Root / "web" / app / "document" / "specification" =>
-        _component_manual(app)
+        if (_is_production_operation_mode) _document_unavailable_in_production("Component help")
+        else _component_manual(app)
       case GET -> Root / "web" / app / "document" / "specification" / service =>
-        _component_manual_service(app, service)
+        if (_is_production_operation_mode) _document_unavailable_in_production("Component help")
+        else _component_manual_service(app, service)
       case GET -> Root / "web" / app / "document" / "specification" / service / operation =>
-        _component_manual_operation(app, service, operation)
+        if (_is_production_operation_mode) _document_unavailable_in_production("Component help")
+        else _component_manual_operation(app, service, operation)
       case GET -> Root / "web" / app / "document" / documentPath =>
-        _component_document_asset(app, Vector(documentPath))
+        if (_is_production_operation_mode) _document_unavailable_in_production("Component documents")
+        else _component_document_asset(app, Vector(documentPath))
       case GET -> Root / "web" / app / "document" / documentPath / documentName =>
-        _component_document_asset(app, Vector(documentPath, documentName))
+        if (_is_production_operation_mode) _document_unavailable_in_production("Component documents")
+        else _component_document_asset(app, Vector(documentPath, documentName))
       case req @ GET -> Root / "web" =>
         _web_route_alias(req, Vector("web")).flatMap {
           case Some(response) => IO.pure(response)
@@ -4116,7 +4166,7 @@ final class Http4sHttpServer(
   ): Vector[StaticFormAppRenderer.DocumentLink] =
     _component_document_candidates.view.flatMap { case (title, path) =>
       _component_document_content(componentName, path).map { _ =>
-        StaticFormAppRenderer.DocumentLink(title, s"/web/${NamingConventions.toNormalizedSegment(componentName)}/document/${path.map(_escape_uri_path_segment).mkString("/")}")
+        StaticFormAppRenderer.DocumentLink(title, s"/man/${NamingConventions.toNormalizedSegment(componentName)}/${path.map(_escape_uri_path_segment).mkString("/")}")
       }
     }.toVector
 
@@ -5575,6 +5625,14 @@ final class Http4sHttpServer(
 
   private def _show_runtime_landing: Boolean =
     RuntimeConfig.from(engine.runtimeSubsystem.configuration).operationMode != org.goldenport.cncf.config.OperationMode.Production
+
+  private def _is_production_operation_mode: Boolean =
+    _operation_mode == org.goldenport.cncf.config.OperationMode.Production
+
+  private def _document_unavailable_in_production(
+    label: String
+  ): IO[HResponse[IO]] =
+    IO.pure(HResponse[IO](HStatus.NotFound).withEntity(s"$label is not available in production"))
 
   private def _dispatch_component_segment(
     app: String

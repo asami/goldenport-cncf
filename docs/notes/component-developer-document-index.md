@@ -112,8 +112,10 @@ assembly:
 - `docs/design/domain-component.md`
   - DomainComponent / Cozy integration contract.
 - `docs/design/assembly-descriptor.md`
-  - Runtime assembly descriptor, reproducible wiring, and explicit test
-    descriptor overlay for test-only assembly/config/SPI provider selection.
+  - Runtime assembly descriptor, component-local
+    `src/main/car/assembly-descriptor.yaml` defaults, reproducible wiring, and
+    explicit test descriptor overlay for test-only assembly/config/SPI provider
+    selection.
 - `docs/notes/subsystem-descriptor-note.md`
   - Subsystem descriptor guidance.
 - `docs/notes/cml-crud-domain-subsystem-bootstrap.md`
@@ -123,8 +125,10 @@ assembly:
 - `docs/notes/omponent-discovery-from-classdir.md`
   - Development-time component discovery from class directories.
 
-Use assembly descriptors for resolved operational wiring. Keep subsystem
-descriptors as authored intent.
+Use assembly descriptors for resolved operational wiring. For CAR projects,
+`packaging.kind: car` defaults the CAR-root source directory to
+`src/main/car`; component-local `assembly-descriptor.yaml` belongs there and is
+packaged at the CAR root. Keep subsystem descriptors as authored intent.
 
 ## Web, Admin, And Static Form Apps
 
