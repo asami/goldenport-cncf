@@ -220,6 +220,16 @@ closed while hardening `--component-file` and component-CAR startup:
 - Startup diagnostics identify the missing component, requesting CAR/subsystem
   descriptor, assembly descriptor, and configured repositories.
 
+Post-closure AI runner SPI maintenance on Jul. 9, 2026 kept Phase 28 closed
+while extending the provider-neutral AI runner contract:
+
+- `AiRunnerRequirement` can carry logical tool requests through the existing
+  generate/chat SPI path.
+- The CNCF tool vocabulary includes URL context and provider-neutral web
+  search, with Google-specific aliases normalized by the parser.
+- Unknown tool tokens are preserved as contract values so provider adapters can
+  fail explicitly instead of silently ignoring requested behavior.
+
 Post-closure runtime maintenance on Jun. 29, 2026 aligned the CAR component
 developer startup path and launcher command installation path:
 

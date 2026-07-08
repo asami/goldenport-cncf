@@ -62,6 +62,11 @@ been recorded without reopening the Web UI DSL phase:
 - [x] Fail startup deterministically when a declared assembly dependency cannot
       be resolved from active/search repositories, with missing component,
       requesting descriptor, assembly descriptor, and repository diagnostics.
+- [x] Jul. 9, 2026: Extend the AI runner SPI requirement contract with
+      provider-neutral logical tool requests for URL context and web search.
+- [x] Preserve unknown AI tool tokens so provider adapters can return
+      structured invalid-tool or unsupported-tool failures rather than dropping
+      requested behavior.
 
 ---
 
