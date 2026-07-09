@@ -3,7 +3,7 @@ package org.goldenport.cncf.component.repository.fixture.spi
 import org.goldenport.Consequence
 import org.goldenport.cncf.component.*
 import org.goldenport.cncf.context.ExecutionContext
-import org.goldenport.cncf.spi.ai.runner.{AiChatRequest, AiChatResponse, AiGenerateRequest, AiGenerateResponse, AiMessage, AiRunner}
+import org.goldenport.cncf.spi.ai.runner.{AiChatRequest, AiChatResponse, AiGenerateRequest, AiGenerateResponse, AiMessage, AiRecordRequest, AiRecordResponse, AiRunner}
 import org.goldenport.protocol.Protocol
 
 /*
@@ -18,6 +18,9 @@ final class ArtSceneComponent extends Component
 final class PlainAiRunner extends AiRunner {
   def generate(req: AiGenerateRequest)(using ExecutionContext): Consequence[AiGenerateResponse] =
     Consequence.success(AiGenerateResponse(s"car:${req.prompt}"))
+
+  def generateRecord(req: AiRecordRequest)(using ExecutionContext): Consequence[AiRecordResponse] =
+    Consequence.serviceUnavailable("generateRecord is not used by this fixture.")
 
   def chat(req: AiChatRequest)(using ExecutionContext): Consequence[AiChatResponse] =
     Consequence.success(AiChatResponse(AiMessage("assistant", "car:chat")))

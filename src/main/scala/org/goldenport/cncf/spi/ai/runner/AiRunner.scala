@@ -4,6 +4,7 @@ import org.goldenport.Consequence
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.spi.{SpiContract, SpiSelection, SpiSocket}
 import org.goldenport.protocol.Property
+import org.goldenport.record.Record
 import org.goldenport.schema.DataConfidentiality
 
 /*
@@ -18,6 +19,7 @@ import org.goldenport.schema.DataConfidentiality
  */
 trait AiRunner {
   def generate(req: AiGenerateRequest)(using ExecutionContext): Consequence[AiGenerateResponse]
+  def generateRecord(req: AiRecordRequest)(using ExecutionContext): Consequence[AiRecordResponse]
   def chat(req: AiChatRequest)(using ExecutionContext): Consequence[AiChatResponse]
 }
 
@@ -117,6 +119,23 @@ final case class AiGenerateRequest(
 
 final case class AiGenerateResponse(
   text: String,
+  model: Option[String] = None,
+  metadata: Map[String, String] = Map.empty
+)
+
+final case class AiRecordRequest(
+  prompt: String,
+  schema: Record,
+  temperature: Option[Double] = None,
+  maxTokens: Option[Int] = None,
+  requirement: AiRunnerRequirement = AiRunnerRequirement(),
+  trace: AiRunnerTracePolicy = AiRunnerTracePolicy(),
+  metadata: Map[String, String] = Map.empty,
+  properties: Vector[Property] = Vector.empty
+)
+
+final case class AiRecordResponse(
+  record: Record,
   model: Option[String] = None,
   metadata: Map[String, String] = Map.empty
 )

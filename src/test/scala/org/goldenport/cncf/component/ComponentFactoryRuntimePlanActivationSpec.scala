@@ -10,7 +10,7 @@ import org.goldenport.cncf.entity.EntityPersistable
 import org.goldenport.cncf.entity.runtime.{EntityMemoryPolicy, EntityRuntimePlan, PartitionStrategy, WorkingSetDefinition}
 import org.goldenport.cncf.component.repository.ComponentRepositorySpace
 import org.goldenport.cncf.spi.{SpiContract, SpiProvider, SpiProviderComponent, SpiSelection}
-import org.goldenport.cncf.spi.ai.runner.{AiChatRequest, AiChatResponse, AiGenerateRequest, AiGenerateResponse, AiMessage, AiRunner, AiRunnerSocket}
+import org.goldenport.cncf.spi.ai.runner.{AiChatRequest, AiChatResponse, AiGenerateRequest, AiGenerateResponse, AiMessage, AiRecordRequest, AiRecordResponse, AiRunner, AiRunnerSocket}
 import org.goldenport.cncf.testutil.TestComponentFactory
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
@@ -258,6 +258,9 @@ final class ComponentFactoryRuntimePlanActivationSpec
   ) extends AiRunner {
     def generate(req: AiGenerateRequest)(using ExecutionContext): Consequence[AiGenerateResponse] =
       Consequence.success(AiGenerateResponse(s"$name:${req.prompt}"))
+
+    def generateRecord(req: AiRecordRequest)(using ExecutionContext): Consequence[AiRecordResponse] =
+      Consequence.serviceUnavailable("generateRecord is not used by this spec")
 
     def chat(req: AiChatRequest)(using ExecutionContext): Consequence[AiChatResponse] =
       Consequence.success(AiChatResponse(AiMessage("assistant", name)))

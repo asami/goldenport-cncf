@@ -4,7 +4,7 @@ import org.goldenport.Consequence
 import org.goldenport.protocol.Protocol
 import org.goldenport.cncf.component.{Component, ComponentId, ComponentInit, ComponentInstanceId, ComponentOrigin}
 import org.goldenport.cncf.context.ExecutionContext
-import org.goldenport.cncf.spi.ai.runner.{AiGenerateRequest, AiGenerateResponse, AiRunner, AiRunnerSocket}
+import org.goldenport.cncf.spi.ai.runner.{AiGenerateRequest, AiGenerateResponse, AiRecordRequest, AiRecordResponse, AiRunner, AiRunnerSocket}
 import org.goldenport.cncf.spi.geo.resolver.{GeoResolver, GeoResolverSocket}
 import org.goldenport.cncf.spi.toolchain.runner.{ConvertSvgPagesToPdfRequest, ToolchainArtifactResponse, ToolchainRunner, ToolchainRunnerSocket}
 import org.goldenport.cncf.testutil.TestComponentFactory
@@ -14,7 +14,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jul.  2, 2026
- * @version Jul.  8, 2026
+ * @version Jul.  9, 2026
  * @author  ASAMI, Tomoharu
  */
 final class SpiSpec
@@ -226,6 +226,9 @@ final class SpiSpec
   ) extends AiRunner {
     def generate(req: AiGenerateRequest)(using ExecutionContext): Consequence[AiGenerateResponse] =
       Consequence.success(AiGenerateResponse(s"$name:${req.prompt}"))
+
+    def generateRecord(req: AiRecordRequest)(using ExecutionContext): Consequence[AiRecordResponse] =
+      Consequence.operationInvalid("generateRecord is not used by this spec")
 
     def chat(req: org.goldenport.cncf.spi.ai.runner.AiChatRequest)(using ExecutionContext): Consequence[org.goldenport.cncf.spi.ai.runner.AiChatResponse] =
       Consequence.operationInvalid("chat is not used by this spec")
