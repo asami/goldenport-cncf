@@ -4,7 +4,7 @@ package org.goldenport.cncf.http
  * @since   May. 18, 2026
  *  version May. 30, 2026
  *  version Jun. 19, 2026
- * @version Jul.  8, 2026
+ * @version Jul. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 import cats.effect.IO
@@ -63,7 +63,7 @@ import org.goldenport.observation.{Cause, Descriptor}
  *  version Apr. 30, 2026
  *  version May. 25, 2026
  *  version Jun. 19, 2026
- * @version Jul.  8, 2026
+ * @version Jul. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Http4sHttpServer(
@@ -2782,7 +2782,7 @@ final class Http4sHttpServer(
       form.getString(source).filter(_.nonEmpty).map(target -> _)
     }
     val frameworkcontext = _framework_passthrough_form_values(form)
-    _normalize_boundary_record(app, service, operation, Record.create(_strip_framework_form_values(form.asMap).toVector)).map { operationform =>
+    _normalize_boundary_record(app, service, operation, _strip_framework_form_record(form)).map { operationform =>
       Record(operationform.fields ++ Record.create(admincontext ++ frameworkcontext).fields)
     }
   }
@@ -2793,7 +2793,7 @@ final class Http4sHttpServer(
     operation: String,
     record: Record
   ): Consequence[Record] =
-    _normalize_boundary_record(app, service, operation, Record.create(_strip_framework_form_values(record.asMap).toVector))
+    _normalize_boundary_record(app, service, operation, _strip_framework_form_record(record))
 
   private[http] def _submit_component_admin_entity_update(
     req: org.http4s.Request[IO],
@@ -2806,7 +2806,7 @@ final class Http4sHttpServer(
     val started = System.nanoTime()
     for {
       form <- _to_form_record(req)
-      record = Record.create((form.asMap + ("id" -> id)).toVector)
+      record = form.upsertSingle("id", id)
       values = _form_values(record)
       validation = _static_form_app_renderer.validateComponentAdminEntityForm(engine.runtimeSubsystem, app, entity, values, engine.webDescriptor, Some("detail"))
       html <- validation match {
@@ -2870,7 +2870,7 @@ final class Http4sHttpServer(
     val started = System.nanoTime()
     for {
       form <- _to_plain_form_record(req)
-      record = Record.create((form.asMap + ("id" -> id)).toVector)
+      record = form.upsertSingle("id", id)
       values = _form_values(record)
       validation = _static_form_app_renderer.validateComponentAdminDataForm(engine.runtimeSubsystem, app, data, values, engine.webDescriptor)
       html <- validation match {
@@ -2936,7 +2936,9 @@ final class Http4sHttpServer(
       HttpRequest.fromPath(
         method = HttpRequest.POST,
         path = s"/admin/data/${operation}",
-        form = Record.create((record.asMap + ("component" -> app) + ("data" -> data)).toVector)
+        form = record
+          .upsertSingle("component", app)
+          .upsertSingle("data", data)
       )
     )
     _AdminFormDispatchResult(response, "Data record was applied.")
@@ -2955,7 +2957,9 @@ final class Http4sHttpServer(
       HttpRequest.fromPath(
         method = HttpRequest.POST,
         path = s"/admin/entity/${operation}",
-        form = Record.create((record.asMap + ("component" -> app) + ("entity" -> entity)).toVector)
+        form = record
+          .upsertSingle("component", app)
+          .upsertSingle("entity", entity)
       )
     )
     _AdminFormDispatchResult(response, "Entity record was applied.")
@@ -3506,7 +3510,7 @@ final class Http4sHttpServer(
       _to_plain_form_record(req).flatMap { form =>
         _operation_dispatch_form(app, service, operation, form) match {
           case Consequence.Success(baseform) =>
-            val dispatchform = Record.create((baseform.asMap + ("id" -> jobId)).toVector)
+            val dispatchform = baseform.upsertSingle("id", jobId)
             val result = _dispatch_operation_result(
               "job_control",
               "job",
@@ -5950,6 +5954,11 @@ final class Http4sHttpServer(
   ): Map[String, Any] =
     values.filterNot { case (k, _) => _is_framework_or_security_form_key(k) || _is_form_context_key(k) }
 
+  private def _strip_framework_form_record(
+    record: Record
+  ): Record =
+    Record(record.fields.filterNot(field => _is_framework_or_security_form_key(field.key) || _is_form_context_key(field.key)))
+
   private def _framework_passthrough_form_values(
     form: Record
   ): Vector[(String, String)] =
@@ -6403,7 +6412,7 @@ final class Http4sHttpServer(
         else HttpRequest.parseQuery(text)
       base.getString("fields") match {
         case Some(fields) =>
-          Record.create(base.asMap.toVector.filterNot(_._1 == "fields") ++ _fields_to_record(fields).asMap.toVector)
+          base.removeKeys(Set("fields")).concatPreservingFields(_fields_to_record(fields))
         case None =>
           base
       }

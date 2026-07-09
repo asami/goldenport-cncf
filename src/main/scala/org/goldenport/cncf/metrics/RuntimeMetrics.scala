@@ -5,7 +5,7 @@ import org.goldenport.record.Record
 
 /*
  * @since   May. 11, 2026
- * @version May. 11, 2026
+ * @version Jul.  9, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class MetricScopeDefinition(
@@ -110,6 +110,12 @@ object RuntimeMetricsCatalog {
       "Blob operation",
       "Blob operation counts grouped by outcome, kind, source, backend, and diagnostic key.",
       Vector("outcome", "kind", "source", "backend", "diagnostic_key")
+    ),
+    MetricScopeDefinition(
+      "spi.invocation",
+      "SPI invocation",
+      "Canonical SPI invocation counts, failures, provider/socket components, and elapsed time.",
+      Vector("outcome", "contract", "operation", "provider_component", "socket_component", "diagnostic_key")
     ),
     MetricScopeDefinition(
       "diagnostic-payload.externalization",

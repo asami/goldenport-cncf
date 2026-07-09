@@ -2,7 +2,7 @@ package org.goldenport.cncf.spi.ai.runner
 
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.ExecutionContext
-import org.goldenport.cncf.spi.{SpiContract, SpiSelection, SpiSocket}
+import org.goldenport.cncf.spi.{SpiContract, SpiSelection, SpiSocket, SpiTraceMetadata, SpiTraceSupport}
 import org.goldenport.protocol.Property
 import org.goldenport.record.Record
 import org.goldenport.schema.DataConfidentiality
@@ -21,6 +21,51 @@ trait AiRunner {
   def generate(req: AiGenerateRequest)(using ExecutionContext): Consequence[AiGenerateResponse]
   def generateRecord(req: AiRecordRequest)(using ExecutionContext): Consequence[AiRecordResponse]
   def chat(req: AiChatRequest)(using ExecutionContext): Consequence[AiChatResponse]
+}
+
+object AiRunner {
+  def traced(
+    underlying: AiRunner,
+    metadata: SpiTraceMetadata
+  ): AiRunner =
+    _TracedAiRunner(underlying, metadata)
+
+  private final case class _TracedAiRunner(
+    underlying: AiRunner,
+    base: SpiTraceMetadata
+  ) extends AiRunner {
+    def generate(req: AiGenerateRequest)(using ExecutionContext): Consequence[AiGenerateResponse] =
+      SpiTraceSupport.trace(base.withOperation("generate"), _generate_attributes)(underlying.generate(req))
+
+    def generateRecord(req: AiRecordRequest)(using ExecutionContext): Consequence[AiRecordResponse] =
+      SpiTraceSupport.trace(base.withOperation("generateRecord"), _record_attributes)(underlying.generateRecord(req))
+
+    def chat(req: AiChatRequest)(using ExecutionContext): Consequence[AiChatResponse] =
+      SpiTraceSupport.trace(base.withOperation("chat"), _chat_attributes)(underlying.chat(req))
+  }
+
+  private def _generate_attributes(response: AiGenerateResponse): Map[String, String] =
+    _clean(Map(
+      "result_type" -> "ai_generate_response",
+      "model" -> response.model.getOrElse("")
+    ))
+
+  private def _record_attributes(response: AiRecordResponse): Map[String, String] =
+    _clean(Map(
+      "result_type" -> "ai_record_response",
+      "model" -> response.model.getOrElse(""),
+      "field_count" -> response.record.fields.size.toString
+    ))
+
+  private def _chat_attributes(response: AiChatResponse): Map[String, String] =
+    _clean(Map(
+      "result_type" -> "ai_chat_response",
+      "model" -> response.model.getOrElse(""),
+      "role" -> response.message.role
+    ))
+
+  private def _clean(values: Map[String, String]): Map[String, String] =
+    values.filter(_._2.nonEmpty)
 }
 
 trait AiRunnerSocket extends SpiSocket[AiRunner] {

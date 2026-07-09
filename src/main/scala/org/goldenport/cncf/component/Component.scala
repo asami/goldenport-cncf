@@ -56,7 +56,7 @@ import org.goldenport.schema.{DataType, XString}
  *  version Apr. 30, 2026
  *  version May. 20, 2026
  *  version Jun. 18, 2026
- * @version Jul.  2, 2026
+ * @version Jul.  9, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class Component() extends Component.Core.Holder {
@@ -536,6 +536,8 @@ object Component {
   trait Port {
     def get[T: ClassTag]: Option[T]
     def entries: Vector[Any]
+    def inputEntries: Vector[Any] = Vector.empty
+    def outputEntries: Vector[Any] = entries
     def orElse(other: Port): Port
   }
 
@@ -543,12 +545,26 @@ object Component {
     val empty: Port = new Port {
       def get[T: ClassTag]: Option[T] = None
       def entries: Vector[Any] = Vector.empty
+      override def inputEntries: Vector[Any] = Vector.empty
+      override def outputEntries: Vector[Any] = Vector.empty
       def orElse(other: Port): Port = other
     }
 
     def of(services: Any*): Port =
+      output(services*)
+
+    def input(services: Any*): Port =
+      create(services.toVector, Vector.empty)
+
+    def output(services: Any*): Port =
+      create(Vector.empty, services.toVector)
+
+    private def create(
+      inputs: Vector[Any],
+      outputs: Vector[Any]
+    ): Port =
       new Port {
-        private val _services = services.toVector
+        private val _services = inputs ++ outputs
         def get[T: ClassTag]: Option[T] = {
           val clazz = summon[ClassTag[T]].runtimeClass
           _services.collectFirst {
@@ -556,6 +572,8 @@ object Component {
           }
         }
         def entries: Vector[Any] = _services
+        override def inputEntries: Vector[Any] = inputs
+        override def outputEntries: Vector[Any] = outputs
         def orElse(other: Port): Port = Port.combined(this, other)
       }
 
@@ -565,6 +583,10 @@ object Component {
           primary.get[T].orElse(secondary.get[T])
         def entries: Vector[Any] =
           primary.entries ++ secondary.entries
+        override def inputEntries: Vector[Any] =
+          primary.inputEntries ++ secondary.inputEntries
+        override def outputEntries: Vector[Any] =
+          primary.outputEntries ++ secondary.outputEntries
         def orElse(other: Port): Port =
           Port.combined(this, other)
       }

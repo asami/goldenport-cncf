@@ -56,7 +56,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
  *  version Feb. 19, 2026
  *  version May. 31, 2026
  *  version Jun. 18, 2026
- * @version Jul.  9, 2026
+ * @version Jul. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 class AdminComponent() extends Component {
@@ -1919,7 +1919,7 @@ object AdminComponent {
         s"Entity collection not found: ${entityName}"
       )
       attachmentRequest <- BlobAttachmentWorkflow.extract(_admin_entity_blob_attachment_request(operation, componentName, entityName, core))
-      inputRecord = _admin_entity_record(collection, args)
+      inputRecord = _admin_entity_record(collection, _action_record(core))
       record <- _canonical_admin_entity_record(collection, inputRecord)
       entityId <- Consequence.fromOption(record.getString("id"), "entity id is required")
       _ <-
@@ -2502,6 +2502,14 @@ object AdminComponent {
     (core.action.properties.map(x => x.name -> x.value) ++
       core.action.arguments.map(x => x.name -> x.value)).toMap
 
+  private def _action_record(
+    core: ActionCall.Core
+  ): Record =
+    Record.create(
+      core.action.properties.map(x => x.name -> x.value) ++
+        core.action.arguments.map(x => x.name -> x.value)
+    )
+
   private def _required_string(
     args: Map[String, Any],
     key: String
@@ -2707,22 +2715,24 @@ object AdminComponent {
 
   private def _admin_entity_record(
     collection: EntityCollection[?],
-    args: Map[String, Any]
+    args: Record
   ): Record = {
-    val data = args.filterNot {
-      case (key, _) => key == "component" || key == "entity" || _is_blob_attachment_form_key(key)
+    val data = args.filterFields { field =>
+      field.key != "component" &&
+        field.key != "entity" &&
+        !_is_blob_attachment_form_key(field.key)
     }
     val withId =
-      data.get("id").map(_.toString).filter(_.nonEmpty) match {
+      data.getString("id").filter(_.nonEmpty) match {
         case Some(idOrShortid) =>
           collection.resolveEntityId(idOrShortid)
-            .map(id => data + ("id" -> id.value))
+            .map(id => data.upsertSingle("id", id.value))
             .getOrElse(data)
         case None =>
           val cid = collection.descriptor.collectionId
-          data + ("id" -> EntityId(cid.major, cid.minor, cid).value)
+          data.appendField("id", EntityId(cid.major, cid.minor, cid).value)
       }
-    Record.create(withId.toVector)
+    withId
   }
 
   private def _is_blob_attachment_form_key(key: String): Boolean =

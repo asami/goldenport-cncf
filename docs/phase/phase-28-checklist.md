@@ -67,6 +67,11 @@ been recorded without reopening the Web UI DSL phase:
 - [x] Preserve unknown AI tool tokens so provider adapters can return
       structured invalid-tool or unsupported-tool failures rather than dropping
       requested behavior.
+- [x] Jul. 9, 2026: Add caller-side canonical SPI invocation tracing for
+      `AiRunner`, `GeoResolver`, and `ToolchainRunner`.
+- [x] Record `spi:<contract>.<operation>` calltree spans and `spi.invocation`
+      runtime metrics without copying prompts, route DSL, API keys, SVG
+      content, or raw provider payloads.
 
 ---
 

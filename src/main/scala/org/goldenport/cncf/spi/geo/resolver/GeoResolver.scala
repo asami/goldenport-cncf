@@ -2,7 +2,7 @@ package org.goldenport.cncf.spi.geo.resolver
 
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.ExecutionContext
-import org.goldenport.cncf.spi.{SpiContract, SpiSelection, SpiSocket}
+import org.goldenport.cncf.spi.{SpiContract, SpiSelection, SpiSocket, SpiTraceMetadata, SpiTraceSupport}
 
 /*
  * Provider-neutral geographic resolver SPI contract.
@@ -12,7 +12,7 @@ import org.goldenport.cncf.spi.{SpiContract, SpiSelection, SpiSocket}
  * operation classes directly.
  *
  * @since   Jul.  3, 2026
- * @version Jul.  3, 2026
+ * @version Jul.  9, 2026
  * @author  ASAMI, Tomoharu
  */
 trait GeoResolver {
@@ -20,6 +20,59 @@ trait GeoResolver {
   def buildMapContext(req: GeoBuildMapContextRequest)(using ExecutionContext): Consequence[GeoBuildMapContextResponse]
   def investigateLocation(req: GeoInvestigateLocationRequest)(using ExecutionContext): Consequence[GeoInvestigateLocationResponse]
   def researchLinearFeatureRoute(req: GeoResearchLinearFeatureRouteRequest)(using ExecutionContext): Consequence[GeoResearchLinearFeatureRouteResponse]
+}
+
+object GeoResolver {
+  def traced(
+    underlying: GeoResolver,
+    metadata: SpiTraceMetadata
+  ): GeoResolver =
+    _TracedGeoResolver(underlying, metadata)
+
+  private final case class _TracedGeoResolver(
+    underlying: GeoResolver,
+    base: SpiTraceMetadata
+  ) extends GeoResolver {
+    def resolveRoute(req: GeoResolveRouteRequest)(using ExecutionContext): Consequence[GeoResolveRouteResponse] =
+      SpiTraceSupport.trace(base.withOperation("resolveRoute"), (x: GeoResolveRouteResponse) => _attributes(x))(underlying.resolveRoute(req))
+
+    def buildMapContext(req: GeoBuildMapContextRequest)(using ExecutionContext): Consequence[GeoBuildMapContextResponse] =
+      SpiTraceSupport.trace(base.withOperation("buildMapContext"), (x: GeoBuildMapContextResponse) => _attributes(x))(underlying.buildMapContext(req))
+
+    def investigateLocation(req: GeoInvestigateLocationRequest)(using ExecutionContext): Consequence[GeoInvestigateLocationResponse] =
+      SpiTraceSupport.trace(base.withOperation("investigateLocation"), (x: GeoInvestigateLocationResponse) => _attributes(x))(underlying.investigateLocation(req))
+
+    def researchLinearFeatureRoute(req: GeoResearchLinearFeatureRouteRequest)(using ExecutionContext): Consequence[GeoResearchLinearFeatureRouteResponse] =
+      SpiTraceSupport.trace(base.withOperation("researchLinearFeatureRoute"), (x: GeoResearchLinearFeatureRouteResponse) => _attributes(x))(underlying.researchLinearFeatureRoute(req))
+  }
+
+  private def _attributes(response: GeoResolveRouteResponse): Map[String, String] =
+    _status_attributes("geo_resolve_route_response", response.valid, response.errorCount, response.warningCount)
+
+  private def _attributes(response: GeoBuildMapContextResponse): Map[String, String] =
+    _status_attributes("geo_build_map_context_response", response.valid, response.errorCount, response.warningCount) ++
+      Map("layer_count" -> response.layerCount.toString, "landmark_count" -> response.landmarkCount.toString)
+
+  private def _attributes(response: GeoInvestigateLocationResponse): Map[String, String] =
+    _status_attributes("geo_investigate_location_response", response.valid, response.errorCount, response.warningCount) ++
+      response.model.map("model" -> _).toMap
+
+  private def _attributes(response: GeoResearchLinearFeatureRouteResponse): Map[String, String] =
+    _status_attributes("geo_research_linear_feature_route_response", response.valid, response.errorCount, response.warningCount) ++
+      response.model.map("model" -> _).toMap
+
+  private def _status_attributes(
+    resultType: String,
+    valid: Boolean,
+    errorCount: Int,
+    warningCount: Int
+  ): Map[String, String] =
+    Map(
+      "result_type" -> resultType,
+      "valid" -> valid.toString,
+      "error_count" -> errorCount.toString,
+      "warning_count" -> warningCount.toString
+    )
 }
 
 trait GeoResolverSocket extends SpiSocket[GeoResolver] {

@@ -6,7 +6,8 @@ import org.goldenport.record.Record
 
 /*
  * @since   Apr. 12, 2026
- * @version May. 11, 2026
+ *  version May. 11, 2026
+ * @version Jul.  9, 2026
  * @author  ASAMI, Tomoharu
  */
 object RuntimeDashboardMetrics {
@@ -104,6 +105,7 @@ object RuntimeDashboardMetrics {
   private var _validationEvents = Vector.empty[Event]
   private var _operationRequestValidationEvents = Vector.empty[Event]
   private var _blobEvents = Vector.empty[Event]
+  private var _spiEvents = Vector.empty[Event]
   private var _payloadExternalizationEvents = Vector.empty[PayloadExternalizationEvent]
   private var _openTelemetryExportEvents = Vector.empty[OpenTelemetryExportEvent]
   private var _recent = Vector.empty[RequestEntry]
@@ -112,7 +114,8 @@ object RuntimeDashboardMetrics {
     "authorization" -> "Authorization",
     "validation" -> "Validation",
     "operation-request-validation" -> "Operation Request Validation",
-    "blob" -> "Blob"
+    "blob" -> "Blob",
+    "spi" -> "SPI"
   )
 
   def recordHtmlRequest(
@@ -210,6 +213,34 @@ object RuntimeDashboardMetrics {
         "kind" -> kind.getOrElse(""),
         "source" -> sourceMode.getOrElse(""),
         "backend" -> backend.getOrElse(""),
+        "diagnostic_key" -> cleanDiagnosticKey.getOrElse("")
+      ))
+    )).takeRight(10000)
+  }
+
+  def recordSpiInvocation(
+    contract: String,
+    operation: String,
+    providerComponent: String,
+    socketComponent: String,
+    error: Boolean,
+    diagnosticKey: Option[String] = None,
+    diagnosticRecord: Option[Record] = None,
+    elapsedMillis: Option[Long] = None
+  ): Unit = synchronized {
+    val cleanDiagnosticKey = if (error) diagnosticKey.filter(_.nonEmpty) else None
+    _spiEvents = (_spiEvents :+ Event(
+      observedAt = java.time.Instant.now.toEpochMilli,
+      error = error,
+      diagnosticKey = cleanDiagnosticKey,
+      diagnosticRecord = if (error) diagnosticRecord else None,
+      operation = Some(operation).filter(_.nonEmpty),
+      elapsedMillis = elapsedMillis,
+      labels = _clean_labels(Map(
+        "contract" -> contract,
+        "operation" -> operation,
+        "provider_component" -> providerComponent,
+        "socket_component" -> socketComponent,
         "diagnostic_key" -> cleanDiagnosticKey.getOrElse("")
       ))
     )).takeRight(10000)
@@ -319,12 +350,30 @@ object RuntimeDashboardMetrics {
     _diagnostic_records(_blobEvents)
   }
 
+  def spiInvocationSnapshot: Snapshot = synchronized {
+    _snapshot(_spiEvents, Vector.empty)
+  }
+
+  def spiDiagnosticCounts: Map[String, Long] = synchronized {
+    _spiEvents
+      .filter(_.error)
+      .groupBy(_.diagnosticKey.getOrElse("unknown"))
+      .view
+      .mapValues(_.size.toLong)
+      .toMap
+  }
+
+  def spiDiagnosticRecords: Map[String, Record] = synchronized {
+    _diagnostic_records(_spiEvents)
+  }
+
   def diagnosticScopes: Vector[DiagnosticScope] = synchronized {
     Vector(
       _diagnostic_scope("authorization", _authorizationEvents),
       _diagnostic_scope("validation", _validationEvents),
       _diagnostic_scope("operation-request-validation", _operationRequestValidationEvents),
-      _diagnostic_scope("blob", _blobEvents)
+      _diagnostic_scope("blob", _blobEvents),
+      _diagnostic_scope("spi", _spiEvents)
     )
   }
 
@@ -422,6 +471,9 @@ object RuntimeDashboardMetrics {
         event.diagnosticKey.map("diagnostic_key" -> _).toMap
       ),
       _event_points("blob.operation", "operations", _blobEvents, event =>
+        event.labels ++ _outcome_label(event)
+      ),
+      _event_points("spi.invocation", "invocations", _spiEvents, event =>
         event.labels ++ _outcome_label(event)
       ),
       _payload_externalization_points,

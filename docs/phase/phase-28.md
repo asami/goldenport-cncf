@@ -223,6 +223,19 @@ closed while hardening `--component-file` and component-CAR startup:
 Post-closure AI runner SPI maintenance on Jul. 9, 2026 kept Phase 28 closed
 while extending the provider-neutral AI runner contract:
 
+Post-closure SPI observability maintenance on Jul. 9, 2026 kept Phase 28 closed
+while adding caller-side tracing for canonical provider-neutral SPI calls:
+
+- Traced services are installed into caller component `SpiSocket`s, so SPI
+  invocation spans are recorded in the caller's execution context.
+- Canonical `AiRunner`, `GeoResolver`, and `ToolchainRunner` calls emit
+  `spi:<contract>.<operation>` calltree spans and `spi.invocation` runtime
+  metrics.
+- Provider request payloads, prompts, route DSL, API keys, SVG content, and raw
+  provider output are not copied into calltree or metrics.
+- If a provider implementation calls a CNCF operation, the existing action /
+  internal-DSL trace appears inside the outer SPI invocation span.
+
 - `AiRunnerRequirement` can carry logical tool requests through the existing
   generate/chat SPI path.
 - The CNCF tool vocabulary includes URL context and provider-neutral web

@@ -664,7 +664,13 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
   migration tooling; CulturalResource collection-item profile; Rule Engine and
   Inference Runtime.
 - Status interpretation rules: `docs/rules/stage-status-and-checklist-convention.md`
-- Latest post-closure maintenance: Jul. 9, 2026 AI runner tool requirement
+- Latest post-closure maintenance: Jul. 9, 2026 caller-side canonical SPI
+  invocation tracing. Provider-neutral SPI services installed into caller
+  component sockets now record `spi.<contract>.<operation>` calltree spans and
+  `spi.invocation` runtime metrics while keeping provider payloads out of
+  observability output. Provider implementations that call CNCF operations still
+  get the existing nested action/internal-DSL traces inside the SPI span.
+- Previous post-closure maintenance: Jul. 9, 2026 AI runner tool requirement
   contract. `AiRunnerRequirement` can now carry provider-neutral logical AI
   tool requests such as URL context and web search, while unknown tool names
   remain preserved in the CNCF contract so provider adapters can return

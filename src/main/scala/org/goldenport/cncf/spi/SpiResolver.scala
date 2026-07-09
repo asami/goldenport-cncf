@@ -12,7 +12,7 @@ import org.goldenport.cncf.context.ExecutionContext
  * registry populated from an existing dependency.
  *
  * @since   Jul.  2, 2026
- * @version Jul.  8, 2026
+ * @version Jul.  9, 2026
  * @author  ASAMI, Tomoharu
  */
 object SpiResolver {
@@ -48,10 +48,15 @@ object SpiResolver {
         case m: SpiProviderComponent => m.spiProviders
         case _ => Vector.empty
       }
-      val portproviders = component.port.entries.collect {
+      val outputentries = component.port.outputEntries
+      val portproviders = outputentries.collect {
         case m: ExtensionPoint[?] => m.asInstanceOf[SpiProvider[?]]
       }
-      val directproviders = component.port.entries.map(_DirectSpiProvider(_))
+      val directproviders = outputentries.collect {
+        case _: ExtensionPoint[?] => None
+        case _: SpiSocket[?] => None
+        case service => Some(_DirectSpiProvider(service))
+      }.flatten
       (componentproviders ++ portproviders ++ directproviders).map(_ProviderSlot(component, _))
     }
 
@@ -64,25 +69,33 @@ object SpiResolver {
     val contract = rawsocket.spiContract.asInstanceOf[SpiContract[Any]]
     _binding(socket, contract, bindings).flatMap { binding =>
       val selection = _selection(rawsocket.spiSelection, binding)
-      val candidates = providers.collect {
-        case provider if _provider_matches_binding(provider, binding) &&
-            provider.provider.asInstanceOf[SpiProvider[Any]].supports(contract, selection) =>
-          provider.provider.asInstanceOf[SpiProvider[Any]]
+      val candidates = providers.filter { provider =>
+        _provider_matches_binding(provider, binding) &&
+          provider.provider.asInstanceOf[SpiProvider[Any]].supports(contract, selection)
       }
-      _install_candidates(rawsocket, contract, selection, candidates)
+      _install_candidates(socket, contract, selection, candidates)
     }
   }
 
   private def _install_candidates(
-    socket: SpiSocket[?],
+    socket: _SocketSlot,
     contract: SpiContract[Any],
     selection: SpiSelection,
-    candidates: Vector[SpiProvider[Any]]
+    candidates: Vector[_ProviderSlot]
   )(using ExecutionContext): Consequence[Unit] =
     candidates match {
       case Vector(provider) =>
-        provider.provide(contract, selection).map { service =>
-          socket.asInstanceOf[SpiSocket[Any]].installSpi(service)
+        provider.provider.asInstanceOf[SpiProvider[Any]].provide(contract, selection).map { service =>
+          val metadata = SpiTraceMetadata(
+            contract = contract.name,
+            operation = "install",
+            socketComponent = _component_name(socket.component),
+            providerComponent = _component_name(provider.component),
+            selectionProvider = selection.provider,
+            selectionMode = selection.mode,
+            selectionEngine = selection.engine
+          )
+          socket.socket.asInstanceOf[SpiSocket[Any]].installSpi(SpiTraceSupport.wrapInstalled(service, metadata))
         }
       case Vector() =>
         Consequence.serviceUnavailable(
