@@ -32,7 +32,7 @@ import org.goldenport.cncf.operation.CmlOperationDefinition
  *  version Mar. 31, 2026
  *  version Apr. 24, 2026
  *  version Jun.  9, 2026
- * @version Jul.  3, 2026
+ * @version Jul. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 /**
@@ -632,7 +632,18 @@ case class ComponentLogic(
         component.stateMachinePlannerProvider
       )
     )
-    global.foreach(g => runtime.setResolvedParameters(g.resolvedParameters))
+    component.applicationConfig.config.filter(_.values.nonEmpty) match {
+      case Some(config) =>
+        runtime.setResolvedParameters(
+          org.goldenport.cncf.config.ResolvedParameters.fromComponentConfiguration(
+            config,
+            component.instanceMetadata.map(_.instance).getOrElse("default"),
+            global.map(_.resolvedParameters)
+          )
+        )
+      case None =>
+        global.foreach(g => runtime.setResolvedParameters(g.resolvedParameters))
+    }
     runtime
   }
 

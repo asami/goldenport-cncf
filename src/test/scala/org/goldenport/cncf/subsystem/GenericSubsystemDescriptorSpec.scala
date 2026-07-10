@@ -7,6 +7,7 @@ import java.util.zip.{ZipEntry, ZipOutputStream}
 import org.goldenport.Consequence
 import org.goldenport.record.Record
 import org.goldenport.cncf.config.RuntimeTestDescriptor
+import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
@@ -14,12 +15,181 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Apr.  8, 2026
  *  version Apr. 28, 2026
  *  version May.  7, 2026
- * @version Jul.  8, 2026
+ * @version Jul. 11, 2026
  * @author  ASAMI, Tomoharu
  */
-final class GenericSubsystemDescriptorSpec extends AnyWordSpec with Matchers {
+final class GenericSubsystemDescriptorSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   "GenericSubsystemDescriptor" should {
+    "load named component instance metadata without collapsing duplicate component types" in {
+      Given("an assembly descriptor with two configured instances of one component type")
+      val path = Files.createTempFile("generic-subsystem-named-instances", ".yaml")
+      Files.writeString(
+        path,
+        """subsystem: art-scene
+          |components:
+          |  - name: textus-scraper
+          |    instance: static-default
+          |    purposes: [official-site, lightweight-navigation]
+          |    tags: [static, jsoup]
+          |    priority: 100
+          |    default: true
+          |    config:
+          |      scraper.mode: static
+          |    rules:
+          |      navigation:
+          |        max-pages: 8
+          |  - name: textus-scraper
+          |    instance: dynamic-playwright
+          |    purposes: [javascript-heavy-site]
+          |    tags: [dynamic, browser]
+          |    config:
+          |      scraper.mode: dynamic
+          |""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+
+      When("the descriptor is loaded")
+      val descriptor = GenericSubsystemDescriptor.load(path).toOption.get
+      val static = descriptor.componentBindings.head
+      val dynamic = descriptor.componentBindings(1)
+
+      Then("both component instances retain isolated identity and metadata")
+      descriptor.componentBindings.map(_.componentName) shouldBe Vector("textus-scraper", "textus-scraper")
+      descriptor.componentBindings.map(_.instanceName) shouldBe Vector("static-default", "dynamic-playwright")
+      static.config shouldBe Map("scraper.mode" -> "static")
+      static.rules.getRecord("navigation").flatMap(_.getInt("max-pages")) shouldBe Some(8)
+      static.purposes should contain allOf ("official-site", "lightweight-navigation")
+      static.tags should contain allOf ("static", "jsoup")
+      static.priority shouldBe Some(100)
+      static.isDefault shouldBe Some(true)
+      dynamic.config shouldBe Map("scraper.mode" -> "dynamic")
+    }
+
+    "reject duplicate named component instance ids" in {
+      Given("an assembly descriptor that repeats one component and instance pair")
+      val path = Files.createTempFile("generic-subsystem-duplicate-instance", ".yaml")
+      Files.writeString(
+        path,
+        """subsystem: art-scene
+          |components:
+          |  - name: textus-scraper
+          |    instance: static-default
+          |  - name: textus-scraper
+          |    instance: static-default
+          |""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+
+      When("the descriptor is loaded")
+      val result = GenericSubsystemDescriptor.load(path)
+
+      Then("the duplicate runtime identity is rejected")
+      result shouldBe a[Consequence.Failure[_]]
+    }
+
+    "reject malformed component instance names" in {
+      Given("an assembly descriptor with a path-like instance name")
+      val path = Files.createTempFile("generic-subsystem-invalid-instance", ".yaml")
+      Files.writeString(
+        path,
+        """subsystem: art-scene
+          |components:
+          |  - name: textus-scraper
+          |    instance: ../dynamic
+          |""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+
+      When("the descriptor is loaded")
+      val result = GenericSubsystemDescriptor.load(path)
+
+      Then("the malformed instance declaration is rejected")
+      result shouldBe a[Consequence.Failure[_]]
+    }
+
+    "reject component instance names that collide after canonicalization" in {
+      Given("two instance names with the same stable ComponentInstanceId value")
+      val path = Files.createTempFile("generic-subsystem-canonical-instance", ".yaml")
+      Files.writeString(
+        path,
+        """subsystem: art-scene
+          |components:
+          |  - name: textus-scraper
+          |    instance: dynamic-playwright
+          |  - name: textus-scraper
+          |    instance: dynamic_playwright
+          |""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+
+      When("the descriptor constructs stable component instance identities")
+      val result = GenericSubsystemDescriptor.load(path)
+
+      Then("the canonical identity collision is rejected")
+      result shouldBe a[Consequence.Failure[_]]
+    }
+
+    "merge component defaults by component type and instance id" in {
+      Given("two default instance declarations and one matching override")
+      val defaults = GenericSubsystemDescriptor(
+        path = java.nio.file.Path.of("component.car"),
+        subsystemName = "art-scene",
+        componentBindings = Vector(
+          GenericSubsystemComponentBinding("textus-scraper", instance = Some("static"), config = Map("mode" -> "static")),
+          GenericSubsystemComponentBinding(
+            "textus-scraper",
+            instance = Some("dynamic"),
+            config = Map("mode" -> "dynamic", "timeout" -> "30s"),
+            rules = Record.data("retry" -> 2),
+            tags = Vector("browser")
+          )
+        )
+      )
+      val overrides = GenericSubsystemDescriptor(
+        path = java.nio.file.Path.of("art-scene.sar"),
+        subsystemName = "art-scene",
+        componentBindings = Vector(
+          GenericSubsystemComponentBinding("textus-scraper", instance = Some("dynamic"), config = Map("mode" -> "browser"))
+        )
+      )
+
+      When("component defaults are merged")
+      val effective = GenericSubsystemDescriptor.mergeComponentDefaults(defaults, overrides)
+
+      Then("the matching instance is field-merged without collapsing inherited settings")
+      effective.componentBindings.map(_.instanceName) shouldBe Vector("static", "dynamic")
+      effective.componentBindings.map(_.config("mode")) shouldBe Vector("static", "browser")
+      effective.componentBindings(1).config("timeout") shouldBe "30s"
+      effective.componentBindings(1).rules.getInt("retry") shouldBe Some(2)
+      effective.componentBindings(1).tags shouldBe Vector("browser")
+    }
+
+    "reject malformed component declarations in assembly overrides" in {
+      Given("a valid subsystem and an override containing duplicate canonical instance ids")
+      val base = GenericSubsystemDescriptor(
+        path = java.nio.file.Path.of("base.yaml"),
+        subsystemName = "art-scene",
+        componentBindings = Vector(GenericSubsystemComponentBinding("textus-scraper"))
+      )
+      val overridesource = GenericSubsystemAssemblyDescriptorSource(
+        Record.data(
+          "components" -> Vector(
+            Record.data("name" -> "textus-scraper", "instance" -> "static-driver"),
+            Record.data("name" -> "textus-scraper", "instance" -> "static_driver")
+          )
+        ),
+        "spec"
+      )
+
+      When("the assembly override is applied through the consequence boundary")
+      val result = GenericSubsystemDescriptor.applyAssemblyOverrideC(base, overridesource)
+
+      Then("the invalid override fails instead of retaining the base bindings silently")
+      result shouldBe a[Consequence.Failure[_]]
+    }
+
     "load component extension bindings from the formal YAML schema using name and version" in {
+      Given("a formal descriptor with component extension bindings")
       val path = Files.createTempFile("generic-subsystem-descriptor", ".yaml")
       Files.writeString(
         path,
@@ -35,24 +205,27 @@ final class GenericSubsystemDescriptorSpec extends AnyWordSpec with Matchers {
         StandardCharsets.UTF_8
       )
 
+      When("the descriptor is loaded")
       val descriptor = GenericSubsystemDescriptor.load(path).toOption.get
-      val componentDescriptor = descriptor.toComponentDescriptors.head
-      val bindings = componentDescriptor.extensionBindings
-      val adapterBindings = bindings.getVector("knowledge_source_adapters").toVector.flatten
-      val keys = adapterBindings.collect {
+      val componentdescriptor = descriptor.toComponentDescriptors.head
+      val bindings = componentdescriptor.extensionBindings
+      val adapterbindings = bindings.getVector("knowledge_source_adapters").toVector.flatten
+      val keys = adapterbindings.collect {
         case r: org.goldenport.record.Record => r.getString("key")
         case m: Map[?, ?] => m.iterator.collectFirst { case (k, v) if k.toString == "key" => v.toString }
       }.flatten
 
+      Then("the extension binding and component coordinate metadata are retained")
       descriptor.subsystemName shouldBe "mcprag"
       descriptor.componentVersion shouldBe Some("0.1.0-SNAPSHOT")
       descriptor.runtimeComponentNames shouldBe Vector("textus-mcp-rag")
-      componentDescriptor.name shouldBe Some("textus-mcp-rag")
-      componentDescriptor.version shouldBe Some("0.1.0-SNAPSHOT")
+      componentdescriptor.name shouldBe Some("textus-mcp-rag")
+      componentdescriptor.version shouldBe Some("0.1.0-SNAPSHOT")
       keys shouldBe Vector("view")
     }
 
     "load security authentication wiring from the formal YAML schema" in {
+      Given("a descriptor with authentication provider wiring")
       val path = Files.createTempFile("generic-subsystem-security-descriptor", ".yaml")
       Files.writeString(
         path,
@@ -79,10 +252,12 @@ final class GenericSubsystemDescriptorSpec extends AnyWordSpec with Matchers {
         StandardCharsets.UTF_8
       )
 
+      When("the descriptor is loaded")
       val descriptor = GenericSubsystemDescriptor.load(path).toOption.get
       val auth = descriptor.security.flatMap(_.authentication).get
       val provider = auth.providers.head
 
+      Then("the authentication policy and provider metadata are available")
       auth.convention shouldBe Some("enabled")
       auth.fallbackPrivilege shouldBe Some("disabled")
       provider.name shouldBe "user-account"
@@ -95,6 +270,7 @@ final class GenericSubsystemDescriptorSpec extends AnyWordSpec with Matchers {
     }
 
     "load operation authorization rules from the formal YAML schema" in {
+      Given("a descriptor with anonymous and production authorization rules")
       val path = Files.createTempFile("generic-subsystem-operation-authorization", ".yaml")
       Files.writeString(
         path,
@@ -115,16 +291,19 @@ final class GenericSubsystemDescriptorSpec extends AnyWordSpec with Matchers {
         StandardCharsets.UTF_8
       )
 
+      When("the descriptor is loaded")
       val descriptor = GenericSubsystemDescriptor.load(path).toOption.get
       val post = descriptor.operationAuthorizationRule("notice-board.notice.post-notice").get
       val admin = descriptor.operationAuthorizationRule("notice-board.notice.admin-only").get
 
+      Then("each operation exposes its resolved authorization modes")
       post.allowAnonymous shouldBe true
       post.anonymousOperationModes.map(_.name) shouldBe Vector("develop", "test")
       admin.operationModes.map(_.name) shouldBe Vector("production")
     }
 
     "load security authorization role definitions from the formal YAML schema" in {
+      Given("a descriptor with composable authorization roles")
       val path = Files.createTempFile("generic-subsystem-security-authorization", ".yaml")
       Files.writeString(
         path,
@@ -150,15 +329,18 @@ final class GenericSubsystemDescriptorSpec extends AnyWordSpec with Matchers {
         StandardCharsets.UTF_8
       )
 
+      When("the descriptor is loaded")
       val descriptor = GenericSubsystemDescriptor.load(path).toOption.get
       val roles = descriptor.security.flatMap(_.authorization).map(_.roles).get
 
+      Then("role capabilities and inheritance are retained")
       roles("blob_user").capabilities should contain allOf ("collection:blob:create", "collection:blob:read")
       roles("blob_operator").includes shouldBe Vector("blob_user")
       roles("blob_operator").capabilities should contain allOf ("association:blob_attachment:delete", "store:blobstore:status")
     }
 
     "load security authorization resource policies from the formal YAML schema" in {
+      Given("a descriptor with collection, association, and store policies")
       val path = Files.createTempFile("generic-subsystem-security-resource-policy", ".yaml")
       Files.writeString(
         path,
@@ -188,9 +370,11 @@ final class GenericSubsystemDescriptorSpec extends AnyWordSpec with Matchers {
         StandardCharsets.UTF_8
       )
 
+      When("the descriptor is loaded")
       val descriptor = GenericSubsystemDescriptor.load(path).toOption.get
       val resources = descriptor.security.flatMap(_.authorization).map(_.resources).get
 
+      Then("resource policies remain addressable by resource type and operation")
       resources.collection(Some("blob"), "create").get.capabilities shouldBe Vector("collection:blob:create")
       resources.collection(Some("blob"), "delete").get.permission shouldBe Some("execute")
       resources.association(Some("blob_attachment"), "create").get.capabilities shouldBe Vector("association:blob_attachment:create")
@@ -198,6 +382,7 @@ final class GenericSubsystemDescriptorSpec extends AnyWordSpec with Matchers {
     }
 
     "reject invalid security authorization resource policies" in {
+      Given("a descriptor with a scalar resource policy")
       val path = Files.createTempFile("generic-subsystem-security-resource-policy-invalid", ".yaml")
       Files.writeString(
         path,
@@ -215,10 +400,15 @@ final class GenericSubsystemDescriptorSpec extends AnyWordSpec with Matchers {
         StandardCharsets.UTF_8
       )
 
-      GenericSubsystemDescriptor.load(path) shouldBe a[Consequence.Failure[_]]
+      When("the descriptor is loaded")
+      val result = GenericSubsystemDescriptor.load(path)
+
+      Then("the malformed resource policy is rejected")
+      result shouldBe a[Consequence.Failure[_]]
     }
 
     "reject invalid security authorization resource permission values" in {
+      Given("a descriptor with an unknown permission value")
       val path = Files.createTempFile("generic-subsystem-security-resource-permission-invalid", ".yaml")
       Files.writeString(
         path,
@@ -238,10 +428,15 @@ final class GenericSubsystemDescriptorSpec extends AnyWordSpec with Matchers {
         StandardCharsets.UTF_8
       )
 
-      GenericSubsystemDescriptor.load(path) shouldBe a[Consequence.Failure[_]]
+      When("the descriptor is loaded")
+      val result = GenericSubsystemDescriptor.load(path)
+
+      Then("the unknown permission is rejected")
+      result shouldBe a[Consequence.Failure[_]]
     }
 
     "reject invalid security authorization role definitions" in {
+      Given("a descriptor with a scalar role definition")
       val path = Files.createTempFile("generic-subsystem-security-authorization-invalid", ".yaml")
       Files.writeString(
         path,
@@ -258,10 +453,15 @@ final class GenericSubsystemDescriptorSpec extends AnyWordSpec with Matchers {
         StandardCharsets.UTF_8
       )
 
-      GenericSubsystemDescriptor.load(path) shouldBe a[Consequence.Failure[_]]
+      When("the descriptor is loaded")
+      val result = GenericSubsystemDescriptor.load(path)
+
+      Then("the malformed role is rejected")
+      result shouldBe a[Consequence.Failure[_]]
     }
 
     "reject invalid user notification event forwarding rules" in {
+      Given("an event forwarding declaration without an event selector")
       val path = Files.createTempFile("generic-subsystem-user-notification-event-forwarding-invalid", ".yaml")
       Files.writeString(
         path,
@@ -283,10 +483,15 @@ final class GenericSubsystemDescriptorSpec extends AnyWordSpec with Matchers {
         StandardCharsets.UTF_8
       )
 
-      GenericSubsystemDescriptor.load(path) shouldBe a[Consequence.Failure[_]]
+      When("the descriptor is loaded")
+      val result = GenericSubsystemDescriptor.load(path)
+
+      Then("the incomplete forwarding rule is rejected")
+      result shouldBe a[Consequence.Failure[_]]
     }
 
     "let SAR security role definitions override inherited CAR role definitions by role name" in {
+      Given("CAR role defaults and a SAR role override with an equivalent normalized name")
       val car = GenericSubsystemDescriptor(
         path = java.nio.file.Path.of("<car>"),
         subsystemName = "blob-car",
@@ -336,9 +541,11 @@ final class GenericSubsystemDescriptorSpec extends AnyWordSpec with Matchers {
         ))
       )
 
+      When("the component defaults and subsystem descriptor are merged")
       val effective = GenericSubsystemDescriptor.mergeComponentDefaults(car, sar)
       val roles = effective.security.flatMap(_.authorization).map(_.roles).get
 
+      Then("the SAR role and resource policy replace the inherited definitions")
       roles.values.map(_.name).toSet shouldBe Set("blob-user")
       roles.values.flatMap(_.capabilities).toSet shouldBe Set("collection:blob:create")
       effective.security.flatMap(_.authorization).flatMap(_.resources.collection(Some("blob"), "create"))
@@ -346,6 +553,7 @@ final class GenericSubsystemDescriptorSpec extends AnyWordSpec with Matchers {
     }
 
     "keep legacy coordinate parsing for backward compatibility" in {
+      Given("a legacy component coordinate declaration")
       val path = Files.createTempFile("generic-subsystem-coordinate-descriptor", ".yaml")
       Files.writeString(
         path,
@@ -358,13 +566,16 @@ final class GenericSubsystemDescriptorSpec extends AnyWordSpec with Matchers {
         StandardCharsets.UTF_8
       )
 
+      When("the descriptor is loaded")
       val descriptor = GenericSubsystemDescriptor.load(path).toOption.get
 
+      Then("component name and version are derived from the coordinate")
       descriptor.componentBindings.head.componentName shouldBe "notice-board"
       descriptor.componentBindings.head.componentVersion shouldBe Some("0.1.0-SNAPSHOT")
     }
 
     "create a synthetic subsystem descriptor from component CAR assembly metadata" in {
+      Given("a component CAR containing component and assembly descriptors")
       val car = Files.createTempFile("component-with-assembly", ".car")
       val descriptor =
         """{"component":{"name":"cwitter"},"version":"0.0.1-SNAPSHOT"}"""
@@ -390,8 +601,10 @@ final class GenericSubsystemDescriptorSpec extends AnyWordSpec with Matchers {
         )
       )
 
+      When("the component archive is loaded as a subsystem")
       val loaded = GenericSubsystemDescriptor.loadComponentArchive(car).toOption.get
 
+      Then("the synthetic subsystem includes assembly components and security defaults")
       loaded.subsystemName shouldBe "cwitter"
       loaded.componentBindings.map(_.componentName) shouldBe Vector("cwitter", "textus-user-account")
       loaded.security.flatMap(_.authentication).flatMap(_.convention) shouldBe Some("enabled")
@@ -399,6 +612,7 @@ final class GenericSubsystemDescriptorSpec extends AnyWordSpec with Matchers {
     }
 
     "reject a component archive with an invalid assembly descriptor" in {
+      Given("a component CAR whose assembly descriptor has no subsystem name")
       val car = Files.createTempFile("invalid-component-assembly", ".car")
       val descriptor =
         """{"component":{"name":"cwitter"},"version":"0.0.1-SNAPSHOT"}"""
@@ -415,13 +629,18 @@ final class GenericSubsystemDescriptorSpec extends AnyWordSpec with Matchers {
         )
       )
 
-      GenericSubsystemDescriptor.loadComponentArchive(car) match {
+      When("the component archive is loaded")
+      val result = GenericSubsystemDescriptor.loadComponentArchive(car)
+
+      Then("the invalid embedded assembly is rejected")
+      result match {
         case Consequence.Failure(_) => succeed
         case Consequence.Success(value) => fail(s"expected invalid assembly descriptor failure but got ${value}")
       }
     }
 
     "let a SAR descriptor inherit authentication provider defaults from a component CAR assembly descriptor" in {
+      Given("component CAR authentication defaults and a SAR without security overrides")
       val car = Files.createTempFile("cwitter-component-defaults", ".car")
       val descriptor =
         """{"component":{"name":"cwitter"},"version":"0.0.1-SNAPSHOT"}"""
@@ -452,7 +671,7 @@ final class GenericSubsystemDescriptorSpec extends AnyWordSpec with Matchers {
           "assembly-descriptor.yaml" -> assembly
         )
       )
-      val carDefaults = GenericSubsystemDescriptor.loadComponentArchive(car).toOption.get
+      val cardefaults = GenericSubsystemDescriptor.loadComponentArchive(car).toOption.get
       val sar = Files.createTempFile("cwitter-sar-no-security", ".yaml")
       Files.writeString(
         sar,
@@ -464,17 +683,20 @@ final class GenericSubsystemDescriptorSpec extends AnyWordSpec with Matchers {
           |""".stripMargin,
         StandardCharsets.UTF_8
       )
-      val sarDescriptor = GenericSubsystemDescriptor.load(sar).toOption.get
+      val sardescriptor = GenericSubsystemDescriptor.load(sar).toOption.get
 
-      val effective = GenericSubsystemDescriptor.mergeComponentDefaults(carDefaults, sarDescriptor)
+      When("the CAR defaults and SAR descriptor are merged")
+      val effective = GenericSubsystemDescriptor.mergeComponentDefaults(cardefaults, sardescriptor)
       val provider = effective.security.flatMap(_.authentication).toVector.flatMap(_.providers).headOption.get
 
+      Then("the SAR inherits the provider and component dependency")
       provider.name shouldBe "user-account"
       provider.component shouldBe "textus-user-account"
       effective.componentBindings.map(_.componentName) shouldBe Vector("cwitter", "textus-user-account")
     }
 
     "let a SAR assembly descriptor override a provider inherited from component CAR assembly defaults" in {
+      Given("an inherited authentication provider and a SAR assembly override")
       val base = GenericSubsystemDescriptor(
         path = java.nio.file.Path.of("cwitter.car"),
         subsystemName = "cwitter",
@@ -508,15 +730,18 @@ final class GenericSubsystemDescriptorSpec extends AnyWordSpec with Matchers {
         path = Some(java.nio.file.Path.of("cwitter.sar"))
       )
 
+      When("the assembly override is applied")
       val effective = GenericSubsystemDescriptor.applyAssemblyOverride(base, overridesource)
       val provider = effective.security.flatMap(_.authentication).toVector.flatMap(_.providers).headOption.get
 
+      Then("the provider implementation and priority come from the SAR")
       provider.name shouldBe "user-account"
       provider.component shouldBe "custom-user-account"
       provider.priority shouldBe Some(200)
     }
 
     "merge partial SAR assembly wiring overrides with inherited component CAR wiring" in {
+      Given("two inherited wiring entries and one matching SAR override")
       val base = GenericSubsystemDescriptor(
         path = java.nio.file.Path.of("cwitter.car"),
         subsystemName = "cwitter",
@@ -542,14 +767,17 @@ final class GenericSubsystemDescriptorSpec extends AnyWordSpec with Matchers {
         path = Some(java.nio.file.Path.of("cwitter.sar"))
       )
 
+      When("the partial wiring override is applied")
       val effective = GenericSubsystemDescriptor.applyAssemblyOverride(base, overridesource)
       val bindings = effective.resolvedWiring
 
+      Then("the matching route is replaced while unrelated wiring is inherited")
       bindings.map(_.toComponent).toSet shouldBe Set("enterprise-user-account", "textus-message-delivery-stub")
       bindings.count(_.fromService == "account") shouldBe 1
     }
 
     "load test descriptor config and assembly SPI bindings" in {
+      Given("a test descriptor with runtime config and an SPI binding")
       val path = Files.createTempFile("cncf-test-descriptor", ".yaml")
       Files.writeString(
         path,
@@ -570,6 +798,7 @@ final class GenericSubsystemDescriptorSpec extends AnyWordSpec with Matchers {
         StandardCharsets.UTF_8
       )
 
+      When("the test descriptor is loaded and applied")
       val descriptor = RuntimeTestDescriptor.load(path).toOption.get
       val subsystem = GenericSubsystemDescriptor(
         path = path,
@@ -581,6 +810,7 @@ final class GenericSubsystemDescriptorSpec extends AnyWordSpec with Matchers {
         .getOrElse(subsystem)
       val bindings = GenericSubsystemDescriptor.resolveAssemblySpiBindings(effective).toOption.get
 
+      Then("runtime config and typed SPI selectors remain available")
       descriptor.config shouldBe Map("textus.web.demo-assist.enabled" -> "true")
       bindings.size shouldBe 1
       bindings.head.socket.component shouldBe Some("target-component")
@@ -590,6 +820,7 @@ final class GenericSubsystemDescriptorSpec extends AnyWordSpec with Matchers {
     }
 
     "merge assembly SPI bindings by socket selector" in {
+      Given("inherited SPI bindings and a matching test override")
       val base = GenericSubsystemDescriptor(
         path = java.nio.file.Path.of("component.car"),
         subsystemName = "target",
@@ -619,15 +850,18 @@ final class GenericSubsystemDescriptorSpec extends AnyWordSpec with Matchers {
         path = Some(java.nio.file.Path.of("test.yaml"))
       )
 
+      When("the assembly override is applied")
       val effective = GenericSubsystemDescriptor.applyAssemblyOverride(base, overridesource)
       val bindings = GenericSubsystemDescriptor.resolveAssemblySpiBindings(effective).toOption.get
 
+      Then("the matching socket provider is replaced and other sockets remain")
       bindings.map(_.socket.contract).toSet shouldBe Set("ai-runner", "geo-resolver")
       bindings.find(_.socket.contract == "ai-runner").flatMap(_.provider.component) shouldBe Some("test-provider")
       bindings.find(_.socket.contract == "geo-resolver").flatMap(_.provider.component) shouldBe Some("geo-provider")
     }
 
     "reject invalid assembly SPI bindings instead of dropping them" in {
+      Given("an assembly SPI binding without a socket contract")
       val descriptor = GenericSubsystemDescriptor(
         path = java.nio.file.Path.of("component.car"),
         subsystemName = "target",
@@ -652,12 +886,15 @@ final class GenericSubsystemDescriptorSpec extends AnyWordSpec with Matchers {
         ))
       )
 
+      When("SPI bindings are resolved")
       val result = GenericSubsystemDescriptor.resolveAssemblySpiBindings(descriptor)
 
+      Then("the malformed binding fails deterministically")
       result shouldBe a[Consequence.Failure[_]]
     }
 
     "reject provider service matching until it is supported" in {
+      Given("an SPI provider selector that requests service-level matching")
       val descriptor = GenericSubsystemDescriptor(
         path = java.nio.file.Path.of("component.car"),
         subsystemName = "target",
@@ -684,18 +921,23 @@ final class GenericSubsystemDescriptorSpec extends AnyWordSpec with Matchers {
         ))
       )
 
+      When("SPI bindings are resolved")
       val result = GenericSubsystemDescriptor.resolveAssemblySpiBindings(descriptor)
 
+      Then("the unsupported selector fails explicitly")
       result shouldBe a[Consequence.Failure[_]]
     }
 
     "load the textus-identity journal sample with security authentication wiring" in {
+      Given("the maintained textus-identity descriptor sample")
       val path = java.nio.file.Path.of("/Users/asami/src/dev2025/cloud-native-component-framework/docs/journal/2026/04/2026-04-09-subsystem-descriptor-textus-identity.yaml")
 
+      When("the sample descriptor is loaded")
       val descriptor = GenericSubsystemDescriptor.load(path).toOption.get
       val auth = descriptor.security.flatMap(_.authentication).get
       val provider = auth.providers.head
 
+      Then("its authentication wiring remains executable documentation")
       descriptor.subsystemName shouldBe "textus-identity"
       descriptor.runtimeComponentNames shouldBe Vector("textus-user-account")
       auth.convention shouldBe Some("enabled")

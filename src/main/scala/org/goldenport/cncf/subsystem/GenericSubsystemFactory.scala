@@ -17,7 +17,7 @@ import org.goldenport.cncf.spi.SpiResolver
  *  version Apr. 23, 2026
  *  version Apr. 25, 2026
  *  version May. 18, 2026
- * @version Jul.  8, 2026
+ * @version Jul. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 object GenericSubsystemFactory {
@@ -366,9 +366,10 @@ object GenericSubsystemFactory {
       ComponentOrigin.Repository("subsystem-descriptor"),
       descriptor.toComponentDescriptors
     )
-    val components0 =
+    val discoveredcomponents =
       _repository_specs_for_descriptor(configuration, descriptor).flatMap(_.build(params).discover())
         .filter(component => descriptor.componentBindings.exists(binding => _matches_descriptor_component(component, binding.componentName)))
+    val components0 = materializeComponentInstances(discoveredcomponents, descriptor, params)
     val builtins = _builtin_components(subsystem, descriptor)
     given ExecutionContext = ExecutionContext.create()
     val spibindings = GenericSubsystemDescriptor.resolveAssemblySpiBindings(descriptor) match {
@@ -432,15 +433,20 @@ object GenericSubsystemFactory {
   ): Consequence[GenericSubsystemDescriptor] = {
     val assemblydescriptor = _assembly_descriptor_path(configuration)
       .flatMap(GenericSubsystemDescriptor.loadAssemblyDescriptor)
-      .map(record => GenericSubsystemDescriptor.applyAssemblyOverride(descriptor, record))
-      .getOrElse(descriptor)
-    RuntimeTestDescriptor.load(configuration).map {
-      case Some(testdescriptor) =>
-        testdescriptor.assembly
-          .map(source => GenericSubsystemDescriptor.applyAssemblyOverride(assemblydescriptor, source))
-          .getOrElse(assemblydescriptor)
-      case None =>
-        assemblydescriptor
+    val assemblydescriptorc = assemblydescriptor match {
+      case Some(record) => GenericSubsystemDescriptor.applyAssemblyOverrideC(descriptor, record)
+      case None => Consequence.success(descriptor)
+    }
+    assemblydescriptorc.flatMap { effectiveassemblydescriptor =>
+      RuntimeTestDescriptor.load(configuration).flatMap {
+        case Some(testdescriptor) =>
+          testdescriptor.assembly match {
+            case Some(source) => GenericSubsystemDescriptor.applyAssemblyOverrideC(effectiveassemblydescriptor, source)
+            case None => Consequence.success(effectiveassemblydescriptor)
+          }
+        case None =>
+          Consequence.success(effectiveassemblydescriptor)
+      }
     }
   }
 
@@ -486,6 +492,50 @@ object GenericSubsystemFactory {
       )
   }
 
+  private[cncf] def materializeComponentInstances(
+    discovered: Seq[Component],
+    descriptor: GenericSubsystemDescriptor,
+    params: ComponentCreate
+  ): Vector[Component] = {
+    val counts = descriptor.componentBindings
+      .groupBy(binding => _runtime_component_name(binding.componentName))
+      .view
+      .mapValues(_.size)
+      .toMap
+    descriptor.componentBindings.flatMap { binding =>
+      val prototypes = discovered.filter(_matches_descriptor_component(_, binding.componentName))
+      prototypes.map { prototype =>
+        val requiresmaterialization =
+          counts.getOrElse(_runtime_component_name(binding.componentName), 0) > 1 ||
+            binding.hasInstanceDeclaration
+        if (requiresmaterialization) {
+          _create_component_participant(prototype, binding, params)
+        } else {
+          prototype
+        }
+      }
+    }
+  }
+
+  private def _create_component_participant(
+    prototype: Component,
+    binding: GenericSubsystemComponentBinding,
+    params: ComponentCreate
+  ): Component =
+    prototype.factoryOption match {
+      case Some(factory) =>
+        val instanceparams = params.withInstanceMetadata(binding.instanceMetadata)
+        val component =
+          if (prototype.isComponentletParticipant) factory.createComponentlet(instanceparams)
+          else factory.createPrimary(instanceparams)
+        prototype.artifactMetadata.foreach(component.withArtifactMetadata)
+        component.withCollaboratorClasspath(prototype.collaboratorClasspath)
+      case None =>
+        throw new IllegalStateException(
+          s"component factory is required for named instance: ${binding.componentName}/${binding.instanceName}"
+        )
+    }
+
   private def _runtime_component_name(
     descriptorComponentName: String
   ): String =
@@ -516,10 +566,13 @@ object GenericSubsystemFactory {
   ): Vector[Component] = {
     val seen = scala.collection.mutable.LinkedHashMap.empty[String, Component]
     components.foreach { component =>
-      seen.get(component.name) match {
+      val key = component.instanceMetadata
+        .map(metadata => s"instance:${metadata.componentName}/${metadata.instance}")
+        .getOrElse(s"component:${component.name}")
+      seen.get(key) match {
         case Some(existing) =>
           val selection = AssemblyReport.selectPreferred(existing, component)
-          seen.update(component.name, selection.selected)
+          seen.update(key, selection.selected)
           if (!AssemblyReport.isSameAssemblySource(existing, component)) {
             GlobalRuntimeContext.current.foreach(
               _.assemblyReport.addWarning(
@@ -533,7 +586,7 @@ object GenericSubsystemFactory {
             )
           }
         case None =>
-          seen += component.name -> component
+          seen += key -> component
       }
     }
     seen.values.toVector

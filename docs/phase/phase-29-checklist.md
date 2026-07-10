@@ -48,7 +48,7 @@ multi-instance SPI consumption.
 
 ## TC-02: Named Component Instance Descriptor and Creation Model
 
-Status: NEXT
+Status: DONE
 
 ### Objective
 
@@ -57,18 +57,36 @@ stable identity and isolated settings.
 
 ### Detailed Tasks
 
-- [ ] Extend assembly component declarations with `instance`.
-- [ ] Add instance-local `config`, `rules`, `purposes`, `tags`, priority, and
+- [x] Extend assembly component declarations with `instance`.
+- [x] Add instance-local `config`, `rules`, `purposes`, `tags`, priority, and
       default metadata.
-- [ ] Preserve duplicate component types through assembly loading.
-- [ ] Create each instance with a stable `ComponentInstanceId`.
-- [ ] Isolate effective configuration and rules by instance id.
-- [ ] Reject duplicate instance ids and malformed instance declarations.
-- [ ] Add descriptor parsing and component-space executable specs.
+- [x] Preserve duplicate component types through assembly loading.
+- [x] Create each instance with a stable `ComponentInstanceId`.
+- [x] Isolate effective configuration and rule metadata by instance id.
+- [x] Reject duplicate instance ids and malformed instance declarations.
+- [x] Add descriptor parsing and component-space executable specs.
+
+### Implementation Evidence
+
+- `GenericSubsystemComponentBinding` retains named-instance metadata and merges
+  defaults by component type plus instance id.
+- `ComponentCreate` carries `ComponentInstanceMetadata` into generated factory
+  construction, and the resulting bundle participants expose stable participant
+  instance ids and isolated rule/selection metadata.
+- Instance-local config is installed as component-scoped resolved parameters,
+  overlaying packaged component config with global runtime parameters retained
+  as the parent.
+- `GenericSubsystemFactory` materializes repeated descriptor bindings from one
+  discovered component bundle and preserves its primary and componentlet
+  participants, while undeclared legacy components retain the existing
+  name-based duplicate collapse behavior.
+- Descriptor, generated factory, and subsystem factory executable specs cover
+  parsing, rejection, construction, property isolation, and component-space
+  lookup.
 
 ## TC-03: Exact Instance Binding and Resolver Semantics
 
-Status: TODO
+Status: NEXT
 
 ### Objective
 

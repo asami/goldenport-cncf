@@ -19,7 +19,7 @@ import scala.reflect.ClassTag
 import org.goldenport.cncf.context.{CorrelationId, EntitySpaceContext, ExecutionContext, ScopeContext, ScopeKind}
 import org.goldenport.cncf.action.{Action, ActionCall, ActionEngine, AggregateBehavior, ProcedureActionCall, QueryAction}
 import org.goldenport.cncf.subsystem.Subsystem
-import org.goldenport.configuration.ResolvedConfiguration
+import org.goldenport.configuration.{Configuration, ConfigurationValue, ResolvedConfiguration}
 import org.goldenport.cncf.http.{HttpDriver, WebPageContextProvider}
 import org.goldenport.cncf.job.{InMemoryJobEngine, JobEngine}
 import org.goldenport.cncf.naming.NamingConventions
@@ -56,7 +56,7 @@ import org.goldenport.schema.{DataType, XString}
  *  version Apr. 30, 2026
  *  version May. 20, 2026
  *  version Jun. 18, 2026
- * @version Jul.  9, 2026
+ * @version Jul. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class Component() extends Component.Core.Holder {
@@ -81,6 +81,7 @@ abstract class Component() extends Component.Core.Holder {
   private var _bindings: Map[String, Component.Binding[?, ?]] = Map.empty
   private var _event_effect_record: Record = Record.empty
   private var _component_descriptors: Vector[ComponentDescriptor] = Vector.empty
+  private var _instance_metadata: Option[ComponentInstanceMetadata] = None
   private var _collections_bootstrapped: Boolean = false
   val entitySpace: EntitySpace = new EntitySpace()
   val aggregateSpace: AggregateSpace = new AggregateSpace()
@@ -112,6 +113,9 @@ abstract class Component() extends Component.Core.Holder {
 
   def componentDescriptors: Vector[ComponentDescriptor] =
     _component_descriptors
+
+  def instanceMetadata: Option[ComponentInstanceMetadata] =
+    _instance_metadata
 
   def collectionsBootstrapped: Boolean =
     _collections_bootstrapped
@@ -154,6 +158,7 @@ abstract class Component() extends Component.Core.Holder {
     _participant_role = params.participantRole
     _subsystem = Some(params.subsystem)
     _component_descriptors = params.componentDescriptors
+    _instance_metadata = params.instanceMetadata
     _inherit_http_driver(params)
     _event_store = Some(params.subsystem.eventStore)
     jobEngine match {
@@ -819,14 +824,33 @@ object Component {
     ): Component = {
       val comp = create_Component(params)
       val core = create_Core(params, comp)
-      val sharedCore = core.copy(jobEngine = params.subsystem.jobEngine)
+      val instanceid = params.instanceMetadata.map { metadata =>
+        role match {
+          case ParticipantRole.Primary => metadata.instanceId
+          case ParticipantRole.Componentlet => ComponentInstanceId(core.name, metadata.instance)
+        }
+      }.getOrElse(core.instanceId)
+      val sharedcore = core.copy(
+        instanceId = instanceid,
+        jobEngine = params.subsystem.jobEngine
+      )
+      params.instanceMetadata.filter(_.config.nonEmpty).foreach { metadata =>
+        val values = metadata.config.map { case (key, value) =>
+          key -> ConfigurationValue.StringValue(value)
+        }
+        val packagedvalues = comp.applicationConfig.config.map(_.values).getOrElse(Map.empty)
+        comp.withApplicationConfig(
+          comp.applicationConfig.copy(config = Some(Configuration(packagedvalues ++ values)))
+        )
+      }
       comp.initialize(
         ComponentInit(
           subsystem = params.subsystem,
-          core = sharedCore,
+          core = sharedcore,
           origin = params.origin,
           componentDescriptors = params.componentDescriptors,
-          participantRole = role
+          participantRole = role,
+          instanceMetadata = params.instanceMetadata
         )
       )
     }
@@ -1912,11 +1936,44 @@ final case class ComponentId(
 final case class ComponentInstanceId(
   name: String,
   instance: String
-) extends UniversalId("cncf", name, "component_instance", instance)
+) extends UniversalId(
+  "cncf",
+  ComponentInstanceId.normalizeLabel(name),
+  "component_instance",
+  ComponentInstanceId.normalizeLabel(instance),
+  Some(org.goldenport.id.UniversalId.StableTimestamp),
+  Some(org.goldenport.id.UniversalId.StableEntropy)
+) {
+  def canonicalKey: String = value
+}
 
 object ComponentInstanceId {
+  private[component] def normalizeLabel(value: String): String = {
+    val normalized = value.map { ch =>
+      if (ch.isLetterOrDigit || ch == '_') ch else '_'
+    }
+    normalized.headOption match {
+      case Some(ch) if ch.isLetter => normalized
+      case _ => s"id_${normalized}"
+    }
+  }
+
   def default(componentId: ComponentId): ComponentInstanceId =
     ComponentInstanceId(componentId.name, "default")
+}
+
+final case class ComponentInstanceMetadata(
+  componentName: String,
+  instance: String = "default",
+  config: Map[String, String] = Map.empty,
+  rules: Record = Record.empty,
+  purposes: Vector[String] = Vector.empty,
+  tags: Vector[String] = Vector.empty,
+  priority: Int = 0,
+  isDefault: Boolean = false
+) {
+  def instanceId: ComponentInstanceId =
+    ComponentInstanceId(componentName, instance)
 }
 
 
@@ -1932,15 +1989,19 @@ object ComponentLocator {
 final case class ComponentCreate(
   subsystem: Subsystem,
   origin: ComponentOrigin,
-  componentDescriptors: Vector[ComponentDescriptor] = Vector.empty
+  componentDescriptors: Vector[ComponentDescriptor] = Vector.empty,
+  instanceMetadata: Option[ComponentInstanceMetadata] = None
 ) {
   def withOrigin(p: ComponentOrigin) = copy(origin = p)
 
   def withComponentDescriptors(p: Vector[ComponentDescriptor]) =
     copy(componentDescriptors = p)
 
+  def withInstanceMetadata(p: ComponentInstanceMetadata) =
+    copy(instanceMetadata = Some(p))
+
   def toInit(core: Component.Core): ComponentInit =
-    ComponentInit(subsystem, core, origin, componentDescriptors)
+    ComponentInit(subsystem, core, origin, componentDescriptors, instanceMetadata = instanceMetadata)
 }
 
 final case class ComponentInit( // TODO use config
@@ -1948,7 +2009,8 @@ final case class ComponentInit( // TODO use config
   core: Component.Core,
   origin: ComponentOrigin,
   componentDescriptors: Vector[ComponentDescriptor] = Vector.empty,
-  participantRole: Component.ParticipantRole = Component.ParticipantRole.Primary
+  participantRole: Component.ParticipantRole = Component.ParticipantRole.Primary,
+  instanceMetadata: Option[ComponentInstanceMetadata] = None
 )
 
 sealed trait ComponentOrigin {

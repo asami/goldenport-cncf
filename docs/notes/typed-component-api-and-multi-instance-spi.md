@@ -183,6 +183,30 @@ ComponentInstanceId("textus-scraper", "dynamic-playwright")
 `instance` identifies a runtime component. It must not be encoded in
 `SpiSelection.provider`, `SpiSelection.mode`, or `SpiSelection.engine`.
 
+### 4.1 Implemented TC-02 Baseline
+
+The Phase 29 TC-02 implementation establishes the descriptor and creation
+baseline:
+
+- repeated `components` entries with the same component type are retained when
+  their `instance` values differ;
+- `config`, `rules`, `purposes`, `tags`, `priority`, and `default` are retained
+  as instance metadata;
+- generated component factories receive that metadata through
+  `ComponentCreate` and create a stable `ComponentInstanceId`;
+- instance config overlays packaged component config and becomes
+  component-scoped resolved parameters whose parent is the global runtime
+  parameter set;
+- duplicate component/instance pairs, multiple declared defaults for one
+  component type, and malformed instance names are rejected;
+- components without an instance declaration continue to use the existing
+  default-instance and name-based duplicate behavior.
+
+Exact socket/provider instance selection remains TC-03 scope.
+Instance `rules` are isolated metadata in TC-02. Their selector and policy
+evaluation semantics are introduced with the corresponding resolver slices;
+TC-02 does not treat an arbitrary rule record as executable behavior.
+
 ## 5. Consumption Modes
 
 ### 5.1 Single Socket Injection
@@ -600,7 +624,8 @@ the externally observable operation contract and execution semantics.
 
 ## 10. Configuration and Rule Scope
 
-Each component instance receives an effective configuration and rule set.
+Each component instance receives effective configuration and isolated rule
+metadata. A resolver or policy applies only rule vocabularies it understands.
 The intended precedence is:
 
 1. component packaged defaults;

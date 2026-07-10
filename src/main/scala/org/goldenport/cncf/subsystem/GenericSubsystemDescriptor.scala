@@ -7,7 +7,7 @@ import scala.util.Using
 import org.goldenport.Consequence
 import org.goldenport.record.Record
 import org.goldenport.record.RecordDecoder
-import org.goldenport.cncf.component.ComponentDescriptor
+import org.goldenport.cncf.component.{ComponentDescriptor, ComponentInstanceId, ComponentInstanceMetadata}
 import org.goldenport.cncf.component.ComponentDescriptorLoader
 import org.goldenport.cncf.component.DescriptorRecordLoader
 import org.goldenport.cncf.security.{AuthorizationResourcePolicies, AuthorizationResourcePolicy, OperationAuthorizationRule, SecurityRoleDefinition, SecuritySubject}
@@ -17,7 +17,7 @@ import org.goldenport.cncf.spi.{SpiProviderSelector, SpiRuntimeBinding, SpiSelec
  * @since   Apr.  7, 2026
  *  version Apr. 28, 2026
  *  version May.  7, 2026
- * @version Jul.  8, 2026
+ * @version Jul. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class GenericSubsystemAuthenticationProviderBinding(
@@ -113,13 +113,38 @@ final case class GenericSubsystemComponentBinding(
   coordinate: Option[String] = None,
   extensionBindings: Record = Record.empty,
   api: Vector[GenericSubsystemPortBinding] = Vector.empty,
-  spi: Vector[GenericSubsystemPortBinding] = Vector.empty
+  spi: Vector[GenericSubsystemPortBinding] = Vector.empty,
+  instance: Option[String] = None,
+  config: Map[String, String] = Map.empty,
+  rules: Record = Record.empty,
+  purposes: Vector[String] = Vector.empty,
+  tags: Vector[String] = Vector.empty,
+  priority: Option[Int] = None,
+  isDefault: Option[Boolean] = None
 ) {
   def componentVersion: Option[String] =
     version.orElse(coordinate.flatMap(GenericSubsystemDescriptor.coordinateVersion))
 
   def runtimeComponentName: String =
     GenericSubsystemDescriptor.runtimeComponentName(componentName)
+
+  def instanceName: String = instance.getOrElse("default")
+
+  def instanceMetadata: ComponentInstanceMetadata =
+    ComponentInstanceMetadata(
+      componentName = componentName,
+      instance = instanceName,
+      config = config,
+      rules = rules,
+      purposes = purposes,
+      tags = tags,
+      priority = priority.getOrElse(0),
+      isDefault = isDefault.getOrElse(false)
+    )
+
+  def hasInstanceDeclaration: Boolean =
+    instance.nonEmpty || config.nonEmpty || rules.fields.nonEmpty ||
+      purposes.nonEmpty || tags.nonEmpty || priority.nonEmpty || isDefault.nonEmpty
 
   def toComponentDescriptor: ComponentDescriptor =
     ComponentDescriptor(
@@ -286,32 +311,47 @@ object GenericSubsystemDescriptor {
   def applyAssemblyOverride(
     descriptor: GenericSubsystemDescriptor,
     source: GenericSubsystemAssemblyDescriptorSource
-  ): GenericSubsystemDescriptor = {
+  ): GenericSubsystemDescriptor =
+    applyAssemblyOverrideC(descriptor, source).TAKE
+
+  def applyAssemblyOverrideC(
+    descriptor: GenericSubsystemDescriptor,
+    source: GenericSubsystemAssemblyDescriptorSource
+  ): Consequence[GenericSubsystemDescriptor] = {
     val rec = source.record
-    val bindings = _bindings_from_record(source.path.getOrElse(descriptor.path), rec)
-    val overrideDescriptor = descriptor.copy(
-      subsystemName = _string(rec, "subsystem", "subsystemName", "name").getOrElse(descriptor.subsystemName),
-      version = _string(rec, "version").orElse(descriptor.version),
-      componentBindings = if (bindings.nonEmpty) bindings else descriptor.componentBindings,
-      extensions = descriptor.extensions ++ _string_map_value(rec, List("extension", "extensions")),
-      config = descriptor.config ++ _string_map_value(rec, List("config")),
-      wiring = _merge_record(descriptor.wiring, _wiring_value(rec)),
-      runtime = _merge_runtime(
-        descriptor.runtime,
-        _record_value(rec, List("runtime")).flatMap(r => summon[RecordDecoder[GenericSubsystemRuntimeBinding]].fromRecord(r).toOption)
-      ),
-      security = _merge_security(
-        descriptor.security,
-        _record_value(rec, List("security")).flatMap(r => summon[RecordDecoder[GenericSubsystemSecurityBinding]].fromRecord(r).toOption)
-      ),
-      builtin = _record_value(rec, List("builtin", "builtins"))
-        .flatMap(r => summon[RecordDecoder[GenericSubsystemBuiltinBinding]].fromRecord(r).toOption)
-        .orElse(descriptor.builtin),
-      operationAuthorization = descriptor.operationAuthorization ++ _operation_authorization_value(rec),
-      assemblyDescriptor = Some(_merge_assembly_sources(descriptor.assemblyDescriptor, source))
-    )
-    overrideDescriptor
+    _override_bindings_from_record_c(source.path.getOrElse(descriptor.path), rec).map { bindings =>
+      descriptor.copy(
+        subsystemName = _string(rec, "subsystem", "subsystemName", "name").getOrElse(descriptor.subsystemName),
+        version = _string(rec, "version").orElse(descriptor.version),
+        componentBindings = if (bindings.nonEmpty) bindings else descriptor.componentBindings,
+        extensions = descriptor.extensions ++ _string_map_value(rec, List("extension", "extensions")),
+        config = descriptor.config ++ _string_map_value(rec, List("config")),
+        wiring = _merge_record(descriptor.wiring, _wiring_value(rec)),
+        runtime = _merge_runtime(
+          descriptor.runtime,
+          _record_value(rec, List("runtime")).flatMap(r => summon[RecordDecoder[GenericSubsystemRuntimeBinding]].fromRecord(r).toOption)
+        ),
+        security = _merge_security(
+          descriptor.security,
+          _record_value(rec, List("security")).flatMap(r => summon[RecordDecoder[GenericSubsystemSecurityBinding]].fromRecord(r).toOption)
+        ),
+        builtin = _record_value(rec, List("builtin", "builtins"))
+          .flatMap(r => summon[RecordDecoder[GenericSubsystemBuiltinBinding]].fromRecord(r).toOption)
+          .orElse(descriptor.builtin),
+        operationAuthorization = descriptor.operationAuthorization ++ _operation_authorization_value(rec),
+        assemblyDescriptor = Some(_merge_assembly_sources(descriptor.assemblyDescriptor, source))
+      )
+    }
   }
+
+  private def _override_bindings_from_record_c(
+    path: Path,
+    rec: Record
+  ): Consequence[Vector[GenericSubsystemComponentBinding]] =
+    if (rec.getAny("components").nonEmpty || rec.getAny("component").nonEmpty)
+      _bindings_from_record_c(path, rec)
+    else
+      Consequence.success(Vector.empty)
 
   private def _merge_assembly_sources(
     defaults: Option[GenericSubsystemAssemblyDescriptorSource],
@@ -431,11 +471,32 @@ object GenericSubsystemDescriptor {
     if (overrides.isEmpty) {
       defaults
     } else {
-      val overrideByName = overrides.map(x => _comparison_key(x.componentName) -> x).toMap
-      val defaultKeys = defaults.map(x => _comparison_key(x.componentName)).toSet
-      defaults.map(x => overrideByName.getOrElse(_comparison_key(x.componentName), x)) ++
-        overrides.filterNot(x => defaultKeys.contains(_comparison_key(x.componentName)))
+      def _key_(binding: GenericSubsystemComponentBinding): String =
+        ComponentInstanceId(runtimeComponentName(binding.componentName), binding.instanceName).canonicalKey
+      val overridebyid = overrides.map(x => _key_(x) -> x).toMap
+      val defaultids = defaults.map(_key_).toSet
+      defaults.map(x => overridebyid.get(_key_(x)).map(_merge_component_binding(x, _)).getOrElse(x)) ++
+        overrides.filterNot(x => defaultids.contains(_key_(x)))
     }
+
+  private def _merge_component_binding(
+    defaults: GenericSubsystemComponentBinding,
+    overrides: GenericSubsystemComponentBinding
+  ): GenericSubsystemComponentBinding =
+    overrides.copy(
+      version = overrides.version.orElse(defaults.version),
+      coordinate = overrides.coordinate.orElse(defaults.coordinate),
+      extensionBindings = _merge_record(defaults.extensionBindings, overrides.extensionBindings),
+      api = if (overrides.api.nonEmpty) overrides.api else defaults.api,
+      spi = if (overrides.spi.nonEmpty) overrides.spi else defaults.spi,
+      instance = overrides.instance.orElse(defaults.instance),
+      config = defaults.config ++ overrides.config,
+      rules = _merge_record(defaults.rules, overrides.rules),
+      purposes = if (overrides.purposes.nonEmpty) overrides.purposes else defaults.purposes,
+      tags = if (overrides.tags.nonEmpty) overrides.tags else defaults.tags,
+      priority = overrides.priority.orElse(defaults.priority),
+      isDefault = overrides.isDefault.orElse(defaults.isDefault)
+    )
 
   private def _merge_security(
     defaults: Option[GenericSubsystemSecurityBinding],
@@ -824,42 +885,114 @@ object GenericSubsystemDescriptor {
     }
   }
 
-  private def _bindings_from_record(path: Path, rec: Record): Vector[GenericSubsystemComponentBinding] =
+  private def _bindings_from_record_c(
+    path: Path,
+    rec: Record
+  ): Consequence[Vector[GenericSubsystemComponentBinding]] =
     rec.getAny("components") match {
       case Some(xs: Seq[?]) =>
-        xs.toVector.flatMap(x => _any_to_record(x).flatMap(_binding_from_record(path, _, None)))
+        _component_bindings_from_values(path, xs.toVector)
+      case Some(xs: java.util.List[?]) =>
+        _component_bindings_from_values(path, xs.asScala.toVector)
+      case Some(_) =>
+        Consequence.resourceInvalid("components must be a list of component declarations")
       case _ =>
         rec.getRecord("component") match {
           case Some(r) if _string(rec, "component").isEmpty =>
-            r.asMap.toVector.flatMap { case (k, v) =>
-              _any_to_record(v).flatMap(_binding_from_record(path, _, Some(k)))
-            }
+            _sequence(r.asMap.toVector.map { case (k, v) =>
+              _any_to_record(v) match {
+                case Some(bindingrecord) => _binding_from_record_c(path, bindingrecord, Some(k))
+                case None => Consequence.resourceInvalid(s"component.${k} must be a component declaration")
+              }
+            }).flatMap(_validate_component_bindings)
           case _ =>
-            _binding_from_record(path, rec, None).toVector
+            _binding_from_record_c(path, rec, None).map(Vector(_)).flatMap(_validate_component_bindings)
         }
     }
 
-  private def _binding_from_record(path: Path, rec: Record, defaultName: Option[String]): Option[GenericSubsystemComponentBinding] = {
-    val componentName = _string(rec, "component", "componentName", "name").orElse(defaultName)
-    componentName.map { name =>
-      val version = _string(rec, "version")
-      val coordinate = _string(rec, "coordinate")
-      coordinate.foreach { c =>
-        val artifact = coordinateArtifact(c).getOrElse(throw new IllegalArgumentException(s"invalid component coordinate: $c"))
-        val cversion = coordinateVersion(c).getOrElse(throw new IllegalArgumentException(s"invalid component coordinate: $c"))
-        require(artifact == name, s"component coordinate artifact must match component name: component=$name coordinate=$c")
-        version.foreach(v => require(v == cversion, s"component version must match coordinate version: component=$name version=$v coordinate=$c"))
+  private def _component_bindings_from_values(
+    path: Path,
+    values: Vector[Any]
+  ): Consequence[Vector[GenericSubsystemComponentBinding]] =
+    _sequence(values.zipWithIndex.map { case (value, index) =>
+      _any_to_record(value) match {
+        case Some(bindingrecord) => _binding_from_record_c(path, bindingrecord, None)
+        case None => Consequence.resourceInvalid(s"components[${index}] must be a component declaration")
       }
-      GenericSubsystemComponentBinding(
-        componentName = name,
-        version = version,
-        coordinate = coordinate,
-        extensionBindings = _record_value(rec, List("extension_bindings", "extensionBindings", "extension_binding")).getOrElse(Record.empty),
-        api = _ports_from_record(rec, "api"),
-        spi = _ports_from_record(rec, "spi")
-      )
+    }).flatMap(_validate_component_bindings)
+
+  private def _validate_component_bindings(
+    bindings: Vector[GenericSubsystemComponentBinding]
+  ): Consequence[Vector[GenericSubsystemComponentBinding]] = {
+    val duplicate = bindings
+      .groupBy(x => ComponentInstanceId(runtimeComponentName(x.componentName), x.instanceName).canonicalKey)
+      .collectFirst { case (id, xs) if xs.size > 1 => id }
+    val duplicatedefault = bindings
+      .filter(_.isDefault.contains(true))
+      .groupBy(x => ComponentInstanceId(runtimeComponentName(x.componentName), "default").canonicalKey)
+      .collectFirst { case (componentid, xs) if xs.size > 1 => componentid }
+    duplicate match {
+      case Some(id) => Consequence.resourceInvalid(s"duplicate component instance id: ${id}")
+      case None => duplicatedefault match {
+        case Some(component) => Consequence.resourceInvalid(s"multiple default component instances: ${component}")
+        case None => Consequence.success(bindings)
+      }
     }
   }
+
+  private def _binding_from_record_c(
+    path: Path,
+    rec: Record,
+    defaultname: Option[String]
+  ): Consequence[GenericSubsystemComponentBinding] = {
+    val componentname = _string(rec, "component", "componentName", "name").orElse(defaultname)
+    componentname match {
+      case Some(name) =>
+      val version = _string(rec, "version")
+      val coordinate = _string(rec, "coordinate")
+      val instance = _string(rec, "instance")
+      val instancespecified = rec.getAny("instance").nonEmpty
+      val invalidinstance = instancespecified && instance.forall(x => !_valid_instance_name(x))
+      if (invalidinstance) {
+        Consequence.resourceInvalid(s"invalid component instance name: ${rec.getAny("instance").getOrElse("")}")
+      } else {
+        val coordinatefailure = coordinate.flatMap { c =>
+          val artifact = coordinateArtifact(c)
+          val cversion = coordinateVersion(c)
+          if (artifact.isEmpty || cversion.isEmpty)
+            Some(s"invalid component coordinate: $c")
+          else if (!artifact.contains(name))
+            Some(s"component coordinate artifact must match component name: component=$name coordinate=$c")
+          else if (version.exists(_ != cversion.get))
+            Some(s"component version must match coordinate version: component=$name version=${version.get} coordinate=$c")
+          else
+            None
+        }
+        coordinatefailure match {
+          case Some(message) => Consequence.resourceInvalid(message)
+          case None => Consequence.success(GenericSubsystemComponentBinding(
+            componentName = name,
+            version = version,
+            coordinate = coordinate,
+            extensionBindings = _record_value(rec, List("extension_bindings", "extensionBindings", "extension_binding")).getOrElse(Record.empty),
+            api = _ports_from_record(rec, "api"),
+            spi = _ports_from_record(rec, "spi"),
+            instance = instance,
+            config = _string_map_value(rec, List("config")),
+            rules = _record_value(rec, List("rules")).getOrElse(Record.empty),
+            purposes = _string_vector(rec, List("purposes", "purpose")),
+            tags = _string_vector(rec, List("tags", "tag")),
+            priority = _int(rec, "priority"),
+            isDefault = _boolean(rec, "default", "isDefault")
+          ))
+        }
+      }
+      case None => Consequence.argumentMissing("component/componentName/name")
+    }
+  }
+
+  private def _valid_instance_name(value: String): Boolean =
+    value.matches("[A-Za-z0-9][A-Za-z0-9._-]*")
 
   private def _ports_from_record(rec: Record, key: String): Vector[GenericSubsystemPortBinding] =
     _record_value(rec, List(key)).map { ports =>
@@ -1320,7 +1453,16 @@ object GenericSubsystemDescriptor {
               componentName = name,
               version = version,
               coordinate = coordinate,
-              extensionBindings = _record_value(rec, List("extension_bindings", "extensionBindings", "extension_binding")).getOrElse(Record.empty)
+              extensionBindings = _record_value(rec, List("extension_bindings", "extensionBindings", "extension_binding")).getOrElse(Record.empty),
+              api = _ports_from_record(rec, "api"),
+              spi = _ports_from_record(rec, "spi"),
+              instance = _string(rec, "instance"),
+              config = _string_map_value(rec, List("config")),
+              rules = _record_value(rec, List("rules")).getOrElse(Record.empty),
+              purposes = _string_vector(rec, List("purposes", "purpose")),
+              tags = _string_vector(rec, List("tags", "tag")),
+              priority = _int(rec, "priority"),
+              isDefault = _boolean(rec, "default", "isDefault")
             )
           )
         case None =>
@@ -1641,11 +1783,10 @@ object GenericSubsystemDescriptor {
       val subsystemName = _string(rec, "subsystem", "subsystemName", "name")
       subsystemName match {
         case Some(name) =>
-          val bindings = _bindings_from_record(Path.of("<record>"), rec)
-          if (bindings.isEmpty)
-            Consequence.argumentMissing("component bindings")
-          else
-            for {
+          _bindings_from_record_c(Path.of("<record>"), rec).flatMap { bindings =>
+            if (bindings.isEmpty)
+              Consequence.argumentMissing("component bindings")
+            else for {
               runtime <- _record_value(rec, List("runtime")) match {
                 case Some(r) => summon[RecordDecoder[GenericSubsystemRuntimeBinding]].fromRecord(r).map(Some(_))
                 case None => Consequence.success(None)
@@ -1665,6 +1806,7 @@ object GenericSubsystemDescriptor {
                 operationAuthorization = _operation_authorization_value(rec)
               )
             }
+          }
         case None =>
           Consequence.argumentMissing("subsystem/subsystemName/name")
       }

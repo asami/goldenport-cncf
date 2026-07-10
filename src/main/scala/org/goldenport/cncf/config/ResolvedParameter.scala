@@ -5,7 +5,8 @@ import org.goldenport.protocol.{Argument, Property, Switch}
 
 /*
  * @since   Mar. 13, 2026
- * @version May.  6, 2026
+ *  version May.  6, 2026
+ * @version Jul. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ResolvedParameter(
@@ -191,5 +192,43 @@ object ResolvedParameters {
       )
     params.markAllLocalUsed()
     params
+  }
+
+  def fromComponentConfig(
+    config: Map[String, String],
+    instance: String,
+    parent: Option[ResolvedParameters]
+  ): ResolvedParameters = {
+    val entries = config.map { case (key, value) =>
+      key -> ResolvedParameter(
+        key,
+        ConfigurationValue.StringValue(value),
+        ResolvedParameter.Source.Component(instance)
+      )
+    }
+    new ResolvedParameters(
+      entries,
+      parent,
+      scala.collection.mutable.LinkedHashMap.empty
+    )
+  }
+
+  def fromComponentConfiguration(
+    config: org.goldenport.configuration.Configuration,
+    instance: String,
+    parent: Option[ResolvedParameters]
+  ): ResolvedParameters = {
+    val entries = config.values.map { case (key, value) =>
+      key -> ResolvedParameter(
+        key,
+        value,
+        ResolvedParameter.Source.Component(instance)
+      )
+    }
+    new ResolvedParameters(
+      entries,
+      parent,
+      scala.collection.mutable.LinkedHashMap.empty
+    )
   }
 }

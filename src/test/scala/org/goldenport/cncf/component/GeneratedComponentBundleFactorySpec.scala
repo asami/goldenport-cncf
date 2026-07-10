@@ -8,6 +8,8 @@ import org.goldenport.cncf.event.*
 import org.goldenport.cncf.operation.CmlOperationDefinition
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.cncf.testutil.TestComponentFactory
+import org.goldenport.configuration.{Configuration, ConfigurationValue}
+import org.goldenport.record.Record
 import org.goldenport.protocol.Protocol
 import org.goldenport.protocol.Request
 import org.goldenport.protocol.handler.ProtocolHandler
@@ -20,7 +22,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr. 22, 2026
- * @version May. 15, 2026
+ *  version May. 15, 2026
+ * @version Jul. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class GeneratedComponentBundleFactorySpec
@@ -28,13 +31,88 @@ final class GeneratedComponentBundleFactorySpec
   with Matchers
   with GivenWhenThen {
   "Generated-style bundle factory" should {
+    "apply named instance identity and local properties during construction" in {
+      Given("a generated component factory and named instance metadata")
+      val subsystem = TestComponentFactory.emptySubsystem("generated-bundle")
+      val metadata = ComponentInstanceMetadata(
+        componentName = "textus-scraper",
+        instance = "dynamic-playwright",
+        config = Map("scraper.mode" -> "dynamic"),
+        rules = Record.data("navigation" -> Record.data("max-pages" -> 8)),
+        purposes = Vector("javascript-heavy-site"),
+        tags = Vector("dynamic", "browser"),
+        priority = 100,
+        isDefault = true
+      )
+      val params = ComponentCreate(
+        subsystem,
+        ComponentOrigin.Repository("cozy-generated")
+      ).withInstanceMetadata(metadata)
+
+      When("the named instance is created")
+      val component = _generated_bundle_factory.PrimaryFactory.createPrimary(params)
+      val resolved = component.logic.executionContext().runtime.resolvedParameters.get("scraper.mode")
+      val packaged = component.logic.executionContext().runtime.resolvedParameters.get("scraper.timeout")
+
+      Then("identity, rules, and ExecutionContext properties belong to that instance")
+      component.instanceId shouldBe ComponentInstanceId("textus-scraper", "dynamic-playwright")
+      component.instanceMetadata shouldBe Some(metadata)
+      resolved.map(_.value) shouldBe Some(ConfigurationValue.StringValue("dynamic"))
+      resolved.map(_.source) shouldBe Some(org.goldenport.cncf.config.ResolvedParameter.Source.Component("dynamic-playwright"))
+      packaged.map(_.value) shouldBe Some(ConfigurationValue.StringValue("30s"))
+    }
+
+    "keep named instances in component space and select the declared default by name" in {
+      Given("two instances created from one component factory")
+      val subsystem = TestComponentFactory.emptySubsystem("generated-bundle")
+      val static = _generated_bundle_factory.PrimaryFactory.createPrimary(
+        ComponentCreate(subsystem, ComponentOrigin.Repository("cozy-generated"))
+          .withInstanceMetadata(ComponentInstanceMetadata("domain", "static", isDefault = true))
+      )
+      val dynamic = _generated_bundle_factory.PrimaryFactory.createPrimary(
+        ComponentCreate(subsystem, ComponentOrigin.Repository("cozy-generated"))
+          .withInstanceMetadata(ComponentInstanceMetadata("domain", "dynamic-playwright"))
+      )
+
+      When("both instances are added to component space")
+      val space = ComponentSpace().add(Vector(dynamic, static))
+
+      Then("exact identity preserves both while name lookup resolves the declared default")
+      space.components.size shouldBe 2
+      space.findInstance(ComponentInstanceId("domain", "static")) shouldBe Some(static)
+      space.findInstance(ComponentInstanceId("domain", "dynamic-playwright")) shouldBe Some(dynamic)
+      space.findInstance(ComponentInstanceId("domain", "dynamic_playwright")) shouldBe Some(dynamic)
+      space.find(ComponentLocator.NameLocator("domain")) shouldBe Some(static)
+    }
+
+    "reject canonical component instance identity collisions in component space" in {
+      Given("two components whose raw instance names normalize to one stable identity")
+      val subsystem = TestComponentFactory.emptySubsystem("generated-bundle")
+      val hyphenated = _generated_bundle_factory.PrimaryFactory.createPrimary(
+        ComponentCreate(subsystem, ComponentOrigin.Repository("cozy-generated"))
+          .withInstanceMetadata(ComponentInstanceMetadata("domain", "dynamic-playwright"))
+      )
+      val underscored = _generated_bundle_factory.PrimaryFactory.createPrimary(
+        ComponentCreate(subsystem, ComponentOrigin.Repository("cozy-generated"))
+          .withInstanceMetadata(ComponentInstanceMetadata("domain", "dynamic_playwright"))
+      )
+
+      When("both components are added to one component space")
+      val result = intercept[IllegalArgumentException] {
+        ComponentSpace().add(Vector(hyphenated, underscored))
+      }
+
+      Then("the stable identity collision fails before lookup")
+      result.getMessage should include ("duplicate component instance id")
+    }
+
     "separate primary and componentlets at construction time" in {
       Given("generated-style bundle factory")
       val subsystem = TestComponentFactory.emptySubsystem("generated-bundle")
       val params = ComponentCreate(subsystem, ComponentOrigin.Repository("cozy-generated"))
 
       When("bundle is created")
-      val bundle = _GeneratedBundleFactory.create(params)
+      val bundle = _generated_bundle_factory.create(params)
 
       Then("primary and componentlets are explicit and initialized separately")
       bundle.primary.name shouldBe "domain"
@@ -42,16 +120,16 @@ final class GeneratedComponentBundleFactorySpec
       bundle.componentlets.map(_.name) shouldBe Vector("notice-admin")
       bundle.componentlets.forall(_.isComponentletParticipant) shouldBe true
       bundle.participants.size shouldBe 2
-      bundle.primary.core.factory shouldBe Some(_GeneratedBundleFactory.PrimaryFactory)
-      bundle.componentlets.head.core.factory shouldBe Some(_GeneratedBundleFactory.NoticeAdminFactory)
+      bundle.primary.core.factory shouldBe Some(_generated_bundle_factory.PrimaryFactory)
+      bundle.componentlets.head.core.factory shouldBe Some(_generated_bundle_factory.NoticeAdminFactory)
     }
 
     "dispatch same-subsystem sync reception on generated componentlet with runtime identity" in {
       Given("bootstrapped generated runtime participants")
-      _GeneratedBundleFactory.clearCalls()
+      _generated_bundle_factory.clearCalls()
       val subsystem = TestComponentFactory.emptySubsystem("generated-bundle")
       val params = ComponentCreate(subsystem, ComponentOrigin.Repository("cozy-generated"))
-      val bundle = _GeneratedBundleFactory.create(params)
+      val bundle = _generated_bundle_factory.create(params)
       val factory = new ComponentFactory()
       val components = bundle.participants.map(factory.bootstrap)
       subsystem.add(components)
@@ -80,7 +158,7 @@ final class GeneratedComponentBundleFactorySpec
           persisted = false
         )
       )
-      _GeneratedBundleFactory.calls.toVector shouldBe Vector("notice-admin")
+      _generated_bundle_factory.calls.toVector shouldBe Vector("notice-admin")
     }
 
     "reject malformed bundle outputs deterministically" in {
@@ -90,7 +168,7 @@ final class GeneratedComponentBundleFactorySpec
 
       When("bundle is created")
       val ex = intercept[IllegalArgumentException] {
-        _InvalidBundleFactory.create(params)
+        _invalid_bundle_factory.create(params)
       }
 
       Then("construction fails before bootstrap")
@@ -98,7 +176,7 @@ final class GeneratedComponentBundleFactorySpec
     }
   }
 
-  private object _GeneratedBundleFactory extends Component.BundleFactory {
+  private object _generated_bundle_factory extends Component.BundleFactory {
     private val _calls = ArrayBuffer.empty[String]
 
     def calls: ArrayBuffer[String] = _calls
@@ -115,7 +193,13 @@ final class GeneratedComponentBundleFactorySpec
                 kind = Some("published")
               )
             )
-        }
+        }.withApplicationConfig(
+          Component.ApplicationConfig(
+            config = Some(Configuration(Map(
+              "scraper.timeout" -> ConfigurationValue.StringValue("30s")
+            )))
+          )
+        )
 
       protected def create_Core(
         params: ComponentCreate,
@@ -247,7 +331,7 @@ final class GeneratedComponentBundleFactorySpec
       Vector(NoticeAdminFactory)
   }
 
-  private object _InvalidBundleFactory extends Component.BundleFactory {
+  private object _invalid_bundle_factory extends Component.BundleFactory {
     object PrimaryFactory extends Component.PrimaryComponentFactory {
       protected def create_Component(params: ComponentCreate): Component =
         new Component() {}

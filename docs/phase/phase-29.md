@@ -51,8 +51,8 @@ Scope boundaries:
 ## 3. Active Work Stack
 
 - A (DONE): TC-01 — Open Phase 29 and freeze the working scope.
-- B (NEXT): TC-02 — Named component instance descriptor and creation model.
-- C (TODO): TC-03 — Exact instance binding and resolver semantics.
+- B (DONE): TC-02 — Named component instance descriptor and creation model.
+- C (NEXT): TC-03 — Exact instance binding and resolver semantics.
 - D (TODO): TC-04 — Socket set and abstract component selection.
 - E (TODO): TC-05 — Generic SPI invoker and canonical operation dispatch.
 - F (TODO): TC-06 — Cozy-generated typed component API and proxy.
@@ -63,14 +63,13 @@ Scope boundaries:
 
 Resume hint:
 
-- Start TC-02 from assembly descriptor parsing, `ComponentCreate`, and
-  `ComponentInstanceId`; do not begin with application-specific scraper
-  shortcuts.
+- Start TC-03 from exact provider instance identity in assembly SPI bindings
+  and resolver candidate matching; preserve the TC-02 default-instance path.
 
 ## 4. Development Items
 
 - [x] TC-01: Open Phase 29 and freeze the working scope.
-- [ ] TC-02: Implement named component instance declarations and creation.
+- [x] TC-02: Implement named component instance declarations and creation.
 - [ ] TC-03: Implement exact instance SPI binding and resolution.
 - [ ] TC-04: Implement socket sets and abstract component selection.
 - [ ] TC-05: Implement generic invocation through the operation/action path.
