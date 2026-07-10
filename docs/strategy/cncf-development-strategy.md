@@ -652,9 +652,10 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Notes contain execution details and results for each phase.
 
 ## Process Status Pointers
-- Current phase selection: none selected after Phase 28 closure.
-- Current phase dashboard: none.
-- Current phase checklist: none.
+- Current phase selection: Phase 29 — Typed Component API and Multi-Instance
+  SPI.
+- Current phase dashboard: `docs/phase/phase-29.md`
+- Current phase checklist: `docs/phase/phase-29-checklist.md`
 - Latest closed phase dashboard: `docs/phase/phase-28.md`
 - Latest closed phase checklist: `docs/phase/phase-28-checklist.md`
 - Previous closed phase dashboard: `docs/phase/phase-27.md`
@@ -782,6 +783,7 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Phase 26: closed (`docs/phase/phase-26.md`)
 - Phase 27: closed (`docs/phase/phase-27.md`)
 - Phase 28: closed (`docs/phase/phase-28.md`)
+- Phase 29: active (`docs/phase/phase-29.md`)
 
 ## 8. Completed Development Item History
 
@@ -1258,7 +1260,7 @@ corresponding completed-history entry.
 
 Current development item:
 
-- None selected. Select one independent 9.x item before opening the next phase.
+- `9.28 Typed Component API and Multi-Instance SPI`, active as Phase 29.
 
 ### 9.1 Web Next Stage Follow-ups
 Web/platform follow-up index.
@@ -2099,3 +2101,54 @@ Future domain logic / runtime / knowledge / automation development item.
   - untrusted rule sandboxing beyond the existing CAR capability sandbox
     direction;
   - using rules as the primary authorization engine.
+
+### 9.28 Typed Component API and Multi-Instance SPI
+Active component composition and runtime development item. Implemented as
+Phase 29.
+
+- Goal: let one CNCF component consume another through an application-facing
+  typed Scala API while preserving operation/action execution semantics, and
+  support multiple named instances of one component type with isolated
+  configuration and rules.
+- Scope:
+  - extend assembly declarations with stable component instance identity,
+    instance-local config, rules, purpose, tags, and selection metadata;
+  - bind a single socket to an exact named provider instance;
+  - add `SpiSocketSet[S]` for assembly-bounded multi-provider use;
+  - support exact instance and abstract purpose/capability/tag selection;
+  - add a public typed `ComponentApiResolver` and generic `SpiInvoker` over the
+    same resolved binding and operation execution path;
+  - keep `Record` as the generic runtime/wire representation while ordinary
+    Scala application code uses generated typed request and response values;
+  - generate component-specific typed APIs, proxies, single sockets, and socket
+    sets from CML service operation metadata;
+  - make both single-socket and socket-set forms available for CNCF standard
+    SPI contracts, with consumer multiplicity selecting the input form;
+  - preserve authorization, `ExecutionContext`, UnitOfWork, jobs, events,
+    calltree, metrics, and local/remote transport substitutability;
+  - prove the model after framework implementation by integrating
+    `textus-scraper` into `/Users/asami/src/dev2026/textus-art-scene` as the
+    development driver and smoke application;
+  - configure and invoke the required `textus-scraper` instance or instances
+    from ArtScene without importing provider implementation code, and verify
+    ArtScene exhibition fetching through the typed component API.
+- Inputs:
+  - `docs/notes/typed-component-api-and-multi-instance-spi.md`;
+  - `docs/journal/2026/07/2026-07-11-typed-component-api-and-multi-instance-spi-consideration.md`;
+  - the existing `ComponentInstanceId`, `ComponentSpace`, `SpiSocket`,
+    `SpiResolver`, assembly binding, and SPI tracing baseline;
+  - Cozy CML Literate Model service-property grammar.
+- Guardrails:
+  - a socket exposes a typed capability API, not a provider `Component` object;
+  - component instance identity is separate from provider-specific variation;
+  - ambiguous selection fails explicitly and never selects the first match;
+  - component-specific APIs do not automatically become CNCF standard SPI;
+  - typed proxies must use the canonical operation/action path rather than
+    direct provider implementation calls;
+  - application components must not import another component's `impl` package.
+- Deferred scope:
+  - arbitrary runtime CAR loading initiated by application code;
+  - hot replacement of installed providers without component restart;
+  - distributed component transport implementation beyond preserving the
+    local/remote-neutral API boundary;
+  - general-purpose dependency injection outside CNCF component assembly.
