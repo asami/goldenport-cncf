@@ -20,6 +20,7 @@ import org.scalatest.wordspec.AnyWordSpec
  */
 final class GenericSubsystemDescriptorSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   "GenericSubsystemDescriptor" should {
+    "manage component instance declarations" which {
     "load named component instance metadata without collapsing duplicate component types" in {
       Given("an assembly descriptor with two configured instances of one component type")
       val path = Files.createTempFile("generic-subsystem-named-instances", ".yaml")
@@ -187,7 +188,9 @@ final class GenericSubsystemDescriptorSpec extends AnyWordSpec with Matchers wit
       Then("the invalid override fails instead of retaining the base bindings silently")
       result shouldBe a[Consequence.Failure[_]]
     }
+    }
 
+    "load extension and security descriptors" which {
     "load component extension bindings from the formal YAML schema using name and version" in {
       Given("a formal descriptor with component extension bindings")
       val path = Files.createTempFile("generic-subsystem-descriptor", ".yaml")
@@ -573,7 +576,9 @@ final class GenericSubsystemDescriptorSpec extends AnyWordSpec with Matchers wit
       descriptor.componentBindings.head.componentName shouldBe "notice-board"
       descriptor.componentBindings.head.componentVersion shouldBe Some("0.1.0-SNAPSHOT")
     }
+    }
 
+    "compose component and subsystem archives" which {
     "create a synthetic subsystem descriptor from component CAR assembly metadata" in {
       Given("a component CAR containing component and assembly descriptors")
       val car = Files.createTempFile("component-with-assembly", ".car")
@@ -775,7 +780,9 @@ final class GenericSubsystemDescriptorSpec extends AnyWordSpec with Matchers wit
       bindings.map(_.toComponent).toSet shouldBe Set("enterprise-user-account", "textus-message-delivery-stub")
       bindings.count(_.fromService == "account") shouldBe 1
     }
+    }
 
+    "load and validate SPI assembly bindings" which {
     "load test descriptor config and assembly SPI bindings" in {
       Given("a test descriptor with runtime config and an SPI binding")
       val path = Files.createTempFile("cncf-test-descriptor", ".yaml")
@@ -789,9 +796,12 @@ final class GenericSubsystemDescriptorSpec extends AnyWordSpec with Matchers wit
           |    bindings:
           |      - socket:
           |          component: target-component
+          |          instance: consumer-default
+          |          name: ai
           |          contract: ai-runner
           |        provider:
           |          component: target-component
+          |          instance: provider-default
           |        selection:
           |          mode: test
           |""".stripMargin,
@@ -814,9 +824,85 @@ final class GenericSubsystemDescriptorSpec extends AnyWordSpec with Matchers wit
       descriptor.config shouldBe Map("textus.web.demo-assist.enabled" -> "true")
       bindings.size shouldBe 1
       bindings.head.socket.component shouldBe Some("target-component")
+      bindings.head.socket.instance shouldBe Some("consumer-default")
+      bindings.head.socket.name shouldBe Some("ai")
       bindings.head.socket.contract shouldBe "ai-runner"
       bindings.head.provider.component shouldBe Some("target-component")
+      bindings.head.provider.instance shouldBe Some("provider-default")
       bindings.head.selection.mode shouldBe Some("test")
+    }
+
+    "reject an SPI provider instance without a provider component" in {
+      Given("an assembly binding with an instance-only provider selector")
+      val descriptor = GenericSubsystemDescriptor(
+        path = java.nio.file.Path.of("component.car"),
+        subsystemName = "target",
+        componentBindings = Vector(GenericSubsystemComponentBinding("target-component")),
+        assemblyDescriptor = Some(GenericSubsystemAssemblyDescriptorSource(
+          Record.data(
+            "spi" -> Record.data(
+              "bindings" -> Vector(Record.data(
+                "socket" -> Record.data(
+                  "component" -> "target-component",
+                  "contract" -> "ai-runner"
+                ),
+                "provider" -> Record.data(
+                  "instance" -> "provider-default"
+                )
+              ))
+            )
+          ),
+          source = "spec"
+        ))
+      )
+
+      When("assembly SPI bindings are decoded")
+      val result = GenericSubsystemDescriptor.resolveAssemblySpiBindings(descriptor)
+
+      Then("the incomplete exact selector is rejected")
+      result shouldBe a[Consequence.Failure[_]]
+    }
+
+    "reject duplicate assembly bindings for one named socket identity" in {
+      Given("two bindings targeting canonical aliases of the same socket instance and name")
+      val descriptor = GenericSubsystemDescriptor(
+        path = java.nio.file.Path.of("component.car"),
+        subsystemName = "target",
+        componentBindings = Vector(GenericSubsystemComponentBinding("target-component")),
+        assemblyDescriptor = Some(GenericSubsystemAssemblyDescriptorSource(
+          Record.data(
+            "spi" -> Record.data(
+              "bindings" -> Vector(
+                Record.data(
+                  "socket" -> Record.data(
+                    "component" -> "target-component",
+                    "instance" -> "consumer-default",
+                    "name" -> "ai",
+                    "contract" -> "ai-runner"
+                  ),
+                  "provider" -> Record.data("component" -> "provider-a")
+                ),
+                Record.data(
+                  "socket" -> Record.data(
+                    "component" -> "target_component",
+                    "instance" -> "consumer_default",
+                    "name" -> "ai",
+                    "contract" -> "ai-runner"
+                  ),
+                  "provider" -> Record.data("component" -> "provider-b")
+                )
+              )
+            )
+          ),
+          source = "spec"
+        ))
+      )
+
+      When("assembly SPI bindings are decoded")
+      val result = GenericSubsystemDescriptor.resolveAssemblySpiBindings(descriptor)
+
+      Then("the canonical socket identity collision is rejected")
+      result shouldBe a[Consequence.Failure[_]]
     }
 
     "merge assembly SPI bindings by socket selector" in {
@@ -927,7 +1013,9 @@ final class GenericSubsystemDescriptorSpec extends AnyWordSpec with Matchers wit
       Then("the unsupported selector fails explicitly")
       result shouldBe a[Consequence.Failure[_]]
     }
+    }
 
+    "preserve journal sample compatibility" which {
     "load the textus-identity journal sample with security authentication wiring" in {
       Given("the maintained textus-identity descriptor sample")
       val path = java.nio.file.Path.of("/Users/asami/src/dev2025/cloud-native-component-framework/docs/journal/2026/04/2026-04-09-subsystem-descriptor-textus-identity.yaml")
@@ -948,6 +1036,7 @@ final class GenericSubsystemDescriptorSpec extends AnyWordSpec with Matchers wit
       provider.priority shouldBe Some(100)
       provider.schemes shouldBe Vector("bearer", "refresh-token")
       provider.isDefault shouldBe Some(true)
+    }
     }
 
   }

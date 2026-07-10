@@ -1261,8 +1261,8 @@ corresponding completed-history entry.
 Current development item:
 
 - `9.28 Typed Component API and Multi-Instance SPI`, active as Phase 29.
-  TC-02 named component instance descriptor and creation is complete; TC-03
-  exact instance SPI binding and resolver semantics is the next slice.
+  TC-02 named component instance creation and TC-03 exact instance SPI binding
+  are complete; TC-04 socket sets and abstract selection is the next slice.
 
 ### 9.1 Web Next Stage Follow-ups
 Web/platform follow-up index.
@@ -2111,7 +2111,8 @@ Phase 29.
 - Current implementation status:
   - TC-01 Phase 29 scope freeze: complete;
   - TC-02 named component instance descriptor and creation model: complete;
-  - TC-03 exact instance binding and resolver semantics: next.
+  - TC-03 exact instance binding and resolver semantics: complete;
+  - TC-04 socket set and abstract component selection: next.
 
 - Goal: let one CNCF component consume another through an application-facing
   typed Scala API while preserving operation/action execution semantics, and

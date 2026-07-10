@@ -52,8 +52,8 @@ Scope boundaries:
 
 - A (DONE): TC-01 — Open Phase 29 and freeze the working scope.
 - B (DONE): TC-02 — Named component instance descriptor and creation model.
-- C (NEXT): TC-03 — Exact instance binding and resolver semantics.
-- D (TODO): TC-04 — Socket set and abstract component selection.
+- C (DONE): TC-03 — Exact instance binding and resolver semantics.
+- D (NEXT): TC-04 — Socket set and abstract component selection.
 - E (TODO): TC-05 — Generic SPI invoker and canonical operation dispatch.
 - F (TODO): TC-06 — Cozy-generated typed component API and proxy.
 - G (TODO): TC-07 — Standard SPI single/set socket alignment.
@@ -63,14 +63,15 @@ Scope boundaries:
 
 Resume hint:
 
-- Start TC-03 from exact provider instance identity in assembly SPI bindings
-  and resolver candidate matching; preserve the TC-02 default-instance path.
+- Start TC-04 from `SpiSocketSet[S]` member metadata and assembly-bounded
+  provider sets; reuse TC-03 exact/default instance resolution without adding
+  arbitrary runtime provider discovery.
 
 ## 4. Development Items
 
 - [x] TC-01: Open Phase 29 and freeze the working scope.
 - [x] TC-02: Implement named component instance declarations and creation.
-- [ ] TC-03: Implement exact instance SPI binding and resolution.
+- [x] TC-03: Implement exact instance SPI binding and resolution.
 - [ ] TC-04: Implement socket sets and abstract component selection.
 - [ ] TC-05: Implement generic invocation through the operation/action path.
 - [ ] TC-06: Generate typed component APIs and proxies from CML.

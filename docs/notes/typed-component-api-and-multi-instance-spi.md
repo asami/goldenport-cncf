@@ -202,10 +202,29 @@ baseline:
 - components without an instance declaration continue to use the existing
   default-instance and name-based duplicate behavior.
 
-Exact socket/provider instance selection remains TC-03 scope.
 Instance `rules` are isolated metadata in TC-02. Their selector and policy
 evaluation semantics are introduced with the corresponding resolver slices;
 TC-02 does not treat an arbitrary rule record as executable behavior.
+
+### 4.2 Implemented TC-03 Exact Binding Baseline
+
+The Phase 29 TC-03 implementation establishes exact single-socket resolution:
+
+- assembly provider selectors may name a component instance;
+- socket selectors may name the consumer instance and the socket itself;
+- `SpiSocket.spiSocketName` defaults to `default`, while components may publish
+  several named sockets through `Component.Port.input(...)`;
+- exact provider instance selection uses canonical `ComponentInstanceId`
+  identity and does not fall back to another instance;
+- a component-only provider selector chooses a unique declared default, then a
+  unique literal `default` instance, and otherwise reports ambiguity;
+- input sockets participate in socket resolution but remain excluded from
+  provider discovery;
+- missing sockets/providers, incompatible providers, duplicate bindings, and
+  ambiguous sockets/providers fail through deterministic `Consequence`
+  boundaries.
+
+Socket sets and abstract purpose/capability/tag selection remain TC-04 scope.
 
 ## 5. Consumption Modes
 
@@ -677,17 +696,17 @@ The current CNCF source already provides part of this model:
 - `ComponentInstanceId` identifies a component instance;
 - `ComponentSpace` stores components by instance id and groups them by
   component id;
+- assembly descriptors create multiple named instances of one component type
+  with isolated config and rule metadata;
 - `SpiSocket[S]` installs one typed service;
 - `SpiResolver` resolves one compatible provider and installs a traced service;
-- assembly SPI bindings can filter by provider component;
+- assembly SPI bindings can select exact provider/consumer instances and named
+  sockets while preserving componentlet participation under the owning logical
+  component instance;
 - SPI calls such as `AiRunner` are ordinary typed Scala method calls.
 
 The following target features are not yet complete:
 
-- assembly declaration and creation of multiple named instances of one
-  component type with isolated config and rules;
-- `provider.instance` selection in SPI bindings;
-- explicit socket names and socket cardinality;
 - `SpiSocketSet[S]`;
 - abstract `ComponentSelector` resolution;
 - public `ComponentApiResolver`;

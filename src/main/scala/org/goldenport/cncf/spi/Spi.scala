@@ -12,7 +12,7 @@ import org.goldenport.cncf.context.ExecutionContext
  * source compatible while new code can import org.goldenport.cncf.spi.*.
  *
  * @since   Jul.  2, 2026
- * @version Jul.  8, 2026
+ * @version Jul. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 type SpiContract[S] = ServiceContract[S]
@@ -59,6 +59,7 @@ trait SpiProviderComponent {
 
 trait SpiSocket[S] {
   def spiContract: SpiContract[S]
+  def spiSocketName: String = "default"
   def spiSelection: SpiSelection = SpiSelection()
   def isSpiInstalled: Boolean = false
   def installSpi(spi: S): Unit
@@ -78,12 +79,15 @@ final case class SpiSocketBinding[S](
 
 final case class SpiProviderSelector(
   component: Option[String] = None,
-  service: Option[String] = None
+  service: Option[String] = None,
+  instance: Option[String] = None
 )
 
 final case class SpiSocketSelector(
   component: Option[String] = None,
-  contract: String
+  contract: String,
+  instance: Option[String] = None,
+  name: Option[String] = None
 )
 
 final case class SpiRuntimeBinding(

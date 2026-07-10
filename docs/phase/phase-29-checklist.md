@@ -86,7 +86,7 @@ stable identity and isolated settings.
 
 ## TC-03: Exact Instance Binding and Resolver Semantics
 
-Status: NEXT
+Status: DONE
 
 ### Objective
 
@@ -94,16 +94,31 @@ Bind a consumer socket to a specific named provider instance.
 
 ### Detailed Tasks
 
-- [ ] Add provider instance identity to assembly SPI bindings.
-- [ ] Add explicit socket identity where multiple sockets share a contract.
-- [ ] Resolve providers by component type, instance, and contract.
-- [ ] Keep input sockets out of provider candidate discovery.
-- [ ] Return structured missing, incompatible, and ambiguous failures.
-- [ ] Preserve existing `Port.of(...)` and single-provider compatibility.
+- [x] Add provider instance identity to assembly SPI bindings.
+- [x] Add explicit socket identity where multiple sockets share a contract.
+- [x] Resolve providers by component type, instance, and contract.
+- [x] Keep input sockets out of provider candidate discovery.
+- [x] Return structured missing, incompatible, and ambiguous failures.
+- [x] Preserve existing `Port.of(...)` and single-provider compatibility.
+
+### Implementation Evidence
+
+- `SpiProviderSelector` carries optional provider instance identity, while
+  `SpiSocketSelector` carries optional consumer instance and socket name.
+- `SpiSocket.spiSocketName` defaults to `default`; named sockets published as
+  `Component.Port.input(...)` are resolved independently and never become
+  provider candidates.
+- Exact instance selection uses canonical `ComponentInstanceId` identity and
+  never falls back to another instance.
+- A component-only provider selector uses one declared default instance, then
+  the literal `default` instance; unresolved and ambiguous cases fail
+  explicitly rather than selecting the first candidate.
+- Descriptor and resolver executable specs cover exact, declared-default,
+  literal-default, missing, ambiguous, named-socket, and compatibility paths.
 
 ## TC-04: Socket Set and Abstract Component Selection
 
-Status: TODO
+Status: NEXT
 
 ### Objective
 

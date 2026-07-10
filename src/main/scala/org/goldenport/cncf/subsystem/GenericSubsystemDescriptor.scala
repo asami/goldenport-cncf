@@ -436,7 +436,12 @@ object GenericSubsystemDescriptor {
   ): Option[String] =
     rec.getAny("socket").flatMap(_any_to_record).flatMap { socket =>
       _string(socket, "contract").map { contract =>
-        Vector(_string(socket, "component").getOrElse(""), contract).map(_comparison_key).mkString("/")
+        Vector(
+          _string(socket, "component").getOrElse(""),
+          _string(socket, "instance").getOrElse(""),
+          _string(socket, "name").getOrElse(""),
+          contract
+        ).map(_comparison_key).mkString("/")
       }
     }
 
@@ -1189,7 +1194,7 @@ object GenericSubsystemDescriptor {
             }.map(xs ++ _)
           }
         }
-    }
+    }.flatMap(_validate_spi_runtime_bindings)
 
   private def _assembly_spi_binding_records(
     source: GenericSubsystemAssemblyDescriptorSource
@@ -1212,18 +1217,39 @@ object GenericSubsystemDescriptor {
       _required_string(socket, "contract").flatMap { contract =>
         _optional_record_field(rec, "provider").flatMap { provider =>
           val service = provider.flatMap(_string(_, "service"))
-          if (service.nonEmpty) {
+          val socketinstance = _string(socket, "instance")
+          val socketname = _string(socket, "name")
+          val providerinstance = provider.flatMap(_string(_, "instance"))
+          val invalidsocketinstance = socketinstance.exists(x => !_valid_instance_name(x))
+          val invalidsocketname = socketname.exists(x => !_valid_instance_name(x))
+          val invalidproviderinstance = providerinstance.exists(x => !_valid_instance_name(x))
+          val socketcomponent = _string(socket, "component")
+          val providercomponent = provider.flatMap(_string(_, "component"))
+          if (invalidsocketinstance) {
+            Consequence.resourceInvalid(s"invalid assembly SPI socket instance: ${socketinstance.getOrElse("")}")
+          } else if (invalidsocketname) {
+            Consequence.resourceInvalid(s"invalid assembly SPI socket name: ${socketname.getOrElse("")}")
+          } else if (invalidproviderinstance) {
+            Consequence.resourceInvalid(s"invalid assembly SPI provider instance: ${providerinstance.getOrElse("")}")
+          } else if (socketinstance.nonEmpty && socketcomponent.isEmpty) {
+            Consequence.resourceInvalid("assembly SPI socket instance requires socket.component")
+          } else if (providerinstance.nonEmpty && providercomponent.isEmpty) {
+            Consequence.resourceInvalid("assembly SPI provider instance requires provider.component")
+          } else if (service.nonEmpty) {
             Consequence.resourceInvalid("assembly.spi.bindings provider.service is not supported yet")
           } else {
             _optional_record_field(rec, "selection").map { selection =>
               SpiRuntimeBinding(
                 socket = SpiSocketSelector(
-                  component = _string(socket, "component"),
-                  contract = contract
+                  component = socketcomponent,
+                  contract = contract,
+                  instance = socketinstance,
+                  name = socketname
                 ),
                 provider = SpiProviderSelector(
-                  component = provider.flatMap(_string(_, "component")),
-                  service = service
+                  component = providercomponent,
+                  service = service,
+                  instance = providerinstance
                 ),
                 selection = _spi_selection(selection)
               )
@@ -1232,6 +1258,23 @@ object GenericSubsystemDescriptor {
         }
       }
     }
+
+  private def _validate_spi_runtime_bindings(
+    bindings: Vector[SpiRuntimeBinding]
+  ): Consequence[Vector[SpiRuntimeBinding]] = {
+    val duplicate = bindings
+      .groupBy { binding =>
+        val component = binding.socket.component.map(x => ComponentInstanceId(x, "default").canonicalKey).getOrElse("*")
+        val instance = binding.socket.instance.map(x => ComponentInstanceId("component", x).canonicalKey).getOrElse("*")
+        val name = binding.socket.name.map(x => ComponentInstanceId("socket", x).canonicalKey).getOrElse("*")
+        s"${component}/${instance}/${name}/${binding.socket.contract}"
+      }
+      .collectFirst { case (key, xs) if xs.size > 1 => key }
+    duplicate match {
+      case Some(key) => Consequence.resourceInvalid(s"duplicate assembly SPI socket binding: ${key}")
+      case None => Consequence.success(bindings)
+    }
+  }
 
   private def _spi_selection(
     rec: Option[Record]
