@@ -99,3 +99,87 @@ body {
   vertical-align: -0.125em;
   fill: currentColor;
 }
+
+.textus-app-topbar {
+  min-height: 3.5rem;
+  z-index: 1020;
+}
+
+.textus-app-topbar-meta {
+  color: var(--textus-md-muted);
+  font-size: 0.875rem;
+}
+
+.textus-app-sidebar {
+  min-height: calc(100vh - 3.5rem);
+}
+
+.textus-app-sidebar-nav {
+  position: sticky;
+  top: 3.5rem;
+  max-height: calc(100vh - 3.5rem);
+}
+
+.textus-app-sidebar-section + .textus-app-sidebar-section {
+  margin-top: 1.5rem;
+}
+
+.textus-app-sidebar-label {
+  letter-spacing: 0.04em;
+}
+
+.textus-app-sidebar-link {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.25rem;
+}
+
+.textus-app-sidebar-link.is-active,
+.textus-app-sidebar-link[aria-current="page"] {
+  color: var(--textus-md-primary);
+  background: rgba(21, 101, 192, 0.08);
+  font-weight: 600;
+}
+
+.textus-mobile-menu > summary {
+  list-style: none;
+}
+
+.textus-mobile-menu > summary::-webkit-details-marker {
+  display: none;
+}
+
+.textus-app-main {
+  min-width: 0;
+}
+
+.textus-page-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.textus-page-head h1 {
+  margin: 0;
+  font-size: 1.85rem;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.textus-page-kicker {
+  margin: 0 0 0.25rem;
+  color: var(--textus-md-muted);
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+@media (max-width: 720px) {
+  .textus-page-head {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+}

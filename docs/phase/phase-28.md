@@ -140,6 +140,17 @@ Deferred work remains outside Phase 28:
 
 ## 7. Post-closure Maintenance
 
+Post-closure Material profile asset maintenance on Jul. 10, 2026 kept Phase
+28 closed while hardening the generated Web UI static asset baseline:
+
+- Bootstrap-compatible application shell helpers now cover top bar, sidebar,
+  mobile menu, page head, and active navigation states.
+- Local masked Material-style icon helpers provide stable generated/admin Web
+  UI icons without requiring external icon font delivery.
+- This is asset hardening for the existing Material profile path; production
+  theme marketplace, frontend package lifecycle, and broader Material visual
+  system work remain deferred.
+
 Phase 28 remains closed. Post-closure runtime maintenance on Jun. 28, 2026
 added CNCF build-version metadata and a runtime `version` command so launcher
 development-runtime paths can report the selected CNCF runtime version without

@@ -1,12 +1,59 @@
 /* Local icon helpers for generated CNCF Web UIs. */
 .textus-icon,
 .textus-material-icon {
+  --textus-icon-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect x='5' y='5' width='14' height='14' rx='2' fill='black'/%3E%3C/svg%3E");
   display: inline-block;
   width: 1em;
   height: 1em;
-  vertical-align: -0.125em;
+  overflow: hidden;
+  color: currentColor;
   fill: currentColor;
+  font-size: 1em;
+  line-height: 1;
+  vertical-align: -0.125em;
   flex: 0 0 auto;
+}
+
+.textus-material-icon[data-icon] {
+  width: 1rem;
+  height: 1rem;
+  font-size: 0;
+}
+
+.textus-material-icon[data-icon]::before {
+  content: "";
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: currentColor;
+  -webkit-mask: var(--textus-icon-mask) center / contain no-repeat;
+  mask: var(--textus-icon-mask) center / contain no-repeat;
+}
+
+.textus-material-icon[data-icon="api"] {
+  --textus-icon-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M5 4h14v16H5V4Zm2 2v12h10V6H7Zm2 3h6v2H9V9Zm0 4h6v2H9v-2Z' fill='black'/%3E%3C/svg%3E");
+}
+
+.textus-material-icon[data-icon="edit"] {
+  --textus-icon-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='m4 17.3-.7 3.4 3.4-.7L18.8 7.9l-2.7-2.7L4 17.3ZM19.7 7 17 4.3l1.3-1.3a1.9 1.9 0 0 1 2.7 0 1.9 1.9 0 0 1 0 2.7L19.7 7Z' fill='black'/%3E%3C/svg%3E");
+}
+
+.textus-material-icon[data-icon="event"],
+.textus-material-icon[data-icon="event-repeat"] {
+  --textus-icon-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M7 2h2v3h6V2h2v3h3v17H4V5h3V2Zm11 8H6v10h12V10ZM6 7v1h12V7H6Z' fill='black'/%3E%3C/svg%3E");
+}
+
+.textus-material-icon[data-icon="museum"] {
+  --textus-icon-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 3 3 8v2h18V8l-9-5ZM5 11v7H3v3h18v-3h-2v-7h-3v7h-3v-7h-2v7H8v-7H5Z' fill='black'/%3E%3C/svg%3E");
+}
+
+.textus-material-icon[data-icon="refresh"],
+.textus-material-icon[data-icon="sync"] {
+  --textus-icon-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M17.6 6.4A7.8 7.8 0 0 0 4.8 10H2l4 4 4-4H7a5 5 0 0 1 8.6-2.1l2-1.5ZM18 10a5 5 0 0 1-8.6 2.1l-2 1.5A7.8 7.8 0 0 0 20.2 10H23l-4-4-4 4h3Z' fill='black'/%3E%3C/svg%3E");
+}
+
+.textus-material-icon[data-icon="timeline"] {
+  --textus-icon-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M4 6h10v3H4V6Zm6 5h10v3H10v-3Zm-6 5h16v3H4v-3Z' fill='black'/%3E%3C/svg%3E");
 }
 
 .btn .textus-icon,

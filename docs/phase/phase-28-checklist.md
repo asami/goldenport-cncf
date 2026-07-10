@@ -72,6 +72,11 @@ been recorded without reopening the Web UI DSL phase:
 - [x] Record `spi:<contract>.<operation>` calltree spans and `spi.invocation`
       runtime metrics without copying prompts, route DSL, API keys, SVG
       content, or raw provider payloads.
+- [x] Jul. 10, 2026: Harden Material profile static assets with
+      Bootstrap-compatible application shell helpers and local masked
+      Material-style icon helpers for generated/admin Web surfaces.
+- [x] Keep production theme marketplace, frontend package lifecycle, and
+      broader Material visual-system work deferred.
 
 ---
 

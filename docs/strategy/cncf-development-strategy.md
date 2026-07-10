@@ -664,7 +664,13 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
   migration tooling; CulturalResource collection-item profile; Rule Engine and
   Inference Runtime.
 - Status interpretation rules: `docs/rules/stage-status-and-checklist-convention.md`
-- Latest post-closure maintenance: Jul. 9, 2026 caller-side canonical SPI
+- Latest post-closure maintenance: Jul. 10, 2026 Material profile static asset
+  hardening. The generated Web UI asset set now includes Bootstrap-compatible
+  application shell helpers and local masked Material-style icon helpers for
+  generated/admin Web surfaces. This remains Phase 28 post-closure maintenance
+  and does not reopen deferred Material theme marketplace or frontend package
+  lifecycle work.
+- Previous post-closure maintenance: Jul. 9, 2026 caller-side canonical SPI
   invocation tracing. Provider-neutral SPI services installed into caller
   component sockets now record `spi.<contract>.<operation>` calltree spans and
   `spi.invocation` runtime metrics while keeping provider payloads out of
