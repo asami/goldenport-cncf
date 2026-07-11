@@ -14,7 +14,7 @@ import org.goldenport.cncf.spi.toolchain.runner.ToolchainRunner
  * Common tracing support for provider-neutral CNCF SPI calls.
  *
  * @since   Jul.  9, 2026
- * @version Jul.  9, 2026
+ * @version Jul. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class SpiTraceMetadata(
@@ -22,6 +22,11 @@ final case class SpiTraceMetadata(
   operation: String,
   socketComponent: String,
   providerComponent: String,
+  socketName: Option[String] = None,
+  providerInstance: Option[String] = None,
+  selectorPurpose: Option[String] = None,
+  selectorCapabilities: Set[String] = Set.empty,
+  selectorTags: Set[String] = Set.empty,
   selectionProvider: Option[String] = None,
   selectionMode: Option[String] = None,
   selectionEngine: Option[String] = None
@@ -34,7 +39,12 @@ final case class SpiTraceMetadata(
       "contract" -> contract,
       "operation" -> operation,
       "socket_component" -> socketComponent,
+      "socket_name" -> socketName.getOrElse(""),
       "provider_component" -> providerComponent,
+      "provider_instance" -> providerInstance.getOrElse(""),
+      "selector_purpose" -> selectorPurpose.getOrElse(""),
+      "selector_capabilities" -> selectorCapabilities.toVector.sorted.mkString(","),
+      "selector_tags" -> selectorTags.toVector.sorted.mkString(","),
       "selection_provider" -> selectionProvider.getOrElse(""),
       "selection_mode" -> selectionMode.getOrElse(""),
       "selection_engine" -> selectionEngine.getOrElse("")
@@ -112,7 +122,7 @@ object SpiTraceSupport {
     metadata: SpiTraceMetadata,
     error: Boolean,
     conclusion: Option[Conclusion],
-    elapsedMillis: Long
+    elapsedmillis: Long
   ): Unit = {
     val diagnostic = conclusion.map(ConclusionDiagnostics.classify)
     RuntimeDashboardMetrics.recordSpiInvocation(
@@ -123,7 +133,7 @@ object SpiTraceSupport {
       error = error,
       diagnosticKey = diagnostic.map(_.diagnosticKey),
       diagnosticRecord = diagnostic.map(_.toRecord),
-      elapsedMillis = Some(elapsedMillis)
+      elapsedMillis = Some(elapsedmillis)
     )
   }
 

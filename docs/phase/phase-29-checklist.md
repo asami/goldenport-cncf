@@ -150,7 +150,7 @@ abstract intent.
 
 ## TC-05: Generic SPI Invoker and Canonical Operation Dispatch
 
-Status: NEXT
+Status: DONE
 
 ### Objective
 
@@ -159,16 +159,38 @@ without bypassing CNCF execution semantics.
 
 ### Detailed Tasks
 
-- [ ] Add resolved binding/socket reference models.
-- [ ] Add `SpiInvoker` contract, operation, request, and selector invocation.
-- [ ] Dispatch through `OperationCall` / `ActionEngine`.
-- [ ] Preserve validation, authorization, UnitOfWork, jobs, and events.
-- [ ] Return structured conversion, operation, and provider failures.
-- [ ] Verify typed and generic routes produce equivalent behavior.
+- [x] Add resolved binding/socket reference models.
+- [x] Add `SpiInvoker` contract, operation, request, and selector invocation.
+- [x] Dispatch through canonical request construction and `ActionEngine`.
+- [x] Preserve validation, authorization, UnitOfWork, jobs, and events.
+- [x] Return structured conversion, operation, and provider failures.
+- [x] Verify typed and generic routes produce equivalent behavior.
+
+### Implementation Evidence
+
+- `ResolvedSpiBinding` retains public socket/provider identity plus the internal
+  assembly participant and declared operation catalog needed for exact,
+  contract-bounded operation dispatch.
+- `ComponentApiResolver.resolveBinding` restricts socket-reference resolution
+  to the providers actually bound to that assembly socket. Programmatic calls
+  without a socket reference retain assembly-admitted provider selection.
+- Resolved bindings are owned by their source subsystem and are rejected by a
+  different subsystem before operation dispatch.
+- `Subsystem.spiInvoker` converts `Record.fields` to a field-preserving request
+  and dispatches through authorization, operation request validation,
+  `ComponentLogic`, `ActionEngine`, and operation association bindings.
+- The caller runtime context is retained while the provider action receives its
+  normal child action scope.
+- `SpiOperationResponseCodec` defines deterministic Record, scalar, void,
+  JSON, YAML, HTTP, and opaque response behavior.
+- Executable specs cover exact and purpose selection, repeated fields,
+  authorization, structured failures, safe CallTree metadata, response
+  conversion, direct/generic result equivalence, and managed command/job/
+  UnitOfWork/event behavior.
 
 ## TC-06: Cozy-Generated Typed Component API and Proxy
 
-Status: TODO
+Status: NEXT
 
 ### Objective
 

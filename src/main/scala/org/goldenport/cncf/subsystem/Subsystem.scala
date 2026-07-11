@@ -46,7 +46,7 @@ import org.goldenport.cncf.security.{AdminAuthorizationPolicy, IngressSecurityRe
 import org.goldenport.cncf.config.{ResolvedParameter, ResolvedParameters}
 import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.metrics.EntityAccessMetricsRegistry
-import org.goldenport.cncf.spi.ComponentApiResolver
+import org.goldenport.cncf.spi.{ComponentApiResolver, ResolvedSpiBinding, SpiInvoker, SpiOperationSelector}
 
 /*
  * @since   Jan.  7, 2026
@@ -94,6 +94,7 @@ final class Subsystem(
   )
   private var _descriptor: Option[GenericSubsystemDescriptor] = None
   private var _component_api_resolver: ComponentApiResolver = ComponentApiResolver.empty
+  private lazy val _spi_invoker: SpiInvoker = SpiInvoker._create(this)
   private var _resolved_security_wiring: ResolvedSecurityWiring = ResolvedSecurityWiring.empty
   private var _user_notification_forwarding_registered: Boolean = false
 
@@ -137,6 +138,9 @@ final class Subsystem(
 
   def componentApiResolver: ComponentApiResolver =
     _component_api_resolver
+
+  def spiInvoker: SpiInvoker =
+    _spi_invoker
 
   def withComponentApiResolver(resolver: ComponentApiResolver): Subsystem = {
     _component_api_resolver = _component_api_resolver.merge(resolver)
@@ -309,10 +313,10 @@ final class Subsystem(
 
   private def _execute_with_metadata(
     request: Request,
-    httpRequest: Option[HttpRequest]
+    httprequest: Option[HttpRequest]
   ): Consequence[ExecutionResult] = {
     val requestwithhttpproperties =
-      httpRequest
+      httprequest
         .map(req => request.copy(properties = request.properties ++ _framework_properties_from_http(req)))
         .getOrElse(request)
     var lastexecutionmetadata = RuntimeContext.ExecutionMetadata.empty
@@ -323,44 +327,24 @@ final class Subsystem(
         case None =>
           Consequence.operationNotFound("operation route")
       }
-      normalizedRequest <- _prepare_filebundle_parameters(route._3, requestwithhttpproperties)
+      normalizedrequest <- _prepare_filebundle_parameters(route._3, requestwithhttpproperties)
       response <- {
         val (component, _, _) = route
-        val domainRequest = _domain_request(normalizedRequest)
-        IngressSecurityResolver.resolve(component.logic.executionContext(), normalizedRequest).flatMap { security =>
-          val executionContext =
-            _with_http_runtime_parameters(security.executionContext, httpRequest)
-          given ExecutionContext = executionContext
-          _authorize_operation(route, executionContext).flatMap { _ =>
-            val operationDomainRequest = _operation_business_request(route, domainRequest)
-            val oprequest = component.logic.makeOperationRequest(operationDomainRequest)
-            _observe_operation_request_validation_failure(
-              route,
-              operationDomainRequest,
-              oprequest,
-              executionContext
-            )
-            oprequest.flatMap {
-              case action: Action =>
-                component.logic.executeAction(action, executionContext).flatMap { response =>
-                  lastexecutionmetadata = executionContext.runtime.executionMetadata
-                  _apply_operation_association_bindings(route, domainRequest, response, executionContext).map { bound =>
-                    lastexecutionmetadata = executionContext.runtime.executionMetadata
-                    ExecutionResult(bound, lastexecutionmetadata)
-                  }
-                }.recoverWith { conclusion =>
-                  lastexecutionmetadata = executionContext.runtime.executionMetadata
-                  Consequence.Failure(conclusion)
-                }
-              case _ =>
-                Consequence.argumentInvalid("OperationRequest must be Action")
-            }
+        IngressSecurityResolver.resolve(component.logic.executionContext(), normalizedrequest).flatMap { security =>
+          val executioncontext =
+            _with_http_runtime_parameters(security.executionContext, httprequest)
+          _execute_resolved_operation(route, normalizedrequest, executioncontext).map { result =>
+            lastexecutionmetadata = executioncontext.runtime.executionMetadata
+            ExecutionResult(result, lastexecutionmetadata)
+          }.recoverWith { conclusion =>
+            lastexecutionmetadata = executioncontext.runtime.executionMetadata
+            Consequence.Failure(conclusion)
           }
         }
       }
     } yield response
     _observe_execute_failure(requestwithhttpproperties, r)
-    httpRequest match {
+    httprequest match {
       case Some(_) =>
         r.recover { conclusion =>
           ExecutionResult(
@@ -373,9 +357,106 @@ final class Subsystem(
     }
   }
 
+  private def _execute_resolved_operation(
+    route: (Component, ServiceDefinition, OperationDefinition),
+    request: Request,
+    executioncontext: ExecutionContext
+  ): Consequence[OperationResponse] = {
+    val (component, _, _) = route
+    val domainrequest = _domain_request(request)
+    given ExecutionContext = executioncontext
+    _authorize_operation(route, executioncontext).flatMap { _ =>
+      val operationdomainrequest = _operation_business_request(route, domainrequest)
+      val oprequest = component.logic.makeOperationRequest(operationdomainrequest)
+      _observe_operation_request_validation_failure(
+        route,
+        operationdomainrequest,
+        oprequest,
+        executioncontext
+      )
+      oprequest.flatMap {
+        case action: Action =>
+          component.logic.executeAction(action, executioncontext).flatMap { response =>
+            _apply_operation_association_bindings(route, domainrequest, response, executioncontext)
+          }
+        case _ =>
+          Consequence.argumentInvalid("OperationRequest must be Action")
+      }
+    }
+  }
+
+  private[cncf] def _invoke_spi(
+    binding: ResolvedSpiBinding,
+    selector: SpiOperationSelector,
+    record: Record
+  )(using executionContext: ExecutionContext): Consequence[OperationResponse] =
+    if (!binding._target_component.subsystem.contains(this))
+      Consequence.serviceUnavailable(
+        s"resolved SPI binding belongs to another subsystem: provider=${binding.provider.instanceId.canonicalKey}"
+      )
+    else
+      for {
+        route <- _resolve_spi_route(binding, selector)
+        request = Request.of(
+          component = binding.provider.component,
+          service = route._2.name,
+          operation = route._3.name,
+          properties = record.fields.map(field => Property(field.key, field.value, None)).toList
+        )
+        normalized <- _prepare_filebundle_parameters(route._3, request)
+        response <- _execute_resolved_operation(route, normalized, executionContext)
+      } yield response
+
+  private def _resolve_spi_route(
+    binding: ResolvedSpiBinding,
+    selector: SpiOperationSelector
+  ): Consequence[(Component, ServiceDefinition, OperationDefinition)] = {
+    val component = binding._target_component
+    val services = component.protocol.services.services.toVector
+    val exposed = binding.operations.exists { operation =>
+      NamingConventions.equivalentByNormalized(operation.operation, selector.operation) &&
+        selector.service.forall(requested => operation.service.exists(
+          declared => NamingConventions.equivalentByNormalized(declared, requested)
+        ))
+    }
+    val matches = if (!exposed) Vector.empty else selector.service match {
+      case Some(servicename) =>
+        services
+          .filter(service => NamingConventions.equivalentByNormalized(service.name, servicename))
+          .flatMap(service => service.operations.operations.toVector
+            .filter(operation => NamingConventions.equivalentByNormalized(operation.name, selector.operation))
+            .map(operation => (component, service, operation)))
+      case None =>
+        services.flatMap(service => service.operations.operations.toVector
+          .filter(operation => NamingConventions.equivalentByNormalized(operation.name, selector.operation))
+          .map(operation => (component, service, operation)))
+    }
+    matches match {
+      case Vector(route) =>
+        Consequence.success(route)
+      case Vector() =>
+        if (!exposed)
+          Consequence.operationNotFound(
+            s"component API operation is not exposed by contract ${binding.provider.contract}: " +
+              s"service=${selector.service.getOrElse("*")}, operation=${selector.operation}"
+          )
+        else
+          Consequence.operationNotFound(
+            s"component API operation: component=${binding.provider.component}, " +
+              s"instance=${binding.provider.instanceId.instance}, service=${selector.service.getOrElse("*")}, " +
+              s"operation=${selector.operation}"
+          )
+      case xs =>
+        Consequence.operationInvalid(
+          s"ambiguous component API operation: component=${binding.provider.component}, " +
+            s"instance=${binding.provider.instanceId.instance}, operation=${selector.operation}, candidates=${xs.size}"
+        )
+    }
+  }
+
   private def _execute_query_only_with_metadata(
     request: Request,
-    httpRequest: Option[HttpRequest]
+    httprequest: Option[HttpRequest]
   ): Consequence[ExecutionResult] = {
     val r: Consequence[ExecutionResult] = for {
       route <- _resolve_route(request) match {
@@ -384,29 +465,29 @@ final class Subsystem(
         case None =>
           Consequence.operationNotFound("operation route")
       }
-      normalizedRequest <- _prepare_filebundle_parameters(route._3, request)
+      normalizedrequest <- _prepare_filebundle_parameters(route._3, request)
       response <- {
         val (component, _, _) = route
-        val domainRequest = _domain_request(normalizedRequest)
-        IngressSecurityResolver.resolve(component.logic.executionContext(), normalizedRequest).flatMap { security =>
-          val executionContext =
-            _with_http_runtime_parameters(security.executionContext, httpRequest)
-          given ExecutionContext = executionContext
-          if (executionContext.framework.traceJob) {
+        val domainrequest = _domain_request(normalizedrequest)
+        IngressSecurityResolver.resolve(component.logic.executionContext(), normalizedrequest).flatMap { security =>
+          val executioncontext =
+            _with_http_runtime_parameters(security.executionContext, httprequest)
+          given ExecutionContext = executioncontext
+          if (executioncontext.framework.traceJob) {
             Consequence.operationInvalid("CompositeQuery accepts only direct Query execution; trace-job is not allowed")
-          } else _authorize_operation(route, executionContext).flatMap { _ =>
-            val operationDomainRequest = _operation_business_request(route, domainRequest)
-            val oprequest = component.logic.makeOperationRequest(operationDomainRequest)
+          } else _authorize_operation(route, executioncontext).flatMap { _ =>
+            val operationdomainrequest = _operation_business_request(route, domainrequest)
+            val oprequest = component.logic.makeOperationRequest(operationdomainrequest)
             _observe_operation_request_validation_failure(
               route,
-              operationDomainRequest,
+              operationdomainrequest,
               oprequest,
-              executionContext
+              executioncontext
             )
             oprequest.flatMap {
               case action: QueryAction =>
-                component.logic.executeAction(action, executionContext).map { response =>
-                  ExecutionResult(response, executionContext.runtime.executionMetadata)
+                component.logic.executeAction(action, executioncontext).map { response =>
+                  ExecutionResult(response, executioncontext.runtime.executionMetadata)
                 }
               case action: Action =>
                 Consequence.operationInvalid(s"CompositeQuery accepts only Query operations: ${action.request.name}")
@@ -429,29 +510,29 @@ final class Subsystem(
   ): Consequence[OperationResponse] = {
     val (component, _, operation) = route
     given ExecutionContext = context
-    val childEntityBindings =
+    val childentitybindings =
       _operation_child_entity_bindings(component, operation).filter(_.isAutomaticCreate)
-    val associationBindings =
+    val associationbindings =
       _operation_association_binding(component, operation).filter(_.isAutomaticCreate).toVector
-    val imageBindings =
+    val imagebindings =
       _operation_image_binding(component, operation).filter(_.toAssociationBinding.isAutomaticCreate).toVector
     for {
-      childSummaries <- childEntityBindings.foldLeft(
+      childsummaries <- childentitybindings.foldLeft(
         Consequence.success(Vector.empty[(CmlOperationChildEntityBinding, ChildEntityBindingSummary)])
       ) { (z, binding) =>
         z.flatMap { xs =>
           _apply_child_entity_binding(component, binding, request, response).map(summary => xs :+ (binding -> summary))
         }
       }
-      associationSummaries <- _apply_association_bindings(associationBindings, request, response).recoverWith { conclusion =>
-        _compensate_child_entity_bindings(component, childSummaries.reverse)
+      associationsummaries <- _apply_association_bindings(associationbindings, request, response).recoverWith { conclusion =>
+        _compensate_child_entity_bindings(component, childsummaries.reverse)
           .flatMap(_ => Consequence.Failure[Vector[(CmlOperationAssociationBinding, Vector[AssociationBindingAttachResult])]](conclusion))
       }
-      _ <- imageBindings.foldLeft(Consequence.unit) { (z, binding) =>
+      _ <- imagebindings.foldLeft(Consequence.unit) { (z, binding) =>
         z.flatMap(_ => _apply_image_binding(component, binding, request, response))
       }.recoverWith { conclusion =>
-        _compensate_association_bindings(associationSummaries.reverse)
-          .flatMap(_ => _compensate_child_entity_bindings(component, childSummaries.reverse))
+        _compensate_association_bindings(associationsummaries.reverse)
+          .flatMap(_ => _compensate_child_entity_bindings(component, childsummaries.reverse))
           .flatMap(_ => Consequence.Failure[Unit](conclusion))
       }
     } yield response
@@ -485,12 +566,12 @@ final class Subsystem(
     component: Component,
     operation: OperationDefinition
   ): Set[String] = {
-    val protocolNames = operation.specification.request.parameters.toVector.flatMap(_.names)
-    val cmlNames = component.operationDefinitions
+    val protocolnames = operation.specification.request.parameters.toVector.flatMap(_.names)
+    val cmlnames = component.operationDefinitions
       .find(definition => NamingConventions.equivalentByNormalized(definition.name, operation.name))
       .toVector
       .flatMap(_.parameters.map(_.name))
-    (protocolNames ++ cmlNames).toSet
+    (protocolnames ++ cmlnames).toSet
   }
 
   private def _is_operation_binding_parameter(
@@ -710,10 +791,10 @@ final class Subsystem(
     request: Request
   ): Consequence[Subsystem.WiredExecutionResult] =
     for {
-      mediatedRequest <- _apply_request_glue(binding, request)
-      response <- execute(mediatedRequest)
-      mediatedResponse <- _apply_response_glue(binding, mediatedRequest, response)
-    } yield mediatedResponse
+      mediatedrequest <- _apply_request_glue(binding, request)
+      response <- execute(mediatedrequest)
+      mediatedresponse <- _apply_response_glue(binding, mediatedrequest, response)
+    } yield mediatedresponse
 
   def executeAction(action: Action): Consequence[OperationResponse] =
     _resolve_route(action.request) match {
@@ -734,19 +815,19 @@ final class Subsystem(
   ): Consequence[Unit] = {
     val (component, service, operation) = route
     val selector = s"${component.name}.${service.name}.${operation.name}"
-    val runtimeConfig = RuntimeConfig.from(configuration)
+    val runtimeconfig = RuntimeConfig.from(configuration)
     val rule = if (component.name == AdminComponent.name)
-      Some(AdminAuthorizationPolicy.operationRule(selector, runtimeConfig))
+      Some(AdminAuthorizationPolicy.operationRule(selector, runtimeconfig))
     else operation match {
       case provider: OperationAuthorizationProvider =>
-        Some(provider.operationAuthorization(runtimeConfig))
+        Some(provider.operationAuthorization(runtimeconfig))
       case _ =>
         _cml_operation_authorization_rule(component, operation.name)
           .orElse(descriptor.flatMap(_.operationAuthorizationRule(selector)))
     }
     rule match {
       case Some(r) =>
-        given ExecutionContext = _operation_authorization_context(ctx, runtimeConfig)
+        given ExecutionContext = _operation_authorization_context(ctx, runtimeconfig)
         OperationAuthorization.authorize(selector, r)
       case _ =>
         Consequence.unit
@@ -755,10 +836,10 @@ final class Subsystem(
 
   private def _cml_operation_authorization_rule(
     component: Component,
-    operationName: String
+    operationname: String
   ): Option[org.goldenport.cncf.security.OperationAuthorizationRule] =
     component.operationDefinitions
-      .find(x => _normalize_operation_name(x.name) == _normalize_operation_name(operationName))
+      .find(x => _normalize_operation_name(x.name) == _normalize_operation_name(operationname))
       .flatMap(_.operationAuthorization)
 
   private def _normalize_operation_name(name: String): String =
@@ -766,7 +847,7 @@ final class Subsystem(
 
   private def _operation_authorization_context(
     ctx: ExecutionContext,
-    runtimeConfig: RuntimeConfig
+    runtimeconfig: RuntimeConfig
   ): ExecutionContext = {
     val runtime = new RuntimeContext(
       core = ctx.runtime.core,
@@ -777,7 +858,7 @@ final class Subsystem(
       disposeAction = _ => (),
       token = "operation-authorization",
       context = ctx.runtime.context,
-      operationMode = runtimeConfig.operationMode,
+      operationMode = runtimeconfig.operationMode,
       transitionValidationHook = ctx.runtime.transitionValidationHook,
       entityCreateDefaultsPolicy = ctx.runtime.entityCreateDefaultsPolicy
     )
@@ -813,17 +894,17 @@ final class Subsystem(
     request: Request,
     response: Response
   ): Consequence[Subsystem.WiredExecutionResult] = {
-    val requestMode = _glue_mode(binding, "request/mode")
-    val responseMode = _glue_mode(binding, "response/mode")
-    responseMode match {
+    val requestmode = _glue_mode(binding, "request/mode")
+    val responsemode = _glue_mode(binding, "response/mode")
+    responsemode match {
       case "passthrough" =>
         Consequence.success(
           Subsystem.WiredExecutionResult(
             request = request,
             response = response,
             glueApplied = Record.data(
-              "request_mode" -> requestMode,
-              "response_mode" -> responseMode
+              "request_mode" -> requestmode,
+              "response_mode" -> responsemode
             )
           )
         )
@@ -950,9 +1031,9 @@ final class Subsystem(
     val segments = req.pathParts
     val spec = if (_is_spec_route(segments)) _resolve_spec_route(segments) else None
     spec.orElse {
-      val normalizedSegments =
+      val normalizedsegments =
         PathPreNormalizer.rewriteSegments(segments, _http_run_mode, _alias_resolver)
-      normalizedSegments match {
+      normalizedsegments match {
         case Vector(componentname, servicename, operationname) =>
           _resolve_route_via_resolver(componentname, servicename, operationname)
         case _ =>
@@ -1024,13 +1105,13 @@ final class Subsystem(
   private def _resolve_spec_route(
     segments: Vector[String]
   ): Option[(Component, ServiceDefinition, OperationDefinition)] = {
-    val specSegments = segments match {
+    val specsegments = segments match {
       case Vector("spec-old", rest @ _*) =>
         rest.toVector
       case _ =>
         segments
     }
-    val opsegment = specSegments match {
+    val opsegment = specsegments match {
       case Vector("spec", "export", op) =>
         Some(op)
       case Vector("spec", "current", op) =>
@@ -1355,7 +1436,7 @@ object Subsystem {
 
   object Config {
     def from(conf: ResolvedConfiguration): Consequence[Config] = {
-      val httpDriver =
+      val httpdriver =
         conf.get[String]("cncf.subsystem.http.driver").flatMap {
           case Some(value) => Consequence.success(value)
           case None        => Consequence.argumentMissing("cncf.subsystem.http.driver")
@@ -1367,12 +1448,12 @@ object Subsystem {
           .map(_.getOrElse("normal"))
           .flatMap { value =>
             RunMode.from(value) match {
-              case Some(runMode) => Consequence.success(runMode)
+              case Some(runmode) => Consequence.success(runmode)
               case None          => Consequence.argumentInvalid(s"invalid run mode: ${value}")
             }
           }
 
-      (httpDriver, mode).mapN(Config.apply)
+      (httpdriver, mode).mapN(Config.apply)
     }
   }
 }

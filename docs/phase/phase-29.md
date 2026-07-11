@@ -54,8 +54,8 @@ Scope boundaries:
 - B (DONE): TC-02 — Named component instance descriptor and creation model.
 - C (DONE): TC-03 — Exact instance binding and resolver semantics.
 - D (DONE): TC-04 — Socket set and abstract component selection.
-- E (NEXT): TC-05 — Generic SPI invoker and canonical operation dispatch.
-- F (TODO): TC-06 — Cozy-generated typed component API and proxy.
+- E (DONE): TC-05 — Generic SPI invoker and canonical operation dispatch.
+- F (NEXT): TC-06 — Cozy-generated typed component API and proxy.
 - G (TODO): TC-07 — Standard SPI single/set socket alignment.
 - H (TODO): TC-08 — ArtScene + `textus-scraper` development-driver smoke.
 - I (TODO): TC-09 — Observability, failure semantics, and regression coverage.
@@ -63,9 +63,8 @@ Scope boundaries:
 
 Resume hint:
 
-- Start TC-05 from resolved SPI member references and generic `Record`
-  invocation; preserve TC-04 assembly-bounded selection and dispatch through
-  canonical operation/action execution.
+- Start TC-06 from the CML service contract surface and generate typed API
+  traits plus proxies over TC-05 `ResolvedSpiBinding` and `SpiInvoker`.
 
 ## 4. Development Items
 
@@ -73,7 +72,7 @@ Resume hint:
 - [x] TC-02: Implement named component instance declarations and creation.
 - [x] TC-03: Implement exact instance SPI binding and resolution.
 - [x] TC-04: Implement socket sets and abstract component selection.
-- [ ] TC-05: Implement generic invocation through the operation/action path.
+- [x] TC-05: Implement generic invocation through the operation/action path.
 - [ ] TC-06: Generate typed component APIs and proxies from CML.
 - [ ] TC-07: Align standard SPI contracts with single/set socket forms.
 - [ ] TC-08: Complete the ArtScene + `textus-scraper` driver smoke.

@@ -376,11 +376,12 @@ Generic runtime tools, scripts, and rule engines may use a `Record` boundary:
 
 ```scala
 spiInvoker.invoke(
-  socket = SpiSocketRef("art-scene", "scrapers"),
-  operation = "fetch-page",
+  contract = TextusScraperApi.contract,
+  socket = Some(SpiSocketRef("art-scene", "scrapers", TextusScraperApi.contract.name)),
+  operation = SpiOperationSelector("fetch-page", Some("scraper")),
   request = requestRecord,
   selector = ComponentSelector(
-    component = "textus-scraper",
+    component = Some("textus-scraper"),
     purpose = Some("javascript-heavy-site")
   )
 )
@@ -404,7 +405,7 @@ private final class GeneratedTextusScraperApiProxy(
     invoker
       .invoke(
         binding = binding,
-        operation = "fetch-page",
+        operation = SpiOperationSelector("fetch-page", Some("scraper")),
         request = request.toRecord
       )
       .flatMap(FetchPageResponse.fromRecord)
@@ -648,7 +649,7 @@ The canonical path is:
 typed Scala method
   -> generated component API proxy
   -> SPI invoker / resolved binding
-  -> OperationCall / ActionEngine
+  -> ComponentLogic request construction / ActionEngine
   -> provider component operation
 ```
 
@@ -727,15 +728,29 @@ The current CNCF source already provides part of this model:
 - assembly SPI bindings can select exact provider/consumer instances and named
   sockets while preserving componentlet participation under the owning logical
   component instance;
+- `ResolvedSpiBinding` retains selected socket/provider identity, the exact
+  assembly participant, and the contract operation catalog used for dispatch;
+- `SpiOperationProvider` publishes the operations exposed by a provider
+  contract; generic invocation rejects undeclared component operations;
+- `SpiInvoker` invokes a selected provider operation through request
+  validation, authorization, `ComponentLogic`, and `ActionEngine` using a
+  provider-neutral `Record` boundary;
+- generic invocation with a socket reference selects only providers actually
+  bound to that assembly socket, while socket-free programmatic invocation can
+  select from the subsystem's assembly-admitted provider catalog;
+- resolved bindings remain owned by their source subsystem and cannot be
+  invoked through a different subsystem;
+- typed service resolution and generic operation invocation share the same
+  health, policy, priority, default, and ambiguity rules within those bounds;
 - SPI calls such as `AiRunner` are ordinary typed Scala method calls.
 
 The following target features are not yet complete:
 
-- generic `SpiInvoker` for contract/operation/`Record` invocation;
 - generated typed component API proxies from CML operations;
 - Cozy-generated paired single-socket and socket-set contracts for
   component-specific APIs;
-- calltree metadata for selected component instance and selection rule.
+- generated proxy conversion between public request/response types and the
+  generic `Record` boundary.
 
 Until these features exist, component implementations must not emulate them by
 importing another component's implementation package or by silently selecting

@@ -35,6 +35,8 @@ object SpiResolver {
     val singles = _single_sockets(components)
     val sets = _socket_sets(components)
     _validate_runtime_bindings(singles, sets, bindings).flatMap { _ =>
+      _resolve_socket_bindings(singles, sets, providers, bindings)
+    }.flatMap { resolvedbindings =>
       val installedsingles = singles.filterNot(_.socket.isSpiInstalled).foldLeft(
         Consequence.success(Vector.empty[ResolvedSpiMember[?]])
       ) { (result, socket) =>
@@ -52,7 +54,11 @@ object SpiResolver {
       }.map { members =>
         Resolution(
           components,
-          ComponentApiResolver.withProviders(members, providers.map(_component_api_provider))
+          ComponentApiResolver._with_providers(
+            members,
+            providers.map(_component_api_provider),
+            resolvedbindings
+          )
         )
       }
     }
@@ -156,6 +162,95 @@ object SpiResolver {
         }
       }
     }
+
+  private def _resolve_socket_bindings(
+    singles: Vector[SingleSocketSlot],
+    sets: Vector[SetSocketSlot],
+    providers: Vector[ProviderSlot],
+    bindings: Vector[SpiRuntimeBinding]
+  )(using ExecutionContext): Consequence[Vector[ResolvedSpiBinding]] = {
+    val singleresult = singles.foldLeft(Consequence.success(Vector.empty[ResolvedSpiBinding])) { (result, socket) =>
+      result.flatMap { resolved =>
+        _resolve_single_socket_binding(socket, providers, bindings).map(_.fold(resolved)(resolved :+ _))
+      }
+    }
+    singleresult.flatMap { singlebindings =>
+      sets.foldLeft(Consequence.success(singlebindings)) { (result, socket) =>
+        result.flatMap { resolved =>
+          _resolve_set_socket_bindings(socket, providers, bindings).map(resolved ++ _)
+        }
+      }
+    }
+  }
+
+  private def _resolve_single_socket_binding(
+    socket: SingleSocketSlot,
+    providers: Vector[ProviderSlot],
+    bindings: Vector[SpiRuntimeBinding]
+  )(using ExecutionContext): Consequence[Option[ResolvedSpiBinding]] = {
+    val rawsocket = socket.socket
+    val contract = rawsocket.spiContract.asInstanceOf[SpiContract[Any]]
+    _single_binding(socket, contract, bindings).flatMap { binding =>
+      val selection = _selection(rawsocket.spiSelection, binding)
+      val candidates = providers.filter { provider =>
+        _provider_matches_binding(provider, binding) &&
+          _is_healthy(provider.component) &&
+          provider.provider.asInstanceOf[SpiProvider[Any]].supports(contract, selection)
+      }
+      _select_default_instance(binding, candidates).flatMap {
+        case Vector(provider) =>
+          Consequence.success(Some(_resolved_binding(socket.component, rawsocket.spiSocketName, contract, provider, selection)))
+        case Vector() if !rawsocket.spiRequired =>
+          Consequence.success(None)
+        case Vector() =>
+          Consequence.serviceUnavailable(
+            s"SPI provider not found: contract=${contract.name}, runtimeClass=${contract.runtimeClass.getName}, " +
+              s"provider=${binding.map(_provider_selector_display).getOrElse("automatic")}, selection=$selection"
+          )
+        case xs =>
+          Consequence.serviceUnavailable(
+            s"ambiguous SPI providers: contract=${contract.name}, runtimeClass=${contract.runtimeClass.getName}, " +
+              s"provider=${binding.map(_provider_selector_display).getOrElse("automatic")}, selection=$selection, candidates=${xs.size}"
+          )
+      }
+    }
+  }
+
+  private def _resolve_set_socket_bindings(
+    socket: SetSocketSlot,
+    providers: Vector[ProviderSlot],
+    bindings: Vector[SpiRuntimeBinding]
+  )(using ExecutionContext): Consequence[Vector[ResolvedSpiBinding]] = {
+    val rawsocket = socket.socket
+    val contract = rawsocket.spiContract.asInstanceOf[SpiContract[Any]]
+    val matchedbindings = bindings.filter { binding =>
+      _set_socket_matches_selector(socket, binding.socket) && binding.socket.contract == contract.name
+    }
+    val requests = if (matchedbindings.isEmpty) Vector(None) else matchedbindings.map(Some(_))
+    val selected = requests.flatMap { binding =>
+      val selection = _selection(rawsocket.spiSelection, binding)
+      providers.filter { provider =>
+        _provider_matches_binding(provider, binding) &&
+          _is_healthy(provider.component) &&
+          provider.provider.asInstanceOf[SpiProvider[Any]].supports(contract, selection)
+      }.map(provider => (provider, selection))
+    }
+    val duplicate = selected.groupBy(x => _provider_instance_group_key(x._1)).collectFirst {
+      case (key, xs) if xs.size > 1 => key
+    }
+    duplicate match {
+      case Some(key) =>
+        Consequence.serviceUnavailable(s"duplicate SPI socket set provider instance: $key")
+      case None if rawsocket.spiRequired && selected.isEmpty =>
+        Consequence.serviceUnavailable(
+          s"required SPI socket set is empty: contract=${contract.name}, socket=${rawsocket.spiSocketName}"
+        )
+      case None =>
+        Consequence.success(selected.map { case (provider, selection) =>
+          _resolved_binding(socket.component, rawsocket.spiSocketName, contract, provider, selection)
+        })
+    }
+  }
 
   private def _install_single(
     socket: SingleSocketSlot,
@@ -264,43 +359,71 @@ object SpiResolver {
         selectionMode = selection.mode,
         selectionEngine = selection.engine
       )
-      val metadata = provider.component.instanceMetadata
-      val health = provider.component.healthSnapshot
       ResolvedSpiMember(
         SpiTraceSupport.wrapInstalled(service, trace),
-        SpiMemberMetadata(
-          contract = contract.name,
-          component = _component_type(provider.component),
-          instanceId = _logical_instance_id(provider.component).getOrElse(
-            ComponentInstanceId(_component_type(provider.component), _component_instance(provider.component).getOrElse("default"))
-          ),
-          purposes = metadata.map(_.purposes.toSet).getOrElse(Set.empty),
-          capabilities = metadata.map(_.capabilities.toSet).getOrElse(Set.empty),
-          tags = metadata.map(_.tags.toSet).getOrElse(Set.empty),
-          priority = metadata.map(_.priority).getOrElse(0),
-          isDefault = metadata.exists(_.isDefault),
-          healthStatus = health.status
-        )
+        _spi_member_metadata(provider.component, contract.name)
       )
     }
 
+  private def _resolved_binding(
+    socketcomponent: Component,
+    socketname: String,
+    contract: SpiContract[Any],
+    provider: ProviderSlot,
+    selection: SpiSelection
+  ): ResolvedSpiBinding = {
+    val metadata = _spi_member_metadata(provider.component, contract.name)
+    val socketinstance = _logical_instance_id(socketcomponent)
+      .map(_.instance)
+      .orElse(_component_instance(socketcomponent))
+    ResolvedSpiBinding(
+      socket = Some(SpiSocketRef(
+        component = _component_type(socketcomponent),
+        name = socketname,
+        contract = contract.name,
+        instance = socketinstance
+      )),
+      provider = SpiProviderRef(metadata.component, metadata.instanceId, contract.name),
+      metadata = metadata,
+      selector = ComponentSelector(
+        component = Some(metadata.component),
+        instance = Some(metadata.instanceId.instance)
+      ),
+      selection = selection,
+      operations = provider.provider match {
+        case operationprovider: SpiOperationProvider => operationprovider.spiOperations(contract.name)
+        case _ => Vector.empty
+      },
+      _target_component = provider.component
+    )
+  }
+
+  private def _spi_member_metadata(
+    component: Component,
+    contract: String
+  ): SpiMemberMetadata = {
+    val instancemetadata = component.instanceMetadata
+    val health = component.healthSnapshot
+    SpiMemberMetadata(
+      contract = contract,
+      component = _component_type(component),
+      instanceId = _logical_instance_id(component).getOrElse(
+        ComponentInstanceId(_component_type(component), _component_instance(component).getOrElse("default"))
+      ),
+      purposes = instancemetadata.map(_.purposes.toSet).getOrElse(Set.empty),
+      capabilities = instancemetadata.map(_.capabilities.toSet).getOrElse(Set.empty),
+      tags = instancemetadata.map(_.tags.toSet).getOrElse(Set.empty),
+      priority = instancemetadata.map(_.priority).getOrElse(0),
+      isDefault = instancemetadata.exists(_.isDefault),
+      healthStatus = health.status
+    )
+  }
+
   private def _component_api_provider(provider: ProviderSlot): ComponentApiProvider = {
     val component = provider.component
-    val metadata = component.instanceMetadata
     ComponentApiProvider(
-      SpiMemberMetadata(
-        contract = "",
-        component = _component_type(component),
-        instanceId = _logical_instance_id(component).getOrElse(
-          ComponentInstanceId(_component_type(component), _component_instance(component).getOrElse("default"))
-        ),
-        purposes = metadata.map(_.purposes.toSet).getOrElse(Set.empty),
-        capabilities = metadata.map(_.capabilities.toSet).getOrElse(Set.empty),
-        tags = metadata.map(_.tags.toSet).getOrElse(Set.empty),
-        priority = metadata.map(_.priority).getOrElse(0),
-        isDefault = metadata.exists(_.isDefault),
-        healthStatus = component.healthSnapshot.status
-      ),
+      _spi_member_metadata(component, ""),
+      component,
       provider.provider
     )
   }

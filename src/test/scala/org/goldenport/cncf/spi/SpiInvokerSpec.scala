@@ -1,0 +1,555 @@
+package org.goldenport.cncf.spi
+
+import cats.data.NonEmptyVector
+import io.circe.Json
+import java.nio.file.Path
+import org.goldenport.Consequence
+import org.goldenport.protocol.{Property, Protocol, Request}
+import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
+import org.goldenport.protocol.spec as spec
+import org.goldenport.record.Record
+import org.goldenport.schema.DataType
+import org.goldenport.cncf.action.{Action, ActionCall, CommandAction, CommandExecutionMode, ProcedureActionCall, QueryAction}
+import org.goldenport.cncf.component.{Component, ComponentId, ComponentInit, ComponentInstanceId, ComponentInstanceMetadata, ComponentOrigin}
+import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.cncf.event.DomainEvent
+import org.goldenport.cncf.security.OperationAuthorizationRule
+import org.goldenport.cncf.subsystem.{GenericSubsystemDescriptor, Subsystem}
+import org.goldenport.cncf.testutil.TestComponentFactory
+import org.scalatest.GivenWhenThen
+import org.scalatest.matchers.should.Matchers
+import org.scalatest.wordspec.AnyWordSpec
+
+/*
+ * @since   Jul. 11, 2026
+ * @version Jul. 11, 2026
+ * @author  ASAMI, Tomoharu
+ */
+final class SpiInvokerSpec
+  extends AnyWordSpec
+  with Matchers
+  with GivenWhenThen {
+
+  "SpiInvoker canonical invocation" should {
+    "use a selected assembly binding without rematerializing the typed service" in {
+      Given("an assembly-admitted provider with an exact instance and a component operation")
+      val fixture = InvocationFixture.create()
+      given ExecutionContext = ExecutionContext.withFrameworkCallTreeEnabled(ExecutionContext.create(), enabled = true)
+      val secret = "not-for-calltree"
+      val request = Record.create(Vector(
+        "tag" -> "first",
+        "tag" -> "second",
+        "secret" -> secret
+      ))
+      val socket = SpiSocketRef("consumer", "catalog", InvocationContract.name)
+
+      When("the generic invoker resolves the exact provider and invokes the operation")
+      val result = fixture.subsystem.spiInvoker.invoke(
+        InvocationContract.contract,
+        SpiOperationSelector("echo", Some("api")),
+        request,
+        ComponentSelector(component = Some("test_provider"), instance = Some("primary")),
+        Some(socket)
+      )
+
+      Then("the Record fields and caller ExecutionContext reach the provider without materializing the typed service")
+      result shouldBe a[Consequence.Success[_]]
+      result.toOption.get.asMap.get("tag").collect {
+        case values: Seq[?] => values.toVector.map(_.toString)
+      } shouldBe Some(Vector("first", "second"))
+      fixture.provider.observedExecutionContext.exists(_.runtime eq summon[ExecutionContext].runtime) shouldBe true
+      fixture.provider.typedProviderMaterializationCount shouldBe fixture.materializationsAfterAssembly
+
+      And("safe selection metadata is visible in CallTree without request values")
+      val calltree = summon[ExecutionContext].observability.callTreeContext.build().getOrElse(fail("calltree missing")).toRecord.print
+      calltree should include ("spi:invocation-api.echo")
+      calltree should include ("socket_name=catalog")
+      calltree should include ("provider_instance=primary")
+      calltree should not include secret
+    }
+  }
+
+  "SpiInvoker provider resolution" should {
+    "select a provider by abstract purpose before invocation" in {
+      Given("two provider instances with different purposes")
+      val subsystem = TestComponentFactory.emptySubsystem("spi_invoker_purpose")
+      val static = InvocationFixture.addProvider(subsystem, "static", Vector("official-site"))
+      val dynamic = InvocationFixture.addProvider(subsystem, "dynamic", Vector("javascript-heavy-site"))
+      InvocationFixture.installResolver(subsystem, Vector(static, dynamic))
+      given ExecutionContext = ExecutionContext.create()
+
+      When("the generic invocation requests the dynamic purpose")
+      val result = subsystem.spiInvoker.invoke(
+        InvocationContract.contract,
+        SpiOperationSelector("identity", Some("api")),
+        Record.empty,
+        ComponentSelector(component = Some("test_provider"), purpose = Some("javascript-heavy-site"))
+      )
+
+      Then("the operation runs on the selected component instance")
+      result.toOption.get.getString("instance") shouldBe Some("dynamic")
+    }
+
+    "restrict socket invocation to its assembly-bound providers" in {
+      Given("one socket bound to the static provider while a dynamic provider is also assembly-admitted")
+      val subsystem = TestComponentFactory.emptySubsystem("spi_invoker_socket_boundary")
+      val static = InvocationFixture.addProvider(subsystem, "static", Vector("official-site"))
+      val dynamic = InvocationFixture.addProvider(subsystem, "dynamic", Vector("javascript-heavy-site"))
+      val (consumer, socket) = InvocationFixture.addConsumer(subsystem, "consumer", "catalog")
+      val binding = SpiRuntimeBinding(
+        SpiSocketSelector(
+          component = Some("consumer"),
+          contract = InvocationContract.name,
+          name = Some("catalog")
+        ),
+        SpiProviderSelector(component = Some("test_provider"), instance = Some("static"))
+      )
+      InvocationFixture.installResolver(subsystem, Vector(static, dynamic, consumer), Vector(binding))
+      given ExecutionContext = ExecutionContext.create()
+      val socketref = SpiSocketRef("consumer", socket.spiSocketName, InvocationContract.name)
+
+      When("the socket route requests the unbound dynamic provider and the programmatic route requests the same provider")
+      val socketresult = subsystem.spiInvoker.invoke(
+        InvocationContract.contract,
+        SpiOperationSelector("identity", Some("api")),
+        Record.empty,
+        ComponentSelector(instance = Some("dynamic")),
+        Some(socketref)
+      )
+      val programmaticresult = subsystem.spiInvoker.invoke(
+        InvocationContract.contract,
+        SpiOperationSelector("identity", Some("api")),
+        Record.empty,
+        ComponentSelector(instance = Some("dynamic"))
+      )
+
+      Then("the socket route rejects the unbound provider while programmatic assembly resolution remains available")
+      socketresult shouldBe a[Consequence.Failure[_]]
+      programmaticresult.toOption.get.getString("instance") shouldBe Some("dynamic")
+    }
+
+    "reject a binding resolved by another subsystem" in {
+      Given("two independent subsystems and a binding resolved by the first")
+      val first = InvocationFixture.create("spi_invoker_owner_first")
+      val second = InvocationFixture.create("spi_invoker_owner_second")
+      given ExecutionContext = ExecutionContext.create()
+      val binding = first.subsystem.componentApiResolver.resolveBinding(
+        InvocationContract.contract,
+        ComponentSelector(component = Some("test_provider"), instance = Some("primary"))
+      ).toOption.get
+
+      When("the second subsystem invoker receives the foreign binding")
+      val result = second.subsystem.spiInvoker.invoke(
+        binding,
+        SpiOperationSelector("identity", Some("api")),
+        Record.empty
+      )
+
+      Then("the invocation fails before provider operation dispatch")
+      _failure(result) should include ("belongs to another subsystem")
+    }
+  }
+
+  "SpiInvoker canonical dispatch" should {
+    "produce the same business result as ordinary subsystem dispatch" in {
+      Given("one provider operation and one repeated-field request")
+      val fixture = InvocationFixture.create()
+      given ExecutionContext = ExecutionContext.create()
+      val record = Record.create(Vector("tag" -> "first", "tag" -> "second"))
+      val direct = Request.of(
+        component = "test_provider",
+        service = "api",
+        operation = "echo",
+        properties = record.fields.map(field => Property(field.key, field.value, None)).toList
+      )
+
+      When("the operation is called through direct and generic routes")
+      val directresult = fixture.subsystem.executeOperationResponse(direct).flatMap(SpiOperationResponseCodec.toRecord)
+      val genericresult = fixture.subsystem.spiInvoker.invoke(
+        InvocationContract.contract,
+        SpiOperationSelector("echo", Some("api")),
+        record,
+        ComponentSelector(component = Some("test_provider"), instance = Some("primary"))
+      )
+
+      Then("both routes preserve the same Record result")
+      genericresult shouldBe directresult
+    }
+
+    "return structured request operation and selection failures" in {
+      Given("a provider with invalid, failing, missing, and ambiguous operation paths")
+      val fixture = InvocationFixture.create()
+      given ExecutionContext = ExecutionContext.create()
+      val binding = fixture.subsystem.componentApiResolver.resolveBinding(
+        InvocationContract.contract,
+        ComponentSelector(component = Some("test_provider"), instance = Some("primary"))
+      ).toOption.get
+
+      When("each invalid path is invoked")
+      val invalidrequest = fixture.subsystem.spiInvoker.invoke(binding, SpiOperationSelector("invalid", Some("api")), Record.empty)
+      val operationfailure = fixture.subsystem.spiInvoker.invoke(binding, SpiOperationSelector("fail", Some("api")), Record.empty)
+      val missing = fixture.subsystem.spiInvoker.invoke(binding, SpiOperationSelector("missing"), Record.empty)
+      val ambiguous = fixture.subsystem.spiInvoker.invoke(binding, SpiOperationSelector("duplicate"), Record.empty)
+      val mismatchedsocket = fixture.subsystem.componentApiResolver.resolveBinding(
+        InvocationContract.contract,
+        ComponentSelector(component = Some("test_provider")),
+        Some(SpiSocketRef("consumer", "catalog", "other-contract"))
+      )
+
+      Then("each path fails deterministically without a fallback operation")
+      _failure(invalidrequest) should include ("invalid invocation request")
+      _failure(operationfailure) should include ("planned invocation failure")
+      _failure(missing) should include ("not exposed by contract")
+      _failure(ambiguous) should include ("ambiguous component API operation")
+      _failure(mismatchedsocket) should include ("socket contract does not match")
+    }
+
+    "preserve operation authorization" in {
+      Given("a provider operation denied by the subsystem authorization descriptor")
+      val fixture = InvocationFixture.create()
+      fixture.subsystem.withDescriptor(GenericSubsystemDescriptor(
+        path = Path.of("<spi-invoker-authorization>"),
+        subsystemName = "spi-invoker-authorization",
+        operationAuthorization = Map(
+          "test_provider.api.echo" -> OperationAuthorizationRule(deny = true)
+        )
+      ))
+      given ExecutionContext = ExecutionContext.create()
+
+      When("the operation is invoked through SPI")
+      val result = fixture.subsystem.spiInvoker.invoke(
+        InvocationContract.contract,
+        SpiOperationSelector("echo", Some("api")),
+        Record.empty,
+        ComponentSelector(component = Some("test_provider"), instance = Some("primary"))
+      )
+
+      Then("the canonical authorization failure is returned")
+      result shouldBe a[Consequence.Failure[_]]
+    }
+
+    "preserve managed command job UnitOfWork and event semantics" in {
+      Given("a component API command that runs as a synchronous managed job and stages an event")
+      val fixture = InvocationFixture.create("spi_invoker_command")
+      given ExecutionContext = ExecutionContext.create()
+
+      When("the command is invoked through the generic SPI route")
+      val result = fixture.subsystem.spiInvoker.invoke(
+        InvocationContract.contract,
+        SpiOperationSelector("command", Some("api")),
+        Record.empty,
+        ComponentSelector(component = Some("test_provider"), instance = Some("primary"))
+      )
+
+      Then("the command result returns after job execution and UnitOfWork event commit")
+      result.toOption.get.getString("command") shouldBe Some("ok")
+      fixture.provider.jobEngine.listJobs(limit = 20, persistentOnly = false) should not be empty
+      fixture.provider.eventWasStaged shouldBe true
+      fixture.provider.unitOfWorkCommitted shouldBe true
+    }
+  }
+
+  "SpiOperationResponseCodec" should {
+    "convert supported semantic responses and reject opaque responses" in {
+      Given("record scalar void JSON YAML and opaque operation responses")
+
+      When("each response is converted to the generic Record boundary")
+      val record = SpiOperationResponseCodec.toRecord(OperationResponse.RecordResponse(Record.dataAuto("name" -> "record")))
+      val scalar = SpiOperationResponseCodec.toRecord(OperationResponse.Scalar("scalar"))
+      val empty = SpiOperationResponseCodec.toRecord(OperationResponse.Void())
+      val json = SpiOperationResponseCodec.toRecord(OperationResponse.Json(Json.obj("name" -> Json.fromString("json"))))
+      val yaml = SpiOperationResponseCodec.toRecord(OperationResponse.Yaml("name: yaml"))
+      val opaque = SpiOperationResponseCodec.toRecord(OperationResponse.Opaque(new Object()))
+
+      Then("structured values have deterministic Record shapes")
+      record.toOption.get.getString("name") shouldBe Some("record")
+      scalar.toOption.get.getString("value") shouldBe Some("scalar")
+      empty.toOption.get shouldBe Record.empty
+      json.toOption.get.getString("name") shouldBe Some("json")
+      yaml.toOption.get.getString("name") shouldBe Some("yaml")
+      opaque shouldBe a[Consequence.Failure[_]]
+    }
+  }
+
+  private def _failure(result: Consequence[?]): String =
+    result match {
+      case Consequence.Failure(conclusion) => conclusion.display
+      case _ => fail("expected failure")
+    }
+}
+
+private trait InvocationApi
+
+private object InvocationContract {
+  val name = "invocation-api"
+  val contract: SpiContract[InvocationApi] = SpiContract(name, classOf[InvocationApi])
+}
+
+private final class InvocationProviderComponent(
+  instance: String
+) extends Component with SpiProviderComponent {
+  var observedExecutionContext: Option[ExecutionContext] = None
+  var typedProviderMaterializationCount: Int = 0
+  var eventWasStaged: Boolean = false
+  var unitOfWorkCommitted: Boolean = false
+
+  def spiProviders: Vector[SpiProvider[?]] =
+    Vector(new SpiProvider[InvocationApi] with SpiOperationProvider {
+      def spiOperations(contract: String): Vector[SpiOperationSelector] =
+        if (contract == InvocationContract.name)
+          Vector(
+            SpiOperationSelector("echo", Some("api")),
+            SpiOperationSelector("identity", Some("api")),
+            SpiOperationSelector("fail", Some("api")),
+            SpiOperationSelector("invalid", Some("api")),
+            SpiOperationSelector("command", Some("api")),
+            SpiOperationSelector("duplicate", Some("api")),
+            SpiOperationSelector("duplicate", Some("secondary"))
+          )
+        else
+          Vector.empty
+
+      def supports(
+        contract: SpiContract[InvocationApi],
+        selection: SpiSelection
+      )(using ExecutionContext): Boolean =
+        contract.name == InvocationContract.name && contract.runtimeClass == classOf[InvocationApi]
+
+      def provide(
+        contract: SpiContract[InvocationApi],
+        selection: SpiSelection
+      )(using ExecutionContext): Consequence[InvocationApi] = {
+        typedProviderMaterializationCount += 1
+        Consequence.success(new InvocationApi {})
+      }
+    })
+
+  def observe(context: ExecutionContext): Unit =
+    observedExecutionContext = Some(context)
+
+  def instanceName: String = instance
+
+  def observeTransactionalExecution(context: ExecutionContext): Unit = {
+    val unitofwork = context.runtime.unitOfWork
+    unitofwork.stageEvent(InvocationEvent("spi-invoker-event"))
+    eventWasStaged = unitofwork.pendingEvents.nonEmpty
+    unitofwork.stagePostCommit {
+      unitOfWorkCommitted = true
+    }
+  }
+}
+
+private object InvocationFixture {
+  final case class Fixture(
+    subsystem: Subsystem,
+    provider: InvocationProviderComponent,
+    socket: InvocationSocket,
+    materializationsAfterAssembly: Int
+  )
+
+  def create(name: String = "spi_invoker"): Fixture = {
+    val subsystem = TestComponentFactory.emptySubsystem(name)
+    val provider = addProvider(subsystem, "primary", Vector("official-site"))
+    val (consumer, socket) = addConsumer(subsystem, "consumer", "catalog")
+    val binding = SpiRuntimeBinding(
+      SpiSocketSelector(
+        component = Some("consumer"),
+        contract = InvocationContract.name,
+        name = Some("catalog")
+      ),
+      SpiProviderSelector(component = Some("test_provider"), instance = Some("primary"))
+    )
+    installResolver(subsystem, Vector(provider, consumer), Vector(binding))
+    Fixture(subsystem, provider, socket, provider.typedProviderMaterializationCount)
+  }
+
+  def addProvider(
+    subsystem: Subsystem,
+    instance: String,
+    purposes: Vector[String]
+  ): InvocationProviderComponent = {
+    val provider = new InvocationProviderComponent(instance)
+    val protocol = _protocol(provider)
+    val componentid = ComponentId("test_provider")
+    val metadata = ComponentInstanceMetadata("test_provider", instance, purposes = purposes)
+    val core = Component.Core.create(
+      name = "test_provider",
+      componentid = componentid,
+      instanceid = metadata.instanceId,
+      protocol = protocol
+    )
+    provider.initialize(ComponentInit(
+      subsystem = subsystem,
+      core = core,
+      origin = ComponentOrigin.Builtin,
+      instanceMetadata = Some(metadata)
+    ))
+    subsystem.add(provider)
+    provider
+  }
+
+  def addConsumer(
+    subsystem: Subsystem,
+    name: String,
+    socketname: String
+  ): (InvocationConsumerComponent, InvocationSocket) = {
+    val socket = new InvocationSocket(socketname)
+    val consumer = new InvocationConsumerComponent(socket)
+    val componentid = ComponentId(name)
+    val metadata = ComponentInstanceMetadata(name, "default")
+    val core = Component.Core.create(
+      name = name,
+      componentid = componentid,
+      instanceid = metadata.instanceId,
+      protocol = Protocol.empty
+    )
+    consumer.initialize(ComponentInit(
+      subsystem = subsystem,
+      core = core,
+      origin = ComponentOrigin.Builtin,
+      instanceMetadata = Some(metadata)
+    ))
+    subsystem.add(consumer)
+    consumer -> socket
+  }
+
+  def installResolver(
+    subsystem: Subsystem,
+    components: Vector[Component],
+    bindings: Vector[SpiRuntimeBinding] = Vector.empty
+  ): Unit = {
+    given ExecutionContext = ExecutionContext.create()
+    val resolution = SpiResolver.resolveAssembly(components, bindings).toOption.get
+    subsystem.withComponentApiResolver(resolution.componentApiResolver)
+  }
+
+  private def _protocol(provider: InvocationProviderComponent): Protocol = {
+    val api = spec.ServiceDefinition(
+      name = "api",
+      operations = spec.OperationDefinitionGroup(NonEmptyVector.fromVectorUnsafe(Vector(
+        InvocationOperation("echo", provider, InvocationBehavior.Echo),
+        InvocationOperation("identity", provider, InvocationBehavior.Identity),
+        InvocationOperation("fail", provider, InvocationBehavior.Fail),
+        InvocationOperation("command", provider, InvocationBehavior.Command),
+        InvalidInvocationOperation(),
+        InvocationOperation("duplicate", provider, InvocationBehavior.Identity)
+      )))
+    )
+    val secondary = spec.ServiceDefinition(
+      name = "secondary",
+      operations = spec.OperationDefinitionGroup(NonEmptyVector.of(
+        InvocationOperation("duplicate", provider, InvocationBehavior.Identity)
+      ))
+    )
+    Protocol(services = spec.ServiceDefinitionGroup(Vector(api, secondary)))
+  }
+}
+
+private final class InvocationSocket(
+  name: String
+) extends SpiSocket[InvocationApi] {
+  private var _service: Option[InvocationApi] = None
+
+  def spiContract: SpiContract[InvocationApi] = InvocationContract.contract
+  override def spiSocketName: String = name
+  override def isSpiInstalled: Boolean = _service.nonEmpty
+  def installSpi(spi: InvocationApi): Unit = _service = Some(spi)
+}
+
+private final class InvocationConsumerComponent(
+  socket: InvocationSocket
+) extends Component {
+  withPort(Component.Port.input(socket))
+}
+
+private enum InvocationBehavior {
+  case Echo
+  case Identity
+  case Fail
+  case Command
+}
+
+private final case class InvocationOperation(
+  operationName: String,
+  component: InvocationProviderComponent,
+  behavior: InvocationBehavior
+) extends spec.OperationDefinition {
+  override val specification: spec.OperationDefinition.Specification =
+    spec.OperationDefinition.Specification(
+      name = operationName,
+      request = spec.RequestDefinition(),
+      response = spec.ResponseDefinition(result = List(DataType.Named("Record")))
+    )
+
+  override def createOperationRequest(req: Request): Consequence[OperationRequest] =
+    behavior match {
+      case InvocationBehavior.Command =>
+        Consequence.success(InvocationCommandAction(req, component))
+      case _ =>
+        Consequence.success(InvocationAction(req, component, behavior))
+    }
+}
+
+private final case class InvalidInvocationOperation() extends spec.OperationDefinition {
+  override val specification: spec.OperationDefinition.Specification =
+    spec.OperationDefinition.Specification(
+      name = "invalid",
+      request = spec.RequestDefinition(),
+      response = spec.ResponseDefinition.void
+    )
+
+  override def createOperationRequest(req: Request): Consequence[OperationRequest] =
+    Consequence.argumentInvalid("invalid invocation request")
+}
+
+private final case class InvocationAction(
+  request: Request,
+  providerComponent: InvocationProviderComponent,
+  behavior: InvocationBehavior
+) extends QueryAction {
+  override def createCall(core: ActionCall.Core): ActionCall =
+    InvocationActionCall(core, providerComponent, behavior)
+}
+
+private final case class InvocationActionCall(
+  core: ActionCall.Core,
+  providerComponent: InvocationProviderComponent,
+  behavior: InvocationBehavior
+) extends ProcedureActionCall {
+  override def execute(): Consequence[OperationResponse] = {
+    providerComponent.observe(core.executionContext)
+    behavior match {
+      case InvocationBehavior.Echo =>
+        Consequence.success(OperationResponse.RecordResponse(core.action.request.toRecord))
+      case InvocationBehavior.Identity =>
+        Consequence.success(OperationResponse.RecordResponse(Record.dataAuto("instance" -> providerComponent.instanceName)))
+      case InvocationBehavior.Fail =>
+        Consequence.operationInvalid("planned invocation failure")
+      case InvocationBehavior.Command =>
+        Consequence.operationInvalid("command behavior must use InvocationCommandAction")
+    }
+  }
+}
+
+private final case class InvocationCommandAction(
+  request: Request,
+  providerComponent: InvocationProviderComponent
+) extends CommandAction {
+  override def commandExecutionMode: CommandExecutionMode = CommandExecutionMode.JobSync
+
+  override def createCall(core: ActionCall.Core): ActionCall =
+    InvocationCommandActionCall(core, providerComponent)
+}
+
+private final case class InvocationCommandActionCall(
+  core: ActionCall.Core,
+  providerComponent: InvocationProviderComponent
+) extends ProcedureActionCall {
+  override def execute(): Consequence[OperationResponse] = {
+    providerComponent.observe(core.executionContext)
+    providerComponent.observeTransactionalExecution(core.executionContext)
+    Consequence.success(OperationResponse.RecordResponse(Record.dataAuto("command" -> "ok")))
+  }
+}
+
+private final case class InvocationEvent(name: String) extends DomainEvent
