@@ -183,6 +183,9 @@ abstract class Component() extends Component.Core.Holder {
 
   def port: Component.Port = _port
 
+  def componentApiProviders: Vector[org.goldenport.cncf.spi.SpiProvider[?]] =
+    Vector.empty
+
   def binding: Option[Component.Binding[?, ?]] = bindings.headOption.map(_._2)
 
   def withBinding(binding: Component.Binding[?, ?]): Component =
@@ -562,12 +565,12 @@ object Component {
       output(services*)
 
     def input(services: Any*): Port =
-      create(services.toVector, Vector.empty)
+      _create(services.toVector, Vector.empty)
 
     def output(services: Any*): Port =
-      create(Vector.empty, services.toVector)
+      _create(Vector.empty, services.toVector)
 
-    private def create(
+    private def _create(
       inputs: Vector[Any],
       outputs: Vector[Any]
     ): Port =

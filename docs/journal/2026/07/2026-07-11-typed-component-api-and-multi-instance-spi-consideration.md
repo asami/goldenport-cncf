@@ -195,9 +195,9 @@ that service:
 
 #### Scraping
 
-- standard-spi :: cncf.web-content-fetcher
-- direction :: provides
-- socket :: true
+- spi-standard :: cncf.web-content-fetcher
+- spi-direction :: provides
+- spi-socket :: true
 ```
 
 The top-level `# SERVICE / ## Scraping` definition remains the source of
@@ -212,7 +212,7 @@ installed into either form, and future multi-instance use should not require a
 provider contract change.
 
 Every CNCF standard SPI therefore supplies both forms, such as
-`AiRunnerSocket` and `AiRunnerSocketSet`. When `socket :: true` is declared for
+`AiRunnerSocket` and `AiRunnerSocketSet`. When `spi-socket :: true` is declared for
 a component-specific service, Cozy likewise generates both forms.
 
 The consumer selects one through requirement multiplicity:
@@ -220,7 +220,7 @@ The consumer selects one through requirement multiplicity:
 - `1`: required single socket;
 - `?`: optional single socket;
 - `*`: socket set;
-- `*` plus `required :: true`: non-empty socket set.
+- `*` plus `spi-required :: true`: non-empty socket set.
 
 ## Decision
 

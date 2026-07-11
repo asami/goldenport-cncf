@@ -190,7 +190,7 @@ without bypassing CNCF execution semantics.
 
 ## TC-06: Cozy-Generated Typed Component API and Proxy
 
-Status: NEXT
+Status: DONE
 
 ### Objective
 
@@ -199,17 +199,17 @@ operation metadata.
 
 ### Detailed Tasks
 
-- [ ] Finalize CML service properties with Cozy.
-- [ ] Support standard SPI declaration and component-specific socket exposure.
-- [ ] Generate typed API traits and public request/response/value types.
-- [ ] Generate proxy implementations over `SpiInvoker`.
-- [ ] Generate both single socket and socket-set traits.
-- [ ] Generate consumer requirements from `1`, `?`, and `*` multiplicity.
-- [ ] Add Cozy/simple-modeler executable generation fixtures.
+- [x] Finalize SPI-prefixed CML service properties with Cozy.
+- [x] Support standard SPI declaration metadata and component-specific socket exposure.
+- [x] Generate typed API traits using public request/response/value types.
+- [x] Generate proxy implementations over `ResolvedSpiBinding` and `SpiInvoker`.
+- [x] Generate both single socket and socket-set traits.
+- [x] Generate consumer requirements from `1`, `?`, and `*` multiplicity.
+- [x] Add CNCF, Kaleidox, and Cozy/SimpleModeler executable coverage.
 
 ## TC-07: Standard SPI Single/Set Socket Alignment
 
-Status: TODO
+Status: NEXT
 
 ### Objective
 

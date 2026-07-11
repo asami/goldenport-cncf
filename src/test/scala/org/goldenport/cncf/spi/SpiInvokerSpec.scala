@@ -31,6 +31,40 @@ final class SpiInvokerSpec
   with GivenWhenThen {
 
   "SpiInvoker canonical invocation" should {
+    "materialize a typed component API from its resolved binding" in {
+      Given("a component API provider whose proxy is created only after provider selection")
+      val fixture = InvocationFixture.create("spi_bound_component_api")
+      given ExecutionContext = ExecutionContext.create()
+
+      When("the component API is resolved and its typed operation is called")
+      val api = fixture.subsystem.componentApiResolver.resolve(
+        BoundInvocationContract.contract,
+        ComponentSelector(component = Some("test_provider"), instance = Some("primary"))
+      ).toOption.get
+      val result = api.echo(Record.dataAuto("message" -> "bound"))
+
+      Then("the generated-style proxy invokes the selected component operation through SpiInvoker")
+      result.toOption.get.getString("message") shouldBe Some("bound")
+      fixture.provider.boundProviderMaterializationCount shouldBe 1
+    }
+
+    "inject a binding-aware component API into a required socket" in {
+      Given("a generated-style provider and consumer socket in the same subsystem")
+      val subsystem = TestComponentFactory.emptySubsystem("spi_bound_socket")
+      val provider = InvocationFixture.addProvider(subsystem, "primary", Vector("official-site"))
+      val (consumer, socket) = InvocationFixture.addBoundConsumer(subsystem, "bound_consumer", "scraper")
+      given ExecutionContext = ExecutionContext.create()
+
+      When("assembly SPI resolution installs the only compatible provider")
+      InvocationFixture.installResolver(subsystem, Vector(provider, consumer))
+      val result = socket.service.echo(Record.dataAuto("message" -> "installed"))
+
+      Then("the socket receives the generated-style proxy and invokes the selected component")
+      socket.isSpiInstalled shouldBe true
+      result.toOption.get.getString("message") shouldBe Some("installed")
+      provider.boundProviderMaterializationCount shouldBe 1
+    }
+
     "use a selected assembly binding without rematerializing the typed service" in {
       Given("an assembly-admitted provider with an exact instance and a component operation")
       val fixture = InvocationFixture.create()
@@ -280,9 +314,18 @@ final class SpiInvokerSpec
 
 private trait InvocationApi
 
+private trait BoundInvocationApi {
+  def echo(request: Record)(using ExecutionContext): Consequence[Record]
+}
+
 private object InvocationContract {
   val name = "invocation-api"
   val contract: SpiContract[InvocationApi] = SpiContract(name, classOf[InvocationApi])
+}
+
+private object BoundInvocationContract {
+  val name = "bound-invocation-api"
+  val contract: SpiContract[BoundInvocationApi] = SpiContract(name, classOf[BoundInvocationApi])
 }
 
 private final class InvocationProviderComponent(
@@ -290,6 +333,7 @@ private final class InvocationProviderComponent(
 ) extends Component with SpiProviderComponent {
   var observedExecutionContext: Option[ExecutionContext] = None
   var typedProviderMaterializationCount: Int = 0
+  var boundProviderMaterializationCount: Int = 0
   var eventWasStaged: Boolean = false
   var unitOfWorkCommitted: Boolean = false
 
@@ -321,6 +365,31 @@ private final class InvocationProviderComponent(
       )(using ExecutionContext): Consequence[InvocationApi] = {
         typedProviderMaterializationCount += 1
         Consequence.success(new InvocationApi {})
+      }
+    })
+
+  override def componentApiProviders: Vector[SpiProvider[?]] =
+    Vector(new SpiBoundProvider[BoundInvocationApi] with SpiOperationProvider {
+      def spiOperations(contract: String): Vector[SpiOperationSelector] =
+        if (contract == BoundInvocationContract.name)
+          Vector(SpiOperationSelector("echo", Some("api")))
+        else
+          Vector.empty
+
+      def supports(
+        contract: SpiContract[BoundInvocationApi],
+        selection: SpiSelection
+      )(using ExecutionContext): Boolean =
+        contract.name == BoundInvocationContract.name && contract.runtimeClass == classOf[BoundInvocationApi]
+
+      def provideBound(
+        binding: ResolvedSpiBinding
+      )(using ExecutionContext): Consequence[BoundInvocationApi] = {
+        boundProviderMaterializationCount += 1
+        Consequence.success(new BoundInvocationApi {
+          def echo(request: Record)(using ExecutionContext): Consequence[Record] =
+            binding.invoke(SpiOperationSelector("echo", Some("api")), request)
+        })
       }
     })
 
@@ -413,6 +482,31 @@ private object InvocationFixture {
     consumer -> socket
   }
 
+  def addBoundConsumer(
+    subsystem: Subsystem,
+    name: String,
+    socketname: String
+  ): (BoundInvocationConsumerComponent, BoundInvocationSocket) = {
+    val socket = new BoundInvocationSocket(socketname)
+    val consumer = new BoundInvocationConsumerComponent(socket)
+    val componentid = ComponentId(name)
+    val metadata = ComponentInstanceMetadata(name, "default")
+    val core = Component.Core.create(
+      name = name,
+      componentid = componentid,
+      instanceid = metadata.instanceId,
+      protocol = Protocol.empty
+    )
+    consumer.initialize(ComponentInit(
+      subsystem = subsystem,
+      core = core,
+      origin = ComponentOrigin.Builtin,
+      instanceMetadata = Some(metadata)
+    ))
+    subsystem.add(consumer)
+    consumer -> socket
+  }
+
   def installResolver(
     subsystem: Subsystem,
     components: Vector[Component],
@@ -458,6 +552,25 @@ private final class InvocationSocket(
 
 private final class InvocationConsumerComponent(
   socket: InvocationSocket
+) extends Component {
+  withPort(Component.Port.input(socket))
+}
+
+private final class BoundInvocationSocket(
+  name: String
+) extends SpiSocket[BoundInvocationApi] {
+  private var _service: Option[BoundInvocationApi] = None
+
+  def spiContract: SpiContract[BoundInvocationApi] = BoundInvocationContract.contract
+  override def spiSocketName: String = name
+  override def isSpiInstalled: Boolean = _service.nonEmpty
+  def installSpi(spi: BoundInvocationApi): Unit = _service = Some(spi)
+  def service: BoundInvocationApi =
+    _service.getOrElse(throw new IllegalStateException("Bound invocation SPI is not installed"))
+}
+
+private final class BoundInvocationConsumerComponent(
+  socket: BoundInvocationSocket
 ) extends Component {
   withPort(Component.Port.input(socket))
 }

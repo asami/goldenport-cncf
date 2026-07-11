@@ -534,15 +534,15 @@ under the component. It may combine declarations:
 
 #### Scraping
 
-- standard-spi :: cncf.web-content-fetcher
-- direction :: provides
-- socket :: true
+- spi-standard :: cncf.web-content-fetcher
+- spi-direction :: provides
+- spi-socket :: true
 
 #### AiRunner
 
-- standard-spi :: cncf.ai-runner
-- direction :: requires
-- multiplicity :: *
+- spi-standard :: cncf.ai-runner
+- spi-direction :: requires
+- spi-multiplicity :: "*"
 ```
 
 The top-level `# SERVICE / ## Scraping` section continues to define the service
@@ -557,16 +557,19 @@ independent for each exposed contract.
 
 ### 8.5 CML Service SPI Properties
 
-The working CML property contract is:
+The working CML property contract is namespaced with the `spi-` prefix because
+component service metadata may also contain properties unrelated to SPI
+composition:
 
 | Property | Meaning |
 |---|---|
-| `standard-spi` | Existing CNCF standard SPI contract implemented or required by the service. |
-| `direction` | `provides` or `requires`; default is `provides`. |
-| `socket` | When `true`, generate the component-specific typed API, single socket, and socket set. |
-| `multiplicity` | Consumer cardinality: `1`, `?`, or `*`; valid for `requires`. |
-| `required` | When `true` with `*`, require at least one installed provider. |
-| `api-name` | Optional generated component-specific API name override. |
+| `spi-standard` | Existing CNCF standard SPI contract implemented or required by the service. |
+| `spi-direction` | `provides` or `requires`; default is `provides`. |
+| `spi-socket` | When `true`, generate the component-specific typed API, single socket, and socket set. |
+| `spi-multiplicity` | Consumer cardinality: `1`, `?`, or `*`; valid for `requires`. |
+| `spi-required` | When `true` with `*`, require at least one installed provider. |
+| `spi-api-name` | Optional generated component-specific API name override. |
+| `spi-component-api` | Fully qualified generated component API required by a consumer service. |
 
 Examples:
 
@@ -579,22 +582,29 @@ Examples:
 
 #### Scraping
 
-- standard-spi :: cncf.web-content-fetcher
-- direction :: provides
-- socket :: true
-- api-name :: TextusScraper
+- spi-standard :: cncf.web-content-fetcher
+- spi-direction :: provides
+- spi-socket :: true
+- spi-api-name :: TextusScraper
 
 #### AiRunners
 
-- standard-spi :: cncf.ai-runner
-- direction :: requires
-- multiplicity :: *
-- required :: true
+- spi-standard :: cncf.ai-runner
+- spi-direction :: requires
+- spi-multiplicity :: "*"
+- spi-required :: true
+
+#### Scrapers
+
+- spi-direction :: requires
+- spi-component-api :: org.simplemodeling.textus.scraper.api.TextusScraperApi
+- spi-multiplicity :: "*"
+- spi-required :: true
 ```
 
 The four provider-side service combinations are:
 
-| `standard-spi` | `socket` | Contract exposure |
+| `spi-standard` | `spi-socket` | Contract exposure |
 |---|---:|---|
 | absent | absent or `false` | Ordinary service operations only. |
 | present | `false` | CNCF standard SPI only. |
@@ -604,15 +614,15 @@ The four provider-side service combinations are:
 Every CNCF standard SPI contract publishes both its single socket and socket
 set. Every Cozy-generated component-specific socket contract also publishes
 both forms. Provider declarations do not restrict cardinality. Consumer
-`multiplicity` selects the runtime input-port form:
+`spi-multiplicity` selects the runtime input-port form:
 
 - `1`: required single socket;
 - `?`: optional single socket;
 - `*`: socket set;
-- `*` with `required :: true`: non-empty socket set.
+- `*` with `spi-required :: true`: non-empty socket set.
 
-`standard-spi` without `socket :: true` does not generate a component-specific
-API. `socket :: true` does not promote a component API into
+`spi-standard` without `spi-socket :: true` does not generate a component-specific
+API. `spi-socket :: true` does not promote a component API into
 `org.goldenport.cncf.spi`.
 
 Conceptually:
@@ -742,19 +752,25 @@ The current CNCF source already provides part of this model:
   invoked through a different subsystem;
 - typed service resolution and generic operation invocation share the same
   health, policy, priority, default, and ambiguity rules within those bounds;
+- `SpiBoundProvider` materializes a generated API proxy only after the runtime
+  has selected a concrete provider and produced a `ResolvedSpiBinding`;
+- CML component service composition uses `spi-*` properties so unrelated
+  service metadata remains in a separate namespace;
+- Cozy/SimpleModeler generate component-specific API traits under the public
+  `.api` package, binding-aware proxies, provider adapters, and paired single
+  and set socket classes;
+- generated consumer declarations install `1`, `?`, or `*` input ports and
+  expose typed accessors without handling the generic `Record` boundary;
 - SPI calls such as `AiRunner` are ordinary typed Scala method calls.
 
-The following target features are not yet complete:
+The following target feature is not yet complete:
 
-- generated typed component API proxies from CML operations;
-- Cozy-generated paired single-socket and socket-set contracts for
-  component-specific APIs;
-- generated proxy conversion between public request/response types and the
-  generic `Record` boundary.
+- consistent paired single-socket and socket-set forms for CNCF-owned standard
+  SPI contracts.
 
-Until these features exist, component implementations must not emulate them by
-importing another component's implementation package or by silently selecting
-the first component from `Subsystem.components`.
+Component implementations must not bypass the generated contract by importing
+another component's implementation package or by silently selecting the first
+component from `Subsystem.components`.
 
 ## 14. Acceptance Criteria
 

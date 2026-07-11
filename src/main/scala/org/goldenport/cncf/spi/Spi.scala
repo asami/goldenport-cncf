@@ -3,6 +3,7 @@ package org.goldenport.cncf.spi
 import org.goldenport.Consequence
 import org.goldenport.cncf.component.{Component, ComponentInstanceId, ExtensionPoint, Port, PortApi, ServiceContract, VariationPoint, VariationSelection}
 import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.record.Record
 
 /*
  * CNCF canonical SPI vocabulary.
@@ -59,6 +60,21 @@ trait SpiProviderComponent {
 
 trait SpiOperationProvider {
   def spiOperations(contract: String): Vector[SpiOperationSelector]
+}
+
+/** Materializes a typed service only after runtime provider selection. */
+trait SpiBoundProvider[S] extends SpiProvider[S] {
+  def provideBound(
+    binding: ResolvedSpiBinding
+  )(using ExecutionContext): Consequence[S]
+
+  final def provide(
+    contract: SpiContract[S],
+    selection: SpiSelection
+  )(using ExecutionContext): Consequence[S] =
+    Consequence.serviceUnavailable(
+      s"binding-aware SPI provider requires a resolved binding: contract=${contract.name}"
+    )
 }
 
 trait SpiSocket[S] {
@@ -177,7 +193,18 @@ final case class ResolvedSpiBinding private[cncf] (
   selection: SpiSelection,
   operations: Vector[SpiOperationSelector],
   private[cncf] val _target_component: Component
-)
+) {
+  def invoke(
+    operation: SpiOperationSelector,
+    request: Record
+  )(using ExecutionContext): Consequence[Record] =
+    _target_component.subsystem match {
+      case Some(subsystem) => subsystem.spiInvoker.invoke(this, operation, request)
+      case None => Consequence.serviceUnavailable(
+        s"resolved SPI provider is not attached to a subsystem: ${provider.instanceId.canonicalKey}"
+      )
+    }
+}
 
 trait ComponentSelectionPolicy {
   def accept(member: SpiMemberMetadata, selector: ComponentSelector): Consequence[Boolean]
@@ -227,9 +254,10 @@ final class ComponentApiResolver private (
           !metadata.healthStatus.equalsIgnoreCase("error") &&
           provider.provider.asInstanceOf[SpiProvider[S]].supports(contract, provider.selection)
       ) {
+        val binding = _provider_binding(contract, selector, provider, metadata)
         Some(ComponentApiCandidate(
           metadata,
-          () => provider.provider.asInstanceOf[SpiProvider[S]].provide(contract, provider.selection).map { service =>
+          () => _provide(provider.provider.asInstanceOf[SpiProvider[S]], contract, provider.selection, binding).map { service =>
             val trace = SpiTraceMetadata(
               contract = contract.name,
               operation = "resolve",
@@ -386,6 +414,38 @@ final class ComponentApiResolver private (
 
   private def _member_key(metadata: SpiMemberMetadata): String =
     s"${metadata.contract}/${metadata.instanceId.canonicalKey}"
+
+  private def _provider_binding[S](
+    contract: SpiContract[S],
+    selector: ComponentSelector,
+    provider: ComponentApiProvider,
+    metadata: SpiMemberMetadata
+  ): ResolvedSpiBinding =
+    ResolvedSpiBinding(
+      socket = None,
+      provider = SpiProviderRef(metadata.component, metadata.instanceId, contract.name),
+      metadata = metadata,
+      selector = selector,
+      selection = provider.selection,
+      operations = provider.provider match {
+        case operationProvider: SpiOperationProvider => operationProvider.spiOperations(contract.name)
+        case _ => Vector.empty
+      },
+      _target_component = provider.component
+    )
+
+  private def _provide[S](
+    provider: SpiProvider[S],
+    contract: SpiContract[S],
+    selection: SpiSelection,
+    binding: ResolvedSpiBinding
+  )(using ExecutionContext): Consequence[S] =
+    provider match {
+      case bound: SpiBoundProvider[?] =>
+        bound.asInstanceOf[SpiBoundProvider[S]].provideBound(binding)
+      case _ =>
+        provider.provide(contract, selection)
+    }
 }
 
 object ComponentApiResolver {

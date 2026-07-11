@@ -92,6 +92,7 @@ object SpiResolver {
         case m: SpiProviderComponent => m.spiProviders
         case _ => Vector.empty
       }
+      val componentapiproviders = component.componentApiProviders
       val outputentries = component.port.outputEntries
       val portproviders = outputentries.collect {
         case m: ExtensionPoint[?] => m.asInstanceOf[SpiProvider[?]]
@@ -102,7 +103,7 @@ object SpiResolver {
         case _: SpiSocketSet[?] => None
         case service => Some(DirectSpiProvider(service))
       }.flatten
-      (componentproviders ++ portproviders ++ directproviders).map(ProviderSlot(component, _))
+      (componentproviders ++ componentapiproviders ++ portproviders ++ directproviders).map(ProviderSlot(component, _))
     }
 
   private def _single_sockets(
@@ -281,7 +282,7 @@ object SpiResolver {
   )(using ExecutionContext): Consequence[Option[ResolvedSpiMember[Any]]] =
     candidates match {
       case Vector(provider) =>
-        _provide_member(socket.component, provider, contract, selection).map { member =>
+        _provide_member(socket.component, socket.socket.spiSocketName, provider, contract, selection).map { member =>
           socket.socket.asInstanceOf[SpiSocket[Any]].installSpi(member.service)
           Some(member)
         }
@@ -328,7 +329,7 @@ object SpiResolver {
         case None =>
           selected.foldLeft(Consequence.success(Vector.empty[ResolvedSpiMember[Any]])) { case (result, (provider, selection)) =>
             result.flatMap { members =>
-              _provide_member(socket.component, provider, contract, selection).map(members :+ _)
+              _provide_member(socket.component, socket.socket.spiSocketName, provider, contract, selection).map(members :+ _)
             }
           }.flatMap { members =>
             val eligible = members.filterNot(_.metadata.healthStatus.equalsIgnoreCase("error"))
@@ -345,11 +346,19 @@ object SpiResolver {
 
   private def _provide_member(
     socketcomponent: Component,
+    socketname: String,
     provider: ProviderSlot,
     contract: SpiContract[Any],
     selection: SpiSelection
-  )(using ExecutionContext): Consequence[ResolvedSpiMember[Any]] =
-    provider.provider.asInstanceOf[SpiProvider[Any]].provide(contract, selection).map { service =>
+  )(using ExecutionContext): Consequence[ResolvedSpiMember[Any]] = {
+    val binding = _resolved_binding(socketcomponent, socketname, contract, provider, selection)
+    val provided = provider.provider match {
+      case bound: SpiBoundProvider[?] =>
+        bound.asInstanceOf[SpiBoundProvider[Any]].provideBound(binding)
+      case standard =>
+        standard.asInstanceOf[SpiProvider[Any]].provide(contract, selection)
+    }
+    provided.map { service =>
       val trace = SpiTraceMetadata(
         contract = contract.name,
         operation = "install",
@@ -364,6 +373,7 @@ object SpiResolver {
         _spi_member_metadata(provider.component, contract.name)
       )
     }
+  }
 
   private def _resolved_binding(
     socketcomponent: Component,
