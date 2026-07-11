@@ -253,7 +253,7 @@ TC items.
 
 ## TC-09: Observability, Failure Semantics, and Regression Coverage
 
-Status: TODO
+Status: DONE
 
 ### Objective
 
@@ -261,13 +261,16 @@ Make typed multi-instance calls diagnosable and safe under failure.
 
 ### Detailed Tasks
 
-- [ ] Add contract, operation, provider instance, and selection basis to
+- [x] Add contract, operation, provider instance, and selection basis to
       calltree metadata.
-- [ ] Keep request bodies, secrets, and raw provider payloads out of tracing.
-- [ ] Add metrics dimensions that do not create unbounded cardinality.
-- [ ] Cover unavailable, ambiguous, incompatible, unhealthy, and rejected
+- [x] Trace pre-binding resolution failures without copying request bodies,
+      secrets, or raw provider payloads into SPI metadata.
+- [x] Add finite `selection_basis` to metrics while excluding instance IDs and
+      free-form selector values.
+- [x] Cover unavailable, ambiguous, incompatible, unhealthy, and rejected
       selections.
-- [ ] Run CNCF core, Cozy generation, and driver integration regressions.
+- [x] Run CNCF core, Cozy generation, static scraper, and ArtScene driver
+      regressions.
 
 ## TC-10: Decided Design Promotion and Phase Closure
 

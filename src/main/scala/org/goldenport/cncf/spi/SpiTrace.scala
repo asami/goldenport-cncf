@@ -29,7 +29,8 @@ final case class SpiTraceMetadata(
   selectorTags: Set[String] = Set.empty,
   selectionProvider: Option[String] = None,
   selectionMode: Option[String] = None,
-  selectionEngine: Option[String] = None
+  selectionEngine: Option[String] = None,
+  selectionBasis: Option[String] = None
 ) {
   def label: String = s"spi:$contract.$operation"
 
@@ -47,7 +48,8 @@ final case class SpiTraceMetadata(
       "selector_tags" -> selectorTags.toVector.sorted.mkString(","),
       "selection_provider" -> selectionProvider.getOrElse(""),
       "selection_mode" -> selectionMode.getOrElse(""),
-      "selection_engine" -> selectionEngine.getOrElse("")
+      "selection_engine" -> selectionEngine.getOrElse(""),
+      "selection_basis" -> selectionBasis.getOrElse("")
     ))
 
   def withOperation(name: String): SpiTraceMetadata =
@@ -130,6 +132,7 @@ object SpiTraceSupport {
       operation = metadata.operation,
       providerComponent = metadata.providerComponent,
       socketComponent = metadata.socketComponent,
+      selectionBasis = metadata.selectionBasis,
       error = error,
       diagnosticKey = diagnostic.map(_.diagnosticKey),
       diagnosticRecord = diagnostic.map(_.toRecord),

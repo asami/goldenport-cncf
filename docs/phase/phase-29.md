@@ -59,13 +59,13 @@ Scope boundaries:
 - F (DONE): TC-06 — Cozy-generated typed component API and proxy.
 - G (DONE): TC-07 — Standard SPI single/set socket alignment.
 - H (DONE): TC-08 — ArtScene + static `textus-scraper` development-driver smoke.
-- I (NEXT): TC-09 — Observability, failure semantics, and regression coverage.
-- J (TODO): TC-10 — Decided design promotion and Phase 29 closure.
+- I (DONE): TC-09 — Observability, failure semantics, and regression coverage.
+- J (NEXT): TC-10 — Decided design promotion and Phase 29 closure.
 
 Resume hint:
 
-- Start TC-09 by verifying component API observability and structured failure
-  behavior across the ArtScene/static scraper boundary.
+- Start TC-10 by promoting the settled component API and multi-instance SPI
+  contract to authoritative design documentation and closing Phase 29.
 
 ## 4. Development Items
 
@@ -77,7 +77,7 @@ Resume hint:
 - [x] TC-06: Generate typed component APIs and proxies from CML.
 - [x] TC-07: Align standard SPI contracts with single/set socket forms.
 - [x] TC-08: Complete the ArtScene + static `textus-scraper` driver smoke.
-- [ ] TC-09: Complete observability, failure, and regression verification.
+- [x] TC-09: Complete observability, failure, and regression verification.
 - [ ] TC-10: Promote the settled contract to design and close Phase 29.
 
 Detailed task breakdown and progress tracking are recorded in

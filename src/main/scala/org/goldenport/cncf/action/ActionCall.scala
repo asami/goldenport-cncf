@@ -29,7 +29,7 @@ import org.goldenport.cncf.Program
  *  version Feb. 21, 2026
  *  version Apr. 28, 2026
  *  version May. 23, 2026
- * @version Jul.  6, 2026
+ * @version Jul. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class ActionCall()
@@ -79,12 +79,12 @@ abstract class ActionCall()
   def args: List[String] = action.args
   def fieldConfidentiality: Map[String, DataConfidentiality] =
     component
-      .map(OperationConfidentiality.request(_, action.name))
+      .map(OperationConfidentiality.request(_, action.request.operation))
       .getOrElse(Map.empty)
 
   def resultFieldConfidentiality: Map[String, DataConfidentiality] =
     component
-      .map(OperationConfidentiality.response(_, action.name))
+      .map(OperationConfidentiality.response(_, action.request.operation))
       .getOrElse(Map.empty)
 
   def allFieldConfidentiality: Map[String, DataConfidentiality] =

@@ -13,7 +13,7 @@ import org.goldenport.cncf.context.{CorrelationId, DataStoreContext, EntityStore
 import org.goldenport.cncf.datastore.DataStoreSpace
 import org.goldenport.cncf.entity.EntityStoreSpace
 import org.goldenport.cncf.http.FakeHttpDriver
-import org.goldenport.cncf.operation.{CmlOperationAccess, CmlOperationDefinition}
+import org.goldenport.cncf.operation.{CmlOperationAccess, CmlOperationDefinition, CmlOperationField}
 import org.goldenport.cncf.unitofwork.{ExecUowM, UnitOfWorkOp}
 import org.goldenport.datatype.{ContentType, MimeType}
 import org.goldenport.http.{HttpResponse, HttpStatus}
@@ -27,7 +27,8 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Dec. 23, 2025
  *  version Apr. 28, 2026
- * @version Jul.  3, 2026
+ *  version Jul.  3, 2026
+ * @version Jul. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 class ActionCallSpec extends AnyWordSpec with Matchers {
@@ -202,6 +203,43 @@ class ActionCallSpec extends AnyWordSpec with Matchers {
         "name" -> "長池見附橋",
         "lat" -> "35.61178333"
       )))
+    }
+
+    "resolve response confidentiality by the operation segment of a qualified action name" in {
+      given ExecutionContext = _execution_context(
+        principalId = "u1",
+        attrs = Map("authenticated" -> "true")
+      )
+      val call = _confidentiality_call()
+
+      call.action.name shouldBe "Scraper.Scraping.FetchPage"
+      call.resultFieldConfidentiality.get("body").map(_.label) shouldBe Some("internal")
+    }
+  }
+
+  private def _confidentiality_call()(using ExecutionContext): ActionCall = {
+    val targetcomponent = new Component {
+      override def operationDefinitions: Vector[CmlOperationDefinition] = Vector(
+        CmlOperationDefinition(
+          name = "FetchPage",
+          kind = "command",
+          inputType = "FetchPageRequest",
+          outputType = "FetchPageResult",
+          inputValueKind = "record",
+          resultFields = Vector(CmlOperationField("body", "string", confidentiality = Some("internal")))
+        )
+      )
+    }
+    val targetaction = new CommandAction {
+      override def createCall(core: ActionCall.Core): ActionCall =
+        throw new UnsupportedOperationException("not used in ActionCallSpec")
+
+      override def request: org.goldenport.protocol.Request =
+        org.goldenport.protocol.Request.of("Scraper", "Scraping", "FetchPage")
+    }
+    new ProcedureActionCall with ActionCall.Core.Holder {
+      val core = ActionCall.Core(targetaction, summon[ExecutionContext], Some(targetcomponent), None)
+      def execute(): Consequence[OperationResponse] = Consequence.success(OperationResponse.void)
     }
   }
 

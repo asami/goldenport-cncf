@@ -707,6 +707,26 @@ Every typed and generic SPI invocation should add calltree metadata for:
 Sensitive config and rule values must follow existing calltree confidentiality
 policy.
 
+The runtime records the selected basis using a finite vocabulary:
+
+- `assembly-binding`;
+- `exact-instance`;
+- `abstract-selector`;
+- `priority`;
+- `declared-default`;
+- `conventional-default`;
+- `sole-candidate`.
+
+Provider resolution failures are traced even when no binding can be created.
+Such traces use `provider_component = unresolved` and the requested finite
+selection basis. SPI tracing never copies the request `Record`, provider raw
+payload, or confidential configuration into SPI attributes.
+
+SPI metrics use bounded dimensions only: contract, operation, provider
+component type, socket component type, selection basis, outcome, and diagnostic
+key. Instance identifiers, selector purpose/capability/tag values, request
+fields, and provider payload values remain outside metrics labels.
+
 ## 12. Failure Semantics
 
 Expected runtime failures use `Consequence`:
@@ -723,6 +743,12 @@ Expected runtime failures use `Consequence`:
 
 The resolver must not silently choose the first provider when multiple equal
 candidates remain.
+
+Unavailable, ambiguous, incompatible, unhealthy, and policy-rejected
+selections retain distinct deterministic failure messages. A provider excluded
+only because its health status is `error` is reported as unhealthy; a non-empty
+candidate set reduced to zero by `ComponentSelectionPolicy` is reported as
+policy-rejected.
 
 ## 13. Current Implementation Status
 
@@ -752,6 +778,11 @@ The current CNCF source already provides part of this model:
   invoked through a different subsystem;
 - typed service resolution and generic operation invocation share the same
   health, policy, priority, default, and ambiguity rules within those bounds;
+- resolved bindings retain a finite `SpiSelectionBasis`, and both successful
+  invocation and pre-binding resolution failure produce safe SPI CallTree
+  records;
+- SPI runtime metrics include the finite selection basis but exclude instance
+  and free-form selector values to avoid unbounded cardinality;
 - `SpiBoundProvider` materializes a generated API proxy only after the runtime
   has selected a concrete provider and produced a `ResolvedSpiBinding`;
 - CML component service composition uses `spi-*` properties so unrelated

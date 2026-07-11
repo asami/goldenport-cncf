@@ -364,9 +364,12 @@ object SpiResolver {
         operation = "install",
         socketComponent = _component_name(socketcomponent),
         providerComponent = _component_name(provider.component),
+        socketName = Some(socketname),
+        providerInstance = Some(_spi_member_metadata(provider.component, contract.name).instanceId.instance),
         selectionProvider = selection.provider,
         selectionMode = selection.mode,
-        selectionEngine = selection.engine
+        selectionEngine = selection.engine,
+        selectionBasis = Some(SpiSelectionBasis.AssemblyBinding.name)
       )
       ResolvedSpiMember(
         SpiTraceSupport.wrapInstalled(service, trace),
@@ -400,6 +403,7 @@ object SpiResolver {
         instance = Some(metadata.instanceId.instance)
       ),
       selection = selection,
+      selectionBasis = SpiSelectionBasis.AssemblyBinding,
       operations = provider.provider match {
         case operationprovider: SpiOperationProvider => operationprovider.spiOperations(contract.name)
         case _ => Vector.empty

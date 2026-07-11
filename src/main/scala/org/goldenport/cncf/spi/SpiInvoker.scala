@@ -55,7 +55,8 @@ object SpiInvoker {
         selectorTags = binding.selector.tags,
         selectionProvider = binding.selection.provider,
         selectionMode = binding.selection.mode,
-        selectionEngine = binding.selection.engine
+        selectionEngine = binding.selection.engine,
+        selectionBasis = Some(binding.selectionBasis.name)
       )
       SpiTraceSupport.trace(metadata, (record: Record) => Map(
         "result_type" -> "record",
@@ -73,10 +74,26 @@ object SpiInvoker {
       request: Record,
       selector: ComponentSelector,
       socket: Option[SpiSocketRef]
-    )(using ExecutionContext): Consequence[Record] =
-      subsystem.componentApiResolver
-        .resolveBinding(contract, selector, socket)
-        .flatMap(invoke(_, operation, request))
+    )(using ExecutionContext): Consequence[Record] = {
+      val resolved = subsystem.componentApiResolver.resolveBinding(contract, selector, socket)
+      resolved match {
+        case Consequence.Success(binding) =>
+          invoke(binding, operation, request)
+        case Consequence.Failure(conclusion) =>
+          val metadata = SpiTraceMetadata(
+            contract = contract.name,
+            operation = operation.operation,
+            socketComponent = socket.map(_.component).getOrElse("component-api-resolver"),
+            providerComponent = "unresolved",
+            socketName = socket.map(_.name),
+            selectorPurpose = selector.purpose,
+            selectorCapabilities = selector.capabilities,
+            selectorTags = selector.tags,
+            selectionBasis = Some(SpiSelectionBasis.requested(selector, socket).name)
+          )
+          SpiTraceSupport.trace[Record](metadata)(Consequence.Failure(conclusion))
+      }
+    }
   }
 }
 

@@ -13,6 +13,7 @@ import org.goldenport.cncf.action.{Action, ActionCall, CommandAction, CommandExe
 import org.goldenport.cncf.component.{Component, ComponentId, ComponentInit, ComponentInstanceId, ComponentInstanceMetadata, ComponentOrigin}
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.event.DomainEvent
+import org.goldenport.cncf.http.RuntimeDashboardMetrics
 import org.goldenport.cncf.security.OperationAuthorizationRule
 import org.goldenport.cncf.subsystem.{GenericSubsystemDescriptor, Subsystem}
 import org.goldenport.cncf.testutil.TestComponentFactory
@@ -117,7 +118,34 @@ final class SpiInvokerSpec
       calltree should include ("spi:invocation-api.echo")
       calltree should include ("socket_name=catalog")
       calltree should include ("provider_instance=primary")
+      calltree should include ("selection_basis=exact-instance")
       calltree should not include secret
+    }
+
+    "trace provider resolution failure without exposing the request record" in {
+      Given("an invocation selecting an unavailable provider instance with a confidential request field")
+      val fixture = InvocationFixture.create("spi_invoker_unavailable_trace")
+      given ExecutionContext = ExecutionContext.withFrameworkCallTreeEnabled(ExecutionContext.create(), enabled = true)
+      val secret = "unavailable-request-secret"
+      val beforeerrors = RuntimeDashboardMetrics.spiInvocationSnapshot.summary.cumulative.errors
+
+      When("provider resolution fails before operation dispatch")
+      val result = fixture.subsystem.spiInvoker.invoke(
+        InvocationContract.contract,
+        SpiOperationSelector("echo", Some("api")),
+        Record.dataAuto("secret" -> secret),
+        ComponentSelector(component = Some("test_provider"), instance = Some("missing"))
+      )
+
+      Then("the failure is traced with bounded resolution metadata and no request values")
+      result shouldBe a[Consequence.Failure[_]]
+      val calltree = summon[ExecutionContext].observability.callTreeContext.build().getOrElse(fail("calltree missing")).toRecord.print
+      calltree should include ("spi:invocation-api.echo")
+      calltree should include ("provider_component=unresolved")
+      calltree should include ("selection_basis=exact-instance")
+      calltree should include ("outcome=failure")
+      calltree should not include secret
+      RuntimeDashboardMetrics.spiInvocationSnapshot.summary.cumulative.errors should be > beforeerrors
     }
   }
 
@@ -199,6 +227,59 @@ final class SpiInvokerSpec
 
       Then("the invocation fails before provider operation dispatch")
       _failure(result) should include ("belongs to another subsystem")
+    }
+
+    "distinguish unavailable ambiguous incompatible unhealthy and policy-rejected selections" in {
+      Given("independent resolver fixtures for each provider selection failure")
+      given ExecutionContext = ExecutionContext.create()
+      val unavailablefixture = InvocationFixture.create("spi_failure_unavailable")
+      val ambiguoussubsystem = TestComponentFactory.emptySubsystem("spi_failure_ambiguous")
+      val ambiguousfirst = InvocationFixture.addProvider(ambiguoussubsystem, "first", Vector("official-site"))
+      val ambiguoussecond = InvocationFixture.addProvider(ambiguoussubsystem, "second", Vector("official-site"))
+      InvocationFixture.installResolver(ambiguoussubsystem, Vector(ambiguousfirst, ambiguoussecond))
+      val unhealthysubsystem = TestComponentFactory.emptySubsystem("spi_failure_unhealthy")
+      val unhealthy = InvocationFixture.addProvider(unhealthysubsystem, "offline", Vector("official-site"))
+      unhealthy.registerHealthContributor(new Component.HealthContributor {
+        def name: String = "provider"
+        def check(component: Component): Component.HealthCheck = Component.HealthCheck(name, "error", Some("offline"))
+      })
+      InvocationFixture.installResolver(unhealthysubsystem, Vector(unhealthy))
+      val rejectedfixture = InvocationFixture.create("spi_failure_rejected")
+      val rejectall = ComponentApiResolver(Vector.empty, new ComponentSelectionPolicy {
+        def accept(member: SpiMemberMetadata, selector: ComponentSelector): Consequence[Boolean] =
+          Consequence.success(false)
+      })
+      rejectedfixture.subsystem.withComponentApiResolver(rejectedfixture.subsystem.componentApiResolver.merge(rejectall))
+
+      When("each invalid selection is resolved")
+      val unavailable = unavailablefixture.subsystem.componentApiResolver.resolveBinding(
+        InvocationContract.contract,
+        ComponentSelector(instance = Some("missing"))
+      )
+      val ambiguous = ambiguoussubsystem.componentApiResolver.resolveBinding(
+        InvocationContract.contract,
+        ComponentSelector(component = Some("test_provider"))
+      )
+      val incompatible = unavailablefixture.subsystem.componentApiResolver.resolveBinding(
+        InvocationContract.contract,
+        ComponentSelector(),
+        Some(SpiSocketRef("consumer", "catalog", "other-contract"))
+      )
+      val unhealthyresult = unhealthysubsystem.componentApiResolver.resolveBinding(
+        InvocationContract.contract,
+        ComponentSelector(component = Some("test_provider"))
+      )
+      val rejected = rejectedfixture.subsystem.componentApiResolver.resolveBinding(
+        InvocationContract.contract,
+        ComponentSelector(component = Some("test_provider"))
+      )
+
+      Then("each failure keeps a deterministic semantic reason")
+      _failure(unavailable) should include ("provider not found")
+      _failure(ambiguous) should include ("ambiguous component API providers")
+      _failure(incompatible) should include ("socket contract does not match")
+      _failure(unhealthyresult) should include ("providers are unhealthy")
+      _failure(rejected) should include ("rejected by policy")
     }
   }
 

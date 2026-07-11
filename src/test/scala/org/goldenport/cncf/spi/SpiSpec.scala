@@ -77,6 +77,7 @@ final class SpiSpec
       text should include ("contract=ai-runner")
       text should include ("provider_component=trace_provider")
       text should include ("socket_component=trace_consumer")
+      text should include ("selection_basis=assembly-binding")
       text should include ("outcome=success")
       text should not include ("secret prompt")
       RuntimeDashboardMetrics.spiInvocationSnapshot.summary.cumulative.total should be > before
@@ -84,7 +85,10 @@ final class SpiSpec
       metrics.points.exists(point =>
         point.scope == "spi.invocation" &&
           point.labels.get("contract").contains("ai-runner") &&
-          point.labels.get("operation").contains("generate")
+          point.labels.get("operation").contains("generate") &&
+          point.labels.get("selection_basis").contains("assembly-binding") &&
+          !point.labels.contains("provider_instance") &&
+          !point.labels.contains("selector_purpose")
       ) shouldBe true
     }
 

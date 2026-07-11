@@ -7,7 +7,7 @@ import org.goldenport.record.Record
 /*
  * @since   Apr. 12, 2026
  *  version May. 11, 2026
- * @version Jul.  9, 2026
+ * @version Jul. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 object RuntimeDashboardMetrics {
@@ -98,19 +98,19 @@ object RuntimeDashboardMetrics {
     status: String
   )
 
-  private var _htmlEvents = Vector.empty[Event]
-  private var _actionEvents = Vector.empty[Event]
-  private var _authorizationEvents = Vector.empty[Event]
-  private var _dslEvents = Vector.empty[Event]
-  private var _validationEvents = Vector.empty[Event]
-  private var _operationRequestValidationEvents = Vector.empty[Event]
-  private var _blobEvents = Vector.empty[Event]
-  private var _spiEvents = Vector.empty[Event]
-  private var _payloadExternalizationEvents = Vector.empty[PayloadExternalizationEvent]
-  private var _openTelemetryExportEvents = Vector.empty[OpenTelemetryExportEvent]
+  private var _html_events = Vector.empty[Event]
+  private var _action_events = Vector.empty[Event]
+  private var _authorization_events = Vector.empty[Event]
+  private var _dsl_events = Vector.empty[Event]
+  private var _validation_events = Vector.empty[Event]
+  private var _operation_request_validation_events = Vector.empty[Event]
+  private var _blob_events = Vector.empty[Event]
+  private var _spi_events = Vector.empty[Event]
+  private var _payload_externalization_events = Vector.empty[PayloadExternalizationEvent]
+  private var _open_telemetry_export_events = Vector.empty[OpenTelemetryExportEvent]
   private var _recent = Vector.empty[RequestEntry]
 
-  private val DiagnosticScopeLabels: Map[String, String] = Map(
+  private val DIAGNOSTIC_SCOPE_LABELS: Map[String, String] = Map(
     "authorization" -> "Authorization",
     "validation" -> "Validation",
     "operation-request-validation" -> "Operation Request Validation",
@@ -125,7 +125,7 @@ object RuntimeDashboardMetrics {
     elapsedMillis: Long
   ): Unit = synchronized {
     val now = java.time.Instant.now.toEpochMilli
-    _htmlEvents = (_htmlEvents :+ Event(
+    _html_events = (_html_events :+ Event(
       observedAt = now,
       error = status >= 400,
       elapsedMillis = Some(elapsedMillis),
@@ -138,7 +138,7 @@ object RuntimeDashboardMetrics {
     error: Boolean,
     elapsedMillis: Option[Long] = None
   ): Unit = synchronized {
-    _actionEvents = (_actionEvents :+ Event(
+    _action_events = (_action_events :+ Event(
       observedAt = java.time.Instant.now.toEpochMilli,
       error = error,
       elapsedMillis = elapsedMillis
@@ -155,11 +155,11 @@ object RuntimeDashboardMetrics {
     diagnosticRecord: Option[Record] = None
   ): Unit = synchronized {
     val kind = if (denied) diagnosticKey.filter(_.nonEmpty) else None
-    _authorizationEvents = (_authorizationEvents :+ Event(java.time.Instant.now.toEpochMilli, denied, kind, if (denied) diagnosticRecord else None)).takeRight(10000)
+    _authorization_events = (_authorization_events :+ Event(java.time.Instant.now.toEpochMilli, denied, kind, if (denied) diagnosticRecord else None)).takeRight(10000)
   }
 
   def recordDslChokepoint(error: Boolean): Unit = synchronized {
-    _dslEvents = (_dslEvents :+ Event(java.time.Instant.now.toEpochMilli, error)).takeRight(10000)
+    _dsl_events = (_dsl_events :+ Event(java.time.Instant.now.toEpochMilli, error)).takeRight(10000)
   }
 
   def recordValidation(
@@ -167,7 +167,7 @@ object RuntimeDashboardMetrics {
     diagnosticKey: Option[String],
     diagnosticRecord: Option[Record] = None
   ): Unit = synchronized {
-    _validationEvents = (_validationEvents :+ Event(
+    _validation_events = (_validation_events :+ Event(
       observedAt = java.time.Instant.now.toEpochMilli,
       error = true,
       diagnosticKey = diagnosticKey.filter(_.nonEmpty),
@@ -181,7 +181,7 @@ object RuntimeDashboardMetrics {
     diagnosticKey: Option[String],
     diagnosticRecord: Option[Record] = None
   ): Unit = synchronized {
-    _operationRequestValidationEvents = (_operationRequestValidationEvents :+ Event(
+    _operation_request_validation_events = (_operation_request_validation_events :+ Event(
       observedAt = java.time.Instant.now.toEpochMilli,
       error = true,
       diagnosticKey = diagnosticKey.filter(_.nonEmpty),
@@ -200,7 +200,7 @@ object RuntimeDashboardMetrics {
     backend: Option[String] = None
   ): Unit = synchronized {
     val cleanDiagnosticKey = if (error) diagnosticKey.filter(_.nonEmpty) else None
-    _blobEvents = (_blobEvents :+ Event(
+    _blob_events = (_blob_events :+ Event(
       observedAt = java.time.Instant.now.toEpochMilli,
       error = error,
       diagnosticKey = cleanDiagnosticKey,
@@ -224,12 +224,13 @@ object RuntimeDashboardMetrics {
     providerComponent: String,
     socketComponent: String,
     error: Boolean,
+    selectionBasis: Option[String] = None,
     diagnosticKey: Option[String] = None,
     diagnosticRecord: Option[Record] = None,
     elapsedMillis: Option[Long] = None
   ): Unit = synchronized {
     val cleanDiagnosticKey = if (error) diagnosticKey.filter(_.nonEmpty) else None
-    _spiEvents = (_spiEvents :+ Event(
+    _spi_events = (_spi_events :+ Event(
       observedAt = java.time.Instant.now.toEpochMilli,
       error = error,
       diagnosticKey = cleanDiagnosticKey,
@@ -241,6 +242,7 @@ object RuntimeDashboardMetrics {
         "operation" -> operation,
         "provider_component" -> providerComponent,
         "socket_component" -> socketComponent,
+        "selection_basis" -> selectionBasis.getOrElse(""),
         "diagnostic_key" -> cleanDiagnosticKey.getOrElse("")
       ))
     )).takeRight(10000)
@@ -251,7 +253,7 @@ object RuntimeDashboardMetrics {
     status: String,
     destination: String
   ): Unit = synchronized {
-    _payloadExternalizationEvents = (_payloadExternalizationEvents :+ PayloadExternalizationEvent(
+    _payload_externalization_events = (_payload_externalization_events :+ PayloadExternalizationEvent(
       observedAt = java.time.Instant.now.toEpochMilli,
       status = _normalize_label(status),
       payloadKind = _normalize_label(payloadKind),
@@ -263,7 +265,7 @@ object RuntimeDashboardMetrics {
     signal: String,
     status: String
   ): Unit = synchronized {
-    _openTelemetryExportEvents = (_openTelemetryExportEvents :+ OpenTelemetryExportEvent(
+    _open_telemetry_export_events = (_open_telemetry_export_events :+ OpenTelemetryExportEvent(
       observedAt = java.time.Instant.now.toEpochMilli,
       signal = _normalize_label(signal),
       status = _normalize_label(status)
@@ -271,19 +273,19 @@ object RuntimeDashboardMetrics {
   }
 
   def htmlSnapshot: Snapshot = synchronized {
-    _snapshot(_htmlEvents, _recent)
+    _snapshot(_html_events, _recent)
   }
 
   def actionCallSnapshot: Snapshot = synchronized {
-    _snapshot(_actionEvents, Vector.empty)
+    _snapshot(_action_events, Vector.empty)
   }
 
   def authorizationDecisionSnapshot: Snapshot = synchronized {
-    _snapshot(_authorizationEvents, Vector.empty)
+    _snapshot(_authorization_events, Vector.empty)
   }
 
   def authorizationDiagnosticCounts: Map[String, Long] = synchronized {
-    _authorizationEvents
+    _authorization_events
       .filter(_.error)
       .groupBy(_.diagnosticKey.getOrElse("unknown"))
       .view
@@ -292,19 +294,19 @@ object RuntimeDashboardMetrics {
   }
 
   def authorizationDiagnosticRecords: Map[String, Record] = synchronized {
-    _diagnostic_records(_authorizationEvents)
+    _diagnostic_records(_authorization_events)
   }
 
   def dslChokepointSnapshot: Snapshot = synchronized {
-    _snapshot(_dslEvents, Vector.empty)
+    _snapshot(_dsl_events, Vector.empty)
   }
 
   def validationSnapshot: Snapshot = synchronized {
-    _snapshot(_validationEvents, Vector.empty)
+    _snapshot(_validation_events, Vector.empty)
   }
 
   def validationDiagnosticCounts: Map[String, Long] = synchronized {
-    _validationEvents
+    _validation_events
       .filter(_.error)
       .groupBy(_.diagnosticKey.getOrElse("unknown"))
       .view
@@ -313,15 +315,15 @@ object RuntimeDashboardMetrics {
   }
 
   def validationDiagnosticRecords: Map[String, Record] = synchronized {
-    _diagnostic_records(_validationEvents)
+    _diagnostic_records(_validation_events)
   }
 
   def operationRequestValidationSnapshot: Snapshot = synchronized {
-    _snapshot(_operationRequestValidationEvents, Vector.empty)
+    _snapshot(_operation_request_validation_events, Vector.empty)
   }
 
   def operationRequestValidationDiagnosticCounts: Map[String, Long] = synchronized {
-    _operationRequestValidationEvents
+    _operation_request_validation_events
       .filter(_.error)
       .groupBy(_.diagnosticKey.getOrElse("unknown"))
       .view
@@ -330,15 +332,15 @@ object RuntimeDashboardMetrics {
   }
 
   def operationRequestValidationDiagnosticRecords: Map[String, Record] = synchronized {
-    _diagnostic_records(_operationRequestValidationEvents)
+    _diagnostic_records(_operation_request_validation_events)
   }
 
   def blobOperationSnapshot: Snapshot = synchronized {
-    _snapshot(_blobEvents, Vector.empty)
+    _snapshot(_blob_events, Vector.empty)
   }
 
   def blobDiagnosticCounts: Map[String, Long] = synchronized {
-    _blobEvents
+    _blob_events
       .filter(_.error)
       .groupBy(_.diagnosticKey.getOrElse("unknown"))
       .view
@@ -347,15 +349,15 @@ object RuntimeDashboardMetrics {
   }
 
   def blobDiagnosticRecords: Map[String, Record] = synchronized {
-    _diagnostic_records(_blobEvents)
+    _diagnostic_records(_blob_events)
   }
 
   def spiInvocationSnapshot: Snapshot = synchronized {
-    _snapshot(_spiEvents, Vector.empty)
+    _snapshot(_spi_events, Vector.empty)
   }
 
   def spiDiagnosticCounts: Map[String, Long] = synchronized {
-    _spiEvents
+    _spi_events
       .filter(_.error)
       .groupBy(_.diagnosticKey.getOrElse("unknown"))
       .view
@@ -364,16 +366,16 @@ object RuntimeDashboardMetrics {
   }
 
   def spiDiagnosticRecords: Map[String, Record] = synchronized {
-    _diagnostic_records(_spiEvents)
+    _diagnostic_records(_spi_events)
   }
 
   def diagnosticScopes: Vector[DiagnosticScope] = synchronized {
     Vector(
-      _diagnostic_scope("authorization", _authorizationEvents),
-      _diagnostic_scope("validation", _validationEvents),
-      _diagnostic_scope("operation-request-validation", _operationRequestValidationEvents),
-      _diagnostic_scope("blob", _blobEvents),
-      _diagnostic_scope("spi", _spiEvents)
+      _diagnostic_scope("authorization", _authorization_events),
+      _diagnostic_scope("validation", _validation_events),
+      _diagnostic_scope("operation-request-validation", _operation_request_validation_events),
+      _diagnostic_scope("blob", _blob_events),
+      _diagnostic_scope("spi", _spi_events)
     )
   }
 
@@ -413,7 +415,7 @@ object RuntimeDashboardMetrics {
     scope: String,
     events: Vector[Event]
   ): DiagnosticScope = {
-    val label = DiagnosticScopeLabels.getOrElse(scope, scope)
+    val label = DIAGNOSTIC_SCOPE_LABELS.getOrElse(scope, scope)
     val groups = events
       .filter(_.error)
       .groupBy(_.diagnosticKey.getOrElse("unknown"))
@@ -455,25 +457,25 @@ object RuntimeDashboardMetrics {
     entityAccessMetrics: Vector[EntityAccessMetricEntry]
   ): Vector[RuntimeMetricPoint] =
     Vector(
-      _event_points("web.request", "requests", _htmlEvents, event =>
+      _event_points("web.request", "requests", _html_events, event =>
         event.labels ++ _outcome_label(event)
       ),
-      _event_points("action.execution", "executions", _actionEvents, _outcome_label),
-      _event_points("authorization.decision", "decisions", _authorizationEvents, event =>
+      _event_points("action.execution", "executions", _action_events, _outcome_label),
+      _event_points("authorization.decision", "decisions", _authorization_events, event =>
         Map("outcome" -> (if (event.error) "denied" else "allowed")) ++
           event.diagnosticKey.map("diagnostic_key" -> _).toMap
       ),
-      _event_points("dsl.chokepoint", "chokepoints", _dslEvents, _outcome_label),
-      _event_points("validation", "failures", _validationEvents, event =>
+      _event_points("dsl.chokepoint", "chokepoints", _dsl_events, _outcome_label),
+      _event_points("validation", "failures", _validation_events, event =>
         event.diagnosticKey.map("diagnostic_key" -> _).toMap
       ),
-      _event_points("operation-request-validation", "failures", _operationRequestValidationEvents, event =>
+      _event_points("operation-request-validation", "failures", _operation_request_validation_events, event =>
         event.diagnosticKey.map("diagnostic_key" -> _).toMap
       ),
-      _event_points("blob.operation", "operations", _blobEvents, event =>
+      _event_points("blob.operation", "operations", _blob_events, event =>
         event.labels ++ _outcome_label(event)
       ),
-      _event_points("spi.invocation", "invocations", _spiEvents, event =>
+      _event_points("spi.invocation", "invocations", _spi_events, event =>
         event.labels ++ _outcome_label(event)
       ),
       _payload_externalization_points,
@@ -508,7 +510,7 @@ object RuntimeDashboardMetrics {
       }
 
   private def _payload_externalization_points: Vector[RuntimeMetricPoint] =
-    _payloadExternalizationEvents
+    _payload_externalization_events
       .groupBy(x => Map("status" -> x.status, "payload_kind" -> x.payloadKind, "destination" -> x.destination))
       .toVector
       .sortBy(_._1.toVector.sortBy(_._1).mkString("|"))
@@ -524,7 +526,7 @@ object RuntimeDashboardMetrics {
       }
 
   private def _open_telemetry_export_points: Vector[RuntimeMetricPoint] =
-    _openTelemetryExportEvents
+    _open_telemetry_export_events
       .groupBy(x => Map("status" -> x.status, "signal" -> x.signal))
       .toVector
       .sortBy(_._1.toVector.sortBy(_._1).mkString("|"))
