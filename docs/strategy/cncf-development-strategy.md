@@ -652,16 +652,15 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Notes contain execution details and results for each phase.
 
 ## Process Status Pointers
-- Current phase selection: none. Select an independent development item before
-  opening the next phase.
+- Current phase dashboard: `docs/phase/phase-30.md`
+- Current phase checklist: `docs/phase/phase-30-checklist.md`
+- Current development item: `9.29 CAR Component API Artifacts`.
 - Latest closed phase dashboard: `docs/phase/phase-29.md`
 - Latest closed phase checklist: `docs/phase/phase-29-checklist.md`
 - Previous closed phase dashboard: `docs/phase/phase-28.md`
 - Previous closed phase checklist: `docs/phase/phase-28-checklist.md`
-- Candidate next phase areas after Phase 29: Web UI multi-locale message
-  control; AwsComponent/S3 BlobStore provider; Search/index planning; DB
-  migration tooling; CulturalResource collection-item profile; Rule Engine and
-  Inference Runtime.
+- Current next slice: CA-03, contract-only component API JAR generation and
+  packaging under the CAR `spi/` boundary.
 - Status interpretation rules: `docs/rules/stage-status-and-checklist-convention.md`
 - Latest post-closure maintenance: Jul. 12, 2026 CNCF test descriptor and
   test-home hardening. Explicit `test.yaml` / `test.json` descriptors can now
@@ -791,6 +790,7 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Phase 27: closed (`docs/phase/phase-27.md`)
 - Phase 28: closed (`docs/phase/phase-28.md`)
 - Phase 29: closed (`docs/phase/phase-29.md`)
+- Phase 30: active (`docs/phase/phase-30.md`)
 
 ## 8. Completed Development Item History
 
@@ -2126,3 +2126,31 @@ Future domain logic / runtime / knowledge / automation development item.
   - untrusted rule sandboxing beyond the existing CAR capability sandbox
     direction;
   - using rules as the primary authorization engine.
+
+### 9.29 CAR Component API Artifacts
+Active in Phase 30.
+
+- Dashboard: `docs/phase/phase-30.md`
+- Checklist: `docs/phase/phase-30-checklist.md`
+- Goal: package component-specific typed APIs as contract-only CAR artifacts
+  and use the same artifact identity for consumer compilation and runtime
+  assembly classloading.
+- Scope:
+  - generate provided and required component API descriptors from CML;
+  - compute and validate the transitive public API type closure;
+  - package the closure under the CAR `spi/` contract boundary;
+  - resolve dependent CAR API artifacts through `cozyCarDependencies` without
+    adding provider implementation JARs to consumer compilation;
+  - establish one assembly API classloader identity shared by consumers and
+    providers;
+  - keep source-development and packaged-CAR startup behavior equivalent;
+  - verify the complete contract with ArtScene and textus-scraper through the
+    standard launcher path.
+- Completed slice: CA-02 generates deterministic provided/required API metadata
+  and rejects public contracts that expose implementation or private
+  persistence types.
+- Next slice: CA-03 packages only the descriptor-selected API classes as a
+  contract-only JAR under the existing CAR `spi/` boundary.
+- Non-goals: provider implementation libraries as consumer APIs, arbitrary
+  application-driven CAR loading, distributed component transport, dynamic
+  Playwright scraping, and flattened classpaths as deployment evidence.
