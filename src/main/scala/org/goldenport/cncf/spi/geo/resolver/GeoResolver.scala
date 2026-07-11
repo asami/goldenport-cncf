@@ -2,7 +2,7 @@ package org.goldenport.cncf.spi.geo.resolver
 
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.ExecutionContext
-import org.goldenport.cncf.spi.{SpiContract, SpiSelection, SpiSocket, SpiTraceMetadata, SpiTraceSupport}
+import org.goldenport.cncf.spi.{ComponentSelector, SpiContract, SpiSelection, SpiSocket, SpiTraceMetadata, SpiTraceSupport, StandardSpiSocketSet}
 
 /*
  * Provider-neutral geographic resolver SPI contract.
@@ -12,7 +12,7 @@ import org.goldenport.cncf.spi.{SpiContract, SpiSelection, SpiSocket, SpiTraceMe
  * operation classes directly.
  *
  * @since   Jul.  3, 2026
- * @version Jul.  9, 2026
+ * @version Jul. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 trait GeoResolver {
@@ -99,6 +99,16 @@ trait GeoResolverSocket extends SpiSocket[GeoResolver] {
 
   override def installSpi(spi: GeoResolver): Unit =
     withGeoResolver(spi)
+}
+
+trait GeoResolverSocketSet extends StandardSpiSocketSet[GeoResolver] {
+  def geoResolver(
+    selector: ComponentSelector = ComponentSelector()
+  )(using ExecutionContext): Consequence[GeoResolver] =
+    resolve(selector)
+
+  override def spiContract: SpiContract[GeoResolver] =
+    SpiContract("geo-resolver", classOf[GeoResolver])
 }
 
 final case class GeoResolveRouteRequest(

@@ -761,12 +761,11 @@ The current CNCF source already provides part of this model:
   and set socket classes;
 - generated consumer declarations install `1`, `?`, or `*` input ports and
   expose typed accessors without handling the generic `Record` boundary;
+- `StandardSpiSocketSet` supplies the reusable member-storage and selector
+  baseline for CNCF-owned standard SPI contracts;
+- AI runner, geographic resolver, and toolchain runner publish paired single
+  and set socket forms while retaining their existing single-socket APIs;
 - SPI calls such as `AiRunner` are ordinary typed Scala method calls.
-
-The following target feature is not yet complete:
-
-- consistent paired single-socket and socket-set forms for CNCF-owned standard
-  SPI contracts.
 
 Component implementations must not bypass the generated contract by importing
 another component's implementation package or by silently selecting the first

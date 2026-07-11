@@ -2,7 +2,7 @@ package org.goldenport.cncf.spi.toolchain.runner
 
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.ExecutionContext
-import org.goldenport.cncf.spi.{SpiContract, SpiSelection, SpiSocket, SpiTraceMetadata, SpiTraceSupport}
+import org.goldenport.cncf.spi.{ComponentSelector, SpiContract, SpiSelection, SpiSocket, SpiTraceMetadata, SpiTraceSupport, StandardSpiSocketSet}
 
 /*
  * Provider-neutral toolchain runner SPI contract.
@@ -12,7 +12,7 @@ import org.goldenport.cncf.spi.{SpiContract, SpiSelection, SpiSocket, SpiTraceMe
  * generated operation API.
  *
  * @since   Jul.  3, 2026
- * @version Jul.  9, 2026
+ * @version Jul. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 trait ToolchainRunner {
@@ -72,6 +72,16 @@ trait ToolchainRunnerSocket extends SpiSocket[ToolchainRunner] {
 
   override def installSpi(spi: ToolchainRunner): Unit =
     withToolchainRunner(spi)
+}
+
+trait ToolchainRunnerSocketSet extends StandardSpiSocketSet[ToolchainRunner] {
+  def toolchainRunner(
+    selector: ComponentSelector = ComponentSelector()
+  )(using ExecutionContext): Consequence[ToolchainRunner] =
+    resolve(selector)
+
+  override def spiContract: SpiContract[ToolchainRunner] =
+    SpiContract("toolchain-runner", classOf[ToolchainRunner])
 }
 
 final case class ConvertSvgToPdfRequest(

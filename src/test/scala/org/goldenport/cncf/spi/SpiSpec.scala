@@ -6,9 +6,9 @@ import org.goldenport.cncf.component.{Component, ComponentId, ComponentInit, Com
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.http.RuntimeDashboardMetrics
 import org.goldenport.cncf.metrics.EntityAccessMetricsRegistry
-import org.goldenport.cncf.spi.ai.runner.{AiGenerateRequest, AiGenerateResponse, AiRecordRequest, AiRecordResponse, AiRunner, AiRunnerSocket}
-import org.goldenport.cncf.spi.geo.resolver.{GeoResolver, GeoResolverSocket}
-import org.goldenport.cncf.spi.toolchain.runner.{ConvertSvgPagesToPdfRequest, ToolchainArtifactResponse, ToolchainRunner, ToolchainRunnerSocket}
+import org.goldenport.cncf.spi.ai.runner.{AiGenerateRequest, AiGenerateResponse, AiRecordRequest, AiRecordResponse, AiRunner, AiRunnerSocket, AiRunnerSocketSet}
+import org.goldenport.cncf.spi.geo.resolver.{GeoResolver, GeoResolverSocket, GeoResolverSocketSet}
+import org.goldenport.cncf.spi.toolchain.runner.{ConvertSvgPagesToPdfRequest, ToolchainArtifactResponse, ToolchainRunner, ToolchainRunnerSocket, ToolchainRunnerSocketSet}
 import org.goldenport.cncf.subsystem.{GenericSubsystemAssemblyDescriptorSource, GenericSubsystemComponentBinding, GenericSubsystemDescriptor}
 import org.goldenport.cncf.testutil.TestComponentFactory
 import org.goldenport.record.Record
@@ -27,6 +27,21 @@ final class SpiSpec
   with GivenWhenThen {
 
   "SpiResolver" should {
+    "publish paired socket forms for CNCF-owned standard SPI contracts" in {
+      Given("the AI, geographic, and toolchain standard SPI contracts")
+      val aiset = new AiRunnerSocketSet {}
+      val geoset = new GeoResolverSocketSet {}
+      val toolset = new ToolchainRunnerSocketSet {}
+
+      When("their socket-set forms are constructed without providers")
+      val contracts = Vector(aiset.spiContract.name, geoset.spiContract.name, toolset.spiContract.name)
+
+      Then("each standard contract exposes an optional empty set alongside its existing single socket")
+      contracts shouldBe Vector("ai-runner", "geo-resolver", "toolchain-runner")
+      Vector(aiset, geoset, toolset).forall(_.spiMembers.isEmpty) shouldBe true
+      Vector(aiset, geoset, toolset).forall(!_.spiRequired) shouldBe true
+    }
+
     "resolve automatic and compatibility providers" which {
     "inject a provider component into a matching socket component" in {
       Given("a provider component and a consumer component with an AI runner socket")
@@ -1018,18 +1033,10 @@ final class SpiSpec
     name: String,
     required: Boolean = false,
     selectionpolicy: ComponentSelectionPolicy = ComponentSelectionPolicy.allowAll
-  ) extends SpiSocketSet[AiRunner] {
-    private var _members: Vector[ResolvedSpiMember[AiRunner]] = Vector.empty
-
-    def spiContract: SpiContract[AiRunner] =
-      SpiContract("ai-runner", classOf[AiRunner])
-
+  ) extends AiRunnerSocketSet {
     override def spiSocketName: String = name
     override def spiRequired: Boolean = required
     override def spiSelectionPolicy: ComponentSelectionPolicy = selectionpolicy
-    def spiMembers: Vector[ResolvedSpiMember[AiRunner]] = _members
-    def installSpiMembers(members: Vector[ResolvedSpiMember[AiRunner]]): Unit =
-      _members = members
   }
 
   private final case class GeoResolverConsumerComponent() extends Component with GeoResolverSocket

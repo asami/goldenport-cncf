@@ -2,7 +2,7 @@ package org.goldenport.cncf.spi.ai.runner
 
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.ExecutionContext
-import org.goldenport.cncf.spi.{SpiContract, SpiSelection, SpiSocket, SpiTraceMetadata, SpiTraceSupport}
+import org.goldenport.cncf.spi.{ComponentSelector, SpiContract, SpiSelection, SpiSocket, SpiTraceMetadata, SpiTraceSupport, StandardSpiSocketSet}
 import org.goldenport.protocol.Property
 import org.goldenport.record.Record
 import org.goldenport.schema.DataConfidentiality
@@ -14,7 +14,7 @@ import org.goldenport.schema.DataConfidentiality
  * SPI; consumer components depend only on this CNCF-owned protocol.
  *
  * @since   Jul.  2, 2026
- * @version Jul.  9, 2026
+ * @version Jul. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 trait AiRunner {
@@ -92,6 +92,16 @@ trait AiRunnerSocket extends SpiSocket[AiRunner] {
 
   override def installSpi(spi: AiRunner): Unit =
     withAiRunner(spi)
+}
+
+trait AiRunnerSocketSet extends StandardSpiSocketSet[AiRunner] {
+  def aiRunner(
+    selector: ComponentSelector = ComponentSelector()
+  )(using ExecutionContext): Consequence[AiRunner] =
+    resolve(selector)
+
+  override def spiContract: SpiContract[AiRunner] =
+    SpiContract("ai-runner", classOf[AiRunner])
 }
 
 final case class AiRunnerRequirement(

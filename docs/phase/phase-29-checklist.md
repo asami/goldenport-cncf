@@ -209,7 +209,7 @@ operation metadata.
 
 ## TC-07: Standard SPI Single/Set Socket Alignment
 
-Status: NEXT
+Status: DONE
 
 ### Objective
 
@@ -218,15 +218,15 @@ standard SPI contracts.
 
 ### Detailed Tasks
 
-- [ ] Define the reusable standard socket-set baseline.
-- [ ] Apply it to representative standard SPI contracts.
-- [ ] Preserve existing single-socket source compatibility.
-- [ ] Verify one component may consume/provide standard SPI and publish a
+- [x] Define the reusable standard socket-set baseline.
+- [x] Apply it to AI runner, geographic resolver, and toolchain runner SPI contracts.
+- [x] Preserve existing single-socket source compatibility.
+- [x] Verify one component may consume/provide standard SPI and publish a
       generated component API without ambiguity.
 
 ## TC-08: ArtScene and Textus Scraper Development-Driver Smoke
 
-Status: TODO
+Status: NEXT
 
 ### Objective
 

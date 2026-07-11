@@ -100,6 +100,16 @@ trait SpiSocketSet[S] {
     ComponentApiResolver(spiMembers, spiSelectionPolicy).resolve(spiContract, selector)
 }
 
+/** Shared member storage and selector resolution for CNCF-owned standard SPI socket sets. */
+trait StandardSpiSocketSet[S] extends SpiSocketSet[S] {
+  private var _spi_members: Vector[ResolvedSpiMember[S]] = Vector.empty
+
+  final def spiMembers: Vector[ResolvedSpiMember[S]] = _spi_members
+
+  final def installSpiMembers(members: Vector[ResolvedSpiMember[S]]): Unit =
+    _spi_members = members
+}
+
 sealed trait SpiCardinality {
   def isMany: Boolean
   def isRequired: Boolean

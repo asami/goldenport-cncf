@@ -65,6 +65,24 @@ final class SpiInvokerSpec
       provider.boundProviderMaterializationCount shouldBe 1
     }
 
+    "resolve a standard SPI and component API from the same provider without ambiguity" in {
+      Given("one provider publishing both a standard typed SPI and a generated-style component API")
+      val subsystem = TestComponentFactory.emptySubsystem("spi_dual_contract")
+      val provider = InvocationFixture.addProvider(subsystem, "primary", Vector("official-site"))
+      val (standardconsumer, standardsocket) = InvocationFixture.addConsumer(subsystem, "standard_consumer", "standard")
+      val (apiconsumer, apisocket) = InvocationFixture.addBoundConsumer(subsystem, "api_consumer", "component-api")
+      given ExecutionContext = ExecutionContext.create()
+
+      When("assembly resolution installs both contracts")
+      InvocationFixture.installResolver(subsystem, Vector(provider, standardconsumer, apiconsumer))
+      val apiresult = apisocket.service.echo(Record.dataAuto("message" -> "component-api"))
+
+      Then("each socket invokes its own contract through the same provider component")
+      standardsocket.isSpiInstalled shouldBe true
+      apiresult.toOption.get.getString("message") shouldBe Some("component-api")
+      provider.boundProviderMaterializationCount shouldBe 1
+    }
+
     "use a selected assembly binding without rematerializing the typed service" in {
       Given("an assembly-admitted provider with an exact instance and a component operation")
       val fixture = InvocationFixture.create()

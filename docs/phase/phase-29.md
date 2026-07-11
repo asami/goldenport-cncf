@@ -56,15 +56,15 @@ Scope boundaries:
 - D (DONE): TC-04 — Socket set and abstract component selection.
 - E (DONE): TC-05 — Generic SPI invoker and canonical operation dispatch.
 - F (DONE): TC-06 — Cozy-generated typed component API and proxy.
-- G (NEXT): TC-07 — Standard SPI single/set socket alignment.
-- H (TODO): TC-08 — ArtScene + `textus-scraper` development-driver smoke.
+- G (DONE): TC-07 — Standard SPI single/set socket alignment.
+- H (NEXT): TC-08 — ArtScene + `textus-scraper` development-driver smoke.
 - I (TODO): TC-09 — Observability, failure semantics, and regression coverage.
 - J (TODO): TC-10 — Decided design promotion and Phase 29 closure.
 
 Resume hint:
 
-- Start TC-07 by aligning CNCF-owned standard SPI contracts with the generated
-  single-socket/socket-set baseline established by TC-06.
+- Start TC-08 by integrating configured `textus-scraper` instances into
+  ArtScene through the generated public typed API.
 
 ## 4. Development Items
 
@@ -74,7 +74,7 @@ Resume hint:
 - [x] TC-04: Implement socket sets and abstract component selection.
 - [x] TC-05: Implement generic invocation through the operation/action path.
 - [x] TC-06: Generate typed component APIs and proxies from CML.
-- [ ] TC-07: Align standard SPI contracts with single/set socket forms.
+- [x] TC-07: Align standard SPI contracts with single/set socket forms.
 - [ ] TC-08: Complete the ArtScene + `textus-scraper` driver smoke.
 - [ ] TC-09: Complete observability, failure, and regression verification.
 - [ ] TC-10: Promote the settled contract to design and close Phase 29.
