@@ -66,7 +66,7 @@ import org.goldenport.cncf.spi.SpiResolver
  *  version Apr. 30, 2026
  *  version May. 25, 2026
  *  version Jun. 29, 2026
- * @version Jul. 11, 2026
+ * @version Jul. 12, 2026
  * @author  ASAMI, Tomoharu
  */
 object CncfRuntime extends GlobalObservable {
@@ -101,15 +101,15 @@ object CncfRuntime extends GlobalObservable {
   private final case class RuntimeLaunch(
     cwd: Path,
     configuration: ResolvedConfiguration,
-    activeSpecifications: Vector[org.goldenport.cncf.component.repository.ComponentRepository.Specification],
-    logBackendOption: Option[String],
-    logLevelOption: Option[String],
-    actualArgs: Array[String],
-    runtimeParse: RuntimeParameterParseResult,
-    domainArgs: Array[String],
+    activespecifications: Vector[org.goldenport.cncf.component.repository.ComponentRepository.Specification],
+    logbackendoption: Option[String],
+    logleveloption: Option[String],
+    actualargs: Array[String],
+    runtimeparse: RuntimeParameterParseResult,
+    domainargs: Array[String],
     mode: RunMode,
-    runtimeConfig: RuntimeConfig,
-    aliasResolver: AliasResolver
+    runtimeconfig: RuntimeConfig,
+    aliasresolver: AliasResolver
   )
 
   private val _configuration_application_name = "textus"
@@ -480,6 +480,9 @@ object CncfRuntime extends GlobalObservable {
     cwd: Path,
     args: Array[String]
   ): RuntimeBootstrap = {
+    val testargs = _normalize_test_mode_args(cwd, args)
+    if (!testargs.sameElements(args))
+      return bootstrap(cwd, testargs)
     val normalizedargs = _normalize_source_args(args)
     if (!normalizedargs.sameElements(args))
       return bootstrap(cwd, normalizedargs)
@@ -608,24 +611,32 @@ object CncfRuntime extends GlobalObservable {
   ): RuntimeRepositoryParameters = {
     val extracted =
       ComponentRepositorySpace.extractRepositoryArgs(configuration, args)
+    val nodefault = extracted.noDefault || _test_home_repository_inheritance_disabled(configuration)
     val activerepositories =
       ComponentRepositorySpace.appendDefaultActiveRepositories(
-        ComponentRepositorySpace.resolveSpecifications(extracted.active, cwd, extracted.noDefault),
+        ComponentRepositorySpace.resolveSpecifications(extracted.active, cwd, nodefault),
         cwd,
-        extracted.noDefault
+        nodefault
       )
     val searchrepositories =
       ComponentRepositorySpace.appendDefaultSearchRepositories(
-        ComponentRepositorySpace.resolveSpecifications(extracted.search, cwd, extracted.noDefault),
+        ComponentRepositorySpace.resolveSpecifications(extracted.search, cwd, nodefault),
         activerepositories.getOrElse(Vector.empty),
         cwd,
-        extracted.noDefault
+        nodefault
       )
     RuntimeRepositoryParameters(
       activeRepositories = activerepositories,
       searchRepositories = searchrepositories
     )
   }
+
+  private def _test_home_repository_inheritance_disabled(
+    configuration: ResolvedConfiguration
+  ): Boolean =
+    RuntimeConfig.getString(configuration, RuntimeConfig.TEST_HOME_PATH_KEY).nonEmpty &&
+      RuntimeConfig.getString(configuration, RuntimeConfig.TEST_HOME_INHERIT_REPOSITORIES_KEY)
+        .exists(value => !_truthy(value))
 
   private[cncf] def canonicalInvocationParameters(
     configuration: ResolvedConfiguration,
@@ -656,8 +667,12 @@ object CncfRuntime extends GlobalObservable {
     if (alreadyspecified) {
       componentresolved
     } else {
+      val lookupspecs =
+        (activespecs ++ searchspecs).foldLeft(Vector.empty[ComponentRepository.Specification]) { (z, spec) =>
+          if (z.contains(spec)) z else z :+ spec
+        }
       componentresolved.subsystemName
-        .flatMap(name => _resolve_subsystem_descriptor_entry(searchspecs, name))
+        .flatMap(name => _resolve_subsystem_descriptor_entry(lookupspecs, name))
         .map { case (spec, descriptor) =>
           val repoargs =
             _active_spec_argument(spec)
@@ -766,15 +781,15 @@ object CncfRuntime extends GlobalObservable {
           RuntimeLaunch(
             cwd = cwd,
             configuration = configuration,
-            activeSpecifications = specs,
-            logBackendOption = backendoption,
-            logLevelOption = logleveloption,
-            actualArgs = actualargs,
-            runtimeParse = runtimeparse,
-            domainArgs = domainargs,
+            activespecifications = specs,
+            logbackendoption = backendoption,
+            logleveloption = logleveloption,
+            actualargs = actualargs,
+            runtimeparse = runtimeparse,
+            domainargs = domainargs,
             mode = mode,
-            runtimeConfig = runtimeconfig,
-            aliasResolver = aliasresolver
+            runtimeconfig = runtimeconfig,
+            aliasresolver = aliasresolver
           )
         )
     }
@@ -784,17 +799,17 @@ object CncfRuntime extends GlobalObservable {
     launch: RuntimeLaunch
   ): Unit = {
     val logbackend = _decide_backend(
-      launch.logBackendOption,
+      launch.logbackendoption,
       _logging_backend_from_configuration(launch.configuration),
       launch.mode
     )
     _install_log_backend(logbackend)
-    _update_visibility_policy(launch.logLevelOption, launch.configuration, launch.mode)
+    _update_visibility_policy(launch.logleveloption, launch.configuration, launch.mode)
     _reset_global_runtime_context()
     _create_global_runtime_context(
-      launch.runtimeConfig,
+      launch.runtimeconfig,
       launch.configuration,
-      launch.aliasResolver
+      launch.aliasresolver
     )
     _mark_used_parameters(launch.configuration)
   }
@@ -811,7 +826,7 @@ object CncfRuntime extends GlobalObservable {
       case Right(launch) =>
         _prepare_runtime(launch)
         val r: Consequence[OperationRequest] =
-          _runtime_protocol_engine.makeOperationRequest(launch.domainArgs)
+          _runtime_protocol_engine.makeOperationRequest(launch.domainargs)
         r match {
           case Consequence.Success(req) =>
             val requestmode = RunMode.from(req.request.operation)
@@ -826,23 +841,23 @@ object CncfRuntime extends GlobalObservable {
               GlobalRuntimeContext.current.foreach(_.updateRuntimeMode(m))
             }
             observe_trace(
-              s"[subsytem] runWithExtraComponents dispatching mode args=${launch.domainArgs.drop(1).mkString(" ")}"
+              s"[subsytem] runWithExtraComponents dispatching mode args=${launch.domainargs.drop(1).mkString(" ")}"
             )
             requestmode match {
               case Some(RunMode.Server) =>
                 val subsystem = buildSubsystem(extracomponents, Some(RunMode.Server), args)
-                new CncfRuntime().startServer(subsystem, launch.domainArgs.drop(1))
+                new CncfRuntime().startServer(subsystem, launch.domainargs.drop(1))
                 0
               case Some(RunMode.Client) =>
                 val subsystem = buildSubsystem(extracomponents, Some(RunMode.Client), args)
-                new CncfRuntime().executeClient(subsystem, launch.domainArgs.drop(1))
+                new CncfRuntime().executeClient(subsystem, launch.domainargs.drop(1))
               case Some(RunMode.Command) =>
                 val subsystem = buildSubsystem(extracomponents, Some(RunMode.Command), args)
-                new CncfRuntime().executeCommand(subsystem, launch.domainArgs.drop(1))
+                new CncfRuntime().executeCommand(subsystem, launch.domainargs.drop(1))
               case Some(RunMode.ServerEmulator) =>
-                executeServerEmulator(launch.domainArgs.drop(1), extracomponents)
+                executeServerEmulator(launch.domainargs.drop(1), extracomponents)
               case Some(RunMode.Script) =>
-                _run_script(launch.domainArgs.drop(1), extracomponents)
+                _run_script(launch.domainargs.drop(1), extracomponents)
               case _ =>
                 _print_usage()
                 2
@@ -868,7 +883,7 @@ object CncfRuntime extends GlobalObservable {
       case Right(launch) =>
         _prepare_runtime(launch)
         val r: Consequence[OperationRequest] =
-          _runtime_protocol_engine.makeOperationRequest(launch.domainArgs)
+          _runtime_protocol_engine.makeOperationRequest(launch.domainargs)
         r match {
           case Consequence.Success(req) =>
             val mode = RunMode.from(req.request.operation)
@@ -882,21 +897,21 @@ object CncfRuntime extends GlobalObservable {
             mode match {
               case Some(RunMode.Server) =>
                 val subsystem = buildSubsystem(mode = Some(RunMode.Server), args = args)
-                new CncfRuntime().startServer(subsystem, launch.domainArgs.drop(1))
+                new CncfRuntime().startServer(subsystem, launch.domainargs.drop(1))
                 0
               case Some(RunMode.Client) =>
                 observe_trace(
-                  s"[client:trace] run dispatching to client mode args=${launch.domainArgs.drop(1).mkString(" ")}"
+                  s"[client:trace] run dispatching to client mode args=${launch.domainargs.drop(1).mkString(" ")}"
                 )
                 val subsystem = buildSubsystem(mode = Some(RunMode.Client), args = args)
-                new CncfRuntime().executeClient(subsystem, (launch.runtimeParse.consumed ++ launch.domainArgs.drop(1)).toArray)
+                new CncfRuntime().executeClient(subsystem, (launch.runtimeparse.consumed ++ launch.domainargs.drop(1)).toArray)
               case Some(RunMode.Command) =>
                 val subsystem = buildSubsystem(mode = Some(RunMode.Command), args = args)
-                new CncfRuntime().executeCommand(subsystem, launch.domainArgs.drop(1))
+                new CncfRuntime().executeCommand(subsystem, launch.domainargs.drop(1))
               case Some(RunMode.ServerEmulator) =>
-                executeServerEmulator(launch.domainArgs.drop(1))
+                executeServerEmulator(launch.domainargs.drop(1))
               case Some(RunMode.Script) =>
-                _run_script(launch.domainArgs.drop(1), _ => Nil)
+                _run_script(launch.domainargs.drop(1), _ => Nil)
               case None =>
                 _print_error(s"Unknown mode: ${req.request.operation}")
                 _print_usage()
@@ -1110,6 +1125,74 @@ object CncfRuntime extends GlobalObservable {
     }
     val result = buffer.result().toArray
     if (changed) result else args
+  }
+
+  private def _normalize_test_mode_args(
+    cwd: Path,
+    args: Array[String]
+  ): Array[String] =
+    args.headOption match {
+      case Some("test") =>
+        val buffer = Vector.newBuilder[String]
+        buffer += s"--${RuntimeConfig.OperationModeKey}=test"
+        var i = 1
+        var done = false
+        while (i < args.length && !done) {
+          val current = args(i)
+          if (current.startsWith("--test-config=")) {
+            val value = current.stripPrefix("--test-config=").trim
+            if (value.isEmpty)
+              throw new IllegalArgumentException("--test-config requires a value")
+            buffer += s"--${RuntimeConfig.TEST_DESCRIPTOR_KEY}=${value}"
+            i += 1
+          } else if (current == "--test-config") {
+            if (i + 1 >= args.length)
+              throw new IllegalArgumentException("--test-config requires a value")
+            buffer += s"--${RuntimeConfig.TEST_DESCRIPTOR_KEY}=${args(i + 1)}"
+            i += 2
+          } else if (current.startsWith("--home=")) {
+            val value = current.stripPrefix("--home=").trim
+            if (value.isEmpty)
+              throw new IllegalArgumentException("--home requires a value")
+            _append_test_home_args(buffer, value)
+            i += 1
+          } else if (current == "--home") {
+            if (i + 1 >= args.length)
+              throw new IllegalArgumentException("--home requires a value")
+            _append_test_home_args(buffer, args(i + 1))
+            i += 2
+          } else if (current == "--temporary-home") {
+            val temporaryhome = _create_temporary_test_home(cwd)
+            _append_test_home_args(buffer, temporaryhome.toString)
+            buffer += s"--${RuntimeConfig.TEST_HOME_TEMPORARY_KEY}=true"
+            i += 1
+          } else {
+            done = true
+          }
+        }
+        (buffer.result() ++ args.drop(i)).toArray
+      case _ =>
+        args
+    }
+
+  private def _append_test_home_args(
+    buffer: scala.collection.mutable.Builder[String, Vector[String]],
+    path: String
+  ): Unit = {
+    buffer += s"--${RuntimeConfig.TEST_HOME_MODE_KEY}=isolated"
+    buffer += s"--${RuntimeConfig.TEST_HOME_PATH_KEY}=${path}"
+    buffer += s"--${RuntimeConfig.TEST_HOME_INHERIT_RUNTIME_KEY}=true"
+    buffer += s"--${RuntimeConfig.TEST_HOME_INHERIT_REPOSITORIES_KEY}=true"
+    buffer += s"--${RuntimeConfig.TEST_HOME_INHERIT_CREDENTIALS_KEY}=false"
+    buffer += s"--${RuntimeConfig.TEST_HOME_INHERIT_LOCAL_DATA_KEY}=false"
+  }
+
+  private def _create_temporary_test_home(
+    cwd: Path
+  ): Path = {
+    val root = cwd.resolve("target").resolve("cncf.d").normalize
+    Files.createDirectories(root)
+    Files.createTempDirectory(root, "test-home-").normalize
   }
 
   private def _is_option_name(
@@ -2466,17 +2549,24 @@ object CncfRuntime extends GlobalObservable {
     args: Array[String] = Array.empty
   ): ResolvedConfiguration = {
     val configargs = _config_args(args)
-    val basesources = _runtime_standard_config_sources(
+    val initialbasesources = _runtime_standard_config_sources(
       cwd,
       applicationname = _configuration_application_name,
       args = Map.empty
     )
     val explicitconfigs = _explicit_config_sources(cwd, configargs)
     val argsource = ConfigurationSource.args(configargs).toSeq
-    val initialsources = ConfigurationSources(basesources.sources ++ explicitconfigs ++ argsource)
+    val initialsources = ConfigurationSources(initialbasesources.sources ++ explicitconfigs ++ argsource)
     val testconfigs = _test_descriptor_config_sources(initialsources, cwd)
+    val effectiveargs = configargs ++ testconfigs.configmap
+    val basesources = _runtime_standard_config_sources(
+      cwd,
+      applicationname = _configuration_application_name,
+      args = effectiveargs
+    )
+    val testhomedefaults = _test_home_default_config_source(cwd, effectiveargs)
     val sources = ConfigurationSources(
-      basesources.sources ++ explicitconfigs ++ testconfigs.configs ++ argsource ++ testconfigs.normalizedpathsource.toVector
+      basesources.sources ++ explicitconfigs ++ testhomedefaults.toVector ++ testconfigs.configs ++ argsource ++ testconfigs.normalizedpathsource.toVector
     )
     // TODO Phase 2.9+: define failure policy for configuration resolution.
     // - Preserve/emit ConfigurationTrace and error details for observability.
@@ -2501,7 +2591,8 @@ object CncfRuntime extends GlobalObservable {
             case Consequence.Success(descriptor) =>
               TestDescriptorConfigSources(
                 RuntimeTestDescriptor.configurationSource(descriptor).toVector,
-                ConfigurationSource.args(Map(RuntimeConfig.TEST_DESCRIPTOR_KEY -> normalized.toString))
+                ConfigurationSource.args(Map(RuntimeConfig.TEST_DESCRIPTOR_KEY -> normalized.toString)),
+                descriptor.config
               )
             case Consequence.Failure(conclusion) =>
               throw new IllegalArgumentException(conclusion.display)
@@ -2513,11 +2604,12 @@ object CncfRuntime extends GlobalObservable {
 
   private final case class TestDescriptorConfigSources(
     configs: Vector[ConfigurationSource],
-    normalizedpathsource: Option[ConfigurationSource]
+    normalizedpathsource: Option[ConfigurationSource],
+    configmap: Map[String, String]
   )
 
   private object TestDescriptorConfigSources {
-    val empty: TestDescriptorConfigSources = TestDescriptorConfigSources(Vector.empty, None)
+    val empty: TestDescriptorConfigSources = TestDescriptorConfigSources(Vector.empty, None, Map.empty)
   }
 
   private def _explicit_config_sources(
@@ -2547,7 +2639,15 @@ object CncfRuntime extends GlobalObservable {
   ): ConfigurationSources = {
     val loader = new RuntimeFileConfigLoader
     val names = _configuration_application_names(applicationname)
-    val home = sys.props.get("user.home").toVector.flatMap { home =>
+    val testhome = _test_home_runtime_config(cwd, args)
+    val inheritedhome =
+      if (testhome.exists(_.inheritruntime))
+        sys.props.get("user.home").toVector
+      else if (testhome.nonEmpty)
+        Vector.empty
+      else
+        sys.props.get("user.home").toVector
+    val home = inheritedhome.flatMap { home =>
       names.flatMap { name =>
         _runtime_standard_file_sources(
           Paths.get(home).resolve(_configuration_dir_name(name)),
@@ -2555,6 +2655,18 @@ object CncfRuntime extends GlobalObservable {
           ConfigurationSource.Rank.Home,
           loader
         )
+      }
+    }
+    val testhomesources = testhome.toVector.flatMap { homeconfig =>
+      homeconfig.path.toVector.flatMap { home =>
+        names.flatMap { name =>
+          _runtime_standard_file_sources(
+            home.resolve(_configuration_dir_name(name)),
+            ConfigurationOrigin.Home,
+            ConfigurationSource.Rank.Home + 1,
+            loader
+          )
+        }
       }
     }
     val project = names.flatMap { name =>
@@ -2584,8 +2696,82 @@ object CncfRuntime extends GlobalObservable {
       )
     val envsource = ConfigurationSource.env(sys.env, applicationname).toVector
     val argsource = ConfigurationSource.args(args).toVector
-    ConfigurationSources(home ++ project ++ current ++ Vector(currenttextuscompat) ++ envsource ++ argsource)
+    ConfigurationSources(home ++ testhomesources ++ project ++ current ++ Vector(currenttextuscompat) ++ envsource ++ argsource)
   }
+
+  private final case class TestHomeRuntimeConfig(
+    path: Option[Path],
+    inheritruntime: Boolean,
+    inheritrepositories: Boolean,
+    inheritlocaldata: Boolean
+  )
+
+  private def _test_home_runtime_config(
+    cwd: Path,
+    args: Map[String, String]
+  ): Option[TestHomeRuntimeConfig] = {
+    val path = _test_home_path(cwd, args)
+    val mode = _test_home_arg(args, RuntimeConfig.TEST_HOME_MODE_KEY, RuntimeConfig.RUNTIME_TEST_HOME_MODE_KEY)
+      .map(_.trim.toLowerCase(java.util.Locale.ROOT))
+    val temporary = _test_home_arg(args, RuntimeConfig.TEST_HOME_TEMPORARY_KEY, RuntimeConfig.RUNTIME_TEST_HOME_TEMPORARY_KEY)
+      .exists(_truthy)
+    if (path.isEmpty && mode.isEmpty && !temporary) {
+      None
+    } else {
+      Some(TestHomeRuntimeConfig(
+        path = path,
+        inheritruntime = _test_home_boolean(args, RuntimeConfig.TEST_HOME_INHERIT_RUNTIME_KEY, RuntimeConfig.RUNTIME_TEST_HOME_INHERIT_RUNTIME_KEY, default = true),
+        inheritrepositories = _test_home_boolean(args, RuntimeConfig.TEST_HOME_INHERIT_REPOSITORIES_KEY, RuntimeConfig.RUNTIME_TEST_HOME_INHERIT_REPOSITORIES_KEY, default = true),
+        inheritlocaldata = _test_home_boolean(args, RuntimeConfig.TEST_HOME_INHERIT_LOCAL_DATA_KEY, RuntimeConfig.RUNTIME_TEST_HOME_INHERIT_LOCAL_DATA_KEY, default = false)
+      ))
+    }
+  }
+
+  private def _test_home_path(
+    cwd: Path,
+    args: Map[String, String]
+  ): Option[Path] =
+    _test_home_arg(args, RuntimeConfig.TEST_HOME_PATH_KEY, RuntimeConfig.RUNTIME_TEST_HOME_PATH_KEY)
+      .map(Paths.get(_))
+      .map(path => if (path.isAbsolute) path.normalize else cwd.resolve(path).normalize)
+
+  private def _test_home_default_config_source(
+    cwd: Path,
+    args: Map[String, String]
+  ): Option[ConfigurationSource] =
+    _test_home_runtime_config(cwd, args).flatMap { homeconfig =>
+      if (homeconfig.inheritlocaldata) {
+        None
+      } else {
+        homeconfig.path.flatMap { path =>
+          ConfigurationSource.args(Map("textus.local-data.root" -> path.resolve(".cncf").toString))
+        }
+      }
+    }
+
+  private def _test_home_boolean(
+    args: Map[String, String],
+    key: String,
+    runtimekey: String,
+    default: Boolean
+  ): Boolean =
+    _test_home_arg(args, key, runtimekey).map(_truthy).getOrElse(default)
+
+  private def _test_home_arg(
+    args: Map[String, String],
+    key: String,
+    runtimekey: String
+  ): Option[String] =
+    Vector(
+      key,
+      runtimekey,
+      _cncf_key(key),
+      _cncf_key(runtimekey)
+    ).iterator.flatMap(args.get).toSeq.headOption.map(_.trim).filter(_.nonEmpty)
+
+  private def _cncf_key(key: String): String =
+    if (key.startsWith("textus.")) "cncf." + key.stripPrefix("textus.")
+    else key
 
   private def _configuration_application_names(
     applicationname: String
@@ -3214,7 +3400,7 @@ class CncfRuntime() extends GlobalObservable {
       (runtimeextras(subsystem) ++ extracomponents(subsystem)).map(compfactory.bootstrap)
     )
     if (extras.nonEmpty) {
-      subsystem.add(extras)
+      subsystem.upsert(extras)
     }
     if (_apply_component_assembly_defaults(subsystem)) {
       val inheritedextras = _collapse_component_duplicates(
@@ -3222,7 +3408,7 @@ class CncfRuntime() extends GlobalObservable {
         runtimeextras(subsystem).map(compfactory.bootstrap)
       )
       if (inheritedextras.nonEmpty) {
-        subsystem.add(inheritedextras)
+        subsystem.upsert(inheritedextras)
       }
     }
     _verify_descriptor_components_available(subsystem, runtimespecs)
@@ -3280,7 +3466,6 @@ class CncfRuntime() extends GlobalObservable {
     subsystem: Subsystem,
     componentname: String
   ): Boolean = {
-    val requested = NamingConventions.toComparisonKey(componentname)
     subsystem.components.exists { component =>
       val candidates =
         Vector(
@@ -3288,8 +3473,21 @@ class CncfRuntime() extends GlobalObservable {
           component.artifactMetadata.flatMap(_.component),
           component.artifactMetadata.map(_.name)
         ).flatten
-      candidates.exists(name => NamingConventions.toComparisonKey(name) == requested)
+      candidates.exists(name => _matches_runtime_component_name(name, componentname))
     }
+  }
+
+  private def _matches_runtime_component_name(
+    runtimecomponentname: String,
+    descriptorcomponentname: String
+  ): Boolean = {
+    val descriptor = descriptorcomponentname.trim
+    val withouttextus =
+      if (descriptor.startsWith("textus-")) descriptor.stripPrefix("textus-")
+      else if (descriptor.startsWith("textus_")) descriptor.stripPrefix("textus_")
+      else descriptor
+    NamingConventions.equivalentByNormalized(runtimecomponentname, descriptor) ||
+      NamingConventions.equivalentByNormalized(runtimecomponentname, withouttextus)
   }
 
   private def _repository_spec_label(
@@ -3388,7 +3586,8 @@ class CncfRuntime() extends GlobalObservable {
     candidates.foreach { component =>
       val key = NamingConventions.toComparisonKey(component.core.name)
       if (existingkeys.contains(key)) {
-        existing.find(x => NamingConventions.toComparisonKey(x.core.name) == key).foreach { current =>
+        existing.find(x => NamingConventions.toComparisonKey(x.core.name) == key).foreach { original =>
+          val current = seen.getOrElse(key, original)
           val selection = AssemblyReport.selectPreferred(current, component)
           if (selection.selected ne current) {
             seen.update(key, selection.selected)
@@ -3428,9 +3627,7 @@ class CncfRuntime() extends GlobalObservable {
         }
       }
     }
-    seen.iterator.collect {
-      case (key, component) if !existingkeys.contains(key) => component
-    }.toVector
+    seen.values.toVector
   }
 
   private def _merge_component_specs(

@@ -29,7 +29,7 @@ import org.goldenport.configuration.ConfigurationTrace
  * @since   Feb.  4, 2026
  *  version Apr. 25, 2026
  *  version May. 25, 2026
- * @version Jul.  9, 2026
+ * @version Jul. 12, 2026
  * @author  ASAMI, Tomoharu
  */
 class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAndAfterAll with GivenWhenThen {
@@ -875,7 +875,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
       Given("an application CAR whose assembly descriptor declares a provider component")
       _with_temp_dir { root =>
         val repositorydir = root.resolve("repository.d")
-        val appcar = root.resolve("textus-art-scene.car")
+        val appcar = root.resolve("component-file-app.car")
         val appjar = _create_class_component_jar(
           root.resolve("assets").resolve("art-scene-main.jar"),
           Seq(
@@ -886,15 +886,15 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
         val appdescriptor = root.resolve("component-descriptor-art-scene.json")
         Files.writeString(
           appdescriptor,
-          """{"name":"textus-art-scene","version":"0.1.0-SNAPSHOT","component":"textus-art-scene"}"""
+          """{"name":"component-file-app","version":"0.1.0-SNAPSHOT","component":"component-file-app"}"""
         )
         val assemblydescriptor = root.resolve("assembly-descriptor-art-scene.yaml")
         Files.writeString(
           assemblydescriptor,
-          """subsystem: textus-art-scene
+          """subsystem: component-file-app
             |version: 0.1.0
             |components:
-            |  - name: textus-art-scene
+            |  - name: component-file-app
             |    version: 0.1.0-SNAPSHOT
             |  - name: plain-ai-runner-provider
             |    version: 0.1.0
@@ -938,7 +938,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
             "--no-default-components",
             "--component-file", appcar.toString,
             "--repository-dir", repositorydir.toString,
-            "command", "textus-art-scene.main.noop"
+            "command", "component-file-app.main.noop"
           ),
           modeHint = Some(org.goldenport.cncf.cli.RunMode.Command)
         ).TAKE
@@ -954,7 +954,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
     "fail startup when a component-file assembly dependency is unresolved" in {
       Given("an application CAR whose assembly descriptor declares a missing provider")
       _with_temp_dir { root =>
-        val appcar = root.resolve("textus-art-scene.car")
+        val appcar = root.resolve("component-file-app.car")
         val appjar = _create_class_component_jar(
           root.resolve("assets").resolve("art-scene-main.jar"),
           Seq(
@@ -965,15 +965,15 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
         val appdescriptor = root.resolve("component-descriptor-art-scene.json")
         Files.writeString(
           appdescriptor,
-          """{"name":"textus-art-scene","version":"0.1.0-SNAPSHOT","component":"textus-art-scene"}"""
+          """{"name":"component-file-app","version":"0.1.0-SNAPSHOT","component":"component-file-app"}"""
         )
         val assemblydescriptor = root.resolve("assembly-descriptor-art-scene.yaml")
         Files.writeString(
           assemblydescriptor,
-          """subsystem: textus-art-scene
+          """subsystem: component-file-app
             |version: 0.1.0
             |components:
-            |  - name: textus-art-scene
+            |  - name: component-file-app
             |    version: 0.1.0-SNAPSHOT
             |  - name: missing-ai-runtime-for-component-file-spec
             |    version: 0.2.0-SNAPSHOT
@@ -994,7 +994,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
           args = Array(
             "--no-default-components",
             "--component-file", appcar.toString,
-            "command", "textus-art-scene.main.noop"
+            "command", "component-file-app.main.noop"
           ),
           modeHint = Some(org.goldenport.cncf.cli.RunMode.Command)
         )
@@ -1508,6 +1508,15 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
     "keep generated component packages outside parent-first runtime ABI packages" in {
       ComponentLocalFirstClassLoader.isParentFirst("org.simplemodeling.model.Entity") shouldBe true
       ComponentLocalFirstClassLoader.isParentFirst("org.simplemodeling.textus.useraccount.ComponentFactory") shouldBe false
+    }
+
+    "share generated component API contracts across CAR classloaders" in {
+      ComponentLocalFirstClassLoader.isParentFirst(
+        "org.simplemodeling.textus.scraper.api.TextusScraperApi"
+      ) shouldBe true
+      ComponentLocalFirstClassLoader.isParentFirst(
+        "org.simplemodeling.textus.scraper.impl.ComponentFactory"
+      ) shouldBe false
     }
 
     "detect resolved shared dependency module conflicts" in {

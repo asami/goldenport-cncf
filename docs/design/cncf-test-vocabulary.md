@@ -72,6 +72,18 @@ kind: test-descriptor
 config:
   textus.some.runtime.key: value
 
+runtime:
+  datastore:
+    type: local
+    path: target/cncf.d/runtime.db
+
+components:
+  target-component:
+    datastore:
+      application:
+        type: local
+        path: target/cncf.d/target-component/application.db
+
 assembly:
   spi:
     bindings:
@@ -90,6 +102,66 @@ The descriptor must not be treated as a way to add Scala traits, JVM methods,
 or compiled component APIs at runtime. It is a test-only runtime overlay for
 configuration, assembly wiring, and provider selection.
 
+The `config` block remains the canonical escape hatch for runtime properties.
+The `runtime.datastore` and `components.<component>.datastore` blocks are
+standard shorthand for test-owned datastore replacement. They are normalized to
+ordinary runtime configuration before `RuntimeConfig` is created. Tests should
+prefer the logical `type: local` and `path` keys rather than SQLite-specific
+property names. The current local implementation may use SQLite internally,
+but the descriptor contract is a CNCF datastore contract.
+
 Provider matching currently uses provider component plus the ordinary SPI
 contract and `provider` / `mode` / `engine` selection. `provider.service` is
 reserved for future service-level matching and is rejected when specified.
+
+
+Test Home
+---------
+
+Most integration tests should use runtime overlay mode: keep the normal CNCF
+home and component repositories, pass an explicit test descriptor, and replace
+only test-owned resources such as the target component datastore.
+
+Some tests require a separate CNCF home. CNCF supports this as an explicit
+test runtime surface rather than by changing the JVM `user.home` property:
+
+```bash
+cncf test --test-config test.yaml server
+cncf test --home target/cncf.d/stage-home server
+cncf test --temporary-home server
+```
+
+The `test` wrapper is not a runtime mode. It is normalized before runtime
+dispatch into ordinary `server`, `client`, `command`, or `script` execution
+with test-only configuration keys. `--test-config` maps to
+`textus.test.descriptor`. `--home` maps to an isolated test home path.
+`--temporary-home` creates a target-owned temporary home below `target/cncf.d`.
+
+The test descriptor may also declare home behavior:
+
+```yaml
+kind: test-descriptor
+
+home:
+  mode: isolated
+  path: target/cncf.d/stage-home
+  inherit:
+    runtime: true
+    repositories: true
+    credentials: false
+    local-data: false
+```
+
+When a test home is active, CNCF reads test-home configuration files from the
+test home as an overlay. By default, runtime configuration and component
+repositories are inherited, while local application data is not inherited.
+`textus.local-data.root` is redirected to the test home unless
+`inherit.local-data: true` is specified. This keeps tests away from the user's
+ordinary component application datastores while still allowing normal assembly
+dependencies to resolve.
+
+`inherit.repositories: false` disables default repository inheritance. Tests
+that choose this mode must provide explicit repository or component activation
+arguments. Credentials are not a separate runtime source yet; tests that need
+strict credential isolation should avoid inheriting base runtime configuration
+and provide only explicit test configuration.

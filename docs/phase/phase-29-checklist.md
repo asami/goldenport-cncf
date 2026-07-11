@@ -13,6 +13,21 @@ complements the summary-level phase document (`phase-29.md`).
   `docs/design/typed-component-api-and-multi-instance-spi.md`; the preceding
   note remains an implementation-history record.
 
+## Post-closure Maintenance
+
+- [x] Jul. 12, 2026: Add explicit CNCF test-home support without mutating JVM
+      `user.home`.
+- [x] Normalize `cncf test --test-config`, `--home`, and `--temporary-home`
+      into ordinary runtime modes plus test-only configuration keys.
+- [x] Extend `test.yaml` / `test.json` descriptors with logical runtime and
+      component datastore shorthand.
+- [x] Keep assembly dependency and repository inheritance available by default
+      for packaged Web/server smoke tests.
+- [x] Reject explicit `local` / `sqlite` datastore declarations without a path
+      instead of silently falling back to another datastore.
+- [x] Reject missing `cncf test --test-config` / `--home` option values at the
+      command normalization boundary.
+
 ## TC-01: Open Phase 29 and Freeze the Working Scope
 
 Status: DONE

@@ -6,7 +6,7 @@ import org.goldenport.cncf.naming.NamingConventions
  * @since   Jan.  8, 2026
  *  version Jan. 15, 2026
  *  version Apr. 24, 2026
- * @version Jul. 11, 2026
+ * @version Jul. 12, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentSpace(
@@ -54,6 +54,19 @@ final class ComponentSpace(
 
   def add(p: Component): ComponentSpace = {
     _components = _components :+ p
+    _refresh()
+    this
+  }
+
+  def upsert(ps: Seq[Component]): ComponentSpace = {
+    ps.foreach { component =>
+      val key = component.instanceId.canonicalKey
+      val index = _components.indexWhere(_.instanceId.canonicalKey == key)
+      if (index >= 0)
+        _components = _components.updated(index, component)
+      else
+        _components = _components :+ component
+    }
     _refresh()
     this
   }

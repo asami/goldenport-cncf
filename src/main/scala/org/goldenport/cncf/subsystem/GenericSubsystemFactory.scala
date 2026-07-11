@@ -17,7 +17,7 @@ import org.goldenport.cncf.spi.SpiResolver
  *  version Apr. 23, 2026
  *  version Apr. 25, 2026
  *  version May. 18, 2026
- * @version Jul. 11, 2026
+ * @version Jul. 12, 2026
  * @author  ASAMI, Tomoharu
  */
 object GenericSubsystemFactory {
@@ -366,9 +366,13 @@ object GenericSubsystemFactory {
       ComponentOrigin.Repository("subsystem-descriptor"),
       descriptor.toComponentDescriptors
     )
+    val repositoryspecs = _repository_specs_for_descriptor(configuration, descriptor)
     val discoveredcomponents =
-      _repository_specs_for_descriptor(configuration, descriptor).flatMap(_.build(params).discover())
-        .filter(component => descriptor.componentBindings.exists(binding => _matches_descriptor_component(component, binding.componentName)))
+      repositoryspecs.zipWithIndex.flatMap { case (spec, index) =>
+        val activedescriptors =
+          ComponentRepository.descriptorsForSpecification(spec, repositoryspecs.take(index), descriptor.toComponentDescriptors)
+        spec.build(params.withComponentDescriptors(activedescriptors)).discover()
+      }.filter(component => descriptor.componentBindings.exists(binding => _matches_descriptor_component(component, binding.componentName)))
     val components0 = materializeComponentInstances(discoveredcomponents, descriptor, params)
     val builtins = _builtin_components(subsystem, descriptor)
     given ExecutionContext = ExecutionContext.create()
@@ -401,11 +405,30 @@ object GenericSubsystemFactory {
   private def _repository_specs_for_descriptor(
     configuration: ResolvedConfiguration,
     descriptor: GenericSubsystemDescriptor
-  ): Vector[ComponentRepository.Specification] =
-    componentDevDirPath(configuration)
+  ): Vector[ComponentRepository.Specification] = {
+    val base = componentDevDirPath(configuration)
       .filter(path => _descriptor_components_are_from_dev_dir(path, descriptor))
       .map(path => Vector(ComponentRepository.ComponentDevDirRepository.Specification(path)))
       .getOrElse(_repository_specs(configuration))
+    _merge_repository_specs(_active_component_repository_specs(configuration), base)
+  }
+
+  private def _active_component_repository_specs(
+    configuration: ResolvedConfiguration
+  ): Vector[ComponentRepository.Specification] =
+    Vector(
+      componentArchivePath(configuration).map(ComponentRepository.ComponentFileRepository.Specification.apply),
+      componentCarDirPath(configuration).map(ComponentRepository.ComponentDirRepository.Specification.apply),
+      componentDevDirPath(configuration).map(ComponentRepository.ComponentDevDirRepository.Specification.apply)
+    ).flatten
+
+  private def _merge_repository_specs(
+    primary: Vector[ComponentRepository.Specification],
+    secondary: Vector[ComponentRepository.Specification]
+  ): Vector[ComponentRepository.Specification] =
+    (primary ++ secondary).foldLeft(Vector.empty[ComponentRepository.Specification]) { (z, spec) =>
+      if (z.contains(spec)) z else z :+ spec
+    }
 
   private def _descriptor_components_are_from_dev_dir(
     path: Path,

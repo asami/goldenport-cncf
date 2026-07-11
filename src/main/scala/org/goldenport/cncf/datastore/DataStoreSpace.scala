@@ -1,5 +1,6 @@
 package org.goldenport.cncf.datastore
 
+import java.nio.file.{Files, Paths}
 import java.util.concurrent.atomic.AtomicLong
 import org.goldenport.Consequence
 import org.goldenport.observation.Descriptor
@@ -16,10 +17,13 @@ import org.goldenport.record.io.RecordEncoder
  * @since   Feb. 25, 2026
  *  version Apr. 15, 2026
  *  version May. 11, 2026
- * @version Jul.  6, 2026
+ * @version Jul. 12, 2026
  * @author  ASAMI, Tomoharu
  */
 class DataStoreSpace {
+  // Nested ActionCalls restore the caller's component-scoped datastore.
+  final case class Binding private[DataStoreSpace] (dataStore: Option[DataStore])
+
   private var _entity_stores: Vector[DataStore] = Vector.empty
   private val _inject_sequence = new AtomicLong(0L)
   private val _scoped_entity_store = new ThreadLocal[DataStore]()
@@ -39,6 +43,15 @@ class DataStoreSpace {
 
   def clearBoundDataStore(): Unit =
     _scoped_entity_store.remove()
+
+  def captureBinding(): Binding =
+    Binding(Option(_scoped_entity_store.get()))
+
+  def restoreBinding(binding: Binding): Unit =
+    binding.dataStore match {
+      case Some(datastore) => bindDataStore(datastore)
+      case None => clearBoundDataStore()
+    }
 
   def useApplicationDataStore(
     params: org.goldenport.cncf.config.ResolvedParameters,
@@ -312,10 +325,10 @@ class DataStoreSpace {
 
   private def _redact_sensitive_text(value: String): String = {
     val sensitive = "(?i)(password|passwd|secret|token|session|authorization|cookie|credential|api[_-]?key)"
-    val jsonLike = (s"""("?$sensitive"?\\s*[:=]\\s*)("[^"]*"|'[^']*'|[^,}\\]\\s]+)""").r
-    val formLike = (s"""($sensitive)(\\s*[=:]\\s*)([^&\\s,}\\]]+)""").r
-    val jsonRedacted = jsonLike.replaceAllIn(value, m => s"${m.group(1)}***")
-    formLike.replaceAllIn(jsonRedacted, m => s"${m.group(1)}${m.group(2)}***")
+    val jsonlike = (s"""("?$sensitive"?\\s*[:=]\\s*)("[^"]*"|'[^']*'|[^,}\\]\\s]+)""").r
+    val formlike = (s"""($sensitive)(\\s*[=:]\\s*)([^&\\s,}\\]]+)""").r
+    val jsonredacted = jsonlike.replaceAllIn(value, m => s"${m.group(1)}***")
+    formlike.replaceAllIn(jsonredacted, m => s"${m.group(1)}${m.group(2)}***")
   }
 }
 
@@ -334,11 +347,20 @@ object DataStoreSpace {
 
   def create(conf: ResolvedConfiguration): DataStoreSpace = {
     val dss = new DataStoreSpace()
+    val datastorekind = _get_string(
+      conf,
+      "textus.datastore.kind",
+      "cncf.datastore.kind"
+    ).map(_.trim.toLowerCase(java.util.Locale.ROOT))
     val sqlitepath = _get_string(
+      conf,
+      "textus.datastore.path",
+      "cncf.datastore.path"
+    ).orElse(_get_string(
       conf,
       "textus.datastore.sqlite.path",
       "cncf.datastore.sqlite.path"
-    )
+    ))
     val sqlnormalizecolumns =
       _get_string(
         conf,
@@ -350,19 +372,40 @@ object DataStoreSpace {
         "cncf.datastore.sqlite.normalize-column-names"
       ))
         .exists(_.trim.equalsIgnoreCase("true"))
-    val ds = sqlitepath match {
-      case Some(path) =>
-        SqlDataStore.sqlite(
-          path,
-          config = SqlDataStore.Config(
-            normalizeColumnNames = sqlnormalizecolumns
+    val ds = datastorekind match {
+      case Some("in-memory" | "inmemory" | "memory") =>
+        DataStore.inMemorySearchable()
+      case Some("local" | "sqlite") =>
+        sqlitepath.map { path =>
+          _ensure_parent(path)
+          SqlDataStore.sqlite(
+            path,
+            config = SqlDataStore.Config(
+              normalizeColumnNames = sqlnormalizecolumns
+            )
           )
-        )
-      case None => DataStore.inMemorySearchable()
+        }.getOrElse(throw new IllegalArgumentException(
+          "textus.datastore.path is required when textus.datastore.kind is local or sqlite"
+        ))
+      case _ =>
+        sqlitepath match {
+          case Some(path) =>
+            _ensure_parent(path)
+            SqlDataStore.sqlite(
+              path,
+              config = SqlDataStore.Config(
+                normalizeColumnNames = sqlnormalizecolumns
+              )
+            )
+          case None => DataStore.inMemorySearchable()
+        }
     }
     dss.addDataStore(ds)
     dss
   }
+
+  private def _ensure_parent(path: String): Unit =
+    Option(Paths.get(path).toAbsolutePath.normalize.getParent).foreach(Files.createDirectories(_))
 
   private def _get_string(
     conf: ResolvedConfiguration,

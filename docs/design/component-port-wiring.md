@@ -111,6 +111,35 @@ uses the normal SPI contract plus `provider` / `mode` / `engine` selection.
 `provider.service` is reserved for future service-level matching and is
 rejected when specified.
 
+Tests that also need to isolate component data should keep provider selection
+and datastore replacement in the same explicit test descriptor:
+
+```yaml
+kind: test-descriptor
+
+components:
+  target-component:
+    datastore:
+      application:
+        type: local
+        path: target/cncf.d/target-component/application.db
+
+assembly:
+  spi:
+    bindings:
+      - socket:
+          component: target-component
+          contract: ai-runner
+        provider:
+          component: target-component
+        selection:
+          mode: test
+```
+
+This remains runtime configuration and assembly selection. It does not mutate
+the component API surface, add socket traits, or require a separate test-only
+CAR when the target CAR already contains the provider implementation.
+
 ## 8. Validation
 
 The canonical executable coverage is:

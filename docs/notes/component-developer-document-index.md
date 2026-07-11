@@ -290,7 +290,11 @@ Use these when adding tests or validating changes:
   - Test policy for CNCF.
 - `docs/design/cncf-test-vocabulary.md`
   - Shared test vocabulary and explicit `test.yaml` / `test.json` descriptor
-    role for component integration tests.
+    role for component integration tests, including test-owned datastore
+    replacement and CNCF-managed test home selection.
+- `docs/design/assembly-descriptor.md`
+  - Test descriptor assembly overlay, SPI provider selection, and how runtime
+    datastore/test-home configuration relates to assembly wiring.
 - `docs/rules/executable-spec-display-and-tagging-rules.md`
   - Executable spec display/tagging rules.
 - `docs/rules/stage-status-and-checklist-convention.md`

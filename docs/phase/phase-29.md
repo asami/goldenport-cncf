@@ -115,3 +115,23 @@ Phase 29 closed after verifying that:
 - `docs/journal/2026/07/2026-07-11-typed-component-api-and-multi-instance-spi-consideration.md`
 - `docs/design/component-port-wiring.md`
 - `docs/rules/stage-status-and-checklist-convention.md`
+
+## 7. Post-closure Maintenance
+
+Post-closure CNCF test-runtime maintenance on Jul. 12, 2026 kept Phase 29
+closed while hardening the ArtScene driver smoke path:
+
+- Explicit `test.yaml` / `test.json` descriptors can replace runtime and
+  component datastores through logical `type: local` + `path` shorthand.
+- `cncf test --test-config`, `cncf test --home`, and
+  `cncf test --temporary-home` normalize to ordinary runtime modes while
+  injecting test-only configuration.
+- Test homes overlay the normal CNCF home without changing JVM `user.home`.
+- Local component data defaults to the test home, while runtime and repository
+  inheritance remain explicit.
+- Normal assembly dependencies remain resolvable unless repository inheritance
+  is disabled by the test configuration.
+- Explicit `local` / `sqlite` runtime and component datastore declarations fail
+  deterministically when their required path is absent.
+- `cncf test --test-config` and `--home` reject missing values at the command
+  normalization boundary.

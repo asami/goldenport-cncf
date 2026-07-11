@@ -149,6 +149,41 @@ assembly:
 overlay and follows the same merge direction as an assembly descriptor, with
 test descriptor values winning over packaged and configured assembly sources.
 
+The test descriptor may also carry runtime-owned test resource selection:
+
+```yaml
+kind: test-descriptor
+
+runtime:
+  datastore:
+    type: local
+    path: target/cncf.d/runtime.db
+
+components:
+  target-component:
+    datastore:
+      application:
+        type: local
+        path: target/cncf.d/target-component/application.db
+```
+
+These blocks are not assembly data. They are normalized to runtime
+configuration before component startup, so tests can replace test-owned
+datastores without changing packaged component descriptors or the JVM
+`user.home`.
+
+When a test requires an isolated CNCF home, use the explicit test launcher
+surface:
+
+```bash
+cncf test --test-config ./test.yaml --home target/cncf.d/stage-home server
+cncf test --temporary-home server
+```
+
+The test launcher is a startup wrapper, not a production runtime mode. It keeps
+ordinary repository and assembly dependency resolution available unless the test
+home inheritance policy explicitly disables repository inheritance.
+
 The `assembly.spi.bindings` section selects an SPI provider already present in
 the test runtime assembly. It is the preferred route for tests where the target
 CAR already carries a test provider implementation. This avoids producing a

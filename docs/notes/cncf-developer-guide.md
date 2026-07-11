@@ -566,6 +566,47 @@ uses the ordinary SPI contract plus `provider` / `mode` / `engine` selection.
 rejected when specified. Use selection values when a component carries multiple
 providers for the same SPI contract.
 
+### Test Datastore and Test Home Selection
+
+Use `test.yaml` to replace test-owned datastores without replacing the JVM
+home. This keeps the normal CNCF home, assembly defaults, and repository
+resolution available while moving component data under `target/`:
+
+```yaml
+kind: test-descriptor
+
+runtime:
+  datastore:
+    type: local
+    path: target/cncf.d/runtime.db
+
+components:
+  art-scene:
+    datastore:
+      application:
+        type: local
+        path: target/cncf.d/art-scene/application.db
+```
+
+Run the test descriptor explicitly:
+
+```bash
+cncf dev server --textus.test.descriptor=./test.yaml
+```
+
+For fully isolated tests, use the CNCF test wrapper instead of setting
+`-Duser.home`:
+
+```bash
+cncf test --test-config ./test.yaml --home target/cncf.d/stage-home server
+cncf test --temporary-home server
+```
+
+`cncf test` is normalized to the ordinary runtime mode after it injects
+test-only configuration. It does not add a production runtime mode. The test
+home overlay can inherit runtime configuration and repositories while keeping
+local component datastores under the test home by default.
+
 ## Tests
 
 For every handwritten operation:

@@ -13,7 +13,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jul.  6, 2026
- * @version Jul.  6, 2026
+ * @version Jul. 12, 2026
  * @author  ASAMI, Tomoharu
  */
 class ComponentDataStoreSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -57,6 +57,40 @@ class ComponentDataStoreSpec extends AnyWordSpec with Matchers with GivenWhenThe
       _load_marker(dedicated) shouldBe Some("selected")
     }
 
+    "select a component datastore from generic local test path configuration" in {
+      val root = Files.createTempDirectory("cncf-component-local-path-datastore")
+      val dedicated = root.resolve("application.db")
+      val params = _params(
+        "textus.component.art-scene.datastores.application.kind" -> "local",
+        "textus.component.art-scene.datastores.application.path" -> dedicated.toString
+      )
+      given ExecutionContext = ExecutionContext.create()
+
+      Given("a test descriptor style component datastore path")
+      val selected = ComponentDataStore.resolve(params, ComponentDataStore.Request("art-scene"))
+
+      When("the component writes through the selected datastore")
+      _write_marker(selected)
+
+      Then("the target-owned local datastore is used without SQLite-specific public keys")
+      _load_marker(dedicated) shouldBe Some("selected")
+    }
+
+    "reject an explicit component local datastore without a path" in {
+      Given("a component datastore explicitly configured as local without a path")
+      val params = _params(
+        "textus.component.art-scene.datastores.application.kind" -> "local"
+      )
+
+      When("the component datastore is resolved")
+      val thrown = intercept[IllegalArgumentException] {
+        ComponentDataStore.resolve(params, ComponentDataStore.Request("art-scene"))
+      }
+
+      Then("configuration fails instead of selecting another datastore")
+      thrown.getMessage should include ("textus.component.art-scene.datastores.application.path is required")
+    }
+
     "use the basic runtime datastore when it is persistent and no dedicated datastore is configured" in {
       val root = Files.createTempDirectory("cncf-component-basic-datastore")
       val basic = root.resolve("basic.db")
@@ -71,6 +105,40 @@ class ComponentDataStoreSpec extends AnyWordSpec with Matchers with GivenWhenThe
 
       Then("the basic datastore contains the record")
       _load_marker(basic) shouldBe Some("selected")
+    }
+
+    "create the runtime datastore from generic local test path configuration" in {
+      val root = Files.createTempDirectory("cncf-runtime-local-path-datastore")
+      val runtime = root.resolve("runtime.db")
+      val configuration = _config(
+        "textus.datastore.kind" -> "local",
+        "textus.datastore.path" -> runtime.toString
+      )
+      given ExecutionContext = ExecutionContext.create()
+
+      Given("a test descriptor style runtime datastore path")
+      val space = DataStoreSpace.create(configuration)
+
+      When("the runtime writes through the datastore space")
+      _write_marker(space.dataStore(DataStore.CollectionId("component_selection")).toOption.get)
+
+      Then("the target-owned runtime datastore is used without SQLite-specific public keys")
+      _load_marker(runtime) shouldBe Some("selected")
+    }
+
+    "reject an explicit runtime local datastore without a path" in {
+      Given("a runtime datastore explicitly configured as local without a path")
+      val configuration = _config(
+        "textus.datastore.kind" -> "local"
+      )
+
+      When("the runtime datastore space is created")
+      val thrown = intercept[IllegalArgumentException] {
+        DataStoreSpace.create(configuration)
+      }
+
+      Then("configuration fails instead of falling back to in-memory storage")
+      thrown.getMessage should include ("textus.datastore.path is required")
     }
 
     "fall back to the component local datastore for local-default CAR policy" in {
@@ -198,15 +266,15 @@ class ComponentDataStoreSpec extends AnyWordSpec with Matchers with GivenWhenThe
     "bind a component datastore to the current action without replacing the shared datastore space" in {
       val root = Files.createTempDirectory("cncf-component-scoped-datastore")
       val existing = root.resolve("existing.db")
-      val localRoot = root.resolve("local")
+      val localroot = root.resolve("local")
       val space = new DataStoreSpace().useDataStore(SqlDataStore.sqlite(existing.toString))
       val params = _params(
-        "textus.local-data.root" -> localRoot.toString
+        "textus.local-data.root" -> localroot.toString
       )
       val config = _config(
         "textus.component.art-scene.datastores.application.policy" -> "local-default"
       )
-      val local = localRoot.resolve("art-scene").resolve("application.db")
+      val local = localroot.resolve("art-scene").resolve("application.db")
       given ExecutionContext = ExecutionContext.create()
 
       Given("a shared datastore space with an existing entity store")
@@ -222,6 +290,28 @@ class ComponentDataStoreSpec extends AnyWordSpec with Matchers with GivenWhenThe
       Then("the scoped write uses local storage and the shared store remains available after clearing")
       _load_marker(local) shouldBe Some("selected")
       _load_marker(existing) shouldBe Some("selected")
+    }
+
+    "restore an outer component datastore after a nested action binding ends" in {
+      val root = Files.createTempDirectory("cncf-component-nested-datastore")
+      val outer = SqlDataStore.sqlite(root.resolve("outer.db").toString)
+      val inner = SqlDataStore.sqlite(root.resolve("inner.db").toString)
+      val space = new DataStoreSpace()
+      given ExecutionContext = ExecutionContext.create()
+
+      Given("an outer action datastore binding")
+      space.bindDataStore(outer)
+      val outerbinding = space.captureBinding()
+
+      When("a nested action temporarily replaces and then restores the binding")
+      space.bindDataStore(inner)
+      _write_marker(space.dataStore(DataStore.CollectionId("component_selection")).toOption.get)
+      space.restoreBinding(outerbinding)
+      _write_marker(space.dataStore(DataStore.CollectionId("component_selection")).toOption.get)
+
+      Then("the nested and outer writes remain isolated in their respective datastores")
+      _load_marker(root.resolve("inner.db")) shouldBe Some("selected")
+      _load_marker(root.resolve("outer.db")) shouldBe Some("selected")
     }
 
     "ignore external settings for local-only policy" in {
@@ -254,6 +344,8 @@ class ComponentDataStoreSpec extends AnyWordSpec with Matchers with GivenWhenThe
       )
 
       Given("external-required policy without a configured persistent datastore")
+
+      When("the component datastore is resolved")
       val thrown = intercept[IllegalArgumentException] {
         ComponentDataStore.resolve(_env(_params(), config), ComponentDataStore.Request("art-scene"))
       }

@@ -7,7 +7,7 @@ import org.goldenport.configuration.{ConfigurationValue, ResolvedConfiguration}
 
 /*
  * @since   Jul.  6, 2026
- * @version Jul.  6, 2026
+ * @version Jul. 12, 2026
  * @author  ASAMI, Tomoharu
  */
 object ComponentDataStore {
@@ -153,8 +153,10 @@ object ComponentDataStore {
     kind match {
       case Some("in-memory" | "inmemory" | "memory") =>
         None
-      case Some("sqlite") =>
-        _sqlite(environment, prefixes)
+      case Some("local" | "sqlite") =>
+        Some(_local_sql(environment, prefixes).getOrElse(throw new IllegalArgumentException(
+          s"${prefixes.headOption.getOrElse("textus.datastore")}.path is required when datastore kind is local or sqlite"
+        )))
       case Some("mysql") =>
         _jdbc(environment, prefixes, SqlDataStore.Mysql, Some("com.mysql.cj.jdbc.Driver"))
       case Some("jdbc") =>
@@ -171,8 +173,21 @@ object ComponentDataStore {
     prefixes: Vector[String]
   ): Option[DataStore] =
     _first(environment, prefixes.map(_ + ".sqlite.path")).map { path =>
+      _ensure_parent(path)
       SqlDataStore.sqlite(path, config = _sql_config(environment, prefixes))
     }
+
+  private def _local_sql(
+    environment: Environment,
+    prefixes: Vector[String]
+  ): Option[DataStore] =
+    _first(environment, prefixes.flatMap(p => Vector(p + ".path", p + ".sqlite.path"))).map { path =>
+      _ensure_parent(path)
+      SqlDataStore.sqlite(path, config = _sql_config(environment, prefixes))
+    }
+
+  private def _ensure_parent(path: String): Unit =
+    Option(Paths.get(path).toAbsolutePath.normalize.getParent).foreach(Files.createDirectories(_))
 
   private def _jdbc_auto(
     environment: Environment,

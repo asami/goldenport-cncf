@@ -663,7 +663,16 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
   migration tooling; CulturalResource collection-item profile; Rule Engine and
   Inference Runtime.
 - Status interpretation rules: `docs/rules/stage-status-and-checklist-convention.md`
-- Latest post-closure maintenance: Jul. 10, 2026 Material profile static asset
+- Latest post-closure maintenance: Jul. 12, 2026 CNCF test descriptor and
+  test-home hardening. Explicit `test.yaml` / `test.json` descriptors can now
+  replace runtime and component datastores through logical `type: local` +
+  `path` shorthand, and `cncf test --home` / `--temporary-home` provides
+  test-owned CNCF home overlays without changing JVM `user.home`. Normal
+  assembly dependencies remain resolvable unless repository inheritance is
+  explicitly disabled. Explicit `local` / `sqlite` datastore declarations now
+  require a path instead of silently selecting in-memory storage, and missing
+  `--test-config` / `--home` values fail deterministically.
+- Previous post-closure maintenance: Jul. 10, 2026 Material profile static asset
   hardening. The generated Web UI asset set now includes Bootstrap-compatible
   application shell helpers and local masked Material-style icon helpers for
   generated/admin Web surfaces. This remains Phase 28 post-closure maintenance

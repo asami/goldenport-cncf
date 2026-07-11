@@ -53,7 +53,7 @@ import org.goldenport.cncf.spi.{ComponentApiResolver, ResolvedSpiBinding, SpiInv
  *  version Jan. 31, 2026
  *  version Feb.  4, 2026
  *  version Apr. 30, 2026
- * @version Jul. 11, 2026
+ * @version Jul. 12, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Subsystem(
@@ -167,6 +167,15 @@ final class Subsystem(
 
   def add(component: Component): Subsystem =
     add(Vector(component))
+
+  def upsert(comps: Seq[Component]): Subsystem = {
+    val bootstrapped = comps.map(_component_factory.bootstrap)
+    val injected = bootstrapped.map(x => _inject_context(x.name, x))
+    injected.foreach(_bind_runtime_services)
+    _component_space = _component_space.upsert(injected)
+    _rebuild_resolver()
+    this
+  }
 
   def registerEventReception(componentName: String, reception: EventReception): Subsystem = {
     _event_receptions.update(componentName, reception)

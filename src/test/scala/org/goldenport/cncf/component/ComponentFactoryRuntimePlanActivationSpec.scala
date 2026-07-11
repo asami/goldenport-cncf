@@ -21,7 +21,7 @@ import org.scalatest.wordspec.AnyWordSpec
  *  version Mar. 24, 2026
  *  version Apr. 24, 2026
  *  version May.  3, 2026
- * @version Jul.  9, 2026
+ * @version Jul. 12, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactoryRuntimePlanActivationSpec
@@ -104,6 +104,36 @@ final class ComponentFactoryRuntimePlanActivationSpec
       Then("the socket receives the provider SPI")
       given ExecutionContext = ExecutionContext.create()
       socket.aiRunner.generate(AiGenerateRequest("hello")).toOption.get.text shouldBe "factory:hello"
+    }
+
+    "replace a packaged component when a preferred development component has the same instance identity" in {
+      Given("a subsystem containing a packaged component without its current SPI publication")
+      val subsystem = TestComponentFactory.emptySubsystem("runtime_component_override")
+      val packaged = _initialized_component(
+        subsystem,
+        "runtime_component_override_provider",
+        new Component() {}
+      )
+      subsystem.add(packaged)
+
+      And("a development component for the same logical instance with the SPI provider")
+      val development = _initialized_component(
+        subsystem,
+        "runtime_component_override_provider",
+        new Component() with SpiProviderComponent {
+          def spiProviders: Vector[SpiProvider[?]] =
+            Vector(_AiRunnerProvider("development"))
+        }
+      )
+
+      When("runtime assembly upserts the preferred development component")
+      subsystem.upsert(Vector(development))
+      val matching = subsystem.components.toVector.filter(_.name == "runtime_component_override_provider")
+
+      Then("the obsolete packaged instance is replaced rather than retained beside it")
+      matching should have size 1
+      matching.head should be theSameInstanceAs development
+      matching.head.asInstanceOf[SpiProviderComponent].spiProviders should not be empty
     }
 
     "resolve SPI sockets after runtime extra components are added" in {

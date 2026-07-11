@@ -29,7 +29,7 @@ import org.goldenport.cncf.Program
  *  version Feb. 21, 2026
  *  version Apr. 28, 2026
  *  version May. 23, 2026
- * @version Jul. 11, 2026
+ * @version Jul. 12, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class ActionCall()
@@ -161,10 +161,12 @@ abstract class FunctionalActionCall extends ActionCall {
     })
 
   final override def execute(): Consequence[OperationResponse] =
+    val datastorespace = executionContext.dataStoreSpace
+    val datastorebinding = datastorespace.captureBinding()
     try {
       build_Program.value.foldMap(executionContext.runtime.unitOfWorkInterpreter).flatMap(identity)
     } finally {
-      executionContext.dataStoreSpace.clearBoundDataStore()
+      datastorespace.restoreBinding(datastorebinding)
     }
 }
 

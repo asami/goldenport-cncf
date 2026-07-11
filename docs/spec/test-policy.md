@@ -64,6 +64,39 @@ Locations:
 BDD is treated as a description technique,
 not as an architectural or directory layer.
 
+Modern CNCF executable specifications are also used for stabilized runtime
+behavior. Once a behavior is intentionally fixed, tests should assert it
+directly using Given / When / Then structure rather than leaving it as a
+pending reservation.
+
+Component integration tests that need runtime wiring or resource replacement
+must use explicit CNCF test surfaces:
+
+  test.yaml / test.json
+    - test-only startup descriptor
+    - loaded only when explicitly specified
+    - may override runtime config, assembly wiring, SPI provider selection,
+      runtime datastore, and component datastores
+
+  cncf test
+    - test launcher wrapper
+    - normalizes into ordinary server/client/command/script execution
+    - provides explicit test home support without changing JVM user.home
+
+Tests MUST NOT rely on JVM `-Duser.home` mutation to isolate CNCF state.
+Use `cncf test --home ...` or `cncf test --temporary-home` when a test needs
+an isolated CNCF home. Most component integration tests should instead use
+runtime overlay mode: keep normal runtime/repository resolution and replace
+only test-owned resources through `test.yaml`.
+
+Test-owned datastore replacement should use logical CNCF datastore keys:
+
+  runtime.datastore.type/path
+  components.<component>.datastore.<name>.type/path
+
+The public test descriptor contract is `type: local` plus `path`, not
+SQLite-specific implementation keys.
+
 ----------------------------------------------------------------------
 5. Use of TDD
 ----------------------------------------------------------------------

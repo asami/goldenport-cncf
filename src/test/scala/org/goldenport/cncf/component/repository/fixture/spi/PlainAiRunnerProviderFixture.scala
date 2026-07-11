@@ -8,7 +8,7 @@ import org.goldenport.protocol.Protocol
 
 /*
  * @since   Jul.  8, 2026
- * @version Jul.  9, 2026
+ * @version Jul. 12, 2026
  * @author  ASAMI, Tomoharu
  */
 final class PlainAiRunnerProviderComponent extends Component
@@ -53,9 +53,9 @@ final class ArtSceneComponentFactory extends Component.Factory {
     comp: Component
   ): Component.Core =
     Component.Core.create(
-      "textus-art-scene",
-      ComponentId("textus_art_scene"),
-      ComponentInstanceId.default(ComponentId("textus_art_scene")),
+      "component-file-app",
+      ComponentId("component_file_app"),
+      ComponentInstanceId.default(ComponentId("component_file_app")),
       Protocol.empty,
       this
     )

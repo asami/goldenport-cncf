@@ -4,7 +4,7 @@ package org.goldenport.cncf.http
  * @since   May. 18, 2026
  *  version May. 27, 2026
  *  version Jun. 19, 2026
- * @version Jul.  8, 2026
+ * @version Jul. 12, 2026
  * @author  ASAMI, Tomoharu
  */
 import scala.collection.mutable.ListBuffer
@@ -70,7 +70,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Apr. 12, 2026
  *  version May. 27, 2026
  *  version Jun. 19, 2026
- * @version Jul.  8, 2026
+ * @version Jul. 12, 2026
  * @author  ASAMI, Tomoharu
  */
 final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -3323,10 +3323,15 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "prefer main project Web root over same-name repository CAR root" in {
+      Given("a main component development project and a same-name repository component")
       val mainroot = Files.createDirectories(Files.createTempDirectory("cncf-main-web-root-").resolve("textus-knowledge-editor"))
       val carroot = Files.createTempDirectory("cncf-car-web-root-")
       Files.createDirectories(mainroot.resolve("src").resolve("main").resolve("web"))
       Files.createDirectories(carroot.resolve("src").resolve("main").resolve("web"))
+      val classdir = Files.createDirectories(mainroot.resolve("target").resolve("scala-3.3.8").resolve("classes"))
+      val runtimeclasspath = mainroot.resolve("target").resolve("cncf.d").resolve("runtime-classpath.txt")
+      Files.createDirectories(runtimeclasspath.getParent)
+      Files.writeString(runtimeclasspath, classdir.toString)
       val maincomponent = new org.goldenport.cncf.component.Component() {}
       val carcomponent = new org.goldenport.cncf.component.Component() {}
       _initialize_component_with_id(
@@ -3350,9 +3355,11 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       ).add(Vector(maincomponent, carcomponent))
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
 
+      When("the component Web roots are resolved")
       val roots = server._component_web_roots("textus-knowledge-editor").map(_.name)
       val allroots = server._component_web_roots().map(_.name)
 
+      Then("the main development project root takes precedence over the repository CAR root")
       roots should contain (mainroot.resolve("src").resolve("main").resolve("web").toString)
       roots should not contain carroot.resolve("src").resolve("main").resolve("web").toString
       allroots should contain (mainroot.resolve("src").resolve("main").resolve("web").toString)

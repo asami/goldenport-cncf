@@ -31,7 +31,7 @@ import org.goldenport.configuration.{Configuration, ConfigurationTrace, Resolved
  *  version Mar. 22, 2026
  *  version Apr. 25, 2026
  *  version May. 25, 2026
- * @version Jul.  8, 2026
+ * @version Jul. 12, 2026
  * @author  ASAMI, Tomoharu
  */
 sealed abstract class ComponentRepository {
@@ -376,6 +376,14 @@ object ComponentRepository extends GlobalObservable {
           packagePrefixes = ComponentRepository.resolvePackagePrefixes()
         )
 
+      override def resolveSubsystemDescriptor(
+        subsystemName: String
+      ): Option[GenericSubsystemDescriptor] =
+        if (Files.isRegularFile(file))
+          GenericSubsystemDescriptor.loadComponentArchive(file).toOption.filter(_matches_subsystem_descriptor(_, subsystemName))
+        else
+          None
+
       override def resolveComponentDescriptor(
         componentName: String
       ): Option[ComponentDescriptor] =
@@ -434,8 +442,10 @@ object ComponentRepository extends GlobalObservable {
       base: Path,
       component: Component
     ): Component.ArtifactMetadata = {
-      val descriptor = ComponentDevDirRepository.devComponentDescriptors(base).headOption
       val componentname = component.core.name
+      val descriptor = ComponentDevDirRepository.devComponentDescriptors(base).find { candidate =>
+        _component_descriptor_names(candidate).exists(_matches_dev_component_name(_, componentname))
+      }
       Component.ArtifactMetadata(
         sourceType = "component-dev-dir",
         name = descriptor.flatMap(_.name).orElse(descriptor.flatMap(_.componentName)).getOrElse(componentname),
@@ -446,6 +456,19 @@ object ComponentRepository extends GlobalObservable {
         effectiveExtensions = descriptor.map(_.extensions).getOrElse(Map.empty),
         effectiveConfig = descriptor.map(_.config).getOrElse(Map.empty)
       )
+    }
+
+    private def _matches_dev_component_name(
+      descriptorname: String,
+      runtimename: String
+    ): Boolean = {
+      val normalized = descriptorname.trim
+      val withouttextus =
+        if (normalized.startsWith("textus-")) normalized.stripPrefix("textus-")
+        else if (normalized.startsWith("textus_")) normalized.stripPrefix("textus_")
+        else normalized
+      NamingConventions.equivalentByNormalized(normalized, runtimename) ||
+        NamingConventions.equivalentByNormalized(withouttextus, runtimename)
     }
   }
 

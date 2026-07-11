@@ -22,7 +22,7 @@ import org.goldenport.cncf.blob.BlobStoreConfig
  *  version Mar. 28, 2026
  *  version Apr. 30, 2026
  *  version Jun. 19, 2026
- * @version Jul.  8, 2026
+ * @version Jul. 12, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class RuntimeConfig(
@@ -206,6 +206,20 @@ object RuntimeConfig {
   val AssemblyDescriptorKey = "textus.assembly.descriptor"
   val TEST_DESCRIPTOR_KEY = "textus.test.descriptor"
   val RUNTIME_TEST_DESCRIPTOR_KEY = "textus.runtime.test.descriptor"
+  val TEST_HOME_MODE_KEY = "textus.test.home.mode"
+  val RUNTIME_TEST_HOME_MODE_KEY = "textus.runtime.test.home.mode"
+  val TEST_HOME_PATH_KEY = "textus.test.home.path"
+  val RUNTIME_TEST_HOME_PATH_KEY = "textus.runtime.test.home.path"
+  val TEST_HOME_TEMPORARY_KEY = "textus.test.home.temporary"
+  val RUNTIME_TEST_HOME_TEMPORARY_KEY = "textus.runtime.test.home.temporary"
+  val TEST_HOME_INHERIT_RUNTIME_KEY = "textus.test.home.inherit.runtime"
+  val RUNTIME_TEST_HOME_INHERIT_RUNTIME_KEY = "textus.runtime.test.home.inherit.runtime"
+  val TEST_HOME_INHERIT_REPOSITORIES_KEY = "textus.test.home.inherit.repositories"
+  val RUNTIME_TEST_HOME_INHERIT_REPOSITORIES_KEY = "textus.runtime.test.home.inherit.repositories"
+  val TEST_HOME_INHERIT_CREDENTIALS_KEY = "textus.test.home.inherit.credentials"
+  val RUNTIME_TEST_HOME_INHERIT_CREDENTIALS_KEY = "textus.runtime.test.home.inherit.credentials"
+  val TEST_HOME_INHERIT_LOCAL_DATA_KEY = "textus.test.home.inherit.local-data"
+  val RUNTIME_TEST_HOME_INHERIT_LOCAL_DATA_KEY = "textus.runtime.test.home.inherit.local-data"
   val WebDescriptorKey = "textus.web.descriptor"
   val RepositoryDirKey = "textus.repository.dir"
   val RepositoryComponentDevDirKey = "textus.repository.component.dev.dir"
@@ -695,6 +709,13 @@ object RuntimeConfig {
         case SubsystemSarDirKey => Vector(RuntimeSubsystemSarDirKey)
         case ComponentFileKey => Vector(RuntimeComponentFileKey)
         case TEST_DESCRIPTOR_KEY => Vector(RUNTIME_TEST_DESCRIPTOR_KEY)
+        case TEST_HOME_MODE_KEY => Vector(RUNTIME_TEST_HOME_MODE_KEY)
+        case TEST_HOME_PATH_KEY => Vector(RUNTIME_TEST_HOME_PATH_KEY)
+        case TEST_HOME_TEMPORARY_KEY => Vector(RUNTIME_TEST_HOME_TEMPORARY_KEY)
+        case TEST_HOME_INHERIT_RUNTIME_KEY => Vector(RUNTIME_TEST_HOME_INHERIT_RUNTIME_KEY)
+        case TEST_HOME_INHERIT_REPOSITORIES_KEY => Vector(RUNTIME_TEST_HOME_INHERIT_REPOSITORIES_KEY)
+        case TEST_HOME_INHERIT_CREDENTIALS_KEY => Vector(RUNTIME_TEST_HOME_INHERIT_CREDENTIALS_KEY)
+        case TEST_HOME_INHERIT_LOCAL_DATA_KEY => Vector(RUNTIME_TEST_HOME_INHERIT_LOCAL_DATA_KEY)
         case LogBackendKey => Vector(RuntimeLogBackendKey)
         case LogLevelKey => Vector(RuntimeLogLevelKey)
         case LogFilePathKey => Vector(RuntimeLogFilePathKey)

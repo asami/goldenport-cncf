@@ -12,7 +12,7 @@ import org.goldenport.cncf.config.RuntimeConfig
 
 /*
  * @since   May. 16, 2026
- * @version May. 16, 2026
+ * @version Jul. 12, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ComponentDependencyManifest(
@@ -439,5 +439,12 @@ object ComponentLocalFirstClassLoader {
     new ComponentLocalFirstClassLoader(paths.map(_.toUri.toURL).toArray, parent)
 
   def isParentFirst(classname: String): Boolean =
-    _parent_first_prefixes.exists(classname.startsWith)
+    _parent_first_prefixes.exists(classname.startsWith) ||
+      _is_component_api_contract(classname)
+
+  // Generated component API contracts must keep one runtime type identity
+  // across consumer and provider CAR classloaders. Other generated component
+  // classes remain local-first so CAR implementations can evolve independently.
+  private def _is_component_api_contract(classname: String): Boolean =
+    classname.startsWith("org.simplemodeling.") && classname.contains(".api.")
 }

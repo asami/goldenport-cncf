@@ -11,7 +11,7 @@ import org.goldenport.cncf.subsystem.GenericSubsystemAssemblyDescriptorSource
 
 /*
  * @since   Jul.  8, 2026
- * @version Jul.  8, 2026
+ * @version Jul. 12, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class RuntimeTestDescriptor(
@@ -65,7 +65,8 @@ object RuntimeTestDescriptor {
     path: Path,
     record: Record
   ): RuntimeTestDescriptor = {
-    val config = _config(record)
+    val config =
+      _derived_config(record) ++ _config(record)
     val assembly = record.getAny("assembly").flatMap(_record).map { assembly =>
       GenericSubsystemAssemblyDescriptorSource(
         record = assembly,
@@ -82,6 +83,78 @@ object RuntimeTestDescriptor {
         key -> Option(value).map(_.toString).getOrElse("")
       }.toMap
     }.getOrElse(Map.empty)
+
+  private def _derived_config(record: Record): Map[String, String] =
+    _home_config(record) ++ _runtime_config(record) ++ _component_config(record)
+
+  private def _home_config(record: Record): Map[String, String] =
+    record.getAny("home").flatMap(_record).map { home =>
+      val base = Vector(
+        _string(home, "mode").map(RuntimeConfig.TEST_HOME_MODE_KEY -> _),
+        _string(home, "path").map(RuntimeConfig.TEST_HOME_PATH_KEY -> _)
+      ).flatten.toMap
+      val temporary = _string(home, "temporary").map(RuntimeConfig.TEST_HOME_TEMPORARY_KEY -> _).toMap
+      val inherit =
+        home.getAny("inherit").flatMap(_record).map { inherit =>
+          Vector(
+            _string(inherit, "runtime").map(RuntimeConfig.TEST_HOME_INHERIT_RUNTIME_KEY -> _),
+            _string(inherit, "repositories").map(RuntimeConfig.TEST_HOME_INHERIT_REPOSITORIES_KEY -> _),
+            _string(inherit, "credentials").map(RuntimeConfig.TEST_HOME_INHERIT_CREDENTIALS_KEY -> _),
+            _string(inherit, "local-data").orElse(_string(inherit, "localData")).map(RuntimeConfig.TEST_HOME_INHERIT_LOCAL_DATA_KEY -> _)
+          ).flatten.toMap
+        }.getOrElse(Map.empty)
+      base ++ temporary ++ inherit
+    }.getOrElse(Map.empty)
+
+  private def _runtime_config(record: Record): Map[String, String] =
+    record.getAny("runtime").flatMap(_record).flatMap(_.getAny("datastore")).flatMap(_record).map { datastore =>
+      _datastore_config("textus.datastore", datastore)
+    }.getOrElse(Map.empty)
+
+  private def _component_config(record: Record): Map[String, String] =
+    record.getAny("components").flatMap(_record).map { components =>
+      components.asMap.iterator.flatMap { case (component, value) =>
+        _record(value).toVector.flatMap { componentrecord =>
+          val datastores =
+            componentrecord.getAny("datastores")
+              .orElse(componentrecord.getAny("datastore"))
+              .flatMap(_record)
+              .toVector
+          datastores.flatMap { datastorerecord =>
+            _component_datastore_config(component, datastorerecord)
+          }
+        }
+      }.toMap
+    }.getOrElse(Map.empty)
+
+  private def _component_datastore_config(
+    component: String,
+    datastores: Record
+  ): Map[String, String] =
+    datastores.asMap.iterator.flatMap { case (name, value) =>
+      _record(value).toVector.flatMap { datastore =>
+        _datastore_config(s"textus.component.${component}.datastores.${name}", datastore)
+      }
+    }.toMap
+
+  private def _datastore_config(
+    prefix: String,
+    datastore: Record
+  ): Map[String, String] =
+    Vector(
+      _string(datastore, "type").orElse(_string(datastore, "kind")).map(prefix + ".kind" -> _),
+      _string(datastore, "path").map(prefix + ".path" -> _),
+      _string(datastore, "policy").map(prefix + ".policy" -> _),
+      _string(datastore, "jdbcUrl").orElse(_string(datastore, "jdbc-url")).map(prefix + ".jdbc.url" -> _),
+      _string(datastore, "user").map(prefix + ".jdbc.user" -> _),
+      _string(datastore, "password").map(prefix + ".jdbc.password" -> _)
+    ).flatten.toMap
+
+  private def _string(
+    record: Record,
+    key: String
+  ): Option[String] =
+    record.getAny(key).map(_.toString).map(_.trim).filter(_.nonEmpty)
 
   private def _record(value: Any): Option[Record] =
     value match {
