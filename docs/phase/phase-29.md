@@ -32,8 +32,9 @@ This document is a phase dashboard, not a design journal.
   calltree, metrics, and future local/remote transport substitution.
 - Validate the result by integrating `textus-scraper` into ArtScene after the
   framework feature is implemented.
-- Exercise configured static and dynamic scraper instances from ArtScene
-  without direct `impl` package dependencies.
+- Exercise the static scraper component from ArtScene without direct `impl`
+  package dependencies. Dynamic Playwright integration and application-level
+  multi-instance selection are deferred until the static contract is stable.
 - Verify that ArtScene exhibition acquisition reaches `textus-scraper`
   through the generated typed API and canonical CNCF operation path.
 
@@ -57,14 +58,14 @@ Scope boundaries:
 - E (DONE): TC-05 — Generic SPI invoker and canonical operation dispatch.
 - F (DONE): TC-06 — Cozy-generated typed component API and proxy.
 - G (DONE): TC-07 — Standard SPI single/set socket alignment.
-- H (NEXT): TC-08 — ArtScene + `textus-scraper` development-driver smoke.
-- I (TODO): TC-09 — Observability, failure semantics, and regression coverage.
+- H (DONE): TC-08 — ArtScene + static `textus-scraper` development-driver smoke.
+- I (NEXT): TC-09 — Observability, failure semantics, and regression coverage.
 - J (TODO): TC-10 — Decided design promotion and Phase 29 closure.
 
 Resume hint:
 
-- Start TC-08 by integrating configured `textus-scraper` instances into
-  ArtScene through the generated public typed API.
+- Start TC-09 by verifying component API observability and structured failure
+  behavior across the ArtScene/static scraper boundary.
 
 ## 4. Development Items
 
@@ -75,7 +76,7 @@ Resume hint:
 - [x] TC-05: Implement generic invocation through the operation/action path.
 - [x] TC-06: Generate typed component APIs and proxies from CML.
 - [x] TC-07: Align standard SPI contracts with single/set socket forms.
-- [ ] TC-08: Complete the ArtScene + `textus-scraper` driver smoke.
+- [x] TC-08: Complete the ArtScene + static `textus-scraper` driver smoke.
 - [ ] TC-09: Complete observability, failure, and regression verification.
 - [ ] TC-10: Promote the settled contract to design and close Phase 29.
 
@@ -101,8 +102,10 @@ Phase 29 can close when:
   basis without exposing confidential payloads.
 - ArtScene packages and resolves `textus-scraper` through assembly and invokes
   its typed API for exhibition acquisition.
-- the ArtScene smoke proves static and dynamic configured scraper instances can
-  be selected without importing provider implementation code.
+- the ArtScene smoke proves the static scraper component can be selected and
+  invoked without importing provider implementation code.
+- dynamic Playwright and application-level multi-instance scraper selection
+  remain explicit post-TC-08 work rather than implicit static-fetch fallback.
 - settled contracts are promoted from the working note to `docs/design`.
 
 ## 6. Authoritative Inputs

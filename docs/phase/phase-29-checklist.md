@@ -226,7 +226,7 @@ standard SPI contracts.
 
 ## TC-08: ArtScene and Textus Scraper Development-Driver Smoke
 
-Status: NEXT
+Status: DONE
 
 ### Objective
 
@@ -237,19 +237,19 @@ TC items.
 
 ### Detailed Tasks
 
-- [ ] Publish a component-specific `TextusScraperApi` contract.
-- [ ] Configure static JSoup and dynamic Playwright named instances.
-- [ ] Declare `textus-scraper` as an ArtScene assembly dependency.
-- [ ] Bind and invoke one exact instance through a single socket.
-- [ ] Select static/dynamic behavior through a socket set or typed resolver.
-- [ ] Verify instance-local config and rules affect only the selected instance.
-- [ ] Replace ArtScene direct dependencies on `textus-scraper.impl` with the
+- [x] Publish a component-specific `TextusScraperApi` contract.
+- [x] Declare the static `textus-scraper` as an ArtScene assembly dependency.
+- [x] Bind and invoke the static component through the generated socket set.
+- [x] Replace ArtScene direct dependencies on `textus-scraper.impl` with the
       generated public typed API.
-- [ ] Verify ArtScene exhibition acquisition uses the scraper component's
+- [x] Verify ArtScene exhibition acquisition uses the scraper component's
       public operations and canonical CNCF operation/action path.
-- [ ] Verify ArtScene's existing provider/fallback behavior remains intact
+- [x] Verify ArtScene's existing provider/fallback behavior remains intact
       around the scraper boundary.
-- [ ] Add packaged CAR/assembly integration smoke coverage.
+- [x] Add executable assembly integration coverage with the real ArtScene and
+      static scraper components and deterministic HTTP fixture.
+- [x] Defer dynamic Playwright and multiple named scraper instance selection
+      beyond the TC-08 static vertical slice.
 
 ## TC-09: Observability, Failure Semantics, and Regression Coverage
 
