@@ -107,8 +107,8 @@ assembly:
   - Component factory/provider/group contract.
 - `docs/design/component-port-wiring.md`
   - Component port wiring and service injection path.
-- `docs/notes/typed-component-api-and-multi-instance-spi.md`
-  - Working specification for typed component APIs, named configured component
+- `docs/design/typed-component-api-and-multi-instance-spi.md`
+  - Authoritative design for typed component APIs, named configured component
     instances, single sockets, socket sets, and programmatic typed resolution.
 - `docs/design/component-internal-execution-model.md`
   - Internal execution model.

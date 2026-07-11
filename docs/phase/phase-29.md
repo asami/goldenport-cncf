@@ -1,10 +1,10 @@
 # Phase 29 — Typed Component API and Multi-Instance SPI
 
-status = active
+status = closed
 
 ## 1. Purpose of This Document
 
-This work document records Phase 29, which implements the `9.28 Typed
+This work document records Phase 29, which implemented the `9.28 Typed
 Component API and Multi-Instance SPI` development item.
 
 Phase 29 turns the existing single-provider SPI baseline into a component
@@ -60,12 +60,12 @@ Scope boundaries:
 - G (DONE): TC-07 — Standard SPI single/set socket alignment.
 - H (DONE): TC-08 — ArtScene + static `textus-scraper` development-driver smoke.
 - I (DONE): TC-09 — Observability, failure semantics, and regression coverage.
-- J (NEXT): TC-10 — Decided design promotion and Phase 29 closure.
+- J (DONE): TC-10 — Decided design promotion and Phase 29 closure.
 
 Resume hint:
 
-- Start TC-10 by promoting the settled component API and multi-instance SPI
-  contract to authoritative design documentation and closing Phase 29.
+- Phase 29 is closed. Select the next independent development item before
+  opening another phase.
 
 ## 4. Development Items
 
@@ -78,14 +78,14 @@ Resume hint:
 - [x] TC-07: Align standard SPI contracts with single/set socket forms.
 - [x] TC-08: Complete the ArtScene + static `textus-scraper` driver smoke.
 - [x] TC-09: Complete observability, failure, and regression verification.
-- [ ] TC-10: Promote the settled contract to design and close Phase 29.
+- [x] TC-10: Promote the settled contract to design and close Phase 29.
 
 Detailed task breakdown and progress tracking are recorded in
 `phase-29-checklist.md`.
 
 ## 5. Completion Conditions
 
-Phase 29 can close when:
+Phase 29 closed after verifying that:
 
 - Assembly creates two named instances of one component type with isolated
   config and rules.
@@ -110,7 +110,8 @@ Phase 29 can close when:
 
 ## 6. Authoritative Inputs
 
-- `docs/notes/typed-component-api-and-multi-instance-spi.md`
+- `docs/design/typed-component-api-and-multi-instance-spi.md`
+- `docs/notes/typed-component-api-and-multi-instance-spi.md` (history)
 - `docs/journal/2026/07/2026-07-11-typed-component-api-and-multi-instance-spi-consideration.md`
 - `docs/design/component-port-wiring.md`
 - `docs/rules/stage-status-and-checklist-convention.md`

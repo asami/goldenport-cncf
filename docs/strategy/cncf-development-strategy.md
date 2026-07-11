@@ -652,15 +652,13 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Notes contain execution details and results for each phase.
 
 ## Process Status Pointers
-- Current phase selection: Phase 29 — Typed Component API and Multi-Instance
-  SPI.
-- Current phase dashboard: `docs/phase/phase-29.md`
-- Current phase checklist: `docs/phase/phase-29-checklist.md`
-- Latest closed phase dashboard: `docs/phase/phase-28.md`
-- Latest closed phase checklist: `docs/phase/phase-28-checklist.md`
-- Previous closed phase dashboard: `docs/phase/phase-27.md`
-- Previous closed phase checklist: `docs/phase/phase-27-checklist.md`
-- Candidate next phase areas after Phase 28: Web UI multi-locale message
+- Current phase selection: none. Select an independent development item before
+  opening the next phase.
+- Latest closed phase dashboard: `docs/phase/phase-29.md`
+- Latest closed phase checklist: `docs/phase/phase-29-checklist.md`
+- Previous closed phase dashboard: `docs/phase/phase-28.md`
+- Previous closed phase checklist: `docs/phase/phase-28-checklist.md`
+- Candidate next phase areas after Phase 29: Web UI multi-locale message
   control; AwsComponent/S3 BlobStore provider; Search/index planning; DB
   migration tooling; CulturalResource collection-item profile; Rule Engine and
   Inference Runtime.
@@ -783,7 +781,7 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Phase 26: closed (`docs/phase/phase-26.md`)
 - Phase 27: closed (`docs/phase/phase-27.md`)
 - Phase 28: closed (`docs/phase/phase-28.md`)
-- Phase 29: active (`docs/phase/phase-29.md`)
+- Phase 29: closed (`docs/phase/phase-29.md`)
 
 ## 8. Completed Development Item History
 
@@ -1251,6 +1249,26 @@ Completed in Phase 28.
   Island Architecture Runtime, API Gateway / public REST exposure policy, and
   production visual theme marketplace.
 
+### 8.18 Typed Component API and Multi-Instance SPI
+Completed in Phase 29.
+
+- Closed dashboard: `docs/phase/phase-29.md`
+- Closed checklist: `docs/phase/phase-29-checklist.md`
+- Decided design: `docs/design/typed-component-api-and-multi-instance-spi.md`
+- Completed scope:
+  - named component instances with isolated config, rules, and metadata;
+  - exact and abstract provider selection for single sockets and socket sets;
+  - generic `SpiInvoker` and Cozy-generated typed component APIs over the same
+    CNCF operation/action path;
+  - paired single/set forms for CNCF standard SPI contracts;
+  - deterministic failure semantics, safe CallTree metadata, and bounded SPI
+    metrics;
+  - ArtScene/static `textus-scraper` integration through the generated public
+    API without provider implementation imports.
+- Deferred scope includes dynamic Playwright selection, provider hot
+  replacement, arbitrary application-driven CAR loading, distributed
+  transport, and general-purpose dependency injection.
+
 ## 9. Development Item Status
 
 This final section lists planned active and future development areas only.
@@ -1258,15 +1276,7 @@ Completed work areas are recorded in section 8. When a development item closes,
 remove its completion record from this section and add or update the
 corresponding completed-history entry.
 
-Current development item:
-
-- `9.28 Typed Component API and Multi-Instance SPI`, active as Phase 29.
-  TC-02 named component instance creation, TC-03 exact instance SPI binding,
-  TC-04 socket sets and abstract selection, TC-05 generic SPI invocation,
-  TC-06 Cozy-generated typed APIs and proxies, and TC-07 standard SPI
-  single/set alignment, TC-08 ArtScene/static `textus-scraper` integration, and
-  TC-09 observability/failure regression are complete; TC-10 design promotion
-  and Phase 29 closure is the next slice.
+Current development item: none.
 
 ### 9.1 Web Next Stage Follow-ups
 Web/platform follow-up index.
@@ -2107,67 +2117,3 @@ Future domain logic / runtime / knowledge / automation development item.
   - untrusted rule sandboxing beyond the existing CAR capability sandbox
     direction;
   - using rules as the primary authorization engine.
-
-### 9.28 Typed Component API and Multi-Instance SPI
-Active component composition and runtime development item. Implemented as
-Phase 29.
-
-- Current implementation status:
-  - TC-01 Phase 29 scope freeze: complete;
-  - TC-02 named component instance descriptor and creation model: complete;
-  - TC-03 exact instance binding and resolver semantics: complete;
-  - TC-04 socket set and abstract component selection: complete;
-  - TC-05 generic SPI invoker and canonical operation dispatch: complete;
-  - TC-06 Cozy-generated typed component API and proxy: complete;
-  - TC-07 standard SPI single/set socket alignment: complete;
-  - TC-08 ArtScene and static `textus-scraper` development-driver smoke:
-    complete;
-  - TC-09 observability, failure semantics, and regression coverage: complete;
-  - TC-10 decided design promotion and Phase 29 closure: next.
-
-- Goal: let one CNCF component consume another through an application-facing
-  typed Scala API while preserving operation/action execution semantics, and
-  support multiple named instances of one component type with isolated
-  configuration and rules.
-- Scope:
-  - extend assembly declarations with stable component instance identity,
-    instance-local config, rules, purpose, tags, and selection metadata;
-  - bind a single socket to an exact named provider instance;
-  - add `SpiSocketSet[S]` for assembly-bounded multi-provider use;
-  - support exact instance and abstract purpose/capability/tag selection;
-  - add a public typed `ComponentApiResolver` and generic `SpiInvoker` over the
-    same resolved binding and operation execution path;
-  - keep `Record` as the generic runtime/wire representation while ordinary
-    Scala application code uses generated typed request and response values;
-  - generate component-specific typed APIs, proxies, single sockets, and socket
-    sets from CML service operation metadata;
-  - make both single-socket and socket-set forms available for CNCF standard
-    SPI contracts, with consumer multiplicity selecting the input form;
-  - preserve authorization, `ExecutionContext`, UnitOfWork, jobs, events,
-    calltree, metrics, and local/remote transport substitutability;
-  - prove the model after framework implementation by integrating
-    `textus-scraper` into `/Users/asami/src/dev2026/textus-art-scene` as the
-    development driver and smoke application;
-  - configure and invoke the required `textus-scraper` instance or instances
-    from ArtScene without importing provider implementation code, and verify
-    ArtScene exhibition fetching through the typed component API.
-- Inputs:
-  - `docs/notes/typed-component-api-and-multi-instance-spi.md`;
-  - `docs/journal/2026/07/2026-07-11-typed-component-api-and-multi-instance-spi-consideration.md`;
-  - the existing `ComponentInstanceId`, `ComponentSpace`, `SpiSocket`,
-    `SpiResolver`, assembly binding, and SPI tracing baseline;
-  - Cozy CML Literate Model service-property grammar.
-- Guardrails:
-  - a socket exposes a typed capability API, not a provider `Component` object;
-  - component instance identity is separate from provider-specific variation;
-  - ambiguous selection fails explicitly and never selects the first match;
-  - component-specific APIs do not automatically become CNCF standard SPI;
-  - typed proxies must use the canonical operation/action path rather than
-    direct provider implementation calls;
-  - application components must not import another component's `impl` package.
-- Deferred scope:
-  - arbitrary runtime CAR loading initiated by application code;
-  - hot replacement of installed providers without component restart;
-  - distributed component transport implementation beyond preserving the
-    local/remote-neutral API boundary;
-  - general-purpose dependency injection outside CNCF component assembly.

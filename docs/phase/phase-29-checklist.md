@@ -9,8 +9,9 @@ complements the summary-level phase document (`phase-29.md`).
 - The phase document holds summary status only.
 - A DONE item here must also be checked in the phase dashboard.
 - Investigation and rejected alternatives belong in the Phase 29 journal.
-- The working contract remains in
-  `docs/notes/typed-component-api-and-multi-instance-spi.md` until TC-10.
+- The settled contract is authoritative in
+  `docs/design/typed-component-api-and-multi-instance-spi.md`; the preceding
+  note remains an implementation-history record.
 
 ## TC-01: Open Phase 29 and Freeze the Working Scope
 
@@ -274,7 +275,7 @@ Make typed multi-instance calls diagnosable and safe under failure.
 
 ## TC-10: Decided Design Promotion and Phase Closure
 
-Status: TODO
+Status: DONE
 
 ### Objective
 
@@ -283,17 +284,17 @@ to authoritative design documentation.
 
 ### Detailed Tasks
 
-- [ ] Reconcile the working note with implementation evidence.
-- [ ] Promote the settled contract to `docs/design`.
-- [ ] Reduce the working note to a history/pointer role or mark it superseded.
-- [ ] Update developer guides and document indexes.
-- [ ] Record validation evidence and deferred work.
-- [ ] Update strategy history and close Phase 29.
+- [x] Reconcile the working note with implementation evidence.
+- [x] Promote the settled contract to `docs/design`.
+- [x] Reduce the working note to a history/pointer role or mark it superseded.
+- [x] Update developer guides and document indexes.
+- [x] Record validation evidence and deferred work.
+- [x] Update strategy history and close Phase 29.
 
 ## Completion Check
 
-- [ ] All TC items are DONE.
-- [ ] Dashboard and checklist statuses agree.
-- [ ] CNCF and Cozy executable specifications pass.
-- [ ] The ArtScene + `textus-scraper` development-driver smoke passes.
-- [ ] The decided design document is authoritative.
+- [x] All TC items are DONE.
+- [x] Dashboard and checklist statuses agree.
+- [x] CNCF and Cozy executable specifications pass.
+- [x] The ArtScene + `textus-scraper` development-driver smoke passes.
+- [x] The decided design document is authoritative.

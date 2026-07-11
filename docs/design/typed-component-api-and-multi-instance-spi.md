@@ -1,51 +1,26 @@
 # Typed Component API and Multi-Instance SPI
 
-Status: Superseded working specification
+Status: Decided design specification
 Scope: CNCF component API consumption, SPI sockets, named component instances,
 and assembly-time/runtime selection
 
-Authoritative design: `docs/design/typed-component-api-and-multi-instance-spi.md`
-
-This note records the implementation-stage contract used during Phase 29. It
-is retained for history and no longer defines current behavior.
-
 ## 1. Purpose
 
-This note defines how one CNCF component consumes another component through a
+This design defines how one CNCF component consumes another component through a
 typed API while preserving the CNCF operation boundary. It also defines the
-target model for using multiple configured instances of the same component.
+model for using multiple configured instances of the same component.
 
-The motivating example is an application component using several
-`textus-scraper` instances. Each instance may have different configuration and
-rules, such as a static JSoup profile and a dynamic Playwright profile.
+The motivating example is an application component using several configured
+instances of one reusable component type. The Phase 29 development driver uses
+ArtScene and the static `textus-scraper` component to verify the public typed
+boundary. Dynamic Playwright integration remains deferred.
 
-This is a working specification. It is expected to evolve as the corresponding
-CNCF, Cozy, and component runtime features are implemented.
+## 1.1 Authority
 
-## 1.1 Document Lifecycle
-
-This note is the mutable specification used while the feature is being
-implemented. Its examples, names, descriptor shapes, and API boundaries may be
-revised in response to implementation and executable-specification findings.
-
-The documentation lifecycle is:
-
-```text
-journal consideration record
-  -> notes working implementation specification
-  -> implementation and executable verification
-  -> design decided specification
-```
-
-After the feature is implemented and its acceptance criteria are verified, the
-settled contract must be promoted to a document under `docs/design`. The design
-document then becomes the authoritative decided specification. This note should
-be reduced to an implementation-history pointer or clearly marked as superseded
-by that design document.
-
-The journal remains an immutable record of the reasoning that led to the
-working specification. It must not be rewritten to match later implementation
-details.
+This document is the authoritative decided contract for typed component APIs,
+named component instances, and multi-instance SPI selection. The preceding
+journal and working note remain historical records and must not override this
+design.
 
 ## 2. Core Principles
 
@@ -95,15 +70,15 @@ component operations. For example:
 trait TextusScraperApi {
   def fetchPage(
     request: FetchPageRequest
-  )(using ExecutionContext): Consequence[FetchPageResponse]
+  )(using ExecutionContext): Consequence[FetchPageResult]
 
   def navigateSite(
     request: NavigateSiteRequest
-  )(using ExecutionContext): Consequence[NavigateSiteResponse]
+  )(using ExecutionContext): Consequence[NavigateSiteResult]
 
   def extractEvents(
     request: ExtractEventsRequest
-  )(using ExecutionContext): Consequence[ExtractEventsResponse]
+  )(using ExecutionContext): Consequence[ExtractEventsResult]
 }
 ```
 
@@ -138,7 +113,7 @@ application-programming surface.
 
 ## 4. Component Instance Descriptor
 
-The target assembly shape supports multiple entries with the same component
+The assembly shape supports multiple entries with the same component
 name and distinct instance ids:
 
 ```yaml
@@ -344,12 +319,12 @@ note.
 
 ## 6. Exact and Abstract Selection
 
-`ComponentSelector` supports exact and abstract selection. The target selector
+`ComponentSelector` supports exact and abstract selection. The selector
 shape may include:
 
 ```scala
 final case class ComponentSelector(
-  component: String,
+  component: Option[String] = None,
   instance: Option[String] = None,
   purpose: Option[String] = None,
   capabilities: Set[String] = Set.empty,
@@ -383,7 +358,7 @@ Generic runtime tools, scripts, and rule engines may use a `Record` boundary:
 spiInvoker.invoke(
   contract = TextusScraperApi.contract,
   socket = Some(SpiSocketRef("art-scene", "scrapers", TextusScraperApi.contract.name)),
-  operation = SpiOperationSelector("fetch-page", Some("scraper")),
+  operation = SpiOperationSelector("FetchPage", Some("Scraping")),
   request = requestRecord,
   selector = ComponentSelector(
     component = Some("textus-scraper"),
@@ -400,20 +375,18 @@ Application code uses the typed component API. A generated proxy hides record
 conversion and string operation selectors:
 
 ```scala
-private final class GeneratedTextusScraperApiProxy(
-  invoker: SpiInvoker,
+final case class Proxy(
   binding: ResolvedSpiBinding
 ) extends TextusScraperApi {
   def fetchPage(
     request: FetchPageRequest
-  )(using ExecutionContext): Consequence[FetchPageResponse] =
-    invoker
+  )(using ExecutionContext): Consequence[FetchPageResult] =
+    binding
       .invoke(
-        binding = binding,
-        operation = SpiOperationSelector("fetch-page", Some("scraper")),
-        request = request.toRecord
+        SpiOperationSelector("FetchPage", Some("Scraping")),
+        request.toRecord
       )
-      .flatMap(FetchPageResponse.fromRecord)
+      .flatMap(FetchPageResult.createC)
 }
 ```
 
@@ -464,8 +437,8 @@ Not every component API should become a CNCF standard SPI. A component that is
 normally consumed as one concrete component, or whose public API follows its
 own CML application model, uses a Cozy-generated component API contract.
 
-For example, `textus-scraper` defines its public operations in CML. Cozy should
-generate:
+For example, `textus-scraper` defines its public operations in CML. Cozy
+generates:
 
 - `TextusScraperApi`;
 - typed operation request and response values;
@@ -562,7 +535,7 @@ independent for each exposed contract.
 
 ### 8.5 CML Service SPI Properties
 
-The working CML property contract is namespaced with the `spi-` prefix because
+The CML property contract is namespaced with the `spi-` prefix because
 component service metadata may also contain properties unrelated to SPI
 composition:
 
@@ -635,9 +608,9 @@ Conceptually:
 ```text
 textus-scraper contract
   - TextusScraperApi
-  - FetchPageRequest / FetchPageResponse
-  - NavigateSiteRequest / NavigateSiteResponse
-  - ExtractEventsRequest / ExtractEventsResponse
+  - FetchPageRequest / FetchPageResult
+  - NavigateSiteRequest / NavigateSiteResult
+  - ExtractEventsRequest / ExtractEventsResult
 
 textus-scraper CAR implementation
   - component factory and operation logic
@@ -645,7 +618,7 @@ textus-scraper CAR implementation
   - config and rule implementation
 ```
 
-Cozy should generate component-specific typed API facades, sockets, socket sets,
+Cozy generates component-specific typed API facades, sockets, socket sets,
 and proxies from CML operation metadata. CNCF supplies the generic SPI/socket,
 resolution, invocation, and execution infrastructure. Consumers depend on the
 contract surface, not on the implementation package.
@@ -699,7 +672,7 @@ Configuration and rules are isolated by `ComponentInstanceId`. An override for
 
 ## 11. Observability
 
-Every typed and generic SPI invocation should add calltree metadata for:
+Every typed and generic SPI invocation adds calltree metadata for:
 
 - contract;
 - operation;
@@ -755,9 +728,9 @@ only because its health status is `error` is reported as unhealthy; a non-empty
 candidate set reduced to zero by `ComponentSelectionPolicy` is reported as
 policy-rejected.
 
-## 13. Current Implementation Status
+## 13. Implemented Contract
 
-The current CNCF source already provides part of this model:
+The CNCF, Cozy, and SimpleModeler implementation provides this model:
 
 - `ComponentInstanceId` identifies a component instance;
 - `ComponentSpace` stores components by instance id and groups them by
@@ -809,7 +782,7 @@ component from `Subsystem.components`.
 
 ## 14. Acceptance Criteria
 
-The feature is complete when:
+The Phase 29 implementation satisfies these criteria:
 
 1. Assembly can create two instances of one component type with independent
    config and rules.
@@ -825,9 +798,9 @@ The feature is complete when:
 8. Both routes preserve operation/action semantics and produce equivalent
    calltree records.
 9. Consumer code depends only on the public contract package.
-10. An ArtScene development-driver smoke integrates `textus-scraper` after the
-    framework feature is implemented and proves static and dynamic configured
-    instances can be selected and invoked through the public typed API.
+10. The ArtScene development-driver smoke integrates static `textus-scraper`
+    through the public typed API without importing provider implementation
+    code.
 11. Existing CNCF standard SPI contracts remain CNCF-owned, while a
     component-specific contract can be generated without adding a new type to
     `org.goldenport.cncf.spi`.
@@ -836,3 +809,28 @@ The feature is complete when:
 13. Standard and component-specific SPI contracts both make single and set
     socket forms available, while consumer multiplicity chooses which form is
     installed.
+
+## 15. Validation Evidence
+
+Phase 29 closure verified:
+
+- CNCF core resolver, invoker, selection, failure, CallTree, and bounded-metric
+  executable specifications;
+- Cozy/SimpleModeler generation of typed APIs, proxies, provider adapters,
+  single sockets, socket sets, and CML result-field metadata;
+- static `textus-scraper` component operation and CAR structure checks;
+- ArtScene integration through the generated public API and canonical CNCF
+  operation/action path;
+- response confidentiality redaction for raw scraper HTML in nested Action
+  CallTree output.
+
+## 16. Deferred Work
+
+The following work is outside Phase 29:
+
+- dynamic Playwright scraper integration and application-level selection among
+  multiple named scraper instances;
+- provider hot replacement without component restart;
+- arbitrary remote CAR loading initiated by application code;
+- distributed component transport implementation;
+- a general dependency-injection framework outside CNCF component assembly.
