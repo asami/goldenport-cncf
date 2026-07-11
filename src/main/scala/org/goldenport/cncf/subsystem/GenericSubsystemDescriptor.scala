@@ -11,7 +11,7 @@ import org.goldenport.cncf.component.{ComponentDescriptor, ComponentInstanceId, 
 import org.goldenport.cncf.component.ComponentDescriptorLoader
 import org.goldenport.cncf.component.DescriptorRecordLoader
 import org.goldenport.cncf.security.{AuthorizationResourcePolicies, AuthorizationResourcePolicy, OperationAuthorizationRule, SecurityRoleDefinition, SecuritySubject}
-import org.goldenport.cncf.spi.{SpiProviderSelector, SpiRuntimeBinding, SpiSelection, SpiSocketSelector}
+import org.goldenport.cncf.spi.{SpiCardinality, SpiProviderSelector, SpiRuntimeBinding, SpiSelection, SpiSocketSelector}
 
 /*
  * @since   Apr.  7, 2026
@@ -120,7 +120,8 @@ final case class GenericSubsystemComponentBinding(
   purposes: Vector[String] = Vector.empty,
   tags: Vector[String] = Vector.empty,
   priority: Option[Int] = None,
-  isDefault: Option[Boolean] = None
+  isDefault: Option[Boolean] = None,
+  capabilities: Vector[String] = Vector.empty
 ) {
   def componentVersion: Option[String] =
     version.orElse(coordinate.flatMap(GenericSubsystemDescriptor.coordinateVersion))
@@ -139,12 +140,13 @@ final case class GenericSubsystemComponentBinding(
       purposes = purposes,
       tags = tags,
       priority = priority.getOrElse(0),
-      isDefault = isDefault.getOrElse(false)
+      isDefault = isDefault.getOrElse(false),
+      capabilities = capabilities
     )
 
   def hasInstanceDeclaration: Boolean =
     instance.nonEmpty || config.nonEmpty || rules.fields.nonEmpty ||
-      purposes.nonEmpty || tags.nonEmpty || priority.nonEmpty || isDefault.nonEmpty
+      purposes.nonEmpty || tags.nonEmpty || priority.nonEmpty || isDefault.nonEmpty || capabilities.nonEmpty
 
   def toComponentDescriptor: ComponentDescriptor =
     ComponentDescriptor(
@@ -436,14 +438,46 @@ object GenericSubsystemDescriptor {
   ): Option[String] =
     rec.getAny("socket").flatMap(_any_to_record).flatMap { socket =>
       _string(socket, "contract").map { contract =>
-        Vector(
+        val cardinality = _spi_cardinality_key(socket)
+        val socketkey = Vector(
           _string(socket, "component").getOrElse(""),
           _string(socket, "instance").getOrElse(""),
           _string(socket, "name").getOrElse(""),
-          contract
-        ).map(_comparison_key).mkString("/")
+          contract,
+          cardinality
+        ).map(_comparison_key)
+        val providerkey =
+          if (_is_many_spi_cardinality(cardinality)) {
+            rec.getAny("provider").flatMap(_any_to_record).toVector.flatMap { provider =>
+              Vector(
+                _string(provider, "component").getOrElse(""),
+                _string(provider, "instance").getOrElse("")
+              ).map(_comparison_key)
+            }
+          } else {
+            Vector.empty
+          }
+        (socketkey ++ providerkey).mkString("/")
       }
     }
+
+  private def _is_many_spi_cardinality(value: String): Boolean =
+    Set("many", "set", "zero-or-more", "one-or-more", "non-empty").contains(
+      value.trim.toLowerCase.replace('_', '-').replace(' ', '-')
+    )
+
+  private def _spi_cardinality_key(socket: Record): String = {
+    val value = _string(socket, "cardinality").getOrElse("one")
+    val normalized = value.trim.toLowerCase.replace('_', '-').replace(' ', '-')
+    val required = _boolean(socket, "required").getOrElse(
+      !Set("optional", "zero-or-one", "many", "set", "zero-or-more").contains(normalized)
+    )
+    if (_is_many_spi_cardinality(normalized)) {
+      if (required) "one-or-more" else "many"
+    } else {
+      if (required) "one" else "optional"
+    }
+  }
 
   private def _wiring_records(value: Any): Vector[Record] =
     value match {
@@ -500,7 +534,8 @@ object GenericSubsystemDescriptor {
       purposes = if (overrides.purposes.nonEmpty) overrides.purposes else defaults.purposes,
       tags = if (overrides.tags.nonEmpty) overrides.tags else defaults.tags,
       priority = overrides.priority.orElse(defaults.priority),
-      isDefault = overrides.isDefault.orElse(defaults.isDefault)
+      isDefault = overrides.isDefault.orElse(defaults.isDefault),
+      capabilities = if (overrides.capabilities.nonEmpty) overrides.capabilities else defaults.capabilities
     )
 
   private def _merge_security(
@@ -988,7 +1023,8 @@ object GenericSubsystemDescriptor {
             purposes = _string_vector(rec, List("purposes", "purpose")),
             tags = _string_vector(rec, List("tags", "tag")),
             priority = _int(rec, "priority"),
-            isDefault = _boolean(rec, "default", "isDefault")
+            isDefault = _boolean(rec, "default", "isDefault"),
+            capabilities = _string_vector(rec, List("capabilities", "capability"))
           ))
         }
       }
@@ -1225,6 +1261,11 @@ object GenericSubsystemDescriptor {
           val invalidproviderinstance = providerinstance.exists(x => !_valid_instance_name(x))
           val socketcomponent = _string(socket, "component")
           val providercomponent = provider.flatMap(_string(_, "component"))
+          val cardinalityname = _string(socket, "cardinality").getOrElse("one")
+          val normalizedcardinality = cardinalityname.trim.toLowerCase.replace('_', '-').replace(' ', '-')
+          val required = _boolean(socket, "required").getOrElse(
+            !Set("optional", "zero-or-one", "many", "set", "zero-or-more").contains(normalizedcardinality)
+          )
           if (invalidsocketinstance) {
             Consequence.resourceInvalid(s"invalid assembly SPI socket instance: ${socketinstance.getOrElse("")}")
           } else if (invalidsocketname) {
@@ -1238,21 +1279,24 @@ object GenericSubsystemDescriptor {
           } else if (service.nonEmpty) {
             Consequence.resourceInvalid("assembly.spi.bindings provider.service is not supported yet")
           } else {
-            _optional_record_field(rec, "selection").map { selection =>
-              SpiRuntimeBinding(
-                socket = SpiSocketSelector(
-                  component = socketcomponent,
-                  contract = contract,
-                  instance = socketinstance,
-                  name = socketname
-                ),
-                provider = SpiProviderSelector(
-                  component = providercomponent,
-                  service = service,
-                  instance = providerinstance
-                ),
-                selection = _spi_selection(selection)
-              )
+            SpiCardinality.from(cardinalityname, required).flatMap { cardinality =>
+              _optional_record_field(rec, "selection").map { selection =>
+                SpiRuntimeBinding(
+                  socket = SpiSocketSelector(
+                    component = socketcomponent,
+                    contract = contract,
+                    instance = socketinstance,
+                    name = socketname,
+                    cardinality = cardinality
+                  ),
+                  provider = SpiProviderSelector(
+                    component = providercomponent,
+                    service = service,
+                    instance = providerinstance
+                  ),
+                  selection = _spi_selection(selection)
+                )
+              }
             }
           }
         }
@@ -1267,7 +1311,14 @@ object GenericSubsystemDescriptor {
         val component = binding.socket.component.map(x => ComponentInstanceId(x, "default").canonicalKey).getOrElse("*")
         val instance = binding.socket.instance.map(x => ComponentInstanceId("component", x).canonicalKey).getOrElse("*")
         val name = binding.socket.name.map(x => ComponentInstanceId("socket", x).canonicalKey).getOrElse("*")
-        s"${component}/${instance}/${name}/${binding.socket.contract}"
+        val socket = s"${component}/${instance}/${name}/${binding.socket.contract}/${binding.socket.cardinality}"
+        if (binding.socket.cardinality.isMany) {
+          val providercomponent = binding.provider.component.map(x => ComponentInstanceId(x, "default").canonicalKey).getOrElse("*")
+          val providerinstance = binding.provider.instance.map(x => ComponentInstanceId("component", x).canonicalKey).getOrElse("*")
+          s"${socket}/${providercomponent}/${providerinstance}"
+        } else {
+          socket
+        }
       }
       .collectFirst { case (key, xs) if xs.size > 1 => key }
     duplicate match {

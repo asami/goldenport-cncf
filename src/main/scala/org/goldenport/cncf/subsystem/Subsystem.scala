@@ -46,13 +46,14 @@ import org.goldenport.cncf.security.{AdminAuthorizationPolicy, IngressSecurityRe
 import org.goldenport.cncf.config.{ResolvedParameter, ResolvedParameters}
 import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.metrics.EntityAccessMetricsRegistry
+import org.goldenport.cncf.spi.ComponentApiResolver
 
 /*
  * @since   Jan.  7, 2026
  *  version Jan. 31, 2026
  *  version Feb.  4, 2026
  *  version Apr. 30, 2026
- * @version Jun. 18, 2026
+ * @version Jul. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Subsystem(
@@ -92,6 +93,7 @@ final class Subsystem(
     "cncf.runtime.site.base-url"
   )
   private var _descriptor: Option[GenericSubsystemDescriptor] = None
+  private var _component_api_resolver: ComponentApiResolver = ComponentApiResolver.empty
   private var _resolved_security_wiring: ResolvedSecurityWiring = ResolvedSecurityWiring.empty
   private var _user_notification_forwarding_registered: Boolean = false
 
@@ -130,6 +132,14 @@ final class Subsystem(
     _descriptor = Some(descriptor)
     _resolved_security_wiring = ResolvedSecurityWiring.resolve(_descriptor, components)
     _ensure_user_notification_event_forwarding()
+    this
+  }
+
+  def componentApiResolver: ComponentApiResolver =
+    _component_api_resolver
+
+  def withComponentApiResolver(resolver: ComponentApiResolver): Subsystem = {
+    _component_api_resolver = _component_api_resolver.merge(resolver)
     this
   }
 

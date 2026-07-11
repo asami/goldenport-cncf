@@ -31,6 +31,7 @@ final class GenericSubsystemDescriptorSpec extends AnyWordSpec with Matchers wit
           |  - name: textus-scraper
           |    instance: static-default
           |    purposes: [official-site, lightweight-navigation]
+          |    capabilities: [html, same-origin]
           |    tags: [static, jsoup]
           |    priority: 100
           |    default: true
@@ -60,6 +61,7 @@ final class GenericSubsystemDescriptorSpec extends AnyWordSpec with Matchers wit
       static.config shouldBe Map("scraper.mode" -> "static")
       static.rules.getRecord("navigation").flatMap(_.getInt("max-pages")) shouldBe Some(8)
       static.purposes should contain allOf ("official-site", "lightweight-navigation")
+      static.capabilities should contain allOf ("html", "same-origin")
       static.tags should contain allOf ("static", "jsoup")
       static.priority shouldBe Some(100)
       static.isDefault shouldBe Some(true)
@@ -830,6 +832,159 @@ final class GenericSubsystemDescriptorSpec extends AnyWordSpec with Matchers wit
       bindings.head.provider.component shouldBe Some("target-component")
       bindings.head.provider.instance shouldBe Some("provider-default")
       bindings.head.selection.mode shouldBe Some("test")
+    }
+
+    "load multiple providers for one required socket set" in {
+      Given("an assembly descriptor with two exact many-cardinality bindings")
+      val descriptor = GenericSubsystemDescriptor(
+        path = java.nio.file.Path.of("component.car"),
+        subsystemName = "target",
+        componentBindings = Vector(GenericSubsystemComponentBinding("target-component")),
+        assemblyDescriptor = Some(GenericSubsystemAssemblyDescriptorSource(
+          Record.data(
+            "spi" -> Record.data(
+              "bindings" -> Vector("static", "dynamic").map { instance =>
+                Record.data(
+                  "socket" -> Record.data(
+                    "component" -> "target-component",
+                    "name" -> "scrapers",
+                    "contract" -> "ai-runner",
+                    "cardinality" -> "many",
+                    "required" -> true
+                  ),
+                  "provider" -> Record.data(
+                    "component" -> "textus-scraper",
+                    "instance" -> instance
+                  )
+                )
+              }
+            )
+          ),
+          source = "spec"
+        ))
+      )
+
+      When("assembly SPI bindings are decoded")
+      val bindings = GenericSubsystemDescriptor.resolveAssemblySpiBindings(descriptor).toOption.get
+
+      Then("both providers retain required set cardinality and exact identity")
+      bindings.size shouldBe 2
+      bindings.map(_.socket.cardinality).toSet shouldBe Set(org.goldenport.cncf.spi.SpiCardinality.OneOrMore)
+      bindings.flatMap(_.provider.instance).toSet shouldBe Set("static", "dynamic")
+    }
+
+    "merge socket set bindings by provider member identity" in {
+      Given("two inherited socket-set members and one provider-specific override")
+      def _binding_(instance: String, mode: String): Record =
+        Record.data(
+          "socket" -> Record.data(
+            "component" -> "target-component",
+            "name" -> "scrapers",
+            "contract" -> "ai-runner",
+            "cardinality" -> "many"
+          ),
+          "provider" -> Record.data(
+            "component" -> "textus-scraper",
+            "instance" -> instance
+          ),
+          "selection" -> Record.data("mode" -> mode)
+        )
+      val base = GenericSubsystemDescriptor(
+        path = java.nio.file.Path.of("component.car"),
+        subsystemName = "target",
+        componentBindings = Vector(GenericSubsystemComponentBinding("target-component")),
+        assemblyDescriptor = Some(GenericSubsystemAssemblyDescriptorSource(
+          Record.data("spi" -> Record.data("bindings" -> Vector(
+            _binding_("static", "base-static"),
+            _binding_("dynamic", "base-dynamic")
+          ))),
+          source = "car"
+        ))
+      )
+      val overridevalue = GenericSubsystemAssemblyDescriptorSource(
+        Record.data("spi" -> Record.data("bindings" -> Vector(
+          _binding_("dynamic", "override-dynamic")
+        ))),
+        source = "sar"
+      )
+
+      When("the subsystem assembly override is applied")
+      val effective = GenericSubsystemDescriptor.applyAssemblyOverride(base, overridevalue)
+      val bindings = GenericSubsystemDescriptor.resolveAssemblySpiBindings(effective).toOption.get
+
+      Then("the matching provider is replaced while the other set member remains")
+      bindings.size shouldBe 2
+      bindings.map(x => x.provider.instance.get -> x.selection.mode.get).toMap shouldBe Map(
+        "static" -> "base-static",
+        "dynamic" -> "override-dynamic"
+      )
+    }
+
+    "reject an unknown socket cardinality" in {
+      Given("an assembly binding with an unsupported cardinality")
+      val descriptor = GenericSubsystemDescriptor(
+        path = java.nio.file.Path.of("component.car"),
+        subsystemName = "target",
+        componentBindings = Vector(GenericSubsystemComponentBinding("target-component")),
+        assemblyDescriptor = Some(GenericSubsystemAssemblyDescriptorSource(
+          Record.data(
+            "spi" -> Record.data(
+              "bindings" -> Vector(Record.data(
+                "socket" -> Record.data(
+                  "component" -> "target-component",
+                  "contract" -> "ai-runner",
+                  "cardinality" -> "several"
+                ),
+                "provider" -> Record.data("component" -> "textus-ai")
+              ))
+            )
+          ),
+          source = "spec"
+        ))
+      )
+
+      When("assembly SPI bindings are decoded")
+      val result = GenericSubsystemDescriptor.resolveAssemblySpiBindings(descriptor)
+
+      Then("the malformed cardinality fails deterministically")
+      result shouldBe a[Consequence.Failure[_]]
+      result.asInstanceOf[Consequence.Failure[_]].conclusion.display should include ("unknown SPI socket cardinality")
+    }
+
+    "reject contradictory socket cardinality and required declarations" in {
+      Given("optional-required and non-empty-optional assembly bindings")
+      def _descriptor_(cardinality: String, required: Boolean): GenericSubsystemDescriptor =
+        GenericSubsystemDescriptor(
+          path = java.nio.file.Path.of("component.car"),
+          subsystemName = "target",
+          componentBindings = Vector(GenericSubsystemComponentBinding("target-component")),
+          assemblyDescriptor = Some(GenericSubsystemAssemblyDescriptorSource(
+            Record.data(
+              "spi" -> Record.data(
+                "bindings" -> Vector(Record.data(
+                  "socket" -> Record.data(
+                    "component" -> "target-component",
+                    "contract" -> "ai-runner",
+                    "cardinality" -> cardinality,
+                    "required" -> required
+                  ),
+                  "provider" -> Record.data("component" -> "textus-ai")
+                ))
+              )
+            ),
+            source = "spec"
+          ))
+        )
+
+      When("assembly SPI bindings are decoded")
+      val optionalrequired = GenericSubsystemDescriptor.resolveAssemblySpiBindings(_descriptor_("optional", true))
+      val nonemptyoptional = GenericSubsystemDescriptor.resolveAssemblySpiBindings(_descriptor_("one-or-more", false))
+
+      Then("both contradictory declarations fail explicitly")
+      optionalrequired shouldBe a[Consequence.Failure[_]]
+      optionalrequired.asInstanceOf[Consequence.Failure[_]].conclusion.display should include ("cannot be required")
+      nonemptyoptional shouldBe a[Consequence.Failure[_]]
+      nonemptyoptional.asInstanceOf[Consequence.Failure[_]].conclusion.display should include ("cannot be optional")
     }
 
     "reject an SPI provider instance without a provider component" in {

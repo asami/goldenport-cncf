@@ -53,8 +53,8 @@ Scope boundaries:
 - A (DONE): TC-01 — Open Phase 29 and freeze the working scope.
 - B (DONE): TC-02 — Named component instance descriptor and creation model.
 - C (DONE): TC-03 — Exact instance binding and resolver semantics.
-- D (NEXT): TC-04 — Socket set and abstract component selection.
-- E (TODO): TC-05 — Generic SPI invoker and canonical operation dispatch.
+- D (DONE): TC-04 — Socket set and abstract component selection.
+- E (NEXT): TC-05 — Generic SPI invoker and canonical operation dispatch.
 - F (TODO): TC-06 — Cozy-generated typed component API and proxy.
 - G (TODO): TC-07 — Standard SPI single/set socket alignment.
 - H (TODO): TC-08 — ArtScene + `textus-scraper` development-driver smoke.
@@ -63,16 +63,16 @@ Scope boundaries:
 
 Resume hint:
 
-- Start TC-04 from `SpiSocketSet[S]` member metadata and assembly-bounded
-  provider sets; reuse TC-03 exact/default instance resolution without adding
-  arbitrary runtime provider discovery.
+- Start TC-05 from resolved SPI member references and generic `Record`
+  invocation; preserve TC-04 assembly-bounded selection and dispatch through
+  canonical operation/action execution.
 
 ## 4. Development Items
 
 - [x] TC-01: Open Phase 29 and freeze the working scope.
 - [x] TC-02: Implement named component instance declarations and creation.
 - [x] TC-03: Implement exact instance SPI binding and resolution.
-- [ ] TC-04: Implement socket sets and abstract component selection.
+- [x] TC-04: Implement socket sets and abstract component selection.
 - [ ] TC-05: Implement generic invocation through the operation/action path.
 - [ ] TC-06: Generate typed component APIs and proxies from CML.
 - [ ] TC-07: Align standard SPI contracts with single/set socket forms.

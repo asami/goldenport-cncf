@@ -251,6 +251,9 @@ abstract class Component() extends Component.Core.Holder {
 
   def healthContributors: Vector[Component.HealthContributor] = _health_contributors
 
+  def healthSnapshot: Component.HealthSnapshot =
+    Component.healthSnapshot(this)
+
   def registerHealthContributor(contributor: Component.HealthContributor): Component = {
     _health_contributors = _health_contributors :+ contributor
     this
@@ -1117,21 +1120,31 @@ object Component {
     )
   }
 
+  final case class HealthSnapshot(
+    status: String,
+    checks: Vector[HealthCheck]
+  )
+
+  def healthSnapshot(component: Component): HealthSnapshot = {
+    val checks = _resolve_health_checks(component)
+    HealthSnapshot(_overall_status(checks), checks)
+  }
+
   private def _with_default_services(protocol: Protocol): Protocol = {
-    val withMetaHelp = _ensure_operation(protocol, _default_meta_service_name, _DefaultMetaHelpOperation)
-    val withMetaDescribe = _ensure_operation(withMetaHelp, _default_meta_service_name, _DefaultMetaDescribeOperation)
-    val withMetaComponents = _ensure_operation(withMetaDescribe, _default_meta_service_name, _DefaultMetaComponentsOperation)
-    val withMetaServices = _ensure_operation(withMetaComponents, _default_meta_service_name, _DefaultMetaServicesOperation)
-    val withMetaOperations = _ensure_operation(withMetaServices, _default_meta_service_name, _DefaultMetaOperationsOperation)
-    val withMetaSchema = _ensure_operation(withMetaOperations, _default_meta_service_name, _DefaultMetaSchemaOperation)
-    val withMetaOpenApi = _ensure_operation(withMetaSchema, _default_meta_service_name, _DefaultMetaOpenApiOperation)
-    val withMetaMcp = _ensure_operation(withMetaOpenApi, _default_meta_service_name, _DefaultMetaMcpOperation)
-    val withMetaTree = _ensure_operation(withMetaMcp, _default_meta_service_name, _DefaultMetaTreeOperation)
-    val withMetaStateMachine = _ensure_operation(withMetaTree, _default_meta_service_name, _DefaultMetaStateMachineOperation)
-    val withMetaVersion = _ensure_operation(withMetaStateMachine, _default_meta_service_name, _DefaultMetaVersionOperation)
-    val withSystemPing = _ensure_operation(withMetaVersion, _default_system_service_name, _DefaultSystemPingOperation)
-    val withSystemHealth = _ensure_operation(withSystemPing, _default_system_service_name, _DefaultSystemHealthOperation)
-    _ensure_operation(withSystemHealth, _default_system_service_name, _DefaultSystemStatusOperation)
+    val withMetaHelp = _ensure_operation(protocol, _default_meta_service_name, DefaultMetaHelpOperation)
+    val withMetaDescribe = _ensure_operation(withMetaHelp, _default_meta_service_name, DefaultMetaDescribeOperation)
+    val withMetaComponents = _ensure_operation(withMetaDescribe, _default_meta_service_name, DefaultMetaComponentsOperation)
+    val withMetaServices = _ensure_operation(withMetaComponents, _default_meta_service_name, DefaultMetaServicesOperation)
+    val withMetaOperations = _ensure_operation(withMetaServices, _default_meta_service_name, DefaultMetaOperationsOperation)
+    val withMetaSchema = _ensure_operation(withMetaOperations, _default_meta_service_name, DefaultMetaSchemaOperation)
+    val withMetaOpenApi = _ensure_operation(withMetaSchema, _default_meta_service_name, DefaultMetaOpenApiOperation)
+    val withMetaMcp = _ensure_operation(withMetaOpenApi, _default_meta_service_name, DefaultMetaMcpOperation)
+    val withMetaTree = _ensure_operation(withMetaMcp, _default_meta_service_name, DefaultMetaTreeOperation)
+    val withMetaStateMachine = _ensure_operation(withMetaTree, _default_meta_service_name, DefaultMetaStateMachineOperation)
+    val withMetaVersion = _ensure_operation(withMetaStateMachine, _default_meta_service_name, DefaultMetaVersionOperation)
+    val withSystemPing = _ensure_operation(withMetaVersion, _default_system_service_name, DefaultSystemPingOperation)
+    val withSystemHealth = _ensure_operation(withSystemPing, _default_system_service_name, DefaultSystemHealthOperation)
+    _ensure_operation(withSystemHealth, _default_system_service_name, DefaultSystemStatusOperation)
   }
 
   private def _ensure_operation(
@@ -1152,7 +1165,7 @@ object Component {
     }
   }
 
-  private object _DefaultMetaHelpOperation extends OperationDefinition {
+  private object DefaultMetaHelpOperation extends OperationDefinition {
     override val specification: OperationDefinition.Specification =
       OperationDefinition.Specification(
         name = "help",
@@ -1161,10 +1174,10 @@ object Component {
       )
 
     override def createOperationRequest(req: Request): Consequence[OperationRequest] =
-      Consequence.success(_DefaultMetaHelpAction(req))
+      Consequence.success(DefaultMetaHelpAction(req))
   }
 
-  private object _DefaultMetaDescribeOperation extends OperationDefinition {
+  private object DefaultMetaDescribeOperation extends OperationDefinition {
     override val specification: OperationDefinition.Specification =
       OperationDefinition.Specification(
         name = "describe",
@@ -1173,10 +1186,10 @@ object Component {
       )
 
     override def createOperationRequest(req: Request): Consequence[OperationRequest] =
-      Consequence.success(_DefaultMetaDescribeAction(req))
+      Consequence.success(DefaultMetaDescribeAction(req))
   }
 
-  private object _DefaultMetaComponentsOperation extends OperationDefinition {
+  private object DefaultMetaComponentsOperation extends OperationDefinition {
     override val specification: OperationDefinition.Specification =
       OperationDefinition.Specification(
         name = "components",
@@ -1185,10 +1198,10 @@ object Component {
       )
 
     override def createOperationRequest(req: Request): Consequence[OperationRequest] =
-      Consequence.success(_DefaultMetaComponentsAction(req))
+      Consequence.success(DefaultMetaComponentsAction(req))
   }
 
-  private object _DefaultMetaServicesOperation extends OperationDefinition {
+  private object DefaultMetaServicesOperation extends OperationDefinition {
     override val specification: OperationDefinition.Specification =
       OperationDefinition.Specification(
         name = "services",
@@ -1197,10 +1210,10 @@ object Component {
       )
 
     override def createOperationRequest(req: Request): Consequence[OperationRequest] =
-      Consequence.success(_DefaultMetaServicesAction(req))
+      Consequence.success(DefaultMetaServicesAction(req))
   }
 
-  private object _DefaultMetaOperationsOperation extends OperationDefinition {
+  private object DefaultMetaOperationsOperation extends OperationDefinition {
     override val specification: OperationDefinition.Specification =
       OperationDefinition.Specification(
         name = "operations",
@@ -1209,10 +1222,10 @@ object Component {
       )
 
     override def createOperationRequest(req: Request): Consequence[OperationRequest] =
-      Consequence.success(_DefaultMetaOperationsAction(req))
+      Consequence.success(DefaultMetaOperationsAction(req))
   }
 
-  private object _DefaultMetaSchemaOperation extends OperationDefinition {
+  private object DefaultMetaSchemaOperation extends OperationDefinition {
     override val specification: OperationDefinition.Specification =
       OperationDefinition.Specification(
         name = "schema",
@@ -1221,10 +1234,10 @@ object Component {
       )
 
     override def createOperationRequest(req: Request): Consequence[OperationRequest] =
-      Consequence.success(_DefaultMetaSchemaAction(req))
+      Consequence.success(DefaultMetaSchemaAction(req))
   }
 
-  private object _DefaultMetaOpenApiOperation extends OperationDefinition {
+  private object DefaultMetaOpenApiOperation extends OperationDefinition {
     override val specification: OperationDefinition.Specification =
       OperationDefinition.Specification(
         name = "openapi",
@@ -1233,10 +1246,10 @@ object Component {
       )
 
     override def createOperationRequest(req: Request): Consequence[OperationRequest] =
-      Consequence.success(_DefaultMetaOpenApiAction(req))
+      Consequence.success(DefaultMetaOpenApiAction(req))
   }
 
-  private object _DefaultMetaTreeOperation extends OperationDefinition {
+  private object DefaultMetaTreeOperation extends OperationDefinition {
     override val specification: OperationDefinition.Specification =
       OperationDefinition.Specification(
         name = "tree",
@@ -1245,10 +1258,10 @@ object Component {
       )
 
     override def createOperationRequest(req: Request): Consequence[OperationRequest] =
-      Consequence.success(_DefaultMetaTreeAction(req))
+      Consequence.success(DefaultMetaTreeAction(req))
   }
 
-  private object _DefaultMetaMcpOperation extends OperationDefinition {
+  private object DefaultMetaMcpOperation extends OperationDefinition {
     override val specification: OperationDefinition.Specification =
       OperationDefinition.Specification(
         name = "mcp",
@@ -1257,10 +1270,10 @@ object Component {
       )
 
     override def createOperationRequest(req: Request): Consequence[OperationRequest] =
-      Consequence.success(_DefaultMetaMcpAction(req))
+      Consequence.success(DefaultMetaMcpAction(req))
   }
 
-  private object _DefaultMetaStateMachineOperation extends OperationDefinition {
+  private object DefaultMetaStateMachineOperation extends OperationDefinition {
     override val specification: OperationDefinition.Specification =
       OperationDefinition.Specification(
         name = "statemachine",
@@ -1269,10 +1282,10 @@ object Component {
       )
 
     override def createOperationRequest(req: Request): Consequence[OperationRequest] =
-      Consequence.success(_DefaultMetaStateMachineAction(req))
+      Consequence.success(DefaultMetaStateMachineAction(req))
   }
 
-  private object _DefaultMetaVersionOperation extends OperationDefinition {
+  private object DefaultMetaVersionOperation extends OperationDefinition {
     override val specification: OperationDefinition.Specification =
       OperationDefinition.Specification(
         name = "version",
@@ -1281,10 +1294,10 @@ object Component {
       )
 
     override def createOperationRequest(req: Request): Consequence[OperationRequest] =
-      Consequence.success(_DefaultMetaVersionAction(req))
+      Consequence.success(DefaultMetaVersionAction(req))
   }
 
-  private object _DefaultSystemPingOperation extends OperationDefinition {
+  private object DefaultSystemPingOperation extends OperationDefinition {
     override val specification: OperationDefinition.Specification =
       OperationDefinition.Specification(
         name = "ping",
@@ -1293,10 +1306,10 @@ object Component {
       )
 
     override def createOperationRequest(req: Request): Consequence[OperationRequest] =
-      Consequence.success(_DefaultSystemPingAction(req))
+      Consequence.success(DefaultSystemPingAction(req))
   }
 
-  private object _DefaultSystemHealthOperation extends OperationDefinition {
+  private object DefaultSystemHealthOperation extends OperationDefinition {
     override val specification: OperationDefinition.Specification =
       OperationDefinition.Specification(
         name = "health",
@@ -1305,10 +1318,10 @@ object Component {
       )
 
     override def createOperationRequest(req: Request): Consequence[OperationRequest] =
-      Consequence.success(_DefaultSystemHealthAction(req))
+      Consequence.success(DefaultSystemHealthAction(req))
   }
 
-  private object _DefaultSystemStatusOperation extends OperationDefinition {
+  private object DefaultSystemStatusOperation extends OperationDefinition {
     override val specification: OperationDefinition.Specification =
       OperationDefinition.Specification(
         name = "status",
@@ -1317,17 +1330,17 @@ object Component {
       )
 
     override def createOperationRequest(req: Request): Consequence[OperationRequest] =
-      Consequence.success(_DefaultSystemStatusAction(req))
+      Consequence.success(DefaultSystemStatusAction(req))
   }
 
-  private final case class _DefaultMetaHelpAction(
+  private final case class DefaultMetaHelpAction(
     request: Request
   ) extends QueryAction {
     override def createCall(core: ActionCall.Core): ActionCall =
-      _DefaultMetaHelpActionCall(request, core)
+      DefaultMetaHelpActionCall(request, core)
   }
 
-  private final case class _DefaultMetaHelpActionCall(
+  private final case class DefaultMetaHelpActionCall(
     req: Request,
     core: ActionCall.Core
   ) extends ProcedureActionCall {
@@ -1351,14 +1364,14 @@ object Component {
     }
   }
 
-  private final case class _DefaultMetaDescribeAction(
+  private final case class DefaultMetaDescribeAction(
     request: Request
   ) extends QueryAction {
     override def createCall(core: ActionCall.Core): ActionCall =
-      _DefaultMetaDescribeActionCall(request, core)
+      DefaultMetaDescribeActionCall(request, core)
   }
 
-  private final case class _DefaultMetaDescribeActionCall(
+  private final case class DefaultMetaDescribeActionCall(
     req: Request,
     core: ActionCall.Core
   ) extends ProcedureActionCall {
@@ -1379,14 +1392,14 @@ object Component {
     }
   }
 
-  private final case class _DefaultMetaComponentsAction(
+  private final case class DefaultMetaComponentsAction(
     request: Request
   ) extends QueryAction {
     override def createCall(core: ActionCall.Core): ActionCall =
-      _DefaultMetaComponentsActionCall(request, core)
+      DefaultMetaComponentsActionCall(request, core)
   }
 
-  private final case class _DefaultMetaComponentsActionCall(
+  private final case class DefaultMetaComponentsActionCall(
     req: Request,
     core: ActionCall.Core
   ) extends ProcedureActionCall {
@@ -1404,14 +1417,14 @@ object Component {
     }
   }
 
-  private final case class _DefaultMetaServicesAction(
+  private final case class DefaultMetaServicesAction(
     request: Request
   ) extends QueryAction {
     override def createCall(core: ActionCall.Core): ActionCall =
-      _DefaultMetaServicesActionCall(request, core)
+      DefaultMetaServicesActionCall(request, core)
   }
 
-  private final case class _DefaultMetaServicesActionCall(
+  private final case class DefaultMetaServicesActionCall(
     req: Request,
     core: ActionCall.Core
   ) extends ProcedureActionCall {
@@ -1430,14 +1443,14 @@ object Component {
     }
   }
 
-  private final case class _DefaultMetaOperationsAction(
+  private final case class DefaultMetaOperationsAction(
     request: Request
   ) extends QueryAction {
     override def createCall(core: ActionCall.Core): ActionCall =
-      _DefaultMetaOperationsActionCall(request, core)
+      DefaultMetaOperationsActionCall(request, core)
   }
 
-  private final case class _DefaultMetaOperationsActionCall(
+  private final case class DefaultMetaOperationsActionCall(
     req: Request,
     core: ActionCall.Core
   ) extends ProcedureActionCall {
@@ -1456,14 +1469,14 @@ object Component {
     }
   }
 
-  private final case class _DefaultMetaSchemaAction(
+  private final case class DefaultMetaSchemaAction(
     request: Request
   ) extends QueryAction {
     override def createCall(core: ActionCall.Core): ActionCall =
-      _DefaultMetaSchemaActionCall(request, core)
+      DefaultMetaSchemaActionCall(request, core)
   }
 
-  private final case class _DefaultMetaSchemaActionCall(
+  private final case class DefaultMetaSchemaActionCall(
     req: Request,
     core: ActionCall.Core
   ) extends ProcedureActionCall {
@@ -1481,14 +1494,14 @@ object Component {
     }
   }
 
-  private final case class _DefaultMetaOpenApiAction(
+  private final case class DefaultMetaOpenApiAction(
     request: Request
   ) extends QueryAction {
     override def createCall(core: ActionCall.Core): ActionCall =
-      _DefaultMetaOpenApiActionCall(request, core)
+      DefaultMetaOpenApiActionCall(request, core)
   }
 
-  private final case class _DefaultMetaOpenApiActionCall(
+  private final case class DefaultMetaOpenApiActionCall(
     req: Request,
     core: ActionCall.Core
   ) extends ProcedureActionCall {
@@ -1511,28 +1524,28 @@ object Component {
     }
   }
 
-  private final case class _DefaultMetaTreeAction(
+  private final case class DefaultMetaTreeAction(
     request: Request
   ) extends QueryAction {
     override def createCall(core: ActionCall.Core): ActionCall =
-      _DefaultMetaTreeActionCall(request, core)
+      DefaultMetaTreeActionCall(request, core)
   }
 
-  private final case class _DefaultMetaMcpAction(
+  private final case class DefaultMetaMcpAction(
     request: Request
   ) extends QueryAction {
     override def createCall(core: ActionCall.Core): ActionCall =
-      _DefaultMetaMcpActionCall(request, core)
+      DefaultMetaMcpActionCall(request, core)
   }
 
-  private final case class _DefaultMetaStateMachineAction(
+  private final case class DefaultMetaStateMachineAction(
     request: Request
   ) extends QueryAction {
     override def createCall(core: ActionCall.Core): ActionCall =
-      _DefaultMetaStateMachineActionCall(request, core)
+      DefaultMetaStateMachineActionCall(request, core)
   }
 
-  private final case class _DefaultMetaMcpActionCall(
+  private final case class DefaultMetaMcpActionCall(
     req: Request,
     core: ActionCall.Core
   ) extends ProcedureActionCall {
@@ -1555,7 +1568,7 @@ object Component {
     }
   }
 
-  private final case class _DefaultMetaTreeActionCall(
+  private final case class DefaultMetaTreeActionCall(
     req: Request,
     core: ActionCall.Core
   ) extends ProcedureActionCall {
@@ -1575,7 +1588,7 @@ object Component {
     }
   }
 
-  private final case class _DefaultMetaStateMachineActionCall(
+  private final case class DefaultMetaStateMachineActionCall(
     req: Request,
     core: ActionCall.Core
   ) extends ProcedureActionCall {
@@ -1593,14 +1606,14 @@ object Component {
     }
   }
 
-  private final case class _DefaultMetaVersionAction(
+  private final case class DefaultMetaVersionAction(
     request: Request
   ) extends QueryAction {
     override def createCall(core: ActionCall.Core): ActionCall =
-      _DefaultMetaVersionActionCall(core)
+      DefaultMetaVersionActionCall(core)
   }
 
-  private final case class _DefaultMetaVersionActionCall(
+  private final case class DefaultMetaVersionActionCall(
     core: ActionCall.Core
   ) extends ProcedureActionCall {
     override def execute(): Consequence[OperationResponse] = {
@@ -1617,38 +1630,37 @@ object Component {
     }
   }
 
-  private final case class _DefaultSystemPingAction(
+  private final case class DefaultSystemPingAction(
     request: Request
   ) extends QueryAction {
     override def createCall(core: ActionCall.Core): ActionCall =
-      _DefaultSystemPingActionCall(core)
+      DefaultSystemPingActionCall(core)
   }
 
-  private final case class _DefaultSystemPingActionCall(
+  private final case class DefaultSystemPingActionCall(
     core: ActionCall.Core
   ) extends ProcedureActionCall {
     override def execute(): Consequence[OperationResponse] =
       Consequence.success(OperationResponse.Scalar("ok"))
   }
 
-  private final case class _DefaultSystemHealthAction(
+  private final case class DefaultSystemHealthAction(
     request: Request
   ) extends QueryAction {
     override def createCall(core: ActionCall.Core): ActionCall =
-      _DefaultSystemHealthActionCall(core)
+      DefaultSystemHealthActionCall(core)
   }
 
-  private final case class _DefaultSystemHealthActionCall(
+  private final case class DefaultSystemHealthActionCall(
     core: ActionCall.Core
   ) extends ProcedureActionCall {
     override def execute(): Consequence[OperationResponse] = {
       val rec = core.component match {
         case Some(component) =>
-          val checks = _resolve_health_checks(component)
-          val overall = _overall_status(checks)
+          val health = healthSnapshot(component)
           Record.data(
-            "status" -> overall,
-            "checks" -> checks.map(_.toRecord)
+            "status" -> health.status,
+            "checks" -> health.checks.map(_.toRecord)
           )
         case None =>
           Record.data(
@@ -1662,14 +1674,14 @@ object Component {
     }
   }
 
-  private final case class _DefaultSystemStatusAction(
+  private final case class DefaultSystemStatusAction(
     request: Request
   ) extends QueryAction {
     override def createCall(core: ActionCall.Core): ActionCall =
-      _DefaultSystemStatusActionCall(core)
+      DefaultSystemStatusActionCall(core)
   }
 
-  private final case class _DefaultSystemStatusActionCall(
+  private final case class DefaultSystemStatusActionCall(
     core: ActionCall.Core
   ) extends ProcedureActionCall {
     override def execute(): Consequence[OperationResponse] = {
@@ -1970,7 +1982,8 @@ final case class ComponentInstanceMetadata(
   purposes: Vector[String] = Vector.empty,
   tags: Vector[String] = Vector.empty,
   priority: Int = 0,
-  isDefault: Boolean = false
+  isDefault: Boolean = false,
+  capabilities: Vector[String] = Vector.empty
 ) {
   def instanceId: ComponentInstanceId =
     ComponentInstanceId(componentName, instance)

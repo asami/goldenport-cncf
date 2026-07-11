@@ -224,7 +224,31 @@ The Phase 29 TC-03 implementation establishes exact single-socket resolution:
   ambiguous sockets/providers fail through deterministic `Consequence`
   boundaries.
 
-Socket sets and abstract purpose/capability/tag selection remain TC-04 scope.
+### 4.3 Implemented TC-04 Socket Set Baseline
+
+The Phase 29 TC-04 implementation adds assembly-bounded multi-provider
+resolution:
+
+- `SpiSocketSet[S]` receives `ResolvedSpiMember[S]` values with logical
+  component instance, purpose, capability, tag, priority, default, and health
+  metadata;
+- `ComponentSelector` supports exact instance and abstract
+  purpose/capability/tag filtering;
+- `ComponentApiResolver` applies health and typed runtime policy before
+  deterministic priority/default selection;
+- assembly `cardinality: many` bindings may contribute several provider
+  members to one named socket set, while single sockets continue to reject
+  multiple bindings;
+- required single, optional single, optional set, and required non-empty set
+  cardinalities fail or remain empty deterministically;
+- component-only set bindings expand compatible instances already admitted by
+  the effective assembly; they never discover or load arbitrary components;
+- error-health providers are excluded before service materialization. Warning
+  health remains eligible and is retained in resolved member metadata.
+
+Arbitrary instance `rules` records remain metadata and are not executed as
+selection code. Custom runtime policy is expressed through the typed
+`ComponentSelectionPolicy` boundary.
 
 ## 5. Consumption Modes
 
@@ -299,7 +323,7 @@ A consumer may resolve a typed API through CNCF runtime services:
 ```scala
 componentApiResolver
   .resolve[TextusScraperApi](ComponentSelector(
-    component = "textus-scraper",
+    component = Some("textus-scraper"),
     purpose = Some("javascript-heavy-site")
   ))
   .flatMap(_.fetchPage(request))
@@ -707,9 +731,6 @@ The current CNCF source already provides part of this model:
 
 The following target features are not yet complete:
 
-- `SpiSocketSet[S]`;
-- abstract `ComponentSelector` resolution;
-- public `ComponentApiResolver`;
 - generic `SpiInvoker` for contract/operation/`Record` invocation;
 - generated typed component API proxies from CML operations;
 - Cozy-generated paired single-socket and socket-set contracts for

@@ -66,7 +66,7 @@ import org.goldenport.cncf.spi.SpiResolver
  *  version Apr. 30, 2026
  *  version May. 25, 2026
  *  version Jun. 29, 2026
- * @version Jul.  9, 2026
+ * @version Jul. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 object CncfRuntime extends GlobalObservable {
@@ -2492,32 +2492,32 @@ object CncfRuntime extends GlobalObservable {
   private def _test_descriptor_config_sources(
     sources: ConfigurationSources,
     cwd: Path
-  ): _TestDescriptorConfigSources =
+  ): TestDescriptorConfigSources =
     ConfigurationResolver.default.resolve(sources) match {
       case Consequence.Success(configuration) =>
         RuntimeTestDescriptor.path(configuration).map { path =>
           val normalized = if (path.isAbsolute) path.normalize else cwd.resolve(path).normalize
           RuntimeTestDescriptor.load(normalized) match {
             case Consequence.Success(descriptor) =>
-              _TestDescriptorConfigSources(
+              TestDescriptorConfigSources(
                 RuntimeTestDescriptor.configurationSource(descriptor).toVector,
                 ConfigurationSource.args(Map(RuntimeConfig.TEST_DESCRIPTOR_KEY -> normalized.toString))
               )
             case Consequence.Failure(conclusion) =>
               throw new IllegalArgumentException(conclusion.display)
           }
-        }.getOrElse(_TestDescriptorConfigSources.empty)
+        }.getOrElse(TestDescriptorConfigSources.empty)
       case Consequence.Failure(_) =>
-        _TestDescriptorConfigSources.empty
+        TestDescriptorConfigSources.empty
     }
 
-  private final case class _TestDescriptorConfigSources(
+  private final case class TestDescriptorConfigSources(
     configs: Vector[ConfigurationSource],
     normalizedpathsource: Option[ConfigurationSource]
   )
 
-  private object _TestDescriptorConfigSources {
-    val empty: _TestDescriptorConfigSources = _TestDescriptorConfigSources(Vector.empty, None)
+  private object TestDescriptorConfigSources {
+    val empty: TestDescriptorConfigSources = TestDescriptorConfigSources(Vector.empty, None)
   }
 
   private def _explicit_config_sources(
@@ -3323,7 +3323,8 @@ class CncfRuntime() extends GlobalObservable {
         }
       }
       .getOrElse(Vector.empty)
-    SpiResolver.resolveOrRaise(subsystem.components.toVector, bindings)
+    val resolution = SpiResolver.resolveAssemblyOrRaise(subsystem.components.toVector, bindings)
+    subsystem.withComponentApiResolver(resolution.componentApiResolver)
   }
 
   private def _apply_component_assembly_defaults(

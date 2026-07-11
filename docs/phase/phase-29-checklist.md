@@ -118,7 +118,7 @@ Bind a consumer socket to a specific named provider instance.
 
 ## TC-04: Socket Set and Abstract Component Selection
 
-Status: NEXT
+Status: DONE
 
 ### Objective
 
@@ -127,16 +127,30 @@ abstract intent.
 
 ### Detailed Tasks
 
-- [ ] Add `SpiSocketSet[S]` and resolved member metadata.
-- [ ] Define `ComponentSelector` for instance, purpose, capability, and tags.
-- [ ] Apply health, policy, priority, and default selection deterministically.
-- [ ] Reject equal remaining candidates as ambiguous.
-- [ ] Add public typed `ComponentApiResolver` over assembly-admitted instances.
-- [ ] Cover required, optional, set, and non-empty-set cardinalities.
+- [x] Add `SpiSocketSet[S]` and resolved member metadata.
+- [x] Define `ComponentSelector` for instance, purpose, capability, and tags.
+- [x] Apply health, policy, priority, and default selection deterministically.
+- [x] Reject equal remaining candidates as ambiguous.
+- [x] Add public typed `ComponentApiResolver` over assembly-admitted instances.
+- [x] Cover required, optional, set, and non-empty-set cardinalities.
+
+### Implementation Evidence
+
+- `ResolvedSpiMember` records logical component identity and selection metadata
+  without exposing provider implementation classes.
+- `SpiSocketSet` and `ComponentApiResolver` share exact and abstract selector
+  semantics over the assembly-admitted member catalog.
+- `cardinality: many` bindings merge by provider member identity; required sets
+  fail when no healthy compatible member is available.
+- Component health projection and SPI selection use the same runtime health
+  snapshot; error providers are excluded before materialization. Typed
+  `ComponentSelectionPolicy` supplies the policy boundary.
+- Executable specs cover exact and component-only sets, selector metadata,
+  health filtering, policy rejection, ambiguity, and all four cardinalities.
 
 ## TC-05: Generic SPI Invoker and Canonical Operation Dispatch
 
-Status: TODO
+Status: NEXT
 
 ### Objective
 

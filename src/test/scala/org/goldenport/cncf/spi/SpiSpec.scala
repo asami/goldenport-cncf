@@ -560,6 +560,243 @@ final class SpiSpec
     }
     }
 
+    "resolve socket sets and abstract component selectors" which {
+    "resolve an assembly-admitted provider without a consumer socket" in {
+      Given("one loaded provider component and no socket binding")
+      given ExecutionContext = ExecutionContext.create()
+      val subsystem = TestComponentFactory.emptySubsystem("spi_programmatic_provider")
+      val provider = _initialized_component(
+        subsystem,
+        "textus-scraper",
+        ProviderComponent("programmatic"),
+        Some(ComponentInstanceMetadata(
+          "textus-scraper",
+          "static",
+          purposes = Vector("official-site"),
+          capabilities = Vector("html")
+        ))
+      )
+
+      When("assembly resolution builds the public component API catalog")
+      val resolution = SpiResolver.resolveAssembly(Vector(provider)).toOption.get
+      val result = resolution.componentApiResolver.resolve(
+        SpiContract("ai-runner", classOf[AiRunner]),
+        ComponentSelector(component = Some("textus-scraper"), purpose = Some("official-site"))
+      )
+
+      Then("the admitted provider is materialized lazily through the typed resolver")
+      result.flatMap(_.generate(AiGenerateRequest("hello"))).toOption.get.text shouldBe "programmatic:hello"
+    }
+
+    "install explicitly bound provider instances into one socket set" in {
+      Given("two named provider instances and one required socket set with exact bindings")
+      given ExecutionContext = ExecutionContext.create()
+      val subsystem = TestComponentFactory.emptySubsystem("spi_socket_set_exact")
+      val static = _initialized_component(
+        subsystem,
+        "textus-scraper",
+        ProviderComponent("static"),
+        Some(ComponentInstanceMetadata(
+          "textus-scraper",
+          "static-default",
+          purposes = Vector("official-site"),
+          tags = Vector("static"),
+          priority = 100,
+          isDefault = true,
+          capabilities = Vector("html")
+        ))
+      )
+      val dynamic = _initialized_component(
+        subsystem,
+        "textus-scraper",
+        ProviderComponent("dynamic"),
+        Some(ComponentInstanceMetadata(
+          "textus-scraper",
+          "dynamic-playwright",
+          purposes = Vector("javascript-heavy-site"),
+          tags = Vector("dynamic"),
+          priority = 100,
+          capabilities = Vector("javascript")
+        ))
+      )
+      val socket = RunnerSocketSet("scrapers", required = true)
+      val consumer = _initialized_component(
+        subsystem,
+        "art-scene",
+        new Component() {}.withPort(Component.Port.input(socket))
+      )
+      val bindings = Vector("static-default", "dynamic-playwright").map { instance =>
+        SpiRuntimeBinding(
+          SpiSocketSelector(Some("art-scene"), "ai-runner", name = Some("scrapers"), cardinality = SpiCardinality.OneOrMore),
+          SpiProviderSelector(component = Some("textus-scraper"), instance = Some(instance))
+        )
+      }
+
+      When("SPI resolution installs the assembly-bounded provider set")
+      val result = SpiResolver.resolveAssembly(Vector(static, dynamic, consumer), bindings)
+
+      Then("both members are installed and abstract selectors resolve the expected typed API")
+      result shouldBe a[Consequence.Success[_]]
+      subsystem.withComponentApiResolver(result.toOption.get.componentApiResolver)
+      socket.spiMembers.map(_.metadata.instanceId.instance).toSet shouldBe Set("static-default", "dynamic-playwright")
+      socket.resolve(ComponentSelector(purpose = Some("javascript-heavy-site")))
+        .flatMap(_.generate(AiGenerateRequest("hello"))).toOption.get.text shouldBe "dynamic:hello"
+      socket.resolve(ComponentSelector(capabilities = Set("html"), tags = Set("static")))
+        .flatMap(_.generate(AiGenerateRequest("hello"))).toOption.get.text shouldBe "static:hello"
+      subsystem.componentApiResolver.resolve(
+        SpiContract("ai-runner", classOf[AiRunner]),
+        ComponentSelector(component = Some("textus-scraper"), instance = Some("dynamic-playwright"))
+      ).flatMap(_.generate(AiGenerateRequest("runtime"))).toOption.get.text shouldBe "dynamic:runtime"
+    }
+
+    "expand a component-only set binding to all compatible assembly instances" in {
+      Given("two compatible instances and one component-only many binding")
+      given ExecutionContext = ExecutionContext.create()
+      val subsystem = TestComponentFactory.emptySubsystem("spi_socket_set_component")
+      val first = _initialized_component(
+        subsystem,
+        "textus-scraper",
+        ProviderComponent("first"),
+        Some(ComponentInstanceMetadata("textus-scraper", "first"))
+      )
+      val second = _initialized_component(
+        subsystem,
+        "textus-scraper",
+        ProviderComponent("second"),
+        Some(ComponentInstanceMetadata("textus-scraper", "second"))
+      )
+      val socket = RunnerSocketSet("scrapers")
+      val consumer = _initialized_component(
+        subsystem,
+        "consumer",
+        new Component() {}.withPort(Component.Port.input(socket))
+      )
+      val binding = SpiRuntimeBinding(
+        SpiSocketSelector(Some("consumer"), "ai-runner", name = Some("scrapers"), cardinality = SpiCardinality.Many),
+        SpiProviderSelector(component = Some("textus-scraper"))
+      )
+
+      When("SPI resolution expands the component selector")
+      val result = SpiResolver.resolve(Vector(first, second, consumer), Vector(binding))
+
+      Then("every compatible named instance is installed without default collapsing")
+      result shouldBe a[Consequence.Success[_]]
+      socket.spiMembers.map(_.metadata.instanceId.instance).toSet shouldBe Set("first", "second")
+      socket.resolve(ComponentSelector()) shouldBe a[Consequence.Failure[_]]
+    }
+
+    "exclude unhealthy members and apply declared default selection deterministically" in {
+      Given("a healthy default provider and a higher-priority unhealthy provider")
+      given ExecutionContext = ExecutionContext.create()
+      val subsystem = TestComponentFactory.emptySubsystem("spi_socket_set_health")
+      val healthy = _initialized_component(
+        subsystem,
+        "textus-scraper",
+        ProviderComponent("healthy"),
+        Some(ComponentInstanceMetadata("textus-scraper", "default", priority = 10, isDefault = true))
+      )
+      val unhealthy = _initialized_component(
+        subsystem,
+        "textus-scraper",
+        UnavailableProviderComponent(),
+        Some(ComponentInstanceMetadata("textus-scraper", "unhealthy", priority = 100))
+      )
+      unhealthy.registerHealthContributor(new Component.HealthContributor {
+        def name: String = "provider"
+        def check(component: Component): Component.HealthCheck = Component.HealthCheck(name, "error", Some("offline"))
+      })
+      val socket = RunnerSocketSet("scrapers", required = true)
+      val consumer = _initialized_component(subsystem, "consumer", new Component() {}.withPort(Component.Port.input(socket)))
+      val binding = SpiRuntimeBinding(
+        SpiSocketSelector(Some("consumer"), "ai-runner", name = Some("scrapers"), cardinality = SpiCardinality.OneOrMore),
+        SpiProviderSelector(component = Some("textus-scraper"))
+      )
+
+      When("the socket set resolves its default member")
+      val result = SpiResolver.resolve(Vector(healthy, unhealthy, consumer), Vector(binding))
+
+      Then("the error provider is excluded before service materialization")
+      result shouldBe a[Consequence.Success[_]]
+      socket.spiMembers.map(_.metadata.healthStatus).toSet shouldBe Set("ok")
+      socket.resolve().flatMap(_.generate(AiGenerateRequest("hello"))).toOption.get.text shouldBe "healthy:hello"
+    }
+
+    "respect optional single and required set cardinalities" in {
+      Given("an optional single socket plus empty optional and required socket sets")
+      given ExecutionContext = ExecutionContext.create()
+      val subsystem = TestComponentFactory.emptySubsystem("spi_cardinalities")
+      val optional = OptionalRunnerSocket()
+      val optionalset = RunnerSocketSet("optional-set")
+      val required = RunnerSocketSet("required", required = true)
+      val optionalconsumer = _initialized_component(subsystem, "optional-consumer", new Component() {}.withPort(Component.Port.input(optional)))
+      val optionalsetconsumer = _initialized_component(subsystem, "optional-set-consumer", new Component() {}.withPort(Component.Port.input(optionalset)))
+      val requiredconsumer = _initialized_component(subsystem, "required-consumer", new Component() {}.withPort(Component.Port.input(required)))
+      val optionalbinding = SpiRuntimeBinding(
+        SpiSocketSelector(Some("optional-consumer"), "ai-runner", cardinality = SpiCardinality.Optional),
+        SpiProviderSelector(component = Some("missing-provider"))
+      )
+      val optionalsetbinding = SpiRuntimeBinding(
+        SpiSocketSelector(Some("optional-set-consumer"), "ai-runner", name = Some("optional-set"), cardinality = SpiCardinality.Many),
+        SpiProviderSelector(component = Some("missing-provider"))
+      )
+      val requiredbinding = SpiRuntimeBinding(
+        SpiSocketSelector(Some("required-consumer"), "ai-runner", name = Some("required"), cardinality = SpiCardinality.OneOrMore),
+        SpiProviderSelector(component = Some("missing-provider"))
+      )
+
+      When("SPI resolution evaluates each cardinality")
+      val optionalresult = SpiResolver.resolve(Vector(optionalconsumer), Vector(optionalbinding))
+      val optionalsetresult = SpiResolver.resolve(Vector(optionalsetconsumer), Vector(optionalsetbinding))
+      val requiredresult = SpiResolver.resolve(Vector(requiredconsumer), Vector(requiredbinding))
+
+      Then("optional inputs may remain empty while the required set fails")
+      optionalresult shouldBe a[Consequence.Success[_]]
+      optional.isSpiInstalled shouldBe false
+      optionalsetresult shouldBe a[Consequence.Success[_]]
+      optionalset.spiMembers shouldBe empty
+      requiredresult shouldBe a[Consequence.Failure[_]]
+      requiredresult.asInstanceOf[Consequence.Failure[_]].conclusion.display should include ("required SPI socket set is empty")
+    }
+
+    "apply a typed runtime policy before priority and default selection" in {
+      Given("two resolved members and a policy that rejects the default member")
+      val defaultmember = ResolvedSpiMember[AiRunner](
+        AiRunnerImplementation("default"),
+        SpiMemberMetadata("ai-runner", "textus-scraper", ComponentInstanceId("textus-scraper", "default"), priority = 100, isDefault = true)
+      )
+      val allowedmember = ResolvedSpiMember[AiRunner](
+        AiRunnerImplementation("allowed"),
+        SpiMemberMetadata("ai-runner", "textus-scraper", ComponentInstanceId("textus-scraper", "allowed"), priority = 10)
+      )
+      val othercontract = ResolvedSpiMember[AiRunner](
+        AiRunnerImplementation("other-contract"),
+        SpiMemberMetadata("other-runner", "textus-scraper", ComponentInstanceId("textus-scraper", "other"), priority = 1000)
+      )
+      val policy = new ComponentSelectionPolicy {
+        def accept(member: SpiMemberMetadata, selector: ComponentSelector): Consequence[Boolean] =
+          Consequence.success(member.instanceId.instance != "default")
+      }
+      val resolver = ComponentApiResolver(Vector(defaultmember, allowedmember, othercontract), policy)
+      val socket = RunnerSocketSet("policy", selectionpolicy = policy)
+      socket.installSpiMembers(Vector(defaultmember, allowedmember, othercontract))
+      val subsystem = TestComponentFactory.emptySubsystem("spi_policy_merge")
+      subsystem.withComponentApiResolver(resolver)
+      given ExecutionContext = ExecutionContext.create()
+
+      When("the public component API resolver applies an abstract selector")
+      val result = resolver.resolve(SpiContract("ai-runner", classOf[AiRunner]), ComponentSelector(component = Some("textus-scraper")))
+
+      Then("contract and policy rejection happen before deterministic ranking")
+      result.flatMap(_.generate(AiGenerateRequest("hello"))).toOption.get.text shouldBe "allowed:hello"
+      socket.resolve(ComponentSelector(component = Some("textus-scraper")))
+        .flatMap(_.generate(AiGenerateRequest("socket"))).toOption.get.text shouldBe "allowed:socket"
+      subsystem.componentApiResolver.resolve(
+        SpiContract("ai-runner", classOf[AiRunner]),
+        ComponentSelector(component = Some("textus-scraper"))
+      ).flatMap(_.generate(AiGenerateRequest("subsystem"))).toOption.get.text shouldBe "allowed:subsystem"
+    }
+    }
+
     "resolve provider variations and standard contracts" which {
     "select a provider by mode and engine" in {
       Given("two providers with different selections")
@@ -712,6 +949,24 @@ final class SpiSpec
       Consequence.success(FailingAiRunnerImplementation())
   }
 
+  private final case class UnavailableProviderComponent() extends Component with SpiProviderComponent {
+    def spiProviders: Vector[SpiProvider[?]] = Vector(UnavailableAiRunnerProvider())
+  }
+
+  private final case class UnavailableAiRunnerProvider() extends SpiProvider[AiRunner] {
+    def supports(
+      contract: SpiContract[AiRunner],
+      requested: SpiSelection
+    )(using ExecutionContext): Boolean =
+      contract.name == "ai-runner" && contract.runtimeClass == classOf[AiRunner]
+
+    def provide(
+      contract: SpiContract[AiRunner],
+      requested: SpiSelection
+    )(using ExecutionContext): Consequence[AiRunner] =
+      Consequence.serviceUnavailable("unhealthy provider must not be materialized")
+  }
+
   private final case class AiRunnerImplementation(
     name: String
   ) extends AiRunner {
@@ -753,6 +1008,28 @@ final class SpiSpec
     name: String
   ) extends AiRunnerSocket {
     override def spiSocketName: String = name
+  }
+
+  private final case class OptionalRunnerSocket() extends AiRunnerSocket {
+    override def spiRequired: Boolean = false
+  }
+
+  private final case class RunnerSocketSet(
+    name: String,
+    required: Boolean = false,
+    selectionpolicy: ComponentSelectionPolicy = ComponentSelectionPolicy.allowAll
+  ) extends SpiSocketSet[AiRunner] {
+    private var _members: Vector[ResolvedSpiMember[AiRunner]] = Vector.empty
+
+    def spiContract: SpiContract[AiRunner] =
+      SpiContract("ai-runner", classOf[AiRunner])
+
+    override def spiSocketName: String = name
+    override def spiRequired: Boolean = required
+    override def spiSelectionPolicy: ComponentSelectionPolicy = selectionpolicy
+    def spiMembers: Vector[ResolvedSpiMember[AiRunner]] = _members
+    def installSpiMembers(members: Vector[ResolvedSpiMember[AiRunner]]): Unit =
+      _members = members
   }
 
   private final case class GeoResolverConsumerComponent() extends Component with GeoResolverSocket

@@ -377,8 +377,9 @@ object GenericSubsystemFactory {
       case Consequence.Failure(conclusion) =>
         throw new IllegalStateException(conclusion.display)
     }
-    val components = SpiResolver.resolveOrRaise(_collapse_duplicate_components(builtins ++ components0), spibindings)
-    subsystem.add(components)
+    val resolution = SpiResolver.resolveAssemblyOrRaise(_collapse_duplicate_components(builtins ++ components0), spibindings)
+    subsystem.add(resolution.components)
+    subsystem.withComponentApiResolver(resolution.componentApiResolver)
     subsystem.withDescriptor(descriptor)
   }
 
