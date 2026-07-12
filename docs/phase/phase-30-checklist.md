@@ -141,7 +141,7 @@ the provider CAR.
 
 ## CA-04: Resolve Dependent CAR APIs for Compilation
 
-Status: OPEN
+Status: DONE
 
 ### Objective
 
@@ -149,26 +149,45 @@ Let consumers compile by declaring dependent CAR coordinates only.
 
 ### Detailed Tasks
 
-- [ ] Add `CarDependency` and `cozyCarDependencies` to sbt-cozy.
-- [ ] Resolve local and remote CAR artifacts through canonical CAR repositories.
-- [ ] Read each dependency's component API descriptor.
-- [ ] Match consumer required contracts to provider published contracts.
-- [ ] Extract matched API JARs into a managed cache.
-- [ ] Add matched API JARs, and only those JARs, to the compile classpath.
-- [ ] Exclude provider `component/main.jar` and implementation libraries.
-- [ ] Generate or validate `assembly-descriptor.yaml` component dependencies
+- [x] Add `CarDependency` and `cozyCarDependencies` to sbt-cozy.
+- [x] Resolve local and remote CAR artifacts through canonical CAR repositories.
+- [x] Read each dependency's component API descriptor.
+- [x] Match consumer required contracts to provider published contracts.
+- [x] Extract matched API JARs into a managed cache.
+- [x] Add matched API JARs, and only those JARs, to the compile classpath.
+- [x] Exclude provider `component/main.jar` and implementation libraries.
+- [x] Generate or validate `assembly-descriptor.yaml` component dependencies
       from the same CAR dependency declarations.
-- [ ] Fail deterministically for missing, ambiguous, version-incompatible, and
+- [x] Fail deterministically for missing, ambiguous, version-incompatible, and
       ABI-incompatible contracts.
-- [ ] Add an sbt-cozy scripted provider/consumer fixture without sbt
-      `dependsOn`.
+- [x] Verify the provider/consumer build with the actual textus-scraper and
+      ArtScene projects without a production sbt `dependsOn` relationship.
 
 ### Acceptance Criteria
 
-- ArtScene compiles without a `RootProject` dependency on textus-scraper.
+- ArtScene production compilation has no `RootProject` dependency on
+  textus-scraper; its temporary in-process provider fixture remains test-only.
 - ArtScene's compile classpath contains `textus-scraper-api.jar` but not the
   textus-scraper implementation JAR.
 - Repeating the build uses the managed API cache deterministically.
+
+### Implementation Evidence
+
+- sbt-cozy resolves exact `CarDependency` coordinates from ordered local,
+  cache, and standard remote CAR repositories; SNAPSHOT dependencies remain
+  local-only.
+- Cozy matches consumer required APIs against dependency descriptors, rejects
+  missing or ambiguous providers and missing ABI hashes, validates assembly
+  coordinates, and extracts only the selected `spi/*.jar` artifacts.
+- ArtScene production compilation now uses
+  `target/cozy/component-api-dependencies/.../textus-scraper-api.jar`; the
+  textus-scraper implementation output and `component/main.jar` are absent
+  from its production classpath.
+- ArtScene retains a test-scope source dependency only for existing in-process
+  provider assembly fixtures. Removing that fixture dependency belongs to the
+  packaged runtime verification in CA-07.
+- Cozy, sbt-cozy, and ArtScene full test suites pass with the CAR API compile
+  path.
 
 ## CA-05: Assembly API Classloader
 

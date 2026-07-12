@@ -87,23 +87,23 @@ parser implementations, persistence implementations, or private resources.
 - A (DONE): CA-01 — Open Phase 30 and freeze the packaging contract.
 - B (DONE): CA-02 — Generate provided/required component API metadata.
 - C (DONE): CA-03 — Build and package contract-only API JARs.
-- D (NEXT): CA-04 — Resolve dependent CAR APIs for consumer compilation.
-- E (OPEN): CA-05 — Add assembly-wide shared API classloading.
+- D (DONE): CA-04 — Resolve dependent CAR APIs for consumer compilation.
+- E (NEXT): CA-05 — Add assembly-wide shared API classloading.
 - F (OPEN): CA-06 — Align development-directory and packaged startup.
 - G (OPEN): CA-07 — Verify ArtScene and textus-scraper end to end.
 - H (OPEN): CA-08 — Promote the settled packaging contract and close Phase 30.
 
 Resume hint:
 
-- Start CA-04 in sbt-cozy by resolving component API descriptors and API JARs
-  from declared dependent CAR coordinates into the managed compile classpath.
+- Start CA-05 in CNCF by loading declared component API JARs through one
+  assembly-wide parent classloader before component instantiation.
 
 ## 6. Development Items
 
 - [x] CA-01: Open Phase 30 and freeze the packaging contract.
 - [x] CA-02: Generate provided and required component API metadata from CML.
 - [x] CA-03: Build and package contract-only component API JARs.
-- [ ] CA-04: Resolve `cozyCarDependencies` for consumer compilation and
+- [x] CA-04: Resolve `cozyCarDependencies` for consumer compilation and
       assembly metadata.
 - [ ] CA-05: Load declared API JARs through an assembly API classloader.
 - [ ] CA-06: Make development-directory and packaged-CAR startup equivalent.
