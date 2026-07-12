@@ -108,6 +108,16 @@ Phase 29 closed after verifying that:
   remain explicit post-TC-08 work rather than implicit static-fetch fallback.
 - settled contracts are promoted from the working note to `docs/design`.
 
+### Phase 30 Evidence Correction
+
+TC-08 proved the typed API, socket-set selection, and canonical operation/action
+semantics with the ArtScene development fixture. Its smoke used a flattened
+consumer/provider implementation classpath, so it did not prove a contract-only
+API artifact, isolated component classloaders, CAR-local implementation
+dependencies, or standard-launcher packaged assembly. Phase 30 CA-07 supplied
+that deployment evidence. This correction narrows the TC-08 evidence boundary;
+it does not reopen the Phase 29 API or selection contract.
+
 ## 6. Authoritative Inputs
 
 - `docs/design/typed-component-api-and-multi-instance-spi.md`

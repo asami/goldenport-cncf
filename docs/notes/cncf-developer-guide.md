@@ -501,6 +501,49 @@ ToolchainRunner integrations should use the CNCF-owned SPI contracts under
 those provider surfaces, but consumers should depend on the CNCF SPI request
 and response models rather than generated Textus operation classes.
 
+### Component-Specific API Dependencies
+
+Use a Cozy-generated component API when a consumer needs the public operations
+of one concrete component rather than a provider-neutral CNCF SPI. Declare the
+exact provider CAR in the consumer build:
+
+```scala
+cozyCarDependencies += CarDependency("textus-scraper", "0.1.0-SNAPSHOT")
+```
+
+Declare the required API and multiplicity in CML with `spi-component-api` and
+`spi-multiplicity`. Do not add the provider source project or
+`component/main.jar` to the consumer's production dependencies. sbt-cozy must
+compile the consumer from the provider's contract-only `spi/*-api.jar`.
+
+When developing against a SNAPSHOT provider, publish its CAR to the normal
+local CAR repository first:
+
+```bash
+cd ../textus-scraper
+sbt --batch publishLocal
+```
+
+Then generate, compile, and run the consumer through the standard launcher.
+The expected verification route is `cncf . server` or an equivalent normal
+launcher command with an explicit test descriptor for isolated state. A direct
+Java command with a flattened consumer/provider classpath is not deployment
+evidence.
+
+Treat these startup failures as contract diagnostics rather than adding a
+classpath workaround:
+
+- required component API or declared API JAR missing from the provider CAR;
+- declared CAR coordinate absent from configured repositories;
+- API class content or ABI hash conflict;
+- consumer assembly coordinate inconsistent with `cozyCarDependencies`;
+- runtime ABI type loaded independently by component classloaders.
+
+Component implementation-only Maven dependencies belong in
+`project.yaml` under `packaging.car.dependencies.local`. Use `shared` only when
+several components intentionally require one shared runtime type identity. Do
+not rely on a library being present accidentally on the launcher classpath.
+
 ### Test SPI Selection
 
 When a component CAR already contains a test SPI provider, test execution should

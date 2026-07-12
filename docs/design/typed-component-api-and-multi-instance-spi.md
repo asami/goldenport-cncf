@@ -464,6 +464,53 @@ Assembly and runtime wiring are the same for CNCF standard SPI contracts and
 Cozy-generated component API contracts. The distinction is ownership and
 generation, not invocation semantics.
 
+#### 8.2.1 Contract Artifact Boundary
+
+A provider CAR publishes its generated component contract separately from its
+implementation:
+
+```text
+component/main.jar
+spi/textus-scraper-api.jar
+component-descriptor.json
+component-api-descriptor.json
+```
+
+The API JAR contains the generated API trait, proxy, socket, socket set,
+operation request/response values, and the transitive public datatype and
+powertype closure. It must not contain component factories, `impl` packages,
+parser or persistence implementations, or private resources.
+
+A consumer declares the provider CAR coordinate in `build.sbt`:
+
+```scala
+cozyCarDependencies += CarDependency("textus-scraper", "0.1.0-SNAPSHOT")
+```
+
+sbt-cozy resolves the declared CAR, verifies that its API descriptor satisfies
+the CML requirement, and adds only the contract API JAR to the consumer compile
+classpath. The same declaration is validated against the consumer's assembly
+descriptor so compilation and runtime activation cannot silently use different
+provider coordinates.
+
+For local SNAPSHOT development, publish the provider CAR before generating or
+compiling the consumer:
+
+```bash
+sbt --batch publishLocal
+```
+
+The provider source project and implementation JAR must not be added to the
+consumer's production classpath. A test-only source fixture is allowed when a
+spec deliberately exercises provider implementation behavior, but it does not
+replace the packaged standard-launcher smoke.
+
+At runtime, CNCF preflights all declared API artifacts and creates one assembly
+API classloader before component instantiation. Consumer and provider component
+loaders delegate generated API packages to that assembly parent. Missing API
+artifacts, missing required contracts, conflicting API classes, and ABI hash or
+coordinate conflicts fail before socket installation.
+
 ### 8.3 Consumer-Side Socket Declaration
 
 The socket is semantically the consumer's input port. Mechanically, the socket

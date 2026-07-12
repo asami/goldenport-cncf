@@ -1,6 +1,6 @@
 # Phase 30 — CAR Component API Artifacts
 
-status = active
+status = closed
 
 ## 1. Purpose of This Document
 
@@ -74,8 +74,12 @@ textus-scraper.car
 ├── spi/textus-scraper-api.jar
 ├── component-descriptor.json
 ├── component-api-descriptor.json
-└── assembly-descriptor.yaml
+└── component-dependencies.yaml  # when local/shared Maven dependencies exist
 ```
+
+`assembly-descriptor.yaml` belongs to the consuming application or subsystem
+assembly when that assembly needs an explicit descriptor. It is not a required
+member of every provider CAR.
 
 The component API JAR contains generated API traits, proxies, sockets, socket
 sets, public request and response types, and their public datatype/powertype
@@ -91,12 +95,12 @@ parser implementations, persistence implementations, or private resources.
 - E (DONE): CA-05 — Add assembly-wide shared API classloading.
 - F (DONE): CA-06 — Align development-directory and packaged startup.
 - G (DONE): CA-07 — Verify ArtScene and textus-scraper end to end.
-- H (NEXT): CA-08 — Promote the settled packaging contract and close Phase 30.
+- H (DONE): CA-08 — Promote the settled packaging contract and close Phase 30.
 
-Resume hint:
+Closure guidance:
 
-- Start CA-08 by promoting the verified component API artifact, local
-  dependency, and runtime classloader contracts to authoritative guidance.
+- Phase 30 is closed. Select the next development item explicitly rather than
+  extending the component API artifact scope implicitly.
 
 ## 6. Development Items
 
@@ -108,7 +112,7 @@ Resume hint:
 - [x] CA-05: Load declared API JARs through an assembly API classloader.
 - [x] CA-06: Make development-directory and packaged-CAR startup equivalent.
 - [x] CA-07: Run the ArtScene/textus-scraper standard-launcher smoke.
-- [ ] CA-08: Update authoritative design and developer guidance, then close
+- [x] CA-08: Update authoritative design and developer guidance, then close
       Phase 30.
 
 Detailed task breakdown and progress tracking are recorded in
@@ -128,11 +132,17 @@ Phase 30 closes only after verifying that:
 - consumer and provider observe the same API class identity;
 - source-directory and packaged-CAR startup use the same dependency and
   classloader model;
-- ArtScene no longer uses `RootProject(...).dependsOn(textusScraper)`;
+- ArtScene production compilation and runtime assembly no longer use
+  `RootProject(...).dependsOn(textusScraper)`; any source-project edge is
+  restricted to test fixtures and is not deployment evidence;
 - standard `cncf server` starts ArtScene and installs
   `TextusScraperApi.SocketSet` from the assembly;
 - ArtScene fetch, candidate, Web, and timeline smoke checks pass through the
   canonical textus-scraper operation path.
+
+All completion conditions were verified by CA-07. CA-08 promoted the resulting
+contract to the authoritative design and developer guides and recorded the
+Phase 29 evidence boundary without reopening Phase 29.
 
 ## 8. Authoritative Inputs
 

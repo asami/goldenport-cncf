@@ -320,7 +320,7 @@ Prove the complete contract with the Phase 29 development-driver application.
 
 ## CA-08: Design Promotion and Phase Closure
 
-Status: OPEN
+Status: DONE
 
 ### Objective
 
@@ -329,16 +329,27 @@ and developer documentation.
 
 ### Detailed Tasks
 
-- [ ] Update `docs/design/component-dependency-loading.md`.
-- [ ] Update `docs/design/typed-component-api-and-multi-instance-spi.md`.
-- [ ] Update the CAR/component developer guide.
-- [ ] Document `cozyCarDependencies`, local SNAPSHOT publication, and API
+- [x] Update `docs/design/component-dependency-loading.md`.
+- [x] Update `docs/design/typed-component-api-and-multi-instance-spi.md`.
+- [x] Update the CAR/component developer guide.
+- [x] Document `cozyCarDependencies`, local SNAPSHOT publication, and API
       conflict diagnostics.
-- [ ] Add a factual Phase 29 correction note describing the original
+- [x] Add a factual Phase 29 correction note describing the original
       flattened-classpath smoke boundary.
-- [ ] Complete all Phase 30 validation and close the dashboard.
+- [x] Complete all Phase 30 validation and close the dashboard.
 
 ### Acceptance Criteria
 
 - Published documentation matches executable packaging and startup behavior.
 - Phase 30 closes with ArtScene/textus-scraper standard-launcher evidence.
+
+### Closure Result
+
+- The authoritative classloader design now records the assembly API loader,
+  parent-first runtime ABI, and component-local loader lifetime.
+- The typed component API design and developer guides now record contract-only
+  API JARs, `cozyCarDependencies`, local SNAPSHOT publication, and deterministic
+  missing/conflicting API diagnostics.
+- Phase 29 now distinguishes its development-fixture smoke from the packaged
+  assembly proof completed by Phase 30 CA-07.
+- Phase 30 is closed with no implicit next slice.

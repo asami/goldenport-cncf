@@ -224,9 +224,36 @@ For provider components:
 1. Prefer published standard components from the default component repository.
 2. Put fixed local CARs under `repository.d` when they should be searchable but
    not automatically active.
-3. Use local `.textus.conf` development-directory overrides when a sibling
-   component is being edited at the same time.
+3. Declare typed provider CAR dependencies with `cozyCarDependencies`; publish
+   SNAPSHOT providers locally before compiling the consumer.
 4. Do not embed provider CARs inside the application component CAR.
+
+Example consumer build declaration:
+
+```scala
+cozyCarDependencies += CarDependency("textus-scraper", "0.1.0-SNAPSHOT")
+```
+
+The provider CAR must publish `component-api-descriptor.json` and its declared
+`spi/*-api.jar`. Consumer compilation uses only that API artifact, not the
+provider source project or implementation JAR. Keep any direct source-project
+dependency test-only and verify deployment separately through the standard
+launcher.
+
+For a provider implementation library such as JSoup, declare a CAR-local Maven
+dependency in the provider's `project.yaml`:
+
+```yaml
+packaging:
+  car:
+    dependencies:
+      local:
+        - "org.jsoup:jsoup:1.17.2"
+```
+
+Use `dependencies.shared` only when assembly components deliberately share one
+library type identity. Use CAR `lib/` only for a dependency that cannot be
+published to a Maven-style repository.
 
 Related authority documents:
 
@@ -305,6 +332,9 @@ A new CAR component is ready for normal feature work when:
 - `sbt --batch cozyBuildCAR` produces a CAR;
 - development startup works with `cncf --component-dev-dir . server` or the
   project-local run script;
-- any provider component dependency is repository-resolved, staged in
-  `repository.d`, or declared as a local development override instead of being
-  embedded into the CAR.
+- any typed provider component dependency is declared through
+  `cozyCarDependencies` and repository-resolved instead of being embedded into
+  the CAR;
+- component-only third-party libraries are declared under
+  `packaging.car.dependencies.local` rather than assumed from the launcher
+  classpath.

@@ -652,15 +652,14 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Notes contain execution details and results for each phase.
 
 ## Process Status Pointers
-- Current phase dashboard: `docs/phase/phase-30.md`
-- Current phase checklist: `docs/phase/phase-30-checklist.md`
-- Current development item: `9.29 CAR Component API Artifacts`.
-- Latest closed phase dashboard: `docs/phase/phase-29.md`
-- Latest closed phase checklist: `docs/phase/phase-29-checklist.md`
-- Previous closed phase dashboard: `docs/phase/phase-28.md`
-- Previous closed phase checklist: `docs/phase/phase-28-checklist.md`
-- Current next slice: CA-08, authoritative design/developer documentation and
-  Phase 30 closure.
+- Current phase dashboard: none.
+- Current phase checklist: none.
+- Current development item: none.
+- Latest closed phase dashboard: `docs/phase/phase-30.md`
+- Latest closed phase checklist: `docs/phase/phase-30-checklist.md`
+- Previous closed phase dashboard: `docs/phase/phase-29.md`
+- Previous closed phase checklist: `docs/phase/phase-29-checklist.md`
+- Current next slice: none. Select the next development item explicitly.
 - Status interpretation rules: `docs/rules/stage-status-and-checklist-convention.md`
 - Latest post-closure maintenance: Jul. 12, 2026 CNCF test descriptor and
   test-home hardening. Explicit `test.yaml` / `test.json` descriptors can now
@@ -790,7 +789,7 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Phase 27: closed (`docs/phase/phase-27.md`)
 - Phase 28: closed (`docs/phase/phase-28.md`)
 - Phase 29: closed (`docs/phase/phase-29.md`)
-- Phase 30: active (`docs/phase/phase-30.md`)
+- Phase 30: closed (`docs/phase/phase-30.md`)
 
 ## 8. Completed Development Item History
 
@@ -1277,6 +1276,30 @@ Completed in Phase 29.
 - Deferred scope includes dynamic Playwright selection, provider hot
   replacement, arbitrary application-driven CAR loading, distributed
   transport, and general-purpose dependency injection.
+
+### 8.19 CAR Component API Artifacts
+Completed in Phase 30.
+
+- Closed dashboard: `docs/phase/phase-30.md`
+- Closed checklist: `docs/phase/phase-30-checklist.md`
+- Decided designs:
+  - `docs/design/component-dependency-loading.md`
+  - `docs/design/typed-component-api-and-multi-instance-spi.md`
+- Completed scope:
+  - contract-only component API JARs and generated API descriptors under the
+    CAR `spi/` boundary;
+  - exact consumer compilation through `cozyCarDependencies` without provider
+    implementation JARs on the production compile classpath;
+  - one assembly API classloader identity shared by consumer and provider
+    component classloaders;
+  - equivalent development and packaged dependency resolution;
+  - component-local Maven dependencies and loader lifetime sufficient for
+    delayed implementation loading;
+  - ArtScene/textus-scraper verification through the standard launcher with
+    canonical typed operation dispatch and isolated datastore state.
+- Deferred scope includes distributed component transport, dynamic Playwright
+  scraping, arbitrary application-driven CAR loading, and general component
+  mediation beyond the settled API artifact contract.
 
 ## 9. Development Item Status
 
@@ -2126,32 +2149,3 @@ Future domain logic / runtime / knowledge / automation development item.
   - untrusted rule sandboxing beyond the existing CAR capability sandbox
     direction;
   - using rules as the primary authorization engine.
-
-### 9.29 CAR Component API Artifacts
-Active in Phase 30.
-
-- Dashboard: `docs/phase/phase-30.md`
-- Checklist: `docs/phase/phase-30-checklist.md`
-- Goal: package component-specific typed APIs as contract-only CAR artifacts
-  and use the same artifact identity for consumer compilation and runtime
-  assembly classloading.
-- Scope:
-  - generate provided and required component API descriptors from CML;
-  - compute and validate the transitive public API type closure;
-  - package the closure under the CAR `spi/` contract boundary;
-  - resolve dependent CAR API artifacts through `cozyCarDependencies` without
-    adding provider implementation JARs to consumer compilation;
-  - establish one assembly API classloader identity shared by consumers and
-    providers;
-  - keep source-development and packaged-CAR startup behavior equivalent;
-  - verify the complete contract with ArtScene and textus-scraper through the
-    standard launcher path.
-- Completed slice: CA-07 verifies ArtScene and textus-scraper end to end through
-  the standard launcher, typed operation dispatch, component-local JSoup
-  resolution, inline CallTree, and isolated datastore smoke.
-- Next slice: CA-08 promotes the verified artifact/classloader contract to
-  authoritative design and developer guidance, records the Phase 29 correction,
-  and closes Phase 30.
-- Non-goals: provider implementation libraries as consumer APIs, arbitrary
-  application-driven CAR loading, distributed component transport, dynamic
-  Playwright scraping, and flattened classpaths as deployment evidence.

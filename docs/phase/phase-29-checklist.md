@@ -267,6 +267,14 @@ TC items.
 - [x] Defer dynamic Playwright and multiple named scraper instance selection
       beyond the TC-08 static vertical slice.
 
+### Post-closure Evidence Correction
+
+TC-08's flattened development classpath verified typed invocation and
+selection semantics, but not contract-only API packaging or isolated assembly
+classloading. Phase 30 CA-07 later supplied that proof through the standard
+launcher with packaged ArtScene and textus-scraper dependencies. The correction
+does not change TC-08's DONE status.
+
 ## TC-09: Observability, Failure Semantics, and Regression Coverage
 
 Status: DONE
