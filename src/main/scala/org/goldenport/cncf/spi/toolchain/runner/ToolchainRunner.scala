@@ -1,5 +1,6 @@
 package org.goldenport.cncf.spi.toolchain.runner
 
+import java.net.URI
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.spi.{ComponentSelector, SpiContract, SpiSelection, SpiSocket, SpiTraceMetadata, SpiTraceSupport, StandardSpiSocketSet}
@@ -12,12 +13,14 @@ import org.goldenport.cncf.spi.{ComponentSelector, SpiContract, SpiSelection, Sp
  * generated operation API.
  *
  * @since   Jul.  3, 2026
- * @version Jul. 11, 2026
+ * @version Jul. 12, 2026
  * @author  ASAMI, Tomoharu
  */
 trait ToolchainRunner {
   def convertSvgToPdf(req: ConvertSvgToPdfRequest)(using ExecutionContext): Consequence[ToolchainArtifactResponse]
   def convertSvgPagesToPdf(req: ConvertSvgPagesToPdfRequest)(using ExecutionContext): Consequence[ToolchainArtifactResponse]
+  def renderWebPage(req: RenderWebPageRequest)(using ExecutionContext): Consequence[RenderedWebPageResponse] =
+    Consequence.notImplemented("ToolchainRunner.renderWebPage is not implemented by this provider")
 }
 
 object ToolchainRunner {
@@ -36,6 +39,9 @@ object ToolchainRunner {
 
     def convertSvgPagesToPdf(req: ConvertSvgPagesToPdfRequest)(using ExecutionContext): Consequence[ToolchainArtifactResponse] =
       SpiTraceSupport.trace(base.withOperation("convertSvgPagesToPdf"), _attributes)(underlying.convertSvgPagesToPdf(req))
+
+    override def renderWebPage(req: RenderWebPageRequest)(using ExecutionContext): Consequence[RenderedWebPageResponse] =
+      SpiTraceSupport.trace(base.withOperation("renderWebPage"), _web_page_attributes)(underlying.renderWebPage(req))
   }
 
   private def _attributes(response: ToolchainArtifactResponse): Map[String, String] =
@@ -46,6 +52,21 @@ object ToolchainRunner {
       "warning_count" -> response.warningCount.toString,
       "page_count" -> response.pageCount.toString
     )
+
+  private def _web_page_attributes(response: RenderedWebPageResponse): Map[String, String] =
+    Map(
+      "result_type" -> "rendered_web_page_response",
+      "status" -> response.status.map(_.toString).getOrElse(""),
+      "final_host" -> _host(response.finalUrl).getOrElse(""),
+      "engine" -> response.engine,
+      "browser" -> response.browser
+    ).filter(_._2.nonEmpty)
+
+  private def _host(url: String): Option[String] =
+    try
+      Option(URI.create(url).getHost).filter(_.nonEmpty)
+    catch
+      case _: IllegalArgumentException => None
 }
 
 trait ToolchainRunnerSocket extends SpiSocket[ToolchainRunner] {
@@ -110,5 +131,25 @@ final case class ToolchainArtifactResponse(
   out: Option[String],
   pageCount: Int,
   dockerImage: Option[String],
+  metadata: Map[String, String] = Map.empty
+)
+
+final case class RenderWebPageRequest(
+  url: String,
+  waitUntil: Option[String] = None,
+  waitForSelector: Option[String] = None,
+  timeoutSeconds: Option[Int] = None,
+  metadata: Map[String, String] = Map.empty
+)
+
+final case class RenderedWebPageResponse(
+  requestedUrl: String,
+  finalUrl: String,
+  status: Option[Int],
+  title: Option[String],
+  html: String,
+  renderedAt: String,
+  engine: String,
+  browser: String,
   metadata: Map[String, String] = Map.empty
 )
