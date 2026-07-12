@@ -659,8 +659,8 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Latest closed phase checklist: `docs/phase/phase-29-checklist.md`
 - Previous closed phase dashboard: `docs/phase/phase-28.md`
 - Previous closed phase checklist: `docs/phase/phase-28-checklist.md`
-- Current next slice: CA-07, standard-launcher ArtScene/textus-scraper
-  end-to-end verification.
+- Current next slice: CA-08, authoritative design/developer documentation and
+  Phase 30 closure.
 - Status interpretation rules: `docs/rules/stage-status-and-checklist-convention.md`
 - Latest post-closure maintenance: Jul. 12, 2026 CNCF test descriptor and
   test-home hardening. Explicit `test.yaml` / `test.json` descriptors can now
@@ -2146,10 +2146,12 @@ Active in Phase 30.
   - keep source-development and packaged-CAR startup behavior equivalent;
   - verify the complete contract with ArtScene and textus-scraper through the
     standard launcher path.
-- Completed slice: CA-06 gives development components the packaged assembly API
-  classloader contract and resolves dependency CARs through normal repositories.
-- Next slice: CA-07 verifies ArtScene and textus-scraper end to end through the
-  standard launcher, typed operation dispatch, and isolated datastore smoke.
+- Completed slice: CA-07 verifies ArtScene and textus-scraper end to end through
+  the standard launcher, typed operation dispatch, component-local JSoup
+  resolution, inline CallTree, and isolated datastore smoke.
+- Next slice: CA-08 promotes the verified artifact/classloader contract to
+  authoritative design and developer guidance, records the Phase 29 correction,
+  and closes Phase 30.
 - Non-goals: provider implementation libraries as consumer APIs, arbitrary
   application-driven CAR loading, distributed component transport, dynamic
   Playwright scraping, and flattened classpaths as deployment evidence.

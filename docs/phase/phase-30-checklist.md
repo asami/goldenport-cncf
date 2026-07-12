@@ -276,7 +276,7 @@ and packaged CAR execution.
 
 ## CA-07: ArtScene and textus-scraper Verification
 
-Status: OPEN
+Status: DONE
 
 ### Objective
 
@@ -284,17 +284,33 @@ Prove the complete contract with the Phase 29 development-driver application.
 
 ### Detailed Tasks
 
-- [ ] Publish textus-scraper locally with its API JAR.
-- [ ] Replace ArtScene's source-project dependency with
-      `cozyCarDependencies`.
-- [ ] Generate and compile ArtScene from the resolved scraper API.
-- [ ] Start ArtScene through standard `cncf server`.
-- [ ] Verify assembly installation of `TextusScraperApi.SocketSet`.
-- [ ] Verify typed scraping calls use canonical CNCF operation/action dispatch.
-- [ ] Run fetch, candidate, Web, and timeline smoke checks.
-- [ ] Confirm the user's normal ArtScene datastore is preserved by test
+- [x] Publish textus-scraper locally with its API JAR.
+- [x] Replace ArtScene's production source-project dependency with
+      `cozyCarDependencies`; retain the test-only source fixture for focused
+      parser specs.
+- [x] Generate and compile ArtScene from the resolved scraper API.
+- [x] Start ArtScene through standard `cncf server`.
+- [x] Verify assembly installation of `TextusScraperApi.SocketSet`.
+- [x] Verify typed scraping calls use canonical CNCF operation/action dispatch.
+- [x] Run fetch, candidate, Web, and timeline smoke checks.
+- [x] Confirm the user's normal ArtScene datastore is preserved by test
       configuration.
-- [ ] Run CNCF, Cozy, sbt-cozy, textus-scraper, and ArtScene regression suites.
+- [x] Run CNCF, Cozy, sbt-cozy, textus-scraper, and ArtScene regression suites.
+
+### Verification Result
+
+- `scripts/check-phase30-ca07-component-api-assembly.sh` publishes the scraper
+  SNAPSHOT CAR, starts ArtScene through `cncf . server`, and verifies official
+  fetch, candidates, timeline Web, source identity, status preservation, and
+  isolated datastore behavior.
+- Inline CallTree evidence records `spi:Scraper.Scraping.FetchPage`, the
+  `Scrapers` socket set, the `textus-scraper` provider, canonical operation
+  dispatch, and redacted response bodies.
+- Runtime verification exposed and fixed two flattened-classpath blind spots:
+  Cats/Circe public ABI identity is parent-first, and component-local
+  dependency classloaders remain open for the component runtime lifetime.
+- `textus-scraper` declares JSoup as a CAR-local Maven dependency instead of
+  relying on the launcher's classpath.
 
 ### Acceptance Criteria
 

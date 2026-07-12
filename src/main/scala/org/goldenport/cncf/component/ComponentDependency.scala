@@ -431,6 +431,10 @@ object ComponentLocalFirstClassLoader {
   private val _parent_first_prefixes = Vector(
     "org.goldenport.",
     "org.simplemodeling.model.",
+    // CNCF public ABI exposes Cats typeclasses and Circe JSON values. They must
+    // retain runtime identity across component classloaders.
+    "cats.",
+    "io.circe.",
     "scala.",
     "java.",
     "javax.",

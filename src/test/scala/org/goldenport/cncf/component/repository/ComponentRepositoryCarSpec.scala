@@ -1656,8 +1656,13 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
       }
     }
 
-    "keep generated component packages outside parent-first runtime ABI packages" in {
+    "share runtime ABI packages without sharing generated component implementations" in {
+      Given("runtime ABI types and generated component implementation types")
+
+      Then("runtime ABI types are parent-first while component implementations stay local-first")
       ComponentLocalFirstClassLoader.isParentFirst("org.simplemodeling.model.Entity") shouldBe true
+      ComponentLocalFirstClassLoader.isParentFirst("cats.Monad") shouldBe true
+      ComponentLocalFirstClassLoader.isParentFirst("io.circe.Json") shouldBe true
       ComponentLocalFirstClassLoader.isParentFirst("org.simplemodeling.textus.useraccount.ComponentFactory") shouldBe false
     }
 

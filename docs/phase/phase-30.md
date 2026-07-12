@@ -90,13 +90,13 @@ parser implementations, persistence implementations, or private resources.
 - D (DONE): CA-04 — Resolve dependent CAR APIs for consumer compilation.
 - E (DONE): CA-05 — Add assembly-wide shared API classloading.
 - F (DONE): CA-06 — Align development-directory and packaged startup.
-- G (NEXT): CA-07 — Verify ArtScene and textus-scraper end to end.
-- H (OPEN): CA-08 — Promote the settled packaging contract and close Phase 30.
+- G (DONE): CA-07 — Verify ArtScene and textus-scraper end to end.
+- H (NEXT): CA-08 — Promote the settled packaging contract and close Phase 30.
 
 Resume hint:
 
-- Start CA-07 with the standard ArtScene launcher path and verify typed scraper
-  operation dispatch, fetch/timeline behavior, and datastore isolation.
+- Start CA-08 by promoting the verified component API artifact, local
+  dependency, and runtime classloader contracts to authoritative guidance.
 
 ## 6. Development Items
 
@@ -107,7 +107,7 @@ Resume hint:
       assembly metadata.
 - [x] CA-05: Load declared API JARs through an assembly API classloader.
 - [x] CA-06: Make development-directory and packaged-CAR startup equivalent.
-- [ ] CA-07: Run the ArtScene/textus-scraper standard-launcher smoke.
+- [x] CA-07: Run the ArtScene/textus-scraper standard-launcher smoke.
 - [ ] CA-08: Update authoritative design and developer guidance, then close
       Phase 30.
 

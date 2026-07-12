@@ -1645,46 +1645,48 @@ object ComponentRepository extends GlobalObservable {
     )
     val componentparams =
       params.withComponentDescriptors(_component_descriptors_for_artifact(params, extracted.descriptor))
-    Using.resource(dependencies.componentClassLoader(
+    // Component classes can load declared local dependencies after factory
+    // discovery. The live component classes retain this loader for their
+    // runtime lifetime, so closing it here would break deferred class loading.
+    val componentLoader = dependencies.componentClassLoader(
       Vector(extracted.componentMain),
       extracted.componentLibs,
       params.assemblyApiClassLoader.getOrElse(getClass.getClassLoader)
-    )) { componentLoader =>
-      val components0 =
-        _discover_component_from_artifact_with_loader(
-          artifactname = artifactpath.getFileName.toString,
-          loader = componentLoader,
-          // Scan only the component's main archive. Dependency jars may contain
-          // demo or builtin components that must not be treated as packaged
-          // component definitions for this CAR.
-          scanclasspath = Vector(extracted.componentMain),
-          params = componentparams,
-          origin = baseorigin,
-          log = log
-        ).toVector
-      val components = components0.map(_.withArtifactMetadata(artifactmetadata))
-      val collaboratorcomponents = components.collect {
-        case comp: CollaboratorComponent => comp
-      }
-      if (collaboratorcomponents.isEmpty) {
-        Consequence.success(components)
-      } else {
-        extracted.collaboratorClasspath match {
-          case Some(paths) if paths.nonEmpty =>
-            Using.resource(CollaboratorClassLoader(paths)) { collaboratorLoader =>
-              CollaboratorFactory.create(collaboratorLoader, paths) match {
-                case Consequence.Success(collaborator) =>
-                  collaboratorcomponents.foreach(_.setCollaborator(collaborator))
-                  Consequence.success(components)
-                case Consequence.Failure(conclusion) =>
-                  log.warn(s"[component-dir] artifact=${artifactpath.getFileName} collaborator init failed cause=${conclusion.show}")
-                  Consequence.success(Vector.empty)
-              }
+    )
+    val components0 =
+      _discover_component_from_artifact_with_loader(
+        artifactname = artifactpath.getFileName.toString,
+        loader = componentLoader,
+        // Scan only the component's main archive. Dependency jars may contain
+        // demo or builtin components that must not be treated as packaged
+        // component definitions for this CAR.
+        scanclasspath = Vector(extracted.componentMain),
+        params = componentparams,
+        origin = baseorigin,
+        log = log
+      ).toVector
+    val components = components0.map(_.withArtifactMetadata(artifactmetadata))
+    val collaboratorcomponents = components.collect {
+      case comp: CollaboratorComponent => comp
+    }
+    if (collaboratorcomponents.isEmpty) {
+      Consequence.success(components)
+    } else {
+      extracted.collaboratorClasspath match {
+        case Some(paths) if paths.nonEmpty =>
+          Using.resource(CollaboratorClassLoader(paths)) { collaboratorLoader =>
+            CollaboratorFactory.create(collaboratorLoader, paths) match {
+              case Consequence.Success(collaborator) =>
+                collaboratorcomponents.foreach(_.setCollaborator(collaborator))
+                Consequence.success(components)
+              case Consequence.Failure(conclusion) =>
+                log.warn(s"[component-dir] artifact=${artifactpath.getFileName} collaborator init failed cause=${conclusion.show}")
+                Consequence.success(Vector.empty)
             }
-          case _ =>
-            log.warn(s"[component-dir] artifact=${artifactpath.getFileName} collaborator classpath missing")
-            Consequence.success(Vector.empty)
-        }
+          }
+        case _ =>
+          log.warn(s"[component-dir] artifact=${artifactpath.getFileName} collaborator classpath missing")
+          Consequence.success(Vector.empty)
       }
     }
   }
