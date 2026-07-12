@@ -501,6 +501,20 @@ ToolchainRunner integrations should use the CNCF-owned SPI contracts under
 those provider surfaces, but consumers should depend on the CNCF SPI request
 and response models rather than generated Textus operation classes.
 
+Browser-backed scraping follows both boundaries deliberately. Application
+components call the generated `TextusScraperApi.RenderPage` operation because
+Textus Scraper owns HTML normalization. Textus Scraper then calls the
+provider-neutral `ToolchainRunner.renderWebPage` SPI because ToolchainRunner
+owns browser/process execution. Do not invoke Playwright, Node.js, Docker, or a
+browser process directly from application or scraper component logic.
+
+The browser SPI call must carry the current `ExecutionContext`. CallTree may
+record requested/final host, status, engine, browser, provider component, and
+tool execution, but must not record rendered HTML, cookies, credentials,
+request headers, or raw browser payloads. Static HTTP operations must not gain
+an implicit browser fallback; deployments select browser-backed operations or
+drivers explicitly.
+
 ### Component-Specific API Dependencies
 
 Use a Cozy-generated component API when a consumer needs the public operations

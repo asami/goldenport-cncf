@@ -11,9 +11,10 @@ typed API while preserving the CNCF operation boundary. It also defines the
 model for using multiple configured instances of the same component.
 
 The motivating example is an application component using several configured
-instances of one reusable component type. The Phase 29 development driver uses
-ArtScene and the static `textus-scraper` component to verify the public typed
-boundary. Dynamic Playwright integration remains deferred.
+instances of one reusable component type. The Phase 29 development driver used
+ArtScene and static `textus-scraper` operations to verify the public typed
+boundary. Textus Scraper Phase 2 subsequently verified explicit browser-backed
+`RenderPage` execution through the same typed API and the ToolchainRunner SPI.
 
 ## 1.1 Authority
 
@@ -656,12 +657,13 @@ Conceptually:
 textus-scraper contract
   - TextusScraperApi
   - FetchPageRequest / FetchPageResult
+  - RenderPageRequest / RenderPageResult
   - NavigateSiteRequest / NavigateSiteResult
   - ExtractEventsRequest / ExtractEventsResult
 
 textus-scraper CAR implementation
   - component factory and operation logic
-  - JSoup and Playwright adapters
+  - JSoup normalization and ToolchainRunner SPI delegation
   - config and rule implementation
 ```
 
@@ -871,12 +873,22 @@ Phase 29 closure verified:
 - response confidentiality redaction for raw scraper HTML in nested Action
   CallTree output.
 
+Textus Scraper Phase 2 additionally verified:
+
+- packaged `TextusScraperApi.RenderPage` execution through a repository-resolved
+  Scraper CAR;
+- ToolchainRunner SPI injection into Textus Scraper and packaged
+  Playwright/Chromium execution;
+- JavaScript-generated DOM normalization with rendered HTML redacted from
+  CallTree;
+- explicit ArtScene browser-transport selection without changing static
+  official drivers.
+
 ## 16. Deferred Work
 
 The following work is outside Phase 29:
 
-- dynamic Playwright scraper integration and application-level selection among
-  multiple named scraper instances;
+- application-level selection among multiple named scraper instances;
 - provider hot replacement without component restart;
 - arbitrary remote CAR loading initiated by application code;
 - distributed component transport implementation;
