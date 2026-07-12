@@ -15,12 +15,12 @@ This directory does **not** contain design details or thinking processes.
 
 Current baseline:
 
-- Active phase: none selected after Phase 28 closure.
+- Active phase: none selected after Phase 30 closure.
 - Active checklist: none.
-- Latest closed phase: `phase-28.md`
-- Latest closed checklist: `phase-28-checklist.md`
-- Latest post-closure maintenance: Jul. 8, 2026 CAR runtime intake and plain
-  factory SPI wiring hardening under closed Phase 28.
+- Latest closed phase: `phase-30.md`
+- Latest closed checklist: `phase-30-checklist.md`
+- Latest post-closure maintenance: Jul. 13, 2026 CNCF I18N
+  `display-safe-v1` text normalization API and executable specification.
 - Closed phase set currently includes:
   - `phase-4.md`
   - `phase-5.md`
@@ -46,6 +46,8 @@ Current baseline:
   - `phase-26.md`
   - `phase-27.md`
   - `phase-28.md`
+  - `phase-29.md`
+  - `phase-30.md`
 
 ## Related Rules
 
