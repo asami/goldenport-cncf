@@ -665,6 +665,8 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
   The public `display-safe-v1` profile now provides NFC, spacing, invisible
   formatting, and Japanese display-width canonicalization with
   `ExecutionContext` locale defaults and optional transformation provenance.
+  The API is available on the `0.5.1-SNAPSHOT` development line; stable
+  `0.5.0` remains the recommended released runtime and does not claim this API.
 - Previous post-closure maintenance: Jul. 12, 2026 provider-neutral browser
   rendering controls. `ToolchainRunner.renderWebPage` preserves the existing
   positional metadata contract and adds optional User-Agent plus an explicit

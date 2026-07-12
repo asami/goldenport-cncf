@@ -20,7 +20,8 @@ Current baseline:
 - Latest closed phase: `phase-30.md`
 - Latest closed checklist: `phase-30-checklist.md`
 - Latest post-closure maintenance: Jul. 13, 2026 CNCF I18N
-  `display-safe-v1` text normalization API and executable specification.
+  `display-safe-v1` text normalization API and executable specification on the
+  `0.5.1-SNAPSHOT` development line.
 - Closed phase set currently includes:
   - `phase-4.md`
   - `phase-5.md`
