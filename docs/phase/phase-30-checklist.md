@@ -94,7 +94,7 @@ component-specific typed API.
 
 ## CA-03: Build and Package Component API JARs
 
-Status: OPEN
+Status: DONE
 
 ### Objective
 
@@ -103,17 +103,17 @@ the provider CAR.
 
 ### Detailed Tasks
 
-- [ ] Add `cozyComponentApiJar` to sbt-cozy.
-- [ ] Package only class files listed by generated API closure metadata.
-- [ ] Include Scala companion, nested, and TASTy files required by the public
+- [x] Add `cozyComponentApiJar` to sbt-cozy.
+- [x] Package only class files listed by generated API closure metadata.
+- [x] Include Scala companion, nested, and TASTy files required by the public
       API.
-- [ ] Feed generated API JARs into the existing `cozySpiJars` packaging path.
-- [ ] Add API descriptor and ABI hash to the CAR.
-- [ ] Run API JAR generation automatically from `cozyBuildCar` and
+- [x] Feed generated API JARs into the existing `cozySpiJars` packaging path.
+- [x] Add API descriptor and ABI hash to the CAR.
+- [x] Run API JAR generation automatically from `cozyBuildCar` and
       `cozyPublishLocalCar`.
-- [ ] Keep main-JAR compatibility while ensuring shared parent-first loading
-      selects the API JAR class identity.
-- [ ] Add archive-content and forbidden-class executable specifications.
+- [x] Keep main-JAR compatibility while reserving the generated API JAR for
+      the shared parent-first classloading work in CA-05.
+- [x] Add archive-content and forbidden-class executable specifications.
 
 ### Acceptance Criteria
 
@@ -121,6 +121,23 @@ the provider CAR.
 - The API JAR contains `TextusScraperApi`, `Socket`, `SocketSet`, public request
   and response types, and required public datatypes.
 - The API JAR contains no `ComponentFactory` or `impl` class.
+
+### Implementation Evidence
+
+- Cozy parses `component-api-descriptor.json` structurally and packages only
+  descriptor-selected artifacts from the compiled component JAR.
+- Public class, companion, nested runtime helper, and TASTy artifacts are
+  included; implementation, persistence, repository, and ComponentFactory
+  artifacts are rejected at the packaging boundary.
+- sbt-cozy exposes `cozyComponentApiJar` and automatically merges its output
+  into the existing `cozySpiJars` CAR path.
+- Provider and consumer CARs both embed the generated component API descriptor;
+  consumer-only descriptors do not leave stale API JARs.
+- The textus-scraper driver CAR contains
+  `spi/textus-scraper-api.jar` and the generated descriptor, while the nested
+  API JAR contains no implementation or ComponentFactory classes.
+- The ArtScene consumer CAR contains its required API descriptor and no
+  component-owned API JAR.
 
 ## CA-04: Resolve Dependent CAR APIs for Compilation
 

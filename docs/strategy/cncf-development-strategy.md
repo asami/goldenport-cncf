@@ -659,8 +659,8 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Latest closed phase checklist: `docs/phase/phase-29-checklist.md`
 - Previous closed phase dashboard: `docs/phase/phase-28.md`
 - Previous closed phase checklist: `docs/phase/phase-28-checklist.md`
-- Current next slice: CA-03, contract-only component API JAR generation and
-  packaging under the CAR `spi/` boundary.
+- Current next slice: CA-04, dependent CAR API resolution for the consumer
+  managed compile classpath.
 - Status interpretation rules: `docs/rules/stage-status-and-checklist-convention.md`
 - Latest post-closure maintenance: Jul. 12, 2026 CNCF test descriptor and
   test-home hardening. Explicit `test.yaml` / `test.json` descriptors can now
@@ -2146,11 +2146,11 @@ Active in Phase 30.
   - keep source-development and packaged-CAR startup behavior equivalent;
   - verify the complete contract with ArtScene and textus-scraper through the
     standard launcher path.
-- Completed slice: CA-02 generates deterministic provided/required API metadata
-  and rejects public contracts that expose implementation or private
-  persistence types.
-- Next slice: CA-03 packages only the descriptor-selected API classes as a
-  contract-only JAR under the existing CAR `spi/` boundary.
+- Completed slice: CA-03 packages only descriptor-selected API classes,
+  companions, nested helpers, and TASTy metadata as a contract-only JAR under
+  the existing CAR `spi/` boundary.
+- Next slice: CA-04 resolves API descriptors and contract JARs from declared
+  dependent CARs without adding provider implementation JARs to compilation.
 - Non-goals: provider implementation libraries as consumer APIs, arbitrary
   application-driven CAR loading, distributed component transport, dynamic
   Playwright scraping, and flattened classpaths as deployment evidence.
