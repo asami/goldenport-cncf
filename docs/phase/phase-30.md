@@ -144,6 +144,24 @@ All completion conditions were verified by CA-07. CA-08 promoted the resulting
 contract to the authoritative design and developer guides and recorded the
 Phase 29 evidence boundary without reopening Phase 29.
 
+## 9. Post-Closure Maintenance
+
+On Jul. 12, 2026, the existing CNCF `ToolchainRunner.renderWebPage` standard
+SPI gained optional User-Agent and browser-profile controls. The change keeps
+the pre-existing positional `metadata` argument stable and leaves ordinary
+User-Agent handling literal. Reviewed site compatibility is an explicit opt-in
+implemented by the provider, not hidden application-side Docker behavior.
+
+ArtScene's Yamanashi driver verifies the result through the Phase 30 component
+API artifact and assembly route:
+
+```text
+ArtScene -> TextusScraperApi.RenderPage -> ToolchainRunner SPI -> provider
+```
+
+This maintenance does not reopen Phase 30 or make dynamic scraping part of the
+component API packaging scope.
+
 ## 8. Authoritative Inputs
 
 - `docs/design/typed-component-api-and-multi-instance-spi.md`

@@ -353,3 +353,15 @@ and developer documentation.
 - Phase 29 now distinguishes its development-fixture smoke from the packaged
   assembly proof completed by Phase 30 CA-07.
 - Phase 30 is closed with no implicit next slice.
+
+## Post-Closure Maintenance: Browser Rendering Controls
+
+Status: DONE
+
+- [x] Preserve the positional `RenderWebPageRequest.metadata` argument.
+- [x] Add optional provider-neutral User-Agent and browser-profile controls.
+- [x] Keep ordinary User-Agent handling literal.
+- [x] Require explicit reviewed-site compatibility before provider browser
+      identity adjustments are enabled.
+- [x] Verify the ArtScene Yamanashi route through Textus Scraper and the
+      ToolchainRunner SPI without direct Docker use in ArtScene.

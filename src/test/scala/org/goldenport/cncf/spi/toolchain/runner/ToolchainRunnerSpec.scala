@@ -57,6 +57,25 @@ final class ToolchainRunnerSpec extends AnyWordSpec with Matchers with GivenWhen
       result shouldBe a[Consequence.Failure[_]]
       result.asInstanceOf[Consequence.Failure[_]].conclusion.display should include("not-implemented")
     }
+
+    "preserve the positional metadata argument while adding browser controls" in {
+      Given("a legacy source call that passes metadata as the fifth argument")
+      val metadata = Map("trace" -> "legacy-positional")
+
+      When("the request is constructed through the compatible public signature")
+      val request = RenderWebPageRequest(
+        "https://museum.example/",
+        Some("load"),
+        None,
+        Some(30),
+        metadata
+      )
+
+      Then("metadata keeps its original position and new controls retain defaults")
+      request.metadata shouldBe metadata
+      request.userAgent shouldBe None
+      request.browserProfile shouldBe None
+    }
   }
 
   private final case class BrowserRenderer(html: String) extends ToolchainRunner {

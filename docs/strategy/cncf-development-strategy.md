@@ -661,7 +661,13 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Previous closed phase checklist: `docs/phase/phase-29-checklist.md`
 - Current next slice: none. Select the next development item explicitly.
 - Status interpretation rules: `docs/rules/stage-status-and-checklist-convention.md`
-- Latest post-closure maintenance: Jul. 12, 2026 CNCF test descriptor and
+- Latest post-closure maintenance: Jul. 12, 2026 provider-neutral browser
+  rendering controls. `ToolchainRunner.renderWebPage` preserves the existing
+  positional metadata contract and adds optional User-Agent plus an explicit
+  browser profile. Literal User-Agent use remains standard behavior; reviewed
+  site compatibility is opt-in and validated by Textus Toolchain Runner and
+  ArtScene's Yamanashi driver through the normal Scraper component route.
+- Previous post-closure maintenance: Jul. 12, 2026 CNCF test descriptor and
   test-home hardening. Explicit `test.yaml` / `test.json` descriptors can now
   replace runtime and component datastores through logical `type: local` +
   `path` shorthand, and `cncf test --home` / `--temporary-home` provides
@@ -739,7 +745,7 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
   properties-style files, preserving the selected JCL format on JobDefinition
   records so later compensation/profile handling can parse the original source
   correctly.
-- Previous post-closure maintenance: Jun. 29, 2026 CAR development and CLI install
+- Earlier post-closure maintenance: Jun. 29, 2026 CAR development and CLI install
   alignment. CNCF keeps command execution on canonical
   `component.service.operation` selectors, `cncf-launcher` and
   `textus-launcher` own target-first convenience syntax and generated command

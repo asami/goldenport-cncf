@@ -1,3 +1,8 @@
+/*
+ * @since   Jul.  3, 2026
+ * @version Jul. 12, 2026
+ * @author  ASAMI, Tomoharu
+ */
 package org.goldenport.cncf.spi.toolchain.runner
 
 import java.net.URI
@@ -139,7 +144,9 @@ final case class RenderWebPageRequest(
   waitUntil: Option[String] = None,
   waitForSelector: Option[String] = None,
   timeoutSeconds: Option[Int] = None,
-  metadata: Map[String, String] = Map.empty
+  metadata: Map[String, String] = Map.empty,
+  userAgent: Option[String] = None,
+  browserProfile: Option[String] = None
 )
 
 final case class RenderedWebPageResponse(
