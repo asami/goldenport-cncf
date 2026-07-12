@@ -1,8 +1,9 @@
 package org.goldenport.cncf.cli
 
-import java.nio.file.Files
+import java.nio.file.{Files, Paths}
 import java.util.zip.{ZipEntry, ZipOutputStream}
 import org.goldenport.cncf.config.{RuntimeConfig, RuntimeTestDescriptor}
+import org.goldenport.cncf.component.repository.ComponentRepository
 import org.goldenport.cncf.subsystem.{GenericSubsystemDescriptor, GenericSubsystemFactory}
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
@@ -16,6 +17,22 @@ import org.scalatest.wordspec.AnyWordSpec
  */
 final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   "CncfRuntime" should {
+    "select search repositories only as development assembly API sources" in {
+      Given("one active component development target and one dependency search repository")
+      val dev = ComponentRepository.ComponentDevDirRepository.Specification(Paths.get("/tmp/app"))
+      val dependency = ComponentRepository.ComponentDirRepository.Specification(Paths.get("/tmp/repository"))
+
+      When("development assembly specifications are selected")
+      val development = CncfRuntime.developmentAssemblySearchSpecifications(Vector(dev), Vector(dependency))
+      val packaged = CncfRuntime.developmentAssemblySearchSpecifications(Vector(dependency), Vector(dev))
+
+      Then("the development target selects only the dependency repository for API preflight")
+      development shouldBe Vector(dependency)
+
+      And("a packaged target keeps search repositories non-active")
+      packaged shouldBe empty
+    }
+
     "resolve an explicit YAML config file passed as a Textus CLI framework option" in {
       Given("an explicit YAML configuration file")
       val cwd = Files.createTempDirectory("textus-runtime-config")

@@ -71,17 +71,30 @@ object ComponentRepository extends GlobalObservable {
   def discoverAssembly(
     repositories: Vector[ComponentRepository],
     runtimeParent: ClassLoader = getClass.getClassLoader
+  ): Vector[Component] =
+    _discover_assembly(repositories, repositories, runtimeParent)
+
+  def discoverAssembly(
+    assemblyRepositories: Vector[ComponentRepository],
+    discoveryRepositories: Vector[ComponentRepository]
+  ): Vector[Component] =
+    _discover_assembly(assemblyRepositories, discoveryRepositories, getClass.getClassLoader)
+
+  private def _discover_assembly(
+    assemblyrepositories: Vector[ComponentRepository],
+    discoveryrepositories: Vector[ComponentRepository],
+    runtimeparent: ClassLoader
   ): Vector[Component] = {
-    val metadataC = repositories.foldLeft(Consequence.success(AssemblyApiMetadata())) { (z, repository) =>
+    val metadatac = assemblyrepositories.foldLeft(Consequence.success(AssemblyApiMetadata())) { (z, repository) =>
       for {
         acc <- z
         metadata <- repository.prepareAssemblyApi()
       } yield acc ++ metadata
     }
-    val metadata = _required(metadataC)
-    val loader = _required(AssemblyApiClassLoader.create(runtimeParent, metadata))
-    repositories.foreach(_.installAssemblyApiClassLoader(loader))
-    repositories.flatMap(_.discover())
+    val metadata = _required(metadatac)
+    val loader = _required(AssemblyApiClassLoader.create(runtimeparent, metadata))
+    assemblyrepositories.foreach(_.installAssemblyApiClassLoader(loader))
+    discoveryrepositories.flatMap(_.discover())
   }
 
   private def _required[A](result: Consequence[A]): A =
@@ -332,8 +345,9 @@ object ComponentRepository extends GlobalObservable {
     releaseonly: Boolean = false
   ) extends ComponentRepository {
     override private[repository] def prepareAssemblyApi(): Consequence[AssemblyApiMetadata] = {
+      val hasrequests = _requested_components(params).nonEmpty
       val requested = _requested_component_artifacts(baseDir, params, releaseonly)
-      val artifacts = if (requested.nonEmpty) requested else _list_artifacts(baseDir)
+      val artifacts = if (hasrequests) requested else _list_artifacts(baseDir)
       _load_assembly_api_artifacts(artifacts)
     }
 
@@ -344,9 +358,10 @@ object ComponentRepository extends GlobalObservable {
         val effectiveparams = with_assembly_api_class_loader(params)
         val log = PersistentBootstrapLog.forClass(classOf[ComponentDirRepository], ObservabilityScopeDefaults.Bootstrap)
         val origin = ComponentOrigin.Repository("component-dir")
+        val hasrequests = _requested_components(effectiveparams).nonEmpty
         val artifacts = _requested_component_artifacts(baseDir, effectiveparams, releaseonly)
         val components =
-          if (artifacts.nonEmpty)
+          if (hasrequests)
             artifacts.flatMap(_discover_artifact(_, effectiveparams, origin, log))
           else
             _discover_from_artifacts(basedir = baseDir, params = effectiveparams, origin = origin, log = log, releaseonly = releaseonly)
@@ -448,6 +463,9 @@ object ComponentRepository extends GlobalObservable {
     params: ComponentCreate,
     packagePrefixes: Seq[String]
   ) extends ComponentRepository {
+    override private[repository] def prepareAssemblyApi(): Consequence[AssemblyApiMetadata] =
+      AssemblyApiClassLoader.loadDirectory(ComponentDevDirRepository.devComponentApiDirectory(baseDir))
+
     def discover(): Seq[Component] = {
       val log = PersistentBootstrapLog.forClass(classOf[ComponentDevDirRepository], ObservabilityScopeDefaults.Bootstrap)
       ComponentDevDirRepository.validate(baseDir) match {
@@ -462,10 +480,14 @@ object ComponentRepository extends GlobalObservable {
         if (classdirs.isEmpty) {
           throw new IllegalStateException(ComponentDevDirRepository.noClassDirectoryMessage(baseDir))
         } else {
-          val loader = _class_loader_from_paths(classpath, getClass.getClassLoader)
+          val effectiveparams = with_assembly_api_class_loader(params)
+          val loader = ComponentLocalFirstClassLoader(
+            classpath,
+            effectiveparams.assemblyApiClassLoader.getOrElse(getClass.getClassLoader)
+          )
           _discover_components(
             loader,
-            params,
+            effectiveparams,
             classdirs,
             packagePrefixes,
             ComponentOrigin.Repository("component-dev-dir"),
@@ -540,6 +562,9 @@ object ComponentRepository extends GlobalObservable {
 
     def runtimeClasspathFile(base: Path): Path =
       base.resolve("target").resolve("cncf.d").resolve("runtime-classpath.txt")
+
+    def devComponentApiDirectory(base: Path): Path =
+      base.resolve("target").resolve("cozy")
 
     def inferComponentDescriptors(base: Path): Vector[ComponentDescriptor] = {
       val log = PersistentBootstrapLog.forClass(classOf[ComponentDevDirRepository], ObservabilityScopeDefaults.Bootstrap)
@@ -849,6 +874,12 @@ object ComponentRepository extends GlobalObservable {
         descriptors
     }
 
+  private[cncf] def unresolvedDescriptorsForSearch(
+    previousspecs: Seq[Specification],
+    descriptors: Vector[ComponentDescriptor]
+  ): Vector[ComponentDescriptor] =
+    descriptors.filterNot(_is_descriptor_satisfied_by_specs(_, previousspecs))
+
   private def _is_descriptor_satisfied_by_specs(
     descriptor: ComponentDescriptor,
     specs: Seq[Specification]
@@ -1141,11 +1172,28 @@ object ComponentRepository extends GlobalObservable {
         case ArtifactKind.Car | ArtifactKind.CarDir =>
           filename == s"${componentName}.car" ||
           filename == s"${componentName}.zip" ||
-          filename.startsWith(prefix)
+          filename.startsWith(prefix) ||
+          _artifact_matches_component_descriptor(artifact, componentName, version)
         case _ =>
           false
       }
     }
+  }
+
+  private def _artifact_matches_component_descriptor(
+    artifact: Artifact,
+    componentname: String,
+    version: Option[String]
+  ): Boolean = {
+    val descriptor = artifact.kind match {
+      case ArtifactKind.Car =>
+        ComponentDescriptorLoader.loadArchive(artifact.path).toOption
+      case ArtifactKind.CarDir =>
+        ComponentDescriptorLoader.load(artifact.path).toOption.flatMap(_.headOption)
+      case _ =>
+        None
+    }
+    descriptor.exists(_matches_component_descriptor(_, componentname, version))
   }
 
   private def _resolve_standard_component_descriptor(

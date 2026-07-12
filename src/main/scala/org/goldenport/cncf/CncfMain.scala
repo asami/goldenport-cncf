@@ -13,7 +13,7 @@ import org.goldenport.cncf.observability.global.GlobalObservable
  *  version Mar. 26, 2026
  *  version Apr. 10, 2026
  *  version Jun. 29, 2026
- * @version Jul.  1, 2026
+ * @version Jul. 12, 2026
  * @author  ASAMI, Tomoharu
  */
 object CncfMain extends GlobalObservable {
@@ -42,7 +42,8 @@ object CncfMain extends GlobalObservable {
             Console.err.println(message)
             2
           case (Right(activeSpecs), Right(searchSpecs)) =>
-            val extras = CncfRuntime.componentExtraFunction(activeSpecs, bootstrap.front)
+            val assemblysearchspecs = CncfRuntime.developmentAssemblySearchSpecifications(activeSpecs, searchSpecs)
+            val extras = CncfRuntime.componentExtraFunction(activeSpecs, bootstrap.front, assemblysearchspecs)
             val invocation = CncfRuntime.resolveSubsystemInvocation(bootstrap.invocation, searchSpecs, activeSpecs)
             CncfRuntime.runWithExtraComponents(invocation.actualArgs, extras)
         }

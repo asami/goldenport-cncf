@@ -742,6 +742,85 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
       }
     }
 
+    "not discover unrelated CARs when an explicitly requested component is absent" in {
+      Given("a component repository containing an unrelated CAR and an explicit missing component request")
+      val subsystem = TestComponentFactory.emptySubsystem("explicit-component-selection")
+      val origin = ComponentOrigin.Repository("component-dir")
+      _with_temp_dir { componentdir =>
+        val carpath = componentdir.resolve("unrelated-component.car")
+        val componentjar = _create_fake_component_jar(componentdir.resolve("assets").resolve("unrelated-main.jar"))
+        val descriptor = componentdir.resolve("component-descriptor-unrelated.json")
+        Files.writeString(
+          descriptor,
+          """{"name":"unrelated-component","version":"0.1.0","component":"unrelated-component"}"""
+        )
+        _create_car(
+          carpath,
+          Seq(
+            "component/main.jar" -> componentjar,
+            "component-descriptor.json" -> descriptor
+          )
+        )
+        val requested = ComponentDescriptor(
+          name = Some("missing-component"),
+          version = Some("0.1.0"),
+          componentName = Some("missing-component")
+        )
+        val params = ComponentCreate(subsystem, origin, Vector(requested))
+        val repository = new ComponentRepository.ComponentDirRepository(
+          componentdir,
+          params,
+          ComponentRepository.resolvePackagePrefixes()
+        )
+
+        When("the repository resolves the explicit request")
+        val components = repository.discover()
+
+        Then("it does not fall back to scanning every CAR")
+        components shouldBe empty
+      }
+    }
+
+    "use search repositories for assembly API preflight without discovering their components" in {
+      Given("one active CAR repository and one API-only search CAR repository")
+      val subsystem = TestComponentFactory.emptySubsystem("assembly-api-search")
+      val origin = ComponentOrigin.Repository("component-dir")
+      _with_temp_dir { root =>
+        def _create_repository_(dirname: String, componentname: String): ComponentRepository = {
+          val componentdir = Files.createDirectories(root.resolve(dirname))
+          val componentjar = _create_fake_component_jar(componentdir.resolve("assets").resolve("component-main.jar"))
+          val descriptor = componentdir.resolve("component-descriptor.json")
+          Files.writeString(
+            descriptor,
+            s"""{"name":"${componentname}","version":"0.1.0","component":"${componentname}"}"""
+          )
+          _create_car(
+            componentdir.resolve(s"${componentname}.car"),
+            Seq(
+              "component/main.jar" -> componentjar,
+              "component-descriptor.json" -> descriptor
+            )
+          )
+          new ComponentRepository.ComponentDirRepository(
+            componentdir,
+            ComponentCreate(subsystem, origin),
+            ComponentRepository.resolvePackagePrefixes()
+          )
+        }
+        val active = _create_repository_("active", "active-component")
+        val search = _create_repository_("search", "search-component")
+
+        When("assembly discovery preflights both repositories but activates only the active repository")
+        val components = ComponentRepository.discoverAssembly(Vector(active, search), Vector(active))
+
+        Then("the active repository participates in component discovery")
+        components.flatMap(_.artifactMetadata.map(_.name)) should contain ("active-component")
+
+        And("the search repository remains an API source only")
+        components.flatMap(_.artifactMetadata.map(_.name)) should not contain "search-component"
+      }
+    }
+
     "discover a plain Component.Factory from a component CAR" in {
       Given("a component CAR containing a plain Component.Factory")
       val subsystem = new Subsystem(
@@ -1519,6 +1598,61 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
         extracted.componentMain shouldBe mainjar
         extracted.componentApiJars shouldBe Vector(apijar)
         extracted.componentLibs should not contain apijar
+      }
+    }
+
+    "preflight generated component API metadata from a development directory" in {
+      _with_temp_dir { root =>
+        Given("a component development directory with generated API metadata and its API JAR")
+        val classdir = Files.createDirectories(root.resolve("target").resolve("scala-3.3.8").resolve("classes"))
+        _write_runtime_classpath(root, classdir)
+        val apidir = ComponentRepository.ComponentDevDirRepository.devComponentApiDirectory(root)
+        val apijar = _create_fake_component_jar(apidir.resolve("spi").resolve("sample-api.jar"))
+        Files.createDirectories(apidir)
+        Files.writeString(
+          apidir.resolve("component-api-descriptor.json"),
+          """{"schemaVersion":"cncf.component-api.v1","component":{"name":"sample","version":"0.1.0-SNAPSHOT"},"provided":[{"apiClass":"example.api.SampleApi","packages":["example.api"],"abiHash":"sha256:sample","artifactPath":"spi/sample-api.jar"}],"required":[]}"""
+        )
+        val subsystem = TestComponentFactory.emptySubsystem("dev-api-spec")
+        val params = ComponentCreate(subsystem, ComponentOrigin.Repository("component-dev-dir"))
+        val repository = ComponentRepository.ComponentDevDirRepository.Specification(root).build(params)
+
+        When("the development assembly API is prepared")
+        val metadata = repository.prepareAssemblyApi().toOption.get
+
+        Then("the generated API JAR participates in the same metadata model as a packaged CAR")
+        metadata.artifacts.map(_.contract.apiClass) shouldBe Vector("example.api.SampleApi")
+        metadata.artifacts.head.contract.artifactPath shouldBe "spi/sample-api.jar"
+        metadata.artifacts.head.classes should not be empty
+        Files.isRegularFile(apijar) shouldBe true
+      }
+    }
+
+    "reject a development API descriptor whose declared JAR is missing" in {
+      _with_temp_dir { root =>
+        Given("a component development directory whose generated descriptor references an absent API JAR")
+        val classdir = Files.createDirectories(root.resolve("target").resolve("scala-3.3.8").resolve("classes"))
+        _write_runtime_classpath(root, classdir)
+        val apidir = ComponentRepository.ComponentDevDirRepository.devComponentApiDirectory(root)
+        Files.createDirectories(apidir)
+        Files.writeString(
+          apidir.resolve("component-api-descriptor.json"),
+          """{"schemaVersion":"cncf.component-api.v1","component":{"name":"sample","version":"0.1.0-SNAPSHOT"},"provided":[{"apiClass":"example.api.SampleApi","packages":["example.api"],"abiHash":"sha256:sample","artifactPath":"spi/missing-api.jar"}],"required":[]}"""
+        )
+        val subsystem = TestComponentFactory.emptySubsystem("dev-api-spec")
+        val params = ComponentCreate(subsystem, ComponentOrigin.Repository("component-dev-dir"))
+        val repository = ComponentRepository.ComponentDevDirRepository.Specification(root).build(params)
+
+        When("the development assembly API is prepared")
+        val result = repository.prepareAssemblyApi()
+
+        Then("startup reports the exact missing generated API artifact")
+        result match {
+          case Consequence.Failure(conclusion) =>
+            conclusion.display should include ("spi/missing-api.jar")
+          case Consequence.Success(value) =>
+            fail(s"expected missing development API JAR failure but got $value")
+        }
       }
     }
 

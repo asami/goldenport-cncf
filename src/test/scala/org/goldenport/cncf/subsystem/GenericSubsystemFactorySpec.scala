@@ -28,7 +28,7 @@ import org.scalatest.wordspec.AnyWordSpec
  *  version Apr. 10, 2026
  *  version Apr. 24, 2026
  *  version May. 25, 2026
- * @version Jul. 11, 2026
+ * @version Jul. 12, 2026
  * @author  ASAMI, Tomoharu
  */
 final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with BeforeAndAfterAll with GivenWhenThen {
@@ -114,7 +114,7 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
         val componentdescriptor = componentdir.resolve("component-descriptor-car.json")
         Files.writeString(
           componentdescriptor,
-          """{"name":"structured-knowledge","version":"0.1.0","component":"textus-mcp-rag"}"""
+          """{"name":"structured-knowledge","version":"0.1.0-SNAPSHOT","component":"textus-mcp-rag"}"""
         )
         _create_car(
           componentdir.resolve("structured-knowledge.car"),
@@ -168,7 +168,7 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
         val componentdescriptor = componentdir.resolve("component-descriptor-car.json")
         Files.writeString(
           componentdescriptor,
-          """{"name":"structured-knowledge","version":"0.1.0","component":"textus-mcp-rag"}"""
+          """{"name":"structured-knowledge","version":"0.1.0-SNAPSHOT","component":"textus-mcp-rag"}"""
         )
         _create_car(
           componentdir.resolve("structured-knowledge.car"),
@@ -201,7 +201,10 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
         When("the subsystem is built")
         val subsystem = GenericSubsystemFactory.default(descriptor, configuration = configuration)
 
-        Then("the subsystem resolver exposes the component operation")
+        Then("the explicitly versioned CAR is loaded")
+        subsystem.components.flatMap(_.artifactMetadata.map(_.component)) should contain (Some("textus-mcp-rag"))
+
+        And("the subsystem resolver exposes the component operation")
         subsystem.resolver.resolve("spec.export.openapi") shouldBe
           ResolutionResult.Resolved(
             fqn = "spec.export.openapi",

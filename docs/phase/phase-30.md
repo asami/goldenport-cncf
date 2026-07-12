@@ -89,14 +89,14 @@ parser implementations, persistence implementations, or private resources.
 - C (DONE): CA-03 — Build and package contract-only API JARs.
 - D (DONE): CA-04 — Resolve dependent CAR APIs for consumer compilation.
 - E (DONE): CA-05 — Add assembly-wide shared API classloading.
-- F (NEXT): CA-06 — Align development-directory and packaged startup.
-- G (OPEN): CA-07 — Verify ArtScene and textus-scraper end to end.
+- F (DONE): CA-06 — Align development-directory and packaged startup.
+- G (NEXT): CA-07 — Verify ArtScene and textus-scraper end to end.
 - H (OPEN): CA-08 — Promote the settled packaging contract and close Phase 30.
 
 Resume hint:
 
-- Start CA-06 by projecting development component API artifacts into the same
-  assembly preflight and parent classloader contract used by packaged CARs.
+- Start CA-07 with the standard ArtScene launcher path and verify typed scraper
+  operation dispatch, fetch/timeline behavior, and datastore isolation.
 
 ## 6. Development Items
 
@@ -106,7 +106,7 @@ Resume hint:
 - [x] CA-04: Resolve `cozyCarDependencies` for consumer compilation and
       assembly metadata.
 - [x] CA-05: Load declared API JARs through an assembly API classloader.
-- [ ] CA-06: Make development-directory and packaged-CAR startup equivalent.
+- [x] CA-06: Make development-directory and packaged-CAR startup equivalent.
 - [ ] CA-07: Run the ArtScene/textus-scraper standard-launcher smoke.
 - [ ] CA-08: Update authoritative design and developer guidance, then close
       Phase 30.

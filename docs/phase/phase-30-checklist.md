@@ -234,7 +234,7 @@ instantiated.
 
 ## CA-06: Development and Packaged Startup Parity
 
-Status: OPEN
+Status: DONE
 
 ### Objective
 
@@ -243,21 +243,36 @@ and packaged CAR execution.
 
 ### Detailed Tasks
 
-- [ ] Produce the provider API JAR in its normal target directory during
+- [x] Produce the provider API JAR in its normal target directory during
       development.
-- [ ] Resolve dependency APIs from local published CARs for consumer builds.
-- [ ] Give development component classloaders the assembly API loader parent.
-- [ ] Keep packaged dependencies in the normal CAR repository path.
-- [ ] Verify `.cncf/launcher.yaml` project development mode without manual
+- [x] Resolve dependency APIs from local published CARs for consumer builds.
+- [x] Give development component classloaders the assembly API loader parent.
+- [x] Keep packaged dependencies in the normal CAR repository path.
+- [x] Verify `.cncf/launcher.yaml` project development mode without manual
       dependency `--component-dev-dir` options.
-- [ ] Reject missing local SNAPSHOT CAR dependencies with an actionable error.
-- [ ] Remove flat-classpath execution from standard validation evidence.
+- [x] Reject missing local SNAPSHOT CAR dependencies with an actionable error.
+- [x] Remove flat-classpath execution from standard validation evidence.
 
 ### Acceptance Criteria
 
 - `cncf server` and packaged CAR startup use the same API identity model.
 - Development startup requires no dependency CAR copying or classpath
   flattening.
+
+### Implementation Evidence
+
+- Development repositories read generated API metadata from `target/cozy` and
+  parent their component-local loader with the same assembly API loader used by
+  packaged CARs.
+- Development assembly preflight includes dependency search repositories only
+  when an active development target exists; ordinary packaged search
+  repositories remain non-active.
+- ArtScene uses sbt-cozy `0.1.12-SNAPSHOT` for the CA-04 build contract and
+  starts through `cncf dev command --project-dev .` with Scraper and TextusAi
+  resolved from normal local CAR repositories, without dependency dev-dir
+  options.
+- Focused specs verify generated development API discovery, exact missing JAR
+  diagnostics, and development-only search repository inclusion.
 
 ## CA-07: ArtScene and textus-scraper Verification
 

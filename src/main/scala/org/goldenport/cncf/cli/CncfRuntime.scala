@@ -735,16 +735,30 @@ object CncfRuntime extends GlobalObservable {
 
   private[cncf] def componentExtraFunction(
     specs: Vector[ComponentRepository.Specification],
-    front: RuntimeFrontParameters
+    front: RuntimeFrontParameters,
+    assemblysearchspecs: Vector[ComponentRepository.Specification] = Vector.empty
   ): Subsystem => Seq[Component] =
     _trace_component_dir_extras(
       _component_extra_function(
         specs,
+        assemblysearchspecs,
         front.discoverClasses,
         front.workspace,
         front.factoryClasses
       )
     )
+
+  private[cncf] def developmentAssemblySearchSpecifications(
+    active: Vector[ComponentRepository.Specification],
+    search: Vector[ComponentRepository.Specification]
+  ): Vector[ComponentRepository.Specification] = {
+    val hasdevelopmenttarget = active.exists {
+      case _: ComponentRepository.ComponentDevDirRepository.Specification => true
+      case _: ComponentRepository.SubsystemDevDirRepository.Specification => true
+      case _ => false
+    }
+    if (hasdevelopmenttarget) search.filterNot(active.contains).distinct else Vector.empty
+  }
 
   private def _prepare_launch(
     cwd: Path,
@@ -1350,18 +1364,23 @@ object CncfRuntime extends GlobalObservable {
   }
 
   private def _discover_from_repositories(
-    specs: Seq[ComponentRepository.Specification]
+    specs: Seq[ComponentRepository.Specification],
+    assemblysearchspecs: Seq[ComponentRepository.Specification]
   ): Subsystem => Seq[Component] =
     (subsystem: Subsystem) => {
       val descriptors = subsystem.descriptor.map(_.toComponentDescriptors).getOrElse(Vector.empty)
-      val repositories = specs.zipWithIndex.map { case (spec, index) =>
+      val allspecs = specs ++ assemblysearchspecs
+      val repositories = allspecs.zipWithIndex.map { case (spec, index) =>
         val origin = _origin_for_spec(spec)
         val activedescriptors =
-          ComponentRepository.descriptorsForSpecification(spec, specs.take(index), descriptors)
+          if (index < specs.size)
+            ComponentRepository.descriptorsForSpecification(spec, allspecs.take(index), descriptors)
+          else
+            ComponentRepository.unresolvedDescriptorsForSearch(allspecs.take(index), descriptors)
         val params = ComponentCreate(subsystem, origin, activedescriptors)
         spec.build(params.withOrigin(origin))
       }.toVector
-      ComponentRepository.discoverAssembly(repositories)
+      ComponentRepository.discoverAssembly(repositories, repositories.take(specs.size))
     }
 
   private def _origin_for_spec(
@@ -1384,6 +1403,7 @@ object CncfRuntime extends GlobalObservable {
 
   private def _component_extra_function(
     specs: Vector[ComponentRepository.Specification],
+    assemblysearchspecs: Vector[ComponentRepository.Specification],
     enabled: Boolean,
     workspace: Option[Path],
     factoryclasses: Vector[String]
@@ -1422,7 +1442,7 @@ object CncfRuntime extends GlobalObservable {
         _add_all_(_discover_components(workspace)(subsystem))
       }
       if (specs.nonEmpty) {
-        _add_all_(_discover_from_repositories(specs)(subsystem))
+        _add_all_(_discover_from_repositories(specs, assemblysearchspecs)(subsystem))
       }
       if (factoryclasses.nonEmpty) {
         _add_all_(_discover_from_component_factories(factoryclasses)(subsystem))
