@@ -9,3 +9,7 @@ Current Web/widget specs:
 
 - `textus-widget.md`
 - `html-tree-value.md`
+
+Current runtime/I18N specs:
+
+- `i18n-text-normalization.md`
