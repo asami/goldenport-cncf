@@ -18,14 +18,16 @@ import org.goldenport.cncf.subsystem.Subsystem
  *  version Mar. 26, 2026
  *  version Apr. 25, 2026
  *  version May. 25, 2026
- * @version Jul.  8, 2026
+ * @version Jul. 12, 2026
  * @author  ASAMI, Tomoharu
  */
 class ComponentRepositorySpace(
   private val _entries: Vector[ComponentRepositorySpace.Slot] = Vector.empty
 ) {
-  def discover(): Vector[Component] =
-    _entries.flatMap(_.repository.discover())
+  def discover(): Vector[Component] = {
+    val repositories = _entries.map(_.repository)
+    ComponentRepository.discoverAssembly(repositories)
+  }
 }
 
 object ComponentRepositorySpace {

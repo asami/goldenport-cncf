@@ -11,7 +11,7 @@ import org.goldenport.cncf.path.AliasResolver
 
 /*
  * @since   Mar. 26, 2026
- * @version Apr. 24, 2026
+ * @version Jul. 12, 2026
  * @author  ASAMI, Tomoharu
  */
 object TextusIdentitySubsystemFactory {
@@ -77,8 +77,9 @@ object TextusIdentitySubsystemFactory {
         runMode = runMode
       )
     val params = ComponentCreate(subsystem, ComponentOrigin.Repository("textus-identity"))
+    val repositories = _repository_specs(configuration).map(_.build(params))
     val components =
-      _repository_specs(configuration).flatMap(_.build(params).discover())
+      ComponentRepository.discoverAssembly(repositories)
         .filter(_matches_descriptor_component(_, descriptor.componentName))
         .distinctBy(_.name)
     subsystem.add(components)

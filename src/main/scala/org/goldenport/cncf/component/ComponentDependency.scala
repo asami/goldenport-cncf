@@ -404,7 +404,7 @@ final class ComponentLocalFirstClassLoader(
   parent: ClassLoader
 ) extends URLClassLoader(urls, parent) {
   override def loadClass(name: String, resolve: Boolean): Class[?] = synchronized {
-    if (ComponentLocalFirstClassLoader.isParentFirst(name)) {
+    if (ComponentLocalFirstClassLoader.isParentFirst(name) || _is_assembly_api_class(name)) {
       super.loadClass(name, resolve)
     } else {
       Option(findLoadedClass(name)).getOrElse {
@@ -419,6 +419,12 @@ final class ComponentLocalFirstClassLoader(
       }
     }
   }
+
+  private def _is_assembly_api_class(name: String): Boolean =
+    parent match {
+      case x: AssemblyApiClassIdentity => x.isComponentApiClass(name)
+      case _ => false
+    }
 }
 
 object ComponentLocalFirstClassLoader {

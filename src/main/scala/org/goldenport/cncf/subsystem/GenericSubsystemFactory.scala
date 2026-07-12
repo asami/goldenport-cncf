@@ -316,8 +316,9 @@ object GenericSubsystemFactory {
         runMode = runMode
       )
     val params = ComponentCreate(subsystem, ComponentOrigin.Repository("subsystem-name"))
+    val repositories = repos.map(_.build(params)).toVector
     val components0 =
-      repos.flatMap(_.build(params).discover())
+      ComponentRepository.discoverAssembly(repositories)
         .filter(_matches_named_subsystem(_, subsystemName))
     val builtins = DefaultSubsystemFactory.builtinComponents(subsystem)
     val components = _collapse_duplicate_components(builtins ++ components0)
@@ -367,12 +368,15 @@ object GenericSubsystemFactory {
       descriptor.toComponentDescriptors
     )
     val repositoryspecs = _repository_specs_for_descriptor(configuration, descriptor)
-    val discoveredcomponents =
-      repositoryspecs.zipWithIndex.flatMap { case (spec, index) =>
+    val repositories =
+      repositoryspecs.zipWithIndex.map { case (spec, index) =>
         val activedescriptors =
           ComponentRepository.descriptorsForSpecification(spec, repositoryspecs.take(index), descriptor.toComponentDescriptors)
-        spec.build(params.withComponentDescriptors(activedescriptors)).discover()
-      }.filter(component => descriptor.componentBindings.exists(binding => _matches_descriptor_component(component, binding.componentName)))
+        spec.build(params.withComponentDescriptors(activedescriptors))
+      }.toVector
+    val discoveredcomponents =
+      ComponentRepository.discoverAssembly(repositories)
+        .filter(component => descriptor.componentBindings.exists(binding => _matches_descriptor_component(component, binding.componentName)))
     val components0 = materializeComponentInstances(discoveredcomponents, descriptor, params)
     val builtins = _builtin_components(subsystem, descriptor)
     given ExecutionContext = ExecutionContext.create()

@@ -1354,13 +1354,14 @@ object CncfRuntime extends GlobalObservable {
   ): Subsystem => Seq[Component] =
     (subsystem: Subsystem) => {
       val descriptors = subsystem.descriptor.map(_.toComponentDescriptors).getOrElse(Vector.empty)
-      specs.zipWithIndex.flatMap { case (spec, index) =>
+      val repositories = specs.zipWithIndex.map { case (spec, index) =>
         val origin = _origin_for_spec(spec)
         val activedescriptors =
           ComponentRepository.descriptorsForSpecification(spec, specs.take(index), descriptors)
         val params = ComponentCreate(subsystem, origin, activedescriptors)
-        spec.build(params.withOrigin(origin)).discover()
-      }
+        spec.build(params.withOrigin(origin))
+      }.toVector
+      ComponentRepository.discoverAssembly(repositories)
     }
 
   private def _origin_for_spec(

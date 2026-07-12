@@ -56,7 +56,7 @@ import org.goldenport.schema.{DataType, XString}
  *  version Apr. 30, 2026
  *  version May. 20, 2026
  *  version Jun. 18, 2026
- * @version Jul. 11, 2026
+ * @version Jul. 12, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class Component() extends Component.Core.Holder {
@@ -2006,7 +2006,8 @@ final case class ComponentCreate(
   subsystem: Subsystem,
   origin: ComponentOrigin,
   componentDescriptors: Vector[ComponentDescriptor] = Vector.empty,
-  instanceMetadata: Option[ComponentInstanceMetadata] = None
+  instanceMetadata: Option[ComponentInstanceMetadata] = None,
+  assemblyApiClassLoader: Option[ClassLoader] = None
 ) {
   def withOrigin(p: ComponentOrigin) = copy(origin = p)
 
@@ -2015,6 +2016,9 @@ final case class ComponentCreate(
 
   def withInstanceMetadata(p: ComponentInstanceMetadata) =
     copy(instanceMetadata = Some(p))
+
+  def withAssemblyApiClassLoader(p: ClassLoader) =
+    copy(assemblyApiClassLoader = Some(p))
 
   def toInit(core: Component.Core): ComponentInit =
     ComponentInit(subsystem, core, origin, componentDescriptors, instanceMetadata = instanceMetadata)

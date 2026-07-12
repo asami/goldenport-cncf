@@ -659,8 +659,8 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Latest closed phase checklist: `docs/phase/phase-29-checklist.md`
 - Previous closed phase dashboard: `docs/phase/phase-28.md`
 - Previous closed phase checklist: `docs/phase/phase-28-checklist.md`
-- Current next slice: CA-05, assembly-wide shared API classloading before
-  component instantiation.
+- Current next slice: CA-06, development-directory and packaged-CAR startup
+  parity for component API artifacts.
 - Status interpretation rules: `docs/rules/stage-status-and-checklist-convention.md`
 - Latest post-closure maintenance: Jul. 12, 2026 CNCF test descriptor and
   test-home hardening. Explicit `test.yaml` / `test.json` descriptors can now
@@ -2146,10 +2146,10 @@ Active in Phase 30.
   - keep source-development and packaged-CAR startup behavior equivalent;
   - verify the complete contract with ArtScene and textus-scraper through the
     standard launcher path.
-- Completed slice: CA-04 resolves declared dependent CARs, matches required
-  descriptors, and adds only extracted contract JARs to consumer compilation.
-- Next slice: CA-05 gives consumer and provider component classloaders one
-  shared parent API classloader and validates class identity before startup.
+- Completed slice: CA-05 preflights declared API artifacts and gives consumer
+  and provider component classloaders one shared parent API class identity.
+- Next slice: CA-06 makes development-directory startup use the same API
+  artifact and classloader contract as packaged CAR startup.
 - Non-goals: provider implementation libraries as consumer APIs, arbitrary
   application-driven CAR loading, distributed component transport, dynamic
   Playwright scraping, and flattened classpaths as deployment evidence.

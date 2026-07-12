@@ -14,7 +14,7 @@ import org.goldenport.cncf.workarea.WorkAreaSpace
  * @since   Feb.  3, 2026
  *  version Mar. 22, 2026
  *  version Apr.  8, 2026
- * @version May. 16, 2026
+ * @version Jul. 12, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class CarExtracted(
@@ -22,6 +22,7 @@ final case class CarExtracted(
   descriptor: ComponentDescriptor,
   componentMain: Path,
   componentLibs: Vector[Path],
+  componentApiJars: Vector[Path],
   collaboratorMain: Option[Path],
   collaboratorLibs: Vector[Path]
 ) {
@@ -97,6 +98,7 @@ object CarExtractor {
         (_list_jars(root.resolve("lib")) ++ _list_jars(componentdir.resolve("lib")))
           .distinct
           .sortBy(_.getFileName.toString)
+      val componentapijars = _list_jars(root.resolve("spi")).sortBy(_.getFileName.toString)
       val collaboratordir = componentdir.resolve("collaborator")
       val collaboratormainfiles = _list_jars(collaboratordir)
       if (collaboratormainfiles.size > 1) {
@@ -110,6 +112,7 @@ object CarExtractor {
             descriptor = d,
             componentMain = componentjars.head,
             componentLibs = componentlibs,
+            componentApiJars = componentapijars,
             collaboratorMain = collaboratormain,
             collaboratorLibs = collaboratorlibs
           )
@@ -139,6 +142,7 @@ object CarExtractor {
     descriptor: ComponentDescriptor,
     componentMain: Path,
     componentLibs: Vector[Path],
+    componentApiJars: Vector[Path],
     collaboratorMain: Option[Path],
     collaboratorLibs: Vector[Path]
   ): Consequence[CarExtracted] = Consequence.success(
@@ -147,6 +151,7 @@ object CarExtractor {
       descriptor = descriptor,
       componentMain = componentMain,
       componentLibs = componentLibs,
+      componentApiJars = componentApiJars,
       collaboratorMain = collaboratorMain,
       collaboratorLibs = collaboratorLibs
     )

@@ -1505,6 +1505,23 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
       }
     }
 
+    "expose CAR component API jars separately from component implementation libraries" in {
+      _with_temp_dir { root =>
+        val mainjar = _create_fake_component_jar(root.resolve("component").resolve("main.jar"))
+        val apijar = _create_fake_component_jar(root.resolve("spi").resolve("sample-api.jar"))
+        Files.writeString(
+          root.resolve("component-descriptor.json"),
+          """{"name":"sample-component","version":"0.1.0","component":"sample-component"}"""
+        )
+
+        val extracted = CarExtractor.resolveDirectory(root).toOption.get
+
+        extracted.componentMain shouldBe mainjar
+        extracted.componentApiJars shouldBe Vector(apijar)
+        extracted.componentLibs should not contain apijar
+      }
+    }
+
     "keep generated component packages outside parent-first runtime ABI packages" in {
       ComponentLocalFirstClassLoader.isParentFirst("org.simplemodeling.model.Entity") shouldBe true
       ComponentLocalFirstClassLoader.isParentFirst("org.simplemodeling.textus.useraccount.ComponentFactory") shouldBe false

@@ -191,7 +191,7 @@ Let consumers compile by declaring dependent CAR coordinates only.
 
 ## CA-05: Assembly API Classloader
 
-Status: OPEN
+Status: DONE
 
 ### Objective
 
@@ -200,25 +200,37 @@ instantiated.
 
 ### Detailed Tasks
 
-- [ ] Extend `CarExtractor` to expose declared `spi/*.jar` API artifacts.
-- [ ] Resolve assembly descriptors and API artifacts before component
+- [x] Extend `CarExtractor` to expose declared `spi/*.jar` API artifacts.
+- [x] Resolve assembly descriptors and API artifacts before component
       instantiation.
-- [ ] Build an assembly API classloader above component-local classloaders.
-- [ ] Parent consumer and provider component classloaders with the same API
+- [x] Build an assembly API classloader above component-local classloaders.
+- [x] Parent consumer and provider component classloaders with the same API
       loader.
-- [ ] Use descriptor-declared API packages for parent-first loading instead of
+- [x] Use descriptor-declared API packages for parent-first loading instead of
       relying only on the broad `.api.` naming heuristic.
-- [ ] Never scan API JARs for component factories or bundle definitions.
-- [ ] Validate duplicate contract/version/ABI hash combinations.
-- [ ] Preserve existing CAR behavior when no component API artifact is
+- [x] Never scan API JARs for component factories or bundle definitions.
+- [x] Validate duplicate contract/version/ABI hash combinations.
+- [x] Preserve existing CAR behavior when no component API artifact is
       declared.
-- [ ] Return structured startup failures for missing or conflicting APIs.
+- [x] Return structured startup failures for missing or conflicting APIs.
 
 ### Acceptance Criteria
 
 - Consumer and provider `classOf[TextusScraperApi]` values are identical.
 - `TextusScraperApi.SocketSet` can be constructed before SPI assembly wiring.
 - API conflicts fail before partial component startup.
+
+### Implementation Evidence
+
+- `AssemblyApiClassLoader` reads only descriptor-declared nested API JARs and
+  keeps their class bytes outside component factory discovery classpaths.
+- `ComponentRepository.discoverAssembly` preflights all participating CAR
+  repositories before discovery and installs one parent loader for every
+  consumer and provider component loader.
+- Component-local loading recognizes descriptor-declared API packages through
+  the assembly loader while retaining the existing no-API parent behavior.
+- Executable specs verify shared class identity, conflict rejection, nested CAR
+  API loading, no-API compatibility, and separate `CarExtractor` API artifacts.
 
 ## CA-06: Development and Packaged Startup Parity
 

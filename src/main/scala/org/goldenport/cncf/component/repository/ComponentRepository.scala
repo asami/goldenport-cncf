@@ -35,7 +35,18 @@ import org.goldenport.configuration.{Configuration, ConfigurationTrace, Resolved
  * @author  ASAMI, Tomoharu
  */
 sealed abstract class ComponentRepository {
+  private var _assembly_api_class_loader: Option[ClassLoader] = None
+
   def discover(): Seq[Component]
+
+  private[repository] def prepareAssemblyApi(): Consequence[AssemblyApiMetadata] =
+    Consequence.success(AssemblyApiMetadata())
+
+  private[repository] def installAssemblyApiClassLoader(loader: ClassLoader): Unit =
+    _assembly_api_class_loader = Some(loader)
+
+  protected final def with_assembly_api_class_loader(params: ComponentCreate): ComponentCreate =
+    _assembly_api_class_loader.map(params.withAssemblyApiClassLoader).getOrElse(params)
 }
 
 object ComponentRepository extends GlobalObservable {
@@ -56,6 +67,28 @@ object ComponentRepository extends GlobalObservable {
   private val _legacy_standard_subsystem_repository_path = Paths.get("org", "simplemodeling", "sar")
   private val _remote_connect_timeout_ms = 2000
   private val _remote_read_timeout_ms = 5000
+
+  def discoverAssembly(
+    repositories: Vector[ComponentRepository],
+    runtimeParent: ClassLoader = getClass.getClassLoader
+  ): Vector[Component] = {
+    val metadataC = repositories.foldLeft(Consequence.success(AssemblyApiMetadata())) { (z, repository) =>
+      for {
+        acc <- z
+        metadata <- repository.prepareAssemblyApi()
+      } yield acc ++ metadata
+    }
+    val metadata = _required(metadataC)
+    val loader = _required(AssemblyApiClassLoader.create(runtimeParent, metadata))
+    repositories.foreach(_.installAssemblyApiClassLoader(loader))
+    repositories.flatMap(_.discover())
+  }
+
+  private def _required[A](result: Consequence[A]): A =
+    result match {
+      case Consequence.Success(value) => value
+      case Consequence.Failure(conclusion) => Consequence.Failure[A](conclusion).RAISE
+    }
 
   sealed abstract class Specification {
     def build(params: ComponentCreate): ComponentRepository
@@ -298,18 +331,25 @@ object ComponentRepository extends GlobalObservable {
     packagePrefixes: Seq[String],
     releaseonly: Boolean = false
   ) extends ComponentRepository {
+    override private[repository] def prepareAssemblyApi(): Consequence[AssemblyApiMetadata] = {
+      val requested = _requested_component_artifacts(baseDir, params, releaseonly)
+      val artifacts = if (requested.nonEmpty) requested else _list_artifacts(baseDir)
+      _load_assembly_api_artifacts(artifacts)
+    }
+
     def discover(): Seq[Component] = {
       if (!Files.exists(baseDir)) {
         Nil
       } else {
+        val effectiveparams = with_assembly_api_class_loader(params)
         val log = PersistentBootstrapLog.forClass(classOf[ComponentDirRepository], ObservabilityScopeDefaults.Bootstrap)
         val origin = ComponentOrigin.Repository("component-dir")
-        val artifacts = _requested_component_artifacts(baseDir, params, releaseonly)
+        val artifacts = _requested_component_artifacts(baseDir, effectiveparams, releaseonly)
         val components =
           if (artifacts.nonEmpty)
-            artifacts.flatMap(_discover_artifact(_, params, origin, log))
+            artifacts.flatMap(_discover_artifact(_, effectiveparams, origin, log))
           else
-            _discover_from_artifacts(basedir = baseDir, params = params, origin = origin, log = log, releaseonly = releaseonly)
+            _discover_from_artifacts(basedir = baseDir, params = effectiveparams, origin = origin, log = log, releaseonly = releaseonly)
         if (components.nonEmpty) {
           components
         } else {
@@ -353,14 +393,18 @@ object ComponentRepository extends GlobalObservable {
     params: ComponentCreate,
     packagePrefixes: Seq[String]
   ) extends ComponentRepository {
+    override private[repository] def prepareAssemblyApi(): Consequence[AssemblyApiMetadata] =
+      AssemblyApiClassLoader.loadCar(file)
+
     def discover(): Seq[Component] = {
       if (!Files.isRegularFile(file)) {
         Nil
       } else {
+        val effectiveparams = with_assembly_api_class_loader(params)
         val log = PersistentBootstrapLog.forClass(classOf[ComponentFileRepository], ObservabilityScopeDefaults.Bootstrap)
         val origin = ComponentOrigin.Repository("component-file")
         val artifact = Artifact(file, ArtifactKind.Car)
-        _discover_artifact(artifact, params, origin, log)
+        _discover_artifact(artifact, effectiveparams, origin, log)
       }
     }
   }
@@ -672,9 +716,20 @@ object ComponentRepository extends GlobalObservable {
     params: ComponentCreate,
     packagePrefixes: Seq[String]
   ) extends ComponentRepository {
+    override private[repository] def prepareAssemblyApi(): Consequence[AssemblyApiMetadata] = {
+      _ensure_requested_component_artifacts()
+      _load_assembly_api_artifacts(_requested_component_artifacts(cacheRoot, params, releaseonly = true))
+    }
+
     def discover(): Seq[Component] = {
       _ensure_requested_component_artifacts()
-      new ComponentDirRepository(cacheRoot, params, packagePrefixes, releaseonly = true).discover()
+      val repository = new ComponentDirRepository(
+        cacheRoot,
+        with_assembly_api_class_loader(params),
+        packagePrefixes,
+        releaseonly = true
+      )
+      repository.discover()
     }
 
     private def _ensure_requested_component_artifacts(): Unit =
@@ -1007,6 +1062,22 @@ object ComponentRepository extends GlobalObservable {
       }
     }
   }
+
+  private def _load_assembly_api_artifacts(
+    artifacts: Vector[Artifact]
+  ): Consequence[AssemblyApiMetadata] =
+    artifacts.foldLeft(Consequence.success(AssemblyApiMetadata())) { (z, artifact) =>
+      for {
+        acc <- z
+        metadata <- artifact.kind match {
+          case ArtifactKind.Car => AssemblyApiClassLoader.loadCar(artifact.path)
+          case ArtifactKind.CarDir => AssemblyApiClassLoader.loadDirectory(artifact.path)
+          case ArtifactKind.Sar => AssemblyApiClassLoader.loadSar(artifact.path)
+          case ArtifactKind.SarDir => AssemblyApiClassLoader.loadSarDirectory(artifact.path)
+          case _ => Consequence.success(AssemblyApiMetadata())
+        }
+      } yield acc ++ metadata
+    }
 
   private def _requested_component_artifacts(
     basedir: Path,
@@ -1526,7 +1597,11 @@ object ComponentRepository extends GlobalObservable {
     )
     val componentparams =
       params.withComponentDescriptors(_component_descriptors_for_artifact(params, extracted.descriptor))
-    Using.resource(dependencies.componentClassLoader(Vector(extracted.componentMain), extracted.componentLibs, getClass.getClassLoader)) { componentLoader =>
+    Using.resource(dependencies.componentClassLoader(
+      Vector(extracted.componentMain),
+      extracted.componentLibs,
+      params.assemblyApiClassLoader.getOrElse(getClass.getClassLoader)
+    )) { componentLoader =>
       val components0 =
         _discover_component_from_artifact_with_loader(
           artifactname = artifactpath.getFileName.toString,
