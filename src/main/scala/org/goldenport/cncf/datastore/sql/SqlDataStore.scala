@@ -4,6 +4,8 @@ import java.sql.Connection
 import java.sql.PreparedStatement
 import javax.sql.DataSource
 import com.zaxxer.hikari.{HikariConfig, HikariDataSource}
+import io.circe.Json
+import io.circe.parser.parse
 import org.goldenport.Consequence
 import org.goldenport.convert.StringEncodable
 import org.goldenport.text.Presentable
@@ -34,7 +36,8 @@ import org.goldenport.cncf.directive.{Query as EntityQuery}
  *  version Mar. 31, 2026
  *  version May.  8, 2026
  *  version May. 26, 2026
- * @version Jul.  6, 2026
+ *  version Jul.  6, 2026
+ * @version Jul. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 class SqlDataStore(
@@ -214,8 +217,8 @@ class SqlDataStore(
         m.toJsonString
       case m: RecordPresentable =>
         m.toRecord().toJsonString
-      case xs: Iterable[?] if xs.forall(_is_record_like) =>
-        xs.iterator.map(_record_like_json).mkString("[", ",", "]")
+      case xs: Iterable[?] =>
+        Json.fromValues(xs.iterator.map(_json_from_value).toVector).noSpaces
       case m: Byte => m.toInt
       case m: Short => m.toInt
       case m: Int => m
@@ -229,22 +232,31 @@ class SqlDataStore(
         Presentable.print(other)
     }
 
-  private def _is_record_like(
+  private def _json_from_value(
     value: Any
-  ): Boolean =
+  ): Json =
     value match {
-      case _: Record => true
-      case _: RecordPresentable => true
-      case _ => false
-    }
-
-  private def _record_like_json(
-    value: Any
-  ): String =
-    value match {
-      case m: Record => m.toJsonString
-      case m: RecordPresentable => m.toRecord().toJsonString
-      case other => Presentable.print(other)
+      case null => Json.Null
+      case m: StringEncodable =>
+        given org.goldenport.context.ExecutionContext = org.goldenport.convert.StringEncoder.storageExecutionContext
+        Json.fromString(m.encode)
+      case m: Record =>
+        parse(m.toJsonString).getOrElse(Json.fromString(m.toJsonString))
+      case m: RecordPresentable =>
+        val jsontext = m.toRecord().toJsonString
+        parse(jsontext).getOrElse(Json.fromString(jsontext))
+      case xs: Iterable[?] =>
+        Json.fromValues(xs.iterator.map(_json_from_value).toVector)
+      case m: Byte => Json.fromInt(m.toInt)
+      case m: Short => Json.fromInt(m.toInt)
+      case m: Int => Json.fromInt(m)
+      case m: Long => Json.fromLong(m)
+      case m: Boolean => Json.fromBoolean(m)
+      case m: Float => Json.fromFloatOrNull(m)
+      case m: Double => Json.fromDoubleOrNull(m)
+      case m: BigInt => Json.fromBigInt(m)
+      case m: BigDecimal => Json.fromBigDecimal(m)
+      case other => Json.fromString(Presentable.print(other))
     }
 
   private def _decode_column_value(
@@ -256,13 +268,25 @@ class SqlDataStore(
         if (trimmed.startsWith("{") && trimmed.endsWith("}"))
           _record_decoder.json(trimmed).toOption.getOrElse(s)
         else if (trimmed.startsWith("[") && trimmed.endsWith("]"))
-          _record_decoder.jsonAutoRecords(trimmed).toOption.getOrElse(s)
+          parse(trimmed).toOption.map(_json_to_value).getOrElse(s)
         else
           s
       case other =>
         other
     }
   }
+
+  private def _json_to_value(
+    json: Json
+  ): Any =
+    json.fold(
+      jsonNull = null,
+      jsonBoolean = identity,
+      jsonNumber = n => n.toLong.getOrElse(n.toDouble),
+      jsonString = identity,
+      jsonArray = _.map(_json_to_value).toVector,
+      jsonObject = obj => Record.dataAuto(obj.toVector.map { case (k, v) => k -> _json_to_value(v) }*)
+    )
 
   private def _table_exists(
     conn: Connection,

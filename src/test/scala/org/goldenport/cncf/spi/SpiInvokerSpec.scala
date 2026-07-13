@@ -23,7 +23,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jul. 11, 2026
- * @version Jul. 11, 2026
+ * @version Jul. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final class SpiInvokerSpec
@@ -288,12 +288,20 @@ final class SpiInvokerSpec
       Given("one provider operation and one repeated-field request")
       val fixture = InvocationFixture.create()
       given ExecutionContext = ExecutionContext.create()
-      val record = Record.create(Vector("tag" -> "first", "tag" -> "second"))
+      val nested = Record.dataAuto(
+        "name" -> "profile",
+        "selectors" -> Vector("article", ".event")
+      )
+      val record = Record.create(Vector(
+        "tag" -> "first",
+        "tag" -> "second",
+        "rule" -> nested
+      ))
       val direct = Request.of(
         component = "test_provider",
         service = "api",
         operation = "echo",
-        properties = record.fields.map(field => Property(field.key, field.value, None)).toList
+        properties = record.fields.map(field => Property(field.key, field.value.single, None)).toList
       )
 
       When("the operation is called through direct and generic routes")
@@ -307,6 +315,7 @@ final class SpiInvokerSpec
 
       Then("both routes preserve the same Record result")
       genericresult shouldBe directresult
+      genericresult.toOption.flatMap(_.getRecord("rule")) shouldBe Some(nested)
     }
 
     "return structured request operation and selection failures" in {

@@ -53,7 +53,7 @@ import org.goldenport.cncf.spi.{ComponentApiResolver, ResolvedSpiBinding, SpiInv
  *  version Jan. 31, 2026
  *  version Feb.  4, 2026
  *  version Apr. 30, 2026
- * @version Jul. 12, 2026
+ * @version Jul. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Subsystem(
@@ -410,7 +410,7 @@ final class Subsystem(
           component = binding.provider.component,
           service = route._2.name,
           operation = route._3.name,
-          properties = record.fields.map(field => Property(field.key, field.value, None)).toList
+          properties = record.fields.map(field => Property(field.key, field.value.single, None)).toList
         )
         normalized <- _prepare_filebundle_parameters(route._3, request)
         response <- _execute_resolved_operation(route, normalized, executionContext)

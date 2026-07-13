@@ -15,9 +15,9 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 12, 2026
- *  version Mar. 12, 2026
  *  version Apr. 26, 2026
- * @version May. 26, 2026
+ *  version May. 26, 2026
+ * @version Jul. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 class SqliteDataStoreSpec
@@ -147,6 +147,38 @@ class SqliteDataStoreSpec
           val lines = r.getVector("lines").getOrElse(fail("lines should be decoded as Vector"))
           lines.collect { case rec: Record => rec.getString("sku") } shouldBe Vector(Some("sku-1"), Some("sku-2"))
           lines.collect { case rec: Record => _int_value(rec, "quantity") } shouldBe Vector(Some(2), Some(1))
+        case other =>
+          fail(s"unexpected result: $other")
+      }
+    }
+
+    "round-trip repeated scalar values as JSON array data" in {
+      val path = Files.createTempFile("cncf-sqlite-scalar-array", ".db").toString
+      val datastore = SqlDataStore.sqlite(path)
+      val collection = DataStore.CollectionId("scalar_array")
+      val ctx = ExecutionContext.create()
+      given ExecutionContext = ctx
+
+      Given("a record with repeated string, numeric, and boolean values")
+      val entryid = DataStore.StringEntryId("array1")
+      val record = Record.data(
+        "id" -> "array1",
+        "methods" -> Vector("official_driver", "ai_web_tools", "museum_or_jp"),
+        "priorities" -> Vector(1, 2),
+        "flags" -> Vector(true, false)
+      )
+
+      When("creating and loading the record")
+      datastore.create(collection, entryid, record) should be_success
+      val loaded = datastore.load(collection, entryid)
+
+      Then("each repeated scalar field is decoded as a vector of scalar values")
+      loaded should be_success
+      loaded match {
+        case Consequence.Success(Some(r)) =>
+          r.getVector("methods") shouldBe Some(Vector("official_driver", "ai_web_tools", "museum_or_jp"))
+          r.getVector("priorities").map(_.collect { case n: java.lang.Number => n.intValue }) shouldBe Some(Vector(1, 2))
+          r.getVector("flags") shouldBe Some(Vector(true, false))
         case other =>
           fail(s"unexpected result: $other")
       }
