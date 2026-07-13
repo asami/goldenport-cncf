@@ -700,6 +700,12 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
   remain preserved in the CNCF contract so provider adapters can return
   structured unsupported or invalid-tool failures instead of silently dropping
   requested behavior.
+- Latest post-closure maintenance: Jul. 14, 2026 CAR documentation route
+  alignment. Component manuals packaged from `src/main/car/manual/*` are
+  served through `/man/{component}/*`; generated component Help links to CLI
+  help, Manual, canonical `/openapi.json`, and `/mcp`; and the canonical
+  OpenAPI route shares the compatibility route's authorization and production
+  visibility policy.
 - Previous post-closure maintenance: Jul. 9, 2026 CAR assembly dependency
   activation hardening. `--component-file` / component-CAR startup now honors
   component dependencies declared by the CAR-local assembly descriptor, activates

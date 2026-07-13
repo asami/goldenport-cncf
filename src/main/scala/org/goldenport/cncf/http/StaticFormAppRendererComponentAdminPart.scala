@@ -32,7 +32,7 @@ import io.circe.parser.parse
 /*
  * @since   May. 18, 2026
  *  version Jun. 19, 2026
- * @version Jul.  8, 2026
+ * @version Jul. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 trait StaticFormAppRendererComponentAdminPart {
@@ -101,7 +101,7 @@ trait StaticFormAppRendererComponentAdminPart {
            s"""<p>CNCF-generated runtime documents expose implementation-facing specifications and machine-readable interface descriptions.</p>
               |${admin_link_list_group(Vector(
                 "Generated Help" -> "/help/system",
-                "OpenAPI JSON" -> "/help/system/openapi.json",
+                "OpenAPI JSON" -> "/openapi.json",
                 "MCP endpoint" -> "/mcp",
                 "System dashboard" -> "/web/system/dashboard",
                 "Console" -> "/web/console"
@@ -211,7 +211,7 @@ trait StaticFormAppRendererComponentAdminPart {
       val generated =
         Vector(
           "Generated Help" -> s"/help/${escape(componentPath)}",
-          "OpenAPI JSON" -> "/help/system/openapi.json",
+          "OpenAPI JSON" -> "/openapi.json",
           "MCP endpoint" -> "/mcp"
         )
       val packaged =

@@ -4,7 +4,7 @@ package org.goldenport.cncf.http
  * @since   May. 18, 2026
  *  version May. 27, 2026
  *  version Jun. 19, 2026
- * @version Jul. 12, 2026
+ * @version Jul. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 import scala.collection.mutable.ListBuffer
@@ -70,7 +70,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Apr. 12, 2026
  *  version May. 27, 2026
  *  version Jun. 19, 2026
- * @version Jul. 12, 2026
+ * @version Jul. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -1174,12 +1174,12 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       systemdocumenthtml should include ("System Documents")
       systemdocumenthtml should include ("Generated Help")
       systemdocumenthtml should include ("/help/system")
-      systemdocumenthtml should include ("/help/system/openapi.json")
+      systemdocumenthtml should include ("/openapi.json")
       systemdocumenthtml should include ("User Guide")
       componentdocumenthtml should include ("notice_board Documents")
       componentdocumenthtml should include ("Generated Help")
       componentdocumenthtml should include ("/help/notice-board")
-      componentdocumenthtml should include ("/help/system/openapi.json")
+      componentdocumenthtml should include ("/openapi.json")
       componentdocumenthtml should include ("Reference Manual")
       systemhtml should include ("System Specification")
       systemhtml should include ("OpenAPI JSON")
@@ -1286,6 +1286,12 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         .run(_get_request("/web/system/document/specification/openapi.json"))
         .unsafeRunSync()
       val openapijson = openapiresponse.as[String].unsafeRunSync()
+      val canonicalopenapiresponse = server
+        .routes(null)
+        .orNotFound
+        .run(_get_request("/openapi.json"))
+        .unsafeRunSync()
+      val canonicalopenapijson = canonicalopenapiresponse.as[String].unsafeRunSync()
       val helpresponse = server
         .routes(null)
         .orNotFound
@@ -1309,6 +1315,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       manualresponse.status.code shouldBe 200
       manualhtml should include ("Generated operation specification")
       manualhtml should include ("approve-notice-aggregate")
+      manualhtml should include ("cncf command meta.help notice-board")
+      manualhtml should include ("/help/notice-board")
+      manualhtml should include ("/man/notice-board")
+      manualhtml should include ("/openapi.json")
       manualhtml should include ("/mcp")
       aliasmanualresponse.status.code shouldBe 200
       aliasmanualhtml should include ("Generated operation specification")
@@ -1316,14 +1326,65 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       openapiresponse.status.code shouldBe 200
       openapijson should include (""""openapi"""")
       openapijson should include ("/rest/v1/notice-board/notice-aggregate/approve-notice-aggregate")
+      canonicalopenapiresponse.status.code shouldBe 200
+      canonicalopenapijson shouldBe openapijson
       helpresponse.status.code shouldBe 200
       helphtml should include ("Generated operation specification")
       helphtml should include ("approve-notice-aggregate")
       helpopenapiresponse.status.code shouldBe 200
       helpopenapijson should include (""""openapi"""")
+      helpopenapijson shouldBe canonicalopenapijson
       manresponse.status.code shouldBe 200
       manhtml should include ("notice_board Documents")
       manhtml should include ("Packaged component documents")
+    }
+
+    "serve the canonical CAR manual source through the component manual route" in {
+      Given("a component loaded from a CAR archive containing src/main/car/manual output")
+      val archive = _web_archive_fixture(
+        "notice-board.car",
+        Vector("manual/index.md" -> "# Notice Board Reference Manual\n\nCanonical CAR manual content.\n")
+      )
+      val subsystem = _aggregate_http_fixture_subsystem_with_componentlets()
+      val component = subsystem.components.find(x => org.goldenport.cncf.naming.NamingConventions.equivalentByNormalized(x.name, "notice-board")).getOrElse(fail("notice-board component is missing"))
+      component.withArtifactMetadata(org.goldenport.cncf.component.Component.ArtifactMetadata(
+        sourceType = "car",
+        name = "notice-board",
+        version = "0.1.0",
+        component = Some("notice-board"),
+        archivePath = Some(archive.toString)
+      ))
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+
+      When("the component manual index and canonical reference manual are requested")
+      val indexresponse = server.routes(null).orNotFound.run(_get_request("/man/notice-board")).unsafeRunSync()
+      val indexhtml = indexresponse.as[String].unsafeRunSync()
+      val manualresponse = server.routes(null).orNotFound.run(_get_request("/man/notice-board/index.md")).unsafeRunSync()
+      val manualcontent = manualresponse.as[String].unsafeRunSync()
+
+      Then("CNCF discovers and serves the CAR manual subtree")
+      indexresponse.status.code shouldBe 200
+      indexhtml should include ("Reference Manual")
+      indexhtml should include ("/man/notice-board/index.md")
+      manualresponse.status.code shouldBe 200
+      manualcontent should include ("Canonical CAR manual content")
+    }
+
+    "apply the existing system document authorization policy to the canonical OpenAPI route" in {
+      Given("a subsystem whose Web descriptor denies the system Help OpenAPI selector")
+      val subsystem = _aggregate_http_fixture_subsystem_with_componentlets()
+      val descriptor = WebDescriptor(authorization = Map(
+        "system.help.openapi" -> WebDescriptor.Authorization(deny = true)
+      ))
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem, Some(descriptor)))
+
+      When("the canonical and compatibility Help OpenAPI routes are requested")
+      val canonicalresponse = server.routes(null).orNotFound.run(_get_request("/openapi.json")).unsafeRunSync()
+      val compatibilityresponse = server.routes(null).orNotFound.run(_get_request("/help/system/openapi.json")).unsafeRunSync()
+
+      Then("both routes reject the request through the same authorization selector")
+      canonicalresponse.status.code shouldBe 403
+      compatibilityresponse.status.code shouldBe 403
     }
 
     "hide generated help and packaged manuals in production operation mode" in {
@@ -1337,7 +1398,9 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val helpresponse = server.routes(null).orNotFound.run(_get_request("/help/notice-board")).unsafeRunSync()
       val manresponse = server.routes(null).orNotFound.run(_get_request("/man/notice-board")).unsafeRunSync()
       val systemhelpresponse = server.routes(null).orNotFound.run(_get_request("/help/system")).unsafeRunSync()
+      val canonicalopenapiresponse = server.routes(null).orNotFound.run(_get_request("/openapi.json")).unsafeRunSync()
       val systemopenapiresponse = server.routes(null).orNotFound.run(_get_request("/help/system/openapi.json")).unsafeRunSync()
+      val legacyopenapiresponse = server.routes(null).orNotFound.run(_get_request("/web/system/document/specification/openapi.json")).unsafeRunSync()
       val systemmanresponse = server.routes(null).orNotFound.run(_get_request("/man/system")).unsafeRunSync()
       val compatssystemhelpresponse = server.routes(null).orNotFound.run(_get_request("/web/system/document/specification")).unsafeRunSync()
       val compatssystemmanresponse = server.routes(null).orNotFound.run(_get_request("/web/system/document")).unsafeRunSync()
@@ -1348,7 +1411,9 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       helpresponse.status.code shouldBe 404
       manresponse.status.code shouldBe 404
       systemhelpresponse.status.code shouldBe 404
+      canonicalopenapiresponse.status.code shouldBe 404
       systemopenapiresponse.status.code shouldBe 404
+      legacyopenapiresponse.status.code shouldBe 404
       systemmanresponse.status.code shouldBe 404
       compatssystemhelpresponse.status.code shouldBe 404
       compatssystemmanresponse.status.code shouldBe 404

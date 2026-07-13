@@ -716,15 +716,27 @@ Routes:
 ```text
 /help
 /help/system
-/help/system/openapi.json
+/openapi.json
 /help/{component}
 /help/{component}/{service}
 /help/{component}/{service}/{operation}
 ```
 
+`/openapi.json` is the canonical system-wide machine-readable OpenAPI route.
+`/help/system/openapi.json` and
+`/web/system/document/specification/openapi.json` remain compatibility aliases
+that return the same document. Generated Help and packaged manuals link to the
+canonical route.
+
 Manuals are component-packaged, human-authored documents for component
 developers and operators. They are separate from CML-generated Help and from
 application Web UI routes.
+
+The canonical authoring source is `src/main/car/manual/`. Cozy packages that
+subtree as `manual/` in the CAR, and CNCF exposes it below
+`/man/{component}/`. For example, `src/main/car/manual/index.md` becomes
+`/man/{component}/index.md`. Existing documents under component Web roots
+`docs/` and `documents/` remain supported.
 
 Routes:
 
@@ -732,6 +744,7 @@ Routes:
 /man
 /man/system
 /man/{component}
+/man/{component}/index.md
 /man/{component}/user-guide.md
 /man/{component}/user-guide.html
 /man/{component}/user-guide.pdf

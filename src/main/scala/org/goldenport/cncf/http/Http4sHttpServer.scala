@@ -4,7 +4,7 @@ package org.goldenport.cncf.http
  * @since   May. 18, 2026
  *  version May. 30, 2026
  *  version Jun. 19, 2026
- * @version Jul. 10, 2026
+ * @version Jul. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 import cats.effect.IO
@@ -63,7 +63,7 @@ import org.goldenport.observation.{Cause, Descriptor}
  *  version Apr. 30, 2026
  *  version May. 25, 2026
  *  version Jun. 19, 2026
- * @version Jul. 10, 2026
+ * @version Jul. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Http4sHttpServer(
@@ -161,6 +161,10 @@ final class Http4sHttpServer(
         _web_global_asset(_web_global_asset_path(req).get)
       case req @ GET -> Root / "web" / "blob" / "content" / id =>
         _blob_content(req, id)
+      case req @ GET -> Root / "openapi.json" =>
+        if (_is_production_operation_mode) _document_unavailable_in_production("System help")
+        else if (_is_web_authorized("system", "help", "openapi", Some(req), Some("admin.system.document"))) _system_manual_openapi()
+        else _forbidden_web(req, Some("system"), Some("help"), Some("openapi"))
       case req @ GET -> Root / "web" / "system" / "dashboard" =>
         if (_is_web_authorized("system", "dashboard", "index", Some(req), Some("admin.system.dashboard"))) _subsystem_dashboard() else _forbidden_web(req, Some("system"), Some("dashboard"), Some("index"))
       case req @ GET -> Root / "web" / "system" / "dashboard" / "state" =>
@@ -4168,23 +4172,58 @@ final class Http4sHttpServer(
   private def _component_document_entries(
     componentName: String
   ): Vector[StaticFormAppRenderer.DocumentLink] =
-    _component_document_candidates.view.flatMap { case (title, path) =>
-      _component_document_content(componentName, path).map { _ =>
+    (_component_manual_document_candidates.view.flatMap { case (title, path) =>
+      _component_manual_document_content(componentName, path).map { _ =>
         StaticFormAppRenderer.DocumentLink(title, s"/man/${NamingConventions.toNormalizedSegment(componentName)}/${path.map(_escape_uri_path_segment).mkString("/")}")
       }
-    }.toVector
+    } ++ _component_web_document_candidates.view.flatMap { case (title, path) =>
+      _component_web_document_content(componentName, path).map { _ =>
+        StaticFormAppRenderer.DocumentLink(title, s"/man/${NamingConventions.toNormalizedSegment(componentName)}/${path.map(_escape_uri_path_segment).mkString("/")}")
+      }
+    }).toVector.distinctBy(_.href)
 
   private def _component_document_content(
     componentName: String,
     documentPath: Vector[String]
   ): Option[(BinaryBag, MediaType)] =
-    _component_document_storage_candidates(documentPath).view.flatMap { path =>
-      _component_web_roots(componentName).view.flatMap { root =>
-        root.readBinary(path).map(_ -> _asset_media_type(documentPath.lastOption.getOrElse("")))
+    _component_manual_document_content(componentName, documentPath).
+      orElse(_component_web_document_content(componentName, documentPath))
+
+  private def _component_manual_document_content(
+    componentname: String,
+    documentpath: Vector[String]
+  ): Option[(BinaryBag, MediaType)] =
+    _component_manual_roots(componentname).view.flatMap { root =>
+      root.readBinary(_relative_path(documentpath)).map(_ -> _asset_media_type(documentpath.lastOption.getOrElse("")))
+    }.headOption
+
+  private def _component_web_document_content(
+    componentname: String,
+    documentpath: Vector[String]
+  ): Option[(BinaryBag, MediaType)] =
+    _component_document_storage_candidates(documentpath).view.flatMap { path =>
+      _component_web_roots(componentname).view.flatMap { root =>
+        root.readBinary(path).map(_ -> _asset_media_type(documentpath.lastOption.getOrElse("")))
       }
     }.headOption
 
-  private def _component_document_candidates: Vector[(String, Vector[String])] =
+  private def _component_manual_document_candidates: Vector[(String, Vector[String])] =
+    _component_manual_document_candidates(
+      "Reference Manual",
+      Vector("index", "reference-manual", "reference")
+    ) ++ _component_manual_document_candidates("User Guide", Vector("user-guide"))
+
+  private def _component_manual_document_candidates(
+    title: String,
+    stems: Vector[String]
+  ): Vector[(String, Vector[String])] =
+    stems.flatMap { stem =>
+      Vector("md", "markdown", "adoc", "asciidoc", "dox", "html").map { extension =>
+        title -> Vector(s"${stem}.${extension}")
+      }
+    }
+
+  private def _component_web_document_candidates: Vector[(String, Vector[String])] =
     Vector(
       "User Guide" -> Vector("user-guide.html"),
       "User Guide" -> Vector("user-guide.md"),
@@ -4197,6 +4236,40 @@ final class Http4sHttpServer(
       "Packaged Specification" -> Vector("specification.pdf"),
       "README" -> Vector("README.md")
     )
+
+  private[http] def _component_manual_roots(
+    componentname: String
+  ): Vector[WebResourceRoot] = {
+    val normalized = NamingConventions.toNormalizedSegment(componentname)
+    val candidates = engine.runtimeSubsystem.components.
+      filter(component => _component_matches(component, normalized))
+    _highest_priority_components(candidates).flatMap(_component_manual_roots)
+  }
+
+  private def _component_manual_roots(
+    component: org.goldenport.cncf.component.Component
+  ): Vector[WebResourceRoot] =
+    (_configured_component_dev_dirs().
+      filter(_configured_component_dev_dir_matches(component, _)).
+      flatMap { path =>
+        Vector(
+          path.resolve("src").resolve("main").resolve("car").resolve("manual"),
+          path.resolve("manual")
+        ).filter(Files.isDirectory(_)).map(WebResourceRoot.directory)
+      } ++ component.artifactMetadata.toVector.
+      flatMap(_.archivePath).
+      map(path => Paths.get(path).toAbsolutePath.normalize).
+      distinct.
+      flatMap { path =>
+        if (WebResourceRoot.isArchiveFile(path))
+          Vector(WebResourceRoot.archiveSubtree(path, Vector("manual")))
+        else
+          Vector(
+            path.resolve("car.d").resolve("manual"),
+            path.resolve("src").resolve("main").resolve("car").resolve("manual"),
+            path.resolve("manual")
+          ).filter(Files.isDirectory(_)).map(WebResourceRoot.directory)
+      }).distinct
 
   private def _component_document_storage_candidates(
     documentPath: Vector[String]

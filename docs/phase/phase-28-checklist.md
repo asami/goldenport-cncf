@@ -51,6 +51,15 @@ been recorded without reopening the Web UI DSL phase:
       CAR-root source directory to `src/main/car`.
 - [x] Clarify that `src/main/car/assembly-descriptor.yaml` is the standard
       component-local assembly defaults source.
+- [x] Jul. 14, 2026: Serve packaged `src/main/car/manual/*` content through
+      `/man/{component}/*`.
+- [x] Add generated component Help navigation to CLI help,
+      `/help/{component}`, `/man/{component}`, `/openapi.json`, and
+      `/mcp`.
+- [x] Keep existing OpenAPI compatibility routes while making
+      `/openapi.json` canonical.
+- [x] Verify canonical and compatibility OpenAPI routes share authorization
+      and production-mode visibility policy.
 - [x] Jul. 8, 2026: Harden CAR runtime intake so component CAR descriptors
       must declare name, version, and component metadata.
 - [x] Support plain `Component.Factory` discovery from component CARs and cover

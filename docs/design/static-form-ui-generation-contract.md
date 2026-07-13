@@ -112,21 +112,28 @@ Canonical routes are:
 
 - `/help`
 - `/help/system`
-- `/help/system/openapi.json`
+- `/openapi.json`
 - `/help/{component}`
 - `/help/{component}/{service}`
 - `/help/{component}/{service}/{operation}`
 - `/man`
 - `/man/system`
 - `/man/{component}`
+- `/man/{component}/index.md`
 - `/man/{component}/user-guide.md`
 - `/man/{component}/user-guide.html`
 - `/man/{component}/user-guide.pdf`
 
-Component-packaged documents are discovered from private component Web roots
-under `docs/` or `documents/`. Typical files are `user-guide.md`,
-`reference-manual.md`, and optional packaged `specification.md` or HTML/PDF
-variants. Compatibility routes under `/web/system/document` and
+`/openapi.json` is canonical. Existing
+`/help/system/openapi.json` and
+`/web/system/document/specification/openapi.json` routes remain direct-content
+compatibility aliases, but generated navigation must use the canonical route.
+
+The canonical source is `src/main/car/manual/`, packaged as the CAR `manual/`
+subtree. `src/main/car/manual/index.md` is therefore available as
+`/man/{component}/index.md`. Existing component Web roots under `docs/` or
+`documents/` remain supported for `user-guide.md`, `reference-manual.md`, and
+optional packaged `specification.md` or HTML/PDF variants. Compatibility routes under `/web/system/document` and
 `/web/{component}/document` may remain available, but new documentation should
 prefer `/help` and `/man`.
 

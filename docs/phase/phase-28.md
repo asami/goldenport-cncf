@@ -210,6 +210,18 @@ coverage:
   component-local assembly defaults source for wiring, SPI/provider defaults,
   and required provider component declarations.
 
+Post-closure CAR documentation route maintenance on Jul. 14, 2026 kept Phase
+28 closed while completing the executable source-to-route contract:
+
+- CAR manual content packaged from `src/main/car/manual/*` is discoverable
+  and served through `/man/{component}/*`.
+- Generated component Help exposes the CLI help command plus links to
+  `/help/{component}`, `/man/{component}`, `/openapi.json`, and `/mcp`.
+- `/openapi.json` is the canonical system-wide OpenAPI route; compatibility
+  routes return the same document.
+- Canonical and compatibility OpenAPI routes share the existing authorization
+  selector and production-mode visibility policy.
+
 Post-closure CAR runtime intake maintenance on Jul. 8, 2026 kept Phase 28
 closed while hardening packaged component loading:
 

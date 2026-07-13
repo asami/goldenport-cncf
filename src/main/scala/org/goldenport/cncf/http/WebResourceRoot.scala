@@ -9,7 +9,8 @@ import org.goldenport.bag.{Bag, BinaryBag}
 
 /*
  * @since   Apr. 20, 2026
- * @version Apr. 25, 2026
+ *  version Apr. 25, 2026
+ * @version Jul. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 sealed trait WebResourceRoot {
@@ -79,11 +80,55 @@ object WebResourceRoot {
       }
   }
 
+  final case class ArchiveSubtree(
+    archive: Path,
+    prefix: Vector[String]
+  ) extends WebResourceRoot {
+    def name: String = s"${archive}!/${prefix.mkString("/")}"
+
+    def exists(relativePath: Path): Boolean =
+      _entry_name(relativePath).exists { entry =>
+        Using.resource(new ZipFile(archive.toFile)) { zip =>
+          Option(zip.getEntry(entry)).exists(!_.isDirectory)
+        }
+      }
+
+    def readBinary(relativePath: Path): Option[BinaryBag] =
+      _entry_name(relativePath).flatMap { entry =>
+        Using.resource(new ZipFile(archive.toFile)) { zip =>
+          Option(zip.getEntry(entry)).filterNot(_.isDirectory).flatMap { x =>
+            val in = zip.getInputStream(x)
+            try {
+              Bag.create(in).toOption.map(_.promoteToBinary())
+            } finally {
+              in.close()
+            }
+          }
+        }
+      }
+
+    def readBytes(relativePath: Path): Option[Array[Byte]] =
+      readBinary(relativePath).map { bag =>
+        Using.resource(bag.openInputStream())(_.readAllBytes())
+      }
+
+    def readText(relativePath: Path): Option[String] =
+      readBinary(relativePath).map(_.asStringUnsafe())
+
+    private def _entry_name(relativePath: Path): Option[String] =
+      Option.when(_safe(relativePath)) {
+        (prefix ++ relativePath.iterator.asScala.map(_.toString).toVector).mkString("/")
+      }
+  }
+
   def directory(root: Path): WebResourceRoot =
     Directory(root)
 
   def archive(path: Path): WebResourceRoot =
     Archive(path)
+
+  def archiveSubtree(path: Path, prefix: Vector[String]): WebResourceRoot =
+    ArchiveSubtree(path, prefix)
 
   def isArchiveFile(path: Path): Boolean = {
     val name = path.getFileName.toString.toLowerCase(java.util.Locale.ROOT)

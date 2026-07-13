@@ -33,7 +33,7 @@ import io.circe.parser.parse
  * @since   May. 18, 2026
  *  version May. 20, 2026
  *  version Jun. 19, 2026
- * @version Jul.  8, 2026
+ * @version Jul. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 trait StaticFormAppRendererSystemAdminPart {
@@ -1898,6 +1898,7 @@ trait StaticFormAppRendererSystemAdminPart {
     currentPath: String,
     childNames: Vector[String]
   ): String = {
+    val componentpath = NamingConventions.toNormalizedSegment(component.name)
     val help = HelpProjection.project(component, selector)
     val describe = DescribeProjection.project(component, selector)
     val schema = SchemaProjection.project(component, selector)
@@ -1920,11 +1921,13 @@ trait StaticFormAppRendererSystemAdminPart {
     val body =
       s"""${manual_card("Specification navigation",
          s"""<p>This generated specification is read-only. Use it to inspect help, describe, schema, OpenAPI, and MCP entry points.</p>
+            |<p class="mb-0">CLI help: <code>cncf command meta.help ${escape(componentpath)}</code></p>
             |<div class="d-flex flex-wrap gap-2 mt-3">
             |  <a class="btn btn-outline-primary" href="${escape(currentPath)}#help">Help</a>
             |  <a class="btn btn-outline-primary" href="${escape(currentPath)}#describe">Describe</a>
             |  <a class="btn btn-outline-primary" href="${escape(currentPath)}#schema">Schema</a>
-            |  <a class="btn btn-outline-secondary" href="/help/system/openapi.json">OpenAPI JSON</a>
+            |  <a class="btn btn-outline-secondary" href="/man/${escape(componentpath)}">Manual</a>
+            |  <a class="btn btn-outline-secondary" href="/openapi.json">OpenAPI JSON</a>
             |  <a class="btn btn-outline-secondary" href="/mcp">MCP endpoint</a>
             |  <a class="btn btn-outline-secondary" href="/web/console">Console</a>
             |</div>""".stripMargin)}
@@ -1953,7 +1956,7 @@ trait StaticFormAppRendererSystemAdminPart {
             |  <a class="btn btn-outline-primary" href="/web/system/dashboard">System dashboard</a>
             |  <a class="btn btn-outline-primary" href="/web/system/admin">Admin configuration</a>
             |  <a class="btn btn-outline-primary" href="/web/system/performance">Performance details</a>
-            |  <a class="btn btn-outline-secondary" href="/help/system/openapi.json">OpenAPI JSON</a>
+            |  <a class="btn btn-outline-secondary" href="/openapi.json">OpenAPI JSON</a>
             |  <a class="btn btn-outline-secondary" href="/mcp">MCP endpoint</a>
             |  <a class="btn btn-outline-secondary" href="/web/console">Console</a>
             |</div>""".stripMargin)}
@@ -2335,7 +2338,7 @@ trait StaticFormAppRendererSystemAdminPart {
          "REST" -> restPath,
          "Form" -> formPath,
          "Form API" -> formApiPath,
-       "OpenAPI JSON" -> "/help/system/openapi.json"
+       "OpenAPI JSON" -> "/openapi.json"
       ))}
        |${manual_child_entity_binding_summary(record)}
        |${manual_association_binding_summary(record)}
