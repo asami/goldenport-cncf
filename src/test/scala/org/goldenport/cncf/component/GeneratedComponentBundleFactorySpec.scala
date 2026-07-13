@@ -23,7 +23,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Apr. 22, 2026
  *  version May. 15, 2026
- * @version Jul. 11, 2026
+ * @version Jul. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final class GeneratedComponentBundleFactorySpec
@@ -60,6 +60,24 @@ final class GeneratedComponentBundleFactorySpec
       resolved.map(_.value) shouldBe Some(ConfigurationValue.StringValue("dynamic"))
       resolved.map(_.source) shouldBe Some(org.goldenport.cncf.config.ResolvedParameter.Source.Component("dynamic-playwright"))
       packaged.map(_.value) shouldBe Some(ConfigurationValue.StringValue("30s"))
+    }
+
+    "resolve entity runtime descriptors declared by generated components" in {
+      Given("a generated component override supplies CML entity descriptors")
+      val subsystem = TestComponentFactory.emptySubsystem("generated-descriptor")
+
+      When("the component is created without separately injected descriptors")
+      val component = _generated_bundle_factory.PrimaryFactory.createPrimary(
+        ComponentCreate(subsystem, ComponentOrigin.Repository("cozy-generated"))
+      )
+
+      Then("runtime policy resolves the generated descriptor by entity and collection name")
+      component.entityRuntimeDescriptor("SharedNotice").map(_.usageKind) should contain(
+        org.goldenport.cncf.security.EntityUsageKind.SharedRecord
+      )
+      component.entityRuntimeDescriptor("shared_notice").map(_.usageKind) should contain(
+        org.goldenport.cncf.security.EntityUsageKind.SharedRecord
+      )
     }
 
     "keep named instances in component space and select the declared default by name" in {
@@ -185,6 +203,24 @@ final class GeneratedComponentBundleFactorySpec
     object PrimaryFactory extends Component.PrimaryComponentFactory {
       protected def create_Component(params: ComponentCreate): Component =
         new Component() {
+          override def componentDescriptors: Vector[ComponentDescriptor] =
+            Vector(ComponentDescriptor(
+              name = Some("domain"),
+              componentName = Some("domain"),
+              entityRuntimeDescriptors = Vector(
+                org.goldenport.cncf.entity.runtime.EntityRuntimeDescriptor(
+                  entityName = "SharedNotice",
+                  collectionId = org.simplemodeling.model.datatype.EntityCollectionId("test", "domain", "shared_notice"),
+                  memoryPolicy = org.goldenport.cncf.entity.runtime.EntityMemoryPolicy.LoadToMemory,
+                  partitionStrategy = org.goldenport.cncf.entity.runtime.PartitionStrategy.byOrganizationMonthUTC,
+                  maxPartitions = 4,
+                  maxEntitiesPerPartition = 16,
+                  usageKind = org.goldenport.cncf.security.EntityUsageKind.SharedRecord,
+                  applicationDomain = org.goldenport.cncf.security.EntityApplicationDomain.Business
+                )
+              )
+            ))
+
           override def eventReceptionDefinitions: Vector[CmlEventDefinition] =
             Vector(
               CmlEventDefinition(

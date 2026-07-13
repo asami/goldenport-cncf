@@ -69,7 +69,7 @@ import org.goldenport.cncf.config.RuntimeFileConfigLoader
  *  version Mar. 30, 2026
  *  version Apr. 29, 2026
  *  version May. 25, 2026
- * @version Jul.  6, 2026
+ * @version Jul. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 trait BehaviorFeaturePart { self: Behavior.Core.Holder =>
@@ -2285,7 +2285,9 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
             case _ => EntityApplicationDomain.default
         )
     val profiles =
-      if (
+      if (entityusage == EntityUsageKind.SharedRecord)
+        EntityCreateOptions.sharedRecord.defaultProfiles
+      else if (
         entityapplicationdomain == EntityApplicationDomain.Cms ||
         entityusage == EntityUsageKind.PublicContent ||
         access.exists(_.policy.equalsIgnoreCase("public"))

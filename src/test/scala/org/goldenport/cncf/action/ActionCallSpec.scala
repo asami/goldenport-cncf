@@ -27,8 +27,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Dec. 23, 2025
  *  version Apr. 28, 2026
- *  version Jul.  3, 2026
- * @version Jul. 11, 2026
+ * @version Jul. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 class ActionCallSpec extends AnyWordSpec with Matchers {
@@ -53,6 +52,37 @@ class ActionCallSpec extends AnyWordSpec with Matchers {
       val call = _call("changePassword", Some(CmlOperationAccess("authenticated_only")))
 
       call.authorize() shouldBe a[Consequence.Failure[_]]
+    }
+
+    "apply declared authorization to a service-qualified action name" in {
+      given ExecutionContext = _execution_context(
+        principalId = "anonymous",
+        attrs = Map("anonymous" -> "true")
+      )
+      val call = _call(
+        "changePassword",
+        Some(CmlOperationAccess("authenticated_only")),
+        servicename = Some("account")
+      )
+
+      call.action.name shouldBe "account.changePassword"
+      call.authorize() shouldBe a[Consequence.Failure[_]]
+    }
+
+    "not confuse a qualified action with a shorter suffix operation" in {
+      given ExecutionContext = _execution_context(
+        principalId = "anonymous",
+        attrs = Map("anonymous" -> "true")
+      )
+      val call = _call(
+        "changePassword",
+        Some(CmlOperationAccess("authenticated_only")),
+        servicename = Some("account"),
+        definitionname = Some("password")
+      )
+
+      call.action.name shouldBe "account.changePassword"
+      call.authorize() shouldBe Consequence.unit
     }
 
     "allow anonymous_only for anonymous subject" in {
@@ -244,13 +274,15 @@ class ActionCallSpec extends AnyWordSpec with Matchers {
   }
 
   private def _call(
-    operationName: String,
-    access: Option[CmlOperationAccess]
+    operationname: String,
+    access: Option[CmlOperationAccess],
+    servicename: Option[String] = None,
+    definitionname: Option[String] = None
   )(using ExecutionContext): ActionCall = {
     val comp = new Component {
       override def operationDefinitions: Vector[CmlOperationDefinition] = Vector(
         CmlOperationDefinition(
-          name = operationName,
+          name = definitionname.getOrElse(operationname),
           kind = "command",
           inputType = "Input",
           outputType = "Output",
@@ -266,8 +298,8 @@ class ActionCallSpec extends AnyWordSpec with Matchers {
       override def request: org.goldenport.protocol.Request =
         org.goldenport.protocol.Request(
           component = None,
-          service = None,
-          operation = operationName,
+          service = servicename,
+          operation = operationname,
           arguments = Nil,
           switches = Nil,
           properties = List(Property("dummy", "x", None))

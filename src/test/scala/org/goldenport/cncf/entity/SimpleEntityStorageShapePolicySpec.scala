@@ -7,7 +7,7 @@ import org.simplemodeling.model.value.SecurityAttributes
 
 /*
  * @since   Apr. 26, 2026
- * @version Apr. 26, 2026
+ * @version Jul. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 final class SimpleEntityStorageShapePolicySpec extends AnyWordSpec with Matchers {
@@ -57,6 +57,27 @@ final class SimpleEntityStorageShapePolicySpec extends AnyWordSpec with Matchers
       attributes.ownerId.id.value shouldBe "target_owner"
       attributes.groupId.id.value shouldBe "target_group"
       attributes.privilegeId.id.value shouldBe "target_privilege"
+      attributes.rights.other.read shouldBe false
+    }
+
+    "preserve private permissions when a datastore decodes permission JSON as a Record" in {
+      val privaterights = SecurityAttributes.privateOwnedBy("alice").rights
+      val permission = Record.dataAuto(
+        "owner" -> privaterights.owner.toRecord,
+        "group" -> privaterights.group.toRecord,
+        "other" -> privaterights.other.toRecord
+      )
+      val record = Record.dataAuto(
+        "owner_id" -> "alice",
+        "group_id" -> "alice",
+        "privilege_id" -> "alice",
+        "permission" -> permission
+      )
+
+      val attributes = SimpleEntityStorageShapePolicy.securityAttributesFromRecord(record).get
+
+      attributes.rights.owner.read shouldBe true
+      attributes.rights.group.read shouldBe false
       attributes.rights.other.read shouldBe false
     }
 

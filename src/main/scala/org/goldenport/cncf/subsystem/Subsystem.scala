@@ -53,7 +53,7 @@ import org.goldenport.cncf.spi.{ComponentApiResolver, ResolvedSpiBinding, SpiInv
  *  version Jan. 31, 2026
  *  version Feb.  4, 2026
  *  version Apr. 30, 2026
- * @version Jul. 13, 2026
+ * @version Jul. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Subsystem(
@@ -326,7 +326,7 @@ final class Subsystem(
   ): Consequence[ExecutionResult] = {
     val requestwithhttpproperties =
       httprequest
-        .map(req => request.copy(properties = request.properties ++ _framework_properties_from_http(req)))
+        .map(req => _with_framework_properties(request, req))
         .getOrElse(request)
     var lastexecutionmetadata = RuntimeContext.ExecutionMetadata.empty
     val r: Consequence[ExecutionResult] = for {
@@ -1183,7 +1183,7 @@ final class Subsystem(
         "HTTP ingress not configured"
       )
       request0 <- ingress.encode(operation, req)
-      request1 = request0.copy(properties = request0.properties ++ _framework_properties_from_http(req))
+      request1 = _with_framework_properties(request0, req)
       request = request1.component match {
         case Some(_) => request1
         case None =>
@@ -1285,6 +1285,10 @@ final class Subsystem(
       req.form.getString(name).filter(_.nonEmpty).map(value => Property(name, value, None))
     }
     val header = req.header.asMap.toVector.collect {
+      case (name, value) if _http_name_matches(name, "authorization") =>
+        Property("authorization", value.toString, None)
+      case (name, value) if _http_name_matches(name, "cookie") =>
+        Property("cookie", value.toString, None)
       case (name, value) if _http_name_matches(name, "x-textus-debug-calltree") =>
         Property("x-textus-debug-calltree", value.toString, None)
       case (name, value) if _http_name_matches(name, "x-textus-debug-trace-job") =>
@@ -1299,8 +1303,22 @@ final class Subsystem(
         Property("x-textus-operation-origin-slot", value.toString, None)
       case (name, value) if _http_name_matches(name, "x-textus-session") =>
         Property("x-textus-session", value.toString, None)
+      case (name, value) if _http_name_matches(name, "x-cncf-session") =>
+        Property("x-cncf-session", value.toString, None)
     }
     (query ++ form ++ header).toList
+  }
+
+  private def _with_framework_properties(
+    request: Request,
+    httprequest: HttpRequest
+  ): Request = {
+    val additions = _framework_properties_from_http(httprequest)
+    val additionnames = additions.iterator.map(_.name.toLowerCase(java.util.Locale.ROOT)).toSet
+    val retained = request.properties.filterNot { property =>
+      additionnames.contains(property.name.toLowerCase(java.util.Locale.ROOT))
+    }
+    request.copy(properties = retained ++ additions)
   }
 
   private def _http_query_record(

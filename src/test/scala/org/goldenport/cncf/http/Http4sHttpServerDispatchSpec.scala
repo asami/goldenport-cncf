@@ -30,7 +30,7 @@ import org.typelevel.ci.CIStringSyntax
  *  version Apr. 25, 2026
  *  version May. 25, 2026
  *  version Jun. 19, 2026
- * @version Jul.  7, 2026
+ * @version Jul. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers {
@@ -103,6 +103,24 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers {
       body should include ("url: \"https://example.test/a b\"")
       body should not include ("Knowledge%20Import%20Paper")
       body should not include ("https%3A%2F%2Fexample.test")
+    }
+
+    "preserve authorization headers for empty REST GET operation requests" in {
+      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val app = server.routes(null.asInstanceOf[org.http4s.server.websocket.WebSocketBuilder2[IO]]).orNotFound
+
+      val response = app
+        .run(HRequest[IO](
+          method = Method.GET,
+          uri = Uri.unsafeFromString("/rest/v1/debug/http/echo?authorization=spoofed")
+        ).putHeaders(org.http4s.Header.Raw(ci"Authorization", "Bearer authenticated-user")))
+        .unsafeRunSync()
+      val body = response.as[String].unsafeRunSync()
+
+      response.status.code shouldBe 200
+      body should include ("value: \"Bearer authenticated-user\"")
+      "value: \"Bearer authenticated-user\"".r.findAllIn(body).length shouldBe 1
     }
 
     "serve GET-backed HEAD responses without response bodies" in {

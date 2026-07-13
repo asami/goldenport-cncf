@@ -26,7 +26,8 @@ import org.simplemodeling.model.directive.Condition
 
 /*
  * @since   Mar. 29, 2026
- * @version Apr. 26, 2026
+ *  version Apr. 26, 2026
+ * @version Jul. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ActionCallEntityAccessMetricsSpec
@@ -465,16 +466,16 @@ final class ActionCallEntityAccessMetricsSpec
         val created = probe.createPublic[TestPersonCreate](TestPersonCreate("created-from-dto", 42, cid))
 
         Then("the stored record is decoded into the entity-space working set")
-        val createdId = created match {
+        val createdid = created match {
           case Consequence.Success(result) => result.id
           case other => fail(s"create failed: $other")
         }
-        val workingSet = component.entitySpace.entity[TestPerson](cid.name).storage.storeRealm.values
-        workingSet.map(_.id) should contain(createdId)
-        val createdEntity = workingSet.find(_.id == createdId).get
-        createdEntity.postStatus.map(_.toLowerCase(java.util.Locale.ROOT).contains("published")) should contain(true)
-        createdEntity.aliveness.map(_.toLowerCase(java.util.Locale.ROOT).contains("alive")) should contain(true)
-        createdEntity.securityAttributes
+        val workingset = component.entitySpace.entity[TestPerson](cid.name).storage.storeRealm.values
+        workingset.map(_.id) should contain(createdid)
+        val createdentity = workingset.find(_.id == createdid).get
+        createdentity.postStatus.map(_.toLowerCase(java.util.Locale.ROOT).contains("published")) should contain(true)
+        createdentity.aliveness.map(_.toLowerCase(java.util.Locale.ROOT).contains("alive")) should contain(true)
+        createdentity.securityAttributes
           .flatMap(_.getRecord("rights"))
           .flatMap(_.getRecord("other"))
           .flatMap(_.getBoolean("read")) should contain(false)
@@ -487,7 +488,7 @@ final class ActionCallEntityAccessMetricsSpec
           age = Condition.any[Int]
         )))
         val result = probe.search[TestPerson](query)
-        result.map(_.data.map(_.id)) shouldBe Consequence.success(Vector(createdId))
+        result.map(_.data.map(_.id)) shouldBe Consequence.success(Vector(createdid))
         _metric_count("entity.search.hit.entity-space", "entity-space") shouldBe 1L
         _metric_count("entity.search.fallback.entity-store", "entity-store") shouldBe 0L
       }
@@ -527,18 +528,67 @@ final class ActionCallEntityAccessMetricsSpec
         val created = probe.create[TestPersonCreate](TestPersonCreate("descriptor-cms-default", 41, cid))
 
         Then("the descriptor classification activates CMS/public-read defaults")
-        val createdId = created match {
+        val createdid = created match {
           case Consequence.Success(result) => result.id
           case other => fail(s"create failed: $other")
         }
-        val createdEntity = component.entitySpace.entity[TestPerson](cid.name).storage.storeRealm.values.find(_.id == createdId).get
-        createdEntity.securityAttributes
+        val createdentity = component.entitySpace.entity[TestPerson](cid.name).storage.storeRealm.values.find(_.id == createdid).get
+        createdentity.securityAttributes
           .flatMap(_.getRecord("rights"))
           .flatMap(_.getRecord("other"))
           .flatMap(_.getBoolean("read")) should contain(true)
-        createdEntity.publishAt should not be empty
-        createdEntity.publicAt should not be empty
-        createdEntity.publishedBy should not be empty
+        createdentity.publishAt should not be empty
+        createdentity.publicAt should not be empty
+        createdentity.publishedBy should not be empty
+      }
+    }
+
+    "derive shared read defaults without CMS publication fields" in {
+      EntityAccessMetricsRegistry.shared.synchronized {
+        Given("a component descriptor declares a shared business record")
+        EntityAccessMetricsRegistry.shared.clear()
+        given EntityPersistent[TestPerson] = _persistent
+        given EntityPersistentCreate[TestPersonCreate] = _create_persistent
+
+        val datastorespace = DataStoreSpace.default()
+        val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+        val ctx = _execution_context(datastorespace, entitystorespace)
+        val cid = _cid("person_metrics_descriptor_shared_create")
+        val component = TestComponentFactory.create("descriptor_shared_create", Protocol.empty)
+          .withComponentDescriptors(Vector(ComponentDescriptor(
+            name = Some("descriptor-shared-create"),
+            componentName = Some("descriptor-shared-create"),
+            entityRuntimeDescriptors = Vector(EntityRuntimeDescriptor(
+              entityName = "TestPerson",
+              collectionId = cid,
+              memoryPolicy = EntityMemoryPolicy.LoadToMemory,
+              partitionStrategy = PartitionStrategy.byOrganizationMonthUTC,
+              maxPartitions = 4,
+              maxEntitiesPerPartition = 16,
+              usageKind = EntityUsageKind.SharedRecord,
+              operationKind = EntityOperationKind.Resource,
+              applicationDomain = EntityApplicationDomain.Business
+            ))
+          )))
+        component.entitySpace.registerEntity(cid.name, _empty_collection(cid))
+        val probe = _component_scoped_probe(component, ctx)
+
+        When("creating through ActionCallEntityStorePart without operation-level ACCESS")
+        val created = probe.create[TestPersonCreate](TestPersonCreate("descriptor-shared-default", 43, cid))
+
+        Then("the shared record is readable by other subjects without CMS lifecycle metadata")
+        val createdid = created match {
+          case Consequence.Success(result) => result.id
+          case other => fail(s"create failed: $other")
+        }
+        val createdentity = component.entitySpace.entity[TestPerson](cid.name).storage.storeRealm.values.find(_.id == createdid).get
+        createdentity.securityAttributes
+          .flatMap(_.getRecord("rights"))
+          .flatMap(_.getRecord("other"))
+          .flatMap(_.getBoolean("read")) should contain(true)
+        createdentity.publishAt shouldBe empty
+        createdentity.publicAt shouldBe empty
+        createdentity.publishedBy shouldBe empty
       }
     }
 
@@ -576,18 +626,18 @@ final class ActionCallEntityAccessMetricsSpec
         val created = probe.create[TestPersonCreate](TestPersonCreate("descriptor-business-default", 42, cid))
 
         Then("the descriptor classification keeps business/private defaults")
-        val createdId = created match {
+        val createdid = created match {
           case Consequence.Success(result) => result.id
           case other => fail(s"create failed: $other")
         }
-        val createdEntity = component.entitySpace.entity[TestPerson](cid.name).storage.storeRealm.values.find(_.id == createdId).get
-        createdEntity.securityAttributes
+        val createdentity = component.entitySpace.entity[TestPerson](cid.name).storage.storeRealm.values.find(_.id == createdid).get
+        createdentity.securityAttributes
           .flatMap(_.getRecord("rights"))
           .flatMap(_.getRecord("other"))
           .flatMap(_.getBoolean("read")) should contain(false)
-        createdEntity.publishAt shouldBe empty
-        createdEntity.publicAt shouldBe empty
-        createdEntity.publishedBy shouldBe empty
+        createdentity.publishAt shouldBe empty
+        createdentity.publicAt shouldBe empty
+        createdentity.publishedBy shouldBe empty
       }
     }
   }
@@ -840,11 +890,11 @@ final class ActionCallEntityAccessMetricsSpec
 
   private def _typed_security_persistent(ownerId: String): EntityPersistent[TestPerson] =
     new EntityPersistent[TestPerson] {
-      private val base = _persistent
+      private val _base = _persistent
 
       def id(e: TestPerson): EntityId = e.id
       def toRecord(e: TestPerson): Record = e.toRecord()
-      def fromRecord(r: Record): Consequence[TestPerson] = base.fromRecord(r)
+      def fromRecord(r: Record): Consequence[TestPerson] = _base.fromRecord(r)
       override def securityAttributes(e: TestPerson): Option[org.simplemodeling.model.value.SecurityAttributes] =
         Some(org.simplemodeling.model.value.SecurityAttributes.ownedBy(ownerId))
     }

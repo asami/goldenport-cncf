@@ -56,7 +56,7 @@ import org.goldenport.schema.{DataType, XString}
  *  version Apr. 30, 2026
  *  version May. 20, 2026
  *  version Jun. 18, 2026
- * @version Jul. 12, 2026
+ * @version Jul. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class Component() extends Component.Core.Holder {
@@ -124,7 +124,7 @@ abstract class Component() extends Component.Core.Holder {
     entityName: String
   ): Option[org.goldenport.cncf.entity.runtime.EntityRuntimeDescriptor] = {
     val name = Option(entityName).getOrElse("").trim
-    _component_descriptors.iterator.flatMap(_.entityRuntimeDescriptors).find { d =>
+    (_component_descriptors ++ componentDescriptors).distinct.iterator.flatMap(_.entityRuntimeDescriptors).find { d =>
       NamingConventions.equivalentByNormalized(d.entityName, name) ||
       NamingConventions.equivalentByNormalized(d.collectionId.name, name)
     }

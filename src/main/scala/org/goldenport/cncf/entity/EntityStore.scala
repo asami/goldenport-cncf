@@ -23,7 +23,8 @@ import org.simplemodeling.model.statemachine.{Aliveness, PostStatus}
  *  version Feb. 26, 2026
  *  version Mar. 30, 2026
  *  version Apr. 26, 2026
- * @version May. 17, 2026
+ *  version May. 17, 2026
+ * @version Jul. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class EntityStore {
@@ -132,6 +133,7 @@ final case class EntityCreateOptions(
 }
 object EntityCreateOptions {
   val default: EntityCreateOptions = EntityCreateOptions()
+  val sharedRecord: EntityCreateOptions = EntityCreateOptions(Set("public-read"))
 }
 
 case class CreateResult[T](

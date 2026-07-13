@@ -13,7 +13,8 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Apr. 13, 2026
  *  version Apr. 16, 2026
  *  version Apr. 24, 2026
- * @version May.  7, 2026
+ *  version May.  7, 2026
+ * @version Jul. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentDescriptorSpec extends AnyWordSpec with Matchers {
@@ -53,6 +54,20 @@ final class ComponentDescriptorSpec extends AnyWordSpec with Matchers {
       descriptor.entityKind shouldBe EntityKind.Workflow
       descriptor.usageKind shouldBe EntityUsageKind.BusinessRecord
       descriptor.operationKind shouldBe EntityOperationKind.Task
+      descriptor.applicationDomain shouldBe EntityApplicationDomain.Business
+    }
+
+    "decode shared business record usage" in {
+      val rec = Record.data(
+        "entity" -> "SharedCatalog",
+        "usageKind" -> "shared-record",
+        "applicationDomain" -> "business"
+      )
+
+      val descriptor = summon[RecordDecoder[EntityRuntimeDescriptor]].fromRecord(rec).toOption.get
+
+      descriptor.usageKind shouldBe EntityUsageKind.SharedRecord
+      descriptor.operationKind shouldBe EntityOperationKind.Resource
       descriptor.applicationDomain shouldBe EntityApplicationDomain.Business
     }
 

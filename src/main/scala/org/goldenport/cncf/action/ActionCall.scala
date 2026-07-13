@@ -29,7 +29,7 @@ import org.goldenport.cncf.Program
  *  version Feb. 21, 2026
  *  version Apr. 28, 2026
  *  version May. 23, 2026
- * @version Jul. 12, 2026
+ * @version Jul. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class ActionCall()
@@ -99,7 +99,16 @@ abstract class ActionCall()
     }.getOrElse(Vector.empty)
 
   private def _declared_operation =
-    component.flatMap(_.operationDefinitions.find(x => _normalize_name(x.name) == _normalize_name(action.name)))
+    component.flatMap { c =>
+      val actionnames = Vector(action.request.operation, action.name)
+        .map(_normalize_name)
+        .filter(_.nonEmpty)
+        .toSet
+      c.operationDefinitions.find { operation =>
+        val operationname = _normalize_name(operation.name)
+        actionnames.contains(operationname)
+      }
+    }
 
   private def _normalize_name(p: String): String =
     Option(p).getOrElse("").toLowerCase(java.util.Locale.ROOT).replaceAll("[^a-z0-9]", "")

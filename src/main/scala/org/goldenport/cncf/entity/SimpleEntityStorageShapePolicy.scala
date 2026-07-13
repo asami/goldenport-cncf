@@ -8,7 +8,7 @@ import org.simplemodeling.model.value.SecurityAttributes
 
 /*
  * @since   Apr. 26, 2026
- * @version Apr. 26, 2026
+ * @version Jul. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 object SimpleEntityStorageShapePolicy {
@@ -108,9 +108,9 @@ object SimpleEntityStorageShapePolicy {
 
   def securityAttributesFromRecord(record: Record): Option[SecurityAttributes] = {
     val fallback = SecurityAttributes.fromRecord(record)
-    val rights = stringValue(record, PermissionField).flatMap(permissionRightsFromJson)
+    val rights = _permission_rights(record)
       .orElse(fallback.map(_.rights))
-    _targetSecurityAttributes(record, rights) match {
+    _target_security_attributes(record, rights) match {
       case Some(attributes) =>
         Some(attributes)
       case None =>
@@ -133,6 +133,27 @@ object SimpleEntityStorageShapePolicy {
       } yield SecurityAttributes.Rights(owner, group, other)
     }
 
+  private def _permission_rights(record: Record): Option[SecurityAttributes.Rights] =
+    record.getAny(PermissionField).flatMap {
+      case value: String => permissionRightsFromJson(value)
+      case value: Record => _permission_rights_from_record(value)
+      case _ => None
+    }
+
+  private def _permission_rights_from_record(record: Record): Option[SecurityAttributes.Rights] =
+    for {
+      owner <- record.getRecord("owner").flatMap(_permissions)
+      group <- record.getRecord("group").flatMap(_permissions)
+      other <- record.getRecord("other").flatMap(_permissions)
+    } yield SecurityAttributes.Rights(owner, group, other)
+
+  private def _permissions(record: Record): Option[SecurityAttributes.Rights.Permissions] =
+    for {
+      read <- record.getBoolean("read")
+      write <- record.getBoolean("write")
+      execute <- record.getBoolean("execute")
+    } yield SecurityAttributes.Rights.Permissions(read, write, execute)
+
   private def _permissions(cursor: io.circe.ACursor): Option[SecurityAttributes.Rights.Permissions] =
     for {
       read <- cursor.get[Boolean]("read").toOption
@@ -151,22 +172,22 @@ object SimpleEntityStorageShapePolicy {
       "privilegeid"
     ).map(_normalize)
 
-  private def _targetSecurityAttributes(
+  private def _target_security_attributes(
     record: Record,
     rights: Option[SecurityAttributes.Rights]
   ): Option[SecurityAttributes] =
     for {
-      owner <- _targetStringValue(record, "ownerId")
+      owner <- _target_string_value(record, "ownerId")
       r <- rights
     } yield SecurityAttributes(
       ownerId = _object_id(owner),
-      groupId = _object_id(_targetStringValue(record, "groupId").getOrElse(owner)),
+      groupId = _object_id(_target_string_value(record, "groupId").getOrElse(owner)),
       rights = r,
-      privilegeId = _object_id(_targetStringValue(record, "privilegeId").getOrElse(owner))
+      privilegeId = _object_id(_target_string_value(record, "privilegeId").getOrElse(owner))
     )
 
-  private def _targetStringValue(record: Record, logicalName: String): Option[String] =
-    record.getAny(targetName(logicalName))
+  private def _target_string_value(record: Record, logicalname: String): Option[String] =
+    record.getAny(targetName(logicalname))
       .map(_single_value)
       .map(_.toString)
       .map(_.trim)
