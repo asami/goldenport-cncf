@@ -185,16 +185,22 @@ def cncfBuildInfoSource(
 def cncfRuntimeDescriptorText(
   cncfversion: String,
   scalabinaryversion: String,
-  baseprovidedmodules: Vector[String]
+  baseprovidedmodules: Vector[String],
+  predefinedresultcatalog: String
 ): String = {
   val baseprovidedblock =
     baseprovidedmodules.map(module => s"  - $module").mkString("baseProvided:\n", "\n", "")
+  val cataloglines = predefinedresultcatalog.trim.linesIterator.toVector
+  val predefinedresultsblock = cataloglines.headOption.map { head =>
+    (s"predefinedResults: $head" +: cataloglines.drop(1).map(line => s"  $line")).mkString("\n")
+  }.getOrElse("predefinedResults: {}")
   s"""schemaVersion: 1
      |runtime: cncf
      |version: $cncfversion
      |scalaBinaryVersion: "$scalabinaryversion"
      |module: org.goldenport:goldenport-cncf_$scalabinaryversion:$cncfversion
      |$baseprovidedblock
+     |$predefinedresultsblock
      |""".stripMargin
 }
 
@@ -411,7 +417,8 @@ lazy val root = project
             organization.value,
             name.value,
             scalaBinaryVersion.value
-          )
+          ),
+          IO.read(baseDirectory.value / "src" / "main" / "resources" / "META-INF" / "cncf" / "predefined-results.json")
         )
       )
       file

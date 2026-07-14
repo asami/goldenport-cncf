@@ -23,6 +23,7 @@ class PredefinedResultCatalogSpec extends AnyWordSpec with Matchers with GivenWh
 
       Then("the catalog exposes stable runtime classes and payload schemas")
       catalog.schemaVersion shouldBe "cncf.predefined-result.v1"
+      PredefinedResultCatalog.RESOURCE_PATH shouldBe "META-INF/cncf/predefined-results.json"
       operationresult.map(_.runtimeClassName) shouldBe Some(classOf[OperationResult].getName)
       operationresult.toVector.flatMap(_.resultFields) shouldBe empty
       unitresult.map(_.runtimeClassName) shouldBe Some(classOf[UnitResult].getName)
