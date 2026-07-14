@@ -25,3 +25,7 @@ Current Entity/Blob usage design:
 Current component composition design:
 
 - `typed-component-api-and-multi-instance-spi.md`
+
+Current operation contract design:
+
+- `predefined-result-catalog.md`
