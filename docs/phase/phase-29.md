@@ -128,6 +128,13 @@ it does not reopen the Phase 29 API or selection contract.
 
 ## 7. Post-closure Maintenance
 
+Post-closure assembly configuration maintenance on Jul. 14, 2026 kept Phase
+29 closed while making an explicitly selected assembly descriptor's `config`
+section part of normal resolved runtime configuration. Assembly entries act as
+defaults: test descriptors and command-line arguments retain higher
+precedence. CNCF executable specs cover that ordering, and ArtScene's Phase 9A
+smoke verifies the resulting standalone and multi-user component assemblies.
+
 Post-closure CNCF test-runtime maintenance on Jul. 12, 2026 kept Phase 29
 closed while hardening the ArtScene driver smoke path:
 

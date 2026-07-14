@@ -12,11 +12,69 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Apr. 15, 2026
  *  version Apr. 25, 2026
- * @version Jul. 12, 2026
+ * @version Jul. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   "CncfRuntime" should {
+    "apply assembly descriptor config while preserving test and command-line precedence" in {
+      Given("an assembly descriptor with runtime config and a test descriptor override")
+      val cwd = Files.createTempDirectory("cncf-assembly-runtime-config")
+      val assemblydescriptor = cwd.resolve("assembly.yaml")
+      val testdescriptor = cwd.resolve("test.yaml")
+      Files.writeString(
+        assemblydescriptor,
+        """subsystem: config-target
+          |components: []
+          |config:
+          |  textus.artscene.application.mode: multi_user
+          |  textus.component.art-scene.datastores.application.policy: external-required
+          |""".stripMargin
+      )
+      Files.writeString(
+        testdescriptor,
+        """kind: test-descriptor
+          |config:
+          |  textus.artscene.application.mode: test_multi_user
+          |""".stripMargin
+      )
+
+      When("the assembly is bootstrapped without and with higher-precedence overrides")
+      val assemblyonly = CncfRuntime.bootstrap(
+        cwd,
+        Array(s"--textus.assembly.descriptor=${assemblydescriptor}", "command")
+      )
+      val testoverride = CncfRuntime.bootstrap(
+        cwd,
+        Array(
+          s"--textus.assembly.descriptor=${assemblydescriptor}",
+          s"--textus.test.descriptor=${testdescriptor}",
+          "command"
+        )
+      )
+      val clioverride = CncfRuntime.bootstrap(
+        cwd,
+        Array(
+          s"--textus.assembly.descriptor=${assemblydescriptor}",
+          s"--textus.test.descriptor=${testdescriptor}",
+          "--textus.artscene.application.mode=standalone",
+          "command"
+        )
+      )
+
+      Then("assembly config supplies defaults and explicit test or CLI config wins")
+      RuntimeConfig.getString(assemblyonly.configuration, "textus.artscene.application.mode") shouldBe Some("multi_user")
+      RuntimeConfig.getString(
+        assemblyonly.configuration,
+        "textus.component.art-scene.datastores.application.policy"
+      ) shouldBe Some("external-required")
+      RuntimeConfig.getString(testoverride.configuration, "textus.artscene.application.mode") shouldBe Some("test_multi_user")
+      RuntimeConfig.getString(clioverride.configuration, "textus.artscene.application.mode") shouldBe Some("standalone")
+      assemblyonly.configuration.trace
+        .get("textus.artscene.application.mode")
+        .flatMap(_.sourceType) shouldBe Some("assembly-descriptor")
+    }
+
     "select search repositories only as development assembly API sources" in {
       Given("one active component development target and one dependency search repository")
       val dev = ComponentRepository.ComponentDevDirRepository.Specification(Paths.get("/tmp/app"))

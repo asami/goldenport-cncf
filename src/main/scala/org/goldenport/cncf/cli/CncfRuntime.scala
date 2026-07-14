@@ -17,7 +17,7 @@ import org.goldenport.observation.Taxonomy
 import org.goldenport.observation.Descriptor.Facet
 import org.goldenport.bag.Bag
 import org.goldenport.cli.parser.ArgsParser
-import org.goldenport.configuration.{Configuration, ConfigurationOrigin, ConfigurationResolver, ConfigurationSources, ConfigurationTrace, ResolvedConfiguration}
+import org.goldenport.configuration.{Configuration, ConfigurationOrigin, ConfigurationResolution, ConfigurationResolver, ConfigurationSources, ConfigurationTrace, ConfigurationValue, ResolvedConfiguration}
 import org.goldenport.configuration.source.ConfigurationSource
 import org.goldenport.configuration.source.ProjectRootFinder
 import org.goldenport.cncf.component.builtin.client.ClientComponent
@@ -66,7 +66,7 @@ import org.goldenport.cncf.spi.SpiResolver
  *  version Apr. 30, 2026
  *  version May. 25, 2026
  *  version Jun. 29, 2026
- * @version Jul. 12, 2026
+ * @version Jul. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 object CncfRuntime extends GlobalObservable {
@@ -373,7 +373,7 @@ object CncfRuntime extends GlobalObservable {
 
   def executeServerEmulator(args: Array[String]): Int = {
     val cwd = Paths.get("").toAbsolutePath.normalize
-    val configuration = _resolve_configuration(cwd, args)
+    val configuration = _with_configured_assembly_descriptor_configuration(_resolve_configuration(cwd, args))
     val runtimeconfig = _runtime_config(configuration)
     val (includeheader, rest) = _include_header(args)
     val result = normalizeServerEmulatorArgs(rest, runtimeconfig.serverEmulatorBaseUrl) match {
@@ -404,7 +404,7 @@ object CncfRuntime extends GlobalObservable {
     extracomponents: Subsystem => Seq[Component]
   ): Int = {
     val cwd = Paths.get("").toAbsolutePath.normalize
-    val configuration = _resolve_configuration(cwd, args)
+    val configuration = _with_configured_assembly_descriptor_configuration(_resolve_configuration(cwd, args))
     val runtimeconfig = _runtime_config(configuration)
     val (includeheader, rest) = _include_header(args)
     val result = normalizeServerEmulatorArgs(rest, runtimeconfig.serverEmulatorBaseUrl) match {
@@ -486,7 +486,7 @@ object CncfRuntime extends GlobalObservable {
     val normalizedargs = _normalize_source_args(args)
     if (!normalizedargs.sameElements(args))
       return bootstrap(cwd, normalizedargs)
-    val configuration = _resolve_configuration(cwd, args)
+    val configuration = _with_configured_assembly_descriptor_configuration(_resolve_configuration(cwd, args))
     val front = frontParameters(configuration, args)
     val invocation = canonicalInvocationParameters(configuration, front.residualArgs)
     val withcomponentfile = _with_auto_component_file(cwd, args, configuration, invocation)
@@ -494,6 +494,52 @@ object CncfRuntime extends GlobalObservable {
       return bootstrap(cwd, withcomponentfile)
     val repositories = repositoryParameters(configuration, args, cwd)
     RuntimeBootstrap(configuration, front, invocation, repositories)
+  }
+
+  private def _with_configured_assembly_descriptor_configuration(
+    configuration: ResolvedConfiguration
+  ): ResolvedConfiguration = {
+    val source = RuntimeConfig
+      .getString(configuration, RuntimeConfig.AssemblyDescriptorKey)
+      .map(_.trim)
+      .filter(_.nonEmpty)
+      .map(Paths.get(_))
+      .flatMap(GenericSubsystemDescriptor.loadAssemblyDescriptor)
+    source match {
+      case Some(assembly) =>
+        val descriptor = GenericSubsystemDescriptor(
+          path = assembly.path.getOrElse(Paths.get(".")),
+          subsystemName = "configured-assembly"
+        )
+        val assemblyconfig = GenericSubsystemDescriptor.applyAssemblyOverride(descriptor, assembly).config
+        val missing = assemblyconfig.filterNot { case (key, _) =>
+          configuration.configuration.values.contains(key)
+        }
+        if (missing.isEmpty) {
+          configuration
+        } else {
+          val sourceid = assembly.path.map(_.toString)
+          val values = missing.map { case (key, value) =>
+            key -> ConfigurationValue.StringValue(value)
+          }
+          val entries = missing.map { case (key, value) =>
+            key -> ConfigurationResolution(
+              key = key,
+              finalValue = ConfigurationValue.StringValue(value),
+              origin = ConfigurationOrigin.Resource,
+              history = Nil,
+              sourceType = Some("assembly-descriptor"),
+              sourceId = sourceid
+            )
+          }
+          ResolvedConfiguration(
+            Configuration(configuration.configuration.values ++ values),
+            ConfigurationTrace(configuration.trace.entries ++ entries)
+          )
+        }
+      case None =>
+        configuration
+    }
   }
 
   private def _with_auto_component_file(

@@ -15,6 +15,11 @@ complements the summary-level phase document (`phase-29.md`).
 
 ## Post-closure Maintenance
 
+- [x] Jul. 14, 2026: Apply explicitly selected assembly descriptor `config`
+      entries as runtime defaults while preserving test-descriptor and
+      command-line precedence.
+- [x] Verify the assembly configuration order in CNCF executable specs and in
+      ArtScene's standalone/multi-user Phase 9A smoke.
 - [x] Jul. 12, 2026: Add explicit CNCF test-home support without mutating JVM
       `user.home`.
 - [x] Normalize `cncf test --test-config`, `--home`, and `--temporary-home`
