@@ -3,12 +3,13 @@ package org.goldenport.cncf.mcp
 import io.circe.{Json, JsonObject}
 import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.subsystem.Subsystem
+import org.goldenport.datatype.I18nString
 import org.goldenport.protocol.spec.{OperationDefinition, ParameterDefinition, ServiceDefinition}
 import org.goldenport.schema.{Multiplicity, XBoolean, XDouble, XFloat, XInt, XInteger, XLong}
 
 /*
  * @since   May. 18, 2026
- * @version May. 18, 2026
+ * @version Jul. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 object McpToolCatalog {
@@ -26,14 +27,29 @@ object McpToolCatalog {
   }
 
   def toolsForSubsystem(subsystem: Subsystem): Vector[Tool] =
-    subsystem.components.flatMap(toolsForComponent)
+    subsystem.components.filter(_.isPrimaryParticipant).flatMap(toolsForComponent)
 
   def toolsForComponent(component: Component): Vector[Tool] =
     component.protocol.services.services.flatMap(service =>
-      service.operations.operations.toVector.map(operation =>
-        toolForOperation(component.name, service, operation)
+      service.operations.operations.toVector.filter(operation =>
+        component.isMcpReady(service.name, operation.name)
+      ).map(operation =>
+        _tool_for_operation(component, service, operation)
       )
     )
+
+  private def _tool_for_operation(
+    component: Component,
+    service: ServiceDefinition,
+    operation: OperationDefinition
+  ): Tool = {
+    val parameters = operation.specification.request.parameters.toVector
+    Tool(
+      name = s"${component.name}.${service.name}.${operation.name}",
+      description = _description(Some(component), component.name, service, operation),
+      inputSchema = inputSchema(parameters)
+    )
+  }
 
   def toolForOperation(
     componentname: String,
@@ -43,7 +59,7 @@ object McpToolCatalog {
     val parameters = operation.specification.request.parameters.toVector
     Tool(
       name = s"$componentname.${service.name}.${operation.name}",
-      description = s"${service.name}.${operation.name}",
+      description = _description(None, componentname, service, operation),
       inputSchema = inputSchema(parameters)
     )
   }
@@ -81,6 +97,40 @@ object McpToolCatalog {
       case Multiplicity.One | Multiplicity.OneMore => true
       case _ => false
     }
+
+  private def _description(
+    component: Option[Component],
+    componentname: String,
+    service: ServiceDefinition,
+    operation: OperationDefinition
+  ): String =
+    _trim_i18n(operation.specification.summary)
+      .orElse(_trim_i18n(operation.specification.description))
+      .orElse(component.flatMap(_component_operation_summary(_, operation.name)))
+      .orElse(_trim_i18n(service.specification.summary))
+      .orElse(_trim_i18n(service.specification.description))
+      .getOrElse(s"$componentname.${service.name}.${operation.name}")
+
+  private def _trim_i18n(value: Option[I18nString]): Option[String] =
+    value.map(_.displayMessage.trim).filter(_.nonEmpty)
+
+  private def _component_operation_summary(
+    component: Component,
+    operationname: String
+  ): Option[String] = {
+    val target = _normalized_name(operationname)
+    val summaries = component.operationDefinitions
+      .filter(x => _normalized_name(x.name) == target)
+      .flatMap(_.summary.map(_.trim).filter(_.nonEmpty))
+      .distinct
+    summaries match {
+      case Vector(summary) => Some(summary)
+      case _ => None
+    }
+  }
+
+  private def _normalized_name(value: String): String =
+    Option(value).getOrElse("").toLowerCase(java.util.Locale.ROOT).replaceAll("[^a-z0-9]", "")
 
   private def _json_type(parameter: ParameterDefinition): String =
     parameter.datatype match {

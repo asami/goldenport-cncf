@@ -146,6 +146,14 @@ Phase 29 evidence boundary without reopening Phase 29.
 
 ## 9. Post-Closure Maintenance
 
+On Jul. 14, 2026, CNCF hardened its shared MCP projection boundary without
+reopening Phase 30. Components now declare MCP readiness at service or
+service-qualified operation granularity; CAR/SAR runtime configuration can
+disable but cannot expand that surface. Named JSON arguments are normalized as
+generated operation properties, and MCP tool descriptions use CML operation
+metadata when protocol metadata is absent. Full CNCF tests and representative
+SIE/CBD Support CAR tests verify publication, invocation, and tool ownership.
+
 On Jul. 12, 2026, the existing CNCF `ToolchainRunner.renderWebPage` standard
 SPI gained optional User-Agent and browser-profile controls. The change keeps
 the pre-existing positional `metadata` argument stable and leaves ordinary

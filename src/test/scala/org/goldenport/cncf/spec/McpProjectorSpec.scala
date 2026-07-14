@@ -3,23 +3,29 @@ package org.goldenport.cncf.spec
 import io.circe.parser.parse
 import org.goldenport.cncf.mcp.McpProjector
 import org.goldenport.cncf.subsystem.DefaultSubsystemFactory
+import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 19, 2026
- * @version Mar. 19, 2026
+ * @version Jul. 14, 2026
  * @author  ASAMI, Tomoharu
  */
-final class McpProjectorSpec extends AnyWordSpec with Matchers {
+final class McpProjectorSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   "McpProjector" should {
     "produce MCP tool projection output" in {
+      Given("a command subsystem with the admin system service declared MCP ready")
       val subsystem = DefaultSubsystemFactory.default(Some("command"))
+      subsystem.components.find(_.name == "admin").foreach(_.withMcpReadyServices(Set("system")))
+
+      When("the subsystem is projected as MCP metadata")
       val json = parse(McpProjector.forSubsystem(subsystem)).fold(
         err => fail(s"MCP JSON parse failed: ${err.getMessage}"),
         identity
       )
 
+      Then("the projection contains versioned, described, typed tools")
       val top = json.hcursor
       top.get[String]("mcpVersion").isRight shouldBe true
 

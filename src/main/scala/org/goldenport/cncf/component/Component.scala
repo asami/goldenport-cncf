@@ -56,7 +56,7 @@ import org.goldenport.schema.{DataType, XString}
  *  version Apr. 30, 2026
  *  version May. 20, 2026
  *  version Jun. 18, 2026
- * @version Jul. 13, 2026
+ * @version Jul. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class Component() extends Component.Core.Holder {
@@ -83,6 +83,8 @@ abstract class Component() extends Component.Core.Holder {
   private var _component_descriptors: Vector[ComponentDescriptor] = Vector.empty
   private var _instance_metadata: Option[ComponentInstanceMetadata] = None
   private var _collections_bootstrapped: Boolean = false
+  private var _mcp_ready_services: Set[String] = Set.empty
+  private var _mcp_ready_operations: Set[String] = Set.empty
   val entitySpace: EntitySpace = new EntitySpace()
   val aggregateSpace: AggregateSpace = new AggregateSpace()
   val aggregateEditContextSpace: AggregateEditContextSpace = new AggregateEditContextSpace()
@@ -231,6 +233,41 @@ abstract class Component() extends Component.Core.Holder {
 
   def applicationConfig: Component.ApplicationConfig = _application_config
 
+  def mcpReadyServices: Set[String] = _mcp_ready_services
+
+  def mcpReadyOperations: Set[String] = _mcp_ready_operations
+
+  def withMcpReadyServices(names: Set[String]): Component = {
+    _mcp_ready_services = names
+    this
+  }
+
+  def withMcpReadyOperations(names: Set[String]): Component = {
+    _mcp_ready_operations = names
+    this
+  }
+
+  def isMcpReady(
+    serviceName: String,
+    operationName: String
+  ): Boolean = {
+    val servicekey = NamingConventions.toNormalizedSegment(serviceName)
+    val operationkey = s"$servicekey.${NamingConventions.toNormalizedSegment(operationName)}"
+    val ready =
+      mcpReadyServices.exists(x => NamingConventions.toNormalizedSegment(x) == servicekey) ||
+        mcpReadyOperations.exists { x =>
+          x.split("\\.", 2).toList match {
+            case service :: operation :: Nil =>
+              NamingConventions.toNormalizedSegment(service) == servicekey &&
+                NamingConventions.toNormalizedSegment(operation) == NamingConventions.toNormalizedSegment(operationName)
+            case _ => false
+          }
+        }
+    ready && _mcp_publication_enabled &&
+      !_mcp_disabled_services.contains(servicekey) &&
+      !_mcp_disabled_operations.contains(operationkey)
+  }
+
   def subsystem: Option[Subsystem] = _subsystem
 
   def collaboratorClasspath: Option[Vector[Path]] = _collaborator_classpath
@@ -244,6 +281,23 @@ abstract class Component() extends Component.Core.Holder {
     _application_config = ac
     this
   }
+
+  private def _mcp_publication_enabled: Boolean =
+    _mcp_config_value("cncf.mcp.enabled").forall(_.toBooleanOption.getOrElse(false))
+
+  private def _mcp_disabled_services: Set[String] =
+    _mcp_config_values("cncf.mcp.disabled-services")
+
+  private def _mcp_disabled_operations: Set[String] =
+    _mcp_config_values("cncf.mcp.disabled-operations")
+
+  private def _mcp_config_values(key: String): Set[String] =
+    _mcp_config_value(key).toSet.flatMap(_.split(",")).map(_.trim).filter(_.nonEmpty).map { value =>
+      value.split("\\.").map(NamingConventions.toNormalizedSegment).mkString(".")
+    }
+
+  private def _mcp_config_value(key: String): Option[String] =
+    _application_config.config.flatMap(_.string(key)).map(_.trim).filter(_.nonEmpty)
 
 //  def systemContext: SystemContext = _system_context
 

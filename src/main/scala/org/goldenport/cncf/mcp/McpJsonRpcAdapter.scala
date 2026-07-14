@@ -10,7 +10,8 @@ import org.goldenport.cncf.subsystem.Subsystem
  * @since   Mar. 19, 2026
  *  version Mar. 27, 2026
  *  version Apr. 15, 2026
- * @version May. 20, 2026
+ *  version May. 20, 2026
+ * @version Jul. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 final class McpJsonRpcAdapter(
@@ -86,7 +87,9 @@ final class McpJsonRpcAdapter(
     name: String,
     arguments: JsonObject
   ): Json =
-    _to_request(name, arguments) match {
+    if (!McpToolCatalog.toolsForSubsystem(subsystem).exists(_.name == name))
+      _error(id, -32602, s"MCP tool is not published: $name")
+    else _to_request(name, arguments) match {
       case Left(message) =>
         _error(id, -32602, message)
       case Right(req) =>
@@ -131,13 +134,13 @@ final class McpJsonRpcAdapter(
             Argument(k, _json_argument_value(v))
           }
           .toList
-        val properties = _request_properties(service, operation, args)
+        val properties = _request_properties(args)
         Right(
           Request.of(
             component = component,
             service = service,
             operation = operation,
-            arguments = args,
+            arguments = Nil,
             switches = Nil,
             properties = properties :+ Property("textus.format", "json", None)
           )
@@ -146,17 +149,8 @@ final class McpJsonRpcAdapter(
         Left(s"invalid tool name: $name")
     }
 
-  private def _request_properties(
-    service: String,
-    operation: String,
-    args: List[Argument]
-  ): List[Property] =
-    if (service == "Mcp" && operation == "callTool")
-      args
-        .filter(x => x.name == "name" || x.name == "arguments")
-        .map(x => Property(x.name, x.value, None))
-    else
-      Nil
+  private def _request_properties(args: List[Argument]): List[Property] =
+    args.map(x => Property(x.name, x.value, None))
 
   private def _json_argument_value(v: Json): String =
     v.asString.getOrElse(v.noSpaces)

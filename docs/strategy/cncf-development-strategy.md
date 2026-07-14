@@ -661,13 +661,20 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Previous closed phase checklist: `docs/phase/phase-29-checklist.md`
 - Current next slice: none. Select the next development item explicitly.
 - Status interpretation rules: `docs/rules/stage-status-and-checklist-convention.md`
-- Latest post-closure maintenance: Jul. 13, 2026 CNCF I18N text normalization.
+- Latest post-closure maintenance: Jul. 14, 2026 MCP publication hardening.
+  MCP readiness is default-deny and service-qualified, runtime CAR/SAR policy
+  can only narrow the declared surface, named JSON arguments retain generated
+  request typing, and tool descriptions prefer CML operation metadata. The
+  contract is verified by SIE and CBD Support through their separately owned
+  knowledge and component-development tool surfaces.
+- Previous post-closure maintenance: Jul. 13, 2026 CNCF I18N text
+  normalization.
   The public `display-safe-v1` profile now provides NFC, spacing, invisible
   formatting, and Japanese display-width canonicalization with
   `ExecutionContext` locale defaults and optional transformation provenance.
   The API is available on the `0.5.1-SNAPSHOT` development line; stable
   `0.5.0` remains the recommended released runtime and does not claim this API.
-- Previous post-closure maintenance: Jul. 12, 2026 provider-neutral browser
+- Earlier post-closure maintenance: Jul. 12, 2026 provider-neutral browser
   rendering controls. `ToolchainRunner.renderWebPage` preserves the existing
   positional metadata contract and adds optional User-Agent plus an explicit
   browser profile. Literal User-Agent use remains standard behavior; reviewed
