@@ -267,6 +267,18 @@ profile; contextless compatibility dispatch may bind the subsystem component
 profile. Provider-owned delivery receipt IDs and timestamps remain outside this
 runtime Event contract.
 
+Job lifecycle Events are also Event runtime semantics. `JobEngine` MUST retain
+the submitted Job execution profile and use it when lifecycle Events are
+persisted or dispatched. Event IDs therefore derive from the submitted ID
+generation capability, while the lifecycle occurrence time remains the
+JobEngine time source selected by the same runtime profile. When an EventBus is
+installed, JobEngine uses an internal runtime-publication boundary that carries
+the submitted `ExecutionContext` to `EventRecordFactory` and runtime handlers
+without reapplying ingress publication authorization. This boundary is not a
+public authorization bypass: external publication continues to use
+`publishAuthorized`. The direct EventStore fallback uses the same submitted
+profile and MUST NOT emit a constant fallback Event ID.
+
 Job input and Job definition lifecycle timestamps are runtime semantics. Their
 model constructors and update functions require an explicit instant and MUST
 NOT consult an ambient clock or provide an ambient default. Component command

@@ -109,6 +109,10 @@ trait EventBus {
     event: DomainEvent,
     option: EventPublishOption = EventPublishOption()
   ): Consequence[EventPublishResult]
+  private[cncf] def publishRuntime(
+    event: DomainEvent,
+    option: EventPublishOption = EventPublishOption()
+  )(using ExecutionContext): Consequence[EventPublishResult]
   def publishAuthorized(
     event: DomainEvent,
     option: EventPublishOption = EventPublishOption(),
@@ -133,17 +137,17 @@ object EventBus {
 final class DefaultEventBus(
   eventengine: EventEngine
 ) extends EventBus {
-  private case class _Entry(
+  private case class Entry(
     order: Long,
     subscription: EventSubscription
   )
 
-  private val _subscriptions = mutable.ArrayBuffer.empty[_Entry]
+  private val _subscriptions = mutable.ArrayBuffer.empty[Entry]
   private var _order_seed = 0L
 
   def register(subscription: EventSubscription): Unit = synchronized {
     _order_seed = _order_seed + 1
-    _subscriptions += _Entry(_order_seed, subscription)
+    _subscriptions += Entry(_order_seed, subscription)
   }
 
   def subscriptions: Vector[EventSubscription] = synchronized {
@@ -161,6 +165,12 @@ final class DefaultEventBus(
   ): Consequence[EventPublishResult] = {
     _publish(event, option, None)
   }
+
+  private[cncf] def publishRuntime(
+    event: DomainEvent,
+    option: EventPublishOption = EventPublishOption()
+  )(using ctx: ExecutionContext): Consequence[EventPublishResult] =
+    _publish(event, option, Some(ctx))
 
   def publishAuthorized(
     event: DomainEvent,

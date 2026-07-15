@@ -294,6 +294,14 @@ Status: IN PROGRESS
   to a subsystem component profile; provider-owned delivery receipts remain a
   provider concern. Property-based coverage verifies replay-stable diagnostic
   records and distinct outcome identities.
+- Job lifecycle Event publication now carries the submitted Job execution
+  profile through both EventBus and direct EventStore paths. Persistent Event
+  identity uses the submitted ID-generation capability, Event occurrence time
+  uses the profile-bound Job time source, and runtime handlers receive the
+  submitted context without reopening ingress authorization. Property-based
+  coverage verifies replay-stable, collision-free submitted/running/succeeded
+  records, while EventBus coverage proves that its fallback profile cannot
+  replace the submitted profile.
 - Workflow instance creation now uses the invocation-bound ID generation
   namespace, entropy, and clock. Instance creation/update/history timestamps
   have no ambient default, and property-based executable specifications verify

@@ -26,7 +26,7 @@ import org.goldenport.cncf.context.{
   IdGenerationContext
 }
 import org.goldenport.cncf.entity.EntityStore
-import org.goldenport.cncf.event.{EventBus, EventId, EventLane, EventPublishOption, EventRecord, EventStore, ReceptionDomainEvent}
+import org.goldenport.cncf.event.{EventBus, EventLane, EventPublishOption, EventRecordFactory, EventStore, ReceptionDomainEvent}
 import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.cncf.observability.{DiagnosticPayloadExternalizer, ObservabilityEngine}
 
@@ -986,6 +986,7 @@ final class InMemoryJobEngine(
     )
     _put_record(record)
     _append_event(
+      jobid = jobid,
       name = "job.submitted",
       payload = Map(
         "job-id" -> jobid.value,
@@ -999,6 +1000,7 @@ final class InMemoryJobEngine(
           case Some(scheduledat) =>
             _append_timeline(jobid, "job.delayed.scheduled", None, None, Some(scheduledat.toString))
             _append_event(
+              jobid = jobid,
               name = "job.delayed.scheduled",
               payload = Map(
                 "job-id" -> jobid.value,
@@ -1274,6 +1276,7 @@ final class InMemoryJobEngine(
     _append_timeline(jobid, "job.failed", None, None, Some(message))
     _update_record(jobid, JobStatus.Failed, Some(JobResult.Failure(conclusion)))
     _append_event(
+      jobid = jobid,
       name = "job.failed",
       payload = Map(
         "job-id" -> jobid.value,
@@ -1301,6 +1304,7 @@ final class InMemoryJobEngine(
     _append_timeline(jobid, "job.running", None, None, None)
     _update_record(jobid, JobStatus.Running, None)
     _append_event(
+      jobid = jobid,
       name = "job.running",
       payload = Map(
         "job-id" -> jobid.value,
@@ -1312,6 +1316,7 @@ final class InMemoryJobEngine(
         _append_timeline(jobid, "job.succeeded", None, None, Some("no task"))
         _update_record(jobid, JobStatus.Succeeded, None)
         _append_event(
+          jobid = jobid,
           name = "job.succeeded",
           payload = Map(
             "job-id" -> jobid.value,
@@ -1616,6 +1621,7 @@ final class InMemoryJobEngine(
     )
     _append_timeline(jobid, "job.retry.submitted", None, None, None)
     _append_event(
+      jobid = jobid,
       name = "job.retry.submitted",
       payload = Map(
         "job-id" -> jobid.value,
@@ -1650,6 +1656,7 @@ final class InMemoryJobEngine(
     command match {
       case JobControlCommand.Cancel =>
         _append_event(
+          jobid = jobid,
           name = "job.cancelled",
           payload = Map(
             "job-id" -> jobid.value,
@@ -1659,6 +1666,7 @@ final class InMemoryJobEngine(
         )
       case JobControlCommand.Suspend =>
         _append_event(
+          jobid = jobid,
           name = "job.suspended",
           payload = Map(
             "job-id" -> jobid.value,
@@ -1668,6 +1676,7 @@ final class InMemoryJobEngine(
         )
       case JobControlCommand.Resume =>
         _append_event(
+          jobid = jobid,
           name = "job.resumed",
           payload = Map(
             "job-id" -> jobid.value,
@@ -1968,6 +1977,7 @@ final class InMemoryJobEngine(
             _append_timeline(jobid, "job.failed", None, None, c.observation.getEffectiveMessage)
             _update_record(jobid, JobStatus.Failed, Some(JobResult.Failure(c)))
             _append_event(
+              jobid = jobid,
               name = "job.failed",
               payload = Map(
                 "job-id" -> jobid.value,
@@ -1980,6 +1990,7 @@ final class InMemoryJobEngine(
             _append_timeline(jobid, "job.succeeded", None, None, None)
             _update_record(jobid, JobStatus.Succeeded, Some(success))
             _append_event(
+              jobid = jobid,
               name = "job.succeeded",
               payload = Map(
                 "job-id" -> jobid.value,
@@ -2146,6 +2157,7 @@ final class InMemoryJobEngine(
     }
     _append_timeline(jobid, "job.recovery-required", None, None, Some(message))
     _append_event(
+      jobid = jobid,
       name = "job.recovery-required",
       payload = Map(
         "job-id" -> jobid.value,
@@ -2526,84 +2538,63 @@ final class InMemoryJobEngine(
     }
 
   private def _append_event(
+    jobid: JobId,
     name: String,
     payload: Map[String, Any],
     attributes: Map[String, String] = Map.empty
-  ): Unit = {
-    val (eventPayload, eventAttributes) = _job_event_metadata(name, payload, attributes)
-    _event_bus match {
-      case Some(bus) =>
-        val _ = bus.publish(
-          ReceptionDomainEvent(
-            name = name,
-            kind = name,
-            payload = eventPayload,
-            attributes = eventAttributes,
-            occurredAt = _now()
-          ),
-          EventPublishOption(persistent = true)
-        )
-      case None =>
-        _event_store.foreach { store =>
-          val _ = store.append(
-            Vector(
-              EventRecord(
-                id = EventId.generate(),
-                name = name,
-                kind = name,
-                payload = eventPayload,
-                attributes = eventAttributes,
-                createdAt = _now(),
-                persistent = true,
-                status = EventRecord.Status.Stored,
-                lane = EventLane.NonTransactional
-              )
-            )
-          )
-        }
+  ): Unit =
+    _get_record(jobid).foreach { record =>
+      val (eventpayload, eventattributes) = _job_event_metadata(record, name, payload, attributes)
+      val occurredat = _now()
+      val event = ReceptionDomainEvent(
+        name = name,
+        kind = name,
+        payload = eventpayload,
+        attributes = eventattributes,
+        occurredAt = occurredat
+      )
+      given ExecutionContext = record.submittedContext
+      _event_bus match {
+        case Some(bus) =>
+          val _ = bus.publishRuntime(event, EventPublishOption(persistent = true))
+        case None =>
+          _event_store.foreach { store =>
+            val factory = EventRecordFactory.from(record.submittedContext)
+            val _ = store.append(Vector(factory.create(event, EventLane.NonTransactional)))
+          }
+      }
     }
-  }
 
   private def _job_event_metadata(
+    record: JobRecord,
     name: String,
     payload: Map[String, Any],
     attributes: Map[String, String]
   ): (Map[String, Any], Map[String, String]) =
-    if (name.startsWith("job."))
-      _job_record_from_payload(payload) match {
-        case Some(record) =>
-          val submitter = JobSubmitter.from(record.submittedContext)
-          val summary = _result_summary(record)
-          val extrapayload =
-            Map(
-              "submitter-principal-id" -> submitter.principalId,
-              "submitter-subject-kind" -> submitter.subjectKind,
-              "submitter-session-id" -> submitter.sessionId.getOrElse(""),
-              "job-run-mode" -> _job_run_mode_label(record.runMode),
-              "job-persistence" -> _job_persistence_label(record.persistence),
-              "recovery-required" -> record.retry.recoveryRequired.toString
-            ) ++
-              record.debug.parameters.filter { case (k, _) => k.startsWith("web.") } ++
-              summary.message.map("result-summary" -> _)
-          val extraattributes =
-            Map(
-              "cncf.job.id" -> record.id.value,
-              "cncf.job.status" -> record.status.toString
-            ) ++
-              record.submittedContext.observability.correlationId.map(id => "correlation-id" -> id.print)
-          (payload ++ extrapayload, attributes ++ extraattributes)
-        case None =>
-          (payload, attributes)
-      }
+    if (name.startsWith("job.")) {
+      val submitter = JobSubmitter.from(record.submittedContext)
+      val summary = _result_summary(record)
+      val extrapayload =
+        Map(
+          "submitter-principal-id" -> submitter.principalId,
+          "submitter-subject-kind" -> submitter.subjectKind,
+          "submitter-session-id" -> submitter.sessionId.getOrElse(""),
+          "job-run-mode" -> _job_run_mode_label(record.runMode),
+          "job-persistence" -> _job_persistence_label(record.persistence),
+          "recovery-required" -> record.retry.recoveryRequired.toString
+        ) ++
+          record.debug.parameters.filter { case (k, _) => k.startsWith("web.") } ++
+          summary.message.map("result-summary" -> _)
+      val extraattributes =
+        Map(
+          "cncf.job.id" -> record.id.value,
+          "cncf.job.status" -> record.status.toString
+        ) ++
+          record.submittedContext.observability.correlationId.map(id => "correlation-id" -> id.print)
+      (payload ++ extrapayload, attributes ++ extraattributes)
+    }
     else
       (payload, attributes)
-
-  private def _job_record_from_payload(
-    payload: Map[String, Any]
-  ): Option[JobRecord] =
-    payload.get("job-id").map(_.toString).flatMap { value =>
-      JobId.parse(value).toOption.flatMap(_get_record)
-    }
 
   private def _job_run_mode_label(runmode: JobRunMode): String =
     runmode match {
@@ -2748,6 +2739,7 @@ final class InMemoryJobEngine(
     retry: JobRetryState
   ): Unit =
     _append_event(
+      jobid = jobid,
       name = "job.failed",
       payload = Map(
         "job-id" -> jobid.value,
@@ -2764,6 +2756,7 @@ final class InMemoryJobEngine(
     retry: JobRetryState
   ): Unit =
     _append_event(
+      jobid = jobid,
       name = name,
       payload = Map(
         "job-id" -> jobid.value,
@@ -2833,6 +2826,7 @@ final class InMemoryJobEngine(
         _append_timeline(jobid, "job.retry.delayed.submitted", None, None, Some(s"${record.retry.attemptCount}/${record.retry.maxAttempts}"))
         _append_timeline(jobid, "job.retry.delayed.enqueued", None, None, Some(s"${record.retry.attemptCount}/${record.retry.maxAttempts}"))
         _append_event(
+          jobid = jobid,
           name = "job.retry.delayed.submitted",
           payload = Map(
             "job-id" -> jobid.value,
@@ -2868,6 +2862,7 @@ final class InMemoryJobEngine(
         _append_timeline(jobid, "job.delayed.enqueued", None, None, record.scheduledStartAt.map(_.toString))
         _append_timeline(jobid, "job.async.queued", None, None, Some("delayed-start"))
         _append_event(
+          jobid = jobid,
           name = "job.delayed.enqueued",
           payload = Map(
             "job-id" -> jobid.value,
