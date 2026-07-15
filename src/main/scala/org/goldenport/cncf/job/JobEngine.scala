@@ -22,7 +22,8 @@ import org.goldenport.cncf.context.{
   ExecutionInvocationIdentity,
   ExecutionProfileRuntime,
   ExecutionSchedulerMode,
-  ExecutionSchedulingRegistration
+  ExecutionSchedulingRegistration,
+  IdGenerationContext
 }
 import org.goldenport.cncf.entity.EntityStore
 import org.goldenport.cncf.event.{EventBus, EventId, EventLane, EventPublishOption, EventRecord, EventStore, ReceptionDomainEvent}
@@ -47,6 +48,24 @@ object JobId {
   def generate(): JobId =
     JobId("cncf", "job")
 
+  def create(
+    purpose: String,
+    timestamp: Instant
+  )(using ctx: ExecutionContext): JobId =
+    create(purpose, timestamp, ctx.idGeneration)
+
+  def create(
+    purpose: String,
+    timestamp: Instant,
+    idgeneration: IdGenerationContext
+  ): JobId =
+    JobId(
+      major = idgeneration.namespace.major,
+      minor = idgeneration.namespace.minor,
+      timestamp = Some(timestamp),
+      entropy = Some(idgeneration.opaqueId(s"job.$purpose"))
+    )
+
   def parse(s: String): Consequence[JobId] =
     UniversalId.parseParts(s, "job").map(parts => JobId(parts.major, parts.minor, Some(parts.timestamp), Some(parts.entropy)))
 }
@@ -61,6 +80,24 @@ final case class TaskId(
 object TaskId {
   def generate(): TaskId =
     TaskId("cncf", "task")
+
+  def create(
+    purpose: String,
+    timestamp: Instant
+  )(using ctx: ExecutionContext): TaskId =
+    create(purpose, timestamp, ctx.idGeneration)
+
+  def create(
+    purpose: String,
+    timestamp: Instant,
+    idgeneration: IdGenerationContext
+  ): TaskId =
+    TaskId(
+      major = idgeneration.namespace.major,
+      minor = idgeneration.namespace.minor,
+      timestamp = Some(timestamp),
+      entropy = Some(idgeneration.opaqueId(s"task.$purpose"))
+    )
 
   def parse(s: String): Consequence[TaskId] =
     UniversalId.parseParts(s, "task").map(parts => TaskId(parts.major, parts.minor, Some(parts.timestamp), Some(parts.entropy)))
@@ -892,7 +929,7 @@ final class InMemoryJobEngine(
     option: JobSubmitOption
   ): Consequence[JobId] =
     _validate_submit_option(option).map { _ =>
-    val jobid = JobId.generate()
+    val jobid = JobId.create("submit", ctx.clock.instant(), ctx.idGeneration)
     val now = _now()
     val initialdebug = JobDebugInfo(
       requestSummary = option.requestSummary.orElse(_request_summary(tasks)),
@@ -1114,7 +1151,7 @@ final class InMemoryJobEngine(
   ): Consequence[TaskId] =
     _get_record(jobId) match {
       case Some(_) =>
-        val taskid = TaskId.generate()
+        val taskid = TaskId.create("same-job.enqueue", ctx.clock.instant(), ctx.idGeneration)
         _append_timeline(jobId, "job.same-job-async.queued", Some(taskid), ctx.jobContext.currentTask, Some(task.operationName.getOrElse(task.actionId.print)))
         val priority = _get_record(jobId).map(_.priority).getOrElse(0)
         _enqueue_work(SchedulerWorkItem.SameJobTask(_next_sequence(), priority, jobId, task, ctx, taskid))
@@ -1272,7 +1309,7 @@ final class InMemoryJobEngine(
         tasks.foreach { task =>
           if (failure.isEmpty && _can_run_next_task(jobid)) {
             if (_await_if_suspended(jobid)) {
-              val taskid = TaskId.generate()
+              val taskid = TaskId.create("execute", ctx.clock.instant(), ctx.idGeneration)
               val startedat = _now()
               val startednanos = System.nanoTime()
               val jobcontext = JobContext(
@@ -1322,7 +1359,7 @@ final class InMemoryJobEngine(
           }
         }
         if (failure.nonEmpty)
-          _run_compensations(jobid, failedtaskid, committedtasks.reverse)
+          _run_compensations(jobid, failedtaskid, committedtasks.reverse, ctx)
         val deferred = _get_record(jobid).map(_.status) match {
           case Some(JobStatus.Cancelled) =>
             Some(JobResult.Failure(Consequence.stateInvalid[Nothing](
@@ -1342,7 +1379,9 @@ final class InMemoryJobEngine(
     ctx: ExecutionContext,
     forcedTaskId: Option[TaskId] = None
   ): TaskOutcome = {
-    val taskid = forcedTaskId.getOrElse(TaskId.generate())
+    val taskid = forcedTaskId.getOrElse(
+      TaskId.create("same-job.execute", ctx.clock.instant(), ctx.idGeneration)
+    )
     val parent = ctx.jobContext.currentTask
     val startedat = _now()
     val startednanos = System.nanoTime()
@@ -1383,7 +1422,7 @@ final class InMemoryJobEngine(
           _now()
         )
         _append_timeline(jobid, "task.transaction.failed", Some(taskid), parent, c.observation.getEffectiveMessage)
-        _run_same_job_compensations(jobid, Some(taskid))
+        _run_same_job_compensations(jobid, Some(taskid), ctx)
         _update_deferred_result(jobid, Some(JobResult.Failure(c)))
     }
     _settle_if_ready(jobid)
@@ -1939,14 +1978,19 @@ final class InMemoryJobEngine(
   private def _run_compensations(
     jobid: JobId,
     failureTaskId: Option[TaskId],
-    committedTasks: Vector[(TaskId, JobTask)]
+    committedTasks: Vector[(TaskId, JobTask)],
+    ctx: ExecutionContext
   ): Unit =
     if (committedTasks.nonEmpty) {
       _append_timeline(jobid, "job.compensation.started", failureTaskId, None, Some(committedTasks.size.toString))
       committedTasks.foreach { case (originalTaskId, originalTask) =>
         originalTask.compensationTask match {
           case Some(compensation) =>
-            val compensationtaskid = TaskId.generate()
+            val compensationtaskid = TaskId.create(
+              "compensation",
+              ctx.clock.instant(),
+              ctx.idGeneration
+            )
             val startedat = _now()
             val startednanos = System.nanoTime()
             val parent = failureTaskId.orElse(Some(originalTaskId))
@@ -1961,7 +2005,6 @@ final class InMemoryJobEngine(
               relation = Some("compensation"),
               compensatesTaskId = Some(originalTaskId)
             )
-            val ctx = _get_record(jobid).map(_.submittedContext).getOrElse(ExecutionContext.test())
             val jobcontext = JobContext(
               jobId = Some(jobid),
               taskId = Some(compensationtaskid),
@@ -2020,11 +2063,12 @@ final class InMemoryJobEngine(
 
   private def _run_same_job_compensations(
     jobid: JobId,
-    failureTaskId: Option[TaskId]
+    failureTaskId: Option[TaskId],
+    ctx: ExecutionContext
   ): Unit = {
     val committed = _committed_tasks_for_compensation(jobid, failureTaskId)
     if (committed.nonEmpty)
-      _run_compensations(jobid, failureTaskId, committed)
+      _run_compensations(jobid, failureTaskId, committed, ctx)
   }
 
   private def _committed_tasks_for_compensation(

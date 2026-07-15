@@ -12,6 +12,7 @@ import org.goldenport.cncf.context.GlobalRuntimeContext
 import org.goldenport.cncf.config.RuntimeDefaults
 import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.context.RuntimeContext
+import org.goldenport.cncf.job.JobId
 
 /*
  * @since   Mar. 13, 2026
@@ -19,7 +20,7 @@ import org.goldenport.cncf.context.RuntimeContext
  *  version Apr. 30, 2026
  *  version May. 31, 2026
  *  version Jun. 29, 2026
- * @version Jul. 15, 2026
+ * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 object OperationResponseFormatter {
@@ -353,7 +354,7 @@ object OperationResponseFormatter {
   private def _is_job_id(
     value: String
   ): Boolean =
-    value != null && value.startsWith("cncf-job-")
+    value != null && JobId.parse(value).isSuccess
 
   private def _configuration_string(
     key: String

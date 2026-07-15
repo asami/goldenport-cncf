@@ -10,6 +10,7 @@ import org.goldenport.cncf.component.{ComponentId, ComponentInstanceId}
 import org.goldenport.cncf.context.{Capability, ExecutionContext, PrincipalId, SecurityLevel, SessionContext, SubjectKind}
 import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.information.*
+import org.goldenport.cncf.job.JobId
 import org.goldenport.cncf.knowledge.{KnowledgeNode, KnowledgeNodeId, KnowledgeWorkingSetSnapshot}
 import org.goldenport.cncf.security.{AuthenticationProvider, AuthenticationRequest, AuthenticationResult}
 import org.goldenport.cncf.subsystem.DefaultSubsystemFactory
@@ -30,7 +31,7 @@ import org.typelevel.ci.CIStringSyntax
  *  version Apr. 25, 2026
  *  version May. 25, 2026
  *  version Jun. 19, 2026
- * @version Jul. 14, 2026
+ * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers {
@@ -512,7 +513,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers {
         .unsafeRunSync()
 
       response.status.code shouldBe 200
-      response.headers.get(ci"X-Textus-Job-Id").map(_.head.value).getOrElse("") should include ("cncf-job-job")
+      response.headers.get(ci"X-Textus-Job-Id").map(_.head.value).flatMap(JobId.parse(_).toOption) should not be empty
     }
 
     "render unauthorized operation-result widgets as inline page errors" in {

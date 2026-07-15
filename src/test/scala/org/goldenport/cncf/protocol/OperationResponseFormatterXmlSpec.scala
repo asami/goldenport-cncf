@@ -1,9 +1,11 @@
 package org.goldenport.cncf.protocol
 
+import java.time.Instant
 import org.goldenport.protocol.{Property, Request, Response}
 import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.cncf.cli.RunMode
 import org.goldenport.cncf.context.RuntimeContext
+import org.goldenport.cncf.job.JobId
 import org.goldenport.record.Record
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
@@ -13,7 +15,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Mar. 28, 2026
  *  version May. 31, 2026
  *  version Jun. 29, 2026
- * @version Jul.  1, 2026
+ * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 final class OperationResponseFormatterXmlSpec
@@ -109,7 +111,13 @@ final class OperationResponseFormatterXmlSpec
     "project JobId scalar into job metadata in canonical envelope" in {
       Given("a JobAsync scalar JobId response")
       val request = _request("domain.command", shape = "envelope", format = "json")
-      val response = OperationResponse.Scalar("cncf-job-1")
+      val jobid = JobId(
+        major = "cncf",
+        minor = "job",
+        timestamp = Some(Instant.parse("2026-07-16T00:00:00Z")),
+        entropy = Some("formatter_spec")
+      ).value
+      val response = OperationResponse.Scalar(jobid)
 
       When("formatting the response")
       val formatted = OperationResponseFormatter.toResponse(request, response, RunMode.Command)
@@ -118,7 +126,7 @@ final class OperationResponseFormatterXmlSpec
       formatted match {
         case Response.Json(value) =>
           value should include (""""data":null""")
-          value should include (""""job":{"id":"cncf-job-1","status":"accepted"}""")
+          value should include (s""""job":{"id":"$jobid","status":"accepted"}""")
           value should not include (""""result"""")
         case other =>
           fail(s"unexpected response: ${other}")

@@ -67,8 +67,8 @@ ordering, locale/environment assumptions, and replayability diagnostics.
       audit classification, CAR lint, Tag timestamps, canonical Event reception,
       transition lifecycle events, EventStore record materialization, and
       Workflow lifecycle identity/time, Job input timestamps, and JobDefinition
-      lifecycle timestamps are complete; remaining runtime-semantic migration
-      remains active.
+      lifecycle timestamps, plus Job/Task runtime identity are complete;
+      remaining runtime-semantic migration remains active.
 - [ ] ED-08: Add diagnostics, replay scenarios, developer guidance, and close
       Phase 31.
 

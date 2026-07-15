@@ -3,6 +3,7 @@ package org.goldenport.cncf.http
 import java.net.InetSocketAddress
 import java.nio.charset.StandardCharsets
 import com.sun.net.httpserver.{HttpExchange, HttpHandler, HttpServer}
+import org.goldenport.cncf.job.JobId
 import org.goldenport.cncf.subsystem.DefaultSubsystemFactory
 import org.goldenport.protocol.Property
 import org.scalatest.GivenWhenThen
@@ -135,7 +136,7 @@ final class HttpDriverSpec
 
       Then("the response exposes the retained job id as an HTTP header")
       response.code shouldBe 200
-      response.headerValue("X-Textus-Job-Id").getOrElse("") should include ("cncf-job-job")
+      response.headerValue("X-Textus-Job-Id").flatMap(JobId.parse(_).toOption) should not be empty
     }
 
     "let debug job metadata override an existing job header case-insensitively" in {
@@ -149,7 +150,7 @@ final class HttpDriverSpec
       val response = driver.get("/debug/http/echo?textus.debug.trace-job=true&x-textus-job-id=stale-job")
 
       Then("the metadata job id is the observable job header")
-      response.headerValue("X-Textus-Job-Id").getOrElse("") should include ("cncf-job-job")
+      response.headerValue("X-Textus-Job-Id").flatMap(JobId.parse(_).toOption) should not be empty
       response.header.fields.count(_.key.equalsIgnoreCase("X-Textus-Job-Id")) shouldBe 1
     }
   }
