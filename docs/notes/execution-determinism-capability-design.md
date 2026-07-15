@@ -553,6 +553,13 @@ not migrated mechanically. CAR lint treats equivalent access in component
 sources as a warning so application code cannot silently cross these framework
 boundaries.
 
+The Jul. 16, 2026 closure audit found no remaining unclassified
+component-visible or runtime-semantic ambient call. Retained calls are owned by
+transport/session/metrics, explicit compatibility polling, realtime adapters,
+monotonic diagnostics, provider delivery receipts, injected-clock adapters, or
+bootstrap/repository/provider boundaries. ED-07 therefore closes without
+reinterpreting those host concerns as ActionCall semantics.
+
 ## Proposed Implementation Slices
 
 ### ED-01: Freeze the execution-profile contract

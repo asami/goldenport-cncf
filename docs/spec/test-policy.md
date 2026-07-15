@@ -128,6 +128,14 @@ Component code must not receive the advance control. Executable specifications
 for retry, delay, timeout, and async Event behavior should use controlled time
 instead of host sleeps when the behavior is owned by CNCF.
 
+Replay specifications must create two independent runtime graphs from the same
+controlled profile and invocation sequence. They should compare both business
+data and CNCF-owned semantic evidence such as generated IDs, domain/Event
+timestamps, retry due time, Task/Event ordering, and the sanitized profile
+fingerprint. Raw trace, span, and correlation identifiers are diagnostic
+metadata and should be removed from the semantic comparison. Reusing one
+mutable runtime is not sufficient replay evidence.
+
 ----------------------------------------------------------------------
 5. Use of TDD
 ----------------------------------------------------------------------

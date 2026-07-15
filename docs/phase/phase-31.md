@@ -51,8 +51,8 @@ ordering, locale/environment assumptions, and replayability diagnostics.
 - D (DONE): ED-04 - Internal DSL and capability-based ID generation.
 - E (DONE): ED-05 - Unified time and Job/Event scheduling.
 - F (DONE): ED-06 - Resolved environment assumptions.
-- G (IN PROGRESS): ED-07 - Deterministic ordering, migration, and enforcement.
-- H (PLANNED): ED-08 - Introspection, replay verification, and closure.
+- G (DONE): ED-07 - Deterministic ordering, migration, and enforcement.
+- H (IN PROGRESS): ED-08 - Introspection, replay verification, and closure.
 
 ## 5. Development Items
 
@@ -63,7 +63,7 @@ ordering, locale/environment assumptions, and replayability diagnostics.
 - [x] ED-04: Add internal DSL access and profile-based ID generation.
 - [x] ED-05: Integrate manual time with JobEngine and async Event execution.
 - [x] ED-06: Resolve environment and internationalization assumptions.
-- [ ] ED-07: Fix CNCF-owned ordering and migrate ambient-state debt. Ordering,
+- [x] ED-07: Fix CNCF-owned ordering and migrate ambient-state debt. Ordering,
       audit classification, CAR lint, Tag timestamps, canonical Event reception,
       transition lifecycle events, EventStore record materialization, and
       user-notification forwarding diagnostics,
@@ -75,10 +75,14 @@ ordering, locale/environment assumptions, and replayability diagnostics.
       and Entity working-set lifecycle timestamps plus Entity working-set
       admission/residency evaluation, temporal ABAC authorization, and
       Aggregate edit-context lifecycle timestamps/expiry and built-in
-      `system.status` timestamp/uptime are complete; other remaining
-      runtime-semantic migration remains active.
+      `system.status` timestamp/uptime are complete. The final audit classifies
+      retained direct host access as transport, compatibility polling,
+      realtime adapter, monotonic diagnostic, provider, injected-clock, or
+      bootstrap/repository behavior outside the controlled replay contract.
 - [ ] ED-08: Add diagnostics, replay scenarios, developer guidance, and close
-      Phase 31.
+      Phase 31. Sanitized diagnostics, replayability states, redaction,
+      developer/test guidance, and the end-to-end two-runtime replay scenario
+      are complete; full validation and final review remain.
 
 Detailed status and acceptance evidence are recorded in
 `phase-31-checklist.md`.

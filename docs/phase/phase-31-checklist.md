@@ -245,7 +245,7 @@ Status: DONE
 
 ## ED-07: Deterministic Ordering, Migration, and Enforcement
 
-Status: IN PROGRESS
+Status: DONE
 
 ### Tasks
 
@@ -254,7 +254,7 @@ Status: IN PROGRESS
 - [x] Define strict concurrent named-stream behavior.
 - [x] Classify direct time, UUID, random, sleep, environment, property,
       filesystem, and executor access by semantic boundary.
-- [ ] Migrate component-visible and runtime-semantic occurrences.
+- [x] Migrate component-visible and runtime-semantic occurrences.
 - [x] Preserve host bootstrap and monotonic diagnostic uses where appropriate.
 - [x] Extend CAR lint/review/developer guidance for ambient-state access.
 
@@ -365,8 +365,12 @@ Status: IN PROGRESS
 - CAR lint and component developer guidance now report direct ambient clock,
   UUID/random, sleep, environment/property, host filesystem, thread, and
   executor access in component sources.
-- Other remaining runtime model semantic defaults still require migration
-  before ED-07 can be marked DONE.
+- The final source audit found no unclassified component-visible or
+  runtime-semantic ambient access. Remaining direct host calls are confined to
+  transport/session/metrics, explicit compatibility polling, realtime
+  adapters, monotonic diagnostics, provider-owned receipts, injected-clock
+  adapters, and bootstrap/repository/provider boundaries. Those retained calls
+  do not participate in the controlled replay contract.
 
 ### Acceptance Criteria
 
@@ -375,18 +379,18 @@ Status: IN PROGRESS
 
 ## ED-08: Introspection, Replay Verification, and Closure
 
-Status: PLANNED
+Status: IN PROGRESS
 
 ### Tasks
 
-- [ ] Expose sanitized profile mode, fingerprint, controlled dimensions, and
+- [x] Expose sanitized profile mode, fingerprint, controlled dimensions, and
       replayability reasons.
-- [ ] Add replayability states: replayable, partially-controlled,
+- [x] Add replayability states: replayable, partially-controlled,
       uncontrolled, and invalid.
-- [ ] Verify profile diagnostics never contain seeds, credentials, or secret
+- [x] Verify profile diagnostics never contain seeds, credentials, or secret
       environment values.
-- [ ] Run the end-to-end two-runtime replay scenario.
-- [ ] Update component developer and test guidance.
+- [x] Run the end-to-end two-runtime replay scenario.
+- [x] Update component developer and test guidance.
 - [ ] Run full related core and CNCF validation.
 - [ ] Resolve final review findings and update strategy/history.
 - [ ] Close Phase 31 without overstating external provider or distributed
@@ -401,3 +405,23 @@ Status: PLANNED
 - End-to-end replay scenario output comparison.
 - Passing full tests in every dirty related core repository and CNCF.
 - Final `git diff --check` and review with no blocking findings.
+
+### Current Evidence
+
+- `ExecutionControlContext.toRecord` exposes the sanitized profile identity,
+  fingerprint, invocation identity, dimension modes, replayability state, and
+  reasons. `ExecutionProfileSpec` verifies that raw seed, run-key, credential,
+  and non-allowlisted environment values do not enter this projection.
+- `ExecutionDeterminismReplayScenarioSpec` creates two independent
+  `GlobalRuntimeContext -> Subsystem -> ComponentLogic -> JobEngine` runtime
+  graphs from the same controlled profile. The same `JobAsync` command fails
+  once with `RetryLater`, advances manual time, retries through the runtime
+  scheduler, commits a domain Event through ActionCall/UoW, and compares the
+  complete semantic snapshot.
+- The replay comparison fixes business data, deterministic Entity/Job/Task/
+  Event IDs, domain and lifecycle timestamps, retry due time, Task status and
+  transaction outcomes, Job timeline ordering, EventStore sequence, and the
+  sanitized profile fingerprint. Raw trace/correlation diagnostics are removed
+  from the semantic snapshot while domain Event attributes remain compared.
+  The focused scenario passes without host sleeping.
+- Phase 31 remains active until full related validation and final review pass.

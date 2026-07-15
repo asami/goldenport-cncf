@@ -2192,12 +2192,13 @@ Future domain logic / runtime / knowledge / automation development item.
 Active runtime and component-test development item. Phase 31 owns the initial
 implementation.
 
-- Current implementation status (Jul. 15, 2026): ED-01 through ED-06 are
-  complete. ED-07 has fixed and specified CNCF-owned ordering, strict named
-  stream semantics, ambient-access classification, CAR lint guidance, and the
-  first builtin Tag timestamp migration. Remaining component/runtime semantic
-  ambient-state migration is active; ED-08 introspection and replay closure is
-  still planned.
+- Current implementation status (Jul. 16, 2026): ED-01 through ED-07 are
+  complete. CNCF-owned ordering, strict named-stream semantics, ambient-access
+  classification, component/runtime semantic migration, and CAR lint guidance
+  are fixed. ED-08 now has sanitized profile/replayability diagnostics,
+  redaction coverage, developer/test guidance, and a passing end-to-end
+  two-runtime replay scenario; full validation and final review remain before
+  Phase 31 closure.
 
 - Goal: make component-observable execution reproducible by resolving clock,
   random, ID/entropy, operational scheduling, CNCF-owned asynchronous ordering,

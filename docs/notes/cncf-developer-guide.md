@@ -147,6 +147,13 @@ repository discovery, transport adaptation, provider effects, and monotonic
 performance measurement remain distinct boundaries and must not be routed
 blindly through an `ActionCall` merely to remove an ambient API call.
 
+For an end-to-end replay executable specification, create two independent
+runtime/subsystem/component graphs from the same controlled profile and run the
+same invocation sequence through the normal ComponentLogic and ActionCall/UoW
+path. Compare business data plus CNCF-owned Job, Task, retry, Event, timestamp,
+ID, ordering, and sanitized profile evidence. Do not reuse one mutable runtime
+or share its random, ID, clock, or scheduler instances between replay runs.
+
 ## CAR Source Layout And Assembly Defaults
 
 For CAR projects, `packaging.kind: car` uses `src/main/car` as the default

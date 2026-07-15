@@ -588,6 +588,34 @@ The diagnostic projection may expose profile mode, sanitized fingerprint,
 dimension modes, replayability state, and reasons. It MUST NOT expose raw seeds,
 entropy, credentials, or secret environment values.
 
+## Replay Verification
+
+Replay verification MUST create independent runtime graphs from the same
+controlled profile. Reusing one mutable runtime only verifies repeat execution;
+it does not verify reconstruction from declared profile inputs.
+
+An end-to-end replay scenario SHOULD compare business data together with the
+observable execution evidence owned by CNCF:
+
+- generated domain, Job, Task, Action, and Event identities;
+- domain and runtime-semantic timestamps;
+- retry due times and attempt state;
+- Task status, transaction outcome, and Job timeline order;
+- EventStore order and persisted domain Events;
+- sanitized profile identity, fingerprint, dimensions, and replayability.
+
+Trace, span, and correlation identifiers are observability metadata rather
+than business/runtime semantic identity. A replay comparison MUST exclude those
+raw diagnostic identifiers while retaining domain Event attributes and CNCF
+Job/Event semantic metadata.
+
+The scenario MUST execute through normal ComponentLogic, ActionCall/UoW,
+JobEngine, and EventStore boundaries. Directly constructing expected records or
+sharing scheduler/random/ID runtime instances between the two runs does not
+provide end-to-end replay evidence. External providers and distributed
+execution remain outside the Phase 31 replay guarantee unless the scenario
+supplies controlled provider inputs explicitly.
+
 ## Failure Semantics
 
 Invalid profile configuration fails at bootstrap as
