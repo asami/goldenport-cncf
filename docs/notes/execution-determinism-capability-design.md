@@ -540,7 +540,7 @@ before migration:
 
 | Boundary | Representative locations | Direction |
 | --- | --- | --- |
-| component-visible domain state | InformationSpace, Tag, JobControl, Workflow, Knowledge working sets | use current execution clock/ID/random capabilities; Tag update and move are migrated |
+| component-visible domain state | InformationSpace, Tag, JobControl, Workflow, Knowledge working sets | use current execution clock/ID/random capabilities; Tag, InformationSpace, and Knowledge working-set lifecycle time are migrated |
 | Event/Job/runtime semantics | EventReception, EventStore fallback, transition lifecycle events, Job model defaults | route construction and mutation through runtime clock/ID controls; remove semantic defaults that hide the required context |
 | provider/driver effects | BlobStore, notification delivery, Docker/filesystem adapters | retain behind provider/driver contracts and supply deterministic test doubles where replay is required |
 | monotonic diagnostics and transport telemetry | ActionEngine duration, OpenTelemetry export, dashboard/diagnostic capture | retain monotonic or transport-owned time; do not reinterpret as domain time |

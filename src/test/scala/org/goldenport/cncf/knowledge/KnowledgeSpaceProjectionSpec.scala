@@ -1,6 +1,7 @@
 package org.goldenport.cncf.knowledge
 
 import org.goldenport.Consequence
+import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.protocol.Protocol
 import org.goldenport.cncf.testutil.TestComponentFactory
 import org.scalatest.GivenWhenThen
@@ -9,7 +10,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   May. 17, 2026
- * @version May. 18, 2026
+ *  version May. 18, 2026
+ * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 final class KnowledgeSpaceProjectionSpec
@@ -17,8 +19,11 @@ final class KnowledgeSpaceProjectionSpec
   with Matchers
   with GivenWhenThen {
 
+  private given ExecutionContext = ExecutionContext.test()
+
   "KnowledgeSpaceProjection" should {
     "project status counts and records deterministically" in {
+      Given("a component with an indexed Knowledge working set")
       val component = TestComponentFactory.create("knowledge_component", Protocol.empty)
       val ext = ExternalKnowledgeIdentifier.entity("customer", "customer-1")
       val rdfnode = RdfNodeName("rdf:customer-1")
@@ -98,11 +103,13 @@ final class KnowledgeSpaceProjectionSpec
       )
       _success(component.knowledgeSpace.replace(snapshot))
 
+      When("component, query, and node projections are built")
       val projection = KnowledgeSpaceProjection.component(component)
       val record = projection.toRecord
       val query = component.knowledgeSpace.query
       val node = KnowledgeSpaceProjection.nodeOption(component, customer.id).getOrElse(fail("missing node projection"))
 
+      Then("the projections expose stable status, counts, and semantic indexes")
       projection.componentName shouldBe "knowledge_component"
       projection.counts shouldBe KnowledgeWorkingSetCounts(
         nodeCount = 2,
@@ -146,6 +153,7 @@ final class KnowledgeSpaceProjectionSpec
     }
 
     "lookup entity bindings across components" in {
+      Given("two component KnowledgeSpaces bound to the same Entity")
       val first = TestComponentFactory.create("first", Protocol.empty)
       val second = TestComponentFactory.create("second", Protocol.empty)
       val firstnode = KnowledgeNode(
@@ -161,19 +169,27 @@ final class KnowledgeSpaceProjectionSpec
       _success(first.knowledgeSpace.replace(KnowledgeWorkingSetSnapshot(nodes = Vector(firstnode))))
       _success(second.knowledgeSpace.replace(KnowledgeWorkingSetSnapshot(nodes = Vector(secondnode))))
 
+      When("the Entity binding is looked up across components")
       val result = KnowledgeSpaceProjection.lookupEntity(Vector(second, first), "customer", "customer-1")
 
+      Then("the component projections are returned in deterministic name order")
       result.map(_.componentName) shouldBe Vector("first", "second")
       result.map(_.node.id) shouldBe Vector(firstnode.id, secondnode.id)
       result.map(_.toRecord.asMap.keySet.contains("node")) shouldBe Vector(true, true)
     }
 
     "render external identifier keys without colon ambiguity" in {
+      Given("external identifiers containing colons in every segment")
       val withkind = ExternalKnowledgeIdentifier("rdf:system", "http://example.com/a:b", Some("subject:type"))
       val withoutkind = ExternalKnowledgeIdentifier("rdf:system", "http://example.com/a:b", None)
 
-      withkind.key shouldBe "system=10:rdf:system|kind=12:subject:type|value=22:http://example.com/a:b"
-      withoutkind.key shouldBe "system=10:rdf:system|kind=-|value=22:http://example.com/a:b"
+      When("their canonical map keys are rendered")
+      val withkindkey = withkind.key
+      val withoutkindkey = withoutkind.key
+
+      Then("length-prefixed segments preserve the identifier boundaries")
+      withkindkey shouldBe "system=10:rdf:system|kind=12:subject:type|value=22:http://example.com/a:b"
+      withoutkindkey shouldBe "system=10:rdf:system|kind=-|value=22:http://example.com/a:b"
     }
   }
 

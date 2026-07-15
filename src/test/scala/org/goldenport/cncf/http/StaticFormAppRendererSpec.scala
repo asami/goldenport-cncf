@@ -346,7 +346,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         provenance = Vector(provenance),
         frames = Vector(frame),
         facts = Vector(fact)
-      )))
+      ))(using ExecutionContext.test()))
 
       val index = _renderer.renderSystemAdminKnowledge(subsystem).body
       val detail = _renderer.renderSystemAdminKnowledgeComponent(subsystem, "knowledge-component").map(_.body).getOrElse(fail("knowledge component page missing"))

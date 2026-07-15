@@ -885,7 +885,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
       val component = subsystem.findComponent("knowledge_component").getOrElse(fail("knowledge component missing"))
       component.knowledgeSpace.replace(KnowledgeWorkingSetSnapshot(
         nodes = Vector(KnowledgeNode(KnowledgeNodeId("node-1"), "concept", Some("Node One")))
-      )) match {
+      ))(using ExecutionContext.test()) match {
         case Consequence.Success(_) => ()
         case Consequence.Failure(conclusion) => fail(conclusion.toString)
       }

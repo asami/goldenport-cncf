@@ -1,13 +1,15 @@
 package org.goldenport.cncf.knowledge
 
 import org.goldenport.Consequence
+import org.goldenport.cncf.context.ExecutionContext
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   May. 17, 2026
- * @version May. 18, 2026
+ *  version May. 18, 2026
+ * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 final class KnowledgeSpaceSpec
@@ -15,12 +17,20 @@ final class KnowledgeSpaceSpec
   with Matchers
   with GivenWhenThen {
 
+  private given ExecutionContext = ExecutionContext.test()
+
   "KnowledgeSpace" should {
     "start empty and not ready" in {
+      Given("a newly constructed KnowledgeSpace")
       val space = new KnowledgeSpace
 
-      space.status.state shouldBe KnowledgeWorkingSetState.NotStarted
-      space.counts shouldBe KnowledgeWorkingSetCounts()
+      When("its initial state is inspected")
+      val status = space.status
+      val counts = space.counts
+
+      Then("it exposes an empty not-started working set")
+      status.state shouldBe KnowledgeWorkingSetState.NotStarted
+      counts shouldBe KnowledgeWorkingSetCounts()
       space.nodeOption(KnowledgeNodeId("missing")) shouldBe None
     }
 

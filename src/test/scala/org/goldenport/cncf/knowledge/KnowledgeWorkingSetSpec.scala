@@ -1,19 +1,23 @@
 package org.goldenport.cncf.knowledge
 
 import org.goldenport.Consequence
+import org.goldenport.cncf.context.ExecutionContext
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   May. 17, 2026
- * @version May. 18, 2026
+ *  version May. 18, 2026
+ * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 final class KnowledgeWorkingSetSpec
   extends AnyWordSpec
   with Matchers
   with GivenWhenThen {
+
+  private given ExecutionContext = ExecutionContext.test()
 
   "KnowledgeWorkingSet" should {
     "load index and project frames facts relationships and bindings" in {
@@ -124,13 +128,19 @@ final class KnowledgeWorkingSetSpec
     }
 
     "reject duplicate ids" in {
+      Given("a snapshot containing duplicate KnowledgeNode identifiers")
       val node = KnowledgeNode(KnowledgeNodeId("node-dup"), "entity")
       val snapshot = KnowledgeWorkingSetSnapshot(nodes = Vector(node, node))
 
-      KnowledgeWorkingSet.load(snapshot) shouldBe a[Consequence.Failure[_]]
+      When("the snapshot is loaded")
+      val result = KnowledgeWorkingSet.load(snapshot)
+
+      Then("the working set rejects the duplicate identity")
+      result shouldBe a[Consequence.Failure[_]]
     }
 
     "reject relationships pointing at missing nodes" in {
+      Given("a relationship whose target is absent from the snapshot")
       val node = KnowledgeNode(KnowledgeNodeId("node-a"), "entity")
       val relationship = KnowledgeRelationship(
         KnowledgeRelationshipId("rel-missing"),
@@ -143,10 +153,15 @@ final class KnowledgeWorkingSetSpec
         relationships = Vector(relationship)
       )
 
-      KnowledgeWorkingSet.load(snapshot) shouldBe a[Consequence.Failure[_]]
+      When("the snapshot is loaded")
+      val result = KnowledgeWorkingSet.load(snapshot)
+
+      Then("the working set rejects the dangling relationship")
+      result shouldBe a[Consequence.Failure[_]]
     }
 
     "reject missing frame and fact references" in {
+      Given("a snapshot with dangling fact and frame references")
       val node = KnowledgeNode(KnowledgeNodeId("node-a"), "entity")
       val brokenfact = KnowledgeFact(
         KnowledgeFactId("fact-broken"),
@@ -161,11 +176,17 @@ final class KnowledgeWorkingSetSpec
         origin = KnowledgeFrameOrigin(KnowledgeFrameInputRoute.EntityProjection)
       )
 
-      KnowledgeWorkingSet.load(KnowledgeWorkingSetSnapshot(nodes = Vector(node), facts = Vector(brokenfact))) shouldBe a[Consequence.Failure[_]]
-      KnowledgeWorkingSet.load(KnowledgeWorkingSetSnapshot(nodes = Vector(node), frames = Vector(brokenframe))) shouldBe a[Consequence.Failure[_]]
+      When("each invalid snapshot is loaded")
+      val factresult = KnowledgeWorkingSet.load(KnowledgeWorkingSetSnapshot(nodes = Vector(node), facts = Vector(brokenfact)))
+      val frameresult = KnowledgeWorkingSet.load(KnowledgeWorkingSetSnapshot(nodes = Vector(node), frames = Vector(brokenframe)))
+
+      Then("both dangling references are rejected")
+      factresult shouldBe a[Consequence.Failure[_]]
+      frameresult shouldBe a[Consequence.Failure[_]]
     }
 
     "load SIE retrieval frames with document chunk relationships" in {
+      Given("a semantic-retrieval snapshot containing document and chunk semantics")
       val provenance = KnowledgeProvenance(
         KnowledgeProvenanceId("prov-sie"),
         origin = "textus-sie",
@@ -229,6 +250,7 @@ final class KnowledgeWorkingSetSpec
         query = Some(KnowledgeQueryRef("semantic retrieval"))
       )
 
+      When("the SIE retrieval snapshot is loaded")
       val workingset = _success(KnowledgeWorkingSet.load(KnowledgeWorkingSetSnapshot(
         nodes = Vector(document, chunk),
         relationships = Vector(relationship),
@@ -238,6 +260,7 @@ final class KnowledgeWorkingSetSpec
         facts = Vector(fact)
       )))
 
+      Then("document/chunk traversal and retrieval-frame metadata are indexed")
       workingset.counts.relationshipCount shouldBe 1
       workingset.relationshipsFrom(document.id).map(_.kind) shouldBe Vector(KnowledgeRelationshipKind.HasPart)
       workingset.nodeOption(document.id).flatMap(_.structure.partWhole.hasPart.headOption) shouldBe Some(chunk.id)

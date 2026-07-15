@@ -2,10 +2,12 @@ package org.goldenport.cncf.knowledge
 
 import java.time.Instant
 import org.goldenport.Consequence
+import org.goldenport.cncf.context.ExecutionContext
 
 /*
  * @since   May. 17, 2026
- * @version May. 18, 2026
+ *  version May. 18, 2026
+ * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class KnowledgeWorkingSetSnapshot(
@@ -150,12 +152,14 @@ object KnowledgeWorkingSet {
   def failed(
     previous: KnowledgeWorkingSet,
     error: String
-  ): KnowledgeWorkingSet =
+  )(using ctx: ExecutionContext): KnowledgeWorkingSet = {
+    val now = ctx.clock.instant()
     new KnowledgeWorkingSet(
       previous.snapshot,
       KnowledgeWorkingSetStatus(
         state = KnowledgeWorkingSetState.Failed,
-        completedAt = Some(Instant.now()),
+        startedAt = Some(now),
+        completedAt = Some(now),
         error = Some(error)
       ),
       previous._nodes,
@@ -173,8 +177,10 @@ object KnowledgeWorkingSet {
       previous._entity_bindings,
       previous._tag_bindings
     )
+  }
 
-  def load(snapshot: KnowledgeWorkingSetSnapshot): Consequence[KnowledgeWorkingSet] =
+  def load(snapshot: KnowledgeWorkingSetSnapshot)(using ctx: ExecutionContext): Consequence[KnowledgeWorkingSet] = {
+    val now = ctx.clock.instant()
     for {
       _ <- _validate_unique("knowledge node", snapshot.nodes.map(_.id.print))
       _ <- _validate_unique("knowledge relationship", snapshot.relationships.map(_.id.print))
@@ -219,7 +225,8 @@ object KnowledgeWorkingSet {
         materialized,
         KnowledgeWorkingSetStatus(
           state = KnowledgeWorkingSetState.Ready,
-          completedAt = Some(Instant.now())
+          startedAt = Some(now),
+          completedAt = Some(now)
         ),
         nodes,
         relationships,
@@ -237,6 +244,7 @@ object KnowledgeWorkingSet {
         tagbindings
       )
     }
+  }
 
   private def _validate_unique(
     label: String,

@@ -310,11 +310,16 @@ Status: IN PROGRESS
   Information and field-event model constructors no longer supply ambient
   timestamp defaults, and property-based coverage verifies the lifecycle and
   materialized KnowledgeFrame timestamps.
+- Knowledge working-set load and replacement now require the caller execution
+  context. Successful and failed reload status derives `startedAt` and
+  `completedAt` from one execution-clock instant, failed replacement preserves
+  the previous indexed snapshot, and property-based coverage verifies replay
+  across generated fixed instants.
 - CAR lint and component developer guidance now report direct ambient clock,
   UUID/random, sleep, environment/property, host filesystem, thread, and
   executor access in component sources.
-- Remaining Job model defaults, working-set, and other runtime model semantic
-  defaults still require migration before ED-07 can be marked DONE.
+- Entity working-set and other remaining runtime model semantic defaults still
+  require migration before ED-07 can be marked DONE.
 
 ### Acceptance Criteria
 

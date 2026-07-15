@@ -1,16 +1,18 @@
 package org.goldenport.cncf.knowledge
 
 import org.goldenport.Consequence
+import org.goldenport.cncf.context.ExecutionContext
 
 /*
  * @since   May. 17, 2026
- * @version May. 18, 2026
+ *  version May. 18, 2026
+ * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 final class KnowledgeSpace {
   private var _working_set: KnowledgeWorkingSet = KnowledgeWorkingSet.empty
 
-  def replace(snapshot: KnowledgeWorkingSetSnapshot): Consequence[KnowledgeWorkingSetStatus] =
+  def replace(snapshot: KnowledgeWorkingSetSnapshot)(using ExecutionContext): Consequence[KnowledgeWorkingSetStatus] =
     KnowledgeWorkingSet.load(snapshot) match {
       case Consequence.Success(workingset) =>
         _working_set = workingset

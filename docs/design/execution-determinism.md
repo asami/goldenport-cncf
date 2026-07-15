@@ -290,6 +290,14 @@ for `KnowledgeFrame.materializedAt`. `Information.updatedAt` and
 `InformationFieldEvent.occurredAt` require explicit constructor values and MUST
 NOT supply ambient defaults.
 
+Knowledge working-set load status is component-visible runtime semantics.
+`KnowledgeWorkingSet.load` and `KnowledgeSpace.replace` MUST receive the caller
+`ExecutionContext` and MUST NOT infer a clock. A synchronous load or reload
+attempt captures one execution-clock instant and uses it for both `startedAt`
+and `completedAt`. A failed replacement retains the previous snapshot and
+indexes while recording the failed attempt status with that same caller-bound
+instant.
+
 Manual scheduling is limited by `timer-scheduling-boundary.md`. It MUST NOT add
 cron, recurrence, business-calendar, workflow-wait, or general scheduler
 semantics.
