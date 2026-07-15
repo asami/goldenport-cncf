@@ -2,7 +2,7 @@ package org.goldenport.cncf.datastore.sql
 
 /*
  * @since   Jul.  6, 2026
- * @version Jul.  6, 2026
+ * @version Jul. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 object MySqlDialectDriver extends SqlDialectDriver {
@@ -41,6 +41,21 @@ object MySqlDialectDriver extends SqlDialectDriver {
     val names = allcols.map(quote_identifier).mkString(", ")
     val values = List.fill(allcols.length)("?").mkString(", ")
     s"INSERT INTO ${quote_identifier(table)} ($names) VALUES ($values)"
+  }
+
+  def upsert_sql(
+    table: String,
+    columns: Vector[String]
+  ): String = {
+    val insert = insert_sql(table, columns)
+    if (columns.isEmpty)
+      s"$insert ON DUPLICATE KEY UPDATE ${quote_identifier("id")} = ${quote_identifier("id")}"
+    else {
+      val assignments = columns.map { column =>
+        s"${quote_identifier(column)} = VALUES(${quote_identifier(column)})"
+      }.mkString(", ")
+      s"$insert ON DUPLICATE KEY UPDATE $assignments"
+    }
   }
 
   def update_sql(

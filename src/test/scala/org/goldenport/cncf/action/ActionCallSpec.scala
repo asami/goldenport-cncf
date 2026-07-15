@@ -27,7 +27,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Dec. 23, 2025
  *  version Apr. 28, 2026
- * @version Jul. 14, 2026
+ * @version Jul. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 class ActionCallSpec extends AnyWordSpec with Matchers {
@@ -103,6 +103,26 @@ class ActionCallSpec extends AnyWordSpec with Matchers {
       val call = _call("register", Some(CmlOperationAccess("anonymous_only")))
 
       call.authorize() shouldBe a[Consequence.Failure[_]]
+    }
+
+    "allow public for anonymous subject without a component authorizer" in {
+      given ExecutionContext = _execution_context(
+        principalId = "anonymous",
+        attrs = Map("anonymous" -> "true")
+      )
+      val call = _call("refreshAccessToken", Some(CmlOperationAccess("public")))
+
+      call.authorize() shouldBe Consequence.unit
+    }
+
+    "allow public for authenticated subject without a component authorizer" in {
+      given ExecutionContext = _execution_context(
+        principalId = "u1",
+        attrs = Map("authenticated" -> "true", "refresh_token" -> "refresh-token")
+      )
+      val call = _call("refreshAccessToken", Some(CmlOperationAccess("public")))
+
+      call.authorize() shouldBe Consequence.unit
     }
 
     "run ProcedureActionCall ExecUowM programs through the runtime interpreter" in {

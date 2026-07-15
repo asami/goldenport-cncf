@@ -17,7 +17,7 @@ import org.goldenport.cncf.spi.{SpiCardinality, SpiProviderSelector, SpiRuntimeB
  * @since   Apr.  7, 2026
  *  version Apr. 28, 2026
  *  version May.  7, 2026
- * @version Jul. 11, 2026
+ * @version Jul. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class GenericSubsystemAuthenticationProviderBinding(
@@ -30,9 +30,18 @@ final case class GenericSubsystemAuthenticationProviderBinding(
   isDefault: Option[Boolean] = None
 )
 
+final case class GenericSubsystemLocalSubjectBinding(
+  id: String,
+  roles: Vector[String] = Vector.empty,
+  capabilities: Vector[String] = Vector.empty,
+  attributes: Map[String, String] = Map.empty,
+  securityLevel: Option[String] = None
+)
+
 final case class GenericSubsystemAuthenticationBinding(
   convention: Option[String] = None,
   fallbackPrivilege: Option[String] = None,
+  localSubject: Option[GenericSubsystemLocalSubjectBinding] = None,
   providers: Vector[GenericSubsystemAuthenticationProviderBinding] = Vector.empty
 )
 
@@ -613,6 +622,7 @@ object GenericSubsystemDescriptor {
         Some(GenericSubsystemAuthenticationBinding(
           convention = b.convention.orElse(a.convention),
           fallbackPrivilege = b.fallbackPrivilege.orElse(a.fallbackPrivilege),
+          localSubject = b.localSubject.orElse(a.localSubject),
           providers = _merge_authentication_providers(a.providers, b.providers)
         ))
     }
@@ -1598,10 +1608,30 @@ object GenericSubsystemDescriptor {
         GenericSubsystemAuthenticationBinding(
           convention = _string(rec, "convention"),
           fallbackPrivilege = _string(rec, "fallback_privilege", "fallbackPrivilege"),
+          localSubject = _record_value(rec, List("local_subject", "localSubject")).flatMap { subject =>
+            summon[RecordDecoder[GenericSubsystemLocalSubjectBinding]].fromRecord(subject).toOption
+          },
           providers = providers
         )
       )
     }
+
+  given RecordDecoder[GenericSubsystemLocalSubjectBinding] with
+    def fromRecord(rec: Record): Consequence[GenericSubsystemLocalSubjectBinding] =
+      _string(rec, "id", "subject_id", "subjectId") match {
+        case Some(id) =>
+          Consequence.success(
+            GenericSubsystemLocalSubjectBinding(
+              id = id,
+              roles = _string_vector(rec, List("roles", "role")),
+              capabilities = _string_vector(rec, List("capabilities", "capability")),
+              attributes = _string_map_value(rec, List("attributes")),
+              securityLevel = _string(rec, "security_level", "securityLevel")
+            )
+          )
+        case None =>
+          Consequence.argumentMissing("local subject id")
+      }
 
   given RecordDecoder[GenericSubsystemMessageDeliveryProviderBinding] with
     def fromRecord(rec: Record): Consequence[GenericSubsystemMessageDeliveryProviderBinding] = {

@@ -24,7 +24,7 @@ import org.simplemodeling.model.statemachine.{Aliveness, PostStatus}
  *  version Mar. 30, 2026
  *  version Apr. 26, 2026
  *  version May. 17, 2026
- * @version Jul. 13, 2026
+ * @version Jul. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class EntityStore {
@@ -36,6 +36,24 @@ abstract class EntityStore {
   def create[T](
     entity: T,
     options: EntityCreateOptions = EntityCreateOptions.default
+  )(using tc: EntityPersistentCreate[T], ctx: ExecutionContext): Consequence[CreateResult[T]]
+
+  def upsert[T](
+    entity: T,
+    id: EntityId,
+    options: EntityCreateOptions = EntityCreateOptions.default
+  )(
+    authorize: Option[Record] => Consequence[Unit]
+  )(using tc: EntityPersistentCreate[T], ctx: ExecutionContext): Consequence[CreateResult[T]] =
+    upsert(entity, id, options)(authorize, (_: CreateResult[T]) => Consequence.unit)
+
+  def upsert[T](
+    entity: T,
+    id: EntityId,
+    options: EntityCreateOptions
+  )(
+    authorize: Option[Record] => Consequence[Unit],
+    onSaved: CreateResult[T] => Consequence[Unit]
   )(using tc: EntityPersistentCreate[T], ctx: ExecutionContext): Consequence[CreateResult[T]]
 
   def load[T](
@@ -151,6 +169,7 @@ case class DeleteResult[T]()
 class NoopEntityStore() extends EntityStore {
   def name: String = "noop"
   def create[T](entity: T, options: EntityCreateOptions = EntityCreateOptions.default)(using tc: EntityPersistentCreate[T], ctx: ExecutionContext): Consequence[CreateResult[T]] = ???
+  def upsert[T](entity: T, id: EntityId, options: EntityCreateOptions)(authorize: Option[Record] => Consequence[Unit], onSaved: CreateResult[T] => Consequence[Unit])(using tc: EntityPersistentCreate[T], ctx: ExecutionContext): Consequence[CreateResult[T]] = ???
   def load[T](id: EntityId)(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[Option[T]] = ???
   def save[T](entity: T)(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[Unit] = ???
   def update[T](changes: T)(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[Unit] = ???
@@ -165,6 +184,8 @@ class NoopEntityStore() extends EntityStore {
 class StandardEntityStore(
 ) extends EntityStore {
   import EntityStore.*
+
+  private val _upsert_locks = Array.fill(64)(new Object)
 
   def name: String = "standard"
 
@@ -189,6 +210,45 @@ class StandardEntityStore(
       }
     } yield CreateResult(id, Some(rec))
   }
+
+  override def upsert[T](
+    entity: T,
+    id: EntityId,
+    options: EntityCreateOptions
+  )(
+    authorize: Option[Record] => Consequence[Unit],
+    onSaved: CreateResult[T] => Consequence[Unit]
+  )(using tc: EntityPersistentCreate[T], ctx: ExecutionContext): Consequence[CreateResult[T]] =
+    _with_upsert_lock(id) {
+      for {
+        cid <- ctx.entityStoreSpace.dataStoreCollection(id)
+        dsid <- ctx.entityStoreSpace.dataStoreEntryId(id)
+        ds <- ctx.dataStoreSpace.dataStore(cid)
+        existing <- _with_datastore_calltree("load", cid, Some(dsid)) {
+          ds.load(cid, dsid)
+        }
+        _ <- authorize(existing)
+        _ <- _reject_logically_deleted_existing(id, existing)
+        source = tc.toStoreRecord(entity)
+        rec0 = existing match {
+          case Some(current) =>
+            val changes = SimpleEntityStorageShapePolicy.withoutManagedFields(source)
+            _merge_update_record(current, _complement_update_record(changes, id))
+          case None =>
+            _complement_create_record(source, id, options)
+        }
+        rec <- ContentBodyStoragePolicy.prepareForSave(
+          id,
+          rec0,
+          preserveExistingOverflowOnMissingContent = existing.isDefined
+        )
+        _ <- _with_datastore_calltree("upsert", cid, Some(dsid)) {
+          ds.save(cid, dsid, rec)
+        }
+        result = CreateResult[T](id, Some(rec))
+        _ <- onSaved(result)
+      } yield result
+    }
 
   def load[T](
     id: EntityId
@@ -791,6 +851,15 @@ class StandardEntityStore(
       case _ =>
         Consequence.unit
     }
+
+  private def _with_upsert_lock[A](
+    id: EntityId
+  )(
+    body: => Consequence[A]
+  ): Consequence[A] = {
+    val index = Math.floorMod(id.print.hashCode, _upsert_locks.length)
+    _upsert_locks(index).synchronized(body)
+  }
 
   private def _complement_record(
     record: Record,

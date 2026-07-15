@@ -17,7 +17,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Mar. 21, 2026
  *  version Apr. 22, 2026
- * @version May. 31, 2026
+ * @version Jul. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EventReceptionSpec
@@ -210,6 +210,44 @@ final class EventReceptionSpec
       Then("policy denial is returned and action is not dispatched")
       result shouldBe a[Consequence.Failure[_]]
       calls.toVector shouldBe Vector.empty
+    }
+
+    "route an internally emitted event under the caller context without ingress publish capability" in {
+      Given("a domain operation running with an ordinary user context")
+      given ExecutionContext = ExecutionContext.test(SecurityContext.Privilege.User)
+      val fixture = _event_fixture()
+      val calls = ArrayBuffer.empty[String]
+      val reception = EventReception.default(
+        eventBus = fixture.bus,
+        dispatcher = new _RecordingDispatcher(calls),
+        currentSubsystemName = Some("sample")
+      )
+      reception.register(
+        CmlEventDefinition(
+          name = "review.changed",
+          category = CmlEventCategory.ActionEvent,
+          kind = Some("changed"),
+          actionName = Some("notification.enqueue")
+        )
+      )
+
+      When("the operation routes its already-authorized internal domain event")
+      val result = reception.receiveInternal(
+        ReceptionInput(
+          name = "review.changed",
+          kind = "changed"
+        )
+      )
+
+      Then("the event is dispatched without granting event ingress capabilities to the user")
+      result shouldBe Consequence.success(
+        ReceptionResult(
+          outcome = ReceptionOutcome.Routed,
+          dispatchedCount = 1,
+          persisted = false
+        )
+      )
+      calls.toVector shouldBe Vector("notification.enqueue")
     }
 
     "bind ingress-resolved execution context to secure action dispatcher" in {

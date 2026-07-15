@@ -29,7 +29,7 @@ import org.goldenport.cncf.Program
  *  version Feb. 21, 2026
  *  version Apr. 28, 2026
  *  version May. 23, 2026
- * @version Jul. 14, 2026
+ * @version Jul. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class ActionCall()
@@ -146,7 +146,7 @@ abstract class ActionCall()
 
   private def _framework_access_policy: Option[String] =
     _declared_access.flatMap(x => Option(x.policy).map(_.trim.toLowerCase(java.util.Locale.ROOT))).collect {
-      case m @ ("authenticated_only" | "authenticated-only" | "anonymous_only" | "anonymous-only") => m
+      case m @ ("public" | "authenticated_only" | "authenticated-only" | "anonymous_only" | "anonymous-only") => m
     }
 
   private def _component_name: Option[String] =

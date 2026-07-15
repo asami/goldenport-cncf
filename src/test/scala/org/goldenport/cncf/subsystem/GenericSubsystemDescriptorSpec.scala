@@ -15,7 +15,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Apr.  8, 2026
  *  version Apr. 28, 2026
  *  version May.  7, 2026
- * @version Jul. 11, 2026
+ * @version Jul. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final class GenericSubsystemDescriptorSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -243,6 +243,13 @@ final class GenericSubsystemDescriptorSpec extends AnyWordSpec with Matchers wit
           |  authentication:
           |    convention: enabled
           |    fallback_privilege: disabled
+          |    local_subject:
+          |      id: standalone-local
+          |      roles: [user]
+          |      capabilities: [user, notification:read]
+          |      security_level: user
+          |      attributes:
+          |        installation: standalone
           |    providers:
           |      - name: user-account
           |        component: textus-user-account
@@ -265,6 +272,11 @@ final class GenericSubsystemDescriptorSpec extends AnyWordSpec with Matchers wit
       Then("the authentication policy and provider metadata are available")
       auth.convention shouldBe Some("enabled")
       auth.fallbackPrivilege shouldBe Some("disabled")
+      auth.localSubject.map(_.id) shouldBe Some("standalone-local")
+      auth.localSubject.map(_.roles) shouldBe Some(Vector("user"))
+      auth.localSubject.map(_.capabilities) shouldBe Some(Vector("user", "notification:read"))
+      auth.localSubject.flatMap(_.securityLevel) shouldBe Some("user")
+      auth.localSubject.map(_.attributes) shouldBe Some(Map("installation" -> "standalone"))
       provider.name shouldBe "user-account"
       provider.component shouldBe "textus-user-account"
       provider.kind shouldBe Some("human")

@@ -15,7 +15,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Mar. 20, 2026
  *  version Apr. 14, 2026
- * @version May. 11, 2026
+ * @version Jul. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EventBusSpec
@@ -208,6 +208,47 @@ final class EventBusSpec
       Then("publish and dispatch succeed")
       result shouldBe Consequence.success(EventPublishResult(1, persisted = false))
       trace.toVector shouldBe Vector("policy-allow-sub")
+    }
+
+    "preserve the authorized execution context for dispatch handlers" in {
+      Given("an authorized event handler that records its execution context")
+      given context: ExecutionContext =
+        ExecutionContext.test(SecurityContext.Privilege.ApplicationContentManager)
+      val recorder = new _InMemoryCommitRecorder
+      val eventstore = EventStore.inMemory
+      val eventengine = EventEngine.noop(DataStore.noop(recorder), recorder, eventstore)
+      val bus = EventBus.default(eventengine)
+      var dispatchedcontext: Option[ExecutionContext] = None
+      bus.register(
+        EventSubscription(
+          name = "authorized-context-sub",
+          eventName = Some("authorized-context-event"),
+          handler = new EventDispatchHandler {
+            def dispatch(event: DomainEvent): Consequence[Unit] = {
+              val _ = event
+              Consequence.failure("authorized dispatch was not used")
+            }
+
+            override def dispatchAuthorized(
+              event: DomainEvent
+            )(using current: ExecutionContext): Consequence[Unit] = {
+              val _ = event
+              dispatchedcontext = Some(current)
+              Consequence.unit
+            }
+          }
+        )
+      )
+
+      When("the event is published through the authorized entry point")
+      val result = bus.publishAuthorized(
+        _action_event("authorized-context-event"),
+        EventPublishOption(persistent = false)
+      )
+
+      Then("the handler receives the caller's execution context")
+      result shouldBe Consequence.success(EventPublishResult(1, persisted = false))
+      dispatchedcontext shouldBe Some(context)
     }
 
     "deny subscription introspection for user privilege" in {

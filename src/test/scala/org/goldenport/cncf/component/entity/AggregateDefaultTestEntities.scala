@@ -1,6 +1,6 @@
 /*
  * @since   Mar. 30, 2026
- * @version Apr. 30, 2026
+ * @version Jul. 15, 2026
  */
 package org.goldenport.cncf.component.entity
 
@@ -36,11 +36,18 @@ object Order {
   def createC(r: Record): Consequence[Order] =
     Consequence.success(
       Order(
-        id = EntityId.parse(r.getString("id").getOrElse(sys.error("id missing"))).TAKE,
+        id = _entity_id(r, "id"),
         name = r.getString("name").getOrElse(sys.error("name missing")),
         status = r.getString("status").getOrElse(sys.error("status missing"))
       )
     )
+
+  private def _entity_id(record: Record, name: String): EntityId =
+    record.getAny(name) match {
+      case Some(id: EntityId) => id
+      case Some(value: String) => EntityId.parse(value).TAKE
+      case _ => sys.error(s"$name missing")
+    }
 }
 
 final case class Order(

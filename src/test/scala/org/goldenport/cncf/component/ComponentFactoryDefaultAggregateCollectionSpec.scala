@@ -1,6 +1,6 @@
 /*
  * @since   Mar. 30, 2026
- * @version Apr. 26, 2026
+ * @version Jul. 15, 2026
  */
 package org.goldenport.cncf.component
 
@@ -10,8 +10,10 @@ import org.goldenport.Consequence
 import org.goldenport.protocol.Protocol
 import org.goldenport.protocol.Request
 import org.goldenport.protocol.operation.OperationRequest
+import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.protocol.spec as spec
 import org.goldenport.record.Record
+import org.goldenport.cncf.action.{Action, ActionCall, ProcedureActionCall}
 import org.goldenport.cncf.context.{CorrelationId, DataStoreContext, EntityStoreContext, ExecutionContext, ObservabilityContext, RuntimeContext, ScopeContext, ScopeKind, TraceId}
 import org.goldenport.cncf.datastore.{DataStore, DataStoreSpace}
 import org.goldenport.cncf.directive.Query
@@ -88,6 +90,33 @@ final class ComponentFactoryDefaultAggregateCollectionSpec extends AnyWordSpec w
       aggregate.lines.map(_.id) shouldBe Vector(_line_id)
       aggregate.customer.map(_.id) shouldBe Some(_customer_id)
     }
+
+    "persist aggregate command output through the ActionCall execution context" in {
+      val component = new ComponentFactory().bootstrap(_component_with_default_aggregate())
+      given ExecutionContext = _execution_context(Vector.empty)
+      val aggregate = OrderAggregate(
+        id = _order_id,
+        name = "Created through aggregate",
+        status = "Active",
+        customer = None,
+        lines = Vector.empty
+      )
+      val action = _AggregatePersistenceAction(
+        Request.ofService("order", "createOrder"),
+        aggregate
+      )
+      val call = action.createCall(ActionCall.Core(action, summon[ExecutionContext], Some(component), None))
+
+      val result = call.execute()
+      withClue(result) {
+        result.isSuccess shouldBe true
+      }
+
+      val stored = _load_store_record(OrderEntity.collectionId, _order_id)
+      stored.getString("name") shouldBe Some("Created through aggregate")
+      stored.getAny("lines") shouldBe None
+      stored.getAny("customer") shouldBe None
+    }
   }
 
   private def _component_with_default_aggregate(): Component = {
@@ -119,7 +148,7 @@ final class ComponentFactoryDefaultAggregateCollectionSpec extends AnyWordSpec w
             entityName = "order",
             members = Vector(
               AggregateMemberDefinition(
-                name = "lines",
+                name = "line_items",
                 entityName = "order_line",
                 kind = Some("composition"),
                 joinFieldName = Some("orderId"),
@@ -283,4 +312,24 @@ private final case class _AggregateNoopOperation(
 
   override def createOperationRequest(req: Request): Consequence[OperationRequest] =
     Consequence.notImplemented("not used")
+}
+
+private final case class _AggregatePersistenceAction(
+  request: Request,
+  aggregate: org.goldenport.cncf.component.entity.aggregate.Order
+) extends Action {
+  override def createCall(core: ActionCall.Core): ActionCall =
+    _AggregatePersistenceActionCall(core, aggregate)
+}
+
+private final case class _AggregatePersistenceActionCall(
+  core: ActionCall.Core,
+  aggregate: org.goldenport.cncf.component.entity.aggregate.Order
+) extends ProcedureActionCall {
+  override def execute(): Consequence[OperationResponse] =
+    aggregate_create_c(
+      "order",
+      "createOrder",
+      Consequence.success(aggregate)
+    ).map(result => OperationResponse.create(result.toRecord()))
 }

@@ -9,6 +9,7 @@ import org.simplemodeling.model.datatype.EntityCollectionId
 import org.goldenport.cncf.datastore.DataStore
 import org.goldenport.cncf.directive.*
 import org.goldenport.cncf.observability.CallTreeValueSummary
+import org.goldenport.record.Record
 import org.simplemodeling.model.directive.Update
 import org.goldenport.cncf.unitofwork.UnitOfWorkOp.*
 
@@ -18,7 +19,8 @@ import org.goldenport.cncf.unitofwork.UnitOfWorkOp.*
  *  version Mar. 27, 2026
  *  version Apr. 13, 2026
  *  version Apr. 14, 2026
- * @version May. 11, 2026
+ *  version May. 11, 2026
+ * @version Jul. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 class EntityStoreSpace {
@@ -58,6 +60,28 @@ class EntityStoreSpace {
     op: EntityStoreCreate[T]
   ): EntityCreateOptions =
     op.options
+
+  def upsert[T](
+    op: EntityStoreUpsert[T]
+  )(
+    authorize: Option[Record] => Consequence[Unit]
+  )(using ctx: ExecutionContext): Consequence[CreateResult[T]] =
+    upsert(op)(authorize, (_: CreateResult[T]) => Consequence.unit)
+
+  def upsert[T](
+    op: EntityStoreUpsert[T]
+  )(
+    authorize: Option[Record] => Consequence[Unit],
+    onSaved: CreateResult[T] => Consequence[Unit]
+  )(using ctx: ExecutionContext): Consequence[CreateResult[T]] = {
+    given EntityPersistentCreate[T] = op.tc
+    _with_calltree("space:entitystore:upsert", _entitystore_space_attributes("upsert", op.id.collection) + ("entity_id" -> op.id.print)) {
+      for {
+        entitystore <- _by_collection(op.id.collection)
+        result <- entitystore.upsert(op.entity, op.id, op.options)(authorize, onSaved)
+      } yield result
+    }
+  }
 
   def importSeed[T](
     seed: EntityStoreSeed[T]

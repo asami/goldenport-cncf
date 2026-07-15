@@ -7,7 +7,7 @@ import java.util.Locale
 import org.goldenport.{Consequence, ConsequenceT}
 import org.goldenport.cncf.action.CommandExecutionMode
 import org.goldenport.cncf.config.RuntimeConfig
-import org.goldenport.cncf.context.{CorrelationId, DataStoreContext, EntityStoreContext, ExecutionContext, GlobalRuntimeContext, ObservabilityContext, Principal, PrincipalId, RuntimeContext, ScopeContext, ScopeKind, SecurityContext, SpanId, TraceId}
+import org.goldenport.cncf.context.{Capability, CorrelationId, DataStoreContext, EntityStoreContext, ExecutionContext, GlobalRuntimeContext, ObservabilityContext, Principal, PrincipalId, RuntimeContext, ScopeContext, ScopeKind, SecurityContext, SecurityLevel, SubjectKind, SpanId, TraceId}
 import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.event.EventReception
 import org.goldenport.cncf.job.{ActionId, JobContext, JobId, TaskId}
@@ -21,7 +21,7 @@ import org.goldenport.protocol.Request
  * - Reception ingress
  *
  * @since   Mar. 20, 2026
- * @version Apr. 28, 2026
+ * @version Jul. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ResolvedIngressSecurity(
@@ -116,6 +116,9 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
     val caps = _resolve_requested_capabilities(attributes)
     val request = AuthenticationRequest(attributes)
     val resolvedProviders = _resolved_authentication_providers(base)
+    val localsubject =
+      if (_has_local_subject_override_material(request)) None
+      else _resolved_local_subject(base)
     val security0 =
       if (resolvedProviders.nonEmpty)
         _resolve_authenticated_security(resolvedProviders, base, request)
@@ -125,12 +128,17 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
       case Some(security) =>
         Consequence.success(security)
       case None =>
-        if (_fallback_privilege_enabled(base))
-          _resolve_privilege(attributes).map(_security_context(_, attributes))
-        else if (_has_authentication_material(request))
-          Consequence.securityPermissionDenied[SecurityContext]("Privilege fallback is disabled by resolved security wiring.")
-        else
-          _resolve_privilege(attributes).map(_security_context(_, attributes))
+        localsubject match {
+          case Some(security) =>
+            Consequence.success(security)
+          case None =>
+            if (_fallback_privilege_enabled(base))
+              _resolve_privilege(attributes).map(_security_context(_, attributes))
+            else if (_has_authentication_material(request))
+              Consequence.securityPermissionDenied[SecurityContext]("Privilege fallback is disabled by resolved security wiring.")
+            else
+              _resolve_privilege(attributes).map(_security_context(_, attributes))
+        }
     }.flatMap { security =>
       val privilege = _resolve_privilege_from_security(security)
       val ctx0 = ExecutionContext.withSecurityContext(base, security)
@@ -386,6 +394,31 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
   private def _resolved_authentication_providers(base: ExecutionContext): Vector[AuthenticationProvider] =
     AuthenticationProviderRuntime.providers(base)
 
+  private def _resolved_local_subject(
+    base: ExecutionContext
+  ): Option[SecurityContext] =
+    _subsystem_from_scope(base.cncfCore.scope)
+      .flatMap(_.resolvedSecurityWiring.authentication.localSubject)
+      .map { subject =>
+        val roleattributes =
+          if (subject.roles.isEmpty) Map.empty[String, String]
+          else Map("role" -> subject.roles.mkString(" "))
+        SecurityContext(
+          principal = new Principal {
+            val id: PrincipalId = PrincipalId(subject.id)
+            val attributes: Map[String, String] =
+              subject.attributes ++ roleattributes ++ Map(
+                "authenticated" -> "true",
+                "local_subject" -> "true",
+                "subject_kind" -> "installation"
+              )
+          },
+          capabilities = subject.capabilities.map(Capability.apply).toSet,
+          level = SecurityLevel(subject.securityLevel),
+          subjectKind = SubjectKind.User
+        )
+      }
+
   private def _fallback_privilege_enabled(base: ExecutionContext): Boolean =
     _subsystem_from_scope(base.cncfCore.scope)
       .map(_.resolvedSecurityWiring.authentication.fallbackPrivilegeEnabled)
@@ -394,6 +427,9 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
   private def _has_authentication_material(request: AuthenticationRequest): Boolean =
     request.accessToken.exists(_.trim.nonEmpty) ||
       request.refreshToken.exists(_.trim.nonEmpty)
+
+  private def _has_local_subject_override_material(request: AuthenticationRequest): Boolean =
+    _has_authentication_material(request) || request.sessionId.exists(_.trim.nonEmpty)
 
   @annotation.tailrec
   private def _subsystem_from_scope(

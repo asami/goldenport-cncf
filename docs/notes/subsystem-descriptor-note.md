@@ -84,6 +84,13 @@ security:
   authentication:
     convention: enabled
     fallback_privilege: enabled
+    local_subject:
+      id: standalone-local
+      roles: [user]
+      capabilities: [user]
+      security_level: user
+      attributes:
+        installation: standalone
     providers:
       - name: user-account
         component: textus-user-account
@@ -102,6 +109,12 @@ security:
 - `security.authentication`: authentication/session wiring section
 - `security.authentication.convention`: whether convention-based provider discovery is enabled
 - `security.authentication.fallback_privilege`: whether legacy privilege fallback remains enabled when no provider resolves the request
+- `security.authentication.local_subject`: optional trusted installation subject used only for an ingress request without access-token, refresh-token, or session material
+- `security.authentication.local_subject.id`: stable installation subject id shared by every assembled component
+- `security.authentication.local_subject.roles`: roles projected into the subject context
+- `security.authentication.local_subject.capabilities`: direct capabilities granted to the installation subject
+- `security.authentication.local_subject.security_level`: subject security level; defaults to `user`
+- `security.authentication.local_subject.attributes`: deployment-owned subject attributes
 - `security.authentication.providers`: explicit authentication provider entries
 - `security.authentication.providers[*].name`: stable wiring name used in deployment specs and generated diagrams
 - `security.authentication.providers[*].component`: component name hosting the provider
@@ -119,7 +132,24 @@ Security provider resolution should be determined in this order:
 2. descriptor-explicit providers are considered first
 3. if `convention: enabled`, convention-discovered providers are added
 4. selector/default/priority chooses the winner among matches
-5. if no provider resolves and `fallback_privilege: enabled`, legacy privilege resolution applies
+5. a provider-authenticated result always has precedence over a local subject
+6. when no authentication material is present and no provider resolves, the configured local subject is installed
+7. an unmatched access token or refresh token is never replaced by the local subject
+8. if neither provider nor local subject resolves and `fallback_privilege: enabled`, legacy privilege resolution applies
+
+### Local Installation Subject Contract
+
+`local_subject` represents one trusted standalone installation identity. It is
+descriptor wiring, not user-supplied request data and not an authentication
+provider. All components in the subsystem receive the same subject through the
+normal CNCF ingress `ExecutionContext`, so a standalone application and an
+assembled notification component can share current-user semantics without an
+application-specific authentication bypass.
+
+Deployments must not configure `local_subject` for account-backed multi-user
+identity. If a request contains access-token, refresh-token, or session
+material, CNCF keeps that request on the authentication-provider path. A stale
+or rejected credential therefore cannot silently acquire standalone access.
 
 ### Convention Contract
 

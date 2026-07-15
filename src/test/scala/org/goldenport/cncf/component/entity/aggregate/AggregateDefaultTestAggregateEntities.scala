@@ -1,6 +1,6 @@
 /*
  * @since   Mar. 30, 2026
- * @version Apr. 30, 2026
+ * @version Jul. 15, 2026
  */
 package org.goldenport.cncf.component.entity.aggregate
 
@@ -38,7 +38,7 @@ object Order extends AggregateAssembler[Order] {
     member_name match {
       case "customer" =>
         Consequence.success(aggregate.withCustomer(members.collectFirst { case m: Customer => m }))
-      case "lines" =>
+      case "line_items" =>
         Consequence.success(aggregate.withLines(members.collect { case m: OrderLine => m }))
       case _ =>
         Consequence.operationInvalid(s"Unknown aggregate member: ${member_name}")
@@ -57,7 +57,7 @@ final case class Order(
 
   def toRecord(): Record =
     Record.dataAuto(
-      "id" -> id.value,
+      "id" -> id.print,
       "name" -> name,
       "status" -> status,
       "customer" -> customer.map(_.toRecord()),

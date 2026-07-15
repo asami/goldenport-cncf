@@ -1,20 +1,23 @@
 package org.goldenport.cncf.config
 
+import java.time.Instant
 import org.goldenport.cncf.cli.RunMode
 import org.goldenport.cncf.blob.{BlobStoreConfig, BlobStoreFactory}
 import org.goldenport.cncf.context.IdGenerationContext
 import org.goldenport.cncf.log.LogBackend
 import org.goldenport.configuration.{Configuration, ConfigurationTrace, ConfigurationValue, ResolvedConfiguration}
 import org.scalatest.matchers.should.Matchers
+import org.scalatest.GivenWhenThen
 import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr. 18, 2026
  *  version Apr. 28, 2026
- * @version Jun. 19, 2026
+ *  version Jun. 19, 2026
+ * @version Jul. 15, 2026
  * @author  ASAMI, Tomoharu
  */
-final class RuntimeConfigSpec extends AnyWordSpec with Matchers {
+final class RuntimeConfigSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   "RuntimeConfig" should {
     "use develop operation mode and anonymous admin enabled by default" in {
       val config = RuntimeConfig.from(ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty))
@@ -27,6 +30,46 @@ final class RuntimeConfigSpec extends AnyWordSpec with Matchers {
       config.webProductionAdminComponentRoles shouldBe Vector("component_operator", "system_admin")
       config.webProductionAdminJobsRoles shouldBe Vector("system_admin", "audit_viewer")
       config.idNamespace shouldBe IdGenerationContext.DefaultNamespace
+      config.executionClock.isVirtual shouldBe false
+    }
+
+    "parse an advancing virtual clock start and its compatibility aliases" in {
+      Given("a runtime configuration using the compatibility clock key")
+      val configuration = ResolvedConfiguration(
+        Configuration(Map(
+          RuntimeConfig.RUNTIME_CLOCK_VIRTUAL_START_AT_KEY ->
+            ConfigurationValue.StringValue("2026-07-28T18:00:00+09:00")
+        )),
+        ConfigurationTrace.empty
+      )
+
+      When("the runtime configuration is resolved")
+      val config = RuntimeConfig.from(configuration)
+
+      Then("the canonical key resolves the alias and carries an advancing virtual clock")
+      RuntimeConfig.getString(configuration, RuntimeConfig.CLOCK_VIRTUAL_START_AT_KEY) shouldBe
+        Some("2026-07-28T18:00:00+09:00")
+      config.executionClock.isVirtual shouldBe true
+      config.executionClock.virtualStartAt shouldBe Some(Instant.parse("2026-07-28T09:00:00Z"))
+    }
+
+    "reject a virtual clock start without an offset" in {
+      Given("a virtual clock start without an ISO-8601 offset")
+      val configuration = ResolvedConfiguration(
+        Configuration(Map(
+          RuntimeConfig.CLOCK_VIRTUAL_START_AT_KEY ->
+            ConfigurationValue.StringValue("2026-07-28T18:00:00")
+        )),
+        ConfigurationTrace.empty
+      )
+
+      When("the runtime configuration is resolved")
+      val thrown = intercept[IllegalArgumentException] {
+        RuntimeConfig.from(configuration)
+      }
+
+      Then("the invalid clock key is identified")
+      thrown.getMessage should include (RuntimeConfig.CLOCK_VIRTUAL_START_AT_KEY)
     }
 
     "parse web demo assist configuration and cncf alias" in {

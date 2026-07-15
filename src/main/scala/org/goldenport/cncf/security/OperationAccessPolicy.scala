@@ -19,7 +19,8 @@ import org.simplemodeling.model.value.SecurityAttributes
 /*
  * @since   Apr.  6, 2026
  *  version Apr. 29, 2026
- * @version May. 11, 2026
+ *  version May. 11, 2026
+ * @version Jul. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 object OperationAccessPolicy {
@@ -217,7 +218,7 @@ object OperationAccessPolicy {
   )(using ctx: ExecutionContext): Consequence[Unit] =
     authorization.resourceFamily.trim.toLowerCase(java.util.Locale.ROOT) match
       case "domain" | "aggregate" =>
-        authorization.accessKind match
+        _authorize_declared_aggregate_command(authorization).getOrElse(authorization.accessKind match
           case "create" =>
             _authorize_policy_capability(authorization).flatMap(_ => _authorize_domain_create_default(authorization))
           case kind if Set("read", "update", "delete").contains(_permission_access_kind(kind)) =>
@@ -242,12 +243,37 @@ object OperationAccessPolicy {
             }
           case _ =>
             Consequence.unit
+        )
       case "association" =>
         _authorize_policy_capability(authorization)
       case "store" =>
         _authorize_policy_capability(authorization)
       case _ =>
         Consequence.unit
+
+  private def _authorize_declared_aggregate_command(
+    authorization: UnitOfWorkAuthorization
+  )(using ctx: ExecutionContext): Option[Consequence[Unit]] = {
+    val isaggregate = authorization.resourceFamily.trim.equalsIgnoreCase("aggregate")
+    val iscommand = authorization.accessKind.trim.toLowerCase(java.util.Locale.ROOT).startsWith("command:")
+    if (!isaggregate || !iscommand)
+      None
+    else
+      authorization.access.flatMap(a => Option(a.policy).map(_.trim.toLowerCase(java.util.Locale.ROOT))) match
+        case Some("authenticated_only") | Some("authenticated-only") =>
+          Some(
+            if (_subject.isAuthenticated)
+              _authorize_policy_capability(authorization)
+            else
+              Consequence.securityAuthenticationRequired(
+                s"Authenticated user is required: ${authorization.accessKind}"
+              )
+          )
+        case Some("public") =>
+          Some(_authorize_policy_capability(authorization))
+        case _ =>
+          None
+  }
 
   private def _permission_access_kind(accessKind: String): String = {
     val normalized = accessKind.trim.toLowerCase(java.util.Locale.ROOT)

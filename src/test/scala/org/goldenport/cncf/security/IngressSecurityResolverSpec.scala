@@ -5,7 +5,7 @@ import java.util.Locale
 import org.goldenport.Consequence
 import org.goldenport.cncf.component.{Component, ComponentId, ComponentInstanceId}
 import org.goldenport.cncf.context.{CorrelationId, ExecutionContext, PrincipalId, ScopeContext, ScopeKind, SecurityLevel, TraceId}
-import org.goldenport.cncf.subsystem.{GenericSubsystemAuthenticationBinding, GenericSubsystemAuthenticationProviderBinding, GenericSubsystemComponentBinding, GenericSubsystemDescriptor, GenericSubsystemSecurityBinding, Subsystem}
+import org.goldenport.cncf.subsystem.{GenericSubsystemAuthenticationBinding, GenericSubsystemAuthenticationProviderBinding, GenericSubsystemComponentBinding, GenericSubsystemDescriptor, GenericSubsystemLocalSubjectBinding, GenericSubsystemSecurityBinding, Subsystem}
 import org.goldenport.cncf.event.EventReception
 import org.goldenport.cncf.job.{ActionId, JobId, TaskId}
 import org.goldenport.protocol.{Property, Protocol, Request}
@@ -14,7 +14,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 20, 2026
- * @version Apr. 28, 2026
+ *  version Apr. 28, 2026
+ * @version Jul. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final class IngressSecurityResolverSpec extends AnyWordSpec with Matchers {
@@ -192,6 +193,77 @@ final class IngressSecurityResolverSpec extends AnyWordSpec with Matchers {
       val resolved = result.toOption.get
       resolved.executionContext.security.principal.id.value shouldBe "anonymous"
       resolved.executionContext.security.level shouldBe SecurityLevel("anonymous")
+    }
+
+    "install the trusted local subject when standalone ingress has no authentication material" in {
+      val subsystem = _subsystem(
+        fallbackEnabled = false,
+        localSubject = Some(_local_subject)
+      )
+      val base = subsystem.components.head.logic.executionContext()
+
+      val result = IngressSecurityResolver.resolve(base, Map.empty[String, String])
+
+      result shouldBe a[Consequence.Success[_]]
+      val security = result.toOption.get.executionContext.security
+      val subject = SecuritySubject.from(security)
+      security.principal.id.value shouldBe "standalone-local"
+      security.level shouldBe SecurityLevel("user")
+      security.hasCapability("notification:read") shouldBe true
+      security.principal.attributes.get("installation") shouldBe Some("standalone")
+      security.principal.attributes.get("local_subject") shouldBe Some("true")
+      subject.isAuthenticated shouldBe true
+      subject.isProviderAuthenticated shouldBe false
+      subject.hasRole("user") shouldBe true
+    }
+
+    "prefer a provider-authenticated subject over the configured local subject" in {
+      val subsystem = _subsystem(
+        fallbackEnabled = false,
+        providers = Vector(
+          _provider(
+            "account-provider",
+            _ => Consequence.success(Some(AuthenticationResult(PrincipalId("account-user"), attributes = Map.empty)))
+          )
+        ),
+        localSubject = Some(_local_subject)
+      )
+      val base = subsystem.components.head.logic.executionContext()
+
+      val result = IngressSecurityResolver.resolve(base, Map("access_token" -> "account-token"))
+
+      result shouldBe a[Consequence.Success[_]]
+      val security = result.toOption.get.executionContext.security
+      security.principal.id.value shouldBe "account-user"
+      SecuritySubject.from(security).isProviderAuthenticated shouldBe true
+      security.principal.attributes should not contain key ("local_subject")
+    }
+
+    "reject unmatched credentials instead of substituting the configured local subject" in {
+      val subsystem = _subsystem(
+        fallbackEnabled = false,
+        localSubject = Some(_local_subject)
+      )
+      val base = subsystem.components.head.logic.executionContext()
+
+      val result = IngressSecurityResolver.resolve(base, Map("access_token" -> "missing-token"))
+
+      result shouldBe a[Consequence.Failure[_]]
+    }
+
+    "keep an unresolved session outside the configured local subject" in {
+      val subsystem = _subsystem(
+        fallbackEnabled = false,
+        localSubject = Some(_local_subject)
+      )
+      val base = subsystem.components.head.logic.executionContext()
+
+      val result = IngressSecurityResolver.resolve(base, Map("x-textus-session" -> "missing-session"))
+
+      result shouldBe a[Consequence.Success[_]]
+      val security = result.toOption.get.executionContext.security
+      security.principal.id.value shouldBe "anonymous"
+      security.principal.attributes should not contain key ("local_subject")
     }
 
     "allow anonymous resolution for public signup attributes when providers do not match and fallback privilege is disabled" in {
@@ -400,7 +472,8 @@ final class IngressSecurityResolverSpec extends AnyWordSpec with Matchers {
 
   private def _subsystem(
     fallbackEnabled: Boolean,
-    providers: Vector[AuthenticationProvider] = Vector(_provider("dummy-provider", _ => Consequence.success(None)))
+    providers: Vector[AuthenticationProvider] = Vector(_provider("dummy-provider", _ => Consequence.success(None))),
+    localSubject: Option[GenericSubsystemLocalSubjectBinding] = None
   ): Subsystem = {
     val subsystem = Subsystem(
       name = "security-test",
@@ -447,6 +520,7 @@ final class IngressSecurityResolverSpec extends AnyWordSpec with Matchers {
               GenericSubsystemAuthenticationBinding(
                 convention = Some("enabled"),
                 fallbackPrivilege = Some(if (fallbackEnabled) "enabled" else "disabled"),
+                localSubject = localSubject,
                 providers = providers.map { provider =>
                   GenericSubsystemAuthenticationProviderBinding(
                     name = provider.name,
@@ -467,6 +541,15 @@ final class IngressSecurityResolverSpec extends AnyWordSpec with Matchers {
     )
     configured
   }
+
+  private val _local_subject =
+    GenericSubsystemLocalSubjectBinding(
+      id = "standalone-local",
+      roles = Vector("user"),
+      capabilities = Vector("user", "notification:read"),
+      attributes = Map("installation" -> "standalone"),
+      securityLevel = Some("user")
+    )
 
   private def _provider(
     providerName: String,

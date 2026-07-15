@@ -1,5 +1,6 @@
 package org.goldenport.cncf.cli
 
+import java.time.Instant
 import java.nio.file.{Files, Paths}
 import java.util.zip.{ZipEntry, ZipOutputStream}
 import org.goldenport.cncf.config.{RuntimeConfig, RuntimeTestDescriptor}
@@ -12,7 +13,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Apr. 15, 2026
  *  version Apr. 25, 2026
- * @version Jul. 14, 2026
+ * @version Jul. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -112,6 +113,26 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with Giv
       Then("the runtime resolves the file and preserves the framework argument")
       RuntimeConfig.getString(bootstrap.configuration, RuntimeConfig.WebDescriptorKey) shouldBe Some("config/web-descriptor.yaml")
       bootstrap.invocation.actualArgs.toVector should contain (s"--textus.config.file=${config}")
+    }
+
+    "resolve a virtual clock start passed as a Textus CLI framework option" in {
+      Given("a virtual start date-time with an explicit offset")
+      val cwd = Files.createTempDirectory("textus-runtime-virtual-clock")
+
+      When("the runtime is bootstrapped with the clock setting")
+      val bootstrap = CncfRuntime.bootstrap(
+        cwd,
+        Array("--textus.clock.virtual-start-at=2026-07-28T18:00:00+09:00", "command")
+      )
+      val runtimeconfig = RuntimeConfig.from(bootstrap.configuration)
+
+      Then("the CLI value selects an advancing offset clock")
+      RuntimeConfig.getString(
+        bootstrap.configuration,
+        RuntimeConfig.CLOCK_VIRTUAL_START_AT_KEY
+      ) shouldBe Some("2026-07-28T18:00:00+09:00")
+      runtimeconfig.executionClock.virtualStartAt shouldBe
+        Some(Instant.parse("2026-07-28T09:00:00Z"))
     }
 
     "resolve a legacy explicit YAML config file passed as a CNCF CLI framework option" in {

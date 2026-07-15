@@ -26,7 +26,8 @@ import org.goldenport.observation.{Cause, Taxonomy}
  * @since   Mar. 21, 2026
  *  version Mar. 24, 2026
  *  version Apr. 22, 2026
- * @version May. 31, 2026
+ *  version May. 31, 2026
+ * @version Jul. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 enum CmlEventCategory {
@@ -476,6 +477,9 @@ trait EventReception {
     input: ReceptionInput,
     policy: EventPolicyEngine = EventPolicyEngine.default
   )(using ExecutionContext): Consequence[ReceptionResult]
+  def receiveInternal(
+    input: ReceptionInput
+  )(using ExecutionContext): Consequence[ReceptionResult]
 }
 
 object EventReception {
@@ -618,6 +622,16 @@ object EventReception {
                 case _ =>
                   Consequence.unit
               }
+
+            override def dispatchAuthorized(
+              event: DomainEvent
+            )(using context: ExecutionContext): Consequence[Unit] =
+              event match {
+                case reception: ReceptionDomainEvent =>
+                  _dispatch_registered_subscription_authorized(subscription, reception)
+                case _ =>
+                  Consequence.unit
+              }
           }
         )
       )
@@ -674,6 +688,11 @@ object EventReception {
       policy: EventPolicyEngine = EventPolicyEngine.default
     )(using ExecutionContext): Consequence[ReceptionResult] =
       _receive(input, policy, Some(summon[ExecutionContext]))
+
+    def receiveInternal(
+      input: ReceptionInput
+    )(using ExecutionContext): Consequence[ReceptionResult] =
+      _receive(input, EventPolicyEngine.internal, Some(summon[ExecutionContext]))
 
     private def _receive(
       input: ReceptionInput,
@@ -1408,17 +1427,31 @@ object EventReception {
       event: ReceptionDomainEvent
     ): Consequence[Unit] =
       _resolve_dispatch_execution_context(event.attributes).flatMap { security =>
-        given ExecutionContext = security.executionContext
-        _resolve_execution_policy(subscription, event).flatMap { resolved =>
-          if (resolved.policy.timing == EventExecutionTiming.Sync &&
-            resolved.policy.jobRelation == EventJobRelation.SameJob &&
-            security.executionContext.jobContext.jobId.isEmpty
-          )
-            _dispatch_subscription_inline(subscription, event).map(_ => ())
-          else
-            _dispatch_subscription(subscription, event).map(_ => ())
-        }
+        _dispatch_registered_subscription(subscription, event, security.executionContext)
       }
+
+    private def _dispatch_registered_subscription_authorized(
+      subscription: CmlSubscriptionDefinition,
+      event: ReceptionDomainEvent
+    )(using context: ExecutionContext): Consequence[Unit] =
+      _dispatch_registered_subscription(subscription, event, context)
+
+    private def _dispatch_registered_subscription(
+      subscription: CmlSubscriptionDefinition,
+      event: ReceptionDomainEvent,
+      context: ExecutionContext
+    ): Consequence[Unit] = {
+      given ExecutionContext = context
+      _resolve_execution_policy(subscription, event).flatMap { resolved =>
+        if (resolved.policy.timing == EventExecutionTiming.Sync &&
+          resolved.policy.jobRelation == EventJobRelation.SameJob &&
+          context.jobContext.jobId.isEmpty
+        )
+          _dispatch_subscription_inline(subscription, event).map(_ => ())
+        else
+          _dispatch_subscription(subscription, event).map(_ => ())
+      }
+    }
 
     private def _resolve_dispatch_execution_context(
       attributes: Map[String, String]

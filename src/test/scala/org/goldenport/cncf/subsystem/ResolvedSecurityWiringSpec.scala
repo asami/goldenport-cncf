@@ -13,7 +13,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Apr.  9, 2026
  *  version Apr. 23, 2026
  *  version Apr. 24, 2026
- * @version May.  7, 2026
+ * @version Jul. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ResolvedSecurityWiringSpec extends AnyWordSpec with Matchers {
@@ -107,6 +107,46 @@ final class ResolvedSecurityWiringSpec extends AnyWordSpec with Matchers {
       wiring.authentication.providers shouldBe empty
     }
 
+    "resolve the trusted local installation subject independently of authentication providers" in {
+      val descriptor = GenericSubsystemDescriptor(
+        path = java.nio.file.Path.of("<memory>"),
+        subsystemName = "standalone-application",
+        componentBindings = Vector(GenericSubsystemComponentBinding("application")),
+        security = Some(
+          GenericSubsystemSecurityBinding(
+            authentication = Some(
+              GenericSubsystemAuthenticationBinding(
+                convention = Some("disabled"),
+                fallbackPrivilege = Some("disabled"),
+                localSubject = Some(
+                  GenericSubsystemLocalSubjectBinding(
+                    id = "standalone-local",
+                    roles = Vector("user"),
+                    capabilities = Vector("user", "notification:read"),
+                    attributes = Map("installation" -> "standalone"),
+                    securityLevel = Some("user")
+                  )
+                )
+              )
+            )
+          )
+        )
+      )
+
+      val wiring = ResolvedSecurityWiring.resolve(Some(descriptor), Vector.empty)
+
+      wiring.authentication.localSubject shouldBe Some(
+        ResolvedLocalSubjectBinding(
+          id = "standalone-local",
+          roles = Vector("user"),
+          capabilities = Vector("user", "notification:read"),
+          attributes = Map("installation" -> "standalone"),
+          securityLevel = "user"
+        )
+      )
+      wiring.authentication.providers shouldBe empty
+    }
+
     "resolve message-delivery providers with descriptor precedence and deterministic ordering" in {
       val descriptor = GenericSubsystemDescriptor(
         path = java.nio.file.Path.of("<memory>"),
@@ -133,10 +173,10 @@ final class ResolvedSecurityWiringSpec extends AnyWordSpec with Matchers {
           )
         )
       )
-      val component = _messageDeliveryComponent(
+      val component = _message_delivery_component(
         "MessageDeliveryStub",
         "textus-message-delivery-stub",
-        Vector(_messageDeliveryProvider("textus-message-delivery-stub"), _messageDeliveryProvider("other-message-delivery"))
+        Vector(_message_delivery_provider("textus-message-delivery-stub"), _message_delivery_provider("other-message-delivery"))
       )
 
       val wiring = ResolvedSecurityWiring.resolve(Some(descriptor), Vector(component))
@@ -176,10 +216,10 @@ final class ResolvedSecurityWiringSpec extends AnyWordSpec with Matchers {
           )
         )
       )
-      val component = _userNotificationComponent(
+      val component = _user_notification_component(
         "UserNotification",
         "textus-user-notification",
-        Vector(_userNotificationProvider("textus-user-notification"), _userNotificationProvider("other-user-notification"))
+        Vector(_user_notification_provider("textus-user-notification"), _user_notification_provider("other-user-notification"))
       )
 
       val wiring = ResolvedSecurityWiring.resolve(Some(descriptor), Vector(component))
@@ -197,11 +237,11 @@ final class ResolvedSecurityWiringSpec extends AnyWordSpec with Matchers {
   private def _component(
     name: String,
     providers: Vector[AuthenticationProvider],
-    messageDeliveryProviders0: Vector[MessageDeliveryProvider] = Vector.empty
+    messagedeliveryproviders: Vector[MessageDeliveryProvider] = Vector.empty
   ): Component =
     new Component() {
       override def authenticationProviders: Vector[AuthenticationProvider] = providers
-      override def messageDeliveryProviders: Vector[MessageDeliveryProvider] = messageDeliveryProviders0
+      override def messageDeliveryProviders: Vector[MessageDeliveryProvider] = messagedeliveryproviders
     }.withArtifactMetadata(
       Component.ArtifactMetadata(
         sourceType = "spec",
@@ -211,9 +251,9 @@ final class ResolvedSecurityWiringSpec extends AnyWordSpec with Matchers {
       )
     )
 
-  private def _messageDeliveryComponent(
+  private def _message_delivery_component(
     name: String,
-    descriptorComponent: String,
+    descriptorcomponent: String,
     providers: Vector[MessageDeliveryProvider]
   ): Component =
     new Component() {
@@ -223,7 +263,7 @@ final class ResolvedSecurityWiringSpec extends AnyWordSpec with Matchers {
         sourceType = "spec",
         name = name,
         version = "0.0.0",
-        component = Some(descriptorComponent)
+        component = Some(descriptorcomponent)
       )
     )
 
@@ -234,16 +274,16 @@ final class ResolvedSecurityWiringSpec extends AnyWordSpec with Matchers {
         Consequence.success(None)
     }
 
-  private def _messageDeliveryProvider(pname: String): MessageDeliveryProvider =
+  private def _message_delivery_provider(pname: String): MessageDeliveryProvider =
     new MessageDeliveryProvider {
       override val name: String = pname
       def send(message: UnifiedMessage)(using ExecutionContext): Consequence[MessageDeliveryResult] =
         Consequence.success(MessageDeliveryResult())
     }
 
-  private def _userNotificationComponent(
+  private def _user_notification_component(
     name: String,
-    descriptorComponent: String,
+    descriptorcomponent: String,
     providers: Vector[UserNotificationProvider]
   ): Component =
     new Component() {
@@ -253,11 +293,11 @@ final class ResolvedSecurityWiringSpec extends AnyWordSpec with Matchers {
         sourceType = "spec",
         name = name,
         version = "0.0.0",
-        component = Some(descriptorComponent)
+        component = Some(descriptorcomponent)
       )
     )
 
-  private def _userNotificationProvider(pname: String): UserNotificationProvider =
+  private def _user_notification_provider(pname: String): UserNotificationProvider =
     new UserNotificationProvider {
       override val name: String = pname
       def notify(request: UserNotificationRequest)(using ExecutionContext): Consequence[UserNotificationResult] =

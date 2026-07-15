@@ -72,6 +72,19 @@ current scalar helper family is:
 - `config_double(key)`;
 - `config_boolean(key)`.
 
+For runtime time, component and provider logic should use the execution clock
+through the protected internal DSL:
+
+- `execution_clock` for APIs that require a `java.time.Clock`;
+- `current_instant` for an absolute current timestamp;
+- `current_zoned_datetime` for the current timestamp in the execution-context
+  timezone.
+
+Component and provider logic must not call `Clock.systemUTC()`,
+`Clock.systemDefaultZone()`, `Instant.now()`, or `ZonedDateTime.now()` directly.
+The runtime bootstrap owns system-clock and offset-clock selection, and every
+component action observes the clock injected into its `ExecutionContext`.
+
 For structured DSL/config parsing, component logic should use:
 
 - `parse_dsl_document(path)`;
@@ -136,6 +149,17 @@ generic internal search. Examples include:
   `slug`;
 - tenant-aware lookup based on `ExecutionContext`.
 
+`entity_upsert(create)` is the canonical create-or-update boundary when the
+component has already assigned a stable entity identity to a generated entity
+create shape. The create shape must expose that identity; omission is an
+invalid operation rather than a request to generate an identity. CNCF checks
+whether the identity exists, applies create authorization and creation
+defaults to a new record, or applies update authorization and merges only the
+domain fields into an existing record. Existing managed lifecycle and security
+attributes are retained on update. The datastore save is an atomic upsert.
+Components must not implement this distinction by calling a datastore directly
+or by treating `entity_save` as an unauthorised upsert.
+
 These helpers should emit dedicated `UnitOfWork` intents, such as uniqueness or
 identity resolution, rather than broad search operations. The dedicated intent
 lets `UnitOfWork` check `EntitySpace` / working set first, fall back to
@@ -175,6 +199,8 @@ When reviewing an internal DSL helper, check:
 - Is tenant scope resolved from `ExecutionContext` rather than assembled in
   application code?
 - Do runtime settings flow through `config_*` helpers?
+- Does runtime time flow through `execution_clock`, `current_instant`, or
+  `current_zoned_datetime` instead of a process-global clock?
 - Does structured input parsing flow through `parse_dsl_document`?
 - Does outbound HTTP flow through `http_*` helpers or `UnitOfWorkOp.Http*`
   using the current `ExecutionContext`?

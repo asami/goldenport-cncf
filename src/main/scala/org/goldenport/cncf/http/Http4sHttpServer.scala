@@ -4,7 +4,7 @@ package org.goldenport.cncf.http
  * @since   May. 18, 2026
  *  version May. 30, 2026
  *  version Jun. 19, 2026
- * @version Jul. 14, 2026
+ * @version Jul. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 import cats.effect.IO
@@ -63,7 +63,7 @@ import org.goldenport.observation.{Cause, Descriptor}
  *  version Apr. 30, 2026
  *  version May. 25, 2026
  *  version Jun. 19, 2026
- * @version Jul. 14, 2026
+ * @version Jul. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Http4sHttpServer(
@@ -4381,6 +4381,8 @@ final class Http4sHttpServer(
     req: Option[org.http4s.Request[IO]] = None
   ): Consequence[StaticFormAppRenderer.Page] = {
     val fullhtmldocument = _static_form_app_renderer.isHtmlDocumentTemplate(content)
+    val sourcehastextusmarkup =
+      _static_form_app_renderer.hasTextusMarkup(content) || _has_textus_include(content)
     val composesubsystemarticle =
       _compose_subsystem_article(webappname, page) &&
         !fullhtmldocument
@@ -4405,6 +4407,7 @@ final class Http4sHttpServer(
       }.getOrElse(composed.html)
       val needstemplaterendering =
         composed.appliedLayout ||
+          sourcehastextusmarkup ||
           _static_form_app_renderer.hasTextusMarkup(expandedhtml) ||
           _has_textus_include(expandedhtml) ||
           (!_static_form_app_renderer.isHtmlDocumentTemplate(expandedhtml) && _has_property_placeholder(expandedhtml))

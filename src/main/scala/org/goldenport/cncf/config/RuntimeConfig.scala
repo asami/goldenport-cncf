@@ -1,5 +1,6 @@
 package org.goldenport.cncf.config
 
+import java.time.Clock
 import org.goldenport.Consequence
 import org.goldenport.configuration.ResolvedConfiguration
 import org.goldenport.cncf.cli.RunMode
@@ -11,7 +12,7 @@ import org.goldenport.cncf.entity.{EntityStore, EntityStoreSpace}
 import org.goldenport.cncf.config.ConfigurationAccess
 import org.goldenport.cncf.config.RuntimeDefaults
 import org.goldenport.cncf.action.CommandExecutionMode
-import org.goldenport.cncf.context.IdGenerationContext
+import org.goldenport.cncf.context.{IdGenerationContext, RuntimeClock}
 import org.goldenport.cncf.observability.{DiagnosticPayloadExternalizationConfig, ObservabilityEngine, OpenTelemetryExportConfig}
 import org.goldenport.cncf.blob.BlobStoreConfig
 
@@ -22,7 +23,7 @@ import org.goldenport.cncf.blob.BlobStoreConfig
  *  version Mar. 28, 2026
  *  version Apr. 30, 2026
  *  version Jun. 19, 2026
- * @version Jul. 12, 2026
+ * @version Jul. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class RuntimeConfig(
@@ -53,7 +54,8 @@ final case class RuntimeConfig(
   staticFormAppRendererConfig: StaticFormAppRendererConfig =
     StaticFormAppRendererConfig.default,
   blobStoreConfig: BlobStoreConfig = BlobStoreConfig(),
-  idNamespace: IdGenerationContext.IdNamespace = IdGenerationContext.DefaultNamespace
+  idNamespace: IdGenerationContext.IdNamespace = IdGenerationContext.DefaultNamespace,
+  executionClock: RuntimeClock = RuntimeConfig.DEFAULT_EXECUTION_CLOCK
 )
 
 object RuntimeConfig {
@@ -89,6 +91,8 @@ object RuntimeConfig {
   val RuntimeOperationModeKey = "textus.runtime.operation-mode"
   val CommandExecutionModeKey = "textus.command.execution-mode"
   val RuntimeCommandExecutionModeKey = "textus.runtime.command.execution-mode"
+  val CLOCK_VIRTUAL_START_AT_KEY = "textus.clock.virtual-start-at"
+  val RUNTIME_CLOCK_VIRTUAL_START_AT_KEY = "textus.runtime.clock.virtual-start-at"
   val IdNamespaceMajorKey = "textus.id.namespace.major"
   val RuntimeIdNamespaceMajorKey = "textus.runtime.id.namespace.major"
   val IdNamespaceMinorKey = "textus.id.namespace.minor"
@@ -278,6 +282,7 @@ object RuntimeConfig {
   val DEFAULT_DEBUG_AUTH_PASSWORD = "test"
   val DEFAULT_DEBUG_AUTH_STATUS = "active"
   val DefaultIdNamespace: IdGenerationContext.IdNamespace = IdGenerationContext.DefaultNamespace
+  val DEFAULT_EXECUTION_CLOCK: RuntimeClock = RuntimeClock.system(Clock.systemUTC())
 
   val default: RuntimeConfig =
     RuntimeConfig(
@@ -304,7 +309,8 @@ object RuntimeConfig {
       openTelemetryExportConfig = OpenTelemetryExportConfig(),
       staticFormAppRendererConfig = StaticFormAppRendererConfig.default,
       blobStoreConfig = BlobStoreConfig(),
-      idNamespace = DefaultIdNamespace
+      idNamespace = DefaultIdNamespace,
+      executionClock = DEFAULT_EXECUTION_CLOCK
     )
 
   def from(
@@ -374,6 +380,7 @@ object RuntimeConfig {
       _static_form_app_renderer_config(configuration)
     val blobStoreConfig = BlobStoreConfig.fromConfiguration(configuration)
     val idNamespace = _id_namespace(configuration)
+    val executionClock = _execution_clock(configuration)
     val webOperationDispatcher =
       _get_string(configuration, WebOperationDispatcherKey)
         .map(_.trim.toLowerCase)
@@ -434,7 +441,8 @@ object RuntimeConfig {
       openTelemetryExportConfig = openTelemetryExportConfig,
       staticFormAppRendererConfig = rendererconfig,
       blobStoreConfig = blobStoreConfig,
-      idNamespace = idNamespace
+      idNamespace = idNamespace,
+      executionClock = executionClock
     )
     _validate(config)
     config
@@ -632,6 +640,25 @@ object RuntimeConfig {
     IdGenerationContext.IdNamespace.normalizeOrThrow(major, minor)
   }
 
+  private def _execution_clock(
+    configuration: ResolvedConfiguration
+  ): RuntimeClock = {
+    val baseclock = Clock.systemUTC()
+    _get_string(configuration, CLOCK_VIRTUAL_START_AT_KEY) match {
+      case Some(value) =>
+        try {
+          RuntimeClock.parseOffset(baseclock, value)
+        } catch {
+          case cause: IllegalArgumentException =>
+            throw new IllegalArgumentException(
+              s"${CLOCK_VIRTUAL_START_AT_KEY} must be an ISO-8601 date-time with an offset: ${value}",
+              cause
+            )
+        }
+      case None => RuntimeClock.system(baseclock)
+    }
+  }
+
   private def _split_csv(
     value: Option[String]
   ): Vector[String] =
@@ -652,6 +679,7 @@ object RuntimeConfig {
         case ModeKey => Vector(RuntimeModeKey)
         case OperationModeKey => Vector(RuntimeOperationModeKey)
         case CommandExecutionModeKey => Vector(RuntimeCommandExecutionModeKey)
+        case CLOCK_VIRTUAL_START_AT_KEY => Vector(RUNTIME_CLOCK_VIRTUAL_START_AT_KEY)
         case IdNamespaceMajorKey => Vector(RuntimeIdNamespaceMajorKey)
         case IdNamespaceMinorKey => Vector(RuntimeIdNamespaceMinorKey)
         case DebugCallTreeKey => Vector(RuntimeDebugCallTreeKey)

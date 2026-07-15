@@ -8,9 +8,10 @@ import org.goldenport.cncf.context.ExecutionContext
 import org.simplemodeling.model.datatype.EntityId
 import org.goldenport.cncf.directive.Query
 import org.goldenport.cncf.entity.EntityPersistent
-import org.goldenport.cncf.entity.aggregate.{AggregateCollection, AggregateSpaceSpecHelper, ProductBuilder, SalesOrderBuilder, UserBuilder}
+import org.goldenport.cncf.entity.aggregate.{AggregateBuilder, AggregateCollection, AggregateSpaceSpecHelper, ProductBuilder, SalesOrderBuilder, UserBuilder}
 import org.goldenport.cncf.entity.runtime.*
 import org.goldenport.cncf.entity.runtime.testdomain.{ProductAggregate, SalesOrder, SalesOrderAggregate, SalesOrderLine, UserAggregate}
+import org.goldenport.cncf.entity.view.{Browser, ViewBuilder, ViewCollection}
 import org.goldenport.cncf.http.RuntimeDashboardMetrics
 import org.goldenport.cncf.log.{LogBackend, LogBackendHolder}
 import org.goldenport.cncf.observability.{DslChokepointContext, DslChokepointHook, DslChokepointOutcome, DslChokepointPhase}
@@ -24,7 +25,8 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Mar. 16, 2026
  *  version Mar. 24, 2026
- * @version Apr. 15, 2026
+ *  version Apr. 15, 2026
+ * @version Jul. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ActionCallAggregateResolveSpec
@@ -332,6 +334,134 @@ final class ActionCallAggregateResolveSpec
       call.asInstanceOf[UpdateNoticeProbeAggregateCall].actionRan shouldBe false
     }
 
+    "run an authenticated command against a shared aggregate without a separate read grant" in {
+      Given("a shared aggregate and an authenticated-only command")
+      given EntityPersistent[NoticeProbeAggregate] = NoticeProbeAggregate.persistent
+      val cid = org.simplemodeling.model.datatype.EntityCollectionId("test", "a", "notice")
+      val id = EntityId("test", "shared_notice", cid)
+      val current = NoticeProbeAggregate.privateOwnedBy(id, "shared", "source-manager")
+      val component = new Component() {
+        override def operationDefinitions: Vector[CmlOperationDefinition] = Vector(
+          CmlOperationDefinition(
+            name = "reviewNotice",
+            kind = "command",
+            inputType = "ReviewNotice",
+            outputType = "ReviewNoticeResult",
+            inputValueKind = "record",
+            access = Some(CmlOperationAccess("authenticated_only"))
+          )
+        )
+      }
+      component.entitySpace.registerEntity("notice", NoticeProbeAggregate.collection(cid, current))
+      component.aggregateSpace.register(
+        "notice",
+        new AggregateCollection(new AggregateBuilder[NoticeProbeAggregate] {
+          def build(targetid: EntityId): Consequence[NoticeProbeAggregate] =
+            Consequence.success(current.copy(id = targetid))
+        })
+      )
+      val base = ActionCallSupport.componentPair(component)
+      val authenticated = ExecutionContext.withSecurityContext(
+        base.executioncontext,
+        org.goldenport.cncf.context.SecurityContext(
+          principal = new org.goldenport.cncf.context.Principal {
+            def id = org.goldenport.cncf.context.PrincipalId("reviewer")
+            def attributes = Map("access_token" -> "reviewer-token")
+          },
+          capabilities = Set.empty,
+          level = org.goldenport.cncf.context.SecurityLevel("user")
+        )
+      )
+      val pair = ActionCallSupport.pair(base.component, authenticated)
+
+      When("the command loads and updates the aggregate through one chokepoint")
+      val call = action_call("review-notice", pair) { core =>
+        CommandNoticeProbeAggregateCall(core, id, "reviewed")
+      }
+      val result = call.execute()
+
+      Then("the command succeeds without exposing a separate aggregate read")
+      result shouldBe a[Consequence.Success[_]]
+      call.asInstanceOf[CommandNoticeProbeAggregateCall].commandRan shouldBe true
+    }
+
+    "invalidate cached entity views after an aggregate command persists its result" in {
+      Given("an aggregate and a cached read-side view over the same entity")
+      given EntityPersistent[NoticeProbeAggregate] = NoticeProbeAggregate.persistent
+      val cid = org.simplemodeling.model.datatype.EntityCollectionId("test", "a", "notice")
+      val id = EntityId("test", "cached_notice", cid)
+      val current = NoticeProbeAggregate.privateOwnedBy(id, "before", "source-manager")
+      val component = new Component() {
+        override def operationDefinitions: Vector[CmlOperationDefinition] = Vector(
+          CmlOperationDefinition(
+            name = "reviewNotice",
+            kind = "command",
+            inputType = "ReviewNotice",
+            outputType = "ReviewNoticeResult",
+            inputValueKind = "record",
+            access = Some(CmlOperationAccess("authenticated_only"))
+          )
+        )
+      }
+      component.entitySpace.registerEntity("notice", NoticeProbeAggregate.collection(cid, current))
+      component.aggregateSpace.register(
+        "notice",
+        new AggregateCollection(new AggregateBuilder[NoticeProbeAggregate] {
+          def build(targetid: EntityId): Consequence[NoticeProbeAggregate] =
+            Consequence.success(current.copy(id = targetid))
+        })
+      )
+      var projectedname = "before"
+      var querycount = 0
+      val viewcollection = new ViewCollection[Record](new ViewBuilder[Record] {
+        def build(targetid: EntityId): Consequence[Record] =
+          Consequence.success(Record.dataAuto("id" -> targetid, "name" -> projectedname))
+      })
+      component.viewSpace.register(
+        "notice",
+        viewcollection,
+        Browser.from(
+          viewcollection,
+          _ => {
+            querycount += 1
+            Consequence.success(Vector(Record.dataAuto("id" -> id, "name" -> projectedname)))
+          }
+        )
+      )
+      val query = Query(Record.empty)
+      component.viewSpace.browser[Record]("notice").query(query).TAKE.head.getString("name") shouldBe Some("before")
+      querycount shouldBe 1
+      val base = ActionCallSupport.componentPair(component)
+      val authenticated = ExecutionContext.withSecurityContext(
+        base.executioncontext,
+        org.goldenport.cncf.context.SecurityContext(
+          principal = new org.goldenport.cncf.context.Principal {
+            def id = org.goldenport.cncf.context.PrincipalId("reviewer")
+            def attributes = Map("access_token" -> "reviewer-token")
+          },
+          capabilities = Set.empty,
+          level = org.goldenport.cncf.context.SecurityLevel("user")
+        )
+      )
+      val pair = ActionCallSupport.pair(base.component, authenticated)
+
+      When("the aggregate command persists an updated value")
+      val call = action_call("review-notice", pair) { core =>
+        CommandNoticeProbeAggregateCall(
+          core,
+          id,
+          "after",
+          () => projectedname = "after"
+        )
+      }
+      val result = call.execute()
+
+      Then("the next view query is evaluated again instead of returning the stale cache entry")
+      result shouldBe a[Consequence.Success[_]]
+      component.viewSpace.browser[Record]("notice").query(query).TAKE.head.getString("name") shouldBe Some("after")
+      querycount shouldBe 2
+    }
+
     "reject aggregate create at the ActionCall chokepoint before running create logic" in {
       Given("a component operation that restricts aggregate create to managers")
       val component = new Component() {
@@ -434,7 +564,7 @@ private final case class ResolveAndDiffUpdateAggregateCall(
         _before = Some(current)
         _updated = Some(updated)
 
-        store_update(updated).map { _ =>
+        _store_update(updated).map { _ =>
           OperationResponse.RecordResponse(
             Record.dataAuto(
               "before" -> current,
@@ -446,7 +576,7 @@ private final case class ResolveAndDiffUpdateAggregateCall(
       }
     }
 
-  private def store_update(
+  private def _store_update(
     updated: SalesOrderAggregate
   ): Consequence[Unit] = {
     val _ = store_update(updated.order.id, updated.order.toRecord())
@@ -494,6 +624,24 @@ private final case class CreateNoticeProbeAggregateCall(
         Consequence.success(created)
       }
     ).map(x => OperationResponse.RecordResponse(x.toRecord()))
+}
+
+private final case class CommandNoticeProbeAggregateCall(
+  core: ActionCall.Core,
+  targetid: EntityId,
+  updatedName: String,
+  onCommand: () => Unit = () => ()
+) extends ProcedureActionCall {
+  private var _commandran: Boolean = false
+
+  def commandRan: Boolean = _commandran
+
+  override def execute(): Consequence[OperationResponse] =
+    aggregate_command_c[NoticeProbeAggregate]("notice", targetid, "reviewNotice") { current =>
+      _commandran = true
+      onCommand()
+      Consequence.success(current.copy(name = updatedName))
+    }.map(x => OperationResponse.RecordResponse(x.toRecord()))
 }
 
 private final case class NoticeProbeAggregate(

@@ -29,7 +29,7 @@ import org.goldenport.configuration.ConfigurationTrace
  * @since   Feb.  4, 2026
  *  version Apr. 25, 2026
  *  version May. 25, 2026
- * @version Jul. 12, 2026
+ * @version Jul. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAndAfterAll with GivenWhenThen {
@@ -1761,7 +1761,14 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
   }
 
   private def _copy_devdir_sample_classes(target: Path): Unit = {
-    val source = Path.of("target", "scala-3.3.7", "test-classes", "devdirsample")
+    val testclasses = Path.of(
+      classOf[devdirsample.DevDirSampleComponent]
+        .getProtectionDomain
+        .getCodeSource
+        .getLocation
+        .toURI
+    )
+    val source = testclasses.resolve("devdirsample")
     Files.createDirectories(target.resolve("devdirsample"))
     Using.resource(Files.list(source)) { stream =>
       stream.iterator().asScala

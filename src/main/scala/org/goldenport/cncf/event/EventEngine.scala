@@ -22,7 +22,7 @@ import org.goldenport.cncf.unitofwork.{CommitParticipant, CommitRecorder, Prepar
  */
 /*
  * @since   Jan.  6, 2026
- * @version Mar. 20, 2026
+ * @version Jul. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 trait EventEngine extends CommitParticipant {
@@ -88,6 +88,8 @@ object EventEngine {
         val _ = eventStore.append(records)
       }
       dataStore.commit(tx)
+      _prepared = None
+      _staged = Vector.empty
     }
 
     def abort(tx: TransactionContext): Unit = {

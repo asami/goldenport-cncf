@@ -1,6 +1,7 @@
 package org.goldenport.cncf.action
 
 import java.nio.file.Path
+import java.time.{Clock, Instant, ZonedDateTime}
 import cats.free.Free
 import cats.syntax.flatMap.*
 import cats.syntax.functor.*
@@ -69,12 +70,21 @@ import org.goldenport.cncf.config.RuntimeFileConfigLoader
  *  version Mar. 30, 2026
  *  version Apr. 29, 2026
  *  version May. 25, 2026
- * @version Jul. 13, 2026
+ * @version Jul. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 trait BehaviorFeaturePart { self: Behavior.Core.Holder =>
   protected final def execution_context: ExecutionContext =
     executionContext
+
+  protected final def execution_clock: Clock =
+    execution_context.clock
+
+  protected final def current_instant: Instant =
+    execution_clock.instant()
+
+  protected final def current_zoned_datetime: ZonedDateTime =
+    current_instant.atZone(execution_context.timezone)
 
   protected final def component_name_option: Option[String] =
     component.flatMap(_.coreOption.map(_.name))
@@ -794,9 +804,26 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
     record: Record
   ): Consequence[Unit] =
     component.flatMap(_.entitySpace.entityOption[Any](entityName)) match {
-      case Some(collection) => collection.putRecord(record)
+      case Some(collection) =>
+        collection.putRecordSynced(
+          _aggregate_canonical_root_record(collection, record)
+        )(using execution_context).map { _ =>
+          component.foreach(_.viewSpace.invalidate(entityName))
+        }
       case None => Consequence.argumentInvalid(s"$entityName entity collection is not available")
     }
+
+  private def _aggregate_canonical_root_record(
+    collection: org.goldenport.cncf.entity.runtime.EntityCollection[Any],
+    record: Record
+  ): Record =
+    record.getString("id")
+      .flatMap(value => EntityId.parse(value).toOption)
+      .map { id =>
+        val canonicalid = _canonical_aggregate_entity_id(collection, id)
+        record.upsertSingle("id", canonicalid)
+      }
+      .getOrElse(record)
 
   protected final def aggregate_create[A <: org.goldenport.record.RecordPresentable](
     entityName: String,
@@ -863,6 +890,52 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
           _aggregate_put_record_authorized_c(entityName, aggregate.toRecord())
         }
       } yield aggregate
+    }
+
+  protected final def aggregate_command[A <: org.goldenport.record.RecordPresentable](
+    aggregateName: String,
+    targetId: EntityId,
+    commandName: String
+  )(
+    command: A => Consequence[A]
+  ): ExecUowM[A] =
+    exec_from_calltree("uow:aggregate:command", _aggregate_calltree_attributes("command", aggregateName) + ("command" -> commandName, "entity_id" -> targetId.print)) {
+      aggregate_command_c(aggregateName, targetId, commandName)(command)
+    }
+
+  protected final def aggregate_command_c[A <: org.goldenport.record.RecordPresentable](
+    aggregateName: String,
+    targetId: EntityId,
+    commandName: String
+  )(
+    command: A => Consequence[A]
+  ): Consequence[A] =
+    _aggregate_chokepoint[A](
+      operation = "command",
+      aggregateName = aggregateName,
+      targetId = Some(targetId),
+      commandName = Some(commandName)
+    ) { ctx =>
+      for {
+        _ <- _aggregate_phase(ctx, DslChokepointPhase.Authorization) {
+          _aggregate_authorize_update(aggregateName, targetId, commandName)
+        }
+        aggregate <- _aggregate_phase(ctx, DslChokepointPhase.Resolve) {
+          component
+            .map(_.aggregateSpace)
+            .getOrElse(Consequence.uninitializedState.RAISE)
+            .resolve_with_context[A](targetId)(using execution_context)
+        }
+        updated <- _aggregate_phase(ctx, DslChokepointPhase.Method) {
+          command(aggregate)
+        }
+        _ <- _aggregate_phase(ctx, DslChokepointPhase.Persistence) {
+          if (aggregate.toRecord() == updated.toRecord())
+            Consequence.unit
+          else
+            _aggregate_put_record_authorized_c(aggregateName, updated.toRecord())
+        }
+      } yield updated
     }
 
   private def _aggregate_chokepoint[A](
@@ -1739,6 +1812,27 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
       _entity_uow_authorization(Some(effectivetc.id(entity).collection.name), Some(effectivetc.id(entity)), "update")
     )
     ConsequenceT.liftF(Free.liftF(op))
+  }
+
+  protected final def entity_upsert[T](
+    entity: T
+  )(using tc: EntityPersistentCreate[T]): ExecUowM[CreateResult[T]] = {
+    ensure_component_application_datastore()
+    tc.id(entity) match {
+      case Some(sourceid) =>
+        val id = _canonical_entity_id(sourceid)
+        val op = UnitOfWorkOp.EntityStoreUpsert(
+          entity,
+          id,
+          tc,
+          _entity_create_options(Some(id.collection.name)),
+          _entity_uow_authorization(Some(id.collection.name), None, "create"),
+          _entity_uow_authorization(Some(id.collection.name), Some(id), "update")
+        )
+        ConsequenceT.liftF(Free.liftF(op))
+      case None =>
+        exec_from(Consequence.argumentInvalid("entity_upsert requires a stable entity id"))
+    }
   }
 
   protected final def entity_update[T](

@@ -10,7 +10,7 @@ import org.goldenport.log.Logger
 import org.goldenport.Consequence
 import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.action.{CommandExecutionMode, CommandExecutionPolicy}
-import org.goldenport.cncf.config.OperationMode
+import org.goldenport.cncf.config.{OperationMode, RuntimeConfig}
 import org.goldenport.cncf.http.{FakeHttpDriver, HttpDriver}
 import org.goldenport.cncf.datastore.DataStoreSpace
 import org.goldenport.cncf.entity.EntityStoreSpace
@@ -43,7 +43,8 @@ import cats.~>
  *  version Jan. 20, 2026
  *  version Feb. 25, 2026
  *  version Apr. 25, 2026
- * @version May. 31, 2026
+ *  version May. 31, 2026
+ * @version Jul. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class ExecutionContext
@@ -156,7 +157,15 @@ object ExecutionContext {
   def create(): ExecutionContext =
     _create(
       SecurityContext.Privilege.User,
-      IdGenerationContext.default(IdGenerationContext.DefaultNamespace)
+      IdGenerationContext.default(IdGenerationContext.DefaultNamespace),
+      RuntimeConfig.DEFAULT_EXECUTION_CLOCK.clock
+    )
+
+  def create(clock: Clock): ExecutionContext =
+    _create(
+      SecurityContext.Privilege.User,
+      IdGenerationContext.default(IdGenerationContext.DefaultNamespace),
+      clock
     )
 
   def create(
@@ -164,14 +173,16 @@ object ExecutionContext {
   ): ExecutionContext =
     _create(
       privilege,
-      IdGenerationContext.default(IdGenerationContext.DefaultNamespace)
+      IdGenerationContext.default(IdGenerationContext.DefaultNamespace),
+      RuntimeConfig.DEFAULT_EXECUTION_CLOCK.clock
     )
 
   private def _create(
     privilege: SecurityContext.Privilege,
-    idGeneration: IdGenerationContext
+    idgeneration: IdGenerationContext,
+    clock: Clock
   ): ExecutionContext = {
-    val core = _core()
+    val core = _core(clock)
     val security = _security_context(privilege)
     val observability = _observability_context(core)
     lazy val runtime: RuntimeContext = _test_runtime_context(() => context, observability) // TODO
@@ -183,7 +194,7 @@ object ExecutionContext {
         observability = observability,
         runtime = runtime,
         jobContext = org.goldenport.cncf.job.JobContext.empty,
-        idGeneration = idGeneration
+        idGeneration = idgeneration
       )
     )
     context
@@ -193,7 +204,7 @@ object ExecutionContext {
     create(runtime, runtime)
 
   def create(scope: ScopeContext, runtime: RuntimeContext): ExecutionContext = {
-    val core = _core()
+    val core = _core(_execution_clock(scope))
     val security = _security_context(SecurityContext.Privilege.User)
     val observability = _observability_context(core)
     val idgeneration = _id_generation_context(scope)
@@ -216,7 +227,18 @@ object ExecutionContext {
   ): ExecutionContext =
     _create(
       SecurityContext.Privilege.User,
-      IdGenerationContext.default(namespace)
+      IdGenerationContext.default(namespace),
+      RuntimeConfig.DEFAULT_EXECUTION_CLOCK.clock
+    )
+
+  def create(
+    namespace: IdGenerationContext.IdNamespace,
+    clock: Clock
+  ): ExecutionContext =
+    _create(
+      SecurityContext.Privilege.User,
+      IdGenerationContext.default(namespace),
+      clock
     )
 
   /**
@@ -254,6 +276,7 @@ object ExecutionContext {
     case i: Instance =>
       val idgeneration = _id_generation_context_for_rebound(i.cncfCore.idGeneration, runtime)
       i.copy(
+        core = _core_for_rebound(i.core, runtime),
         cncfCore = i.cncfCore.copy(
           scope = runtime,
           runtime = runtime,
@@ -270,6 +293,7 @@ object ExecutionContext {
   ): ExecutionContext = ctx match {
     case i: Instance =>
       i.copy(
+        core = _core_for_rebound(i.core, runtime),
         cncfCore = i.cncfCore.copy(
           scope = runtime,
           runtime = runtime
@@ -519,6 +543,38 @@ object ExecutionContext {
       .map(_.config.idNamespace)
       .getOrElse(IdGenerationContext.DefaultNamespace)
 
+  private def _execution_clock(
+    scope: ScopeContext
+  ): Clock =
+    _execution_clock_option(scope)
+      .getOrElse(RuntimeConfig.DEFAULT_EXECUTION_CLOCK.clock)
+
+  private def _execution_clock_option(
+    scope: ScopeContext
+  ): Option[Clock] =
+    _global_runtime_context(scope)
+      .map(_.config.executionClock.clock)
+
+  private def _core_for_rebound(
+    current: CoreExecutionContext.Core,
+    runtime: RuntimeContext
+  ): CoreExecutionContext.Core =
+    _execution_clock_option(runtime)
+      .map(clock => _core_with_clock(current, clock))
+      .getOrElse(current)
+
+  private def _core_with_clock(
+    current: CoreExecutionContext.Core,
+    clock: Clock
+  ): CoreExecutionContext.Core = {
+    val vm = current.vm match {
+      case instant: VirtualMachineContext.Instant =>
+        instant.copy(core = instant.core.copy(clock = clock))
+      case other => other
+    }
+    current.copy(vm = vm, clock = clock)
+  }
+
   private def _id_generation_context_for_rebound(
     current: IdGenerationContext,
     runtime: RuntimeContext
@@ -535,12 +591,12 @@ object ExecutionContext {
       case other => other.parent.flatMap(_global_runtime_context)
     }
 
-  private def _core(): CoreExecutionContext.Core =
+  private def _core(clock: Clock): CoreExecutionContext.Core =
     CoreExecutionContext.Core(
       environment = CoreEnvironmentContext.local(),
       vm = VirtualMachineContext.Instant(
         VirtualMachineContext.Core(
-          clock = Clock.systemUTC(),
+          clock = clock,
           timezone = ZoneId.of("UTC"),
           encoding = Charset.forName("UTF-8"),
           lineSeparator = "\n",
@@ -562,7 +618,7 @@ object ExecutionContext {
       locale = Locale.ROOT,
       timezone = ZoneId.of("UTC"),
       encoding = Charset.forName("UTF-8"),
-      clock = Clock.systemUTC(),
+      clock = clock,
       math = MathContext.DECIMAL64,
       random = RandomContext.from("fixed"),
       logger = _TestLogger

@@ -32,7 +32,7 @@ import org.goldenport.cncf.operation.CmlOperationDefinition
  *  version Mar. 31, 2026
  *  version Apr. 24, 2026
  *  version Jun.  9, 2026
- * @version Jul. 11, 2026
+ * @version Jul. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 /**
@@ -147,18 +147,8 @@ case class ComponentLogic(
   def executeEventContinuationAction(
     action: Action,
     ctx: ExecutionContext
-  ): Consequence[OperationResponse] = {
-    val call = createActionCall(action, ctx)
-    given ExecutionContext = ctx
-    call.authorize().flatMap { _ =>
-      try {
-        call.execute()
-      } catch {
-        case e: Throwable =>
-          Consequence.Failure(Conclusion.from(e))
-      }
-    }
-  }
+  ): Consequence[OperationResponse] =
+    component.actionEngine.execute(createActionCall(action, ctx))
 
   private def _execute_query_action(
     task: ActionTask,

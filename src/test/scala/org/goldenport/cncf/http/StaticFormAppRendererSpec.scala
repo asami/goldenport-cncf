@@ -4,7 +4,7 @@ package org.goldenport.cncf.http
  * @since   May. 18, 2026
  *  version May. 27, 2026
  *  version Jun. 19, 2026
- * @version Jul. 14, 2026
+ * @version Jul. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 import scala.collection.mutable.ListBuffer
@@ -70,7 +70,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Apr. 12, 2026
  *  version May. 27, 2026
  *  version Jun. 19, 2026
- * @version Jul. 14, 2026
+ * @version Jul. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -3076,6 +3076,50 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       html should not include ("${content}")
       webinf.status.code shouldBe 404
       lowerwebinf.status.code shouldBe 404
+    }
+
+    "render page context in a partial included by a full HTML Static Form page" in {
+      val root = Files.createTempDirectory("cncf-web-full-html-partial-root-")
+      Files.writeString(
+        root.resolve("web-descriptor.yaml"),
+        """web:
+          |  apps:
+          |    - name: notice-board
+          |  routes:
+          |    - path: /web/board
+          |      kind: alias
+          |      target:
+          |        component: notice-board
+          |        app: notice-board
+          |""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+      Files.createDirectories(root.resolve("WEB-INF").resolve("partials"))
+      Files.writeString(
+        root.resolve("WEB-INF").resolve("partials").resolve("topbar.html"),
+        """<header><a data-notification-indicator ${pageContext.notification.indicatorHidden}>Notifications <span data-notification-badge ${pageContext.notification.badgeHidden}>${pageContext.notification.unconfirmedCount}</span></a></header>""",
+        StandardCharsets.UTF_8
+      )
+      Files.writeString(
+        root.resolve("index.html"),
+        """<!doctype html><html><body><textus:include name="topbar"></textus:include><main>Board</main></body></html>""",
+        StandardCharsets.UTF_8
+      )
+      val subsystem = _management_console_fixture_subsystem(
+        Configuration(Map(
+          RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web-descriptor.yaml").toString)
+        ))
+      )
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+
+      val response = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/board"))).unsafeRunSync()
+      val html = response.as[String].unsafeRunSync()
+
+      response.status.code shouldBe 200
+      html should include ("data-notification-indicator hidden")
+      html should include ("data-notification-badge hidden>0</span>")
+      html should not include ("<textus:include")
+      html should not include ("${pageContext.notification")
     }
 
     "prefer the route target component layout for standalone app pages" in {

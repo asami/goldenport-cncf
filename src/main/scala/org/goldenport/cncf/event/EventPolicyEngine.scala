@@ -14,7 +14,7 @@ import org.goldenport.cncf.context.ExecutionContext
  *
  * @since   Mar. 20, 2026
  *  version Mar. 20, 2026
- * @version Apr. 14, 2026
+ * @version Jul. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 trait EventPolicyEngine {
@@ -26,6 +26,15 @@ trait EventPolicyEngine {
 
 object EventPolicyEngine {
   val default: EventPolicyEngine = new Default
+
+  private[event] val internal: EventPolicyEngine = new Internal
+
+  private final class Internal extends EventPolicyEngine {
+    def authorizePublish(using ExecutionContext): Consequence[Unit] = Consequence.unit
+    def authorizeDispatch(using ExecutionContext): Consequence[Unit] = Consequence.unit
+    def authorizeIntrospection(using ExecutionContext): Consequence[Unit] = Consequence.unit
+    def authorizeReplay(using ExecutionContext): Consequence[Unit] = Consequence.unit
+  }
 
   private final class Default extends EventPolicyEngine {
     private val _publish_caps = Set("event_publish", "event_admin", "content_manager", "content_admin")

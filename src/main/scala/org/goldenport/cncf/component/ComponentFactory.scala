@@ -41,7 +41,7 @@ import scala.util.Try
  *  version Apr. 25, 2026
  *  version Apr. 26, 2026
  *  version May.  7, 2026
- * @version Jul.  2, 2026
+ * @version Jul. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactory(
@@ -955,15 +955,8 @@ final class ComponentFactory(
       aggregates <- entities.foldLeft(Consequence.success(Vector.empty[Any])) { (z, entity) =>
         z.flatMap(xs => _entity_to_aggregate(component, member.entityName, entity).map(xs :+ _))
       }
-      attached <- _invoke_member_setter(aggregate, module, _aggregate_member_field_name(member.name), aggregates)
+      attached <- _invoke_member_setter(aggregate, module, member.name, aggregates)
     } yield attached
-  }
-
-  private def _aggregate_member_field_name(name: String): String = {
-    val parts = Option(name).getOrElse("").split("_").toVector.filter(_.nonEmpty)
-    parts.headOption.fold(name) { head =>
-      head + parts.drop(1).map(x => x.headOption.fold("")(_.toUpper.toString) + x.drop(1)).mkString
-    }
   }
 
   private def _resolve_aggregate_member_entities(

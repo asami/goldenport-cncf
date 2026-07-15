@@ -25,7 +25,8 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Mar. 21, 2026
  *  version Mar. 28, 2026
- * @version May. 31, 2026
+ *  version May. 31, 2026
+ * @version Jul. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentLogicCommandScriptExecutionModeSpec
@@ -308,6 +309,37 @@ final class ComponentLogicCommandScriptExecutionModeSpec
         jobid.value.nonEmpty shouldBe true
         executed.get() shouldBe true
       }
+    }
+
+    "commit event continuation actions through ActionEngine" in {
+      Given("an event continuation action with a post-commit callback")
+      val component = TestComponentFactory.create("event_continuation_commit", Protocol.empty)
+      val callbackexecuted = new AtomicBoolean(false)
+      val action = new CommandAction() {
+        val request = Request.ofOperation("event_continuation_commit")
+
+        override def createCall(core: ActionCall.Core): ActionCall = {
+          val self = this
+          val c = core
+          new ActionCall {
+            override val core: ActionCall.Core = c
+            override def action: Action = self
+            def execute(): Consequence[OperationResponse] = {
+              executionContext.runtime.unitOfWork.stagePostCommit {
+                callbackexecuted.set(true)
+              }
+              Consequence.success(OperationResponse.Scalar("committed"))
+            }
+          }
+        }
+      }
+
+      When("the continuation is executed through ComponentLogic")
+      val result = component.logic.executeEventContinuationAction(action, ExecutionContext.test())
+
+      Then("the normal action commit runs the callback")
+      result shouldBe Consequence.success(OperationResponse.Scalar("committed"))
+      callbackexecuted.get() shouldBe true
     }
   }
 

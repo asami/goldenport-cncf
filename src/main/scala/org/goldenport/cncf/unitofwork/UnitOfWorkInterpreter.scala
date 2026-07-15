@@ -34,7 +34,7 @@ import org.goldenport.record.io.RecordEncoder
  *  version Mar. 29, 2026
  *  version Apr. 29, 2026
  *  version May. 11, 2026
- * @version Jul.  3, 2026
+ * @version Jul. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkInterpreter(uow: UnitOfWork) {
@@ -196,6 +196,23 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
               _view_space_invalidate_all()
               r
             }
+        )
+      }
+
+    case m: (UnitOfWorkOp.EntityStoreUpsert[t] @unchecked) =>
+      _with_calltree("uow:entitystore:upsert") {
+        _entity_store_space.upsert(m)(
+          authorize = { existing =>
+            val authorization = if (existing.isDefined) m.updateAuthorization else m.createAuthorization
+            val loadrecord = existing.map(_ => () => Consequence.success(existing))
+            _authorize(authorization, loadrecord)
+          },
+          onSaved = { result =>
+            _entity_space_put_record(result.id, result.record).map { _ =>
+              _view_space_invalidate_all()
+              ()
+            }
+          }
         )
       }
 

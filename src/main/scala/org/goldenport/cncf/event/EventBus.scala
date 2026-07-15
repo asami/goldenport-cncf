@@ -18,11 +18,16 @@ import org.goldenport.observation.{Cause, Taxonomy}
  *
  * @since   Mar. 20, 2026
  *  version Apr. 22, 2026
- * @version May. 11, 2026
+ * @version Jul. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 trait EventDispatchHandler {
   def dispatch(event: DomainEvent): Consequence[Unit]
+
+  def dispatchAuthorized(
+    event: DomainEvent
+  )(using ExecutionContext): Consequence[Unit] =
+    dispatch(event)
 }
 
 trait ActionCallDispatcher {
@@ -154,7 +159,7 @@ final class DefaultEventBus(
     event: DomainEvent,
     option: EventPublishOption = EventPublishOption()
   ): Consequence[EventPublishResult] = {
-    _publish(event, option)
+    _publish(event, option, None)
   }
 
   def publishAuthorized(
@@ -164,13 +169,14 @@ final class DefaultEventBus(
   )(using ctx: ExecutionContext): Consequence[EventPublishResult] =
     policy.authorizePublish.flatMap { _ =>
       policy.authorizeDispatch.flatMap { _ =>
-        _publish(event, option)
+        _publish(event, option, Some(ctx))
       }
     }
 
   private def _publish(
     event: DomainEvent,
-    option: EventPublishOption
+    option: EventPublishOption,
+    context: Option[ExecutionContext]
   ): Consequence[EventPublishResult] = {
     val name = _event_name(event)
     val kind = _event_kind(event)
@@ -193,7 +199,14 @@ final class DefaultEventBus(
     persisted.flatMap { _ =>
       resolved.foldLeft(Consequence.success(0)) { (z, e) =>
         z.flatMap { count =>
-          e.subscription.handler.dispatch(event) match {
+          val dispatched = context match {
+            case Some(ctx) =>
+              given ExecutionContext = ctx
+              e.subscription.handler.dispatchAuthorized(event)
+            case None =>
+              e.subscription.handler.dispatch(event)
+          }
+          dispatched match {
             case Consequence.Success(_) =>
               Consequence.success(count + 1)
             case Consequence.Failure(conclusion) =>

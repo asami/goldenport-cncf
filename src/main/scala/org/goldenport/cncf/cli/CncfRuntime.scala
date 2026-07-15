@@ -66,7 +66,7 @@ import org.goldenport.cncf.spi.SpiResolver
  *  version Apr. 30, 2026
  *  version May. 25, 2026
  *  version Jun. 29, 2026
- * @version Jul. 14, 2026
+ * @version Jul. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 object CncfRuntime extends GlobalObservable {
@@ -139,7 +139,10 @@ object CncfRuntime extends GlobalObservable {
     configuration: ResolvedConfiguration,
     aliasresolver: AliasResolver
   ): GlobalRuntimeContext = {
-    val execution = ExecutionContext.create(runconfig.idNamespace)
+    val execution = ExecutionContext.create(
+      runconfig.idNamespace,
+      runconfig.executionClock.clock
+    )
     val context = GlobalRuntimeContext.create(
       name = "runtime",
       runconfig,
@@ -156,6 +159,11 @@ object CncfRuntime extends GlobalObservable {
     _global_runtime_context = Some(context)
     GlobalRuntimeContext.current = Some(context)
     _initialize_global_observability()
+    observe_info(
+      s"runtime clock mode=${if (runconfig.executionClock.isVirtual) "offset" else "system"}" +
+        s" current=${execution.clock.instant()}" +
+        s" virtual-start=${runconfig.executionClock.virtualStartAt.map(_.toString).getOrElse("none")}"
+    )
     context
   }
 
@@ -3237,7 +3245,10 @@ class CncfRuntime() extends GlobalObservable {
     configuration: ResolvedConfiguration,
     aliasresolver: AliasResolver
   ): GlobalRuntimeContext = {
-    val execution = ExecutionContext.create(runconfig.idNamespace)
+    val execution = ExecutionContext.create(
+      runconfig.idNamespace,
+      runconfig.executionClock.clock
+    )
     val context = GlobalRuntimeContext.create(
       name = "runtime",
       runconfig,
@@ -3254,6 +3265,11 @@ class CncfRuntime() extends GlobalObservable {
     _global_runtime_context = Some(context)
     GlobalRuntimeContext.current = Some(context)
     _initialize_global_observability()
+    observe_info(
+      s"runtime clock mode=${if (runconfig.executionClock.isVirtual) "offset" else "system"}" +
+        s" current=${execution.clock.instant()}" +
+        s" virtual-start=${runconfig.executionClock.virtualStartAt.map(_.toString).getOrElse("none")}"
+    )
     context
   }
 

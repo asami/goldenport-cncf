@@ -17,7 +17,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Mar. 12, 2026
  *  version Apr. 26, 2026
  *  version May. 26, 2026
- * @version Jul. 13, 2026
+ * @version Jul. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 class SqliteDataStoreSpec
@@ -29,6 +29,24 @@ class SqliteDataStoreSpec
   import SqliteDataStoreSpec._
 
   "Sqlite DataStore" should {
+    "insert and replace one identity through the atomic save contract" in {
+      Given("an empty sqlite datastore and one stable entry identity")
+      val path = Files.createTempFile("cncf-sqlite-upsert", ".db").toString
+      val datastore = SqlDataStore.sqlite(path)
+      val collection = DataStore.CollectionId("atomic_save")
+      val entryid = DataStore.StringEntryId("stable-1")
+      given ExecutionContext = ExecutionContext.create()
+
+      When("save is called first for insertion and then for replacement")
+      datastore.save(collection, entryid, Record.data("name" -> "before")) should be_success
+      datastore.save(collection, entryid, Record.data("name" -> "after")) should be_success
+      val loaded = datastore.load(collection, entryid)
+
+      Then("one row remains with the latest record")
+      loaded should be_success
+      loaded.toOption.flatten.flatMap(_.getString("name")) shouldBe Some("after")
+    }
+
     "round-trip powertype db values through ValueReader" in {
       val path = Files.createTempFile("cncf-sqlite-powertype", ".db").toString
       val datastore = SqlDataStore.sqlite(path)

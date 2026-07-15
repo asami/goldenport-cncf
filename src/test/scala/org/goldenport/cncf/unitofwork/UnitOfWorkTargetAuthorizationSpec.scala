@@ -1,13 +1,18 @@
 package org.goldenport.cncf.unitofwork
 
 import cats.~>
+import java.util.concurrent.{CountDownLatch, TimeUnit}
 import scala.collection.mutable.ListBuffer
+import scala.concurrent.{Await, Future}
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.duration.*
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.{Capability, CorrelationId, DataStoreContext, EntityStoreContext, ExecutionContext, ObservabilityContext, Principal, PrincipalId, RuntimeContext, ScopeContext, ScopeKind, SecurityContext, SecurityLevel, TraceId}
 import org.goldenport.cncf.datastore.{DataStore, DataStoreSpace}
 import org.goldenport.cncf.entity.{EntityPersistent, EntityPersistentUpdate, EntityStore, EntityStoreSpace, SimpleEntityStorageShapePolicy}
 import org.goldenport.cncf.http.FakeHttpDriver
 import org.goldenport.cncf.log.{LogBackend, LogBackendHolder}
+import org.goldenport.cncf.operation.CmlOperationAccess
 import org.goldenport.cncf.security.{AggregateAuthorization, EntityAbacCondition, EntityAccessMode, EntityAccessRelation, EntityApplicationDomain, EntityOperationKind, ServiceOperationModel}
 import org.goldenport.record.Record
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
@@ -18,7 +23,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr.  7, 2026
- * @version Apr. 26, 2026
+ *  version Apr. 26, 2026
+ * @version Jul. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkTargetAuthorizationSpec
@@ -153,6 +159,51 @@ final class UnitOfWorkTargetAuthorizationSpec
           fail("expected aggregate command authorization failure")
     }
 
+    "allow an authenticated aggregate command declared for authenticated users" in {
+      given ExecutionContext = _execution_context(
+        principalId = "aggregate-reviewer",
+        principalAttributes = Map("access_token" -> "reviewer-token")
+      )
+
+      val id = EntityId("test", "aggregate_review", _cid)
+      val record = PersonEntity(id, "shared-exhibition", "source-manager").toRecord()
+
+      val result = AggregateAuthorization.authorizeCommand(
+        aggregateName = "exhibition",
+        targetId = Some(id),
+        commandName = "reviewExhibition",
+        loadRecord = _ => Consequence.success(Some(record)),
+        access = Some(CmlOperationAccess("authenticated_only"))
+      )
+
+      result shouldBe Consequence.unit
+    }
+
+    "reject an anonymous aggregate command declared for authenticated users" in {
+      given ExecutionContext = _execution_context(
+        principalId = "anonymous",
+        principalAttributes = Map("anonymous" -> "true")
+      )
+
+      val id = EntityId("test", "aggregate_anonymous_review", _cid)
+      val record = PersonEntity(id, "shared-exhibition", "source-manager").toRecord()
+
+      val result = AggregateAuthorization.authorizeCommand(
+        aggregateName = "exhibition",
+        targetId = Some(id),
+        commandName = "reviewExhibition",
+        loadRecord = _ => Consequence.success(Some(record)),
+        access = Some(CmlOperationAccess("authenticated_only"))
+      )
+
+      result shouldBe a[Consequence.Failure[_]]
+      result match
+        case Consequence.Failure(conclusion) =>
+          conclusion.show should include("Authenticated user is required")
+        case _ =>
+          fail("expected aggregate command authentication failure")
+    }
+
     "allow load for a group-visible entity" in {
       given ExecutionContext = _execution_context(
         principalId = "group-user",
@@ -218,6 +269,137 @@ final class UnitOfWorkTargetAuthorizationSpec
 
       result shouldBe Consequence.unit
       _load_name(id) shouldBe Consequence.success(Some("taro-2"))
+    }
+
+    "apply create authorization when an upsert identity is new" in {
+      Given("an authenticated creator and a stable identity that is not stored")
+      given ExecutionContext = _execution_context(principalId = "upsert-creator")
+      given EntityPersistent[PersonEntity] = _person_persistent
+      val id = EntityId("test", "upsert_create", _cid)
+      val uow = new UnitOfWork(summon[ExecutionContext])
+
+      When("the entity is upserted with distinct create and update authorizations")
+      val result = new UnitOfWorkInterpreter(uow).run(
+        org.goldenport.ConsequenceT.liftF(
+          cats.free.Free.liftF[UnitOfWorkOp, org.goldenport.cncf.entity.CreateResult[PersonCreate]](
+            UnitOfWorkOp.EntityStoreUpsert(
+              entity = PersonCreate("new-person", "upsert-creator", id = Some(id)),
+              id = id,
+              tc = _person_create_persistent,
+              createAuthorization = Some(UnitOfWorkAuthorization(
+                resourceFamily = "domain",
+                resourceType = Some("Person"),
+                accessKind = "create"
+              )),
+              updateAuthorization = Some(UnitOfWorkAuthorization(
+                resourceFamily = "domain",
+                resourceType = Some("Person"),
+                targetId = Some(id),
+                accessKind = "update"
+              ))
+            )
+          )
+        )
+      )
+
+      Then("create authorization is selected and the entity is stored")
+      result.toOption.map(_.id) shouldBe Some(id)
+      _load_name(id) shouldBe Consequence.success(Some("new-person"))
+    }
+
+    "apply update authorization when an upsert identity already exists" in {
+      Given("an existing entity owned by another principal")
+      given ExecutionContext = _execution_context(principalId = "upsert-other")
+      given EntityPersistent[PersonEntity] = _person_persistent
+      val id = EntityId("test", "upsert_update", _cid)
+      _seed(PersonEntity(id, "before", "upsert-owner"))
+      val uow = new UnitOfWork(summon[ExecutionContext])
+
+      When("the other principal tries to upsert that stable identity")
+      val result = new UnitOfWorkInterpreter(uow).run(
+        org.goldenport.ConsequenceT.liftF(
+          cats.free.Free.liftF[UnitOfWorkOp, org.goldenport.cncf.entity.CreateResult[PersonCreate]](
+            UnitOfWorkOp.EntityStoreUpsert(
+              entity = PersonCreate("after", "upsert-owner", id = Some(id)),
+              id = id,
+              tc = _person_create_persistent,
+              createAuthorization = Some(UnitOfWorkAuthorization(
+                resourceFamily = "domain",
+                resourceType = Some("Person"),
+                accessKind = "create"
+              )),
+              updateAuthorization = Some(UnitOfWorkAuthorization(
+                resourceFamily = "domain",
+                resourceType = Some("Person"),
+                targetId = Some(id),
+                accessKind = "update"
+              ))
+            )
+          )
+        )
+      )
+
+      Then("update authorization is selected and rejects the write")
+      result shouldBe a[Consequence.Failure[_]]
+      _load_name(id) shouldBe Consequence.success(Some("before"))
+    }
+
+    "authorize a competing upsert against the row created inside the same identity lock" in {
+      Given("one stable identity and a first writer held inside its authorization callback")
+      given ExecutionContext = _execution_context(principalId = "upsert-race")
+      val context = summon[ExecutionContext]
+      val id = EntityId("test", "upsert_authorization_race", _cid)
+      val firstauthorized = new CountDownLatch(1)
+      val releasefirst = new CountDownLatch(1)
+      val firstsaved = new CountDownLatch(1)
+      val releasefirstcache = new CountDownLatch(1)
+      val secondstarted = new CountDownLatch(1)
+      val secondauthorized = new CountDownLatch(1)
+      def _operation_(name: String) = UnitOfWorkOp.EntityStoreUpsert(
+        entity = PersonCreate(name, "upsert-race", id = Some(id)),
+        id = id,
+        tc = _person_create_persistent
+      )
+
+      When("a second writer starts before the first writer saves")
+      val first = Future {
+        context.entityStoreSpace.upsert(_operation_("first"))(
+          authorize = { existing =>
+            existing shouldBe None
+            firstauthorized.countDown()
+            releasefirst.await(5, TimeUnit.SECONDS) shouldBe true
+            Consequence.unit
+          },
+          onSaved = { _ =>
+            firstsaved.countDown()
+            releasefirstcache.await(5, TimeUnit.SECONDS) shouldBe true
+            Consequence.unit
+          }
+        )(using context)
+      }
+      firstauthorized.await(5, TimeUnit.SECONDS) shouldBe true
+      val second = Future {
+        secondstarted.countDown()
+        context.entityStoreSpace.upsert(_operation_("second")) { existing =>
+          secondauthorized.countDown()
+          if (existing.isDefined)
+            Consequence.securityPermissionDenied("update denied")
+          else
+            Consequence.unit
+        }(using context)
+      }
+      secondstarted.await(5, TimeUnit.SECONDS) shouldBe true
+      releasefirst.countDown()
+      firstsaved.await(5, TimeUnit.SECONDS) shouldBe true
+      secondauthorized.await(100, TimeUnit.MILLISECONDS) shouldBe false
+      releasefirstcache.countDown()
+      val firstresult = Await.result(first, 5.seconds)
+      val secondresult = Await.result(second, 5.seconds)
+
+      Then("the first save callback completes before the competing writer is authorized as an update")
+      firstresult shouldBe a[Consequence.Success[_]]
+      secondresult shouldBe a[Consequence.Failure[_]]
+      _load_name(id) shouldBe Consequence.success(Some("first"))
     }
 
     "allow save from typed security access when entity record omits security attributes" in {
@@ -1243,7 +1425,8 @@ final class UnitOfWorkTargetAuthorizationSpec
     name: String,
     ownerId: String,
     groupId: Option[String] = None,
-    privilegeId: Option[String] = None
+    privilegeId: Option[String] = None,
+    id: Option[EntityId] = None
   ) {
     def toRecord(): Record =
       Record.dataAuto(
@@ -1349,7 +1532,7 @@ final class UnitOfWorkTargetAuthorizationSpec
 
   private val _person_create_persistent: org.goldenport.cncf.entity.EntityPersistentCreate[PersonCreate] =
     new org.goldenport.cncf.entity.EntityPersistentCreate[PersonCreate] {
-      def id(e: PersonCreate): Option[EntityId] = None
+      def id(e: PersonCreate): Option[EntityId] = e.id
       def toRecord(e: PersonCreate): Record = e.toRecord()
       def collection(e: PersonCreate): EntityCollectionId = _cid
     }

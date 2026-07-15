@@ -2,7 +2,8 @@ package org.goldenport.cncf.component
 
 import scala.util.Try
 import org.goldenport.Consequence
-import org.goldenport.protocol.{Argument, Property, Request}
+import org.goldenport.protocol.{Argument, Property, Request, Switch}
+import org.goldenport.protocol.spec.ParameterDefinition
 import org.goldenport.cncf.action.Action
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.event.{DomainEvent, ParsedEventAction, ReceptionDomainEvent, ScopedActionCallDispatcher, SecureActionFactoryDispatcher}
@@ -11,7 +12,7 @@ import org.goldenport.cncf.naming.NamingConventions
 /*
  * @since   Mar. 21, 2026
  *  version Mar. 28, 2026
- * @version Apr. 21, 2026
+ * @version Jul. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final class OperationRequestActionDispatcher(
@@ -54,20 +55,31 @@ final class OperationRequestActionDispatcher(
     event: ReceptionDomainEvent
   ): Consequence[Request] =
     _parse_action_name(actionName).flatMap { case (component, service, operation) =>
-      _resolve_selector(component, service, operation).map { case (resolvedComponent, resolvedService, resolvedOperation) =>
+      _resolve_selector(component, service, operation).map { resolved =>
+        val parameters = _build_parameters(event, resolved.parameterKinds)
         Request.of(
-          component = resolvedComponent,
-          service = resolvedService,
-          operation = resolvedOperation,
-          arguments = _build_arguments(event),
-          switches = Nil,
-          properties = List(
-            Property("event_name", event.name, None),
-            Property("event_kind", event.kind, None)
-          )
+          component = resolved.component,
+          service = resolved.service,
+          operation = resolved.operation,
+          arguments = parameters.arguments,
+          switches = parameters.switches,
+          properties = parameters.properties
         )
       }
     }
+
+  private final case class _ResolvedSelector(
+    component: String,
+    service: String,
+    operation: String,
+    parameterKinds: Map[String, ParameterDefinition.Kind]
+  )
+
+  private final case class _RequestParameters(
+    arguments: List[Argument],
+    switches: List[Switch],
+    properties: List[Property]
+  )
 
   private def _parse_action_name(
     p: String
@@ -88,7 +100,7 @@ final class OperationRequestActionDispatcher(
     component: String,
     service: String,
     operation: String
-  ): Consequence[(String, String, String)] = {
+  ): Consequence[_ResolvedSelector] = {
     val resolvedComponent =
       if (NamingConventions.equivalentByNormalized(component, logic.component.name))
         logic.component.name
@@ -102,7 +114,12 @@ final class OperationRequestActionDispatcher(
           NamingConventions.equivalentByNormalized(operation, op.name)
         ) match {
           case Some(operationDefinition) =>
-            Consequence.success((resolvedComponent, serviceDefinition.name, operationDefinition.name))
+            Consequence.success(_ResolvedSelector(
+              resolvedComponent,
+              serviceDefinition.name,
+              operationDefinition.name,
+              operationDefinition.specification.request.parameters.map(x => x.name -> x.kind).toMap
+            ))
           case None =>
             Consequence.operationNotFound(s"${serviceDefinition.name}.${operation}")
         }
@@ -111,17 +128,33 @@ final class OperationRequestActionDispatcher(
     }
   }
 
-  private def _build_arguments(
-    event: ReceptionDomainEvent
-  ): List[Argument] = {
-    val params = event.payload.map { case (k, v) =>
-      k -> _to_argument_value(v)
-    } ++ event.attributes
-    params.toVector
-      .sortBy(_._1)
-      .map { case (k, v) => Argument(k, v) }
-      .toList
+  private def _build_parameters(
+    event: ReceptionDomainEvent,
+    parameterKinds: Map[String, ParameterDefinition.Kind]
+  ): _RequestParameters = {
+    val params = event.payload ++ event.attributes ++ Map(
+      "event_name" -> event.name,
+      "event_kind" -> event.kind
+    )
+    params.toVector.sortBy(_._1).foldLeft(_RequestParameters(Nil, Nil, Nil)) {
+      case (z, (name, rawvalue)) =>
+        val value = _to_argument_value(rawvalue)
+        parameterKinds.get(name) match {
+          case Some(ParameterDefinition.Kind.Property) =>
+            z.copy(properties = z.properties :+ Property(name, value, None))
+          case Some(ParameterDefinition.Kind.Switch) =>
+            z.copy(switches = z.switches :+ Switch(name, _to_boolean(value), None))
+          case _ =>
+            z.copy(arguments = z.arguments :+ Argument(name, value))
+        }
+    }
   }
+
+  private def _to_boolean(p: String): Boolean =
+    p.trim.toLowerCase(java.util.Locale.ROOT) match {
+      case "true" | "1" | "yes" | "on" => true
+      case _ => false
+    }
 
   private def _to_argument_value(
     p: Any

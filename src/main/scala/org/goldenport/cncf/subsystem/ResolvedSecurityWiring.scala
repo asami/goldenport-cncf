@@ -15,7 +15,7 @@ import org.goldenport.cncf.usernotification.UserNotificationProvider
  *
  * @since   Apr.  9, 2026
  *  version Apr. 24, 2026
- * @version May.  7, 2026
+ * @version Jul. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ResolvedAuthenticationProviderBinding(
@@ -36,9 +36,18 @@ object ResolvedAuthenticationProviderBinding {
   }
 }
 
+final case class ResolvedLocalSubjectBinding(
+  id: String,
+  roles: Vector[String] = Vector.empty,
+  capabilities: Vector[String] = Vector.empty,
+  attributes: Map[String, String] = Map.empty,
+  securityLevel: String = "user"
+)
+
 final case class ResolvedAuthenticationWiring(
   conventionEnabled: Boolean = true,
   fallbackPrivilegeEnabled: Boolean = true,
+  localSubject: Option[ResolvedLocalSubjectBinding] = None,
   providers: Vector[ResolvedAuthenticationProviderBinding] = Vector.empty
 ) {
   def enabledProviders: Vector[ResolvedAuthenticationProviderBinding] =
@@ -124,6 +133,15 @@ object ResolvedSecurityWiring {
     val authOpt = descriptor.flatMap(_.security).flatMap(_.authentication)
     val conventionEnabled = authOpt.flatMap(_.convention).forall(_is_enabled)
     val fallbackPrivilegeEnabled = authOpt.flatMap(_.fallbackPrivilege).forall(_is_enabled)
+    val localSubject = authOpt.flatMap(_.localSubject).map { subject =>
+      ResolvedLocalSubjectBinding(
+        id = subject.id,
+        roles = subject.roles,
+        capabilities = subject.capabilities,
+        attributes = subject.attributes,
+        securityLevel = subject.securityLevel.getOrElse("user")
+      )
+    }
     val explicitKeys = explicit.map(x => (_normalize(x.componentName), _normalize(x.name))).toSet
     val convention =
       if (!conventionEnabled) Vector.empty
@@ -199,6 +217,7 @@ object ResolvedSecurityWiring {
       authentication = ResolvedAuthenticationWiring(
         conventionEnabled = conventionEnabled,
         fallbackPrivilegeEnabled = fallbackPrivilegeEnabled,
+        localSubject = localSubject,
         providers = (explicit ++ convention).sortBy(x => (-x.priority, _normalize(x.componentName), _normalize(x.name)))
       ),
       messageDelivery = ResolvedMessageDeliveryWiring(

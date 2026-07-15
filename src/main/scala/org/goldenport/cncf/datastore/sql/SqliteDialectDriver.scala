@@ -2,7 +2,8 @@ package org.goldenport.cncf.datastore.sql
 
 /*
  * @since   Mar. 12, 2026
- * @version Apr.  3, 2026
+ *  version Apr.  3, 2026
+ * @version Jul. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 object SqliteDialectDriver extends SqlDialectDriver {
@@ -41,6 +42,21 @@ object SqliteDialectDriver extends SqlDialectDriver {
     val names = allcols.map(quote_identifier).mkString(", ")
     val values = List.fill(allcols.length)("?").mkString(", ")
     s"INSERT INTO ${quote_identifier(table)} ($names) VALUES ($values)"
+  }
+
+  def upsert_sql(
+    table: String,
+    columns: Vector[String]
+  ): String = {
+    val insert = insert_sql(table, columns)
+    if (columns.isEmpty)
+      s"$insert ON CONFLICT (${quote_identifier("id")}) DO NOTHING"
+    else {
+      val assignments = columns.map { column =>
+        s"${quote_identifier(column)} = excluded.${quote_identifier(column)}"
+      }.mkString(", ")
+      s"$insert ON CONFLICT (${quote_identifier("id")}) DO UPDATE SET $assignments"
+    }
   }
 
   def update_sql(

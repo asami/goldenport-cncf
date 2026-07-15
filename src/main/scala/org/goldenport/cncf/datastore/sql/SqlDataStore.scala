@@ -36,8 +36,7 @@ import org.goldenport.cncf.directive.{Query as EntityQuery}
  *  version Mar. 31, 2026
  *  version May.  8, 2026
  *  version May. 26, 2026
- *  version Jul.  6, 2026
- * @version Jul. 13, 2026
+ * @version Jul. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 class SqlDataStore(
@@ -87,8 +86,7 @@ class SqlDataStore(
       val cols = _record_columns(record)
       for {
         _ <- _ensure_table(conn, collection, cols)
-        exists <- _exists(conn, collection, id)
-        _ <- if (exists) _update(conn, collection, id, cols) else _insert(conn, collection, id, cols)
+        _ <- _upsert(conn, collection, id, cols)
       } yield ()
     }
 
@@ -414,6 +412,27 @@ class SqlDataStore(
           stmt.setObject(i + 2, v)
         }
         stmt.executeUpdate()
+      } finally {
+        stmt.close()
+      }
+    }
+
+  private def _upsert(
+    conn: Connection,
+    collection: CollectionId,
+    id: EntryId,
+    columns: Vector[(String, Any)]
+  ): Consequence[Unit] =
+    Consequence {
+      val sql = dialect.upsert_sql(_table_name(collection), columns.map(_._1))
+      val stmt = conn.prepareStatement(sql)
+      try {
+        stmt.setString(1, id.print)
+        columns.zipWithIndex.foreach { case ((_, value), index) =>
+          stmt.setObject(index + 2, value)
+        }
+        stmt.executeUpdate()
+        ()
       } finally {
         stmt.close()
       }
