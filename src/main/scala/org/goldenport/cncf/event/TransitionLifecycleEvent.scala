@@ -11,7 +11,8 @@ import org.goldenport.cncf.statemachine.TransitionEvent
  * Canonical transition lifecycle envelope for EV-01.
  *
  * @since   Mar. 20, 2026
- * @version Mar. 24, 2026
+ *  version Mar. 24, 2026
+ * @version Jul. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 enum TransitionLifecycleKind(val value: String) {
@@ -92,11 +93,12 @@ object TransitionLifecycleEvent {
     failure: Option[TransitionLifecycleFailure]
   )(using ctx: ExecutionContext): TransitionLifecycleEvent = {
     val ob = ctx.observability
+    val occurredat = ctx.clock.instant()
     TransitionLifecycleEvent(
-      id = EventId.generate(),
+      id = EventId.create("transition-lifecycle", occurredat),
       name = _name,
       kind = kind,
-      occurredAt = Instant.now(),
+      occurredAt = occurredat,
       correlation = TransitionLifecycleCorrelation(
         executionContextId = ExecutionContextId.generate(),
         traceId = ob.traceId.print,

@@ -20,7 +20,8 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Mar. 21, 2026
  *  version Apr. 10, 2026
- * @version May. 31, 2026
+ *  version May. 31, 2026
+ * @version Jul. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactoryEventReceptionBootstrapSpec
@@ -111,9 +112,9 @@ final class ComponentFactoryEventReceptionBootstrapSpec
       val bus = EventBus.default(engine)
       val calls = scala.collection.mutable.ArrayBuffer.empty[String]
       val dispatcher = new ActionCallDispatcher {
-        def dispatchAction(actionName: String, event: DomainEvent): Consequence[Unit] = {
+        def dispatchAction(actionname: String, event: DomainEvent): Consequence[Unit] = {
           val _ = event
-          calls += actionName
+          calls += actionname
           Consequence.unit
         }
       }
@@ -188,8 +189,8 @@ final class ComponentFactoryEventReceptionBootstrapSpec
       val engine = EventEngine.noop(DataStore.noop(recorder), recorder, store)
       val bus = EventBus.default(engine)
       val dispatcher = new ActionCallDispatcher {
-        def dispatchAction(actionName: String, event: DomainEvent): Consequence[Unit] = {
-          val _ = actionName
+        def dispatchAction(actionname: String, event: DomainEvent): Consequence[Unit] = {
+          val _ = actionname
           event match {
             case e: ReceptionDomainEvent => captured += e.attributes
             case _ => ()
@@ -259,8 +260,8 @@ final class ComponentFactoryEventReceptionBootstrapSpec
       When("factory registers generated rules")
       val ex = intercept[IllegalStateException] {
         factory.createEventReception(component, bus, new ActionCallDispatcher {
-          def dispatchAction(actionName: String, event: DomainEvent): Consequence[Unit] = {
-            val _ = actionName
+          def dispatchAction(actionname: String, event: DomainEvent): Consequence[Unit] = {
+            val _ = actionname
             val _ = event
             Consequence.unit
           }
@@ -304,19 +305,19 @@ final class ComponentFactoryEventReceptionBootstrapSpec
       val bus = EventBus.default(engine)
       val calls = scala.collection.mutable.ArrayBuffer.empty[String]
       val dispatcher = new ActionCallDispatcher {
-        def dispatchAction(actionName: String, event: DomainEvent): Consequence[Unit] = {
+        def dispatchAction(actionname: String, event: DomainEvent): Consequence[Unit] = {
           val _ = event
-          calls += actionName
+          calls += actionname
           Consequence.unit
         }
       }
 
       val factory = new ComponentFactory()
-      val publisherReception = factory.createEventReceptionWithOperationDispatcher(publisher, bus)
+      val publisherreception = factory.createEventReceptionWithOperationDispatcher(publisher, bus)
       val _ = factory.createEventReception(subscriber, bus, dispatcher)
 
       When("publisher receives an event")
-      val result = publisherReception.receive(
+      val result = publisherreception.receive(
         ReceptionInput(
           name = "person.created",
           kind = "created",
@@ -374,13 +375,13 @@ final class ComponentFactoryEventReceptionBootstrapSpec
               actionName = "notice.sync"
             )
           )
-      }, subsystem, componentIdLabel = "public_notice")
+      }, subsystem, componentidlabel = "public_notice")
 
       val calls = scala.collection.mutable.ArrayBuffer.empty[String]
       val attrs = scala.collection.mutable.ArrayBuffer.empty[Map[String, String]]
       val dispatcher = new ActionCallDispatcher {
-        def dispatchAction(actionName: String, event: DomainEvent): Consequence[Unit] = {
-          calls += actionName
+        def dispatchAction(actionname: String, event: DomainEvent): Consequence[Unit] = {
+          calls += actionname
           event match {
             case e: ReceptionDomainEvent => attrs += e.attributes
             case _ => ()
@@ -390,7 +391,7 @@ final class ComponentFactoryEventReceptionBootstrapSpec
       }
 
       val factory = new ComponentFactory()
-      val publisherReception = factory.createEventReceptionWithOperationDispatcher(publisher, subsystem.eventBus)
+      val publisherreception = factory.createEventReceptionWithOperationDispatcher(publisher, subsystem.eventBus)
       val _ = factory.createEventReception(subscriber, subsystem.eventBus, dispatcher)
       given org.goldenport.cncf.context.ExecutionContext =
         org.goldenport.cncf.context.ExecutionContext.test(
@@ -398,7 +399,7 @@ final class ComponentFactoryEventReceptionBootstrapSpec
         )
 
       When("publisher emits an event routed to the runtime componentlet")
-      val result = publisherReception.receiveAuthorized(
+      val result = publisherreception.receiveAuthorized(
         ReceptionInput(
           name = "notice.published",
           kind = "published",
@@ -432,7 +433,7 @@ final class ComponentFactoryEventReceptionBootstrapSpec
             )
           )
         )
-      ), subsystem, componentIdLabel = "notice_board")
+      ), subsystem, componentidlabel = "notice_board")
 
       When("factory bootstraps the primary component only")
       val bootstrapped = new ComponentFactory().bootstrap(component)
@@ -487,7 +488,8 @@ final class ComponentFactoryEventReceptionBootstrapSpec
         name = "system.test",
         kind = "test",
         payload = Map.empty,
-        attributes = Map.empty
+        attributes = Map.empty,
+        occurredAt = java.time.Instant.EPOCH
       )
 
       Then("dispatcher exposes parse/validate flow")
@@ -544,12 +546,12 @@ final class ComponentFactoryEventReceptionBootstrapSpec
     name: String,
     component: Component,
     subsystem: Subsystem,
-    componentIdLabel: String = ""
+    componentidlabel: String = ""
   ): Component = {
-    val idlabel = if (componentIdLabel.nonEmpty) componentIdLabel else name
-    val componentId = ComponentId(idlabel)
-    val instanceId = ComponentInstanceId.default(componentId)
-    val core = Component.Core.create(name, componentId, instanceId, Protocol.empty)
+    val idlabel = if (componentidlabel.nonEmpty) componentidlabel else name
+    val componentid = ComponentId(idlabel)
+    val instanceid = ComponentInstanceId.default(componentid)
+    val core = Component.Core.create(name, componentid, instanceid, Protocol.empty)
     component.initialize(ComponentInit(subsystem, core, ComponentOrigin.Builtin))
   }
 }

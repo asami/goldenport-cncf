@@ -8,6 +8,7 @@ import org.goldenport.Consequence
 import org.goldenport.Conclusion
 import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.action.{JobTransactionScope, OperationEventTransactionRequirement, TaskTransactionRole}
 import org.simplemodeling.model.datatype.EntityId
 import org.goldenport.cncf.entity.runtime.EntitySpace
@@ -138,13 +139,13 @@ final case class EventReceptionAbacCondition(
     ctx: ExecutionContext,
     event: ReceptionDomainEvent
   ): EventReceptionAbacEvaluation = {
-    val leftValue = left.resolve(ctx, event)
-    val rightValue = right.resolve(ctx, event)
-    val matched = (leftValue, rightValue) match {
+    val leftvalue = left.resolve(ctx, event)
+    val rightvalue = right.resolve(ctx, event)
+    val matched = (leftvalue, rightvalue) match {
       case (Some(l), Some(r)) => operator.matches(l, r)
       case _ => false
     }
-    EventReceptionAbacEvaluation(this, matched, leftValue, rightValue)
+    EventReceptionAbacEvaluation(this, matched, leftvalue, rightvalue)
   }
 }
 
@@ -305,23 +306,23 @@ final case class EventReceptionExecutionPolicy(
   failurePolicy: EventFailurePolicy
 ) {
   def modeName: String = {
-    val timingLabel = timing match {
+    val timinglabel = timing match {
       case EventExecutionTiming.Sync => "sync"
       case EventExecutionTiming.Async => "async"
     }
-    val jobLabel = jobRelation match {
+    val joblabel = jobRelation match {
       case EventJobRelation.SameJob => "same-job"
       case EventJobRelation.NewJob => "new-job"
     }
-    val sagaLabel = sagaRelation match {
+    val sagalabel = sagaRelation match {
       case EventSagaRelation.SameSaga => "same-saga"
       case EventSagaRelation.NewSaga => "new-saga"
     }
-    val txLabel = transactionRelation match {
+    val txlabel = transactionRelation match {
       case EventTransactionRelation.SameTransaction => "same-transaction"
       case EventTransactionRelation.NewTransaction => "new-transaction"
     }
-    s"$timingLabel:$jobLabel:$sagaLabel:$txLabel"
+    s"$timinglabel:$joblabel:$sagalabel:$txlabel"
   }
 }
 
@@ -384,7 +385,7 @@ final case class ReceptionDomainEvent(
   kind: String,
   payload: Map[String, Any],
   attributes: Map[String, String],
-  occurredAt: Instant = Instant.now()
+  occurredAt: Instant
 ) extends DomainEvent
 
 enum ReceptionOutcome {
@@ -730,7 +731,7 @@ object EventReception {
           if (!hasactionbinding && !hasnonaction)
             _failure(s"subscription mismatch: ${input.name}/${input.kind}")
           else {
-            val occurredat = Instant.now()
+            val occurredat = _reception_instant(ctx)
             val event = ReceptionDomainEvent(
               name = input.name,
               kind = input.kind,
@@ -963,6 +964,13 @@ object EventReception {
       }
     }
 
+    private def _reception_instant(
+      ctx: Option[ExecutionContext]
+    ): Instant =
+      ctx
+        .map(_.clock.instant())
+        .getOrElse(RuntimeConfig.DEFAULT_EXECUTION_CLOCK.clock.instant())
+
     private def _external_ingress_boundary(
       attributes: Map[String, String]
     ): Boolean =
@@ -1084,19 +1092,19 @@ object EventReception {
     ): Map[String, String] = {
       val ob = ctx.observability
       val job = ctx.jobContext
-      val sourceSubsystem = _find_scope_name(ctx.cncfCore.scope, org.goldenport.cncf.context.ScopeKind.Subsystem)
+      val sourcesubsystem = _find_scope_name(ctx.cncfCore.scope, org.goldenport.cncf.context.ScopeKind.Subsystem)
         .orElse(currentSubsystemName)
-      val sourceComponent = _find_scope_name(ctx.cncfCore.scope, org.goldenport.cncf.context.ScopeKind.Component)
+      val sourcecomponent = _find_scope_name(ctx.cncfCore.scope, org.goldenport.cncf.context.ScopeKind.Component)
         .orElse(currentComponentName)
-      val sourceAction = _find_scope_name(ctx.cncfCore.scope, org.goldenport.cncf.context.ScopeKind.Action)
+      val sourceaction = _find_scope_name(ctx.cncfCore.scope, org.goldenport.cncf.context.ScopeKind.Action)
       val causationid = job.causationId
         .orElse(job.actionId.map(_.print))
         .orElse(ob.correlationId.map(_.print))
         .getOrElse("unknown")
       val pairs = Vector(
-        sourceSubsystem.map(x => StandardAttribute.SourceSubsystem -> x),
-        sourceComponent.map(x => StandardAttribute.SourceComponent -> x),
-        sourceAction.map(x => StandardAttribute.SourceAction -> x),
+        sourcesubsystem.map(x => StandardAttribute.SourceSubsystem -> x),
+        sourcecomponent.map(x => StandardAttribute.SourceComponent -> x),
+        sourceaction.map(x => StandardAttribute.SourceAction -> x),
         Some(StandardAttribute.TraceId -> ob.traceId.print),
         ob.spanId.map(x => StandardAttribute.SpanId -> x.print),
         ob.correlationId.map(x => StandardAttribute.CorrelationId -> x.print),
@@ -1902,8 +1910,8 @@ object EventReception {
       targetid: String,
       resolved: _ResolvedExecutionPolicy
     )(using ctx: ExecutionContext): Consequence[ReceptionDomainEvent] = {
-      val withSaga = _with_saga_identity(ctx, event, resolved)
-      val attrs0 = withSaga.attributes + ("targetId" -> targetid) + ("target" -> targetid)
+      val withsaga = _with_saga_identity(ctx, event, resolved)
+      val attrs0 = withsaga.attributes + ("targetId" -> targetid) + ("target" -> targetid)
       val attrs1 = subscription.entityName match {
         case Some(name) =>
           attrs0 ++ Map(
@@ -1931,11 +1939,11 @@ object EventReception {
         Some(StandardAttribute.receptionTransactionCapability -> resolved.receptionTransactionCapability.print),
         Some(StandardAttribute.transactionCapability -> resolved.effectiveTransactionCapability.print),
         Some(StandardAttribute.SagaRelation -> _saga_relation_name(resolved.policy.sagaRelation)),
-        _read_first(withSaga.attributes, Vector(StandardAttribute.SagaId, StandardAttribute.CorrelationId)).map(x => StandardAttribute.SagaId -> x),
+        _read_first(withsaga.attributes, Vector(StandardAttribute.SagaId, StandardAttribute.CorrelationId)).map(x => StandardAttribute.SagaId -> x),
         currentSubsystemName.filter(_.nonEmpty).map(x => StandardAttribute.TargetSubsystem -> x),
         currentComponentName.filter(_.nonEmpty).map(x => StandardAttribute.TargetComponent -> x)
       ).flatten.toMap
-      _append_reception_history(withSaga.copy(attributes = attrs2))
+      _append_reception_history(withsaga.copy(attributes = attrs2))
     }
 
     private def _append_source_history(
@@ -2097,7 +2105,7 @@ object EventReception {
             ctx.observability.copy(sagaId = sagaid)
           )
         case EventSagaRelation.NewSaga =>
-          val sagaid = event.attributes.get(StandardAttribute.SagaId).filter(_.nonEmpty).orElse(ctx.observability.sagaId).getOrElse(_generated_saga_boundary(event))
+          val sagaid = event.attributes.get(StandardAttribute.SagaId).filter(_.nonEmpty).orElse(ctx.observability.sagaId).getOrElse(_generated_saga_boundary(event, ctx))
           currentSubsystemName match {
             case Some(name) =>
               val observability = ctx.observability.copy(
@@ -2123,7 +2131,7 @@ object EventReception {
         case EventSagaRelation.SameSaga =>
           ctx.observability.copy(sagaId = sagaid)
         case EventSagaRelation.NewSaga =>
-          val nextsaga = sagaid.getOrElse(_generated_saga_boundary(event))
+          val nextsaga = sagaid.getOrElse(_generated_saga_boundary(event, ctx))
           ctx.observability.copy(sagaId = Some(nextsaga))
       }
       ExecutionContext.withObservabilityContext(ctx, observability)
@@ -2139,9 +2147,9 @@ object EventReception {
           event.attributes.get(StandardAttribute.SagaId)
             .orElse(ctx.observability.sagaId)
             .orElse(ctx.observability.correlationId.map(_.print))
-            .getOrElse(_generated_saga_boundary(event))
+            .getOrElse(_generated_saga_boundary(event, ctx))
         case EventSagaRelation.NewSaga =>
-          _generated_saga_boundary(event)
+          _generated_saga_boundary(event, ctx)
       }
       val attrs = event.attributes ++ Map(
         StandardAttribute.SagaId -> sagaid,
@@ -2151,9 +2159,10 @@ object EventReception {
     }
 
     private def _generated_saga_boundary(
-      event: ReceptionDomainEvent
+      event: ReceptionDomainEvent,
+      ctx: ExecutionContext
     ): String =
-      s"event_${event.name.replace('.', '_')}_${java.lang.Long.toUnsignedString(Instant.now().toEpochMilli, 36)}"
+      s"event_${event.name.replace('.', '_')}_${ctx.idGeneration.opaqueId("event.saga-boundary")}"
 
     private def _correlation_minor(sagaid: String): String = {
       val normalized = Option(sagaid).getOrElse("")

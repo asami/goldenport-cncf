@@ -1,37 +1,42 @@
 package org.goldenport.cncf.usernotification
 
 import scala.collection.mutable.ArrayBuffer
+import java.util.concurrent.{CountDownLatch, TimeUnit}
 import org.goldenport.Consequence
 import org.goldenport.configuration.{Configuration, ConfigurationTrace, ResolvedConfiguration}
 import org.goldenport.cncf.component.{Component, ComponentId, ComponentInit, ComponentInstanceId, ComponentOrigin}
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.event.{EventPublishOption, ReceptionDomainEvent}
-import org.goldenport.cncf.job.{ActionId, InMemoryJobEngine, JobEngine, JobId, JobRunMode, JobStatus, JobSubmitOption, JobTask, TaskOutcome, TaskSucceeded}
+import org.goldenport.cncf.job.{ActionId, JobRunMode, JobStatus, JobSubmitOption, JobTask, TaskOutcome, TaskSucceeded}
 import org.goldenport.cncf.subsystem.{GenericSubsystemComponentBinding, GenericSubsystemDescriptor, GenericSubsystemRuntimeBinding, GenericSubsystemUserNotificationBinding, GenericSubsystemUserNotificationEventForwardingBinding, GenericSubsystemUserNotificationProviderBinding, Subsystem}
 import org.goldenport.protocol.Protocol
 import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.observation.{Cause, Descriptor, Taxonomy}
+import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   May.  7, 2026
- * @version May. 20, 2026
+ * @version Jul. 15, 2026
  * @author  ASAMI, Tomoharu
  */
-final class UserNotificationProviderRuntimeSpec extends AnyWordSpec with Matchers {
+final class UserNotificationProviderRuntimeSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   "UserNotificationProviderRuntime" should {
     "reject notify when the configured provider is disabled" in {
+      Given("a disabled user-notification provider")
       val sink = ArrayBuffer.empty[UserNotificationRequest]
       val (component, subsystem) = _component("textus-user-notification", sink)
       subsystem.withDescriptor(_descriptor(enabled = false))
       given ExecutionContext = component.logic.executionContext()
 
+      When("a notification is requested")
       val result = UserNotificationProviderRuntime.notify(
         summon[ExecutionContext],
         _request()
       )
 
+      Then("the capability failure is structured and nothing is delivered")
       result.isSuccess shouldBe false
       result match
         case Consequence.Failure(conclusion) =>
@@ -46,30 +51,36 @@ final class UserNotificationProviderRuntimeSpec extends AnyWordSpec with Matcher
     }
 
     "dispatch to the configured provider when wired" in {
+      Given("an enabled and wired user-notification provider")
       val sink = ArrayBuffer.empty[UserNotificationRequest]
       val (component, subsystem) = _component("textus-user-notification", sink)
       subsystem.withDescriptor(_descriptor(enabled = true))
       given ExecutionContext = component.logic.executionContext()
 
+      When("a notification is requested")
       val result = UserNotificationProviderRuntime.notify(
         summon[ExecutionContext],
         _request()
       )
 
+      Then("the provider receives the notification")
       result.toOption.flatMap(_.notificationId) shouldBe Some("notification-1")
       sink.map(_.recipientUserId).toVector shouldBe Vector("alice")
     }
 
     "forward configured application Job events through EventBus routing" in {
+      Given("default application-visible Job event forwarding")
       val sink = ArrayBuffer.empty[UserNotificationRequest]
       val (_, subsystem) = _component("textus-user-notification", sink)
       subsystem.withDescriptor(_descriptor(enabled = true))
 
+      When("an application Job success event is published")
       val result = subsystem.eventBus.publish(
         _job_event("job.succeeded", "job-forward-1", app = Some("blog")),
         EventPublishOption(persistent = true)
       )
 
+      Then("one application notification is delivered with Job context")
       result.toOption.map(_.dispatchedCount) shouldBe Some(1)
       sink.size shouldBe 1
       sink.head.recipientUserId shouldBe "alice"
@@ -80,43 +91,52 @@ final class UserNotificationProviderRuntimeSpec extends AnyWordSpec with Matcher
     }
 
     "skip default Job event forwarding without application context" in {
+      Given("default application-visible Job event forwarding")
       val sink = ArrayBuffer.empty[UserNotificationRequest]
       val (_, subsystem) = _component("textus-user-notification", sink)
       subsystem.withDescriptor(_descriptor(enabled = true))
 
+      When("an internal Job event without application context is published")
       val result = subsystem.eventBus.publish(
         _job_event("job.succeeded", "job-internal-1", app = None),
         EventPublishOption(persistent = true)
       )
 
+      Then("the event is not forwarded")
       result.toOption.map(_.dispatchedCount) shouldBe Some(0)
       sink shouldBe empty
     }
 
     "skip default Job event forwarding for synchronous managed jobs" in {
+      Given("default application-visible Job event forwarding")
       val sink = ArrayBuffer.empty[UserNotificationRequest]
       val (_, subsystem) = _component("textus-user-notification", sink)
       subsystem.withDescriptor(_descriptor(enabled = true))
 
+      When("a synchronous managed Job event is published")
       val result = subsystem.eventBus.publish(
-        _job_event("job.succeeded", "job-sync-1", app = Some("blog"), runMode = "sync"),
+        _job_event("job.succeeded", "job-sync-1", app = Some("blog"), runmode = "sync"),
         EventPublishOption(persistent = true)
       )
 
+      Then("the event is not forwarded")
       result.toOption.map(_.dispatchedCount) shouldBe Some(0)
       sink shouldBe empty
     }
 
     "allow explicit event forwarding opt-in for internal Job events" in {
+      Given("event forwarding explicitly includes internal Job events")
       val sink = ArrayBuffer.empty[UserNotificationRequest]
       val (_, subsystem) = _component("textus-user-notification", sink)
-      subsystem.withDescriptor(_descriptor(enabled = true, appVisibleOnly = Some(false)))
+      subsystem.withDescriptor(_descriptor(enabled = true, appvisibleonly = Some(false)))
 
+      When("an internal Job failure event is published")
       val result = subsystem.eventBus.publish(
         _job_event("job.failed", "job-internal-opt-in-1", app = None),
         EventPublishOption(persistent = true)
       )
 
+      Then("one high-priority notification without an application link is delivered")
       result.toOption.map(_.dispatchedCount) shouldBe Some(1)
       sink.size shouldBe 1
       sink.head.actionUrl shouldBe None
@@ -124,24 +144,30 @@ final class UserNotificationProviderRuntimeSpec extends AnyWordSpec with Matcher
     }
 
     "deduplicate forwarded Job event notifications by job id and trigger" in {
+      Given("default application-visible Job event forwarding")
       val sink = ArrayBuffer.empty[UserNotificationRequest]
       val (_, subsystem) = _component("textus-user-notification", sink)
       subsystem.withDescriptor(_descriptor(enabled = true))
 
+      When("the same Job event trigger is published twice")
       val first = subsystem.eventBus.publish(_job_event("job.succeeded", "job-dedupe-1", app = Some("blog")), EventPublishOption(persistent = true))
       val second = subsystem.eventBus.publish(_job_event("job.succeeded", "job-dedupe-1", app = Some("blog")), EventPublishOption(persistent = true))
 
+      Then("the forwarding reception remains idempotent")
       first.toOption.map(_.dispatchedCount) shouldBe Some(1)
       second.toOption.map(_.dispatchedCount) shouldBe Some(1)
       sink.size shouldBe 1
     }
 
     "forward JobEngine lifecycle events through EventBus routing" in {
+      Given("an asynchronous JobEngine task and application-visible forwarding")
       val sink = ArrayBuffer.empty[UserNotificationRequest]
-      val (component, subsystem) = _component("textus-user-notification", sink)
+      val deliverylatch = new CountDownLatch(1)
+      val (component, subsystem) = _component("textus-user-notification", sink, Some(deliverylatch))
       subsystem.withDescriptor(_descriptor(enabled = true))
       val task = _success_task("job-engine-forwarding")
 
+      When("the Job is submitted")
       val jobid = subsystem.jobEngine.submit(
         List(task),
         component.logic.executionContext(),
@@ -150,25 +176,27 @@ final class UserNotificationProviderRuntimeSpec extends AnyWordSpec with Matcher
           "web.service" -> "post",
           "web.operation" -> "publish"
         ))
-      ).toOption.get
-      subsystem.jobEngine match {
-        case m: InMemoryJobEngine => m.drainAll()
-        case _ => ()
-      }
+      ).toOption.getOrElse(fail("job submission failed"))
+      And("the JobEngine await contract observes its completion")
+      subsystem.jobEngine.awaitResult(jobid, 5000L).toOption shouldBe defined
+      deliverylatch.await(5L, TimeUnit.SECONDS) shouldBe true
 
-      _await_status(subsystem.jobEngine, jobid, JobStatus.Succeeded) shouldBe true
+      Then("the completed Job event is forwarded with its Job identity")
+      subsystem.jobEngine.getStatus(jobid) shouldBe Some(JobStatus.Succeeded)
       sink.size shouldBe 1
       sink.head.actionUrl shouldBe Some(s"/web/blog/jobs/${jobid.value}")
       sink.head.metadata.get("jobId") shouldBe Some(jobid.value)
       sink.head.metadata.get("sourceEventName") shouldBe Some("job.succeeded")
     }
 
-    "do not forward synchronous JobEngine lifecycle events through default rules" in {
+    "not forward synchronous JobEngine lifecycle events through default rules" in {
+      Given("a synchronous JobEngine task and default forwarding")
       val sink = ArrayBuffer.empty[UserNotificationRequest]
       val (component, subsystem) = _component("textus-user-notification", sink)
       subsystem.withDescriptor(_descriptor(enabled = true))
       val task = _success_task("job-engine-sync-not-forwarded")
 
+      When("the Job is submitted synchronously")
       val jobid = subsystem.jobEngine.submit(
         List(task),
         component.logic.executionContext(),
@@ -180,16 +208,18 @@ final class UserNotificationProviderRuntimeSpec extends AnyWordSpec with Matcher
             "web.operation" -> "publish"
           )
         )
-      ).toOption.get
+      ).toOption.getOrElse(fail("job submission failed"))
 
+      Then("the Job succeeds without emitting an application notification")
       subsystem.jobEngine.getStatus(jobid) shouldBe Some(JobStatus.Succeeded)
       sink shouldBe empty
     }
   }
 
   private def _component(
-    providerName: String,
-    sink: ArrayBuffer[UserNotificationRequest]
+    providername: String,
+    sink: ArrayBuffer[UserNotificationRequest],
+    deliverylatch: Option[CountDownLatch] = None
   ): (Component, Subsystem) = {
     val subsystem = Subsystem(
       name = "textus-notify",
@@ -197,7 +227,7 @@ final class UserNotificationProviderRuntimeSpec extends AnyWordSpec with Matcher
     )
     val component = new Component() {
       override def userNotificationProviders: Vector[UserNotificationProvider] =
-        Vector(_provider(providerName, sink))
+        Vector(_provider(providername, sink, deliverylatch))
     }
     val id = ComponentId("textus_user_notification")
     val core = Component.Core.create(
@@ -222,7 +252,7 @@ final class UserNotificationProviderRuntimeSpec extends AnyWordSpec with Matcher
 
   private def _descriptor(
     enabled: Boolean,
-    appVisibleOnly: Option[Boolean] = None
+    appvisibleonly: Option[Boolean] = None
   ): GenericSubsystemDescriptor =
     GenericSubsystemDescriptor(
       path = java.nio.file.Path.of("<memory>"),
@@ -241,10 +271,10 @@ final class UserNotificationProviderRuntimeSpec extends AnyWordSpec with Matcher
                   isDefault = Some(true)
                 )
               ),
-              eventForwarding = appVisibleOnly.toVector.map { visibleOnly =>
+              eventForwarding = appvisibleonly.toVector.map { visibleonly =>
                 GenericSubsystemUserNotificationEventForwardingBinding(
                   event = "job.failed",
-                  appVisibleOnly = Some(visibleOnly)
+                  appVisibleOnly = Some(visibleonly)
                 )
               }
             )
@@ -254,14 +284,16 @@ final class UserNotificationProviderRuntimeSpec extends AnyWordSpec with Matcher
     )
 
   private def _provider(
-    providerName: String,
-    sink: ArrayBuffer[UserNotificationRequest]
+    providername: String,
+    sink: ArrayBuffer[UserNotificationRequest],
+    deliverylatch: Option[CountDownLatch]
   ): UserNotificationProvider =
     new UserNotificationProvider {
-      val name: String = providerName
+      val name: String = providername
 
       def notify(request: UserNotificationRequest)(using ExecutionContext): Consequence[UserNotificationResult] = {
         sink += request
+        deliverylatch.foreach(_.countDown())
         Consequence.success(UserNotificationResult(notificationId = Some("notification-1")))
       }
     }
@@ -277,23 +309,24 @@ final class UserNotificationProviderRuntimeSpec extends AnyWordSpec with Matcher
 
   private def _job_event(
     name: String,
-    jobId: String,
+    jobid: String,
     app: Option[String],
-    runMode: String = "async"
+    runmode: String = "async"
   ): ReceptionDomainEvent =
     ReceptionDomainEvent(
       name = name,
       kind = name,
       payload = Map(
-        "job-id" -> jobId,
+        "job-id" -> jobid,
         "status" -> name.stripPrefix("job."),
-        "job-run-mode" -> runMode,
+        "job-run-mode" -> runmode,
         "submitter-principal-id" -> "alice",
         "web.service" -> "post",
         "web.operation" -> "publish",
         "message" -> "done"
       ) ++ app.map("web.app" -> _),
-      attributes = Map("correlation-id" -> "corr-1")
+      attributes = Map("correlation-id" -> "corr-1"),
+      occurredAt = java.time.Instant.EPOCH
     )
 
   private def _success_task(name: String): JobTask =
@@ -306,19 +339,4 @@ final class UserNotificationProviderRuntimeSpec extends AnyWordSpec with Matcher
       }
     }
 
-  private def _await_status(
-    jobengine: JobEngine,
-    jobid: JobId,
-    expected: JobStatus,
-    timeoutmillis: Long = 5000L,
-    pollmillis: Long = 20L
-  ): Boolean = {
-    val deadline = System.currentTimeMillis() + timeoutmillis
-    var matched = jobengine.getStatus(jobid).contains(expected)
-    while (!matched && System.currentTimeMillis() < deadline) {
-      Thread.sleep(pollmillis)
-      matched = jobengine.getStatus(jobid).contains(expected)
-    }
-    matched
-  }
 }

@@ -279,11 +279,17 @@ Status: IN PROGRESS
   bootstrap/repository, transport, and compatibility-test concerns.
 - Tag update and move timestamps now use the current operational execution
   clock and have property-based executable specification coverage.
+- Canonical Event reception now derives semantic timestamps and generated saga
+  boundaries from the bound execution profile. Transition lifecycle events use
+  one execution-clock instant and profile-derived Event IDs. Property-based
+  replay coverage fixes both contracts, and direct `ReceptionDomainEvent`
+  construction now requires an explicit timestamp.
 - CAR lint and component developer guidance now report direct ambient clock,
   UUID/random, sleep, environment/property, host filesystem, thread, and
   executor access in component sources.
-- Remaining InformationSpace, Event/Workflow, working-set, and runtime model
-  semantic defaults still require migration before ED-07 can be marked DONE.
+- Remaining generic EventStore fallback, Workflow/InformationSpace,
+  working-set, and runtime model semantic defaults still require migration
+  before ED-07 can be marked DONE.
 
 ### Acceptance Criteria
 

@@ -29,7 +29,7 @@ import org.goldenport.value.BaseContent
  *  version Mar. 29, 2026
  *  version Apr. 22, 2026
  *  version May. 31, 2026
- * @version Jul.  1, 2026
+ * @version Jul. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final class JobControlComponent() extends Component {
@@ -120,80 +120,80 @@ object JobControlComponent {
     ): Component.Core = {
       val request = spec.RequestDefinition()
       val idrequest = _job_id_request
-      val getJobStatus = new GetJobStatusOperationDefinition(request = idrequest, response = spec.ResponseDefinition(result = List(DataType.Named("JobQueryReadModel"))))
-      val loadJobHistory = new LoadJobHistoryOperationDefinition(request = idrequest, response = spec.ResponseDefinition(result = List(DataType.Named("JobTimelinePage"))))
-      val getJobCalltree = new GetJobCalltreeOperationDefinition(request = idrequest, response = spec.ResponseDefinition(result = List(DataType.Named("Record"))))
-      val getTaskExecutionTree = new GetTaskExecutionTreeOperationDefinition(request = idrequest, response = spec.ResponseDefinition(result = List(DataType.Named("Record"))))
-      val getTaskDetail = new GetTaskDetailOperationDefinition(request = _job_task_request, response = spec.ResponseDefinition(result = List(DataType.Named("Record"))))
-      val getJobResult = new GetJobResultOperationDefinition(request = idrequest, response = spec.ResponseDefinition(result = List(DataType.Named("JobResult"))))
-      val awaitJobResult = new AwaitJobResultOperationDefinition(request = idrequest, response = spec.ResponseDefinition(result = List(DataType.Named("OperationResponse"))))
+      val getjobstatus = new GetJobStatusOperationDefinition(request = idrequest, response = spec.ResponseDefinition(result = List(DataType.Named("JobQueryReadModel"))))
+      val loadjobhistory = new LoadJobHistoryOperationDefinition(request = idrequest, response = spec.ResponseDefinition(result = List(DataType.Named("JobTimelinePage"))))
+      val getjobcalltree = new GetJobCalltreeOperationDefinition(request = idrequest, response = spec.ResponseDefinition(result = List(DataType.Named("Record"))))
+      val gettaskexecutiontree = new GetTaskExecutionTreeOperationDefinition(request = idrequest, response = spec.ResponseDefinition(result = List(DataType.Named("Record"))))
+      val gettaskdetail = new GetTaskDetailOperationDefinition(request = _job_task_request, response = spec.ResponseDefinition(result = List(DataType.Named("Record"))))
+      val getjobresult = new GetJobResultOperationDefinition(request = idrequest, response = spec.ResponseDefinition(result = List(DataType.Named("JobResult"))))
+      val awaitjobresult = new AwaitJobResultOperationDefinition(request = idrequest, response = spec.ResponseDefinition(result = List(DataType.Named("OperationResponse"))))
       val bodyrequest = _body_request
-      val describeJobDefinition = new DescribeJobDefinitionOperationDefinition(bodyrequest, spec.ResponseDefinition(result = List(DataType.Named("Record"))))
-      val submitJobDefinition = new SubmitJobDefinitionOperationDefinition(bodyrequest, spec.ResponseDefinition(result = List(DataType.Named("Record"))))
-      val submitJobBatch = new SubmitJobBatchOperationDefinition(bodyrequest, spec.ResponseDefinition(result = List(DataType.Named("Record"))))
-      val compareJobProfile = new CompareJobProfileOperationDefinition(idrequest, spec.ResponseDefinition(result = List(DataType.Named("Record"))))
-      val reconstructJobProfile = new ReconstructJobProfileOperationDefinition(idrequest, spec.ResponseDefinition(result = List(DataType.Named("Record"))))
-      val definitionRequest = _job_definition_request
-      val definitionKeyRequest = _job_definition_key_request
-      val createJobDefinition = new CreateJobDefinitionOperationDefinition(definitionRequest, spec.ResponseDefinition(result = List(DataType.Named("Record"))))
-      val updateJobDefinition = new UpdateJobDefinitionOperationDefinition(definitionRequest, spec.ResponseDefinition(result = List(DataType.Named("Record"))))
-      val activateJobDefinition = new ActivateJobDefinitionOperationDefinition(definitionKeyRequest, spec.ResponseDefinition(result = List(DataType.Named("Record"))))
-      val retireJobDefinition = new RetireJobDefinitionOperationDefinition(definitionKeyRequest, spec.ResponseDefinition(result = List(DataType.Named("Record"))))
-      val getJobDefinition = new GetJobDefinitionOperationDefinition(definitionKeyRequest, spec.ResponseDefinition(result = List(DataType.Named("Record"))))
-      val searchJobDefinitions = new SearchJobDefinitionsOperationDefinition(request, spec.ResponseDefinition(result = List(DataType.Named("Record"))))
-      val cancelJob = new ControlJobOperationDefinition(
+      val describejobdefinition = new DescribeJobDefinitionOperationDefinition(bodyrequest, spec.ResponseDefinition(result = List(DataType.Named("Record"))))
+      val submitjobdefinition = new SubmitJobDefinitionOperationDefinition(bodyrequest, spec.ResponseDefinition(result = List(DataType.Named("Record"))))
+      val submitjobbatch = new SubmitJobBatchOperationDefinition(bodyrequest, spec.ResponseDefinition(result = List(DataType.Named("Record"))))
+      val comparejobprofile = new CompareJobProfileOperationDefinition(idrequest, spec.ResponseDefinition(result = List(DataType.Named("Record"))))
+      val reconstructjobprofile = new ReconstructJobProfileOperationDefinition(idrequest, spec.ResponseDefinition(result = List(DataType.Named("Record"))))
+      val definitionrequest = _job_definition_request
+      val definitionkeyrequest = _job_definition_key_request
+      val createjobdefinition = new CreateJobDefinitionOperationDefinition(definitionrequest, spec.ResponseDefinition(result = List(DataType.Named("Record"))))
+      val updatejobdefinition = new UpdateJobDefinitionOperationDefinition(definitionrequest, spec.ResponseDefinition(result = List(DataType.Named("Record"))))
+      val activatejobdefinition = new ActivateJobDefinitionOperationDefinition(definitionkeyrequest, spec.ResponseDefinition(result = List(DataType.Named("Record"))))
+      val retirejobdefinition = new RetireJobDefinitionOperationDefinition(definitionkeyrequest, spec.ResponseDefinition(result = List(DataType.Named("Record"))))
+      val getjobdefinition = new GetJobDefinitionOperationDefinition(definitionkeyrequest, spec.ResponseDefinition(result = List(DataType.Named("Record"))))
+      val searchjobdefinitions = new SearchJobDefinitionsOperationDefinition(request, spec.ResponseDefinition(result = List(DataType.Named("Record"))))
+      val canceljob = new ControlJobOperationDefinition(
         name = "cancel_job",
         command = JobControlCommand.Cancel,
         request = idrequest,
         response = spec.ResponseDefinition(result = List(DataType.Named("JobControlResponse")))
       )
-      val suspendJob = new ControlJobOperationDefinition(
+      val suspendjob = new ControlJobOperationDefinition(
         name = "suspend_job",
         command = JobControlCommand.Suspend,
         request = idrequest,
         response = spec.ResponseDefinition(result = List(DataType.Named("JobControlResponse")))
       )
-      val resumeJob = new ControlJobOperationDefinition(
+      val resumejob = new ControlJobOperationDefinition(
         name = "resume_job",
         command = JobControlCommand.Resume,
         request = idrequest,
         response = spec.ResponseDefinition(result = List(DataType.Named("JobControlResponse")))
       )
-      val loadJobEvents = new LoadJobEventsOperationDefinition(request = idrequest, response = spec.ResponseDefinition(result = List(DataType.Named("RecordList"))))
-      val jobService = spec.ServiceDefinition(
+      val loadjobevents = new LoadJobEventsOperationDefinition(request = idrequest, response = spec.ResponseDefinition(result = List(DataType.Named("RecordList"))))
+      val jobservice = spec.ServiceDefinition(
         name = "job",
         operations = spec.OperationDefinitionGroup(
           operations = NonEmptyVector.of(
-            getJobStatus,
-            loadJobHistory,
-            getJobCalltree,
-            getTaskExecutionTree,
-            getTaskDetail,
-            getJobResult,
-            awaitJobResult,
-            describeJobDefinition,
-            submitJobDefinition,
-            submitJobBatch,
-            compareJobProfile,
-            reconstructJobProfile,
-            createJobDefinition,
-            updateJobDefinition,
-            activateJobDefinition,
-            retireJobDefinition,
-            getJobDefinition,
-            searchJobDefinitions
+            getjobstatus,
+            loadjobhistory,
+            getjobcalltree,
+            gettaskexecutiontree,
+            gettaskdetail,
+            getjobresult,
+            awaitjobresult,
+            describejobdefinition,
+            submitjobdefinition,
+            submitjobbatch,
+            comparejobprofile,
+            reconstructjobprofile,
+            createjobdefinition,
+            updatejobdefinition,
+            activatejobdefinition,
+            retirejobdefinition,
+            getjobdefinition,
+            searchjobdefinitions
           )
         )
       )
-      val jobAdminService = spec.ServiceDefinition(
+      val jobadminservice = spec.ServiceDefinition(
         name = "job_admin",
         operations = spec.OperationDefinitionGroup(
-          operations = NonEmptyVector.of(cancelJob, suspendJob, resumeJob, loadJobEvents)
+          operations = NonEmptyVector.of(canceljob, suspendjob, resumejob, loadjobevents)
         )
       )
       val protocol = Protocol(
         services = spec.ServiceDefinitionGroup(
-          services = Vector(jobService, jobAdminService)
+          services = Vector(jobservice, jobadminservice)
         ),
         handler = ProtocolHandler.default
       )
@@ -650,9 +650,9 @@ object JobControlComponent {
     private def _change_definition_status(
       key: String,
       status: JobDefinitionStatus
-    )(using org.goldenport.cncf.context.ExecutionContext): Consequence[Record] =
+    )(using ctx: org.goldenport.cncf.context.ExecutionContext): Consequence[Record] =
       _definition_by_ref(key).flatMap { current =>
-        val updated = current.copy(status = status, revision = current.revision + 1, updatedAt = java.time.Instant.now())
+        val updated = current.copy(status = status, revision = current.revision + 1, updatedAt = ctx.clock.instant())
         _save_definition(updated).map(_.toRecord())
       }
 
@@ -701,7 +701,7 @@ object JobControlComponent {
     private def _workflow_start_event(
       endpoint: WorkflowEntrypoint,
       parameters: Map[String, String]
-    ): ReceptionDomainEvent = {
+    )(using ctx: org.goldenport.cncf.context.ExecutionContext): ReceptionDomainEvent = {
       val payload: Map[String, Any] = parameters.toVector.map(x => x._1 -> x._2).toMap
       val attributes = parameters ++ Map(
         "entity" -> endpoint.registration.entityCollection,
@@ -713,7 +713,8 @@ object JobControlComponent {
         name = endpoint.registration.eventName,
         kind = "domain-event",
         payload = payload,
-        attributes = attributes
+        attributes = attributes,
+        occurredAt = ctx.clock.instant()
       )
     }
 

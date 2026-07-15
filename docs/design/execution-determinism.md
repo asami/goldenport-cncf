@@ -242,6 +242,14 @@ Asynchronous Event reception enters JobEngine and uses the same scheduler,
 clock, timer, and queue-ordering policy. Synchronous same-transaction Event
 reception executes immediately and MUST NOT become a scheduled task.
 
+Canonical Event reception derives `ReceptionDomainEvent.occurredAt` and its
+standard occurred-at attribute from the bound execution clock. Event-generated
+saga boundaries and transition lifecycle Event IDs derive from the bound ID
+generation capability. Direct `ReceptionDomainEvent` construction therefore
+requires an explicit timestamp; the model MUST NOT supply an ambient default.
+Transition lifecycle creation captures one execution-clock instant and uses it
+for both the lifecycle timestamp and Event ID timestamp.
+
 Manual scheduling is limited by `timer-scheduling-boundary.md`. It MUST NOT add
 cron, recurrence, business-calendar, workflow-wait, or general scheduler
 semantics.

@@ -24,7 +24,8 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 
 /*
  * @since   Apr. 22, 2026
- * @version May.  4, 2026
+ *  version May.  4, 2026
+ * @version Jul. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final class WorkflowEngineSpec
@@ -41,7 +42,7 @@ final class WorkflowEngineSpec
       val trace = ArrayBuffer.empty[String]
       val entityid = _entity_id("approved_1")
       _with_fixture(
-        workflowDefinitions = Vector(
+        workflowdefinitions = Vector(
           WorkflowDefinition(
             name = "sales-order-approval",
             registrations = Vector(
@@ -76,7 +77,7 @@ final class WorkflowEngineSpec
         val instance = fixture.subsystem.workflowEngine.instances.head
         instance.registrationName shouldBe "approval"
         instance.relatedJobIds.size shouldBe 1
-        awaitJobCompletion(fixture, instance.relatedJobIds.head)
+        _await_job_completion(fixture, instance.relatedJobIds.head)
         trace.toVector shouldBe Vector("workflow.advanceOrder")
         fixture.subsystem.jobEngine.query(instance.relatedJobIds.head).flatMap(_.tasks.tasks.headOption.flatMap(_.component)) shouldBe Some(fixture.component.name)
       }
@@ -87,7 +88,7 @@ final class WorkflowEngineSpec
       val trace = ArrayBuffer.empty[String]
       val entityid = _entity_id("repeat_1")
       _with_fixture(
-        workflowDefinitions = Vector(
+        workflowdefinitions = Vector(
           WorkflowDefinition(
             name = "sales-order-repeat",
             registrations = Vector(
@@ -130,7 +131,7 @@ final class WorkflowEngineSpec
       val trace = ArrayBuffer.empty[String]
       val entityid = _entity_id("missing_status_1")
       _with_fixture(
-        workflowDefinitions = Vector(
+        workflowdefinitions = Vector(
           WorkflowDefinition(
             name = "sales-order-failures",
             registrations = Vector(
@@ -150,29 +151,31 @@ final class WorkflowEngineSpec
         entities = Vector(_SalesOrder(entityid, "approved"))
       ) { fixture =>
         When("entity id is missing")
-        val missingId = fixture.subsystem.workflowEngine.handle(
+        val missingid = fixture.subsystem.workflowEngine.handle(
           fixture.component.name,
           ReceptionDomainEvent(
             name = "sales-order.status-check",
             kind = "domain-event",
             payload = Map.empty,
-            attributes = Map("entity" -> "salesOrder")
+            attributes = Map("entity" -> "salesOrder"),
+            occurredAt = java.time.Instant.EPOCH
           )
         )(using fixture.component.logic.executionContext()).toOption.get
 
         When("entity is unresolved")
-        val missingEntity = fixture.subsystem.workflowEngine.handle(
+        val missingentity = fixture.subsystem.workflowEngine.handle(
           fixture.component.name,
           ReceptionDomainEvent(
             name = "sales-order.status-check",
             kind = "domain-event",
             payload = Map.empty,
-            attributes = Map("entity" -> "salesOrder", "orderId" -> _entity_id("missing").value)
+            attributes = Map("entity" -> "salesOrder", "orderId" -> _entity_id("missing").value),
+            occurredAt = java.time.Instant.EPOCH
           )
         )(using fixture.component.logic.executionContext()).toOption.get
 
         When("status field is missing")
-        val missingStatus = fixture.component.eventReception.get.receive(
+        val missingstatus = fixture.component.eventReception.get.receive(
           ReceptionInput(
             name = "sales-order.status-check",
             attributes = Map("entity" -> "salesOrder", "orderId" -> entityid.value)
@@ -180,11 +183,11 @@ final class WorkflowEngineSpec
         )
 
         Then("workflow does not progress and no action is executed")
-        missingId.progressed shouldBe false
-        missingId.reason shouldBe Some("missing-entity-id")
-        missingEntity.progressed shouldBe false
-        missingEntity.reason shouldBe Some("entity-unresolved")
-        missingStatus.toOption.get.outcome shouldBe ReceptionOutcome.Routed
+        missingid.progressed shouldBe false
+        missingid.reason shouldBe Some("missing-entity-id")
+        missingentity.progressed shouldBe false
+        missingentity.reason shouldBe Some("entity-unresolved")
+        missingstatus.toOption.get.outcome shouldBe ReceptionOutcome.Routed
         fixture.subsystem.workflowEngine.instances.head.status shouldBe WorkflowStatus.NoProgress
         trace shouldBe empty
       }
@@ -195,7 +198,7 @@ final class WorkflowEngineSpec
       val trace = ArrayBuffer.empty[String]
       val entityid = _entity_id("priority_1")
       _with_fixture(
-        workflowDefinitions = Vector(
+        workflowdefinitions = Vector(
           WorkflowDefinition(
             name = "priority-winner",
             registrations = Vector(
@@ -234,7 +237,7 @@ final class WorkflowEngineSpec
           )
         )
         val instance = fixture.subsystem.workflowEngine.instances.head
-        awaitJobCompletion(fixture, instance.relatedJobIds.head)
+        _await_job_completion(fixture, instance.relatedJobIds.head)
 
         Then("the smallest numeric priority registration wins")
         trace.toVector shouldBe Vector("workflow.advanceOrderLow")
@@ -287,12 +290,12 @@ final class WorkflowEngineSpec
   )
 
   private def _with_fixture[A](
-    workflowDefinitions: Vector[WorkflowDefinition],
+    workflowdefinitions: Vector[WorkflowDefinition],
     trace: ArrayBuffer[String],
     entities: Vector[_SalesOrder]
   )(body: _Fixture => A): A =
     withWorkflowSubsystem(s"workflow-spec-${_seed.incrementAndGet()}") { subsystem =>
-      val component = _component(subsystem, workflowDefinitions, trace, entities)
+      val component = _component(subsystem, workflowdefinitions, trace, entities)
       val factory = new ComponentFactory()
       val bootstrapped = factory.bootstrap(component)
       subsystem.add(bootstrapped)
@@ -337,9 +340,9 @@ final class WorkflowEngineSpec
     }
     component.entitySpace.registerEntity("salesOrder", _collection(entities))
     val name = s"workflow_component_${_seed.incrementAndGet()}"
-    val componentId = ComponentId(name)
-    val instanceId = ComponentInstanceId.default(componentId)
-    val core = Component.Core.create(name, componentId, instanceId, protocol)
+    val componentid = ComponentId(name)
+    val instanceid = ComponentInstanceId.default(componentid)
+    val core = Component.Core.create(name, componentid, instanceid, protocol)
     component.initialize(ComponentInit(subsystem, core, ComponentOrigin.Builtin))
   }
 
@@ -375,12 +378,12 @@ final class WorkflowEngineSpec
     )
   }
 
-  private def awaitJobCompletion(
+  private def _await_job_completion(
     fixture: _Fixture,
-    jobId: org.goldenport.cncf.job.JobId
+    jobid: org.goldenport.cncf.job.JobId
   ): Unit = {
     awaitCondition {
-      fixture.subsystem.jobEngine.query(jobId).exists { m =>
+      fixture.subsystem.jobEngine.query(jobid).exists { m =>
         m.status != JobStatus.Submitted && m.status != JobStatus.Running
       }
     } shouldBe true
