@@ -33,7 +33,7 @@ import org.goldenport.cncf.observability.{DiagnosticPayloadExternalizer, Observa
  * @since   Jan.  4, 2026
  *  version Mar. 30, 2026
  *  version May. 31, 2026
- * @version Jul. 15, 2026
+ * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class JobId(
@@ -315,7 +315,7 @@ final case class JobInputPayload(
   sha256: Option[String] = None,
   inlineBase64: Option[String] = None,
   blobId: Option[String] = None,
-  createdAt: Instant = Instant.now()
+  createdAt: Instant
 ) {
   def sanitized: JobInputPayload =
     copy(inlineBase64 = None, blobId = None)
@@ -341,7 +341,7 @@ final case class JobInput(
   payloads: Vector[JobInputPayload] = Vector.empty,
   retentionPolicy: JobInputRetentionPolicy = JobInputRetentionPolicy.Ttl,
   ttl: Duration = JobInput.DefaultTtl,
-  createdAt: Instant = Instant.now(),
+  createdAt: Instant,
   cleanedAt: Option[Instant] = None
 ) {
   def isCleaned: Boolean = cleanedAt.nonEmpty
@@ -375,7 +375,7 @@ object JobInput {
     bytes: Array[Byte],
     filename: Option[String],
     contentType: Option[String],
-    now: Instant = Instant.now()
+    now: Instant
   ): JobInputPayload =
     JobInputPayload(
       storage = "inline",
@@ -395,7 +395,7 @@ object JobInput {
     contentType: Option[String],
     byteSize: Option[Long],
     sha256: Option[String],
-    now: Instant = Instant.now()
+    now: Instant
   ): JobInputPayload =
     JobInputPayload(
       storage = "blob",
@@ -740,7 +740,7 @@ trait JobEngine {
     }
   def metrics: Option[JobMetrics] = None
   def annotateJob(jobId: JobId, parameters: Map[String, String], executionNotes: Vector[String] = Vector.empty): Unit = ()
-  def cleanupExpiredInputs(now: Instant = Instant.now()): Int = 0
+  def cleanupExpiredInputs(now: Instant): Int = 0
   def annotateJobProfile(jobId: JobId, profile: JobDeclaredProfile): Unit = ()
   def runTaskInJobSync(jobId: JobId, task: JobTask, ctx: ExecutionContext): Consequence[TaskOutcome] =
     Consequence.operationInvalid("job.same-job.sync-task")
@@ -1063,7 +1063,7 @@ final class InMemoryJobEngine(
       )
     }
 
-  override def cleanupExpiredInputs(now: Instant = _now()): Int = {
+  override def cleanupExpiredInputs(now: Instant): Int = {
     val ids = (_durable_jobs.keySet().toArray(new Array[JobId](0)).toVector ++
       _runtime_jobs.keySet().toArray(new Array[JobId](0)).toVector).distinct
     ids.count { id =>

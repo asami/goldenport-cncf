@@ -15,9 +15,11 @@ import org.goldenport.cncf.http.FakeHttpDriver
 import org.goldenport.cncf.job.JobId
 import org.goldenport.cncf.path.AliasResolver
 import org.goldenport.cncf.protocol.OperationResponseFormatter
+import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.cncf.testutil.TestComponentFactory
 import org.goldenport.protocol.{Property, Protocol, Request, Response}
 import org.goldenport.protocol.operation.OperationResponse
+import org.scalatest.BeforeAndAfterEach
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -26,13 +28,23 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Mar. 21, 2026
  *  version Mar. 28, 2026
  *  version May. 31, 2026
- * @version Jul. 15, 2026
+ * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentLogicCommandScriptExecutionModeSpec
   extends AnyWordSpec
   with Matchers
-  with GivenWhenThen {
+  with GivenWhenThen
+  with BeforeAndAfterEach {
+  private val _test_subsystems = ArrayBuffer.empty[Subsystem]
+
+  override protected def afterEach(): Unit =
+    try
+      _test_subsystems.foreach(_.shutdown())
+    finally {
+      _test_subsystems.clear()
+      super.afterEach()
+    }
 
   "ComponentLogic command/script execution mode" should {
     "parse canonical and compatibility command execution mode names" in {
@@ -82,7 +94,7 @@ final class ComponentLogicCommandScriptExecutionModeSpec
     }
 
     "use Sync for an unspecified command action" in {
-      val component = TestComponentFactory.create("default_command_execution_mode", Protocol.empty)
+      val component = _create_component("default_command_execution_mode", Protocol.empty)
       val action = _command_action("default_sync", "ok")
 
       _with_runtime_mode(RunMode.Command) {
@@ -97,7 +109,7 @@ final class ComponentLogicCommandScriptExecutionModeSpec
     }
 
     "preserve explicit JobAsync command action behavior" in {
-      val component = TestComponentFactory.create("explicit_async_command_execution_mode", Protocol.empty)
+      val component = _create_component("explicit_async_command_execution_mode", Protocol.empty)
       val action = _command_action("explicit_async", "ok", mode = Some(CommandExecutionMode.JobAsync))
       val ctx = ExecutionContext.test()
 
@@ -132,7 +144,7 @@ final class ComponentLogicCommandScriptExecutionModeSpec
     }
 
     "use Sync for command + SCRIPT combination" in {
-      val component = TestComponentFactory.create("script_execution_mode", Protocol.empty)
+      val component = _create_component("script_execution_mode", Protocol.empty)
       val action = _script_action()
 
       _with_runtime_mode(RunMode.Command) {
@@ -147,7 +159,7 @@ final class ComponentLogicCommandScriptExecutionModeSpec
     }
 
     "use ScriptAction default JobSync outside command mode" in {
-      val component = TestComponentFactory.create("script_execution_mode_non_command", Protocol.empty)
+      val component = _create_component("script_execution_mode_non_command", Protocol.empty)
       val action = _script_action()
 
       _with_runtime_mode(RunMode.Script) {
@@ -162,7 +174,7 @@ final class ComponentLogicCommandScriptExecutionModeSpec
     }
 
     "allow framework meta parameter to force JobSync for command action" in {
-      val component = TestComponentFactory.create("framework_meta_sync_job", Protocol.empty)
+      val component = _create_component("framework_meta_sync_job", Protocol.empty)
       val action = _command_action("meta_sync", "ok")
       val ctx = ExecutionContext.withFrameworkCommandExecutionMode(
         ExecutionContext.test(),
@@ -181,7 +193,7 @@ final class ComponentLogicCommandScriptExecutionModeSpec
     }
 
     "record JobSyncWithAsyncCont primary command synchronously with continuation metadata" in {
-      val component = TestComponentFactory.create("framework_meta_job_sync_with_async_cont", Protocol.empty)
+      val component = _create_component("framework_meta_job_sync_with_async_cont", Protocol.empty)
       val action = _command_action("meta_sync_async_cont", "ok")
       val ctx = ExecutionContext.withFrameworkCommandExecutionMode(
         ExecutionContext.test(),
@@ -266,7 +278,7 @@ final class ComponentLogicCommandScriptExecutionModeSpec
     }
 
     "preserve deprecated AsyncJobAndAwait compatibility behavior" in {
-      val component = TestComponentFactory.create("framework_meta_async_job_and_await", Protocol.empty)
+      val component = _create_component("framework_meta_async_job_and_await", Protocol.empty)
       val action = _command_action("meta_async_job_and_await", "ok")
       val ctx = ExecutionContext.withFrameworkCommandExecutionMode(
         ExecutionContext.test(),
@@ -285,7 +297,7 @@ final class ComponentLogicCommandScriptExecutionModeSpec
     }
 
     "preserve deprecated SyncJobAsyncInterface compatibility behavior" in {
-      val component = TestComponentFactory.create("framework_meta_sync_job_async_interface", Protocol.empty)
+      val component = _create_component("framework_meta_sync_job_async_interface", Protocol.empty)
       val executed = new AtomicBoolean(false)
       val action = _command_action("meta_sync_async_interface", "ok", executed)
       val ctx = ExecutionContext.withFrameworkCommandExecutionMode(
@@ -313,7 +325,7 @@ final class ComponentLogicCommandScriptExecutionModeSpec
 
     "commit event continuation actions through ActionEngine" in {
       Given("an event continuation action with a post-commit callback")
-      val component = TestComponentFactory.create("event_continuation_commit", Protocol.empty)
+      val component = _create_component("event_continuation_commit", Protocol.empty)
       val callbackexecuted = new AtomicBoolean(false)
       val action = new CommandAction() {
         val request = Request.ofOperation("event_continuation_commit")
@@ -350,6 +362,15 @@ final class ComponentLogicCommandScriptExecutionModeSpec
       operation = "RUN"
     )
     ScriptAction("script_RUN", request, _ => "ok")
+  }
+
+  private def _create_component(
+    name: String,
+    protocol: Protocol
+  ): Component = {
+    val subsystem = TestComponentFactory.emptySubsystem(s"$name-subsystem")
+    _test_subsystems += subsystem
+    TestComponentFactory.create(name, protocol, subsystem = subsystem)
   }
 
   private def _command_action(
@@ -423,6 +444,7 @@ final class ComponentLogicCommandScriptExecutionModeSpec
     calls: ArrayBuffer[String]
   ): Component = {
     val subsystem = TestComponentFactory.emptySubsystem("test")
+    _test_subsystems += subsystem
     val component = new Component() {
       override def eventReceptionDefinitions: Vector[CmlEventDefinition] =
         Vector(

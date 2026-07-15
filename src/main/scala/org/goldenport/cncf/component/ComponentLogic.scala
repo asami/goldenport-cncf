@@ -32,7 +32,7 @@ import org.goldenport.cncf.operation.CmlOperationDefinition
  *  version Mar. 31, 2026
  *  version Apr. 24, 2026
  *  version Jun.  9, 2026
- * @version Jul. 15, 2026
+ * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 /**
@@ -198,7 +198,7 @@ case class ComponentLogic(
         case CommandJobRunMode.Sync => JobRunMode.Sync
         case CommandJobRunMode.Async => JobRunMode.Async
       }
-      val jobinput = _job_input(action)
+      val jobinput = _job_input(action, policyctx.clock.instant())
       val option0 = _default_submit_option(List(task)).copy(
         runMode = runmode,
         input = jobinput,
@@ -437,7 +437,10 @@ case class ComponentLogic(
     }
   }
 
-  private def _job_input(action: Action): Option[JobInput] = {
+  private def _job_input(
+    action: Action,
+    now: java.time.Instant
+  ): Option[JobInput] = {
     val flatparams = (action.arguments.map(x => x.name -> x.value.toString) ++
       action.properties.map(x => x.name -> x.value.toString)).toMap
     val record = action.request.toRecord
@@ -450,7 +453,7 @@ case class ComponentLogic(
     param("cncf.job.input.storage").map { storage =>
       val created = param("cncf.job.input.createdAt")
         .flatMap(x => scala.util.Try(java.time.Instant.parse(x)).toOption)
-        .getOrElse(java.time.Instant.now())
+        .getOrElse(now)
       val payload = JobInputPayload(
         storage = storage,
         fieldName = param("cncf.job.input.fieldName"),

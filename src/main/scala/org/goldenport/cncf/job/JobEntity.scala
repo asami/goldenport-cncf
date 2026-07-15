@@ -16,7 +16,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
  *
  * @since   May.  7, 2026
  *  version May. 31, 2026
- * @version Jul.  1, 2026
+ * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 object JobEntityCollections {
@@ -122,7 +122,7 @@ object JobDefinitionEntity {
     onEventSource: Option[String],
     status: JobDefinitionStatus,
     targetAction: Option[String],
-    now: Instant = Instant.now()
+    now: Instant
   ): JobDefinitionEntity =
     JobDefinitionEntity(
       id = entityId(key),
@@ -155,7 +155,7 @@ object JobDefinitionEntity {
     onEventSource: Option[String],
     status: Option[JobDefinitionStatus],
     targetAction: Option[String],
-    now: Instant = Instant.now()
+    now: Instant
   ): JobDefinitionEntity = {
     val normalizedformat = _normalize_jcl_format(jclformat)
     val newhash = hashOf(jclSource)

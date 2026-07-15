@@ -29,7 +29,7 @@ import org.goldenport.value.BaseContent
  *  version Mar. 29, 2026
  *  version Apr. 22, 2026
  *  version May. 31, 2026
- * @version Jul. 15, 2026
+ * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 final class JobControlComponent() extends Component {
@@ -384,7 +384,8 @@ object JobControlComponent {
             eventsSource = parsed._1.events.map(_.show),
             onEventSource = parsed._1.onEvent.map(_.show),
             status = parsed._2,
-            targetAction = parsed._1.target.action
+            targetAction = parsed._1.target.action,
+            now = summon[org.goldenport.cncf.context.ExecutionContext].clock.instant()
           )
           saved <- _save_definition(updated)
         } yield saved.toRecord()
@@ -623,7 +624,8 @@ object JobControlComponent {
           eventsSource = job.events.map(_.show),
           onEventSource = job.onEvent.map(_.show),
           status = parsedStatus.getOrElse(JobDefinitionStatus.Draft),
-          targetAction = job.target.action
+          targetAction = job.target.action,
+          now = summon[org.goldenport.cncf.context.ExecutionContext].clock.instant()
         )
       }
 

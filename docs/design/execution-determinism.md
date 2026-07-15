@@ -259,6 +259,15 @@ the EventEngine-bound factory. Commit therefore persists the already-fixed
 record identity and semantic timestamp without consulting ambient time or a
 constant fallback Event ID.
 
+Job input and Job definition lifecycle timestamps are runtime semantics. Their
+model constructors and update functions require an explicit instant and MUST
+NOT consult an ambient clock or provide an ambient default. Component command
+execution and Job Control operations pass the current bound execution clock
+instant into those model boundaries. An explicitly supplied Job input
+`createdAt` remains authoritative; when it is absent, the fallback is the bound
+execution clock, not host wall time. Job input cleanup similarly receives its
+operational instant explicitly from its caller.
+
 Manual scheduling is limited by `timer-scheduling-boundary.md`. It MUST NOT add
 cron, recurrence, business-calendar, workflow-wait, or general scheduler
 semantics.

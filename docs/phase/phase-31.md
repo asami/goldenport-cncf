@@ -66,8 +66,9 @@ ordering, locale/environment assumptions, and replayability diagnostics.
 - [ ] ED-07: Fix CNCF-owned ordering and migrate ambient-state debt. Ordering,
       audit classification, CAR lint, Tag timestamps, canonical Event reception,
       transition lifecycle events, EventStore record materialization, and
-      Workflow lifecycle identity/time are complete; remaining
-      runtime-semantic migration remains active.
+      Workflow lifecycle identity/time, Job input timestamps, and JobDefinition
+      lifecycle timestamps are complete; remaining runtime-semantic migration
+      remains active.
 - [ ] ED-08: Add diagnostics, replay scenarios, developer guidance, and close
       Phase 31.
 

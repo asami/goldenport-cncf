@@ -292,11 +292,17 @@ Status: IN PROGRESS
   namespace, entropy, and clock. Instance creation/update/history timestamps
   have no ambient default, and property-based executable specifications verify
   replay-stable IDs/timestamps plus collision-free per-invocation sequencing.
+- Job input payload/input creation and JobDefinition create/update now require
+  explicit semantic timestamps. Component command execution and Job Control
+  operations supply the bound execution clock, Job input cleanup receives an
+  explicit operational instant, and property-based executable specifications
+  verify replay-stable lifecycle timestamps without ambient clock access.
 - CAR lint and component developer guidance now report direct ambient clock,
   UUID/random, sleep, environment/property, host filesystem, thread, and
   executor access in component sources.
-- Remaining InformationSpace, working-set, and runtime model semantic defaults
-  still require migration before ED-07 can be marked DONE.
+- Remaining Job/Task/Action identity and model defaults, InformationSpace,
+  working-set, and other runtime model semantic defaults still require
+  migration before ED-07 can be marked DONE.
 
 ### Acceptance Criteria
 
