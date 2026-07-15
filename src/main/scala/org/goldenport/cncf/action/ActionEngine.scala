@@ -3,7 +3,6 @@ package org.goldenport.cncf.action
 import org.goldenport.Consequence
 import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
 import org.goldenport.cncf.context.{CorrelationId, ExecutionContext}
-import java.time.Instant
 import org.goldenport.cncf.context.ExecutionContextId
 import org.goldenport.cncf.event.ActionEvent
 import org.goldenport.cncf.security.AuthorizationDecision
@@ -32,12 +31,12 @@ import org.goldenport.schema.DataConfidentiality
  *  version Apr. 25, 2026
  *  version May. 17, 2026
  *  version Jun. 18, 2026
- * @version Jul.  6, 2026
+ * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 class ActionEngine(
   config: ActionEngine.Config,
-  authorizationEngine: AuthorizationEngine
+  authorizationengine: AuthorizationEngine
 ) {
 
   // private def createActionCall(
@@ -73,7 +72,7 @@ class ActionEngine(
     val label =
       if (call.action.name.nonEmpty) s"action:${call.action.name}"
       else "action"
-    var executionOutcome: Option[Either[org.goldenport.Conclusion, OperationResponse]] = None
+    var executionoutcome: Option[Either[org.goldenport.Conclusion, OperationResponse]] = None
 
     val authresult: Consequence[Unit] =
       Consequence {
@@ -88,12 +87,12 @@ class ActionEngine(
       Consequence run {
         val params = _build_resolved_parameters(call)
         DiagnosticPayloadExternalizer.withOperation(call.action.name, params) {
-        val actionStartedAtNanos = System.nanoTime()
+        val actionstartedatnanos = System.nanoTime()
         runtime.setResolvedParameters(params)
-        val inputAttributes = _calltree_input_attributes(call, params)
-        var leaveAttributes: Map[String, String] = Map.empty
+        val inputattributes = _calltree_input_attributes(call, params)
+        var leaveattributes: Map[String, String] = Map.empty
         try {
-          calltree.enter(label, inputAttributes)
+          calltree.enter(label, inputattributes)
           try {
             // Observation hooks apply only to executed actions.
             observe_enter(call)
@@ -101,12 +100,12 @@ class ActionEngine(
               val r = call.execute()
               r match {
                 case Consequence.Success(response) =>
-                  leaveAttributes = _calltree_output_attributes(call, response) + ("outcome" -> "success")
-                  executionOutcome = Some(Right(response))
+                  leaveattributes = _calltree_output_attributes(call, response) + ("outcome" -> "success")
+                  executionoutcome = Some(Right(response))
                 case Consequence.Failure(conclusion) =>
-                  leaveAttributes = _calltree_error_attributes(conclusion) + ("outcome" -> "failure")
+                  leaveattributes = _calltree_error_attributes(conclusion) + ("outcome" -> "failure")
                   calltree.failure("io:error", conclusion.display, _calltree_error_attributes(conclusion) + ("calltree_kind" -> "io-error"))
-                  executionOutcome = Some(Left(conclusion))
+                  executionoutcome = Some(Left(conclusion))
               }
               ec.runtime.commit()
               observe_leave(call, r)
@@ -129,9 +128,9 @@ class ActionEngine(
               case e: Throwable =>
                 ec.runtime.abort()
                 val conclusion = org.goldenport.Conclusion.from(e)
-                leaveAttributes = _calltree_error_attributes(conclusion) + ("outcome" -> "failure")
+                leaveattributes = _calltree_error_attributes(conclusion) + ("outcome" -> "failure")
                 calltree.failure("io:error", conclusion.display, _calltree_error_attributes(conclusion) + ("calltree_kind" -> "io-error"))
-                executionOutcome = Some(Left(conclusion))
+                executionoutcome = Some(Left(conclusion))
                 observe_leave(call, Consequence.Failure(conclusion))
                 val _ = ObservabilityEngine.build( // TODO
                   scope = ScopeContext(
@@ -150,8 +149,8 @@ class ActionEngine(
             try {
               ec.runtime.dispose()
             } finally {
-              calltree.leave(leaveAttributes)
-              val builtCallTree = calltree.build()
+              calltree.leave(leaveattributes)
+              val builtcalltree = calltree.build()
               ec.runtime.noteExecutionContext(
                 ec.observability.sagaId,
                 ec.jobContext.jobId.map(_.value),
@@ -160,33 +159,33 @@ class ActionEngine(
               ec.runtime.noteExecutionDiagnostics(
                 traceId = Some(ec.observability.traceId.value),
                 executionId = ec.observability.correlationId.map(_.value),
-                failure = executionOutcome.flatMap {
+                failure = executionoutcome.flatMap {
                   case Left(conclusion) => Some(conclusion.display)
                   case Right(_) => None
                 }
               )
               if (ec.framework.inlineCallTree) {
-                builtCallTree.foreach { tree =>
+                builtcalltree.foreach { tree =>
                   ec.runtime.noteInlineCallTree(
                     ObservabilityEngine.callTreeRecord(tree, ec.jobContext.jobId.map(_.value))
                   )
                 }
               }
-              executionOutcome.foreach { outcome =>
-                val actionEndedAtNanos = System.nanoTime()
+              executionoutcome.foreach { outcome =>
+                val actionendedatnanos = System.nanoTime()
                 RuntimeDashboardMetrics.recordActionCall(
                   outcome.isLeft,
-                  Some((actionEndedAtNanos - actionStartedAtNanos) / 1000000L)
+                  Some((actionendedatnanos - actionstartedatnanos) / 1000000L)
                 )
                 OpenTelemetryExporter.fromGlobal.exportActionTrace(
                   operation = call.action.name,
-                  calltree = builtCallTree,
+                  calltree = builtcalltree,
                   jobId = ec.jobContext.jobId.map(_.value),
                   taskId = ec.jobContext.currentTask.orElse(ec.jobContext.taskId).map(_.value),
                   sagaId = ec.observability.sagaId,
                   outcome = outcome.fold(_ => "failure", _ => "success"),
-                  startedAtNanos = actionStartedAtNanos,
-                  endedAtNanos = actionEndedAtNanos
+                  startedAtNanos = actionstartedatnanos,
+                  endedAtNanos = actionendedatnanos
                 )
                 ObservabilityEngine.recordActionExecution(
                   operation = call.action.name,
@@ -198,7 +197,7 @@ class ActionEngine(
                   traceId = Some(ec.observability.traceId.value),
                   executionId = ec.observability.correlationId.map(_.value),
                   originSlot = _operation_origin_slot(call),
-                  calltree = builtCallTree
+                  calltree = builtcalltree
                 )
       }
       }
@@ -212,22 +211,23 @@ class ActionEngine(
   }
 
   def executeAuthorized(
-    actionName: String,
+    actionname: String,
     ec: ExecutionContext
   )(
-    buildCall: => ActionCall
+    buildcall: => ActionCall
   ): Consequence[OperationResponse] =
-    authorize_pre(actionName, ec) match {
+    authorize_pre(actionname, ec) match {
       case AuthorizationDecision.Allow =>
-        val call = buildCall
+        val call = buildcall
         execute(call)
       case AuthorizationDecision.Deny =>
         val reason = "authorization denied"
+        val occurredat = ec.clock.instant()
         val event = ActionEvent.authorizationFailed(
-          ExecutionContextId.generate(),
-          actionName,
+          ExecutionContextId.create("authorization-denied", occurredat, ec.idGeneration),
+          actionname,
           reason,
-          Instant.now()
+          occurredat
         )
         ec.runtime.unitOfWork.commit(Seq(event)).flatMap { _ =>
           Consequence.securityPermissionDenied(reason)
@@ -521,12 +521,12 @@ class ActionEngine(
   private def _calltree_record_summary_json(
     record: Record,
     confidentiality: Map[String, DataConfidentiality] = Map.empty,
-    payloadKind: String = "result"
+    payloadkind: String = "result"
   ): String =
     if (record.asMap.isEmpty)
       ""
     else
-      _calltree_record_json(CallTreeValueSummary.recordSummary(record, includeInline = true, confidentiality, payloadKind = payloadKind))
+      _calltree_record_json(CallTreeValueSummary.recordSummary(record, includeInline = true, confidentiality, payloadKind = payloadkind))
 
   private def _operation_response_summary_attributes(
     response: OperationResponse,
@@ -701,21 +701,21 @@ class ActionEngine(
     value: String
   ): String = {
     val sensitive = """password|passwd|secret|token|access[-_]?session[-_]?id|refresh[-_]?session[-_]?id|session[-_]?id|session|authorization|cookie|credential|api[-_]?key|private[-_]?key"""
-    val jsonLike = s"""(?i)("(?:$sensitive)"\\s*:\\s*)"[^"]*"""".r
-    val formLike = s"""(?i)(^|[?&\\s,;])($sensitive)(\\s*[=:]\\s*)([^&\\s,;]+)""".r
-    val jsonRedacted = jsonLike.replaceAllIn(value, m => s"""${m.group(1)}"***"""")
-    formLike.replaceAllIn(jsonRedacted, m => s"${m.group(1)}${m.group(2)}${m.group(3)}***")
+    val jsonlike = s"""(?i)("(?:$sensitive)"\\s*:\\s*)"[^"]*"""".r
+    val formlike = s"""(?i)(^|[?&\\s,;])($sensitive)(\\s*[=:]\\s*)([^&\\s,;]+)""".r
+    val jsonredacted = jsonlike.replaceAllIn(value, m => s"""${m.group(1)}"***"""")
+    formlike.replaceAllIn(jsonredacted, m => s"${m.group(1)}${m.group(2)}${m.group(3)}***")
   }
 
   protected def authorize_pre(
-    actionName: String,
+    actionname: String,
     ec: ExecutionContext
   ): AuthorizationDecision = {
     val resource = new SecuredResource {
       def securityLevel = ec.security.level
     }
-    val action = SecurityAction(actionName)
-    authorizationEngine.authorize(ec, resource, action)
+    val action = SecurityAction(actionname)
+    authorizationengine.authorize(ec, resource, action)
   }
 }
 

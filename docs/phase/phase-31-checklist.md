@@ -318,6 +318,11 @@ Status: IN PROGRESS
 - Component, Event reception, Workflow, and JCL execution boundaries now derive
   primary and compensation Action IDs from the same caller-bound capabilities.
   The replay specification covers Job, Task, and Action identity sequences.
+- Pre-ActionCall authorization denial now captures one caller-clock instant and
+  derives its transactional ActionEvent `ExecutionContextId` from the caller
+  ID-generation capability. Property-based coverage verifies replay-stable
+  EventRecord and execution-context identity without constructing the denied
+  ActionCall.
 - InformationSpace registration, mutation, validation, confirmation,
   publication, conflict handling, and Knowledge materialization now require the
   caller execution context and derive semantic timestamps from its clock.

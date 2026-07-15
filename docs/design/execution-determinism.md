@@ -298,6 +298,13 @@ Tasks, and Actions collision-free. Model-level no-argument generators are
 compatibility/test conveniences and MUST NOT be used by CNCF production
 execution paths.
 
+Authorization denial may occur before ActionCall construction, but its
+transactional `ActionEvent` remains caller-visible runtime semantics.
+`ActionEngine` MUST capture one caller execution-clock instant for the Event and
+derive its `ExecutionContextId` from the caller ID-generation capability. It
+MUST NOT substitute ambient wall time or a constant compatibility context ID at
+that pre-execution boundary.
+
 InformationSpace lifecycle and Knowledge materialization timestamps are
 component-visible runtime semantics. Information registration, mutation,
 validation, confirmation, publication, conflict handling, and materialization

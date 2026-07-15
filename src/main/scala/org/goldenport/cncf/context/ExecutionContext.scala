@@ -2,7 +2,7 @@ package org.goldenport.cncf.context
 
 import java.math.MathContext
 import java.nio.charset.Charset
-import java.time.{Clock, ZoneId}
+import java.time.{Clock, Instant, ZoneId}
 import java.util.Locale
 import org.goldenport.context.{EntropyContext, EnvironmentContext as CoreEnvironmentContext, ExecutionContext as CoreExecutionContext, I18nContext, RandomContext, VirtualMachineContext}
 import org.goldenport.id.{UniversalId as CoreUniversalId}
@@ -44,7 +44,7 @@ import cats.~>
  *  version Feb. 25, 2026
  *  version Apr. 25, 2026
  *  version May. 31, 2026
- * @version Jul. 15, 2026
+ * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class ExecutionContext
@@ -683,14 +683,14 @@ object ExecutionContext {
       math = MathContext.DECIMAL64,
       random = RandomContext.from("fixed"),
       entropy = EntropyContext.deterministic("cncf-test"),
-      logger = _TestLogger
+      logger = TestLogger
     )
 
   private def _security_context(
     privilege: SecurityContext.Privilege
   ): SecurityContext =
     SecurityContext(
-      principal = new _TestPrincipal(privilege),
+      principal = new TestPrincipal(privilege),
       capabilities = privilege.capabilities,
       level = privilege.level,
       subjectKind = privilege.subjectKind
@@ -749,14 +749,14 @@ object ExecutionContext {
     )
   }
 
-  private final class _TestPrincipal(
+  private final class TestPrincipal(
     privilege: SecurityContext.Privilege
   ) extends Principal {
     def id: PrincipalId = privilege.principalId
     def attributes: Map[String, String] = privilege.attributes
   }
 
-  private object _TestLogger extends Logger {
+  private object TestLogger extends Logger {
     def trace(message: => String): Unit = {}
     def debug(message: => String): Unit = {}
     def info(message: => String): Unit = {}
@@ -770,12 +770,32 @@ object ExecutionContext {
 
 final case class ExecutionContextId(
   major: String,
-  minor: String
-) extends CoreUniversalId(major, minor, "execution_context")
+  minor: String,
+  timestamp: Option[Instant] = None,
+  entropy: Option[String] = None
+) extends CoreUniversalId(major, minor, "execution_context", timestamp, entropy)
 
 object ExecutionContextId {
   def generate(): ExecutionContextId =
     ExecutionContextId("cncf", "execution_context") // TODO
+
+  def create(
+    purpose: String,
+    timestamp: Instant
+  )(using ctx: ExecutionContext): ExecutionContextId =
+    create(purpose, timestamp, ctx.idGeneration)
+
+  def create(
+    purpose: String,
+    timestamp: Instant,
+    idgeneration: IdGenerationContext
+  ): ExecutionContextId =
+    ExecutionContextId(
+      major = idgeneration.namespace.major,
+      minor = idgeneration.namespace.minor,
+      timestamp = Some(timestamp),
+      entropy = Some(idgeneration.opaqueId(s"execution-context.$purpose"))
+    )
 }
 // final case class ExecutionContext(
 //   executionId: UniversalId,

@@ -70,6 +70,7 @@ ordering, locale/environment assumptions, and replayability diagnostics.
       Job lifecycle Event persistence and runtime dispatch,
       Workflow lifecycle identity/time, Job input timestamps, and JobDefinition
       lifecycle timestamps, Job/Task/Action runtime identity, and
+      pre-ActionCall authorization-denial Event identity/time,
       InformationSpace lifecycle/materialization timestamps and Knowledge
       and Entity working-set lifecycle timestamps plus Entity working-set
       admission/residency evaluation, and temporal ABAC authorization are
