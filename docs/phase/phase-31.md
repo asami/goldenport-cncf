@@ -46,8 +46,8 @@ ordering, locale/environment assumptions, and replayability diagnostics.
 ## 4. Active Work Stack
 
 - A (DONE): ED-01 - Freeze the execution-profile contract.
-- B (IN PROGRESS): ED-02 - Seeded named random streams and dedicated entropy.
-- C (PLANNED): ED-03 - CNCF profile resolution and ActionCall binding.
+- B (DONE): ED-02 - Seeded named random streams and dedicated entropy.
+- C (IN PROGRESS): ED-03 - CNCF profile resolution and ActionCall binding.
 - D (PLANNED): ED-04 - Internal DSL and capability-based ID generation.
 - E (PLANNED): ED-05 - Unified time and Job/Event scheduling.
 - F (PLANNED): ED-06 - Resolved environment assumptions.
@@ -58,7 +58,7 @@ ordering, locale/environment assumptions, and replayability diagnostics.
 
 - [x] ED-01: Promote the execution-profile ownership, configuration,
       compatibility, and replayability contract.
-- [ ] ED-02: Implement seeded named random streams and separate entropy.
+- [x] ED-02: Implement seeded named random streams and separate entropy.
 - [ ] ED-03: Resolve and bind coherent execution profiles.
 - [ ] ED-04: Add internal DSL access and profile-based ID generation.
 - [ ] ED-05: Integrate manual time with JobEngine and async Event execution.

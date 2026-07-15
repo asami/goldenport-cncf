@@ -4,7 +4,7 @@ import java.math.MathContext
 import java.nio.charset.Charset
 import java.time.{Clock, ZoneId}
 import java.util.Locale
-import org.goldenport.context.{EnvironmentContext as CoreEnvironmentContext, ExecutionContext as CoreExecutionContext, I18nContext, RandomContext, VirtualMachineContext}
+import org.goldenport.context.{EntropyContext, EnvironmentContext as CoreEnvironmentContext, ExecutionContext as CoreExecutionContext, I18nContext, RandomContext, VirtualMachineContext}
 import org.goldenport.id.{UniversalId as CoreUniversalId}
 import org.goldenport.log.Logger
 import org.goldenport.Consequence
@@ -621,6 +621,7 @@ object ExecutionContext {
       clock = clock,
       math = MathContext.DECIMAL64,
       random = RandomContext.from("fixed"),
+      entropy = EntropyContext.deterministic("cncf-test"),
       logger = _TestLogger
     )
 
@@ -649,7 +650,7 @@ object ExecutionContext {
     observability: ObservabilityContext
   ): RuntimeContext = {
     val driver = FakeHttpDriver.okText("nop")
-    val consequenceInterpreter = new (UnitOfWorkOp ~> Consequence) {
+    val consequenceinterpreter = new (UnitOfWorkOp ~> Consequence) {
       def apply[A](fa: UnitOfWorkOp[A]): Consequence[A] =
         throw new UnsupportedOperationException("unitOfWorkInterpreter is not used in test context")
     }
@@ -673,7 +674,7 @@ object ExecutionContext {
         entityspace = Some(EntitySpaceContext(new EntitySpace()))
       ),
       unitOfWorkSupplier = () => new UnitOfWork(context()),
-      unitOfWorkInterpreterFn = consequenceInterpreter,
+      unitOfWorkInterpreterFn = consequenceinterpreter,
       commitAction = uow => {
         val _ = uow.commit()
         ()

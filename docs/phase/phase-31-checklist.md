@@ -50,17 +50,17 @@ replayability rules before implementing new runtime types.
 
 ## ED-02: Seeded Named Random and Dedicated Entropy
 
-Status: IN PROGRESS
+Status: DONE
 
 ### Tasks
 
-- [ ] Extend core `RandomContext` with seeded advancing behavior.
-- [ ] Add stable purpose-based stream derivation.
-- [ ] Define and implement a dedicated entropy abstraction.
-- [ ] Keep domain, ID, retry, and security purpose families separate.
-- [ ] Preserve production-safe security entropy defaults.
-- [ ] Verify sequence reproducibility, stream independence, and numeric bounds.
-- [ ] Publish the validated core snapshot locally for CNCF consumption.
+- [x] Extend core `RandomContext` with seeded advancing behavior.
+- [x] Add stable purpose-based stream derivation.
+- [x] Define and implement a dedicated entropy abstraction.
+- [x] Keep domain, ID, retry, and security purpose families separate.
+- [x] Preserve production-safe security entropy defaults.
+- [x] Verify sequence reproducibility, stream independence, and numeric bounds.
+- [x] Publish the validated core snapshot locally for CNCF consumption.
 
 ### Acceptance Criteria
 
@@ -68,9 +68,25 @@ Status: IN PROGRESS
 - Calls in one purpose stream do not change another purpose stream.
 - No seed or entropy material appears in diagnostics.
 
+### Evidence
+
+- Core `RandomContext` now provides stateful seeded named streams and retains
+  production and fixed compatibility implementations.
+- Core `EntropyContext` provides independent secure and explicitly
+  deterministic purpose streams; `ExecutionContext.Core` carries random and
+  entropy as separate capabilities.
+- `RandomContextSpec`, `EntropyContextSpec`, and `ExecutionContextSpec` verify
+  reproducibility, stream isolation, bounds, capability separation, and
+  redacted representations with property-based executable specifications.
+- The core `0.4.1-SNAPSHOT` passed focused specs and `Test/compile`, was
+  published locally, and CNCF `Test/compile` passed against the new API.
+- CNCF composition of profile seed, invocation identity, and purpose remains
+  ED-03; core accepts the resulting seed without owning CNCF invocation
+  semantics.
+
 ## ED-03: CNCF Profile Resolution and ActionCall Binding
 
-Status: PLANNED
+Status: IN PROGRESS
 
 ### Tasks
 
