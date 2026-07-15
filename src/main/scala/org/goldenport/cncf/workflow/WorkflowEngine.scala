@@ -17,7 +17,8 @@ import org.simplemodeling.model.datatype.EntityId
 
 /*
  * @since   Apr. 22, 2026
- * @version Apr. 22, 2026
+ *  version Apr. 22, 2026
+ * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class WorkflowDefinitionId(
@@ -79,6 +80,17 @@ object WorkflowInstanceId {
   def generate(): WorkflowInstanceId =
     WorkflowInstanceId("cncf", "workflow_inst")
 
+  def create(
+    purpose: String,
+    timestamp: Instant
+  )(using ctx: ExecutionContext): WorkflowInstanceId =
+    WorkflowInstanceId(
+      major = ctx.idGeneration.namespace.major,
+      minor = ctx.idGeneration.namespace.minor,
+      timestamp = Some(timestamp),
+      entropy = Some(ctx.idGeneration.opaqueId(s"workflow.$purpose"))
+    )
+
   def parse(s: String): Consequence[WorkflowInstanceId] =
     UniversalId.parseParts(s, "workflow_inst").map(parts =>
       WorkflowInstanceId(parts.major, parts.minor, Some(parts.timestamp), Some(parts.entropy))
@@ -86,7 +98,7 @@ object WorkflowInstanceId {
 }
 
 final case class WorkflowHistoryEntry(
-  occurredAt: Instant = Instant.now(),
+  occurredAt: Instant,
   status: WorkflowStatus,
   message: String,
   entityStatus: Option[String] = None,
@@ -270,30 +282,30 @@ object WorkflowEngine {
             case Some((resolvedid, entity, statusopt)) =>
               statusopt match {
                 case None =>
-                  val updated = _record(instance, WorkflowStatus.NoProgress, "missing-status-field", entityStatus = None)
-                  Consequence.success(_decision(updated, entityId = Some(resolvedid.value), reason = Some("missing-status-field")))
+                  val updated = _record(instance, WorkflowStatus.NoProgress, "missing-status-field", entitystatus = None)
+                  Consequence.success(_decision(updated, entityid = Some(resolvedid.value), reason = Some("missing-status-field")))
                 case Some(status) =>
                   entry.registration.statusRules.find(_.currentStatus == status) match {
                     case None =>
-                      val updated = _record(instance, WorkflowStatus.NoProgress, "status-unmatched", entityStatus = Some(status))
-                      Consequence.success(_decision(updated, entityId = Some(resolvedid.value), entityStatus = Some(status), reason = Some("status-unmatched")))
+                      val updated = _record(instance, WorkflowStatus.NoProgress, "status-unmatched", entitystatus = Some(status))
+                      Consequence.success(_decision(updated, entityid = Some(resolvedid.value), entitystatus = Some(status), reason = Some("status-unmatched")))
                     case Some(rule) =>
                       _submit_action(entry, event, rule.nextAction).map { case (jobid, resolvedaction) =>
                         val updated = _record(
                           instance,
                           WorkflowStatus.Submitted,
                           "action-submitted",
-                          entityStatus = Some(status),
-                          selectedAction = Some(resolvedaction),
-                          relatedJobId = Some(jobid),
-                          entityId = Some(resolvedid.value)
+                          entitystatus = Some(status),
+                          selectedaction = Some(resolvedaction),
+                          relatedjobid = Some(jobid),
+                          entityid = Some(resolvedid.value)
                         )
                         _decision(
                           updated,
-                          entityId = Some(resolvedid.value),
-                          entityStatus = Some(status),
-                          selectedAction = Some(resolvedaction),
-                          relatedJobId = Some(jobid),
+                          entityid = Some(resolvedid.value),
+                          entitystatus = Some(status),
+                          selectedaction = Some(resolvedaction),
+                          relatedjobid = Some(jobid),
                           progressed = true,
                           reason = None
                         )
@@ -305,15 +317,15 @@ object WorkflowEngine {
     }
 
     private def _resolve_candidates(
-      componentName: String,
-      eventName: String,
+      componentname: String,
+      eventname: String,
       collection: Option[String]
     ): Vector[_Entry] = synchronized {
       collection match {
         case Some(entitycollection) =>
           _entries.toVector.filter { entry =>
-            entry.component.name == componentName &&
-              entry.registration.eventName == eventName &&
+            entry.component.name == componentname &&
+              entry.registration.eventName == eventname &&
               entry.registration.entityCollection == entitycollection
           }
         case None =>
@@ -373,9 +385,9 @@ object WorkflowEngine {
     private def _submit_action(
       entry: _Entry,
       event: ReceptionDomainEvent,
-      actionName: String
+      actionname: String
     )(using ctx: ExecutionContext): Consequence[(JobId, String)] =
-      _resolve_target_action(entry, event, actionName).flatMap { case (component, action, resolvedselector) =>
+      _resolve_target_action(entry, event, actionname).flatMap { case (component, action, resolvedselector) =>
         val task = ActionTask(ActionId.generate(), action, component.actionEngine, Some(component))
         val option = JobSubmitOption(
           persistence = JobPersistencePolicy.Persistent,
@@ -398,17 +410,17 @@ object WorkflowEngine {
     private def _resolve_target_action(
       entry: _Entry,
       event: ReceptionDomainEvent,
-      actionName: String
+      actionname: String
     ): Consequence[(Component, Action, String)] = {
-      val selector = _action_selector(entry.component, actionName)
+      val selector = _action_selector(entry.component, actionname)
       subsystem().operationResolver.resolve(selector) match {
-        case OperationResolver.ResolutionResult.Resolved(fqn, componentName, serviceName, operationName) =>
-          subsystem().findComponent(componentName) match {
+        case OperationResolver.ResolutionResult.Resolved(fqn, componentname, servicename, operationname) =>
+          subsystem().findComponent(componentname) match {
             case Some(component) =>
               val request = Request.of(
-                component = componentName,
-                service = serviceName,
-                operation = operationName,
+                component = componentname,
+                service = servicename,
+                operation = operationname,
                 arguments = _build_arguments(event),
                 switches = Nil,
                 properties = List(
@@ -422,7 +434,7 @@ object WorkflowEngine {
                 case _: OperationRequest => Consequence.argumentInvalid(s"workflow target is not action: $selector")
               }
             case None =>
-              Consequence.operationNotFound(s"workflow component: $componentName")
+              Consequence.operationNotFound(s"workflow component: $componentname")
           }
         case OperationResolver.ResolutionResult.NotFound(_, selector0) =>
           Consequence.operationNotFound(s"workflow action: $selector0")
@@ -442,44 +454,48 @@ object WorkflowEngine {
 
     private def _action_selector(
       component: Component,
-      actionName: String
+      actionname: String
     ): String =
-      actionName.split("\\.").toVector.filter(_.nonEmpty) match {
+      actionname.split("\\.").toVector.filter(_.nonEmpty) match {
         case Vector(service, operation) =>
           s"${component.name}.$service.$operation"
         case Vector(_component, _service, _operation) =>
-          actionName
+          actionname
         case _ =>
-          actionName
+          actionname
       }
 
     private def _instance(
       entry: _Entry,
       entityidtext: String,
       event: ReceptionDomainEvent
-    ): WorkflowInstance = synchronized {
+    )(using ctx: ExecutionContext): WorkflowInstance = synchronized {
       val key = (entry.registration.name, entry.registration.entityCollection, entityidtext)
       _instances.getOrElseUpdate(
         key,
-        WorkflowInstance(
-          id = WorkflowInstanceId.generate(),
-          registrationName = entry.registration.name,
-          entityCollection = entry.registration.entityCollection,
-          entityId = entityidtext,
-          status = WorkflowStatus.Active,
-          currentEntityStatus = None,
-          triggeringEventName = event.name,
-          startedAt = Instant.now(),
-          updatedAt = Instant.now(),
-          lastAction = None,
-          relatedJobIds = Vector.empty,
-          history = Vector(
-            WorkflowHistoryEntry(
-              status = WorkflowStatus.Active,
-              message = "instance-created"
+        {
+          val now = ctx.clock.instant()
+          WorkflowInstance(
+            id = WorkflowInstanceId.create("instance", now),
+            registrationName = entry.registration.name,
+            entityCollection = entry.registration.entityCollection,
+            entityId = entityidtext,
+            status = WorkflowStatus.Active,
+            currentEntityStatus = None,
+            triggeringEventName = event.name,
+            startedAt = now,
+            updatedAt = now,
+            lastAction = None,
+            relatedJobIds = Vector.empty,
+            history = Vector(
+              WorkflowHistoryEntry(
+                occurredAt = now,
+                status = WorkflowStatus.Active,
+                message = "instance-created"
+              )
             )
           )
-        )
+        }
       )
     }
 
@@ -487,26 +503,26 @@ object WorkflowEngine {
       instance: WorkflowInstance,
       status: WorkflowStatus,
       message: String,
-      entityStatus: Option[String] = None,
-      selectedAction: Option[String] = None,
-      relatedJobId: Option[JobId] = None,
-      entityId: Option[String] = None
-    ): WorkflowInstance = synchronized {
-      val now = Instant.now()
+      entitystatus: Option[String] = None,
+      selectedaction: Option[String] = None,
+      relatedjobid: Option[JobId] = None,
+      entityid: Option[String] = None
+    )(using ctx: ExecutionContext): WorkflowInstance = synchronized {
+      val now = ctx.clock.instant()
       val updated = instance.copy(
-        entityId = entityId.getOrElse(instance.entityId),
+        entityId = entityid.getOrElse(instance.entityId),
         status = status,
-        currentEntityStatus = entityStatus.orElse(instance.currentEntityStatus),
+        currentEntityStatus = entitystatus.orElse(instance.currentEntityStatus),
         updatedAt = now,
-        lastAction = selectedAction.orElse(instance.lastAction),
-        relatedJobIds = relatedJobId.fold(instance.relatedJobIds)(jobid => instance.relatedJobIds :+ jobid),
+        lastAction = selectedaction.orElse(instance.lastAction),
+        relatedJobIds = relatedjobid.fold(instance.relatedJobIds)(jobid => instance.relatedJobIds :+ jobid),
         history = instance.history :+ WorkflowHistoryEntry(
           occurredAt = now,
           status = status,
           message = message,
-          entityStatus = entityStatus,
-          selectedAction = selectedAction,
-          relatedJobId = relatedJobId
+          entityStatus = entitystatus,
+          selectedAction = selectedaction,
+          relatedJobId = relatedjobid
         )
       )
       _instances.update((updated.registrationName, updated.entityCollection, updated.entityId), updated)
@@ -515,20 +531,20 @@ object WorkflowEngine {
 
     private def _decision(
       instance: WorkflowInstance,
-      entityId: Option[String] = None,
-      entityStatus: Option[String] = None,
-      selectedAction: Option[String] = None,
-      relatedJobId: Option[JobId] = None,
+      entityid: Option[String] = None,
+      entitystatus: Option[String] = None,
+      selectedaction: Option[String] = None,
+      relatedjobid: Option[JobId] = None,
       progressed: Boolean = false,
       reason: Option[String] = None
     ): WorkflowDecision =
       WorkflowDecision(
         registrationName = Some(instance.registrationName),
         entityCollection = Some(instance.entityCollection),
-        entityId = entityId.orElse(Some(instance.entityId)),
-        currentEntityStatus = entityStatus.orElse(instance.currentEntityStatus),
-        selectedAction = selectedAction.orElse(instance.lastAction),
-        relatedJobId = relatedJobId.orElse(instance.relatedJobIds.lastOption),
+        entityId = entityid.orElse(Some(instance.entityId)),
+        currentEntityStatus = entitystatus.orElse(instance.currentEntityStatus),
+        selectedAction = selectedaction.orElse(instance.lastAction),
+        relatedJobId = relatedjobid.orElse(instance.relatedJobIds.lastOption),
         progressed = progressed,
         reason = reason,
         instanceId = Some(instance.id)

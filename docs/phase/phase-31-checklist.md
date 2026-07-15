@@ -288,12 +288,15 @@ Status: IN PROGRESS
   UnitOfWork fixes transactional Event records before prepare/commit, authorized
   EventBus publication uses the caller profile, and generic fallback Events no
   longer use ambient `Instant.now` or the constant `EventId.generate` value.
+- Workflow instance creation now uses the invocation-bound ID generation
+  namespace, entropy, and clock. Instance creation/update/history timestamps
+  have no ambient default, and property-based executable specifications verify
+  replay-stable IDs/timestamps plus collision-free per-invocation sequencing.
 - CAR lint and component developer guidance now report direct ambient clock,
   UUID/random, sleep, environment/property, host filesystem, thread, and
   executor access in component sources.
-- Remaining Workflow/InformationSpace, working-set, and runtime model semantic
-  defaults still require migration
-  before ED-07 can be marked DONE.
+- Remaining InformationSpace, working-set, and runtime model semantic defaults
+  still require migration before ED-07 can be marked DONE.
 
 ### Acceptance Criteria
 

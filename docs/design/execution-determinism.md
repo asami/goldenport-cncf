@@ -407,6 +407,14 @@ environment, system-property, or host filesystem APIs directly. Bootstrap,
 transport, repository discovery, provider, and monotonic diagnostics may use
 host facilities when the result is outside component semantics.
 
+Workflow instance lifecycle is runtime semantics. Instance identity MUST use
+the invocation-bound `IdGenerationContext`; `startedAt`, `updatedAt`, and every
+history timestamp MUST use the invocation-bound execution clock. Workflow
+history values MUST require an explicit timestamp and MUST NOT carry an ambient
+construction default. Equivalent controlled capabilities and event sequences
+therefore reproduce Workflow identity and lifecycle time, while purpose-local
+ID sequencing prevents collisions within one invocation.
+
 ## CNCF-Owned Ordering
 
 Under a `controlled` profile, CNCF serializes the runtime work that it owns.
