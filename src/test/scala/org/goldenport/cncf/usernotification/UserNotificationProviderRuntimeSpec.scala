@@ -5,8 +5,8 @@ import java.util.concurrent.{CountDownLatch, TimeUnit}
 import org.goldenport.Consequence
 import org.goldenport.configuration.{Configuration, ConfigurationTrace, ResolvedConfiguration}
 import org.goldenport.cncf.component.{Component, ComponentId, ComponentInit, ComponentInstanceId, ComponentOrigin}
-import org.goldenport.cncf.context.ExecutionContext
-import org.goldenport.cncf.event.{EventPublishOption, ReceptionDomainEvent}
+import org.goldenport.cncf.context.{ExecutionContext, IdGenerationContext}
+import org.goldenport.cncf.event.{EventPublishOption, EventStore, ReceptionDomainEvent}
 import org.goldenport.cncf.job.{ActionId, JobRunMode, JobStatus, JobSubmitOption, JobTask, TaskOutcome, TaskSucceeded}
 import org.goldenport.cncf.subsystem.{GenericSubsystemComponentBinding, GenericSubsystemDescriptor, GenericSubsystemRuntimeBinding, GenericSubsystemUserNotificationBinding, GenericSubsystemUserNotificationEventForwardingBinding, GenericSubsystemUserNotificationProviderBinding, Subsystem}
 import org.goldenport.protocol.Protocol
@@ -18,7 +18,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   May.  7, 2026
- * @version Jul. 15, 2026
+ * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UserNotificationProviderRuntimeSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -157,6 +157,36 @@ final class UserNotificationProviderRuntimeSpec extends AnyWordSpec with Matcher
       first.toOption.map(_.dispatchedCount) shouldBe Some(1)
       second.toOption.map(_.dispatchedCount) shouldBe Some(1)
       sink.size shouldBe 1
+    }
+
+    "preserve the authorized caller execution profile for forwarding diagnostics" in {
+      Given("a caller-scoped notification forwarding dispatch")
+      val sink = ArrayBuffer.empty[UserNotificationRequest]
+      val (component, subsystem) = _component("textus-user-notification", sink)
+      subsystem.withDescriptor(_descriptor(enabled = true))
+      val base = component.logic.executionContext()
+      val callerids = IdGenerationContext.deterministic(
+        IdGenerationContext.IdNamespace("caller", "notification"),
+        base.clock,
+        "notification-forwarding-caller"
+      )
+      given ExecutionContext = ExecutionContext.withIdGenerationContext(base, callerids)
+
+      When("the forwarding subscription dispatches under the authorized caller context")
+      val dispatched = UserNotificationEventForwarder
+        .subscription(subsystem)
+        .handler
+        .dispatchAuthorized(_job_event("job.succeeded", "job-caller-profile-1", app = Some("blog")))
+
+      Then("the diagnostic Event identity retains the caller namespace")
+      dispatched.isSuccess shouldBe true
+      val diagnostics = subsystem.eventStore
+        .query(EventStore.Query(name = Some("user-notification.forwarding.sent")))
+        .toOption
+        .getOrElse(Vector.empty)
+      diagnostics should have size 1
+      diagnostics.head.id.major shouldBe "caller"
+      diagnostics.head.id.minor shouldBe "notification"
     }
 
     "forward JobEngine lifecycle events through EventBus routing" in {

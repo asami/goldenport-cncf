@@ -13,7 +13,7 @@ import org.goldenport.cncf.subsystem.{GenericSubsystemUserNotificationEventForwa
  * here when subsystem notification forwarding rules match those events.
  *
  * @since   May.  7, 2026
- * @version May.  7, 2026
+ * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 object UserNotificationEventForwarder:
@@ -35,67 +35,80 @@ object UserNotificationEventForwarder:
       },
       priority = 1000,
       handler = new EventDispatchHandler {
-        def dispatch(event: org.goldenport.cncf.event.DomainEvent): Consequence[Unit] = {
-          event match {
-            case reception: ReceptionDomainEvent =>
-              _forward_one(subsystem, reception)
-            case _ =>
-              ()
-          }
+        def dispatch(event: DomainEvent): Consequence[Unit] = {
+          _base_execution_context(subsystem).foreach(_dispatch(subsystem, event, _))
+          Consequence.unit
+        }
+
+        override def dispatchAuthorized(
+          event: DomainEvent
+        )(using ctx: ExecutionContext): Consequence[Unit] = {
+          _dispatch(subsystem, event, ctx)
           Consequence.unit
         }
       }
     )
 
+  private def _dispatch(
+    subsystem: Subsystem,
+    event: DomainEvent,
+    ctx: ExecutionContext
+  ): Unit =
+    event match {
+      case reception: ReceptionDomainEvent =>
+        _forward_one(subsystem, reception, ctx)
+      case _ =>
+        ()
+    }
+
   private def _forward_one(
     subsystem: Subsystem,
-    event: ReceptionDomainEvent
+    event: ReceptionDomainEvent,
+    ctx: ExecutionContext
   ): Unit =
     _rules(subsystem).filter(_.matches(event)).foreach { rule =>
-      _base_execution_context(subsystem).foreach { base =>
-        _request(event, rule) match {
-          case Some(request) =>
-            val key = request.dedupeKey.getOrElse(s"cncf.user-notification:${event.name}:${System.identityHashCode(event)}")
-            if (_sent.add(key)) {
-              _provider(base, rule.provider) match {
-                case Some(provider) =>
-                  provider.notify(request)(using base) match {
-                    case Consequence.Success(result) =>
-                      _append_forwarding_diagnostic(
-                        subsystem,
-                        "user-notification.forwarding.sent",
-                        event,
-                        request,
-                        result.notificationId.orElse(result.providerNotificationId).getOrElse("")
-                      )
-                    case Consequence.Failure(conclusion) =>
-                      _append_forwarding_diagnostic(
-                        subsystem,
-                        "user-notification.forwarding.failed",
-                        event,
-                        request,
-                        conclusion.show
-                      )
-                  }
-                case None =>
-                  _append_forwarding_diagnostic(
-                    subsystem,
-                    "user-notification.forwarding.failed",
-                    event,
-                    request,
-                    "No user-notification provider is configured for the current subsystem."
-                  )
-              }
+      _request(event, rule) match {
+        case Some(request) =>
+          val key = request.dedupeKey.getOrElse(s"cncf.user-notification:${event.name}:${System.identityHashCode(event)}")
+          if (_sent.add(key)) {
+            _provider(ctx, rule.provider) match {
+              case Some(provider) =>
+                provider.notify(request)(using ctx) match {
+                  case Consequence.Success(result) =>
+                    _append_forwarding_diagnostic(
+                      subsystem,
+                      "user-notification.forwarding.sent",
+                      event,
+                      request,
+                      result.notificationId.orElse(result.providerNotificationId).getOrElse("")
+                    )(using ctx)
+                  case Consequence.Failure(conclusion) =>
+                    _append_forwarding_diagnostic(
+                      subsystem,
+                      "user-notification.forwarding.failed",
+                      event,
+                      request,
+                      conclusion.show
+                    )(using ctx)
+                }
+              case None =>
+                _append_forwarding_diagnostic(
+                  subsystem,
+                  "user-notification.forwarding.failed",
+                  event,
+                  request,
+                  "No user-notification provider is configured for the current subsystem."
+                )(using ctx)
             }
-          case None =>
-            _append_forwarding_diagnostic(
-              subsystem,
-              "user-notification.forwarding.skipped",
-              event,
-              None,
-              "missing recipient or app visibility metadata"
-            )
-        }
+          }
+        case None =>
+          _append_forwarding_diagnostic(
+            subsystem,
+            "user-notification.forwarding.skipped",
+            event,
+            None,
+            "missing recipient or app visibility metadata"
+          )(using ctx)
       }
     }
 
@@ -240,8 +253,8 @@ object UserNotificationEventForwarder:
     source: ReceptionDomainEvent,
     request: UserNotificationRequest,
     note: String
-  ): Unit =
-    _append_forwarding_diagnostic(subsystem, name, source, Some(request), note)
+  )(using ctx: ExecutionContext): Unit =
+    _append_forwarding_diagnostic(subsystem, name, source, Some(request), note)(using ctx)
 
   private def _append_forwarding_diagnostic(
     subsystem: Subsystem,
@@ -249,10 +262,23 @@ object UserNotificationEventForwarder:
     source: ReceptionDomainEvent,
     request: Option[UserNotificationRequest],
     note: String
-  ): Unit = {
+  )(using ctx: ExecutionContext): Unit = {
+    val record = diagnosticRecord(name, source, request, note)
+    val _ = subsystem.eventStore.append(Vector(record))
+  }
+
+  private[usernotification] def diagnosticRecord(
+    name: String,
+    source: ReceptionDomainEvent,
+    request: Option[UserNotificationRequest],
+    note: String
+  )(using ctx: ExecutionContext): EventRecord = {
+    val createdat = ctx.clock.instant()
+    val jobid = _string(source, "job-id").getOrElse("")
+    val dedupekey = request.flatMap(_.dedupeKey).getOrElse("")
     val payload = Map(
       "source-event-name" -> source.name,
-      "job-id" -> _string(source, "job-id").getOrElse(""),
+      "job-id" -> jobid,
       "note" -> note
     ) ++ request.toVector.flatMap { r =>
       Vector(
@@ -260,19 +286,16 @@ object UserNotificationEventForwarder:
         "dedupe-key" -> r.dedupeKey.getOrElse("")
       )
     }.toMap
-    val _ = subsystem.eventStore.append(
-      Vector(
-        EventRecord(
-          id = EventId.generate(),
-          name = name,
-          kind = name,
-          payload = payload,
-          attributes = Map("cncf.userNotification.forwarding" -> "true"),
-          createdAt = java.time.Instant.now(),
-          persistent = true,
-          status = EventRecord.Status.Stored,
-          lane = EventLane.NonTransactional
-        )
-      )
+    val purpose = Vector(name, source.name, jobid, dedupekey).mkString(".")
+    EventRecord(
+      id = EventId.create(s"user-notification.forwarding.$purpose", createdat),
+      name = name,
+      kind = name,
+      payload = payload,
+      attributes = Map("cncf.userNotification.forwarding" -> "true"),
+      createdAt = createdat,
+      persistent = true,
+      status = EventRecord.Status.Stored,
+      lane = EventLane.NonTransactional
     )
   }

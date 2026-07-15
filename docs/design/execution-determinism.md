@@ -259,6 +259,14 @@ the EventEngine-bound factory. Commit therefore persists the already-fixed
 record identity and semantic timestamp without consulting ambient time or a
 constant fallback Event ID.
 
+CNCF-owned user-notification forwarding diagnostics are Event runtime
+semantics, even though notification delivery itself is a provider effect. A
+forwarding diagnostic MUST derive its `EventRecord` timestamp and identity from
+the dispatch execution profile. Authorized dispatch preserves the caller
+profile; contextless compatibility dispatch may bind the subsystem component
+profile. Provider-owned delivery receipt IDs and timestamps remain outside this
+runtime Event contract.
+
 Job input and Job definition lifecycle timestamps are runtime semantics. Their
 model constructors and update functions require an explicit instant and MUST
 NOT consult an ambient clock or provide an ambient default. Component command

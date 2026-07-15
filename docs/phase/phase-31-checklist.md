@@ -288,6 +288,12 @@ Status: IN PROGRESS
   UnitOfWork fixes transactional Event records before prepare/commit, authorized
   EventBus publication uses the caller profile, and generic fallback Events no
   longer use ambient `Instant.now` or the constant `EventId.generate` value.
+- User-notification forwarding diagnostics now preserve an authorized dispatch
+  profile and derive persistent Event IDs/timestamps from its ID-generation and
+  clock capabilities. Contextless compatibility dispatch explicitly falls back
+  to a subsystem component profile; provider-owned delivery receipts remain a
+  provider concern. Property-based coverage verifies replay-stable diagnostic
+  records and distinct outcome identities.
 - Workflow instance creation now uses the invocation-bound ID generation
   namespace, entropy, and clock. Instance creation/update/history timestamps
   have no ambient default, and property-based executable specifications verify

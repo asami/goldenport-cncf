@@ -66,6 +66,7 @@ ordering, locale/environment assumptions, and replayability diagnostics.
 - [ ] ED-07: Fix CNCF-owned ordering and migrate ambient-state debt. Ordering,
       audit classification, CAR lint, Tag timestamps, canonical Event reception,
       transition lifecycle events, EventStore record materialization, and
+      user-notification forwarding diagnostics,
       Workflow lifecycle identity/time, Job input timestamps, and JobDefinition
       lifecycle timestamps, Job/Task/Action runtime identity, and
       InformationSpace lifecycle/materialization timestamps and Knowledge
