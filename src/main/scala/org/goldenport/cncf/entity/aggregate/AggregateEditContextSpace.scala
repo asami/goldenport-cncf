@@ -11,55 +11,54 @@ import org.simplemodeling.model.datatype.EntityId
 /*
  * @since   Jun. 14, 2026
  *  version Jun. 18, 2026
- * @version Jul. 15, 2026
+ * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 final class AggregateEditContextSpace(
-  ttl: Duration = Duration.ofHours(2),
-  now: () => Instant = () => Instant.now()
+  ttl: Duration = Duration.ofHours(2)
 ) {
   private val _contexts = new ConcurrentHashMap[String, AggregateEditContext[?]]()
   private val _leases = new ConcurrentHashMap[AggregateEditContextSpace.LeaseKey, String]()
 
   def begin[A](
-    contextId: String,
-    aggregateName: String,
-    aggregateId: EntityId,
-    baseToken: String,
+    timestamp: Instant,
+    contextid: String,
+    aggregatename: String,
+    aggregateid: EntityId,
+    basetoken: String,
     aggregate: A,
     owner: AggregateEditOwner = AggregateEditOwner.anonymous,
-    lockScope: AggregateEditLockScope = AggregateEditLockScope.Principal,
+    lockscope: AggregateEditLockScope = AggregateEditLockScope.Principal,
     metadata: Record = Record.empty
   ): Consequence[AggregateEditContext[A]] = synchronized {
-    val effectivecontextid = contextId.trim
+    val effectivecontextid = contextid.trim
     if (effectivecontextid.isEmpty)
       return Consequence.argumentMissing("contextId")
-    expire()
-    val key = AggregateEditContextSpace.LeaseKey(aggregateName, aggregateId.print)
+    expire(timestamp)
+    val key = AggregateEditContextSpace.LeaseKey(aggregatename, aggregateid.print)
     Option(_leases.get(key)).flatMap(id => Option(_contexts.get(id))) match {
       case Some(existing) if _same_owner(existing, owner) =>
-        val touched = existing.asInstanceOf[AggregateEditContext[A]].touch(now())
+        val touched = existing.asInstanceOf[AggregateEditContext[A]].touch(timestamp)
         _contexts.put(touched.contextId, touched)
         return Consequence.success(touched)
       case Some(existing) =>
         return Consequence.operationConflict(
           "aggregate_edit_context_begin",
           Seq(Descriptor.Facet.Message(
-            s"Aggregate is already being edited: aggregate=$aggregateName, aggregateId=${aggregateId.print}, owner=${_owner_label(existing)}"
+            s"Aggregate is already being edited: aggregate=$aggregatename, aggregateId=${aggregateid.print}, owner=${_owner_label(existing)}"
           ))
         )
       case None =>
     }
     if (_contexts.containsKey(effectivecontextid))
       return Consequence.stateConflict(s"aggregate edit context already exists: $effectivecontextid")
-    val timestamp = now()
     val context = AggregateEditContext[A](
       contextId = effectivecontextid,
-      aggregateName = aggregateName,
-      aggregateId = aggregateId,
-      baseToken = baseToken,
+      aggregateName = aggregatename,
+      aggregateId = aggregateid,
+      baseToken = basetoken,
       owner = owner,
-      lockScope = lockScope,
+      lockScope = lockscope,
       workingAggregate = aggregate,
       dirty = false,
       createdAt = timestamp,
@@ -72,49 +71,53 @@ final class AggregateEditContextSpace(
   }
 
   def get[A](
-    contextId: String,
+    timestamp: Instant,
+    contextid: String,
     owner: AggregateEditOwner = AggregateEditOwner.anonymous
   ): Consequence[AggregateEditContext[A]] = synchronized {
-    _context[A](contextId, owner).map { context =>
-      val touched = context.touch(now())
-      _contexts.put(contextId, touched)
+    _context[A](timestamp, contextid, owner).map { context =>
+      val touched = context.touch(timestamp)
+      _contexts.put(contextid, touched)
       touched
     }
   }
 
   def update[A](
-    contextId: String,
+    timestamp: Instant,
+    contextid: String,
     owner: AggregateEditOwner = AggregateEditOwner.anonymous
   )(
     action: A => Consequence[A]
   ): Consequence[AggregateEditContext[A]] = synchronized {
-    _context[A](contextId, owner).flatMap { context =>
+    _context[A](timestamp, contextid, owner).flatMap { context =>
       action(context.workingAggregate).map { updated =>
-        val next = context.update(updated, now())
-        _contexts.put(contextId, next)
+        val next = context.update(updated, timestamp)
+        _contexts.put(contextid, next)
         next
       }
     }
   }
 
   def view[A, B](
-    contextId: String,
+    timestamp: Instant,
+    contextid: String,
     owner: AggregateEditOwner = AggregateEditOwner.anonymous
   )(
     action: AggregateEditContext[A] => Consequence[B]
   ): Consequence[B] = synchronized {
-    get[A](contextId, owner).flatMap(action)
+    get[A](timestamp, contextid, owner).flatMap(action)
   }
 
   def save[A, B](
-    contextId: String,
-    currentBaseToken: Option[String] = None,
+    timestamp: Instant,
+    contextid: String,
+    currentbasetoken: Option[String] = None,
     owner: AggregateEditOwner = AggregateEditOwner.anonymous
   )(
     action: A => Consequence[B]
   ): Consequence[B] = synchronized {
-    _context[A](contextId, owner).flatMap { context =>
-      currentBaseToken match {
+    _context[A](timestamp, contextid, owner).flatMap { context =>
+      currentbasetoken match {
         case Some(token) if token != context.baseToken =>
           Consequence.operationConflict(
             "aggregate_edit_context_save",
@@ -124,7 +127,7 @@ final class AggregateEditContextSpace(
           )
         case _ =>
           action(context.workingAggregate).map { result =>
-            _contexts.remove(contextId)
+            _contexts.remove(contextid)
             _leases.remove(_lease_key(context))
             result
           }
@@ -133,24 +136,24 @@ final class AggregateEditContextSpace(
   }
 
   def discard(
-    contextId: String,
+    timestamp: Instant,
+    contextid: String,
     owner: AggregateEditOwner = AggregateEditOwner.anonymous
   ): Consequence[Boolean] = synchronized {
-    expire()
-    _context[Any](contextId, owner) match {
+    expire(timestamp)
+    _context[Any](timestamp, contextid, owner) match {
       case Consequence.Success(context) =>
-        _contexts.remove(contextId)
+        _contexts.remove(contextid)
         _leases.remove(_lease_key(context))
         Consequence.success(true)
-      case Consequence.Failure(conclusion) if Option(_contexts.get(contextId)).isEmpty =>
+      case Consequence.Failure(conclusion) if Option(_contexts.get(contextid)).isEmpty =>
         Consequence.success(false)
       case failure: Consequence.Failure[AggregateEditContext[Any]] =>
         Consequence.Failure(failure.conclusion)
     }
   }
 
-  def expire(): Unit = synchronized {
-    val timestamp = now()
+  def expire(timestamp: Instant): Unit = synchronized {
     _contexts.asScala.foreach {
       case (id, context) if _expired(context, timestamp) =>
         _contexts.remove(id)
@@ -159,28 +162,29 @@ final class AggregateEditContextSpace(
     }
   }
 
-  def size: Int = synchronized {
-    expire()
+  def size(timestamp: Instant): Int = synchronized {
+    expire(timestamp)
     _contexts.size()
   }
 
   private def _context[A](
-    contextId: String,
+    timestamp: Instant,
+    contextid: String,
     owner: AggregateEditOwner
   ): Consequence[AggregateEditContext[A]] = {
-    expire()
-    Option(_contexts.get(contextId)) match {
+    expire(timestamp)
+    Option(_contexts.get(contextid)) match {
       case Some(context) if _same_owner(context, owner) =>
         Consequence.success(context.asInstanceOf[AggregateEditContext[A]])
       case Some(context) =>
         Consequence.operationConflict(
           "aggregate_edit_context_owner",
           Seq(Descriptor.Facet.Message(
-            s"Aggregate edit context is owned by another owner: contextId=$contextId, owner=${_owner_label(context)}"
+            s"Aggregate edit context is owned by another owner: contextId=$contextid, owner=${_owner_label(context)}"
           ))
         )
       case None =>
-        Consequence.entityNotFound(s"AggregateEditContext not found: $contextId")
+        Consequence.entityNotFound(s"AggregateEditContext not found: $contextid")
     }
   }
 
@@ -202,7 +206,7 @@ final class AggregateEditContextSpace(
 
 object AggregateEditContextSpace {
   private final case class LeaseKey(
-    aggregateName: String,
-    aggregateId: String
+    aggregatename: String,
+    aggregateid: String
   )
 }

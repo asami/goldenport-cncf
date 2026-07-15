@@ -73,8 +73,8 @@ ordering, locale/environment assumptions, and replayability diagnostics.
       pre-ActionCall authorization-denial Event identity/time,
       InformationSpace lifecycle/materialization timestamps and Knowledge
       and Entity working-set lifecycle timestamps plus Entity working-set
-      admission/residency evaluation, and temporal ABAC authorization are
-      complete; other remaining
+      admission/residency evaluation, temporal ABAC authorization, and
+      Aggregate edit-context lifecycle timestamps/expiry are complete; other remaining
       runtime-semantic migration remains active.
 - [ ] ED-08: Add diagnostics, replay scenarios, developer guidance, and close
       Phase 31.

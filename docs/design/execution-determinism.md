@@ -347,6 +347,14 @@ candidate and condition in the decision. Context-free compatibility evaluation
 without an explicit instant MUST leave `now` unresolved and fail the temporal
 condition closed; it MUST NOT consult ambient wall-clock time.
 
+Aggregate edit-context lifecycle is component-visible runtime semantics. The
+mutable `AggregateEditContextSpace` MUST NOT own or infer a clock. Every begin,
+touch, update, view, save, discard, expiry, and size evaluation receives an
+explicit evaluation instant. The ActionCall aggregate-edit internal DSL MUST
+capture that instant from the bound execution clock and pass it to the space.
+Equivalent operation sequences with equivalent execution instants therefore
+produce the same context timestamps and lease-expiry decisions.
+
 Manual scheduling is limited by `timer-scheduling-boundary.md`. It MUST NOT add
 cron, recurrence, business-calendar, workflow-wait, or general scheduler
 semantics.

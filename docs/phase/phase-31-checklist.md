@@ -351,6 +351,11 @@ Status: IN PROGRESS
   across every candidate and condition, while context-free compatibility
   evaluation fails temporal conditions closed instead of reading wall-clock
   time. Property-based coverage verifies replay across generated fixed clocks.
+- Aggregate edit-context lifecycle operations now require an explicit
+  evaluation instant. The aggregate-edit internal DSL supplies the bound
+  execution-clock instant, the mutable space no longer owns an ambient clock,
+  and property-based coverage verifies replay-stable create/touch timestamps
+  and lease-expiry outcomes.
 - CAR lint and component developer guidance now report direct ambient clock,
   UUID/random, sleep, environment/property, host filesystem, thread, and
   executor access in component sources.

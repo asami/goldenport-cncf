@@ -611,127 +611,128 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
     }
 
   protected final def begin_aggregate_edit[A](
-    aggregateName: String,
+    aggregatename: String,
     id: EntityId,
-    baseToken: String,
-    lockScope: AggregateEditLockScope = AggregateEditLockScope.Principal,
+    basetoken: String,
+    lockscope: AggregateEditLockScope = AggregateEditLockScope.Principal,
     metadata: Record = Record.empty
   ): ExecUowM[AggregateEditContext[A]] =
-    exec_from_calltree("uow:aggregate-edit:begin", _aggregate_edit_calltree_attributes("begin", aggregateName, Some(id))) {
-      begin_aggregate_edit_c[A](aggregateName, id, baseToken, lockScope, metadata)
+    exec_from_calltree("uow:aggregate-edit:begin", _aggregate_edit_calltree_attributes("begin", aggregatename, Some(id))) {
+      begin_aggregate_edit_c[A](aggregatename, id, basetoken, lockscope, metadata)
     }
 
   protected final def begin_aggregate_edit_c[A](
-    aggregateName: String,
+    aggregatename: String,
     id: EntityId,
-    baseToken: String,
-    lockScope: AggregateEditLockScope = AggregateEditLockScope.Principal,
+    basetoken: String,
+    lockscope: AggregateEditLockScope = AggregateEditLockScope.Principal,
     metadata: Record = Record.empty
   ): Consequence[AggregateEditContext[A]] =
-    aggregate_load_c[A](aggregateName, id).flatMap { aggregate =>
+    aggregate_load_c[A](aggregatename, id).flatMap { aggregate =>
       component
         .map(_.aggregateEditContextSpace)
         .getOrElse(Consequence.uninitializedState.RAISE)
         .begin(
+          current_instant,
           opaque_id("aggregate-edit.context"),
-          aggregateName,
+          aggregatename,
           id,
-          baseToken,
+          basetoken,
           aggregate,
           AggregateEditOwner.current(using execution_context),
-          lockScope,
+          lockscope,
           metadata
         )
     }
 
   protected final def get_aggregate_edit[A](
-    contextId: String
+    contextid: String
   ): ExecUowM[AggregateEditContext[A]] =
-    exec_from_calltree("uow:aggregate-edit:get", _aggregate_edit_calltree_attributes("get", contextId = Some(contextId))) {
-      get_aggregate_edit_c[A](contextId)
+    exec_from_calltree("uow:aggregate-edit:get", _aggregate_edit_calltree_attributes("get", contextid = Some(contextid))) {
+      get_aggregate_edit_c[A](contextid)
     }
 
   protected final def get_aggregate_edit_c[A](
-    contextId: String
+    contextid: String
   ): Consequence[AggregateEditContext[A]] =
     component
       .map(_.aggregateEditContextSpace)
       .getOrElse(Consequence.uninitializedState.RAISE)
-      .get[A](contextId, AggregateEditOwner.current(using execution_context))
+      .get[A](current_instant, contextid, AggregateEditOwner.current(using execution_context))
 
   protected final def update_aggregate_edit[A](
-    contextId: String
+    contextid: String
   )(
     action: A => Consequence[A]
   ): ExecUowM[AggregateEditContext[A]] =
-    exec_from_calltree("uow:aggregate-edit:update", _aggregate_edit_calltree_attributes("update", contextId = Some(contextId))) {
-      update_aggregate_edit_c[A](contextId)(action)
+    exec_from_calltree("uow:aggregate-edit:update", _aggregate_edit_calltree_attributes("update", contextid = Some(contextid))) {
+      update_aggregate_edit_c[A](contextid)(action)
     }
 
   protected final def update_aggregate_edit_c[A](
-    contextId: String
+    contextid: String
   )(
     action: A => Consequence[A]
   ): Consequence[AggregateEditContext[A]] =
     component
       .map(_.aggregateEditContextSpace)
       .getOrElse(Consequence.uninitializedState.RAISE)
-      .update[A](contextId, AggregateEditOwner.current(using execution_context))(action)
+      .update[A](current_instant, contextid, AggregateEditOwner.current(using execution_context))(action)
 
   protected final def get_aggregate_edit_view[A, B](
-    contextId: String
+    contextid: String
   )(
     action: AggregateEditContext[A] => Consequence[B]
   ): ExecUowM[B] =
-    exec_from_calltree("uow:aggregate-edit:view", _aggregate_edit_calltree_attributes("view", contextId = Some(contextId))) {
-      get_aggregate_edit_view_c[A, B](contextId)(action)
+    exec_from_calltree("uow:aggregate-edit:view", _aggregate_edit_calltree_attributes("view", contextid = Some(contextid))) {
+      get_aggregate_edit_view_c[A, B](contextid)(action)
     }
 
   protected final def get_aggregate_edit_view_c[A, B](
-    contextId: String
+    contextid: String
   )(
     action: AggregateEditContext[A] => Consequence[B]
   ): Consequence[B] =
     component
       .map(_.aggregateEditContextSpace)
       .getOrElse(Consequence.uninitializedState.RAISE)
-      .view[A, B](contextId, AggregateEditOwner.current(using execution_context))(action)
+      .view[A, B](current_instant, contextid, AggregateEditOwner.current(using execution_context))(action)
 
   protected final def save_aggregate_edit[A, B](
-    contextId: String,
-    currentBaseToken: Option[String] = None
+    contextid: String,
+    currentbasetoken: Option[String] = None
   )(
     action: A => Consequence[B]
   ): ExecUowM[B] =
-    exec_from_calltree("uow:aggregate-edit:save", _aggregate_edit_calltree_attributes("save", contextId = Some(contextId))) {
-      save_aggregate_edit_c[A, B](contextId, currentBaseToken)(action)
+    exec_from_calltree("uow:aggregate-edit:save", _aggregate_edit_calltree_attributes("save", contextid = Some(contextid))) {
+      save_aggregate_edit_c[A, B](contextid, currentbasetoken)(action)
     }
 
   protected final def save_aggregate_edit_c[A, B](
-    contextId: String,
-    currentBaseToken: Option[String] = None
+    contextid: String,
+    currentbasetoken: Option[String] = None
   )(
     action: A => Consequence[B]
   ): Consequence[B] =
     component
       .map(_.aggregateEditContextSpace)
       .getOrElse(Consequence.uninitializedState.RAISE)
-      .save[A, B](contextId, currentBaseToken, AggregateEditOwner.current(using execution_context))(action)
+      .save[A, B](current_instant, contextid, currentbasetoken, AggregateEditOwner.current(using execution_context))(action)
 
   protected final def discard_aggregate_edit(
-    contextId: String
+    contextid: String
   ): ExecUowM[Boolean] =
-    exec_from_calltree("uow:aggregate-edit:discard", _aggregate_edit_calltree_attributes("discard", contextId = Some(contextId))) {
-      discard_aggregate_edit_c(contextId)
+    exec_from_calltree("uow:aggregate-edit:discard", _aggregate_edit_calltree_attributes("discard", contextid = Some(contextid))) {
+      discard_aggregate_edit_c(contextid)
     }
 
   protected final def discard_aggregate_edit_c(
-    contextId: String
+    contextid: String
   ): Consequence[Boolean] =
     component
       .map(_.aggregateEditContextSpace)
       .getOrElse(Consequence.uninitializedState.RAISE)
-      .discard(contextId, AggregateEditOwner.current(using execution_context))
+      .discard(current_instant, contextid, AggregateEditOwner.current(using execution_context))
 
   private def _aggregate_authorize_load(
     aggregateName: String,
@@ -1080,16 +1081,16 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
 
   private def _aggregate_edit_calltree_attributes(
     operation: String,
-    aggregateName: String = "",
-    targetId: Option[EntityId] = None,
-    contextId: Option[String] = None
+    aggregatename: String = "",
+    targetid: Option[EntityId] = None,
+    contextid: Option[String] = None
   ): Map[String, String] =
     Map(
       "dsl" -> "uow",
       "operation" -> operation,
-      "aggregate_edit_context" -> contextId.getOrElse(""),
-      "aggregate" -> aggregateName
-    ) ++ targetId.map(id => "entity_id" -> id.print).toMap
+      "aggregate_edit_context" -> contextid.getOrElse(""),
+      "aggregate" -> aggregatename
+    ) ++ targetid.map(id => "entity_id" -> id.print).toMap
 
   private def _aggregate_authorize_create(
     aggregateName: String,
