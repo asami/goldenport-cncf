@@ -114,6 +114,24 @@ object ActionId {
   def generate(): ActionId =
     ActionId("cncf", "action")
 
+  def create(
+    purpose: String,
+    timestamp: Instant
+  )(using ctx: ExecutionContext): ActionId =
+    create(purpose, timestamp, ctx.idGeneration)
+
+  def create(
+    purpose: String,
+    timestamp: Instant,
+    idgeneration: IdGenerationContext
+  ): ActionId =
+    ActionId(
+      major = idgeneration.namespace.major,
+      minor = idgeneration.namespace.minor,
+      timestamp = Some(timestamp),
+      entropy = Some(idgeneration.opaqueId(s"action.$purpose"))
+    )
+
   def parse(s: String): Consequence[ActionId] =
     UniversalId.parseParts(s, "action").map(parts => ActionId(parts.major, parts.minor, Some(parts.timestamp), Some(parts.entropy)))
 }

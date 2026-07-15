@@ -134,7 +134,12 @@ case class ComponentLogic(
     ctx.runtime.clearExecutionMetadata()
     val actionscope = component.scopeContext.createChildScope(ScopeKind.Action, action.name)
     val scopedctx = ctx.withScope(actionscope)
-    val task = ActionTask(ActionId.generate(), action, component.actionEngine, Some(component))
+    val task = ActionTask(
+      ActionId.create("component.execute", scopedctx.clock.instant(), scopedctx.idGeneration),
+      action,
+      component.actionEngine,
+      Some(component)
+    )
     _resolve_operation_kind(action) match {
       case Some(ComponentLogic.OperationKind.Query) =>
         _execute_query_action(task, scopedctx)
@@ -371,7 +376,12 @@ case class ComponentLogic(
         _resolve_action(hook.action, _action_parameters(action) ++ hook.parameters, ctx).map { case (target, compensationAction) =>
           task.copy(
             compensationActionRef = Some(hook.action),
-            compensationTask = Some(ActionTask(ActionId.generate(), compensationAction, target.actionEngine, Some(target)))
+            compensationTask = Some(ActionTask(
+              ActionId.create("component.compensation", ctx.clock.instant(), ctx.idGeneration),
+              compensationAction,
+              target.actionEngine,
+              Some(target)
+            ))
           )
         }
     }

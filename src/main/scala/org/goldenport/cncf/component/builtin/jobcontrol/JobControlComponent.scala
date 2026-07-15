@@ -501,11 +501,11 @@ object JobControlComponent {
       declaredProfile: Option[org.goldenport.cncf.job.JobDeclaredProfile],
       definitionSnapshot: Option[JobDefinitionSnapshot] = None,
       compensation: Option[JobFailureHook] = None
-    )(using org.goldenport.cncf.context.ExecutionContext): Consequence[(JobId, Consequence[OperationResponse])] =
+    )(using ctx: org.goldenport.cncf.context.ExecutionContext): Consequence[(JobId, Consequence[OperationResponse])] =
       _resolve_target_action(selector, parameters).flatMap { case (target, action) =>
         _resolve_compensation_task(compensation, parameters).flatMap { comp =>
           val task = ActionTask(
-            ActionId.generate(),
+            ActionId.create("jcl.submit", ctx.clock.instant(), ctx.idGeneration),
             action,
             target.actionEngine,
             Some(target),
@@ -520,7 +520,7 @@ object JobControlComponent {
             declaredProfile = declaredProfile,
             jobDefinitionSnapshot = definitionSnapshot
           )
-          component.jobEngine.submit(List(task), summon[org.goldenport.cncf.context.ExecutionContext], option).map { jobid =>
+          component.jobEngine.submit(List(task), ctx, option).map { jobid =>
             (jobid, component.logic.awaitJobResult(jobid))
           }
         }
@@ -529,12 +529,17 @@ object JobControlComponent {
     private def _resolve_compensation_task(
       compensation: Option[JobFailureHook],
       parameters: Map[String, String]
-    ): Consequence[Option[ActionTask]] =
+    )(using ctx: org.goldenport.cncf.context.ExecutionContext): Consequence[Option[ActionTask]] =
       compensation match {
         case None => Consequence.success(None)
         case Some(hook) =>
           _resolve_target_action(hook.action, parameters ++ hook.parameters).map { case (target, action) =>
-            Some(ActionTask(ActionId.generate(), action, target.actionEngine, Some(target)))
+            Some(ActionTask(
+              ActionId.create("jcl.compensation", ctx.clock.instant(), ctx.idGeneration),
+              action,
+              target.actionEngine,
+              Some(target)
+            ))
           }
       }
 

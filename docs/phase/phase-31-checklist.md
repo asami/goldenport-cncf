@@ -301,12 +301,15 @@ Status: IN PROGRESS
   now derive Job/Task IDs from the caller execution namespace, clock, and
   purpose-local entropy sequence. Property-based executable specifications
   verify equivalent-capability replay and collision-free per-invocation IDs.
+- Component, Event reception, Workflow, and JCL execution boundaries now derive
+  primary and compensation Action IDs from the same caller-bound capabilities.
+  The replay specification covers Job, Task, and Action identity sequences.
 - CAR lint and component developer guidance now report direct ambient clock,
   UUID/random, sleep, environment/property, host filesystem, thread, and
   executor access in component sources.
-- Remaining Action identity and Job model defaults, InformationSpace,
-  working-set, and other runtime model semantic defaults still require migration
-  before ED-07 can be marked DONE.
+- Remaining Job model defaults, InformationSpace, working-set, and other runtime
+  model semantic defaults still require migration before ED-07 can be marked
+  DONE.
 
 ### Acceptance Criteria
 

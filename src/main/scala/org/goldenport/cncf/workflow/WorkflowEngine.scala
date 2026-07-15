@@ -17,7 +17,6 @@ import org.simplemodeling.model.datatype.EntityId
 
 /*
  * @since   Apr. 22, 2026
- *  version Apr. 22, 2026
  * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
@@ -388,7 +387,12 @@ object WorkflowEngine {
       actionname: String
     )(using ctx: ExecutionContext): Consequence[(JobId, String)] =
       _resolve_target_action(entry, event, actionname).flatMap { case (component, action, resolvedselector) =>
-        val task = ActionTask(ActionId.generate(), action, component.actionEngine, Some(component))
+        val task = ActionTask(
+          ActionId.create("workflow.submit", ctx.clock.instant(), ctx.idGeneration),
+          action,
+          component.actionEngine,
+          Some(component)
+        )
         val option = JobSubmitOption(
           persistence = JobPersistencePolicy.Persistent,
           runMode = JobRunMode.Async,

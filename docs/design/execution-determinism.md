@@ -268,13 +268,15 @@ instant into those model boundaries. An explicitly supplied Job input
 execution clock, not host wall time. Job input cleanup similarly receives its
 operational instant explicitly from its caller.
 
-Job and Task identities created by JobEngine are also runtime semantics. Job
-submission and Task execution boundaries derive their namespace, timestamp,
-and entropy from the caller's bound execution capabilities. Equivalent
-invocation-local capabilities therefore replay the same identity sequence,
-while purpose-local sequences keep multiple Jobs and Tasks collision-free.
-Model-level no-argument generators are compatibility/test conveniences and
-MUST NOT be used by CNCF production execution paths.
+Job, Task, and Action identities created by CNCF execution boundaries are also
+runtime semantics. Job submission, Task execution, component Action,
+Event-reception Action, Workflow Action, and JCL Action boundaries derive their
+namespace, timestamp, and entropy from the caller's bound execution
+capabilities. Equivalent invocation-local capabilities therefore replay the
+same identity sequence, while purpose-local sequences keep multiple Jobs,
+Tasks, and Actions collision-free. Model-level no-argument generators are
+compatibility/test conveniences and MUST NOT be used by CNCF production
+execution paths.
 
 Manual scheduling is limited by `timer-scheduling-boundary.md`. It MUST NOT add
 cron, recurrence, business-calendar, workflow-wait, or general scheduler

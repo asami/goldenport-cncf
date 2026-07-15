@@ -28,7 +28,7 @@ import org.goldenport.observation.{Cause, Taxonomy}
  *  version Mar. 24, 2026
  *  version Apr. 22, 2026
  *  version May. 31, 2026
- * @version Jul. 15, 2026
+ * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 enum CmlEventCategory {
@@ -944,7 +944,11 @@ object EventReception {
             ),
             executionNotes = Vector("event no matched subscription")
           )
-          engine.submit(List(_NoMatchEventTask(input)), ctx, option).map(_ => ())
+          val task = _NoMatchEventTask(
+            ActionId.create("event.reception.no_match", ctx.clock.instant(), ctx.idGeneration),
+            input
+          )
+          engine.submit(List(task), ctx, option).map(_ => ())
       }
 
     private def _effective_attributes(
@@ -1165,9 +1169,9 @@ object EventReception {
         scope.core.parent.exists(_has_action_scope)
 
     private final case class _NoMatchEventTask(
+      actionId: ActionId,
       input: ReceptionInput
     ) extends JobTask {
-      val actionId: ActionId = ActionId.generate()
       def run(ctx: ExecutionContext): TaskOutcome = {
         val _ = ctx
         val _ = input
@@ -1811,9 +1815,19 @@ object EventReception {
               )
               resolved.policy.timing match {
                 case EventExecutionTiming.Sync =>
-                  engine.runTaskInJobSync(jobid, _DispatchActionTask(actionname, eventwithsaga), dispatchctx).map(_ => ())
+                  val task = _DispatchActionTask(
+                    ActionId.create("event.reception.same_job_sync", dispatchctx.clock.instant(), dispatchctx.idGeneration),
+                    actionname,
+                    eventwithsaga
+                  )
+                  engine.runTaskInJobSync(jobid, task, dispatchctx).map(_ => ())
                 case EventExecutionTiming.Async =>
-                  val enqueue = () => engine.enqueueTaskInJob(jobid, _DispatchActionTask(actionname, eventwithsaga), dispatchctx).map(_ => ())
+                  val task = _DispatchActionTask(
+                    ActionId.create("event.reception.same_job_async", dispatchctx.clock.instant(), dispatchctx.idGeneration),
+                    actionname,
+                    eventwithsaga
+                  )
+                  val enqueue = () => engine.enqueueTaskInJob(jobid, task, dispatchctx).map(_ => ())
                   if (_has_action_scope(dispatchctx.cncfCore.scope))
                     dispatchctx.runtime.unitOfWork.stagePostCommit {
                       val _ = enqueue()
@@ -1864,7 +1878,12 @@ object EventReception {
                       s"event reception policy source: ${resolved.policySource.print}"
                     )
                   )
-                  val submit = () => engine.submit(List(_DispatchActionTask(actionname, eventwithsaga)), submitctx, option)
+                  val task = _DispatchActionTask(
+                    ActionId.create("event.reception.new_job_async", submitctx.clock.instant(), submitctx.idGeneration),
+                    actionname,
+                    eventwithsaga
+                  )
+                  val submit = () => engine.submit(List(task), submitctx, option)
                   if (_has_action_scope(dispatchctx.cncfCore.scope)) {
                     dispatchctx.runtime.unitOfWork.stagePostCommit {
                       val _ = submit()
@@ -2216,10 +2235,10 @@ object EventReception {
     }
 
     private final case class _DispatchActionTask(
+      actionId: ActionId,
       actionName: String,
       event: ReceptionDomainEvent
     ) extends JobTask {
-      val actionId: ActionId = ActionId.generate()
       override val transactionRole: Option[String] =
         event.attributes.get(StandardAttribute.TransactionRelation)
           .map(_.trim.toLowerCase(java.util.Locale.ROOT))

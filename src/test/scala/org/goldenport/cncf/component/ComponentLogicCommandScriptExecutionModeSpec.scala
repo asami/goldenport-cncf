@@ -1,18 +1,19 @@
 package org.goldenport.cncf.component
 
-import java.util.concurrent.atomic.AtomicBoolean
+import java.time.{Clock, Instant, ZoneOffset}
+import java.util.concurrent.atomic.{AtomicBoolean, AtomicReference}
 import scala.collection.mutable.ArrayBuffer
 import org.goldenport.Consequence
 import org.goldenport.cncf.action.{Action, ActionCall, CallerTransactionPolicy, CommandAction, CommandExecutionMode, CommandExecutionPolicy, JobTransactionScope, OperationEventTransactionRequirement}
 import org.goldenport.cncf.CncfVersion
 import org.goldenport.cncf.cli.RunMode
 import org.goldenport.cncf.config.RuntimeConfig
-import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, ScopeContext, ScopeKind, SecurityContext}
+import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, IdGenerationContext, ScopeContext, ScopeKind, SecurityContext}
 import org.goldenport.cncf.datastore.DataStore
 import org.goldenport.cncf.dsl.script.ScriptAction
 import org.goldenport.cncf.event.{ActionCallDispatcher, CmlEventCategory, CmlEventDefinition, CmlSubscriptionDefinition, DispatchRoute, DomainEvent, EventBus, EventEngine, EventReception, EventReceptionCondition, EventReceptionExecutionPolicy, EventReceptionRule, EventStore, ReceptionOutcome}
 import org.goldenport.cncf.http.FakeHttpDriver
-import org.goldenport.cncf.job.JobId
+import org.goldenport.cncf.job.{ActionId, JobId}
 import org.goldenport.cncf.path.AliasResolver
 import org.goldenport.cncf.protocol.OperationResponseFormatter
 import org.goldenport.cncf.subsystem.Subsystem
@@ -141,6 +142,46 @@ final class ComponentLogicCommandScriptExecutionModeSpec
         }
         _eventually_completed(component)
       }
+    }
+
+    "bind Job-managed Action identity to caller execution capabilities" in {
+      Given("a JobSync command with a fixed clock and custom caller ID namespace")
+      val component = _create_component("action_identity_capability", Protocol.empty)
+      val capturedactionid = new AtomicReference[Option[ActionId]](None)
+      val action = new CommandAction() {
+        val request = Request.ofOperation("capture_action_identity")
+
+        override def createCall(core: ActionCall.Core): ActionCall = {
+          val self = this
+          val c = core
+          new ActionCall {
+            override val core: ActionCall.Core = c
+            override def action: Action = self
+            def execute(): Consequence[OperationResponse] = {
+              capturedactionid.set(executionContext.jobContext.actionId)
+              Consequence.success(OperationResponse.Scalar("captured"))
+            }
+          }
+        }
+      }
+      val timestamp = Instant.parse("2026-07-16T01:30:00Z")
+      val clock = Clock.fixed(timestamp, ZoneOffset.UTC)
+      val namespace = IdGenerationContext.IdNamespace("phase31", "component")
+      val idgeneration = IdGenerationContext.deterministic(namespace, clock, "component-action")
+      val basecontext = ExecutionContext.withIdGenerationContext(ExecutionContext.create(clock), idgeneration)
+      val ctx = ExecutionContext.withFrameworkCommandExecutionMode(basecontext, CommandExecutionMode.JobSync)
+
+      When("ComponentLogic creates and executes the managed Action task")
+      val result = _with_runtime_mode(RunMode.Command) {
+        component.logic.executeAction(action, ctx)
+      }
+
+      Then("the Action identity carries the caller namespace and execution instant")
+      result shouldBe Consequence.success(OperationResponse.Scalar("captured"))
+      val actionid = capturedactionid.get().getOrElse(fail("Action identity was not propagated"))
+      actionid.parts.major shouldBe namespace.major
+      actionid.parts.minor shouldBe namespace.minor
+      actionid.parts.timestamp shouldBe timestamp
     }
 
     "use Sync for command + SCRIPT combination" in {
