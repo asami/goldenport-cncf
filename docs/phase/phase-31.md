@@ -1,6 +1,6 @@
 # Phase 31 - Deterministic Execution Capabilities
 
-status = active
+status = closed
 
 ## 1. Purpose
 
@@ -52,7 +52,13 @@ ordering, locale/environment assumptions, and replayability diagnostics.
 - E (DONE): ED-05 - Unified time and Job/Event scheduling.
 - F (DONE): ED-06 - Resolved environment assumptions.
 - G (DONE): ED-07 - Deterministic ordering, migration, and enforcement.
-- H (IN PROGRESS): ED-08 - Introspection, replay verification, and closure.
+- H (DONE): ED-08 - Introspection, replay verification, and closure.
+
+Closure guidance:
+
+- Phase 31 is closed. Future deterministic execution work must be selected as
+  an explicit follow-up rather than extending the controlled replay contract
+  implicitly.
 
 ## 5. Development Items
 
@@ -79,10 +85,11 @@ ordering, locale/environment assumptions, and replayability diagnostics.
       retained direct host access as transport, compatibility polling,
       realtime adapter, monotonic diagnostic, provider, injected-clock, or
       bootstrap/repository behavior outside the controlled replay contract.
-- [ ] ED-08: Add diagnostics, replay scenarios, developer guidance, and close
-      Phase 31. Sanitized diagnostics, replayability states, redaction,
-      developer/test guidance, and the end-to-end two-runtime replay scenario
-      are complete; full validation and final review remain.
+- [x] ED-08: Add diagnostics, replay scenarios, developer guidance, and close
+      Phase 31. The completed scope includes sanitized diagnostics and
+      redaction, two-runtime replay verification, full CNCF validation, and
+      final review. Distributed replay and uncontrolled external providers
+      remain explicitly outside this phase.
 
 Detailed status and acceptance evidence are recorded in
 `phase-31-checklist.md`.
@@ -119,3 +126,7 @@ Phase 31 closes only after verifying that:
 
 The note and journal are non-normative inputs. Phase implementation decisions
 must be promoted into design/spec documents before closure.
+
+All completion conditions were verified by ED-08. The controlled replay
+contract does not claim deterministic provider-internal concurrency,
+uncontrolled external responses, or distributed multi-machine execution.

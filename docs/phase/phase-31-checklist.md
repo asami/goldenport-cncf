@@ -379,7 +379,7 @@ Status: DONE
 
 ## ED-08: Introspection, Replay Verification, and Closure
 
-Status: IN PROGRESS
+Status: DONE
 
 ### Tasks
 
@@ -391,9 +391,9 @@ Status: IN PROGRESS
       environment values.
 - [x] Run the end-to-end two-runtime replay scenario.
 - [x] Update component developer and test guidance.
-- [ ] Run full related core and CNCF validation.
-- [ ] Resolve final review findings and update strategy/history.
-- [ ] Close Phase 31 without overstating external provider or distributed
+- [x] Run full related core and CNCF validation.
+- [x] Resolve final review findings and update strategy/history.
+- [x] Close Phase 31 without overstating external provider or distributed
       replay coverage.
 
 ### Closure Evidence Required
@@ -424,4 +424,20 @@ Status: IN PROGRESS
   sanitized profile fingerprint. Raw trace/correlation diagnostics are removed
   from the semantic snapshot while domain Event attributes remain compared.
   The focused scenario passes without host sleeping.
-- Phase 31 remains active until full related validation and final review pass.
+- The focused replay scenario and the full CNCF suite passed on Jul. 16, 2026:
+  `sbt --batch test` completed 1,783 tests with zero failures and zero aborted
+  suites. No dirty related core repository belonged to this replay slice;
+  unrelated sibling work was deliberately left outside its validation and
+  commit scope.
+- Final Phase 31 review found no actionable finding. `git diff --check` passes
+  for the closure record.
+
+### Closure Result
+
+- Phase 31 is closed with deterministic execution profiles, named random and
+  entropy boundaries, capability-based IDs, manual Job/Event scheduling,
+  resolved environment assumptions, ambient-access enforcement, and
+  two-runtime replay evidence.
+- The phase guarantees controlled in-process CNCF replay only. Distributed
+  execution, provider-internal concurrency, and uncontrolled external
+  provider responses remain explicit future work.
