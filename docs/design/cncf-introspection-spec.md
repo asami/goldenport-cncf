@@ -62,6 +62,21 @@ Aggregate/View metadata exposure:
 - Projection output order must be deterministic:
   - collections sorted by `name`
   - named views sorted and deduplicated
+  - MCP tools sorted by their complete identity
+
+MCP tool identity and collision behavior:
+
+- The stable tool identity is the exact
+  `<component>.<service>.<operation>` tuple projected from canonical runtime
+  definitions.
+- Subsystem projection includes MCP-ready operations from primary participants
+  only and orders the complete identities lexically. SAR declaration order does
+  not change discovery output.
+- Two projected operations must not share one complete identity. CNCF reports a
+  structured conflict and does not choose a component, append an unstable
+  suffix, or publish duplicate tools.
+- JSON-RPC `tools/list` and `tools/call` fail closed with internal error
+  `-32603` while the catalog has an identity conflict.
 
 ## Output Channels
 

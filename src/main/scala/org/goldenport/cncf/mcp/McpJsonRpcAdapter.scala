@@ -11,7 +11,7 @@ import org.goldenport.cncf.subsystem.Subsystem
  *  version Mar. 27, 2026
  *  version Apr. 15, 2026
  *  version May. 20, 2026
- * @version Jul. 14, 2026
+ * @version Jul. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final class McpJsonRpcAdapter(
@@ -39,7 +39,7 @@ final class McpJsonRpcAdapter(
             case "initialize" =>
               _result(id, _initialize_result())
             case "tools/list" =>
-              _result(id, Json.obj("tools" -> Json.arr(_tools: _*)))
+              _tools_list(id)
             case "tools/call" =>
               _tools_call(id, params)
             case _ =>
@@ -62,8 +62,19 @@ final class McpJsonRpcAdapter(
       )
     )
 
-  private def _tools: Vector[Json] =
-    McpToolCatalog.toolsForSubsystem(subsystem).map(_.toJson)
+  private def _tools_list(id: Json): Json =
+    _tool_catalog match {
+      case Consequence.Success(tools) =>
+        _result(id, Json.obj("tools" -> Json.arr(tools.map(_.toJson): _*)))
+      case Consequence.Failure(conclusion) =>
+        _tool_catalog_error(id, conclusion.display)
+    }
+
+  private def _tool_catalog: Consequence[Vector[McpToolCatalog.Tool]] =
+    McpToolCatalog.consequenceToolsForSubsystem(subsystem)
+
+  private def _tool_catalog_error(id: Json, message: String): Json =
+    _error(id, -32603, s"MCP tool catalog unavailable: $message")
 
   private def _tools_call(
     id: Json,
@@ -87,38 +98,43 @@ final class McpJsonRpcAdapter(
     name: String,
     arguments: JsonObject
   ): Json =
-    if (!McpToolCatalog.toolsForSubsystem(subsystem).exists(_.name == name))
-      _error(id, -32602, s"MCP tool is not published: $name")
-    else _to_request(name, arguments) match {
-      case Left(message) =>
-        _error(id, -32602, message)
-      case Right(req) =>
-        subsystem.execute(req) match {
-          case Consequence.Success(response) =>
-            _result(
-              id,
-              Json.obj(
-                "content" -> Json.arr(
+    _tool_catalog match {
+      case Consequence.Failure(conclusion) =>
+        _tool_catalog_error(id, conclusion.display)
+      case Consequence.Success(tools) =>
+        if (!tools.exists(_.name == name))
+          _error(id, -32602, s"MCP tool is not published: $name")
+        else _to_request(name, arguments) match {
+          case Left(message) =>
+            _error(id, -32602, message)
+          case Right(req) =>
+            subsystem.execute(req) match {
+              case Consequence.Success(response) =>
+                _result(
+                  id,
                   Json.obj(
-                    "type" -> Json.fromString("text"),
-                    "text" -> Json.fromString(response.print)
+                    "content" -> Json.arr(
+                      Json.obj(
+                        "type" -> Json.fromString("text"),
+                        "text" -> Json.fromString(response.print)
+                      )
+                    )
                   )
                 )
-              )
-            )
-          case Consequence.Failure(conclusion) =>
-            _result(
-              id,
-              Json.obj(
-                "isError" -> Json.True,
-                "content" -> Json.arr(
+              case Consequence.Failure(conclusion) =>
+                _result(
+                  id,
                   Json.obj(
-                    "type" -> Json.fromString("text"),
-                    "text" -> Json.fromString(conclusion.show)
+                    "isError" -> Json.True,
+                    "content" -> Json.arr(
+                      Json.obj(
+                        "type" -> Json.fromString("text"),
+                        "text" -> Json.fromString(conclusion.show)
+                      )
+                    )
                   )
                 )
-              )
-            )
+            }
         }
     }
 

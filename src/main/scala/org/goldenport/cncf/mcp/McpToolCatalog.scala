@@ -1,6 +1,7 @@
 package org.goldenport.cncf.mcp
 
 import io.circe.{Json, JsonObject}
+import org.goldenport.Consequence
 import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.datatype.I18nString
@@ -9,7 +10,7 @@ import org.goldenport.schema.{Multiplicity, XBoolean, XDouble, XFloat, XInt, XIn
 
 /*
  * @since   May. 18, 2026
- * @version Jul. 14, 2026
+ * @version Jul. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 object McpToolCatalog {
@@ -27,7 +28,12 @@ object McpToolCatalog {
   }
 
   def toolsForSubsystem(subsystem: Subsystem): Vector[Tool] =
-    subsystem.components.filter(_.isPrimaryParticipant).flatMap(toolsForComponent)
+    consequenceToolsForSubsystem(subsystem).TAKE
+
+  def consequenceToolsForSubsystem(subsystem: Subsystem): Consequence[Vector[Tool]] =
+    _validated_tools(
+      subsystem.components.filter(_.isPrimaryParticipant).flatMap(toolsForComponent)
+    )
 
   def toolsForComponent(component: Component): Vector[Tool] =
     component.protocol.services.services.flatMap(service =>
@@ -36,7 +42,22 @@ object McpToolCatalog {
       ).map(operation =>
         _tool_for_operation(component, service, operation)
       )
-    )
+    ).sortBy(_.name)
+
+  private def _validated_tools(tools: Vector[Tool]): Consequence[Vector[Tool]] = {
+    val ordered = tools.sortBy(_.name)
+    val duplicateidentities = ordered
+      .groupBy(_.name)
+      .toVector
+      .collect { case (name, entries) if entries.size > 1 => name }
+      .sorted
+    if (duplicateidentities.isEmpty)
+      Consequence.success(ordered)
+    else
+      Consequence.stateConflict(
+        s"duplicate MCP tool identities: ${duplicateidentities.mkString(", ")}"
+      )
+  }
 
   private def _tool_for_operation(
     component: Component,
