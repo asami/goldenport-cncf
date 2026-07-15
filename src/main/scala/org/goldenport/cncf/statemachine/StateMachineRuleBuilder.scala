@@ -6,7 +6,7 @@ import org.goldenport.Consequence
  * Builder helpers for generated/component-defined transition rules.
  *
  * @since   Mar. 19, 2026
- * @version Mar. 19, 2026
+ * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 object StateMachineRuleBuilder {
@@ -48,7 +48,13 @@ object StateMachineRuleBuilder {
     priority: Int = 0,
     declarationOrder: Int = 0,
     guard: Option[Guard[S, TransitionEvent]] = None,
-    plan: ExecutionPlan[S, TransitionEvent]
+    plan: ExecutionPlan[S, TransitionEvent],
+    machineName: Option[String] = None,
+    stateFieldName: Option[String] = None,
+    fromState: Option[String] = None,
+    fromStateValue: Option[Int] = None,
+    toState: Option[String] = None,
+    toStateValue: Option[Int] = None
   ): CollectionTransitionRule[Any] =
     CollectionTransitionRule[Any](
       collectionName = collectionName,
@@ -57,7 +63,13 @@ object StateMachineRuleBuilder {
       priority = priority,
       declarationOrder = declarationOrder,
       guard = guard.asInstanceOf[Option[Guard[Any, TransitionEvent]]],
-      plan = plan.asInstanceOf[ExecutionPlan[Any, TransitionEvent]]
+      plan = plan.asInstanceOf[ExecutionPlan[Any, TransitionEvent]],
+      machineName = machineName,
+      stateFieldName = stateFieldName,
+      fromState = fromState,
+      fromStateValue = fromStateValue,
+      toState = toState,
+      toStateValue = toStateValue
     )
 
   def saveRule[S](
@@ -66,7 +78,13 @@ object StateMachineRuleBuilder {
     priority: Int = 0,
     declarationOrder: Int = 0,
     guard: Option[Guard[S, TransitionEvent]] = None,
-    plan: ExecutionPlan[S, TransitionEvent]
+    plan: ExecutionPlan[S, TransitionEvent],
+    machineName: Option[String] = None,
+    stateFieldName: Option[String] = None,
+    fromState: Option[String] = None,
+    fromStateValue: Option[Int] = None,
+    toState: Option[String] = None,
+    toStateValue: Option[Int] = None
   ): CollectionTransitionRule[Any] =
     CollectionTransitionRule[Any](
       collectionName = collectionName,
@@ -75,7 +93,12 @@ object StateMachineRuleBuilder {
       priority = priority,
       declarationOrder = declarationOrder,
       guard = guard.asInstanceOf[Option[Guard[Any, TransitionEvent]]],
-      plan = plan.asInstanceOf[ExecutionPlan[Any, TransitionEvent]]
+      plan = plan.asInstanceOf[ExecutionPlan[Any, TransitionEvent]],
+      machineName = machineName,
+      stateFieldName = stateFieldName,
+      fromState = fromState,
+      fromStateValue = fromStateValue,
+      toState = toState,
+      toStateValue = toStateValue
     )
 }
-

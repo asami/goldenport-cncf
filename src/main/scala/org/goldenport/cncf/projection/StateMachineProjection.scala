@@ -13,8 +13,8 @@ import org.goldenport.cncf.statemachine.{
 
 /*
  * @since   Mar. 20, 2026
- *  version Mar. 20, 2026
- * @version Mar. 25, 2026
+ *  version Mar. 25, 2026
+ * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 object StateMachineProjection {
@@ -88,8 +88,8 @@ object StateMachineProjection {
 
   private def _transition_record(
     rule: CollectionTransitionRule[Any]
-  ): Record =
-    Record.data(
+  ): Record = {
+    val base = Vector[(String, Any)](
       "collection" -> rule.collectionName,
       "trigger" -> rule.trigger.toString.toLowerCase,
       "event" -> rule.eventName,
@@ -102,6 +102,16 @@ object StateMachineProjection {
         "entry" -> rule.plan.entryActions.size
       )
     )
+    val topology = Vector(
+      rule.machineName.map("machine" -> _),
+      rule.stateFieldName.map("stateField" -> _),
+      rule.fromState.map("fromState" -> _),
+      rule.fromStateValue.map("fromStateValue" -> _),
+      rule.toState.map("toState" -> _),
+      rule.toStateValue.map("toStateValue" -> _)
+    ).flatten
+    Record.create(base ++ topology)
+  }
 
   private def _guard_record(
     guard: Option[Guard[Any, TransitionEvent]]

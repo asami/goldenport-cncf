@@ -11,7 +11,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 20, 2026
- * @version Mar. 25, 2026
+ *  version Mar. 25, 2026
+ * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 final class StateMachineProjectionSpec
@@ -40,6 +41,10 @@ final class StateMachineProjectionSpec
 
       second.get("event") shouldBe Some("update")
       second.get("priority") shouldBe Some(2)
+      second.get("machine") shouldBe Some("lifecycle")
+      second.get("stateField") shouldBe Some("status")
+      second.get("fromState") shouldBe Some("Draft")
+      second.get("toState") shouldBe Some("Published")
       _record(second("guard")).asMap.get("kind") shouldBe Some("expression")
     }
 
@@ -70,7 +75,13 @@ final class StateMachineProjectionSpec
             priority = 2,
             declarationOrder = 1,
             guard = Some(ExpressionGuard("event.name == 'update'", (_, _) => Map("event" -> Map("name" -> "update")))),
-            plan = ExecutionPlan.empty[Any, TransitionEvent]
+            plan = ExecutionPlan.empty[Any, TransitionEvent],
+            machineName = Some("lifecycle"),
+            stateFieldName = Some("status"),
+            fromState = Some("Draft"),
+            fromStateValue = Some(1),
+            toState = Some("Published"),
+            toStateValue = Some(2)
           ),
           CollectionTransitionRule[Any](
             collectionName = "person",

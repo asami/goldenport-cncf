@@ -5,18 +5,21 @@ import org.goldenport.cncf.context.ExecutionContext
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 import org.goldenport.cncf.entity.EntityPersistent
 import org.goldenport.record.Record
+import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 19, 2026
  *  version Mar. 24, 2026
- * @version Apr. 14, 2026
+ *  version Apr. 14, 2026
+ * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 final class CollectionStateMachinePlannerProviderSpec
   extends AnyWordSpec
-  with Matchers {
+  with Matchers
+  with GivenWhenThen {
 
   private val _cid = EntityCollectionId("test", "sm", "person")
 
@@ -79,7 +82,112 @@ final class CollectionStateMachinePlannerProviderSpec
 
       selected shouldBe Consequence.success(None)
     }
+
+    "allow a declared structural state transition on generic update" in {
+      Given("a lifecycle rule from Draft to Published and matching record state")
+      val planner = new CollectionStateMachinePlanner(Vector(
+        _structural_rule("publish", "Draft", 1, "Published", 2)
+      ))
+      val person = _Person(EntityId("test", "p4", _cid), "taro", age = 20)
+      val event = TransitionEvent(
+        "update",
+        Some(person.id),
+        currentRecord = Some(Record.data("status" -> "Draft")),
+        proposedRecord = Some(Record.data("status" -> "Published"))
+      )
+
+      When("the generic update is planned")
+      val selected = planner.plan(person, event)
+
+      Then("the declared semantic transition supplies the execution plan")
+      selected shouldBe Consequence.success(Some(ExecutionPlan.empty[_Person, TransitionEvent]))
+    }
+
+    "reject a state change with no declared structural transition" in {
+      Given("a lifecycle that allows Draft to Published only")
+      val planner = new CollectionStateMachinePlanner(Vector(
+        _structural_rule("publish", "Draft", 1, "Published", 2)
+      ))
+      val person = _Person(EntityId("test", "p5", _cid), "taro", age = 20)
+      val event = TransitionEvent(
+        "update",
+        Some(person.id),
+        currentRecord = Some(Record.data("status" -> "Published")),
+        proposedRecord = Some(Record.data("status" -> "Draft"))
+      )
+
+      When("the reverse update is planned")
+      val selected = planner.plan(person, event)
+
+      Then("the planner reports a state conflict")
+      selected shouldBe a[Consequence.Failure[_]]
+      selected match {
+        case Consequence.Failure(conclusion) => conclusion.show should include("Published -> Draft")
+        case _ => fail("state conflict should fail")
+      }
+    }
+
+    "skip transition execution when the state field is unchanged" in {
+      Given("a structural lifecycle rule and an update that keeps its state")
+      val planner = new CollectionStateMachinePlanner(Vector(
+        _structural_rule("publish", "Draft", 1, "Published", 2)
+      ))
+      val person = _Person(EntityId("test", "p6", _cid), "taro", age = 21)
+      val event = TransitionEvent(
+        "update",
+        Some(person.id),
+        currentRecord = Some(Record.data("status" -> "Draft", "age" -> 20)),
+        proposedRecord = Some(Record.data("status" -> "Draft", "age" -> 21))
+      )
+
+      When("the non-state update is planned")
+      val selected = planner.plan(person, event)
+
+      Then("no state-machine plan is required")
+      selected shouldBe Consequence.success(None)
+    }
+
+    "resolve duplicate semantic event names by structural from and to states" in {
+      Given("two cancel transitions that share an event but start in different states")
+      val queued = _structural_rule("cancel", "Queued", 1, "Canceled", 4)
+      val sending = _structural_rule("cancel", "Sending", 2, "Canceled", 4)
+      val planner = new CollectionStateMachinePlanner(Vector(queued, sending))
+      val person = _Person(EntityId("test", "p7", _cid), "taro", age = 20)
+      val event = TransitionEvent(
+        "update",
+        Some(person.id),
+        currentRecord = Some(Record.data("status" -> 2)),
+        proposedRecord = Some(Record.data("status" -> 4))
+      )
+
+      When("the update starts from Sending")
+      val selected = planner.plan(person, event)
+
+      Then("the Sending transition is selected independently of declaration order")
+      selected shouldBe Consequence.success(Some(sending.plan))
+    }
   }
+
+  private def _structural_rule(
+    eventname: String,
+    fromstate: String,
+    fromvalue: Int,
+    tostate: String,
+    tovalue: Int
+  ): TransitionRule[_Person] =
+    TransitionRule(
+      eventName = eventname,
+      priority = 0,
+      declarationOrder = 0,
+      guard = None,
+      plan = ExecutionPlan.empty[_Person, TransitionEvent],
+      machineName = Some("lifecycle"),
+      stateFieldName = Some("status"),
+      fromState = Some(fromstate),
+      fromStateValue = Some(fromvalue),
+      toState = Some(tostate),
+      toStateValue = Some(tovalue)
+    )
 
   private final case class _Person(
     id: EntityId,

@@ -22,6 +22,7 @@ import org.goldenport.cncf.metrics.EntityAccessMetricsRegistry
 import org.goldenport.configuration.ConfigurationValue
 import org.goldenport.record.Record
 import org.goldenport.record.io.RecordEncoder
+import org.simplemodeling.model.directive.Update
 
 /*
  * Interpreter for UnitOfWorkOp.
@@ -218,33 +219,46 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
 
     case m: (UnitOfWorkOp.EntityStoreUpdate[t] @unchecked) =>
       _with_calltree("uow:entitystore:update") {
-        val loadrecord = () =>
-          _load_record(m.tc.id(m.entity)).map(_.orElse(Some(m.tc.authorizationRecord(m.entity))))
-        _authorize(m.authorization, Some(loadrecord)).flatMap(_ =>
-          _transition_validation_hook
-            .beforeUpdate[t](m.entity, m.tc)
-            .flatMap(_ => _entity_store_space.update(m))
-            .map { r =>
-              _entity_space_evict(m.tc.id(m.entity))
-              _view_space_invalidate_all()
-              r
-            }
-        )
+        val id = m.tc.id(m.entity)
+        for {
+          current <- _load_record(id)
+          loadrecord = () => Consequence.success(current.orElse(Some(m.tc.authorizationRecord(m.entity))))
+          _ <- _authorize(m.authorization, Some(loadrecord))
+          _ <- current match {
+            case Some(record) =>
+              _transition_validation_hook.beforeUpdate[t](m.entity, m.tc, record, m.tc.toStoreRecord(m.entity))
+            case None =>
+              _transition_validation_hook.beforeUpdate[t](m.entity, m.tc)
+          }
+          r <- _entity_store_space.update(m)
+        } yield {
+          _entity_space_evict(id)
+          _view_space_invalidate_all()
+          r
+        }
       }
 
     case m: (UnitOfWorkOp.EntityStoreUpdateById[t] @unchecked) =>
       _with_calltree("uow:entitystore:update:patch") {
         val id = _canonical_entity_id(m.id)
         val op = m.copy(id = id)
-        _authorize(op.authorization, Some(() => _load_record(op.id))).flatMap(_ =>
-          _transition_validation_hook
-            .beforeUpdateById[t](op.id, op.patch, op.tc)
-            .flatMap(_ => _entity_store_space.updateById(op))
-            .map { r =>
-              _view_space_invalidate_all()
-              r
-            }
-        )
+        for {
+          current <- _load_record(op.id)
+          _ <- _authorize(op.authorization, Some(() => Consequence.success(current)))
+          _ <- current match {
+            case Some(record) =>
+              val changes = Update.toChangesRecord(op.tc.toStoreRecord(op.patch))
+              val proposed = _overlay_record(record, changes)
+              _transition_validation_hook.beforeUpdateById[t](op.id, op.patch, op.tc, record, proposed)
+            case None =>
+              _transition_validation_hook.beforeUpdateById[t](op.id, op.patch, op.tc)
+          }
+          r <- _entity_store_space.updateById(op)
+        } yield {
+          _entity_space_evict(op.id)
+          _view_space_invalidate_all()
+          r
+        }
       }
 
     case m: UnitOfWorkOp.EntityStoreDelete =>
@@ -710,6 +724,11 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
           Consequence.success(None)
         else
           Consequence.Failure(conclusion)
+    }
+
+  private def _overlay_record(base: Record, changes: Record): Record =
+    changes.fields.foldLeft(base) { (z, field) =>
+      z.upsertSingle(field.key, field.value.single)
     }
 
   private def _is_not_found(conclusion: Conclusion): Boolean = {

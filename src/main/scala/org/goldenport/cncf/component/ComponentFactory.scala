@@ -358,7 +358,13 @@ final class ComponentFactory(
       priority = p.priority,
       declarationOrder = p.declarationOrder,
       guard = p.guard,
-      plan = p.plan
+      plan = p.plan,
+      machineName = p.machineName,
+      stateFieldName = p.stateFieldName,
+      fromState = p.fromState,
+      fromStateValue = p.fromStateValue,
+      toState = p.toState,
+      toStateValue = p.toStateValue
     )
 
   private def _bootstrap_entities_with_plan(

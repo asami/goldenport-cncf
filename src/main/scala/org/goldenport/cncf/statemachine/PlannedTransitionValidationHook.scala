@@ -5,15 +5,19 @@ import org.goldenport.cncf.context.ExecutionContext
 import org.simplemodeling.model.datatype.EntityId
 import org.goldenport.cncf.entity.{EntityPersistent, EntityPersistentUpdate}
 import org.goldenport.cncf.event.TransitionLifecycleEvent
+import org.goldenport.record.Record
 
 /*
  * @since   Mar. 19, 2026
- * @version Mar. 24, 2026
+ *  version Mar. 24, 2026
+ * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class TransitionEvent(
   name: String,
-  targetId: Option[EntityId]
+  targetId: Option[EntityId],
+  currentRecord: Option[Record] = None,
+  proposedRecord: Option[Record] = None
 )
 
 trait StateMachinePlannerProvider {
@@ -108,12 +112,54 @@ final class PlannedTransitionValidationHook(
     } yield ()
   }
 
+  override def beforeUpdate[T](
+    entity: T,
+    tc: EntityPersistent[T],
+    current: Record,
+    proposed: Record
+  )(using ctx: ExecutionContext): Consequence[Unit] = {
+    val event = TransitionEvent("update", Some(tc.id(entity)), Some(current), Some(proposed))
+    for {
+      plan <- plannerProvider.planForUpdate(entity, tc, event)
+      _ <- plan.fold(Consequence.unit) { p =>
+        ExecutionPlanExecutor.execute(
+          p,
+          entity,
+          event,
+          _lifecycle_observer[T](event, Some(tc.id(entity).collection.name))
+        )
+      }
+    } yield ()
+  }
+
   def beforeUpdateById[P](
     id: EntityId,
     patch: P,
     tc: EntityPersistentUpdate[P]
   )(using ctx: ExecutionContext): Consequence[Unit] = {
     val event = TransitionEvent("updateById", Some(id))
+    val state = (id, patch)
+    for {
+      plan <- plannerProvider.planForUpdateById(id, patch, tc, event)
+      _ <- plan.fold(Consequence.unit) { p =>
+        ExecutionPlanExecutor.execute(
+          p,
+          state,
+          event,
+          _lifecycle_observer[(EntityId, P)](event, Some(id.collection.name))
+        )
+      }
+    } yield ()
+  }
+
+  override def beforeUpdateById[P](
+    id: EntityId,
+    patch: P,
+    tc: EntityPersistentUpdate[P],
+    current: Record,
+    proposed: Record
+  )(using ctx: ExecutionContext): Consequence[Unit] = {
+    val event = TransitionEvent("updateById", Some(id), Some(current), Some(proposed))
     val state = (id, patch)
     for {
       plan <- plannerProvider.planForUpdateById(id, patch, tc, event)
