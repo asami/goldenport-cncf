@@ -51,6 +51,34 @@ final class HttpDriverSpec
       }
     }
 
+    "preserve a successful 201 Created response" in {
+      Given("an HTTP server that creates RDF data")
+      val server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0)
+      server.createContext("/data", new HttpHandler {
+        def handle(exchange: HttpExchange): Unit = {
+          val bytes = "{\"count\":2}".getBytes(StandardCharsets.UTF_8)
+          exchange.getResponseHeaders.add("Content-Type", "application/json")
+          exchange.sendResponseHeaders(201, bytes.length)
+          exchange.getResponseBody.write(bytes)
+          exchange.close()
+        }
+      })
+      server.start()
+
+      try {
+        When("the URL connection driver posts a provider dataset")
+        val port = server.getAddress.getPort
+        val driver = new UrlConnectionHttpDriver(s"http://127.0.0.1:$port")
+        val response = driver.post("/data", Some("{}"), Map("Content-Type" -> "application/json"))
+
+        Then("the successful Created status is preserved")
+        response.code shouldBe 201
+        response.getString shouldBe Some("{\"count\":2}")
+      } finally {
+        server.stop(0)
+      }
+    }
+
     "preserve non-text responses as binary bodies" in {
       Given("an HTTP server that returns a PNG payload")
       val server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0)
