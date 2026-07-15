@@ -533,6 +533,26 @@ classified before editing:
 This classification avoids blindly replacing every `Instant.now` or UUID call
 with an ActionCall clock where no ActionCall semantics exist.
 
+### ED-07 audit snapshot
+
+The Jul. 15, 2026 source audit grouped the remaining ambient calls by ownership
+before migration:
+
+| Boundary | Representative locations | Direction |
+| --- | --- | --- |
+| component-visible domain state | InformationSpace, Tag, JobControl, Workflow, Knowledge working sets | use current execution clock/ID/random capabilities; Tag update and move are migrated |
+| Event/Job/runtime semantics | EventReception, EventStore fallback, transition lifecycle events, Job model defaults | route construction and mutation through runtime clock/ID controls; remove semantic defaults that hide the required context |
+| provider/driver effects | BlobStore, notification delivery, Docker/filesystem adapters | retain behind provider/driver contracts and supply deterministic test doubles where replay is required |
+| monotonic diagnostics and transport telemetry | ActionEngine duration, OpenTelemetry export, dashboard/diagnostic capture | retain monotonic or transport-owned time; do not reinterpret as domain time |
+| bootstrap/repository/host discovery | CLI, RuntimeConfig bootstrap, component repository, configuration sources, test-home/work-area setup | retain at ingress/bootstrap and snapshot only values that become component-visible |
+| compatibility/test waiting | AwaitSupport and legacy EventAwaitSupport | replace asserted semantic waiting with controlled scheduler operations; bounded host polling may remain only as explicit compatibility infrastructure |
+
+The audit also found direct host filesystem access concentrated in repository,
+archive, config, transport, datastore, and provider adapters. Those calls are
+not migrated mechanically. CAR lint treats equivalent access in component
+sources as a warning so application code cannot silently cross these framework
+boundaries.
+
 ## Proposed Implementation Slices
 
 ### ED-01: Freeze the execution-profile contract

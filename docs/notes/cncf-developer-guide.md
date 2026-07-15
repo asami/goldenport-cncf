@@ -121,6 +121,32 @@ Component code should not:
 - call raw `DataStoreSpace` / unrestricted `EntityStoreSpace` from business
   logic.
 
+### Deterministic execution capabilities
+
+Values that enter an operation response, Entity state, Event, Job/Task state,
+or another component-visible decision must come from the current execution
+capabilities. In handwritten `ActionCall` behavior:
+
+- use `execution_clock`, `current_instant`, or `current_zoned_datetime` for
+  semantic time;
+- use `random_int`, `random_long`, `random_double`, or `random_boolean` with a
+  stable purpose name for domain randomness;
+- use `entity_id`, `collection_entity_id`, or `opaque_id` for generated IDs;
+- represent delay and asynchronous continuation through Job/Event facilities,
+  never `Thread.sleep` or an application-created executor;
+- use resolved environment assumptions and `config_*` helpers rather than
+  `System.getenv`, `System.getProperty`, or JVM defaults;
+- use CNCF filesystem/datastore/provider boundaries rather than directly
+  reading host files that affect component behavior.
+
+The controlled profile orders CNCF-owned timers, Job queues, retries, and async
+Event continuation Tasks. It does not make arbitrary component-created threads
+deterministic. Concurrent access to one named random stream is supported only
+when CNCF-managed Task ordering serializes the calls. Host bootstrap,
+repository discovery, transport adaptation, provider effects, and monotonic
+performance measurement remain distinct boundaries and must not be routed
+blindly through an `ActionCall` merely to remove an ambient API call.
+
 ## CAR Source Layout And Assembly Defaults
 
 For CAR projects, `packaging.kind: car` uses `src/main/car` as the default
@@ -702,3 +728,10 @@ Before accepting component implementation code, check:
 - Are provider integrations exposed through SPI or component operations rather
   than direct client construction?
 - Do tests cover the operation behavior and the intended internal DSL route?
+- Are semantic time, random values, and IDs obtained through execution
+  capabilities rather than ambient JVM APIs?
+- Are delays and concurrency Job/Event-managed instead of using host sleep,
+  threads, or executors?
+- Is every retained host environment/property/filesystem access clearly a
+  bootstrap, transport, repository, or provider boundary rather than component
+  behavior?

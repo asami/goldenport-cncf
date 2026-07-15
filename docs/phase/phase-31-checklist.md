@@ -245,18 +245,45 @@ Status: DONE
 
 ## ED-07: Deterministic Ordering, Migration, and Enforcement
 
-Status: PLANNED
+Status: IN PROGRESS
 
 ### Tasks
 
-- [ ] Fix ordering guarantees for Job queues, due timers, retries, and async
+- [x] Fix ordering guarantees for Job queues, due timers, retries, and async
       Event continuations owned by CNCF.
-- [ ] Define strict concurrent named-stream behavior.
-- [ ] Classify direct time, UUID, random, sleep, environment, property,
+- [x] Define strict concurrent named-stream behavior.
+- [x] Classify direct time, UUID, random, sleep, environment, property,
       filesystem, and executor access by semantic boundary.
 - [ ] Migrate component-visible and runtime-semantic occurrences.
-- [ ] Preserve host bootstrap and monotonic diagnostic uses where appropriate.
-- [ ] Extend CAR lint/review/developer guidance for ambient-state access.
+- [x] Preserve host bootstrap and monotonic diagnostic uses where appropriate.
+- [x] Extend CAR lint/review/developer guidance for ambient-state access.
+
+### Current Evidence
+
+- Controlled scheduling orders due timers by due instant and registration
+  sequence, ready Jobs by priority and enqueue sequence, delayed retry by
+  inherited priority and retry enqueue sequence, same-Job continuation Tasks by
+  inherited priority and enqueue sequence, and Event subscriptions by priority
+  and registration sequence.
+- Existing Job/Event executable specifications cover equal-due Jobs, FIFO and
+  priority queues, delayed retry, same-Job async continuation through the
+  controlled scheduler, immediate same-transaction Event handling, and Event
+  subscription ordering. The focused ED-07 run completed 81 tests without
+  failure.
+- The strict named-stream rule permits shared-stream calls only through
+  CNCF-managed serialized execution. Arbitrary component-created thread or
+  executor ordering is outside the replay contract.
+- The source audit is recorded in
+  `docs/notes/execution-determinism-capability-design.md`; it separates
+  component/runtime semantics from provider, monotonic diagnostics,
+  bootstrap/repository, transport, and compatibility-test concerns.
+- Tag update and move timestamps now use the current operational execution
+  clock and have property-based executable specification coverage.
+- CAR lint and component developer guidance now report direct ambient clock,
+  UUID/random, sleep, environment/property, host filesystem, thread, and
+  executor access in component sources.
+- Remaining InformationSpace, Event/Workflow, working-set, and runtime model
+  semantic defaults still require migration before ED-07 can be marked DONE.
 
 ### Acceptance Criteria
 

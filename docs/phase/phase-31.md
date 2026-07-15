@@ -51,7 +51,7 @@ ordering, locale/environment assumptions, and replayability diagnostics.
 - D (DONE): ED-04 - Internal DSL and capability-based ID generation.
 - E (DONE): ED-05 - Unified time and Job/Event scheduling.
 - F (DONE): ED-06 - Resolved environment assumptions.
-- G (PLANNED): ED-07 - Deterministic ordering, migration, and enforcement.
+- G (IN PROGRESS): ED-07 - Deterministic ordering, migration, and enforcement.
 - H (PLANNED): ED-08 - Introspection, replay verification, and closure.
 
 ## 5. Development Items
@@ -63,7 +63,9 @@ ordering, locale/environment assumptions, and replayability diagnostics.
 - [x] ED-04: Add internal DSL access and profile-based ID generation.
 - [x] ED-05: Integrate manual time with JobEngine and async Event execution.
 - [x] ED-06: Resolve environment and internationalization assumptions.
-- [ ] ED-07: Fix CNCF-owned ordering and migrate ambient-state debt.
+- [ ] ED-07: Fix CNCF-owned ordering and migrate ambient-state debt. Ordering,
+      audit classification, CAR lint, and the first Tag migration are complete;
+      runtime-semantic migration remains active.
 - [ ] ED-08: Add diagnostics, replay scenarios, developer guidance, and close
       Phase 31.
 

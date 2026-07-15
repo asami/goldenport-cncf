@@ -2,11 +2,10 @@ package org.goldenport.cncf.tag
 
 import java.time.Instant
 import java.util.Locale
-import java.util.UUID
 import org.goldenport.Consequence
 import org.goldenport.cncf.association.{Association, AssociationBindingWorkflow, AssociationDomain, AssociationFilter, AssociationRecordCodec, AssociationRepository, AssociationStoragePolicy}
 import org.goldenport.cncf.context.ExecutionContext
-import org.goldenport.cncf.directive.{Query, SearchResult}
+import org.goldenport.cncf.directive.Query
 import org.goldenport.cncf.entity.{EntityPersistent, EntityPersistentCreate, EntityQuery, EntitySearchScope, EntityStore, EntityVisibilityScope}
 import org.goldenport.record.Record
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
@@ -15,7 +14,8 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
  * Built-in hierarchical Tag master and Entity-to-Tag association workflow.
  *
  * @since   May.  5, 2026
- * @version May.  5, 2026
+ *  version May.  5, 2026
+ * @version Jul. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 enum TagUsageKind(val value: String) {
@@ -140,7 +140,7 @@ final class EntityStoreTagRepository extends TagRepository {
         sortOrder = update.sortOrder.orElse(tag.sortOrder),
         title = update.title.orElse(tag.title),
         description = update.description.orElse(tag.description),
-        updatedAt = Instant.now(),
+        updatedAt = ctx.clock.instant(),
         attributes = update.attributes.getOrElse(tag.attributes)
       )
       _ <- EntityStore.standard().save(changed)
@@ -153,28 +153,28 @@ final class EntityStoreTagRepository extends TagRepository {
 
   def move(ref: String, newParentRef: Option[String], newKey: Option[String])(using ctx: ExecutionContext): Consequence[Tag] =
     for {
-      currentTree <- tree()
-      tag <- currentTree.resolve(ref)
+      currenttree <- tree()
+      tag <- currenttree.resolve(ref)
       newkey <- newKey.map(TagPath.validateKey).getOrElse(Consequence.success(tag.key))
-      parent <- _resolve_move_parent(currentTree, tag, newParentRef)
+      parent <- _resolve_move_parent(currenttree, tag, newParentRef)
       values <- list(tag.tagSpace)
       _ <- _reject_duplicate_sibling_excluding(values, parent.map(_.id), newkey, tag.id)
-      _ <- _reject_move_cycle(currentTree, tag, parent)
-      oldPath = tag.path
-      newPath = TagPath.childPath(parent.map(_.path), newkey)
-      now = Instant.now()
+      _ <- _reject_move_cycle(currenttree, tag, parent)
+      oldpath = tag.path
+      newpath = TagPath.childPath(parent.map(_.path), newkey)
+      now = ctx.clock.instant()
       updates = values.collect {
         case x if x.id.value == tag.id.value =>
           x.copy(
             key = newkey,
             parentTagId = parent.map(_.id),
-            path = newPath,
+            path = newpath,
             updatedAt = now,
-            attributes = x.attributes + ("path" -> newPath)
+            attributes = x.attributes + ("path" -> newpath)
           )
-        case x if _is_descendant_path(x.path, oldPath) =>
-          val suffix = x.path.stripPrefix(oldPath + ".")
-          val path = s"$newPath.$suffix"
+        case x if _is_descendant_path(x.path, oldpath) =>
+          val suffix = x.path.stripPrefix(oldpath + ".")
+          val path = s"$newpath.$suffix"
           x.copy(path = path, updatedAt = now, attributes = x.attributes + ("path" -> path))
       }
       _ <- updates.foldLeft(Consequence.unit)((z, value) => z.flatMap(_ => EntityStore.standard().save(value)))
@@ -222,19 +222,19 @@ final class EntityStoreTagRepository extends TagRepository {
 
   private def _normalize_create(create: TagCreate)(using ctx: ExecutionContext): Consequence[TagCreate] =
     {
-      val tagSpace = TagSpace.normalize(create.tagSpace)
+      val tagspace = TagSpace.normalize(create.tagSpace)
       for {
       key <- TagPath.validateKey(create.key)
       parent <- create.parentTagId.map(load).map(_.flatMap {
-        case Some(value) if value.tagSpace == tagSpace => Consequence.success(Some(value))
+        case Some(value) if value.tagSpace == tagspace => Consequence.success(Some(value))
         case Some(value) => Consequence.argumentInvalid(s"parent tag belongs to a different tag space: ${value.tagSpace}")
         case None => Consequence.argumentInvalid(s"missing parent tag: ${create.parentTagId.map(_.value).getOrElse("")}")
       }).getOrElse(Consequence.success(None))
-      values <- list(tagSpace)
+      values <- list(tagspace)
       _ <- _reject_duplicate_sibling(values, parent.map(_.id), key)
       path = TagPath.childPath(parent.map(_.path), key)
       id = create.id.map(_tag_id)
-      } yield create.copy(id = id, tagSpace = tagSpace, key = key, parentTagId = parent.map(_.id), attributes = create.attributes + ("path" -> path))
+      } yield create.copy(id = id, tagSpace = tagspace, key = key, parentTagId = parent.map(_.id), attributes = create.attributes + ("path" -> path))
     }
 
   private def _reject_duplicate_sibling(values: Vector[Tag], parent: Option[EntityId], key: String): Consequence[Unit] =
@@ -272,8 +272,8 @@ final class EntityStoreTagRepository extends TagRepository {
         Consequence.unit
     }
 
-  private def _is_descendant_path(path: String, parentPath: String): Boolean =
-    path.startsWith(parentPath + ".")
+  private def _is_descendant_path(path: String, parentpath: String): Boolean =
+    path.startsWith(parentpath + ".")
 
   private def _normalize_collection(tag: Tag): Tag =
     tag.copy(id = _tag_id(tag.id), parentTagId = tag.parentTagId.map(_tag_id))
@@ -325,13 +325,13 @@ object TagTreeCache {
 }
 
 final case class TagTree(tags: Vector[Tag]) {
-  private val byId: Map[String, Tag] =
+  private val _by_id: Map[String, Tag] =
     tags.map(x => x.id.value -> x).toMap
-  private val byEntropy: Map[String, Tag] =
+  private val _by_entropy: Map[String, Tag] =
     tags.map(x => x.id.parts.entropy -> x).toMap
-  private val byPath: Map[String, Vector[Tag]] =
+  private val _by_path: Map[String, Vector[Tag]] =
     tags.groupBy(x => TagPath.normalizePath(x.path))
-  private val byKey: Map[String, Vector[Tag]] =
+  private val _by_key: Map[String, Vector[Tag]] =
     tags.groupBy(_.key)
 
   def resolve(ref: String): Consequence[Tag] = {
@@ -339,15 +339,15 @@ final case class TagTree(tags: Vector[Tag]) {
     if (value.isEmpty)
       Consequence.argumentMissing("tagRef")
     else {
-      val entityId = EntityId.parse(value).toOption
-      entityId.flatMap(id => byId.get(id.copy(collection = TagEntityCollections.Tag).value))
-        .orElse(byId.get(value))
-        .orElse(byEntropy.get(value))
+      val entityid = EntityId.parse(value).toOption
+      entityid.flatMap(id => _by_id.get(id.copy(collection = TagEntityCollections.Tag).value))
+        .orElse(_by_id.get(value))
+        .orElse(_by_entropy.get(value))
         .map(Consequence.success)
         .getOrElse {
-          byPath.get(TagPath.normalizePath(value)) match {
+          _by_path.get(TagPath.normalizePath(value)) match {
             case Some(xs) => _unique(Some(xs), value)
-            case None => _unique(byKey.get(value), value)
+            case None => _unique(_by_key.get(value), value)
           }
         }
     }
@@ -378,31 +378,31 @@ object TagTree {
     _validate_tree(tags).map(_ => TagTree(tags))
 
   private def _validate_tree(tags: Vector[Tag]): Consequence[Unit] = {
-    val byId = tags.map(x => x.id.value -> x).toMap
+    val byid = tags.map(x => x.id.value -> x).toMap
     val missing = tags.collectFirst {
-      case tag if tag.parentTagId.exists(id => !byId.contains(id.value)) =>
+      case tag if tag.parentTagId.exists(id => !byid.contains(id.value)) =>
         s"missing parent tag: ${tag.parentTagId.map(_.value).getOrElse("")}"
     }
     missing.map(Consequence.argumentInvalid).getOrElse {
       tags.collectFirst {
-        case tag if _has_cycle(tag, byId, Set.empty) => s"tag cycle detected: ${tag.id.value}"
+        case tag if _has_cycle(tag, byid, Set.empty) => s"tag cycle detected: ${tag.id.value}"
       }.map(Consequence.argumentInvalid).getOrElse(Consequence.unit)
     }
   }
 
-  private def _has_cycle(tag: Tag, byId: Map[String, Tag], seen: Set[String]): Boolean =
+  private def _has_cycle(tag: Tag, byid: Map[String, Tag], seen: Set[String]): Boolean =
     tag.parentTagId.exists { parent =>
       val key = parent.value
-      seen.contains(key) || byId.get(key).exists(_has_cycle(_, byId, seen + tag.id.value))
+      seen.contains(key) || byid.get(key).exists(_has_cycle(_, byid, seen + tag.id.value))
     }
 }
 
 object TagPath {
-  private val KeyRegex = "^[A-Za-z0-9][A-Za-z0-9_-]*(?:\\.[A-Za-z0-9][A-Za-z0-9_-]*)*$".r
+  private val _key_regex = "^[A-Za-z0-9][A-Za-z0-9_-]*(?:\\.[A-Za-z0-9][A-Za-z0-9_-]*)*$".r
 
   def validateKey(value: String): Consequence[String] =
     Option(value).map(_.trim.toLowerCase(Locale.ROOT)) match {
-      case Some(KeyRegex()) => Consequence.success(value.trim.toLowerCase(Locale.ROOT))
+      case Some(_key_regex()) => Consequence.success(value.trim.toLowerCase(Locale.ROOT))
       case Some(other) if other.nonEmpty => Consequence.argumentInvalid(s"invalid tag key: $other")
       case _ => Consequence.argumentMissing("key")
     }
@@ -438,7 +438,7 @@ final class TaggingWorkflow(
   tagSpace: String = "",
   tagSpaces: Vector[String] = Vector.empty
 ) {
-  private val binding =
+  private val _binding =
     AssociationBindingWorkflow(associations, AssociationStoragePolicy.tagAttachmentDefault)
 
   def attach(
@@ -449,7 +449,7 @@ final class TaggingWorkflow(
   )(using ExecutionContext): Consequence[Association] =
     for {
       tag <- _tree.flatMap(_.resolve(tagRef))
-      result <- binding.attachExistingTargetResult(
+      result <- _binding.attachExistingTargetResult(
         sourceEntityId = sourceEntityId,
         domain = AssociationDomain.TagAttachment,
         targetKind = Some("tag"),
@@ -507,13 +507,13 @@ final class TaggingWorkflow(
         targetKind = Some("tag"),
         role = Some(role)
       ))
-      desiredIds = desired.map(_.id.value).toSet
-      stale = current.filterNot(a => desiredIds.contains(a.targetEntityId))
+      desiredids = desired.map(_.id.value).toSet
+      stale = current.filterNot(a => desiredids.contains(a.targetEntityId))
       _ <- stale.foldLeft(Consequence.unit)((z, association) => z.flatMap(_ => associations.delete(association)))
       created <- desired.zipWithIndex.foldLeft(Consequence.success(Vector.empty[Association])) {
         case (z, (tag, index)) =>
           z.flatMap(xs =>
-            binding.attachExistingTargetResult(
+            _binding.attachExistingTargetResult(
               sourceEntityId = sourceEntityId,
               domain = AssociationDomain.TagAttachment,
               targetKind = Some("tag"),
@@ -572,7 +572,7 @@ object TagRecordCodec {
   def toRecord(tag: Tag): Record =
     _record(
       id = Some(tag.id),
-      tagSpace = tag.tagSpace,
+      tagspace = tag.tagSpace,
       key = tag.key,
       parent = tag.parentTagId,
       path = tag.path,
@@ -592,7 +592,7 @@ object TagRecordCodec {
     val path = create.attributes.get("path").getOrElse(TagPath.childPath(None, create.key))
     _record(
       id = create.id,
-      tagSpace = create.tagSpace,
+      tagspace = create.tagSpace,
       key = create.key,
       parent = create.parentTagId,
       path = path,
@@ -616,14 +616,14 @@ object TagRecordCodec {
     for {
       id <- EntityId.createC(record)
       key <- _string(record, "key").map(TagPath.validateKey).getOrElse(Consequence.argumentMissing("key"))
-      tagSpace = _string(record, "tagSpace", "tag_space").map(TagSpace.normalize).getOrElse(TagRepository.DefaultTagSpace)
+      tagspace = _string(record, "tagSpace", "tag_space").map(TagSpace.normalize).getOrElse(TagRepository.DefaultTagSpace)
       path = _string(record, "path").map(TagPath.normalizePath).getOrElse(TagPath.childPath(None, key))
       usage <- _string(record, "usageKind", "usage_kind").map(TagUsageKind.parse).getOrElse(Consequence.success(TagUsageKind.General))
       createdat <- _instant(record, "createdAt", "created_at").map(Consequence.success).getOrElse(Consequence.argumentMissing("createdAt"))
       updatedat <- _instant(record, "updatedAt", "updated_at").map(Consequence.success).getOrElse(Consequence.argumentMissing("updatedAt"))
     } yield Tag(
       id = id.copy(collection = TagEntityCollections.Tag),
-      tagSpace = tagSpace,
+      tagSpace = tagspace,
       key = key,
       parentTagId = _entity_id(record, "parentTagId", "parent_tag_id").map(_.copy(collection = TagEntityCollections.Tag)),
       path = path,
@@ -638,7 +638,7 @@ object TagRecordCodec {
 
   private def _record(
     id: Option[EntityId],
-    tagSpace: String,
+    tagspace: String,
     key: String,
     parent: Option[EntityId],
     path: String,
@@ -652,7 +652,7 @@ object TagRecordCodec {
   ): Record =
     Record.dataAuto(
       "id" -> id.map(_.value),
-      "tagSpace" -> TagSpace.normalize(tagSpace),
+      "tagSpace" -> TagSpace.normalize(tagspace),
       "key" -> key,
       "name" -> key,
       "parentTagId" -> parent.map(_.value),

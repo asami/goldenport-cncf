@@ -390,6 +390,54 @@ environment, system-property, or host filesystem APIs directly. Bootstrap,
 transport, repository discovery, provider, and monotonic diagnostics may use
 host facilities when the result is outside component semantics.
 
+## CNCF-Owned Ordering
+
+Under a `controlled` profile, CNCF serializes the runtime work that it owns.
+The normative tie-breakers are:
+
+- operational timers: due instant, then timer registration sequence;
+- ready Jobs: numeric priority, then Job/work enqueue sequence;
+- delayed retry: original Job priority, then the retry enqueue sequence when
+  its operational due instant becomes eligible;
+- same-Job async continuation Tasks: inherited Job priority, then Task enqueue
+  sequence;
+- Event subscriptions: numeric priority, then subscription registration
+  sequence.
+
+`runUntilIdle` drains eligible timers and registered CNCF work queues in their
+runtime registration order. Advancing manual time only makes due work eligible;
+it does not bypass the queue tie-breakers above.
+
+A seeded named random stream is deterministic only when its calls have a
+deterministic order. The `controlled` profile therefore supports shared-stream
+use only from CNCF-managed serialized work, such as one ActionCall or the
+ordered Job/Event Tasks above. Components MUST NOT create threads or executors
+to call a shared stream concurrently. Such arbitrary-thread shared-stream use
+is outside the replay contract and makes the execution partially controlled or
+invalid when replay is required; CNCF does not assign reproducible values by
+host thread arrival order.
+
+## Ambient-State Boundary
+
+Direct host-state access is classified by semantic ownership rather than by
+API name alone:
+
+1. Component-visible values and persistent domain state use `ExecutionContext`
+   or protected internal DSL capabilities.
+2. Job/Event/runtime semantic timestamps, delays, retries, and ordering use the
+   selected operational clock and scheduler.
+3. External effects remain behind providers or drivers.
+4. Performance duration and similar diagnostics retain a monotonic source.
+5. Bootstrap, transport, and repository discovery may inspect host state and
+   must snapshot any value that later becomes component-visible.
+6. Executable specifications use controlled facilities instead of host sleep
+   or arrival timing when those affect the asserted behavior.
+
+CAR lint reports direct clock, UUID/random, sleep, environment/property,
+filesystem, thread, and executor access in component sources. A framework or
+provider boundary may suppress a warning only with an explicit documented
+exception; suppression does not make that value part of the replay contract.
+
 ## Replayability
 
 The runtime computes `ReplayabilityAssessment` from every observable dimension.

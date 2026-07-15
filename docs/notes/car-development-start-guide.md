@@ -178,6 +178,15 @@ and `parse_dsl_document` for structured DSL/config parsing instead of directly
 reading runtime parameter maps, subsystem configuration, or low-level config
 loader classes.
 
+Component-visible time, random values, and IDs are runtime capabilities too.
+Use `current_instant`/`execution_clock`, purpose-based `random_*`, and
+`entity_id`/`collection_entity_id`/`opaque_id` helpers. Do not use
+`Instant.now()`, `UUID.randomUUID()`, `scala.util.Random`, `Thread.sleep`, host
+environment/system properties, direct host filesystem access, or
+component-created threads/executors in ordinary component logic. CNCF-owned
+Job/Event scheduling provides deterministic ordering in a controlled test
+profile; arbitrary thread arrival order does not.
+
 ## Development Loop
 
 Compile and test the component first:
