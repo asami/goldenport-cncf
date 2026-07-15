@@ -17,7 +17,7 @@ import org.goldenport.cncf.spi.SpiResolver
  *  version Apr. 23, 2026
  *  version Apr. 25, 2026
  *  version May. 18, 2026
- * @version Jul. 12, 2026
+ * @version Jul. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 object GenericSubsystemFactory {
@@ -290,8 +290,8 @@ object GenericSubsystemFactory {
       case None =>
         ()
     }
-    val runtimeConfig = RuntimeConfig.from(configuration)
-    val runMode = mode.getOrElse(runtimeConfig.mode)
+    val runtimeconfig = RuntimeConfig.from(configuration)
+    val runmode = mode.getOrElse(runtimeconfig.mode)
     val subsystem =
       Subsystem(
         name = subsystemName,
@@ -310,10 +310,10 @@ object GenericSubsystemFactory {
               )
           }
         ),
-        httpdriver = Some(runtimeConfig.httpDriver),
+        httpdriver = Some(runtimeconfig.httpDriver),
         configuration = configuration,
         aliasResolver = aliasResolver,
-        runMode = runMode
+        runMode = runmode
       )
     val params = ComponentCreate(subsystem, ComponentOrigin.Repository("subsystem-name"))
     val repositories = repos.map(_.build(params)).toVector
@@ -336,8 +336,8 @@ object GenericSubsystemFactory {
       .map(_.aliasResolver)
       .getOrElse(AliasResolver.empty)
   ): Subsystem = {
-    val runtimeConfig = RuntimeConfig.from(configuration)
-    val runMode = mode.getOrElse(runtimeConfig.mode)
+    val runtimeconfig = RuntimeConfig.from(configuration)
+    val runmode = mode.getOrElse(runtimeconfig.mode)
     val subsystem =
       Subsystem(
         name = descriptor.subsystemName,
@@ -357,10 +357,10 @@ object GenericSubsystemFactory {
               )
           }
         ),
-        httpdriver = Some(runtimeConfig.httpDriver),
+        httpdriver = Some(runtimeconfig.httpDriver),
         configuration = configuration,
         aliasResolver = aliasResolver,
-        runMode = runMode
+        runMode = runmode
       )
     val params = ComponentCreate(
       subsystem,
@@ -502,21 +502,21 @@ object GenericSubsystemFactory {
 
   private def _matches_named_subsystem(
     component: Component,
-    subsystemName: String
+    subsystemname: String
   ): Boolean =
-    component.artifactMetadata.flatMap(_.subsystem).contains(subsystemName)
+    component.artifactMetadata.flatMap(_.subsystem).contains(subsystemname)
 
   private def _matches_descriptor_component(
     component: Component,
-    descriptorComponentName: String
+    descriptorcomponentname: String
   ): Boolean = {
-    val runtimeName = _runtime_component_name(descriptorComponentName)
-    val legacyRuntimeName = _legacy_runtime_component_name(descriptorComponentName)
-    component.name == runtimeName ||
-      component.name == legacyRuntimeName ||
+    val runtimename = _runtime_component_name(descriptorcomponentname)
+    val legacyruntimename = _legacy_runtime_component_name(descriptorcomponentname)
+    component.name == runtimename ||
+      component.name == legacyruntimename ||
       component.artifactMetadata.exists(metadata =>
-        metadata.component.contains(descriptorComponentName) ||
-          metadata.name == descriptorComponentName
+        metadata.component.contains(descriptorcomponentname) ||
+          metadata.name == descriptorcomponentname
       )
   }
 
@@ -552,7 +552,9 @@ object GenericSubsystemFactory {
   ): Component =
     prototype.factoryOption match {
       case Some(factory) =>
-        val instanceparams = params.withInstanceMetadata(binding.instanceMetadata)
+        val instanceparams = params
+          .withOrigin(prototype.origin)
+          .withInstanceMetadata(binding.instanceMetadata)
         val component =
           if (prototype.isComponentletParticipant) factory.createComponentlet(instanceparams)
           else factory.createPrimary(instanceparams)
@@ -565,14 +567,14 @@ object GenericSubsystemFactory {
     }
 
   private def _runtime_component_name(
-    descriptorComponentName: String
+    descriptorcomponentname: String
   ): String =
-    descriptorComponentName.trim
+    descriptorcomponentname.trim
 
   private def _legacy_runtime_component_name(
-    descriptorComponentName: String
+    descriptorcomponentname: String
   ): String = {
-    val normalized = descriptorComponentName.trim
+    val normalized = descriptorcomponentname.trim
     val stripped =
       if (normalized.startsWith("textus-")) normalized.stripPrefix("textus-")
       else if (normalized.startsWith("textus_")) normalized.stripPrefix("textus_")

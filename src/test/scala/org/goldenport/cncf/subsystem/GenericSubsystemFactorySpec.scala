@@ -28,7 +28,7 @@ import org.scalatest.wordspec.AnyWordSpec
  *  version Apr. 10, 2026
  *  version Apr. 24, 2026
  *  version May. 25, 2026
- * @version Jul. 12, 2026
+ * @version Jul. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with BeforeAndAfterAll with GivenWhenThen {
@@ -70,6 +70,37 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
         ComponentInstanceId("textus-scraper", "dynamic-playwright")
       )
       instances.flatMap(_.instanceMetadata).map(_.config("scraper.mode")).toSet shouldBe Set("static", "dynamic")
+    }
+
+    "preserve descriptor runtime config across repository duplicate selection" in {
+      Given("one repository component and a descriptor binding that disables MCP publication")
+      val subsystem = TestComponentFactory.emptySubsystem("descriptor-runtime-config")
+      val origin = ComponentOrigin.Repository("component-file:car:textus-scraper:0.1.0-SNAPSHOT")
+      val params = ComponentCreate(subsystem, ComponentOrigin.Repository("subsystem-descriptor"))
+      val prototype = _named_instance_factory.createPrimary(params.withOrigin(origin))
+      val descriptor = GenericSubsystemDescriptor(
+        path = Path.of("descriptor-runtime-config.yaml"),
+        subsystemName = "descriptor-runtime-config",
+        componentBindings = Vector(
+          GenericSubsystemComponentBinding(
+            "textus-scraper",
+            config = Map("cncf.mcp.enabled" -> "false")
+          )
+        )
+      )
+
+      When("the configured instance competes with its repository prototype")
+      val materialized = GenericSubsystemFactory
+        .materializeComponentInstances(Vector(prototype), descriptor, params)
+        .head
+      val selection = org.goldenport.cncf.assembly.AssemblyReport.selectPreferred(materialized, prototype)
+
+      Then("the configured instance retains repository priority and MCP stays disabled")
+      selection.selected should be theSameInstanceAs materialized
+      materialized.origin shouldBe origin
+      materialized.applicationConfig.config.flatMap(_.string("cncf.mcp.enabled")) shouldBe Some("false")
+      prototype.isMcpReady("Search", "query") shouldBe true
+      materialized.isMcpReady("Search", "query") shouldBe false
     }
 
     "materialize every bundle participant for each named component instance" in {
@@ -356,7 +387,9 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
 
   private object _named_instance_factory extends Component.PrimaryComponentFactory {
     protected def create_Component(params: ComponentCreate): Component =
-      new Component() {}
+      new Component() {
+        override def mcpReadyServices: Set[String] = Set("Search")
+      }
 
     protected def create_Core(
       params: ComponentCreate,

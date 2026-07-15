@@ -365,3 +365,14 @@ Status: DONE
       identity adjustments are enabled.
 - [x] Verify the ArtScene Yamanashi route through Textus Scraper and the
       ToolchainRunner SPI without direct Docker use in ArtScene.
+
+## Post-Closure Maintenance: Descriptor Runtime Config Preservation
+
+Status: DONE
+
+- [x] Preserve the discovered repository origin when a descriptor binding
+      materializes a configured component instance.
+- [x] Keep descriptor runtime configuration on the preferred component during
+      later repository duplicate selection.
+- [x] Verify `cncf.mcp.enabled=false` through the representative CBD Support
+      and SIE SAR live MCP endpoint.

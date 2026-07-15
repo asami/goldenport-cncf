@@ -661,7 +661,13 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Previous closed phase checklist: `docs/phase/phase-29-checklist.md`
 - Current next slice: none. Select the next development item explicitly.
 - Status interpretation rules: `docs/rules/stage-status-and-checklist-convention.md`
-- Latest post-closure maintenance: Jul. 14, 2026 configured assembly runtime
+- Latest post-closure maintenance: Jul. 15, 2026 descriptor-bound component
+  runtime configuration preservation. Materialized component instances retain
+  their repository origin, so later duplicate discovery cannot replace a
+  configured SAR participant with an unconfigured prototype. The CBD Support
+  and SIE representative SAR verifies that global MCP disable policy narrows
+  the live composed tool catalog from thirteen tools to zero.
+- Previous post-closure maintenance: Jul. 14, 2026 configured assembly runtime
   defaults. An explicitly selected assembly descriptor now contributes its
   `config` entries to resolved runtime configuration while preserving the
   higher precedence of test descriptors and command-line arguments. ArtScene

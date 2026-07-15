@@ -146,6 +146,14 @@ Phase 29 evidence boundary without reopening Phase 29.
 
 ## 9. Post-Closure Maintenance
 
+On Jul. 15, 2026, descriptor-bound component materialization was corrected to
+retain the discovered prototype's repository origin. This prevents later
+duplicate repository discovery from replacing the configured instance with an
+unconfigured prototype. A focused executable specification preserves the
+origin and `cncf.mcp.enabled=false` application configuration across duplicate
+selection, while the representative CBD Support and SIE SAR narrows its live
+MCP catalog from thirteen tools to zero under global disable policy.
+
 On Jul. 14, 2026, CNCF hardened its shared MCP projection boundary without
 reopening Phase 30. Components now declare MCP readiness at service or
 service-qualified operation granularity; CAR/SAR runtime configuration can
