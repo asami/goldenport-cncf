@@ -12,7 +12,7 @@ import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.context.{ObservabilityContext, ScopeContext, ScopeKind, TraceId}
 import org.goldenport.cncf.http.RuntimeDashboardMetrics
 import org.goldenport.cncf.metrics.{EntityAccessMetricsRegistry, RuntimeMetricPoint, RuntimeMetricsSnapshot}
-import org.goldenport.cncf.log.{LogBackend, LogBackendHolder}
+import org.goldenport.cncf.log.{LogBackend, LogBackendHolder, StructuredLogEvent}
 import io.circe.Json
 import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.record.Record
@@ -25,7 +25,7 @@ import org.goldenport.configuration.{Configuration, ConfigurationTrace, Configur
  *  version Apr. 15, 2026
  *  version May. 11, 2026
  *  version Jun. 18, 2026
- * @version Jul.  4, 2026
+ * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 class ObservabilityEngineSpec extends AnyWordSpec with Matchers with BeforeAndAfterEach {
@@ -552,6 +552,28 @@ class ObservabilityEngineSpec extends AnyWordSpec with Matchers with BeforeAndAf
   }
 
   "visibility policy" should {
+    "preserve structured event attributes for a structured backend" in {
+      val backend = new StructuredMemoryBackend
+      LogBackendHolder.install(backend)
+      val scope = _scope_context()
+      val attributes = Record.dataAuto(
+        "provider" -> "chroma",
+        "outcome" -> "success"
+      )
+
+      ObservabilityEngine.emitInfo(
+        scope.observabilityContext,
+        scope,
+        "provider.http.completed",
+        attributes
+      )
+
+      backend.events should have size 1
+      backend.events.head.level shouldBe "info"
+      backend.events.head.message should include ("provider.http.completed")
+      backend.events.head.attributes shouldBe attributes
+    }
+
     "hide debug events when the minimum level is info" in {
       val backend = new MemoryBackend
       LogBackendHolder.install(backend)
@@ -691,6 +713,22 @@ class ObservabilityEngineSpec extends AnyWordSpec with Matchers with BeforeAndAf
 
     override def writeLine(line: String): Unit = _lines.synchronized {
       _lines += line
+    }
+  }
+
+  private final class StructuredMemoryBackend extends LogBackend {
+    private val _events = ListBuffer.empty[StructuredLogEvent]
+
+    def events: Vector[StructuredLogEvent] = _events.synchronized {
+      _events.toVector
+    }
+
+    override def logStructured(event: StructuredLogEvent): Unit = _events.synchronized {
+      _events += event
+    }
+
+    override def writeLine(line: String): Unit = {
+      val _ = line
     }
   }
 }

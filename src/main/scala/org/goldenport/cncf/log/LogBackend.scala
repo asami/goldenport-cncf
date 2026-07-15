@@ -5,16 +5,20 @@ import java.nio.file.{Files, Paths, StandardOpenOption}
 
 import org.slf4j.LoggerFactory
 import scala.collection.mutable.ListBuffer
+import org.goldenport.record.Record
 
 /*
  * @since   Jan.  7, 2026
  *  version Mar. 13, 2026
- * @version Apr. 24, 2026
+ * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 trait LogBackend {
   def log(level: String, message: String): Unit =
     writeLine(formatLine(level, message))
+
+  def logStructured(event: StructuredLogEvent): Unit =
+    log(event.level, event.message)
 
   def writeLine(line: String): Unit
 
@@ -22,6 +26,12 @@ trait LogBackend {
 
   protected[log] def formatLine(level: String, message: String): String = message
 }
+
+final case class StructuredLogEvent(
+  level: String,
+  message: String,
+  attributes: Record
+)
 
 object LogBackend {
   case object NopLogBackend extends LogBackend {

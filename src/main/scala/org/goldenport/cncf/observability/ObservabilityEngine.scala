@@ -11,7 +11,7 @@ import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.record.Record
 import org.goldenport.schema.DataConfidentiality
 import org.goldenport.cncf.context.{ObservabilityContext, ScopeContext}
-import org.goldenport.cncf.log.{LogBackend, LogBackendHolder}
+import org.goldenport.cncf.log.{LogBackend, LogBackendHolder, StructuredLogEvent}
 import org.goldenport.observation.calltree.CallTree
 
 /*
@@ -19,7 +19,7 @@ import org.goldenport.observation.calltree.CallTree
  *  version Jan. 29, 2026
  *  version Apr. 25, 2026
  *  version May. 11, 2026
- * @version Jun. 18, 2026
+ * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class OperationContext(
@@ -887,7 +887,11 @@ object ObservabilityEngine {
     LogBackendHolder.backend.foreach { backend =>
       if (shouldEmit(level, scope, "org.goldenport.cncf", "ObservabilityEngine", backend)) {
         val prefix = s"event=$level scope=${scope.kind} name=${scope.name} "
-        backend.log(level, s"$prefix$message")
+        backend.logStructured(StructuredLogEvent(
+          level,
+          s"$prefix$message",
+          attributes
+        ))
       }
     }
   }
