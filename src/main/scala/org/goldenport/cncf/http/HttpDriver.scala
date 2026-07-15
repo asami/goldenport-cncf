@@ -15,7 +15,7 @@ import org.slf4j.LoggerFactory
  *  version Feb.  7, 2026
  *  version Apr. 29, 2026
  *  version May. 30, 2026
- * @version Jul.  3, 2026
+ * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 trait HttpDriver {
@@ -86,6 +86,7 @@ final class UrlConnectionHttpDriver(
     conn.setRequestMethod(method)
     conn.setConnectTimeout(_connect_timeout_ms(properties))
     conn.setReadTimeout(_read_timeout_ms(properties))
+    conn.setInstanceFollowRedirects(_follow_redirects(properties))
     if (method == "PUT" || method == "POST") {
       conn.setDoOutput(true)
     }
@@ -106,6 +107,13 @@ final class UrlConnectionHttpDriver(
     _timeout_ms(properties, Vector("http.read-timeout-ms"))
       .orElse(_timeout_seconds(properties, Vector("http.read-timeout-seconds", "http.timeout-seconds")))
       .getOrElse(_default_read_timeout_ms)
+
+  private def _follow_redirects(
+    properties: Vector[Property]
+  ): Boolean =
+    _property_string(properties, Vector("http.follow-redirects"))
+      .flatMap(_.toBooleanOption)
+      .getOrElse(true)
 
   private def _timeout_ms(
     properties: Vector[Property],
@@ -245,11 +253,8 @@ final class UrlConnectionHttpDriver(
 
   private def _status(
     code: Int
-  ): HttpStatus = code match {
-    case 200 => HttpStatus.Ok
-    case 404 => HttpStatus.NotFound
-    case _ => HttpStatus.InternalServerError
-  }
+  ): HttpStatus =
+    HttpStatus.fromInt(code).getOrElse(HttpStatus.InternalServerError)
 }
 
 final class FakeHttpDriver(

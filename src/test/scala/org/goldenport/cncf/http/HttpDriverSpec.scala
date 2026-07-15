@@ -4,13 +4,14 @@ import java.net.InetSocketAddress
 import java.nio.charset.StandardCharsets
 import com.sun.net.httpserver.{HttpExchange, HttpHandler, HttpServer}
 import org.goldenport.cncf.subsystem.DefaultSubsystemFactory
+import org.goldenport.protocol.Property
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr. 25, 2026
- * @version Jul.  3, 2026
+ * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 final class HttpDriverSpec
@@ -77,6 +78,44 @@ final class HttpDriverSpec
           in.readAllBytes() shouldBe payload
         finally
           in.close()
+      } finally {
+        server.stop(0)
+      }
+    }
+
+    "return redirects without following them when request policy disables redirect handling" in {
+      Given("an HTTP server whose first response redirects to a second resource")
+      val server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0)
+      var targetcalls = 0
+      server.createContext("/start", new HttpHandler {
+        def handle(exchange: HttpExchange): Unit = {
+          exchange.getResponseHeaders.add("Location", "/target")
+          exchange.sendResponseHeaders(307, -1)
+          exchange.close()
+        }
+      })
+      server.createContext("/target", new HttpHandler {
+        def handle(exchange: HttpExchange): Unit = {
+          targetcalls += 1
+          exchange.sendResponseHeaders(204, -1)
+          exchange.close()
+        }
+      })
+      server.start()
+
+      try {
+        When("the request disables automatic redirect handling")
+        val port = server.getAddress.getPort
+        val driver = new UrlConnectionHttpDriver(s"http://127.0.0.1:${port}")
+        val response = driver.get(
+          "/start",
+          properties = Vector(Property("http.follow-redirects", "false", None))
+        )
+
+        Then("the redirect remains observable and the target receives no request")
+        response.code shouldBe 307
+        response.headerValue("Location") shouldBe Some("/target")
+        targetcalls shouldBe 0
       } finally {
         server.stop(0)
       }
