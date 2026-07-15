@@ -74,3 +74,10 @@ Operational tests that use virtual time must record both the wall-clock run
 date and the configured CNCF execution date. Virtual time validates runtime
 behavior and date-sensitive flows; it must not be presented as unrecorded
 wall-clock elapsed time.
+
+## Related Non-Normative Work
+
+Broader execution determinism, including random streams, ID entropy, manual
+scheduling, execution ordering, and environment assumptions, is explored in
+`docs/notes/execution-determinism-capability-design.md`. That note does not
+change the clock contract defined here.

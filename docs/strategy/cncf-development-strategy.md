@@ -827,6 +827,7 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Phase 28: closed (`docs/phase/phase-28.md`)
 - Phase 29: closed (`docs/phase/phase-29.md`)
 - Phase 30: closed (`docs/phase/phase-30.md`)
+- Phase 31: active (`docs/phase/phase-31.md`)
 
 ## 8. Completed Development Item History
 
@@ -2186,3 +2187,52 @@ Future domain logic / runtime / knowledge / automation development item.
   - untrusted rule sandboxing beyond the existing CAR capability sandbox
     direction;
   - using rules as the primary authorization engine.
+
+### 9.28 Execution Determinism
+Active runtime and component-test development item. Phase 31 owns the initial
+implementation.
+
+- Goal: make component-observable execution reproducible by resolving clock,
+  random, ID/entropy, operational scheduling, CNCF-owned asynchronous ordering,
+  locale, and environment assumptions as one coherent runtime profile.
+- Positioning:
+  - generic execution assumptions reuse or extend goldenport core abstractions;
+  - CNCF owns ActionCall binding, Job/Event integration, internal DSL access,
+    runtime scheduling controls, and replayability diagnostics;
+  - effectful resources such as HTTP, filesystem, datastore, event bus, AI,
+    and knowledge remain runtime-owned drivers or providers;
+  - deterministic scheduling remains operational Job control and does not
+    broaden CNCF into a cron, business-calendar, or workflow timer platform.
+- Scope:
+  - define `standard`, `seeded`, and test-only `controlled` execution profiles;
+  - add seeded named random streams and entropy separation in goldenport core;
+  - derive CNCF ID generation from the selected execution clock and dedicated
+    ID entropy rather than ambient wall time or domain random state;
+  - bind one coherent profile at ActionCall creation and replace all
+    profile-dependent facilities coherently during runtime rebinding;
+  - adapt JobEngine timing, retry, delay, and CNCF-owned async ordering to the
+    resolved execution profile;
+  - add manual time advance and run-until-idle controls for test harnesses;
+  - resolve locale, timezone, charset, line separator, math, i18n, and an
+    allowlisted environment snapshot at bootstrap;
+  - expose sanitized profile and replayability diagnostics without seeds,
+    credentials, or secret environment values;
+  - migrate component-visible ambient clock, UUID, random, sleep, environment,
+    and host-state reads to CNCF internal DSL or runtime/provider boundaries.
+- First implementation direction:
+  - freeze the core/CNCF ownership and configuration contract;
+  - implement core seeded named random streams and a dedicated entropy
+    boundary;
+  - resolve the profile through normal configuration and explicit
+    `test.yaml`/`test.json` overlays;
+  - complete a context/random/ID vertical slice before integrating manual Job
+    scheduling;
+  - verify two isolated controlled executions produce the same business data,
+    IDs, timestamps, and purpose-specific random results.
+- Deferred scope:
+  - distributed replay and deterministic ordering across machines;
+  - arbitrary provider-internal concurrency control;
+  - production manual-clock control endpoints;
+  - cron, business-calendar, workflow wait, or general scheduling semantics;
+  - automatic replay of uncontrolled external provider responses;
+  - treating one seed flag as proof of full replayability.
