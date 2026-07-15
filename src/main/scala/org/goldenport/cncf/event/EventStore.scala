@@ -1,9 +1,10 @@
 package org.goldenport.cncf.event
 
-import java.time.Instant
+import java.time.{Clock, Instant}
 import scala.collection.mutable
 import org.goldenport.Consequence
-import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.cncf.config.RuntimeConfig
+import org.goldenport.cncf.context.{ExecutionContext, IdGenerationContext}
 
 /*
  * EventStore baseline for EV-02.
@@ -17,7 +18,7 @@ import org.goldenport.cncf.context.ExecutionContext
  * Re-dispatch idempotency is handled by upper layers.
  *
  * @since   Mar. 20, 2026
- * @version Mar. 20, 2026
+ * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 trait EventStore {
@@ -74,19 +75,32 @@ object EventRecord {
 
   def fromDomainEvent(
     event: DomainEvent,
-    lane: EventLane
+    lane: EventLane,
+    factory: EventRecordFactory
   ): EventRecord =
+    factory.create(event, lane)
+}
+
+final case class EventRecordFactory(
+  clock: Clock,
+  idGeneration: IdGenerationContext
+) {
+  def create(
+    event: DomainEvent,
+    lane: EventLane
+  ): EventRecord = {
+    val occurredat = _occurred_at(event)
     event match {
       case e: ReceptionDomainEvent =>
         EventRecord(
-          id = EventId.generate(),
+          id = _event_id(e, occurredat),
           name = e.name,
           kind = e.kind,
           payload = e.payload,
           attributes = e.attributes,
           createdAt = e.occurredAt,
           persistent = true,
-          status = Status.Stored,
+          status = EventRecord.Status.Stored,
           lane = lane
         )
       case e: TransitionLifecycleEvent =>
@@ -106,34 +120,67 @@ object EventRecord {
           ),
           createdAt = e.occurredAt,
           persistent = true,
-          status = Status.Stored,
+          status = EventRecord.Status.Stored,
           lane = lane
         )
       case e: ActionEvent =>
         EventRecord(
-          id = EventId.generate(),
+          id = _event_id(e, occurredat),
           name = e.actionName,
           kind = e.result.toString.toLowerCase,
           payload = Map("reason" -> e.reason.getOrElse("")),
           attributes = Map("executionContextId" -> e.executionContextId.print),
           createdAt = e.occurredAt,
           persistent = true,
-          status = Status.Stored,
+          status = EventRecord.Status.Stored,
           lane = lane
         )
       case other =>
         EventRecord(
-          id = EventId.generate(),
+          id = _event_id(other, occurredat),
           name = other.getClass.getSimpleName,
           kind = "domain-event",
           payload = Map.empty,
           attributes = Map.empty,
-          createdAt = Instant.now(),
+          createdAt = occurredat,
           persistent = true,
-          status = Status.Stored,
+          status = EventRecord.Status.Stored,
           lane = lane
         )
     }
+  }
+
+  private def _occurred_at(event: DomainEvent): Instant =
+    event match {
+      case e: ReceptionDomainEvent => e.occurredAt
+      case e: TransitionLifecycleEvent => e.occurredAt
+      case e: ActionEvent => e.occurredAt
+      case _ => Instant.now(clock)
+    }
+
+  private def _event_id(
+    event: DomainEvent,
+    occurredat: Instant
+  ): EventId =
+    event match {
+      case e: TransitionLifecycleEvent => e.id
+      case e: ReceptionDomainEvent => EventId.create(s"record.${e.name}", occurredat, idGeneration)
+      case e: ActionEvent => EventId.create(s"record.${e.actionName}", occurredat, idGeneration)
+      case other => EventId.create(s"record.${other.getClass.getName}", occurredat, idGeneration)
+    }
+}
+
+object EventRecordFactory {
+  def standard: EventRecordFactory = {
+    val clock = RuntimeConfig.DEFAULT_EXECUTION_CLOCK.clock
+    EventRecordFactory(
+      clock,
+      IdGenerationContext.default(IdGenerationContext.DefaultNamespace, clock)
+    )
+  }
+
+  def from(ctx: ExecutionContext): EventRecordFactory =
+    EventRecordFactory(ctx.core.clock, ctx.idGeneration)
 }
 
 object EventStore {

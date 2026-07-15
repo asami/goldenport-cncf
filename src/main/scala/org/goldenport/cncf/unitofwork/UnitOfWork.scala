@@ -20,8 +20,7 @@ import org.goldenport.cncf.entity.EntityPersistentCreate
 import org.goldenport.cncf.entity.EntityPersistable
 import org.goldenport.cncf.directive.Query
 import org.goldenport.cncf.directive.SearchResult
-import org.goldenport.cncf.event.EventEngine
-import org.goldenport.cncf.event.DomainEvent
+import org.goldenport.cncf.event.{DomainEvent, EventEngine, EventRecordFactory}
 import org.goldenport.cncf.http.HttpDriver
 
 /*
@@ -30,7 +29,8 @@ import org.goldenport.cncf.http.HttpDriver
  *  version Jan. 18, 2026
  *  version Feb. 27, 2026
  *  version Mar. 24, 2026
- * @version Apr. 28, 2026
+ *  version Apr. 28, 2026
+ * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 class UnitOfWork(
@@ -122,7 +122,7 @@ class UnitOfWork(
     try {
       val tx = TransactionContext.create(context.transactionContext)
       val all = _pending_events ++ events.toVector
-      eventengine.stage(all)
+      eventengine.stage(all, EventRecordFactory.from(context))
       recorder.record("UnitOfWork.prepare")
       val prepares = List(
         tx.prepare(),

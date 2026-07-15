@@ -284,11 +284,15 @@ Status: IN PROGRESS
   one execution-clock instant and profile-derived Event IDs. Property-based
   replay coverage fixes both contracts, and direct `ReceptionDomainEvent`
   construction now requires an explicit timestamp.
+- EventStore record materialization now uses an explicit clock/ID capability.
+  UnitOfWork fixes transactional Event records before prepare/commit, authorized
+  EventBus publication uses the caller profile, and generic fallback Events no
+  longer use ambient `Instant.now` or the constant `EventId.generate` value.
 - CAR lint and component developer guidance now report direct ambient clock,
   UUID/random, sleep, environment/property, host filesystem, thread, and
   executor access in component sources.
-- Remaining generic EventStore fallback, Workflow/InformationSpace,
-  working-set, and runtime model semantic defaults still require migration
+- Remaining Workflow/InformationSpace, working-set, and runtime model semantic
+  defaults still require migration
   before ED-07 can be marked DONE.
 
 ### Acceptance Criteria

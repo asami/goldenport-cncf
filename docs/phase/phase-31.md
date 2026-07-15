@@ -65,8 +65,8 @@ ordering, locale/environment assumptions, and replayability diagnostics.
 - [x] ED-06: Resolve environment and internationalization assumptions.
 - [ ] ED-07: Fix CNCF-owned ordering and migrate ambient-state debt. Ordering,
       audit classification, CAR lint, Tag timestamps, canonical Event reception,
-      and transition lifecycle events are complete; remaining runtime-semantic
-      migration remains active.
+      transition lifecycle events, and EventStore record materialization are
+      complete; remaining runtime-semantic migration remains active.
 - [ ] ED-08: Add diagnostics, replay scenarios, developer guidance, and close
       Phase 31.
 

@@ -18,7 +18,7 @@ import org.goldenport.observation.{Cause, Taxonomy}
  *
  * @since   Mar. 20, 2026
  *  version Apr. 22, 2026
- * @version Jul. 15, 2026
+ * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 trait EventDispatchHandler {
@@ -31,7 +31,7 @@ trait EventDispatchHandler {
 }
 
 trait ActionCallDispatcher {
-  def dispatchAction(actionName: String, event: DomainEvent): Consequence[Unit]
+  def dispatchAction(actionname: String, event: DomainEvent): Consequence[Unit]
 }
 
 trait ScopedActionCallDispatcher extends ActionCallDispatcher {
@@ -46,7 +46,7 @@ final case class ParsedEventAction(
 
 trait ActionFactoryDispatcher extends ActionCallDispatcher {
   def parseValidateAction(
-    actionName: String,
+    actionname: String,
     event: DomainEvent
   ): Consequence[ParsedEventAction]
 
@@ -55,15 +55,15 @@ trait ActionFactoryDispatcher extends ActionCallDispatcher {
   ): Consequence[Unit]
 
   final override def dispatchAction(
-    actionName: String,
+    actionname: String,
     event: DomainEvent
   ): Consequence[Unit] =
-    parseValidateAction(actionName, event).flatMap(dispatchParsedAction)
+    parseValidateAction(actionname, event).flatMap(dispatchParsedAction)
 }
 
 trait SecureActionCallDispatcher extends ActionCallDispatcher {
   def dispatchActionAuthorized(
-    actionName: String,
+    actionname: String,
     event: DomainEvent
   )(using ExecutionContext): Consequence[Unit]
 }
@@ -74,10 +74,10 @@ trait SecureActionFactoryDispatcher extends ActionFactoryDispatcher with SecureA
   )(using ExecutionContext): Consequence[Unit]
 
   final override def dispatchActionAuthorized(
-    actionName: String,
+    actionname: String,
     event: DomainEvent
   )(using ExecutionContext): Consequence[Unit] =
-    parseValidateAction(actionName, event).flatMap(dispatchParsedActionAuthorized)
+    parseValidateAction(actionname, event).flatMap(dispatchParsedActionAuthorized)
 }
 
 final case class EventSubscription(
@@ -117,21 +117,21 @@ trait EventBus {
 }
 
 object EventBus {
-  def default(eventEngine: EventEngine): EventBus =
-    new DefaultEventBus(eventEngine)
+  def default(eventengine: EventEngine): EventBus =
+    new DefaultEventBus(eventengine)
 
   def actionCallHandler(
-    actionName: String,
+    actionname: String,
     dispatcher: ActionCallDispatcher
   ): EventDispatchHandler =
     new EventDispatchHandler {
       def dispatch(event: DomainEvent): Consequence[Unit] =
-        dispatcher.dispatchAction(actionName, event)
+        dispatcher.dispatchAction(actionname, event)
     }
 }
 
 final class DefaultEventBus(
-  eventEngine: EventEngine
+  eventengine: EventEngine
 ) extends EventBus {
   private case class _Entry(
     order: Long,
@@ -191,7 +191,10 @@ final class DefaultEventBus(
     }
 
     val persisted = if (option.persistent) {
-      eventEngine.emit(Vector(event)).map(_ => ())
+      context match {
+        case Some(ctx) => eventengine.emit(Vector(event), EventRecordFactory.from(ctx)).map(_ => ())
+        case None => eventengine.emit(Vector(event)).map(_ => ())
+      }
     } else {
       Consequence.unit
     }
@@ -240,8 +243,8 @@ final class DefaultEventBus(
 
   private def _dispatch_failure[A](
     subscription: EventSubscription,
-    eventName: String,
-    eventKind: String,
+    eventname: String,
+    eventkind: String,
     cause: org.goldenport.Conclusion
   ): Consequence[A] =
     Consequence.operationInvalid(
@@ -249,8 +252,8 @@ final class DefaultEventBus(
       Cause.Kind.Inconsistency,
       Seq(
         Facet.Name(subscription.name),
-        Facet.Key(eventName),
-        Facet.State(eventKind),
+        Facet.Key(eventname),
+        Facet.State(eventkind),
         Facet.Message("event dispatch failed")
       ),
       previous = Some(cause)

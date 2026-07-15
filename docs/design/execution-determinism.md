@@ -250,6 +250,15 @@ requires an explicit timestamp; the model MUST NOT supply an ambient default.
 Transition lifecycle creation captures one execution-clock instant and uses it
 for both the lifecycle timestamp and Event ID timestamp.
 
+EventStore persistence uses an explicit `EventRecordFactory` capability carrying
+the execution clock and ID-generation context. Transactional events are
+materialized into fixed `EventRecord` values when UnitOfWork stages the commit,
+not later inside `EventEngine.commit`. Authorized non-transactional publication
+uses the caller execution profile; contextless compatibility publication uses
+the EventEngine-bound factory. Commit therefore persists the already-fixed
+record identity and semantic timestamp without consulting ambient time or a
+constant fallback Event ID.
+
 Manual scheduling is limited by `timer-scheduling-boundary.md`. It MUST NOT add
 cron, recurrence, business-calendar, workflow-wait, or general scheduler
 semantics.

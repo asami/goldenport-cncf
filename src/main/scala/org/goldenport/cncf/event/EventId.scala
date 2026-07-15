@@ -2,13 +2,13 @@ package org.goldenport.cncf.event
 
 import java.time.Instant
 import org.goldenport.Consequence
-import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.cncf.context.{ExecutionContext, IdGenerationContext}
 import org.goldenport.id.UniversalId
 
 /*
  * @since   Jan.  7, 2026
  *  version Mar. 30, 2026
- * @version Jul. 15, 2026
+ * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class EventId(
@@ -26,11 +26,18 @@ object EventId {
     purpose: String,
     timestamp: Instant
   )(using ctx: ExecutionContext): EventId =
+    create(purpose, timestamp, ctx.idGeneration)
+
+  def create(
+    purpose: String,
+    timestamp: Instant,
+    idgeneration: IdGenerationContext
+  ): EventId =
     EventId(
-      major = ctx.major,
-      minor = ctx.minor,
+      major = idgeneration.namespace.major,
+      minor = idgeneration.namespace.minor,
       timestamp = Some(timestamp),
-      entropy = Some(ctx.idGeneration.opaqueId(s"event.$purpose"))
+      entropy = Some(idgeneration.opaqueId(s"event.$purpose"))
     )
 
   def parse(s: String): Consequence[EventId] =
