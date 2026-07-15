@@ -1,28 +1,62 @@
 package org.goldenport.cncf.context
 
-import java.time.Instant
+import java.time.{Clock, Instant, ZoneOffset}
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
-import org.goldenport.id.CompactUuid
+import org.goldenport.context.EntropyContext
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 
 /*
  * @since   May.  2, 2026
- * @version May.  5, 2026
+ *  version May.  5, 2026
+ * @version Jul. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 trait IdGenerationContext {
   def namespace: IdGenerationContext.IdNamespace
-  def entityId(collection: EntityCollectionId): EntityId
+
+  def entityId(collection: EntityCollectionId): EntityId =
+    entityId(collection, "entity-create")
+
+  def entityId(collection: EntityCollectionId, purpose: String): EntityId
+
+  def entityIdInCollectionNamespace(
+    collection: EntityCollectionId,
+    purpose: String
+  ): EntityId
+
+  def opaqueId(purpose: String): String
 }
 
 object IdGenerationContext {
   val DefaultNamespace: IdNamespace = IdNamespace("single", "global")
 
   def default(namespace: IdNamespace): IdGenerationContext =
-    Nondeterministic(namespace)
+    production(namespace, Clock.systemUTC(), EntropyContext.secure())
+
+  def default(namespace: IdNamespace, clock: Clock): IdGenerationContext =
+    production(namespace, clock, EntropyContext.secure())
+
+  def production(
+    namespace: IdNamespace,
+    clock: Clock,
+    entropy: EntropyContext
+  ): IdGenerationContext =
+    Context(namespace, clock, entropy)
 
   def deterministic(namespace: IdNamespace, seed: String = "test"): IdGenerationContext =
-    Deterministic(namespace, _safe_seed(seed))
+    deterministic(
+      namespace,
+      Clock.fixed(Instant.EPOCH, ZoneOffset.UTC),
+      seed
+    )
+
+  def deterministic(
+    namespace: IdNamespace,
+    clock: Clock,
+    seed: String
+  ): IdGenerationContext =
+    Context(namespace, clock, EntropyContext.deterministic(_safe_seed(seed)))
 
   final case class IdNamespace(
     major: String,
@@ -71,36 +105,65 @@ object IdGenerationContext {
       c >= '0' && c <= '9'
   }
 
-  private final case class Nondeterministic(
-    namespace: IdNamespace
-  ) extends IdGenerationContext {
-    def entityId(collection: EntityCollectionId): EntityId =
-      EntityId(
-        namespace.major,
-        namespace.minor,
-        collection,
-        timestamp = Some(Instant.now()),
-        entropy = Some(CompactUuid.generateString())
-      )
-  }
-
-  private final case class Deterministic(
+  private final case class Context(
     namespace: IdNamespace,
-    seed: String
+    clock: Clock,
+    entropy: EntropyContext
   ) extends IdGenerationContext {
-    private val sequence = AtomicLong(0L)
+    private val _sequences = new ConcurrentHashMap[String, AtomicLong]()
 
-    def entityId(collection: EntityCollectionId): EntityId = {
-      val n = sequence.incrementAndGet()
+    def entityId(collection: EntityCollectionId, purpose: String): EntityId = {
+      _entity_id(namespace, collection, purpose)
+    }
+
+    def entityIdInCollectionNamespace(
+      collection: EntityCollectionId,
+      purpose: String
+    ): EntityId =
+      _entity_id(IdNamespace(collection.major, collection.minor), collection, purpose)
+
+    private def _entity_id(
+      idnamespace: IdNamespace,
+      collection: EntityCollectionId,
+      purpose: String
+    ): EntityId = {
+      val key = s"entity.${_collection_key(collection)}.${_purpose(purpose)}"
       EntityId(
-        namespace.major,
-        namespace.minor,
+        idnamespace.major,
+        idnamespace.minor,
         collection,
-        timestamp = Some(Instant.EPOCH.plusMillis(n)),
-        entropy = Some(f"${seed}_${n}%06d")
+        timestamp = Some(clock.instant()),
+        entropy = Some(_token(key))
       )
     }
+
+    def opaqueId(purpose: String): String =
+      _token(s"opaque.${_purpose(purpose)}")
+
+    private def _token(key: String): String = {
+      val sequence = _sequences.computeIfAbsent(key, _ => new AtomicLong(0L)).incrementAndGet()
+      _hex(entropy.bytes(s"$key.$sequence", 16))
+    }
   }
+
+  private def _collection_key(collection: EntityCollectionId): String =
+    Vector(collection.major, collection.minor, collection.name)
+      .map(_purpose)
+      .mkString(".")
+
+  private def _purpose(value: String): String = {
+    val source = Option(value).map(_.trim.toLowerCase(java.util.Locale.ROOT)).getOrElse("")
+    require(source.nonEmpty, "ID purpose must not be empty")
+    source.map {
+      case c if c >= 'a' && c <= 'z' => c
+      case c if c >= '0' && c <= '9' => c
+      case c @ ('.' | '-' | '_') => c
+      case _ => '_'
+    }
+  }
+
+  private def _hex(bytes: Array[Byte]): String =
+    bytes.iterator.map(byte => f"${byte & 0xff}%02x").mkString
 
   private def _safe_seed(value: String): String = {
     val raw = value.trim.toLowerCase(java.util.Locale.ROOT).map {

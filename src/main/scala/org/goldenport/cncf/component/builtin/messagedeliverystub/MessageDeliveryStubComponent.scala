@@ -1,7 +1,6 @@
 package org.goldenport.cncf.component.builtin.messagedeliverystub
 
 import java.time.Instant
-import java.util.UUID
 import scala.collection.concurrent.TrieMap
 import org.goldenport.Consequence
 import org.goldenport.cncf.component.{Component, ComponentCreate, ComponentId, ComponentInstanceId}
@@ -16,7 +15,8 @@ import org.goldenport.protocol.spec.ServiceDefinitionGroup
  * Built-in stub message-delivery provider for local/test use.
  *
  * @since   Apr. 23, 2026
- * @version Apr. 24, 2026
+ *  version Apr. 24, 2026
+ * @version Jul. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 class MessageDeliveryStubComponent() extends Component
@@ -68,9 +68,9 @@ object MessageDeliveryStubComponent:
   object DefaultMessageDeliveryProvider extends MessageDeliveryProvider:
     val name: String = "textus-message-delivery-stub"
 
-    def send(message: UnifiedMessage)(using ExecutionContext): Consequence[MessageDeliveryResult] =
-      val now = Instant.now
-      val providerMessageId = UUID.randomUUID.toString
+    def send(message: UnifiedMessage)(using ctx: ExecutionContext): Consequence[MessageDeliveryResult] =
+      val now = ctx.clock.instant()
+      val providerMessageId = ctx.idGeneration.opaqueId("message-delivery.stub")
       val delivery = Delivery(
         channel = message.channel,
         recipient = message.recipient,

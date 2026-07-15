@@ -1,12 +1,10 @@
 package org.goldenport.cncf.association
 
-import java.util.UUID
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.entity.EntityAccessScopePolicy
 import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.cncf.operation.CmlOperationAssociationBinding
-import org.goldenport.id.UniversalId
 import org.goldenport.protocol.Request
 import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.record.Record
@@ -17,7 +15,8 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
  * target Entity ids.
  *
  * @since   Apr. 30, 2026
- * @version May.  3, 2026
+ *  version May.  3, 2026
+ * @version Jul. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class AssociationBindingPart(
@@ -170,7 +169,7 @@ final class AssociationBindingWorkflow(
         case _ =>
           repository.create(AssociationCreate(
             id = Some(_association_entity_id(collection)),
-            associationId = UUID.randomUUID().toString,
+            associationId = summon[ExecutionContext].idGeneration.opaqueId("association.binding"),
             sourceEntityId = sourceEntityId,
             targetEntityId = targetEntityId.value,
             targetKind = targetKind,
@@ -215,14 +214,10 @@ final class AssociationBindingWorkflow(
       z.flatMap(_ => repository.delete(association))
     }
 
-  private def _association_entity_id(collection: EntityCollectionId): EntityId =
-    EntityId(
-      collection.major,
-      collection.minor,
-      collection,
-      Some(UniversalId.StableTimestamp),
-      Some(s"association_${UUID.randomUUID().toString.replace("-", "_")}")
-    )
+  private def _association_entity_id(
+    collection: EntityCollectionId
+  )(using ctx: ExecutionContext): EntityId =
+    ctx.idGeneration.entityIdInCollectionNamespace(collection, "association.binding")
 }
 
 object AssociationBindingWorkflow {

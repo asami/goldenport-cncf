@@ -300,14 +300,28 @@ final class ExecutionProfileRuntime private[context] (
       case ExecutionRandomMode.Seeded =>
         RandomContext.seeded(profile.config.randomSeed.getOrElse("")).stream(invocationkey)
     }
+    val entropy = EntropyContext.secure()
     val idgeneration = profile.config.idMode match {
-      case ExecutionIdMode.Production => IdGenerationContext.default(namespace)
-      case ExecutionIdMode.Deterministic => IdGenerationContext.deterministic(namespace, invocationkey)
+      case ExecutionIdMode.Production =>
+        IdGenerationContext.production(
+          namespace,
+          profile.runtimeClock.clock,
+          EntropyContext.secure()
+        )
+      case ExecutionIdMode.Deterministic =>
+        val invocationordinal = invocation.map(_.ordinal).getOrElse(0L)
+        val idseed = ExecutionProfileHash.digest(
+          profile.identity.fingerprint,
+          invocationkey,
+          invocationordinal.toString,
+          "id-generation"
+        )
+        IdGenerationContext.deterministic(namespace, profile.runtimeClock.clock, idseed)
     }
     ExecutionProfileBinding(
       profile.runtimeClock.clock,
       random,
-      EntropyContext.secure(),
+      entropy,
       idgeneration,
       profile.control.copy(invocation = invocation)
     )

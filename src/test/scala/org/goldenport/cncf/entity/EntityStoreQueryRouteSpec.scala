@@ -20,7 +20,8 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Mar. 16, 2026
  *  version Apr. 26, 2026
- * @version May.  5, 2026
+ *  version May.  5, 2026
+ * @version Jul. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EntityStoreQueryRouteSpec
@@ -572,9 +573,9 @@ final class EntityStoreQueryRouteSpec
       created.map(_.id) shouldBe Consequence.success(created.TAKE.id)
       created.map(_.id.major) shouldBe Consequence.success("single")
       created.map(_.id.minor) shouldBe Consequence.success("global")
-      created.map(_.id.parts.entropy) shouldBe Consequence.success("test_000001")
+      created.map(_.id.parts.entropy.matches("[0-9a-f]{32}")) shouldBe Consequence.success(true)
       loaded.map(_.flatMap(_.getString("id"))) shouldBe Consequence.success(Some(created.TAKE.id.print))
-      loaded.map(_.flatMap(_.getString("short_id"))) shouldBe Consequence.success(Some("test_000001"))
+      loaded.map(_.flatMap(_.getString("short_id"))) shouldBe created.map(result => Some(result.id.parts.entropy))
       loaded.map(_.flatMap(_.getString("name"))) shouldBe Consequence.success(Some("test-principal"))
       loaded.map(_.flatMap(_.getAny("age"))) shouldBe Consequence.success(Some(18))
       loaded.map(_.flatMap(_.getString("created_by"))) shouldBe Consequence.success(Some("test_principal"))
@@ -748,7 +749,7 @@ final class EntityStoreQueryRouteSpec
     }
 
     "generate deterministic but unique ids from ExecutionContext in tests" in {
-      Given("two create requests without explicit ids")
+      Given("two independent execution contexts with the same deterministic ID configuration")
       val datastorespace = DataStoreSpace.default()
       val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
       given ExecutionContext = _execution_context(datastorespace, entitystorespace)
@@ -768,9 +769,26 @@ final class EntityStoreQueryRouteSpec
         )
       )
 
-      Then("the test generator is deterministic and still unique")
-      first.map(_.id.parts.entropy) shouldBe Consequence.success("test_000001")
-      second.map(_.id.parts.entropy) shouldBe Consequence.success("test_000002")
+      val replaydatastorespace = DataStoreSpace.default()
+      val replayentitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+      val replaycontext = _execution_context(replaydatastorespace, replayentitystorespace)
+      val replayfirst = replayentitystorespace.create(
+        UnitOfWorkOp.EntityStoreCreate(
+          entity = CreateCandidate(None, Some("first"), Some(1)),
+          tc = summon[EntityPersistentCreate[CreateCandidate]]
+        )
+      )(using replaycontext)
+      val replaysecond = replayentitystorespace.create(
+        UnitOfWorkOp.EntityStoreCreate(
+          entity = CreateCandidate(None, Some("second"), Some(2)),
+          tc = summon[EntityPersistentCreate[CreateCandidate]]
+        )
+      )(using replaycontext)
+
+      Then("the opaque sequence replays across contexts and stays unique within one context")
+      first.map(_.id) shouldBe replayfirst.map(_.id)
+      second.map(_.id) shouldBe replaysecond.map(_.id)
+      first.map(_.id.parts.entropy.matches("[0-9a-f]{32}")) shouldBe Consequence.success(true)
       first.map(_.id.value) should not be second.map(_.id.value)
     }
 

@@ -15,7 +15,8 @@ import org.simplemodeling.model.datatype.EntityId
  *
  * @since   Apr. 27, 2026
  *  version Apr. 30, 2026
- * @version May.  4, 2026
+ *  version May.  4, 2026
+ * @version Jul. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class BlobUploadPart(
@@ -65,7 +66,7 @@ final class BlobAttachmentWorkflow(
   repository: BlobRepository,
   associations: AssociationRepository
 ) {
-  private val associationWorkflow: AssociationBindingWorkflow =
+  private val _association_workflow: AssociationBindingWorkflow =
     AssociationBindingWorkflow(associations, AssociationStoragePolicy.blobAttachmentDefault)
 
   def extract(request: Request): Consequence[BlobAttachmentRequest] =
@@ -140,8 +141,8 @@ final class BlobAttachmentWorkflow(
 
   private def _register_upload(
     part: BlobUploadPart
-  )(using ExecutionContext): Consequence[Blob] = {
-    val id = EntityId(BlobRepository.CollectionId.major, BlobRepository.CollectionId.minor, BlobRepository.CollectionId)
+  )(using ctx: ExecutionContext): Consequence[Blob] = {
+    val id = ctx.idGeneration.entityIdInCollectionNamespace(BlobRepository.CollectionId, "blob.attachment-upload")
     store.put(
       BlobPutRequest(
         id = id,
@@ -198,7 +199,7 @@ final class BlobAttachmentWorkflow(
     role: String,
     sortOrder: Option[Int]
   )(using ExecutionContext): Consequence[AssociationBindingAttachResult] =
-    associationWorkflow.attachExistingTargetResult(
+        _association_workflow.attachExistingTargetResult(
       sourceEntityId = sourceEntityId,
       domain = AssociationDomain.BlobAttachment,
       targetKind = Some("blob"),

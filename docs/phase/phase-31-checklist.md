@@ -129,17 +129,17 @@ Status: DONE
 
 ## ED-04: Internal DSL and Capability-Based IDs
 
-Status: PLANNED
+Status: DONE
 
 ### Tasks
 
-- [ ] Add purpose-based random internal DSL helpers.
-- [ ] Add ID creation helpers through `IdGenerationContext`.
-- [ ] Construct ID generation from selected clock and dedicated ID entropy.
-- [ ] Derive deterministic per-invocation/per-collection sequences.
-- [ ] Migrate observable builtin UUID and entity-ID creation paths.
-- [ ] Preserve opaque `CanonicalId` and `EntityId` contracts.
-- [ ] Add CallTree metadata without exposing seeds or token values.
+- [x] Add purpose-based random internal DSL helpers.
+- [x] Add ID creation helpers through `IdGenerationContext`.
+- [x] Construct ID generation from selected clock and dedicated ID entropy.
+- [x] Derive deterministic per-invocation/per-collection sequences.
+- [x] Migrate observable builtin UUID and entity-ID creation paths.
+- [x] Preserve opaque `CanonicalId` and `EntityId` contracts.
+- [x] Add CallTree metadata without exposing seeds or token values.
 
 ### Acceptance Criteria
 
@@ -147,9 +147,33 @@ Status: PLANNED
 - Controlled IDs reproduce without colliding across invocation ordinals.
 - Component behavior does not access profile internals directly.
 
+### Evidence
+
+- `BehaviorFeaturePart` provides protected purpose-based random helpers and
+  runtime-namespace, collection-namespace, and opaque ID helpers. Component
+  behavior does not receive seed, entropy, or profile-config access.
+- `IdGenerationContext` now owns the selected clock, dedicated entropy, and
+  collection/purpose-local sequences. Controlled profile bindings include the
+  invocation ordinal in the derived ID seed, so repeated explicit invocation
+  keys do not collide while independent runtimes replay the same sequence.
+- Runtime-namespace Entity IDs remain available for ordinary EntityStore
+  creation. Collection-namespace Entity IDs explicitly preserve the previous
+  self-describing Blob, Association, and child-Entity binding contract.
+- Blob registration and attachment, Association binding, child Entity binding,
+  Aggregate edit contexts, and the message-delivery stub no longer create
+  component-visible IDs through ambient UUID/EntityId defaults.
+- `IdGenerationContextSpec`, `ExecutionCapabilityDslSpec`, and
+  `ExecutionProfileSpec` verify property-based sequence replay, purpose and
+  collection isolation, invocation-ordinal uniqueness, domain-random
+  independence, EntityId round-trip behavior, and CallTree redaction.
+- Focused Blob, Association, child Entity, Aggregate edit, and message-delivery
+  regression suites pass. The focused execution-profile, context, clock, ID,
+  and internal-DSL suites also pass with no failures; two pre-existing
+  `ExecutionContextSpec` placeholders remain pending.
+
 ## ED-05: Unified Time and Job/Event Scheduling
 
-Status: PLANNED
+Status: IN PROGRESS
 
 ### Tasks
 

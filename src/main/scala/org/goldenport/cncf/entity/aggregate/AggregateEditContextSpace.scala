@@ -1,7 +1,6 @@
 package org.goldenport.cncf.entity.aggregate
 
 import java.time.{Duration, Instant}
-import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import scala.jdk.CollectionConverters.*
 import org.goldenport.Consequence
@@ -11,7 +10,8 @@ import org.simplemodeling.model.datatype.EntityId
 
 /*
  * @since   Jun. 14, 2026
- * @version Jun. 18, 2026
+ *  version Jun. 18, 2026
+ * @version Jul. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final class AggregateEditContextSpace(
@@ -22,6 +22,7 @@ final class AggregateEditContextSpace(
   private val _leases = new ConcurrentHashMap[AggregateEditContextSpace.LeaseKey, String]()
 
   def begin[A](
+    contextId: String,
     aggregateName: String,
     aggregateId: EntityId,
     baseToken: String,
@@ -30,6 +31,9 @@ final class AggregateEditContextSpace(
     lockScope: AggregateEditLockScope = AggregateEditLockScope.Principal,
     metadata: Record = Record.empty
   ): Consequence[AggregateEditContext[A]] = synchronized {
+    val effectivecontextid = contextId.trim
+    if (effectivecontextid.isEmpty)
+      return Consequence.argumentMissing("contextId")
     expire()
     val key = AggregateEditContextSpace.LeaseKey(aggregateName, aggregateId.print)
     Option(_leases.get(key)).flatMap(id => Option(_contexts.get(id))) match {
@@ -46,9 +50,11 @@ final class AggregateEditContextSpace(
         )
       case None =>
     }
+    if (_contexts.containsKey(effectivecontextid))
+      return Consequence.stateConflict(s"aggregate edit context already exists: $effectivecontextid")
     val timestamp = now()
     val context = AggregateEditContext[A](
-      contextId = UUID.randomUUID().toString,
+      contextId = effectivecontextid,
       aggregateName = aggregateName,
       aggregateId = aggregateId,
       baseToken = baseToken,

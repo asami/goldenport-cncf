@@ -17,7 +17,8 @@ import org.simplemodeling.model.datatype.EntityId
  * operation returns or supplies the parent Entity id.
  *
  * @since   Apr. 30, 2026
- * @version Apr. 30, 2026
+ *  version Apr. 30, 2026
+ * @version Jul. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ChildEntityBindingSummary(
@@ -121,7 +122,7 @@ final class ChildEntityBindingWorkflow(
     sourceEntityId: String,
     row: Record,
     index: Int
-  ): Consequence[(Record, EntityId)] =
+  )(using ExecutionContext): Consequence[(Record, EntityId)] =
     _validate_parent_field(binding, sourceEntityId, row).flatMap { _ =>
       val withParent = row ++ Record.dataAuto(binding.parentIdField -> sourceEntityId)
       val withSort = binding.sortOrderField match {
@@ -151,16 +152,15 @@ final class ChildEntityBindingWorkflow(
     collection: EntityCollection[?],
     binding: CmlOperationChildEntityBinding,
     record: Record
-  ): Consequence[(Record, EntityId)] = {
+  )(using ctx: ExecutionContext): Consequence[(Record, EntityId)] = {
     val field = binding.childIdField.getOrElse("id")
     record.getAny(field).map(_.toString.trim).filter(_.nonEmpty) match {
       case Some(value) =>
         EntityId.parse(value).map(id => record -> id)
       case None if binding.childIdField.isDefined =>
-        val id = EntityId(
-          collection.descriptor.collectionId.major,
-          collection.descriptor.collectionId.minor,
-          collection.descriptor.collectionId
+        val id = ctx.idGeneration.entityIdInCollectionNamespace(
+          collection.descriptor.collectionId,
+          "child-entity.binding"
         )
         Consequence.success((record ++ Record.dataAuto(field -> id.value)) -> id)
       case None =>

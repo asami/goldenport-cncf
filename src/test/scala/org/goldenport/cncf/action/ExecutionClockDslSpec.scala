@@ -5,6 +5,7 @@ import org.goldenport.cncf.context.ExecutionContext
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
+import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 
 /*
  * @since   Jul. 15, 2026
@@ -27,13 +28,19 @@ final class ExecutionClockDslSpec extends AnyWordSpec with Matchers with GivenWh
       snapshot._1 should be theSameInstanceAs clock
       snapshot._2 shouldBe instant
       snapshot._3 shouldBe ZonedDateTime.ofInstant(instant, context.timezone)
+      snapshot._4.timestamp shouldBe Some(instant)
     }
   }
 
   private final class _ClockBehavior(
     val behaviorCore: Behavior.Core
   ) extends Behavior {
-    def snapshot(): (Clock, Instant, ZonedDateTime) =
-      (execution_clock, current_instant, current_zoned_datetime)
+    def snapshot(): (Clock, Instant, ZonedDateTime, EntityId) =
+      (
+        execution_clock,
+        current_instant,
+        current_zoned_datetime,
+        collection_entity_id(EntityCollectionId("sample", "clock", "snapshot"), "clock-spec")
+      )
   }
 }

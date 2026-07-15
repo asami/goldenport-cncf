@@ -86,6 +86,62 @@ trait BehaviorFeaturePart { self: Behavior.Core.Holder =>
   protected final def current_zoned_datetime: ZonedDateTime =
     current_instant.atZone(execution_context.timezone)
 
+  protected final def random_int(purpose: String, bound: Int): Int =
+    _execution_capability(
+      "random.next-int",
+      Map("purpose" -> purpose, "bound" -> bound.toString)
+    ) {
+      execution_context.random.stream(purpose).nextInt(bound)
+    }
+
+  protected final def random_long(purpose: String): Long =
+    _execution_capability("random.next-long", Map("purpose" -> purpose)) {
+      execution_context.random.stream(purpose).nextLong()
+    }
+
+  protected final def random_double(purpose: String): Double =
+    _execution_capability("random.next-double", Map("purpose" -> purpose)) {
+      execution_context.random.stream(purpose).nextDouble()
+    }
+
+  protected final def random_boolean(purpose: String): Boolean =
+    _execution_capability("random.next-boolean", Map("purpose" -> purpose)) {
+      execution_context.random.stream(purpose).nextBoolean()
+    }
+
+  protected final def entity_id(
+    collection: EntityCollectionId,
+    purpose: String
+  ): EntityId =
+    _execution_capability(
+      "id.entity-id",
+      Map(
+        "purpose" -> purpose,
+        "collection" -> collection.name
+      )
+    ) {
+      execution_context.idGeneration.entityId(collection, purpose)
+    }
+
+  protected final def collection_entity_id(
+    collection: EntityCollectionId,
+    purpose: String
+  ): EntityId =
+    _execution_capability(
+      "id.collection-entity-id",
+      Map(
+        "purpose" -> purpose,
+        "collection" -> collection.name
+      )
+    ) {
+      execution_context.idGeneration.entityIdInCollectionNamespace(collection, purpose)
+    }
+
+  protected final def opaque_id(purpose: String): String =
+    _execution_capability("id.opaque-id", Map("purpose" -> purpose)) {
+      execution_context.idGeneration.opaqueId(purpose)
+    }
+
   protected final def component_name_option: Option[String] =
     component.flatMap(_.coreOption.map(_.name))
 
@@ -145,6 +201,41 @@ trait BehaviorFeaturePart { self: Behavior.Core.Holder =>
           calltree.leave(Map(
             "outcome" -> "failure",
             "error" -> Option(e.getMessage).getOrElse(e.getClass.getName)
+          ))
+          throw e
+      }
+    } else {
+      body
+    }
+  }
+
+  private def _execution_capability[A](
+    operation: String,
+    attributes: Map[String, String]
+  )(
+    body: => A
+  ): A = {
+    val calltree = execution_context.observability.callTreeContext
+    if (calltree.isEnabled) {
+      val capability = operation.takeWhile(_ != '.')
+      calltree.enter(
+        s"execution:$operation",
+        attributes ++ Map(
+          "calltree_kind" -> "execution-capability",
+          "capability" -> capability,
+          "operation" -> operation,
+          "profile" -> execution_context.executionControl.profile.name
+        )
+      )
+      try {
+        val result = body
+        calltree.leave(Map("outcome" -> "success"))
+        result
+      } catch {
+        case e: Throwable =>
+          calltree.leave(Map(
+            "outcome" -> "failure",
+            "error_type" -> e.getClass.getName
           ))
           throw e
       }
@@ -541,7 +632,16 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
       component
         .map(_.aggregateEditContextSpace)
         .getOrElse(Consequence.uninitializedState.RAISE)
-        .begin(aggregateName, id, baseToken, aggregate, AggregateEditOwner.current(using execution_context), lockScope, metadata)
+        .begin(
+          opaque_id("aggregate-edit.context"),
+          aggregateName,
+          id,
+          baseToken,
+          aggregate,
+          AggregateEditOwner.current(using execution_context),
+          lockScope,
+          metadata
+        )
     }
 
   protected final def get_aggregate_edit[A](

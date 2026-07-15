@@ -4,7 +4,6 @@ import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
-import java.util.UUID
 import cats.free.Free
 import cats.data.NonEmptyVector
 import cats.syntax.all.*
@@ -42,7 +41,8 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
  * Builtin Blob user-facing component.
  *
  * @since   Apr. 26, 2026
- * @version Jun.  5, 2026
+ *  version Jun.  5, 2026
+ * @version Jul. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final class BlobComponent() extends Component {
@@ -57,7 +57,6 @@ object BlobComponent {
   }
 
   final case class RegisterBlobRequest(
-    id: EntityId,
     kind: BlobKind,
     sourceMode: BlobSourceMode,
     filename: Option[String],
@@ -753,8 +752,8 @@ object BlobComponent {
     registerRequest: RegisterBlobRequest
   ) extends FunctionalActionCall with ActionCall.Core.Holder with BlobActionCallSupport {
     protected def build_Program: ExecUowM[OperationResponse] =
-      _observe_blob("register_blob", Some(registerRequest.kind), Some(registerRequest.sourceMode)) {
-        _register_blob(registerRequest)
+      observe_blob("register_blob", Some(registerRequest.kind), Some(registerRequest.sourceMode)) {
+        register_blob(registerRequest)
       }.map { metadata =>
         OperationResponse.RecordResponse(metadata.toRecord)
       }
@@ -765,19 +764,19 @@ object BlobComponent {
     idRef: String
   ) extends FunctionalActionCall with ActionCall.Core.Holder with BlobActionCallSupport {
     protected def build_Program: ExecUowM[OperationResponse] =
-      _observe_blob("read_blob") {
+      observe_blob("read_blob") {
         for {
-          id <- _blob_resolve_id(idRef)
-          blob <- _blob_load(id)
+          id <- blob_resolve_id(idRef)
+          blob <- blob_load(id)
           result <- blob.sourceMode match {
             case BlobSourceMode.Managed =>
               blob.storageRef match {
                 case Some(ref) =>
                   for {
-                    store <- exec_from(_blob_store)
-                    result <- _observe_blob_store("blob_store_get", store) {
-                      _recover_with(exec_from(store.get(ref))) { conclusion =>
-                        exec_from(_managed_payload_missing(blob, ref, conclusion))
+                    store <- exec_from(blob_store)
+                    result <- observe_blob_store("blob_store_get", store) {
+                      recover_with(exec_from(store.get(ref))) { conclusion =>
+                        exec_from(managed_payload_missing(blob, ref, conclusion))
                       }
                     }
                   } yield result
@@ -791,7 +790,7 @@ object BlobComponent {
             HttpStatus.Ok,
             result.contentType,
             result.payload,
-            _blob_content_header(blob.metadata, result)
+            blob_content_header(blob.metadata, result)
           )
         )
       }
@@ -803,8 +802,8 @@ object BlobComponent {
   ) extends FunctionalActionCall with ActionCall.Core.Holder with BlobActionCallSupport {
     protected def build_Program: ExecUowM[OperationResponse] =
       for {
-        id <- _blob_resolve_id(idRef)
-        blob <- _blob_load(id)
+        id <- blob_resolve_id(idRef)
+        blob <- blob_load(id)
         record <- exec_from(_blob_access_url_record(blob.metadata))
       } yield OperationResponse.RecordResponse(record)
   }
@@ -815,8 +814,8 @@ object BlobComponent {
   ) extends FunctionalActionCall with ActionCall.Core.Holder with BlobActionCallSupport {
     protected def build_Program: ExecUowM[OperationResponse] =
       for {
-        id <- _blob_resolve_id(idRef)
-        blob <- _blob_load(id)
+        id <- blob_resolve_id(idRef)
+        blob <- blob_load(id)
       } yield OperationResponse.RecordResponse(blob.metadata.toRecord)
   }
 
@@ -825,7 +824,7 @@ object BlobComponent {
     attachRequest: AttachBlobRequest
   ) extends FunctionalActionCall with ActionCall.Core.Holder with BlobActionCallSupport {
     protected def build_Program: ExecUowM[OperationResponse] =
-      _attach_blob_to_entity(attachRequest).map { record =>
+      attach_blob_to_entity(attachRequest).map { record =>
         OperationResponse.RecordResponse(record)
       }
   }
@@ -835,7 +834,7 @@ object BlobComponent {
     detachRequest: DetachBlobRequest
   ) extends FunctionalActionCall with ActionCall.Core.Holder with BlobActionCallSupport {
     protected def build_Program: ExecUowM[OperationResponse] =
-      _detach_blob_from_entity(detachRequest).map { record =>
+      detach_blob_from_entity(detachRequest).map { record =>
         OperationResponse.RecordResponse(record)
       }
   }
@@ -845,7 +844,7 @@ object BlobComponent {
     listRequest: ListEntityBlobsRequest
   ) extends FunctionalActionCall with ActionCall.Core.Holder with BlobActionCallSupport {
     protected def build_Program: ExecUowM[OperationResponse] =
-      _list_entity_blobs(listRequest).map { record =>
+      list_entity_blobs(listRequest).map { record =>
         OperationResponse.RecordResponse(record)
       }
   }
@@ -855,8 +854,8 @@ object BlobComponent {
     page: AdminPageRequest
   ) extends FunctionalActionCall with ActionCall.Core.Holder with BlobActionCallSupport {
     protected def build_Program: ExecUowM[OperationResponse] =
-      _authorize_blob_collection_access("search/list").flatMap { _ =>
-        _blob_search(page, system = true)
+      authorize_blob_collection_access("search/list").flatMap { _ =>
+        blob_search(page, system = true)
       }.map { values =>
         val rows = values.take(page.limit)
         OperationResponse.RecordResponse(Record.dataAuto(
@@ -874,8 +873,8 @@ object BlobComponent {
     id: EntityId
   ) extends FunctionalActionCall with ActionCall.Core.Holder with BlobActionCallSupport {
     protected def build_Program: ExecUowM[OperationResponse] =
-      _authorize_blob_collection_access("read").flatMap { _ =>
-        _blob_load(id, system = true)
+      authorize_blob_collection_access("read").flatMap { _ =>
+        blob_load(id, system = true)
       }.map { blob =>
         OperationResponse.RecordResponse(blob.metadata.toRecord)
       }
@@ -886,8 +885,8 @@ object BlobComponent {
     listRequest: AdminListBlobAssociationsRequest
   ) extends FunctionalActionCall with ActionCall.Core.Holder with BlobActionCallSupport {
     protected def build_Program: ExecUowM[OperationResponse] =
-      _authorize_blob_attachment_access("search/list").flatMap { _ =>
-        _association_search(_blob_admin_association_filter(listRequest), listRequest.page.offset, Some(listRequest.page.fetchLimit), system = true)
+      authorize_blob_attachment_access("search/list").flatMap { _ =>
+        association_search(_blob_admin_association_filter(listRequest), listRequest.page.offset, Some(listRequest.page.fetchLimit), system = true)
       }.map { values =>
         val rows = values.take(listRequest.page.limit)
         OperationResponse.RecordResponse(Record.dataAuto(
@@ -905,11 +904,11 @@ object BlobComponent {
   ) extends FunctionalActionCall with ActionCall.Core.Holder with BlobActionCallSupport {
     protected def build_Program: ExecUowM[OperationResponse] =
       for {
-        _ <- _authorize_blob_store_access("status")
-        store <- exec_from(_blob_store)
-        maxByteSize <- exec_from(_blob_max_byte_size)
-        record <- _observe_blob("admin_blob_store_status", backend = Some(store.name)) {
-          _observe_blob_store("blob_store_status", store) {
+        _ <- authorize_blob_store_access("status")
+        store <- exec_from(blob_store)
+        maxByteSize <- exec_from(blob_max_byte_size)
+        record <- observe_blob("admin_blob_store_status", backend = Some(store.name)) {
+          observe_blob_store("blob_store_status", store) {
             exec_from(store.status().map(status => _blob_store_status_record(status, maxByteSize)))
           }
         }
@@ -923,7 +922,7 @@ object BlobComponent {
     deleteRequest: AdminDeleteBlobRequest
   ) extends FunctionalActionCall with ActionCall.Core.Holder with BlobActionCallSupport {
     protected def build_Program: ExecUowM[OperationResponse] =
-      _admin_delete_blob(deleteRequest).map { record =>
+      admin_delete_blob(deleteRequest).map { record =>
         OperationResponse.RecordResponse(record)
       }
   }
@@ -933,7 +932,7 @@ object BlobComponent {
     attachRequest: AttachBlobRequest
   ) extends FunctionalActionCall with ActionCall.Core.Holder with BlobActionCallSupport {
     protected def build_Program: ExecUowM[OperationResponse] =
-      _attach_blob_to_entity(attachRequest, system = true).map { record =>
+      attach_blob_to_entity(attachRequest, system = true).map { record =>
         OperationResponse.RecordResponse(record)
       }
   }
@@ -943,13 +942,13 @@ object BlobComponent {
     detachRequest: DetachBlobRequest
   ) extends FunctionalActionCall with ActionCall.Core.Holder with BlobActionCallSupport {
     protected def build_Program: ExecUowM[OperationResponse] =
-      _detach_blob_from_entity(detachRequest, system = true).map { record =>
+      detach_blob_from_entity(detachRequest, system = true).map { record =>
         OperationResponse.RecordResponse(record)
       }
   }
 
   private trait BlobActionCallSupport extends ActionCallEntityStorePart { self: FunctionalActionCall & ActionCall.Core.Holder =>
-    protected final def _observe_blob[A](
+    protected final def observe_blob[A](
       operation: String,
       kind: Option[BlobKind] = None,
       sourceMode: Option[BlobSourceMode] = None,
@@ -968,13 +967,13 @@ object BlobComponent {
           failure
       })
 
-    protected final def _observe_blob_store[A](
+    protected final def observe_blob_store[A](
       operation: String,
       store: BlobStore
     )(
       program: ExecUowM[A]
     ): ExecUowM[A] =
-      _observe_blob(operation, backend = Some(store.name))(program)
+      observe_blob(operation, backend = Some(store.name))(program)
 
     private def _record_blob_observation(
       operation: String,
@@ -1011,29 +1010,32 @@ object BlobComponent {
         backend = backend
       )
 
-    protected final def _register_blob(
+    protected final def register_blob(
       request: RegisterBlobRequest
-    ): ExecUowM[BlobMetadata] =
+    ): ExecUowM[BlobMetadata] = {
+      val id = collection_entity_id(BlobCollectionId, "blob.register")
       request.sourceMode match {
-        case BlobSourceMode.Managed => _register_managed_blob(request)
-        case BlobSourceMode.ExternalUrl => _register_external_url_blob(request)
+        case BlobSourceMode.Managed => _register_managed_blob(request, id)
+        case BlobSourceMode.ExternalUrl => _register_external_url_blob(request, id)
       }
+    }
 
     private def _register_managed_blob(
-      request: RegisterBlobRequest
+      request: RegisterBlobRequest,
+      id: EntityId
     ): ExecUowM[BlobMetadata] =
       request.payload match {
         case Some(payload) =>
           val contentType = request.contentType.getOrElse(ContentType.APPLICATION_OCTET_STREAM)
           for {
-            maxByteSize <- exec_from(_blob_max_byte_size)
+            maxByteSize <- exec_from(blob_max_byte_size)
             _ <- exec_from(_validate_managed_request(request, payload, contentType, maxByteSize))
-            _ <- _authorize_blob_create(request.id.collection, system = false)
-            store <- exec_from(_blob_store)
-            result <- _observe_blob_store("blob_store_put", store) {
+            _ <- _authorize_blob_create(id.collection, system = false)
+            store <- exec_from(blob_store)
+            result <- observe_blob_store("blob_store_put", store) {
               exec_from(store.put(
                 BlobPutRequest(
-                  id = request.id,
+                  id = id,
                   kind = request.kind,
                   filename = request.filename,
                   contentType = contentType,
@@ -1042,7 +1044,7 @@ object BlobComponent {
                 payload
               ))
             }
-            _ <- _recover_with(exec_from(_validate_managed_result(request, result, maxByteSize))) { conclusion =>
+            _ <- recover_with(exec_from(_validate_managed_result(request, result, maxByteSize))) { conclusion =>
               _delete_payload_then_fail(store, result.storageRef, conclusion)
             }
             blob <- _blob_create_managed(
@@ -1069,17 +1071,18 @@ object BlobComponent {
       }
 
     private def _register_external_url_blob(
-      request: RegisterBlobRequest
+      request: RegisterBlobRequest,
+      id: EntityId
     ): ExecUowM[BlobMetadata] =
       request.externalUrl match {
         case Some(url) if url.trim.nonEmpty =>
           for {
             _ <- exec_from(_validate_external_request(request))
-            _ <- _authorize_blob_create(request.id.collection, system = false)
+            _ <- _authorize_blob_create(id.collection, system = false)
             normalized <- exec_from(BlobExternalUrlPolicy.normalize(url))
-            blob <- _blob_create(
+            blob <- blob_create(
               BlobCreate(
-                id = request.id,
+                id = id,
                 kind = request.kind,
                 sourceMode = BlobSourceMode.ExternalUrl,
                 filename = request.filename,
@@ -1109,36 +1112,36 @@ object BlobComponent {
       else
         BlobUrl.cncfRoute(result.id)
 
-    protected final def _blob_content_header(
+    protected final def blob_content_header(
       metadata: BlobMetadata,
       result: BlobReadResult
     ): Record =
       Record.dataAuto(
-        "ETag" -> _http_etag(result.digest),
-        "Last-Modified" -> _http_date(result.storedAt),
+        "ETag" -> http_etag(result.digest),
+        "Last-Modified" -> http_date(result.storedAt),
         "Content-Length" -> result.byteSize.toString,
         "Cache-Control" -> "private, max-age=60",
         "X-Content-Type-Options" -> "nosniff",
-        "Content-Disposition" -> _content_disposition_value(metadata)
+        "Content-Disposition" -> content_disposition_value(metadata)
       )
 
-    protected final def _http_etag(digest: String): String =
+    protected final def http_etag(digest: String): String =
       s""""${digest.replace("\"", "")}""""
 
-    protected final def _http_date(instant: java.time.Instant): String =
+    protected final def http_date(instant: java.time.Instant): String =
       DateTimeFormatter.RFC_1123_DATE_TIME.format(instant.atOffset(ZoneOffset.UTC))
 
-    protected final def _content_disposition_value(metadata: BlobMetadata): String = {
+    protected final def content_disposition_value(metadata: BlobMetadata): String = {
       val raw = metadata.filename.getOrElse(metadata.id.value)
-      val fallback = _safe_ascii_content_disposition_filename(raw)
-      val encoded = _rfc5987_filename(raw)
+      val fallback = safe_ascii_content_disposition_filename(raw)
+      val encoded = rfc5987_filename(raw)
       if (encoded == fallback)
         s"""inline; filename="${fallback}""""
       else
         s"""inline; filename="${fallback}"; filename*=UTF-8''${encoded}"""
     }
 
-    protected final def _safe_ascii_content_disposition_filename(filename: String): String = {
+    protected final def safe_ascii_content_disposition_filename(filename: String): String = {
       val sanitized = filename.map {
         case c if c <= 0x1f.toChar || c == 0x7f.toChar => '_'
         case '"' | '\\' | ';' | '/' => '_'
@@ -1151,10 +1154,10 @@ object BlobComponent {
         sanitized.take(160)
     }
 
-    protected final def _rfc5987_filename(filename: String): String =
+    protected final def rfc5987_filename(filename: String): String =
       URLEncoder.encode(filename, StandardCharsets.UTF_8).replace("+", "%20")
 
-    protected final def _blob_load(id: EntityId, system: Boolean = false): ExecUowM[Blob] = {
+    protected final def blob_load(id: EntityId, system: Boolean = false): ExecUowM[Blob] = {
       import BlobRepository.given
       val op = UnitOfWorkOp.EntityStoreLoad(
         id,
@@ -1164,7 +1167,7 @@ object BlobComponent {
       _exec_uow(op).flatMap(x => exec_from(Consequence.successOrEntityNotFound(x)(id)))
     }
 
-    protected final def _managed_payload_missing(
+    protected final def managed_payload_missing(
       blob: Blob,
       ref: BlobStorageRef,
       previous: Conclusion
@@ -1179,7 +1182,7 @@ object BlobComponent {
         previous
       )
 
-    protected final def _blob_resolve_id(value: String): ExecUowM[EntityId] = {
+    protected final def blob_resolve_id(value: String): ExecUowM[EntityId] = {
       import BlobRepository.given
       EntityId.parse(value).toOption.filter(_.collection == BlobRepository.CollectionId) match {
         case Some(id) => exec_pure(id)
@@ -1202,7 +1205,7 @@ object BlobComponent {
       }
     }
 
-    protected final def _blob_create(create: BlobCreate, system: Boolean = false): ExecUowM[Blob] = {
+    protected final def blob_create(create: BlobCreate, system: Boolean = false): ExecUowM[Blob] = {
       import BlobRepository.given
       val op = UnitOfWorkOp.EntityStoreCreate(
         create,
@@ -1225,7 +1228,7 @@ object BlobComponent {
         EntityCreateOptions.default,
         Some(_authorization(create.id.collection, None, "create", system = false))
       )
-      _recover_with(_exec_uow(op)) { conclusion =>
+      recover_with(_exec_uow(op)) { conclusion =>
         _delete_payload_then_fail(store, storageRef, conclusion)
       }.flatMap(result => _blob_from_create_result(result, Some((store, storageRef))))
     }
@@ -1237,7 +1240,7 @@ object BlobComponent {
       import BlobRepository.given
       result.record match {
         case Some(record) =>
-          _recover_with(
+          recover_with(
             exec_from(summon[EntityPersistent[Blob]].fromStoreRecord(record))
           ) { conclusion =>
             _cleanup_created_blob_after_decode_failure(result.id, managedPayload, conclusion)
@@ -1275,11 +1278,11 @@ object BlobComponent {
       ref: BlobStorageRef,
       conclusion: Conclusion
     ): ExecUowM[A] =
-      _observe_blob_store("blob_store_delete", store) {
+      observe_blob_store("blob_store_delete", store) {
         exec_from(store.delete(ref))
       }.flatMap(_ => exec_from(Consequence.Failure[A](conclusion)))
 
-    protected final def _blob_search(page: AdminPageRequest, system: Boolean): ExecUowM[Vector[Blob]] = {
+    protected final def blob_search(page: AdminPageRequest, system: Boolean): ExecUowM[Vector[Blob]] = {
       import BlobRepository.given
       val query = EntityQuery[Blob](
         BlobCollectionId,
@@ -1294,22 +1297,22 @@ object BlobComponent {
       _exec_uow(op).map(_.data)
     }
 
-    protected final def _attach_blob_to_entity(
+    protected final def attach_blob_to_entity(
       request: AttachBlobRequest,
       system: Boolean = false
     ): ExecUowM[Record] =
       _authorize_source_entity(request.sourceEntityId, "update", system).flatMap { _ =>
-        _blob_load(request.id, system).flatMap { blob =>
-          _authorize_blob_attachment_access("create").flatMap { _ =>
+        blob_load(request.id, system).flatMap { blob =>
+          authorize_blob_attachment_access("create").flatMap { _ =>
             val filter = _blob_association_filter(request.sourceEntityId, Some(request.role), Some(blob.id))
-            _association_search(filter, 0, None, system = true).flatMap {
+            association_search(filter, 0, None, system = true).flatMap {
               case existing +: _ =>
                 exec_pure(AssociationRecordCodec.toRecord(existing))
               case _ =>
                 _association_create(
                   AssociationCreate(
                     id = None,
-                    associationId = UUID.randomUUID().toString,
+                    associationId = opaque_id("blob.attachment"),
                     sourceEntityId = request.sourceEntityId,
                     targetEntityId = blob.id.value,
                     targetKind = Some("blob"),
@@ -1325,13 +1328,13 @@ object BlobComponent {
         }
       }
 
-    protected final def _detach_blob_from_entity(
+    protected final def detach_blob_from_entity(
       request: DetachBlobRequest,
       system: Boolean = false
     ): ExecUowM[Record] =
       _authorize_source_entity(request.sourceEntityId, "update", system).flatMap { _ =>
-        _authorize_blob_attachment_access("delete").flatMap { _ =>
-          _association_search(_blob_association_filter(request.sourceEntityId, request.role, Some(request.id)), 0, None, system = true).flatMap {
+        authorize_blob_attachment_access("delete").flatMap { _ =>
+          association_search(_blob_association_filter(request.sourceEntityId, request.role, Some(request.id)), 0, None, system = true).flatMap {
             case Vector() => exec_from(Consequence.operationNotFound(s"blob association:${request.sourceEntityId}:${request.id.value}"))
             case values =>
               values.foldLeft(exec_pure(0)) { (z, association) =>
@@ -1341,13 +1344,13 @@ object BlobComponent {
         }
       }
 
-    protected final def _list_entity_blobs(
+    protected final def list_entity_blobs(
       request: ListEntityBlobsRequest,
       system: Boolean = false
     ): ExecUowM[Record] =
       _authorize_source_entity(request.sourceEntityId, "read", system).flatMap { _ =>
-        _authorize_blob_attachment_access("search/list").flatMap { _ =>
-          _association_search(_blob_association_filter(request.sourceEntityId, request.role, None), 0, None, system = true).flatMap { values =>
+        authorize_blob_attachment_access("search/list").flatMap { _ =>
+          association_search(_blob_association_filter(request.sourceEntityId, request.role, None), 0, None, system = true).flatMap { values =>
             values.foldLeft(exec_pure(Vector.empty[BlobMetadata])) { (z, association) =>
               z.flatMap { acc =>
                 exec_from(EntityId.parse(association.targetEntityId)).flatMap(id => _blob_metadata_if_visible(id, system)).map {
@@ -1365,13 +1368,13 @@ object BlobComponent {
         }
       }
 
-    protected final def _admin_delete_blob(
+    protected final def admin_delete_blob(
       request: AdminDeleteBlobRequest
     ): ExecUowM[Record] =
       for {
-        _ <- _authorize_blob_collection_access("delete")
-        blob <- _blob_load(request.id, system = true)
-        refs <- _association_search(_blob_target_association_filter(blob.id), 0, None, system = true)
+        _ <- authorize_blob_collection_access("delete")
+        blob <- blob_load(request.id, system = true)
+        refs <- association_search(_blob_target_association_filter(blob.id), 0, None, system = true)
         _ <- if (refs.nonEmpty && !request.force)
           exec_from(Consequence.operationConflict(
             "admin_delete_blob",
@@ -1429,7 +1432,7 @@ object BlobComponent {
       id: EntityId,
       system: Boolean
     ): ExecUowM[Option[BlobMetadata]] =
-      ConsequenceT(_blob_load(id, system).value.map {
+      ConsequenceT(blob_load(id, system).value.map {
         case Consequence.Success(blob) =>
           Consequence.success(Some(blob.metadata))
         case Consequence.Failure(conclusion) if _is_permission_denied(conclusion) =>
@@ -1438,7 +1441,7 @@ object BlobComponent {
           Consequence.Failure(conclusion)
       })
 
-    protected final def _association_search(
+    protected final def association_search(
       filter: AssociationFilter,
       offset: Int,
       limit: Option[Int],
@@ -1483,12 +1486,12 @@ object BlobComponent {
     ): ExecUowM[Unit] =
       _exec_uow(UnitOfWorkOp.Authorize(_authorization(collection, None, "create", system)))
 
-    protected final def _authorize_blob_collection_access(
+    protected final def authorize_blob_collection_access(
       accessKind: String
     ): ExecUowM[Unit] =
       _exec_uow(UnitOfWorkOp.Authorize(_authorization(BlobCollectionId, None, accessKind, system = false)))
 
-    protected final def _authorize_blob_attachment_access(
+    protected final def authorize_blob_attachment_access(
       accessKind: String
     ): ExecUowM[Unit] =
       _exec_uow(UnitOfWorkOp.Authorize(_association_authorization(
@@ -1499,7 +1502,7 @@ object BlobComponent {
         system = false
       )))
 
-    protected final def _authorize_blob_store_access(
+    protected final def authorize_blob_store_access(
       accessKind: String
     ): ExecUowM[Unit] =
       _exec_uow(UnitOfWorkOp.Authorize(_store_authorization(_blob_store_resource_name, accessKind, system = false)))
@@ -1519,7 +1522,7 @@ object BlobComponent {
     private def _exec_uow[A](op: UnitOfWorkOp[A]): ExecUowM[A] =
       ConsequenceT.liftF(Free.liftF(op))
 
-    protected final def _recover_with[A](
+    protected final def recover_with[A](
       program: ExecUowM[A]
     )(f: Conclusion => ExecUowM[A]): ExecUowM[A] =
       ConsequenceT(program.value.flatMap {
@@ -1548,8 +1551,8 @@ object BlobComponent {
           blob.storageRef match {
             case Some(ref) =>
               for {
-                store <- exec_from(_blob_store)
-                _ <- _observe_blob_store("blob_store_delete", store) {
+                store <- exec_from(blob_store)
+                _ <- observe_blob_store("blob_store_delete", store) {
                   exec_from(store.delete(ref))
                 }
               } yield true
@@ -1559,10 +1562,10 @@ object BlobComponent {
           exec_pure(false)
       }
 
-    protected final def _blob_store: Consequence[BlobStore] =
+    protected final def blob_store: Consequence[BlobStore] =
       _service(core).map(_.blobStore)
 
-    protected final def _blob_max_byte_size: Consequence[Long] =
+    protected final def blob_max_byte_size: Consequence[Long] =
       _service(core).map(_.maxByteSize)
 
     private def _authorization(
@@ -1760,7 +1763,6 @@ object BlobComponent {
     for {
       sourceMode <- _string(req, "sourceMode", "source_mode").map(BlobSourceMode.parse).getOrElse(Consequence.argumentMissing("sourceMode"))
       kind <- _string(req, "kind").map(BlobKind.parse).getOrElse(Consequence.argumentMissing("kind"))
-      id = _new_blob_entity_id()
       filename = _string(req, "filename", "fileName")
       mimeBody = _any(req, "payload", "body", "file").collect { case m: MimeBody => m }
       contentType <- mimeBody match {
@@ -1771,7 +1773,6 @@ object BlobComponent {
       expectedDigest = _string(req, "expectedDigest", "expected_digest")
       payload <- _payload(req, mimeBody)
     } yield RegisterBlobRequest(
-      id = id,
       kind = kind,
       sourceMode = sourceMode,
       filename = filename,
@@ -1905,9 +1906,6 @@ object BlobComponent {
     else
       Consequence.success(AdminPageRequest(offset, limit))
   }
-
-  private def _new_blob_entity_id(): EntityId =
-    EntityId(BlobCollectionId.major, BlobCollectionId.minor, BlobCollectionId)
 
   private def _blob_access_url_record(metadata: BlobMetadata): Consequence[Record] =
     if (metadata.sourceMode == BlobSourceMode.ExternalUrl)

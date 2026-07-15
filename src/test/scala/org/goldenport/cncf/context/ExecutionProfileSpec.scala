@@ -82,6 +82,36 @@ final class ExecutionProfileSpec
       checked.passed shouldBe true
     }
 
+    "derive controlled ID sequences per invocation without consuming domain random streams" in {
+      Given("two controlled runtimes with repeated explicit invocation keys")
+      val config = _controlled_configuration("id-run", "domain-random-seed")
+      val leftprofile = ExecutionProfileResolver.resolveForSpec(config).toOption.get
+      val rightprofile = ExecutionProfileResolver.resolveForSpec(config).toOption.get
+      val namespace = IdGenerationContext.DefaultNamespace
+      val collection = org.simplemodeling.model.datatype.EntityCollectionId("sample", "catalog", "article")
+      val leftruntime = leftprofile.newRuntime(namespace)
+      val rightruntime = rightprofile.newRuntime(namespace)
+
+      When("each runtime binds two invocation ordinals and one side generates IDs before domain random")
+      val leftfirst = leftruntime.nextBinding("catalog.article.create", Some("same-explicit-key"))
+      val leftfirstid = leftfirst.idGeneration.entityId(collection, "article.create")
+      val leftrandom = leftfirst.random.stream("price-table").nextLong()
+      val leftsecond = leftruntime.nextBinding("catalog.article.create", Some("same-explicit-key"))
+      val leftsecondid = leftsecond.idGeneration.entityId(collection, "article.create")
+
+      val rightfirst = rightruntime.nextBinding("catalog.article.create", Some("same-explicit-key"))
+      val rightrandom = rightfirst.random.stream("price-table").nextLong()
+      val rightfirstid = rightfirst.idGeneration.entityId(collection, "article.create")
+      val rightsecond = rightruntime.nextBinding("catalog.article.create", Some("same-explicit-key"))
+      val rightsecondid = rightsecond.idGeneration.entityId(collection, "article.create")
+
+      Then("ordinal-bound IDs reproduce, remain unique, and use no domain-random values")
+      leftfirstid shouldBe rightfirstid
+      leftsecondid shouldBe rightsecondid
+      leftfirstid should not be leftsecondid
+      leftrandom shouldBe rightrandom
+    }
+
     "redact seed and run-key material from profile diagnostics" in {
       Given("a seeded profile containing recognizable confidential material")
       val seed = "sensitive-seed-material-918273"

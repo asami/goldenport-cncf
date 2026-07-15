@@ -339,8 +339,31 @@ Canonical time helpers are:
 - `current_instant`;
 - `current_zoned_datetime`.
 
-Phase 31 adds purpose-based random and ID helpers. Component behavior MUST NOT
-read the root seed, raw entropy, scheduler, executor, or test-control handle.
+Canonical purpose-based random helpers are:
+
+- `random_int(purpose, bound)`;
+- `random_long(purpose)`;
+- `random_double(purpose)`;
+- `random_boolean(purpose)`.
+
+Canonical ID helpers are:
+
+- `entity_id(collection, purpose)` for the configured runtime ID namespace;
+- `collection_entity_id(collection, purpose)` when an `EntityId` must retain
+  the collection namespace and round-trip without external collection
+  context;
+- `opaque_id(purpose)` for non-Entity opaque identifiers.
+
+Every helper records only structural execution-capability CallTree metadata.
+Generated values, raw seeds, and entropy tokens MUST NOT be recorded.
+Component behavior MUST NOT read the root seed, raw entropy, scheduler,
+executor, or test-control handle.
+
+`IdGenerationContext` is constructed from the selected execution clock and a
+dedicated ID entropy context. Controlled bindings derive the ID entropy seed
+from the profile fingerprint, invocation identity, and invocation ordinal.
+Entity and opaque ID sequences are isolated by collection and purpose. ID
+generation therefore MUST NOT consume a domain random stream.
 
 Component-visible behavior MUST NOT call ambient clock, UUID, random, sleep,
 environment, system-property, or host filesystem APIs directly. Bootstrap,

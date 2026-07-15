@@ -160,14 +160,14 @@ object ExecutionContext {
   def create(): ExecutionContext =
     _create(
       SecurityContext.Privilege.User,
-      IdGenerationContext.default(IdGenerationContext.DefaultNamespace),
+      IdGenerationContext.default(IdGenerationContext.DefaultNamespace, RuntimeConfig.DEFAULT_EXECUTION_CLOCK.clock),
       RuntimeConfig.DEFAULT_EXECUTION_CLOCK.clock
     )
 
   def create(clock: Clock): ExecutionContext =
     _create(
       SecurityContext.Privilege.User,
-      IdGenerationContext.default(IdGenerationContext.DefaultNamespace),
+      IdGenerationContext.default(IdGenerationContext.DefaultNamespace, clock),
       clock
     )
 
@@ -176,7 +176,7 @@ object ExecutionContext {
   ): ExecutionContext =
     _create(
       privilege,
-      IdGenerationContext.default(IdGenerationContext.DefaultNamespace),
+      IdGenerationContext.default(IdGenerationContext.DefaultNamespace, RuntimeConfig.DEFAULT_EXECUTION_CLOCK.clock),
       RuntimeConfig.DEFAULT_EXECUTION_CLOCK.clock
     )
 
@@ -234,7 +234,7 @@ object ExecutionContext {
   ): ExecutionContext =
     _create(
       SecurityContext.Privilege.User,
-      IdGenerationContext.default(namespace),
+      IdGenerationContext.default(namespace, RuntimeConfig.DEFAULT_EXECUTION_CLOCK.clock),
       RuntimeConfig.DEFAULT_EXECUTION_CLOCK.clock
     )
 
@@ -244,7 +244,7 @@ object ExecutionContext {
   ): ExecutionContext =
     _create(
       SecurityContext.Privilege.User,
-      IdGenerationContext.default(namespace),
+      IdGenerationContext.default(namespace, clock),
       clock
     )
 
@@ -580,7 +580,7 @@ object ExecutionContext {
   private def _id_generation_context(
     scope: ScopeContext
   ): IdGenerationContext =
-    IdGenerationContext.default(_id_namespace(scope))
+    IdGenerationContext.default(_id_namespace(scope), _execution_clock(scope))
 
   private def _id_namespace(
     scope: ScopeContext
