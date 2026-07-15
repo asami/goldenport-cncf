@@ -404,9 +404,22 @@ ExecutionContext provides:
     - execution-scoped resources
     - UnitOfWork coordination
     - commit / abort integration
+    - resolved execution-time and scheduling controls
+    - execution-profile and replayability metadata
 
 Job lifecycle transitions
 must coordinate with ExecutionContext lifecycle.
+
+JobEngine uses the runtime-selected execution time and operational scheduler
+defined by `docs/design/execution-determinism.md`. `JobTimeSource` is an adapter
+to that source, not an independent semantic policy. Job timestamps, retry and
+delayed-start due times, and observable await timeouts must follow the selected
+execution profile.
+
+Under the test-only controlled profile, advancing manual time makes due work
+eligible and run-until-idle executes eligible CNCF-owned work without host
+sleeping. Async Event reception uses the same Job scheduler. Synchronous
+same-transaction Event reception remains immediate and is not scheduled.
 
 
 ----------------------------------------------------------------------

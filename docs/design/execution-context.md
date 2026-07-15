@@ -19,6 +19,12 @@ ExecutionContext is composed from:
 
 The Action ExecutionContext is the only point where these layers merge.
 
+Execution assumptions are resolved according to
+`docs/design/execution-determinism.md`. Generic assumptions are carried by core
+`ExecutionContext.Core`; CNCF-only execution controls are carried by the CNCF
+context extension. The two layers MUST represent one coherent resolved
+execution profile.
+
 ## Provisioning
 - CNCF constructs SystemContext during server startup.
 - Construction is explicit.
@@ -74,6 +80,11 @@ Design Notes (Security)
 ## Mutability
 - ExecutionContext MUST NOT be mutated.
 - ExecutionContext MUST NOT be replaced during runtime.
+- Runtime-owned mutable facilities may be referenced through immutable context
+  handles, but their lifecycle remains owned by `GlobalRuntimeContext`.
+- Context construction/rebinding before ActionCall binding MUST replace all
+  profile-dependent core and CNCF fields coherently. A bound ActionCall context
+  MUST NOT be rebound during execution.
 
 ## Relationship to CanonicalId
 - ExecutionContext does NOT contain CanonicalId.
@@ -95,6 +106,9 @@ CNCF consumer contract.
 - Runtime state management
 - Observability state
 - Request-scoped data
+
+Execution-profile resolution, invocation identity, and replayability semantics
+are defined in `docs/design/execution-determinism.md`.
 
 ----------------------------------------------------------------------
 END OF DOCUMENT

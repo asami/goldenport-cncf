@@ -35,6 +35,13 @@ cncf --textus.clock.virtual-start-at=2026-07-28T18:00:00+09:00 server
 date-time without an offset is rejected because it does not identify one
 instant.
 
+The unified execution-profile keys are
+`textus.execution.time.mode` and `textus.execution.time.start-at`. The existing
+`textus.clock.virtual-start-at` key maps to offset mode when the unified keys
+are absent. If both start keys are present they must identify the same instant;
+a mismatch is a configuration error. Manual mode conflicts with the offset
+compatibility key.
+
 ## Semantics
 
 Without the key, runtime bootstrap selects the system UTC clock. With the key,
@@ -46,6 +53,12 @@ The same runtime clock instance is used to create the global execution context
 and is recovered from `GlobalRuntimeContext` when component execution contexts
 are created. The execution-context timezone remains a separate concern; the
 initial implementation uses UTC.
+
+The test-only controlled profile selects a manual clock and an operational
+scheduler as one runtime-owned pair. Its in-process test control may advance
+time and run eligible CNCF work until idle. Components can read the selected
+clock but cannot advance it. Manual time control does not change monotonic
+performance measurement and does not introduce general scheduling semantics.
 
 ## Component Rule
 
@@ -74,6 +87,12 @@ Operational tests that use virtual time must record both the wall-clock run
 date and the configured CNCF execution date. Virtual time validates runtime
 behavior and date-sensitive flows; it must not be presented as unrecorded
 wall-clock elapsed time.
+
+## Related Contracts
+
+The complete execution-profile, random, ID, scheduling, environment, and
+replayability contract is defined in
+`docs/design/execution-determinism.md`.
 
 ## Related Non-Normative Work
 

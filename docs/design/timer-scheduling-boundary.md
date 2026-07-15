@@ -25,6 +25,11 @@ This means:
 
 The built-in scheduler is the `JobEngine`-owned job scheduler.
 
+Its clock, timer, and queue-ordering implementation is selected by the resolved
+execution profile defined in `docs/design/execution-determinism.md`. A manual
+test implementation changes how allowed operational timing is driven; it does
+not expand the set of allowed timing semantics.
+
 ## Allowed Built-In Timing
 
 The following built-in timing behavior is in scope:

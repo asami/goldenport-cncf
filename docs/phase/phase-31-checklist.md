@@ -17,7 +17,7 @@ dashboard remains in `phase-31.md`.
 
 ## ED-01: Freeze the Execution-Profile Contract
 
-Status: IN PROGRESS
+Status: DONE
 
 ### Objective
 
@@ -29,15 +29,15 @@ replayability rules before implementing new runtime types.
 - [x] Record the investigation handoff and non-normative design exploration.
 - [x] Add strategy item `9.28 Execution Determinism`.
 - [x] Open Phase 31 and its detailed checklist.
-- [ ] Decide final core and CNCF type names.
-- [ ] Define the core/CNCF/runtime ownership matrix normatively.
-- [ ] Define `standard`, `seeded`, and `controlled` compatibility rules.
-- [ ] Define profile identity, invocation identity, and deterministic ordinal
+- [x] Decide final core and CNCF type names.
+- [x] Define the core/CNCF/runtime ownership matrix normatively.
+- [x] Define `standard`, `seeded`, and `controlled` compatibility rules.
+- [x] Define profile identity, invocation identity, and deterministic ordinal
       semantics.
-- [ ] Define canonical configuration keys and structured test-descriptor
+- [x] Define canonical configuration keys and structured test-descriptor
       normalization.
-- [ ] Define replayability states and sanitization rules.
-- [ ] Promote settled decisions to execution-context, execution-clock, Job,
+- [x] Define replayability states and sanitization rules.
+- [x] Promote settled decisions to execution-context, execution-clock, Job,
       timer-boundary, and test-policy documents.
 
 ### Acceptance Criteria
@@ -50,7 +50,7 @@ replayability rules before implementing new runtime types.
 
 ## ED-02: Seeded Named Random and Dedicated Entropy
 
-Status: PLANNED
+Status: IN PROGRESS
 
 ### Tasks
 

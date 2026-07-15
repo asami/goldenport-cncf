@@ -30,19 +30,18 @@ and non-deterministic execution.
 3. Unit Test Policy (src/test)
 ----------------------------------------------------------------------
 
-Unit tests in CNCF serve as structural reservations.
+Tests under `src/test` are Executable Specifications by default.
 
 Characteristics:
-  - ScalaTest AnyWordSpec is used
-  - Tests are intentionally marked as pending
-  - No concrete behavior is asserted
-  - Tests compile and pass by design
+  - substantial behavior specifications use ScalaTest `AnyWordSpec`
+  - behavior is expressed with Given / When / Then boundaries
+  - Property-Based Testing is used for value spaces and invariants
+  - expectations reserve observable contracts rather than implementation
+    details
+  - pending tests are allowed only for explicitly unfinished exploratory work
 
-This prevents premature specification locking
-during architectural exploration.
-
-Classic test-first TDD is intentionally avoided
-in early CNCF development.
+Stable behavior must be asserted directly. Tests must not remain pending merely
+to avoid fixing an implemented contract.
 
 ----------------------------------------------------------------------
 4. Integration and Scenario Tests
@@ -97,25 +96,63 @@ Test-owned datastore replacement should use logical CNCF datastore keys:
 The public test descriptor contract is `type: local` plus `path`, not
 SQLite-specific implementation keys.
 
+Controlled execution tests may declare an explicit execution profile:
+
+```yaml
+kind: test-descriptor
+
+execution:
+  profile: controlled
+  key: executable-spec-run
+  time:
+    mode: manual
+    start-at: 2026-07-28T09:00:00Z
+  random:
+    mode: seeded
+    seed: executable-spec-seed
+  ids:
+    mode: deterministic
+  scheduler:
+    mode: manual
+  ordering:
+    mode: deterministic
+```
+
+The block normalizes to the canonical execution configuration defined in
+`docs/design/execution-determinism.md`. `controlled` is valid only through an
+explicit test descriptor, `cncf test`, or an in-process executable-spec
+builder. CNCF must reject it during ordinary production startup.
+
+The controlled test API may advance time and run eligible CNCF work until idle.
+Component code must not receive the advance control. Executable specifications
+for retry, delay, timeout, and async Event behavior should use controlled time
+instead of host sleeps when the behavior is owned by CNCF.
+
 ----------------------------------------------------------------------
 5. Use of TDD
 ----------------------------------------------------------------------
 
 TDD MAY be applied selectively in later stages,
-once core structure stabilizes.
+once the behavior boundary is sufficiently understood.
 
 Typical use cases include:
   - boundary condition refinement
   - failure handling
   - regression prevention
+  - property-based validation of stable invariants
+
+Repository work follows rules, executable specification, design, then code.
+Exploratory pending specifications must be replaced by executable behavior
+specifications when the contract is promoted to design/spec.
 
 ----------------------------------------------------------------------
 6. Summary
 ----------------------------------------------------------------------
 
-- Unit tests reserve structure (pending-first)
+- Tests are executable behavior specifications by default
 - Integration and scenario tests validate execution
-- Architectural freedom is prioritized early
-- Behavior is fixed only after stabilization
+- Property-Based Testing covers value spaces and invariants
+- Explicit controlled profiles isolate observable time, random, ID, and
+  CNCF-owned async ordering
 
 ======================================================================
