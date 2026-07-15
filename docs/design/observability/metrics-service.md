@@ -33,9 +33,28 @@ Supported OB-05 scopes are:
 - `diagnostic-payload.externalization`
 - `otel.export`
 - `entity-access`
+- `component`
 
 Default labels exclude high-cardinality values such as raw paths, entity ids,
 job ids, payload ids, request parameters, and user/session ids.
+
+## Component-Owned Metrics
+
+Components use `ComponentMetricsRegistry` to contribute a metric to the
+`component` scope. Every declaration fixes a metric name, its permitted label
+keys, and a maximum series count from 1 through 256. Every declaration must
+include the `component` label, which identifies the emitting CAR/component.
+
+The registry accepts only machine-readable label values no longer than 64
+characters. It rejects unknown labels, invalid values, and new series beyond a
+declaration's limit before they reach the dashboard or OpenTelemetry exporter.
+Component implementations must not use this registry for paths, query text,
+entity/source identifiers, credentials, request/response content, or other
+unbounded values.
+
+The runtime catalog lists the mandatory `component` label. Additional labels
+are defined by the component-owned metric declaration rather than by a global
+catalog schema.
 
 ## Metrics Component
 

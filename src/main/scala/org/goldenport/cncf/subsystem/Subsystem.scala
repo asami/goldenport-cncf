@@ -45,7 +45,7 @@ import org.goldenport.cncf.operation.{AssociationBindingOperationDefinition, Chi
 import org.goldenport.cncf.security.{AdminAuthorizationPolicy, IngressSecurityResolver, OperationAuthorization, OperationAuthorizationProvider}
 import org.goldenport.cncf.config.{ResolvedParameter, ResolvedParameters}
 import org.goldenport.cncf.config.RuntimeConfig
-import org.goldenport.cncf.metrics.EntityAccessMetricsRegistry
+import org.goldenport.cncf.metrics.{ComponentMetricsRegistry, EntityAccessMetricsRegistry}
 import org.goldenport.cncf.spi.{ComponentApiResolver, ResolvedSpiBinding, SpiInvoker, SpiOperationSelector}
 
 /*
@@ -93,6 +93,7 @@ final class Subsystem(
   private lazy val _workflow_engine: WorkflowEngine = WorkflowEngine.inMemory(this)
   private val _event_receptions = mutable.LinkedHashMap.empty[String, EventReception]
   private val _entity_access_metrics: EntityAccessMetricsRegistry = EntityAccessMetricsRegistry.shared
+  private val _component_metrics: ComponentMetricsRegistry = ComponentMetricsRegistry.shared
   private val _site_base_url_keys = Vector(
     RuntimeConfig.SiteBaseUrlKey,
     RuntimeConfig.RuntimeSiteBaseUrlKey,
@@ -129,6 +130,7 @@ final class Subsystem(
   def workflowEngine: WorkflowEngine = _workflow_engine
   def eventReceptions: Map[String, EventReception] = _event_receptions.toMap
   def entityAccessMetrics: EntityAccessMetricsRegistry = _entity_access_metrics
+  def componentMetrics: ComponentMetricsRegistry = _component_metrics
   def serverEmulatorBaseUrl: String = globalRuntimeContext.serverEmulatorBaseUrl
   def descriptor: Option[GenericSubsystemDescriptor] = _descriptor
   def resolvedSecurityWiring: ResolvedSecurityWiring = _resolved_security_wiring

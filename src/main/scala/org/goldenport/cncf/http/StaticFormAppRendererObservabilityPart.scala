@@ -31,7 +31,7 @@ import io.circe.parser.parse
 
 /*
  * @since   May. 18, 2026
- * @version May. 18, 2026
+ * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 trait StaticFormAppRendererObservabilityPart {
@@ -83,7 +83,10 @@ trait StaticFormAppRendererObservabilityPart {
   }
 
   protected def observability_metrics_page(subsystem: Subsystem): String = {
-    val snapshot = RuntimeDashboardMetrics.runtimeMetricsSnapshot(subsystem.entityAccessMetrics)
+    val snapshot = RuntimeDashboardMetrics.runtimeMetricsSnapshot(
+      subsystem.entityAccessMetrics,
+      subsystem.componentMetrics
+    )
     val scopeCards = snapshot.catalog.map { scope =>
       val points = snapshot.points.filter(_.scope == scope.scope)
       admin_card(

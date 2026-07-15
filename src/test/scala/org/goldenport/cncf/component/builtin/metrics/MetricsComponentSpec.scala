@@ -4,6 +4,7 @@ import org.goldenport.Consequence
 import org.goldenport.cncf.action.Action
 import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.http.RuntimeDashboardMetrics
+import org.goldenport.cncf.metrics.ComponentMetricDefinition
 import org.goldenport.cncf.subsystem.DefaultSubsystemFactory
 import org.goldenport.cncf.subsystem.resolver.OperationResolver
 import org.goldenport.cncf.subsystem.resolver.OperationResolver.ResolutionResult
@@ -15,7 +16,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   May. 11, 2026
- * @version May. 11, 2026
+ * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 final class MetricsComponentSpec extends AnyWordSpec with Matchers {
@@ -33,6 +34,11 @@ final class MetricsComponentSpec extends AnyWordSpec with Matchers {
           "outcome" -> "success"
         )
       )
+      subsystem.componentMetrics.record(
+        ComponentMetricDefinition("semantic.provider.request", Vector("component", "provider", "outcome")),
+        Map("component" -> "textus-sie", "provider" -> "fuseki", "outcome" -> "success"),
+        durationmillis = Some(4L)
+      )
 
       val entityAccess = _execute(metrics, _request(subsystem.resolver, "metrics.metrics.load_entity_access_metrics"))
       val runtime = _execute(metrics, _request(subsystem.resolver, "metrics.metrics.load_runtime_metrics"))
@@ -43,10 +49,12 @@ final class MetricsComponentSpec extends AnyWordSpec with Matchers {
       runtime.show should include ("diagnostic-payload.externalization")
       runtime.show should include ("otel.export")
       runtime.show should include ("entity-access")
+      runtime.show should include ("semantic.provider.request")
       runtime.show should include ("payload_kind=result")
       runtime.show should include ("otel_export")
       catalog.show should include ("web.request")
       catalog.show should include ("otel.export")
+      catalog.show should include ("component")
       catalog.show should include ("label_keys")
     }
   }

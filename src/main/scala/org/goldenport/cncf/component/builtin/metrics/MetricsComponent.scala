@@ -6,7 +6,7 @@ import org.goldenport.cncf.action.{Action, ActionCall, ProcedureActionCall, Quer
 import org.goldenport.cncf.component.{Component, ComponentCreate, ComponentId, ComponentInstanceId}
 import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.http.RuntimeDashboardMetrics
-import org.goldenport.cncf.metrics.EntityAccessMetricsRegistry
+import org.goldenport.cncf.metrics.{ComponentMetricsRegistry, EntityAccessMetricsRegistry}
 import org.goldenport.cncf.observability.OpenTelemetryExporter
 import org.goldenport.protocol.Protocol
 import org.goldenport.protocol.Request
@@ -19,7 +19,7 @@ import org.goldenport.schema.DataType
 /*
  * @since   Mar. 29, 2026
  *  version Apr. 10, 2026
- * @version May. 11, 2026
+ * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 final class MetricsComponent() extends Component {
@@ -63,7 +63,11 @@ object MetricsComponent {
         handler = ProtocolHandler.default
       )
       val runtimeConfig = RuntimeConfig.from(params.subsystem.configuration)
-      comp.withPort(Component.Port.of(new DefaultMetricsService(params.subsystem.entityAccessMetrics, runtimeConfig)))
+      comp.withPort(Component.Port.of(new DefaultMetricsService(
+        params.subsystem.entityAccessMetrics,
+        params.subsystem.componentMetrics,
+        runtimeConfig
+      )))
       val instanceId = ComponentInstanceId.default(componentId)
       Component.Core.create(name, componentId, instanceId, protocol)
     }
@@ -71,13 +75,14 @@ object MetricsComponent {
 
   private final class DefaultMetricsService(
     registry: EntityAccessMetricsRegistry,
+    componentmetrics: ComponentMetricsRegistry,
     runtimeConfig: RuntimeConfig
   ) extends MetricsService {
     def loadEntityAccessMetrics(): Consequence[Record] =
       Consequence.success(registry.toRecord)
 
     def loadRuntimeMetrics(): Consequence[Record] = {
-      val snapshot = RuntimeDashboardMetrics.runtimeMetricsSnapshot(registry)
+      val snapshot = RuntimeDashboardMetrics.runtimeMetricsSnapshot(registry, componentmetrics)
       val exportResult = OpenTelemetryExporter(
         runtimeConfig.openTelemetryExportConfig,
         runtimeConfig.operationMode

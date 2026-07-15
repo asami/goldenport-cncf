@@ -1,13 +1,13 @@
 package org.goldenport.cncf.http
 
 import java.time.Instant
-import org.goldenport.cncf.metrics.{EntityAccessMetricEntry, EntityAccessMetricsRegistry, RuntimeMetricPoint, RuntimeMetricsCatalog, RuntimeMetricsSnapshot}
+import org.goldenport.cncf.metrics.{ComponentMetricEntry, ComponentMetricsRegistry, EntityAccessMetricEntry, EntityAccessMetricsRegistry, RuntimeMetricPoint, RuntimeMetricsCatalog, RuntimeMetricsSnapshot}
 import org.goldenport.record.Record
 
 /*
  * @since   Apr. 12, 2026
  *  version May. 11, 2026
- * @version Jul. 11, 2026
+ * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 object RuntimeDashboardMetrics {
@@ -393,10 +393,16 @@ object RuntimeDashboardMetrics {
 
   def runtimeMetricsSnapshot(
     entityAccessMetrics: EntityAccessMetricsRegistry
+  ): RuntimeMetricsSnapshot =
+    runtimeMetricsSnapshot(entityAccessMetrics, ComponentMetricsRegistry.shared)
+
+  def runtimeMetricsSnapshot(
+    entityAccessMetrics: EntityAccessMetricsRegistry,
+    componentmetrics: ComponentMetricsRegistry
   ): RuntimeMetricsSnapshot = synchronized {
     RuntimeMetricsSnapshot(
       generatedAt = Instant.now(),
-      points = _runtime_metric_points(entityAccessMetrics.snapshot()),
+      points = _runtime_metric_points(entityAccessMetrics.snapshot(), componentmetrics.snapshot()),
       catalog = RuntimeMetricsCatalog.scopes
     )
   }
@@ -454,7 +460,8 @@ object RuntimeDashboardMetrics {
     scope.trim.toLowerCase(java.util.Locale.ROOT).replace('_', '-')
 
   private def _runtime_metric_points(
-    entityAccessMetrics: Vector[EntityAccessMetricEntry]
+    entityAccessMetrics: Vector[EntityAccessMetricEntry],
+    componentmetrics: Vector[ComponentMetricEntry]
   ): Vector[RuntimeMetricPoint] =
     Vector(
       _event_points("web.request", "requests", _html_events, event =>
@@ -480,7 +487,8 @@ object RuntimeDashboardMetrics {
       ),
       _payload_externalization_points,
       _open_telemetry_export_points,
-      _entity_access_points(entityAccessMetrics)
+      _entity_access_points(entityAccessMetrics),
+      _component_points(componentmetrics)
     ).flatten
 
   private def _event_points(
@@ -559,6 +567,11 @@ object RuntimeDashboardMetrics {
         errorCount = if (entry.outcome.exists(x => x == "failure" || x == "denied")) entry.count else 0L
       )
     }
+
+  private def _component_points(
+    entries: Vector[ComponentMetricEntry]
+  ): Vector[RuntimeMetricPoint] =
+    entries.map(_.toRuntimeMetricPoint)
 
   private def _outcome_label(event: Event): Map[String, String] =
     Map("outcome" -> (if (event.error) "failure" else "success"))

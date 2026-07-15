@@ -1973,19 +1973,8 @@ final class InMemoryJobEngine(
         record.deferredResult match {
           case Some(JobResult.Failure(c)) if record.status != JobStatus.Cancelled =>
             _handle_failed_settlement(jobid, record, c)
-          case Some(JobResult.Failure(c)) =>
-            _append_timeline(jobid, "job.failed", None, None, c.observation.getEffectiveMessage)
-            _update_record(jobid, JobStatus.Failed, Some(JobResult.Failure(c)))
-            _append_event(
-              jobid = jobid,
-              name = "job.failed",
-              payload = Map(
-                "job-id" -> jobid.value,
-                "status" -> JobStatus.Failed.toString,
-                "message" -> c.show
-              ),
-              attributes = _retry_event_attributes(record.retry)
-            )
+          case Some(JobResult.Failure(_)) =>
+            () // A cancellation is terminal even when an already-admitted task returns later.
           case Some(success @ JobResult.Success(_)) =>
             _append_timeline(jobid, "job.succeeded", None, None, None)
             _update_record(jobid, JobStatus.Succeeded, Some(success))

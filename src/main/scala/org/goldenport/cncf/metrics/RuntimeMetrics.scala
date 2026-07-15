@@ -5,7 +5,7 @@ import org.goldenport.record.Record
 
 /*
  * @since   May. 11, 2026
- * @version Jul.  9, 2026
+ * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class MetricScopeDefinition(
@@ -134,6 +134,12 @@ object RuntimeMetricsCatalog {
       "Entity access",
       "Entity/data/view access metrics from the entity access registry.",
       Vector("entity", "source", "outcome", "reason", "working_set_state")
+    ),
+    MetricScopeDefinition(
+      "component",
+      "Component",
+      "Component-owned bounded metrics with contract-defined, low-cardinality labels.",
+      Vector("component")
     )
   )
 

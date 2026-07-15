@@ -1,5 +1,6 @@
 package org.goldenport.cncf.job
 
+import java.util.concurrent.{CountDownLatch, TimeUnit}
 import org.goldenport.Consequence
 import org.goldenport.protocol.Request
 import org.goldenport.protocol.operation.OperationResponse
@@ -14,7 +15,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Mar. 21, 2026
  *  version Apr. 22, 2026
- * @version May. 11, 2026
+ * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 final class JobControlCommandSpec
@@ -24,6 +25,39 @@ final class JobControlCommandSpec
   with JobEngineTestFixture {
 
   "Job control commands" should {
+    "preserve cancellation after an admitted task completes" in {
+      Given("a running job whose task is held after admission")
+      val engine = createJobEngine()
+      val entered = new CountDownLatch(1)
+      val release = new CountDownLatch(1)
+      val task = new JobTask {
+        val actionId: ActionId = ActionId.generate()
+
+        def run(ctx: ExecutionContext): TaskOutcome = {
+          val _ = ctx
+          entered.countDown()
+          release.await()
+          TaskSucceeded(OperationResponse.Void())
+        }
+      }
+      val jobid = _jobid(engine.submit(List(task), ExecutionContext.test()))
+      entered.await(3L, TimeUnit.SECONDS) shouldBe true
+
+      given ExecutionContext = ExecutionContext.test(SecurityContext.Privilege.ApplicationContentManager)
+
+      When("cancellation is requested before the admitted task returns")
+      try {
+        engine.control(jobid, JobControlRequest(JobControlCommand.Cancel)) shouldBe a[Consequence.Success[_]]
+        release.countDown()
+
+        Then("the terminal cancellation is not overwritten by successful task settlement")
+        awaitStatus(engine, jobid, Set(JobStatus.Cancelled)) shouldBe Some(JobStatus.Cancelled)
+        engine.query(jobid).map(_.status) shouldBe Some(JobStatus.Cancelled)
+      } finally {
+        release.countDown()
+      }
+    }
+
     "return async acknowledgment by default" in {
       Given("a running job and content-manager privilege")
       val engine = createJobEngine()
