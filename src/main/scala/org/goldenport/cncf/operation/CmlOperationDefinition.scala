@@ -8,7 +8,8 @@ import org.goldenport.schema.DataConfidentiality
 /*
  * @since   Mar. 22, 2026
  *  version Mar. 28, 2026
- * @version May.  8, 2026
+ *  version May.  8, 2026
+ * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class CmlOperationAssociationBinding(
@@ -135,7 +136,8 @@ final case class CmlOperationField(
   placeholder: Option[String] = None,
   help: Option[String] = None,
   required: Option[Boolean] = None,
-  confidentiality: Option[String] = None
+  confidentiality: Option[String] = None,
+  validation: org.goldenport.schema.WebValidationHints = org.goldenport.schema.WebValidationHints.empty
 ) {
   def effectiveConfidentiality: DataConfidentiality =
     DataConfidentiality.getOrPublic(confidentiality)

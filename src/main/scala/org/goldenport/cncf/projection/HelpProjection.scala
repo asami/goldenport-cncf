@@ -11,7 +11,8 @@ import org.goldenport.datatype.I18nString
  * @since   Mar.  5, 2026
  *  version Mar. 28, 2026
  *  version Apr. 30, 2026
- * @version May. 31, 2026
+ *  version May. 31, 2026
+ * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 object HelpProjection {
@@ -115,7 +116,9 @@ object HelpProjection {
         val componentName = component.name
         val serviceName = service.name
         val operationName = operation.name
-        val args = operation.specification.request.parameters.toVector.map(_.name)
+        val parameters = operation.specification.request.parameters.toVector
+        val args = parameters.map(_.name)
+        val argumentdetails = parameters.map(_argument_detail)
         val returns = render_operation_returns(operation)
         val summary = _operation_summary(service, operation).getOrElse(s"Operation: ${service.name}.${operation.name}")
         val descriptionDetails = _trim_i18n(operation.specification.description).fold(Map.empty[String, Vector[String]])(x => Map("description" -> Vector(x)))
@@ -133,6 +136,7 @@ object HelpProjection {
           children = Vector.empty,
           details = Map(
             "arguments" -> args,
+            "argumentDetails" -> argumentdetails,
             "returns" -> Vector(returns)
           ) ++ descriptionDetails,
           childEntityBindings = childEntityBindings,
@@ -203,6 +207,22 @@ object HelpProjection {
 
   private def _trim_i18n(p: Option[I18nString]): Option[String] =
     p.map(_.displayMessage.trim).filter(_.nonEmpty)
+
+  private def _argument_detail(
+    p: org.goldenport.protocol.spec.ParameterDefinition
+  ): String = {
+    val validation = p.web.validation
+    val constraints = Vector(
+      validation.min.map(x => s"min=$x"),
+      validation.max.map(x => s"max=$x"),
+      validation.step.map(x => s"step=$x"),
+      validation.minLength.map(x => s"min-length=$x"),
+      validation.maxLength.map(x => s"max-length=$x"),
+      validation.pattern.map(x => s"pattern=$x")
+    ).flatten
+    val suffix = if (constraints.isEmpty) "" else constraints.mkString(" [", ", ", "]")
+    s"${p.name}: ${p.datatype.name} ${p.multiplicity.mark}$suffix"
+  }
 
   private def _clean_opt(p: Option[String]): Option[String] =
     p.map(_.trim).filter(s => s.nonEmpty && s != "None")

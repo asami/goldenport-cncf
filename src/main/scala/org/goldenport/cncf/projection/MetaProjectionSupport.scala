@@ -13,7 +13,8 @@ import org.goldenport.cncf.operation.{AssociationBindingOperationDefinition, Chi
 
 /*
  * @since   Mar.  5, 2026
- * @version May. 31, 2026
+ *  version May. 31, 2026
+ * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 private[projection] object MetaProjectionSupport {
@@ -167,16 +168,40 @@ private[projection] object MetaProjectionSupport {
     )
 
   def parameter_record(param: ParameterDefinition): Record = {
-    val datatype = Option(param.domain.datatype).map(_.toString).getOrElse("unknown")
+    val datatype = Option(param.domain.datatype).map(_.name).getOrElse("unknown")
     val multiplicity = Option(param.domain.multiplicity).map(_.toString).getOrElse("unknown")
     Record.data(
       "name" -> param.name,
       "kind" -> param.kind.toString,
       "type" -> datatype,
       "multiplicity" -> multiplicity,
+      "required" -> param.web.required.getOrElse(_is_required(param.domain.multiplicity)),
+      "validation" -> web_validation_record(param.web.validation),
       "confidentiality" -> param.confidentiality.label
     )
   }
+
+  def web_validation_record(
+    validation: org.goldenport.schema.WebValidationHints
+  ): Record =
+    Record.dataAuto(
+      "min" -> validation.min,
+      "max" -> validation.max,
+      "step" -> validation.step,
+      "minLength" -> validation.minLength,
+      "maxLength" -> validation.maxLength,
+      "pattern" -> validation.pattern
+    )
+
+  private def _is_required(
+    multiplicity: org.goldenport.schema.Multiplicity
+  ): Boolean =
+    multiplicity match {
+      case org.goldenport.schema.Multiplicity.One | org.goldenport.schema.Multiplicity.OneMore => true
+      case org.goldenport.schema.Multiplicity.Range(from, _) => from > 0
+      case org.goldenport.schema.Multiplicity.Ranges(ranges) => ranges.exists(_.head.from > 0)
+      case _ => false
+    }
 
   def operation_details(operation: OperationDefinition): Record = {
     val args = operation.specification.request.parameters.toVector.map(parameter_record)
@@ -413,6 +438,8 @@ private[projection] object MetaProjectionSupport {
               "name" -> p.name,
               "datatype" -> p.datatype,
               "multiplicity" -> p.multiplicity,
+              "required" -> p.required.getOrElse(p.multiplicity == "1" || p.multiplicity == "+"),
+              "validation" -> web_validation_record(p.validation),
               "confidentiality" -> p.effectiveConfidentiality.label
             )
           },

@@ -12,7 +12,8 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Mar. 25, 2026
  *  version Mar. 28, 2026
  *  version Apr.  6, 2026
- * @version May. 31, 2026
+ *  version May. 31, 2026
+ * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 final class GeneratedHelpProjectionSpec
@@ -30,6 +31,7 @@ final class GeneratedHelpProjectionSpec
       val componentHelp = HelpProjection.projectModel(component, Some("domain"))
       val serviceHelp = HelpProjection.projectModel(component, Some("domain.address"))
       val operationHelp = HelpProjection.projectModel(component, Some("domain.address.lookupAddress"))
+      val operationschema = SchemaProjection.project(component, Some("domain.address.lookupAddress"))
 
       Then("the subsystem target resolves top-level requirement metadata")
       subsystemHelp.`type` shouldBe "subsystem"
@@ -72,8 +74,23 @@ final class GeneratedHelpProjectionSpec
       operationHelp.details("description") shouldBe Vector(
         "Look up an address by postal code.Returns a normalized address representation."
       )
-      operationHelp.details("arguments") shouldBe Vector.empty
+      operationHelp.details("arguments") shouldBe Vector("description")
+      operationHelp.details("argumentDetails") shouldBe Vector(
+        "description: text 1 [min-length=1, max-length=8192]"
+      )
       operationHelp.details("returns") shouldBe Vector("LookupAddressResult")
+      val schemaparameters = operationschema
+        .getRecord("request")
+        .flatMap(_.getAny("parameters"))
+        .collect { case xs: Seq[?] => xs.collect { case x: Record => x }.toVector }
+        .getOrElse(fail("operation schema parameters are missing"))
+      val descriptionparameter = schemaparameters.find(_.getString("name").contains("description")).getOrElse(
+        fail("description parameter schema is missing")
+      )
+      descriptionparameter.getString("type") shouldBe Some("text")
+      descriptionparameter.getBoolean("required") shouldBe Some(true)
+      descriptionparameter.getRecord("validation").flatMap(_.getInt("minLength")) shouldBe Some(1)
+      descriptionparameter.getRecord("validation").flatMap(_.getInt("maxLength")) shouldBe Some(8192)
       val commandExecution = operationHelp.commandExecution.getOrElse(fail("command execution metadata is missing"))
       commandExecution.getRecord("commandExecutionPolicy").flatMap(_.getString("mode")) shouldBe Some("Sync")
       commandExecution.getRecord("commandExecutionPolicy").flatMap(_.getString("legacyMode")) shouldBe Some("SyncDirectNoJob")
@@ -96,6 +113,7 @@ final class GeneratedHelpProjectionSpec
       json should include ("\"type\":\"operation\"")
       json should include ("\"name\":\"lookupAddress\"")
       json should include ("\"summary\":\"Look up an address by postal code.\"")
+      json should include ("\"argumentDetails\":[\"description: text 1 [min-length=1, max-length=8192]\"]")
       json should include ("\"returns\":[\"LookupAddressResult\"]")
 
       val subsystemYaml = CliHelpYamlRenderer.render(subsystemHelp)

@@ -5,7 +5,7 @@ import org.goldenport.protocol.Protocol
 import org.goldenport.protocol.Request
 import org.goldenport.protocol.operation.OperationRequest
 import org.goldenport.protocol.spec.*
-import org.goldenport.schema.DataType
+import org.goldenport.schema.{DataType, Multiplicity, ValueDomain, WebColumn, WebValidationHints}
 import org.goldenport.cncf.action.{Action, ActionCall, QueryAction}
 import org.goldenport.cncf.component.*
 import org.goldenport.cncf.operation.{CmlOperationDefinition, CmlOperationField}
@@ -16,25 +16,26 @@ import org.goldenport.value.BaseContent
  * @since   Mar. 25, 2026
  *  version Mar. 29, 2026
  *  version Apr.  6, 2026
- * @version Apr. 14, 2026
+ *  version Apr. 14, 2026
+ * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 private[projection] object GeneratedHelpProjectionFixture {
   def component(): Component = {
-    val subsystem = TestComponentFactory.emptySubsystem(name)
+    val subsystem = TestComponentFactory.emptySubsystem(_name)
     val params = ComponentCreate(
       subsystem = subsystem,
       origin = ComponentOrigin.Repository("cozy-generated")
     )
-    val component = factory.create(params).primary
+    val component = _factory.create(params).primary
     subsystem.add(Vector(component))
     subsystem.components.find(_.name == component.name).getOrElse(component)
   }
 
-  private val name = "domain"
-  private val componentId = ComponentId(name)
+  private val _name = "domain"
+  private val _component_id = ComponentId(_name)
 
-  private lazy val factory = new Component.SinglePrimaryBundleFactory {
+  private lazy val _factory = new Component.SinglePrimaryBundleFactory {
     override protected def create_Component(params: ComponentCreate): Component =
       new Component() {
         override def operationDefinitions: Vector[CmlOperationDefinition] =
@@ -98,18 +99,18 @@ private[projection] object GeneratedHelpProjectionFixture {
       params: ComponentCreate,
       comp: Component
     ): Component.Core =
-      core
+      _core
   }
 
-  private lazy val core: Component.Core =
+  private lazy val _core: Component.Core =
     Component.Core.create(
-      name,
-      componentId,
-      ComponentInstanceId.default(componentId),
+      _name,
+      _component_id,
+      ComponentInstanceId.default(_component_id),
       Protocol(
         services = ServiceDefinitionGroup(Vector(AddressService))
       ),
-      factory
+      _factory
     )
 
   object AddressService extends ServiceDefinition {
@@ -138,6 +139,21 @@ private[projection] object GeneratedHelpProjectionFixture {
         content = BaseContent.Builder("lookupAddress").
           summary("Look up an address by postal code.").
           description("Look up an address by postal code.Returns a normalized address representation."),
+        request = RequestDefinition(parameters = List(
+          ParameterDefinition(
+            content = BaseContent.simple("description"),
+            kind = ParameterDefinition.Kind.Property,
+            domain = ValueDomain(
+              datatype = DataType.Named("text"),
+              multiplicity = Multiplicity.One
+            ),
+            web = WebColumn(
+              controlType = Some("textarea"),
+              required = Some(true),
+              validation = WebValidationHints(minLength = Some(1), maxLength = Some(8192))
+            )
+          )
+        )),
         response = ResponseDefinition(result = List(DataType.Named("LookupAddressResult")))
       )
       .build()

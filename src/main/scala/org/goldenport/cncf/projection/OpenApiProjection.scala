@@ -7,7 +7,8 @@ import org.goldenport.protocol.spec.{ServiceDefinition, OperationDefinition}
 
 /*
  * @since   Mar.  5, 2026
- * @version May.  8, 2026
+ *  version May.  8, 2026
+ * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 object OpenApiProjection {
@@ -82,10 +83,24 @@ object OpenApiProjection {
   private def _json_array_operations(xs: Vector[OperationMeta]): String = {
     val entries = xs.map { x =>
       val parameters = x.parameters.map { p =>
-        s"""{"name":"${_escape(p.getString("name").getOrElse(""))}","datatype":"${_escape(p.getString("datatype").getOrElse(""))}","multiplicity":"${_escape(p.getString("multiplicity").getOrElse(""))}","x-textus-confidentiality":"${_escape(p.getString("confidentiality").getOrElse("public"))}"}"""
+        val required = p.getBoolean("required").getOrElse(false)
+        val validation = p.getRecord("validation").map(_json_validation).getOrElse("{}")
+        s"""{"name":"${_escape(p.getString("name").getOrElse(""))}","datatype":"${_escape(p.getString("datatype").getOrElse(""))}","multiplicity":"${_escape(p.getString("multiplicity").getOrElse(""))}","required":${required},"validation":${validation},"x-textus-confidentiality":"${_escape(p.getString("confidentiality").getOrElse("public"))}"}"""
       }.mkString("[", ",", "]")
       s"""{"name":"${_escape(x.name)}","kind":"${_escape(x.kind)}","inputType":"${_escape(x.inputType)}","outputType":"${_escape(x.outputType)}","inputValueKind":"${_escape(x.inputValueKind)}","parameters":${parameters}}"""
     }
     entries.mkString("[", ",", "]")
+  }
+
+  private def _json_validation(p: org.goldenport.record.Record): String = {
+    val fields = Vector(
+      p.getAny("min").map(x => s"\"min\":${x}"),
+      p.getAny("max").map(x => s"\"max\":${x}"),
+      p.getAny("step").map(x => s"\"step\":${x}"),
+      p.getAny("minLength").map(x => s"\"minLength\":${x}"),
+      p.getAny("maxLength").map(x => s"\"maxLength\":${x}"),
+      p.getString("pattern").map(x => s"\"pattern\":\"${_escape(x)}\"")
+    ).flatten
+    fields.mkString("{", ",", "}")
   }
 }

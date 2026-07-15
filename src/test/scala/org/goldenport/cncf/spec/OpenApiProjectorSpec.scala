@@ -6,18 +6,20 @@ import org.goldenport.cncf.subsystem.DefaultSubsystemFactory
 import org.goldenport.cncf.testutil.TestComponentFactory
 import org.goldenport.protocol.Protocol
 import org.goldenport.protocol.spec as spec
-import org.goldenport.schema.{ValueDomain, XFileBundle}
+import org.goldenport.schema.{DataType, Multiplicity, ValueDomain, WebColumn, WebValidationHints, XFileBundle}
 import org.goldenport.value.BaseContent
+import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 import io.circe.parser.parse
 
 /*
  * @since   Jan. 20, 2026
- * @version Apr. 30, 2026
+ *  version Apr. 30, 2026
+ * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
-final class OpenApiProjectorSpec extends AnyWordSpec with Matchers {
+final class OpenApiProjectorSpec extends AnyWordSpec with Matchers with GivenWhenThen {
 
   "OpenApiProjector" should {
     "produce Phase 2.8 compliant OpenAPI output" in {
@@ -121,6 +123,72 @@ final class OpenApiProjectorSpec extends AnyWordSpec with Matchers {
         .downField("properties")
         .downField("bundle")
         .get[String]("format") shouldBe Right("binary")
+    }
+
+    "project locale-aware text constraints without collapsing the API value to one string" in {
+      Given("an operation property using canonical text with per-locale length constraints")
+      val subsystem = TestComponentFactory.emptySubsystem("openapi-text")
+      val operation = spec.OperationDefinition(
+        content = BaseContent.simple("publishMessage"),
+        request = spec.RequestDefinition(List(
+          spec.ParameterDefinition(
+            content = BaseContent.simple("body"),
+            kind = spec.ParameterDefinition.Kind.Property,
+            domain = ValueDomain(
+              datatype = DataType.Named("text"),
+              multiplicity = Multiplicity.One
+            ),
+            web = WebColumn(
+              controlType = Some("textarea"),
+              required = Some(true),
+              validation = WebValidationHints(minLength = Some(1), maxLength = Some(8192))
+            )
+          )
+        )),
+        response = spec.ResponseDefinition.void
+      )
+      val service = spec.ServiceDefinition(
+        name = "message",
+        operations = spec.OperationDefinitionGroup(NonEmptyVector.of(operation))
+      )
+      val component = TestComponentFactory.create(
+        "publisher",
+        Protocol(services = spec.ServiceDefinitionGroup(Vector(service))),
+        subsystem = subsystem
+      )
+      subsystem.add(component)
+
+      When("the automatic REST OpenAPI schema is projected")
+      val json = parse(OpenApiProjector.forSubsystem(subsystem)).fold(
+        err => fail(s"OpenAPI JSON parse failed: ${err.getMessage}"),
+        identity
+      )
+      val requestschema = json.hcursor
+        .downField("paths")
+        .downField("/rest/v1/publisher/message/publish-message")
+        .downField("POST")
+        .downField("requestBody")
+        .downField("content")
+        .downField("application/json")
+        .downField("schema")
+      val body = requestschema.downField("properties").downField("body")
+      val alternatives = body.downField("oneOf").focus.flatMap(_.asArray).getOrElse(
+        fail("text schema must accept plain and locale-map input")
+      )
+
+      Then("the body remains required and identifies the canonical text datatype")
+      requestschema.get[Vector[String]]("required") shouldBe Right(Vector("body"))
+      body.get[String]("x-textus-datatype") shouldBe Right("text")
+
+      And("both plain and locale-map values enforce the range on each text value")
+      alternatives.head.hcursor.get[Int]("minLength") shouldBe Right(1)
+      alternatives.head.hcursor.get[Int]("maxLength") shouldBe Right(8192)
+      alternatives(1).hcursor
+        .downField("additionalProperties")
+        .get[Int]("minLength") shouldBe Right(1)
+      alternatives(1).hcursor
+        .downField("additionalProperties")
+        .get[Int]("maxLength") shouldBe Right(8192)
     }
   }
 }
