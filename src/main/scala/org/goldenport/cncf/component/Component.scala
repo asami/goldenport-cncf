@@ -16,7 +16,7 @@ import org.goldenport.protocol.handler.egress.*
 import org.goldenport.protocol.handler.projection.*
 import java.nio.file.Path
 import scala.reflect.ClassTag
-import org.goldenport.cncf.context.{CorrelationId, EntitySpaceContext, ExecutionContext, ScopeContext, ScopeKind}
+import org.goldenport.cncf.context.{CorrelationId, EntitySpaceContext, ExecutionContext, GlobalRuntimeContext, ScopeContext, ScopeKind}
 import org.goldenport.cncf.action.{Action, ActionCall, ActionEngine, AggregateBehavior, ProcedureActionCall, QueryAction}
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.configuration.{Configuration, ConfigurationValue, ResolvedConfiguration}
@@ -56,7 +56,7 @@ import org.goldenport.schema.{DataType, XString}
  *  version Apr. 30, 2026
  *  version May. 20, 2026
  *  version Jun. 18, 2026
- * @version Jul. 14, 2026
+ * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class Component() extends Component.Core.Holder {
@@ -1742,11 +1742,14 @@ object Component {
     core: ActionCall.Core
   ) extends ProcedureActionCall {
     override def execute(): Consequence[OperationResponse] = {
-      val now = Instant.now()
+      val now = core.executionContext.clock.instant()
+      val bootedat = _global_runtime_context(core.executionContext.runtime).map(_.bootedAt).getOrElse(now)
+      val duration = Duration.between(bootedat, now)
+      val uptime = if (duration.isNegative) Duration.ZERO else duration
       val base = Record.data(
         "status" -> "UP",
         "timestamp" -> now.toString,
-        "uptime" -> Duration.between(_booted_at, now).toString
+        "uptime" -> uptime.toString
       )
       val record = core.component match {
         case Some(component) =>
@@ -1995,7 +1998,15 @@ object Component {
     }
   }
 
-  private val _booted_at: Instant = Instant.now()
+  @annotation.tailrec
+  private def _global_runtime_context(scope: ScopeContext): Option[GlobalRuntimeContext] =
+    scope match {
+      case global: GlobalRuntimeContext => Some(global)
+      case other => other.parent match {
+        case Some(parent) => _global_runtime_context(parent)
+        case None => None
+      }
+    }
 }
 
 final case class ComponentId(

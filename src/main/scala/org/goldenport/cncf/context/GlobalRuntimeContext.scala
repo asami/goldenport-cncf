@@ -1,5 +1,6 @@
 package org.goldenport.cncf.context
 
+import java.time.Instant
 import org.goldenport.cncf.CncfVersion
 import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.config.ResolvedParameters
@@ -17,7 +18,7 @@ import org.goldenport.configuration.{Configuration, ConfigurationTrace, Resolved
  *  version Feb.  1, 2026
  *  version Mar. 28, 2026
  *  version Apr. 11, 2026
- * @version Jul. 15, 2026
+ * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 final class GlobalRuntimeContext(
@@ -43,6 +44,7 @@ final class GlobalRuntimeContext(
   val assemblyReport: AssemblyReport = new AssemblyReport()
   val executionProfileRuntime: ExecutionProfileRuntime =
     config.executionProfile.newRuntime(config.idNamespace)
+  val bootedAt: Instant = executionProfileRuntime.runtimeClock.clock.instant()
 
   lazy val resolvedParameters: ResolvedParameters =
     ResolvedParameters.fromResolvedConfiguration(resolvedConfiguration)

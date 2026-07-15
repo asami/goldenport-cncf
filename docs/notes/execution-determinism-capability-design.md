@@ -540,7 +540,7 @@ before migration:
 
 | Boundary | Representative locations | Direction |
 | --- | --- | --- |
-| component-visible domain state | InformationSpace, Tag, JobControl, Workflow, Aggregate edit contexts, Knowledge and Entity working sets, temporal ABAC authorization | use current execution clock/ID/random capabilities; Tag, InformationSpace, Aggregate edit-context lifecycle time, Knowledge working-set lifecycle time, Entity working-set status/policy time, and ABAC `now` evaluation are migrated |
+| component-visible domain state | InformationSpace, Tag, JobControl, Workflow, Aggregate edit contexts, Knowledge and Entity working sets, temporal ABAC authorization, built-in system status | use current execution clock/ID/random capabilities; Tag, InformationSpace, Aggregate edit-context lifecycle time, Knowledge working-set lifecycle time, Entity working-set status/policy time, ABAC `now` evaluation, and `system.status` timestamp/uptime are migrated |
 | Event/Job/runtime semantics | EventReception, EventStore fallback, transition lifecycle events, pre-ActionCall authorization-denial Events, Job lifecycle publication, notification forwarding diagnostics, Job model defaults | route construction and mutation through runtime clock/ID controls; Event records, authorization-denial Events, Job lifecycle publication, and CNCF-owned forwarding diagnostics are migrated |
 | provider/driver effects | BlobStore, notification delivery, Docker/filesystem adapters | retain behind provider/driver contracts and supply deterministic test doubles where replay is required |
 | monotonic diagnostics and transport telemetry | ActionEngine duration, OpenTelemetry export, dashboard/diagnostic capture | retain monotonic or transport-owned time; do not reinterpret as domain time |

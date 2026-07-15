@@ -356,6 +356,12 @@ Status: IN PROGRESS
   execution-clock instant, the mutable space no longer owns an ambient clock,
   and property-based coverage verifies replay-stable create/touch timestamps
   and lease-expiry outcomes.
+- `GlobalRuntimeContext` now captures its boot instant from the selected
+  profile runtime clock. The built-in `system.status` operation derives its
+  response timestamp from the ActionCall execution clock and uptime from that
+  profile-bound boot instant, with property-based coverage across generated
+  elapsed durations. Isolated fixture contexts report zero uptime instead of
+  consulting process wall-clock time.
 - CAR lint and component developer guidance now report direct ambient clock,
   UUID/random, sleep, environment/property, host filesystem, thread, and
   executor access in component sources.

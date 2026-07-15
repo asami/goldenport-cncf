@@ -355,6 +355,16 @@ capture that instant from the bound execution clock and pass it to the space.
 Equivalent operation sequences with equivalent execution instants therefore
 produce the same context timestamps and lease-expiry decisions.
 
+Built-in component status is also component-visible runtime semantics.
+`GlobalRuntimeContext` MUST capture its boot instant once from the selected
+profile runtime clock. The default `system.status` operation MUST obtain its
+response timestamp from the ActionCall execution clock and derive uptime from
+that runtime boot instant. It MUST NOT read process wall-clock time. When an
+isolated compatibility or fixture context has no owning global runtime, the
+operation reports zero uptime at the ActionCall instant rather than inventing
+an ambient boot time. A negative elapsed duration is likewise clamped to zero
+because runtime status cannot expose negative uptime.
+
 Manual scheduling is limited by `timer-scheduling-boundary.md`. It MUST NOT add
 cron, recurrence, business-calendar, workflow-wait, or general scheduler
 semantics.
