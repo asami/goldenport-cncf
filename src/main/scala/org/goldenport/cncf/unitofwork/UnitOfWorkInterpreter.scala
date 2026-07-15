@@ -34,7 +34,7 @@ import org.goldenport.record.io.RecordEncoder
  *  version Mar. 29, 2026
  *  version Apr. 29, 2026
  *  version May. 11, 2026
- * @version Jul. 15, 2026
+ * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkInterpreter(uow: UnitOfWork) {
@@ -595,7 +595,7 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
     entity: T
   ): Unit =
     try {
-      collection.put(entity)
+      collection.putScoped(entity)(using uow.executionContext)
     } catch {
       case e: IllegalStateException if e.getMessage != null && e.getMessage.contains("Entity must implement EntityPersistable") =>
         ()
@@ -653,7 +653,7 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
           component.entitySpace.entityOption(id.collection).map(_.asInstanceOf[org.goldenport.cncf.entity.runtime.EntityCollection[T]])
         )
       }
-      .foreach(_.put(entity))
+      .foreach(_.putScoped(entity)(using uow.executionContext))
   }
 
   private def _entity_space_put_record(
@@ -669,7 +669,7 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
         )
       }
       if collection.storage.memoryRealm.isDefined
-    } yield collection.putRecord(r).recoverWith {
+    } yield collection.putRecordScoped(r)(using uow.executionContext).recoverWith {
       case c if _is_not_implemented(c) => Consequence.unit
       case c => Consequence.Failure[Unit](c)
     }).getOrElse(Consequence.unit)

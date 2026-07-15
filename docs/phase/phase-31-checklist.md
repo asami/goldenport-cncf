@@ -321,12 +321,17 @@ Status: IN PROGRESS
   omit timestamps instead of reading ambient wall time. Property-based coverage
   verifies successful and failed lifecycle replay across generated instants,
   and startup preload coverage verifies the injected clock boundary.
+- `WorkingSetPolicy` and custom policy evaluators now require an explicit
+  evaluation instant. Context-aware admission and search capture one instant
+  from the bound execution clock, UnitOfWork uses those scoped APIs, and
+  context-free admission rejects time-dependent policies before mutating either
+  realm. Property-based coverage verifies that admission and search observe the
+  same supplied instant across replay.
 - CAR lint and component developer guidance now report direct ambient clock,
   UUID/random, sleep, environment/property, host filesystem, thread, and
   executor access in component sources.
-- Entity working-set policy admission/residency defaults and other remaining
-  runtime model semantic defaults still require migration before ED-07 can be
-  marked DONE.
+- Other remaining runtime model semantic defaults still require migration
+  before ED-07 can be marked DONE.
 
 ### Acceptance Criteria
 

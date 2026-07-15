@@ -304,8 +304,14 @@ clock for `Loading`, `Ready`, and `Failed` transition timestamps. The mutable
 status holder MUST NOT obtain ambient wall-clock time. Context-free fixture
 transitions may omit timestamps, but MUST NOT fabricate semantic timestamps.
 Working-set admission and residency evaluation likewise require an explicit
-evaluation instant; compatibility defaults in that policy boundary remain
-outside the completed status-lifecycle contract until migrated.
+evaluation instant. `WorkingSetPolicy` and custom evaluators MUST NOT define an
+ambient default. Context-aware Entity admission, scoped resolution, and search
+capture one instant from the bound execution clock and pass it through policy
+evaluation. Context-free compatibility admission is valid only for static
+`Disabled`, `ResidentAll`, or policy-free behavior; a time-dependent policy is
+rejected before storage mutation. Context-free resolution may return stored
+data, but MUST NOT mutate a time-dependent resident cache without an evaluation
+instant.
 
 Manual scheduling is limited by `timer-scheduling-boundary.md`. It MUST NOT add
 cron, recurrence, business-calendar, workflow-wait, or general scheduler

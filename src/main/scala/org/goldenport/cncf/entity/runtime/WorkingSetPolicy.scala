@@ -6,7 +6,7 @@ import org.goldenport.record.Record
 
 /*
  * @since   Apr. 24, 2026
- * @version Apr. 24, 2026
+ * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 sealed trait WorkingSetPolicy {
@@ -14,7 +14,7 @@ sealed trait WorkingSetPolicy {
 
   def isResident(
     record: Record,
-    now: Instant = Instant.now()
+    now: Instant
   ): Boolean
 }
 
@@ -169,7 +169,7 @@ object WorkingSetPolicy {
 trait WorkingSetPolicyEvaluator {
   def isResident(
     record: Record,
-    now: Instant = Instant.now()
+    now: Instant
   ): Boolean
 }
 

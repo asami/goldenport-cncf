@@ -69,9 +69,9 @@ ordering, locale/environment assumptions, and replayability diagnostics.
       Workflow lifecycle identity/time, Job input timestamps, and JobDefinition
       lifecycle timestamps, Job/Task/Action runtime identity, and
       InformationSpace lifecycle/materialization timestamps and Knowledge
-      and Entity working-set lifecycle timestamps are complete; working-set
-      policy admission and other remaining runtime-semantic migration remain
-      active.
+      and Entity working-set lifecycle timestamps plus Entity working-set
+      admission/residency evaluation are complete; other remaining
+      runtime-semantic migration remains active.
 - [ ] ED-08: Add diagnostics, replay scenarios, developer guidance, and close
       Phase 31.
 

@@ -1,5 +1,6 @@
 package org.goldenport.cncf.entity.runtime
 
+import java.time.Instant
 import org.goldenport.Consequence
 import org.goldenport.datatype.Identifier
 import org.goldenport.record.Record
@@ -13,7 +14,8 @@ import org.goldenport.cncf.unitofwork.UnitOfWorkOp
 /*
  * @since   Mar. 14, 2026
  *  version Mar. 30, 2026
- * @version May. 10, 2026
+ *  version May. 10, 2026
+ * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 trait Collection[A] {
@@ -44,9 +46,31 @@ final class EntityCollection[E](
   ): Boolean =
     query.scope == EntitySearchScope.WorkingSet && _has_effective_working_set_policy && !workingSetStatus.isReady
 
-  def put(entity: E): Unit = {
+  def put(entity: E): Unit =
+    _residency(entity, None) match {
+      case Some(resident) => _put(entity, resident)
+      case None =>
+        throw new IllegalStateException(_time_dependent_policy_message)
+    }
+
+  def putScoped(
+    entity: E
+  )(using ctx: ExecutionContext): Unit = {
+    val evaluationinstant = ctx.clock.instant()
+    _put(entity, evaluationinstant)
+  }
+
+  private def _put(
+    entity: E,
+    evaluationinstant: Instant
+  ): Unit =
+    _put(entity, _is_resident(entity, evaluationinstant))
+
+  private def _put(
+    entity: E,
+    resident: Boolean
+  ): Unit = {
     val id = descriptor.persistent.id(entity)
-    val resident = _is_resident(entity)
     storage.storeRealm.put(entity)
     storage.memoryRealm.foreach { memory =>
       if (resident)
@@ -57,38 +81,59 @@ final class EntityCollection[E](
   }
 
   def putRecord(record: Record): Consequence[Unit] =
-    descriptor.persistent.fromRecord(record).map { entity =>
-      put(entity)
+    descriptor.persistent.fromRecord(record).flatMap { entity =>
+      _residency(entity, None) match {
+        case Some(resident) =>
+          _put(entity, resident)
+          Consequence.unit
+        case None =>
+          Consequence.operationInvalid(
+            "entity.working-set.admission",
+            _time_dependent_policy_message
+          )
+      }
     }
+
+  def putRecordScoped(
+    record: Record
+  )(using ctx: ExecutionContext): Consequence[Unit] = {
+    val evaluationinstant = ctx.clock.instant()
+    descriptor.persistent.fromRecord(record).map { entity =>
+      _put(entity, evaluationinstant)
+    }
+  }
 
   def putRecordSynced(
     record: Record
-  )(using ctx: ExecutionContext): Consequence[Unit] =
+  )(using ctx: ExecutionContext): Consequence[Unit] = {
+    val evaluationinstant = ctx.clock.instant()
     for {
       entity <- descriptor.persistent.fromRecord(record)
       _ <- ctx.entityStoreSpace.save(
         UnitOfWorkOp.EntityStoreSave(entity, descriptor.persistent)
       )
-      _ = put(entity)
+      _ = _put(entity, evaluationinstant)
     } yield ()
+  }
 
   // Load-through resolution:
   // 1. Try MemoryRealm (working set cache)
   // 2. Fallback to StoreRealm
   // 3. If loaded from StoreRealm and MemoryRealm exists, cache it
   def resolve(id: EntityId): Consequence[E] =
-    _resolve(id, entity => !_is_logically_deleted(entity))
+    _resolve(id, entity => !_is_logically_deleted(entity), None)
 
   override def resolveScoped(
     id: EntityId
   )(using ctx: ExecutionContext): Consequence[E] =
     _with_calltree("space:entity:resolve", _entity_collection_attributes("resolve") + ("entity_id" -> id.print)) {
-      _resolve(id, _is_normal_access_visible)
+      _resolve(id, _is_normal_access_visible, Some(ctx.clock.instant()))
     }
 
   private def _resolve(
     id: EntityId,
-    visible: E => Boolean
+    visible: E => Boolean,
+    evaluationinstant: Option[Instant]
   ): Consequence[E] = {
     val memory = storage.memoryRealm
     memory.flatMap(_.get(id)) match {
@@ -100,7 +145,7 @@ final class EntityCollection[E](
           if (!visible(entity))
             Consequence.successOrEntityNotFound(Option.empty[E])(id)
           else {
-            _cache_if_resident(entity)
+            _cache_if_resident(entity, evaluationinstant)
             Consequence.success(entity)
           }
         }
@@ -111,7 +156,7 @@ final class EntityCollection[E](
           if (!visible(entity))
             Consequence.successOrEntityNotFound(Option.empty[E])(id)
           else {
-            _cache_if_resident(entity)
+            _cache_if_resident(entity, evaluationinstant)
             Consequence.success(entity)
           }
         }
@@ -123,13 +168,13 @@ final class EntityCollection[E](
     storage.memoryRealm.foreach(_.remove(id))
   }
 
-  def resolveEntityId(idOrShortid: String): Option[EntityId] =
-    _canonical_entity_id(idOrShortid).orElse(_entity_id_by_shortid(idOrShortid))
+  def resolveEntityId(idorshortid: String): Option[EntityId] =
+    _canonical_entity_id(idorshortid).orElse(_entity_id_by_shortid(idorshortid))
 
-  def resolveByReference(idOrShortid: String): Consequence[E] =
-    resolveEntityId(idOrShortid) match {
+  def resolveByReference(idorshortid: String): Consequence[E] =
+    resolveEntityId(idorshortid) match {
       case Some(id) => resolve(id)
-      case None => Consequence.successOrEntityNotFound(Option.empty[E])(Identifier(idOrShortid))
+      case None => Consequence.successOrEntityNotFound(Option.empty[E])(Identifier(idorshortid))
     }
 
   def uniqueValueExists(
@@ -213,6 +258,7 @@ final class EntityCollection[E](
   def search(
     query: EntityQuery[?]
   )(using ctx: ExecutionContext): Consequence[SearchResult[E]] = {
+    val evaluationinstant = ctx.clock.instant()
     _with_calltree("space:entity:search", _entity_collection_attributes("search") ++ Map("scope" -> query.scope.toString, "working_set_ready" -> workingSetStatus.isReady.toString)) {
       val visibilitypolicy = _visibility_policy(query)
       val source = query.scope match {
@@ -224,7 +270,7 @@ final class EntityCollection[E](
       val scoped = notdeleted.filter(entity => _is_access_scope_visible(entity, query.visibilityScope))
       val resident = query.scope match {
         case EntitySearchScope.WorkingSet =>
-          if (workingSetSearchAvailable) scoped.filter(_is_resident) else scoped
+          if (workingSetSearchAvailable) scoped.filter(_is_resident(_, evaluationinstant)) else scoped
         case EntitySearchScope.Store => scoped
       }
       val visible = resident.filter(v => _is_visible(descriptor.persistent.toRecord(v), visibilitypolicy))
@@ -256,9 +302,9 @@ final class EntityCollection[E](
       try {
         val result = body
         result match {
-          case success: Consequence.Success[A] =>
+          case success: Consequence.Success[?] =>
             calltree.leave(Map("outcome" -> "success") ++ CallTreeValueSummary.resultAttributes(success.result))
-          case failure: Consequence.Failure[A] =>
+          case failure: Consequence.Failure[?] =>
             calltree.leave(Map(
               "outcome" -> "failure",
               "status" -> failure.conclusion.status.webCode.code.toString,
@@ -301,26 +347,40 @@ final class EntityCollection[E](
     storage.memoryRealm.map(_.values).getOrElse(_search_source)
 
   private def _cache_if_resident(
-    entity: E
+    entity: E,
+    evaluationinstant: Option[Instant]
   ): Unit = {
     val id = descriptor.persistent.id(entity)
     storage.memoryRealm.foreach { memory =>
-      if (_is_resident(entity))
-        memory.put(entity)
-      else
-        memory.remove(id)
+      _residency(entity, evaluationinstant).foreach { resident =>
+        if (resident)
+          memory.put(entity)
+        else
+          memory.remove(id)
+      }
     }
   }
 
   private def _is_resident(
-    entity: E
+    entity: E,
+    evaluationinstant: Instant
   ): Boolean =
-    !_is_logically_deleted(entity) && (
+    _residency(entity, Some(evaluationinstant)).contains(true)
+
+  private def _residency(
+    entity: E,
+    evaluationinstant: Option[Instant]
+  ): Option[Boolean] =
+    if (_is_logically_deleted(entity))
+      Some(false)
+    else
       descriptor.plan.workingSetPolicy match {
-        case Some(policy) => policy.isResident(descriptor.persistent.toRecord(entity))
-        case None => true
+        case Some(WorkingSetPolicy.Disabled) => Some(false)
+        case Some(WorkingSetPolicy.ResidentAll) => Some(true)
+        case Some(policy) =>
+          evaluationinstant.map(policy.isResident(descriptor.persistent.toRecord(entity), _))
+        case None => Some(true)
       }
-    )
 
   private def _has_effective_working_set_policy: Boolean =
     descriptor.plan.workingSetPolicy match {
@@ -328,14 +388,17 @@ final class EntityCollection[E](
       case Some(_) => true
     }
 
+  private def _time_dependent_policy_message: String =
+    "time-dependent working-set policy evaluation requires ExecutionContext"
+
   private final case class _VisibilityPolicy(
-    postStatuses: Option[Set[String]],
+    poststatuses: Option[Set[String]],
     alivenesses: Option[Set[String]]
   )
 
   private final case class _LifecycleConstraint(
-    postStatusExplicit: Boolean,
-    alivenessExplicit: Boolean
+    poststatusexplicit: Boolean,
+    alivenessexplicit: Boolean
   )
 
   private def _visibility_policy(
@@ -352,7 +415,7 @@ final class EntityCollection[E](
     val query = entityQuery.query
     val lifecycle = _lifecycle_constraint(query)
     val ismanager = _is_content_manager()
-    val poststatuses = if (lifecycle.postStatusExplicit) {
+    val poststatuses = if (lifecycle.poststatusexplicit) {
       None
     } else if (ismanager) {
       val p = _post_statuses_for_manager()
@@ -360,7 +423,7 @@ final class EntityCollection[E](
     } else {
       Some(Set("published"))
     }
-    val alivenesses = if (lifecycle.alivenessExplicit) {
+    val alivenesses = if (lifecycle.alivenessexplicit) {
       None
     } else if (ismanager) {
       val p = _alivenesses_for_manager(poststatuses.getOrElse(Set.empty))
@@ -369,7 +432,7 @@ final class EntityCollection[E](
       Some(Set("alive"))
     }
     _VisibilityPolicy(
-      postStatuses = poststatuses,
+      poststatuses = poststatuses,
       alivenesses = alivenesses
     )
   }
@@ -380,8 +443,8 @@ final class EntityCollection[E](
     val expr = Query.whereOf(query)
     val raw = _query_condition(query)
     _LifecycleConstraint(
-      postStatusExplicit = _mentions_path(expr, Set("poststatus")) || _mentions_condition_key(raw, Set("poststatus")),
-      alivenessExplicit = _mentions_path(expr, Set("aliveness")) || _mentions_condition_key(raw, Set("aliveness"))
+      poststatusexplicit = _mentions_path(expr, Set("poststatus")) || _mentions_condition_key(raw, Set("poststatus")),
+      alivenessexplicit = _mentions_path(expr, Set("aliveness")) || _mentions_condition_key(raw, Set("aliveness"))
     )
   }
 
@@ -444,7 +507,7 @@ final class EntityCollection[E](
     record: Record,
     policy: _VisibilityPolicy
   ): Boolean = {
-    val postok = policy.postStatuses match {
+    val postok = policy.poststatuses match {
       case Some(allowed) =>
         _record_value(record, Vector("postStatus"))
           .flatMap(EntityLifecycleRecordPolicy.postStatusToken)

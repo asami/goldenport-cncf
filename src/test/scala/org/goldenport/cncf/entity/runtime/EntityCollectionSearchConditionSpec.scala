@@ -1,5 +1,6 @@
 package org.goldenport.cncf.entity.runtime
 
+import java.time.{Clock, Instant, ZoneOffset}
 import cats.data.State
 import cats.effect.Ref
 import org.goldenport.Consequence
@@ -16,7 +17,8 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Mar. 16, 2026
  *  version Mar. 24, 2026
- * @version May.  2, 2026
+ *  version May.  2, 2026
+ * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EntityCollectionSearchConditionSpec
@@ -177,7 +179,8 @@ final class EntityCollectionSearchConditionSpec
     }
 
     "keep only recent entities resident for working-set scope" in {
-      given ExecutionContext = ExecutionContext.test()
+      val now = Instant.parse("2026-07-16T03:00:00Z")
+      given ExecutionContext = ExecutionContext.create(Clock.fixed(now, ZoneOffset.UTC))
       given EntityPersistent[TimedPostEntity] = new EntityPersistent[TimedPostEntity] {
         def id(e: TimedPostEntity): EntityId = e.id
         def toRecord(e: TimedPostEntity): Record = e.toRecord()
@@ -185,8 +188,8 @@ final class EntityCollectionSearchConditionSpec
           Consequence.notImplemented("not used in this spec")
       }
 
-      val recent = TimedPostEntity(EntityId("m", "r", _cid), java.time.Instant.now().minusSeconds(3600), "recent")
-      val old = TimedPostEntity(EntityId("m", "o", _cid), java.time.Instant.now().minusSeconds(3 * 24 * 3600), "old")
+      val recent = TimedPostEntity(EntityId("m", "r", _cid), now.minusSeconds(3600), "recent")
+      val old = TimedPostEntity(EntityId("m", "o", _cid), now.minusSeconds(3 * 24 * 3600), "old")
       val storerealm = new EntityRealm[TimedPostEntity](
         entityName = "person",
         loader = EntityLoader[TimedPostEntity](_ => None),
@@ -214,18 +217,18 @@ final class EntityCollectionSearchConditionSpec
         storage = EntityStorage(storerealm, Some(memoryrealm))
       )
 
-      collection.put(recent)
-      collection.put(old)
-      collection.storage.workingSetStatus.markReady()
+      collection.putScoped(recent)(using summon[ExecutionContext])
+      collection.putScoped(old)(using summon[ExecutionContext])
+      collection.storage.workingSetStatus.markReady(now)
 
       memoryrealm.get(recent.id) shouldBe Some(recent)
       memoryrealm.get(old.id) shouldBe None
 
-      val workingSetResult = collection.search(EntityQuery(_cid, Query.plan(Record.empty, includeTotal = true), EntitySearchScope.WorkingSet))
-      val storeResult = collection.search(EntityQuery(_cid, Query.plan(Record.empty, includeTotal = true), EntitySearchScope.Store))
+      val workingsetresult = collection.search(EntityQuery(_cid, Query.plan(Record.empty, includeTotal = true), EntitySearchScope.WorkingSet))
+      val storeresult = collection.search(EntityQuery(_cid, Query.plan(Record.empty, includeTotal = true), EntitySearchScope.Store))
 
-      workingSetResult.map(_.data.map(_.id)) shouldBe Consequence.success(Vector(recent.id))
-      storeResult.map(_.data.map(_.id).toSet) shouldBe Consequence.success(Set(recent.id, old.id))
+      workingsetresult.map(_.data.map(_.id)) shouldBe Consequence.success(Vector(recent.id))
+      storeresult.map(_.data.map(_.id).toSet) shouldBe Consequence.success(Set(recent.id, old.id))
     }
 
     "compare Instant query values against generated string datetime fields in resident search" in {
@@ -274,8 +277,8 @@ final class EntityCollectionSearchConditionSpec
         storage = EntityStorage(storerealm, Some(memoryrealm))
       )
 
-      collection.put(recent)
-      collection.put(old)
+      collection.putScoped(recent)(using summon[ExecutionContext])
+      collection.putScoped(old)(using summon[ExecutionContext])
 
       val result = collection.search(
         EntityQuery(
@@ -299,7 +302,7 @@ final class EntityCollectionSearchConditionSpec
         override def toStoreRecord(e: GeneratedStoreStyleTimedPostEntity): Record = e.toRecord()
         def fromRecord(r: Record): Consequence[GeneratedStoreStyleTimedPostEntity] =
           Consequence.notImplemented("not used in this spec")
-        override def storeFieldName(logicalName: String): String = logicalName match {
+        override def storeFieldName(logicalname: String): String = logicalname match {
           case "postedAt" => "posted_at"
           case other => other
         }
@@ -342,8 +345,8 @@ final class EntityCollectionSearchConditionSpec
         storage = EntityStorage(storerealm, Some(memoryrealm))
       )
 
-      collection.put(recent)
-      collection.put(old)
+      collection.putScoped(recent)(using summon[ExecutionContext])
+      collection.putScoped(old)(using summon[ExecutionContext])
 
       val result = collection.search(
         EntityQuery(
@@ -360,7 +363,8 @@ final class EntityCollectionSearchConditionSpec
     }
 
     "exclude logically deleted entities from the working set even when recent" in {
-      given ExecutionContext = ExecutionContext.test()
+      val now = Instant.parse("2026-07-16T04:00:00Z")
+      given ExecutionContext = ExecutionContext.create(Clock.fixed(now, ZoneOffset.UTC))
       given EntityPersistent[TimedLifecyclePostEntity] = new EntityPersistent[TimedLifecyclePostEntity] {
         def id(e: TimedLifecyclePostEntity): EntityId = e.id
         def toRecord(e: TimedLifecyclePostEntity): Record = e.toRecord()
@@ -370,16 +374,16 @@ final class EntityCollectionSearchConditionSpec
 
       val live = TimedLifecyclePostEntity(
         EntityId("m", "l", _cid),
-        java.time.Instant.now().minusSeconds(3600),
+        now.minusSeconds(3600),
         "live",
         "alive"
       )
       val deleted = TimedLifecyclePostEntity(
         EntityId("m", "d", _cid),
-        java.time.Instant.now().minusSeconds(3600),
+        now.minusSeconds(3600),
         "deleted",
         "alive",
-        deletedAt = Some(java.time.Instant.now())
+        deletedAt = Some(now)
       )
       val storerealm = new EntityRealm[TimedLifecyclePostEntity](
         entityName = "person",
@@ -408,17 +412,17 @@ final class EntityCollectionSearchConditionSpec
         storage = EntityStorage(storerealm, Some(memoryrealm))
       )
 
-      collection.put(live)
-      collection.put(deleted)
+      collection.putScoped(live)(using summon[ExecutionContext])
+      collection.putScoped(deleted)(using summon[ExecutionContext])
 
       memoryrealm.get(live.id) shouldBe Some(live)
       memoryrealm.get(deleted.id) shouldBe None
 
-      val workingSetResult = collection.search(EntityQuery(_cid, Query.plan(Record.empty, includeTotal = true), EntitySearchScope.WorkingSet))
-      val storeResult = collection.search(EntityQuery(_cid, Query.plan(Record.empty, includeTotal = true), EntitySearchScope.Store))
+      val workingsetresult = collection.search(EntityQuery(_cid, Query.plan(Record.empty, includeTotal = true), EntitySearchScope.WorkingSet))
+      val storeresult = collection.search(EntityQuery(_cid, Query.plan(Record.empty, includeTotal = true), EntitySearchScope.Store))
 
-      workingSetResult.map(_.data.map(_.id)) shouldBe Consequence.success(Vector(live.id))
-      storeResult.map(_.data.map(_.id)) shouldBe Consequence.success(Vector(live.id))
+      workingsetresult.map(_.data.map(_.id)) shouldBe Consequence.success(Vector(live.id))
+      storeresult.map(_.data.map(_.id)) shouldBe Consequence.success(Vector(live.id))
     }
 
     "filter entities by generated condition object via directive.Query" in {
@@ -462,7 +466,7 @@ final class EntityCollectionSearchConditionSpec
       )
 
       When("searching by condition object generated by Cozy")
-      val condition = domain.query.Person(
+      val condition = Domain.QueryModel.Person(
         id = Condition.any[EntityId],
         name = Condition.is(Name("taro")),
         age = Condition.any[Age]
@@ -516,7 +520,7 @@ final class EntityCollectionSearchConditionSpec
 
       When("searching with where(age >= 20), order by age desc, offset 1, limit 1")
       val planned = Query.plan(
-        condition = domain.query.Person(
+        condition = Domain.QueryModel.Person(
           id = Condition.any[EntityId],
           name = Condition.any[Name],
           age = Condition.any[Age]
@@ -576,14 +580,14 @@ final class EntityCollectionSearchConditionSpec
       val camel = collection.search(EntityQuery(_cid, Query.plan(Record.empty, where = Query.Eq("postStatus", "Published"))))
       val snake = collection.search(EntityQuery(_cid, Query.plan(Record.empty, where = Query.Eq("post_status", "Published"))))
       val kebab = collection.search(EntityQuery(_cid, Query.plan(Record.empty, where = Query.Eq("post-status", "Published"))))
-      val traceSnake = collection.search(EntityQuery(_cid, Query.plan(Record.empty, where = Query.Eq("trace_id", "trace-a"))))
-      val traceKebab = collection.search(EntityQuery(_cid, Query.plan(Record.empty, where = Query.Eq("trace-id", "trace-a"))))
+      val tracesnake = collection.search(EntityQuery(_cid, Query.plan(Record.empty, where = Query.Eq("trace_id", "trace-a"))))
+      val tracekebab = collection.search(EntityQuery(_cid, Query.plan(Record.empty, where = Query.Eq("trace-id", "trace-a"))))
 
       camel.map(_.data.map(_.id)) shouldBe Consequence.success(Vector(s1.id))
       snake.map(_.data.map(_.id)) shouldBe Consequence.success(Vector(s1.id))
       kebab.map(_.data.map(_.id)) shouldBe Consequence.success(Vector(s1.id))
-      traceSnake.map(_.data.map(_.id)) shouldBe Consequence.success(Vector(s1.id))
-      traceKebab.map(_.data.map(_.id)) shouldBe Consequence.success(Vector(s1.id))
+      tracesnake.map(_.data.map(_.id)) shouldBe Consequence.success(Vector(s1.id))
+      tracekebab.map(_.data.map(_.id)) shouldBe Consequence.success(Vector(s1.id))
     }
   }
 }
@@ -672,13 +676,13 @@ private final case class GeneratedStoreStyleTimedPostEntity(
     )
 }
 
-private object domain {
-  object query {
+private object Domain {
+  object QueryModel {
     final case class Person(
       id: Condition[EntityId],
       name: Condition[Name],
       age: Condition[Age]
-    ) extends Query.ConditionShape
+    ) extends org.goldenport.cncf.directive.Query.ConditionShape
   }
 }
 
