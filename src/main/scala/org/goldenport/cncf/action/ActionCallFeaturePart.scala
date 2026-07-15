@@ -1,7 +1,7 @@
 package org.goldenport.cncf.action
 
 import java.nio.file.Path
-import java.time.{Clock, Instant, ZonedDateTime}
+import java.time.{Clock, Duration, Instant, ZonedDateTime}
 import cats.free.Free
 import cats.syntax.flatMap.*
 import cats.syntax.functor.*
@@ -14,7 +14,7 @@ import org.goldenport.protocol.Property
 import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.http.HttpResponse
 import org.goldenport.process.{ShellCommand, ShellCommandResult}
-import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.cncf.context.{ExecutionContext, ExecutionSchedulerMode, GlobalRuntimeContext, ScopeContext}
 import org.goldenport.cncf.unitofwork.{ExecUowM, UnitOfWork, UnitOfWorkAuthorization}
 import org.goldenport.cncf.unitofwork.UnitOfWorkInterpreter
 import org.goldenport.cncf.unitofwork.UnitOfWorkOp
@@ -85,6 +85,44 @@ trait BehaviorFeaturePart { self: Behavior.Core.Holder =>
 
   protected final def current_zoned_datetime: ZonedDateTime =
     current_instant.atZone(execution_context.timezone)
+
+  protected final def await_delay(duration: Duration): Consequence[Unit] =
+    if (duration.isNegative)
+      Consequence.argumentInvalid("Execution delay must not be negative")
+    else
+      try {
+        _execution_capability(
+          "time.await-delay",
+          Map("duration_ms" -> duration.toMillis.toString)
+        ) {
+          execution_context.executionControl.schedulerMode match {
+            case ExecutionSchedulerMode.Manual =>
+              _execution_profile_runtime(execution_context.cncfCore.scope)
+                .flatMap(_.executionProfileRuntime.testControl)
+                .map(_.advanceBy(duration))
+                .getOrElse(throw new IllegalStateException(
+                  "Manual execution delay requires an execution-context-owned CNCF execution profile"
+                ))
+            case ExecutionSchedulerMode.Realtime =>
+              Thread.sleep(duration.toMillis)
+          }
+          Consequence.unit
+        }
+      } catch {
+        case e: InterruptedException =>
+          Thread.currentThread.interrupt()
+          Consequence.serviceUnavailable("Execution delay interrupted")
+        case e: IllegalStateException =>
+          Consequence.operationInvalid(e.getMessage)
+      }
+
+  private def _execution_profile_runtime(
+    scope: ScopeContext
+  ): Option[GlobalRuntimeContext] =
+    scope match {
+      case runtime: GlobalRuntimeContext => Some(runtime)
+      case other => other.parent.flatMap(_execution_profile_runtime)
+    }
 
   protected final def random_int(purpose: String, bound: Int): Int =
     _execution_capability(
