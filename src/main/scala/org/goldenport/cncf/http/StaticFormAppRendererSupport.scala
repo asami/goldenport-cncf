@@ -33,7 +33,8 @@ import io.circe.parser.parse
 /*
  * @since   May. 18, 2026
  *  version May. 24, 2026
- * @version Jun. 19, 2026
+ *  version Jun. 19, 2026
+ * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 object StaticFormAppRendererSupport {
@@ -326,6 +327,7 @@ object StaticFormAppRendererSupport {
     "pageContext.session.signupHidden" -> "",
     "pageContext.session.logoutHidden" -> "hidden",
     "pageContext.session.displayName" -> "",
+    "pageContext.session.cookieName" -> "textus-session",
     "pageContext.security.capabilities" -> "",
     "pageContext.notification.available" -> "false",
     "pageContext.notification.unconfirmedCount" -> "0",

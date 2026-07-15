@@ -4,7 +4,7 @@ package org.goldenport.cncf.http
  * @since   May. 18, 2026
  *  version May. 30, 2026
  *  version Jun. 19, 2026
- * @version Jul. 15, 2026
+ * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 import cats.effect.IO
@@ -63,7 +63,7 @@ import org.goldenport.observation.{Cause, Descriptor}
  *  version Apr. 30, 2026
  *  version May. 25, 2026
  *  version Jun. 19, 2026
- * @version Jul. 15, 2026
+ * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Http4sHttpServer(
@@ -1005,6 +1005,7 @@ final class Http4sHttpServer(
       "pageContext.session.signupHidden" -> (if (authenticated) "hidden" else ""),
       "pageContext.session.logoutHidden" -> (if (authenticated) "" else "hidden"),
       "pageContext.session.displayName" -> "",
+      "pageContext.session.cookieName" -> _session_cookie_name,
       "pageContext.security.capabilities" -> capabilities
     ) ++ session
   }
@@ -4454,6 +4455,7 @@ final class Http4sHttpServer(
       "pageContext.session.signupHidden" -> (if (authenticated) "hidden" else ""),
       "pageContext.session.logoutHidden" -> (if (authenticated) "" else "hidden"),
       "pageContext.session.displayName" -> "",
+      "pageContext.session.cookieName" -> _session_cookie_name,
       "pageContext.jobs.activeCount" -> jobcounts.active.toString,
       "pageContext.jobs.unconfirmedCount" -> jobcounts.unconfirmed.toString,
       "pageContext.jobs.visible" -> authenticated.toString,

@@ -1987,6 +1987,25 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
     ConsequenceT.liftF(Free.liftF(op))
   }
 
+  protected final def entity_update_internal[T](
+    changes: T
+  )(using tc: EntityPersistent[T]): ExecUowM[Unit] = {
+    ensure_component_application_datastore()
+    val effectivetc = _effective_entity_persistent(tc.id(changes).collection, tc)
+    val authorization =
+      _entity_uow_authorization(
+        Some(effectivetc.id(changes).collection.name),
+        Some(effectivetc.id(changes)),
+        "update"
+      ).map(_.copy(accessMode = EntityAccessMode.ServiceInternal))
+    val op = UnitOfWorkOp.EntityStoreUpdate(
+      changes,
+      effectivetc,
+      authorization
+    )
+    ConsequenceT.liftF(Free.liftF(op))
+  }
+
   // Patch update with explicit target id.
   // This is intended for Update.PatchShape where id is excluded from patch object.
   protected final def entity_update[T](

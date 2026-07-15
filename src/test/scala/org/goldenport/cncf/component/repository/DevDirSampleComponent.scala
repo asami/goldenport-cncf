@@ -10,10 +10,32 @@ import org.goldenport.schema.XString
 
 /*
  * @since   May. 18, 2026
- * @version May. 18, 2026
+ * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
-final class DevDirSampleComponent extends Component
+class DevDirSampleComponent extends Component
+
+final class DevDirSamplePrimaryComponent extends DevDirSampleComponent
+
+final class DevDirSampleBundleFactory extends Component.BundleFactory {
+  def primaryFactory: Component.PrimaryComponentFactory =
+    DevDirSamplePrimaryFactory
+}
+
+object DevDirSamplePrimaryFactory extends Component.PrimaryComponentFactory {
+  protected def create_Component(params: ComponentCreate): Component =
+    new DevDirSamplePrimaryComponent
+
+  protected def create_Core(
+    params: ComponentCreate,
+    comp: Component
+  ): Component.Core =
+    spec_create(
+      DevDirSampleComponent.name,
+      DevDirSampleComponent.componentId,
+      MainService
+    )
+}
 
 object DevDirSampleComponent extends Component.Factory {
   val name = "devdirsample"

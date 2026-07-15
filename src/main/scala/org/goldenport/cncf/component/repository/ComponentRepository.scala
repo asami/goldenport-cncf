@@ -31,7 +31,7 @@ import org.goldenport.configuration.{Configuration, ConfigurationTrace, Resolved
  *  version Mar. 22, 2026
  *  version Apr. 25, 2026
  *  version May. 25, 2026
- * @version Jul. 12, 2026
+ * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 sealed abstract class ComponentRepository {
@@ -481,19 +481,35 @@ object ComponentRepository extends GlobalObservable {
           throw new IllegalStateException(ComponentDevDirRepository.noClassDirectoryMessage(baseDir))
         } else {
           val effectiveparams = with_assembly_api_class_loader(params)
+          val origin = ComponentOrigin.Repository("component-dev-dir")
           val loader = ComponentLocalFirstClassLoader(
             classpath,
             effectiveparams.assemblyApiClassLoader.getOrElse(getClass.getClassLoader)
           )
-          _discover_components(
-            loader,
-            effectiveparams,
-            classdirs,
-            packagePrefixes,
-            ComponentOrigin.Repository("component-dev-dir"),
-            log,
-            tolerant = true
-          ) match {
+          val classnames = _discover_class_names(classdirs, packagePrefixes)
+          val factorycomponents = _instantiate_factory_components(
+            loader = loader,
+            classnames = classnames,
+            params = effectiveparams,
+            origin = origin,
+            log = log,
+            artifactname = baseDir.getFileName.toString,
+            repositorytype = "component-dev-dir"
+          )
+          val discovered =
+            if (factorycomponents.nonEmpty)
+              Consequence.success(factorycomponents.toVector)
+            else
+              _discover_components(
+                loader,
+                effectiveparams,
+                classdirs,
+                packagePrefixes,
+                origin,
+                log,
+                tolerant = true
+              )
+          discovered match {
             case Consequence.Success(components) =>
               components.map(component => component.withArtifactMetadata(_dev_artifact_metadata(baseDir, component)))
             case Consequence.Failure(conclusion) =>
@@ -583,15 +599,32 @@ object ComponentRepository extends GlobalObservable {
             )
             val params = ComponentCreate(subsystem, ComponentOrigin.Repository("component-dev-dir"))
             val loader = _class_loader_from_paths(classpath, getClass.getClassLoader)
-            _discover_components(
-              loader,
-              params,
-              classdirs,
-              ComponentRepository.resolvePackagePrefixes(),
-              ComponentOrigin.Repository("component-dev-dir"),
-              log,
-              tolerant = true
-            ).toOption.getOrElse(Vector.empty)
+            val origin = ComponentOrigin.Repository("component-dev-dir")
+            val packageprefixes = ComponentRepository.resolvePackagePrefixes()
+            val classnames = _discover_class_names(classdirs, packageprefixes)
+            val factorycomponents = _instantiate_factory_components(
+              loader = loader,
+              classnames = classnames,
+              params = params,
+              origin = origin,
+              log = log,
+              artifactname = base.getFileName.toString,
+              repositorytype = "component-dev-dir"
+            )
+            val components =
+              if (factorycomponents.nonEmpty)
+                factorycomponents.toVector
+              else
+                _discover_components(
+                  loader,
+                  params,
+                  classdirs,
+                  packageprefixes,
+                  origin,
+                  log,
+                  tolerant = true
+                ).toOption.getOrElse(Vector.empty)
+            components
               .map { component =>
                 val name = component.core.name
                 ComponentDescriptor(

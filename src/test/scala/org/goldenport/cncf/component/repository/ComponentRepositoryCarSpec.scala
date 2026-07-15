@@ -29,7 +29,7 @@ import org.goldenport.configuration.ConfigurationTrace
  * @since   Feb.  4, 2026
  *  version Apr. 25, 2026
  *  version May. 25, 2026
- * @version Jul. 15, 2026
+ * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAndAfterAll with GivenWhenThen {
@@ -533,6 +533,9 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
         descriptor.map(_.subsystemName) shouldBe Some("devdirsample")
         descriptor.toVector.flatMap(_.componentBindings.map(_.componentName)) shouldBe Vector("devdirsample")
         initialized.components.map(_.name) should contain ("devdirsample")
+        initialized.components.count(_.name == "devdirsample") shouldBe 1
+        initialized.components.find(_.name == "devdirsample").map(_.getClass.getName) shouldBe
+          Some(classOf[devdirsample.DevDirSamplePrimaryComponent].getName)
       }
     }
 
