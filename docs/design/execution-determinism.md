@@ -298,6 +298,15 @@ and `completedAt`. A failed replacement retains the previous snapshot and
 indexes while recording the failed attempt status with that same caller-bound
 instant.
 
+Entity working-set load status is runtime semantic state. Startup initialization
+MUST receive the clock selected by the active execution profile and use that
+clock for `Loading`, `Ready`, and `Failed` transition timestamps. The mutable
+status holder MUST NOT obtain ambient wall-clock time. Context-free fixture
+transitions may omit timestamps, but MUST NOT fabricate semantic timestamps.
+Working-set admission and residency evaluation likewise require an explicit
+evaluation instant; compatibility defaults in that policy boundary remain
+outside the completed status-lifecycle contract until migrated.
+
 Manual scheduling is limited by `timer-scheduling-boundary.md`. It MUST NOT add
 cron, recurrence, business-calendar, workflow-wait, or general scheduler
 semantics.

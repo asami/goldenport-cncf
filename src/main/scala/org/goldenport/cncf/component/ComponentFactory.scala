@@ -7,7 +7,7 @@ import cats.data.State
 import org.goldenport.Consequence
 import org.goldenport.record.Record
 import org.goldenport.configuration.ResolvedConfiguration
-import org.goldenport.cncf.config.ConfigurationAccess
+import org.goldenport.cncf.config.{ConfigurationAccess, RuntimeConfig}
 import org.goldenport.cncf.cli.RunMode
 import org.goldenport.cncf.backend.collaborator.{Collaborator, CollaboratorFactory}
 import org.goldenport.cncf.collaborator.api
@@ -41,15 +41,18 @@ import scala.util.Try
  *  version Apr. 25, 2026
  *  version Apr. 26, 2026
  *  version May.  7, 2026
- * @version Jul. 15, 2026
+ * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactory(
   private val _component_repository_space: ComponentRepositorySpace = ComponentRepositorySpace(),
   private val _collaborators: CollaboratorFactory = CollaboratorFactory.empty,
   private val _runtime_entity_descriptors: Vector[EntityRuntimeDescriptor] = Vector.empty,
-  private val _configuration: Option[ResolvedConfiguration] = None
+  private val _configuration: Option[ResolvedConfiguration] = None,
+  workingsetclock: java.time.Clock = RuntimeConfig.DEFAULT_EXECUTION_CLOCK.clock
 ) {
+  private val _working_set_clock = workingsetclock
+
   def discover(): Vector[Component] = {
     val cs = _component_repository_space.discover()
     given ExecutionContext = ExecutionContext.create()
@@ -1290,7 +1293,7 @@ final class ComponentFactory(
     entitySpace: EntitySpace,
     storesnapshot: scala.collection.concurrent.TrieMap[EntityId, Any]
   ): Unit = {
-    val initializer = new WorkingSetInitializer(entitySpace)
+    val initializer = new WorkingSetInitializer(entitySpace, _working_set_clock)
     _default_working_sets(component).foreach { spec =>
       val entities = spec.entities.iterator.toVector
       _prime_store(entitySpace, storesnapshot, spec.entityName, entities)
@@ -1303,7 +1306,8 @@ final class ComponentFactory(
     entitySpace: EntitySpace,
     storesnapshot: scala.collection.concurrent.TrieMap[EntityId, Any]
   ): Unit = {
-    val initializer = new WorkingSetInitializer(entitySpace)
+    val clock = _working_set_clock
+    val initializer = new WorkingSetInitializer(entitySpace, clock)
     plans.foreach { plan =>
       plan.workingSet match {
         case Some(ws) =>
@@ -1316,7 +1320,7 @@ final class ComponentFactory(
             // can be declared ready. Until that loader is wired, keep status
             // initializing so search uses direct store fallback.
             if (collection.storage.memoryRealm.isDefined)
-              collection.storage.workingSetStatus.markLoading()
+              collection.storage.workingSetStatus.markLoading(clock.instant())
             else
               collection.storage.workingSetStatus.markDisabled()
           }
@@ -2051,7 +2055,13 @@ object ComponentFactory {
     val componentDescriptors = _resolve_component_descriptors(cwd, c)
     val space = _build_component_repository_space(subsystem, cwd, c, componentDescriptors)
     val descriptors = componentDescriptors.flatMap(_.entityRuntimeDescriptors)
-    new ComponentFactory(space, collaborators, descriptors, Some(c))
+    new ComponentFactory(
+      space,
+      collaborators,
+      descriptors,
+      Some(c),
+      subsystem.globalRuntimeContext.executionProfileRuntime.runtimeClock.clock
+    )
   }
 
   private def _build_component_repository_space(
@@ -2073,7 +2083,13 @@ object ComponentFactory {
     val componentDescriptors = _resolve_component_descriptors(cwd, c, repositorySpecs)
     val space = ComponentRepositorySpace.create(subsystem, c, repositorySpecs, componentDescriptors)
     val descriptors = componentDescriptors.flatMap(_.entityRuntimeDescriptors)
-    new ComponentFactory(space, collaborators, descriptors, Some(c))
+    new ComponentFactory(
+      space,
+      collaborators,
+      descriptors,
+      Some(c),
+      subsystem.globalRuntimeContext.executionProfileRuntime.runtimeClock.clock
+    )
   }
 
   private val _component_descriptor_key = "cncf.component.descriptor"

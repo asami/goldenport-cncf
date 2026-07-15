@@ -1,5 +1,6 @@
 package org.goldenport.cncf.entity.runtime
 
+import java.time.Clock
 import scala.concurrent.{ExecutionContext as ScalaExecutionContext, Future}
 import scala.util.control.NonFatal
 
@@ -13,11 +14,13 @@ import scala.util.control.NonFatal
  *
  * @since   Mar. 14, 2026
  *  version Mar. 15, 2026
- * @version Apr. 25, 2026
+ *  version Apr. 25, 2026
+ * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 final class WorkingSetInitializer(
-  entityspace: EntitySpace
+  entityspace: EntitySpace,
+  clock: Clock
 ) {
   /**
    * Preload entities into the MemoryRealm for a specific entity type.
@@ -53,14 +56,14 @@ final class WorkingSetInitializer(
     _storage[E](spec.entityName).foreach { storage =>
       storage.memoryRealm match {
         case Some(memory) =>
-          storage.workingSetStatus.markLoading()
+          storage.workingSetStatus.markLoading(clock.instant())
           Future {
             try {
               spec.entities.iterator.foreach(memory.put)
-              storage.workingSetStatus.markReady()
+              storage.workingSetStatus.markReady(clock.instant())
             } catch {
               case NonFatal(e) =>
-                storage.workingSetStatus.markFailed(e.getMessage)
+                storage.workingSetStatus.markFailed(e.getMessage, clock.instant())
             }
           }
         case None =>

@@ -53,7 +53,7 @@ import org.goldenport.cncf.spi.{ComponentApiResolver, ResolvedSpiBinding, SpiInv
  *  version Jan. 31, 2026
  *  version Feb.  4, 2026
  *  version Apr. 30, 2026
- * @version Jul. 15, 2026
+ * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Subsystem(
@@ -75,7 +75,11 @@ final class Subsystem(
     metadata: RuntimeContext.ExecutionMetadata
   )
 
-  private var _component_factory: ComponentFactory = ComponentFactory()
+  private var _component_factory: ComponentFactory = new ComponentFactory(
+    workingsetclock = _find_global_runtime_context(scopeContext)
+      .map(_.executionProfileRuntime.runtimeClock.clock)
+      .getOrElse(RuntimeConfig.DEFAULT_EXECUTION_CLOCK.clock)
+  )
   private var _component_space: ComponentSpace = ComponentSpace()
   private var _resolver: OperationResolver = OperationResolver.empty
   private val _http_driver: Option[HttpDriver] = httpdriver

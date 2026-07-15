@@ -1,5 +1,6 @@
 package org.goldenport.cncf.component
 
+import java.time.{Clock, Instant, ZoneOffset}
 import scala.collection.concurrent.TrieMap
 import cats.data.State
 import cats.effect.Ref
@@ -32,7 +33,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 16, 2026
- * @version Apr. 25, 2026
+ *  version Apr. 25, 2026
+ * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactoryWorkingSetIterableOnceSpec
@@ -113,6 +115,7 @@ final class ComponentFactoryWorkingSetIterableOnceSpec
     }
 
     "populate store and memory from IterableOnce for multiple payload patterns" in {
+      Given("generated working-set entity names and identifiers")
       val table = Table(
         ("minor", "name"),
         ("a", "alpha"),
@@ -120,6 +123,7 @@ final class ComponentFactoryWorkingSetIterableOnceSpec
         ("c", "charlie")
       )
 
+      When("each single-use working-set source is initialized")
       forAll(table) { (minor, name) =>
         val factory = new ComponentFactory()
         val entityspace = new EntitySpace
@@ -181,6 +185,7 @@ final class ComponentFactoryWorkingSetIterableOnceSpec
 
         _initialize_working_sets_from_plan(factory, Vector(plan), entityspace, snapshot)
 
+        Then("both persistent and resident paths contain that entity")
         storerealm.get(id) shouldBe Some(entity)
         _await_working_set_ready(collection) shouldBe true
         memoryrealm.get(id) shouldBe Some(entity)
@@ -189,11 +194,12 @@ final class ComponentFactoryWorkingSetIterableOnceSpec
     }
 
     "satisfy IterableOnce materialization safety as a ScalaCheck property" in {
-      val genMinor = Gen.nonEmptyListOf(Gen.alphaChar).map(_.mkString)
-      val genName = Gen.nonEmptyListOf(Gen.alphaChar).map(_.mkString)
+      Given("generated single-use working-set payloads")
+      val genminor = Gen.nonEmptyListOf(Gen.alphaChar).map(_.mkString)
+      val genname = Gen.nonEmptyListOf(Gen.alphaChar).map(_.mkString)
       val gencase = for {
-        minor <- genMinor
-        name <- genName
+        minor <- genminor
+        name <- genname
       } yield (minor, name)
 
       val property = Prop.forAll(gencase) { (minor, name) =>
@@ -263,10 +269,12 @@ final class ComponentFactoryWorkingSetIterableOnceSpec
         snapshot.get(id) == Some(entity)
       }
 
+      When("the initialization property is checked")
       val result = Test.check(
         Test.Parameters.default.withMinSuccessfulTests(20),
         property
       )
+      Then("every payload is materialized once into both paths")
       result.passed shouldBe true
     }
 
@@ -297,7 +305,8 @@ final class ComponentFactoryWorkingSetIterableOnceSpec
       entityspace.registerEntity("sample", collection)
 
       When("async preload is scheduled")
-      new WorkingSetInitializer(entityspace).preloadAsync(WorkingSetDefinition[Any]("sample", source))(using queued)
+      val clock = Clock.fixed(Instant.parse("2026-07-16T00:00:00Z"), ZoneOffset.UTC)
+      new WorkingSetInitializer(entityspace, clock).preloadAsync(WorkingSetDefinition[Any]("sample", source))(using queued)
 
       Then("the source is not consumed until the queued background task runs")
       source.consumed shouldBe false
@@ -311,7 +320,9 @@ final class ComponentFactoryWorkingSetIterableOnceSpec
 
     "leave policy-only working set initializing instead of marking ready from an empty store realm" in {
       Given("a runtime plan with a working-set policy but no explicit preload snapshot")
-      val factory = new ComponentFactory()
+      val start = Instant.parse("2026-07-16T01:00:00Z")
+      val clock = Clock.fixed(start, ZoneOffset.UTC)
+      val factory = new ComponentFactory(workingsetclock = clock)
       val entityspace = new EntitySpace
       val snapshot = TrieMap.empty[EntityId, Any]
       val cid = EntityCollectionId("test", "a", "sample")
@@ -347,6 +358,7 @@ final class ComponentFactoryWorkingSetIterableOnceSpec
 
       Then("the collection remains initializing so searches keep direct-store fallback")
       collection.storage.workingSetStatus.get.state shouldBe WorkingSetLoadState.Loading
+      collection.storage.workingSetStatus.get.startedAt shouldBe Some(start)
       collection.workingSetSearchAvailable shouldBe false
       collection.shouldFallbackToStoreForWorkingSet(org.goldenport.cncf.entity.EntityQuery(cid, org.goldenport.cncf.directive.Query.plan(Record.empty))) shouldBe true
     }

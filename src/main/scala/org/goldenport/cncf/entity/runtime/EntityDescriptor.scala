@@ -8,7 +8,8 @@ import org.goldenport.cncf.entity.EntityPersistent
 /*
  * @since   Mar. 15, 2026
  *  version Mar. 24, 2026
- * @version Apr. 25, 2026
+ *  version Apr. 25, 2026
+ * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class EntityDescriptor[E](
@@ -55,21 +56,30 @@ final class WorkingSetStatusRef(
   def markDisabled(): Unit =
     _ref.set(WorkingSetStatus(WorkingSetLoadState.Disabled))
 
-  def markLoading(): Unit =
-    _ref.set(WorkingSetStatus(WorkingSetLoadState.Loading, startedAt = Some(Instant.now())))
+  private[cncf] def markLoading(at: Instant): Unit =
+    _ref.set(WorkingSetStatus(WorkingSetLoadState.Loading, startedAt = Some(at)))
 
-  def markReady(): Unit = {
+  private[cncf] def markReady(at: Instant): Unit = {
     val current = _ref.get()
-    _ref.set(current.copy(state = WorkingSetLoadState.Ready, completedAt = Some(Instant.now()), error = None))
+    _ref.set(current.copy(state = WorkingSetLoadState.Ready, completedAt = Some(at), error = None))
   }
 
-  def markFailed(message: String): Unit = {
+  private[cncf] def markFailed(message: String, at: Instant): Unit = {
     val current = _ref.get()
     _ref.set(current.copy(
       state = WorkingSetLoadState.Failed,
-      completedAt = Some(Instant.now()),
+      completedAt = Some(at),
       error = Some(Option(message).getOrElse("").take(500))
     ))
+  }
+
+  // Context-free fixture transitions intentionally omit semantic timestamps.
+  private[cncf] def markLoading(): Unit =
+    _ref.set(WorkingSetStatus(WorkingSetLoadState.Loading))
+
+  private[cncf] def markReady(): Unit = {
+    val current = _ref.get()
+    _ref.set(current.copy(state = WorkingSetLoadState.Ready, completedAt = None, error = None))
   }
 }
 

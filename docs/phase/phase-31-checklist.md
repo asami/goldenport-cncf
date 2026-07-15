@@ -315,11 +315,18 @@ Status: IN PROGRESS
   `completedAt` from one execution-clock instant, failed replacement preserves
   the previous indexed snapshot, and property-based coverage verifies replay
   across generated fixed instants.
+- Entity working-set initialization now receives the clock selected by the
+  active execution profile. Loading, ready, and failed status transitions use
+  explicit instants from that clock, while context-free fixture transitions
+  omit timestamps instead of reading ambient wall time. Property-based coverage
+  verifies successful and failed lifecycle replay across generated instants,
+  and startup preload coverage verifies the injected clock boundary.
 - CAR lint and component developer guidance now report direct ambient clock,
   UUID/random, sleep, environment/property, host filesystem, thread, and
   executor access in component sources.
-- Entity working-set and other remaining runtime model semantic defaults still
-  require migration before ED-07 can be marked DONE.
+- Entity working-set policy admission/residency defaults and other remaining
+  runtime model semantic defaults still require migration before ED-07 can be
+  marked DONE.
 
 ### Acceptance Criteria
 
