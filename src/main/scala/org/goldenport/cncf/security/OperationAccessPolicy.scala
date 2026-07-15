@@ -1,5 +1,6 @@
 package org.goldenport.cncf.security
 
+import java.time.Instant
 import org.goldenport.{Consequence, Conclusion}
 import org.goldenport.observation.Descriptor
 import org.goldenport.record.Record
@@ -20,7 +21,7 @@ import org.simplemodeling.model.value.SecurityAttributes
  * @since   Apr.  6, 2026
  *  version Apr. 29, 2026
  *  version May. 11, 2026
- * @version Jul. 15, 2026
+ * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 object OperationAccessPolicy {
@@ -53,17 +54,17 @@ object OperationAccessPolicy {
       _permission_denied("Management privilege is required.", "manager-only")
 
   def authorizeSimpleEntityOwnerOrManager(
-    entityId: EntityId,
-    loadRecord: EntityId => Consequence[Option[Record]]
+    entityid: EntityId,
+    loadrecord: EntityId => Consequence[Option[Record]]
   )(using ctx: ExecutionContext): Consequence[Unit] =
     if (_is_manager)
       Consequence.unit
-    else if (entityId.print == _subject.subjectId)
+    else if (entityid.print == _subject.subjectId)
       Consequence.unit
     else
-      loadRecord(entityId).flatMap {
+      loadrecord(entityid).flatMap {
         case Some(record) => authorizeOwnerOrManager(record)
-        case None => Consequence.entityNotFound(s"SimpleEntity not found: ${entityId.print}")
+        case None => Consequence.entityNotFound(s"SimpleEntity not found: ${entityid.print}")
       }
 
   def hasManagerPrivilege(using ctx: ExecutionContext): Boolean =
@@ -71,40 +72,40 @@ object OperationAccessPolicy {
 
   def authorizeSimpleEntity(
     record: Record,
-    accessKind: String
+    accesskind: String
   )(using ctx: ExecutionContext): Consequence[Unit] =
-    _authorize_simple_entity(record, accessKind, None)
+    _authorize_simple_entity(record, accesskind, None)
 
   def authorizeSimpleEntity(
     record: Record,
-    accessKind: String,
-    securityAttributes: Option[SecurityAttributes]
+    accesskind: String,
+    securityattributes: Option[SecurityAttributes]
   )(using ctx: ExecutionContext): Consequence[Unit] =
-    _authorize_simple_entity(record, accessKind, securityAttributes)
+    _authorize_simple_entity(record, accesskind, securityattributes)
 
   private def _authorize_simple_entity(
     record: Record,
-    accessKind: String,
-    securityAttributes: Option[SecurityAttributes]
+    accesskind: String,
+    securityattributes: Option[SecurityAttributes]
   )(using ctx: ExecutionContext): Consequence[Unit] =
     if (_is_manager)
       Consequence.unit
-    else if (_has_matching_privilege(record, securityAttributes))
+    else if (_has_matching_privilege(record, securityattributes))
       Consequence.unit
     else
-      _role_for(record, securityAttributes) match
-        case Some("owner") if _permission_for(record, "owner", accessKind, securityAttributes) => Consequence.unit
-        case Some("group") if _permission_for(record, "group", accessKind, securityAttributes) => Consequence.unit
-        case Some("other") if _permission_for(record, "other", accessKind, securityAttributes) => Consequence.unit
-        case Some("owner") => _permission_denied(s"Owner permission is insufficient for $accessKind.", "owner", accessKind)
-        case Some("group") => _permission_denied(s"Group permission is insufficient for $accessKind.", "group", accessKind)
-        case Some("other") => _permission_denied(s"Permission is insufficient for $accessKind.", "other", accessKind)
-        case Some(role) => _permission_denied(s"Permission is insufficient for $accessKind.", role, accessKind)
-        case None => _permission_denied("Security attributes are not available for authorization.", "security-attributes-missing", accessKind)
+      _role_for(record, securityattributes) match
+        case Some("owner") if _permission_for(record, "owner", accesskind, securityattributes) => Consequence.unit
+        case Some("group") if _permission_for(record, "group", accesskind, securityattributes) => Consequence.unit
+        case Some("other") if _permission_for(record, "other", accesskind, securityattributes) => Consequence.unit
+        case Some("owner") => _permission_denied(s"Owner permission is insufficient for $accesskind.", "owner", accesskind)
+        case Some("group") => _permission_denied(s"Group permission is insufficient for $accesskind.", "group", accesskind)
+        case Some("other") => _permission_denied(s"Permission is insufficient for $accesskind.", "other", accesskind)
+        case Some(role) => _permission_denied(s"Permission is insufficient for $accesskind.", role, accesskind)
+        case None => _permission_denied("Security attributes are not available for authorization.", "security-attributes-missing", accesskind)
 
   def authorizeUnitOfWorkDefault(
     authorization: UnitOfWorkAuthorization,
-    loadRecord: EntityId => Consequence[Option[Record]] = _ => Consequence.success(None)
+    loadrecord: EntityId => Consequence[Option[Record]] = _ => Consequence.success(None)
   )(using ctx: ExecutionContext): Consequence[Unit] =
     _with_decision_event(authorization, "unit-of-work") {
       authorization.accessMode match
@@ -118,7 +119,7 @@ object OperationAccessPolicy {
           case Some(policy) if Set("manager_only", "manager-only").contains(policy) =>
             authorizeManagerOnly()
           case _ =>
-            _authorize_resource_default(authorization, loadRecord)
+            _authorize_resource_default(authorization, loadrecord)
     }
 
   def filterVisibleSearchResult[T](
@@ -140,7 +141,8 @@ object OperationAccessPolicy {
           case _ =>
             authorization.resourceFamily.trim.toLowerCase(java.util.Locale.ROOT) match
               case "domain" if authorization.accessKind == "search/list" && !_is_manager =>
-                val visibility = result.data.map(_visibility_evaluation(_, tc, authorization))
+                val evaluatedat = ctx.clock.instant()
+                val visibility = result.data.map(_visibility_evaluation(_, tc, authorization, evaluatedat))
                 val visible = visibility.collect {
                   case (entity, true, _) => entity
                 }
@@ -165,7 +167,7 @@ object OperationAccessPolicy {
   private def _permission_denied[A](
     message: String,
     reason: String,
-    accessKind: String
+    accesskind: String
   )(using ctx: ExecutionContext): Consequence[A] = {
     val (kind, diagnostic) = _authorization_diagnostic(reason)
     Consequence.securityPermissionDenied(
@@ -175,7 +177,7 @@ object OperationAccessPolicy {
         Descriptor.Facet.Reason(reason),
         diagnostic,
         Descriptor.Facet.Parameter.argument("access-kind"),
-        Descriptor.Facet.Value(accessKind),
+        Descriptor.Facet.Value(accesskind),
         Descriptor.Facet.Id(_subject.subjectId)
       )
     )
@@ -214,8 +216,9 @@ object OperationAccessPolicy {
 
   private def _authorize_resource_default(
     authorization: UnitOfWorkAuthorization,
-    loadRecord: EntityId => Consequence[Option[Record]]
-  )(using ctx: ExecutionContext): Consequence[Unit] =
+    loadrecord: EntityId => Consequence[Option[Record]]
+  )(using ctx: ExecutionContext): Consequence[Unit] = {
+    val evaluatedat = ctx.clock.instant()
     authorization.resourceFamily.trim.toLowerCase(java.util.Locale.ROOT) match
       case "domain" | "aggregate" =>
         _authorize_declared_aggregate_command(authorization).getOrElse(authorization.accessKind match
@@ -225,9 +228,9 @@ object OperationAccessPolicy {
             _authorize_policy_capability(authorization).flatMap { _ =>
               authorization.targetId match
               case Some(id) =>
-                loadRecord(id).flatMap {
+                loadrecord(id).flatMap {
                   case Some(record) =>
-                    _natural_condition_miss(record, authorization) match
+                    _natural_condition_miss(record, authorization, evaluatedat) match
                       case Some(miss) =>
                         _permission_denied(miss.message, "abac-condition", authorization.accessKind)
                       case None if (authorization.accessKind == "read" && _is_public_policy(authorization)) =>
@@ -236,7 +239,7 @@ object OperationAccessPolicy {
                         Consequence.unit
                       case None =>
                         authorizeSimpleEntity(record, _policy_permission_access_kind(authorization))
-                  case None => authorizeSimpleEntityOwnerOrManager(id, loadRecord)
+                  case None => authorizeSimpleEntityOwnerOrManager(id, loadrecord)
                 }
               case None =>
                 Consequence.unit
@@ -250,6 +253,7 @@ object OperationAccessPolicy {
         _authorize_policy_capability(authorization)
       case _ =>
         Consequence.unit
+  }
 
   private def _authorize_declared_aggregate_command(
     authorization: UnitOfWorkAuthorization
@@ -275,8 +279,8 @@ object OperationAccessPolicy {
           None
   }
 
-  private def _permission_access_kind(accessKind: String): String = {
-    val normalized = accessKind.trim.toLowerCase(java.util.Locale.ROOT)
+  private def _permission_access_kind(accesskind: String): String = {
+    val normalized = accesskind.trim.toLowerCase(java.util.Locale.ROOT)
     if (normalized.startsWith("command:"))
       "update"
     else if (normalized.startsWith("create:"))
@@ -363,33 +367,15 @@ object OperationAccessPolicy {
         }
     }
 
-  private def _is_visible_simple_entity[T](
-    entity: T,
-    tc: EntityPersistent[T],
-    authorization: UnitOfWorkAuthorization
-  )(using ctx: ExecutionContext): Boolean = {
-    val record = tc.authorizationRecord(entity)
-    val securityattributes = tc.securityAttributes(entity)
-    if (_natural_condition_miss(record, authorization).isDefined)
-      false
-    else if (_is_public_policy(authorization))
-      true
-    else if (_matches_relation(record, authorization))
-      true
-    else
-      _authorize_visible_record(record, tc.id(entity), securityattributes) match
-        case Consequence.Success(_) => true
-        case _ => false
-  }
-
   private def _visibility_evaluation[T](
     entity: T,
     tc: EntityPersistent[T],
-    authorization: UnitOfWorkAuthorization
+    authorization: UnitOfWorkAuthorization,
+    evaluatedat: Instant
   )(using ctx: ExecutionContext): (T, Boolean, Option[EntityAbacCondition.Evaluation]) = {
     val record = tc.authorizationRecord(entity)
     val securityattributes = tc.securityAttributes(entity)
-    _natural_condition_miss(record, authorization) match
+    _natural_condition_miss(record, authorization, evaluatedat) match
       case Some(miss) =>
         (entity, false, Some(miss))
       case None if _is_public_policy(authorization) =>
@@ -527,9 +513,10 @@ object OperationAccessPolicy {
 
   private def _natural_condition_miss(
     record: Record,
-    authorization: UnitOfWorkAuthorization
+    authorization: UnitOfWorkAuthorization,
+    evaluatedat: Instant
   )(using ctx: ExecutionContext): Option[EntityAbacCondition.Evaluation] = {
-    val evaluations = _natural_condition_evaluations(record, authorization)
+    val evaluations = _natural_condition_evaluations(record, authorization, evaluatedat)
     _emit_abac_diagnostics(authorization, evaluations)
     evaluations.collectFirst {
       case (_, true, evaluation) if !evaluation.matched => evaluation
@@ -538,9 +525,10 @@ object OperationAccessPolicy {
 
   private def _natural_condition_evaluations(
     record: Record,
-    authorization: UnitOfWorkAuthorization
+    authorization: UnitOfWorkAuthorization,
+    evaluatedat: Instant
   )(using ctx: ExecutionContext): Vector[(EntityAbacCondition, Boolean, EntityAbacCondition.Evaluation)] = {
-    val context = EntityAuthorizationContext(record, authorization)
+    val context = EntityAuthorizationContext(record, authorization, evaluatedat)
     authorization.naturalConditions.map { condition =>
       val applicable = condition.allows(authorization.accessKind)
       (condition, applicable, condition.evaluate(context))
@@ -558,7 +546,7 @@ object OperationAccessPolicy {
           val expected = evaluation.expected.getOrElse("<missing>")
           s"${evaluation.conditionText}:${if (applicable) "applicable" else "not-applicable"}:${if (evaluation.matched) "matched" else "missed"}:actual=${actual}:expected=${expected}"
       }
-      val applicableEvaluations = evaluations.filter(_._2)
+      val applicableevaluations = evaluations.filter(_._2)
       val _ = ctx.observability.emitInfo(
         ctx.cncfCore.scope,
         "authorization.abac.diagnostics",
@@ -568,8 +556,8 @@ object OperationAccessPolicy {
           "collection" -> authorization.collectionName,
           "target-id" -> authorization.targetId.map(_.print),
           "access-kind" -> authorization.accessKind,
-          "match-count" -> applicableEvaluations.count(_._3.matched),
-          "miss-count" -> applicableEvaluations.count(x => !x._3.matched),
+          "match-count" -> applicableevaluations.count(_._3.matched),
+          "miss-count" -> applicableevaluations.count(x => !x._3.matched),
           "not-applicable-count" -> evaluations.count(x => !x._2),
           "details" -> details.mkString(";")
         )
@@ -623,42 +611,42 @@ object OperationAccessPolicy {
 
   private def _role_for(
     record: Record,
-    securityAttributes: Option[SecurityAttributes] = None
+    securityattributes: Option[SecurityAttributes] = None
   )(using ctx: ExecutionContext): Option[String] = {
-    _security_attributes(record, securityAttributes).flatMap(SecurityAttributes.roleFor(_, _subject.subjectId, _matches_group))
+    _security_attributes(record, securityattributes).flatMap(SecurityAttributes.roleFor(_, _subject.subjectId, _matches_group))
   }
 
   private def _matches_group(
-    groupId: String
+    groupid: String
   )(using ctx: ExecutionContext): Boolean =
-    _subject.hasGroup(groupId)
+    _subject.hasGroup(groupid)
 
   private def _has_matching_privilege(
     record: Record,
-    securityAttributes: Option[SecurityAttributes] = None
+    securityattributes: Option[SecurityAttributes] = None
   )(using ctx: ExecutionContext): Boolean =
-    _security_attributes(record, securityAttributes).map(_.privilegeId.id.value).exists { privilegeId =>
-      _subject.hasPrivilege(privilegeId) ||
-      _subject.hasCapability(privilegeId) ||
-      _subject.securityLevel.contains(SecuritySubject.normalize(privilegeId))
+    _security_attributes(record, securityattributes).map(_.privilegeId.id.value).exists { privilegeid =>
+      _subject.hasPrivilege(privilegeid) ||
+      _subject.hasCapability(privilegeid) ||
+      _subject.securityLevel.contains(SecuritySubject.normalize(privilegeid))
     }
 
   private def _permission_for(
     record: Record,
     role: String,
-    accessKind: String,
-    securityAttributes: Option[SecurityAttributes] = None
+    accesskind: String,
+    securityattributes: Option[SecurityAttributes] = None
   ): Boolean =
-    _security_attributes(record, securityAttributes).exists(_.permissionFor(role, accessKind))
+    _security_attributes(record, securityattributes).exists(_.permissionFor(role, accesskind))
 
   private def _authorize_visible_record(
     record: Record,
     id: EntityId,
-    securityAttributes: Option[SecurityAttributes] = None
+    securityattributes: Option[SecurityAttributes] = None
   )(using ctx: ExecutionContext): Consequence[Unit] =
-    OperationAccessPolicy.authorizeSimpleEntity(record, "read", securityAttributes) match
+    OperationAccessPolicy.authorizeSimpleEntity(record, "read", securityattributes) match
       case s @ Consequence.Success(_) => s
-      case _ if _security_attributes(record, securityAttributes).isEmpty =>
+      case _ if _security_attributes(record, securityattributes).isEmpty =>
         _load_raw_record(id).flatMap {
           case Some(raw) => OperationAccessPolicy.authorizeSimpleEntity(raw, "read")
           case None => Consequence.securityPermissionDenied(

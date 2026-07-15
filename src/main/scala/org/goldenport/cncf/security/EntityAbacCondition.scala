@@ -9,7 +9,8 @@ import org.goldenport.record.Record
  * Natural ABAC condition for entity authorization.
  *
  * @since   Apr. 13, 2026
- * @version May.  4, 2026
+ *  version May.  4, 2026
+ * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class EntityAbacCondition(
@@ -18,14 +19,21 @@ final case class EntityAbacCondition(
   expected: EntityAbacCondition.Value,
   accessKinds: Set[String] = Set.empty
 ) {
-  def allows(accessKind: String): Boolean =
-    accessKinds.isEmpty || accessKinds.contains(EntityAbacCondition.normalize(accessKind))
+  def allows(accesskind: String): Boolean =
+    accessKinds.isEmpty || accessKinds.contains(EntityAbacCondition.normalize(accesskind))
 
   def matches(
     record: Record,
     subject: SecuritySubject
   ): Boolean =
     evaluate(record, subject).matched
+
+  def matches(
+    record: Record,
+    subject: SecuritySubject,
+    evaluatedat: java.time.Instant
+  ): Boolean =
+    evaluate(record, subject, evaluatedat).matched
 
   def matches(
     context: EntityAuthorizationContext
@@ -36,12 +44,26 @@ final case class EntityAbacCondition(
     record: Record,
     subject: SecuritySubject
   ): EntityAbacCondition.Evaluation =
+    _evaluate(record, subject, None)
+
+  def evaluate(
+    record: Record,
+    subject: SecuritySubject,
+    evaluatedat: java.time.Instant
+  ): EntityAbacCondition.Evaluation =
+    _evaluate(record, subject, Some(evaluatedat))
+
+  private def _evaluate(
+    record: Record,
+    subject: SecuritySubject,
+    evaluatedat: Option[java.time.Instant]
+  ): EntityAbacCondition.Evaluation =
     evaluate(EntityAuthorizationContext(
       subject = subject,
       entity = record,
       operation = EntityAuthorizationContext.Operation("", "", None, None, EntityAccessMode.UserPermission, None, None, None),
       application = EntityAuthorizationContext.Application(Vector.empty),
-      environment = EntityAuthorizationContext.Environment("", None)
+      environment = EntityAuthorizationContext.Environment("", None, evaluatedat)
     ))
 
   def evaluate(
@@ -59,17 +81,17 @@ final case class EntityAbacCondition(
 
 object EntityAbacCondition {
   def apply(
-    entityAttribute: String,
+    entityattribute: String,
     expected: EntityAbacCondition.Value,
-    accessKinds: Set[String]
+    accesskinds: Set[String]
   ): EntityAbacCondition =
-    EntityAbacCondition(entityAttribute, Operator.Eq, expected, accessKinds)
+    EntityAbacCondition(entityattribute, Operator.Eq, expected, accesskinds)
 
   def apply(
-    entityAttribute: String,
+    entityattribute: String,
     expected: EntityAbacCondition.Value
   ): EntityAbacCondition =
-    EntityAbacCondition(entityAttribute, Operator.Eq, expected, Set.empty)
+    EntityAbacCondition(entityattribute, Operator.Eq, expected, Set.empty)
 
   sealed trait Operator {
     def symbol: String
@@ -127,7 +149,9 @@ object EntityAbacCondition {
     }
     case object Now extends Value {
       def resolve(subject: SecuritySubject): Option[String] =
-        Some(Instant.now.toString)
+        None
+      override def resolve(context: EntityAuthorizationContext): Option[String] =
+        context.environment.evaluatedAt.map(_.toString)
       def label: String = "now"
     }
   }
@@ -150,10 +174,10 @@ object EntityAbacCondition {
   def parse(text: String): Option[EntityAbacCondition] = {
     val parts = Option(text).getOrElse("").split(":", 2).map(_.trim)
     val expr = _decode_entities(parts.headOption.getOrElse(""))
-    val accessKinds =
+    val accesskinds =
       parts.drop(1).headOption.toSet.flatMap(_.split("[,|]")).map(normalize).filter(_.nonEmpty)
     _split_expr(expr).map { case (left, op, right) =>
-      EntityAbacCondition(left, op, _value(right), accessKinds)
+      EntityAbacCondition(left, op, _value(right), accesskinds)
     }
   }
 
@@ -196,9 +220,9 @@ object EntityAbacCondition {
   def normalizedValueTokens(value: String): Set[String] = {
     val raw = rawValue(value)
     val base = normalize(raw)
-    val enumPattern = """^Enum\(([^)]*)\):(.+)$""".r
+    val enumpattern = """^Enum\(([^)]*)\):(.+)$""".r
     val tokens = raw match {
-      case enumPattern(label, value) =>
+      case enumpattern(label, value) =>
         Vector(label, value, raw)
       case _ =>
         Vector(raw)

@@ -327,6 +327,11 @@ Status: IN PROGRESS
   context-free admission rejects time-dependent policies before mutating either
   realm. Property-based coverage verifies that admission and search observe the
   same supplied instant across replay.
+- Entity ABAC `now` evaluation now resolves from one instant captured from the
+  operation execution clock. Search/list authorization reuses that instant
+  across every candidate and condition, while context-free compatibility
+  evaluation fails temporal conditions closed instead of reading wall-clock
+  time. Property-based coverage verifies replay across generated fixed clocks.
 - CAR lint and component developer guidance now report direct ambient clock,
   UUID/random, sleep, environment/property, host filesystem, thread, and
   executor access in component sources.

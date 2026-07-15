@@ -313,6 +313,13 @@ rejected before storage mutation. Context-free resolution may return stored
 data, but MUST NOT mutate a time-dependent resident cache without an evaluation
 instant.
 
+Temporal authorization is also component-visible semantic behavior. The ABAC
+`now` operand MUST resolve from one execution-clock instant captured by the
+authorization boundary. Search/list filtering MUST reuse that instant for every
+candidate and condition in the decision. Context-free compatibility evaluation
+without an explicit instant MUST leave `now` unresolved and fail the temporal
+condition closed; it MUST NOT consult ambient wall-clock time.
+
 Manual scheduling is limited by `timer-scheduling-boundary.md`. It MUST NOT add
 cron, recurrence, business-calendar, workflow-wait, or general scheduler
 semantics.

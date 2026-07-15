@@ -1,12 +1,13 @@
 package org.goldenport.cncf.security
 
+import java.time.Instant
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.unitofwork.UnitOfWorkAuthorization
 import org.goldenport.record.Record
 
 /*
  * @since   Apr. 13, 2026
- * @version Apr. 13, 2026
+ * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class EntityAuthorizationContext(
@@ -37,12 +38,20 @@ object EntityAuthorizationContext {
 
   final case class Environment(
     traceId: String,
-    correlationId: Option[String]
+    correlationId: Option[String],
+    evaluatedAt: Option[Instant] = None
   )
 
   def apply(
     record: Record,
     authorization: UnitOfWorkAuthorization
+  )(using ctx: ExecutionContext): EntityAuthorizationContext =
+    apply(record, authorization, ctx.clock.instant())
+
+  def apply(
+    record: Record,
+    authorization: UnitOfWorkAuthorization,
+    evaluatedat: Instant
   )(using ctx: ExecutionContext): EntityAuthorizationContext =
     EntityAuthorizationContext(
       subject = SecuritySubject.current,
@@ -62,7 +71,8 @@ object EntityAuthorizationContext {
       ),
       environment = Environment(
         traceId = ctx.observability.traceId.value,
-        correlationId = ctx.observability.correlationId.map(_.value)
+        correlationId = ctx.observability.correlationId.map(_.value),
+        evaluatedAt = Some(evaluatedat)
       )
     )
 }

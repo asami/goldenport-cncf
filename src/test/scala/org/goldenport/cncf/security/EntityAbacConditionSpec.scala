@@ -7,7 +7,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr. 13, 2026
- * @version Apr. 21, 2026
+ *  version Apr. 21, 2026
+ * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EntityAbacConditionSpec
@@ -96,7 +97,7 @@ final class EntityAbacConditionSpec
           entityApplicationDomain = Some(EntityApplicationDomain.Business)
         ),
         application = EntityAuthorizationContext.Application(Vector("Person")),
-        environment = EntityAuthorizationContext.Environment("trace-1", None)
+        environment = EntityAuthorizationContext.Environment("trace-1", None, None)
       )
 
       EntityAbacCondition.parse("operation.operationModel=business-service:read").get.matches(context) shouldBe true
@@ -166,6 +167,7 @@ final class EntityAbacConditionSpec
     }
 
     "match publication time windows against now" in {
+      val evaluatedat = Instant.parse("2026-07-16T00:00:00Z")
       val subject = SecuritySubject(
         subjectId = "u1",
         authenticationState = SecuritySubject.AuthenticationState.Anonymous,
@@ -182,12 +184,13 @@ final class EntityAbacConditionSpec
         "closeAt" -> Instant.parse("2999-01-01T00:00:00Z").toString
       )
 
-      EntityAbacCondition.parse("publishAt<=now:read").get.matches(record, subject) shouldBe true
-      EntityAbacCondition.parse("closeAt>now:read").get.matches(record, subject) shouldBe true
-      EntityAbacCondition.parse("publishAt>now:read").get.matches(record, subject) shouldBe false
+      EntityAbacCondition.parse("publishAt<=now:read").get.matches(record, subject, evaluatedat) shouldBe true
+      EntityAbacCondition.parse("closeAt>now:read").get.matches(record, subject, evaluatedat) shouldBe true
+      EntityAbacCondition.parse("publishAt>now:read").get.matches(record, subject, evaluatedat) shouldBe false
     }
 
     "match CMS publication visibility attributes" in {
+      val evaluatedat = Instant.parse("2026-07-16T00:00:00Z")
       val subject = SecuritySubject(
         subjectId = "u1",
         authenticationState = SecuritySubject.AuthenticationState.Anonymous,
@@ -208,13 +211,14 @@ final class EntityAbacConditionSpec
       )
 
       EntityAbacCondition.parse("visibility=Public:read").get.matches(record, subject) shouldBe true
-      EntityAbacCondition.parse("publicAt<=now:read").get.matches(record, subject) shouldBe true
-      EntityAbacCondition.parse("startAt<=now:read").get.matches(record, subject) shouldBe true
-      EntityAbacCondition.parse("endAt>now:read").get.matches(record, subject) shouldBe true
-      EntityAbacCondition.parse("unpublishAt>now:read").get.matches(record, subject) shouldBe true
+      EntityAbacCondition.parse("publicAt<=now:read").get.matches(record, subject, evaluatedat) shouldBe true
+      EntityAbacCondition.parse("startAt<=now:read").get.matches(record, subject, evaluatedat) shouldBe true
+      EntityAbacCondition.parse("endAt>now:read").get.matches(record, subject, evaluatedat) shouldBe true
+      EntityAbacCondition.parse("unpublishAt>now:read").get.matches(record, subject, evaluatedat) shouldBe true
     }
 
     "explain missed conditions" in {
+      val evaluatedat = Instant.parse("2026-07-16T00:00:00Z")
       val condition = EntityAbacCondition.parse("publishAt<=now:read").get
       val subject = SecuritySubject(
         subjectId = "u1",
@@ -229,7 +233,7 @@ final class EntityAbacConditionSpec
       )
       val record = Record.dataAuto("publishAt" -> Instant.parse("2999-01-01T00:00:00Z").toString)
 
-      val evaluation = condition.evaluate(record, subject)
+      val evaluation = condition.evaluate(record, subject, evaluatedat)
 
       evaluation.matched shouldBe false
       evaluation.conditionText shouldBe "publishAt<=now"

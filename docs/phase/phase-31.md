@@ -70,7 +70,8 @@ ordering, locale/environment assumptions, and replayability diagnostics.
       lifecycle timestamps, Job/Task/Action runtime identity, and
       InformationSpace lifecycle/materialization timestamps and Knowledge
       and Entity working-set lifecycle timestamps plus Entity working-set
-      admission/residency evaluation are complete; other remaining
+      admission/residency evaluation, and temporal ABAC authorization are
+      complete; other remaining
       runtime-semantic migration remains active.
 - [ ] ED-08: Add diagnostics, replay scenarios, developer guidance, and close
       Phase 31.
