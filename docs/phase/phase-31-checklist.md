@@ -173,19 +173,19 @@ Status: DONE
 
 ## ED-05: Unified Time and Job/Event Scheduling
 
-Status: IN PROGRESS
+Status: DONE
 
 ### Tasks
 
 - [x] Adapt `JobTimeSource` to the runtime-selected execution time.
 - [x] Add a manual clock and operational scheduler pair.
 - [x] Add test-harness `advanceBy` and `runUntilIdle` controls.
-- [ ] Drive delayed Job start, retry, due time, and observable await timeout
+- [x] Drive delayed Job start, retry, due time, and observable await timeout
       from the selected policy.
-- [ ] Preserve monotonic performance measurement independently from wall time.
-- [ ] Route async Event reception through the same Job scheduler.
-- [ ] Preserve immediate same-transaction synchronous Event handling.
-- [ ] Replace real sleeping in controlled Job/Event executable specs.
+- [x] Preserve monotonic performance measurement independently from wall time.
+- [x] Route async Event reception through the same Job scheduler.
+- [x] Preserve immediate same-transaction synchronous Event handling.
+- [x] Replace real sleeping in controlled Job/Event executable specs.
 
 Implementation evidence:
 
@@ -195,8 +195,16 @@ Implementation evidence:
   clock and scheduler when a global runtime scope is present; scope-less test
   fixtures retain the established realtime default.
 - `ExecutionProfileJobSchedulingSpec` proves deterministic equal-due ordering,
-  delayed start, and delayed retry without host sleeping. Observable await and
-  async Event reception remain open before ED-05 can close.
+  delayed start, delayed retry, and logical-time await timeout without host
+  sleeping. Await completion and timeout use Job state notifications plus the
+  selected operational timer, and completed waits cancel their timer
+  registrations.
+- Job slow-call capture uses monotonic elapsed time rather than logical wall
+  time, so advancing a manual clock does not create false performance data.
+- `EventReceptionSpec` proves that async same-Job continuation Tasks remain
+  queued until the controlled runtime scheduler drains them, while local
+  same-transaction Event handlers execute immediately without entering that
+  queue.
 
 ### Acceptance Criteria
 

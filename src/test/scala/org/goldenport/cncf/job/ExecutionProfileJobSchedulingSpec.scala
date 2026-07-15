@@ -1,8 +1,10 @@
 package org.goldenport.cncf.job
 
 import java.time.{Duration, Instant}
-import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.{Executors, TimeUnit}
+import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 import scala.collection.mutable.ArrayBuffer
+import org.goldenport.Consequence
 import org.goldenport.Conclusion
 import org.goldenport.configuration.{
   Configuration,
@@ -112,6 +114,103 @@ final class ExecutionProfileJobSchedulingSpec
       engine.getStatus(jobid) shouldBe Some(JobStatus.Succeeded)
       engine.query(jobid).map(_.updatedAt) shouldBe Some(control.now)
     }
+
+    "drive observable Job await timeout from logical time" in {
+      Given("a controlled asynchronous Job that is not yet eligible")
+      val profile = ExecutionProfileResolver.resolveForSpec(_controlled_configuration).toOption.get
+      val runtime = profile.newRuntime(IdGenerationContext.DefaultNamespace)
+      val control = runtime.testControl.get
+      val engine = registerJobEngine(InMemoryJobEngine.create(runtime))
+      val dueat = control.now.plus(Duration.ofMinutes(10L))
+      val jobid = engine.submit(
+        List(_RecordingTask("delayed", ArrayBuffer.empty)),
+        ExecutionContext.test(),
+        JobSubmitOption(runMode = JobRunMode.Async, scheduledStartAt = Some(dueat))
+      ).toOption.get
+      val executor = Executors.newSingleThreadExecutor()
+      val result = new AtomicReference[Consequence[JobResult]]()
+
+      try {
+        When("an await is started and only its logical deadline is advanced")
+        val _ = executor.submit(new Runnable {
+          def run(): Unit =
+            result.set(engine.awaitResult(jobid, Duration.ofSeconds(30L).toMillis))
+        })
+        _spin_until(control.pendingTimerCount == 2)
+        control.advanceBy(Duration.ofSeconds(30L))
+        executor.shutdown()
+        executor.awaitTermination(3L, TimeUnit.SECONDS) shouldBe true
+
+        Then("the await times out without host sleeping and the delayed Job remains pending")
+        result.get() match {
+          case Consequence.Failure(_) => succeed
+          case other => fail(s"expected logical await timeout but got: $other")
+        }
+        engine.getStatus(jobid) shouldBe Some(JobStatus.Submitted)
+        control.now shouldBe Instant.parse("2026-07-28T09:00:30Z")
+        control.pendingTimerCount shouldBe 1
+      } finally {
+        executor.shutdownNow()
+      }
+    }
+
+    "cancel an observable await timer when controlled Job work completes" in {
+      Given("a controlled asynchronous Job and a long logical await deadline")
+      val profile = ExecutionProfileResolver.resolveForSpec(_controlled_configuration).toOption.get
+      val runtime = profile.newRuntime(IdGenerationContext.DefaultNamespace)
+      val control = runtime.testControl.get
+      val engine = registerJobEngine(InMemoryJobEngine.create(runtime))
+      val jobid = engine.submit(
+        List(_RecordingTask("ready", ArrayBuffer.empty)),
+        ExecutionContext.test()
+      ).toOption.get
+      val executor = Executors.newSingleThreadExecutor()
+      val result = new AtomicReference[Consequence[JobResult]]()
+
+      try {
+        When("the Job runs before the logical await deadline")
+        val _ = executor.submit(new Runnable {
+          def run(): Unit =
+            result.set(engine.awaitResult(jobid, Duration.ofMinutes(5L).toMillis))
+        })
+        _spin_until(control.pendingTimerCount == 1)
+        control.runUntilIdle() shouldBe 1
+        executor.shutdown()
+        executor.awaitTermination(3L, TimeUnit.SECONDS) shouldBe true
+
+        Then("the result is returned and its pending timeout registration is removed")
+        result.get().toOption shouldBe defined
+        engine.getStatus(jobid) shouldBe Some(JobStatus.Succeeded)
+        control.pendingTimerCount shouldBe 0
+      } finally {
+        executor.shutdownNow()
+      }
+    }
+
+    "keep performance duration independent from manual wall-time advancement" in {
+      Given("a short Task that advances only the controlled wall clock")
+      val profile = ExecutionProfileResolver.resolveForSpec(_controlled_configuration).toOption.get
+      val runtime = profile.newRuntime(IdGenerationContext.DefaultNamespace)
+      val control = runtime.testControl.get
+      val engine = registerJobEngine(InMemoryJobEngine.create(runtime))
+      val task = _CallbackTask(() => control.advanceBy(Duration.ofHours(4L)))
+
+      When("the Task completes after changing logical wall time")
+      val jobid = engine.submit(
+        List(task),
+        ExecutionContext.test(),
+        JobSubmitOption(
+          persistence = JobPersistencePolicy.Persistent,
+          runMode = JobRunMode.Async
+        )
+      ).toOption.get
+      control.runUntilIdle() shouldBe 1
+
+      Then("slow-call capture uses monotonic performance time instead of logical wall time")
+      val debug = engine.query(jobid).get.debug
+      debug.calltreeSaved shouldBe false
+      debug.calltreeDropReason shouldBe Some("not_matched_policy")
+    }
   }
 
   private final case class _RecordingTask(
@@ -141,6 +240,27 @@ final class ExecutionProfileJobSchedulingSpec
       else
         TaskSucceeded(OperationResponse.Scalar("retried"))
     }
+  }
+
+  private final case class _CallbackTask(
+    callback: () => Unit,
+    actionId: ActionId = ActionId.generate()
+  ) extends JobTask {
+    def run(ctx: ExecutionContext): TaskOutcome = {
+      val _ = ctx
+      callback()
+      TaskSucceeded(OperationResponse.Scalar("callback"))
+    }
+  }
+
+  private def _spin_until(
+    condition: => Boolean,
+    timeoutNanos: Long = TimeUnit.SECONDS.toNanos(3L)
+  ): Unit = {
+    val deadline = System.nanoTime() + timeoutNanos
+    while (!condition && System.nanoTime() < deadline)
+      Thread.onSpinWait()
+    condition shouldBe true
   }
 
   private def _controlled_configuration: ResolvedConfiguration =

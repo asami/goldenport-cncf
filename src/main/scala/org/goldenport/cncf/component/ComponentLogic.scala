@@ -527,17 +527,10 @@ case class ComponentLogic(
     timeoutMillis: Long = 3000L,
     pollMillis: Long = 10L
   ): Consequence[OperationResponse] = {
-    val deadline = System.currentTimeMillis() + timeoutMillis
-    var result: Option[JobResult] = None
-    while (result.isEmpty && System.currentTimeMillis() < deadline) {
-      result = getJobResult(jobid)
-      if (result.isEmpty)
-        Thread.sleep(pollMillis)
-    }
-    result match {
-      case Some(JobResult.Success(response)) => Consequence.success(response)
-      case Some(JobResult.Failure(conclusion)) => Consequence.Failure(conclusion)
-      case None => Consequence.stateConflict(s"job timeout: ${jobid.value}")
+    val _ = pollMillis // Retained for source compatibility; JobEngine owns await policy.
+    component.jobEngine.awaitResult(jobid, timeoutMillis).flatMap {
+      case JobResult.Success(response) => Consequence.success(response)
+      case JobResult.Failure(conclusion) => Consequence.Failure(conclusion)
     }
   }
 

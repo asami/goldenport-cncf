@@ -37,6 +37,9 @@ final class ExecutionSchedulingRuntime private[context] (
 
         def runUntilIdle(limit: Int): Int =
           _run_until_idle(limit)
+
+        def pendingTimerCount: Int =
+          _pending_timer_count
       }
     }
 
@@ -98,6 +101,11 @@ final class ExecutionSchedulingRuntime private[context] (
     }
     workcount
   }
+
+  private def _pending_timer_count: Int =
+    synchronized {
+      _timers.size
+    }
 }
 
 /** In-process control for a manual execution profile; never a component DSL. */
@@ -105,6 +113,7 @@ trait ExecutionTestControl {
   def now: Instant
   def advanceBy(duration: Duration): Unit
   def runUntilIdle(limit: Int = 10000): Int
+  def pendingTimerCount: Int
 }
 
 private[cncf] trait ExecutionSchedulingRegistration {

@@ -3,7 +3,9 @@ package org.goldenport.cncf.event
 import scala.collection.mutable.ArrayBuffer
 import cats.~>
 import org.goldenport.Consequence
-import org.goldenport.cncf.context.{ExecutionContext, ScopeContext, ScopeKind, SecurityContext, SecurityLevel}
+import org.goldenport.configuration.{Configuration, ConfigurationTrace, ConfigurationValue, ResolvedConfiguration}
+import org.goldenport.cncf.config.RuntimeConfig
+import org.goldenport.cncf.context.{ExecutionContext, ExecutionProfileResolver, IdGenerationContext, ScopeContext, ScopeKind, SecurityContext, SecurityLevel}
 import org.goldenport.cncf.datastore.DataStore
 import org.goldenport.cncf.http.FakeHttpDriver
 import org.goldenport.cncf.job.{ActionId, InMemoryJobEngine, JobContext, JobControlPolicy, JobControlRequest, JobControlResponse, JobEngine, JobEngineTestFixture, JobPersistencePolicy, JobQueryReadModel, JobResult, JobStatus, JobSubmitOption, JobTask, JobTaskPage, JobTimelinePage, JobId, TaskId}
@@ -1422,6 +1424,138 @@ final class EventReceptionSpec
       record.lineage.transactionRelation shouldBe Some("new-transaction")
     }
 
+    "route asynchronous same-job reception through the controlled Job scheduler" in {
+      Given("a controlled runtime and an explicit async same-job reception rule")
+      val profile = ExecutionProfileResolver.resolveForSpec(_controlled_configuration).toOption.get
+      val runtime = profile.newRuntime(IdGenerationContext.DefaultNamespace)
+      val control = runtime.testControl.get
+      val jobengine = registerJobEngine(InMemoryJobEngine.create(runtime))
+      val fixture = _event_fixture()
+      val calls = ArrayBuffer.empty[String]
+      val reception = EventReception.default(
+        eventBus = fixture.bus,
+        dispatcher = new _RecordingDispatcher(calls),
+        currentSubsystemName = Some("inventory"),
+        currentComponentName = Some("notice-admin"),
+        jobEngine = Some(jobengine)
+      )
+      reception.register(CmlEventDefinition("notice.controlled", CmlEventCategory.NonActionEvent, Some("published")))
+      reception.registerSubscription(
+        CmlSubscriptionDefinition(
+          name = "notice-controlled",
+          eventName = "notice.controlled",
+          route = DispatchRoute.Unicast,
+          target = Some("targetId"),
+          actionName = "notice.sync"
+        )
+      )
+      reception.registerRule(
+        EventReceptionRule(
+          name = "notice-controlled-async",
+          condition = EventReceptionCondition(
+            originBoundary = Some(EventOriginBoundary.SameSubsystem),
+            eventName = Some("notice.controlled"),
+            eventKind = Some("published")
+          ),
+          policy = EventReceptionExecutionPolicy.AsyncSameJobSameSagaNewTransaction
+        )
+      )
+      val base = fixture.executionContext()
+      val rootjobid = _jobid(jobengine.submit(Nil, base))
+      control.runUntilIdle() shouldBe 1
+      given ExecutionContext = ExecutionContext.withJobContext(
+        base,
+        JobContext(
+          jobId = Some(rootjobid),
+          taskId = Some(TaskId.generate()),
+          actionId = Some(ActionId.generate()),
+          currentTask = Some(TaskId.generate())
+        )
+      )
+
+      When("the Event is accepted before the controlled scheduler is drained")
+      val result = reception.receiveAuthorized(
+        ReceptionInput(
+          name = "notice.controlled",
+          kind = "published",
+          attributes = Map(
+            "targetId" -> "n-controlled",
+            EventReception.StandardAttribute.SourceSubsystem -> "inventory",
+            EventReception.StandardAttribute.SourceComponent -> "public-notice",
+            EventReception.StandardAttribute.commandAsyncContinuation -> "true"
+          )
+        )
+      )
+
+      Then("the continuation remains queued until the same runtime scheduler executes it")
+      result shouldBe Consequence.success(ReceptionResult(ReceptionOutcome.Routed, 1, persisted = false))
+      calls shouldBe empty
+      control.runUntilIdle() shouldBe 1
+      calls.toVector shouldBe Vector("notice.sync")
+      val record = jobengine.query(rootjobid).getOrElse(fail("root job missing"))
+      record.continuation.taskIds should have size 1
+      record.tasks.tasks.map(_.taskId) should contain allElementsOf record.continuation.taskIds
+      record.lineage.receptionPolicy shouldBe Some(EventReceptionExecutionPolicy.AsyncSameJobSameSagaNewTransaction.modeName)
+    }
+
+    "keep same-transaction Event reception immediate under a controlled scheduler" in {
+      Given("a controlled runtime and a local same-transaction reception")
+      val profile = ExecutionProfileResolver.resolveForSpec(_controlled_configuration).toOption.get
+      val runtime = profile.newRuntime(IdGenerationContext.DefaultNamespace)
+      val control = runtime.testControl.get
+      val jobengine = registerJobEngine(InMemoryJobEngine.create(runtime))
+      val fixture = _event_fixture()
+      val calls = ArrayBuffer.empty[String]
+      val reception = EventReception.default(
+        eventBus = fixture.bus,
+        dispatcher = new _RecordingDispatcher(calls),
+        currentSubsystemName = Some("inventory"),
+        currentComponentName = Some("notice-admin"),
+        jobEngine = Some(jobengine)
+      )
+      reception.register(CmlEventDefinition("notice.immediate", CmlEventCategory.NonActionEvent, Some("published")))
+      reception.registerSubscription(
+        CmlSubscriptionDefinition(
+          name = "notice-immediate",
+          eventName = "notice.immediate",
+          route = DispatchRoute.Unicast,
+          target = Some("targetId"),
+          actionName = "notice.sync"
+        )
+      )
+      val base = fixture.executionContext()
+      val rootjobid = _jobid(jobengine.submit(Nil, base))
+      control.runUntilIdle() shouldBe 1
+      given ExecutionContext = ExecutionContext.withJobContext(
+        base,
+        JobContext(
+          jobId = Some(rootjobid),
+          taskId = Some(TaskId.generate()),
+          actionId = Some(ActionId.generate()),
+          currentTask = Some(TaskId.generate())
+        )
+      )
+
+      When("the Event is received with the default Required transaction policy")
+      val result = reception.receiveAuthorized(
+        ReceptionInput(
+          name = "notice.immediate",
+          kind = "published",
+          attributes = Map(
+            "targetId" -> "n-immediate",
+            EventReception.StandardAttribute.SourceSubsystem -> "inventory"
+          )
+        )
+      )
+
+      Then("the handler runs immediately without entering the scheduler queue")
+      result shouldBe Consequence.success(ReceptionResult(ReceptionOutcome.Routed, 1, persisted = false))
+      calls.toVector shouldBe Vector("notice.sync")
+      control.runUntilIdle() shouldBe 0
+      val record = jobengine.query(rootjobid).getOrElse(fail("root job missing"))
+      record.tasks.tasks.flatMap(_.transactionRole) should contain ("join")
+    }
+
     "reject async same-job same-transaction at policy selection time" in {
       val fixture = _event_fixture()
       val store = fixture.store
@@ -2308,6 +2442,8 @@ final class EventReceptionSpec
 
     def getStatus(jobId: JobId): Option[JobStatus] = _delegate.getStatus(jobId)
     def getResult(jobId: JobId): Option[JobResult] = _delegate.getResult(jobId)
+    def awaitResult(jobId: JobId, timeoutMillis: Long): Consequence[JobResult] =
+      _delegate.awaitResult(jobId, timeoutMillis)
     def control(
       jobId: JobId,
       request: JobControlRequest,
@@ -2323,6 +2459,23 @@ final class EventReceptionSpec
 
   private def _jobid(p: Consequence[JobId]): JobId =
     p.toOption.get
+
+  private def _controlled_configuration: ResolvedConfiguration =
+    ResolvedConfiguration(
+      Configuration(Map(
+        RuntimeConfig.OperationModeKey -> ConfigurationValue.StringValue("test"),
+        RuntimeConfig.EXECUTION_PROFILE_KEY -> ConfigurationValue.StringValue("controlled"),
+        RuntimeConfig.EXECUTION_KEY -> ConfigurationValue.StringValue("event-reception-run"),
+        RuntimeConfig.EXECUTION_TIME_MODE_KEY -> ConfigurationValue.StringValue("manual"),
+        RuntimeConfig.EXECUTION_TIME_START_AT_KEY -> ConfigurationValue.StringValue("2026-07-28T09:00:00Z"),
+        RuntimeConfig.EXECUTION_RANDOM_MODE_KEY -> ConfigurationValue.StringValue("seeded"),
+        RuntimeConfig.EXECUTION_RANDOM_SEED_KEY -> ConfigurationValue.StringValue("event-reception-seed"),
+        RuntimeConfig.EXECUTION_IDS_MODE_KEY -> ConfigurationValue.StringValue("deterministic"),
+        RuntimeConfig.EXECUTION_SCHEDULER_MODE_KEY -> ConfigurationValue.StringValue("manual"),
+        RuntimeConfig.EXECUTION_ORDERING_MODE_KEY -> ConfigurationValue.StringValue("deterministic")
+      )),
+      ConfigurationTrace.empty
+    )
 
   private def _shared_event_context(
     recorder: CommitRecorder,

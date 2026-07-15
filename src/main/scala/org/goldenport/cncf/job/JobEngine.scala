@@ -707,6 +707,7 @@ trait JobEngine {
   def shutdown(): Unit = ()
   def getStatus(jobId: JobId): Option[JobStatus]
   def getResult(jobId: JobId): Option[JobResult]
+  def awaitResult(jobId: JobId, timeoutMillis: Long): Consequence[JobResult]
   def control(
     jobId: JobId,
     request: JobControlRequest,
@@ -795,8 +796,12 @@ final class ManualJobTimeSource(initial: Instant) extends JobTimeSource {
 }
 
 trait JobTimer {
-  def schedule(dueat: Instant)(body: => Unit): Unit
+  def schedule(dueat: Instant)(body: => Unit): JobTimerRegistration
   def shutdown(): Unit = ()
+}
+
+trait JobTimerRegistration {
+  def close(): Unit
 }
 
 final class InMemoryJobEngine(
@@ -827,6 +832,7 @@ final class InMemoryJobEngine(
   private val _worker_pool: ExecutorService =
     Executors.newFixedThreadPool(math.max(1, schedulerConfig.workerCount))
   private val _workers_started = new AtomicBoolean(false)
+  private val _state_monitor = new Object
   private var _execution_scheduling_registration = Option.empty[ExecutionSchedulingRegistration]
   @volatile private var _shutdown_requested = false
 
@@ -853,6 +859,7 @@ final class InMemoryJobEngine(
       _timer.shutdown()
       _execution_scheduling_registration.foreach(_.close())
       _execution_scheduling_registration = None
+      _signal_state_change()
     }
 
   private[job] def bind_execution_scheduling(runtime: ExecutionProfileRuntime): Unit =
@@ -960,6 +967,27 @@ final class InMemoryJobEngine(
 
   def getResult(jobId: JobId): Option[JobResult] =
     _get_record(jobId).flatMap(_.result)
+
+  override def awaitResult(
+    jobId: JobId,
+    timeoutMillis: Long
+  ): Consequence[JobResult] =
+    _get_record(jobId) match {
+      case None => Consequence.operationNotFound(s"job:${jobId.value}")
+      case Some(_) =>
+        val deadline = _now().plusMillis(math.max(0L, timeoutMillis))
+        _wait_until(deadline)(getResult(jobId).nonEmpty) match {
+          case _WaitOutcome.Completed =>
+            getResult(jobId) match {
+              case Some(result) => Consequence.success(result)
+              case None => Consequence.stateConflict(s"job timeout: ${jobId.value}")
+            }
+          case _WaitOutcome.TimedOut =>
+            Consequence.stateConflict(s"job timeout: ${jobId.value}")
+          case _WaitOutcome.Interrupted =>
+            Consequence.stateConflict(s"job await interrupted: ${jobId.value}")
+        }
+    }
 
   def control(
     jobId: JobId,
@@ -1246,6 +1274,7 @@ final class InMemoryJobEngine(
             if (_await_if_suspended(jobid)) {
               val taskid = TaskId.generate()
               val startedat = _now()
+              val startednanos = System.nanoTime()
               val jobcontext = JobContext(
                 jobId = Some(jobid),
                 taskId = Some(taskid),
@@ -1262,7 +1291,7 @@ final class InMemoryJobEngine(
               _append_task_running(jobid, taskid, previous, startedat, task)
               task.run(executioncontext) match {
                 case TaskSucceeded(res) =>
-                  _capture_calltree_if_needed(jobid, executioncontext, failed = false, startedat)
+                  _capture_calltree_if_needed(jobid, executioncontext, failed = false, startednanos)
                   successresponse = Some(res)
                   _append_task_finished(
                     jobid,
@@ -1276,7 +1305,7 @@ final class InMemoryJobEngine(
                   committedtasks = committedtasks :+ (taskid -> task)
                   previous = Some(taskid)
                 case TaskFailed(c) =>
-                  _capture_calltree_if_needed(jobid, executioncontext, failed = true, startedat)
+                  _capture_calltree_if_needed(jobid, executioncontext, failed = true, startednanos)
                   failure = Some(c)
                   failedtaskid = Some(taskid)
                   _append_task_finished(
@@ -1316,6 +1345,7 @@ final class InMemoryJobEngine(
     val taskid = forcedTaskId.getOrElse(TaskId.generate())
     val parent = ctx.jobContext.currentTask
     val startedat = _now()
+    val startednanos = System.nanoTime()
     val jobcontext = JobContext(
       jobId = Some(jobid),
       taskId = Some(taskid),
@@ -1332,7 +1362,7 @@ final class InMemoryJobEngine(
     val outcome = task.run(executioncontext)
     outcome match {
       case TaskSucceeded(res) =>
-        _capture_calltree_if_needed(jobid, executioncontext, failed = false, startedat)
+        _capture_calltree_if_needed(jobid, executioncontext, failed = false, startednanos)
         _append_task_finished(
           jobid,
           taskid,
@@ -1343,7 +1373,7 @@ final class InMemoryJobEngine(
         )
         _append_timeline(jobid, "task.transaction.committed", Some(taskid), parent, None)
       case TaskFailed(c) =>
-        _capture_calltree_if_needed(jobid, executioncontext, failed = true, startedat)
+        _capture_calltree_if_needed(jobid, executioncontext, failed = true, startednanos)
         _append_task_finished(
           jobid,
           taskid,
@@ -1378,10 +1408,10 @@ final class InMemoryJobEngine(
     jobid: JobId,
     ctx: ExecutionContext,
     failed: Boolean,
-    startedat: Instant
+    startednanos: Long
   ): Unit =
     _get_record(jobid).foreach { record =>
-      val elapsedmillis = java.time.Duration.between(startedat, _now()).toMillis
+      val elapsedmillis = math.max(0L, (System.nanoTime() - startednanos) / 1000000L)
       val save = record.persistence == JobPersistencePolicy.Persistent && (
         failed ||
         ctx.framework.saveCallTree ||
@@ -1606,22 +1636,21 @@ final class InMemoryJobEngine(
     request: JobControlRequest,
     target: JobStatus
   ): Consequence[JobControlResponse] = {
-    val deadline = System.currentTimeMillis() + math.max(0L, request.option.timeoutMillis)
+    val deadline = _now().plusMillis(math.max(0L, request.option.timeoutMillis))
     var status = getStatus(jobid).getOrElse(target)
-    while (
-      request.command == JobControlCommand.Retry &&
-      !_is_retry_settled(status) &&
-      System.currentTimeMillis() < deadline
-    ) {
-      Thread.sleep(math.max(1L, request.option.pollMillis))
-      status = getStatus(jobid).getOrElse(status)
-    }
-    val timedout =
-      request.command == JobControlCommand.Retry &&
-      !_is_retry_settled(status) &&
-      System.currentTimeMillis() >= deadline
-    if (timedout) {
+    val waitoutcome =
+      if (request.command == JobControlCommand.Retry && !_is_retry_settled(status))
+        _wait_until(deadline) {
+          status = getStatus(jobid).getOrElse(status)
+          _is_retry_settled(status)
+        }
+      else
+        _WaitOutcome.Completed
+    status = getStatus(jobid).getOrElse(status)
+    if (waitoutcome == _WaitOutcome.TimedOut && !_is_retry_settled(status)) {
       _control_timeout(s"sync timeout for job control: ${jobid.value}")
+    } else if (waitoutcome == _WaitOutcome.Interrupted) {
+      Consequence.stateConflict(s"job control await interrupted: ${jobid.value}")
     } else {
       val response = request.command match {
         case JobControlCommand.Retry =>
@@ -1667,13 +1696,59 @@ final class InMemoryJobEngine(
     _get_record(jobid).exists(r => r.status != JobStatus.Cancelled)
 
   private def _await_if_suspended(jobid: JobId): Boolean = {
-    var status = _get_record(jobid).map(_.status)
-    while (status.contains(JobStatus.Suspended)) {
-      Thread.sleep(10L)
-      status = _get_record(jobid).map(_.status)
+    _state_monitor.synchronized {
+      var status = _get_record(jobid).map(_.status)
+      while (!_shutdown_requested && status.contains(JobStatus.Suspended)) {
+        try {
+          _state_monitor.wait()
+        } catch {
+          case _: InterruptedException =>
+            Thread.currentThread().interrupt()
+            return false
+        }
+        status = _get_record(jobid).map(_.status)
+      }
     }
+    val status = _get_record(jobid).map(_.status)
     status.forall(_ != JobStatus.Cancelled)
   }
+
+  private def _wait_until(
+    deadline: Instant
+  )(done: => Boolean): _WaitOutcome = {
+    if (done)
+      _WaitOutcome.Completed
+    else if (!_now().isBefore(deadline))
+      _WaitOutcome.TimedOut
+    else {
+      val registration = _timer.schedule(deadline) {
+        _signal_state_change()
+      }
+      try {
+        _state_monitor.synchronized {
+          var completed = done
+          try {
+            while (!completed && !_shutdown_requested && _now().isBefore(deadline)) {
+              _state_monitor.wait()
+              completed = done
+            }
+            if (completed) _WaitOutcome.Completed else _WaitOutcome.TimedOut
+          } catch {
+            case _: InterruptedException =>
+              Thread.currentThread().interrupt()
+              _WaitOutcome.Interrupted
+          }
+        }
+      } finally {
+        registration.close()
+      }
+    }
+  }
+
+  private def _signal_state_change(): Unit =
+    _state_monitor.synchronized {
+      _state_monitor.notifyAll()
+    }
 
   private def _control_invalid_transition[A](
     command: JobControlCommand,
@@ -1873,6 +1948,7 @@ final class InMemoryJobEngine(
           case Some(compensation) =>
             val compensationtaskid = TaskId.generate()
             val startedat = _now()
+            val startednanos = System.nanoTime()
             val parent = failureTaskId.orElse(Some(originalTaskId))
             _mark_task_compensation(jobid, originalTaskId, Some("running"), None, recoveryRequired = false)
             _append_timeline(jobid, "task.compensation.started", Some(originalTaskId), parent, originalTask.compensationActionRef)
@@ -1900,7 +1976,7 @@ final class InMemoryJobEngine(
             val executioncontext = _job_execution_context(jobid, ctx, jobcontext)
             compensation.run(executioncontext) match {
               case TaskSucceeded(_) =>
-                _capture_calltree_if_needed(jobid, executioncontext, failed = false, startedat)
+                _capture_calltree_if_needed(jobid, executioncontext, failed = false, startednanos)
                 _append_task_finished(
                   jobid,
                   compensationtaskid,
@@ -1915,7 +1991,7 @@ final class InMemoryJobEngine(
                 _append_timeline(jobid, "task.compensation.succeeded", Some(originalTaskId), parent, None)
               case TaskFailed(c) =>
                 val message = c.observation.getEffectiveMessage
-                _capture_calltree_if_needed(jobid, executioncontext, failed = true, startedat)
+                _capture_calltree_if_needed(jobid, executioncontext, failed = true, startednanos)
                 _append_task_finished(
                   jobid,
                   compensationtaskid,
@@ -2315,6 +2391,7 @@ final class InMemoryJobEngine(
       case JobPersistencePolicy.Ephemeral =>
         _runtime_jobs.put(record.id, record)
     }
+    _signal_state_change()
   }
 
   private def _sync_job_entity(record: JobRecord): Unit = {
@@ -2778,6 +2855,12 @@ object InMemoryJobEngine {
   val MaxNonRetryDelay: java.time.Duration =
     java.time.Duration.ofMinutes(15)
 
+  private enum _WaitOutcome {
+    case Completed
+    case TimedOut
+    case Interrupted
+  }
+
   final case class SchedulerConfig(
     workerCount: Int = 1,
     autoStartWorkers: Boolean = true
@@ -2849,9 +2932,9 @@ object InMemoryJobEngine {
     scheduler: ScheduledExecutorService,
     timeSource: JobTimeSource
   ) extends JobTimer {
-    def schedule(dueat: Instant)(body: => Unit): Unit = {
+    def schedule(dueat: Instant)(body: => Unit): JobTimerRegistration = {
       val delaymillis = math.max(0L, dueat.toEpochMilli - timeSource.now().toEpochMilli)
-      val _ = scheduler.schedule(
+      val future = scheduler.schedule(
         new Runnable {
           override def run(): Unit =
             body
@@ -2859,6 +2942,11 @@ object InMemoryJobEngine {
         delaymillis,
         TimeUnit.MILLISECONDS
       )
+      new JobTimerRegistration {
+        def close(): Unit = {
+          val _ = future.cancel(false)
+        }
+      }
     }
 
     override def shutdown(): Unit =
@@ -2870,7 +2958,7 @@ object InMemoryJobEngine {
   ) extends JobTimer {
     private var _registrations = Vector.empty[ExecutionSchedulingRegistration]
 
-    def schedule(dueat: Instant)(body: => Unit): Unit =
+    def schedule(dueat: Instant)(body: => Unit): JobTimerRegistration =
       synchronized {
         var registration = Option.empty[ExecutionSchedulingRegistration]
         val created = runtime.schedulingRuntime.schedule(dueat) {
@@ -2884,6 +2972,13 @@ object InMemoryJobEngine {
         }
         registration = Some(created)
         _registrations :+= created
+        new JobTimerRegistration {
+          def close(): Unit =
+            ExecutionSchedulerJobTimer.this.synchronized {
+              created.close()
+              _registrations = _registrations.filterNot(_ eq created)
+            }
+        }
       }
 
     override def shutdown(): Unit =
@@ -2905,10 +3000,17 @@ object InMemoryJobEngine {
     private var _sequence = 0L
     private var _entries = Vector.empty[Entry]
 
-    def schedule(dueat: Instant)(body: => Unit): Unit =
+    def schedule(dueat: Instant)(body: => Unit): JobTimerRegistration =
       synchronized {
         _sequence += 1
-        _entries :+= Entry(_sequence, dueat, () => body)
+        val sequence = _sequence
+        _entries :+= Entry(sequence, dueat, () => body)
+        new JobTimerRegistration {
+          def close(): Unit =
+            ManualJobTimer.this.synchronized {
+              _entries = _entries.filterNot(_.sequence == sequence)
+            }
+        }
       }
 
     def fireDue(): Int = {
