@@ -424,11 +424,11 @@ Status: DONE
   sanitized profile fingerprint. Raw trace/correlation diagnostics are removed
   from the semantic snapshot while domain Event attributes remain compared.
   The focused scenario passes without host sleeping.
-- The focused replay scenario and the full CNCF suite passed on Jul. 16, 2026:
-  `sbt --batch test` completed 1,783 tests with zero failures and zero aborted
-  suites. No dirty related core repository belonged to this replay slice;
-  unrelated sibling work was deliberately left outside its validation and
-  commit scope.
+- The focused replay scenario, the full `goldenport-core` suite, and the full
+  CNCF suite passed on Jul. 16, 2026. `goldenport-core` completed 371 tests and
+  CNCF completed 1,783 tests; both had zero failures and zero aborted suites.
+  No dirty related core repository belonged to this replay slice; unrelated
+  sibling work was deliberately left outside its validation and commit scope.
 - Final Phase 31 review found no actionable finding. `git diff --check` passes
   for the closure record.
 
