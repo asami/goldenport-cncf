@@ -9,7 +9,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr.  5, 2026
- * @version Apr. 25, 2026
+ *  version Apr. 25, 2026
+ * @version Jul. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final class RuntimeContextContextSpec
@@ -18,6 +19,17 @@ final class RuntimeContextContextSpec
   with GivenWhenThen {
 
   "RuntimeContext.Context" should {
+    "use the deterministic core-compatible formatting baseline" in {
+      Given("the default runtime presentation context")
+
+      When("its locale and timezone assumptions are inspected")
+      val formatting = RuntimeContext.Context.default.formatting
+
+      Then("it does not read host locale or timezone defaults")
+      formatting.locale shouldBe Locale.ROOT
+      formatting.timezone shouldBe ZoneId.of("UTC")
+    }
+
     "apply default snake_case output naming" in {
       Given("a record with canonical camelCase keys")
       val record = Record.dataAuto(

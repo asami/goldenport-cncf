@@ -23,7 +23,8 @@ import org.goldenport.util.StringUtils
  *  version Mar. 31, 2026
  *  version Apr. 28, 2026
  *  version May. 10, 2026
- * @version Jun. 18, 2026
+ *  version Jun. 18, 2026
+ * @version Jul. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final class RuntimeContext(
@@ -237,12 +238,12 @@ object RuntimeContext {
   }
 
   final case class FormattingContext(
-    locale: Locale = Locale.getDefault,
-    timezone: ZoneId = ZoneId.systemDefault,
+    locale: Locale = Locale.ROOT,
+    timezone: ZoneId = ZoneId.of("UTC"),
     numberStyle: NumberStyle = NumberStyle.Plain,
-    dateFormatter: DateTimeFormatter = FormattingContext.dateFormatter(Locale.getDefault),
-    timeFormatter: DateTimeFormatter = FormattingContext.timeFormatter(Locale.getDefault),
-    dateTimeFormatter: DateTimeFormatter = FormattingContext.dateTimeFormatter(Locale.getDefault)
+    dateFormatter: DateTimeFormatter = FormattingContext.dateFormatter(Locale.ROOT),
+    timeFormatter: DateTimeFormatter = FormattingContext.timeFormatter(Locale.ROOT),
+    dateTimeFormatter: DateTimeFormatter = FormattingContext.dateTimeFormatter(Locale.ROOT)
   ) {
     def withLocale(p: Locale): FormattingContext =
       copy(

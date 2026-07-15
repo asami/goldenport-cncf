@@ -1,13 +1,15 @@
 package org.goldenport.cncf.context
 
-import java.nio.charset.StandardCharsets
+import java.math.MathContext
+import java.nio.charset.{Charset, StandardCharsets}
 import java.security.MessageDigest
-import java.time.{Clock, Instant, ZoneOffset}
+import java.time.{Clock, Instant, ZoneId, ZoneOffset}
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicLong
 import org.goldenport.Consequence
 import org.goldenport.configuration.ResolvedConfiguration
-import org.goldenport.context.{EntropyContext, RandomContext}
+import org.goldenport.context.{EntropyContext, ExecutionContext as CoreExecutionContext, I18nContext, RandomContext, VirtualMachineContext}
+import org.goldenport.configuration.ConfigurationValue
 import org.goldenport.cncf.config.{OperationMode, RuntimeConfig}
 import org.goldenport.record.Record
 
@@ -157,12 +159,119 @@ final case class ExecutionProfileConfig(
   idMode: ExecutionIdMode,
   schedulerMode: ExecutionSchedulerMode,
   orderingMode: ExecutionOrderingMode,
+  environmentAssumptions: ResolvedEnvironmentAssumptions,
   activation: ExecutionProfileActivation
 ) {
   override def toString: String =
     s"ExecutionProfileConfig(mode=${mode.name}, time=${timeMode.name}, random=${randomMode.name}, " +
       s"ids=${idMode.name}, scheduler=${schedulerMode.name}, ordering=${orderingMode.name}, " +
       s"activation=${activation.name})"
+}
+
+final case class ResolvedEnvironmentAssumptions(
+  locale: Locale,
+  timezone: ZoneId,
+  charset: Charset,
+  lineSeparator: String,
+  mathContext: MathContext,
+  textNormalizationPolicy: String,
+  textComparisonPolicy: String,
+  dateTimeFormatPolicy: String,
+  environmentVariables: Map[String, String]
+) {
+  private[context] def apply_to(
+    current: CoreExecutionContext.Core,
+    clock: Clock
+  ): CoreExecutionContext.Core =
+    current.copy(
+      vm = VirtualMachineContext.Instant(
+        VirtualMachineContext.Core(
+          clock = clock,
+          timezone = timezone,
+          encoding = charset,
+          lineSeparator = lineSeparator,
+          mathContext = mathContext,
+          environmentVariables = environmentVariables,
+          resourceBundleBaseNames = current.vm.resourceBundleBaseNames,
+          resourceBundleLocales = current.vm.resourceBundleLocales,
+          resourceBundleResolutionOrder = current.vm.resourceBundleResolutionOrder
+        )
+      ),
+      i18n = I18nContext.Instant(
+        I18nContext.Core(
+          textNormalizationPolicy = textNormalizationPolicy,
+          textComparisonPolicy = textComparisonPolicy,
+          dateTimeFormatPolicy = dateTimeFormatPolicy,
+          locale = Some(locale)
+        )
+      ),
+      locale = locale,
+      timezone = timezone,
+      encoding = charset,
+      clock = clock,
+      math = mathContext
+    )
+
+  def toRecord: Record =
+    Record.data(
+      "locale" -> locale.toLanguageTag,
+      "timezone" -> timezone.getId,
+      "charset" -> charset.name,
+      "lineSeparator" -> ResolvedEnvironmentAssumptions.line_separator_name(lineSeparator),
+      "mathContext" -> ResolvedEnvironmentAssumptions.math_context_name(mathContext),
+      "i18n" -> Record.data(
+        "textNormalizationPolicy" -> textNormalizationPolicy,
+        "textComparisonPolicy" -> textComparisonPolicy,
+        "dateTimeFormatPolicy" -> dateTimeFormatPolicy
+      ),
+      "environmentNames" -> environmentVariables.keys.toVector.sorted
+    )
+
+  private[context] def fingerprint: String = {
+    val values = Vector(
+      locale.toLanguageTag,
+      timezone.getId,
+      charset.name,
+      lineSeparator,
+      mathContext.toString,
+      textNormalizationPolicy,
+      textComparisonPolicy,
+      dateTimeFormatPolicy
+    ) ++ environmentVariables.toVector.sortBy(_._1).flatMap { case (name, value) => Vector(name, value) }
+    ExecutionProfileHash.digest(values*)
+  }
+
+  override def toString: String = toRecord.toString
+}
+
+object ResolvedEnvironmentAssumptions {
+  val default: ResolvedEnvironmentAssumptions =
+    ResolvedEnvironmentAssumptions(
+      Locale.ROOT,
+      ZoneId.of("UTC"),
+      StandardCharsets.UTF_8,
+      "\n",
+      MathContext.DECIMAL64,
+      "default",
+      "default",
+      "default",
+      Map.empty
+    )
+
+  private[context] def line_separator_name(value: String): String =
+    value match {
+      case "\n" => "lf"
+      case "\r\n" => "crlf"
+      case "\r" => "cr"
+      case _ => "custom"
+    }
+
+  private[context] def math_context_name(value: MathContext): String =
+    if (value == MathContext.DECIMAL32) "decimal32"
+    else if (value == MathContext.DECIMAL64) "decimal64"
+    else if (value == MathContext.DECIMAL128) "decimal128"
+    else if (value == MathContext.UNLIMITED) "unlimited"
+    else value.toString
 }
 
 final case class ExecutionProfileIdentity(
@@ -250,12 +359,14 @@ final case class ExecutionProfileBinding(
   random: RandomContext,
   entropy: EntropyContext,
   idGeneration: IdGenerationContext,
+  environmentAssumptions: ResolvedEnvironmentAssumptions,
   control: ExecutionControlContext
 )
 
 final case class ResolvedExecutionProfile private[context] (
   identity: ExecutionProfileIdentity,
   runtimeClock: RuntimeClock,
+  environmentAssumptions: ResolvedEnvironmentAssumptions,
   control: ExecutionControlContext,
   private[cncf] val config: ExecutionProfileConfig
 ) {
@@ -329,6 +440,7 @@ final class ExecutionProfileRuntime private[context] (
       random,
       entropy,
       idgeneration,
+      profile.environmentAssumptions,
       profile.control.copy(invocation = invocation)
     )
   }
@@ -351,6 +463,7 @@ object ExecutionProfileResolver {
       ExecutionIdMode.Production,
       ExecutionSchedulerMode.Realtime,
       ExecutionOrderingMode.Concurrent,
+      ResolvedEnvironmentAssumptions.default,
       ExecutionProfileActivation.Ordinary
     )
     _resolved(config)
@@ -360,9 +473,17 @@ object ExecutionProfileResolver {
     configuration: ResolvedConfiguration,
     operationmode: OperationMode,
     activationoverride: Option[ExecutionProfileActivation] = None
+  ): Consequence[ResolvedExecutionProfile] =
+    resolve_with_environment(configuration, operationmode, sys.env, activationoverride)
+
+  private[context] def resolve_with_environment(
+    configuration: ResolvedConfiguration,
+    operationmode: OperationMode,
+    ambientenvironment: Map[String, String],
+    activationoverride: Option[ExecutionProfileActivation] = None
   ): Consequence[ResolvedExecutionProfile] = {
     val activation = activationoverride.getOrElse(_activation(configuration, operationmode))
-    _config(configuration, activation) match {
+    _config(configuration, activation, ambientenvironment) match {
       case Left(message) => Consequence.configurationInvalid(message)
       case Right(config) => Consequence.success(_resolved(config))
     }
@@ -386,7 +507,8 @@ object ExecutionProfileResolver {
 
   private def _config(
     configuration: ResolvedConfiguration,
-    activation: ExecutionProfileActivation
+    activation: ExecutionProfileActivation,
+    ambientenvironment: Map[String, String]
   ): Either[String, ExecutionProfileConfig] = {
     val profilevalue = _value(configuration, RuntimeConfig.EXECUTION_PROFILE_KEY).getOrElse("standard")
     val mode = ExecutionProfileMode.parse(profilevalue).toRight(s"${RuntimeConfig.EXECUTION_PROFILE_KEY} has unsupported value: ${profilevalue}")
@@ -401,6 +523,7 @@ object ExecutionProfileResolver {
         schedulermode <- _mode(configuration, RuntimeConfig.EXECUTION_SCHEDULER_MODE_KEY, _default_scheduler(profilemode), ExecutionSchedulerMode.parse)
         orderingmode <- _mode(configuration, RuntimeConfig.EXECUTION_ORDERING_MODE_KEY, _default_ordering(profilemode), ExecutionOrderingMode.parse)
         startat <- _start_at(timemode, timestart, virtualstart)
+        environment <- _environment(configuration, ambientenvironment)
         config = ExecutionProfileConfig(
           profilemode,
           _value(configuration, RuntimeConfig.EXECUTION_KEY),
@@ -411,6 +534,7 @@ object ExecutionProfileResolver {
           idmode,
           schedulermode,
           orderingmode,
+          environment,
           activation
         )
         _ <- _validate(config, virtualstart)
@@ -505,6 +629,140 @@ object ExecutionProfileResolver {
       Right(())
   }
 
+  private def _environment(
+    configuration: ResolvedConfiguration,
+    ambientenvironment: Map[String, String]
+  ): Either[String, ResolvedEnvironmentAssumptions] = {
+    val localevalue = _value(configuration, RuntimeConfig.EXECUTION_LOCALE_KEY).getOrElse("und")
+    val timezonevalue = _value(configuration, RuntimeConfig.EXECUTION_TIMEZONE_KEY).getOrElse("UTC")
+    val charsetvalue = _value(configuration, RuntimeConfig.EXECUTION_CHARSET_KEY).getOrElse("UTF-8")
+    val lineseparatorvalue = _value(configuration, RuntimeConfig.EXECUTION_LINE_SEPARATOR_KEY).getOrElse("lf")
+    val mathcontextvalue = _value(configuration, RuntimeConfig.EXECUTION_MATH_CONTEXT_KEY).getOrElse("decimal64")
+    val allow = _environment_allow(configuration)
+    val configuredvalues = _environment_values(configuration)
+    for {
+      locale <- _locale(localevalue)
+      timezone <- _timezone(timezonevalue)
+      charset <- _charset(charsetvalue)
+      lineseparator <- _line_separator(lineseparatorvalue)
+      mathcontext <- _math_context(mathcontextvalue)
+      _ <- configuredvalues.keys.filterNot(allow.contains).toVector.sorted.headOption match {
+        case Some(name) => Left(s"${RuntimeConfig.EXECUTION_ENVIRONMENT_VALUES_KEY}.${name} is not declared by ${RuntimeConfig.EXECUTION_ENVIRONMENT_ALLOW_KEY}")
+        case None => Right(())
+      }
+      snapshot = allow.flatMap { name =>
+        configuredvalues.get(name).orElse(ambientenvironment.get(name)).map(name -> _)
+      }.toMap
+    } yield ResolvedEnvironmentAssumptions(
+      locale,
+      timezone,
+      charset,
+      lineseparator,
+      mathcontext,
+      _value(configuration, RuntimeConfig.EXECUTION_I18N_TEXT_NORMALIZATION_POLICY_KEY).getOrElse("default"),
+      _value(configuration, RuntimeConfig.EXECUTION_I18N_TEXT_COMPARISON_POLICY_KEY).getOrElse("default"),
+      _value(configuration, RuntimeConfig.EXECUTION_I18N_DATE_TIME_FORMAT_POLICY_KEY).getOrElse("default"),
+      snapshot
+    )
+  }
+
+  private def _locale(value: String): Either[String, Locale] = {
+    val locale = Locale.forLanguageTag(value.trim.replace('_', '-'))
+    if (value.trim.equalsIgnoreCase("root") || value.trim.equalsIgnoreCase("und")) Right(Locale.ROOT)
+    else if (locale == Locale.ROOT) Left(s"${RuntimeConfig.EXECUTION_LOCALE_KEY} has invalid locale: ${value}")
+    else Right(locale)
+  }
+
+  private def _timezone(value: String): Either[String, ZoneId] =
+    scala.util.Try(ZoneId.of(value.trim)).toEither.left.map(_ =>
+      s"${RuntimeConfig.EXECUTION_TIMEZONE_KEY} has invalid timezone: ${value}"
+    )
+
+  private def _charset(value: String): Either[String, Charset] =
+    scala.util.Try(Charset.forName(value.trim)).toEither.left.map(_ =>
+      s"${RuntimeConfig.EXECUTION_CHARSET_KEY} has invalid charset: ${value}"
+    )
+
+  private def _line_separator(value: String): Either[String, String] =
+    value.trim.toLowerCase(Locale.ROOT) match {
+      case "lf" => Right("\n")
+      case "crlf" => Right("\r\n")
+      case "cr" => Right("\r")
+      case _ => Left(s"${RuntimeConfig.EXECUTION_LINE_SEPARATOR_KEY} has unsupported value: ${value}")
+    }
+
+  private def _math_context(value: String): Either[String, MathContext] =
+    value.trim.toLowerCase(Locale.ROOT) match {
+      case "decimal32" => Right(MathContext.DECIMAL32)
+      case "decimal64" => Right(MathContext.DECIMAL64)
+      case "decimal128" => Right(MathContext.DECIMAL128)
+      case "unlimited" => Right(MathContext.UNLIMITED)
+      case _ => Left(s"${RuntimeConfig.EXECUTION_MATH_CONTEXT_KEY} has unsupported value: ${value}")
+    }
+
+  private def _environment_values(
+    configuration: ResolvedConfiguration
+  ): Map[String, String] = {
+    val prefixes = Vector(
+      RuntimeConfig.EXECUTION_ENVIRONMENT_VALUES_KEY,
+      RuntimeConfig.RUNTIME_EXECUTION_ENVIRONMENT_VALUES_KEY
+    )
+    val flattened = configuration.configuration.values.iterator.flatMap { case (key, value) =>
+      prefixes.iterator.flatMap { prefix =>
+        val marker = prefix + "."
+        Option.when(key.startsWith(marker))(_configuration_string(value).map(key.drop(marker.length) -> _)).flatten
+      }
+    }.toMap
+    val nested = prefixes.iterator.flatMap(prefix =>
+      _configuration_value(configuration.configuration.values, prefix.split('.').toList)
+    ).collectFirst {
+      case ConfigurationValue.ObjectValue(values) =>
+        values.flatMap { case (name, value) => _configuration_string(value).map(name -> _) }
+    }.getOrElse(Map.empty)
+    nested ++ flattened
+  }
+
+  private def _environment_allow(
+    configuration: ResolvedConfiguration
+  ): Vector[String] = {
+    val prefixes = Vector(
+      RuntimeConfig.EXECUTION_ENVIRONMENT_ALLOW_KEY,
+      RuntimeConfig.RUNTIME_EXECUTION_ENVIRONMENT_ALLOW_KEY
+    )
+    val structured = prefixes.iterator.flatMap(prefix =>
+      _configuration_value(configuration.configuration.values, prefix.split('.').toList)
+    ).collectFirst {
+      case ConfigurationValue.ListValue(values) => values.flatMap(_configuration_string).toVector
+    }.getOrElse(Vector.empty)
+    val textual = _value(configuration, RuntimeConfig.EXECUTION_ENVIRONMENT_ALLOW_KEY)
+      .toVector.flatMap(_.split("[,|\\s]+").toVector)
+    (structured ++ textual).map(_.trim).filter(_.nonEmpty).distinct
+  }
+
+  private def _configuration_value(
+    values: Map[String, ConfigurationValue],
+    path: List[String]
+  ): Option[ConfigurationValue] =
+    values.get(path.mkString(".")).orElse(_nested_configuration_value(values, path))
+
+  private def _nested_configuration_value(
+    values: Map[String, ConfigurationValue],
+    path: List[String]
+  ): Option[ConfigurationValue] =
+    path match {
+      case Nil => None
+      case name :: Nil => values.get(name)
+      case name :: tail => values.get(name).collect { case ConfigurationValue.ObjectValue(children) => children }.flatMap(_nested_configuration_value(_, tail))
+    }
+
+  private def _configuration_string(value: ConfigurationValue): Option[String] =
+    value match {
+      case ConfigurationValue.StringValue(x) => Some(x)
+      case ConfigurationValue.NumberValue(x) => Some(x.toString)
+      case ConfigurationValue.BooleanValue(x) => Some(x.toString)
+      case _ => None
+    }
+
   private def _resolved(config: ExecutionProfileConfig): ResolvedExecutionProfile = {
     val fingerprint = ExecutionProfileHash.digest(
       config.mode.name,
@@ -515,7 +773,8 @@ object ExecutionProfileResolver {
       config.randomSeed.getOrElse(""),
       config.idMode.name,
       config.schedulerMode.name,
-      config.orderingMode.name
+      config.orderingMode.name,
+      config.environmentAssumptions.fingerprint
     )
     val identity = ExecutionProfileIdentity(config.mode.name, config.mode, fingerprint)
     val replayability = config.mode match {
@@ -541,7 +800,7 @@ object ExecutionProfileResolver {
       config.orderingMode,
       replayability
     )
-    ResolvedExecutionProfile(identity, runtimeclock, control, config)
+    ResolvedExecutionProfile(identity, runtimeclock, config.environmentAssumptions, control, config)
   }
 
   private def _value(

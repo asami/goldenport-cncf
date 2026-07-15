@@ -614,7 +614,7 @@ object ExecutionContext {
     current: CoreExecutionContext.Core,
     binding: ExecutionProfileBinding
   ): CoreExecutionContext.Core =
-    _core_with_clock(current, binding.clock).copy(
+    binding.environmentAssumptions.apply_to(current, binding.clock).copy(
       random = binding.random,
       entropy = binding.entropy
     )

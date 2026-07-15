@@ -276,7 +276,12 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
   private def _runtime_context_from_config(
     global: GlobalRuntimeContext
   ): RuntimeContext.Context = {
-    val base = RuntimeContext.Context.default
+    val assumptions = global.executionProfile.environmentAssumptions
+    val base = RuntimeContext.Context.default.copy(
+      formatting = RuntimeContext.FormattingContext.default
+        .withLocale(assumptions.locale)
+        .withTimezone(assumptions.timezone)
+    )
     val formatting0 = base.formatting
     val formatting1 = _config_string(global, Vector("textus.locale", "cncf.locale"))
       .flatMap(_parse_locale)

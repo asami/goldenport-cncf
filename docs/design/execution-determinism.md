@@ -265,6 +265,18 @@ The default environment snapshot is empty. Environment keys not selected by
 policy are absent. Seeds, credentials, tokens, and secret environment values
 MUST NOT appear in introspection, CallTree, metrics, or replay diagnostics.
 
+The compatibility defaults are `Locale.ROOT`, `UTC`, `UTF-8`, `LF`, and
+`MathContext.DECIMAL64`, with each i18n policy named `default`. Configuration
+may replace each assumption, but bootstrap MUST validate the complete set
+before constructing `GlobalRuntimeContext`.
+
+For every name in `environment.allow`, an explicit entry in
+`environment.values` takes precedence over the ambient process environment.
+When no explicit value exists, bootstrap may snapshot the ambient value with
+that exact name. Names outside the allowlist are never copied. A configured
+value outside the allowlist is a configuration error. Runtime diagnostics may
+show selected environment names, but never their values.
+
 ## Configuration
 
 The canonical configuration keys are:

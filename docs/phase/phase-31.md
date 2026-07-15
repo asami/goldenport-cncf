@@ -50,7 +50,7 @@ ordering, locale/environment assumptions, and replayability diagnostics.
 - C (DONE): ED-03 - CNCF profile resolution and ActionCall binding.
 - D (DONE): ED-04 - Internal DSL and capability-based ID generation.
 - E (DONE): ED-05 - Unified time and Job/Event scheduling.
-- F (PLANNED): ED-06 - Resolved environment assumptions.
+- F (DONE): ED-06 - Resolved environment assumptions.
 - G (PLANNED): ED-07 - Deterministic ordering, migration, and enforcement.
 - H (PLANNED): ED-08 - Introspection, replay verification, and closure.
 
@@ -62,7 +62,7 @@ ordering, locale/environment assumptions, and replayability diagnostics.
 - [x] ED-03: Resolve and bind coherent execution profiles.
 - [x] ED-04: Add internal DSL access and profile-based ID generation.
 - [x] ED-05: Integrate manual time with JobEngine and async Event execution.
-- [ ] ED-06: Resolve environment and internationalization assumptions.
+- [x] ED-06: Resolve environment and internationalization assumptions.
 - [ ] ED-07: Fix CNCF-owned ordering and migrate ambient-state debt.
 - [ ] ED-08: Add diagnostics, replay scenarios, developer guidance, and close
       Phase 31.

@@ -107,7 +107,39 @@ object RuntimeTestDescriptor {
         )) ++
         _execution_section(execution, "ordering", Vector(
           "mode" -> RuntimeConfig.EXECUTION_ORDERING_MODE_KEY
-        ))
+        )) ++
+        _execution_assumptions(execution)
+    }.getOrElse(Map.empty)
+
+  private def _execution_assumptions(execution: Record): Map[String, String] =
+    execution.getAny("assumptions").flatMap(_record).map { assumptions =>
+      val direct = Vector(
+        _string(assumptions, "locale").map(RuntimeConfig.EXECUTION_LOCALE_KEY -> _),
+        _string(assumptions, "timezone").map(RuntimeConfig.EXECUTION_TIMEZONE_KEY -> _),
+        _string(assumptions, "charset").map(RuntimeConfig.EXECUTION_CHARSET_KEY -> _),
+        _string(assumptions, "line-separator").orElse(_string(assumptions, "lineSeparator")).map(RuntimeConfig.EXECUTION_LINE_SEPARATOR_KEY -> _),
+        _string(assumptions, "math-context").orElse(_string(assumptions, "mathContext")).map(RuntimeConfig.EXECUTION_MATH_CONTEXT_KEY -> _)
+      ).flatten.toMap
+      direct ++ _execution_i18n(assumptions) ++ _execution_environment(assumptions)
+    }.getOrElse(Map.empty)
+
+  private def _execution_i18n(assumptions: Record): Map[String, String] =
+    assumptions.getAny("i18n").flatMap(_record).map { i18n =>
+      Vector(
+        _string(i18n, "text-normalization-policy").orElse(_string(i18n, "textNormalizationPolicy")).map(RuntimeConfig.EXECUTION_I18N_TEXT_NORMALIZATION_POLICY_KEY -> _),
+        _string(i18n, "text-comparison-policy").orElse(_string(i18n, "textComparisonPolicy")).map(RuntimeConfig.EXECUTION_I18N_TEXT_COMPARISON_POLICY_KEY -> _),
+        _string(i18n, "date-time-format-policy").orElse(_string(i18n, "dateTimeFormatPolicy")).map(RuntimeConfig.EXECUTION_I18N_DATE_TIME_FORMAT_POLICY_KEY -> _)
+      ).flatten.toMap
+    }.getOrElse(Map.empty)
+
+  private def _execution_environment(assumptions: Record): Map[String, String] =
+    assumptions.getAny("environment").flatMap(_record).map { environment =>
+      val allow = _string_vector(environment, "allow")
+      val allowconfig = Option.when(allow.nonEmpty)(RuntimeConfig.EXECUTION_ENVIRONMENT_ALLOW_KEY -> allow.mkString(",")).toMap
+      val values = environment.getAny("values").flatMap(_record).map(_.asMap.flatMap { case (name, value) =>
+        Option(value).map(x => s"${RuntimeConfig.EXECUTION_ENVIRONMENT_VALUES_KEY}.${name}" -> x.toString)
+      }).getOrElse(Map.empty)
+      allowconfig ++ values
     }.getOrElse(Map.empty)
 
   private def _execution_time_section(execution: Record): Map[String, String] =
@@ -201,6 +233,16 @@ object RuntimeTestDescriptor {
     record.getAny(key).map {
       case value: java.util.Date => value.toInstant.toString
       case value => value.toString
+    }.map(_.trim).filter(_.nonEmpty)
+
+  private def _string_vector(
+    record: Record,
+    key: String
+  ): Vector[String] =
+    record.getAny(key).toVector.flatMap {
+      case values: Seq[?] => values.toVector.map(_.toString)
+      case values: Array[?] => values.toVector.map(_.toString)
+      case value => value.toString.split("[,|\\s]+").toVector
     }.map(_.trim).filter(_.nonEmpty)
 
   private def _record(value: Any): Option[Record] =

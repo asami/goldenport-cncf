@@ -14,7 +14,8 @@ import org.goldenport.cncf.context.{Capability, ExecutionContext, Principal, Pri
  * - Failure means the provider matched but authentication failed operationally.
  *
  * @since   Apr.  9, 2026
- * @version Jun.  5, 2026
+ *  version Jun.  5, 2026
+ * @version Jul. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class AuthenticationRequest(
@@ -24,13 +25,13 @@ final case class AuthenticationRequest(
     AuthenticationRequest.findFirst(attributes, Vector(name))
 
   def accessToken: Option[String] =
-    AuthenticationRequest.findFirst(attributes, AuthenticationRequest.AccessTokenKeys)
+    AuthenticationRequest.findFirst(attributes, AuthenticationRequest.ACCESS_TOKEN_KEYS)
 
   def refreshToken: Option[String] =
-    AuthenticationRequest.findFirst(attributes, AuthenticationRequest.RefreshTokenKeys)
+    AuthenticationRequest.findFirst(attributes, AuthenticationRequest.REFRESH_TOKEN_KEYS)
 
   def sessionId: Option[String] =
-    AuthenticationRequest.findFirst(attributes, AuthenticationRequest.SessionIdKeys)
+    AuthenticationRequest.findFirst(attributes, AuthenticationRequest.SESSION_ID_KEYS)
       .orElse(AuthenticationRequest.findCookieSession(attributes))
       .flatMap(SessionId.option)
       .map(_.value)
@@ -40,19 +41,19 @@ final case class AuthenticationRequest(
 }
 
 object AuthenticationRequest {
-  val AccessTokenKeys: Vector[String] = Vector(
+  val ACCESS_TOKEN_KEYS: Vector[String] = Vector(
     "access_token",
     "token",
     "bearer_token",
     "authorization"
   )
 
-  val RefreshTokenKeys: Vector[String] = Vector(
+  val REFRESH_TOKEN_KEYS: Vector[String] = Vector(
     "refresh_token",
     "refreshToken"
   )
 
-  val SessionIdKeys: Vector[String] = Vector(
+  val SESSION_ID_KEYS: Vector[String] = Vector(
     "x-textus-session",
     "x-cncf-session",
     "session_id",
@@ -161,17 +162,19 @@ final case class AuthenticationResult(
   subjectKind: SubjectKind = SubjectKind.User,
   session: Option[SessionContext] = None
 ) {
-  def toSecurityContext: SecurityContext =
+  def toSecurityContext: SecurityContext = {
+    val resolvedattributes = AuthenticationResult.defaultAttributes(principalId, attributes)
     SecurityContext(
       principal = new Principal {
         val id: PrincipalId = principalId
-        val attributes: Map[String, String] = AuthenticationResult.defaultAttributes(principalId, attributes)
+        val attributes: Map[String, String] = resolvedattributes
       },
       capabilities = capabilities,
       level = level,
       subjectKind = subjectKind,
       session = session
     )
+  }
 }
 
 object AuthenticationResult {

@@ -50,6 +50,131 @@ final class ExecutionProfileSpec
       profile.runtimeClock.mode shouldBe RuntimeClockMode.System
     }
 
+    "resolve generic environment assumptions once for arbitrary supported values" in {
+      Given("generated locale, timezone, charset, line-separator, and math-context selections")
+      val assumptions = for {
+        locale <- Gen.oneOf("en-US", "ja-JP", "fr-FR")
+        timezone <- Gen.oneOf("UTC", "Asia/Tokyo", "Europe/Paris")
+        charset <- Gen.oneOf("UTF-8", "UTF-16", "US-ASCII")
+        lineseparator <- Gen.oneOf("lf", "crlf", "cr")
+        mathcontext <- Gen.oneOf("decimal32", "decimal64", "decimal128", "unlimited")
+      } yield (locale, timezone, charset, lineseparator, mathcontext)
+
+      When("each selection is resolved into a runtime binding")
+      val property = Prop.forAll(assumptions) { case (locale, timezone, charset, lineseparator, mathcontext) =>
+        val configuration = _configuration(Map(
+          RuntimeConfig.EXECUTION_LOCALE_KEY -> locale,
+          RuntimeConfig.EXECUTION_TIMEZONE_KEY -> timezone,
+          RuntimeConfig.EXECUTION_CHARSET_KEY -> charset,
+          RuntimeConfig.EXECUTION_LINE_SEPARATOR_KEY -> lineseparator,
+          RuntimeConfig.EXECUTION_MATH_CONTEXT_KEY -> mathcontext,
+          RuntimeConfig.EXECUTION_I18N_TEXT_NORMALIZATION_POLICY_KEY -> "unicode-nfc",
+          RuntimeConfig.EXECUTION_I18N_TEXT_COMPARISON_POLICY_KEY -> "case-sensitive",
+          RuntimeConfig.EXECUTION_I18N_DATE_TIME_FORMAT_POLICY_KEY -> "iso-8601"
+        ))
+        val profile = ExecutionProfileResolver.resolve(configuration, OperationMode.Production).toOption.get
+        val binding = profile.newRuntime(IdGenerationContext.DefaultNamespace).baseBinding
+        val core = binding.environmentAssumptions.apply_to(ExecutionContext.create().core, binding.clock)
+
+        core.locale.toLanguageTag == locale &&
+          core.timezone.getId == timezone &&
+          core.encoding.name == java.nio.charset.Charset.forName(charset).name &&
+          core.vm.lineSeparator == binding.environmentAssumptions.lineSeparator &&
+          core.vm.mathContext == binding.environmentAssumptions.mathContext &&
+          core.i18n.textNormalizationPolicy == "unicode-nfc" &&
+          core.i18n.textComparisonPolicy == "case-sensitive" &&
+          core.i18n.dateTimeFormatPolicy == "iso-8601"
+      }
+      val checked = Test.check(Test.Parameters.default.withMinSuccessfulTests(50), property)
+
+      Then("all supported assumptions are carried by the core execution context")
+      checked.passed shouldBe true
+    }
+
+    "snapshot only allowlisted environment values without exposing their contents" in {
+      Given("an allowlist, explicit and ambient values, and recognizable confidential material")
+      val secret = "environment-secret-value-73519"
+      val configuration = _configuration(Map(
+        RuntimeConfig.EXECUTION_ENVIRONMENT_ALLOW_KEY -> "PUBLIC_SETTING,AMBIENT_SETTING",
+        s"${RuntimeConfig.EXECUTION_ENVIRONMENT_VALUES_KEY}.PUBLIC_SETTING" -> secret
+      ))
+      val ambient = Map(
+        "PUBLIC_SETTING" -> "explicit-value-must-win",
+        "AMBIENT_SETTING" -> "ambient-visible",
+        "UNDECLARED_SETTING" -> "ambient-hidden"
+      )
+
+      When("the profile is resolved and its diagnostics are rendered")
+      val profile = ExecutionProfileResolver
+        .resolve_with_environment(configuration, OperationMode.Production, ambient)
+        .toOption
+        .get
+      val binding = profile.newRuntime(IdGenerationContext.DefaultNamespace).baseBinding
+      val rendered = profile.toString + profile.environmentAssumptions.toRecord.toString + profile.control.toRecord.toString
+
+      Then("the immutable snapshot contains only the declared name and diagnostics omit its value")
+      binding.environmentAssumptions.environmentVariables shouldBe Map(
+        "PUBLIC_SETTING" -> secret,
+        "AMBIENT_SETTING" -> "ambient-visible"
+      )
+      binding.environmentAssumptions.environmentVariables should not contain key("UNDECLARED_SETTING")
+      rendered should include ("PUBLIC_SETTING")
+      rendered should not include secret
+      rendered should not include "ambient-visible"
+    }
+
+    "reject configured environment values outside the allowlist" in {
+      Given("an environment value whose name is not declared")
+      val configuration = _configuration(Map(
+        RuntimeConfig.EXECUTION_ENVIRONMENT_ALLOW_KEY -> "DECLARED_SETTING",
+        s"${RuntimeConfig.EXECUTION_ENVIRONMENT_VALUES_KEY}.UNDECLARED_SETTING" -> "rejected"
+      ))
+
+      When("the execution profile is resolved")
+      val result = ExecutionProfileResolver.resolve(configuration, OperationMode.Production)
+
+      Then("bootstrap returns a deterministic structured configuration failure")
+      result shouldBe a[Consequence.Failure[?]]
+      _failure_message(result) should include (RuntimeConfig.EXECUTION_ENVIRONMENT_ALLOW_KEY)
+      _failure_message(result) should include ("UNDECLARED_SETTING")
+    }
+
+    "accept format-neutral list and object configuration for environment assumptions" in {
+      Given("nested configuration values produced by a YAML, JSON, or HOCON decoder")
+      val configuration = ResolvedConfiguration(
+        Configuration(Map(
+          "textus" -> ConfigurationValue.ObjectValue(Map(
+            "execution" -> ConfigurationValue.ObjectValue(Map(
+              "environment" -> ConfigurationValue.ObjectValue(Map(
+                "allow" -> ConfigurationValue.ListValue(List(
+                  ConfigurationValue.StringValue("FIRST_SETTING"),
+                  ConfigurationValue.StringValue("SECOND_SETTING")
+                )),
+                "values" -> ConfigurationValue.ObjectValue(Map(
+                  "FIRST_SETTING" -> ConfigurationValue.StringValue("first"),
+                  "SECOND_SETTING" -> ConfigurationValue.StringValue("second")
+                ))
+              ))
+            ))
+          ))
+        )),
+        ConfigurationTrace.empty
+      )
+
+      When("the execution profile resolves the structural configuration")
+      val assumptions = ExecutionProfileResolver
+        .resolve_with_environment(configuration, OperationMode.Production, Map.empty)
+        .toOption
+        .get
+        .environmentAssumptions
+
+      Then("the same immutable allowlisted snapshot is produced without format-specific parsing")
+      assumptions.environmentVariables shouldBe Map(
+        "FIRST_SETTING" -> "first",
+        "SECOND_SETTING" -> "second"
+      )
+    }
+
     "derive repeatable invocation streams for arbitrary seeded profile inputs" in {
       Given("generated seeds and run keys for two independent seeded runtimes")
       val inputs = for {
@@ -296,6 +421,47 @@ final class ExecutionProfileSpec
       descriptor.config(RuntimeConfig.EXECUTION_ORDERING_MODE_KEY) shouldBe "deterministic"
     }
 
+    "normalize structured environment assumptions without retaining provider-specific shape" in {
+      Given("an explicit test descriptor with i18n and allowlisted environment assumptions")
+      val path = Files.createTempFile("cncf-execution-environment", ".yaml")
+      Files.writeString(
+        path,
+        """kind: test-descriptor
+          |execution:
+          |  assumptions:
+          |    locale: ja-JP
+          |    timezone: Asia/Tokyo
+          |    charset: UTF-8
+          |    line-separator: lf
+          |    math-context: decimal128
+          |    i18n:
+          |      text-normalization-policy: unicode-nfc
+          |      text-comparison-policy: case-sensitive
+          |      date-time-format-policy: iso-8601
+          |    environment:
+          |      allow:
+          |        - PUBLIC_SETTING
+          |      values:
+          |        PUBLIC_SETTING: visible-to-component
+          |""".stripMargin
+      )
+
+      When("the descriptor is decoded")
+      val descriptor = RuntimeTestDescriptor.load(path).toOption.get
+
+      Then("the shorthand maps to the canonical runtime configuration keys")
+      descriptor.config(RuntimeConfig.EXECUTION_LOCALE_KEY) shouldBe "ja-JP"
+      descriptor.config(RuntimeConfig.EXECUTION_TIMEZONE_KEY) shouldBe "Asia/Tokyo"
+      descriptor.config(RuntimeConfig.EXECUTION_CHARSET_KEY) shouldBe "UTF-8"
+      descriptor.config(RuntimeConfig.EXECUTION_LINE_SEPARATOR_KEY) shouldBe "lf"
+      descriptor.config(RuntimeConfig.EXECUTION_MATH_CONTEXT_KEY) shouldBe "decimal128"
+      descriptor.config(RuntimeConfig.EXECUTION_I18N_TEXT_NORMALIZATION_POLICY_KEY) shouldBe "unicode-nfc"
+      descriptor.config(RuntimeConfig.EXECUTION_I18N_TEXT_COMPARISON_POLICY_KEY) shouldBe "case-sensitive"
+      descriptor.config(RuntimeConfig.EXECUTION_I18N_DATE_TIME_FORMAT_POLICY_KEY) shouldBe "iso-8601"
+      descriptor.config(RuntimeConfig.EXECUTION_ENVIRONMENT_ALLOW_KEY) shouldBe "PUBLIC_SETTING"
+      descriptor.config(s"${RuntimeConfig.EXECUTION_ENVIRONMENT_VALUES_KEY}.PUBLIC_SETTING") shouldBe "visible-to-component"
+    }
+
     "normalize JSON execution shorthand through the same canonical keys" in {
       Given("an explicit JSON test descriptor with a seeded execution block")
       val path = Files.createTempFile("cncf-execution-profile", ".json")
@@ -363,9 +529,18 @@ final class ExecutionProfileSpec
       Given("an invocation bound to one seeded runtime and a second runtime with another profile")
       val leftconfig = _runtime_config(_configuration(Map(
         RuntimeConfig.EXECUTION_PROFILE_KEY -> "seeded",
-        RuntimeConfig.EXECUTION_RANDOM_SEED_KEY -> "left-seed"
+        RuntimeConfig.EXECUTION_RANDOM_SEED_KEY -> "left-seed",
+        RuntimeConfig.EXECUTION_LOCALE_KEY -> "en-US",
+        RuntimeConfig.EXECUTION_TIMEZONE_KEY -> "UTC",
+        RuntimeConfig.EXECUTION_ENVIRONMENT_ALLOW_KEY -> "RUNTIME_SIDE",
+        s"${RuntimeConfig.EXECUTION_ENVIRONMENT_VALUES_KEY}.RUNTIME_SIDE" -> "left"
       )))
-      val rightconfig = _runtime_config(_controlled_configuration("right-run", "right-seed"))
+      val rightconfig = _runtime_config(_configuration(_controlled_configuration_values("right-run", "right-seed") ++ Map(
+        RuntimeConfig.EXECUTION_LOCALE_KEY -> "ja-JP",
+        RuntimeConfig.EXECUTION_TIMEZONE_KEY -> "Asia/Tokyo",
+        RuntimeConfig.EXECUTION_ENVIRONMENT_ALLOW_KEY -> "RUNTIME_SIDE",
+        s"${RuntimeConfig.EXECUTION_ENVIRONMENT_VALUES_KEY}.RUNTIME_SIDE" -> "right"
+      )))
       val left = ExecutionContext.withExecutionInvocation(_runtime_context(leftconfig), "catalog.price")
       val rightcontext = _runtime_context(rightconfig)
       val rightruntime = rightcontext.runtime
@@ -381,6 +556,9 @@ final class ExecutionProfileSpec
       rebound.clock should not be theSameInstanceAs(rightconfig.executionClock.clock)
       rebound.random should not be theSameInstanceAs(left.random)
       rebound.idGeneration should not be theSameInstanceAs(left.idGeneration)
+      rebound.locale shouldBe java.util.Locale.forLanguageTag("ja-JP")
+      rebound.timezone shouldBe java.time.ZoneId.of("Asia/Tokyo")
+      rebound.vm.environmentVariables shouldBe Map("RUNTIME_SIDE" -> "right")
     }
 
     "select the runtime-owned profile when scope and runtime originate from different trees" in {
@@ -433,13 +611,49 @@ final class ExecutionProfileSpec
       call.executionContext.runtime.unitOfWork.executionContext.executionControl shouldBe
         call.executionContext.executionControl
     }
+
+    "keep resolved environment assumptions stable across ActionCall admission" in {
+      Given("a component action under a runtime with explicit generic assumptions")
+      val config = _runtime_config(_configuration(Map(
+        RuntimeConfig.EXECUTION_LOCALE_KEY -> "ja-JP",
+        RuntimeConfig.EXECUTION_TIMEZONE_KEY -> "Asia/Tokyo",
+        RuntimeConfig.EXECUTION_CHARSET_KEY -> "UTF-16",
+        RuntimeConfig.EXECUTION_LINE_SEPARATOR_KEY -> "crlf",
+        RuntimeConfig.EXECUTION_MATH_CONTEXT_KEY -> "decimal128",
+        RuntimeConfig.EXECUTION_ENVIRONMENT_ALLOW_KEY -> "CATALOG_MODE",
+        s"${RuntimeConfig.EXECUTION_ENVIRONMENT_VALUES_KEY}.CATALOG_MODE" -> "spec"
+      )))
+      val context = _runtime_context(config)
+      val component = TestComponentFactory.create("catalog", Protocol.empty)
+      val action = _ProfileQueryAction(Request.of(component = "catalog", service = "price", operation = "calculate"))
+
+      When("ComponentLogic creates two invocation-scoped ActionCalls")
+      val first = ComponentLogic(component).createActionCall(action, context).executionContext
+      val second = ComponentLogic(component).createActionCall(action, context).executionContext
+
+      Then("both ActionCalls and their UnitOfWork contexts retain the bootstrap snapshot")
+      first.locale shouldBe java.util.Locale.forLanguageTag("ja-JP")
+      first.timezone shouldBe java.time.ZoneId.of("Asia/Tokyo")
+      first.encoding shouldBe java.nio.charset.Charset.forName("UTF-16")
+      first.vm.lineSeparator shouldBe "\r\n"
+      first.math shouldBe java.math.MathContext.DECIMAL128
+      first.vm.environmentVariables shouldBe Map("CATALOG_MODE" -> "spec")
+      second.vm.environmentVariables shouldBe first.vm.environmentVariables
+      first.runtime.unitOfWork.executionContext.vm.environmentVariables shouldBe first.vm.environmentVariables
+    }
   }
 
   private def _controlled_configuration(
     runkey: String,
     seed: String
   ): ResolvedConfiguration =
-    _configuration(Map(
+    _configuration(_controlled_configuration_values(runkey, seed))
+
+  private def _controlled_configuration_values(
+    runkey: String,
+    seed: String
+  ): Map[String, String] =
+    Map(
       RuntimeConfig.OperationModeKey -> "test",
       RuntimeConfig.EXECUTION_PROFILE_KEY -> "controlled",
       RuntimeConfig.EXECUTION_KEY -> runkey,
@@ -450,7 +664,7 @@ final class ExecutionProfileSpec
       RuntimeConfig.EXECUTION_IDS_MODE_KEY -> "deterministic",
       RuntimeConfig.EXECUTION_SCHEDULER_MODE_KEY -> "manual",
       RuntimeConfig.EXECUTION_ORDERING_MODE_KEY -> "deterministic"
-    ))
+    )
 
   private def _runtime_config(configuration: ResolvedConfiguration): RuntimeConfig =
     RuntimeConfig.from(configuration)

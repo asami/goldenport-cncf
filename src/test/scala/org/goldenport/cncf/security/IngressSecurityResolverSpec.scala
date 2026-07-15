@@ -367,6 +367,8 @@ final class IngressSecurityResolverSpec extends AnyWordSpec with Matchers {
 
       result shouldBe a[Consequence.Success[_]]
       val resolved = result.toOption.get
+      resolved.executionContext.security.principal.attributes.get("locale") shouldBe Some("ja-JP")
+      resolved.executionContext.security.principal.attributes.get("timeZone") shouldBe Some("Asia/Tokyo")
       resolved.executionContext.runtime.context.formatting.locale shouldBe Locale.forLanguageTag("ja-JP")
       resolved.executionContext.runtime.context.formatting.timezone shouldBe ZoneId.of("Asia/Tokyo")
     }

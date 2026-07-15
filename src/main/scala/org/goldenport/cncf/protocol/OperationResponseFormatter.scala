@@ -19,7 +19,7 @@ import org.goldenport.cncf.context.RuntimeContext
  *  version Apr. 30, 2026
  *  version May. 31, 2026
  *  version Jun. 29, 2026
- * @version Jul.  1, 2026
+ * @version Jul. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 object OperationResponseFormatter {
@@ -91,7 +91,14 @@ object OperationResponseFormatter {
     _runtime_context.transformRecord(record)
 
   private def _runtime_context: RuntimeContext.Context = {
-    val base = RuntimeContext.Context.default
+    val base = GlobalRuntimeContext.current.map { global =>
+      val assumptions = global.executionProfile.environmentAssumptions
+      RuntimeContext.Context.default.copy(
+        formatting = RuntimeContext.FormattingContext.default
+          .withLocale(assumptions.locale)
+          .withTimezone(assumptions.timezone)
+      )
+    }.getOrElse(RuntimeContext.Context.default)
     val formatting0 = base.formatting
     val formatting1 = _configuration_string("textus.locale")
       .orElse(_configuration_string("cncf.locale"))

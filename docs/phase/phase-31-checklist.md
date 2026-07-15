@@ -214,16 +214,29 @@ Implementation evidence:
 
 ## ED-06: Resolved Environment Assumptions
 
-Status: PLANNED
+Status: DONE
 
 ### Tasks
 
-- [ ] Resolve locale, timezone, charset, line separator, math, and i18n at
+- [x] Resolve locale, timezone, charset, line separator, math, and i18n at
       bootstrap.
-- [ ] Define an allowlisted immutable environment snapshot.
-- [ ] Carry generic assumptions through core `ExecutionContext.Core`.
-- [ ] Keep secrets and undeclared environment values out of diagnostics.
-- [ ] Add propagation and immutability executable specifications.
+- [x] Define an allowlisted immutable environment snapshot.
+- [x] Carry generic assumptions through core `ExecutionContext.Core`.
+- [x] Keep secrets and undeclared environment values out of diagnostics.
+- [x] Add propagation and immutability executable specifications.
+
+### Evidence
+
+- `ExecutionProfileResolver` validates and resolves locale, timezone, charset,
+  line separator, math context, i18n policies, and allowlisted environment
+  values before `GlobalRuntimeContext` construction.
+- `ResolvedEnvironmentAssumptions` applies the resolved values to core
+  `ExecutionContext.Core`, `VirtualMachineContext`, and `I18nContext`; runtime
+  and invocation rebinding replace the complete assumption set coherently.
+- `ExecutionProfileSpec` uses property-based checks for supported assumption
+  combinations and executable scenarios for allowlist enforcement, ambient
+  snapshot selection, value redaction, test-descriptor normalization, and
+  ActionCall/UnitOfWork propagation.
 
 ### Acceptance Criteria
 
