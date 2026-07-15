@@ -38,6 +38,21 @@ final class RuntimeClockSpec extends AnyWordSpec with Matchers with GivenWhenThe
         Instant.parse("2026-07-28T09:00:00Z")
     }
 
+    "keep zone views attached to the same manual timeline" in {
+      Given("a manual runtime clock and another zone view")
+      val start = Instant.parse("2026-07-28T09:00:00Z")
+      val runtimeclock = RuntimeClock.manual(start, ZoneOffset.UTC)
+      val tokyo = runtimeclock.clock.withZone(ZoneId.of("Asia/Tokyo"))
+
+      When("the runtime-owned manual timeline advances")
+      runtimeclock.manual_clock.get.advanceBy(Duration.ofHours(2L))
+
+      Then("all zone views report the same advanced instant")
+      runtimeclock.clock.instant() shouldBe start.plus(Duration.ofHours(2L))
+      tokyo.instant() shouldBe runtimeclock.clock.instant()
+      tokyo.getZone() shouldBe ZoneId.of("Asia/Tokyo")
+    }
+
     "reject local date-times without an offset" in {
       an[IllegalArgumentException] should be thrownBy {
         RuntimeClock.parseInstant("2026-07-28T18:00:00")

@@ -2,6 +2,7 @@ package org.goldenport.cncf.context
 
 import java.time.{Clock, Duration, Instant, ZoneId}
 import java.time.format.DateTimeFormatter
+import java.util.concurrent.atomic.AtomicReference
 import scala.util.Try
 
 /**
@@ -18,10 +19,17 @@ import scala.util.Try
 final case class RuntimeClock(
   clock: Clock,
   virtualStartAt: Option[Instant],
-  mode: RuntimeClockMode
+  mode: RuntimeClockMode,
+  private[context] val manual_clock: Option[ManualRuntimeClock] = None
 ) {
   def isVirtual: Boolean = virtualStartAt.nonEmpty
   def isManual: Boolean = mode == RuntimeClockMode.Manual
+
+  private[context] def runtime_instance: RuntimeClock =
+    manual_clock match {
+      case Some(_) => RuntimeClock.manual(virtualStartAt.getOrElse(clock.instant()), clock.getZone)
+      case None => this
+    }
 }
 
 enum RuntimeClockMode(val name: String) {
@@ -45,8 +53,10 @@ object RuntimeClock {
   def manual(
     startat: Instant,
     zone: ZoneId
-  ): RuntimeClock =
-    RuntimeClock(Clock.fixed(startat, zone), Some(startat), RuntimeClockMode.Manual)
+  ): RuntimeClock = {
+    val clock = new ManualRuntimeClock(startat, zone)
+    RuntimeClock(clock, Some(startat), RuntimeClockMode.Manual, Some(clock))
+  }
 
   def parseOffset(
     baseclock: Clock,
@@ -61,5 +71,28 @@ object RuntimeClock {
         s"Virtual clock start must be an ISO-8601 date-time with an offset: ${value}"
       )
     }
+  }
+}
+
+private[context] final class ManualRuntimeClock private (
+  private val _current: AtomicReference[Instant],
+  zone: ZoneId
+) extends Clock {
+  private[context] def this(
+    initial: Instant,
+    zone: ZoneId
+  ) = this(new AtomicReference[Instant](initial), zone)
+
+  override def getZone(): ZoneId = zone
+
+  override def withZone(zone: ZoneId): Clock =
+    new ManualRuntimeClock(_current, zone)
+
+  override def instant(): Instant =
+    _current.get()
+
+  def advanceBy(duration: Duration): Instant = {
+    require(!duration.isNegative, "manual clock duration must not be negative")
+    _current.updateAndGet(_.plus(duration))
   }
 }

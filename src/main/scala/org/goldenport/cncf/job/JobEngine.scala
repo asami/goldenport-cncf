@@ -17,7 +17,13 @@ import org.goldenport.record.Record
 import org.goldenport.record.io.RecordEncoder
 import org.goldenport.cncf.action.{Action, ActionCall, ActionEngine, QueryAction}
 import org.goldenport.cncf.component.{Component, ComponentLogic}
-import org.goldenport.cncf.context.{ExecutionContext, ExecutionInvocationIdentity}
+import org.goldenport.cncf.context.{
+  ExecutionContext,
+  ExecutionInvocationIdentity,
+  ExecutionProfileRuntime,
+  ExecutionSchedulerMode,
+  ExecutionSchedulingRegistration
+}
 import org.goldenport.cncf.entity.EntityStore
 import org.goldenport.cncf.event.{EventBus, EventId, EventLane, EventPublishOption, EventRecord, EventStore, ReceptionDomainEvent}
 import org.goldenport.cncf.naming.NamingConventions
@@ -762,6 +768,11 @@ object JobTimeSource {
   val system: JobTimeSource = new JobTimeSource {
     def now(): Instant = Instant.now()
   }
+
+  def fromRuntime(runtime: ExecutionProfileRuntime): JobTimeSource =
+    new JobTimeSource {
+      def now(): Instant = runtime.schedulingRuntime.clock.instant()
+    }
 }
 
 final class ManualJobTimeSource(initial: Instant) extends JobTimeSource {
@@ -816,6 +827,7 @@ final class InMemoryJobEngine(
   private val _worker_pool: ExecutorService =
     Executors.newFixedThreadPool(math.max(1, schedulerConfig.workerCount))
   private val _workers_started = new AtomicBoolean(false)
+  private var _execution_scheduling_registration = Option.empty[ExecutionSchedulingRegistration]
   @volatile private var _shutdown_requested = false
 
   _rehydrate_delayed_starts()
@@ -839,7 +851,14 @@ final class InMemoryJobEngine(
       _shutdown_requested = true
       _worker_pool.shutdownNow()
       _timer.shutdown()
+      _execution_scheduling_registration.foreach(_.close())
+      _execution_scheduling_registration = None
     }
+
+  private[job] def bind_execution_scheduling(runtime: ExecutionProfileRuntime): Unit =
+    _execution_scheduling_registration = Some(
+      runtime.schedulingRuntime.register_work_queue(() => drainOne())
+    )
 
   def drainOne(): Boolean =
     Option(_work_queue.poll()) match {
@@ -2846,6 +2865,34 @@ object InMemoryJobEngine {
       scheduler.shutdownNow()
   }
 
+  private final class ExecutionSchedulerJobTimer(
+    runtime: ExecutionProfileRuntime
+  ) extends JobTimer {
+    private var _registrations = Vector.empty[ExecutionSchedulingRegistration]
+
+    def schedule(dueat: Instant)(body: => Unit): Unit =
+      synchronized {
+        var registration = Option.empty[ExecutionSchedulingRegistration]
+        val created = runtime.schedulingRuntime.schedule(dueat) {
+          try {
+            body
+          } finally {
+            synchronized {
+              registration.foreach(x => _registrations = _registrations.filterNot(_ eq x))
+            }
+          }
+        }
+        registration = Some(created)
+        _registrations :+= created
+      }
+
+    override def shutdown(): Unit =
+      synchronized {
+        _registrations.foreach(_.close())
+        _registrations = Vector.empty
+      }
+  }
+
   final class ManualJobTimer(
     timeSource: ManualJobTimeSource
   ) extends JobTimer {
@@ -2870,7 +2917,7 @@ object InMemoryJobEngine {
           val now = timeSource.now()
           val (ready, pending) = _entries.partition(_.dueat.compareTo(now) <= 0)
           _entries = pending
-          ready.sortBy(_.sequence)
+          ready.sortBy(x => (x.dueat, x.sequence))
         }
       due.foreach(_.run())
       due.size
@@ -2901,6 +2948,24 @@ object InMemoryJobEngine {
     schedulerConfig: SchedulerConfig = SchedulerConfig.default
   ): InMemoryJobEngine =
     new InMemoryJobEngine(schedulerConfig = schedulerConfig)(scala.concurrent.ExecutionContext.global)
+
+  def create(runtime: ExecutionProfileRuntime): InMemoryJobEngine = {
+    val manual = runtime.profile.control.schedulerMode == ExecutionSchedulerMode.Manual
+    val config =
+      if (manual) SchedulerConfig(workerCount = 1, autoStartWorkers = false)
+      else SchedulerConfig.default
+    val timer =
+      if (manual) Some(new ExecutionSchedulerJobTimer(runtime))
+      else None
+    val engine = new InMemoryJobEngine(
+      schedulerConfig = config,
+      timeSource = JobTimeSource.fromRuntime(runtime),
+      timer = timer
+    )(scala.concurrent.ExecutionContext.global)
+    if (manual)
+      engine.bind_execution_scheduling(runtime)
+    engine
+  }
 }
 
 final case class JobRecord(

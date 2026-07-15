@@ -271,6 +271,12 @@ final class ExecutionProfileRuntime private[context] (
   namespace: IdGenerationContext.IdNamespace
 ) {
   private val _invocation_ordinal = new AtomicLong(0L)
+  val runtimeClock: RuntimeClock = profile.runtimeClock.runtime_instance
+  val schedulingRuntime: ExecutionSchedulingRuntime =
+    ExecutionSchedulingRuntime.create(runtimeClock, profile.control.schedulerMode)
+
+  def testControl: Option[ExecutionTestControl] =
+    schedulingRuntime.testControl
 
   def baseBinding: ExecutionProfileBinding =
     _binding(None)
@@ -305,7 +311,7 @@ final class ExecutionProfileRuntime private[context] (
       case ExecutionIdMode.Production =>
         IdGenerationContext.production(
           namespace,
-          profile.runtimeClock.clock,
+          schedulingRuntime.clock,
           EntropyContext.secure()
         )
       case ExecutionIdMode.Deterministic =>
@@ -316,10 +322,10 @@ final class ExecutionProfileRuntime private[context] (
           invocationordinal.toString,
           "id-generation"
         )
-        IdGenerationContext.deterministic(namespace, profile.runtimeClock.clock, idseed)
+        IdGenerationContext.deterministic(namespace, schedulingRuntime.clock, idseed)
     }
     ExecutionProfileBinding(
-      profile.runtimeClock.clock,
+      schedulingRuntime.clock,
       random,
       entropy,
       idgeneration,

@@ -1,7 +1,7 @@
 package org.goldenport.cncf.context
 
 import java.nio.file.Files
-import java.time.Instant
+import java.time.{Duration, Instant}
 import cats.~>
 import org.goldenport.Consequence
 import org.goldenport.configuration.{Configuration, ConfigurationTrace, ConfigurationValue, ResolvedConfiguration}
@@ -162,6 +162,61 @@ final class ExecutionProfileSpec
       profile.control.replayability.state shouldBe ReplayabilityState.Replayable
     }
 
+    "advance the runtime-owned manual clock for arbitrary positive durations" in {
+      Given("a controlled runtime and generated positive durations")
+      val durations = Gen.chooseNum(1L, 86400000L)
+
+      When("the in-process test control advances operational time")
+      val property = Prop.forAll(durations) { millis =>
+        val profile = ExecutionProfileResolver
+          .resolveForSpec(_controlled_configuration("manual-clock-run", "manual-clock-seed"))
+          .toOption
+          .get
+        val runtime = profile.newRuntime(IdGenerationContext.DefaultNamespace)
+        val binding = runtime.baseBinding
+        val control = runtime.testControl.get
+        val before = binding.clock.instant()
+
+        control.advanceBy(Duration.ofMillis(millis))
+
+        control.now == before.plusMillis(millis) &&
+          binding.clock.instant() == control.now &&
+          control.runUntilIdle() == 0
+      }
+      val checked = Test.check(Test.Parameters.default.withMinSuccessfulTests(50), property)
+
+      Then("clock reads advance without host sleeping and no absent timer becomes due")
+      checked.passed shouldBe true
+    }
+
+    "isolate manual time and ID timestamps between runtime instances" in {
+      Given("two runtimes created from one controlled profile template")
+      val profile = ExecutionProfileResolver
+        .resolveForSpec(_controlled_configuration("isolated-clock-run", "isolated-clock-seed"))
+        .toOption
+        .get
+      val left = profile.newRuntime(IdGenerationContext.DefaultNamespace)
+      val right = profile.newRuntime(IdGenerationContext.DefaultNamespace)
+      val start = profile.runtimeClock.clock.instant()
+      val collection = org.simplemodeling.model.datatype.EntityCollectionId(
+        "sample",
+        "catalog",
+        "article"
+      )
+
+      When("only the left runtime advances and creates an invocation-bound ID")
+      left.testControl.get.advanceBy(Duration.ofMinutes(5L))
+      val binding = left.nextBinding("catalog.article.create", Some("advanced-id"))
+      val id = binding.idGeneration.entityId(collection, "article.create")
+
+      Then("the left clock and ID advance while the template and right runtime stay unchanged")
+      left.runtimeClock.clock.instant() shouldBe start.plus(Duration.ofMinutes(5L))
+      id.timestamp shouldBe Some(left.runtimeClock.clock.instant())
+      right.runtimeClock.clock.instant() shouldBe start
+      profile.runtimeClock.clock.instant() shouldBe start
+      left.runtimeClock.clock should not be theSameInstanceAs(right.runtimeClock.clock)
+    }
+
     "reject a dimension that contradicts its selected profile" in {
       Given("a seeded profile that attempts to select deterministic identifiers")
       val configuration = _configuration(Map(
@@ -292,7 +347,8 @@ final class ExecutionProfileSpec
           bound.executionControl.invocation.map(_.key).contains(explicitkey) &&
           bound.executionControl.invocation.map(_.ordinal).contains(1L) &&
           bound.executionControl.idMode == ExecutionIdMode.Deterministic &&
-          (bound.clock eq config.executionClock.clock) &&
+          (bound.clock eq prepared.clock) &&
+          (bound.clock ne config.executionClock.clock) &&
           bound.idGeneration.namespace == config.idNamespace &&
           bound.runtime.unitOfWork.executionContext.executionControl == bound.executionControl &&
           (bound.runtime.unitOfWork.executionContext.random eq bound.random)
@@ -311,7 +367,8 @@ final class ExecutionProfileSpec
       )))
       val rightconfig = _runtime_config(_controlled_configuration("right-run", "right-seed"))
       val left = ExecutionContext.withExecutionInvocation(_runtime_context(leftconfig), "catalog.price")
-      val rightruntime = _runtime_context(rightconfig).runtime
+      val rightcontext = _runtime_context(rightconfig)
+      val rightruntime = rightcontext.runtime
 
       When("the execution context is rebound beneath the second global runtime")
       val rebound = ExecutionContext.withRuntimeContext(left, rightruntime)
@@ -320,7 +377,8 @@ final class ExecutionProfileSpec
       rebound.executionControl.profile shouldBe rightconfig.executionProfile.identity
       rebound.executionControl.invocation shouldBe None
       rebound.executionControl.idMode shouldBe ExecutionIdMode.Deterministic
-      rebound.clock should be theSameInstanceAs rightconfig.executionClock.clock
+      rebound.clock should be theSameInstanceAs rightcontext.clock
+      rebound.clock should not be theSameInstanceAs(rightconfig.executionClock.clock)
       rebound.random should not be theSameInstanceAs(left.random)
       rebound.idGeneration should not be theSameInstanceAs(left.idGeneration)
     }
@@ -342,7 +400,8 @@ final class ExecutionProfileSpec
       created.executionControl.profile shouldBe runtimeconfig.executionProfile.identity
       created.executionControl.invocation shouldBe None
       created.executionControl.idMode shouldBe ExecutionIdMode.Deterministic
-      created.clock should be theSameInstanceAs runtimeconfig.executionClock.clock
+      created.clock should be theSameInstanceAs runtimecontext.clock
+      created.clock should not be theSameInstanceAs(runtimeconfig.executionClock.clock)
       created.idGeneration.namespace shouldBe runtimeconfig.idNamespace
     }
 

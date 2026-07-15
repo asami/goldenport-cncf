@@ -218,6 +218,14 @@ advancing time.
 These controls are in-process test surfaces in Phase 31. CNCF does not expose a
 production or general server endpoint for clock advancement.
 
+The lifecycle owner exposes the handle as
+`ExecutionProfileRuntime.testControl`; ordinary profiles return no handle.
+`advanceBy` advances manual time and runs due timer callbacks so their Job work
+becomes eligible. `runUntilIdle` drains currently eligible runtime work in the
+selected deterministic order and returns the number of drained work items. The
+handle is not copied into component `ExecutionContext` and is not an internal
+DSL capability.
+
 Performance duration MUST use a monotonic source and MUST NOT be calculated by
 subtracting manually advanced wall timestamps.
 

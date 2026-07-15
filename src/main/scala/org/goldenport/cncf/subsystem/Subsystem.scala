@@ -53,7 +53,7 @@ import org.goldenport.cncf.spi.{ComponentApiResolver, ResolvedSpiBinding, SpiInv
  *  version Jan. 31, 2026
  *  version Feb.  4, 2026
  *  version Apr. 30, 2026
- * @version Jul. 14, 2026
+ * @version Jul. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Subsystem(
@@ -79,7 +79,10 @@ final class Subsystem(
   private var _component_space: ComponentSpace = ComponentSpace()
   private var _resolver: OperationResolver = OperationResolver.empty
   private val _http_driver: Option[HttpDriver] = httpdriver
-  private val _job_engine: JobEngine = InMemoryJobEngine.create()
+  private val _job_engine: JobEngine =
+    _find_global_runtime_context(scopeContext)
+      .map(x => InMemoryJobEngine.create(x.executionProfileRuntime))
+      .getOrElse(InMemoryJobEngine.create())
   private val _event_store: EventStore = EventStore.inMemory
   private lazy val _event_bus: EventBus =
     EventBus.default(EventEngine.noop(DataStore.noop(), eventstore = _event_store))

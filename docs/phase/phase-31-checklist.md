@@ -177,15 +177,26 @@ Status: IN PROGRESS
 
 ### Tasks
 
-- [ ] Adapt `JobTimeSource` to the runtime-selected execution time.
-- [ ] Add a manual clock and operational scheduler pair.
-- [ ] Add test-harness `advanceBy` and `runUntilIdle` controls.
+- [x] Adapt `JobTimeSource` to the runtime-selected execution time.
+- [x] Add a manual clock and operational scheduler pair.
+- [x] Add test-harness `advanceBy` and `runUntilIdle` controls.
 - [ ] Drive delayed Job start, retry, due time, and observable await timeout
       from the selected policy.
 - [ ] Preserve monotonic performance measurement independently from wall time.
 - [ ] Route async Event reception through the same Job scheduler.
 - [ ] Preserve immediate same-transaction synchronous Event handling.
 - [ ] Replace real sleeping in controlled Job/Event executable specs.
+
+Implementation evidence:
+
+- `ExecutionProfileRuntime` now owns the selected operational scheduler and
+  exposes in-process test control only for a manual profile.
+- `Subsystem` constructs its `InMemoryJobEngine` with the runtime-selected
+  clock and scheduler when a global runtime scope is present; scope-less test
+  fixtures retain the established realtime default.
+- `ExecutionProfileJobSchedulingSpec` proves deterministic equal-due ordering,
+  delayed start, and delayed retry without host sleeping. Observable await and
+  async Event reception remain open before ED-05 can close.
 
 ### Acceptance Criteria
 
