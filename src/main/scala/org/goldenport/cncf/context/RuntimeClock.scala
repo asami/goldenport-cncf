@@ -1,6 +1,6 @@
 package org.goldenport.cncf.context
 
-import java.time.{Clock, Duration, Instant}
+import java.time.{Clock, Duration, Instant, ZoneId}
 import java.time.format.DateTimeFormatter
 import scala.util.Try
 
@@ -17,22 +17,36 @@ import scala.util.Try
  */
 final case class RuntimeClock(
   clock: Clock,
-  virtualStartAt: Option[Instant]
+  virtualStartAt: Option[Instant],
+  mode: RuntimeClockMode
 ) {
   def isVirtual: Boolean = virtualStartAt.nonEmpty
+  def isManual: Boolean = mode == RuntimeClockMode.Manual
+}
+
+enum RuntimeClockMode(val name: String) {
+  case System extends RuntimeClockMode("system")
+  case Offset extends RuntimeClockMode("offset")
+  case Manual extends RuntimeClockMode("manual")
 }
 
 object RuntimeClock {
   def system(baseclock: Clock): RuntimeClock =
-    RuntimeClock(baseclock, None)
+    RuntimeClock(baseclock, None, RuntimeClockMode.System)
 
   def offset(
     baseclock: Clock,
     virtualstartat: Instant
   ): RuntimeClock = {
     val duration = Duration.between(baseclock.instant(), virtualstartat)
-    RuntimeClock(Clock.offset(baseclock, duration), Some(virtualstartat))
+    RuntimeClock(Clock.offset(baseclock, duration), Some(virtualstartat), RuntimeClockMode.Offset)
   }
+
+  def manual(
+    startat: Instant,
+    zone: ZoneId
+  ): RuntimeClock =
+    RuntimeClock(Clock.fixed(startat, zone), Some(startat), RuntimeClockMode.Manual)
 
   def parseOffset(
     baseclock: Clock,

@@ -4,7 +4,7 @@ import java.time.{Clock, Instant, ZoneOffset}
 
 import org.goldenport.cncf.config.{OperationMode, RuntimeConfig}
 import org.goldenport.cncf.path.AliasResolver
-import org.goldenport.configuration.{Configuration, ConfigurationTrace, ResolvedConfiguration}
+import org.goldenport.configuration.{Configuration, ConfigurationTrace, ConfigurationValue, ResolvedConfiguration}
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.GivenWhenThen
 import org.scalatest.wordspec.AnyWordSpec
@@ -71,7 +71,9 @@ class ExecutionContextSpec extends AnyWordSpec with Matchers with GivenWhenThen 
       )
       val global = GlobalRuntimeContext.create(
         "runtime-clock-spec",
-        RuntimeConfig.default.copy(executionClock = runtimeclock),
+        RuntimeConfig.default.copy(
+          executionProfile = _offset_profile(runtimeclock, virtualstart)
+        ),
         ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty),
         base.observability,
         AliasResolver.empty
@@ -111,7 +113,7 @@ class ExecutionContextSpec extends AnyWordSpec with Matchers with GivenWhenThen 
         "runtime-namespace-spec",
         RuntimeConfig.default.copy(
           idNamespace = namespace,
-          executionClock = runtimeclock
+          executionProfile = _offset_profile(runtimeclock, virtualstart)
         ),
         ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty),
         base.observability,
@@ -141,5 +143,21 @@ class ExecutionContextSpec extends AnyWordSpec with Matchers with GivenWhenThen 
       ctx.clock should be theSameInstanceAs runtimeclock.clock
       ctx.clock.instant() shouldBe virtualstart
     }
+  }
+
+  private def _offset_profile(
+    runtimeclock: RuntimeClock,
+    startat: Instant
+  ): ResolvedExecutionProfile = {
+    val configuration = ResolvedConfiguration(
+      Configuration(Map(
+        RuntimeConfig.EXECUTION_TIME_MODE_KEY -> ConfigurationValue.StringValue("offset"),
+        RuntimeConfig.EXECUTION_TIME_START_AT_KEY -> ConfigurationValue.StringValue(startat.toString)
+      )),
+      ConfigurationTrace.empty
+    )
+    ExecutionProfileResolver.resolveForSpec(configuration).toOption.get.copy(
+      runtimeClock = runtimeclock
+    )
   }
 }

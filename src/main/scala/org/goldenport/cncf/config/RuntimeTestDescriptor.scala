@@ -11,7 +11,7 @@ import org.goldenport.cncf.subsystem.GenericSubsystemAssemblyDescriptorSource
 
 /*
  * @since   Jul.  8, 2026
- * @version Jul. 12, 2026
+ * @version Jul. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class RuntimeTestDescriptor(
@@ -85,7 +85,51 @@ object RuntimeTestDescriptor {
     }.getOrElse(Map.empty)
 
   private def _derived_config(record: Record): Map[String, String] =
-    _home_config(record) ++ _runtime_config(record) ++ _component_config(record)
+    _home_config(record) ++ _execution_config(record) ++ _runtime_config(record) ++ _component_config(record)
+
+  private def _execution_config(record: Record): Map[String, String] =
+    record.getAny("execution").flatMap(_record).map { execution =>
+      val direct = Vector(
+        _string(execution, "profile").map(RuntimeConfig.EXECUTION_PROFILE_KEY -> _),
+        _string(execution, "key").map(RuntimeConfig.EXECUTION_KEY -> _)
+      ).flatten.toMap
+      direct ++
+        _execution_time_section(execution) ++
+        _execution_section(execution, "random", Vector(
+          "mode" -> RuntimeConfig.EXECUTION_RANDOM_MODE_KEY,
+          "seed" -> RuntimeConfig.EXECUTION_RANDOM_SEED_KEY
+        )) ++
+        _execution_section(execution, "ids", Vector(
+          "mode" -> RuntimeConfig.EXECUTION_IDS_MODE_KEY
+        )) ++
+        _execution_section(execution, "scheduler", Vector(
+          "mode" -> RuntimeConfig.EXECUTION_SCHEDULER_MODE_KEY
+        )) ++
+        _execution_section(execution, "ordering", Vector(
+          "mode" -> RuntimeConfig.EXECUTION_ORDERING_MODE_KEY
+        ))
+    }.getOrElse(Map.empty)
+
+  private def _execution_time_section(execution: Record): Map[String, String] =
+    execution.getAny("time").flatMap(_record).map { value =>
+      Vector(
+        _string(value, "mode").map(RuntimeConfig.EXECUTION_TIME_MODE_KEY -> _),
+        _string(value, "start-at")
+          .orElse(_string(value, "startAt"))
+          .map(RuntimeConfig.EXECUTION_TIME_START_AT_KEY -> _)
+      ).flatten.toMap
+    }.getOrElse(Map.empty)
+
+  private def _execution_section(
+    execution: Record,
+    section: String,
+    keys: Vector[(String, String)]
+  ): Map[String, String] =
+    execution.getAny(section).flatMap(_record).map { value =>
+      keys.flatMap { case (source, target) =>
+        _string(value, source).map(target -> _)
+      }.toMap
+    }.getOrElse(Map.empty)
 
   private def _home_config(record: Record): Map[String, String] =
     record.getAny("home").flatMap(_record).map { home =>
@@ -154,7 +198,10 @@ object RuntimeTestDescriptor {
     record: Record,
     key: String
   ): Option[String] =
-    record.getAny(key).map(_.toString).map(_.trim).filter(_.nonEmpty)
+    record.getAny(key).map {
+      case value: java.util.Date => value.toInstant.toString
+      case value => value.toString
+    }.map(_.trim).filter(_.nonEmpty)
 
   private def _record(value: Any): Option[Record] =
     value match {

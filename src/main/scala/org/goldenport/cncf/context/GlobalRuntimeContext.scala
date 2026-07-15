@@ -16,7 +16,8 @@ import org.goldenport.configuration.{Configuration, ConfigurationTrace, Resolved
  *  version Jan. 19, 2026
  *  version Feb.  1, 2026
  *  version Mar. 28, 2026
- * @version Apr. 11, 2026
+ *  version Apr. 11, 2026
+ * @version Jul. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final class GlobalRuntimeContext(
@@ -38,13 +39,17 @@ final class GlobalRuntimeContext(
 //     observabilityContext = observabilityContext,
 //     httpDriverOption = Some(httpDriver)
 //   )
-  private var _componentFactory: Option[ComponentFactory] = None
+  private var _component_factory: Option[ComponentFactory] = None
   val assemblyReport: AssemblyReport = new AssemblyReport()
+  val executionProfileRuntime: ExecutionProfileRuntime =
+    config.executionProfile.newRuntime(config.idNamespace)
 
   lazy val resolvedParameters: ResolvedParameters =
     ResolvedParameters.fromResolvedConfiguration(resolvedConfiguration)
 
   def serverEmulatorBaseUrl: String = config.serverEmulatorBaseUrl
+
+  def executionProfile: ResolvedExecutionProfile = config.executionProfile
 
   override def formatPing: String =
     GlobalRuntimeContext.formatPingValue(
@@ -63,17 +68,17 @@ final class GlobalRuntimeContext(
   def updateSubsystemVersion(version: String): Unit =
     subsystemVersion = version
 
-  def componentFactory: Option[ComponentFactory] = _componentFactory
+  def componentFactory: Option[ComponentFactory] = _component_factory
 
   def updateComponentFactory(factory: ComponentFactory): Unit =
-    _componentFactory = Some(factory)
+    _component_factory = Some(factory)
 }
 
 object GlobalRuntimeContext {
   final val RuntimeValue = "goldenport-cncf"
   final val SubsystemName = "goldenport-cncf"
 
-  private val _defaultRuntimeVersion: String = CncfVersion.current
+  private val _default_runtime_version: String = CncfVersion.current
 
   var current: Option[GlobalRuntimeContext] = None
 
@@ -93,8 +98,8 @@ object GlobalRuntimeContext {
     formatPingValue(
       mode = RunMode.Command,
       subsystemName = SubsystemName,
-      subsystemVersion = _defaultRuntimeVersion,
-      runtimeVersion = _defaultRuntimeVersion
+      subsystemVersion = _default_runtime_version,
+      runtimeVersion = _default_runtime_version
     )
 
   def create(

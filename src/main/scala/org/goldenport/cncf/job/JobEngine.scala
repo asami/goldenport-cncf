@@ -17,7 +17,7 @@ import org.goldenport.record.Record
 import org.goldenport.record.io.RecordEncoder
 import org.goldenport.cncf.action.{Action, ActionCall, ActionEngine, QueryAction}
 import org.goldenport.cncf.component.{Component, ComponentLogic}
-import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.cncf.context.{ExecutionContext, ExecutionInvocationIdentity}
 import org.goldenport.cncf.entity.EntityStore
 import org.goldenport.cncf.event.{EventBus, EventId, EventLane, EventPublishOption, EventRecord, EventStore, ReceptionDomainEvent}
 import org.goldenport.cncf.naming.NamingConventions
@@ -26,7 +26,8 @@ import org.goldenport.cncf.observability.{DiagnosticPayloadExternalizer, Observa
 /*
  * @since   Jan.  4, 2026
  *  version Mar. 30, 2026
- * @version May. 31, 2026
+ *  version May. 31, 2026
+ * @version Jul. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class JobId(
@@ -233,8 +234,16 @@ final case class ActionTask(
 
   def run(ctx: ExecutionContext): TaskOutcome = {
     val call = component.map(ComponentLogic(_).createActionCall(action, ctx)).getOrElse {
-      val correlationid = ctx.observability.correlationId
-      val core = ActionCall.Core(action, ctx, component, correlationid)
+      val boundctx = ExecutionContext.withExecutionInvocation(
+        ctx,
+        ExecutionInvocationIdentity.operationSelector(
+          action.request.component,
+          action.request.service,
+          action.request.operation
+        )
+      )
+      val correlationid = boundctx.observability.correlationId
+      val core = ActionCall.Core(action, boundctx, component, correlationid)
       action.createCall(core)
     }
     actionEngine.execute(call) match {
@@ -1210,9 +1219,9 @@ final class InMemoryJobEngine(
       case _ =>
         var previous: Option[TaskId] = None
         var failure: Option[Conclusion] = None
-        var failedTaskId: Option[TaskId] = None
-        var committedTasks = Vector.empty[(TaskId, JobTask)]
-        var successResponse: Option[OperationResponse] = None
+        var failedtaskid: Option[TaskId] = None
+        var committedtasks = Vector.empty[(TaskId, JobTask)]
+        var successresponse: Option[OperationResponse] = None
         tasks.foreach { task =>
           if (failure.isEmpty && _can_run_next_task(jobid)) {
             if (_await_if_suspended(jobid)) {
@@ -1235,7 +1244,7 @@ final class InMemoryJobEngine(
               task.run(executioncontext) match {
                 case TaskSucceeded(res) =>
                   _capture_calltree_if_needed(jobid, executioncontext, failed = false, startedat)
-                  successResponse = Some(res)
+                  successresponse = Some(res)
                   _append_task_finished(
                     jobid,
                     taskid,
@@ -1245,12 +1254,12 @@ final class InMemoryJobEngine(
                     _now()
                   )
                   _append_timeline(jobid, "task.transaction.committed", Some(taskid), previous, None)
-                  committedTasks = committedTasks :+ (taskid -> task)
+                  committedtasks = committedtasks :+ (taskid -> task)
                   previous = Some(taskid)
                 case TaskFailed(c) =>
                   _capture_calltree_if_needed(jobid, executioncontext, failed = true, startedat)
                   failure = Some(c)
-                  failedTaskId = Some(taskid)
+                  failedtaskid = Some(taskid)
                   _append_task_finished(
                     jobid,
                     taskid,
@@ -1265,7 +1274,7 @@ final class InMemoryJobEngine(
           }
         }
         if (failure.nonEmpty)
-          _run_compensations(jobid, failedTaskId, committedTasks.reverse)
+          _run_compensations(jobid, failedtaskid, committedtasks.reverse)
         val deferred = _get_record(jobid).map(_.status) match {
           case Some(JobStatus.Cancelled) =>
             Some(JobResult.Failure(Consequence.stateInvalid[Nothing](
@@ -1273,7 +1282,7 @@ final class InMemoryJobEngine(
               Seq(Descriptor.Facet.State("cancelled"))
             ).conclusion))
           case _ =>
-            failure.map(JobResult.Failure.apply).orElse(successResponse.map(JobResult.Success.apply))
+            failure.map(JobResult.Failure.apply).orElse(successresponse.map(JobResult.Success.apply))
         }
         _mark_base_completion(jobid, deferred)
     }

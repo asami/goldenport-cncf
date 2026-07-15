@@ -1,6 +1,5 @@
 package org.goldenport.cncf.config
 
-import java.time.Clock
 import org.goldenport.Consequence
 import org.goldenport.configuration.ResolvedConfiguration
 import org.goldenport.cncf.cli.RunMode
@@ -12,7 +11,7 @@ import org.goldenport.cncf.entity.{EntityStore, EntityStoreSpace}
 import org.goldenport.cncf.config.ConfigurationAccess
 import org.goldenport.cncf.config.RuntimeDefaults
 import org.goldenport.cncf.action.CommandExecutionMode
-import org.goldenport.cncf.context.{IdGenerationContext, RuntimeClock}
+import org.goldenport.cncf.context.{ExecutionProfileResolver, IdGenerationContext, ResolvedExecutionProfile, RuntimeClock}
 import org.goldenport.cncf.observability.{DiagnosticPayloadExternalizationConfig, ObservabilityEngine, OpenTelemetryExportConfig}
 import org.goldenport.cncf.blob.BlobStoreConfig
 
@@ -55,8 +54,10 @@ final case class RuntimeConfig(
     StaticFormAppRendererConfig.default,
   blobStoreConfig: BlobStoreConfig = BlobStoreConfig(),
   idNamespace: IdGenerationContext.IdNamespace = IdGenerationContext.DefaultNamespace,
-  executionClock: RuntimeClock = RuntimeConfig.DEFAULT_EXECUTION_CLOCK
-)
+  executionProfile: ResolvedExecutionProfile = RuntimeConfig.DEFAULT_EXECUTION_PROFILE
+) {
+  def executionClock: RuntimeClock = executionProfile.runtimeClock
+}
 
 object RuntimeConfig {
   final case class DebugAuthConfig(
@@ -93,6 +94,24 @@ object RuntimeConfig {
   val RuntimeCommandExecutionModeKey = "textus.runtime.command.execution-mode"
   val CLOCK_VIRTUAL_START_AT_KEY = "textus.clock.virtual-start-at"
   val RUNTIME_CLOCK_VIRTUAL_START_AT_KEY = "textus.runtime.clock.virtual-start-at"
+  val EXECUTION_PROFILE_KEY = "textus.execution.profile"
+  val RUNTIME_EXECUTION_PROFILE_KEY = "textus.runtime.execution.profile"
+  val EXECUTION_KEY = "textus.execution.key"
+  val RUNTIME_EXECUTION_KEY = "textus.runtime.execution.key"
+  val EXECUTION_TIME_MODE_KEY = "textus.execution.time.mode"
+  val RUNTIME_EXECUTION_TIME_MODE_KEY = "textus.runtime.execution.time.mode"
+  val EXECUTION_TIME_START_AT_KEY = "textus.execution.time.start-at"
+  val RUNTIME_EXECUTION_TIME_START_AT_KEY = "textus.runtime.execution.time.start-at"
+  val EXECUTION_RANDOM_MODE_KEY = "textus.execution.random.mode"
+  val RUNTIME_EXECUTION_RANDOM_MODE_KEY = "textus.runtime.execution.random.mode"
+  val EXECUTION_RANDOM_SEED_KEY = "textus.execution.random.seed"
+  val RUNTIME_EXECUTION_RANDOM_SEED_KEY = "textus.runtime.execution.random.seed"
+  val EXECUTION_IDS_MODE_KEY = "textus.execution.ids.mode"
+  val RUNTIME_EXECUTION_IDS_MODE_KEY = "textus.runtime.execution.ids.mode"
+  val EXECUTION_SCHEDULER_MODE_KEY = "textus.execution.scheduler.mode"
+  val RUNTIME_EXECUTION_SCHEDULER_MODE_KEY = "textus.runtime.execution.scheduler.mode"
+  val EXECUTION_ORDERING_MODE_KEY = "textus.execution.ordering.mode"
+  val RUNTIME_EXECUTION_ORDERING_MODE_KEY = "textus.runtime.execution.ordering.mode"
   val IdNamespaceMajorKey = "textus.id.namespace.major"
   val RuntimeIdNamespaceMajorKey = "textus.runtime.id.namespace.major"
   val IdNamespaceMinorKey = "textus.id.namespace.minor"
@@ -282,7 +301,8 @@ object RuntimeConfig {
   val DEFAULT_DEBUG_AUTH_PASSWORD = "test"
   val DEFAULT_DEBUG_AUTH_STATUS = "active"
   val DefaultIdNamespace: IdGenerationContext.IdNamespace = IdGenerationContext.DefaultNamespace
-  val DEFAULT_EXECUTION_CLOCK: RuntimeClock = RuntimeClock.system(Clock.systemUTC())
+  val DEFAULT_EXECUTION_PROFILE: ResolvedExecutionProfile = ExecutionProfileResolver.standard
+  val DEFAULT_EXECUTION_CLOCK: RuntimeClock = DEFAULT_EXECUTION_PROFILE.runtimeClock
 
   val default: RuntimeConfig =
     RuntimeConfig(
@@ -310,12 +330,19 @@ object RuntimeConfig {
       staticFormAppRendererConfig = StaticFormAppRendererConfig.default,
       blobStoreConfig = BlobStoreConfig(),
       idNamespace = DefaultIdNamespace,
-      executionClock = DEFAULT_EXECUTION_CLOCK
+      executionProfile = DEFAULT_EXECUTION_PROFILE
     )
 
   def from(
     configuration: ResolvedConfiguration,
     modeOverride: Option[RunMode] = None
+  ): RuntimeConfig =
+    _from(configuration, modeOverride, None)
+
+  private def _from(
+    configuration: ResolvedConfiguration,
+    modeoverride: Option[RunMode],
+    profileoverride: Option[ResolvedExecutionProfile]
   ): RuntimeConfig = {
     val baseurl =
       _get_string(configuration, ServerEmulatorBaseUrlKey)
@@ -331,16 +358,13 @@ object RuntimeConfig {
           FakeHttpDriver.okText("nop")
       }
     }
-    val modeName =
+    val modename =
       _get_string(configuration, ModeKey)
         .getOrElse(DefaultMode)
     val mode =
-      modeOverride.orElse(RunMode.from(modeName)).getOrElse(RunMode.Command)
-    val operationMode =
-      _get_string(configuration, OperationModeKey)
-        .flatMap(OperationMode.from)
-        .getOrElse(DefaultOperationMode)
-    val commandExecutionMode =
+      modeoverride.orElse(RunMode.from(modename)).getOrElse(RunMode.Command)
+    val operationmode = _operation_mode(configuration)
+    val commandexecutionmode =
       _get_string(configuration, CommandExecutionModeKey)
         .flatMap(parseCommandExecutionMode)
     val logbackend: LogBackend = {
@@ -371,52 +395,52 @@ object RuntimeConfig {
     }
     val datastorespace = DataStoreSpace.create(configuration)
     val entitystorespace = EntityStoreSpace.create(configuration)
-    val executionHistoryConfig = _execution_history_config(configuration)
-    val diagnosticPayloadExternalizationConfig =
-      _diagnostic_payload_externalization_config(configuration, operationMode)
-    val openTelemetryExportConfig =
-      _open_telemetry_export_config(configuration, operationMode)
+    val executionhistoryconfig = _execution_history_config(configuration)
+    val diagnosticpayloadexternalizationconfig =
+      _diagnostic_payload_externalization_config(configuration, operationmode)
+    val opentelemetryexportconfig =
+      _open_telemetry_export_config(configuration, operationmode)
     val rendererconfig =
       _static_form_app_renderer_config(configuration)
-    val blobStoreConfig = BlobStoreConfig.fromConfiguration(configuration)
-    val idNamespace = _id_namespace(configuration)
-    val executionClock = _execution_clock(configuration)
-    val webOperationDispatcher =
+    val blobstoreconfig = BlobStoreConfig.fromConfiguration(configuration)
+    val idnamespace = _id_namespace(configuration)
+    val executionprofile = profileoverride.getOrElse(_execution_profile(configuration, operationmode))
+    val weboperationdispatcher =
       _get_string(configuration, WebOperationDispatcherKey)
         .map(_.trim.toLowerCase)
         .filter(_.nonEmpty)
         .getOrElse(DefaultWebOperationDispatcher)
-    val webOperationDispatcherRestBaseUrl =
+    val weboperationdispatcherrestbaseurl =
       _get_string(configuration, WebOperationDispatcherRestBaseUrlKey)
-    val webDevelopAnonymousAdmin =
+    val webdevelopanonymousadmin =
       _get_boolean(configuration, WebDevelopAnonymousAdminKey)
         .getOrElse(DefaultWebDevelopAnonymousAdmin)
     val webdemoassistenabled =
       _get_boolean(configuration, WEB_DEMO_ASSIST_ENABLED_KEY)
         .getOrElse(DEFAULT_WEB_DEMO_ASSIST_ENABLED)
-    val webProductionAdminEnabled =
+    val webproductionadminenabled =
       _get_boolean(configuration, WebProductionAdminEnabledKey)
         .getOrElse(DefaultWebProductionAdminEnabled)
-    val webProductionAdminSystemRoles =
+    val webproductionadminsystemroles =
       _split_token_list(_get_string(configuration, WebProductionAdminSystemRolesKey))
         .filter(_.nonEmpty) match {
           case Vector() => DefaultWebProductionAdminSystemRoles
           case roles => roles
         }
-    val webProductionAdminComponentRoles =
+    val webproductionadmincomponentroles =
       _split_token_list(_get_string(configuration, WebProductionAdminComponentRolesKey))
         .filter(_.nonEmpty) match {
           case Vector() => DefaultWebProductionAdminComponentRoles
           case roles => roles
         }
-    val webProductionAdminJobsRoles =
+    val webproductionadminjobsroles =
       _split_token_list(_get_string(configuration, WebProductionAdminJobsRolesKey))
         .filter(_.nonEmpty) match {
           case Vector() => DefaultWebProductionAdminJobsRoles
           case roles => roles
         }
     val debugauthconfig = _debug_auth_config(configuration)
-    ObservabilityEngine.updateExecutionHistoryConfig(executionHistoryConfig)
+    ObservabilityEngine.updateExecutionHistoryConfig(executionhistoryconfig)
     val config = RuntimeConfig(
       logbackend,
       loglevel,
@@ -425,24 +449,24 @@ object RuntimeConfig {
       dataStoreSpace = datastorespace,
       entityStoreSpace = entitystorespace,
       mode = mode,
-      operationMode = operationMode,
-      webOperationDispatcher = webOperationDispatcher,
-      webOperationDispatcherRestBaseUrl = webOperationDispatcherRestBaseUrl,
-      webDevelopAnonymousAdmin = webDevelopAnonymousAdmin,
+      operationMode = operationmode,
+      webOperationDispatcher = weboperationdispatcher,
+      webOperationDispatcherRestBaseUrl = weboperationdispatcherrestbaseurl,
+      webDevelopAnonymousAdmin = webdevelopanonymousadmin,
       webDemoAssistEnabled = webdemoassistenabled,
-      webProductionAdminEnabled = webProductionAdminEnabled,
-      webProductionAdminSystemRoles = webProductionAdminSystemRoles,
-      webProductionAdminComponentRoles = webProductionAdminComponentRoles,
-      webProductionAdminJobsRoles = webProductionAdminJobsRoles,
+      webProductionAdminEnabled = webproductionadminenabled,
+      webProductionAdminSystemRoles = webproductionadminsystemroles,
+      webProductionAdminComponentRoles = webproductionadmincomponentroles,
+      webProductionAdminJobsRoles = webproductionadminjobsroles,
       debugAuthConfig = debugauthconfig,
-      commandExecutionMode = commandExecutionMode,
-      executionHistoryConfig = executionHistoryConfig,
-      diagnosticPayloadExternalizationConfig = diagnosticPayloadExternalizationConfig,
-      openTelemetryExportConfig = openTelemetryExportConfig,
+      commandExecutionMode = commandexecutionmode,
+      executionHistoryConfig = executionhistoryconfig,
+      diagnosticPayloadExternalizationConfig = diagnosticpayloadexternalizationconfig,
+      openTelemetryExportConfig = opentelemetryexportconfig,
       staticFormAppRendererConfig = rendererconfig,
-      blobStoreConfig = blobStoreConfig,
-      idNamespace = idNamespace,
-      executionClock = executionClock
+      blobStoreConfig = blobstoreconfig,
+      idNamespace = idnamespace,
+      executionProfile = executionprofile
     )
     _validate(config)
     config
@@ -464,9 +488,15 @@ object RuntimeConfig {
       normalized == "true" || normalized == "1" || normalized == "yes" || normalized == "on"
     }
 
-  def create(conf: ResolvedConfiguration): Consequence[RuntimeConfig] = Consequence {
-    from(conf)
-  }
+  def create(conf: ResolvedConfiguration): Consequence[RuntimeConfig] =
+    ExecutionProfileResolver.resolve(conf, _operation_mode(conf)).flatMap { profile =>
+      Consequence(_from(conf, None, Some(profile)))
+    }
+
+  private def _operation_mode(configuration: ResolvedConfiguration): OperationMode =
+    _get_string(configuration, OperationModeKey)
+      .flatMap(OperationMode.from)
+      .getOrElse(DefaultOperationMode)
 
   private def _validate(config: RuntimeConfig): Unit = {
     config.diagnosticPayloadExternalizationConfig.validationError.foreach { message =>
@@ -547,23 +577,23 @@ object RuntimeConfig {
     configuration: ResolvedConfiguration
   ): ObservabilityEngine.ExecutionHistoryConfig = {
     val defaults = ObservabilityEngine.ExecutionHistoryConfig()
-    val recentLimit =
+    val recentlimit =
       _get_int(configuration, ExecutionHistoryRecentLimitKey).getOrElse(defaults.recentLimit)
-    val filteredLimit =
+    val filteredlimit =
       _get_int(configuration, ExecutionHistoryFilteredLimitKey).getOrElse(defaults.filteredLimit)
     val filters =
       _split_csv(_get_string(configuration, ExecutionHistoryFilterOperationContainsKey))
         .map(x => ObservabilityEngine.ExecutionHistoryFilter(operationContains = Some(x)))
     defaults.copy(
-      recentLimit = math.max(0, recentLimit),
-      filteredLimit = math.max(0, filteredLimit),
+      recentLimit = math.max(0, recentlimit),
+      filteredLimit = math.max(0, filteredlimit),
       filters = filters
     )
   }
 
   private def _diagnostic_payload_externalization_config(
     configuration: ResolvedConfiguration,
-    operationMode: OperationMode
+    operationmode: OperationMode
   ): DiagnosticPayloadExternalizationConfig =
     DiagnosticPayloadExternalizationConfig.fromValues(
       enabled = _get_boolean(configuration, ObservabilityPayloadExternalizationEnabledKey).getOrElse(false),
@@ -576,12 +606,12 @@ object RuntimeConfig {
       allowRequestOverride = _get_boolean(configuration, ObservabilityPayloadExternalizationAllowRequestOverrideKey),
       unsafeOpaquePayloads = _get_boolean(configuration, ObservabilityPayloadExternalizationUnsafeOpaquePayloadsKey),
       retentionDays = _get_int(configuration, ObservabilityPayloadExternalizationRetentionDaysKey),
-      operationMode = operationMode
+      operationMode = operationmode
     )
 
   private def _open_telemetry_export_config(
     configuration: ResolvedConfiguration,
-    operationMode: OperationMode
+    operationmode: OperationMode
   ): OpenTelemetryExportConfig =
     OpenTelemetryExportConfig.fromValues(
       enabled = _get_boolean(configuration, ObservabilityOtelEnabledKey).getOrElse(false),
@@ -590,7 +620,7 @@ object RuntimeConfig {
       tracesEnabled = _get_boolean(configuration, ObservabilityOtelTracesEnabledKey),
       metricsEnabled = _get_boolean(configuration, ObservabilityOtelMetricsEnabledKey),
       logsEnabled = _get_boolean(configuration, ObservabilityOtelLogsEnabledKey),
-      operationMode = operationMode
+      operationMode = operationmode
     )
 
   private def _static_form_app_renderer_config(
@@ -640,24 +670,15 @@ object RuntimeConfig {
     IdGenerationContext.IdNamespace.normalizeOrThrow(major, minor)
   }
 
-  private def _execution_clock(
-    configuration: ResolvedConfiguration
-  ): RuntimeClock = {
-    val baseclock = Clock.systemUTC()
-    _get_string(configuration, CLOCK_VIRTUAL_START_AT_KEY) match {
-      case Some(value) =>
-        try {
-          RuntimeClock.parseOffset(baseclock, value)
-        } catch {
-          case cause: IllegalArgumentException =>
-            throw new IllegalArgumentException(
-              s"${CLOCK_VIRTUAL_START_AT_KEY} must be an ISO-8601 date-time with an offset: ${value}",
-              cause
-            )
-        }
-      case None => RuntimeClock.system(baseclock)
+  private def _execution_profile(
+    configuration: ResolvedConfiguration,
+    operationmode: OperationMode
+  ): ResolvedExecutionProfile =
+    ExecutionProfileResolver.resolve(configuration, operationmode) match {
+      case Consequence.Success(profile) => profile
+      case Consequence.Failure(conclusion) =>
+        throw conclusion.getException.getOrElse(new IllegalArgumentException(conclusion.display))
     }
-  }
 
   private def _split_csv(
     value: Option[String]
@@ -672,7 +693,7 @@ object RuntimeConfig {
   private def _legacy_aliases(
     key: String
   ): Vector[String] = {
-    val textusRuntime =
+    val textusruntime =
       key match {
         case ServerEmulatorBaseUrlKey => Vector(RuntimeServerEmulatorBaseUrlKey)
         case HttpDriverKey => Vector(RuntimeHttpDriverKey)
@@ -680,6 +701,15 @@ object RuntimeConfig {
         case OperationModeKey => Vector(RuntimeOperationModeKey)
         case CommandExecutionModeKey => Vector(RuntimeCommandExecutionModeKey)
         case CLOCK_VIRTUAL_START_AT_KEY => Vector(RUNTIME_CLOCK_VIRTUAL_START_AT_KEY)
+        case EXECUTION_PROFILE_KEY => Vector(RUNTIME_EXECUTION_PROFILE_KEY)
+        case EXECUTION_KEY => Vector(RUNTIME_EXECUTION_KEY)
+        case EXECUTION_TIME_MODE_KEY => Vector(RUNTIME_EXECUTION_TIME_MODE_KEY)
+        case EXECUTION_TIME_START_AT_KEY => Vector(RUNTIME_EXECUTION_TIME_START_AT_KEY)
+        case EXECUTION_RANDOM_MODE_KEY => Vector(RUNTIME_EXECUTION_RANDOM_MODE_KEY)
+        case EXECUTION_RANDOM_SEED_KEY => Vector(RUNTIME_EXECUTION_RANDOM_SEED_KEY)
+        case EXECUTION_IDS_MODE_KEY => Vector(RUNTIME_EXECUTION_IDS_MODE_KEY)
+        case EXECUTION_SCHEDULER_MODE_KEY => Vector(RUNTIME_EXECUTION_SCHEDULER_MODE_KEY)
+        case EXECUTION_ORDERING_MODE_KEY => Vector(RUNTIME_EXECUTION_ORDERING_MODE_KEY)
         case IdNamespaceMajorKey => Vector(RuntimeIdNamespaceMajorKey)
         case IdNamespaceMinorKey => Vector(RuntimeIdNamespaceMinorKey)
         case DebugCallTreeKey => Vector(RuntimeDebugCallTreeKey)
@@ -764,11 +794,11 @@ object RuntimeConfig {
         case BlobMaxByteSizeKey => Vector(RuntimeBlobMaxByteSizeKey)
         case _ => Vector.empty
       }
-    val cncfAliases =
-      (key +: textusRuntime).collect {
+    val cncfaliases =
+      (key +: textusruntime).collect {
         case k if k.startsWith("textus.") => "cncf." + k.stripPrefix("textus.")
       }
-    textusRuntime ++ cncfAliases
+    textusruntime ++ cncfaliases
   }
 }
 

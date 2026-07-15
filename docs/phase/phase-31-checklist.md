@@ -86,23 +86,46 @@ Status: DONE
 
 ## ED-03: CNCF Profile Resolution and ActionCall Binding
 
-Status: IN PROGRESS
+Status: DONE
 
 ### Tasks
 
-- [ ] Add profile config and validated resolver models.
-- [ ] Add `test.yaml` / `test.json` structured `execution` shorthand.
-- [ ] Build core assumptions and CNCF controls from one resolver result.
-- [ ] Derive an ActionCall invocation identity at the execution boundary.
-- [ ] Rebind clock, random, IDs, scheduling, and profile metadata coherently.
-- [ ] Reject incompatible profiles with structured `Conclusion`.
-- [ ] Add context/config executable specifications.
+- [x] Add profile config and validated resolver models.
+- [x] Add `test.yaml` / `test.json` structured `execution` shorthand.
+- [x] Build core assumptions and CNCF controls from one resolver result.
+- [x] Derive an ActionCall invocation identity at the execution boundary.
+- [x] Rebind clock, random, IDs, scheduling, and profile metadata coherently.
+- [x] Reject incompatible profiles with structured `Conclusion`.
+- [x] Add context/config executable specifications.
 
 ### Acceptance Criteria
 
 - One runtime profile produces one coherent ActionCall context.
 - Runtime rebinding cannot mix facilities from different profiles.
 - Test profiles are explicit and are not auto-discovered.
+
+### Evidence
+
+- `ExecutionProfileResolver` resolves `standard`, `seeded`, and test-only
+  `controlled` as validated compatibility rows. Invalid dimensions and unsafe
+  activation return the existing structured configuration `Conclusion`.
+- `RuntimeTestDescriptor` normalizes a structured `execution` block into the
+  canonical runtime keys. Ordinary bootstrap does not discover `test.yaml`;
+  controlled activation requires an explicit descriptor, `cncf test`, or the
+  in-process executable-spec resolver.
+- `GlobalRuntimeContext` owns one `ExecutionProfileRuntime`. ActionCall
+  admission assigns a monotonic invocation identity before call creation and
+  derives clock, random, entropy, ID, and execution-control capabilities from
+  one binding.
+- Runtime rebinding replaces all profile-dependent capabilities together.
+  Internal UnitOfWork rebinding preserves the already selected invocation
+  binding instead of returning to a runtime-base profile.
+- Scheduler and ordering modes are carried coherently as resolved controls in
+  ED-03. Manual scheduling behavior and test-control operations remain ED-05.
+- `ExecutionProfileSpec`, `ExecutionProfileBootstrapSpec`,
+  `ExecutionContextSpec`, and the related runtime/config/command specs pass.
+  The focused validation completed with 81 successful examples and four
+  pre-existing pending examples.
 
 ## ED-04: Internal DSL and Capability-Based IDs
 

@@ -82,6 +82,7 @@ object ExecutionContext {
     jobContext: org.goldenport.cncf.job.JobContext,
     framework: FrameworkParameter = FrameworkParameter(),
     idGeneration: IdGenerationContext = IdGenerationContext.default(IdGenerationContext.DefaultNamespace),
+    executionControl: ExecutionControlContext = ExecutionControlContext.standard,
     tagSpaces: TagSpaceContext = TagSpaceContext.default
   ) {
     def major: String = idGeneration.namespace.major
@@ -101,6 +102,7 @@ object ExecutionContext {
       def jobContext: org.goldenport.cncf.job.JobContext = cncfCore.jobContext
       def framework: FrameworkParameter = cncfCore.framework
       def idGeneration: IdGenerationContext = cncfCore.idGeneration
+      def executionControl: ExecutionControlContext = cncfCore.executionControl
       def tagSpaces: TagSpaceContext = cncfCore.tagSpaces
       def major = cncfCore.major
       def minor = cncfCore.minor
@@ -137,7 +139,8 @@ object ExecutionContext {
     inlineCallTree: Boolean = false,
     traceJob: Boolean = false,
     saveCallTree: Boolean = false,
-    dslChokepointHooks: Option[Vector[DslChokepointHook]] = None
+    dslChokepointHooks: Option[Vector[DslChokepointHook]] = None,
+    executionInvocationKey: Option[String] = None
   )
 
   /**
@@ -204,10 +207,13 @@ object ExecutionContext {
     create(runtime, runtime)
 
   def create(scope: ScopeContext, runtime: RuntimeContext): ExecutionContext = {
-    val core = _core(_execution_clock(scope))
+    val basecore = _core(_execution_clock(scope))
+    val binding = _execution_profile_binding(runtime).orElse(_execution_profile_binding(scope))
+    val core = binding.map(_core_with_profile(basecore, _)).getOrElse(basecore)
     val security = _security_context(SecurityContext.Privilege.User)
     val observability = _observability_context(core)
-    val idgeneration = _id_generation_context(scope)
+    val idgeneration = binding.map(_.idGeneration).getOrElse(_id_generation_context(scope))
+    val executioncontrol = binding.map(_.control).getOrElse(ExecutionControlContext.standard)
     lazy val context: ExecutionContext = Instance(
       core = core,
       cncfCore = CncfCore(
@@ -216,7 +222,8 @@ object ExecutionContext {
         observability = observability,
         runtime = runtime,
         jobContext = org.goldenport.cncf.job.JobContext.empty,
-        idGeneration = idgeneration
+        idGeneration = idgeneration,
+        executionControl = executioncontrol
       )
     )
     context
@@ -274,31 +281,70 @@ object ExecutionContext {
     runtime: RuntimeContext
   ): ExecutionContext = ctx match {
     case i: Instance =>
-      val idgeneration = _id_generation_context_for_rebound(i.cncfCore.idGeneration, runtime)
+      val binding = _execution_profile_binding(runtime)
+      val idgeneration = binding.map(_.idGeneration).getOrElse(_id_generation_context_for_rebound(i.cncfCore.idGeneration, runtime))
+      val core = binding.map(_core_with_profile(i.core, _)).getOrElse(_core_for_rebound(i.core, runtime))
+      val executioncontrol = binding.map(_.control).getOrElse(i.cncfCore.executionControl)
       i.copy(
-        core = _core_for_rebound(i.core, runtime),
+        core = core,
         cncfCore = i.cncfCore.copy(
           scope = runtime,
           runtime = runtime,
-          idGeneration = idgeneration
+          idGeneration = idgeneration,
+          executionControl = executioncontrol
         )
       )
     case _ =>
       ctx
   }
 
-  def withRuntimeContextPreservingIdGeneration(
+  private def _with_runtime_context_preserving_execution_profile(
     ctx: ExecutionContext,
     runtime: RuntimeContext
   ): ExecutionContext = ctx match {
     case i: Instance =>
       i.copy(
-        core = _core_for_rebound(i.core, runtime),
         cncfCore = i.cncfCore.copy(
           scope = runtime,
           runtime = runtime
         )
       )
+    case _ =>
+      ctx
+  }
+
+  def withExecutionInvocation(
+    ctx: ExecutionContext,
+    operationselector: String,
+    explicitkey: Option[String] = None
+  ): ExecutionContext = ctx match {
+    case i: Instance =>
+      val selectedkey = explicitkey.orElse(i.cncfCore.framework.executionInvocationKey)
+      _global_runtime_context(i.cncfCore.runtime) match {
+        case Some(global) =>
+          val binding = global.executionProfileRuntime.nextBinding(operationselector, selectedkey)
+          _rebind_runtime_context(i.copy(
+            core = _core_with_profile(i.core, binding),
+            cncfCore = i.cncfCore.copy(
+              idGeneration = binding.idGeneration,
+              executionControl = binding.control
+            )
+          ))
+        case None =>
+          i
+      }
+    case _ =>
+      ctx
+  }
+
+  def withExplicitExecutionInvocationKey(
+    ctx: ExecutionContext,
+    key: String
+  ): ExecutionContext = ctx match {
+    case i: Instance =>
+      i.copy(cncfCore = i.cncfCore.copy(
+        framework = i.cncfCore.framework.copy(executionInvocationKey = Some(key))
+      ))
     case _ =>
       ctx
   }
@@ -478,7 +524,7 @@ object ExecutionContext {
     ctx: Instance
   ): ExecutionContext = {
     lazy val rebound: ExecutionContext =
-      withRuntimeContextPreservingIdGeneration(
+      _with_runtime_context_preserving_execution_profile(
         ctx,
         ctx.runtime.withUnitOfWorkContext(rebound, ctx.runtime.toToken)
       )
@@ -559,9 +605,19 @@ object ExecutionContext {
     current: CoreExecutionContext.Core,
     runtime: RuntimeContext
   ): CoreExecutionContext.Core =
-    _execution_clock_option(runtime)
-      .map(clock => _core_with_clock(current, clock))
+    _execution_profile_binding(runtime)
+      .map(_core_with_profile(current, _))
+      .orElse(_execution_clock_option(runtime).map(clock => _core_with_clock(current, clock)))
       .getOrElse(current)
+
+  private def _core_with_profile(
+    current: CoreExecutionContext.Core,
+    binding: ExecutionProfileBinding
+  ): CoreExecutionContext.Core =
+    _core_with_clock(current, binding.clock).copy(
+      random = binding.random,
+      entropy = binding.entropy
+    )
 
   private def _core_with_clock(
     current: CoreExecutionContext.Core,
@@ -579,9 +635,14 @@ object ExecutionContext {
     current: IdGenerationContext,
     runtime: RuntimeContext
   ): IdGenerationContext =
-    _global_runtime_context(runtime)
-      .map(global => IdGenerationContext.default(global.config.idNamespace))
+    _execution_profile_binding(runtime)
+      .map(_.idGeneration)
       .getOrElse(current)
+
+  private def _execution_profile_binding(
+    scope: ScopeContext
+  ): Option[ExecutionProfileBinding] =
+    _global_runtime_context(scope).map(_.executionProfileRuntime.baseBinding)
 
   private def _global_runtime_context(
     scope: ScopeContext

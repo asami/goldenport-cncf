@@ -10,7 +10,7 @@ import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
 import org.goldenport.record.Record
 import org.goldenport.cncf.action.{Action, ActionCall, CommandAction, CommandExecutionMode, CommandExecutionPolicy, CommandInterfaceMode, CommandJobRunMode, ProcedureActionCall, QueryAction, ResourceAccess}
 import cats.~>
-import org.goldenport.cncf.context.{DataStoreContext, EntitySpaceContext, EntityStoreContext, ExecutionContext, GlobalRuntimeContext, RuntimeContext, ScopeContext, ScopeKind}
+import org.goldenport.cncf.context.{DataStoreContext, EntitySpaceContext, EntityStoreContext, ExecutionContext, ExecutionInvocationIdentity, GlobalRuntimeContext, RuntimeContext, ScopeContext, ScopeKind}
 import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.backend.collaborator.Collaborator
 import org.goldenport.cncf.datastore.DataStore
@@ -63,9 +63,17 @@ case class ComponentLogic(
     action: Action,
     ctx0: ExecutionContext
   ): ActionCall = {
+    val boundctx = ExecutionContext.withExecutionInvocation(
+      ctx0,
+      ExecutionInvocationIdentity.operationSelector(
+        Some(component.name),
+        action.request.service,
+        action.request.operation
+      )
+    )
     // TODO: action scope should be derived from service scope once available.
     val actionscope = component.scopeContext.createChildScope(ScopeKind.Action, action.name)
-    val ctx = ctx0.withScope(actionscope)
+    val ctx = boundctx.withScope(actionscope)
     val collaborator = _get_collaborator
     val core = ActionCall.Core(
       action,
