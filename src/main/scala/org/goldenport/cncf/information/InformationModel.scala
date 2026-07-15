@@ -16,7 +16,8 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 
 /*
  * @since   May. 20, 2026
- * @version May. 30, 2026
+ *  version May. 30, 2026
+ * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 type InformationId = EntityId
@@ -102,7 +103,7 @@ final case class Information(
   conflicts: Vector[InformationConflict] = Vector.empty,
   fieldEvents: Vector[InformationFieldEvent] = Vector.empty,
   confirmedAt: Option[Instant] = None,
-  updatedAt: Instant = Instant.now()
+  updatedAt: Instant
 ) {
   def data: Record = workingData
 }
@@ -200,7 +201,7 @@ final case class InformationFieldEvent(
   valueAfter: Option[String] = None,
   evidence: Option[String] = None,
   note: Option[String] = None,
-  occurredAt: Instant = Instant.now(),
+  occurredAt: Instant,
   actor: Option[String] = None
 )
 

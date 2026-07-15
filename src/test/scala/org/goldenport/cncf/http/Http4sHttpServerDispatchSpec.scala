@@ -22,6 +22,7 @@ import org.goldenport.record.Record
 import org.http4s.{MediaType, Method, Request as HRequest, Uri}
 import org.http4s.headers.`Content-Type`
 import io.circe.parser.parse
+import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 import org.typelevel.ci.CIStringSyntax
@@ -34,7 +35,7 @@ import org.typelevel.ci.CIStringSyntax
  * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
-class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers {
+class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenWhenThen {
 
   "Http4sHttpServer" should {
     "dispatch form-api submits through the runtime component name when the web selector uses artifact metadata" in {
@@ -908,9 +909,11 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers {
     }
 
     "dispatch system information admin routes" in {
+      Given("a subsystem containing confirmed Information")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       subsystem.add(TestComponentFactory.create("information_component", Protocol.empty))
       val component = subsystem.findComponent("information_component").getOrElse(fail("information component missing"))
+      given ExecutionContext = component.logic.executionContext()
       val batch = component.informationSpace.registerInformation(
         "paper",
         Vector(Record.data("title" -> "Information Import", "authors" -> "Alice Example"))
@@ -921,6 +924,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers {
       val record = batch.headOption.getOrElse(fail("information record missing"))
       component.informationSpace.validateInformation(record.id)
       component.informationSpace.confirmInformation(record.id)
+      When("the system Information index, component detail, and missing component routes are requested")
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
       val app = server.routes(null.asInstanceOf[org.http4s.server.websocket.WebSocketBuilder2[IO]]).orNotFound
 
@@ -928,6 +932,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers {
       val componentpage = app.run(HRequest[IO](method = Method.GET, uri = Uri.unsafeFromString("/web/system/admin/information/information-component"))).unsafeRunSync()
       val unknowncomponent = app.run(HRequest[IO](method = Method.GET, uri = Uri.unsafeFromString("/web/system/admin/information/missing"))).unsafeRunSync()
 
+      Then("existing Information is rendered and an unknown component remains not found")
       index.status.code shouldBe 200
       index.as[String].unsafeRunSync() should include ("System Information")
       componentpage.status.code shouldBe 200

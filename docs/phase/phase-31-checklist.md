@@ -304,12 +304,17 @@ Status: IN PROGRESS
 - Component, Event reception, Workflow, and JCL execution boundaries now derive
   primary and compensation Action IDs from the same caller-bound capabilities.
   The replay specification covers Job, Task, and Action identity sequences.
+- InformationSpace registration, mutation, validation, confirmation,
+  publication, conflict handling, and Knowledge materialization now require the
+  caller execution context and derive semantic timestamps from its clock.
+  Information and field-event model constructors no longer supply ambient
+  timestamp defaults, and property-based coverage verifies the lifecycle and
+  materialized KnowledgeFrame timestamps.
 - CAR lint and component developer guidance now report direct ambient clock,
   UUID/random, sleep, environment/property, host filesystem, thread, and
   executor access in component sources.
-- Remaining Job model defaults, InformationSpace, working-set, and other runtime
-  model semantic defaults still require migration before ED-07 can be marked
-  DONE.
+- Remaining Job model defaults, working-set, and other runtime model semantic
+  defaults still require migration before ED-07 can be marked DONE.
 
 ### Acceptance Criteria
 

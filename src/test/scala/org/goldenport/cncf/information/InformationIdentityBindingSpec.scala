@@ -1,22 +1,29 @@
 package org.goldenport.cncf.information
 
 import org.goldenport.Consequence
+import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.knowledge.{ExternalKnowledgeIdentifier, KnowledgeEntityBinding, KnowledgeNodeId, RdfNodeName}
 import org.goldenport.record.Record
+import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   May. 20, 2026
- * @version May. 25, 2026
+ *  version May. 25, 2026
+ * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 final class InformationIdentityBindingSpec
   extends AnyWordSpec
-  with Matchers {
+  with Matchers
+  with GivenWhenThen {
+
+  private given ExecutionContext = ExecutionContext.test()
 
   "Information identity binding" should {
     "keep Information RDF Entity and Knowledge ids separate" in {
+      Given("an imported paper and a resolver binding with RDF, Entity, and Knowledge identities")
       val space = new InformationSpace
       val batch = _success(space.registerInformation("paper", Vector(Record.data("title" -> "Identity", "authors" -> "Alice"))))
       val recordid = batch.head.id
@@ -29,12 +36,14 @@ final class InformationIdentityBindingSpec
         confidence = Some(0.9)
       )
 
+      When("the binding candidate is selected and the Information is confirmed")
       val candidate = _success(space.addResolutionCandidate(recordid, "title", "Identity", binding, Some(0.9), Some("exact title match")))
       val selected = _success(space.selectResolutionCandidate(recordid, candidate.candidateKey))
       _success(space.validateInformation(recordid))
       val item = _success(space.confirmInformation(recordid))
       val confirmed = item.identityBindings.headOption.getOrElse(fail("missing binding"))
 
+      Then("each identity remains distinct while the binding becomes confirmed")
       selected.selected shouldBe true
       confirmed.status shouldBe InformationBindingStatus.Confirmed
       confirmed.rdfSubject.map(_.print) shouldBe Some("https://example.org/paper/identity")

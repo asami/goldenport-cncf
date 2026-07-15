@@ -70,7 +70,7 @@ import org.goldenport.cncf.config.RuntimeFileConfigLoader
  *  version Mar. 30, 2026
  *  version Apr. 29, 2026
  *  version May. 25, 2026
- * @version Jul. 15, 2026
+ * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 trait BehaviorFeaturePart { self: Behavior.Core.Holder =>
@@ -1382,7 +1382,7 @@ trait BehaviorInformationPart extends BehaviorFeaturePart { self: Behavior.Core.
     records: Vector[Record]
   ): ExecUowM[Vector[Information]] =
     exec_from_calltree("uow:information:register", _information_attributes("register", domain) + ("record_count" -> records.size.toString)) {
-      _information_space.flatMap(_.registerInformation(domain, records))
+      _information_space.flatMap(_.registerInformation(domain, records)(using execution_context))
     }
 
   protected final def information_update(
@@ -1390,7 +1390,7 @@ trait BehaviorInformationPart extends BehaviorFeaturePart { self: Behavior.Core.
     workingdata: Record
   ): ExecUowM[Information] =
     exec_from_calltree("uow:information:update", _information_attributes("update", informationid)) {
-      _information_space.flatMap(_.updateInformation(informationid, workingdata))
+      _information_space.flatMap(_.updateInformation(informationid, workingdata)(using execution_context))
     }
 
   protected final def information_append_field_event(
@@ -1398,7 +1398,7 @@ trait BehaviorInformationPart extends BehaviorFeaturePart { self: Behavior.Core.
     event: InformationFieldEvent
   ): ExecUowM[Information] =
     exec_from_calltree("uow:information:field-event:append", _information_attributes("field-event-append", informationid) + ("field_path" -> event.fieldPath) + ("state" -> event.state.value) + ("source" -> event.source)) {
-      _information_space.flatMap(_.appendFieldEvent(informationid, event))
+      _information_space.flatMap(_.appendFieldEvent(informationid, event)(using execution_context))
     }
 
   protected final def information_append_field_events(
@@ -1415,14 +1415,14 @@ trait BehaviorInformationPart extends BehaviorFeaturePart { self: Behavior.Core.
     informationid: InformationId
   ): ExecUowM[Information] =
     exec_from_calltree("uow:information:validate", _information_attributes("validate", informationid)) {
-      _information_space.flatMap(_.validateInformation(informationid))
+      _information_space.flatMap(_.validateInformation(informationid)(using execution_context))
     }
 
   protected final def information_confirm(
     informationid: InformationId
   ): ExecUowM[Information] =
     exec_from_calltree("uow:information:confirm", _information_attributes("confirm", informationid)) {
-      _information_space.flatMap(_.confirmInformation(informationid))
+      _information_space.flatMap(_.confirmInformation(informationid)(using execution_context))
     }
 
   protected final def information_reject(
@@ -1430,14 +1430,14 @@ trait BehaviorInformationPart extends BehaviorFeaturePart { self: Behavior.Core.
     reason: String
   ): ExecUowM[Information] =
     exec_from_calltree("uow:information:reject", _information_attributes("reject", informationid)) {
-      _information_space.flatMap(_.rejectInformation(informationid, reason))
+      _information_space.flatMap(_.rejectInformation(informationid, reason)(using execution_context))
     }
 
   protected final def information_reopen(
     informationid: InformationId
   ): ExecUowM[Information] =
     exec_from_calltree("uow:information:reopen", _information_attributes("reopen", informationid)) {
-      _information_space.flatMap(_.reopenInformation(informationid))
+      _information_space.flatMap(_.reopenInformation(informationid)(using execution_context))
     }
 
   protected final def information_publish(
@@ -1447,7 +1447,7 @@ trait BehaviorInformationPart extends BehaviorFeaturePart { self: Behavior.Core.
     knowledgeframeid: Option[KnowledgeFrameId] = None
   ): ExecUowM[InformationPublicationStatus] =
     exec_from_calltree("uow:information:publish", _information_attributes("publish", informationid) + ("target" -> target)) {
-      _information_space.flatMap(_.publishInformation(informationid, target, message, knowledgeframeid))
+      _information_space.flatMap(_.publishInformation(informationid, target, message, knowledgeframeid)(using execution_context))
     }
 
   protected final def information_fail_publication(
@@ -1457,7 +1457,7 @@ trait BehaviorInformationPart extends BehaviorFeaturePart { self: Behavior.Core.
     knowledgeframeid: Option[KnowledgeFrameId] = None
   ): ExecUowM[InformationPublicationStatus] =
     exec_from_calltree("uow:information:publish-failure", _information_attributes("publish-failure", informationid) + ("target" -> target)) {
-      _information_space.flatMap(_.failInformationPublication(informationid, target, message, knowledgeframeid))
+      _information_space.flatMap(_.failInformationPublication(informationid, target, message, knowledgeframeid)(using execution_context))
     }
 
   protected final def information_add_resolution_candidate(
@@ -1469,7 +1469,7 @@ trait BehaviorInformationPart extends BehaviorFeaturePart { self: Behavior.Core.
     evidence: Option[String] = None
   ): ExecUowM[InformationResolutionCandidate] =
     exec_from_calltree("uow:information:candidate:add", _information_attributes("candidate-add", informationid) + ("field_path" -> fieldpath)) {
-      _information_space.flatMap(_.addResolutionCandidate(informationid, fieldpath, candidatelabel, binding, confidence, evidence))
+      _information_space.flatMap(_.addResolutionCandidate(informationid, fieldpath, candidatelabel, binding, confidence, evidence)(using execution_context))
     }
 
   protected final def information_select_resolution_candidate(
@@ -1477,7 +1477,7 @@ trait BehaviorInformationPart extends BehaviorFeaturePart { self: Behavior.Core.
     candidatekey: String
   ): ExecUowM[InformationResolutionCandidate] =
     exec_from_calltree("uow:information:candidate:select", _information_candidate_attributes("candidate-select", informationid, candidatekey)) {
-      _information_space.flatMap(_.selectResolutionCandidate(informationid, candidatekey))
+      _information_space.flatMap(_.selectResolutionCandidate(informationid, candidatekey)(using execution_context))
     }
 
   protected final def information_clear_resolution_candidate(
@@ -1485,14 +1485,14 @@ trait BehaviorInformationPart extends BehaviorFeaturePart { self: Behavior.Core.
     candidatekey: String
   ): ExecUowM[InformationResolutionCandidate] =
     exec_from_calltree("uow:information:candidate:clear", _information_candidate_attributes("candidate-clear", informationid, candidatekey)) {
-      _information_space.flatMap(_.clearResolutionCandidate(informationid, candidatekey))
+      _information_space.flatMap(_.clearResolutionCandidate(informationid, candidatekey)(using execution_context))
     }
 
   protected final def information_materialize(
     information: Information
   ): ExecUowM[KnowledgeWorkingSetSnapshot] =
     exec_from_calltree("uow:information:materialize", _information_attributes("materialize", information.id)) {
-      Consequence.success(InformationSpace.materializeInformation(information))
+      Consequence.success(InformationSpace.materializeInformation(information)(using execution_context))
     }
 
   protected final def information_option(
@@ -1517,7 +1517,7 @@ trait BehaviorInformationPart extends BehaviorFeaturePart { self: Behavior.Core.
     severity: String = "warning"
   ): ExecUowM[InformationConflict] =
     exec_from_calltree("uow:information:conflict:record", _information_attributes("conflict-record", informationid) + ("field_path" -> fieldpath)) {
-      _information_space.flatMap(_.recordConflict(informationid, fieldpath, informationvalue, rdfvalue, severity))
+      _information_space.flatMap(_.recordConflict(informationid, fieldpath, informationvalue, rdfvalue, severity)(using execution_context))
     }
 
   protected final def information_resolve_conflict(
@@ -1526,7 +1526,7 @@ trait BehaviorInformationPart extends BehaviorFeaturePart { self: Behavior.Core.
     decision: String
   ): ExecUowM[InformationConflict] =
     exec_from_calltree("uow:information:conflict:resolve", Map("operation" -> "conflict-resolve", "information_id" -> informationid.print, "conflict_key" -> conflictkey)) {
-      _information_space.flatMap(_.resolveConflict(informationid, conflictkey, decision))
+      _information_space.flatMap(_.resolveConflict(informationid, conflictkey, decision)(using execution_context))
     }
 
   private def _information_space: Consequence[InformationSpace] =

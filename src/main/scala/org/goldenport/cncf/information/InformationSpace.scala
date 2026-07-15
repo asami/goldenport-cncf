@@ -42,7 +42,7 @@ import org.goldenport.record.Record
 /*
  * @since   May. 20, 2026
  *  version May. 31, 2026
- * @version Jun. 18, 2026
+ * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 final class InformationSpace {
@@ -67,19 +67,21 @@ final class InformationSpace {
   def registerInformation(
     domain: String,
     records: Vector[Record]
-  ): Consequence[Vector[Information]] =
+  )(using ctx: ExecutionContext): Consequence[Vector[Information]] =
     if (domain.trim.isEmpty)
       Consequence.argumentInvalid("information domain is required")
     else if (records.isEmpty)
       Consequence.argumentInvalid("information records are required")
     else {
       val base = _snapshot.information.size
+      val now = ctx.clock.instant()
       val values = records.zipWithIndex.map { case (record, index) =>
         Information(
           id = InformationId(_next_id("information", base + index + 1)),
           domain = domain,
           rawData = record,
-          workingData = record
+          workingData = record,
+          updatedAt = now
         )
       }
       _snapshot = _snapshot.copy(information = _snapshot.information ++ values)
@@ -92,39 +94,39 @@ final class InformationSpace {
   def updateInformation(
     informationid: InformationId,
     workingdata: Record
-  ): Consequence[Information] =
+  )(using ctx: ExecutionContext): Consequence[Information] =
     _update_information(informationid) { information =>
       information.copy(
         workingData = workingdata,
         state = InformationLifecycleState.Imported,
         validationIssues = Vector.empty,
-        updatedAt = Instant.now()
+        updatedAt = ctx.clock.instant()
       )
     }
 
   def appendFieldEvent(
     informationid: InformationId,
     event: InformationFieldEvent
-  ): Consequence[Information] =
+  )(using ctx: ExecutionContext): Consequence[Information] =
     _update_information(informationid) { information =>
       information.copy(
         fieldEvents = information.fieldEvents :+ event,
-        updatedAt = Instant.now()
+        updatedAt = ctx.clock.instant()
       )
     }
 
   def appendFieldEvents(
     informationid: InformationId,
     events: Vector[InformationFieldEvent]
-  ): Consequence[Information] =
+  )(using ctx: ExecutionContext): Consequence[Information] =
     _update_information(informationid) { information =>
       information.copy(
         fieldEvents = information.fieldEvents ++ events,
-        updatedAt = Instant.now()
+        updatedAt = ctx.clock.instant()
       )
     }
 
-  def validateInformation(informationid: InformationId): Consequence[Information] =
+  def validateInformation(informationid: InformationId)(using ctx: ExecutionContext): Consequence[Information] =
     getInformation(informationid) match {
       case Some(information) =>
         val issues = InformationSpace.validate(information)
@@ -138,7 +140,7 @@ final class InformationSpace {
         val updated = information.copy(
           state = state,
           validationIssues = issues,
-          updatedAt = Instant.now()
+          updatedAt = ctx.clock.instant()
         )
         _replace_information(updated)
         Consequence.success(updated)
@@ -156,7 +158,7 @@ final class InformationSpace {
     binding: InformationIdentityBinding,
     confidence: Option[Double] = None,
     evidence: Option[String] = None
-  ): Consequence[InformationResolutionCandidate] =
+  )(using ctx: ExecutionContext): Consequence[InformationResolutionCandidate] =
     getInformation(informationid) match {
       case Some(information) =>
         val key = _next_key("candidate", information.resolutionCandidates.size + 1)
@@ -166,7 +168,7 @@ final class InformationSpace {
           state = InformationLifecycleState.NeedsResolution,
           resolutionCandidates = information.resolutionCandidates :+ candidate,
           identityBindings = information.identityBindings :+ nextbinding,
-          updatedAt = Instant.now()
+          updatedAt = ctx.clock.instant()
         )
         _replace_information(updated)
         Consequence.success(candidate)
@@ -180,7 +182,7 @@ final class InformationSpace {
   def selectResolutionCandidate(
     informationid: InformationId,
     candidatekey: String
-  ): Consequence[InformationResolutionCandidate] =
+  )(using ctx: ExecutionContext): Consequence[InformationResolutionCandidate] =
     getInformation(informationid) match {
       case Some(information) =>
         information.resolutionCandidates.find(_.candidateKey == candidatekey) match {
@@ -196,7 +198,7 @@ final class InformationSpace {
               state = state,
               resolutionCandidates = candidates,
               identityBindings = bindings,
-              updatedAt = Instant.now()
+              updatedAt = ctx.clock.instant()
             )
             _replace_information(updated)
             Consequence.success(selected)
@@ -210,7 +212,7 @@ final class InformationSpace {
   def clearResolutionCandidate(
     informationid: InformationId,
     candidatekey: String
-  ): Consequence[InformationResolutionCandidate] =
+  )(using ctx: ExecutionContext): Consequence[InformationResolutionCandidate] =
     getInformation(informationid) match {
       case Some(information) if information.state == InformationLifecycleState.Confirmed || information.state == InformationLifecycleState.Published =>
         Consequence.argumentInvalid(s"information is already confirmed: ${informationid.print}")
@@ -223,7 +225,7 @@ final class InformationSpace {
               state = _state_after_candidate_update(information.copy(resolutionCandidates = candidates)),
               resolutionCandidates = candidates,
               identityBindings = bindings,
-              updatedAt = Instant.now()
+              updatedAt = ctx.clock.instant()
             )
             _replace_information(updated)
             Consequence.success(candidate)
@@ -239,7 +241,7 @@ final class InformationSpace {
     candidatekey: String,
     status: InformationBindingStatus,
     selected: Option[Boolean] = None
-  ): Consequence[InformationResolutionCandidate] =
+  )(using ctx: ExecutionContext): Consequence[InformationResolutionCandidate] =
     getInformation(informationid) match {
       case Some(information) =>
         information.resolutionCandidates.find(_.candidateKey == candidatekey) match {
@@ -255,7 +257,7 @@ final class InformationSpace {
               state = _state_after_candidate_update(information.copy(resolutionCandidates = candidates)),
               resolutionCandidates = candidates,
               identityBindings = bindings,
-              updatedAt = Instant.now()
+              updatedAt = ctx.clock.instant()
             )
             _replace_information(updated)
             Consequence.success(nextcandidate)
@@ -266,19 +268,20 @@ final class InformationSpace {
         Consequence.argumentInvalid(s"information not found: ${informationid.print}")
     }
 
-  def confirmInformation(informationid: InformationId): Consequence[Information] =
+  def confirmInformation(informationid: InformationId)(using ctx: ExecutionContext): Consequence[Information] =
     getInformation(informationid) match {
       case Some(information) if information.state == InformationLifecycleState.Invalid =>
         Consequence.argumentInvalid(s"information is invalid: ${informationid.print}")
       case Some(information) if information.state != InformationLifecycleState.ReadyForConfirmation && information.state != InformationLifecycleState.Confirmed =>
         Consequence.argumentInvalid(s"information is not ready for confirmation: ${informationid.print}")
       case Some(information) =>
+        val now = ctx.clock.instant()
         val bindings = information.identityBindings.map(_.copy(status = InformationBindingStatus.Confirmed))
         val confirmed = information.copy(
           state = InformationLifecycleState.Confirmed,
           identityBindings = bindings,
-          confirmedAt = information.confirmedAt.orElse(Some(Instant.now())),
-          updatedAt = Instant.now()
+          confirmedAt = information.confirmedAt.orElse(Some(now)),
+          updatedAt = now
         )
         _replace_information(confirmed)
         Consequence.success(confirmed)
@@ -295,20 +298,21 @@ final class InformationSpace {
   def rejectInformation(
     informationid: InformationId,
     reason: String
-  ): Consequence[Information] =
-    _update_information(informationid)(_.copy(state = InformationLifecycleState.Rejected, updatedAt = Instant.now()))
+  )(using ctx: ExecutionContext): Consequence[Information] =
+    _update_information(informationid)(_.copy(state = InformationLifecycleState.Rejected, updatedAt = ctx.clock.instant()))
 
-  def reopenInformation(informationid: InformationId): Consequence[Information] =
-    _update_information(informationid)(_.copy(state = InformationLifecycleState.ReadyForConfirmation, updatedAt = Instant.now()))
+  def reopenInformation(informationid: InformationId)(using ctx: ExecutionContext): Consequence[Information] =
+    _update_information(informationid)(_.copy(state = InformationLifecycleState.ReadyForConfirmation, updatedAt = ctx.clock.instant()))
 
   def publishInformation(
     informationid: InformationId,
     target: String,
     message: Option[String] = None,
     knowledgeframeid: Option[KnowledgeFrameId] = None
-  ): Consequence[InformationPublicationStatus] =
+  )(using ctx: ExecutionContext): Consequence[InformationPublicationStatus] =
     getInformation(informationid) match {
       case Some(information) if information.state == InformationLifecycleState.Confirmed || information.state == InformationLifecycleState.Published =>
+        val now = ctx.clock.instant()
         val key = information.publicationStatuses.headOption.map(_.publicationKey).getOrElse(_next_key("publication", 1))
         val publication = InformationPublicationStatus(
           publicationKey = key,
@@ -316,12 +320,12 @@ final class InformationSpace {
           target = target,
           message = message,
           knowledgeFrameId = knowledgeframeid,
-          publishedAt = Some(Instant.now())
+          publishedAt = Some(now)
         )
         val published = information.copy(
           state = InformationLifecycleState.Published,
           publicationStatuses = information.publicationStatuses.filterNot(_.publicationKey == key) :+ publication,
-          updatedAt = Instant.now()
+          updatedAt = now
         )
         _replace_information(published)
         Consequence.success(publication)
@@ -336,9 +340,10 @@ final class InformationSpace {
     target: String,
     message: Option[String] = None,
     knowledgeframeid: Option[KnowledgeFrameId] = None
-  ): Consequence[InformationPublicationStatus] =
+  )(using ctx: ExecutionContext): Consequence[InformationPublicationStatus] =
     getInformation(informationid) match {
       case Some(information) if information.state == InformationLifecycleState.Confirmed || information.state == InformationLifecycleState.Published =>
+        val now = ctx.clock.instant()
         val key = information.publicationStatuses.headOption.map(_.publicationKey).getOrElse(_next_key("publication", 1))
         val publication = InformationPublicationStatus(
           publicationKey = key,
@@ -346,11 +351,11 @@ final class InformationSpace {
           target = target,
           message = message,
           knowledgeFrameId = knowledgeframeid,
-          publishedAt = Some(Instant.now())
+          publishedAt = Some(now)
         )
         val failed = information.copy(
           publicationStatuses = information.publicationStatuses.filterNot(_.publicationKey == key) :+ publication,
-          updatedAt = Instant.now()
+          updatedAt = now
         )
         _replace_information(failed)
         Consequence.success(publication)
@@ -372,7 +377,7 @@ final class InformationSpace {
     informationvalue: String,
     rdfvalue: String,
     severity: String = "warning"
-  ): Consequence[InformationConflict] =
+  )(using ctx: ExecutionContext): Consequence[InformationConflict] =
     getInformation(informationid) match {
       case Some(information) =>
         val conflict = InformationConflict(
@@ -385,7 +390,7 @@ final class InformationSpace {
         val updated = information.copy(
           state = InformationLifecycleState.Conflict,
           conflicts = information.conflicts :+ conflict,
-          updatedAt = Instant.now()
+          updatedAt = ctx.clock.instant()
         )
         _replace_information(updated)
         Consequence.success(conflict)
@@ -405,7 +410,7 @@ final class InformationSpace {
     informationid: InformationId,
     conflictkey: String,
     decision: String
-  ): Consequence[InformationConflict] =
+  )(using ctx: ExecutionContext): Consequence[InformationConflict] =
     getInformation(informationid) match {
       case Some(information) =>
         information.conflicts.find(_.conflictKey == conflictkey) match {
@@ -420,7 +425,7 @@ final class InformationSpace {
                 information.publicationStatuses.find(_.state == InformationPublicationState.Published).fold(InformationLifecycleState.Confirmed)(_ => InformationLifecycleState.Published)
               else
                 InformationLifecycleState.Conflict
-            _replace_information(information.copy(state = state, conflicts = conflicts, updatedAt = Instant.now()))
+            _replace_information(information.copy(state = state, conflicts = conflicts, updatedAt = ctx.clock.instant()))
             Consequence.success(resolved)
           case None =>
             Consequence.argumentInvalid(s"information conflict not found: $conflictkey")
@@ -429,7 +434,7 @@ final class InformationSpace {
         Consequence.argumentInvalid(s"information not found: ${informationid.print}")
     }
 
-  def materializeInformation(informationid: InformationId): Consequence[KnowledgeWorkingSetSnapshot] =
+  def materializeInformation(informationid: InformationId)(using ExecutionContext): Consequence[KnowledgeWorkingSetSnapshot] =
     getInformation(informationid) match {
       case Some(information) if information.state == InformationLifecycleState.Confirmed || information.state == InformationLifecycleState.Published =>
         Consequence.success(InformationToKnowledgeProjection.materializeWithRelated(information, _snapshot.information))
@@ -505,13 +510,13 @@ object InformationSpace {
       case _ => Vector.empty
     }
 
-  def materializeInformation(information: Information): KnowledgeWorkingSetSnapshot =
+  def materializeInformation(information: Information)(using ExecutionContext): KnowledgeWorkingSetSnapshot =
     InformationToKnowledgeProjection.materialize(information)
 
   def materializeInformation(
     information: Information,
     relatedInformation: Vector[Information]
-  ): KnowledgeWorkingSetSnapshot =
+  )(using ExecutionContext): KnowledgeWorkingSetSnapshot =
     InformationToKnowledgeProjection.materializeWithRelated(information, relatedInformation)
 
   def materializeInformationWithTags(information: Information)(using ExecutionContext): Consequence[KnowledgeWorkingSetSnapshot] =
@@ -817,7 +822,7 @@ object InformationToKnowledgeProjection {
     "holding"
   )
 
-  def materialize(information: Information): KnowledgeWorkingSetSnapshot =
+  def materialize(information: Information)(using ExecutionContext): KnowledgeWorkingSetSnapshot =
     materialize(information, Vector.empty)
 
   private final case class BookCulturalResourceLayers(
@@ -850,13 +855,13 @@ object InformationToKnowledgeProjection {
     information: Information,
     tagbindings: Vector[KnowledgeTagBinding],
     naming: InformationRdfNodeNaming = InformationRdfNodeNaming.default
-  ): KnowledgeWorkingSetSnapshot =
+  )(using ExecutionContext): KnowledgeWorkingSetSnapshot =
     materializeWithRelated(information, tagbindings, Vector.empty, naming)
 
   def materializeWithRelated(
     information: Information,
     relatedInformation: Vector[Information]
-  ): KnowledgeWorkingSetSnapshot =
+  )(using ExecutionContext): KnowledgeWorkingSetSnapshot =
     materializeWithRelated(information, Vector.empty, relatedInformation, InformationRdfNodeNaming.default)
 
   def materializeWithRelated(
@@ -864,7 +869,8 @@ object InformationToKnowledgeProjection {
     tagbindings: Vector[KnowledgeTagBinding],
     relatedInformation: Vector[Information],
     naming: InformationRdfNodeNaming = InformationRdfNodeNaming.default
-  ): KnowledgeWorkingSetSnapshot = {
+  )(using ctx: ExecutionContext): KnowledgeWorkingSetSnapshot = {
+    val materializedat = ctx.clock.instant()
     val provenance = KnowledgeProvenance(
       KnowledgeProvenanceId(s"prov-${information.id.print}"),
       origin = "information-space",
@@ -928,7 +934,7 @@ object InformationToKnowledgeProjection {
       sourceRefs = Vector(KnowledgeSourceRef("information", information.id.print)),
       purpose = None,
       query = None,
-      materializedAt = Some(Instant.now())
+      materializedAt = Some(materializedat)
     )
     KnowledgeWorkingSetSnapshot(
       nodes = Vector(node) ++ supportnodes,

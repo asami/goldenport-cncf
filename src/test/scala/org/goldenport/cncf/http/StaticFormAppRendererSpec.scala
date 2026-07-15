@@ -4,7 +4,7 @@ package org.goldenport.cncf.http
  * @since   May. 18, 2026
  *  version May. 27, 2026
  *  version Jun. 19, 2026
- * @version Jul. 15, 2026
+ * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 import scala.collection.mutable.ListBuffer
@@ -70,7 +70,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Apr. 12, 2026
  *  version May. 27, 2026
  *  version Jun. 19, 2026
- * @version Jul. 15, 2026
+ * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -388,9 +388,11 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render system admin information pages" in {
+      Given("a subsystem containing published Information")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       subsystem.add(TestComponentFactory.create("information_component", Protocol.empty))
       val component = subsystem.findComponent("information_component").getOrElse(fail("information component missing"))
+      given ExecutionContext = component.logic.executionContext()
       val batch = _success(component.informationSpace.registerInformation(
         "paper",
         Vector(Record.data(
@@ -404,9 +406,11 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val item = _success(component.informationSpace.confirmInformation(record.id))
       _success(component.informationSpace.publishInformation(item.id, "fuseki", Some("published")))
 
+      When("the system Information index and component detail are rendered")
       val index = _renderer.renderSystemAdminInformation(subsystem).body
       val detail = _renderer.renderSystemAdminInformationComponent(subsystem, "information-component").map(_.body).getOrElse(fail("information component page missing"))
 
+      Then("the pages expose component identity and published Information metadata")
       index should include ("System Information")
       index should include ("information_component")
       index should include ("/web/system/admin/information/information_component")

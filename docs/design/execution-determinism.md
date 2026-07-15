@@ -278,6 +278,18 @@ Tasks, and Actions collision-free. Model-level no-argument generators are
 compatibility/test conveniences and MUST NOT be used by CNCF production
 execution paths.
 
+InformationSpace lifecycle and Knowledge materialization timestamps are
+component-visible runtime semantics. Information registration, mutation,
+validation, confirmation, publication, conflict handling, and materialization
+MUST receive the caller `ExecutionContext` and use its bound clock. The mutable
+InformationSpace does not own or infer a clock. One mutation captures one
+instant for all fields changed by that mutation; confirmation therefore uses
+the same instant for `confirmedAt` and `updatedAt`, publication uses the same
+instant for `publishedAt` and `updatedAt`, and projection uses the caller instant
+for `KnowledgeFrame.materializedAt`. `Information.updatedAt` and
+`InformationFieldEvent.occurredAt` require explicit constructor values and MUST
+NOT supply ambient defaults.
+
 Manual scheduling is limited by `timer-scheduling-boundary.md`. It MUST NOT add
 cron, recurrence, business-calendar, workflow-wait, or general scheduler
 semantics.

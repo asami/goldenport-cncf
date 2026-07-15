@@ -1,34 +1,43 @@
 package org.goldenport.cncf.information
 
 import org.goldenport.Consequence
+import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.knowledge.{ExternalKnowledgeIdentifier, KnowledgeNodeId, KnowledgeRelationshipKind, KnowledgeTagBinding, KnowledgeWorkingSet, RdfNodeName}
 import org.goldenport.record.Record
+import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   May. 20, 2026
  *  version May. 31, 2026
- * @version Jun. 18, 2026
+ *  version Jun. 18, 2026
+ * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 final class InformationToKnowledgeProjectionSpec
   extends AnyWordSpec
-  with Matchers {
+  with Matchers
+  with GivenWhenThen {
+
+  private given ExecutionContext = ExecutionContext.test()
 
   "InformationToKnowledgeProjection" should {
     "materialize confirmed paper information into KnowledgeSpace without id collapse" in {
+      Given("confirmed paper Information")
       val space = new InformationSpace
       val batch = _success(space.registerInformation("paper", Vector(Record.data("title" -> "Projection", "authors" -> "Alice"))))
       val recordid = batch.head.id
       _success(space.validateInformation(recordid))
       val item = _success(space.confirmInformation(recordid))
 
+      When("the Information is materialized and loaded into KnowledgeSpace")
       val snapshot = InformationSpace.materializeInformation(item)
       val workingset = _success(KnowledgeWorkingSet.load(snapshot))
       val nodeid = KnowledgeNodeId(s"information-${item.id.print}")
       val node = workingset.nodeOption(nodeid).getOrElse(fail("missing node"))
 
+      Then("Information, Knowledge, and RDF identities remain distinct")
       node.id shouldBe nodeid
       node.id.print should not be item.id.print
       val rdfnode = node.identity.rdfNode.map(_.print).getOrElse(fail("missing RDF node"))
@@ -41,12 +50,14 @@ final class InformationToKnowledgeProjectionSpec
     }
 
     "materialize Information tag bindings into KnowledgeNode bindings" in {
+      Given("confirmed book Information and an Information-space tag binding")
       val space = new InformationSpace
       val batch = _success(space.registerInformation("book", Vector(Record.data("title" -> "Tagged Projection"))))
       val recordid = batch.head.id
       _success(space.validateInformation(recordid))
       val information = _success(space.confirmInformation(recordid))
 
+      When("the tagged Information is materialized")
       val snapshot = InformationToKnowledgeProjection.materialize(
         information,
         Vector(KnowledgeTagBinding("information", "knowledge/book"))
@@ -54,10 +65,12 @@ final class InformationToKnowledgeProjectionSpec
       val workingset = _success(KnowledgeWorkingSet.load(snapshot))
       val node = workingset.nodeOption(KnowledgeNodeId(s"information-${information.id.print}")).getOrElse(fail("missing materialized node"))
 
+      Then("the tag binding is attached to the KnowledgeNode")
       node.bindings.tagBindings should contain (KnowledgeTagBinding("information", "knowledge/book"))
     }
 
     "materialize selected book person and organization candidates as surrounding nodes" in {
+      Given("confirmed book Information with selected author and publisher candidates")
       val space = new InformationSpace
       val batch = _success(space.registerInformation("book", Vector(Record.data(
         "title" -> "The Tale of Genji",
@@ -99,10 +112,12 @@ final class InformationToKnowledgeProjectionSpec
       _success(space.validateInformation(informationid))
       val information = _success(space.confirmInformation(informationid))
 
+      When("the book neighborhood is materialized")
       val snapshot = InformationSpace.materializeInformation(information)
       val nodecategories = snapshot.nodes.map(_.category.print).toSet
       val relationshipkinds = snapshot.relationships.map(_.kind.print).toSet
 
+      Then("the cultural-resource layers and authority relationships are present")
       nodecategories should contain allOf ("publication", "textual-work", "edition", "volume", "person", "organization")
       relationshipkinds should contain allOf ("publication-of", "volume-of", "edition-of", "authored-by", "published-by")
       snapshot.nodes
@@ -119,6 +134,7 @@ final class InformationToKnowledgeProjectionSpec
     }
 
     "exclude rejected and superseded book authority candidates from materialization" in {
+      Given("book authority candidates in selected, superseded, and rejected states")
       val space = new InformationSpace
       val batch = _success(space.registerInformation("book", Vector(Record.data(
         "title" -> "Authority Decisions",
@@ -165,10 +181,12 @@ final class InformationToKnowledgeProjectionSpec
       _success(space.updateResolutionCandidateStatus(informationid, rejectedpublisher.candidateKey, InformationBindingStatus.Rejected, Some(false)))
       val information = space.getInformation(informationid).getOrElse(fail("missing book information"))
 
+      When("the effective book neighborhood is materialized")
       val snapshot = InformationSpace.materializeInformation(information)
       val labels = snapshot.nodes.flatMap(_.presentation.defaultLabel).toSet
       val relationshipkinds = snapshot.relationships.map(_.kind.print).toSet
 
+      Then("only the selected candidate contributes nodes and relationships")
       labels should contain ("Alice Example")
       labels should not contain "Alice E."
       labels should not contain "Example Press"
@@ -177,16 +195,19 @@ final class InformationToKnowledgeProjectionSpec
     }
 
     "materialize an ordinary single-volume book as publication and textual work" in {
+      Given("confirmed ordinary book Information without edition or volume metadata")
       val space = new InformationSpace
       val batch = _success(space.registerInformation("book", Vector(Record.data("title" -> "Effective Java"))))
       val informationid = batch.head.id
       _success(space.validateInformation(informationid))
       val information = _success(space.confirmInformation(informationid))
 
+      When("the book is materialized")
       val snapshot = InformationSpace.materializeInformation(information)
       val nodecategories = snapshot.nodes.map(_.category.print).toSet
       val relationshipkinds = snapshot.relationships.map(_.kind.print).toSet
 
+      Then("only publication and textual-work layers are created")
       nodecategories should contain allOf ("publication", "textual-work")
       nodecategories should not contain "volume"
       nodecategories should not contain "edition"
@@ -196,6 +217,7 @@ final class InformationToKnowledgeProjectionSpec
     }
 
     "materialize reviewed book information link qualifiers" in {
+      Given("confirmed book Information with one reviewed and one invalid link event")
       val space = new InformationSpace
       val batch = _success(space.registerInformation("book", Vector(Record.data(
         "title" -> "The Tale of Genji",
@@ -219,7 +241,8 @@ final class InformationToKnowledgeProjectionSpec
         operation = Some("saveBook"),
         transformation = Some("information-link-review"),
         valueAfter = Some("authored-by"),
-        evidence = Some(s"linkKey=association:${author.candidateKey}; kind=authored-by; rdfPredicate=schema:author; order=1; role=author; confidence=0.95; source=openlibrary; evidenceSummary=reviewed%20author%3B%20source%20fragment")
+        evidence = Some(s"linkKey=association:${author.candidateKey}; kind=authored-by; rdfPredicate=schema:author; order=1; role=author; confidence=0.95; source=openlibrary; evidenceSummary=reviewed%20author%3B%20source%20fragment"),
+        occurredAt = summon[ExecutionContext].clock.instant()
       )))
       _success(space.appendFieldEvent(informationid, InformationFieldEvent(
         fieldPath = "informationLinks",
@@ -228,14 +251,17 @@ final class InformationToKnowledgeProjectionSpec
         operation = Some("saveBook"),
         transformation = Some("information-link-review"),
         valueAfter = Some("not-a-relationship-kind"),
-        evidence = Some(s"linkKey=association:${author.candidateKey}; kind=not-a-relationship-kind; order=99")
+        evidence = Some(s"linkKey=association:${author.candidateKey}; kind=not-a-relationship-kind; order=99"),
+        occurredAt = summon[ExecutionContext].clock.instant()
       )))
       _success(space.validateInformation(informationid))
       val information = _success(space.confirmInformation(informationid))
 
+      When("the reviewed links are materialized")
       val snapshot = InformationSpace.materializeInformation(information)
       val relationship = snapshot.relationships.find(_.kind.print == "authored-by").getOrElse(fail("authored-by relationship missing"))
 
+      Then("the valid link carries its reviewed qualifiers and RDF predicate")
       relationship.qualifiers.values should contain ("order" -> "1")
       relationship.qualifiers.values should contain ("role" -> "author")
       relationship.qualifiers.values should contain ("confidence" -> "0.95")
@@ -245,6 +271,7 @@ final class InformationToKnowledgeProjectionSpec
     }
 
     "materialize Genji Iwanami volume into publication volume edition textual work layers" in {
+      Given("confirmed multi-layer Genji volume Information")
       val space = new InformationSpace
       val batch = _success(space.registerInformation("book", Vector(Record.data(
         "title" -> "源氏物語",
@@ -260,11 +287,13 @@ final class InformationToKnowledgeProjectionSpec
       _success(space.validateInformation(informationid))
       val information = _success(space.confirmInformation(informationid))
 
+      When("the volume is materialized")
       val snapshot = InformationSpace.materializeInformation(information)
       val nodecategories = snapshot.nodes.map(_.category.print).toSet
       val relationshipkinds = snapshot.relationships.map(_.kind.print).toSet
       val labels = snapshot.nodes.flatMap(_.presentation.defaultLabel).toSet
 
+      Then("all cultural-resource layers and relationships are created")
       nodecategories should contain allOf ("publication", "textual-work", "edition", "volume")
       relationshipkinds should contain allOf ("publication-of", "volume-of", "edition-of")
       labels should contain allOf ("源氏物語", "岩波版 源氏物語", "源氏物語 3")
@@ -278,6 +307,7 @@ final class InformationToKnowledgeProjectionSpec
     }
 
     "prefer linked Textual Work Edition and Volume Information during book materialization" in {
+      Given("confirmed book Information linked to curated work, edition, and volume Information")
       val space = new InformationSpace
       val work = _success(space.registerInformation("textual-work", Vector(Record.data(
         "title" -> "源氏物語"
@@ -310,6 +340,7 @@ final class InformationToKnowledgeProjectionSpec
       _success(space.validateInformation(book.id))
       val confirmedbook = _success(space.confirmInformation(book.id))
 
+      When("the linked book neighborhood is materialized")
       val snapshot = _success(space.materializeInformation(confirmedbook.id))
       val workingset = _success(KnowledgeWorkingSet.load(snapshot))
       val worknode = workingset.nodeOption(KnowledgeNodeId(s"information-${confirmedwork.id.print}")).getOrElse(fail("missing linked work node"))
@@ -317,6 +348,7 @@ final class InformationToKnowledgeProjectionSpec
       val volumenode = workingset.nodeOption(KnowledgeNodeId(s"information-${confirmedvolume.id.print}")).getOrElse(fail("missing linked volume node"))
       val relationshipkinds = snapshot.relationships.map(_.kind.print).toSet
 
+      Then("the linked Information supplies identity, labels, and hierarchy")
       worknode.presentation.defaultLabel shouldBe Some("源氏物語")
       editionnode.presentation.defaultLabel shouldBe Some("岩波文庫 源氏物語")
       volumenode.presentation.defaultLabel shouldBe Some("源氏物語 三")
@@ -340,6 +372,7 @@ final class InformationToKnowledgeProjectionSpec
     }
 
     "fall back to title-based book layers when linked Information is absent" in {
+      Given("confirmed book Information whose linked Information ids cannot be resolved")
       val space = new InformationSpace
       val batch = _success(space.registerInformation("book", Vector(Record.data(
         "title" -> "Provider raw title",
@@ -354,10 +387,12 @@ final class InformationToKnowledgeProjectionSpec
       _success(space.validateInformation(informationid))
       val information = _success(space.confirmInformation(informationid))
 
+      When("the book is materialized")
       val snapshot = _success(space.materializeInformation(information.id))
       val nodeids = snapshot.nodes.map(_.id).toSet
       val labels = snapshot.nodes.flatMap(_.presentation.defaultLabel).toSet
 
+      Then("title-based layers are used without dangling relationship endpoints")
       labels should contain allOf ("Fallback Work", "Fallback Edition", "Fallback Work 1")
       nodeids.map(_.print) should not contain "information-missing-work"
       nodeids.map(_.print) should not contain "information-missing-edition"
@@ -369,6 +404,7 @@ final class InformationToKnowledgeProjectionSpec
     }
 
     "materialize book classification entries as concept nodes and relationships" in {
+      Given("confirmed book Information with stable and editing classification entries")
       val space = new InformationSpace
       val entries = Vector(
         "entryKey=ndc-913-36; kind=library; system=ndc; code=913.36; label=NDC 913.36; source=manual; evidence=reviewed NDC%3B source%3Dmanual; state=stable; primary=true",
@@ -384,6 +420,7 @@ final class InformationToKnowledgeProjectionSpec
       _success(space.validateInformation(informationid))
       val information = _success(space.confirmInformation(informationid))
 
+      When("the classifications are materialized")
       val snapshot = InformationSpace.materializeInformation(information)
       val workingset = _success(KnowledgeWorkingSet.load(snapshot))
       val booknodeid = KnowledgeNodeId(s"information-${information.id.print}")
@@ -391,6 +428,7 @@ final class InformationToKnowledgeProjectionSpec
       val relationshipkinds = snapshot.relationships.map(_.kind.print).toSet
       val conceptlabels = snapshot.nodes.filter(_.category.print == "concept").flatMap(_.presentation.defaultLabel).toSet
 
+      Then("stable classifications become typed concept relationships and editing entries are excluded")
       relationshipkinds should contain allOf (
         KnowledgeRelationshipKind.ClassifiedBy.print,
         "has-subject",
@@ -408,6 +446,7 @@ final class InformationToKnowledgeProjectionSpec
     }
 
     "use built-in and configured RDF namespace prefixes" in {
+      Given("confirmed book Information and built-in plus custom namespace mappings")
       val space = new InformationSpace
       val batch = _success(space.registerInformation("book", Vector(Record.data("title" -> "Namespace"))))
       val information = _success(space.confirmInformation(_success(space.validateInformation(batch.head.id)).id))
@@ -418,10 +457,17 @@ final class InformationToKnowledgeProjectionSpec
         namespaces = InformationRdfNodeNaming.BUILT_IN_NAMESPACES :+ InformationRdfNamespace("acme", "https://example.com/acme")
       )
 
-      smnaming.rdfNodeName(information).print shouldBe s"sm:book/$shortid"
-      smnaming.publishedRdfNodeUri("book", shortid) shouldBe Some(s"https://www.simplemodeling.org/book/$shortid")
-      customnaming.rdfNodeName(information).print shouldBe s"acme:book/$shortid"
-      customnaming.publishedRdfNodeUri("book", shortid) shouldBe Some(s"https://example.com/acme/book/$shortid")
+      When("RDF names and published URIs are derived")
+      val smname = smnaming.rdfNodeName(information).print
+      val smuri = smnaming.publishedRdfNodeUri("book", shortid)
+      val customname = customnaming.rdfNodeName(information).print
+      val customuri = customnaming.publishedRdfNodeUri("book", shortid)
+
+      Then("each prefix resolves through its configured namespace")
+      smname shouldBe s"sm:book/$shortid"
+      smuri shouldBe Some(s"https://www.simplemodeling.org/book/$shortid")
+      customname shouldBe s"acme:book/$shortid"
+      customuri shouldBe Some(s"https://example.com/acme/book/$shortid")
     }
   }
 
