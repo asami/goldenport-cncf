@@ -1,57 +1,76 @@
 package org.goldenport.cncf.job
 
+import java.util.concurrent.{CountDownLatch, TimeUnit}
 import org.goldenport.Consequence
 import org.goldenport.protocol.{Argument, Request}
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.testutil.SubsystemTestFixture
+import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 28, 2026
  *  version Apr. 22, 2026
- * @version May.  4, 2026
+ * @version Jul. 17, 2026
  * @author  ASAMI, Tomoharu
  */
-final class SubsystemSharedJobEngineSpec extends AnyWordSpec with Matchers with JobEngineTestFixture {
+final class SubsystemSharedJobEngineSpec
+  extends AnyWordSpec
+  with Matchers
+  with GivenWhenThen
+  with JobEngineTestFixture {
   "Subsystem shared JobEngine" should {
-    "shared-engine" in {
+    "share one JobEngine across administrative components" in {
+      Given("a subsystem with command support")
       SubsystemTestFixture.withSubsystem(SubsystemTestFixture.Startup.Default(Some("command"))) { subsystem =>
         val admin = subsystem.components.find(_.name == "admin").get
         val jobControl = subsystem.components.find(_.name == "job_control").get
         val submitCtx = ExecutionContext.create()
         val controlCtx = ExecutionContext.create(org.goldenport.cncf.context.SecurityContext.Privilege.ApplicationContentManager)
+        val entered = new CountDownLatch(1)
+        val release = new CountDownLatch(1)
 
+        When("admin submits an asynchronous Job and job-control cancels it")
         admin.jobEngine eq jobControl.jobEngine shouldBe true
         val jobId = admin.logic.submitJob(
-          List(SleepTask(ActionId.generate(), 1000L)),
+          List(BlockingTask(ActionId.generate(), entered, release)),
           submitCtx,
           JobSubmitOption(runMode = JobRunMode.Async, requestSummary = Some("shared-job-engine"))
         ).toOption.get
 
-        awaitCondition(jobControl.jobEngine.query(jobId).isDefined) shouldBe true
+        entered.await(DefaultAwaitTimeoutMillis, TimeUnit.MILLISECONDS) shouldBe true
+        try {
+          jobControl.logic.controlJob(jobId, JobControlRequest(JobControlCommand.Cancel))(using controlCtx).TAKE
+          release.countDown()
 
-        jobControl.logic.controlJob(jobId, JobControlRequest(JobControlCommand.Cancel))(using controlCtx).TAKE
-
-        awaitStatus(jobControl.jobEngine, jobId, Set(JobStatus.Cancelled)) shouldBe Some(JobStatus.Cancelled)
+          Then("the shared JobEngine records the cancellation after the admitted task settles")
+          awaitStatus(jobControl.jobEngine, jobId, Set(JobStatus.Cancelled)) shouldBe Some(JobStatus.Cancelled)
+        } finally {
+          release.countDown()
+        }
       }
     }
 
-    "subsystem-execute-job-control" in {
+    "suspend a running Job through the subsystem operation" in {
+      Given("a submitted Job whose task has entered and remains controlled by the specification")
       SubsystemTestFixture.withSubsystem(SubsystemTestFixture.Startup.Default(Some("command"))) { subsystem =>
         val admin = subsystem.components.find(_.name == "admin").get
         val jobControl = subsystem.components.find(_.name == "job_control").get
         val submitCtx = ExecutionContext.test()
+        val entered = new CountDownLatch(1)
+        val release = new CountDownLatch(1)
 
         admin.jobEngine eq jobControl.jobEngine shouldBe true
         val jobId = admin.logic.submitJob(
-          List(SleepTask(ActionId.generate(), 5000L)),
+          List(BlockingTask(ActionId.generate(), entered, release)),
           submitCtx,
           JobSubmitOption(runMode = JobRunMode.Async, requestSummary = Some("subsystem-execute-job-control"))
         ).toOption.get
 
-        awaitStatus(admin.jobEngine, jobId, Set(JobStatus.Submitted, JobStatus.Running)).nonEmpty shouldBe true
+        entered.await(DefaultAwaitTimeoutMillis, TimeUnit.MILLISECONDS) shouldBe true
 
+        When("the job-control suspend operation is executed")
         val request = Request.of(
           component = "job_control",
           service = "job_admin",
@@ -62,20 +81,28 @@ final class SubsystemSharedJobEngineSpec extends AnyWordSpec with Matchers with 
           )
         )
 
-        val result = subsystem.execute(request)
-        result shouldBe a[Consequence.Success[_]]
-        awaitStatus(jobControl.jobEngine, jobId, Set(JobStatus.Suspended)) shouldBe Some(JobStatus.Suspended)
+        try {
+          val result = subsystem.execute(request)
+
+          Then("the shared JobEngine records the suspended state before the task may settle")
+          result shouldBe a[Consequence.Success[_]]
+          awaitStatus(jobControl.jobEngine, jobId, Set(JobStatus.Suspended)) shouldBe Some(JobStatus.Suspended)
+        } finally {
+          release.countDown()
+        }
       }
     }
   }
 
-  private final case class SleepTask(
+  private final case class BlockingTask(
     actionId: ActionId,
-    durationMillis: Long
+    entered: CountDownLatch,
+    release: CountDownLatch
   ) extends JobTask {
     def run(ctx: ExecutionContext): TaskOutcome = {
       val _ = ctx
-      Thread.sleep(durationMillis)
+      entered.countDown()
+      release.await()
       TaskSucceeded(org.goldenport.protocol.operation.OperationResponse.Void())
     }
   }

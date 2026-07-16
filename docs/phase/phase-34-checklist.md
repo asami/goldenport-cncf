@@ -84,18 +84,25 @@ payload, unavailable-driver coverage, and safe success/failure CallTree output.
 
 ## PE-05: Local Driver Lifecycle
 
-Status: OPEN
+Status: DONE (Jul. 17, 2026)
 
-- [ ] Launch an approved executable with an argument vector and no shell
+- [x] Launch an approved executable with an argument vector and no shell
   interpolation.
-- [ ] Drain stdout and stderr concurrently with independent bounded capture.
-- [ ] Enforce launch/total timeout and graceful/forced termination policy.
-- [ ] Return non-zero exit as a provider-interpretable terminal result.
+- [x] Drain stdout and stderr concurrently with independent bounded capture.
+- [x] Enforce launch/total timeout and graceful/forced termination policy.
+- [x] Return non-zero exit as a provider-interpretable terminal result.
 
 Acceptance evidence:
 
 - Controlled local-program specs prove stream draining, timeout, cancellation,
-  and no leaked process/thread after terminal completion.
+  and no retained process or worker lifecycle after terminal completion.
+
+Evidence: `LocalProcessExecutionDriverSpec` passed with a runtime-owned JVM
+probe. It verifies literal vector arguments without shell interpolation,
+concurrent stdout/stderr capture, non-zero exits, execution timeout,
+idempotent cancellation, independently bounded stream capture, launch timeout,
+and local active process/handle cleanup. WorkArea input/output remains
+deliberately rejected until PE-06.
 
 ## PE-06: WorkArea and Artifacts
 

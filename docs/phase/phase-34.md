@@ -71,7 +71,7 @@ provider or run a live Codex account.
   fake-driver execution support.
 - D (DONE): PE-04 - Add UnitOfWork `ProcessExec` and protected ActionCall
   DSL integration.
-- E (PLANNED): PE-05 - Implement local driver lifecycle, bounded streams, and
+- E (DONE): PE-05 - Implement local driver lifecycle, bounded streams, and
   timeout handling.
 - F (PLANNED): PE-06 - Implement WorkArea confinement, artifacts, quotas, and
   cleanup.
@@ -87,7 +87,7 @@ provider or run a live Codex account.
   program-definition models.
 - [x] PE-03: Add ScopeContext driver resolution and deterministic fake driver.
 - [x] PE-04: Add `UnitOfWorkOp.ProcessExec` and `process_exec` DSL support.
-- [ ] PE-05: Implement the local driver lifecycle and bounded stream handling.
+- [x] PE-05: Implement the local driver lifecycle and bounded stream handling.
 - [ ] PE-06: Add WorkArea-confined input/output artifacts, quotas, and cleanup.
 - [ ] PE-07: Integrate Job/Task cancellation, CallTree, metrics, and
   confidentiality.
@@ -117,6 +117,15 @@ PE-04 completed Jul. 17, 2026. `UnitOfWorkOp.ProcessExec` accepts only a
 resolved capability-bound execution. `process_exec` exposes the same intent to
 direct and Free/`ExecUowM` Behavior code, and `UnitOfWorkInterpreter` is the
 only path that resolves and invokes the scoped driver.
+
+PE-05 completed Jul. 17, 2026. `LocalProcessExecutionDriver` launches only
+the runtime-owned executable and resolved argument vector, clears inherited
+environment values, drains stdout/stderr concurrently, and removes completed
+processes from its active runtime set. `LocalProcessExecutionDriverSpec` uses
+a controlled JVM probe to verify literal arguments, independent stream
+capture, non-zero exits, execution timeout, idempotent cancellation, bounded
+capture, launch timeout, and the current explicit rejection of WorkArea inputs
+until PE-06 provides their runtime support.
 
 ## 6. Completion Conditions
 

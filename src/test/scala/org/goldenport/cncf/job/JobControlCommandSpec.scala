@@ -15,7 +15,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Mar. 21, 2026
  *  version Apr. 22, 2026
- * @version Jul. 16, 2026
+ * @version Jul. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class JobControlCommandSpec
@@ -61,21 +61,27 @@ final class JobControlCommandSpec
     "return async acknowledgment by default" in {
       Given("a running job and content-manager privilege")
       val engine = createJobEngine()
-      val task = ActionTask(ActionId.generate(), _sleep_action("slow", 300L, "ok"), ActionEngine.create(), None)
+      val entered = new CountDownLatch(1)
+      val release = new CountDownLatch(1)
+      val task = BlockingTask(ActionId.generate(), entered, release)
       val jobid = _jobid(engine.submit(List(task), ExecutionContext.test()))
-      awaitStatus(engine, jobid, Set(JobStatus.Running, JobStatus.Succeeded))
+      entered.await(DefaultAwaitTimeoutMillis, TimeUnit.MILLISECONDS) shouldBe true
 
       given ExecutionContext = ExecutionContext.test(SecurityContext.Privilege.ApplicationContentManager)
 
       When("suspend is requested with async default")
-      val result = engine.control(jobid, JobControlRequest(JobControlCommand.Suspend))
+      try {
+        val result = engine.control(jobid, JobControlRequest(JobControlCommand.Suspend))
 
-      Then("jobId acknowledgment is returned without sync payload")
-      result shouldBe a[Consequence.Success[_]]
-      val ack = result.toOption.get
-      ack.jobId shouldBe jobid
-      ack.async shouldBe true
-      ack.response shouldBe None
+        Then("jobId acknowledgment is returned without sync payload")
+        result shouldBe a[Consequence.Success[_]]
+        val ack = result.toOption.get
+        ack.jobId shouldBe jobid
+        ack.async shouldBe true
+        ack.response shouldBe None
+      } finally {
+        release.countDown()
+      }
     }
 
     "reject invalid state transitions deterministically" in {
@@ -104,31 +110,44 @@ final class JobControlCommandSpec
     "map sync timeout deterministically for retry" in {
       Given("a cancelled long-running job")
       val engine = createJobEngine()
-      val task = ActionTask(ActionId.generate(), _sleep_action("slow", 800L, "ok"), ActionEngine.create(), None)
-      val jobid = _jobid(engine.submit(List(task), ExecutionContext.test()))
-      awaitStatus(engine, jobid, Set(JobStatus.Running, JobStatus.Succeeded))
+      val firstEntered = new CountDownLatch(1)
+      val firstRelease = new CountDownLatch(1)
+      val retryEntered = new CountDownLatch(1)
+      val retryRelease = new CountDownLatch(1)
+      val firstTask = BlockingTask(ActionId.generate(), firstEntered, firstRelease)
+      val retryTask = BlockingTask(ActionId.generate(), retryEntered, retryRelease)
+      val jobid = _jobid(engine.submit(List(firstTask, retryTask), ExecutionContext.test()))
+      firstEntered.await(DefaultAwaitTimeoutMillis, TimeUnit.MILLISECONDS) shouldBe true
 
       given ExecutionContext = ExecutionContext.test(SecurityContext.Privilege.ApplicationContentManager)
-      val _ = engine.control(jobid, JobControlRequest(JobControlCommand.Cancel))
-      awaitStatus(engine, jobid, Set(JobStatus.Cancelled))
+      try {
+        val _ = engine.control(jobid, JobControlRequest(JobControlCommand.Cancel))
+        firstRelease.countDown()
+        awaitStatus(engine, jobid, Set(JobStatus.Cancelled)) shouldBe Some(JobStatus.Cancelled)
+        awaitResult(engine, jobid).nonEmpty shouldBe true
 
-      When("retry is requested in sync mode with short timeout")
-      val result = engine.control(
-        jobid,
-        JobControlRequest(
-          command = JobControlCommand.Retry,
-          option = JobControlOption(mode = JobCommandMode.Sync, timeoutMillis = 1L, pollMillis = 1L)
+        When("retry is requested in sync mode with short timeout")
+        val result = engine.control(
+          jobid,
+          JobControlRequest(
+            command = JobControlCommand.Retry,
+            option = JobControlOption(mode = JobCommandMode.Sync, timeoutMillis = 1L, pollMillis = 1L)
+          )
         )
-      )
 
-      Then("timeout failure is returned with deterministic taxonomy")
-      result shouldBe a[Consequence.Failure[_]]
-      result match {
-        case Consequence.Failure(c) =>
-          c.observation.taxonomy.category shouldBe Taxonomy.Category.Operation
-          c.observation.taxonomy.symptom shouldBe Taxonomy.Symptom.Unavailable
-        case _ =>
-          fail("expected timeout failure")
+        Then("timeout failure is returned with deterministic taxonomy")
+        result shouldBe a[Consequence.Failure[_]]
+        retryEntered.await(DefaultAwaitTimeoutMillis, TimeUnit.MILLISECONDS) shouldBe true
+        result match {
+          case Consequence.Failure(c) =>
+            c.observation.taxonomy.category shouldBe Taxonomy.Category.Operation
+            c.observation.taxonomy.symptom shouldBe Taxonomy.Symptom.Unavailable
+          case _ =>
+            fail("expected timeout failure")
+        }
+      } finally {
+        firstRelease.countDown()
+        retryRelease.countDown()
       }
     }
 
@@ -159,21 +178,28 @@ final class JobControlCommandSpec
 
       Given("a running persistent job and content-manager privilege")
       val engine = createJobEngine()
-      val task = ActionTask(ActionId.generate(), _sleep_action("managed-cancel", 500L, "ok"), ActionEngine.create(), None)
+      val entered = new CountDownLatch(1)
+      val release = new CountDownLatch(1)
+      val task = BlockingTask(ActionId.generate(), entered, release)
       val submittedCtx = ExecutionContext.test()
       val jobid = _jobid(engine.submit(List(task), submittedCtx))
-      awaitStatus(engine, jobid, Set(JobStatus.Running, JobStatus.Succeeded))
+      entered.await(DefaultAwaitTimeoutMillis, TimeUnit.MILLISECONDS) shouldBe true
 
       given ExecutionContext = ExecutionContext.test(SecurityContext.Privilege.ApplicationContentManager)
 
       When("cancel is requested")
-      val result = engine.control(jobid, JobControlRequest(JobControlCommand.Cancel))
-      result shouldBe a[Consequence.Success[_]]
-      awaitStatus(engine, jobid, Set(JobStatus.Cancelled))
+      try {
+        val result = engine.control(jobid, JobControlRequest(JobControlCommand.Cancel))
+        result shouldBe a[Consequence.Success[_]]
+        release.countDown()
+        awaitStatus(engine, jobid, Set(JobStatus.Cancelled)) shouldBe Some(JobStatus.Cancelled)
 
-      Then("the Job Entity status is updated")
-      val loaded = EntityStore.standard().load[JobEntity](JobEntity.entityId(jobid))(using JobEntity.entityPersistent, submittedCtx).toOption.flatten
-      loaded.flatMap(_.record.getString("status")) shouldBe Some("Cancelled")
+        Then("the Job Entity status is updated")
+        val loaded = EntityStore.standard().load[JobEntity](JobEntity.entityId(jobid))(using JobEntity.entityPersistent, submittedCtx).toOption.flatten
+        loaded.flatMap(_.record.getString("status")) shouldBe Some("Cancelled")
+      } finally {
+        release.countDown()
+      }
     }
   }
 
@@ -195,21 +221,17 @@ final class JobControlCommandSpec
       }
     }
 
-  private def _sleep_action(actionname: String, millis: Long, value: String): CommandAction =
-    new CommandAction() {
-      val request = Request.ofOperation(actionname)
-      override def createCall(core: ActionCall.Core): ActionCall = {
-        val actionself = this
-        val _core = core
-        new ActionCall {
-          override val core: ActionCall.Core = _core
-          override def action: Action = actionself
-          def execute(): Consequence[OperationResponse] = {
-            Thread.sleep(millis)
-            Consequence.success(OperationResponse.Scalar(value))
-          }
-        }
-      }
+  private final case class BlockingTask(
+    actionId: ActionId,
+    entered: CountDownLatch,
+    release: CountDownLatch
+  ) extends JobTask {
+    def run(ctx: ExecutionContext): TaskOutcome = {
+      val _ = ctx
+      entered.countDown()
+      release.await()
+      TaskSucceeded(OperationResponse.Void())
     }
+  }
 
 }
