@@ -112,6 +112,12 @@ object RuntimeMetricsCatalog {
       Vector("outcome", "kind", "source", "backend", "diagnostic_key")
     ),
     MetricScopeDefinition(
+      "rule.execution",
+      "Rule execution",
+      "Rule firing counts, failures, and elapsed time grouped by operation, RuleSet, and diagnostic key.",
+      Vector("outcome", "operation", "rule_set", "diagnostic_key")
+    ),
+    MetricScopeDefinition(
       "spi.invocation",
       "SPI invocation",
       "Canonical SPI invocation counts, failures, provider/socket components, and elapsed time.",

@@ -77,6 +77,38 @@ lower-level runtime objects. If a needed helper does not exist, add or improve
 an internal DSL helper instead of copying runtime mechanics into component
 code.
 
+## Rules And Decision Tables
+
+Use CNCF Rules when domain logic is a stable, explainable decision rather than
+an incidental implementation branch: consumption-tax calculation, product
+price lists, tiered discounts, eligibility, validation constraints, and derived
+facts are the initial drivers. The authoritative model and behavior contract is
+`docs/design/rule-engine-inference-runtime.md` and
+`docs/spec/rule-engine-inference-runtime.md`.
+
+Executable component code builds immutable `RuleSet`, `RuleProgram`, Facts, and
+decision tables with CNCF-owned types, then evaluates them through a
+`RuleEngineSocket`. Use an `InferenceEngineSocket` only for derivation-only
+forward inference. This retains provider substitution, consumer-side SPI trace,
+structured `Consequence` failures, and payload-safe diagnostics. Do not call a
+provider implementation, repository, external rule runtime, or evaluator
+internals from an ActionCall.
+
+For table-oriented rules, bind each decision-table input column explicitly to a
+`FactId`. A missing Fact is a normal no-match; do not create an implicit default
+through datastore/configuration lookup. Table output remains a named decision
+result and is not automatically merged into calculation values. Apply a
+decision result to business state only through the normal ActionCall/internal
+DSL path.
+
+Subsystem descriptors may declare read-only RuleSet metadata at root
+`ruleSets`, but Phase 32 deliberately does not define executable YAML/JSON rule
+programs, table rows, expressions, or action plans. Keep executable program
+construction in typed component code until a later declarative rule-language
+slice defines syntax, validation, and review boundaries. Production Rule plans
+are evaluated first and fired only through `RuleActionAdmission`; they must not
+perform direct store mutation or thread creation.
+
 Locale, timezone, and formatting assumptions are runtime context, not domain
 logic defaults. Component logic should read them from the current
 `ExecutionContext` or protected runtime/context helpers, and operation inputs

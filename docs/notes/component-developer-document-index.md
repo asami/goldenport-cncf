@@ -83,6 +83,15 @@ Use these when writing or reviewing generated/handwritten logic:
   - Current implementation guidance for entity authorization.
 - `docs/notes/aggregate-method-implementation-strategy.md`
   - Aggregate method / ActionCall alignment.
+- `docs/notes/cncf-developer-guide.md` (`Rules And Decision Tables`)
+  - Typed RuleProgram construction, RuleEngine/InferenceEngine socket use, and
+    ActionCall-safe application of tax, pricing, constraint, and derivation
+    results.
+- `docs/design/rule-engine-inference-runtime.md`
+  - Engine-neutral rule model, SPI, decision-table binding, firing, and
+    observability boundaries.
+- `docs/spec/rule-engine-inference-runtime.md`
+  - Normative deterministic RuleSet/RuleProgram and decision-table semantics.
 
 The default rule is: application logic expresses intent; CNCF DSL/UoW helpers
 own lifecycle, authorization, logical delete filtering, tenant scope, and store

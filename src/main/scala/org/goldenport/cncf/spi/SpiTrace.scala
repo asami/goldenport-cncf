@@ -8,13 +8,14 @@ import org.goldenport.cncf.http.RuntimeDashboardMetrics
 import org.goldenport.cncf.observability.ConclusionDiagnostics
 import org.goldenport.cncf.spi.ai.runner.AiRunner
 import org.goldenport.cncf.spi.geo.resolver.GeoResolver
+import org.goldenport.cncf.spi.rule.engine.{InferenceEngine, RuleEngine}
 import org.goldenport.cncf.spi.toolchain.runner.ToolchainRunner
 
 /*
  * Common tracing support for provider-neutral CNCF SPI calls.
  *
  * @since   Jul.  9, 2026
- * @version Jul. 11, 2026
+ * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class SpiTraceMetadata(
@@ -116,6 +117,8 @@ object SpiTraceSupport {
     service match {
       case m: AiRunner => AiRunner.traced(m, metadata)
       case m: GeoResolver => GeoResolver.traced(m, metadata)
+      case m: RuleEngine => RuleEngine.traced(m, metadata)
+      case m: InferenceEngine => InferenceEngine.traced(m, metadata)
       case m: ToolchainRunner => ToolchainRunner.traced(m, metadata)
       case _ => service
     }

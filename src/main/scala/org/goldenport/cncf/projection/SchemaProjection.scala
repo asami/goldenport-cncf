@@ -5,7 +5,8 @@ import org.goldenport.cncf.component.Component
 
 /*
  * @since   Mar.  5, 2026
- * @version May.  7, 2026
+ *  version May.  7, 2026
+ * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 object SchemaProjection {
@@ -18,6 +19,7 @@ object SchemaProjection {
           "type" -> "schema",
           "name" -> name,
           "authorizationPolicies" -> AuthorizationPolicyProjection.project(components, name),
+          "ruleSets" -> RuleSetProjectionSupport.ruleSets(components),
           "components" -> components.map { component =>
             project(base, Some(component.name))
           }

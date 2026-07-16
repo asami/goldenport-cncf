@@ -15,10 +15,10 @@ This directory does **not** contain design details or thinking processes.
 
 Current baseline:
 
-- Active phase: none selected after Phase 30 closure.
+- Active phase: none selected after Phase 32 closure.
 - Active checklist: none.
-- Latest closed phase: `phase-30.md`
-- Latest closed checklist: `phase-30-checklist.md`
+- Latest closed phase: `phase-32.md`
+- Latest closed checklist: `phase-32-checklist.md`
 - Latest post-closure maintenance: Jul. 13, 2026 CNCF I18N
   `display-safe-v1` text normalization API and executable specification on the
   `0.5.1-SNAPSHOT` development line.
@@ -49,6 +49,8 @@ Current baseline:
   - `phase-28.md`
   - `phase-29.md`
   - `phase-30.md`
+  - `phase-31.md`
+  - `phase-32.md`
 
 ## Related Rules
 

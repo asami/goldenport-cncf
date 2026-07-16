@@ -6,7 +6,8 @@ import org.goldenport.cncf.naming.NamingConventions
 
 /*
  * @since   Mar.  5, 2026
- * @version May. 31, 2026
+ *  version May. 31, 2026
+ * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 object DescribeProjection {
@@ -19,6 +20,7 @@ object DescribeProjection {
           "type" -> "subsystem",
           "name" -> name,
           "authorizationPolicies" -> AuthorizationPolicyProjection.project(components, name),
+          "ruleSets" -> RuleSetProjectionSupport.ruleSets(components),
           "components" -> components.map(component_record)
         )
       case Target.ComponentTarget(component) =>
@@ -133,4 +135,13 @@ object DescribeProjection {
           "summary" -> "target not found"
         )
     }
+}
+
+private[projection] object RuleSetProjectionSupport {
+  def ruleSets(components: Vector[Component]): Vector[Record] =
+    components.headOption
+      .flatMap(_.subsystem)
+      .flatMap(_.descriptor)
+      .map(_.ruleSets.map(RuleProjection.project))
+      .getOrElse(Vector.empty)
 }

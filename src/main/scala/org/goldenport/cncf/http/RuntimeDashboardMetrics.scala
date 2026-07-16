@@ -105,16 +105,18 @@ object RuntimeDashboardMetrics {
   private var _validation_events = Vector.empty[Event]
   private var _operation_request_validation_events = Vector.empty[Event]
   private var _blob_events = Vector.empty[Event]
+  private var _rule_events = Vector.empty[Event]
   private var _spi_events = Vector.empty[Event]
   private var _payload_externalization_events = Vector.empty[PayloadExternalizationEvent]
   private var _open_telemetry_export_events = Vector.empty[OpenTelemetryExportEvent]
   private var _recent = Vector.empty[RequestEntry]
 
-  private val DIAGNOSTIC_SCOPE_LABELS: Map[String, String] = Map(
+  private val _diagnostic_scope_labels: Map[String, String] = Map(
     "authorization" -> "Authorization",
     "validation" -> "Validation",
     "operation-request-validation" -> "Operation Request Validation",
     "blob" -> "Blob",
+    "rule" -> "Rule",
     "spi" -> "SPI"
   )
 
@@ -199,11 +201,11 @@ object RuntimeDashboardMetrics {
     sourceMode: Option[String] = None,
     backend: Option[String] = None
   ): Unit = synchronized {
-    val cleanDiagnosticKey = if (error) diagnosticKey.filter(_.nonEmpty) else None
+    val cleandiagnostickey = if (error) diagnosticKey.filter(_.nonEmpty) else None
     _blob_events = (_blob_events :+ Event(
       observedAt = java.time.Instant.now.toEpochMilli,
       error = error,
-      diagnosticKey = cleanDiagnosticKey,
+      diagnosticKey = cleandiagnostickey,
       diagnosticRecord = if (error) diagnosticRecord else None,
       operation = Some(operation).filter(_.nonEmpty),
       kind = kind.filter(_.nonEmpty),
@@ -213,7 +215,31 @@ object RuntimeDashboardMetrics {
         "kind" -> kind.getOrElse(""),
         "source" -> sourceMode.getOrElse(""),
         "backend" -> backend.getOrElse(""),
-        "diagnostic_key" -> cleanDiagnosticKey.getOrElse("")
+        "diagnostic_key" -> cleandiagnostickey.getOrElse("")
+      ))
+    )).takeRight(10000)
+  }
+
+  def recordRuleExecution(
+    operation: String,
+    ruleset: String,
+    error: Boolean,
+    diagnostickey: Option[String] = None,
+    diagnosticrecord: Option[Record] = None,
+    elapsedmillis: Option[Long] = None
+  ): Unit = synchronized {
+    val cleandiagnostickey = if (error) diagnostickey.filter(_.nonEmpty) else None
+    _rule_events = (_rule_events :+ Event(
+      observedAt = java.time.Instant.now.toEpochMilli,
+      error = error,
+      diagnosticKey = cleandiagnostickey,
+      diagnosticRecord = if (error) diagnosticrecord else None,
+      operation = Some(operation).filter(_.nonEmpty),
+      elapsedMillis = elapsedmillis,
+      labels = _clean_labels(Map(
+        "operation" -> operation,
+        "rule_set" -> ruleset,
+        "diagnostic_key" -> cleandiagnostickey.getOrElse("")
       ))
     )).takeRight(10000)
   }
@@ -229,11 +255,11 @@ object RuntimeDashboardMetrics {
     diagnosticRecord: Option[Record] = None,
     elapsedMillis: Option[Long] = None
   ): Unit = synchronized {
-    val cleanDiagnosticKey = if (error) diagnosticKey.filter(_.nonEmpty) else None
+    val cleandiagnostickey = if (error) diagnosticKey.filter(_.nonEmpty) else None
     _spi_events = (_spi_events :+ Event(
       observedAt = java.time.Instant.now.toEpochMilli,
       error = error,
-      diagnosticKey = cleanDiagnosticKey,
+      diagnosticKey = cleandiagnostickey,
       diagnosticRecord = if (error) diagnosticRecord else None,
       operation = Some(operation).filter(_.nonEmpty),
       elapsedMillis = elapsedMillis,
@@ -243,7 +269,7 @@ object RuntimeDashboardMetrics {
         "provider_component" -> providerComponent,
         "socket_component" -> socketComponent,
         "selection_basis" -> selectionBasis.getOrElse(""),
-        "diagnostic_key" -> cleanDiagnosticKey.getOrElse("")
+        "diagnostic_key" -> cleandiagnostickey.getOrElse("")
       ))
     )).takeRight(10000)
   }
@@ -352,6 +378,23 @@ object RuntimeDashboardMetrics {
     _diagnostic_records(_blob_events)
   }
 
+  def ruleExecutionSnapshot: Snapshot = synchronized {
+    _snapshot(_rule_events, Vector.empty)
+  }
+
+  def ruleDiagnosticCounts: Map[String, Long] = synchronized {
+    _rule_events
+      .filter(_.error)
+      .groupBy(_.diagnosticKey.getOrElse("unknown"))
+      .view
+      .mapValues(_.size.toLong)
+      .toMap
+  }
+
+  def ruleDiagnosticRecords: Map[String, Record] = synchronized {
+    _diagnostic_records(_rule_events)
+  }
+
   def spiInvocationSnapshot: Snapshot = synchronized {
     _snapshot(_spi_events, Vector.empty)
   }
@@ -375,6 +418,7 @@ object RuntimeDashboardMetrics {
       _diagnostic_scope("validation", _validation_events),
       _diagnostic_scope("operation-request-validation", _operation_request_validation_events),
       _diagnostic_scope("blob", _blob_events),
+      _diagnostic_scope("rule", _rule_events),
       _diagnostic_scope("spi", _spi_events)
     )
   }
@@ -421,7 +465,7 @@ object RuntimeDashboardMetrics {
     scope: String,
     events: Vector[Event]
   ): DiagnosticScope = {
-    val label = DIAGNOSTIC_SCOPE_LABELS.getOrElse(scope, scope)
+    val label = _diagnostic_scope_labels.getOrElse(scope, scope)
     val groups = events
       .filter(_.error)
       .groupBy(_.diagnosticKey.getOrElse("unknown"))
@@ -480,6 +524,9 @@ object RuntimeDashboardMetrics {
         event.diagnosticKey.map("diagnostic_key" -> _).toMap
       ),
       _event_points("blob.operation", "operations", _blob_events, event =>
+        event.labels ++ _outcome_label(event)
+      ),
+      _event_points("rule.execution", "executions", _rule_events, event =>
         event.labels ++ _outcome_label(event)
       ),
       _event_points("spi.invocation", "invocations", _spi_events, event =>
@@ -625,12 +672,12 @@ object RuntimeDashboardMetrics {
     size: Int
   ): Vector[RequestBucket] = {
     val current = now / widthMillis
-    val byPeriod = events.groupBy(_.observedAt / widthMillis).map {
+    val byperiod = events.groupBy(_.observedAt / widthMillis).map {
       case (period, xs) => period -> RequestBucket(period, xs.size.toLong, xs.count(_.error).toLong)
     }
     val start = current - (size - 1)
     (start to current).toVector.map { period =>
-      byPeriod.getOrElse(period, RequestBucket(period, 0L, 0L))
+      byperiod.getOrElse(period, RequestBucket(period, 0L, 0L))
     }
   }
 }

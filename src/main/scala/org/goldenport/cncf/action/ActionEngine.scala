@@ -526,7 +526,7 @@ class ActionEngine(
     if (record.asMap.isEmpty)
       ""
     else
-      _calltree_record_json(CallTreeValueSummary.recordSummary(record, includeInline = true, confidentiality, payloadKind = payloadkind))
+      _calltree_record_json(CallTreeValueSummary.recordSummary(record, includeInline = false, confidentiality, payloadKind = payloadkind))
 
   private def _operation_response_summary_attributes(
     response: OperationResponse,
@@ -536,7 +536,7 @@ class ActionEngine(
       case OperationResponse.RecordResponse(record) =>
         Map(
           "response_type" -> response.getClass.getSimpleName.stripSuffix("$"),
-          "response" -> _calltree_record_json(CallTreeValueSummary.recordSummary(record, includeInline = true, confidentiality, payloadKind = "response"))
+          "response" -> _calltree_record_json(CallTreeValueSummary.recordSummary(record, includeInline = false, confidentiality, payloadKind = "response"))
         )
       case _ =>
         val summary = CallTreeValueSummary.operationResponseSummary(response, confidentiality)
