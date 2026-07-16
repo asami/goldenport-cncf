@@ -65,6 +65,31 @@ final class TextusUrnResourceAccessSpec extends AnyWordSpec with Matchers with G
       checked.passed shouldBe true
     }
 
+    "resolve a safe logical child without exposing a configured resource root" in {
+      Given("a logical Textus source root and a relative metadata child")
+      val base = ResourceReference.parseC("urn:textus:bok:knowledgehub").toOption.get
+
+      When("component code resolves the child through the resource-reference DSL")
+      val child = ResourceReference.resolveC(base, "metadata/cncf/knowledge-source.json")
+
+      Then("the derived reference remains a logical Textus URN")
+      child.toOption.map(_.print) shouldBe Some(
+        "urn:textus:bok:knowledgehub/metadata/cncf/knowledge-source.json"
+      )
+    }
+
+    "reject unsafe logical child paths before provider selection" in {
+      Given("a logical Textus source root and unsafe child path candidates")
+      val base = ResourceReference.parseC("urn:textus:bok:knowledgehub").toOption.get
+      val values = Vector("../metadata.json", "/metadata.json", "metadata//terms.json", "metadata\\terms.json")
+
+      When("component code resolves each child through the DSL")
+      val results = values.map(ResourceReference.resolveC(base, _))
+
+      Then("each unsafe child path is rejected deterministically")
+      results.forall(_.isFaillure) shouldBe true
+    }
+
     "reject unknown namespaces and unsafe resource identifiers before a file provider can read" in {
       Given("a runtime that binds only the book namespace")
       val root = Files.createTempDirectory("textus-urn-policy")

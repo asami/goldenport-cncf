@@ -35,6 +35,12 @@ It does not assign a provider or policy to either form. In particular,
 `urn:textus` receives its namespace grammar and resolver only in RR-03, while
 non-Textus NIDs receive extension dispatch only in RR-04.
 
+Components that need artifacts below one logical source root use
+`ResourceReference.resolveC`. The operation owns safe child-path validation and
+defines child semantics only for URL and standard Textus URN references. It
+does not infer path structure from an external URN NSS, because that namespace
+belongs to the configured provider.
+
 ## Component Use
 
 Component behavior uses the internal DSL helpers backed by

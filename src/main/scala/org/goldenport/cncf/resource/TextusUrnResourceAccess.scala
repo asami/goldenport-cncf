@@ -43,6 +43,15 @@ object TextusUrnReference {
       }
     }
 
+  def resolveC(
+    base: ResourceReference.Urn,
+    relativepath: String
+  ): Consequence[ResourceReference] =
+    parseC(base).flatMap { reference =>
+      val resourceid = s"${reference.resourceId}/$relativepath"
+      ResourceReference.parseC(s"urn:textus:${reference.namespace}:$resourceid")
+    }
+
   private def _is_safe_resource_id(value: String): Boolean =
     !value.split("/").exists(segment => segment.isEmpty || segment == "." || segment == "..")
 }

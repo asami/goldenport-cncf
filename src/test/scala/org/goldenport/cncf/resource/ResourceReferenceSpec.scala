@@ -63,6 +63,22 @@ final class ResourceReferenceSpec extends AnyWordSpec with Matchers with GivenWh
       results.forall(_.isFaillure) shouldBe true
     }
 
+    "resolve URL children while preserving opaque external URNs" in {
+      Given("a URL source root and an external URN")
+      val url = ResourceReference.parseC("https://example.test/bok/").toOption.get
+      val urn = ResourceReference.parseC("urn:example:catalog-root").toOption.get
+
+      When("a component derives a metadata child through the common DSL")
+      val resolvedurl = ResourceReference.resolveC(url, "metadata/source.json")
+      val resolvedurn = ResourceReference.resolveC(urn, "metadata/source.json")
+
+      Then("only the URL receives standard child-reference resolution")
+      resolvedurl.toOption.map(_.print) shouldBe Some(
+        "https://example.test/bok/metadata/source.json"
+      )
+      resolvedurn.isFaillure shouldBe true
+    }
+
     "decode text strictly and preserve the declared charset as the default" in {
       Given("ISO-8859-1 resource bytes with a declared charset")
       val reference = ResourceReference.parseC("urn:example:message").toOption.get

@@ -54,7 +54,7 @@ not directly use host filesystem or network APIs for this concern.
 - C (DONE): RR-03 - Implement standard `urn:textus` namespace resolution.
 - D (DONE): RR-04 - Implement generic external-URN SPI resolution.
 - E (DONE): RR-05 - Add deterministic test providers and executable specs.
-- F (PLANNED): RR-06 - Migrate SIE BoK readers and verify the cross-repository
+- F (DONE): RR-06 - Migrate SIE BoK readers and verify the cross-repository
   consumer path.
 - G (PLANNED): RR-07 - Review, document, and close Phase 33.
 
@@ -65,7 +65,7 @@ not directly use host filesystem or network APIs for this concern.
 - [x] RR-03: Implement `urn:textus` namespace resolution through configuration.
 - [x] RR-04: Implement the generic `urn:<nid>:<nss>` extension SPI.
 - [x] RR-05: Add deterministic providers and executable specifications.
-- [ ] RR-06: Migrate and verify the SIE BoK reader consumer path.
+- [x] RR-06: Migrate and verify the SIE BoK reader consumer path.
 - [ ] RR-07: Complete review, documentation, verification, and closure.
 
 Detailed task tracking and acceptance evidence are in

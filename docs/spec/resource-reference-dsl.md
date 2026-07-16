@@ -26,6 +26,13 @@ The reference is an identity and routing input only. It does not disclose a
 provider implementation, local path, credential, cache location, or transport
 handle.
 
+`ResourceReference.resolveC(base, relativepath)` derives a safe child
+reference for a resource collection. `relativepath` must be non-empty,
+relative, and free of empty, `.`, `..`, and backslash path segments. URL bases
+use URI child resolution; standard `urn:textus` bases append the child to the
+logical `resource-id`. Generic external URN NSS values remain opaque, so child
+resolution for a non-Textus URN is rejected rather than guessed.
+
 ## Read-only Resource Boundary
 
 `ResourceAccess` is the sole CNCF resource-read boundary exposed through

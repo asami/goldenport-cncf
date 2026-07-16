@@ -124,14 +124,14 @@ are absent from those attributes and ordinary missing-resource failures.
 
 ## RR-06: SIE Consumer Migration
 
-Status: OPEN
+Status: DONE
 
-- [ ] Replace SIE BoK metadata direct filesystem reads with the CNCF resource
+- [x] Replace SIE BoK metadata direct filesystem reads with the CNCF resource
   internal DSL.
-- [ ] Replace SIE BoK source direct filesystem reads with the CNCF resource
+- [x] Replace SIE BoK source direct filesystem reads with the CNCF resource
   internal DSL.
-- [ ] Bind SIE default/test BoK references through `urn:textus` configuration.
-- [ ] Verify metadata-only and source-enabled SIE paths using in-memory and
+- [x] Bind SIE default/test BoK references through `urn:textus` configuration.
+- [x] Verify metadata-only and source-enabled SIE paths using in-memory and
   configured provider bindings.
 
 Acceptance evidence:
@@ -140,6 +140,15 @@ Acceptance evidence:
   content.
 - Cross-repository tests demonstrate the same logical BoK URN under test and
   runtime bindings.
+
+Evidence: CNCF `ResourceReferenceSpec` and `TextusUrnResourceAccessSpec` passed
+12 tests on Jul. 16, 2026. SIE `BokKnowledgeSourceSpec`,
+`BokComponentMetadataSpec`, and `HtmlSiteIndexerSpec` passed 17 tests on Jul.
+16, 2026. `BokKnowledgeSourceReader` and `BokComponentMetadataReader` now
+accept `ExecutionContext`, derive only safe child references through
+`ResourceReference.resolveC`, and read through `ExecutionContext.resources`.
+SIE's configured fixture roots and explicit in-memory Textus provider both use
+the same `urn:textus:bok:<resource-id>` source contract.
 
 ## RR-07: Closure
 

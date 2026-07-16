@@ -45,6 +45,26 @@ object ResourceReference {
     }
   }
 
+  /**
+   * Resolves a logical child resource without exposing the provider's physical
+   * backing location. Only URL references and the standard Textus URN grammar
+   * define child-resource semantics.
+   */
+  def resolveC(
+    base: ResourceReference,
+    relativepath: String
+  ): Consequence[ResourceReference] =
+    _relative_path_c(relativepath).flatMap { path =>
+      base match {
+        case url: Url =>
+          parseC(url.uri.resolve(path).toASCIIString)
+        case urn: Urn if urn.nid == "textus" =>
+          TextusUrnReference.resolveC(urn, path)
+        case _: Urn =>
+          Consequence.resourceUnsupported("relative child resolution is not defined for this URN resource")
+      }
+    }
+
   private val _urn_pattern = "(?i)^urn:([a-z0-9][a-z0-9-]{0,31}):(.+)$".r
 
   private def _urn_c(value: String): Consequence[ResourceReference] =
@@ -53,5 +73,19 @@ object ResourceReference {
         Consequence.success(Urn(rawnid.toLowerCase(Locale.ROOT), nss))
       case _ =>
         Consequence.argumentFormatError("reference", "urn:<nid>:<nss>", value)
-    }
+  }
+
+  private def _relative_path_c(value: String): Consequence[String] = {
+    val path = Option(value).map(_.trim).getOrElse("")
+    val segments = path.split("/").toVector
+    if (
+      path.isEmpty ||
+      path.startsWith("/") ||
+      path.contains("\\") ||
+      segments.exists(segment => segment.isEmpty || segment == "." || segment == "..")
+    )
+      Consequence.argumentFormatError("relativepath", "a safe relative resource path", value)
+    else
+      Consequence.success(path)
+  }
 }
