@@ -4,7 +4,7 @@ import java.time.{Clock, Instant, ZoneOffset}
 
 import org.goldenport.cncf.config.{OperationMode, RuntimeConfig}
 import org.goldenport.cncf.path.AliasResolver
-import org.goldenport.cncf.resource.{ResourceReference, ResourceUrlPolicy, TextusUrnResourcePolicy}
+import org.goldenport.cncf.resource.{ExampleUrnResourceProvider, ResourceReference, ResourceUrlPolicy, TextusUrnResourcePolicy}
 import org.goldenport.cncf.http.FakeHttpDriver
 import org.goldenport.configuration.{Configuration, ConfigurationTrace, ConfigurationValue, ResolvedConfiguration}
 import org.scalatest.matchers.should.Matchers
@@ -173,6 +173,47 @@ class ExecutionContextSpec extends AnyWordSpec with Matchers with GivenWhenThen 
 
       Then("the component-facing resource DSL resolves through its configured logical namespace")
       content.toOption shouldBe Some("configured-urn")
+    }
+
+    "bind configured external URN resource access when creating a context below a global runtime" in {
+      Given("a global runtime whose explicit provider configuration binds an external NID")
+      val base = ExecutionContext.create()
+      val config = RuntimeConfig.from(ResolvedConfiguration(
+        Configuration(Map(
+          RuntimeConfig.ResourceUrnProvidersKey -> ConfigurationValue.StringValue(
+            s"example=${classOf[ExampleUrnResourceProvider].getName}"
+          )
+        )),
+        ConfigurationTrace.empty
+      ))
+      val global = GlobalRuntimeContext.create(
+        "external-urn-resource-access-spec",
+        config,
+        ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty),
+        base.observability,
+        AliasResolver.empty
+      )
+      val runtime = new RuntimeContext(
+        core = RuntimeContext.core(
+          name = "external-urn-resource-access-spec",
+          parent = Some(global),
+          observabilityContext = base.observability
+        ),
+        unitOfWorkSupplier = () => base.unitOfWork,
+        unitOfWorkInterpreterFn = base.runtime.unitOfWorkInterpreter,
+        commitAction = _ => (),
+        abortAction = _ => (),
+        disposeAction = _ => (),
+        token = "external-urn-resource-access-spec"
+      )
+
+      When("a component context is created and reads the configured external URN")
+      val context = ExecutionContext.create(runtime)
+      val reference = ResourceReference.parseC("urn:example:catalog-1").toOption.get
+      val content = context.resources.readText(reference)
+
+      Then("the external provider is reachable only through the runtime resource DSL binding")
+      content.toOption shouldBe Some("external:catalog-1")
     }
 
     "adopt runtime config namespace and clock when rebinding under a global runtime" in {

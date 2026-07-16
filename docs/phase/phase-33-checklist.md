@@ -78,19 +78,26 @@ layer is independent of existing Blob/entity semantic URNs.
 
 ## RR-04: Generic External URN Extension SPI
 
-Status: OPEN
+Status: DONE
 
-- [ ] Define `UrnResourceProvider` SPI for `urn:<nid>:<nss>` references.
-- [ ] Bind external NID providers only through explicit configuration.
-- [ ] Reserve `textus` for `TextusUrnResourceProvider` and prevent generic
+- [x] Define `UrnResourceProvider` SPI for `urn:<nid>:<nss>` references.
+- [x] Bind external NID providers only through explicit configuration.
+- [x] Reserve `textus` for `TextusUrnResourceProvider` and prevent generic
   provider shadowing.
-- [ ] Verify an explicitly installed non-Textus test NID resolves correctly.
-- [ ] Verify unconfigured or malformed external URNs are rejected.
+- [x] Verify an explicitly installed non-Textus test NID resolves correctly.
+- [x] Verify unconfigured or malformed external URNs are rejected.
 
 Acceptance evidence:
 
 - Specs prove generic NID dispatch while the default profile exposes only the
   standard Textus URN route.
+
+Evidence: `UrnResourceAccessSpec` and `ExecutionContextSpec` passed on Jul.
+16, 2026. `UrnResourceProvider` binds only configured non-Textus NIDs through
+`textus.resource.urn.providers` and its runtime/CNCF aliases. Configuration
+rejects reserved `textus`, duplicate bindings, invalid provider classes, and
+provider/NID mismatches before resource access is installed. The dispatcher
+always routes `urn:textus:` to the dedicated standard provider first.
 
 ## RR-05: Deterministic Test Providers and Observability
 

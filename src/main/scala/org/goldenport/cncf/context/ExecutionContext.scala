@@ -678,6 +678,7 @@ object ExecutionContext {
         ResourceAccess.standard(
           global.config.resourceUrlPolicy,
           global.config.textusUrnResourcePolicy,
+          global.config.urnResourceProviders,
           global.httpDriver
         )
       }

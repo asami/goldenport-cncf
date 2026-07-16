@@ -56,8 +56,21 @@ resolution. Those URNs model entity identity and Blob semantics; they are not a
 resource-content provider contract and must not become an implicit route into
 this DSL.
 
+## External URN Provider Boundary
+
+RR-04 provides an explicit extension route for non-Textus NIDs. The generic
+`UrnResourceProvider` is selected only from runtime-configured NID bindings;
+there is no ambient discovery and no generic fallback for an unconfigured NID.
+The configured binding and the provider-reported NID must agree, which prevents
+one installed provider from claiming another provider's route.
+
+`textus` is structurally reserved. The resource dispatcher selects the
+dedicated Textus provider before generic external dispatch, and the external
+configuration rejects `textus` bindings. This preserves the standard Textus
+resource grammar as a CNCF-owned contract while allowing explicitly installed
+future NIDs to evolve behind the same `ExecutionContext.resources` DSL.
+
 ## Deferred Design
 
-This design intentionally excludes generic URN extension dispatch, resolution
-metrics, caching, credentials, refresh, and SIE migration. Those remain Phase
-33 RR-04 through RR-06 work.
+This design intentionally excludes resolution metrics, caching, credentials,
+refresh, and SIE migration. Those remain Phase 33 RR-05 through RR-06 work.

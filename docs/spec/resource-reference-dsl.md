@@ -8,8 +8,7 @@ This specification fixes the Phase 33 RR-01 value model and read-only
 ExecutionContext boundary, RR-02 URL provider and policy behavior, and RR-03
 standard Textus URN resolution. It defines reference parsing, resource
 content, text decoding, URL policy, Textus namespace resolution, and failure
-ownership. It does not define generic external URN resolution or resource
-mutation.
+ownership. It does not define resource mutation.
 
 ## Reference Model
 
@@ -134,7 +133,34 @@ root before reading.
 
 An unknown namespace, invalid logical resource identifier, absent resource, or
 policy denial remains a structured `Consequence` failure. Generic URN providers
-cannot select or shadow `textus`; that extension point is RR-04. This resource
-URN layer is separate from the existing Blob/entity semantic URN facilities:
-RR-03 neither changes their identity model nor uses them as resource-content
-providers.
+cannot select or shadow `textus`. This resource URN layer is separate from the
+existing Blob/entity semantic URN facilities: RR-03 neither changes their
+identity model nor uses them as resource-content providers.
+
+## Generic External URN Resolution
+
+`UrnResourceProvider` is the extension SPI for explicitly configured,
+non-Textus `urn:<nid>:<nss>` references. Its input is the parsed generic URN
+reference, and it returns `ResourceContent` or a normal structured
+`Consequence` failure. It does not expose a provider-selection API to component
+code.
+
+External bindings are explicit execution configuration, using comma-separated
+`<nid>=<provider-class>` entries:
+
+```text
+textus.resource.urn.providers=example=org.example.catalog.ExampleUrnResourceProvider
+```
+
+The usual aliases are `textus.runtime.resource.urn.providers`,
+`cncf.resource.urn.providers`, and `cncf.runtime.resource.urn.providers`. A
+provider class must implement `UrnResourceProvider`, have a public no-argument
+constructor, and report the same normalized NID as its configured binding.
+Malformed NIDs, duplicate NIDs, provider-class construction failures, and NID
+mismatches fail runtime configuration deterministically.
+
+`textus` is reserved: neither a generic configuration binding nor a generic
+provider can receive a `urn:textus:` request. Runtime dispatch always resolves
+Textus URNs through `TextusUrnResourceProvider` first. Empty external-provider
+configuration is the default, so every non-Textus NID remains rejected unless
+an operator explicitly installs its provider.

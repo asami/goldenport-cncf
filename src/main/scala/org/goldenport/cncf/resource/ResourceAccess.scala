@@ -76,24 +76,35 @@ object ResourceAccess {
   def textus(providers: Vector[TextusUrnResourceProvider]): ResourceAccess =
     new TextusUrnResourceAccess(providers)
 
+  def urn(providers: Vector[UrnResourceProvider]): ResourceAccess =
+    new UrnResourceAccess(providers)
+
   def standard(
     urlpolicy: ResourceUrlPolicy,
     textuspolicy: TextusUrnResourcePolicy,
     httpdriver: org.goldenport.cncf.http.HttpDriver
   ): ResourceAccess =
-    _composite(url(urlpolicy, httpdriver), textus(textuspolicy))
+    standard(urlpolicy, textuspolicy, Vector.empty, httpdriver)
+
+  def standard(
+    urlpolicy: ResourceUrlPolicy,
+    textuspolicy: TextusUrnResourcePolicy,
+    urnproviders: Vector[UrnResourceProvider],
+    httpdriver: org.goldenport.cncf.http.HttpDriver
+  ): ResourceAccess =
+    _composite(url(urlpolicy, httpdriver), textus(textuspolicy), urn(urnproviders))
 
   private def _composite(
     urlaccess: ResourceAccess,
-    textusaccess: ResourceAccess
+    textusaccess: ResourceAccess,
+    urnaccess: ResourceAccess
   ): ResourceAccess =
     new ResourceAccess {
       def read(reference: ResourceReference): Consequence[ResourceContent] =
         reference match {
           case _: ResourceReference.Url => urlaccess.read(reference)
           case urn: ResourceReference.Urn if urn.nid == "textus" => textusaccess.read(reference)
-          case _: ResourceReference.Urn =>
-            Consequence.resourceUnsupported("URN resource providers are not configured")
+          case _: ResourceReference.Urn => urnaccess.read(reference)
         }
     }
 }
