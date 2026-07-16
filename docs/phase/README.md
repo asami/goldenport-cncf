@@ -15,8 +15,9 @@ This directory does **not** contain design details or thinking processes.
 
 Current baseline:
 
-- Active phase: none selected after Phase 32 closure.
-- Active checklist: none.
+- Active phase: `phase-33.md` - Resource Reference DSL and URN Provider
+  Resolution.
+- Active checklist: `phase-33-checklist.md`.
 - Latest closed phase: `phase-32.md`
 - Latest closed checklist: `phase-32-checklist.md`
 - Latest post-closure maintenance: Jul. 13, 2026 CNCF I18N

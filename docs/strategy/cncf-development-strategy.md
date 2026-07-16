@@ -652,14 +652,15 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Notes contain execution details and results for each phase.
 
 ## Process Status Pointers
-- Current phase dashboard: none.
-- Current phase checklist: none.
-- Current development item: none.
+- Current phase dashboard: `docs/phase/phase-33.md`.
+- Current phase checklist: `docs/phase/phase-33-checklist.md`.
+- Current development item: `9.28 Resource Reference DSL and URN Provider
+  Resolution`.
 - Latest closed phase dashboard: `docs/phase/phase-32.md`
 - Latest closed phase checklist: `docs/phase/phase-32-checklist.md`
 - Previous closed phase dashboard: `docs/phase/phase-31.md`
 - Previous closed phase checklist: `docs/phase/phase-31-checklist.md`
-- Current next slice: none. Select the next development item explicitly.
+- Current next slice: RR-01 Resource Reference and Internal DSL Contract.
 - Status interpretation rules: `docs/rules/stage-status-and-checklist-convention.md`
 - Latest post-closure maintenance: Jul. 15, 2026 descriptor-bound component
   runtime configuration preservation. Materialized component instances retain
@@ -2155,3 +2156,56 @@ Future Web/platform UX development item.
     content work;
   - automatic machine translation;
   - production translation workflow, translator UI, or terminology management.
+
+### 9.28 Resource Reference DSL and URN Provider Resolution
+Planned execution-context / resource-access development item for Phase 33.
+
+- Goal: provide a CNCF-owned, read-only resource-reference internal DSL so
+  components resolve external knowledge and source material through the
+  `ExecutionContext`, rather than directly reading host files or embedding
+  provider-specific access code.
+- Positioning:
+  - resource access is an execution-environment concern, analogous to the
+    execution Clock and named random streams;
+  - the internal DSL is the component-facing contract; provider SPIs are an
+    implementation detail behind that contract;
+  - URLs remain valid references when their scheme and policy permit access;
+  - the only standard URN namespace in this phase is `urn:textus:`. Other URN
+    NIDs are extensible but not a default runtime dependency.
+- Scope:
+  - define a `ResourceReference` model that parses absolute URLs and URNs;
+  - expose read-only resource access through an `ExecutionContext` internal
+    DSL, with structured `Consequence` failures and no ambient filesystem or
+    network access in component code;
+  - define a URL-scheme provider SPI and URL policy binding for allowed file
+    roots, hosts, and other scheme-specific restrictions;
+  - define the standard `urn:textus:<namespace>:<resource-id>` grammar and a
+    dedicated `TextusUrnResourceProvider` SPI;
+  - bind each `urn:textus` logical namespace through execution configuration
+    to a read-only provider and its provider-specific settings;
+  - define a separate generic `UrnResourceProvider` SPI for
+    `urn:<nid>:<nss>` references, so an explicitly configured future NID can
+    be resolved without changing the DSL;
+  - reserve `textus` for the dedicated standard SPI; the generic SPI must not
+    shadow or redefine `urn:textus` semantics;
+  - provide in-memory test providers and a policy-constrained file provider;
+  - migrate the SIE BoK metadata and source reader as the first consumer
+    validation, replacing direct `Files.readString` access.
+- First implementation direction:
+  - add a `resources` member to `ExecutionContext` and establish the DSL
+    before exposing the provider registry;
+  - resolve a `urn:textus` reference by logical namespace configuration, not
+    by a filesystem path embedded in component code;
+  - deny unconfigured URN NIDs, namespaces, URL schemes, roots, and hosts;
+  - test the generic URN SPI with an explicitly installed test NID while
+    enabling only `urn:textus` in the default profile;
+  - verify the same Textus URN resolves to in-memory test data and configured
+    runtime data without changing component code.
+- Deferred scope:
+  - registration or standardization of additional URN NIDs;
+  - write, delete, listing, mutation, or repository-management APIs;
+  - unrestricted host filesystem, network, classpath, or object-store access;
+  - HTTP caching, credentials, refresh scheduling, and remote repository
+    synchronization policy;
+  - changing BoK ownership, catalog semantics, or SIE retrieval behavior
+    beyond its resource-access boundary.

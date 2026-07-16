@@ -1,0 +1,113 @@
+# Phase 33 - Resource Reference DSL and URN Provider Resolution Checklist
+
+This checklist tracks Phase 33 implementation and evidence. The summary
+dashboard is `phase-33.md`.
+
+## RR-01: Resource Reference and Internal DSL Contract
+
+Status: OPEN
+
+- [ ] Define `ResourceReference` parsing for absolute URLs and URNs.
+- [ ] Define read-only `ExecutionContext.resources` DSL operations and
+  structured `Consequence` failures.
+- [ ] Define the rule that component code does not call direct filesystem or
+  network APIs for managed resource reads.
+- [ ] Define reference identity, content encoding, missing-resource, and
+  policy-denial semantics.
+
+Acceptance evidence:
+
+- A CNCF design/specification document defines the model and DSL before the
+  implementation is treated as stable.
+- Executable specifications cover valid URL/URN parsing and malformed or
+  unsupported reference rejection.
+
+## RR-02: URL Provider and Policy Resolution
+
+Status: OPEN
+
+- [ ] Define a URL-scheme read-only resource provider SPI.
+- [ ] Bind URL scheme providers through ExecutionContext configuration.
+- [ ] Constrain `file:` reads to configured roots.
+- [ ] Constrain HTTPS reads to configured hosts.
+- [ ] Reject an unconfigured scheme, host, root, or provider with a structured
+  policy failure.
+
+Acceptance evidence:
+
+- Specs prove configured URL reads and deny-by-default behavior without relying
+  on ambient host access.
+
+## RR-03: Standard Textus URN Resolution
+
+Status: OPEN
+
+- [ ] Freeze `urn:textus:<namespace>:<resource-id>` grammar.
+- [ ] Define and install `TextusUrnResourceProvider` SPI.
+- [ ] Bind logical Textus namespaces through execution configuration.
+- [ ] Resolve a Textus URN without exposing a file path or remote endpoint to
+  component code.
+- [ ] Reject unknown Textus namespaces and invalid resource identifiers.
+
+Acceptance evidence:
+
+- The same Textus URN resolves to in-memory test data and configured runtime
+  data through unchanged component code.
+
+## RR-04: Generic External URN Extension SPI
+
+Status: OPEN
+
+- [ ] Define `UrnResourceProvider` SPI for `urn:<nid>:<nss>` references.
+- [ ] Bind external NID providers only through explicit configuration.
+- [ ] Reserve `textus` for `TextusUrnResourceProvider` and prevent generic
+  provider shadowing.
+- [ ] Verify an explicitly installed non-Textus test NID resolves correctly.
+- [ ] Verify unconfigured or malformed external URNs are rejected.
+
+Acceptance evidence:
+
+- Specs prove generic NID dispatch while the default profile exposes only the
+  standard Textus URN route.
+
+## RR-05: Deterministic Test Providers and Observability
+
+Status: OPEN
+
+- [ ] Add in-memory URL/Textus-URN/external-URN provider fixtures.
+- [ ] Bind providers through deterministic ExecutionContext test profiles.
+- [ ] Record provider identity and policy-safe resolution diagnostics.
+- [ ] Verify resource contents and provider settings are not leaked in ordinary
+  failure output.
+
+Acceptance evidence:
+
+- Tests execute without host-file or external-network dependencies.
+
+## RR-06: SIE Consumer Migration
+
+Status: OPEN
+
+- [ ] Replace SIE BoK metadata direct filesystem reads with the CNCF resource
+  internal DSL.
+- [ ] Replace SIE BoK source direct filesystem reads with the CNCF resource
+  internal DSL.
+- [ ] Bind SIE default/test BoK references through `urn:textus` configuration.
+- [ ] Verify metadata-only and source-enabled SIE paths using in-memory and
+  configured provider bindings.
+
+Acceptance evidence:
+
+- SIE has no direct `Files.readString` path for managed BoK metadata or source
+  content.
+- Cross-repository tests demonstrate the same logical BoK URN under test and
+  runtime bindings.
+
+## RR-07: Closure
+
+Status: OPEN
+
+- [ ] Run focused CNCF and SIE regression suites.
+- [ ] Run CAR lint/review for the SIE consumer migration.
+- [ ] Record verification evidence in this checklist and phase dashboard.
+- [ ] Update strategy and phase status, then commit the validated work.
