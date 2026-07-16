@@ -652,14 +652,14 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Notes contain execution details and results for each phase.
 
 ## Process Status Pointers
-- Current implementation phase: none. Select the next item explicitly.
+- Current phase dashboard: `docs/phase/phase-34.md`.
+- Current phase checklist: `docs/phase/phase-34-checklist.md`.
+- Current development item: `9.29 Process Execution Runtime`.
 - Latest closed phase dashboard: `docs/phase/phase-33.md`
 - Latest closed phase checklist: `docs/phase/phase-33-checklist.md`
 - Previous closed phase dashboard: `docs/phase/phase-32.md`
 - Previous closed phase checklist: `docs/phase/phase-32-checklist.md`
-- Latest completed development item: `9.28 Resource Reference DSL and URN
-  Provider Resolution`.
-- Next development item: select explicitly from the strategy.
+- Current next slice: PE-01 normative Process Execution contract.
 - Status interpretation rules: `docs/rules/stage-status-and-checklist-convention.md`
 - Latest post-closure maintenance: Jul. 15, 2026 descriptor-bound component
   runtime configuration preservation. Materialized component instances retain
@@ -2209,3 +2209,39 @@ closed Jul. 17, 2026.
     synchronization policy;
   - changing BoK ownership, catalog semantics, or SIE retrieval behavior
     beyond its resource-access boundary.
+
+### 9.29 Process Execution Runtime
+Active development item for Phase 34.
+
+- Goal: provide a capability-constrained CNCF runtime effect for executing an
+  approved external program through UnitOfWork, WorkArea, Job/Task
+  cancellation, structured diagnostics, and observability boundaries.
+- Scope:
+  - define provider-neutral Process Execution request/result, capability,
+    program-definition, limits, driver, termination, and artifact contracts;
+  - resolve a `ProcessExecutionDriver` through inherited `ScopeContext`;
+  - add `UnitOfWorkOp.ProcessExec` and protected `process_exec` internal DSL
+    integration;
+  - enforce runtime-owned program admission, constrained arguments/environment,
+    WorkArea confinement, bounded streams, timeout, cancellation, and cleanup;
+  - provide deterministic fake-driver and controlled local-driver executable
+    specifications;
+  - expose a provider-neutral handoff for a future Textus AI `codex-cli`
+    capability.
+- First implementation direction:
+  - promote `docs/notes/process-execution-design.md` into normative design and
+    static specification documents;
+  - establish capability admission and fake-driver behavior before adding a
+    local `ProcessBuilder` implementation;
+  - preserve existing ActionCall, UnitOfWork, Job/Task, authorization, and
+    observability chokepoints for every process execution.
+- Deferred scope:
+  - live Textus AI/Codex provider implementation, account integration, and
+    network-dependent verification;
+  - container and remote execution drivers;
+  - automatic migration or semantic reinterpretation of legacy
+    `ShellCommandExec` and `ShellCommand` callers;
+  - arbitrary shell execution, arbitrary executable paths, and unbounded
+    process/environment access;
+  - BPM/process orchestration, process scheduling, retention, and advanced
+    process lifecycle UI.
