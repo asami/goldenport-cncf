@@ -14,7 +14,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Apr. 18, 2026
  *  version Apr. 28, 2026
  *  version Jun. 19, 2026
- * @version Jul. 15, 2026
+ * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 final class RuntimeConfigSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -82,6 +82,43 @@ final class RuntimeConfigSpec extends AnyWordSpec with Matchers with GivenWhenTh
 
       RuntimeConfig.getString(configuration, RuntimeConfig.WEB_DEMO_ASSIST_ENABLED_KEY) shouldBe Some("true")
       RuntimeConfig.from(configuration).webDemoAssistEnabled shouldBe true
+    }
+
+    "parse URL resource policy configuration and aliases" in {
+      Given("runtime aliases for constrained file roots and HTTPS hosts")
+      val configuration = ResolvedConfiguration(
+        Configuration(Map(
+          RuntimeConfig.RuntimeResourceUrlFileRootsKey -> ConfigurationValue.StringValue("/tmp/resources-a,/tmp/resources-b"),
+          "cncf.resource.url.https.hosts" -> ConfigurationValue.StringValue("catalog.example.test,assets.example.test")
+        )),
+        ConfigurationTrace.empty
+      )
+
+      When("the runtime configuration is resolved")
+      val config = RuntimeConfig.from(configuration)
+
+      Then("the URL provider policy has only the configured roots and hosts")
+      config.resourceUrlPolicy.normalizedFileRoots.map(_.toString) shouldBe Vector("/tmp/resources-a", "/tmp/resources-b")
+      config.resourceUrlPolicy.normalizedHttpsHosts shouldBe Set("catalog.example.test", "assets.example.test")
+    }
+
+    "reject invalid URL resource policy values deterministically" in {
+      Given("a relative file root and a host value containing a path")
+      val configuration = ResolvedConfiguration(
+        Configuration(Map(
+          RuntimeConfig.ResourceUrlFileRootsKey -> ConfigurationValue.StringValue("relative/resources"),
+          RuntimeConfig.ResourceUrlHttpsHostsKey -> ConfigurationValue.StringValue("catalog.example.test/path")
+        )),
+        ConfigurationTrace.empty
+      )
+
+      When("the runtime configuration is resolved")
+      val thrown = intercept[IllegalArgumentException] {
+        RuntimeConfig.from(configuration)
+      }
+
+      Then("configuration fails before any resource provider is installed")
+      thrown.getMessage should include ("textus.resource.url.file.roots")
     }
 
     "parse id namespace configuration and aliases" in {

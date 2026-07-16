@@ -11,7 +11,7 @@ import org.goldenport.cncf.entity.EntityPersistableQuery
 /*
  * @since   Feb. 19, 2026
  *  version Mar. 30, 2026
- * @version May.  2, 2026
+ * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 case class Query[T](query: T) extends RecordPresentable {
@@ -683,6 +683,7 @@ object Query {
     value match {
       case None => None
       case Some(v) => _normalize_extracted(v)
+      case v: org.simplemodeling.model.value.NominalScalar => Some(v.value)
       case v: org.goldenport.text.Presentable => Some(v.print)
       case v => Some(v)
     }
@@ -690,6 +691,7 @@ object Query {
   private def _normalize_match_value(value: Any): Any =
     value match {
       case Some(v) => _normalize_match_value(v)
+      case v: org.simplemodeling.model.value.NominalScalar => v.value
       case v: org.goldenport.text.Presentable => v.print
       case v => v
     }

@@ -16,6 +16,7 @@ import org.goldenport.cncf.component.repository.ComponentSource
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.cncf.datastore.{DataStore, TotalCountCapability}
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
+import org.simplemodeling.model.value.NominalScalar
 import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext}
 import org.goldenport.cncf.directive.Query
 import org.goldenport.cncf.entity.{EntityPersistable, EntityPersistent, EntityQuery, EntityStore}
@@ -802,7 +803,10 @@ final class ComponentFactory(
         given ExecutionContext = _with_internal_materialization_read(ctx)
         val source = _sanitize_query_record(_query_record(q))
         val filtered = _filter_view_query_record(source, querydef)
-        val searchrecord = _searchable_query_record(if (filtered.asMap.nonEmpty) filtered else source)
+        // Named-view predicates are evaluated after decoding generated entities so
+        // DATATYPE query values retain their domain semantics. Pushing them into
+        // the datastore would compare wire scalars with generated value objects.
+        val searchrecord = _searchable_query_record(source)
         _search_view_source_entities(component, entityspace, entityname, _with_query_controls(searchrecord, q)).flatMap { entities =>
           val matched =
             if (filtered.asMap.isEmpty) entities
@@ -818,7 +822,7 @@ final class ComponentFactory(
         given ExecutionContext = _with_internal_materialization_read(ctx)
         val source = _sanitize_query_record(_query_record(q))
         val filtered = _filter_view_query_record(source, querydef)
-        val searchrecord = _searchable_query_record(if (filtered.asMap.nonEmpty) filtered else source)
+        val searchrecord = _searchable_query_record(source)
         _count_view_source_entities(component, entityspace, entityname, _with_count_controls(searchrecord, q))
       }
     }
@@ -1727,19 +1731,30 @@ final class ComponentFactory(
       includeTotal = true
     )
 
-  private def _searchable_query_record(p: Record): Record =
+  private[component] def _searchable_query_record(p: Record): Record =
     Record.create(
       p.asMap.flatMap {
         case (_, org.simplemodeling.model.directive.Condition.Any) =>
           None
         case (k, org.simplemodeling.model.directive.Condition.Is(expected)) =>
-          Some(k -> expected)
+          Some(k -> _store_query_value(expected))
         case (k, org.simplemodeling.model.directive.Condition.In(candidates)) =>
-          Some(k -> candidates.toVector)
+          Some(k -> candidates.toVector.map(_store_query_value))
         case (k, v) =>
-          Some(k -> v)
+          Some(k -> _store_query_value(v))
       }
     )
+
+  // Generated DATATYPE values are typed in component memory but scalar in the datastore.
+  private def _store_query_value(value: Any): Any =
+    value match {
+      case m: NominalScalar => m.value
+      case m: EntityId => m.print
+      case Some(v) => _store_query_value(v)
+      case xs: Vector[?] => xs.map(_store_query_value)
+      case xs: Seq[?] => xs.map(_store_query_value)
+      case other => other
+    }
 
   private def _filter_view_query_record(
     record: Record,

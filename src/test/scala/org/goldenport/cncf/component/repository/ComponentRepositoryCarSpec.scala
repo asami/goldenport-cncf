@@ -272,6 +272,73 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
       }
     }
 
+    "skip a stale local CAR version when an explicit version is available from the next repository" in {
+      Given("a stale local snapshot and the requested public CAR version")
+      _with_temp_dir { repositoryroot =>
+        val localroot = repositoryroot.resolve("local")
+        val remoteroot = repositoryroot.resolve("remote")
+        val localdir = localroot.resolve("textus-sanpomap").resolve("0.1.1-SNAPSHOT")
+        val remotedir = remoteroot.resolve("textus-sanpomap").resolve("0.2.0")
+        Files.createDirectories(localdir)
+        Files.createDirectories(remotedir)
+        val localdescriptor = repositoryroot.resolve("local-component-descriptor.json")
+        val remotedescriptor = repositoryroot.resolve("remote-component-descriptor.json")
+        Files.writeString(
+          localdescriptor,
+          """{"name":"textus-sanpomap","version":"0.1.1-SNAPSHOT","component":"textus-sanpomap"}"""
+        )
+        Files.writeString(
+          remotedescriptor,
+          """{"name":"textus-sanpomap","version":"0.2.0","component":"textus-sanpomap"}"""
+        )
+        val localcar = localdir.resolve("textus-sanpomap-0.1.1-SNAPSHOT.car")
+        val remotecar = remotedir.resolve("textus-sanpomap-0.2.0.car")
+        _create_car(localcar, Seq("component-descriptor.json" -> localdescriptor))
+        _create_car(remotecar, Seq("component-descriptor.json" -> remotedescriptor))
+        val invocation = org.goldenport.cncf.cli.CncfRuntime.RuntimeInvocationParameters(
+          actualArgs = Array("--textus.component=textus-sanpomap", "--textus.component.version=0.2.0", "command"),
+          subsystemName = None,
+          componentName = Some("textus-sanpomap"),
+          componentVersion = Some("0.2.0")
+        )
+
+        When("the explicit component version is resolved across local and remote repositories")
+        val resolved = org.goldenport.cncf.cli.CncfRuntime.resolveComponentInvocation(
+          invocation,
+          Vector(
+            ComponentRepository.ComponentDirRepository.Specification(localroot),
+            ComponentRepository.ComponentDirRepository.Specification(remoteroot)
+          )
+        )
+
+        Then("the public version is selected instead of the stale local snapshot")
+        resolved.actualArgs.toVector should contain (s"--${RuntimeConfig.ComponentFileKey}=${remotecar}")
+        resolved.actualArgs.toVector should not contain s"--${RuntimeConfig.ComponentFileKey}=${localcar}"
+      }
+    }
+
+    "reject a component file when its CAR descriptor does not match the requested version" in {
+      Given("a component-file CAR with a fixed descriptor version")
+      _with_temp_dir { root =>
+        val descriptor = root.resolve("component-descriptor.json")
+        val car = root.resolve("textus-sanpomap-0.1.1-SNAPSHOT.car")
+        Files.writeString(
+          descriptor,
+          """{"name":"textus-sanpomap","version":"0.1.1-SNAPSHOT","component":"textus-sanpomap"}"""
+        )
+        _create_car(car, Seq("component-descriptor.json" -> descriptor))
+        val spec = ComponentRepository.ComponentFileRepository.Specification(car)
+
+        When("component-file resolution receives a matching and a different explicit version")
+        val matching = spec.resolveComponentArchivePath("textus-sanpomap", Some("0.1.1-SNAPSHOT"))
+        val mismatched = spec.resolveComponentArchivePath("textus-sanpomap", Some("0.2.0"))
+
+        Then("only the matching descriptor version can resolve the supplied CAR")
+        matching shouldBe Some(car)
+        mismatched shouldBe None
+      }
+    }
+
     "parse explicit development and expanded CAR directory routes" in {
       val extracted = ComponentRepositorySpace.extractRepositoryArgs(
         ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty),

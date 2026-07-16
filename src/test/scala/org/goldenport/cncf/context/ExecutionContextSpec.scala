@@ -4,6 +4,8 @@ import java.time.{Clock, Instant, ZoneOffset}
 
 import org.goldenport.cncf.config.{OperationMode, RuntimeConfig}
 import org.goldenport.cncf.path.AliasResolver
+import org.goldenport.cncf.resource.{ResourceReference, ResourceUrlPolicy}
+import org.goldenport.cncf.http.FakeHttpDriver
 import org.goldenport.configuration.{Configuration, ConfigurationTrace, ConfigurationValue, ResolvedConfiguration}
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.GivenWhenThen
@@ -98,6 +100,42 @@ class ExecutionContextSpec extends AnyWordSpec with Matchers with GivenWhenThen 
       Then("the component context uses the selected runtime clock")
       ctx.clock should be theSameInstanceAs runtimeclock.clock
       ctx.clock.instant() shouldBe virtualstart
+    }
+
+    "bind configured URL resource access when creating a context below a global runtime" in {
+      Given("a global runtime with an HTTPS resource policy and deterministic driver")
+      val base = ExecutionContext.create()
+      val global = GlobalRuntimeContext.create(
+        "resource-access-spec",
+        RuntimeConfig.default.copy(
+          httpDriver = FakeHttpDriver.okText("configured-resource"),
+          resourceUrlPolicy = ResourceUrlPolicy(httpsHosts = Vector("catalog.example.test"))
+        ),
+        ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty),
+        base.observability,
+        AliasResolver.empty
+      )
+      val runtime = new RuntimeContext(
+        core = RuntimeContext.core(
+          name = "resource-access-spec",
+          parent = Some(global),
+          observabilityContext = base.observability
+        ),
+        unitOfWorkSupplier = () => base.unitOfWork,
+        unitOfWorkInterpreterFn = base.runtime.unitOfWorkInterpreter,
+        commitAction = _ => (),
+        abortAction = _ => (),
+        disposeAction = _ => (),
+        token = "resource-access-spec"
+      )
+
+      When("a context is created for the runtime scope")
+      val context = ExecutionContext.create(runtime)
+      val reference = ResourceReference.parseC("https://catalog.example.test/items/1").toOption.get
+      val content = context.resources.readText(reference)
+
+      Then("the context exposes only the configured URL provider binding")
+      content.toOption shouldBe Some("configured-resource")
     }
 
     "adopt runtime config namespace and clock when rebinding under a global runtime" in {

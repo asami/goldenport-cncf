@@ -228,7 +228,8 @@ object ExecutionContext {
         runtime = runtime,
         jobContext = org.goldenport.cncf.job.JobContext.empty,
         idGeneration = idgeneration,
-        executionControl = executioncontrol
+        executionControl = executioncontrol,
+        resources = _resource_access(scope)
       )
     )
     context
@@ -668,6 +669,13 @@ object ExecutionContext {
       case x: GlobalRuntimeContext => Some(x)
       case other => other.parent.flatMap(_global_runtime_context)
     }
+
+  private def _resource_access(
+    scope: ScopeContext
+  ): ResourceAccess =
+    _global_runtime_context(scope)
+      .map(global => ResourceAccess.url(global.config.resourceUrlPolicy, global.httpDriver))
+      .getOrElse(ResourceAccess.unavailable)
 
   private def _core(clock: Clock): CoreExecutionContext.Core =
     CoreExecutionContext.Core(

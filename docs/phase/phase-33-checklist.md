@@ -30,19 +30,27 @@ RR-02 through RR-04.
 
 ## RR-02: URL Provider and Policy Resolution
 
-Status: OPEN
+Status: DONE
 
-- [ ] Define a URL-scheme read-only resource provider SPI.
-- [ ] Bind URL scheme providers through ExecutionContext configuration.
-- [ ] Constrain `file:` reads to configured roots.
-- [ ] Constrain HTTPS reads to configured hosts.
-- [ ] Reject an unconfigured scheme, host, root, or provider with a structured
+- [x] Define a URL-scheme read-only resource provider SPI.
+- [x] Bind URL scheme providers through ExecutionContext configuration.
+- [x] Constrain `file:` reads to configured roots.
+- [x] Constrain HTTPS reads to configured hosts.
+- [x] Reject an unconfigured scheme, host, root, or provider with a structured
   policy failure.
 
 Acceptance evidence:
 
 - Specs prove configured URL reads and deny-by-default behavior without relying
   on ambient host access.
+
+Evidence: `UrlResourceAccessSpec`, `RuntimeConfigSpec`, and
+`ExecutionContextSpec` passed on Jul. 16, 2026. `file:` reads require both a
+configured lexical root and a resolved real path below a configured real root;
+`https:` reads use the configured CNCF `HttpDriver` only for exact configured
+hosts. The runtime config aliases are `textus.resource.url.*`,
+`textus.runtime.resource.url.*`, `cncf.resource.url.*`, and
+`cncf.runtime.resource.url.*`.
 
 ## RR-03: Standard Textus URN Resolution
 

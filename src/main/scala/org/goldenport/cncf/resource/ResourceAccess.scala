@@ -51,4 +51,22 @@ object ResourceAccess {
         s"resource access is not configured for ${reference.scheme} references"
       )
   }
+
+  def url(
+    policy: ResourceUrlPolicy,
+    httpdriver: org.goldenport.cncf.http.HttpDriver
+  ): ResourceAccess = {
+    val providers = Vector.newBuilder[UrlResourceProvider]
+    if (policy.normalizedFileRoots.nonEmpty)
+      providers += FileUrlResourceProvider(policy)
+    if (policy.normalizedHttpsHosts.nonEmpty)
+      providers += HttpsUrlResourceProvider(policy, httpdriver)
+    url(policy, providers.result())
+  }
+
+  def url(
+    policy: ResourceUrlPolicy,
+    providers: Vector[UrlResourceProvider]
+  ): ResourceAccess =
+    new UrlResourceAccess(policy, providers)
 }

@@ -400,6 +400,12 @@ object ComponentRepository extends GlobalObservable {
         componentName: String
       ): Option[Path] =
         ComponentRepository.resolveComponentArchivePathFromComponentDir(baseDir, componentName)
+
+      override def resolveComponentArchivePath(
+        componentname: String,
+        version: Option[String]
+      ): Option[Path] =
+        ComponentRepository.resolveComponentArchivePathFromComponentDir(baseDir, componentname, version)
     }
   }
 
@@ -455,6 +461,17 @@ object ComponentRepository extends GlobalObservable {
         componentName: String
       ): Option[Path] =
         resolveComponentDescriptor(componentName).map(_ => file)
+
+      override def resolveComponentArchivePath(
+        componentname: String,
+        version: Option[String]
+      ): Option[Path] =
+        if (Files.isRegularFile(file))
+          ComponentDescriptorLoader.loadArchive(file).toOption
+            .filter(_matches_component_descriptor(_, componentname, version))
+            .map(_ => file)
+        else
+          None
     }
   }
 
@@ -759,6 +776,12 @@ object ComponentRepository extends GlobalObservable {
         componentName: String
       ): Option[Path] =
         ComponentRepository.resolveComponentArchivePathFromComponentDir(baseDir.resolve("component").normalize, componentName)
+
+      override def resolveComponentArchivePath(
+        componentname: String,
+        version: Option[String]
+      ): Option[Path] =
+        ComponentRepository.resolveComponentArchivePathFromComponentDir(baseDir.resolve("component").normalize, componentname, version)
     }
   }
 
@@ -965,6 +988,13 @@ object ComponentRepository extends GlobalObservable {
   def resolveComponentArchivePathFromComponentDir(
     baseDir: Path,
     componentName: String
+  ): Option[Path] =
+    resolveComponentArchivePathFromComponentDir(baseDir, componentName, None)
+
+  def resolveComponentArchivePathFromComponentDir(
+    baseDir: Path,
+    componentName: String,
+    version: Option[String]
   ): Option[Path] = {
     if (!Files.isDirectory(baseDir)) {
       None
@@ -972,12 +1002,12 @@ object ComponentRepository extends GlobalObservable {
       _list_artifacts(baseDir).iterator.flatMap {
         case Artifact(path, ArtifactKind.Car) =>
           ComponentDescriptorLoader.loadArchive(path).toOption
-            .filter(_matches_component_descriptor(_, componentName))
+            .filter(_matches_component_descriptor(_, componentName, version))
             .map(_ => path)
         case _ =>
           None
       }.toSeq.headOption
-        .orElse(_resolve_standard_component_artifact(baseDir, componentName, None).collect {
+        .orElse(_resolve_standard_component_artifact(baseDir, componentName, version).collect {
           case Artifact(path, ArtifactKind.Car) => path
         })
     }

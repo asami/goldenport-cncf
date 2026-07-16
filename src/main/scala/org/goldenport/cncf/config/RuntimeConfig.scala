@@ -14,6 +14,7 @@ import org.goldenport.cncf.action.CommandExecutionMode
 import org.goldenport.cncf.context.{ExecutionProfileResolver, IdGenerationContext, ResolvedExecutionProfile, RuntimeClock}
 import org.goldenport.cncf.observability.{DiagnosticPayloadExternalizationConfig, ObservabilityEngine, OpenTelemetryExportConfig}
 import org.goldenport.cncf.blob.BlobStoreConfig
+import org.goldenport.cncf.resource.ResourceUrlPolicy
 
 /*
  * @since   Jan. 18, 2026
@@ -22,7 +23,7 @@ import org.goldenport.cncf.blob.BlobStoreConfig
  *  version Mar. 28, 2026
  *  version Apr. 30, 2026
  *  version Jun. 19, 2026
- * @version Jul. 15, 2026
+ * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class RuntimeConfig(
@@ -54,7 +55,8 @@ final case class RuntimeConfig(
     StaticFormAppRendererConfig.default,
   blobStoreConfig: BlobStoreConfig = BlobStoreConfig(),
   idNamespace: IdGenerationContext.IdNamespace = IdGenerationContext.DefaultNamespace,
-  executionProfile: ResolvedExecutionProfile = RuntimeConfig.DEFAULT_EXECUTION_PROFILE
+  executionProfile: ResolvedExecutionProfile = RuntimeConfig.DEFAULT_EXECUTION_PROFILE,
+  resourceUrlPolicy: ResourceUrlPolicy = ResourceUrlPolicy()
 ) {
   def executionClock: RuntimeClock = executionProfile.runtimeClock
 }
@@ -303,6 +305,10 @@ object RuntimeConfig {
   val RuntimeBlobStoreProviderClassKey = "textus.runtime.blob.store.provider-class"
   val BlobMaxByteSizeKey = "textus.blob.max-byte-size"
   val RuntimeBlobMaxByteSizeKey = "textus.runtime.blob.max-byte-size"
+  val ResourceUrlFileRootsKey = "textus.resource.url.file.roots"
+  val RuntimeResourceUrlFileRootsKey = "textus.runtime.resource.url.file.roots"
+  val ResourceUrlHttpsHostsKey = "textus.resource.url.https.hosts"
+  val RuntimeResourceUrlHttpsHostsKey = "textus.runtime.resource.url.https.hosts"
 
   val DefaultServerEmulatorBaseUrl = "http://localhost/"
   val DefaultHttpDriverName = "real"
@@ -350,7 +356,8 @@ object RuntimeConfig {
       staticFormAppRendererConfig = StaticFormAppRendererConfig.default,
       blobStoreConfig = BlobStoreConfig(),
       idNamespace = DefaultIdNamespace,
-      executionProfile = DEFAULT_EXECUTION_PROFILE
+      executionProfile = DEFAULT_EXECUTION_PROFILE,
+      resourceUrlPolicy = ResourceUrlPolicy()
     )
 
   def from(
@@ -423,6 +430,7 @@ object RuntimeConfig {
     val rendererconfig =
       _static_form_app_renderer_config(configuration)
     val blobstoreconfig = BlobStoreConfig.fromConfiguration(configuration)
+    val resourceurlpolicy = _resource_url_policy(configuration)
     val idnamespace = _id_namespace(configuration)
     val executionprofile = profileoverride.getOrElse(_execution_profile(configuration, operationmode))
     val weboperationdispatcher =
@@ -486,7 +494,8 @@ object RuntimeConfig {
       staticFormAppRendererConfig = rendererconfig,
       blobStoreConfig = blobstoreconfig,
       idNamespace = idnamespace,
-      executionProfile = executionprofile
+      executionProfile = executionprofile,
+      resourceUrlPolicy = resourceurlpolicy
     )
     _validate(config)
     config
@@ -690,6 +699,18 @@ object RuntimeConfig {
     IdGenerationContext.IdNamespace.normalizeOrThrow(major, minor)
   }
 
+  private def _resource_url_policy(
+    configuration: ResolvedConfiguration
+  ): ResourceUrlPolicy =
+    ResourceUrlPolicy.fromValuesC(
+      fileroots = _split_csv(_get_string(configuration, ResourceUrlFileRootsKey)),
+      httpshosts = _split_csv(_get_string(configuration, ResourceUrlHttpsHostsKey))
+    ) match {
+      case Consequence.Success(value) => value
+      case Consequence.Failure(conclusion) =>
+        throw conclusion.getException.getOrElse(new IllegalArgumentException(conclusion.display))
+    }
+
   private def _execution_profile(
     configuration: ResolvedConfiguration,
     operationmode: OperationMode
@@ -822,6 +843,8 @@ object RuntimeConfig {
         case BlobStorePublicBasePathKey => Vector(RuntimeBlobStorePublicBasePathKey)
         case BlobStoreProviderClassKey => Vector(RuntimeBlobStoreProviderClassKey)
         case BlobMaxByteSizeKey => Vector(RuntimeBlobMaxByteSizeKey)
+        case ResourceUrlFileRootsKey => Vector(RuntimeResourceUrlFileRootsKey)
+        case ResourceUrlHttpsHostsKey => Vector(RuntimeResourceUrlHttpsHostsKey)
         case _ => Vector.empty
       }
     val cncfaliases =
