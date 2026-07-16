@@ -107,6 +107,27 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
       body should not include ("https%3A%2F%2Fexample.test")
     }
 
+    "decode a JSON object body into REST operation arguments" in {
+      Given("a generated REST operation accepting the debug echo body field")
+      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val app = server.routes(null.asInstanceOf[org.http4s.server.websocket.WebSocketBuilder2[IO]]).orNotFound
+      val request = HRequest[IO](
+        method = Method.POST,
+        uri = Uri.unsafeFromString("/rest/v1/debug/http/echo")
+      ).withEntity("{\"body\":\"JSON Review submission\"}")
+        .withContentType(`Content-Type`.parse("application/json").toOption.get)
+
+      When("the JSON client posts its generated operation envelope")
+      val response = app.run(request).unsafeRunSync()
+      val body = response.as[String].unsafeRunSync()
+
+      Then("the operation receives the named field without requiring form encoding")
+      response.status.code shouldBe 200
+      body should include ("name: \"body\"")
+      body should include ("value: \"JSON Review submission\"")
+    }
+
     "preserve authorization headers for empty REST GET operation requests" in {
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))

@@ -38,6 +38,7 @@ import org.http4s.server.websocket.WebSocketBuilder2
 import org.http4s.websocket.WebSocketFrame
 import org.typelevel.ci.CIString
 import org.goldenport.record.{Record, RecordFormat, RecordKeyNaming}
+import org.goldenport.record.io.RecordDecoder
 import org.goldenport.record.io.RecordExportEncoder
 import org.goldenport.{Conclusion, Consequence}
 import org.goldenport.http.{HttpContext, HttpRequest, HttpResponse, HttpStatus}
@@ -6626,12 +6627,22 @@ final class Http4sHttpServer(
         header.mediaType.mainType.equalsIgnoreCase("application") &&
           header.mediaType.subType.equalsIgnoreCase("x-www-form-urlencoded")
       }
-      val (bodyOption, formRecord) =
+      val isjson = contenttypeheader.exists { header =>
+        header.mediaType.mainType.equalsIgnoreCase("application") &&
+          header.mediaType.subType.equalsIgnoreCase("json")
+      }
+      val (bodyoption, formrecord) =
         if (bytes.isEmpty) {
           (None, Record.empty)
         } else if (isformurlencoded) {
           val text = new String(bytes, java.nio.charset.StandardCharsets.UTF_8)
           (None, HttpRequest.parseQuery(text))
+        } else if (isjson) {
+          val text = new String(bytes, java.nio.charset.StandardCharsets.UTF_8)
+          new RecordDecoder().json(text).toOption match {
+            case Some(record) => (None, record)
+            case None => (Some(Bag.binary(bytes.toArray)), Record.empty)
+          }
         } else {
           (Some(Bag.binary(bytes.toArray)), Record.empty)
         }
@@ -6640,9 +6651,9 @@ final class Http4sHttpServer(
         path = path,
         query = query,
         header = header,
-        body = bodyOption,
+        body = bodyoption,
         context = context,
-        form = formRecord
+        form = formrecord
       )
     }
 
