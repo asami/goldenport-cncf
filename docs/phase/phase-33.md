@@ -1,13 +1,13 @@
 # Phase 33 - Resource Reference DSL and URN Provider Resolution
 
 Stage Status:
-- Current status: OPEN
+- Current status: CLOSED
 - Owner: Phase 33 Resource Reference DSL and URN Provider Resolution
 - Update rule: Update this block and `phase-33-checklist.md` whenever a stable
   work-item state changes. Close the phase only when every in-scope checklist
   item is complete or explicitly relocated.
 
-status = open
+status = closed
 
 ## 1. Purpose
 
@@ -56,7 +56,7 @@ not directly use host filesystem or network APIs for this concern.
 - E (DONE): RR-05 - Add deterministic test providers and executable specs.
 - F (DONE): RR-06 - Migrate SIE BoK readers and verify the cross-repository
   consumer path.
-- G (PLANNED): RR-07 - Review, document, and close Phase 33.
+- G (DONE): RR-07 - Review, document, and close Phase 33.
 
 ## 5. Development Items
 
@@ -66,7 +66,7 @@ not directly use host filesystem or network APIs for this concern.
 - [x] RR-04: Implement the generic `urn:<nid>:<nss>` extension SPI.
 - [x] RR-05: Add deterministic providers and executable specifications.
 - [x] RR-06: Migrate and verify the SIE BoK reader consumer path.
-- [ ] RR-07: Complete review, documentation, verification, and closure.
+- [x] RR-07: Complete review, documentation, verification, and closure.
 
 Detailed task tracking and acceptance evidence are in
 `phase-33-checklist.md`.
@@ -87,3 +87,20 @@ Phase 33 closes only when:
 - SIE BoK metadata/source reading no longer directly calls `Files.readString`;
 - every checklist item is complete or explicitly relocated with recorded
   evidence.
+
+## 7. Closure Record
+
+Phase 33 closed on Jul. 17, 2026.
+
+- CNCF focused resource-reference, URL-policy, Textus-URN, external-URN,
+  test-profile, execution-context, and runtime-config suites passed 65 tests.
+- SIE BoK source, metadata, HTML-index boundary, and ComponentFactory suites
+  passed 57 tests. Full regression had already passed 1,877 CNCF tests and 172
+  SIE tests after the final consumer migration.
+- `cncf-car-lint` found no SIE CAR failure and confirmed no direct CNCF DSL
+  bypass in component code. Its missing ABI baseline and development
+  `sbt-cozy` SNAPSHOT findings remain CAR release-readiness warnings, not
+  Phase 33 resource-access defects.
+- SIE BoK readers and source-link projections resolve safe URL and Textus-URN
+  children only through `ResourceReference.resolveC`; managed reads use
+  `ExecutionContext.resources`.

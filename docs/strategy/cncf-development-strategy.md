@@ -652,15 +652,14 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Notes contain execution details and results for each phase.
 
 ## Process Status Pointers
-- Current phase dashboard: `docs/phase/phase-33.md`.
-- Current phase checklist: `docs/phase/phase-33-checklist.md`.
-- Current development item: `9.28 Resource Reference DSL and URN Provider
-  Resolution`.
-- Latest closed phase dashboard: `docs/phase/phase-32.md`
-- Latest closed phase checklist: `docs/phase/phase-32-checklist.md`
-- Previous closed phase dashboard: `docs/phase/phase-31.md`
-- Previous closed phase checklist: `docs/phase/phase-31-checklist.md`
-- Current next slice: RR-06 SIE BoK reader consumer migration.
+- Current implementation phase: none. Select the next item explicitly.
+- Latest closed phase dashboard: `docs/phase/phase-33.md`
+- Latest closed phase checklist: `docs/phase/phase-33-checklist.md`
+- Previous closed phase dashboard: `docs/phase/phase-32.md`
+- Previous closed phase checklist: `docs/phase/phase-32-checklist.md`
+- Latest completed development item: `9.28 Resource Reference DSL and URN
+  Provider Resolution`.
+- Next development item: select explicitly from the strategy.
 - Status interpretation rules: `docs/rules/stage-status-and-checklist-convention.md`
 - Latest post-closure maintenance: Jul. 15, 2026 descriptor-bound component
   runtime configuration preservation. Materialized component instances retain
@@ -2158,7 +2157,8 @@ Future Web/platform UX development item.
   - production translation workflow, translator UI, or terminology management.
 
 ### 9.28 Resource Reference DSL and URN Provider Resolution
-Planned execution-context / resource-access development item for Phase 33.
+Completed execution-context / resource-access development item in Phase 33,
+closed Jul. 17, 2026.
 
 - Goal: provide a CNCF-owned, read-only resource-reference internal DSL so
   components resolve external knowledge and source material through the

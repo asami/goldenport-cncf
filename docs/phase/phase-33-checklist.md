@@ -152,9 +152,29 @@ the same `urn:textus:bok:<resource-id>` source contract.
 
 ## RR-07: Closure
 
-Status: OPEN
+Status: DONE
 
-- [ ] Run focused CNCF and SIE regression suites.
-- [ ] Run CAR lint/review for the SIE consumer migration.
-- [ ] Record verification evidence in this checklist and phase dashboard.
-- [ ] Update strategy and phase status, then commit the validated work.
+- [x] Run focused CNCF and SIE regression suites.
+- [x] Run CAR lint/review for the SIE consumer migration.
+- [x] Record verification evidence in this checklist and phase dashboard.
+- [x] Update strategy and phase status, then commit the validated work.
+
+Acceptance evidence:
+
+- Jul. 17, 2026: CNCF focused Phase 33 suites passed 65 tests:
+  `ResourceReferenceSpec`, `ResourceAccessDslSpec`, `UrlResourceAccessSpec`,
+  `TextusUrnResourceAccessSpec`, `UrnResourceAccessSpec`,
+  `ResourceAccessTestProfileSpec`, `ExecutionContextSpec`, and
+  `RuntimeConfigSpec`.
+- Jul. 17, 2026: SIE focused consumer suites passed 57 tests:
+  `BokKnowledgeSourceSpec`, `BokComponentMetadataSpec`,
+  `HtmlSiteIndexerSpec`, and `ComponentFactorySpec`. The complete suites also
+  passed after the final migration: 1,877 CNCF tests and 172 SIE tests.
+- Jul. 17, 2026: `cncf-car-lint` reported no SIE CAR failure and verified the
+  component code has no obvious CNCF internal-DSL bypass. The remaining
+  `abi.baseline.missing` and development `sbt-cozy` SNAPSHOT warnings concern
+  future CAR publication readiness and are outside this closed phase.
+- Documentation/CML review confirms `ingestBokKnowledgeSource` documents the
+  ResourceReference DSL boundary, accepts only an absolute URL or configured
+  `urn:textus` source root, and does not claim direct filesystem or network
+  access.
