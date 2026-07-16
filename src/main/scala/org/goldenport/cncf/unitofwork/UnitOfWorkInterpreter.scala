@@ -19,6 +19,7 @@ import org.goldenport.process.ShellCommandExecutor
 import org.goldenport.cncf.statemachine.TransitionValidationHook
 import org.goldenport.cncf.security.OperationAccessPolicy
 import org.goldenport.cncf.metrics.EntityAccessMetricsRegistry
+import org.goldenport.cncf.processexecution.{ProcessExecutionDriver, ProcessExecutionResult, ResolvedProcessExecution}
 import org.goldenport.configuration.ConfigurationValue
 import org.goldenport.record.Record
 import org.goldenport.record.io.RecordEncoder
@@ -35,7 +36,7 @@ import org.simplemodeling.model.directive.Update
  *  version Mar. 29, 2026
  *  version Apr. 29, 2026
  *  version May. 11, 2026
- * @version Jul. 16, 2026
+ * @version Jul. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkInterpreter(uow: UnitOfWork) {
@@ -385,6 +386,15 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
     case UnitOfWorkOp.ShellCommandExec(command) =>
       _with_calltree("uow:shell:exec") {
         _shell_command_executor.execute(command)
+      }
+
+    case UnitOfWorkOp.ProcessExec(execution) =>
+      _with_process_execution_calltree(execution) {
+        for {
+          driver <- ProcessExecutionDriver.resolveC(uow.executionContext.cncfCore.scope)
+          handle <- driver.startC(execution)
+          result <- handle.awaitC
+        } yield result
       }
   }
 
@@ -863,4 +873,51 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
       body
     }
   }
+
+  private def _with_process_execution_calltree(
+    execution: ResolvedProcessExecution
+  )(
+    body: => Consequence[ProcessExecutionResult]
+  ): Consequence[ProcessExecutionResult] = {
+    val ctx = _calltree_context
+    if (ctx.isEnabled) {
+      ctx.enter("uow:process-exec", Map(
+        "calltree_kind" -> "uow",
+        "process.capability" -> execution.request.capability.print,
+        "process.program" -> execution.definition.safeProgramIdentity
+      ))
+      try {
+        val result = body
+        result match {
+          case success: Consequence.Success[ProcessExecutionResult] =>
+            ctx.leave(_process_execution_result_attributes(success.result) + ("outcome" -> "success"))
+            success
+          case failure: Consequence.Failure[ProcessExecutionResult] =>
+            ctx.leave(Map(
+              "outcome" -> "failure",
+              "status" -> failure.conclusion.status.webCode.code.toString
+            ))
+            failure
+        }
+      } catch {
+        case e: Throwable =>
+          ctx.leave()
+          throw e
+      }
+    } else {
+      body
+    }
+  }
+
+  private def _process_execution_result_attributes(
+    result: ProcessExecutionResult
+  ): Map[String, String] =
+    Map(
+      "process.termination" -> result.termination.toString,
+      "process.elapsed_millis" -> result.elapsedMillis.toString,
+      "process.stdout_bytes" -> result.stdout.byteCount.toString,
+      "process.stderr_bytes" -> result.stderr.byteCount.toString,
+      "process.artifact_count" -> result.artifacts.size.toString,
+      "process.program" -> result.safeProgramIdentity
+    )
 }

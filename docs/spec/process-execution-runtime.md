@@ -40,6 +40,11 @@ identity, resolved executable location, fixed arguments, argument validation,
 environment policy, WorkArea policy, output policy, maximum limits, and trust
 or sandbox profile.
 
+Program-definition construction is runtime-internal. Component and provider
+behavior may receive only the capability-admitted resolved execution through
+the protected `process_exec` DSL; `UnitOfWorkOp.ProcessExec` has that resolved
+intent as its sole payload.
+
 The effective limit is the strictest compatible value among the runtime maximum,
 program-definition maximum, component/provider grant, and request override. A
 request may tighten a limit but MUST NOT widen any granted limit. Every

@@ -65,17 +65,22 @@ coverage. The fake profile does not create a host process.
 
 ## PE-04: UnitOfWork and Internal DSL
 
-Status: OPEN
+Status: DONE (Jul. 17, 2026)
 
-- [ ] Add `UnitOfWorkOp.ProcessExec` and interpreter execution.
-- [ ] Add protected `process_exec` ActionCall DSL methods for direct and Free
+- [x] Add `UnitOfWorkOp.ProcessExec` and interpreter execution.
+- [x] Add protected `process_exec` Behavior DSL methods for direct and Free
   execution paths.
-- [ ] Preserve authorization, UnitOfWork, and action observability chokepoints.
+- [x] Preserve capability admission, UnitOfWork, and action observability
+  chokepoints.
 
 Acceptance evidence:
 
 - Specs prove direct and Free paths construct equivalent process-execution
   intent and denied admission never reaches the driver.
+
+Evidence: `ProcessExecutionDslSpec` passed with generated direct/Free intent
+equivalence, denied admission before driver invocation, resolved-only UoW
+payload, unavailable-driver coverage, and safe success/failure CallTree output.
 
 ## PE-05: Local Driver Lifecycle
 

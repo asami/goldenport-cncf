@@ -659,7 +659,7 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Latest closed phase checklist: `docs/phase/phase-33-checklist.md`
 - Previous closed phase dashboard: `docs/phase/phase-32.md`
 - Previous closed phase checklist: `docs/phase/phase-32-checklist.md`
-- Current next slice: PE-04 `UnitOfWorkOp.ProcessExec` and protected DSL.
+- Current next slice: PE-05 local Process Execution driver lifecycle and bounded streams.
 - Status interpretation rules: `docs/rules/stage-status-and-checklist-convention.md`
 - Latest post-closure maintenance: Jul. 15, 2026 descriptor-bound component
   runtime configuration preservation. Materialized component instances retain

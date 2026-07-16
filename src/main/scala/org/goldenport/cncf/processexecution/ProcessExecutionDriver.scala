@@ -42,6 +42,52 @@ final case class ProcessExecutionTestProfile(
     new DeterministicProcessExecutionDriver(results)
 }
 
+object ProcessExecutionTestProfile {
+  /**
+   * Builds an admitted test fixture without exposing runtime executable
+   * metadata to component-level executable specifications.
+   */
+  def admittedC(
+    capability: ProcessCapabilityId,
+    result: ProcessExecutionResult
+  ): Consequence[ProcessExecutionTestFixture] = {
+    val profile = ProcessExecutionTestProfile(Map(capability -> result))
+    for {
+      definition <- ProcessProgramDefinition.fromRuntimeC(
+        capability,
+        "deterministic-test-program",
+        "test-runtime-owned-location",
+        Vector.empty,
+        ProcessArgumentPolicy(Vector.empty, Set.empty),
+        _limits,
+        Set.empty
+      )
+      policy <- ProcessExecutionPolicy.createC(Vector(definition))
+      execution <- policy.resolveC(ProcessExecutionRequest(capability), ProcessExecutionGrant(capability))
+    } yield ProcessExecutionTestFixture(profile, policy, execution)
+  }
+
+  private val _limits = ProcessExecutionLimits(
+    Some(100L),
+    Some(100L),
+    Some(100L),
+    Some(100L),
+    Some(100L),
+    Some(100L),
+    Some(100L),
+    Some(100L),
+    Some(100L),
+    Some(100L),
+    Some(100L)
+  )
+}
+
+final case class ProcessExecutionTestFixture(
+  profile: ProcessExecutionTestProfile,
+  policy: ProcessExecutionPolicy,
+  execution: ResolvedProcessExecution
+)
+
 final class DeterministicProcessExecutionDriver private[processexecution] (
   results: Map[ProcessCapabilityId, ProcessExecutionResult]
 ) extends ProcessExecutionDriver {

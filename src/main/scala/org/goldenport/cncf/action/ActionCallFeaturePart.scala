@@ -64,6 +64,7 @@ import org.goldenport.configuration.ConfigurationTrace
 import org.goldenport.configuration.ResolvedConfiguration
 import org.goldenport.configuration.source.file.ConfigTextDecoder
 import org.goldenport.cncf.config.RuntimeFileConfigLoader
+import org.goldenport.cncf.processexecution.{ProcessExecutionResult, ResolvedProcessExecution}
 
 /*
  * @since   Jan.  6, 2026
@@ -72,7 +73,7 @@ import org.goldenport.cncf.config.RuntimeFileConfigLoader
  *  version Mar. 30, 2026
  *  version Apr. 29, 2026
  *  version May. 25, 2026
- * @version Jul. 16, 2026
+ * @version Jul. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 trait BehaviorFeaturePart { self: Behavior.Core.Holder =>
@@ -478,6 +479,33 @@ trait ActionCallFeaturePart extends BehaviorFeaturePart { self: ActionCall.Core.
     target: A
   ): Consequence[OperationResponse] =
     behavior.run(target, executionContext)
+}
+
+trait BehaviorProcessExecutionPart extends BehaviorFeaturePart { self: Behavior.Core.Holder =>
+  /**
+   * Creates a Process Execution intent in the canonical UnitOfWork algebra.
+   * The input is already capability-admitted; components never select a host
+   * executable or invoke a driver directly.
+   */
+  protected final def process_exec(
+    execution: ResolvedProcessExecution
+  ): ExecUowM[ProcessExecutionResult] =
+    ConsequenceT.liftF(Free.liftF(_op_process_exec(execution)))
+
+  protected final def process_exec_c(
+    execution: ResolvedProcessExecution
+  )(using uow: UnitOfWork): Consequence[ProcessExecutionResult] =
+    exec_c(_op_process_exec(execution))
+
+  protected final def process_exec_or_throw(
+    execution: ResolvedProcessExecution
+  )(using uow: UnitOfWork): ProcessExecutionResult =
+    exec_or_throw(_op_process_exec(execution))
+
+  private def _op_process_exec(
+    execution: ResolvedProcessExecution
+  ): UnitOfWorkOp[ProcessExecutionResult] =
+    UnitOfWorkOp.ProcessExec(execution)
 }
 
 trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.Core.Holder =>

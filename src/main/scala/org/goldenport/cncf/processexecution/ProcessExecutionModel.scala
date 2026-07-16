@@ -383,7 +383,7 @@ final class ProcessProgramDefinition private (
 object ProcessProgramDefinition {
   private val _safe_identity_pattern = "[a-z][a-z0-9-]{0,63}".r
 
-  def fromRuntimeC(
+  private[processexecution] def fromRuntimeC(
     capability: ProcessCapabilityId,
     safeprogramidentity: String,
     executablelocation: String,

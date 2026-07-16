@@ -11,6 +11,7 @@ import org.goldenport.cncf.entity.*
 import org.goldenport.cncf.directive.*
 import org.goldenport.cncf.blob.{ContentReferenceAttachResult, ContentReferenceContent, ContentReferenceNormalizeResult, ContentRenderResult, InlineImageAttachResult, InlineImageContent, InlineImageNormalizeResult, InlineImageOccurrence}
 import org.goldenport.cncf.embedded.{EmbeddedDataStore, EmbeddedStatement, EmbeddedUpdateResult}
+import org.goldenport.cncf.processexecution.{ProcessExecutionResult, ResolvedProcessExecution}
 import org.goldenport.value.{ContentAttributes, ContentReferenceOccurrence}
 
 /*
@@ -27,7 +28,7 @@ import org.goldenport.value.{ContentAttributes, ContentReferenceOccurrence}
  *  version Mar. 24, 2026
  *  version Apr. 29, 2026
  *  version May.  4, 2026
- * @version Jul. 15, 2026
+ * @version Jul. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 sealed trait UnitOfWorkOp[A]
@@ -75,6 +76,13 @@ object UnitOfWorkOp {
   final case class ShellCommandExec(
     command: ShellCommand
   ) extends UnitOfWorkOp[ShellCommandResult]
+
+  // ------------------------------------------------------------
+  // Process Execution operations
+  // ------------------------------------------------------------
+  final case class ProcessExec(
+    execution: ResolvedProcessExecution
+  ) extends UnitOfWorkOp[ProcessExecutionResult]
 
   // ------------------------------------------------------------
   // DataStore operations

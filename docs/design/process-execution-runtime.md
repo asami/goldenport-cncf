@@ -48,7 +48,9 @@ The runtime resolves that capability to a `ProcessProgramDefinition`. The
 definition owns the executable identity and location, fixed arguments,
 argument rules, environment policy, driver selection, WorkArea policy, output
 policy, resource limits, trust/sandbox profile, and safe diagnostic identity.
-CAR input cannot replace or loosen this definition.
+CAR input cannot replace or loosen this definition. Construction of a program
+definition is runtime-internal; component behavior receives only an already
+admitted `ResolvedProcessExecution` through the protected DSL.
 
 Admission has three independent checks:
 

@@ -69,7 +69,7 @@ provider or run a live Codex account.
   program-definition models.
 - C (DONE): PE-03 - Add ScopeContext driver resolution and deterministic
   fake-driver execution support.
-- D (PLANNED): PE-04 - Add UnitOfWork `ProcessExec` and protected ActionCall
+- D (DONE): PE-04 - Add UnitOfWork `ProcessExec` and protected ActionCall
   DSL integration.
 - E (PLANNED): PE-05 - Implement local driver lifecycle, bounded streams, and
   timeout handling.
@@ -86,7 +86,7 @@ provider or run a live Codex account.
 - [x] PE-02: Add capability, request/result, limits, and runtime
   program-definition models.
 - [x] PE-03: Add ScopeContext driver resolution and deterministic fake driver.
-- [ ] PE-04: Add `UnitOfWorkOp.ProcessExec` and `process_exec` DSL support.
+- [x] PE-04: Add `UnitOfWorkOp.ProcessExec` and `process_exec` DSL support.
 - [ ] PE-05: Implement the local driver lifecycle and bounded stream handling.
 - [ ] PE-06: Add WorkArea-confined input/output artifacts, quotas, and cleanup.
 - [ ] PE-07: Integrate Job/Task cancellation, CallTree, metrics, and
@@ -112,6 +112,11 @@ Execution driver through ordinary parent inheritance and explicit child
 override. `ProcessExecutionTestProfile` supplies deterministic configured
 results without an ambient process fallback; `ProcessExecutionDriverSpec`
 proves inheritance, override, unavailable-driver behavior, and cancellation.
+
+PE-04 completed Jul. 17, 2026. `UnitOfWorkOp.ProcessExec` accepts only a
+resolved capability-bound execution. `process_exec` exposes the same intent to
+direct and Free/`ExecUowM` Behavior code, and `UnitOfWorkInterpreter` is the
+only path that resolves and invokes the scoped driver.
 
 ## 6. Completion Conditions
 
