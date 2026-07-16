@@ -1,6 +1,7 @@
 package org.goldenport.cncf.action
 
 import java.nio.file.Path
+import java.nio.charset.Charset
 import java.time.{Clock, Duration, Instant, ZonedDateTime}
 import cats.free.Free
 import cats.syntax.flatMap.*
@@ -15,6 +16,7 @@ import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.http.HttpResponse
 import org.goldenport.process.{ShellCommand, ShellCommandResult}
 import org.goldenport.cncf.context.{ExecutionContext, ExecutionSchedulerMode, GlobalRuntimeContext, ScopeContext}
+import org.goldenport.cncf.resource.{ResourceContent, ResourceReference}
 import org.goldenport.cncf.unitofwork.{ExecUowM, UnitOfWork, UnitOfWorkAuthorization}
 import org.goldenport.cncf.unitofwork.UnitOfWorkInterpreter
 import org.goldenport.cncf.unitofwork.UnitOfWorkOp
@@ -85,6 +87,15 @@ trait BehaviorFeaturePart { self: Behavior.Core.Holder =>
 
   protected final def current_zoned_datetime: ZonedDateTime =
     current_instant.atZone(execution_context.timezone)
+
+  protected final def read_resource(reference: ResourceReference): Consequence[ResourceContent] =
+    execution_context.resources.read(reference)
+
+  protected final def read_resource_text(
+    reference: ResourceReference,
+    charset: Option[Charset] = None
+  ): Consequence[String] =
+    execution_context.resources.readText(reference, charset)
 
   protected final def await_delay(duration: Duration): Consequence[Unit] =
     if (duration.isNegative)

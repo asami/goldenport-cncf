@@ -660,7 +660,7 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Latest closed phase checklist: `docs/phase/phase-32-checklist.md`
 - Previous closed phase dashboard: `docs/phase/phase-31.md`
 - Previous closed phase checklist: `docs/phase/phase-31-checklist.md`
-- Current next slice: RR-01 Resource Reference and Internal DSL Contract.
+- Current next slice: RR-02 URL Provider and Policy Resolution.
 - Status interpretation rules: `docs/rules/stage-status-and-checklist-convention.md`
 - Latest post-closure maintenance: Jul. 15, 2026 descriptor-bound component
   runtime configuration preservation. Materialized component instances retain

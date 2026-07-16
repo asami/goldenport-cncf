@@ -49,7 +49,7 @@ not directly use host filesystem or network APIs for this concern.
 
 ## 4. Active Work Stack
 
-- A (PLANNED): RR-01 - Freeze the resource-reference model and DSL contract.
+- A (DONE): RR-01 - Resource-reference model and ExecutionContext DSL contract.
 - B (PLANNED): RR-02 - Implement URL provider resolution and policy binding.
 - C (PLANNED): RR-03 - Implement standard `urn:textus` namespace resolution.
 - D (PLANNED): RR-04 - Implement generic external-URN SPI resolution.
@@ -60,7 +60,7 @@ not directly use host filesystem or network APIs for this concern.
 
 ## 5. Development Items
 
-- [ ] RR-01: Freeze the resource-reference model and internal DSL contract.
+- [x] RR-01: Resource-reference model and internal DSL contract.
 - [ ] RR-02: Implement URL provider resolution and deny-by-default policy.
 - [ ] RR-03: Implement `urn:textus` namespace resolution through configuration.
 - [ ] RR-04: Implement the generic `urn:<nid>:<nss>` extension SPI.

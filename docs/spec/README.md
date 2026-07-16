@@ -14,3 +14,4 @@ Current runtime/I18N specs:
 
 - `i18n-text-normalization.md`
 - `rule-engine-inference-runtime.md`
+- `resource-reference-dsl.md`

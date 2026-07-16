@@ -18,6 +18,7 @@ import org.goldenport.cncf.entity.runtime.EntitySpace
 import org.goldenport.cncf.unitofwork.UnitOfWork
 import org.goldenport.cncf.unitofwork.UnitOfWorkOp
 import org.goldenport.cncf.observability.{CallTreeContext, DslChokepointHook}
+import org.goldenport.cncf.resource.ResourceAccess
 import cats.~>
 
 /**
@@ -65,6 +66,8 @@ abstract class ExecutionContext
 
   def entitySpace: EntitySpace = runtime.entitySpace
 
+  override def resources: ResourceAccess = cncfCore.resources
+
   def isAggregateInternalRead: Boolean = cncfCore.scope.isAggregateInternalRead
 
   lazy val transactionContext = TransactionContext(runtime)
@@ -83,7 +86,8 @@ object ExecutionContext {
     framework: FrameworkParameter = FrameworkParameter(),
     idGeneration: IdGenerationContext = IdGenerationContext.default(IdGenerationContext.DefaultNamespace),
     executionControl: ExecutionControlContext = ExecutionControlContext.standard,
-    tagSpaces: TagSpaceContext = TagSpaceContext.default
+    tagSpaces: TagSpaceContext = TagSpaceContext.default,
+    resources: ResourceAccess = ResourceAccess.unavailable
   ) {
     def major: String = idGeneration.namespace.major
     def minor: String = idGeneration.namespace.minor
@@ -104,6 +108,7 @@ object ExecutionContext {
       def idGeneration: IdGenerationContext = cncfCore.idGeneration
       def executionControl: ExecutionControlContext = cncfCore.executionControl
       def tagSpaces: TagSpaceContext = cncfCore.tagSpaces
+      def resources: ResourceAccess = cncfCore.resources
       def major = cncfCore.major
       def minor = cncfCore.minor
     }
@@ -372,6 +377,18 @@ object ExecutionContext {
         cncfCore = i.cncfCore.copy(
           tagSpaces = tagSpaces
         )
+      )
+    case _ =>
+      ctx
+  }
+
+  def withResourceAccess(
+    ctx: ExecutionContext,
+    resources: ResourceAccess
+  ): ExecutionContext = ctx match {
+    case i: Instance =>
+      i.copy(
+        cncfCore = i.cncfCore.copy(resources = resources)
       )
     case _ =>
       ctx

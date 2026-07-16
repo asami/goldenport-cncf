@@ -5,14 +5,14 @@ dashboard is `phase-33.md`.
 
 ## RR-01: Resource Reference and Internal DSL Contract
 
-Status: OPEN
+Status: DONE
 
-- [ ] Define `ResourceReference` parsing for absolute URLs and URNs.
-- [ ] Define read-only `ExecutionContext.resources` DSL operations and
+- [x] Define `ResourceReference` parsing for absolute URLs and URNs.
+- [x] Define read-only `ExecutionContext.resources` DSL operations and
   structured `Consequence` failures.
-- [ ] Define the rule that component code does not call direct filesystem or
+- [x] Define the rule that component code does not call direct filesystem or
   network APIs for managed resource reads.
-- [ ] Define reference identity, content encoding, missing-resource, and
+- [x] Define reference identity, content encoding, missing-resource, and
   policy-denial semantics.
 
 Acceptance evidence:
@@ -21,6 +21,12 @@ Acceptance evidence:
   implementation is treated as stable.
 - Executable specifications cover valid URL/URN parsing and malformed or
   unsupported reference rejection.
+
+Evidence: `docs/spec/resource-reference-dsl.md`,
+`docs/design/resource-reference-dsl.md`, `ResourceReferenceSpec`, and
+`ResourceAccessDslSpec` passed on Jul. 16, 2026. The implementation exposes an
+unconfigured `ResourceAccess` default only; provider/policy resolution remains
+RR-02 through RR-04.
 
 ## RR-02: URL Provider and Policy Resolution
 
