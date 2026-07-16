@@ -19,7 +19,7 @@ import org.goldenport.process.ShellCommandExecutor
 import org.goldenport.cncf.statemachine.TransitionValidationHook
 import org.goldenport.cncf.security.OperationAccessPolicy
 import org.goldenport.cncf.metrics.EntityAccessMetricsRegistry
-import org.goldenport.cncf.processexecution.{ProcessExecutionDriver, ProcessExecutionResult, ResolvedProcessExecution}
+import org.goldenport.cncf.processexecution.{ProcessExecutionDriver, ProcessExecutionResult, ProcessExecutionWorkArea, ResolvedProcessExecution}
 import org.goldenport.configuration.ConfigurationValue
 import org.goldenport.record.Record
 import org.goldenport.record.io.RecordEncoder
@@ -392,8 +392,8 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
       _with_process_execution_calltree(execution) {
         for {
           driver <- ProcessExecutionDriver.resolveC(uow.executionContext.cncfCore.scope)
-          handle <- driver.startC(execution)
-          result <- handle.awaitC
+          workspace <- ProcessExecutionWorkArea.allocateC(uow.executionContext.cncfCore.scope.workAreaSpace)
+          result <- _execute_process_in_workspace_c(driver, execution, workspace)
         } yield result
       }
   }
@@ -920,4 +920,15 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
       "process.artifact_count" -> result.artifacts.size.toString,
       "process.program" -> result.safeProgramIdentity
     )
+
+  private def _execute_process_in_workspace_c(
+    driver: ProcessExecutionDriver,
+    execution: ResolvedProcessExecution,
+    workspace: ProcessExecutionWorkArea
+  ): Consequence[ProcessExecutionResult] =
+    try {
+      driver.startC(execution, workspace).flatMap(_.awaitC)
+    } finally {
+      workspace.close()
+    }
 }

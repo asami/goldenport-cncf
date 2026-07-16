@@ -1,6 +1,10 @@
 package org.goldenport.cncf.processexecution
 
 import java.io.IOException
+import java.nio.charset.StandardCharsets
+import java.nio.file.Files
+import org.goldenport.cncf.config.RuntimeConfig
+import org.goldenport.cncf.workarea.WorkAreaSpace
 import org.scalacheck.{Gen, Prop, Test}
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
@@ -215,13 +219,13 @@ final class LocalProcessExecutionDriverSpec extends AnyWordSpec with Matchers wi
       driver.activeHandleCount shouldBe 0
     }
 
-    "reject WorkArea-dependent requests before selecting a local host process" in {
-      Given("an admitted request whose input requires the next WorkArea slice")
+    "reject WorkArea-dependent requests that bypass the runtime-owned WorkArea" in {
+      Given("an admitted request whose input requires a runtime-owned WorkArea")
       val path = WorkAreaRelativePath.parseC("input/request.json").toOption.get
       val execution = _execution(Vector("streams", "literal"), input = ProcessExecutionInput.WorkAreaFile(path))
       val driver = new LocalProcessExecutionDriver()
 
-      When("the current local driver is asked to start that unresolved WorkArea request")
+      When("the local driver is asked to start the request without the WorkArea overload")
       val result = try {
         driver.startC(execution)
       } finally {
@@ -233,12 +237,91 @@ final class LocalProcessExecutionDriverSpec extends AnyWordSpec with Matchers wi
       driver.activeProcessCount shouldBe 0
       driver.activeHandleCount shouldBe 0
     }
+
+    "run against an execution WorkArea without exposing host paths in logical artifacts" in {
+      Given("a runtime-owned WorkArea, a declared output, and a WorkArea-backed stdin file")
+      val inputpath = WorkAreaRelativePath.parseC("input/request.txt").toOption.get
+      val outputpath = WorkAreaRelativePath.parseC("output/result.txt").toOption.get
+      val artifactname = ProcessArtifactName.parseC("result").toOption.get
+      val output = ProcessExecutionOutputDeclaration.createC(
+        artifactname,
+        outputpath,
+        ProcessArtifactKind.File,
+        16L
+      ).toOption.get
+      val workspace = ProcessExecutionWorkArea.allocateC(WorkAreaSpace.create(RuntimeConfig.default)).toOption.get
+      Files.createDirectories(workspace.root.resolve("input"))
+      Files.write(workspace.root.resolve(inputpath.value), "request".getBytes(StandardCharsets.UTF_8))
+      val execution = _execution(
+        Vector("copy-stdin-to-file", outputpath.value),
+        input = ProcessExecutionInput.WorkAreaFile(inputpath),
+        outputs = Vector(output)
+      )
+      val driver = new LocalProcessExecutionDriver()
+
+      When("the local driver is supplied the UnitOfWork-owned WorkArea")
+      val result = try {
+        for {
+          handle <- driver.startC(execution, workspace)
+          completed <- handle.awaitC
+        } yield completed
+      } finally {
+        driver.close()
+        workspace.close()
+      }
+
+      Then("the process uses the scoped working directory and returns only bounded logical metadata")
+      result.toOption.map(_.termination) shouldBe Some(ProcessExecutionTermination.Exited(0))
+      result.toOption.map(_.artifacts.map(_.name.print)) shouldBe Some(Vector("result"))
+      result.toOption.map(_.artifacts.map(_.byteCount)) shouldBe Some(Vector(7L))
+      result.toOption.map(_.artifacts.toString).getOrElse("") should not include workspace.root.toString
+      Files.exists(workspace.root) shouldBe false
+    }
+
+    "resolve declared output paths beneath an explicitly selected WorkArea working directory" in {
+      Given("an execution with a nested WorkArea working directory and a relative declared output")
+      val workingdirectory = WorkAreaRelativePath.parseC("work").toOption.get
+      val outputpath = WorkAreaRelativePath.parseC("result.txt").toOption.get
+      val artifactname = ProcessArtifactName.parseC("result").toOption.get
+      val output = ProcessExecutionOutputDeclaration.createC(
+        artifactname,
+        outputpath,
+        ProcessArtifactKind.File,
+        16L
+      ).toOption.get
+      val workspace = ProcessExecutionWorkArea.allocateC(WorkAreaSpace.create(RuntimeConfig.default)).toOption.get
+      val execution = _execution(
+        Vector("write-file", outputpath.value, "ok"),
+        outputs = Vector(output),
+        workingdirectory = Some(workingdirectory)
+      )
+      val driver = new LocalProcessExecutionDriver()
+
+      When("the process writes its output relative to the selected directory")
+      val result = try {
+        for {
+          handle <- driver.startC(execution, workspace)
+          completed <- handle.awaitC
+        } yield completed
+      } finally {
+        driver.close()
+        workspace.close()
+      }
+
+      Then("artifact collection resolves the declared path beneath that directory")
+      result.toOption.map(_.termination) shouldBe Some(ProcessExecutionTermination.Exited(0))
+      result.toOption.map(_.artifacts.map(_.name.print)) shouldBe Some(Vector("result"))
+      result.toOption.map(_.artifacts.map(_.byteCount)) shouldBe Some(Vector(2L))
+      Files.exists(workspace.root) shouldBe false
+    }
   }
 
   private def _execution(
     arguments: Vector[String],
     limits: ProcessExecutionLimits = _limits(),
-    input: ProcessExecutionInput = ProcessExecutionInput.Empty
+    input: ProcessExecutionInput = ProcessExecutionInput.Empty,
+    outputs: Vector[ProcessExecutionOutputDeclaration] = Vector.empty,
+    workingdirectory: Option[WorkAreaRelativePath] = None
   ): ResolvedProcessExecution = {
     val capability = ProcessCapabilityId.parseC("local-probe").toOption.get
     val definition = ProcessProgramDefinition.fromRuntimeC(
@@ -248,11 +331,18 @@ final class LocalProcessExecutionDriverSpec extends AnyWordSpec with Matchers wi
       _fixed_arguments,
       ProcessArgumentPolicy(_fixed_arguments, arguments.toSet),
       limits,
-      Set.empty
+      outputs.map(_.name).toSet,
+      allowsworkingdirectory = workingdirectory.nonEmpty
     ).toOption.get
     val policy = ProcessExecutionPolicy.createC(Vector(definition)).toOption.get
     policy.resolveC(
-      ProcessExecutionRequest(capability, arguments = arguments, input = input),
+      ProcessExecutionRequest(
+        capability,
+        arguments = arguments,
+        input = input,
+        workingDirectory = workingdirectory,
+        outputs = outputs
+      ),
       ProcessExecutionGrant(capability)
     ).toOption.get
   }

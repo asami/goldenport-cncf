@@ -73,7 +73,7 @@ provider or run a live Codex account.
   DSL integration.
 - E (DONE): PE-05 - Implement local driver lifecycle, bounded streams, and
   timeout handling.
-- F (PLANNED): PE-06 - Implement WorkArea confinement, artifacts, quotas, and
+- F (DONE): PE-06 - Implement WorkArea confinement, artifacts, quotas, and
   cleanup.
 - G (PLANNED): PE-07 - Integrate Job/Task cancellation, observability, and
   confidentiality.
@@ -88,7 +88,7 @@ provider or run a live Codex account.
 - [x] PE-03: Add ScopeContext driver resolution and deterministic fake driver.
 - [x] PE-04: Add `UnitOfWorkOp.ProcessExec` and `process_exec` DSL support.
 - [x] PE-05: Implement the local driver lifecycle and bounded stream handling.
-- [ ] PE-06: Add WorkArea-confined input/output artifacts, quotas, and cleanup.
+- [x] PE-06: Add WorkArea-confined input/output artifacts, quotas, and cleanup.
 - [ ] PE-07: Integrate Job/Task cancellation, CallTree, metrics, and
   confidentiality.
 - [ ] PE-08: Verify the consumer contract, document the handoff, and close the
@@ -124,8 +124,19 @@ environment values, drains stdout/stderr concurrently, and removes completed
 processes from its active runtime set. `LocalProcessExecutionDriverSpec` uses
 a controlled JVM probe to verify literal arguments, independent stream
 capture, non-zero exits, execution timeout, idempotent cancellation, bounded
-capture, launch timeout, and the current explicit rejection of WorkArea inputs
-until PE-06 provides their runtime support.
+capture, launch timeout, and WorkArea-backed stdin, working-directory, and
+declared-artifact execution.
+
+### 5.6 PE-06 WorkArea And Artifact Evidence
+
+`UnitOfWorkInterpreter` allocates one execution WorkArea and closes it in a
+`finally` boundary after success, structured failure, timeout, or cancellation.
+The local driver receives that runtime-owned WorkArea, validates all requested
+logical paths, prepares only declared output parents, and exposes only declared
+artifact metadata. `ProcessExecutionWorkAreaSpec` proves declared-output
+projection, traversal/symlink rejection, per-artifact and aggregate WorkArea
+quotas, and cleanup. Raw host paths and undeclared file contents never enter the
+process result.
 
 ## 6. Completion Conditions
 

@@ -93,9 +93,11 @@ allocated from the active scope. CNCF owns input materialization, working
 directory selection, output allocation, real-path verification, artifact
 collection, quota enforcement, and cleanup.
 
-Callers may select only normalized relative paths under that WorkArea. Path
-traversal, symlink escape, undeclared outputs, and quota overflow are rejected.
-The caller receives declared bounded artifacts with logical identities, not
+Callers may select only normalized relative paths under that WorkArea. A
+declared output path is relative to the selected working directory, or the
+WorkArea root when no working directory is selected. Path traversal, symlink
+escape, undeclared output projection, and quota overflow are rejected. The
+caller receives declared bounded artifacts with logical identities, not
 unrestricted host `Path` values. Cleanup is finally-safe for success, ordinary
 failure, timeout, and cancellation; diagnostic retention is an explicit future
 policy, not accidental failed cleanup.

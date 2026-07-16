@@ -17,6 +17,16 @@ import org.goldenport.cncf.context.ScopeContext
 trait ProcessExecutionDriver {
   def safeIdentity: String
   def startC(execution: ResolvedProcessExecution): Consequence[ProcessExecutionHandle]
+
+  /**
+   * Receives a UnitOfWork-owned execution WorkArea. Drivers that do not touch
+   * host files retain the ordinary deterministic implementation.
+   */
+  def startC(
+    execution: ResolvedProcessExecution,
+    workArea: ProcessExecutionWorkArea
+  ): Consequence[ProcessExecutionHandle] =
+    startC(execution)
 }
 
 trait ProcessExecutionHandle {

@@ -1,6 +1,7 @@
 package org.goldenport.cncf.processexecution
 
 import java.io.{ByteArrayOutputStream, IOException, InputStream, OutputStream}
+import java.nio.file.{Files, Path}
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger, AtomicReference}
 import java.util.concurrent.{Callable, ConcurrentHashMap, ExecutionException, ExecutorService, Executors, Future, TimeUnit, TimeoutException}
 import scala.jdk.CollectionConverters.*
@@ -37,6 +38,20 @@ final class LocalProcessExecutionDriver(
       _validate_prelaunch_c(execution).flatMap { _ =>
         _launch_c(execution)
       }
+
+  override def startC(
+    execution: ResolvedProcessExecution,
+    workArea: ProcessExecutionWorkArea
+  ): Consequence[ProcessExecutionHandle] =
+    if (_closed.get)
+      Consequence.serviceUnavailable("Local Process Execution driver is closed")
+    else
+      for {
+        _ <- workArea.prepareOutputsC(execution)
+        workingDirectory <- workArea.workingDirectoryC(execution.request.workingDirectory)
+        inputFile <- _input_file_c(execution, workArea)
+        handle <- _launch_c(execution, Some(workingDirectory), inputFile, Some(workArea))
+      } yield handle
 
   /** Package-visible diagnostic seam for controlled local-driver specifications. */
   private[processexecution] def activeProcessCount: Int = _active_processes.size
@@ -82,6 +97,14 @@ final class LocalProcessExecutionDriver(
 
   private def _launch_c(
     execution: ResolvedProcessExecution
+  ): Consequence[ProcessExecutionHandle] =
+    _launch_c(execution, None, None, None)
+
+  private def _launch_c(
+    execution: ResolvedProcessExecution,
+    workingdirectory: Option[Path],
+    inputfile: Option[Path],
+    workarea: Option[ProcessExecutionWorkArea]
   ): Consequence[ProcessExecutionHandle] = {
     val startedat = System.nanoTime()
     val abandoned = new AtomicBoolean(false)
@@ -89,7 +112,10 @@ final class LocalProcessExecutionDriver(
     val command = execution.definition._executable_location +: execution.effectiveArguments
     val task = _launch_executor.submit(new Callable[Process] {
       def call(): Process = {
-        val process = _launcher.startBlocking(command)
+        val process = workingdirectory match {
+          case Some(value) => _launcher.startBlocking(command, value)
+          case None => _launcher.startBlocking(command)
+        }
         launched.set(process)
         if (abandoned.get) {
           _local_process_execution_handle._destroy_process_tree(process, force = true)
@@ -105,6 +131,8 @@ final class LocalProcessExecutionDriver(
         process,
         execution,
         startedat,
+        inputfile,
+        workarea,
         () => {
           _active_processes.remove(process)
           Option(reference.get).foreach { handle =>
@@ -144,6 +172,15 @@ final class LocalProcessExecutionDriver(
     }
   }
 
+  private def _input_file_c(
+    execution: ResolvedProcessExecution,
+    workarea: ProcessExecutionWorkArea
+  ): Consequence[Option[Path]] =
+    execution.request.input match {
+      case ProcessExecutionInput.WorkAreaFile(path) => workarea.inputPathC(path).map(Some(_))
+      case _ => Consequence.success(None)
+    }
+
   private def _abandon_launch(
     task: Future[Process],
     abandoned: AtomicBoolean,
@@ -176,12 +213,24 @@ final class LocalProcessExecutionDriver(
 
 private[processexecution] trait LocalProcessLauncher {
   def startBlocking(command: Vector[String]): Process
+
+  def startBlocking(command: Vector[String], workingdirectory: Path): Process =
+    startBlocking(command)
 }
 
 private[processexecution] object LocalProcessLauncher {
   val local: LocalProcessLauncher = new LocalProcessLauncher {
     def startBlocking(command: Vector[String]): Process = {
       val builder = new ProcessBuilder(command.asJava)
+      builder.redirectErrorStream(false)
+      // Runtime definitions own every environment value; never inherit caller state.
+      builder.environment().clear()
+      builder.start()
+    }
+
+    override def startBlocking(command: Vector[String], workingdirectory: Path): Process = {
+      val builder = new ProcessBuilder(command.asJava)
+      builder.directory(workingdirectory.toFile)
       builder.redirectErrorStream(false)
       // Runtime definitions own every environment value; never inherit caller state.
       builder.environment().clear()
@@ -201,6 +250,8 @@ private final class _local_process_execution_handle(
   process: Process,
   execution: ResolvedProcessExecution,
   startedat: Long,
+  inputfile: Option[Path],
+  workarea: Option[ProcessExecutionWorkArea],
   onterminal: () => Unit
 ) extends ProcessExecutionHandle {
   private val _io_executor = Executors.newFixedThreadPool(3, new _daemon_thread_factory("cncf-process-io"))
@@ -218,7 +269,7 @@ private final class _local_process_execution_handle(
   })
   private val _stdin_future = _io_executor.submit(new Callable[Unit] {
     def call(): Unit =
-      _write_input(process.getOutputStream, execution.request.input)
+      _write_input(process.getOutputStream, execution.request.input, inputfile)
   })
   @volatile private var _result: Option[ProcessExecutionResult] = None
 
@@ -260,16 +311,10 @@ private final class _local_process_execution_handle(
       val stdout = _await_capture(_stdout_future)
       val stderr = _await_capture(_stderr_future)
       _await_input(_stdin_future)
-      val result = ProcessExecutionResult(
-        termination,
-        stdout,
-        stderr,
-        Vector.empty,
-        TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedat),
-        execution.definition.safeProgramIdentity
-      )
-      _complete(result)
-      Consequence.success(result)
+      _result_c(termination, stdout, stderr).map { result =>
+        _complete(result)
+        result
+      }
     } catch {
       case _: TimeoutException =>
         _terminate_process()
@@ -313,6 +358,39 @@ private final class _local_process_execution_handle(
       execution.definition.safeProgramIdentity
     )
   }
+
+  private def _result_c(
+    termination: ProcessExecutionTermination,
+    stdout: ProcessExecutionCapture,
+    stderr: ProcessExecutionCapture
+  ): Consequence[ProcessExecutionResult] =
+    workarea match {
+      case Some(value) =>
+        value.collectArtifactsC(execution).map { collected =>
+          val effectivetermination =
+            if (collected.limitExceeded)
+              ProcessExecutionTermination.ArtifactLimitExceeded
+            else
+              termination
+          ProcessExecutionResult(
+            effectivetermination,
+            stdout,
+            stderr,
+            collected.artifacts,
+            TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedat),
+            execution.definition.safeProgramIdentity
+          )
+        }
+      case None =>
+        Consequence.success(ProcessExecutionResult(
+          termination,
+          stdout,
+          stderr,
+          Vector.empty,
+          TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedat),
+          execution.definition.safeProgramIdentity
+        ))
+    }
 
   private def _await_capture(
     future: Future[ProcessExecutionCapture]
@@ -379,13 +457,17 @@ private final class _local_process_execution_handle(
 
   private def _write_input(
     stream: OutputStream,
-    input: ProcessExecutionInput
+    input: ProcessExecutionInput,
+    inputfile: Option[Path]
   ): Unit =
     try {
       input match {
         case ProcessExecutionInput.Empty => ()
         case ProcessExecutionInput.Bytes(value) => stream.write(value.toArray)
-        case ProcessExecutionInput.WorkAreaFile(_) => () // Rejected before process launch.
+        case ProcessExecutionInput.WorkAreaFile(_) =>
+          inputfile.foreach { path =>
+            Files.copy(path, stream)
+          }
       }
       stream.flush()
     } finally {

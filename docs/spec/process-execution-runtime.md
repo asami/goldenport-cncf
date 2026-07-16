@@ -103,6 +103,10 @@ execution WorkArea. Relative paths MUST be non-empty normalized relative paths
 without traversal segments. Runtime path validation MUST prevent real-path and
 symlink escape before launch or artifact collection.
 
+A declared output path is interpreted relative to the selected execution
+working directory. When no working directory is declared, it is relative to the
+WorkArea root.
+
 Only predeclared outputs are returned. An artifact has a logical identity,
 declared kind, and bounded content metadata; it is not an unrestricted host
 path. The runtime enforces per-artifact, aggregate byte, and file-count limits.

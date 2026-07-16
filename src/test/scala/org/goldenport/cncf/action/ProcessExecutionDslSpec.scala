@@ -1,9 +1,11 @@
 package org.goldenport.cncf.action
 
 import org.goldenport.Consequence
-import org.goldenport.cncf.context.{ExecutionContext, ScopeContext, ScopeKind}
+import org.goldenport.cncf.config.RuntimeConfig
+import org.goldenport.cncf.context.{ExecutionContext, GlobalContext, ScopeContext, ScopeKind}
 import org.goldenport.cncf.processexecution.*
 import org.goldenport.cncf.unitofwork.{UnitOfWork, UnitOfWorkInterpreter, UnitOfWorkOp}
+import org.goldenport.cncf.workarea.WorkAreaSpace
 import org.scalacheck.{Gen, Prop, Test}
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
@@ -142,6 +144,7 @@ final class ProcessExecutionDslSpec extends AnyWordSpec with Matchers with Given
     driver: Option[ProcessExecutionDriver],
     calltreeenabled: Boolean = false
   ): ExecutionContext = {
+    GlobalContext.set(GlobalContext(WorkAreaSpace.create(RuntimeConfig.default)))
     val base = ExecutionContext.withFrameworkCallTreeEnabled(ExecutionContext.create(), calltreeenabled)
     val scope = ScopeContext(
       kind = ScopeKind.Runtime,

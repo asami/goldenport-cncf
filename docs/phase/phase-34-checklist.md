@@ -101,17 +101,23 @@ Evidence: `LocalProcessExecutionDriverSpec` passed with a runtime-owned JVM
 probe. It verifies literal vector arguments without shell interpolation,
 concurrent stdout/stderr capture, non-zero exits, execution timeout,
 idempotent cancellation, independently bounded stream capture, launch timeout,
-and local active process/handle cleanup. WorkArea input/output remains
-deliberately rejected until PE-06.
+and local active process/handle cleanup.
 
 ## PE-06: WorkArea and Artifacts
 
-Status: OPEN
+Status: DONE (Jul. 17, 2026)
 
-- [ ] Allocate execution-scoped WorkArea input, working, and output paths.
-- [ ] Reject traversal and symlink escape before launch and artifact collection.
-- [ ] Return only declared, bounded artifacts with logical identities.
-- [ ] Run cleanup for success, failure, timeout, and cancellation.
+- [x] Allocate execution-scoped WorkArea input, working, and output paths.
+- [x] Reject traversal and symlink escape before launch and artifact collection.
+- [x] Return only declared, bounded artifacts with logical identities.
+- [x] Run cleanup for success, failure, timeout, and cancellation.
+
+Evidence: `UnitOfWorkInterpreter` allocates and finally closes an execution
+WorkArea for every `ProcessExec` invocation. `LocalProcessExecutionDriverSpec`
+proves WorkArea-backed stdin, scoped working-directory execution, and logical
+artifact projection without raw host paths. `ProcessExecutionWorkAreaSpec`
+proves declared-only artifact collection, traversal/symlink rejection,
+per-artifact and aggregate WorkArea quotas, and root cleanup.
 
 Acceptance evidence:
 

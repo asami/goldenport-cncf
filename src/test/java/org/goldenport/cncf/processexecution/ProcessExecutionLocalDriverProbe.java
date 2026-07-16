@@ -1,6 +1,8 @@
 package org.goldenport.cncf.processexecution;
 
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 
 /**
  * Controlled host-process fixture for LocalProcessExecutionDriverSpec.
@@ -28,6 +30,24 @@ public final class ProcessExecutionLocalDriverProbe {
             case "sleep" -> Thread.sleep(arguments.length > 1 ? Long.parseLong(arguments[1]) : 10000L);
             case "flood-stdout" -> flood(System.out);
             case "flood-stderr" -> flood(System.err);
+            case "echo-stdin" -> {
+                System.out.write(System.in.readAllBytes());
+                System.out.flush();
+            }
+            case "write-file" -> {
+                Path path = Path.of(arguments[1]);
+                if (path.getParent() != null) {
+                    Files.createDirectories(path.getParent());
+                }
+                Files.writeString(path, arguments[2], StandardCharsets.UTF_8);
+            }
+            case "copy-stdin-to-file" -> {
+                Path path = Path.of(arguments[1]);
+                if (path.getParent() != null) {
+                    Files.createDirectories(path.getParent());
+                }
+                Files.write(path, System.in.readAllBytes());
+            }
             default -> System.exit(2);
         }
     }
