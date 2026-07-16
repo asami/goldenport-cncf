@@ -29,3 +29,7 @@ Current component composition design:
 Current operation contract design:
 
 - `predefined-result-catalog.md`
+
+Current execution-platform design:
+
+- `process-execution-runtime.md`

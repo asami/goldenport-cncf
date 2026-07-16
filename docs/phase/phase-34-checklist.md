@@ -5,13 +5,14 @@ dashboard is `phase-34.md`.
 
 ## PE-01: Normative Contract
 
-Status: OPEN
+Status: DONE (Jul. 17, 2026)
 
-- [ ] Promote the Process Execution ownership, capability, WorkArea, lifecycle,
-  cancellation, and confidentiality boundaries to `docs/design/`.
-- [ ] Define request/result/termination/artifact/failure structure in
-  `docs/spec/`.
-- [ ] Define the relationship to legacy `ShellCommandExec`, Job/Task execution,
+- [x] Promote the Process Execution ownership, capability, WorkArea, lifecycle,
+  cancellation, and confidentiality boundaries to
+  `docs/design/process-execution-runtime.md`.
+- [x] Define request/result/termination/artifact/failure structure in
+  `docs/spec/process-execution-runtime.md`.
+- [x] Define the relationship to legacy `ShellCommandExec`, Job/Task execution,
   and Textus AI consumer ownership.
 
 Acceptance evidence:
@@ -20,6 +21,9 @@ Acceptance evidence:
   before implementation is considered stable.
 - The source note remains historical/non-normative and links to the canonical
   documents.
+
+Evidence: `docs/design/process-execution-runtime.md` and
+`docs/spec/process-execution-runtime.md` were added Jul. 17, 2026.
 
 ## PE-02: Capability and Program Model
 

@@ -1,6 +1,15 @@
 # Process Execution Design Note
 
 status = proposed, non-normative
+
+This note is the historical design exploration and implementation handoff for
+Phase 34. The settled normative contracts are:
+
+- `docs/design/process-execution-runtime.md`
+- `docs/spec/process-execution-runtime.md`
+
+When this note differs from either contract, the design and specification
+documents take precedence.
 date = 2026-07-17
 
 Source handoff:

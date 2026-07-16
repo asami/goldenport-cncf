@@ -659,7 +659,7 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Latest closed phase checklist: `docs/phase/phase-33-checklist.md`
 - Previous closed phase dashboard: `docs/phase/phase-32.md`
 - Previous closed phase checklist: `docs/phase/phase-32-checklist.md`
-- Current next slice: PE-01 normative Process Execution contract.
+- Current next slice: PE-02 capability and runtime program model.
 - Status interpretation rules: `docs/rules/stage-status-and-checklist-convention.md`
 - Latest post-closure maintenance: Jul. 15, 2026 descriptor-bound component
   runtime configuration preservation. Materialized component instances retain
@@ -2228,9 +2228,11 @@ Active development item for Phase 34.
     specifications;
   - expose a provider-neutral handoff for a future Textus AI `codex-cli`
     capability.
-- First implementation direction:
-  - promote `docs/notes/process-execution-design.md` into normative design and
-    static specification documents;
+- Initial implementation completed:
+  - `docs/notes/process-execution-design.md` is promoted by the normative
+    `docs/design/process-execution-runtime.md` and
+    `docs/spec/process-execution-runtime.md` contracts.
+- Next implementation direction:
   - establish capability admission and fake-driver behavior before adding a
     local `ProcessBuilder` implementation;
   - preserve existing ActionCall, UnitOfWork, Job/Task, authorization, and

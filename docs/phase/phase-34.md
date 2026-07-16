@@ -63,7 +63,7 @@ provider or run a live Codex account.
 
 ## 4. Active Work Stack
 
-- A (PLANNED): PE-01 - Freeze normative Process Execution design and static
+- A (DONE): PE-01 - Freeze normative Process Execution design and static
   contracts.
 - B (PLANNED): PE-02 - Add capability, request/result, limits, and runtime
   program-definition models.
@@ -82,7 +82,7 @@ provider or run a live Codex account.
 
 ## 5. Development Items
 
-- [ ] PE-01: Freeze normative Process Execution design and static contracts.
+- [x] PE-01: Freeze normative Process Execution design and static contracts.
 - [ ] PE-02: Add capability, request/result, limits, and runtime
   program-definition models.
 - [ ] PE-03: Add ScopeContext driver resolution and deterministic fake driver.
@@ -96,6 +96,11 @@ provider or run a live Codex account.
 
 Detailed task tracking and acceptance evidence are in
 `phase-34-checklist.md`.
+
+PE-01 completed Jul. 17, 2026. The canonical documents are
+`docs/design/process-execution-runtime.md` and
+`docs/spec/process-execution-runtime.md`; the original note remains an
+explicitly non-normative handoff.
 
 ## 6. Completion Conditions
 
@@ -121,5 +126,7 @@ Phase 34 closes only when:
 ## 7. Source Note
 
 The initial design source is `docs/notes/process-execution-design.md`. It is
-non-normative. PE-01 must promote its settled contracts into `docs/design/` and
-`docs/spec/` before runtime implementation is treated as stable.
+non-normative. PE-01 promoted its settled contracts into
+`docs/design/process-execution-runtime.md` and
+`docs/spec/process-execution-runtime.md`; those canonical documents govern
+subsequent runtime implementation.
