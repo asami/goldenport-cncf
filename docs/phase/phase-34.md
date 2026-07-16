@@ -67,7 +67,7 @@ provider or run a live Codex account.
   contracts.
 - B (DONE): PE-02 - Add capability, request/result, limits, and runtime
   program-definition models.
-- C (PLANNED): PE-03 - Add ScopeContext driver resolution and deterministic
+- C (DONE): PE-03 - Add ScopeContext driver resolution and deterministic
   fake-driver execution support.
 - D (PLANNED): PE-04 - Add UnitOfWork `ProcessExec` and protected ActionCall
   DSL integration.
@@ -85,7 +85,7 @@ provider or run a live Codex account.
 - [x] PE-01: Freeze normative Process Execution design and static contracts.
 - [x] PE-02: Add capability, request/result, limits, and runtime
   program-definition models.
-- [ ] PE-03: Add ScopeContext driver resolution and deterministic fake driver.
+- [x] PE-03: Add ScopeContext driver resolution and deterministic fake driver.
 - [ ] PE-04: Add `UnitOfWorkOp.ProcessExec` and `process_exec` DSL support.
 - [ ] PE-05: Implement the local driver lifecycle and bounded stream handling.
 - [ ] PE-06: Add WorkArea-confined input/output artifacts, quotas, and cleanup.
@@ -106,6 +106,12 @@ PE-02 completed Jul. 17, 2026. `ProcessExecutionModel` provides capability-only
 requests, runtime-owned program definitions, bounded effective policy
 resolution, and terminal result vocabulary. `ProcessExecutionModelSpec` proves
 deny-by-default admission and monotonic limit tightening without a live driver.
+
+PE-03 completed Jul. 17, 2026. `ScopeContext` resolves a runtime-owned Process
+Execution driver through ordinary parent inheritance and explicit child
+override. `ProcessExecutionTestProfile` supplies deterministic configured
+results without an ambient process fallback; `ProcessExecutionDriverSpec`
+proves inheritance, override, unavailable-driver behavior, and cancellation.
 
 ## 6. Completion Conditions
 

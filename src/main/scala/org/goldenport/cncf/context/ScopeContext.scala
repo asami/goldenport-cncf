@@ -7,6 +7,7 @@ import org.goldenport.cncf.context.EntityStoreContext
 import org.goldenport.cncf.context.EntitySpaceContext
 import org.goldenport.cncf.workarea.WorkAreaSpace
 import org.goldenport.cncf.http.HttpDriver
+import org.goldenport.cncf.processexecution.ProcessExecutionDriver
 import org.goldenport.cncf.datastore.DataStoreSpace
 import org.goldenport.cncf.entity.EntityStoreSpace
 import org.goldenport.cncf.entity.runtime.EntitySpace
@@ -15,7 +16,7 @@ import org.goldenport.cncf.entity.runtime.EntitySpace
  * @since   Jan.  7, 2026
  *  version Jan. 20, 2026
  *  version Feb. 25, 2026
- * @version Apr.  3, 2026
+ * @version Jul. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 enum ScopeKind {
@@ -46,6 +47,14 @@ abstract class ScopeContext() extends ObservationDsl with ScopeContext.Core.Hold
         }
     }
   }
+
+  /**
+   * Runtime-owned Process Execution driver. A missing driver deliberately has
+   * no ambient-host fallback; the UnitOfWork interpreter returns its
+   * structured unavailable-service failure.
+   */
+  def processExecutionDriverOption: Option[ProcessExecutionDriver] =
+    core.processExecutionDriverOption orElse parent.flatMap(_.processExecutionDriverOption)
 
   def formatPing: String =
     parent match {
@@ -78,7 +87,8 @@ object ScopeContext {
     datastore: Option[DataStoreContext] = None,
     entitystore: Option[EntityStoreContext] = None,
     entityspace: Option[EntitySpaceContext] = None,
-    aggregateInternalRead: Boolean = false
+    aggregateInternalRead: Boolean = false,
+    processExecutionDriverOption: Option[ProcessExecutionDriver] = None
   )
   object Core {
     trait Holder {
@@ -94,15 +104,15 @@ object ScopeContext {
       def dataStoreSpace: DataStoreSpace =
         core.datastore.map(_.dataStoreSpace) orElse
           parent.map(_.dataStoreSpace) getOrElse
-          ScopeContext.defaultDataStoreSpace
+          ScopeContext._default_data_store_space
       def entityStoreSpace: EntityStoreSpace =
         core.entitystore.map(_.entityStoreSpace) orElse
           parent.map(_.entityStoreSpace) getOrElse
-          ScopeContext.defaultEntityStoreSpace
+          ScopeContext._default_entity_store_space
       def entitySpace: EntitySpace =
         core.entityspace.map(_.entitySpace) orElse
           parent.map(_.entitySpace) getOrElse
-          ScopeContext.defaultEntitySpace
+          ScopeContext._default_entity_space
     }
   }
 
@@ -123,7 +133,8 @@ object ScopeContext {
     name: String,
     parent: Option[ScopeContext],
     observabilityContext: ObservabilityContext,
-    httpDriverOption: Option[HttpDriver] = None
+    httpDriverOption: Option[HttpDriver] = None,
+    processExecutionDriverOption: Option[ProcessExecutionDriver] = None
   ): ScopeContext = {
     Instance(
       ScopeContext.Core(
@@ -131,7 +142,8 @@ object ScopeContext {
         name = name,
         parent = parent,
         observabilityContext = observabilityContext,
-        httpDriverOption = httpDriverOption
+        httpDriverOption = httpDriverOption,
+        processExecutionDriverOption = processExecutionDriverOption
       )
     )
   }
@@ -140,10 +152,10 @@ object ScopeContext {
     Some(x.core)
   }
 
-  private lazy val defaultDataStoreSpace: DataStoreSpace =
+  private lazy val _default_data_store_space: DataStoreSpace =
     DataStoreSpace.default()
 
-  private lazy val defaultEntityStoreSpace: EntityStoreSpace =
+  private lazy val _default_entity_store_space: EntityStoreSpace =
     EntityStoreSpace.create(
       org.goldenport.configuration.ResolvedConfiguration(
         org.goldenport.configuration.Configuration.empty,
@@ -151,6 +163,6 @@ object ScopeContext {
       )
     )
 
-  private lazy val defaultEntitySpace: EntitySpace =
+  private lazy val _default_entity_space: EntitySpace =
     new EntitySpace()
 }

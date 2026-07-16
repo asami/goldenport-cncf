@@ -47,17 +47,21 @@ request-shape coverage.
 
 ## PE-03: Driver Resolution and Fake Execution
 
-Status: OPEN
+Status: DONE (Jul. 17, 2026)
 
-- [ ] Add inherited `ProcessExecutionDriver` resolution through `ScopeContext`.
-- [ ] Add deterministic fake-driver/test-profile support.
-- [ ] Preserve driver selection and policy-safe identity in diagnostics without
+- [x] Add inherited `ProcessExecutionDriver` resolution through `ScopeContext`.
+- [x] Add deterministic fake-driver/test-profile support.
+- [x] Preserve driver selection and policy-safe identity in diagnostics without
   exposing request payload values.
 
 Acceptance evidence:
 
 - Specs prove runtime inheritance, child-scope override, unavailable-driver
   failure, and no live program dependency for normal tests.
+
+Evidence: `ProcessExecutionDriverSpec` passed with generated inheritance,
+explicit override, unavailable-driver, deterministic result, and cancellation
+coverage. The fake profile does not create a host process.
 
 ## PE-04: UnitOfWork and Internal DSL
 

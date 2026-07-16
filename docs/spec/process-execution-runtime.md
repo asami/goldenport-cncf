@@ -85,6 +85,12 @@ driver or explicitly override it. An absent driver is a deterministic service
 failure. A component does not obtain a driver, process handle, or host process
 API directly.
 
+The driver exposes only a safe logical identity and receives an already
+resolved execution. `startC` returns a handle with `awaitC` and idempotent
+`cancelC`; normal diagnostics may use the driver identity but MUST NOT infer a
+host executable or provider account from it. `ProcessExecutionTestProfile` is
+an explicit deterministic test fixture and MUST NOT create a host process.
+
 ## WorkArea And Artifact Contract
 
 Input files, working directories, and declared outputs are confined to the

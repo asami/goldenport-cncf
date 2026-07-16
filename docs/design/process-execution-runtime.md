@@ -105,6 +105,14 @@ argument vector without shell interpolation, starts draining stdout and stderr
 concurrently, applies bounded capture independently to both streams, and
 supports idempotent cancellation.
 
+The runtime resolves a driver as a `ProcessExecutionDriver` with a safe logical
+driver identity. `startC` returns a `ProcessExecutionHandle`; `awaitC` returns
+one terminal result and `cancelC` is idempotent. The driver identity is safe
+structural metadata only and must not be a host path, command string, account,
+or provider credential. `ProcessExecutionTestProfile` is an explicit
+deterministic fixture: it returns configured results and never creates a host
+process.
+
 The interpreter owns timeout and cancellation coordination. It registers a
 handle immediately after launch, requests graceful termination when policy
 allows, escalates to forced process-tree termination when required, waits for
