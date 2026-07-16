@@ -2787,7 +2787,13 @@ final class Http4sHttpServer(
       form.getString(source).filter(_.nonEmpty).map(target -> _)
     }
     val frameworkcontext = _framework_passthrough_form_values(form)
-    _normalize_boundary_record(app, service, operation, _strip_framework_form_record(form)).map { operationform =>
+    WebFormValueDecoder.decode(
+      engine.webDescriptor,
+      app,
+      service,
+      operation,
+      _strip_framework_form_record(form)
+    ).flatMap(_normalize_boundary_record(app, service, operation, _)).map { operationform =>
       Record(operationform.fields ++ Record.create(admincontext ++ frameworkcontext).fields)
     }
   }

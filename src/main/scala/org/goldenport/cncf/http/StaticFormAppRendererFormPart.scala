@@ -33,7 +33,7 @@ import io.circe.parser.parse
 /*
  * @since   May. 18, 2026
  *  version Jun. 19, 2026
- * @version Jul.  7, 2026
+ * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 trait StaticFormAppRendererFormPart {
@@ -1492,9 +1492,14 @@ trait StaticFormAppRendererFormPart {
       error("datatype", "a date value")
     else if (is_datetime_type(datatype, controltype) && !is_datetime_value(value))
       error("datatype", "a datetime value")
+    else if (is_record_control_type(controltype) && new RecordDecoder().json(value).toOption.isEmpty)
+      error("datatype", "a JSON object")
     else
       None
   }
+
+  protected def is_record_control_type(controltype: String): Boolean =
+    controltype == "json" || controltype == "record"
 
   protected def form_field_values(
     field: WebSchemaResolver.ResolvedWebField,
@@ -1720,7 +1725,7 @@ trait StaticFormAppRendererFormPart {
          |  ${feedback}
          |  <div class="form-text">${escape(help)}</div>
          |</div>""".stripMargin
-    } else if (inputtype == "textarea") {
+    } else if (inputtype == "textarea" || is_record_control_type(inputtype)) {
       val readonlyattr = if (readonly) " readonly" else ""
       val placeholderattr = placeholder.map(x => s""" placeholder="${escape(x)}"""").getOrElse("")
       s"""<div class="mb-3"${fieldselector}>
