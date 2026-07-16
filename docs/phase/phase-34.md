@@ -65,7 +65,7 @@ provider or run a live Codex account.
 
 - A (DONE): PE-01 - Freeze normative Process Execution design and static
   contracts.
-- B (PLANNED): PE-02 - Add capability, request/result, limits, and runtime
+- B (DONE): PE-02 - Add capability, request/result, limits, and runtime
   program-definition models.
 - C (PLANNED): PE-03 - Add ScopeContext driver resolution and deterministic
   fake-driver execution support.
@@ -83,7 +83,7 @@ provider or run a live Codex account.
 ## 5. Development Items
 
 - [x] PE-01: Freeze normative Process Execution design and static contracts.
-- [ ] PE-02: Add capability, request/result, limits, and runtime
+- [x] PE-02: Add capability, request/result, limits, and runtime
   program-definition models.
 - [ ] PE-03: Add ScopeContext driver resolution and deterministic fake driver.
 - [ ] PE-04: Add `UnitOfWorkOp.ProcessExec` and `process_exec` DSL support.
@@ -101,6 +101,11 @@ PE-01 completed Jul. 17, 2026. The canonical documents are
 `docs/design/process-execution-runtime.md` and
 `docs/spec/process-execution-runtime.md`; the original note remains an
 explicitly non-normative handoff.
+
+PE-02 completed Jul. 17, 2026. `ProcessExecutionModel` provides capability-only
+requests, runtime-owned program definitions, bounded effective policy
+resolution, and terminal result vocabulary. `ProcessExecutionModelSpec` proves
+deny-by-default admission and monotonic limit tightening without a live driver.
 
 ## 6. Completion Conditions
 

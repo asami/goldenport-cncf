@@ -27,19 +27,23 @@ Evidence: `docs/design/process-execution-runtime.md` and
 
 ## PE-02: Capability and Program Model
 
-Status: OPEN
+Status: DONE (Jul. 17, 2026)
 
-- [ ] Add `ProcessCapabilityId`, request/result, termination, limits, input,
+- [x] Add `ProcessCapabilityId`, request/result, termination, limits, input,
   output-declaration, and artifact models.
-- [ ] Add runtime-owned `ProcessProgramDefinition` and effective policy
+- [x] Add runtime-owned `ProcessProgramDefinition` and effective policy
   resolution.
-- [ ] Reject arbitrary executable paths, shell command strings, unconstrained
+- [x] Reject arbitrary executable paths, shell command strings, unconstrained
   environment inheritance, and unbounded limits before driver invocation.
 
 Acceptance evidence:
 
 - Specs prove deny-by-default capability admission and monotonic limit
   tightening.
+
+Evidence: `ProcessExecutionModelSpec` passed with capability grammar,
+WorkArea-relative path, deny-by-default resolution, monotonic limit, and
+request-shape coverage.
 
 ## PE-03: Driver Resolution and Fake Execution
 
