@@ -17,8 +17,8 @@ import org.goldenport.cncf.entity.EntityStoreSpace
 import org.goldenport.cncf.entity.runtime.EntitySpace
 import org.goldenport.cncf.unitofwork.UnitOfWork
 import org.goldenport.cncf.unitofwork.UnitOfWorkOp
-import org.goldenport.cncf.observability.{CallTreeContext, DslChokepointHook}
-import org.goldenport.cncf.resource.ResourceAccess
+import org.goldenport.cncf.observability.{CallTreeContext, DslChokepointHook, ResourceAccessObservation}
+import org.goldenport.cncf.resource.{ResourceAccess, ResourceAccessTestProfile}
 import cats.~>
 
 /**
@@ -66,7 +66,8 @@ abstract class ExecutionContext
 
   def entitySpace: EntitySpace = runtime.entitySpace
 
-  override def resources: ResourceAccess = cncfCore.resources
+  override def resources: ResourceAccess =
+    ResourceAccessObservation.observed(cncfCore.resources)(using this)
 
   def isAggregateInternalRead: Boolean = cncfCore.scope.isAggregateInternalRead
 
@@ -394,6 +395,12 @@ object ExecutionContext {
     case _ =>
       ctx
   }
+
+  def withResourceAccessTestProfile(
+    ctx: ExecutionContext,
+    profile: ResourceAccessTestProfile
+  ): ExecutionContext =
+    withResourceAccess(ctx, profile.resourceAccess)
 
   def withRuntimeContextContext(
     ctx: ExecutionContext,

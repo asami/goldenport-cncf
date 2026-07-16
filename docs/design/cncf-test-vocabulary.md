@@ -110,6 +110,12 @@ prefer the logical `type: local` and `path` keys rather than SQLite-specific
 property names. The current local implementation may use SQLite internally,
 but the descriptor contract is a CNCF datastore contract.
 
+For direct CNCF executable specifications that only need resource-read
+replacement, `ResourceAccessTestProfile` is the narrower test vocabulary. It
+installs deterministic in-memory URL, Textus URN, and external URN providers on
+an `ExecutionContext`; it is not an assembly descriptor and does not add
+provider classes to a CAR/runtime.
+
 Provider matching currently uses provider component plus the ordinary SPI
 contract and `provider` / `mode` / `engine` selection. `provider.service` is
 reserved for future service-level matching and is rejected when specified.

@@ -168,4 +168,15 @@ private final class TextusUrnResourceAccess(
       case _ =>
         Consequence.resourceUnsupported("Textus URN resource access requires a URN reference")
     }
+
+  override def providerMetadata(reference: ResourceReference): ResourceProviderMetadata =
+    reference match {
+      case urn: ResourceReference.Urn =>
+        TextusUrnReference.parseC(urn).toOption.flatMap { textusurn =>
+          _providers.get(textusurn.namespace).map { provider =>
+            ResourceProviderMetadata("textus-urn", provider.namespace, configured = true)
+          }
+        }.getOrElse(ResourceProviderMetadata.unconfigured("textus"))
+      case _ => ResourceProviderMetadata.unconfigured("urn")
+    }
 }

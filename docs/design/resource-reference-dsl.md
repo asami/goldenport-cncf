@@ -70,7 +70,23 @@ configuration rejects `textus` bindings. This preserves the standard Textus
 resource grammar as a CNCF-owned contract while allowing explicitly installed
 future NIDs to evolve behind the same `ExecutionContext.resources` DSL.
 
+## Test and Observability Boundary
+
+`ResourceAccessTestProfile` is a deterministic test-owned composition surface.
+It supplies in-memory URL, Textus URN, and external URN providers only when an
+executable specification or component integration test explicitly installs the
+profile on its `ExecutionContext`. It is not configuration syntax and cannot
+silently alter a production assembly.
+
+The `ExecutionContext.resources` boundary emits the ordinary resource DSL
+chokepoint around each read. Its safe provider metadata is limited to scheme,
+provider family, provider logical identity, and configured state. Physical
+roots, remote endpoints, complete logical references, provider settings, and
+content are intentionally outside both observability attributes and ordinary
+framework-generated failure displays. A custom provider owns the safety of any
+failure message it returns.
+
 ## Deferred Design
 
-This design intentionally excludes resolution metrics, caching, credentials,
-refresh, and SIE migration. Those remain Phase 33 RR-05 through RR-06 work.
+This design intentionally excludes caching, credentials, refresh, and SIE
+migration. Those remain Phase 33 RR-06 work and later maintenance.

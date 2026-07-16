@@ -88,6 +88,12 @@ an isolated CNCF home. Most component integration tests should instead use
 runtime overlay mode: keep normal runtime/repository resolution and replace
 only test-owned resources through `test.yaml`.
 
+Resource-reference tests that do not need assembly/configuration coverage
+should use `ResourceAccessTestProfile` through
+`ExecutionContext.withResourceAccessTestProfile`. The profile provides
+deterministic in-memory URL, Textus URN, and external URN providers; tests must
+not substitute host files or direct network clients for this surface.
+
 Test-owned datastore replacement should use logical CNCF datastore keys:
 
   runtime.datastore.type/path

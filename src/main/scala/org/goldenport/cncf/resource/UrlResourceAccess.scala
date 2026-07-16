@@ -207,6 +207,16 @@ private final class UrlResourceAccess(
         Consequence.resourceUnsupported("URN resource providers are not configured")
     }
 
+  override def providerMetadata(reference: ResourceReference): ResourceProviderMetadata =
+    reference match {
+      case url: ResourceReference.Url =>
+        _providers.get(url.scheme) match {
+          case Some(_) => ResourceProviderMetadata("url", url.scheme, configured = true)
+          case None => ResourceProviderMetadata.unconfigured(url.scheme)
+        }
+      case _: ResourceReference.Urn => ResourceProviderMetadata.unconfigured("urn")
+    }
+
   private def _authorize_c(url: ResourceReference.Url): Consequence[Unit] =
     url.scheme match {
       case "file" if policy.normalizedFileRoots.nonEmpty => Consequence.unit

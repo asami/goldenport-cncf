@@ -131,4 +131,16 @@ private final class UrnResourceAccess(
       case _ =>
         Consequence.resourceUnsupported("URN resource access requires a URN reference")
     }
+
+  override def providerMetadata(reference: ResourceReference): ResourceProviderMetadata =
+    reference match {
+      case urn: ResourceReference.Urn if urn.nid == "textus" =>
+        ResourceProviderMetadata.unconfigured("textus")
+      case urn: ResourceReference.Urn =>
+        _providers.get(urn.nid) match {
+          case Some(_) => ResourceProviderMetadata("urn", urn.nid, configured = true)
+          case None => ResourceProviderMetadata.unconfigured(urn.nid)
+        }
+      case _ => ResourceProviderMetadata.unconfigured("urn")
+    }
 }

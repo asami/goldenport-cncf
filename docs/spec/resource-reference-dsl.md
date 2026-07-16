@@ -164,3 +164,21 @@ provider can receive a `urn:textus:` request. Runtime dispatch always resolves
 Textus URNs through `TextusUrnResourceProvider` first. Empty external-provider
 configuration is the default, so every non-Textus NID remains rejected unless
 an operator explicitly installs its provider.
+
+## Deterministic Test Profiles and Resolution Diagnostics
+
+`ResourceAccessTestProfile` is the explicit executable-specification and
+component-integration-test surface for resource reads. It composes
+`InMemoryUrlResourceProvider`, `InMemoryTextusUrnResourceProvider`, and
+`InMemoryUrnResourceProvider` without opening host files or network
+connections. Tests install it only through
+`ExecutionContext.withResourceAccessTestProfile`; it is not a production
+runtime assembly mechanism.
+
+Every read obtained through `ExecutionContext.resources` passes the resource
+DSL chokepoint. The resulting diagnostic identifies only the resource scheme
+and selected provider family/identity. It MUST NOT include the full URL, URN
+NSS, configured root, provider settings, or resource content. A normal
+framework-generated resource failure likewise remains a structured
+`Consequence` and does not render the requested logical reference. A custom
+provider remains responsible for the safety of its own failure messages.

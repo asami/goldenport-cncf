@@ -101,17 +101,26 @@ always routes `urn:textus:` to the dedicated standard provider first.
 
 ## RR-05: Deterministic Test Providers and Observability
 
-Status: OPEN
+Status: DONE
 
-- [ ] Add in-memory URL/Textus-URN/external-URN provider fixtures.
-- [ ] Bind providers through deterministic ExecutionContext test profiles.
-- [ ] Record provider identity and policy-safe resolution diagnostics.
-- [ ] Verify resource contents and provider settings are not leaked in ordinary
+- [x] Add in-memory URL/Textus-URN/external-URN provider fixtures.
+- [x] Bind providers through deterministic ExecutionContext test profiles.
+- [x] Record provider identity and policy-safe resolution diagnostics.
+- [x] Verify resource contents and provider settings are not leaked in ordinary
   failure output.
 
 Acceptance evidence:
 
 - Tests execute without host-file or external-network dependencies.
+
+Evidence: `ResourceAccessTestProfileSpec`, resource provider specs, and
+`ExecutionContextSpec` passed on Jul. 16, 2026. The explicit
+`ResourceAccessTestProfile` installs in-memory URL, Textus-URN, and external
+URN providers only through `ExecutionContext.withResourceAccessTestProfile`.
+`ExecutionContext.resources` records `dsl:resource.read` and its resolve phase
+with only scheme/provider family/provider identity/configured-state attributes;
+the executable spec proves complete URL/URN references and resource contents
+are absent from those attributes and ordinary missing-resource failures.
 
 ## RR-06: SIE Consumer Migration
 

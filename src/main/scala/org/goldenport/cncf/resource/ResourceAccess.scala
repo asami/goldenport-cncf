@@ -35,6 +35,13 @@ final case class ResourceContent(
 trait ResourceAccess {
   def read(reference: ResourceReference): Consequence[ResourceContent]
 
+  /**
+   * Returns only provider-selection information safe for runtime diagnostics.
+   * It must not contain a URL/NSS, configured root, or resource content.
+   */
+  def providerMetadata(reference: ResourceReference): ResourceProviderMetadata =
+    ResourceProviderMetadata.unconfigured(reference.scheme)
+
   def readText(
     reference: ResourceReference,
     charset: Option[Charset] = None
@@ -79,6 +86,14 @@ object ResourceAccess {
   def urn(providers: Vector[UrnResourceProvider]): ResourceAccess =
     new UrnResourceAccess(providers)
 
+  /** Explicit in-memory provider profile for executable specifications. */
+  def testProfile(profile: ResourceAccessTestProfile): ResourceAccess =
+    _composite(
+      url(profile.urlPolicy, profile.urlProviders),
+      textus(profile.textusUrnProviders),
+      urn(profile.urnProviders)
+    )
+
   def standard(
     urlpolicy: ResourceUrlPolicy,
     textuspolicy: TextusUrnResourcePolicy,
@@ -105,6 +120,13 @@ object ResourceAccess {
           case _: ResourceReference.Url => urlaccess.read(reference)
           case urn: ResourceReference.Urn if urn.nid == "textus" => textusaccess.read(reference)
           case _: ResourceReference.Urn => urnaccess.read(reference)
+        }
+
+      override def providerMetadata(reference: ResourceReference): ResourceProviderMetadata =
+        reference match {
+          case _: ResourceReference.Url => urlaccess.providerMetadata(reference)
+          case urn: ResourceReference.Urn if urn.nid == "textus" => textusaccess.providerMetadata(reference)
+          case _: ResourceReference.Urn => urnaccess.providerMetadata(reference)
         }
     }
 }
