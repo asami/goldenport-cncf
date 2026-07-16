@@ -54,19 +54,27 @@ hosts. The runtime config aliases are `textus.resource.url.*`,
 
 ## RR-03: Standard Textus URN Resolution
 
-Status: OPEN
+Status: DONE
 
-- [ ] Freeze `urn:textus:<namespace>:<resource-id>` grammar.
-- [ ] Define and install `TextusUrnResourceProvider` SPI.
-- [ ] Bind logical Textus namespaces through execution configuration.
-- [ ] Resolve a Textus URN without exposing a file path or remote endpoint to
+- [x] Freeze `urn:textus:<namespace>:<resource-id>` grammar.
+- [x] Define and install `TextusUrnResourceProvider` SPI.
+- [x] Bind logical Textus namespaces through execution configuration.
+- [x] Resolve a Textus URN without exposing a file path or remote endpoint to
   component code.
-- [ ] Reject unknown Textus namespaces and invalid resource identifiers.
+- [x] Reject unknown Textus namespaces and invalid resource identifiers.
 
 Acceptance evidence:
 
 - The same Textus URN resolves to in-memory test data and configured runtime
   data through unchanged component code.
+
+Evidence: `TextusUrnResourceAccessSpec`, `RuntimeConfigSpec`, and
+`ExecutionContextSpec` passed on Jul. 16, 2026. The standard provider parses
+only safe logical `urn:textus:<namespace>:<resource-id>` values, maps each
+configured namespace to a read-only root through
+`textus.resource.urn.textus.file-roots` and its runtime/CNCF aliases, and
+verifies the resolved real path remains within the selected root. This provider
+layer is independent of existing Blob/entity semantic URNs.
 
 ## RR-04: Generic External URN Extension SPI
 

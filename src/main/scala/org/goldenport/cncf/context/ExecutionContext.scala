@@ -674,7 +674,13 @@ object ExecutionContext {
     scope: ScopeContext
   ): ResourceAccess =
     _global_runtime_context(scope)
-      .map(global => ResourceAccess.url(global.config.resourceUrlPolicy, global.httpDriver))
+      .map { global =>
+        ResourceAccess.standard(
+          global.config.resourceUrlPolicy,
+          global.config.textusUrnResourcePolicy,
+          global.httpDriver
+        )
+      }
       .getOrElse(ResourceAccess.unavailable)
 
   private def _core(clock: Clock): CoreExecutionContext.Core =

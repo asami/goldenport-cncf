@@ -4,7 +4,7 @@ import java.time.{Clock, Instant, ZoneOffset}
 
 import org.goldenport.cncf.config.{OperationMode, RuntimeConfig}
 import org.goldenport.cncf.path.AliasResolver
-import org.goldenport.cncf.resource.{ResourceReference, ResourceUrlPolicy}
+import org.goldenport.cncf.resource.{ResourceReference, ResourceUrlPolicy, TextusUrnResourcePolicy}
 import org.goldenport.cncf.http.FakeHttpDriver
 import org.goldenport.configuration.{Configuration, ConfigurationTrace, ConfigurationValue, ResolvedConfiguration}
 import org.scalatest.matchers.should.Matchers
@@ -14,7 +14,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Dec. 23, 2025
  *  version May.  5, 2026
- * @version Jul. 15, 2026
+ * @version Jul. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 class ExecutionContextSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -136,6 +136,43 @@ class ExecutionContextSpec extends AnyWordSpec with Matchers with GivenWhenThen 
 
       Then("the context exposes only the configured URL provider binding")
       content.toOption shouldBe Some("configured-resource")
+    }
+
+    "bind configured Textus URN resource access when creating a context below a global runtime" in {
+      Given("a global runtime with a logical Textus namespace root")
+      val base = ExecutionContext.create()
+      val root = java.nio.file.Files.createTempDirectory("textus-urn-context")
+      java.nio.file.Files.writeString(root.resolve("catalog-1.txt"), "configured-urn")
+      val global = GlobalRuntimeContext.create(
+        "textus-urn-resource-access-spec",
+        RuntimeConfig.default.copy(
+          textusUrnResourcePolicy = TextusUrnResourcePolicy(Map("book" -> root))
+        ),
+        ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty),
+        base.observability,
+        AliasResolver.empty
+      )
+      val runtime = new RuntimeContext(
+        core = RuntimeContext.core(
+          name = "textus-urn-resource-access-spec",
+          parent = Some(global),
+          observabilityContext = base.observability
+        ),
+        unitOfWorkSupplier = () => base.unitOfWork,
+        unitOfWorkInterpreterFn = base.runtime.unitOfWorkInterpreter,
+        commitAction = _ => (),
+        abortAction = _ => (),
+        disposeAction = _ => (),
+        token = "textus-urn-resource-access-spec"
+      )
+
+      When("a context is created for the runtime scope")
+      val context = ExecutionContext.create(runtime)
+      val reference = ResourceReference.parseC("urn:textus:book:catalog-1.txt").toOption.get
+      val content = context.resources.readText(reference)
+
+      Then("the component-facing resource DSL resolves through its configured logical namespace")
+      content.toOption shouldBe Some("configured-urn")
     }
 
     "adopt runtime config namespace and clock when rebinding under a global runtime" in {

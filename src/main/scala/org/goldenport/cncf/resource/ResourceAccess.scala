@@ -69,4 +69,31 @@ object ResourceAccess {
     providers: Vector[UrlResourceProvider]
   ): ResourceAccess =
     new UrlResourceAccess(policy, providers)
+
+  def textus(policy: TextusUrnResourcePolicy): ResourceAccess =
+    textus(policy.fileProviders)
+
+  def textus(providers: Vector[TextusUrnResourceProvider]): ResourceAccess =
+    new TextusUrnResourceAccess(providers)
+
+  def standard(
+    urlpolicy: ResourceUrlPolicy,
+    textuspolicy: TextusUrnResourcePolicy,
+    httpdriver: org.goldenport.cncf.http.HttpDriver
+  ): ResourceAccess =
+    _composite(url(urlpolicy, httpdriver), textus(textuspolicy))
+
+  private def _composite(
+    urlaccess: ResourceAccess,
+    textusaccess: ResourceAccess
+  ): ResourceAccess =
+    new ResourceAccess {
+      def read(reference: ResourceReference): Consequence[ResourceContent] =
+        reference match {
+          case _: ResourceReference.Url => urlaccess.read(reference)
+          case urn: ResourceReference.Urn if urn.nid == "textus" => textusaccess.read(reference)
+          case _: ResourceReference.Urn =>
+            Consequence.resourceUnsupported("URN resource providers are not configured")
+        }
+    }
 }

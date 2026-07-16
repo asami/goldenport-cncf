@@ -51,7 +51,7 @@ not directly use host filesystem or network APIs for this concern.
 
 - A (DONE): RR-01 - Resource-reference model and ExecutionContext DSL contract.
 - B (DONE): RR-02 - Implement URL provider resolution and policy binding.
-- C (PLANNED): RR-03 - Implement standard `urn:textus` namespace resolution.
+- C (DONE): RR-03 - Implement standard `urn:textus` namespace resolution.
 - D (PLANNED): RR-04 - Implement generic external-URN SPI resolution.
 - E (PLANNED): RR-05 - Add deterministic test providers and executable specs.
 - F (PLANNED): RR-06 - Migrate SIE BoK readers and verify the cross-repository
@@ -62,7 +62,7 @@ not directly use host filesystem or network APIs for this concern.
 
 - [x] RR-01: Resource-reference model and internal DSL contract.
 - [x] RR-02: Implement URL provider resolution and deny-by-default policy.
-- [ ] RR-03: Implement `urn:textus` namespace resolution through configuration.
+- [x] RR-03: Implement `urn:textus` namespace resolution through configuration.
 - [ ] RR-04: Implement the generic `urn:<nid>:<nss>` extension SPI.
 - [ ] RR-05: Add deterministic providers and executable specifications.
 - [ ] RR-06: Migrate and verify the SIE BoK reader consumer path.

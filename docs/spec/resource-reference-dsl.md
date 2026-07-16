@@ -5,9 +5,10 @@ Status: normative foundation contract
 ## Scope
 
 This specification fixes the Phase 33 RR-01 value model and read-only
-ExecutionContext boundary, plus RR-02 URL provider and policy behavior. It
-defines reference parsing, resource content, text decoding, URL policy, and
-failure ownership. It does not define URN namespace resolution or resource
+ExecutionContext boundary, RR-02 URL provider and policy behavior, and RR-03
+standard Textus URN resolution. It defines reference parsing, resource
+content, text decoding, URL policy, Textus namespace resolution, and failure
+ownership. It does not define generic external URN resolution or resource
 mutation.
 
 ## Reference Model
@@ -24,8 +25,7 @@ reference returns a structured `Consequence` argument-format failure.
 
 The reference is an identity and routing input only. It does not disclose a
 provider implementation, local path, credential, cache location, or transport
-handle. `urn:textus` semantics are deliberately not defined by this document;
-they are introduced by RR-03.
+handle.
 
 ## Read-only Resource Boundary
 
@@ -91,8 +91,50 @@ resource contents.
 ## ExecutionContext Injection
 
 `ExecutionContext.CncfCore` owns the injected `ResourceAccess` value. A context
-created from a `GlobalRuntimeContext` binds RR-02 URL policy and providers from
-that runtime configuration. Context rebinding and scope changes preserve the
-injected value. Test/demonstration contexts use the unconfigured default unless
-a caller explicitly injects another access implementation. URN provider
-configuration is deferred to RR-03 and RR-04.
+created from a `GlobalRuntimeContext` binds RR-02 URL policy and RR-03 Textus
+URN providers from that runtime configuration. Context rebinding and scope
+changes preserve the injected value. Test/demonstration contexts use the
+unconfigured default unless a caller explicitly injects another access
+implementation.
+
+## Standard Textus URN Resolution
+
+The standard resource URN grammar is:
+
+```text
+urn:textus:<namespace>:<resource-id>
+```
+
+`namespace` is case-insensitive and canonicalized to lower case for provider
+selection. It uses lower-case letters, digits, and hyphens, begins with a
+letter, and is at most 32 characters. `resource-id` is a logical relative
+identifier: it begins with an alphanumeric character and may use
+alphanumerics, `.`, `_`, `-`, and `/`. Empty segments and `.` or `..` segments
+are forbidden. Thus a logical identifier may organize content as
+`documents/paper-1.json`, but it cannot select a physical path outside its
+configured namespace root.
+
+`TextusUrnResourceProvider` is the dedicated standard-provider SPI. Its input
+is a parsed logical Textus URN, never a file path, remote endpoint, credential,
+or provider implementation handle. The standard runtime installation maps
+namespace bindings to read-only file-root providers through a comma-separated
+configuration value:
+
+```text
+textus.resource.urn.textus.file-roots=book=/srv/textus/books,paper=/srv/textus/papers
+```
+
+The usual aliases are accepted: `textus.runtime.resource.urn.textus.file-roots`,
+`cncf.resource.urn.textus.file-roots`, and
+`cncf.runtime.resource.urn.textus.file-roots`. Each binding is exactly one
+`<namespace>=<absolute filesystem path>` pair. Duplicate namespaces, invalid
+namespaces, and relative roots fail during runtime configuration. A configured
+file provider verifies the resolved real path remains below its configured real
+root before reading.
+
+An unknown namespace, invalid logical resource identifier, absent resource, or
+policy denial remains a structured `Consequence` failure. Generic URN providers
+cannot select or shadow `textus`; that extension point is RR-04. This resource
+URN layer is separate from the existing Blob/entity semantic URN facilities:
+RR-03 neither changes their identity model nor uses them as resource-content
+providers.

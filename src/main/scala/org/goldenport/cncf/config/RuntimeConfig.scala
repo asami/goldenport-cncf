@@ -14,7 +14,7 @@ import org.goldenport.cncf.action.CommandExecutionMode
 import org.goldenport.cncf.context.{ExecutionProfileResolver, IdGenerationContext, ResolvedExecutionProfile, RuntimeClock}
 import org.goldenport.cncf.observability.{DiagnosticPayloadExternalizationConfig, ObservabilityEngine, OpenTelemetryExportConfig}
 import org.goldenport.cncf.blob.BlobStoreConfig
-import org.goldenport.cncf.resource.ResourceUrlPolicy
+import org.goldenport.cncf.resource.{ResourceUrlPolicy, TextusUrnResourcePolicy}
 
 /*
  * @since   Jan. 18, 2026
@@ -56,7 +56,8 @@ final case class RuntimeConfig(
   blobStoreConfig: BlobStoreConfig = BlobStoreConfig(),
   idNamespace: IdGenerationContext.IdNamespace = IdGenerationContext.DefaultNamespace,
   executionProfile: ResolvedExecutionProfile = RuntimeConfig.DEFAULT_EXECUTION_PROFILE,
-  resourceUrlPolicy: ResourceUrlPolicy = ResourceUrlPolicy()
+  resourceUrlPolicy: ResourceUrlPolicy = ResourceUrlPolicy(),
+  textusUrnResourcePolicy: TextusUrnResourcePolicy = TextusUrnResourcePolicy()
 ) {
   def executionClock: RuntimeClock = executionProfile.runtimeClock
 }
@@ -309,6 +310,8 @@ object RuntimeConfig {
   val RuntimeResourceUrlFileRootsKey = "textus.runtime.resource.url.file.roots"
   val ResourceUrlHttpsHostsKey = "textus.resource.url.https.hosts"
   val RuntimeResourceUrlHttpsHostsKey = "textus.runtime.resource.url.https.hosts"
+  val ResourceTextusUrnFileRootsKey = "textus.resource.urn.textus.file-roots"
+  val RuntimeResourceTextusUrnFileRootsKey = "textus.runtime.resource.urn.textus.file-roots"
 
   val DefaultServerEmulatorBaseUrl = "http://localhost/"
   val DefaultHttpDriverName = "real"
@@ -357,7 +360,8 @@ object RuntimeConfig {
       blobStoreConfig = BlobStoreConfig(),
       idNamespace = DefaultIdNamespace,
       executionProfile = DEFAULT_EXECUTION_PROFILE,
-      resourceUrlPolicy = ResourceUrlPolicy()
+      resourceUrlPolicy = ResourceUrlPolicy(),
+      textusUrnResourcePolicy = TextusUrnResourcePolicy()
     )
 
   def from(
@@ -431,6 +435,7 @@ object RuntimeConfig {
       _static_form_app_renderer_config(configuration)
     val blobstoreconfig = BlobStoreConfig.fromConfiguration(configuration)
     val resourceurlpolicy = _resource_url_policy(configuration)
+    val textusurnresourcepolicy = _textus_urn_resource_policy(configuration)
     val idnamespace = _id_namespace(configuration)
     val executionprofile = profileoverride.getOrElse(_execution_profile(configuration, operationmode))
     val weboperationdispatcher =
@@ -495,7 +500,8 @@ object RuntimeConfig {
       blobStoreConfig = blobstoreconfig,
       idNamespace = idnamespace,
       executionProfile = executionprofile,
-      resourceUrlPolicy = resourceurlpolicy
+      resourceUrlPolicy = resourceurlpolicy,
+      textusUrnResourcePolicy = textusurnresourcepolicy
     )
     _validate(config)
     config
@@ -711,6 +717,17 @@ object RuntimeConfig {
         throw conclusion.getException.getOrElse(new IllegalArgumentException(conclusion.display))
     }
 
+  private def _textus_urn_resource_policy(
+    configuration: ResolvedConfiguration
+  ): TextusUrnResourcePolicy =
+    TextusUrnResourcePolicy.fromValuesC(
+      _split_csv(_get_string(configuration, ResourceTextusUrnFileRootsKey))
+    ) match {
+      case Consequence.Success(value) => value
+      case Consequence.Failure(conclusion) =>
+        throw conclusion.getException.getOrElse(new IllegalArgumentException(conclusion.display))
+    }
+
   private def _execution_profile(
     configuration: ResolvedConfiguration,
     operationmode: OperationMode
@@ -845,6 +862,7 @@ object RuntimeConfig {
         case BlobMaxByteSizeKey => Vector(RuntimeBlobMaxByteSizeKey)
         case ResourceUrlFileRootsKey => Vector(RuntimeResourceUrlFileRootsKey)
         case ResourceUrlHttpsHostsKey => Vector(RuntimeResourceUrlHttpsHostsKey)
+        case ResourceTextusUrnFileRootsKey => Vector(RuntimeResourceTextusUrnFileRootsKey)
         case _ => Vector.empty
       }
     val cncfaliases =

@@ -121,6 +121,52 @@ final class RuntimeConfigSpec extends AnyWordSpec with Matchers with GivenWhenTh
       thrown.getMessage should include ("textus.resource.url.file.roots")
     }
 
+    "parse Textus URN namespace root configuration and aliases" in {
+      Given("runtime and CNCF aliases for logical Textus namespace roots")
+      val runtimeconfiguration = ResolvedConfiguration(
+        Configuration(Map(
+          RuntimeConfig.RuntimeResourceTextusUrnFileRootsKey -> ConfigurationValue.StringValue("book=/tmp/books,paper=/tmp/papers")
+        )),
+        ConfigurationTrace.empty
+      )
+      val cncfconfiguration = ResolvedConfiguration(
+        Configuration(Map(
+          "cncf.resource.urn.textus.file-roots" -> ConfigurationValue.StringValue("web=/tmp/web")
+        )),
+        ConfigurationTrace.empty
+      )
+
+      When("the runtime configuration is resolved")
+      val runtimeconfig = RuntimeConfig.from(runtimeconfiguration)
+      val cncfconfig = RuntimeConfig.from(cncfconfiguration)
+
+      Then("only logical namespace to root bindings are retained")
+      runtimeconfig.textusUrnResourcePolicy.normalizedFileRoots.map { case (namespace, root) =>
+        namespace -> root.toString
+      } shouldBe Map("book" -> "/tmp/books", "paper" -> "/tmp/papers")
+      cncfconfig.textusUrnResourcePolicy.normalizedFileRoots.map { case (namespace, root) =>
+        namespace -> root.toString
+      } shouldBe Map("web" -> "/tmp/web")
+    }
+
+    "reject invalid Textus URN namespace root configuration deterministically" in {
+      Given("a namespace binding without an absolute root")
+      val configuration = ResolvedConfiguration(
+        Configuration(Map(
+          RuntimeConfig.ResourceTextusUrnFileRootsKey -> ConfigurationValue.StringValue("book=relative/books")
+        )),
+        ConfigurationTrace.empty
+      )
+
+      When("the runtime configuration is resolved")
+      val thrown = intercept[IllegalArgumentException] {
+        RuntimeConfig.from(configuration)
+      }
+
+      Then("configuration fails before a Textus URN provider is installed")
+      thrown.getMessage should include ("textus.resource.urn.textus.file-roots")
+    }
+
     "parse id namespace configuration and aliases" in {
       val configuration = ResolvedConfiguration(
         Configuration(Map(
