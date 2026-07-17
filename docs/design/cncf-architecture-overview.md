@@ -29,6 +29,11 @@ Subsystem
     Service
       Operation
 
+Component runtime capabilities for reusable component code are defined in
+`docs/design/component-runtime-boundary-capabilities.md`. The corresponding
+behavioral contract is
+`docs/spec/component-runtime-boundary-capabilities.md`.
+
 ## Subsystem Construction
 
 Subsystem construction is performed from resolved Components.

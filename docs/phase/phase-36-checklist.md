@@ -5,15 +5,15 @@ This checklist is the Phase 36 state ledger. The summary dashboard is
 
 ## RB-01: Contract Audit and Scope Freeze
 
-Status: IN_PROGRESS
+Status: DONE
 
-- [ ] Inventory reusable Phase 31 execution-time contracts.
-- [ ] Inventory Phase 33 resource-read contracts and identify tree gaps.
-- [ ] Inventory Phase 34/35 Process Execution input, WorkArea, and lifecycle
+- [x] Inventory reusable Phase 31 execution-time contracts.
+- [x] Inventory Phase 33 resource-read contracts and identify tree gaps.
+- [x] Inventory Phase 34/35 Process Execution input, WorkArea, and lifecycle
   contracts, including concurrent fixed-input work.
-- [ ] Freeze typed configuration, secret-reference, resource-tree, and process
+- [x] Freeze typed configuration, secret-reference, resource-tree, and process
   materialization responsibilities without application-specific types.
-- [ ] Promote settled decisions to normative design/spec documents.
+- [x] Promote settled decisions to normative design/spec documents.
 
 ## RB-02: Component Execution-Time Contract
 

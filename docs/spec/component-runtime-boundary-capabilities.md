@@ -1,0 +1,109 @@
+# Component Runtime Boundary Capabilities
+
+Status: normative static contract
+
+Architectural context is described in
+`docs/design/component-runtime-boundary-capabilities.md`.
+
+## Scope
+
+This specification defines the component-visible runtime capability boundary
+for execution time, declared configuration, secrets, read-only resource trees,
+and Process Execution tree inputs. It complements, and does not replace,
+`docs/spec/resource-reference-dsl.md` and
+`docs/spec/process-execution-runtime.md`.
+
+## Capability Source (R1)
+
+Every component-visible operational capability MUST be supplied through the
+bound `ExecutionContext` or a protected internal DSL operation derived from
+it. A reusable component MUST NOT use ambient JVM or operating-system state to
+obtain time, configuration, credentials, filesystem paths, resource roots,
+network handles, executable locations, or process handles.
+
+## Execution Time (R2)
+
+Component-observable execution time MUST be sourced from the clock bound to
+`ExecutionContext`. The protected internal DSL is the component access path.
+An implementation MUST NOT fall back to a host clock when an execution context
+is bound. Monotonic duration measurement remains distinct from business time.
+
+## Declared Typed Configuration (R3)
+
+Component configuration MUST be declared by a typed
+`ComponentConfigurationKey[A]` and obtained through
+`ComponentConfigurationAccess`. The declaration includes key identity,
+decoder, required-or-optional semantics, and confidentiality classification.
+Undeclared lookup is not a component runtime configuration operation.
+
+A required missing value, malformed value, or policy-denied value MUST return
+a structured `Consequence.Failure(Conclusion)`. A component configuration
+result MUST provide a provenance category without exposing an unrelated raw
+configuration source or confidential value.
+
+## Configuration Precedence (R4)
+
+The runtime resolves declared configuration according to explicit component,
+subsystem, and runtime precedence. Operation parameters, request properties,
+and arbitrary properties MUST NOT override a protected declared value. A
+component may not re-resolve configuration from system properties, environment
+variables, or configuration files.
+
+## Opaque Secret References (R5)
+
+`SecretReference` is an opaque component-visible value. It MUST NOT expose a
+secret value accessor, provider handle, physical location, credential bytes, or
+credential text. Only an authorized runtime-owned provider or driver may
+resolve a secret value, and that value MUST NOT be returned through the normal
+component runtime API or diagnostics.
+
+## Admitted Read-only Resource Trees (R6)
+
+`ResourceTreeReference` identifies a named logical resource tree.
+`ResourceTreeAccess` returns an immutable `ResourceTreeSnapshot` with
+deterministically ordered `ResourceTreeEntry` values subject to declared
+`ResourceTreeLimits`. The public values MUST NOT expose a physical root, host
+`Path`, provider handle, credential, or mutable directory operation.
+
+The runtime binds a tree identity to a provider and enforces unknown-tree,
+traversal, symlink, depth, entry-count, per-file-byte, and aggregate-byte
+failures before it returns a snapshot. These failures MUST be normal structured
+`Consequence.Failure(Conclusion)` values.
+
+## Single-resource Compatibility (R7)
+
+`ResourceAccess` remains a single logical content-read capability. It MUST NOT
+gain directory enumeration or resource-tree semantics. A resource tree is a
+separate capability and does not change existing `ResourceReference` or
+`ResourceContent` semantics.
+
+## Process Execution Tree Input (R8)
+
+`ProcessExecutionResourceTreeInput` represents only an admitted logical tree
+snapshot and a WorkArea-relative materialization target. It MUST NOT accept a
+component-selected host path. Fixed `ProcessExecutionInputFile` values remain
+bounded caller-supplied bytes and are not interchangeable with tree inputs.
+
+Process Execution admission MUST validate the logical tree identity against
+the selected program capability before materialization. The runtime performs
+materialization inside the owned WorkArea after admission. Request-level limits
+may narrow but MUST NOT widen runtime, tree, grant, or program limits.
+
+## Lifecycle And Diagnostics (R9)
+
+Materialized trees are WorkArea resources. UnitOfWork terminal cleanup MUST
+reclaim them on success, failure, timeout, cancellation, abort, rollback, and
+explicit dispose according to `docs/spec/process-execution-runtime.md`.
+
+Diagnostics MAY contain safe logical identities, provenance categories, count,
+size, limit, and WorkArea-relative target metadata. Diagnostics MUST NOT
+contain configuration values, secret references or values, physical roots,
+resource-tree content, host paths, provider handles, or credentials.
+
+## Deterministic Executable Evidence (R10)
+
+Each capability implementation MUST have deterministic executable
+specification coverage using an explicit in-memory or fake runtime provider.
+The evidence MUST prove that component code cannot bypass the capability
+boundary through an ambient host dependency. Live external tools, production
+secret managers, and host-specific directories are not required evidence.

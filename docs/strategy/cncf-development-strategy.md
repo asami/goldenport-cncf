@@ -2314,7 +2314,9 @@ Active in Phase 36 (Jul. 17, 2026).
   - document the provider-neutral external-tool integration pattern and
     prepare a separate CBD Support migration handoff.
 - First implementation direction:
-  - audit and freeze the existing capability boundaries before adding APIs;
+  - RB-01 has audited and frozen the existing capability boundaries in
+    `docs/design/component-runtime-boundary-capabilities.md` and
+    `docs/spec/component-runtime-boundary-capabilities.md` before adding APIs;
   - keep fixed bounded Process Execution files distinct from admitted tree
     provenance;
   - provide deterministic in-memory/fake configuration, resource-tree, and
