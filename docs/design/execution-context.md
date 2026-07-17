@@ -36,6 +36,25 @@ Constraints:
 - core ExecutionContext.Core and SystemContext are parallel layers.
 - Action ExecutionContext is the sole merge point.
 
+## Component Runtime Capability Use
+
+Component behavior observes operational time only through the bound Action
+ExecutionContext and protected ActionCall helpers such as `current_instant`.
+It MUST NOT create a host clock, read host environment state, or infer an
+execution instant independently. A controlled clock is selected by runtime/test
+assembly before the ActionCall is bound; component behavior receives no control
+for advancing that clock.
+
+The same Action ExecutionContext is the component-facing entry point for
+logical resource reads and named resource-tree snapshots. Declared component
+configuration and Process Execution use protected ActionCall helpers derived
+from this bound context. A component therefore receives logical values and
+admitted snapshots, never a host configuration bag, physical root, process
+handle, or executable location.
+
+The complete component runtime-boundary contract is defined in
+`docs/design/component-runtime-boundary-capabilities.md`.
+
 ## Admin system ping (runtime introspection)
 
 The `admin.system.ping` operation provides minimal runtime

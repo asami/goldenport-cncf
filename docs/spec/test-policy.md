@@ -94,6 +94,23 @@ should use `ResourceAccessTestProfile` through
 deterministic in-memory URL, Textus URN, and external URN providers; tests must
 not substitute host files or direct network clients for this surface.
 
+Component runtime-boundary tests use explicit deterministic fixtures:
+
+- declared configuration through test descriptor component/subsystem/runtime
+  configuration or `ComponentConfigurationSources` in a focused specification;
+- secret tests assert opaque `SecretReference` behavior and must not use a real
+  credential value or provider;
+- tree tests install `ResourceTreeAccess.inMemory(...)` through
+  `ExecutionContext.withResourceTreeAccess` and assert limits/traversal policy;
+- Process Execution tests use `ProcessExecutionTestProfile` and admitted
+  logical snapshots/WorkArea-relative targets rather than a host process or
+  developer directory.
+
+Tests must prove that request/action properties do not override declared
+component configuration and that an unadmitted tree or path never reaches a
+Process Execution driver. A live external tool is integration evidence only;
+it is not required for the framework executable specification.
+
 Test-owned datastore replacement should use logical CNCF datastore keys:
 
   runtime.datastore.type/path

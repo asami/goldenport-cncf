@@ -87,13 +87,13 @@ Status: DONE
 
 ## RB-08: Documentation and Developer Guidance
 
-Status: OPEN
+Status: DONE
 
-- [ ] Update execution-context and configuration design documents.
-- [ ] Update resource-reference and Process Execution specifications.
-- [ ] Update component developer guidance and test policy.
-- [ ] Record safe configuration, secret, tree, and external-tool examples.
-- [ ] Prepare the separately scoped CBD Support migration handoff.
+- [x] Update execution-context and configuration design documents.
+- [x] Update resource-reference and Process Execution specifications.
+- [x] Update component developer guidance and test policy.
+- [x] Record safe configuration, secret, tree, and external-tool examples.
+- [x] Prepare the separately scoped CBD Support migration handoff.
 
 ## RB-09: Verification and Closure
 

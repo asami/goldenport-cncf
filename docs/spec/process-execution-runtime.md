@@ -119,6 +119,14 @@ A runtime-materialized input file is admitted by logical name, bounded before
 write, materialized by CNCF before launch, and removed with the WorkArea. It is
 not an unrestricted provider-controlled host file.
 
+An admitted resource tree is represented by
+`ProcessExecutionResourceTreeInput`. It is created from an opaque,
+runtime-admitted `ResourceTreeSnapshot`, a validated WorkArea-relative target,
+and limits no broader than the snapshot limits. Program definition and grant
+policy MUST approve the tree identity and may narrow its limits before
+materialization. Components MUST NOT substitute a host path, forge a snapshot,
+or materialize the tree outside the UnitOfWork-owned WorkArea.
+
 A materialized input path MUST NOT equal the effective WorkArea path of a
 declared output. Admission rejects the collision before input materialization,
 so caller-supplied bytes cannot be projected as process output without a

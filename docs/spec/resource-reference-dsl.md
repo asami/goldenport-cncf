@@ -49,6 +49,26 @@ The model has no write, delete, list, scan, cache, credential, provider,
 filesystem, network, or classpath operation. Components must use this boundary
 for managed-resource reads rather than calling Java filesystem or network APIs.
 
+## Separate Resource Tree Contract
+
+`ResourceReference` is a single-resource identity and does not model a
+directory or collection. `ResourceTreeReference` and `ResourceTreeAccess` are
+the separate CNCF capability for named, read-only tree snapshots. A snapshot is
+runtime-admitted, immutable, deterministically ordered, and bounded by depth,
+entry count, per-file byte size, and aggregate byte size.
+
+The public snapshot contains logical relative entries only. It MUST NOT expose
+a physical root, `Path`, symbolic-link target, or host traversal capability.
+Unknown trees, unsafe entries, symbolic links in the local provider, and limit
+violations fail before a component can use the tree.
+
+For an admitted external-tool invocation, a component may construct
+`ProcessExecutionResourceTreeInput` only through
+`createC(snapshot, workAreaRelativeTarget, requestedLimits)`. The snapshot
+must already be admitted; requested limits may only tighten it. Program and
+grant policy revalidate that input before the UnitOfWork-owned Process Execution
+WorkArea materializes it. This does not add a general directory read/list API.
+
 ## Text And Failure Semantics
 
 Text decoding is strict: malformed or unmappable bytes are a structured

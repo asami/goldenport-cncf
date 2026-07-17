@@ -76,6 +76,27 @@ configuration rejects `textus` bindings. This preserves the standard Textus
 resource grammar as a CNCF-owned contract while allowing explicitly installed
 future NIDs to evolve behind the same `ExecutionContext.resources` DSL.
 
+## Admitted Resource Trees
+
+`ResourceReference` and `ResourceAccess` remain single-resource read
+contracts. A component that needs a bounded directory-like input uses the
+separate `ResourceTreeReference` and `ResourceTreeAccess` capability through
+protected `read_resource_tree`. The result is an immutable,
+deterministically-ordered `ResourceTreeSnapshot` with logical entries and
+admitted limits; it does not expose a physical root or general filesystem API.
+
+The component may request tighter limits but cannot broaden the admitted
+snapshot. A snapshot can become Process Execution input only through
+`ProcessExecutionResourceTreeInput.createC(snapshot, target, limits)`, where
+`target` is a validated WorkArea-relative path. Process Execution admission
+then applies program and grant limits before the UnitOfWork interpreter
+materializes the tree in its owned WorkArea. No component/request host path can
+be converted into a tool input.
+
+Resource-tree access is distinct from `ResourceAccess`: it is not a listing
+extension, does not provide mutable filesystem access, and does not change URI
+provider semantics.
+
 ## Test and Observability Boundary
 
 `ResourceAccessTestProfile` is a deterministic test-owned composition surface.

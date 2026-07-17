@@ -2,7 +2,7 @@
 
 Stage Status:
 - Current status: IN_PROGRESS
-- Current step: RB-08 Documentation and developer guidance
+- Current step: RB-09 Verification and closure
 - Owner: Phase 36 Component Runtime Boundary Capabilities
 - Update rule: Update this block and `phase-36-checklist.md` whenever a stable
   work-item state changes. Close the phase only when every in-scope checklist
@@ -74,7 +74,7 @@ CAR Review, and application-specific models.
 - E (DONE): RB-05 - Implement admitted read-only resource trees.
 - F (DONE): RB-06 - Materialize admitted trees into Process WorkAreas.
 - G (DONE): RB-07 - Verify the provider-neutral external-tool pattern.
-- H (OPEN): RB-08 - Update design/spec/developer documentation.
+- H (DONE): RB-08 - Update design/spec/developer documentation.
 - I (OPEN): RB-09 - Run full verification, prepare the CBD handoff, and close
   Phase 36.
 
@@ -126,8 +126,8 @@ contracts.
 
 RB-01 has promoted the Phase 36 capability boundary to
 `docs/design/component-runtime-boundary-capabilities.md` and
-`docs/spec/component-runtime-boundary-capabilities.md`. RB-02 through RB-07
-are complete; RB-08 and RB-09 remain open. The static contract reflects
+`docs/spec/component-runtime-boundary-capabilities.md`. RB-02 through RB-08
+are complete; RB-09 remains open. The static contract reflects
 only APIs backed by executable specifications.
 
 RB-02 has confirmed the existing clock boundary through
@@ -167,3 +167,10 @@ Runtime program definitions own fixed command templates and validated fixed
 environment bindings; component requests remain logical and bounded. A
 deterministic fake driver and test-local adapter prove that all Process terminal
 results, including non-zero exits, remain distinct until provider conversion.
+
+RB-08 has promoted the component runtime-boundary use path to execution,
+configuration, resource-reference, Process Execution, developer, and test
+policy documentation. `ProcessExecutionResourceTreeInput.createC` is the
+documented composition point from an opaque admitted tree to an admitted
+WorkArea-relative tool input. Phase 37 records the separately owned CBD Support
+adoption handoff without changing CNCF provider neutrality.

@@ -156,6 +156,14 @@ Before CBD Support migrates, CNCF should demonstrate:
 5. Re-run CBD Support CAR lint and record which ambient-boundary warnings are
    resolved; the first released CAR ABI baseline remains a separate task.
 
+## Planning Annotation (Jul. 17, 2026)
+
+Phase 37, `Downstream Runtime Boundary Adoption`, is now the planned CNCF
+coordination record for the migration described here. It starts only after
+Phase 36 closes and is owned by the CBD Support downstream implementation. The
+phase does not change this handoff's non-normative status or add CBD Support,
+Cozy, CAR Review, or CAR ABI types to CNCF.
+
 ## References
 
 - `textus-cbd-support/docs/strategy/textus-cbd-support-development-strategy.md`

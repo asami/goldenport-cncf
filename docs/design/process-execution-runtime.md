@@ -110,6 +110,13 @@ allocated from the active scope. CNCF owns input materialization, working
 directory selection, output allocation, real-path verification, artifact
 collection, quota enforcement, and cleanup.
 
+An admitted resource tree reaches this boundary as a
+`ProcessExecutionResourceTreeInput` created from an opaque
+`ResourceTreeSnapshot` and a WorkArea-relative target. The component can
+request a narrower tree limit, but cannot name a host root or materialize the
+tree itself. Program admission and the component/provider grant both restrict
+the tree before the UnitOfWork interpreter copies it into the WorkArea.
+
 Callers may select only normalized relative paths under that WorkArea. A
 declared output path is relative to the selected working directory, or the
 WorkArea root when no working directory is selected. Path traversal, symlink

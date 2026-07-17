@@ -77,6 +77,11 @@ Use these when writing or reviewing generated/handwritten logic:
   - Internal DSL design and use.
 - `docs/notes/unitofwork-guideline.md`
   - UoW boundary, persistence behavior, and consistency expectations.
+- `docs/design/component-runtime-boundary-capabilities.md`
+  - Declared configuration, opaque secret references, admitted resource trees,
+    and provider-neutral external-tool input boundaries.
+- `docs/spec/component-runtime-boundary-capabilities.md`
+  - Normative component-facing capability and executable-evidence contract.
 - `docs/design/process-execution-runtime.md`
   - Capability-constrained external program effects. Provider code submits a
     logical request through protected `process_exec`; runtime assembly owns the

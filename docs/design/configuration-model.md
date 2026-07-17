@@ -241,6 +241,38 @@ Properties:
 - No side effects
 - No cascading construction
 
+### Declared Component Runtime Configuration
+
+Raw configuration remains an assembly/runtime concern. Component behavior uses
+`ComponentConfigurationKey[A]` and the protected
+`component_configuration(key)` helper to request a declared, typed value. A
+key fixes its requirement, decoder, and confidentiality before a request is
+handled.
+
+The runtime resolves one declared key in this order:
+
+```text
+component configuration -> subsystem configuration -> runtime configuration
+```
+
+The result contains the typed optional value and safe provenance. Action
+properties, request parameters, and arbitrary configuration lookups cannot
+override the declaration. Missing required values, invalid formats, and
+confidential-value requests are structured `Consequence` failures.
+
+Public values use string, integer, boolean, or a caller-supplied typed decoder.
+Secret-valued declarations use `requiredSecretReference` or
+`optionalSecretReference`; component behavior receives only an opaque
+`SecretReference`. It cannot resolve or display the credential value. A
+runtime-owned provider or driver may resolve a reference only at its authorized
+boundary.
+
+`test.yaml` and `test.json` are explicit test assembly overlays. They may
+supply deterministic values for declared keys, but are not auto-loaded and do
+not turn action/request input into configuration authority. See
+`docs/spec/component-runtime-boundary-capabilities.md` for the normative
+component boundary and `docs/spec/test-policy.md` for test use.
+
 ---
 
 ### Temporal Values and Context

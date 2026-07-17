@@ -121,8 +121,10 @@ at creation time and persist the resolved value.
 
 Examples of preferred helper routes:
 
-- configuration lookup: `config_string`, `config_int`, `config_double`,
-  `config_boolean`;
+- declared runtime configuration: `component_configuration` with a
+  `ComponentConfigurationKey`;
+- operation-input or transitional compatibility lookup: `config_string`,
+  `config_int`, `config_double`, `config_boolean`;
 - structured DSL/config parsing: `parse_dsl_document`;
 - component application datastore selection:
   `use_component_application_datastore`, `component_datastore`;
@@ -153,6 +155,42 @@ Component code should not:
 - call raw `DataStoreSpace` / unrestricted `EntityStoreSpace` from business
   logic.
 
+### Declared Runtime Configuration and External-tool Inputs
+
+Use `component_configuration(key)` for component-owned runtime configuration
+that must not be controlled by operation input. A
+`ComponentConfigurationKey` fixes the expected type, required/optional state,
+and confidentiality before an ActionCall begins. The runtime resolves declared
+values in component, subsystem, then runtime precedence and returns safe
+provenance with the typed result.
+
+Use `config_*` only for an operation-specific setting or an explicitly
+transitional compatibility route. It permits request property precedence and is
+therefore not the canonical route for a protected provider mode, credential
+locator, resource-root policy, or executable policy.
+
+Use `ComponentConfigurationKey.requiredSecretReference` or
+`optionalSecretReference` for credential locators. Component behavior receives
+an opaque `SecretReference`, not the underlying secret. Do not include that
+reference in a response, log, CallTree attribute, or ordinary failure display.
+
+For a bounded external-tool input, use this sequence:
+
+1. obtain a named, admitted snapshot through
+   `read_resource_tree(reference, limits)`;
+2. create `ProcessExecutionResourceTreeInput` with
+   `createC(snapshot, workAreaRelativeTarget, requestedLimits)`;
+3. place that logical input in `ProcessExecutionRequest`; and
+4. call protected `process_exec(request)`.
+
+The runtime owns the executable location, fixed argument template, fixed
+environment bindings, admission grant, WorkArea materialization, cancellation,
+and artifact cleanup. A component may tighten limits but must not broaden
+them. A non-zero process exit remains a neutral terminal result until the
+component/provider adapter interprets it. Never replace this route with a host
+path, `ProcessBuilder`, shell command, raw driver call, or ambient environment
+lookup.
+
 ### Deterministic execution capabilities
 
 Values that enter an operation response, Entity state, Event, Job/Task state,
@@ -166,7 +204,7 @@ capabilities. In handwritten `ActionCall` behavior:
 - use `entity_id`, `collection_entity_id`, or `opaque_id` for generated IDs;
 - represent delay and asynchronous continuation through Job/Event facilities,
   never `Thread.sleep` or an application-created executor;
-- use resolved environment assumptions and `config_*` helpers rather than
+- use declared configuration and bound execution assumptions rather than
   `System.getenv`, `System.getProperty`, or JVM defaults;
 - use CNCF filesystem/datastore/provider boundaries rather than directly
   reading host files that affect component behavior.
@@ -359,6 +397,12 @@ factory entrypoint.
 
 Use `ActionCallFeaturePart` configuration helpers from component logic.
 
+For newly declared component runtime configuration, prefer
+`component_configuration(ComponentConfigurationKey...)` as described above.
+The older `config_*` helpers remain valid for operation-input and compatibility
+cases; their request-property precedence makes them inappropriate for settings
+that must stay runtime-owned.
+
 Current lookup order for `config_string(key)` is:
 
 1. action request property;
@@ -545,8 +589,9 @@ current `ActionCall` context.
 If a delegated component needs provider keys or runtime settings, prefer:
 
 1. explicit operation argument when the operation contract exposes one;
-2. `config_*` helper in the delegated `ActionCall`;
-3. documented transitional compatibility fallback.
+2. `component_configuration` with a declared key in the delegated
+   `ActionCall`;
+3. `config_*` only for a documented transitional compatibility fallback.
 
 ## SPI Usage
 
@@ -757,7 +802,9 @@ Before accepting component implementation code, check:
 
 - Does handwritten logic express domain intent rather than persistence or
   runtime mechanics?
-- Are configuration values obtained through `config_*` helpers?
+- Are protected runtime settings obtained through declared
+  `component_configuration` keys, with `config_*` limited to operation input
+  or explicit compatibility behavior?
 - Is structured DSL parsing done through `parse_dsl_document`?
 - Is component-local durable user data accessed through
   `embedded_datastore_*` helpers?
