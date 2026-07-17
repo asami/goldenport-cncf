@@ -15,11 +15,10 @@ This directory does **not** contain design details or thinking processes.
 
 Current baseline:
 
-- Active phase: `phase-33.md` - Resource Reference DSL and URN Provider
-  Resolution.
-- Active checklist: `phase-33-checklist.md`.
-- Latest closed phase: `phase-32.md`
-- Latest closed checklist: `phase-32-checklist.md`
+- Active phase: `phase-36.md` - Component Runtime Boundary Capabilities.
+- Active checklist: `phase-36-checklist.md`.
+- Latest closed phase: `phase-35.md`
+- Latest closed checklist: `phase-35-checklist.md`
 - Latest post-closure maintenance: Jul. 13, 2026 CNCF I18N
   `display-safe-v1` text normalization API and executable specification on the
   `0.5.1-SNAPSHOT` development line.
@@ -52,6 +51,9 @@ Current baseline:
   - `phase-30.md`
   - `phase-31.md`
   - `phase-32.md`
+  - `phase-33.md`
+  - `phase-34.md`
+  - `phase-35.md`
 
 ## Related Rules
 

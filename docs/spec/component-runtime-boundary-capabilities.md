@@ -107,3 +107,29 @@ specification coverage using an explicit in-memory or fake runtime provider.
 The evidence MUST prove that component code cannot bypass the capability
 boundary through an ambient host dependency. Live external tools, production
 secret managers, and host-specific directories are not required evidence.
+
+## Examples
+
+### E1: Bound ExecutionContext Clock
+
+A component ActionCall created with a fixed clock in its bound
+`ExecutionContext` observes that clock, its current instant, and its
+context-bound timezone through the protected internal DSL.
+
+### E2: Runtime-controlled ActionCall Clock
+
+A component ActionCall created from a controlled runtime profile observes the
+configured runtime instant through the normal
+`GlobalRuntimeContext -> RuntimeContext -> ExecutionContext` construction
+path.
+
+### E3: Bound Behavior Internal DSL
+
+Behavior created with a bound `ExecutionContext` observes the selected clock
+through protected internal DSL helpers and rejects invalid delay input before
+waiting.
+
+### E4: Controlled Behavior Delay
+
+Behavior under a controlled manual execution profile advances only the
+execution-context-owned clock when it requests a bounded delay.

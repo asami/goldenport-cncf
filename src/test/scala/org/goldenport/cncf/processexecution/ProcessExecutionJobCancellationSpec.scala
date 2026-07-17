@@ -54,124 +54,134 @@ final class ProcessExecutionJobCancellationSpec
 
   "Process Execution Job cancellation" should {
     "E1 propagate active Job cancellation to the registered process handle" must _e1_metadata {
-      Given("Spec: docs/spec/process-execution-runtime.md; Rules: R1; Example: E1; a Job task executing an admitted Process Execution handle")
-      val capability = ProcessCapabilityId.parseC("codex-cli").toOption.get
-      val driver = new BlockingDriver(_result(capability, ProcessExecutionTermination.Cancelled))
-      val context = _context(driver)
-      val engine = createJobEngine()
-      val task = new ProcessTask(_execution(capability))
-      val worker = _submit_sync(engine, task, context)
-      withClue(s"worker=${worker.getState} process failure=${task.failure.map(_.display)}") {
-        driver.awaitentered.await(_process_await_timeout_millis, TimeUnit.MILLISECONDS) shouldBe true
-      }
-      val jobid = task.jobid.getOrElse(fail("missing active Job id"))
-      given ExecutionContext = ExecutionContext.test(SecurityContext.Privilege.ApplicationContentManager)
+      "when an active Job cancellation reaches a registered process" in {
+        Given("Spec: docs/spec/process-execution-runtime.md; Rules: R1; Example: E1; a Job task executing an admitted Process Execution handle")
+        val capability = ProcessCapabilityId.parseC("codex-cli").toOption.get
+        val driver = new BlockingDriver(_result(capability, ProcessExecutionTermination.Cancelled))
+        val context = _context(driver)
+        val engine = createJobEngine()
+        val task = new ProcessTask(_execution(capability))
+        val worker = _submit_sync(engine, task, context)
+        withClue(s"worker=${worker.getState} process failure=${task.failure.map(_.display)}") {
+          driver.awaitentered.await(_process_await_timeout_millis, TimeUnit.MILLISECONDS) shouldBe true
+        }
+        val jobid = task.jobid.getOrElse(fail("missing active Job id"))
+        given ExecutionContext = ExecutionContext.test(SecurityContext.Privilege.ApplicationContentManager)
 
-      When("the Job receives a cancellation control command")
-      engine.control(jobid, JobControlRequest(JobControlCommand.Cancel)).isSuccess shouldBe true
-
-      Then("the handle is signalled once and the Job remains terminally cancelled")
-      awaitCondition(driver.cancelcount.get == 1) shouldBe true
-      awaitStatus(engine, jobid, Set(JobStatus.Cancelled)) shouldBe Some(JobStatus.Cancelled)
-      driver.cancelcount.get shouldBe 1
-      worker.join(_process_await_timeout_millis)
-    }
-
-    "E2 preserve process completion that wins before later Job cancellation" must _e2_metadata {
-      Given("Spec: docs/spec/process-execution-runtime.md; Rules: R2; Example: E2; a Job task whose Process Execution handle has already completed")
-      val capability = ProcessCapabilityId.parseC("codex-cli").toOption.get
-      val driver = new CompletedDriver(_result(capability, ProcessExecutionTermination.Exited(0)))
-      val processcompleted = new CountDownLatch(1)
-      val release = new CountDownLatch(1)
-      val context = _context(driver)
-      val engine = createJobEngine()
-      val task = new ProcessTask(_execution(capability), Some(() => {
-        processcompleted.countDown()
-        release.await(_process_await_timeout_millis, TimeUnit.MILLISECONDS)
-      }))
-      val worker = _submit_sync(engine, task, context)
-      withClue(s"worker=${worker.getState} process failure=${task.failure.map(_.display)}") {
-        processcompleted.await(_process_await_timeout_millis, TimeUnit.MILLISECONDS) shouldBe true
-      }
-      val jobid = task.jobid.getOrElse(fail("missing active Job id"))
-      given ExecutionContext = ExecutionContext.test(SecurityContext.Privilege.ApplicationContentManager)
-
-      When("cancellation arrives after the process completion but before task settlement")
-      try {
+        When("the Job receives a cancellation control command")
         engine.control(jobid, JobControlRequest(JobControlCommand.Cancel)).isSuccess shouldBe true
 
-        Then("the completed handle is not cancelled retroactively")
-        driver.cancelcount.get shouldBe 0
-        driver.completedresult shouldBe Some(driver.result)
-      } finally {
-        release.countDown()
+        Then("the handle is signalled once and the Job remains terminally cancelled")
+        awaitCondition(driver.cancelcount.get == 1) shouldBe true
+        awaitStatus(engine, jobid, Set(JobStatus.Cancelled)) shouldBe Some(JobStatus.Cancelled)
+        driver.cancelcount.get shouldBe 1
         worker.join(_process_await_timeout_millis)
       }
     }
 
+    "E2 preserve process completion that wins before later Job cancellation" must _e2_metadata {
+      "when cancellation arrives after process completion" in {
+        Given("Spec: docs/spec/process-execution-runtime.md; Rules: R2; Example: E2; a Job task whose Process Execution handle has already completed")
+        val capability = ProcessCapabilityId.parseC("codex-cli").toOption.get
+        val driver = new CompletedDriver(_result(capability, ProcessExecutionTermination.Exited(0)))
+        val processcompleted = new CountDownLatch(1)
+        val release = new CountDownLatch(1)
+        val context = _context(driver)
+        val engine = createJobEngine()
+        val task = new ProcessTask(_execution(capability), Some(() => {
+          processcompleted.countDown()
+          release.await(_process_await_timeout_millis, TimeUnit.MILLISECONDS)
+        }))
+        val worker = _submit_sync(engine, task, context)
+        withClue(s"worker=${worker.getState} process failure=${task.failure.map(_.display)}") {
+          processcompleted.await(_process_await_timeout_millis, TimeUnit.MILLISECONDS) shouldBe true
+        }
+        val jobid = task.jobid.getOrElse(fail("missing active Job id"))
+        given ExecutionContext = ExecutionContext.test(SecurityContext.Privilege.ApplicationContentManager)
+
+        When("cancellation arrives after the process completion but before task settlement")
+        try {
+          engine.control(jobid, JobControlRequest(JobControlCommand.Cancel)).isSuccess shouldBe true
+
+          Then("the completed handle is not cancelled retroactively")
+          driver.cancelcount.get shouldBe 0
+          driver.completedresult shouldBe Some(driver.result)
+        } finally {
+          release.countDown()
+          worker.join(_process_await_timeout_millis)
+        }
+      }
+    }
+
     "E3 cancel and reap an active process when its UnitOfWork aborts" must _e3_metadata {
-      Given("Spec: docs/spec/process-execution-runtime.md; Rules: R3; Example: E3; a direct UnitOfWork Process Execution operation with an active handle")
-      val capability = ProcessCapabilityId.parseC("codex-cli").toOption.get
-      val driver = new BlockingDriver(_result(capability, ProcessExecutionTermination.Cancelled))
-      val context = _context(driver)
-      val uow = new UnitOfWork(context)
-      @volatile var result = Option.empty[Consequence[ProcessExecutionResult]]
-      val worker = new Thread(() => {
-        result = Some(new UnitOfWorkInterpreter(uow).interpret(UnitOfWorkOp.ProcessExec(_execution(capability))))
-      })
-      worker.start()
-      driver.awaitentered.await(_process_await_timeout_millis, TimeUnit.MILLISECONDS) shouldBe true
+      "when an owning UnitOfWork aborts an active process" in {
+        Given("Spec: docs/spec/process-execution-runtime.md; Rules: R3; Example: E3; a direct UnitOfWork Process Execution operation with an active handle")
+        val capability = ProcessCapabilityId.parseC("codex-cli").toOption.get
+        val driver = new BlockingDriver(_result(capability, ProcessExecutionTermination.Cancelled))
+        val context = _context(driver)
+        val uow = new UnitOfWork(context)
+        @volatile var result = Option.empty[Consequence[ProcessExecutionResult]]
+        val worker = new Thread(() => {
+          result = Some(new UnitOfWorkInterpreter(uow).interpret(UnitOfWorkOp.ProcessExec(_execution(capability))))
+        })
+        worker.start()
+        driver.awaitentered.await(_process_await_timeout_millis, TimeUnit.MILLISECONDS) shouldBe true
 
-      When("the owning UnitOfWork aborts before process completion")
-      val aborted = uow.abort()
+        When("the owning UnitOfWork aborts before process completion")
+        val aborted = uow.abort()
 
-      Then("the resource lifecycle cancels, awaits, and removes the active process")
-      aborted.isSuccess shouldBe true
-      worker.join(_process_await_timeout_millis)
-      worker.isAlive shouldBe false
-      driver.cancelcount.get shouldBe 1
-      result.flatMap(_.toOption) shouldBe Some(driver.result)
+        Then("the resource lifecycle cancels, awaits, and removes the active process")
+        aborted.isSuccess shouldBe true
+        worker.join(_process_await_timeout_millis)
+        worker.isAlive shouldBe false
+        driver.cancelcount.get shouldBe 1
+        result.flatMap(_.toOption) shouldBe Some(driver.result)
+      }
     }
 
     "E4 retain UnitOfWork ownership when initial process await fails" must _e4_metadata {
-      Given("Spec: docs/spec/process-execution-runtime.md; Rules: R4; Example: E4; a process handle whose initial await fails before terminal completion")
-      val capability = ProcessCapabilityId.parseC("codex-cli").toOption.get
-      val driver = new FailingAwaitDriver(_result(capability, ProcessExecutionTermination.Cancelled))
-      val uow = new UnitOfWork(_context(driver))
+      "when initial process await fails before UnitOfWork abort" in {
+        Given("Spec: docs/spec/process-execution-runtime.md; Rules: R4; Example: E4; a process handle whose initial await fails before terminal completion")
+        val capability = ProcessCapabilityId.parseC("codex-cli").toOption.get
+        val driver = new FailingAwaitDriver(_result(capability, ProcessExecutionTermination.Cancelled))
+        val uow = new UnitOfWork(_context(driver))
 
-      When("the initial await fails and the owning UnitOfWork subsequently aborts")
-      val execution = new UnitOfWorkInterpreter(uow).interpret(UnitOfWorkOp.ProcessExec(_execution(capability)))
-      execution.isSuccess shouldBe false
-      val root = driver.workarearoot.getOrElse(fail("missing Process Execution WorkArea"))
-      Files.exists(root) shouldBe true
-      val aborted = uow.abort()
+        When("the initial await fails and the owning UnitOfWork subsequently aborts")
+        val execution = new UnitOfWorkInterpreter(uow).interpret(UnitOfWorkOp.ProcessExec(_execution(capability)))
+        execution.isSuccess shouldBe false
+        val root = driver.workarearoot.getOrElse(fail("missing Process Execution WorkArea"))
+        Files.exists(root) shouldBe true
+        val aborted = uow.abort()
 
-      Then("the UnitOfWork still cancels, reaps, and closes the registered process resource")
-      aborted.isSuccess shouldBe true
-      driver.cancelcount.get shouldBe 1
-      driver.awaitcount.get shouldBe 2
-      Files.exists(root) shouldBe false
+        Then("the UnitOfWork still cancels, reaps, and closes the registered process resource")
+        aborted.isSuccess shouldBe true
+        driver.cancelcount.get shouldBe 1
+        driver.awaitcount.get shouldBe 2
+        Files.exists(root) shouldBe false
+      }
     }
 
     "E5 continue process reaping when cancellation reports failure" must _e5_metadata {
-      Given("Spec: docs/spec/process-execution-runtime.md; Rules: R4; Example: E5; an owned process whose cancellation reports failure")
-      val capability = ProcessCapabilityId.parseC("codex-cli").toOption.get
-      val driver = new FailingAwaitDriver(
-        _result(capability, ProcessExecutionTermination.Cancelled),
-        failcancel = true
-      )
-      val uow = new UnitOfWork(_context(driver))
-      new UnitOfWorkInterpreter(uow).interpret(UnitOfWorkOp.ProcessExec(_execution(capability))).isSuccess shouldBe false
-      val root = driver.workarearoot.getOrElse(fail("missing Process Execution WorkArea"))
+      "when process cancellation reports a failure during reaping" in {
+        Given("Spec: docs/spec/process-execution-runtime.md; Rules: R4; Example: E5; an owned process whose cancellation reports failure")
+        val capability = ProcessCapabilityId.parseC("codex-cli").toOption.get
+        val driver = new FailingAwaitDriver(
+          _result(capability, ProcessExecutionTermination.Cancelled),
+          failcancel = true
+        )
+        val uow = new UnitOfWork(_context(driver))
+        new UnitOfWorkInterpreter(uow).interpret(UnitOfWorkOp.ProcessExec(_execution(capability))).isSuccess shouldBe false
+        val root = driver.workarearoot.getOrElse(fail("missing Process Execution WorkArea"))
 
-      When("the UnitOfWork reclaims the process resource")
-      val aborted = uow.abort()
+        When("the UnitOfWork reclaims the process resource")
+        val aborted = uow.abort()
 
-      Then("the cancellation failure is retained but await and WorkArea cleanup still complete")
-      aborted.isSuccess shouldBe false
-      driver.cancelcount.get shouldBe 1
-      driver.awaitcount.get shouldBe 2
-      Files.exists(root) shouldBe false
+        Then("the cancellation failure is retained but await and WorkArea cleanup still complete")
+        aborted.isSuccess shouldBe false
+        driver.cancelcount.get shouldBe 1
+        driver.awaitcount.get shouldBe 2
+        Files.exists(root) shouldBe false
+      }
     }
   }
 

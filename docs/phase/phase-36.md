@@ -2,7 +2,7 @@
 
 Stage Status:
 - Current status: IN_PROGRESS
-- Current step: RB-02 component execution-time contract
+- Current step: RB-03 declared typed component configuration
 - Owner: Phase 36 Component Runtime Boundary Capabilities
 - Update rule: Update this block and `phase-36-checklist.md` whenever a stable
   work-item state changes. Close the phase only when every in-scope checklist
@@ -68,8 +68,8 @@ CAR Review, and application-specific models.
 ## 5. Active Work Stack
 
 - A (DONE): RB-01 - Audit existing contracts and freeze Phase 36 scope.
-- B (IN PROGRESS): RB-02 - Confirm the component execution-time contract.
-- C (OPEN): RB-03 - Implement declared typed component configuration.
+- B (DONE): RB-02 - Confirm the component execution-time contract.
+- C (IN PROGRESS): RB-03 - Implement declared typed component configuration.
 - D (OPEN): RB-04 - Implement the opaque secret-reference boundary.
 - E (OPEN): RB-05 - Implement admitted read-only resource trees.
 - F (OPEN): RB-06 - Materialize admitted trees into Process WorkAreas.
@@ -129,3 +129,7 @@ RB-01 has promoted the Phase 36 capability boundary to
 `docs/spec/component-runtime-boundary-capabilities.md`. RB-02 through RB-06
 remain implementation work; the new static contract does not claim those APIs
 are available before their executable specifications are completed.
+
+RB-02 has confirmed the existing clock boundary through
+`ExecutionClockDslSpec`: fixed and controlled runtime clocks reach component
+ActionCalls only through the bound `ExecutionContext` internal DSL.

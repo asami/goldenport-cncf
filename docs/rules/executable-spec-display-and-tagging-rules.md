@@ -105,10 +105,15 @@ This ensures that test output naturally presents
 Executions MUST follow the structure:
 
 ```
-"<spec sentence>" must <afterWord> { ... }
+"<spec sentence>" must <afterWord> {
+  "<executable condition>" in { ... }
+}
 ```
 
-When `afterWord` is applied, `in {}` MUST NOT be used on the same clause.
+`afterWord` supplies descriptive metadata and opens a nested specification
+branch. That branch MUST contain at least one `in {}` executable ScalaTest
+leaf. Omitting the nested `in {}` registers only descriptions and runs zero
+tests.
 
 ### Rule W.3 Sentence Layout
 

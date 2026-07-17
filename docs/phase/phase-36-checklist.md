@@ -17,13 +17,13 @@ Status: DONE
 
 ## RB-02: Component Execution-Time Contract
 
-Status: OPEN
+Status: DONE
 
-- [ ] Specify the existing ExecutionContext clock as the component runtime
+- [x] Specify the existing ExecutionContext clock as the component runtime
   time authority.
-- [ ] Distinguish stable business time from monotonic observability duration.
-- [ ] Prove controlled-profile time through a component-facing internal DSL.
-- [ ] Prove the normal runtime path does not fall back to a host clock.
+- [x] Distinguish stable business time from monotonic observability duration.
+- [x] Prove controlled-profile time through a component-facing internal DSL.
+- [x] Prove the normal runtime path does not fall back to a host clock.
 
 ## RB-03: Declared Typed Component Configuration
 

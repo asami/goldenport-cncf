@@ -83,6 +83,11 @@ Executable specifications cover:
 - propagation from global runtime configuration to component execution;
 - internal DSL access to the injected clock.
 
+`src/test/scala/org/goldenport/cncf/action/ExecutionClockDslSpec.scala`
+demonstrates both a fixed `ExecutionContext` clock and the normal controlled
+runtime-to-ActionCall path. The component runtime boundary rules are
+`R1` and `R2` in `docs/spec/component-runtime-boundary-capabilities.md`.
+
 Operational tests that use virtual time must record both the wall-clock run
 date and the configured CNCF execution date. Virtual time validates runtime
 behavior and date-sensitive flows; it must not be presented as unrecorded
