@@ -63,6 +63,13 @@ validator, or forbidden. A request can set only explicitly overridable names.
 Normal diagnostics may record a safe name category but MUST NOT record an
 environment value.
 
+The initial runtime implementation supports fixed bindings only. A fixed
+binding is validated when the runtime constructs the program definition, held
+outside the component request model, and installed only after the local driver
+clears ambient process environment state. Explicit inheritance, confidential
+resolution, and caller overrides remain deferred until their runtime sources
+and redaction rules are separately specified.
+
 ## Admission Contract
 
 Before a driver starts, CNCF MUST verify all of the following:
@@ -146,6 +153,9 @@ credential, account identity, unrestricted host path, or undeclared file.
 `Exited(nonZero)` is a terminal process result rather than an automatic CNCF
 failure. A provider adapter or domain operation decides how to interpret it.
 Admission and runtime failures remain `Consequence.Failure(Conclusion)` values.
+Provider adapters consume the neutral `ProcessExecutionResult` and map its
+termination to provider/domain outcomes. CNCF does not supply a Cozy-,
+CAR Review-, or application-specific adapter vocabulary.
 
 ## Cancellation And Job Contract
 
@@ -217,7 +227,11 @@ executable specifications:
     terminal path;
 11. normal diagnostics omit confidential process values; and
 12. a provider-style logical request reaches direct and Free DSL execution only
-    through a scoped runtime admission service, without a live external CLI.
+   through a scoped runtime admission service, without a live external CLI.
+13. an explicit deterministic fake driver proves fixed runtime environment,
+    command-template, bounded-input, and declared-output admission; and
+14. provider-local result conversion preserves every Process terminal category
+    until the adapter makes an explicit domain decision.
 
 ## Non-Goals
 

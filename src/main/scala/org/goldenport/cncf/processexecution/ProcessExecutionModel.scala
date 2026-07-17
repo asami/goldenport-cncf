@@ -61,6 +61,37 @@ object ProcessArtifactName {
   }
 }
 
+/** Runtime-owned fixed environment bindings for one admitted program. */
+final class ProcessEnvironment private[processexecution] (
+  private val _values: Map[String, String]
+) {
+  def safeNames: Vector[String] = _values.keys.toVector.sorted
+
+  private[processexecution] def values: Map[String, String] = _values
+}
+
+object ProcessEnvironment {
+  val empty: ProcessEnvironment = new ProcessEnvironment(Map.empty)
+
+  private[processexecution] def fixedC(
+    values: Map[String, String]
+  ): Consequence[ProcessEnvironment] = {
+    val pairs = values.toVector.sortBy { case (name, _) => Option(name).getOrElse("") }
+    pairs.foldLeft(Consequence.unit) { case (z, (name, value)) =>
+      z.flatMap { _ =>
+        if (name == null || !_name_pattern.matches(name))
+          Consequence.argumentFormatError("environment", "uppercase environment variable name", name)
+        else if (value == null || value.exists(_.isControl))
+          Consequence.argumentFormatError("environment", "non-control runtime environment value", "invalid")
+        else
+          Consequence.unit
+      }
+    }.map(_ => new ProcessEnvironment(Map.from(values)))
+  }
+
+  private val _name_pattern = "[A-Z_][A-Z0-9_]*".r
+}
+
 enum ProcessArtifactKind {
   case File
 }
@@ -366,7 +397,8 @@ final class ProcessProgramDefinition private (
   val allowedArtifacts: Set[ProcessArtifactName],
   val allowsWorkingDirectory: Boolean,
   val allowedInputFiles: Set[ProcessArtifactName],
-  val allowedResourceTrees: Map[ResourceTreeReference, ResourceTreeLimits]
+  val allowedResourceTrees: Map[ResourceTreeReference, ResourceTreeLimits],
+  private[processexecution] val _environment: ProcessEnvironment
 ) {
   def validateRequestC(
     request: ProcessExecutionRequest,
@@ -548,7 +580,8 @@ object ProcessProgramDefinition {
     allowedartifacts: Set[ProcessArtifactName],
     allowsworkingdirectory: Boolean = false,
     allowedinputfiles: Set[ProcessArtifactName] = Set.empty,
-    allowedresourcetrees: Map[ResourceTreeReference, ResourceTreeLimits] = Map.empty
+    allowedresourcetrees: Map[ResourceTreeReference, ResourceTreeLimits] = Map.empty,
+    environment: Map[String, String] = Map.empty
   ): Consequence[ProcessProgramDefinition] = {
     val identity = Option(safeprogramidentity).map(_.trim.toLowerCase).getOrElse("")
     val executable = Option(executablelocation).map(_.trim).getOrElse("")
@@ -557,6 +590,7 @@ object ProcessProgramDefinition {
       _ <- _validate_executable_c(executable)
       _ <- maximumlimits.requireFiniteC
       _ <- _validate_resource_tree_limits_c(allowedresourcetrees)
+      processenvironment <- ProcessEnvironment.fixedC(environment)
     } yield new ProcessProgramDefinition(
       capability,
       identity,
@@ -567,7 +601,8 @@ object ProcessProgramDefinition {
       allowedartifacts,
       allowsworkingdirectory,
       allowedinputfiles,
-      allowedresourcetrees
+      allowedresourcetrees,
+      processenvironment
     )
   }
 

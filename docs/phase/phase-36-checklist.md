@@ -76,14 +76,14 @@ Status: DONE
 
 ## RB-07: Provider-neutral External-tool Pattern
 
-Status: OPEN
+Status: DONE
 
-- [ ] Verify fixed command templates, admitted arguments/environment, bounded
+- [x] Verify fixed command templates, admitted arguments/environment, bounded
   inputs, and declared outputs through a fake Process driver.
-- [ ] Keep timeout, cancellation, launch, output-limit, and non-zero-exit
+- [x] Keep timeout, cancellation, launch, output-limit, and non-zero-exit
   outcomes distinct until provider adaptation.
-- [ ] Prove provider result conversion without a live Cozy installation.
-- [ ] Keep CNCF contracts free of CBD Support and CAR Review types.
+- [x] Prove provider result conversion without a live Cozy installation.
+- [x] Keep CNCF contracts free of CBD Support and CAR Review types.
 
 ## RB-08: Documentation and Developer Guidance
 

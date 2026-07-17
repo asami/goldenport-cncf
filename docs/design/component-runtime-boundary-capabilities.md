@@ -162,6 +162,20 @@ receives the same prepared runtime-owned WorkArea. UnitOfWork cleanup applies
 equally to fixed input files and materialized tree inputs on every terminal
 path.
 
+## Provider-neutral External-tool Pattern
+
+A runtime Process program definition supplies the executable location, fixed
+argument template, validated fixed environment bindings, limits, input/tree
+policy, output policy, and capability grant. A component/provider submits only
+the logical request, admitted WorkArea inputs, declared outputs, and narrower
+limits through the protected Process Execution DSL. Components never supply a
+shell string, executable location, host environment map, or host path.
+
+`ProcessExecutionResult` remains a neutral lifecycle result. A provider adapter
+maps explicit terminal outcomes, including non-zero exits, to its own result or
+failure vocabulary after the runtime has completed. CNCF keeps no provider,
+CBD Support, CAR Review, Cozy, or application-specific adapter type.
+
 ## Observability And Testability
 
 Diagnostics record only safe structural metadata: declared configuration key
@@ -180,3 +194,7 @@ chokepoint and a `resource-tree.snapshot` runtime metric. These diagnostics
 contain only the logical tree name, provider family, configured limits, and a
 structured diagnostic projection on failure. They never contain a physical
 root, entry path, or resource-tree payload.
+
+RB-07 uses `ProcessExecutionTestProfile` and a test-local provider adapter to
+prove fixed-template admission, fixed runtime environment, bounded inputs and
+outputs, and distinct terminal-result conversion without a live external tool.

@@ -122,8 +122,8 @@ final class LocalProcessExecutionDriver(
     val task = _launch_executor.submit(new Callable[Process] {
       def call(): Process = {
         val process = workingdirectory match {
-          case Some(value) => _launcher.startBlocking(command, value)
-          case None => _launcher.startBlocking(command)
+          case Some(value) => _launcher.startBlocking(command, value, execution.definition._environment.values)
+          case None => _launcher.startBlocking(command, execution.definition._environment.values)
         }
         launched.set(process)
         if (abandoned.get) {
@@ -223,26 +223,67 @@ final class LocalProcessExecutionDriver(
 private[processexecution] trait LocalProcessLauncher {
   def startBlocking(command: Vector[String]): Process
 
+  def startBlocking(
+    command: Vector[String],
+    environment: Map[String, String]
+  ): Process =
+    if (environment.isEmpty)
+      startBlocking(command)
+    else
+      throw new UnsupportedOperationException(
+        "Local Process launcher does not support runtime-owned environment bindings"
+      )
+
   def startBlocking(command: Vector[String], workingdirectory: Path): Process =
     startBlocking(command)
+
+  def startBlocking(
+    command: Vector[String],
+    workingdirectory: Path,
+    environment: Map[String, String]
+  ): Process =
+    if (environment.isEmpty)
+      startBlocking(command, workingdirectory)
+    else
+      throw new UnsupportedOperationException(
+        "Local Process launcher does not support runtime-owned environment bindings"
+      )
 }
 
 private[processexecution] object LocalProcessLauncher {
   val local: LocalProcessLauncher = new LocalProcessLauncher {
     def startBlocking(command: Vector[String]): Process = {
-      val builder = new ProcessBuilder(command.asJava)
-      builder.redirectErrorStream(false)
-      // Runtime definitions own every environment value; never inherit caller state.
-      builder.environment().clear()
-      builder.start()
+      _start(command, None, Map.empty)
     }
 
     override def startBlocking(command: Vector[String], workingdirectory: Path): Process = {
+      _start(command, Some(workingdirectory), Map.empty)
+    }
+
+    override def startBlocking(
+      command: Vector[String],
+      environment: Map[String, String]
+    ): Process =
+      _start(command, None, environment)
+
+    override def startBlocking(
+      command: Vector[String],
+      workingdirectory: Path,
+      environment: Map[String, String]
+    ): Process =
+      _start(command, Some(workingdirectory), environment)
+
+    private def _start(
+      command: Vector[String],
+      workingdirectory: Option[Path],
+      environment: Map[String, String]
+    ): Process = {
       val builder = new ProcessBuilder(command.asJava)
-      builder.directory(workingdirectory.toFile)
+      workingdirectory.foreach(path => builder.directory(path.toFile))
       builder.redirectErrorStream(false)
       // Runtime definitions own every environment value; never inherit caller state.
       builder.environment().clear()
+      builder.environment().putAll(environment.asJava)
       builder.start()
     }
   }

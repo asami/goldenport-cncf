@@ -831,6 +831,7 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Phase 34: closed (`docs/phase/phase-34.md`)
 - Phase 35: closed (`docs/phase/phase-35.md`)
 - Phase 36: active (`docs/phase/phase-36.md`)
+- Phase 37: planned (`docs/phase/phase-37.md`)
 
 ## 8. Completed Development Item History
 
@@ -2330,3 +2331,32 @@ Active in Phase 36 (Jul. 17, 2026).
   - remote/container Process Execution and general shell execution;
   - CBD Support provider implementation, CAR Review semantics, CAR ABI
     publication, and deployment automation.
+
+### 9.32 Downstream Runtime Boundary Adoption
+Planned for Phase 37 after Phase 36 closes.
+
+- Goal: migrate the first downstream component, CBD Support, from ambient
+  clock/configuration/filesystem/process access to the explicit CNCF runtime
+  capabilities completed by Phase 36.
+- Scope:
+  - bind CBD Support operational time through the existing `ExecutionContext`
+    capability;
+  - resolve only declared component configuration and opaque secret references
+    through runtime assembly;
+  - replace direct local-tree access with admitted `ResourceTreeAccess` and
+    Process Execution WorkArea materialization;
+  - invoke the registered external evidence provider through admitted
+    `ProcessExec`, then map neutral terminal outcomes in the CBD-owned adapter;
+  - prove the migration using deterministic configuration/resource/process
+    fixtures, then run CBD Support CAR lint and targeted integration evidence.
+- Boundary:
+  - this is a downstream adoption phase, not a CNCF-core provider feature;
+  - CNCF contracts remain free of CBD Support, Cozy, CAR Review, and CAR ABI
+    types;
+  - an uncovered framework gap is recorded as a separate CNCF proposal rather
+    than being solved by an application-specific escape hatch.
+- Deferred scope:
+  - production secret-provider selection and deployment automation;
+  - remote/container Process Execution, general shell execution, and generic
+    provider transports;
+  - CBD Support CAR ABI publication and release management.

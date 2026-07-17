@@ -2,7 +2,7 @@
 
 Stage Status:
 - Current status: IN_PROGRESS
-- Current step: RB-07 Provider-neutral external-tool pattern
+- Current step: RB-08 Documentation and developer guidance
 - Owner: Phase 36 Component Runtime Boundary Capabilities
 - Update rule: Update this block and `phase-36-checklist.md` whenever a stable
   work-item state changes. Close the phase only when every in-scope checklist
@@ -73,7 +73,7 @@ CAR Review, and application-specific models.
 - D (DONE): RB-04 - Implement the opaque secret-reference boundary.
 - E (DONE): RB-05 - Implement admitted read-only resource trees.
 - F (DONE): RB-06 - Materialize admitted trees into Process WorkAreas.
-- G (OPEN): RB-07 - Verify the provider-neutral external-tool pattern.
+- G (DONE): RB-07 - Verify the provider-neutral external-tool pattern.
 - H (OPEN): RB-08 - Update design/spec/developer documentation.
 - I (OPEN): RB-09 - Run full verification, prepare the CBD handoff, and close
   Phase 36.
@@ -126,8 +126,8 @@ contracts.
 
 RB-01 has promoted the Phase 36 capability boundary to
 `docs/design/component-runtime-boundary-capabilities.md` and
-`docs/spec/component-runtime-boundary-capabilities.md`. RB-02 through RB-06
-are complete; RB-07 through RB-09 remain open. The static contract reflects
+`docs/spec/component-runtime-boundary-capabilities.md`. RB-02 through RB-07
+are complete; RB-08 and RB-09 remain open. The static contract reflects
 only APIs backed by executable specifications.
 
 RB-02 has confirmed the existing clock boundary through
@@ -161,3 +161,9 @@ admit tree identities and narrow source limits before the
 `UnitOfWorkInterpreter` materializes inputs. Drivers receive an already
 prepared WorkArea, never a component-selected host path. Existing UnitOfWork
 cleanup reclaims materialized trees on all terminal paths.
+
+RB-07 has established the provider-neutral external-tool evidence pattern.
+Runtime program definitions own fixed command templates and validated fixed
+environment bindings; component requests remain logical and bounded. A
+deterministic fake driver and test-local adapter prove that all Process terminal
+results, including non-zero exits, remain distinct until provider conversion.

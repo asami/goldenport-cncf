@@ -126,6 +126,13 @@ argument vector without shell interpolation, starts draining stdout and stderr
 concurrently, applies bounded capture independently to both streams, and
 supports idempotent cancellation.
 
+The initial environment policy is intentionally narrow: runtime program
+definitions may contain validated fixed bindings, and the local driver clears
+ambient environment state before installing those bindings. Components cannot
+supply an environment map. Inheritance, confidential runtime resolution, and
+caller overrides require separately specified runtime provenance and redaction
+rules before they are enabled.
+
 The runtime resolves a driver as a `ProcessExecutionDriver` with a safe logical
 driver identity. `startC` returns a `ProcessExecutionHandle`; `awaitC` returns
 one terminal result and `cancelC` is idempotent. The driver identity is safe
@@ -166,6 +173,12 @@ non-zero exit is an exited terminal result, not automatically a CNCF failure;
 the consumer decides whether that exit represents a successful provider
 response. Launch failure, timeout, cancellation, capture-limit termination,
 and artifact-limit termination are explicit process outcomes.
+
+Provider adapters are intentionally outside the generic runtime vocabulary.
+They accept `ProcessExecutionResult` and convert each explicit termination to
+their own domain outcome. This has deterministic fake-driver coverage without
+requiring a live external tool or importing application/provider types into
+CNCF.
 
 Malformed requests, denied capabilities, absent program definitions, invalid
 runtime configuration, WorkArea policy violations, unavailable drivers, and

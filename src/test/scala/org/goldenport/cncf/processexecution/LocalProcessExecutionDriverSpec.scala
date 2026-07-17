@@ -3,6 +3,7 @@ package org.goldenport.cncf.processexecution
 import java.io.IOException
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
+import java.util.concurrent.atomic.AtomicInteger
 import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.resource.{ResourceTreeAccess, ResourceTreeEntry, ResourceTreeLimits, ResourceTreeReference}
 import org.goldenport.cncf.workarea.WorkAreaSpace
@@ -58,6 +59,59 @@ final class LocalProcessExecutionDriverSpec extends AnyWordSpec with Matchers wi
       result.toOption.map(x => _text(x.stderr)) shouldBe Some("stderr")
       driver.activeProcessCount shouldBe 0
       driver.activeHandleCount shouldBe 0
+    }
+
+    "supply only fixed runtime-owned environment values after clearing ambient process state" in {
+      Given("a local JVM probe and a Process definition with one fixed environment binding")
+      val execution = _execution(
+        Vector("environment", "TEXTUS_TEST_VALUE"),
+        environment = Map("TEXTUS_TEST_VALUE" -> "runtime-owned")
+      )
+      val driver = new LocalProcessExecutionDriver()
+
+      When("the runtime starts the resolved execution without a caller environment map")
+      val result = try {
+        for {
+          handle <- driver.startC(execution)
+          completed <- handle.awaitC
+        } yield completed
+      } finally {
+        driver.close()
+      }
+
+      Then("the child receives the fixed runtime value and no component request controls environment")
+      result.toOption.map(x => _text(x.stdout)) shouldBe Some("runtime-owned")
+      classOf[ProcessExecutionRequest].getDeclaredFields.map(_.getName) should not contain "environment"
+    }
+
+    "reject a controlled launcher that has not opted into fixed runtime environment bindings" in {
+      Given("a legacy controlled launcher and a Process definition with a fixed environment binding")
+      val calls = new AtomicInteger(0)
+      val launcher = new LocalProcessLauncher {
+        def startBlocking(command: Vector[String]): Process = {
+          calls.incrementAndGet()
+          throw new IOException("legacy launcher should not receive an environment-bound launch")
+        }
+      }
+      val execution = _execution(
+        Vector("streams", "literal"),
+        environment = Map("TEXTUS_TEST_VALUE" -> "runtime-owned")
+      )
+      val driver = new LocalProcessExecutionDriver("legacy-local-process", launcher)
+
+      When("the runtime starts the environment-bound execution")
+      val result = try {
+        for {
+          handle <- driver.startC(execution)
+          completed <- handle.awaitC
+        } yield completed
+      } finally {
+        driver.close()
+      }
+
+      Then("the launcher fails before its environment-oblivious method can run")
+      result.toOption.map(_.termination) shouldBe Some(ProcessExecutionTermination.LaunchFailed)
+      calls.get shouldBe 0
     }
 
     "retain provider-interpretable non-zero exits without converting them to framework failure" in {
@@ -352,7 +406,8 @@ final class LocalProcessExecutionDriverSpec extends AnyWordSpec with Matchers wi
     outputs: Vector[ProcessExecutionOutputDeclaration] = Vector.empty,
     workingdirectory: Option[WorkAreaRelativePath] = None,
     resourceTrees: Vector[ProcessExecutionResourceTreeInput] = Vector.empty,
-    allowedresourcetrees: Map[ResourceTreeReference, ResourceTreeLimits] = Map.empty
+    allowedresourcetrees: Map[ResourceTreeReference, ResourceTreeLimits] = Map.empty,
+    environment: Map[String, String] = Map.empty
   ): ResolvedProcessExecution = {
     val capability = ProcessCapabilityId.parseC("local-probe").toOption.get
     val definition = ProcessProgramDefinition.fromRuntimeC(
@@ -364,7 +419,8 @@ final class LocalProcessExecutionDriverSpec extends AnyWordSpec with Matchers wi
       limits,
       outputs.map(_.name).toSet,
       allowsworkingdirectory = workingdirectory.nonEmpty,
-      allowedresourcetrees = allowedresourcetrees
+      allowedresourcetrees = allowedresourcetrees,
+      environment = environment
     ).toOption.get
     val policy = ProcessExecutionPolicy.createC(Vector(definition)).toOption.get
     policy.resolveC(

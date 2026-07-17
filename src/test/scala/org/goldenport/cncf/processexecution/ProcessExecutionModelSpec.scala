@@ -305,6 +305,43 @@ final class ProcessExecutionModelSpec extends AnyWordSpec with Matchers with Giv
       display should not include rawpath
     }
 
+    "reject invalid fixed environment values without reflecting their content" in {
+      Given("a runtime program definition with an invalid confidential environment value")
+      val capability = ProcessCapabilityId.parseC("codex-cli").toOption.get
+      val secret = "confidential\nvalue"
+
+      When("the runtime constructs the fixed environment policy")
+      val rejected = ProcessProgramDefinition.fromRuntimeC(
+        capability,
+        "codex-cli",
+        "runtime-owned-test-location",
+        Vector.empty,
+        ProcessArgumentPolicy(Vector.empty, Set.empty),
+        _limits(100L),
+        Set.empty,
+        environment = Map("TOOL_TOKEN" -> secret)
+      )
+      val display = rejected match {
+        case Consequence.Failure(conclusion) => conclusion.display
+        case _ => ""
+      }
+      val nullname = ProcessProgramDefinition.fromRuntimeC(
+        capability,
+        "codex-cli",
+        "runtime-owned-test-location",
+        Vector.empty,
+        ProcessArgumentPolicy(Vector.empty, Set.empty),
+        _limits(100L),
+        Set.empty,
+        environment = Map(null.asInstanceOf[String] -> "runtime")
+      )
+
+      Then("malformed values and names are structured without exposing the value")
+      rejected.isFaillure shouldBe true
+      display should not include secret
+      nullname.isFaillure shouldBe true
+    }
+
     "keep executable and shell selection outside the component request shape" in {
       Given("the public Process Execution request type")
       val fields = classOf[ProcessExecutionRequest].getDeclaredFields.map(_.getName).toSet

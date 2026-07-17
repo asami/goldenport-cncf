@@ -34,6 +34,11 @@ public final class ProcessExecutionLocalDriverProbe {
                 System.out.write(System.in.readAllBytes());
                 System.out.flush();
             }
+            case "environment" -> {
+                String name = arguments.length > 1 ? arguments[1] : "";
+                System.out.print(System.getenv(name));
+                System.out.flush();
+            }
             case "write-file" -> {
                 Path path = Path.of(arguments[1]);
                 if (path.getParent() != null) {
