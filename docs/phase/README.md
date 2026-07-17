@@ -15,13 +15,12 @@ This directory does **not** contain design details or thinking processes.
 
 Current baseline:
 
-- Active phase: `phase-36.md` - Component Runtime Boundary Capabilities.
-- Active checklist: `phase-36-checklist.md`.
-- Latest closed phase: `phase-35.md`
-- Latest closed checklist: `phase-35-checklist.md`
-- Latest post-closure maintenance: Jul. 13, 2026 CNCF I18N
-  `display-safe-v1` text normalization API and executable specification on the
-  `0.5.1-SNAPSHOT` development line.
+- Active phase: none.
+- Latest closure by date: `phase-37.md` - Downstream Runtime Boundary Adoption.
+- Latest checklist by date: `phase-37-checklist.md`.
+- Latest closure by phase number: `phase-38.md` - Static Web
+  Execution-Context Projection.
+- Latest checklist by phase number: `phase-38-checklist.md`.
 - Closed phase set currently includes:
   - `phase-4.md`
   - `phase-5.md`
@@ -54,6 +53,9 @@ Current baseline:
   - `phase-33.md`
   - `phase-34.md`
   - `phase-35.md`
+  - `phase-36.md`
+  - `phase-37.md`
+  - `phase-38.md`
 
 ## Related Rules
 

@@ -1,15 +1,17 @@
 # Phase 37 - Downstream Runtime Boundary Adoption
 
 Stage Status:
-- Current status: PLANNED
+- Current status: CLOSED
+- Current step: Complete
 - Start condition: Phase 36 is closed and its released CNCF capability surface
   is available to the downstream project.
 - Owner: CBD Support runtime-boundary adoption, with CNCF contract
   coordination.
 - Update rule: Update this block and `phase-37-checklist.md` whenever a stable
-  work-item state changes. Do not activate this phase before Phase 36 closes.
+  work-item state changes. Closed evidence must remain attributable to the
+  downstream CBD Support commits and validation records.
 
-status = planned
+status = closed
 
 ## 1. Purpose
 
@@ -72,14 +74,14 @@ project selects the released or explicitly pinned CNCF capability surface.
 
 ## 5. Planned Work Stack
 
-- A (OPEN): BA-01 - Freeze the downstream migration mapping against the closed
+- A (DONE): BA-01 - Freeze the downstream migration mapping against the closed
   Phase 36 contracts and selected CNCF version.
-- B (OPEN): BA-02 - Migrate clock and declared configuration access.
-- C (OPEN): BA-03 - Migrate admitted resource-tree and WorkArea inputs.
-- D (OPEN): BA-04 - Migrate the bounded external evidence-provider invocation
+- B (DONE): BA-02 - Migrate clock and declared configuration access.
+- C (DONE): BA-03 - Migrate admitted resource-tree and WorkArea inputs.
+- D (DONE): BA-04 - Migrate the bounded external evidence-provider invocation
   and CBD result adapter.
-- E (OPEN): BA-05 - Add deterministic executable evidence and boundary lint.
-- F (OPEN): BA-06 - Record migration evidence, deferred production work, and
+- E (DONE): BA-05 - Add deterministic executable evidence and boundary lint.
+- F (DONE): BA-06 - Record migration evidence, deferred production work, and
   close Phase 37.
 
 ## 6. Completion Conditions
@@ -114,3 +116,42 @@ The normative upstream contracts are:
 The downstream implementation and its executable specifications are owned by
 the CBD Support repository. This phase document is the CNCF coordination and
 dependency record.
+
+## 8. Implementation Evidence
+
+CBD Support completed the downstream migration in two validated commits:
+
+- `4d1b59b Adopt CNCF runtime boundaries in CBD support` moved operational
+  clock, declared configuration, admitted resource-tree access, WorkArea
+  materialization, and the Cozy evidence-provider adapter onto the Phase 36
+  CNCF contracts; and
+- `2d0be7f Complete Phase 7 runtime isolation` separated reusable
+  configuration-scoped runtime state from ActionCall-local admitted inventory
+  and migrated standalone and composed CBD/SIE integration harnesses to
+  explicit CNCF runtime configuration.
+
+The selected runtime was CNCF `0.5.1-SNAPSHOT` from the development source
+tree. Integration evidence records CNCF revision `a1d292a8`; the worktree was
+dirty only because separately owned CNCF development remained in progress.
+No CBD Support, Cozy, CAR Review, or CAR ABI type was added to CNCF.
+
+Executable and integration evidence includes:
+
+- the full CBD Support suite: 227 tests passed with no failure;
+- standalone SAR execution and the four-profile CBD/SIE SAR policy matrix;
+- deterministic configuration, resource-tree, Process Execution terminal
+  outcome, and sequential/concurrent ActionCall-isolation specifications;
+- CAR ABI governance and normal CAR lint with no failure; and
+- final scoped review with no actionable Phase 37 finding.
+
+CAR lint retains only the independently owned first-release ABI baseline
+warning tracked as `FUTURE-CBD-ABI-RELEASE-01`.
+
+## 9. Closure Record
+
+Phase 37 closed on Jul. 18, 2026.
+
+Production secret-provider selection, remote/container Process Execution,
+general shell/provider transports, CAR ABI publication, and deployment
+automation remain explicit follow-up work. They are not incomplete Phase 37
+requirements.

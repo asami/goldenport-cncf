@@ -164,6 +164,19 @@ Phase 36 closes and is owned by the CBD Support downstream implementation. The
 phase does not change this handoff's non-normative status or add CBD Support,
 Cozy, CAR Review, or CAR ABI types to CNCF.
 
+## Closure Annotation (Jul. 18, 2026)
+
+Phase 37 is closed. CBD Support commit `4d1b59b` adopted the Phase 36 runtime
+boundaries, and commit `2d0be7f` completed ActionCall-local runtime isolation
+and explicit standalone/composed integration configuration. The full CBD
+Support suite passed 227 tests; standalone SAR, the four-profile CBD/SIE SAR
+matrix, CAR ABI governance, and CAR lint also passed. The only retained lint
+warning is the separately tracked first-release ABI baseline
+`FUTURE-CBD-ABI-RELEASE-01`.
+
+This annotation records the outcome without changing the handoff's original,
+non-normative planning text.
+
 ## References
 
 - `textus-cbd-support/docs/strategy/textus-cbd-support-development-strategy.md`

@@ -652,13 +652,11 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Notes contain execution details and results for each phase.
 
 ## Process Status Pointers
-- Active phase dashboard: `docs/phase/phase-38.md`.
-- Active phase checklist: `docs/phase/phase-38-checklist.md`.
-- Concurrent planned downstream phase dashboard: `docs/phase/phase-37.md`.
-- Concurrent planned downstream phase checklist:
-  `docs/phase/phase-37-checklist.md`.
-- Latest closed phase dashboard: `docs/phase/phase-36.md`.
-- Latest closed phase checklist: `docs/phase/phase-36-checklist.md`.
+- Active phase: none. Phase 37 and Phase 38 are closed.
+- Latest closure by date: `docs/phase/phase-37.md` with
+  `docs/phase/phase-37-checklist.md` (Jul. 18, 2026).
+- Latest closure by phase number: `docs/phase/phase-38.md` with
+  `docs/phase/phase-38-checklist.md` (Jul. 17, 2026).
 - Status interpretation rules: `docs/rules/stage-status-and-checklist-convention.md`
 - Latest post-closure maintenance: Jul. 15, 2026 descriptor-bound component
   runtime configuration preservation. Materialized component instances retain
@@ -832,7 +830,7 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Phase 34: closed (`docs/phase/phase-34.md`)
 - Phase 35: closed (`docs/phase/phase-35.md`)
 - Phase 36: closed (`docs/phase/phase-36.md`)
-- Phase 37: planned (`docs/phase/phase-37.md`)
+- Phase 37: closed (`docs/phase/phase-37.md`)
 - Phase 38: closed (`docs/phase/phase-38.md`)
 
 ## 8. Completed Development Item History
@@ -2342,7 +2340,7 @@ Completed in Phase 36 (Jul. 17, 2026).
     publication, and deployment automation.
 
 ### 9.32 Downstream Runtime Boundary Adoption
-Planned for Phase 37 after Phase 36 closes.
+Completed in Phase 37 (Jul. 18, 2026).
 
 - Goal: migrate the first downstream component, CBD Support, from ambient
   clock/configuration/filesystem/process access to the explicit CNCF runtime
@@ -2369,6 +2367,14 @@ Planned for Phase 37 after Phase 36 closes.
   - remote/container Process Execution, general shell execution, and generic
     provider transports;
   - CBD Support CAR ABI publication and release management.
+- Closure evidence:
+  - CBD Support commits `4d1b59b` and `2d0be7f` migrated ambient runtime
+    dependencies and isolated ActionCall-local admitted inventory;
+  - the full CBD Support suite passed 227 tests, and standalone plus the
+    four-profile CBD/SIE SAR matrix passed against CNCF `0.5.1-SNAPSHOT`;
+  - CAR ABI governance and CAR lint passed, retaining only the separately
+    tracked first-release ABI baseline warning; and
+  - no CBD Support, Cozy, CAR Review, or CAR ABI type entered CNCF core.
 
 ### 9.33 Static Web Execution-Context Projection
 Completed in Phase 38 (Jul. 17, 2026).
