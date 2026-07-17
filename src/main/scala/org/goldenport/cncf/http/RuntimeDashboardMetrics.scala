@@ -7,7 +7,7 @@ import org.goldenport.record.Record
 /*
  * @since   Apr. 12, 2026
  *  version May. 11, 2026
- * @version Jul. 16, 2026
+ * @version Jul. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 object RuntimeDashboardMetrics {
@@ -107,6 +107,7 @@ object RuntimeDashboardMetrics {
   private var _blob_events = Vector.empty[Event]
   private var _rule_events = Vector.empty[Event]
   private var _spi_events = Vector.empty[Event]
+  private var _process_execution_events = Vector.empty[Event]
   private var _payload_externalization_events = Vector.empty[PayloadExternalizationEvent]
   private var _open_telemetry_export_events = Vector.empty[OpenTelemetryExportEvent]
   private var _recent = Vector.empty[RequestEntry]
@@ -117,7 +118,8 @@ object RuntimeDashboardMetrics {
     "operation-request-validation" -> "Operation Request Validation",
     "blob" -> "Blob",
     "rule" -> "Rule",
-    "spi" -> "SPI"
+    "spi" -> "SPI",
+    "process-execution" -> "Process Execution"
   )
 
   def recordHtmlRequest(
@@ -274,6 +276,31 @@ object RuntimeDashboardMetrics {
     )).takeRight(10000)
   }
 
+  def recordProcessExecution(
+    capability: String,
+    driver: String,
+    error: Boolean = false,
+    diagnosticKey: Option[String] = None,
+    diagnosticRecord: Option[Record] = None,
+    termination: Option[String] = None,
+    elapsedMillis: Option[Long] = None
+  ): Unit = synchronized {
+    val cleandiagnostickey = if (error) diagnosticKey.filter(_.nonEmpty) else None
+    _process_execution_events = (_process_execution_events :+ Event(
+      observedAt = java.time.Instant.now.toEpochMilli,
+      error = error,
+      diagnosticKey = cleandiagnostickey,
+      diagnosticRecord = if (error) diagnosticRecord else None,
+      elapsedMillis = elapsedMillis,
+      labels = _clean_labels(Map(
+        "capability" -> capability,
+        "driver" -> driver,
+        "termination" -> termination.getOrElse(""),
+        "diagnostic_key" -> cleandiagnostickey.getOrElse("")
+      ))
+    )).takeRight(10000)
+  }
+
   def recordDiagnosticPayloadExternalization(
     payloadKind: String,
     status: String,
@@ -412,6 +439,23 @@ object RuntimeDashboardMetrics {
     _diagnostic_records(_spi_events)
   }
 
+  def processExecutionSnapshot: Snapshot = synchronized {
+    _snapshot(_process_execution_events, Vector.empty)
+  }
+
+  def processExecutionDiagnosticCounts: Map[String, Long] = synchronized {
+    _process_execution_events
+      .filter(_.error)
+      .groupBy(_.diagnosticKey.getOrElse("unknown"))
+      .view
+      .mapValues(_.size.toLong)
+      .toMap
+  }
+
+  def processExecutionDiagnosticRecords: Map[String, Record] = synchronized {
+    _diagnostic_records(_process_execution_events)
+  }
+
   def diagnosticScopes: Vector[DiagnosticScope] = synchronized {
     Vector(
       _diagnostic_scope("authorization", _authorization_events),
@@ -419,7 +463,8 @@ object RuntimeDashboardMetrics {
       _diagnostic_scope("operation-request-validation", _operation_request_validation_events),
       _diagnostic_scope("blob", _blob_events),
       _diagnostic_scope("rule", _rule_events),
-      _diagnostic_scope("spi", _spi_events)
+      _diagnostic_scope("spi", _spi_events),
+      _diagnostic_scope("process-execution", _process_execution_events)
     )
   }
 
@@ -530,6 +575,9 @@ object RuntimeDashboardMetrics {
         event.labels ++ _outcome_label(event)
       ),
       _event_points("spi.invocation", "invocations", _spi_events, event =>
+        event.labels ++ _outcome_label(event)
+      ),
+      _event_points("process.execution", "executions", _process_execution_events, event =>
         event.labels ++ _outcome_label(event)
       ),
       _payload_externalization_points,

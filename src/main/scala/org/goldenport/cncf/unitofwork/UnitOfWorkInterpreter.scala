@@ -3,18 +3,19 @@ package org.goldenport.cncf.unitofwork
 import java.nio.file.{Files, Path, Paths}
 import cats.free.Free
 import cats.~>
+import scala.util.control.NonFatal
 import org.goldenport.{Consequence, Conclusion, ConsequenceT}
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.blob.{BlobInlineImageWorkflow, ContentReferenceWorkflow, ContentRenderWorkflow}
 import org.goldenport.cncf.config.ConfigurationAccess
-import org.goldenport.cncf.http.HttpDriver
+import org.goldenport.cncf.http.{HttpDriver, RuntimeDashboardMetrics}
 import org.goldenport.cncf.datastore.*
 import org.goldenport.cncf.embedded.{EmbeddedDataStore, EmbeddedDataStoreRunner}
 import org.goldenport.cncf.entity.*
 import org.simplemodeling.model.datatype.EntityId
 import org.goldenport.cncf.directive.SearchResult
-import org.goldenport.cncf.observability.{CallTreeContext, CallTreeValueSummary}
+import org.goldenport.cncf.observability.{CallTreeContext, CallTreeValueSummary, ConclusionDiagnostics}
 import org.goldenport.process.ShellCommandExecutor
 import org.goldenport.cncf.statemachine.TransitionValidationHook
 import org.goldenport.cncf.security.OperationAccessPolicy
@@ -390,11 +391,7 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
 
     case UnitOfWorkOp.ProcessExec(execution) =>
       _with_process_execution_calltree(execution) {
-        for {
-          driver <- ProcessExecutionDriver.resolveC(uow.executionContext.cncfCore.scope)
-          workspace <- ProcessExecutionWorkArea.allocateC(uow.executionContext.cncfCore.scope.workAreaSpace)
-          result <- _execute_process_in_workspace_c(driver, execution, workspace)
-        } yield result
+        _execute_process_c(execution)
       }
   }
 
@@ -925,10 +922,68 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
     driver: ProcessExecutionDriver,
     execution: ResolvedProcessExecution,
     workspace: ProcessExecutionWorkArea
-  ): Consequence[ProcessExecutionResult] =
+  ): Consequence[ProcessExecutionResult] = {
     try {
-      driver.startC(execution, workspace).flatMap(_.awaitC)
+      driver.startC(execution, workspace).flatMap { handle =>
+        val registration = uow.executionContext.jobContext.cancellationScope.map(
+          _.register(handle.cancelC)
+        )
+        try {
+          handle.awaitC
+        } finally {
+          registration.foreach(_.close())
+        }
+      }
     } finally {
       workspace.close()
     }
+  }
+
+  private def _execute_process_c(
+    execution: ResolvedProcessExecution
+  ): Consequence[ProcessExecutionResult] = {
+    val startednanos = System.nanoTime()
+    var driver = Option.empty[ProcessExecutionDriver]
+    val result = try {
+      ProcessExecutionDriver.resolveC(uow.executionContext.cncfCore.scope).flatMap { resolved =>
+        driver = Some(resolved)
+        ProcessExecutionWorkArea.allocateC(uow.executionContext.cncfCore.scope.workAreaSpace).flatMap(
+          _execute_process_in_workspace_c(resolved, execution, _)
+        )
+      }
+    } catch {
+      case NonFatal(e) => Consequence.Failure(Conclusion.from(e))
+    }
+    _record_process_execution(execution, driver, result, startednanos)
+    result
+  }
+
+  private def _record_process_execution(
+    execution: ResolvedProcessExecution,
+    driver: Option[ProcessExecutionDriver],
+    result: Consequence[ProcessExecutionResult],
+    startednanos: Long
+  ): Unit = {
+    val elapsedmillis = math.max(0L, (System.nanoTime() - startednanos) / 1000000L)
+    val driveridentity = driver.map(_.safeIdentity).getOrElse("unresolved")
+    result match {
+      case success: Consequence.Success[ProcessExecutionResult] =>
+        RuntimeDashboardMetrics.recordProcessExecution(
+          capability = execution.request.capability.print,
+          driver = driveridentity,
+          termination = Some(success.result.termination.toString),
+          elapsedMillis = Some(elapsedmillis)
+        )
+      case failure: Consequence.Failure[ProcessExecutionResult] =>
+        val diagnostic = ConclusionDiagnostics.classify(failure.conclusion)
+        RuntimeDashboardMetrics.recordProcessExecution(
+          capability = execution.request.capability.print,
+          driver = driveridentity,
+          error = true,
+          diagnosticKey = Some(diagnostic.diagnosticKey),
+          diagnosticRecord = Some(diagnostic.toRecord),
+          elapsedMillis = Some(elapsedmillis)
+        )
+    }
+  }
 }

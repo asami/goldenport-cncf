@@ -34,7 +34,7 @@ import org.goldenport.cncf.observability.{DiagnosticPayloadExternalizer, Observa
  * @since   Jan.  4, 2026
  *  version Mar. 30, 2026
  *  version May. 31, 2026
- * @version Jul. 16, 2026
+ * @version Jul. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class JobId(
@@ -144,7 +144,8 @@ final case class JobContext(
   currentTask: Option[TaskId] = None,
   taskStack: Vector[TaskId] = Vector.empty,
   causationId: Option[String] = None,
-  traceMetadata: Map[String, String] = Map.empty
+  traceMetadata: Map[String, String] = Map.empty,
+  cancellationScope: Option[JobCancellationScope] = None
 )
 
 object JobContext {
@@ -888,6 +889,7 @@ final class InMemoryJobEngine(
     Executors.newFixedThreadPool(math.max(1, schedulerConfig.workerCount))
   private val _workers_started = new AtomicBoolean(false)
   private val _state_monitor = new Object
+  private val _cancellation_scopes = new ConcurrentHashMap[JobId, JobCancellationScope]()
   private var _execution_scheduling_registration = Option.empty[ExecutionSchedulingRegistration]
   @volatile private var _shutdown_requested = false
 
@@ -948,6 +950,7 @@ final class InMemoryJobEngine(
   ): Consequence[JobId] =
     _validate_submit_option(option).map { _ =>
     val jobid = JobId.create("submit", ctx.clock.instant(), ctx.idGeneration)
+    _cancellation_scopes.put(jobid, new JobCancellationScope)
     val now = _now()
     val initialdebug = JobDebugInfo(
       requestSummary = option.requestSummary.orElse(_request_summary(tasks)),
@@ -1323,6 +1326,7 @@ final class InMemoryJobEngine(
             "status" -> JobStatus.Succeeded.toString
           )
         )
+        _cancellation_scopes.remove(jobid)
       case _ =>
         var previous: Option[TaskId] = None
         var failure: Option[Conclusion] = None
@@ -1345,7 +1349,8 @@ final class InMemoryJobEngine(
                 causationId = ctx.observability.correlationId.map(_.print),
                 traceMetadata = Map(
                   "traceId" -> ctx.observability.traceId.print
-                ) ++ ctx.observability.correlationId.map(x => "correlationId" -> x.print)
+                ) ++ ctx.observability.correlationId.map(x => "correlationId" -> x.print),
+                cancellationScope = Some(_cancellation_scope(jobid))
               )
               val executioncontext = _job_execution_context(jobid, ctx, jobcontext)
               _append_task_running(jobid, taskid, previous, startedat, task)
@@ -1417,7 +1422,8 @@ final class InMemoryJobEngine(
       taskStack = ctx.jobContext.taskStack :+ taskid,
       causationId = ctx.observability.correlationId.map(_.print),
       traceMetadata = Map("traceId" -> ctx.observability.traceId.print) ++
-        ctx.observability.correlationId.map(x => "correlationId" -> x.print)
+        ctx.observability.correlationId.map(x => "correlationId" -> x.print),
+      cancellationScope = Some(_cancellation_scope(jobid))
     )
     val executioncontext = _job_execution_context(jobid, ctx, jobcontext)
     _append_task_running(jobid, taskid, parent, startedat, task)
@@ -1591,6 +1597,8 @@ final class InMemoryJobEngine(
               _append_timelinefor_control(jobid, request.command, target)
               _update_record(jobid, target, _control_result_for(target))
               _append_eventfor_control(jobid, request.command, target)
+              if (request.command == JobControlCommand.Cancel)
+                _cancellation_scope(jobid).cancel()
           }
           request.option.mode match {
             case JobCommandMode.Async =>
@@ -1609,6 +1617,7 @@ final class InMemoryJobEngine(
     }
 
   private def _retry_job(jobid: JobId, record: JobRecord): Unit = {
+    _cancellation_scopes.put(jobid, new JobCancellationScope)
     val now = _now()
     _put_record(
       record.copy(
@@ -1990,8 +1999,13 @@ final class InMemoryJobEngine(
             ()
         }
         _mutate_record(jobid)(_.copy(baseTasksCompleted = false, deferredResult = None, updatedAt = _now()))
+        if (_get_record(jobid).exists(record => JobStatus.isTerminal(record.status)))
+          _cancellation_scopes.remove(jobid)
       }
     }
+
+  private def _cancellation_scope(jobid: JobId): JobCancellationScope =
+    _cancellation_scopes.computeIfAbsent(jobid, _ => new JobCancellationScope)
 
   private def _run_compensations(
     jobid: JobId,
@@ -2032,7 +2046,8 @@ final class InMemoryJobEngine(
               taskStack = ctx.jobContext.taskStack :+ compensationtaskid,
               causationId = ctx.observability.correlationId.map(_.print),
               traceMetadata = Map("traceId" -> ctx.observability.traceId.print) ++
-                ctx.observability.correlationId.map(x => "correlationId" -> x.print)
+                ctx.observability.correlationId.map(x => "correlationId" -> x.print),
+              cancellationScope = Some(_cancellation_scope(jobid))
             )
             val executioncontext = _job_execution_context(jobid, ctx, jobcontext)
             compensation.run(executioncontext) match {

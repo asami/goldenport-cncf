@@ -3,6 +3,7 @@ package org.goldenport.cncf.action
 import org.goldenport.Consequence
 import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.context.{ExecutionContext, GlobalContext, ScopeContext, ScopeKind}
+import org.goldenport.cncf.http.RuntimeDashboardMetrics
 import org.goldenport.cncf.processexecution.*
 import org.goldenport.cncf.unitofwork.{UnitOfWork, UnitOfWorkInterpreter, UnitOfWorkOp}
 import org.goldenport.cncf.workarea.WorkAreaSpace
@@ -115,6 +116,27 @@ final class ProcessExecutionDslSpec extends AnyWordSpec with Matchers with Given
       rendered should not include secret
     }
 
+    "project structural Process Execution metrics without captured stdout content" in {
+      Given("a deterministic Process Execution result containing confidential output")
+      val capability = ProcessCapabilityId.parseC("codex-cli").toOption.get
+      val secret = "confidential-process-metric-output"
+      val capture = ProcessExecutionCapture(secret.getBytes("UTF-8").toVector, secret.length.toLong, truncated = false)
+      val result = _result(capability, exitcode = 0).copy(stdout = capture)
+      val fixture = ProcessExecutionTestProfile.admittedC(capability, result).toOption.get
+      val context = _context(Some(fixture.profile.driver))
+      val behavior = new _ProcessExecutionBehavior(Behavior.Core(context, None, None))
+      val before = RuntimeDashboardMetrics.processExecutionSnapshot.summary.cumulative.total
+      given UnitOfWork = new UnitOfWork(context)
+
+      When("the protected Process Execution DSL completes")
+      behavior.direct(fixture.execution).toOption shouldBe Some(result)
+      val snapshot = RuntimeDashboardMetrics.processExecutionSnapshot
+
+      Then("the metrics include only structural execution accounting")
+      snapshot.summary.cumulative.total should be >= (before + 1L)
+      RuntimeDashboardMetrics.processExecutionDiagnosticRecords.values.map(_.print).mkString should not include secret
+    }
+
     "omit an unsafe driver failure display from the UnitOfWork calltree" in {
       Given("a calltree-enabled execution with a driver that returns a confidential failure message")
       val capability = ProcessCapabilityId.parseC("codex-cli").toOption.get
@@ -127,6 +149,7 @@ final class ProcessExecutionDslSpec extends AnyWordSpec with Matchers with Given
       }
       val context = _context(Some(failingdriver), calltreeenabled = true)
       val behavior = new _ProcessExecutionBehavior(Behavior.Core(context, None, None))
+      val before = RuntimeDashboardMetrics.processExecutionSnapshot.summary.cumulative.total
       given UnitOfWork = new UnitOfWork(context)
 
       When("the protected Process Execution DSL receives the driver failure")
@@ -137,6 +160,8 @@ final class ProcessExecutionDslSpec extends AnyWordSpec with Matchers with Given
       failed.isFaillure shouldBe true
       rendered should include ("uow:process-exec")
       rendered should not include secret
+      RuntimeDashboardMetrics.processExecutionSnapshot.summary.cumulative.total should be >= (before + 1L)
+      RuntimeDashboardMetrics.processExecutionDiagnosticRecords.values.map(_.print).mkString should not include secret
     }
   }
 

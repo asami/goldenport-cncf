@@ -126,18 +126,28 @@ Acceptance evidence:
 
 ## PE-07: Job/Task and Diagnostics
 
-Status: OPEN
+Status: DONE (Jul. 17, 2026)
 
-- [ ] Register active process handles with execution cancellation.
-- [ ] Propagate Job cancellation to process-tree termination idempotently.
-- [ ] Add payload-safe CallTree, observability, and runtime metrics.
-- [ ] Keep prompt/input/output/environment/credential/raw-path values absent
+- [x] Register active process handles with execution cancellation.
+- [x] Propagate Job cancellation to process-tree termination idempotently.
+- [x] Add payload-safe CallTree, observability, and runtime metrics.
+- [x] Keep prompt/input/output/environment/credential/raw-path values absent
   from normal diagnostics.
 
 Acceptance evidence:
 
 - Specs prove Job cancellation reaches a process handle, terminal races preserve
   actual completion, and confidential values are absent from diagnostics.
+
+Evidence: `JobCancellationScope` is a Job-owned generic active-work boundary.
+`UnitOfWorkInterpreter` registers each launched `ProcessExecutionHandle` and
+unregisters it in the terminal `finally` path. `JobEngine` signals the scope on
+accepted cancellation and creates a fresh scope on retry.
+`RuntimeDashboardMetrics` projects the payload-safe `process.execution` scope
+from structural metadata and `ConclusionDiagnostics`. `JobCancellationScopeSpec`,
+`ProcessExecutionJobCancellationSpec`, and `ProcessExecutionDslSpec` passed with
+callback idempotence, Job-to-handle propagation, completion/cancellation race,
+and confidential-output/failure-display coverage.
 
 ## PE-08: Consumer Handoff and Closure
 

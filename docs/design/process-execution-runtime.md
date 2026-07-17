@@ -124,6 +124,17 @@ stream readers to reach a stable terminal state, and unregisters the handle in
 a finally-safe path. A terminal completion that wins a race with cancellation
 keeps its actual terminal result; later cancellation is a no-op.
 
+`JobCancellationScope` is the Job-owned generic active-work boundary. The Job
+engine creates one scope for a submitted execution, passes it through the
+`JobContext` of primary, same-Job, and compensation Tasks, and signals it when
+Job control accepts cancellation. Process Execution registers only
+`ProcessExecutionHandle.cancelC` with that scope; `JobEngine` never depends on
+the Process Execution SPI. A handle that registers after an accepted
+cancellation is signalled immediately, which closes the launch/cancel race.
+Registration is removed when `awaitC` reaches a terminal result. Retrying a
+cancelled Job creates a fresh scope, so an old task cannot cancel active work
+from the retry.
+
 ## Result And Failure Boundary
 
 A process result separates transport lifecycle from provider/domain meaning. A
@@ -146,6 +157,11 @@ code, elapsed time, byte counts, artifact counts, and limit category. They MUST
 NOT record prompt/stdin content, stdout/stderr content, sensitive arguments,
 environment values, credentials, account identity, raw host paths, or artifact
 contents.
+
+`RuntimeDashboardMetrics` projects Process Execution as
+`process.execution`. Its labels are limited to outcome, capability, safe driver
+identity, terminal result, and structured `ConclusionDiagnostics` key. A
+driver failure is projected from its `Conclusion`, not from a display message.
 
 The driver and any provider adapter are responsible for returning safe failure
 messages. The CNCF runtime must not interpolate confidential request or result

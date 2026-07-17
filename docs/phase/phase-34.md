@@ -75,7 +75,7 @@ provider or run a live Codex account.
   timeout handling.
 - F (DONE): PE-06 - Implement WorkArea confinement, artifacts, quotas, and
   cleanup.
-- G (PLANNED): PE-07 - Integrate Job/Task cancellation, observability, and
+- G (DONE): PE-07 - Integrate Job/Task cancellation, observability, and
   confidentiality.
 - H (PLANNED): PE-08 - Verify the provider-neutral consumer contract and close
   Phase 34.
@@ -89,7 +89,7 @@ provider or run a live Codex account.
 - [x] PE-04: Add `UnitOfWorkOp.ProcessExec` and `process_exec` DSL support.
 - [x] PE-05: Implement the local driver lifecycle and bounded stream handling.
 - [x] PE-06: Add WorkArea-confined input/output artifacts, quotas, and cleanup.
-- [ ] PE-07: Integrate Job/Task cancellation, CallTree, metrics, and
+- [x] PE-07: Integrate Job/Task cancellation, CallTree, metrics, and
   confidentiality.
 - [ ] PE-08: Verify the consumer contract, document the handoff, and close the
   phase.
@@ -112,6 +112,13 @@ Execution driver through ordinary parent inheritance and explicit child
 override. `ProcessExecutionTestProfile` supplies deterministic configured
 results without an ambient process fallback; `ProcessExecutionDriverSpec`
 proves inheritance, override, unavailable-driver behavior, and cancellation.
+
+PE-07 completed Jul. 17, 2026. Job cancellation now reaches active process
+handles through the Job-owned generic `JobCancellationScope`; the Process
+Execution interpreter keeps handle registration finally-safe and projects only
+safe structural CallTree and `process.execution` metric metadata. The
+executable specifications cover idempotence, propagation, terminal races, and
+confidentiality boundaries.
 
 PE-04 completed Jul. 17, 2026. `UnitOfWorkOp.ProcessExec` accepts only a
 resolved capability-bound execution. `process_exec` exposes the same intent to

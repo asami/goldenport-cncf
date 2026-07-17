@@ -5,7 +5,7 @@ import org.goldenport.record.Record
 
 /*
  * @since   May. 11, 2026
- * @version Jul. 16, 2026
+ * @version Jul. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class MetricScopeDefinition(
@@ -122,6 +122,12 @@ object RuntimeMetricsCatalog {
       "SPI invocation",
       "Canonical SPI invocation counts, failures, provider/socket components, and elapsed time.",
       Vector("outcome", "contract", "operation", "provider_component", "socket_component", "diagnostic_key")
+    ),
+    MetricScopeDefinition(
+      "process.execution",
+      "Process execution",
+      "Approved Process Execution counts, failures, terminal state, and elapsed time without payload values.",
+      Vector("outcome", "capability", "driver", "termination", "diagnostic_key")
     ),
     MetricScopeDefinition(
       "diagnostic-payload.externalization",

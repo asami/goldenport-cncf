@@ -140,6 +140,13 @@ cancellation scope immediately after launch and unregisters it on every
 terminal path. Job cancellation signals the active handle and must lead to
 process-tree termination according to the effective termination policy.
 
+The active execution cancellation scope is Job-owned and effect-neutral. A
+Process Execution registration contains only a cancellation callback; the Job
+runtime MUST NOT depend on a Process Execution driver or handle type. A
+registration made after cancellation is accepted MUST be signalled immediately.
+Retrying a Job MUST use a new cancellation scope so callbacks admitted by an
+older cancelled run cannot affect the retry.
+
 Cancellation is idempotent. If process completion wins the race, its terminal
 result remains authoritative and a later cancellation request has no effect.
 Process Execution does not add a Command mode, a scheduler, or a transaction
@@ -153,6 +160,11 @@ termination, exit code, elapsed time, byte counts, artifact counts, and limit
 category. The projection MUST NOT include stdin, prompt, stdout, stderr,
 sensitive argument values, environment values, credentials, raw host paths,
 or artifact content.
+
+The runtime metric scope is `process.execution`. It may use only `outcome`,
+capability, safe driver identity, termination, and a `ConclusionDiagnostics`
+key as metric labels. It MUST derive failed-operation classification from the
+returned `Conclusion`; it MUST NOT parse a failure display message.
 
 ## Required Executable Behaviors
 
