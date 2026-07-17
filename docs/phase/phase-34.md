@@ -1,13 +1,13 @@
 # Phase 34 - Process Execution Runtime
 
 Stage Status:
-- Current status: OPEN
+- Current status: CLOSED
 - Owner: Phase 34 Process Execution Runtime
 - Update rule: Update this block and `phase-34-checklist.md` whenever a stable
   work-item state changes. Close the phase only when every in-scope checklist
   item is complete or explicitly relocated.
 
-status = open
+status = closed
 
 ## 1. Purpose
 
@@ -77,7 +77,7 @@ provider or run a live Codex account.
   cleanup.
 - G (DONE): PE-07 - Integrate Job/Task cancellation, observability, and
   confidentiality.
-- H (PLANNED): PE-08 - Verify the provider-neutral consumer contract and close
+- H (DONE): PE-08 - Verify the provider-neutral consumer contract and close
   Phase 34.
 
 ## 5. Development Items
@@ -91,7 +91,7 @@ provider or run a live Codex account.
 - [x] PE-06: Add WorkArea-confined input/output artifacts, quotas, and cleanup.
 - [x] PE-07: Integrate Job/Task cancellation, CallTree, metrics, and
   confidentiality.
-- [ ] PE-08: Verify the consumer contract, document the handoff, and close the
+- [x] PE-08: Verify the consumer contract, document the handoff, and close the
   phase.
 
 Detailed task tracking and acceptance evidence are in
@@ -173,3 +173,23 @@ non-normative. PE-01 promoted its settled contracts into
 `docs/design/process-execution-runtime.md` and
 `docs/spec/process-execution-runtime.md`; those canonical documents govern
 subsequent runtime implementation.
+
+## 8. Closure Record
+
+Phase 34 closed on Jul. 17, 2026.
+
+- `ProcessExecutionAdmission` is a runtime-installed scoped service. A
+  component/provider submits a logical `ProcessExecutionRequest` through
+  protected `process_exec(request)`; admission produces the resolved-only
+  `UnitOfWorkOp.ProcessExec` payload. The handoff is verified by the
+  deterministic `codex-cli`-style consumer specification and requires no live
+  Codex installation, account, or network access.
+- Final focused Process Execution model, driver, DSL, Job control, and
+  cancellation suites passed 31 tests.
+- Full CNCF regression passed 1,918 tests in 278 suites with no failures.
+- The component developer document index now identifies Process Execution as
+  the required path for approved external program effects.
+- Deferred scope remains live Textus AI/Codex provider integration, account and
+  network behavior, container/remote drivers, arbitrary shell access, legacy
+  shell migration, process retention, BPM/process orchestration, and an
+  independent process scheduler.

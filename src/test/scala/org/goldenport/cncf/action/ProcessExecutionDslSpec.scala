@@ -94,6 +94,43 @@ final class ProcessExecutionDslSpec extends AnyWordSpec with Matchers with Given
       result.isFaillure shouldBe true
     }
 
+    "admit a codex-cli-style provider request through the scoped runtime service" in {
+      Given("a provider Behavior with an installed runtime admission and deterministic driver")
+      val capability = ProcessCapabilityId.parseC("codex-cli").toOption.get
+      val result = _result(capability, exitcode = 0)
+      val fixture = ProcessExecutionTestProfile.admittedC(capability, result).toOption.get
+      val context = _context(Some(fixture.profile.driver), Some(fixture.admission))
+      val behavior = new _ProcessExecutionBehavior(Behavior.Core(context, None, None))
+      val request = ProcessExecutionRequest(capability)
+      given UnitOfWork = new UnitOfWork(context)
+
+      When("the provider submits logical process intent through the protected DSL")
+      val direct = behavior.directRequest(request)
+      val free = new UnitOfWorkInterpreter(new UnitOfWork(context)).run(behavior.freeRequest(request))
+
+      Then("the runtime admits the request before both paths enter the resolved-only UnitOfWork effect")
+      direct.toOption shouldBe Some(result)
+      free.toOption shouldBe Some(result)
+      fixture.profile.driver.executions.map(_.request.capability) shouldBe Vector(capability, capability)
+    }
+
+    "reject a provider request before driver invocation when scoped admission is absent" in {
+      Given("a provider Behavior with a configured driver but no runtime admission")
+      val capability = ProcessCapabilityId.parseC("codex-cli").toOption.get
+      val result = _result(capability, exitcode = 0)
+      val fixture = ProcessExecutionTestProfile.admittedC(capability, result).toOption.get
+      val context = _context(Some(fixture.profile.driver))
+      val behavior = new _ProcessExecutionBehavior(Behavior.Core(context, None, None))
+      given UnitOfWork = new UnitOfWork(context)
+
+      When("the provider submits a logical Process Execution request")
+      val rejected = behavior.directRequest(ProcessExecutionRequest(capability))
+
+      Then("the missing admission is structured and the driver remains untouched")
+      rejected.isFaillure shouldBe true
+      fixture.profile.driver.executions shouldBe empty
+    }
+
     "record safe process result metrics without captured stdout content in the UnitOfWork calltree" in {
       Given("a calltree-enabled execution with a confidential captured stdout value")
       val capability = ProcessCapabilityId.parseC("codex-cli").toOption.get
@@ -167,6 +204,7 @@ final class ProcessExecutionDslSpec extends AnyWordSpec with Matchers with Given
 
   private def _context(
     driver: Option[ProcessExecutionDriver],
+    admission: Option[ProcessExecutionAdmission] = None,
     calltreeenabled: Boolean = false
   ): ExecutionContext = {
     GlobalContext.set(GlobalContext(WorkAreaSpace.create(RuntimeConfig.default)))
@@ -176,7 +214,8 @@ final class ProcessExecutionDslSpec extends AnyWordSpec with Matchers with Given
       name = "process-execution-dsl-test",
       parent = None,
       observabilityContext = base.observability,
-      processExecutionDriverOption = driver
+      processExecutionDriverOption = driver,
+      processExecutionAdmissionOption = admission
     )
     base.withScope(scope)
   }
@@ -204,8 +243,16 @@ private final class _ProcessExecutionBehavior(
   def free(execution: ResolvedProcessExecution) =
     process_exec(execution)
 
+  def freeRequest(request: ProcessExecutionRequest) =
+    process_exec(request)
+
   def direct(
     execution: ResolvedProcessExecution
   )(using UnitOfWork): Consequence[ProcessExecutionResult] =
     process_exec_c(execution)
+
+  def directRequest(
+    request: ProcessExecutionRequest
+  )(using UnitOfWork): Consequence[ProcessExecutionResult] =
+    process_exec_c(request)
 }

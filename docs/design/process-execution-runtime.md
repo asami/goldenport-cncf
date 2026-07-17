@@ -18,10 +18,10 @@ or provider-specific response interpretation.
 
 ```text
 Component or provider behavior
-  -> protected process_exec DSL
+  -> protected process_exec(request) DSL
+  -> ScopeContext ProcessExecutionAdmission
   -> UnitOfWorkOp.ProcessExec
   -> UnitOfWork interpreter
-  -> capability and program-policy admission
   -> ScopeContext ProcessExecutionDriver
   -> approved external program
 ```
@@ -51,6 +51,23 @@ policy, resource limits, trust/sandbox profile, and safe diagnostic identity.
 CAR input cannot replace or loosen this definition. Construction of a program
 definition is runtime-internal; component behavior receives only an already
 admitted `ResolvedProcessExecution` through the protected DSL.
+
+`ProcessExecutionAdmission` is the scoped runtime service that makes this
+boundary usable by a consumer with dynamic logical arguments. Runtime assembly
+installs the effective program policy and the grants for one component/provider
+scope. Consumer behavior constructs a `ProcessExecutionRequest` and calls the
+protected `process_exec(request)` DSL; the service validates the request and
+creates the resolved-only intent used by `UnitOfWorkOp.ProcessExec`. Consumer
+code does not construct `ProcessProgramDefinition`, select a driver, or receive
+an executable location. Scope inheritance may supply an admission service, and
+a child scope may explicitly replace it only as trusted runtime/test wiring.
+
+The initial downstream pattern is a Textus AI provider requesting a logical
+`codex-cli` capability. Its fixed CLI invocation, sandbox policy, executable
+location, environment policy, and limits belong to runtime assembly; the
+provider owns only provider-specific request arguments and interpretation of a
+terminal `ProcessExecutionResult`. This is a handoff contract, not a Codex
+implementation in CNCF core.
 
 Admission has three independent checks:
 

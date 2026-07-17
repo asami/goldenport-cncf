@@ -41,9 +41,12 @@ environment policy, WorkArea policy, output policy, maximum limits, and trust
 or sandbox profile.
 
 Program-definition construction is runtime-internal. Component and provider
-behavior may receive only the capability-admitted resolved execution through
-the protected `process_exec` DSL; `UnitOfWorkOp.ProcessExec` has that resolved
-intent as its sole payload.
+behavior submits a `ProcessExecutionRequest` through protected
+`process_exec(request)`. `ProcessExecutionAdmission`, resolved from the active
+`ScopeContext`, MUST apply the runtime-installed program policy and grant before
+the DSL creates the capability-admitted resolved execution. A missing admission
+service MUST fail deterministically. `UnitOfWorkOp.ProcessExec` has that
+resolved intent as its sole payload.
 
 The effective limit is the strictest compatible value among the runtime maximum,
 program-definition maximum, component/provider grant, and request override. A
@@ -183,8 +186,10 @@ executable specifications:
 9. Job cancellation reaches an active handle and cannot overwrite an earlier
    terminal completion;
 10. only declared, confined artifacts are returned and cleanup runs on every
-    terminal path; and
-11. normal diagnostics omit confidential process values.
+    terminal path;
+11. normal diagnostics omit confidential process values; and
+12. a provider-style logical request reaches direct and Free DSL execution only
+    through a scoped runtime admission service, without a live external CLI.
 
 ## Non-Goals
 

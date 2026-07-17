@@ -77,6 +77,13 @@ Use these when writing or reviewing generated/handwritten logic:
   - Internal DSL design and use.
 - `docs/notes/unitofwork-guideline.md`
   - UoW boundary, persistence behavior, and consistency expectations.
+- `docs/design/process-execution-runtime.md`
+  - Capability-constrained external program effects. Provider code submits a
+    logical request through protected `process_exec`; runtime assembly owns the
+    program definition, grant, driver, WorkArea, cancellation, and diagnostics.
+- `docs/spec/process-execution-runtime.md`
+  - Normative Process Execution request, admission, result, confidentiality,
+    and executable-specification contract.
 - `docs/design/entity-authorization-model.md`
   - Entity and UoW access authorization model.
 - `docs/notes/entity-authorization-implementation-note.md`
@@ -96,6 +103,13 @@ Use these when writing or reviewing generated/handwritten logic:
 The default rule is: application logic expresses intent; CNCF DSL/UoW helpers
 own lifecycle, authorization, logical delete filtering, tenant scope, and store
 mechanics.
+
+For an approved external program, do not use `ProcessBuilder`, a shell command,
+or a driver SPI from component/provider code. Build a logical
+`ProcessExecutionRequest` for a named capability and call protected
+`process_exec(request)`. The runtime must have installed the corresponding
+`ProcessExecutionAdmission`; an absent admission is a deterministic deployment
+failure rather than permission to select an ambient host executable.
 
 ## Component Runtime And Wiring
 

@@ -64,7 +64,7 @@ import org.goldenport.configuration.ConfigurationTrace
 import org.goldenport.configuration.ResolvedConfiguration
 import org.goldenport.configuration.source.file.ConfigTextDecoder
 import org.goldenport.cncf.config.RuntimeFileConfigLoader
-import org.goldenport.cncf.processexecution.{ProcessExecutionResult, ResolvedProcessExecution}
+import org.goldenport.cncf.processexecution.{ProcessExecutionAdmission, ProcessExecutionRequest, ProcessExecutionResult, ResolvedProcessExecution}
 
 /*
  * @since   Jan.  6, 2026
@@ -482,6 +482,27 @@ trait ActionCallFeaturePart extends BehaviorFeaturePart { self: ActionCall.Core.
 }
 
 trait BehaviorProcessExecutionPart extends BehaviorFeaturePart { self: Behavior.Core.Holder =>
+  /**
+   * Resolves a provider's logical request through the runtime-owned admission
+   * service before creating the resolved-only UnitOfWork operation.
+   */
+  protected final def process_exec(
+    request: ProcessExecutionRequest
+  ): ExecUowM[ProcessExecutionResult] =
+    exec_from(ProcessExecutionAdmission.resolveC(execution_context.cncfCore.scope, request)).flatMap(process_exec)
+
+  protected final def process_exec_c(
+    request: ProcessExecutionRequest
+  )(using uow: UnitOfWork): Consequence[ProcessExecutionResult] =
+    ProcessExecutionAdmission.resolveC(execution_context.cncfCore.scope, request).flatMap(
+      execution => process_exec_c(execution)
+    )
+
+  protected final def process_exec_or_throw(
+    request: ProcessExecutionRequest
+  )(using uow: UnitOfWork): ProcessExecutionResult =
+    process_exec_c(request).TAKE
+
   /**
    * Creates a Process Execution intent in the canonical UnitOfWork algebra.
    * The input is already capability-admitted; components never select a host

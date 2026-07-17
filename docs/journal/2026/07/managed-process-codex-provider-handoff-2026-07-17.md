@@ -11,6 +11,13 @@ for the CNCF process boundary needed by Textus AI AR-06. It is non-normative.
 Any settled process contract must be promoted to `docs/design/` and `docs/spec/`
 with executable specifications before implementation is claimed complete.
 
+> Historical annotation, Jul. 17, 2026: Phase 34 selected a new CNCF
+> `UnitOfWorkOp.ProcessExec` effect rather than evolving legacy
+> `ShellCommandExec`. The current normative contracts are
+> `docs/design/process-execution-runtime.md` and
+> `docs/spec/process-execution-runtime.md`. This record preserves the original
+> investigation and must not be read as the current implementation direction.
+
 ## Driver
 
 Textus AI Phase 1 was reopened after Codex CLI execution was confirmed as a

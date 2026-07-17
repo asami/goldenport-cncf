@@ -1,6 +1,7 @@
 package org.goldenport.cncf.processexecution
 
 import org.goldenport.Consequence
+import org.goldenport.cncf.context.ScopeContext
 
 /*
  * @since   Jul. 17, 2026
@@ -428,6 +429,56 @@ final case class ProcessExecutionGrant(
   capability: ProcessCapabilityId,
   maximumLimits: ProcessExecutionLimits = ProcessExecutionLimits.empty
 )
+
+/**
+ * Runtime-installed admission for one component/provider execution scope.
+ *
+ * Component code submits a logical request. The runtime owns program
+ * definitions and grants, and returns the only intent that may enter the
+ * UnitOfWork Process Execution operation.
+ */
+final class ProcessExecutionAdmission private (
+  policy: ProcessExecutionPolicy,
+  grants: Map[ProcessCapabilityId, ProcessExecutionGrant]
+) {
+  def admitC(request: ProcessExecutionRequest): Consequence[ResolvedProcessExecution] =
+    grants.get(request.capability).map(policy.resolveC(request, _)).getOrElse(
+      Consequence.argumentPolicyViolation(
+        "capability",
+        "process.execution.capability-grant",
+        "runtime-installed capability grant",
+        request.capability.print
+      )
+    )
+}
+
+object ProcessExecutionAdmission {
+  def createC(
+    policy: ProcessExecutionPolicy,
+    grants: Vector[ProcessExecutionGrant]
+  ): Consequence[ProcessExecutionAdmission] = {
+    val capabilities = grants.map(_.capability)
+    if (capabilities.distinct.size != capabilities.size)
+      Consequence.argumentPolicyViolation(
+        "grants",
+        "process.execution.capability-grant",
+        "unique capability grants",
+        "duplicate"
+      )
+    else
+      grants.foldLeft(Consequence.unit) { (z, grant) =>
+        z.flatMap(_ => grant.maximumLimits.validateOptionalC)
+      }.map(_ => new ProcessExecutionAdmission(policy, grants.map(x => x.capability -> x).toMap))
+  }
+
+  def resolveC(
+    scope: ScopeContext,
+    request: ProcessExecutionRequest
+  ): Consequence[ResolvedProcessExecution] =
+    scope.processExecutionAdmissionOption
+      .map(_.admitC(request))
+      .getOrElse(Consequence.serviceUnavailable("Process Execution admission is not configured"))
+}
 
 final case class ProcessExecutionRequest(
   capability: ProcessCapabilityId,

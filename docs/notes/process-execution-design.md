@@ -1,6 +1,6 @@
 # Process Execution Design Note
 
-status = proposed, non-normative
+status = historical, non-normative
 
 This note is the historical design exploration and implementation handoff for
 Phase 34. The settled normative contracts are:

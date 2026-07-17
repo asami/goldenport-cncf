@@ -151,13 +151,13 @@ and confidential-output/failure-display coverage.
 
 ## PE-08: Consumer Handoff and Closure
 
-Status: OPEN
+Status: DONE (Jul. 17, 2026)
 
-- [ ] Define the provider-neutral consumer handoff for a `codex-cli`-style
+- [x] Define the provider-neutral consumer handoff for a `codex-cli`-style
   capability without adding a Codex implementation to CNCF core.
-- [ ] Run focused and full CNCF regression suites.
-- [ ] Review the final design/spec/docs and record deferred scope.
-- [ ] Update strategy/phase status and commit validated work.
+- [x] Run focused and full CNCF regression suites.
+- [x] Review the final design/spec/docs and record deferred scope.
+- [x] Update strategy/phase status and commit validated work.
 
 Acceptance evidence:
 
@@ -165,3 +165,13 @@ Acceptance evidence:
   needing a parallel shell/process API.
 - Live Codex installation, account, and network access are not required by
   normal Phase 34 specs.
+
+Evidence: `ProcessExecutionAdmission` is installed in `ScopeContext` by trusted
+runtime assembly and applies the effective policy plus grants before a provider
+DSL request becomes `UnitOfWorkOp.ProcessExec`. `ProcessExecutionDslSpec`
+proves direct and Free execution for a deterministic `codex-cli`-style logical
+request. The final focused model/driver/DSL/Job/cancellation suites passed 31
+tests, and the full CNCF suite passed 1,918 tests in 278 suites with no
+failures. The design/spec, component developer index,
+and historical source handoff record the consumer boundary and the deferred
+live-provider/container/remote/legacy-shell/BPM scope.

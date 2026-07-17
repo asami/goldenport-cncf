@@ -652,15 +652,12 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Notes contain execution details and results for each phase.
 
 ## Process Status Pointers
-- Current phase dashboard: `docs/phase/phase-34.md`.
-- Current phase checklist: `docs/phase/phase-34-checklist.md`.
-- Current development item: `9.29 Process Execution Runtime`.
-- Latest closed phase dashboard: `docs/phase/phase-33.md`
-- Latest closed phase checklist: `docs/phase/phase-33-checklist.md`
-- Previous closed phase dashboard: `docs/phase/phase-32.md`
-- Previous closed phase checklist: `docs/phase/phase-32-checklist.md`
-- Current next slice: PE-07 Process Execution Job/Task cancellation,
-  observability, confidentiality, and diagnostics.
+- No active phase is selected after Phase 34 closure.
+- Latest closed phase dashboard: `docs/phase/phase-34.md`.
+- Latest closed phase checklist: `docs/phase/phase-34-checklist.md`.
+- Previous closed phase dashboard: `docs/phase/phase-33.md`
+- Previous closed phase checklist: `docs/phase/phase-33-checklist.md`
+- Select the next development item before opening a new phase.
 - Status interpretation rules: `docs/rules/stage-status-and-checklist-convention.md`
 - Latest post-closure maintenance: Jul. 15, 2026 descriptor-bound component
   runtime configuration preservation. Materialized component instances retain
@@ -2212,7 +2209,7 @@ closed Jul. 17, 2026.
     beyond its resource-access boundary.
 
 ### 9.29 Process Execution Runtime
-Active development item for Phase 34.
+Completed in Phase 34 (Jul. 17, 2026).
 
 - Goal: provide a capability-constrained CNCF runtime effect for executing an
   approved external program through UnitOfWork, WorkArea, Job/Task
@@ -2229,15 +2226,16 @@ Active development item for Phase 34.
     specifications;
   - expose a provider-neutral handoff for a future Textus AI `codex-cli`
     capability.
-- Initial implementation completed:
+- Implementation completed:
   - `docs/notes/process-execution-design.md` is promoted by the normative
     `docs/design/process-execution-runtime.md` and
     `docs/spec/process-execution-runtime.md` contracts.
-- Next implementation direction:
-  - establish capability admission and fake-driver behavior before adding a
-    local `ProcessBuilder` implementation;
-  - preserve existing ActionCall, UnitOfWork, Job/Task, authorization, and
-    observability chokepoints for every process execution.
+  - `ProcessExecutionAdmission` supplies scoped runtime policy/grant admission
+    for the provider-facing `process_exec(request)` DSL while
+    `UnitOfWorkOp.ProcessExec` remains resolved-only.
+  - deterministic fake-driver, local-driver, WorkArea, Job cancellation,
+    payload-safe diagnostics, and provider-neutral consumer coverage are
+    complete.
 - Deferred scope:
   - live Textus AI/Codex provider implementation, account integration, and
     network-dependent verification;

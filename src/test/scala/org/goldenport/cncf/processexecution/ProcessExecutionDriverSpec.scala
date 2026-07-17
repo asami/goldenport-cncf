@@ -51,6 +51,20 @@ final class ProcessExecutionDriverSpec extends AnyWordSpec with Matchers with Gi
       resolved.toOption.map(_.safeIdentity) shouldBe Some("deterministic-test")
     }
 
+    "inherit runtime-installed admission through a component scope" in {
+      Given("an admitted codex-cli capability installed on the runtime scope")
+      val capability = ProcessCapabilityId.parseC("codex-cli").toOption.get
+      val fixture = ProcessExecutionTestProfile.admittedC(capability, _result(capability, exitcode = 0)).toOption.get
+      val runtime = _scope("runtime", None, Some(fixture.profile.driver), Some(fixture.admission))
+      val component = runtime.createChildScope(ScopeKind.Component, "component")
+
+      When("a component provider resolves its logical Process Execution request")
+      val resolved = ProcessExecutionAdmission.resolveC(component, ProcessExecutionRequest(capability))
+
+      Then("the inherited runtime admission produces the configured resolved intent")
+      resolved.toOption shouldBe Some(fixture.execution)
+    }
+
     "return a structured unavailable-service failure when no scope provides a driver" in {
       Given("a scope tree with no Process Execution driver")
       val runtime = _scope("runtime", None, None)
@@ -87,14 +101,16 @@ final class ProcessExecutionDriverSpec extends AnyWordSpec with Matchers with Gi
   private def _scope(
     name: String,
     parent: Option[ScopeContext],
-    driver: Option[ProcessExecutionDriver]
+    driver: Option[ProcessExecutionDriver],
+    admission: Option[ProcessExecutionAdmission] = None
   ): ScopeContext =
     ScopeContext(
       kind = ScopeKind.Runtime,
       name = name,
       parent = parent,
       observabilityContext = ExecutionContext.create().observability,
-      processExecutionDriverOption = driver
+      processExecutionDriverOption = driver,
+      processExecutionAdmissionOption = admission
     )
 
   private def _execution(capability: ProcessCapabilityId): ResolvedProcessExecution = {

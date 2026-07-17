@@ -73,8 +73,9 @@ object ProcessExecutionTestProfile {
         Set.empty
       )
       policy <- ProcessExecutionPolicy.createC(Vector(definition))
-      execution <- policy.resolveC(ProcessExecutionRequest(capability), ProcessExecutionGrant(capability))
-    } yield ProcessExecutionTestFixture(profile, policy, execution)
+      admission <- ProcessExecutionAdmission.createC(policy, Vector(ProcessExecutionGrant(capability)))
+      execution <- admission.admitC(ProcessExecutionRequest(capability))
+    } yield ProcessExecutionTestFixture(profile, policy, admission, execution)
   }
 
   private val _limits = ProcessExecutionLimits(
@@ -95,6 +96,7 @@ object ProcessExecutionTestProfile {
 final case class ProcessExecutionTestFixture(
   profile: ProcessExecutionTestProfile,
   policy: ProcessExecutionPolicy,
+  admission: ProcessExecutionAdmission,
   execution: ResolvedProcessExecution
 )
 

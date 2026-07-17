@@ -7,7 +7,7 @@ import org.goldenport.cncf.context.EntityStoreContext
 import org.goldenport.cncf.context.EntitySpaceContext
 import org.goldenport.cncf.workarea.WorkAreaSpace
 import org.goldenport.cncf.http.HttpDriver
-import org.goldenport.cncf.processexecution.ProcessExecutionDriver
+import org.goldenport.cncf.processexecution.{ProcessExecutionAdmission, ProcessExecutionDriver}
 import org.goldenport.cncf.datastore.DataStoreSpace
 import org.goldenport.cncf.entity.EntityStoreSpace
 import org.goldenport.cncf.entity.runtime.EntitySpace
@@ -56,6 +56,10 @@ abstract class ScopeContext() extends ObservationDsl with ScopeContext.Core.Hold
   def processExecutionDriverOption: Option[ProcessExecutionDriver] =
     core.processExecutionDriverOption orElse parent.flatMap(_.processExecutionDriverOption)
 
+  /** Runtime-owned capability/program admission for Process Execution. */
+  def processExecutionAdmissionOption: Option[ProcessExecutionAdmission] =
+    core.processExecutionAdmissionOption orElse parent.flatMap(_.processExecutionAdmissionOption)
+
   def formatPing: String =
     parent match {
       case Some(p) => p.formatPing
@@ -88,7 +92,8 @@ object ScopeContext {
     entitystore: Option[EntityStoreContext] = None,
     entityspace: Option[EntitySpaceContext] = None,
     aggregateInternalRead: Boolean = false,
-    processExecutionDriverOption: Option[ProcessExecutionDriver] = None
+    processExecutionDriverOption: Option[ProcessExecutionDriver] = None,
+    processExecutionAdmissionOption: Option[ProcessExecutionAdmission] = None
   )
   object Core {
     trait Holder {
@@ -134,7 +139,8 @@ object ScopeContext {
     parent: Option[ScopeContext],
     observabilityContext: ObservabilityContext,
     httpDriverOption: Option[HttpDriver] = None,
-    processExecutionDriverOption: Option[ProcessExecutionDriver] = None
+    processExecutionDriverOption: Option[ProcessExecutionDriver] = None,
+    processExecutionAdmissionOption: Option[ProcessExecutionAdmission] = None
   ): ScopeContext = {
     Instance(
       ScopeContext.Core(
@@ -143,7 +149,8 @@ object ScopeContext {
         parent = parent,
         observabilityContext = observabilityContext,
         httpDriverOption = httpDriverOption,
-        processExecutionDriverOption = processExecutionDriverOption
+        processExecutionDriverOption = processExecutionDriverOption,
+        processExecutionAdmissionOption = processExecutionAdmissionOption
       )
     )
   }
