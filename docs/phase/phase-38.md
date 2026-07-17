@@ -2,7 +2,7 @@
 
 Stage Status:
 - Current status: IN_PROGRESS
-- Current step: SW-05 Static Web runtime integration
+- Current step: SW-06 Executable security and policy evidence
 - Start condition: Phase 36 is closed and the existing Static Web rendering
   path can supply the effective request execution context.
 - Dependency relation: Phase 38 may start independently of Phase 37.
@@ -87,7 +87,7 @@ models and temporary delayed-render workarounds.
 - C (DONE): SW-03 - Implement mode-aware locale, timezone, and display-format
   resolution.
 - D (DONE): SW-04 - Add first-render template and escaped JSON projection.
-- E (OPEN): SW-05 - Integrate the projection with Static Web routes and page
+- E (DONE): SW-05 - Integrate the projection with Static Web routes and page
   context without changing application business operations.
 - F (OPEN): SW-06 - Add security, locale-precedence, and hostile-input
   executable specifications.
@@ -178,3 +178,11 @@ display-format policy mapping. Shared ingress no longer applies
 `Accept-Language` implicitly. `WebExecutionResolutionSpec` and
 `IngressSecurityResolverSpec` provide behavior and property-based precedence
 evidence.
+
+SW-04 added the typed framework member to `WebPageContext`, safe first-render
+JSON and locale semantics, fragment normalization, reserved-element
+replacement, and provider-merge isolation. SW-05 connected the projection to
+component-owned Static Web request routes through the selected component
+runtime `ExecutionContext`; it preserves structured policy failures and does
+not call application business operations. Executable runtime evidence is in
+`StaticWebExecutionProjectionIntegrationSpec`.

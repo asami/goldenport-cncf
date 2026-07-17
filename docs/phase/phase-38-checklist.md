@@ -88,13 +88,29 @@ Evidence:
 
 ## SW-05: Static Web Runtime Integration
 
-Status: OPEN
+Status: DONE
 
-- [ ] Integrate the projection after security/user execution context is
+- [x] Integrate the projection after security/user execution context is
   resolved and before static HTML is returned.
-- [ ] Preserve Static Web route, authorization, theme, and asset behavior.
-- [ ] Keep application business state in application operations such as
+- [x] Preserve Static Web route, authorization, theme, and asset behavior.
+- [x] Keep application business state in application operations such as
   `DescribeApplication`.
+
+Evidence:
+
+- Static Web request rendering resolves ingress against the selected component
+  runtime context and attaches `WebExecutionProjection` before template
+  rendering.
+- `WebExecutionRuntimeProjection` uses resolved `SecuritySubject` state,
+  explicit Web policy, and bounded request display/language inputs without
+  calling application business operations.
+- Plain full-document Static Web pages now pass through the projection path;
+  internal request-less rendering retains its previous behavior.
+- `StaticWebExecutionProjectionIntegrationSpec` verifies canonical route,
+  application content, configured Japanese locale/timezone, conflicting
+  English `Accept-Language`, first-render JSON, anonymous capability
+  redaction, and rejection of arbitrary request formatting headers through
+  the public HTTP dispatcher.
 
 ## SW-06: Executable Security and Policy Evidence
 

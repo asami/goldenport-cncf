@@ -4,7 +4,7 @@ package org.goldenport.cncf.http
  * @since   May. 18, 2026
  *  version May. 30, 2026
  *  version Jun. 19, 2026
- * @version Jul. 16, 2026
+ * @version Jul. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 import cats.effect.IO
@@ -64,7 +64,7 @@ import org.goldenport.observation.{Cause, Descriptor}
  *  version Apr. 30, 2026
  *  version May. 25, 2026
  *  version Jun. 19, 2026
- * @version Jul. 16, 2026
+ * @version Jul. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Http4sHttpServer(
@@ -4403,7 +4403,7 @@ final class Http4sHttpServer(
       subsystemShell = composesubsystemarticle,
       requireLayout = composesubsystemarticle,
       componentName = componentName
-    ).map { composed =>
+    ).flatMap { composed =>
       val expandedhtml = req.map { request =>
         _web_operation_result_inline_content(
           Some(request),
@@ -4413,23 +4413,26 @@ final class Http4sHttpServer(
           composed.html
         )
       }.getOrElse(composed.html)
-      val needstemplaterendering =
-        composed.appliedLayout ||
-          sourcehastextusmarkup ||
-          _static_form_app_renderer.hasTextusMarkup(expandedhtml) ||
-          _has_textus_include(expandedhtml) ||
-          (!_static_form_app_renderer.isHtmlDocumentTemplate(expandedhtml) && _has_property_placeholder(expandedhtml))
-      if (needstemplaterendering)
-        _static_form_app_renderer.renderStaticTemplate(
-          webappname,
-          page,
-          expandedhtml,
-          _web_app_asset_completion(webappname),
-          _page_view_context(req, webappname, page),
-          engine.webDescriptor
-        )
-      else
-        StaticFormAppRenderer.Page(expandedhtml)
+      _static_page_view_context(req, componentName, webappname, page).map { pagecontext =>
+        val needstemplaterendering =
+          pagecontext.execution.nonEmpty ||
+            composed.appliedLayout ||
+            sourcehastextusmarkup ||
+            _static_form_app_renderer.hasTextusMarkup(expandedhtml) ||
+            _has_textus_include(expandedhtml) ||
+            (!_static_form_app_renderer.isHtmlDocumentTemplate(expandedhtml) && _has_property_placeholder(expandedhtml))
+        if (needstemplaterendering)
+          _static_form_app_renderer.renderStaticTemplate(
+            webappname,
+            page,
+            expandedhtml,
+            _web_app_asset_completion(webappname),
+            pagecontext,
+            engine.webDescriptor
+          )
+        else
+          StaticFormAppRenderer.Page(expandedhtml)
+      }
     }
   }
 
@@ -4443,7 +4446,8 @@ final class Http4sHttpServer(
   private def _page_view_context(
     req: Option[org.http4s.Request[IO]],
     webappname: String,
-    page: Vector[String]
+    page: Vector[String],
+    executioncontext: Option[ExecutionContext] = None
   ): WebPageContext = {
     val sessionid = req.flatMap(_session_id_(_))
     val runtimeconfig = RuntimeConfig.from(engine.runtimeSubsystem.configuration)
@@ -4473,8 +4477,38 @@ final class Http4sHttpServer(
       "pageContext.app" -> webappname,
       "pageContext.page" -> (if (page.isEmpty) "index" else page.mkString("/"))
     ))
-    base.merge(_page_context_from_providers(req, webappname, page, sessionid, authenticated))
+    base.merge(_page_context_from_providers(req, webappname, page, sessionid, authenticated, executioncontext))
   }
+
+  private def _static_page_view_context(
+    req: Option[org.http4s.Request[IO]],
+    componentname: Option[String],
+    webappname: String,
+    page: Vector[String]
+  ): Consequence[WebPageContext] =
+    req match {
+      case None =>
+        Consequence.success(_page_view_context(req, webappname, page))
+      case Some(request) =>
+        val queryvalues = _query_values(request)
+        for {
+          executioncontext <- _static_request_execution_context(request, componentname.orElse(Some(webappname)))
+          projection <- WebExecutionRuntimeProjection.resolve(
+            engine.runtimeSubsystem.configuration,
+            executioncontext,
+            WebExecutionRuntimeRequest(
+              displayLocale = queryvalues.get("lang").orElse(queryvalues.get("locale")),
+              displayTimezone = queryvalues.get("timezone").orElse(queryvalues.get("timeZone")),
+              acceptLanguage = _request_header_value(request, "Accept-Language")
+            )
+          )
+        } yield _page_view_context(
+          req,
+          webappname,
+          page,
+          Some(executioncontext)
+        )._with_execution(projection)
+    }
 
   private def _page_query_context_values(
     req: Option[org.http4s.Request[IO]]
@@ -4501,10 +4535,11 @@ final class Http4sHttpServer(
     webappname: String,
     page: Vector[String],
     sessionid: Option[String],
-    authenticated: Boolean
+    authenticated: Boolean,
+    executioncontext: Option[ExecutionContext] = None
   ): WebPageContext =
     req.flatMap { r =>
-      _request_execution_context(r).toOption.map { ctx =>
+      executioncontext.orElse(_request_execution_context(r).toOption).map { ctx =>
         given ExecutionContext = ctx
         WebPageContextProviderRuntime.resolve(
           engine.runtimeSubsystem,
@@ -5548,13 +5583,50 @@ final class Http4sHttpServer(
     lower == "cookie" || lower == "set-cookie" || lower == "x-textus-session"
 
   private def _request_execution_context(
-    req: org.http4s.Request[IO]
+    req: org.http4s.Request[IO],
+    componentname: Option[String] = None
+  ): Consequence[ExecutionContext] =
+    _request_execution_context(req, componentname, Set.empty)
+
+  private def _static_request_execution_context(
+    req: org.http4s.Request[IO],
+    componentname: Option[String]
+  ): Consequence[ExecutionContext] =
+    _request_execution_context(
+      req,
+      componentname,
+      Set("locale", "user.locale", "textus.locale")
+    )
+
+  private def _request_execution_context(
+    req: org.http4s.Request[IO],
+    componentname: Option[String],
+    excludedattributekeys: Set[String]
   ): Consequence[ExecutionContext] = {
-    val attributes = _request_header_record(req).asMap.map { case (key, value) =>
-      key -> Option(value).map(_.toString).getOrElse("")
-    }
-    IngressSecurityResolver.resolve(ExecutionContext.create(), attributes).map(_.executionContext)
+    val excluded = excludedattributekeys.map(
+      _.trim.toLowerCase(java.util.Locale.ROOT).replace("_", "").replace("-", "")
+    )
+    val attributes = _request_header_record(req).asMap.iterator
+      .filterNot { case (key, _) =>
+        excluded.contains(key.trim.toLowerCase(java.util.Locale.ROOT).replace("_", "").replace("-", ""))
+      }
+      .map { case (key, value) =>
+        key -> Option(value).map(_.toString).getOrElse("")
+      }
+      .toMap
+    val base = componentname.flatMap(_component).map(_.logic.executionContext()).getOrElse(ExecutionContext.create())
+    IngressSecurityResolver.resolve(base, attributes).map(_.executionContext)
   }
+
+  private def _request_header_value(
+    req: org.http4s.Request[IO],
+    name: String
+  ): Option[String] =
+    req.headers.headers.iterator
+      .find(_.name.toString.equalsIgnoreCase(name))
+      .map(_.value)
+      .map(_.trim)
+      .filter(_.nonEmpty)
 
   private def _development_form_header_record(
     req: org.http4s.Request[IO],

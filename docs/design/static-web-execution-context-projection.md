@@ -253,6 +253,19 @@ The existing page-context extension mechanism remains separately reviewed by
 its own contract. Its values are not automatically included in the execution
 JSON.
 
+Static Web runtime integration resolves ingress security against the selected
+component runtime context before projection. `WebExecutionRuntimeProjection`
+derives authentication and effective capabilities from the resolved
+`SecuritySubject`, applies the configured Web execution policy to runtime,
+user-preference, explicit display-override, and optional HTTP language inputs,
+and returns the typed projection. Static Web request routes attach that value
+to the framework page context before template rendering. Internal renderer
+calls without an HTTP request retain their previous unprojected behavior.
+Static Web ingress excludes raw request formatting aliases such as `Locale`
+and `user.locale`; only the typed, policy-gated display override and HTTP
+language inputs may supplement execution-owned formatting. Authentication
+provider principal preferences remain part of the resolved subject context.
+
 ## Integration Boundary
 
 ArtScene consumes the projection before its first application render. It may
