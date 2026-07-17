@@ -832,6 +832,7 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Phase 35: closed (`docs/phase/phase-35.md`)
 - Phase 36: closed (`docs/phase/phase-36.md`)
 - Phase 37: planned (`docs/phase/phase-37.md`)
+- Phase 38: planned (`docs/phase/phase-38.md`)
 
 ## 8. Completed Development Item History
 
@@ -2367,3 +2368,45 @@ Planned for Phase 37 after Phase 36 closes.
   - remote/container Process Execution, general shell execution, and generic
     provider transports;
   - CBD Support CAR ABI publication and release management.
+
+### 9.33 Static Web Execution-Context Projection
+Planned for Phase 38 (Jul. 17, 2026).
+
+- Goal: let Static Web Apps render their first HTML response from a safe,
+  resolved execution-context projection without browser-owned locale state or
+  an application-specific startup REST request.
+- Driver:
+  - ArtScene first-render locale and display formatting;
+  - the resulting contract is generic CNCF Static Web infrastructure.
+- Scope:
+  - define immutable `pageContext.execution` metadata for locale, timezone,
+    application display formats, application mode, safe subject state, and
+    explicitly public capabilities;
+  - resolve standalone and multi-user formatting through effective execution
+    policy before first HTML generation;
+  - emit matching semantic DOM attributes and one safely escaped JSON
+    script-data block;
+  - prevent implicit `Accept-Language`, `navigator.language`, or
+    `localStorage` precedence over execution-owned state;
+  - prove that security tokens, internal identifiers, secrets, configuration,
+    datastore details, and debug context never enter the projection;
+  - update Static Web developer guidance and validate the ArtScene handoff.
+- First implementation direction:
+  - audit existing `IngressSecurityResolver` formatting precedence and Static
+    Web page-context construction;
+  - promote the handoff to normative design/spec before adding renderer APIs;
+  - implement a typed projection rather than serializing `ExecutionContext`;
+  - cover standalone, authenticated-user, runtime-default, hostile-value, and
+    redaction behavior with executable specifications.
+- Boundary:
+  - Phase 38 may start independently of the downstream Phase 37 migration;
+  - `DescribeApplication` remains business-state API, not execution-context
+    discovery;
+  - HTTP language negotiation is opt-in and cannot override an already
+    resolved execution-owned locale;
+  - no general browser serialization of `ExecutionContext` is introduced.
+- Deferred scope:
+  - client-side user-preference editing and persistence UI;
+  - arbitrary execution-context fields or application-private data;
+  - replacing Static Web rendering with SPA-only startup behavior;
+  - ArtScene application-specific translation catalogs and business state.
