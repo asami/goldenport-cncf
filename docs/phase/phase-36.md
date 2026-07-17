@@ -2,7 +2,7 @@
 
 Stage Status:
 - Current status: IN_PROGRESS
-- Current step: RB-03 declared typed component configuration
+- Current step: RB-04 opaque secret-reference boundary
 - Owner: Phase 36 Component Runtime Boundary Capabilities
 - Update rule: Update this block and `phase-36-checklist.md` whenever a stable
   work-item state changes. Close the phase only when every in-scope checklist
@@ -69,8 +69,8 @@ CAR Review, and application-specific models.
 
 - A (DONE): RB-01 - Audit existing contracts and freeze Phase 36 scope.
 - B (DONE): RB-02 - Confirm the component execution-time contract.
-- C (IN PROGRESS): RB-03 - Implement declared typed component configuration.
-- D (OPEN): RB-04 - Implement the opaque secret-reference boundary.
+- C (DONE): RB-03 - Implement declared typed component configuration.
+- D (IN PROGRESS): RB-04 - Implement the opaque secret-reference boundary.
 - E (OPEN): RB-05 - Implement admitted read-only resource trees.
 - F (OPEN): RB-06 - Materialize admitted trees into Process WorkAreas.
 - G (OPEN): RB-07 - Verify the provider-neutral external-tool pattern.
@@ -133,3 +133,10 @@ are available before their executable specifications are completed.
 RB-02 has confirmed the existing clock boundary through
 `ExecutionClockDslSpec`: fixed and controlled runtime clocks reach component
 ActionCalls only through the bound `ExecutionContext` internal DSL.
+
+RB-03 has established `ComponentConfigurationKey[A]`, typed decoders,
+optional-or-required resolution, provenance, and protected ActionCall access.
+Public values resolve `component > subsystem > runtime`; malformed, missing,
+and denied values remain structured `Consequence` failures. `test.yaml`
+assembly component config is executable evidence for deterministic test
+configuration, while action/request properties cannot override a declared key.

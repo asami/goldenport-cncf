@@ -41,6 +41,11 @@ a structured `Consequence.Failure(Conclusion)`. A component configuration
 result MUST provide a provenance category without exposing an unrelated raw
 configuration source or confidential value.
 
+The canonical component access path is the protected ActionCall internal DSL.
+It accepts only a declared key and returns the decoded optional-or-required
+result with `Component`, `Subsystem`, `Runtime`, or `Absent` provenance. It
+does not expose a raw configuration map or arbitrary key lookup operation.
+
 ## Configuration Precedence (R4)
 
 The runtime resolves declared configuration according to explicit component,
@@ -133,3 +138,14 @@ waiting.
 
 Behavior under a controlled manual execution profile advances only the
 execution-context-owned clock when it requests a bounded delay.
+
+### E5: Declared Component Configuration
+
+A component declares `ComponentConfigurationKey[String]("provider.mode",
+...)` and resolves it only through its protected ActionCall internal DSL. The
+runtime selects component configuration before subsystem configuration and
+subsystem configuration before runtime configuration. A `test.yaml` assembly
+override may supply the component binding's `config` for deterministic
+executable specifications. Request properties do not participate in this
+resolution. Missing required, malformed, and policy-denied declarations remain
+structured failures; optional absence returns `Absent` provenance.

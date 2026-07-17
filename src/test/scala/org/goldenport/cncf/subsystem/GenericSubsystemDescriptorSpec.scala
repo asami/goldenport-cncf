@@ -15,7 +15,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Apr.  8, 2026
  *  version Apr. 28, 2026
  *  version May.  7, 2026
- * @version Jul. 15, 2026
+ * @version Jul. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class GenericSubsystemDescriptorSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -806,6 +806,10 @@ final class GenericSubsystemDescriptorSpec extends AnyWordSpec with Matchers wit
           |config:
           |  textus.web.demo-assist.enabled: true
           |assembly:
+          |  components:
+          |    - name: target-component
+          |      config:
+          |        provider.mode: deterministic-test
           |  spi:
           |    bindings:
           |      - socket:
@@ -834,8 +838,14 @@ final class GenericSubsystemDescriptorSpec extends AnyWordSpec with Matchers wit
         .getOrElse(subsystem)
       val bindings = GenericSubsystemDescriptor.resolveAssemblySpiBindings(effective).toOption.get
 
-      Then("runtime config and typed SPI selectors remain available")
+      Then("runtime config, declared component configuration, and typed SPI selectors remain available")
       descriptor.config shouldBe Map("textus.web.demo-assist.enabled" -> "true")
+      effective.componentBindings shouldBe Vector(
+        GenericSubsystemComponentBinding(
+          componentName = "target-component",
+          config = Map("provider.mode" -> "deterministic-test")
+        )
+      )
       bindings.size shouldBe 1
       bindings.head.socket.component shouldBe Some("target-component")
       bindings.head.socket.instance shouldBe Some("consumer-default")

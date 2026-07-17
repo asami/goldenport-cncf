@@ -67,6 +67,23 @@ No component-facing API resolves a `SecretReference` to credential bytes or
 text. Authorized runtime providers and Process Execution drivers resolve secret
 values only at their owned execution boundary.
 
+### Initial Typed Configuration Contract
+
+RB-03 establishes `ComponentConfigurationKey[A]`,
+`ComponentConfigurationDecoder[A]`, `ComponentConfigurationResolution[A]`, and
+`ComponentConfigurationAccess` as the initial public configuration model.
+Components consume this model only through the protected ActionCall internal
+DSL. Public declarations resolve `component > subsystem > runtime`; their
+result carries only the selected provenance category. The implementation does
+not publish raw configuration maps or an arbitrary-key lookup API.
+
+`test.yaml` retains its existing assembly overlay role. A test may declare
+`assembly.components[].config` to create a deterministic component binding;
+normal component construction then merges that binding into the component
+application configuration. This does not create a request-parameter override
+path. Confidential declarations are deliberately denied from this public value
+API until RB-04 supplies an authorized opaque-reference or safe-use boundary.
+
 ## Resource Trees
 
 A resource tree is a named, admitted, read-only logical capability. Its public

@@ -64,6 +64,7 @@ import org.goldenport.configuration.ConfigurationTrace
 import org.goldenport.configuration.ResolvedConfiguration
 import org.goldenport.configuration.source.file.ConfigTextDecoder
 import org.goldenport.cncf.config.RuntimeFileConfigLoader
+import org.goldenport.cncf.config.{ComponentConfigurationAccess, ComponentConfigurationKey, ComponentConfigurationResolution, ComponentConfigurationSources}
 import org.goldenport.cncf.processexecution.{ProcessExecutionAdmission, ProcessExecutionRequest, ProcessExecutionResult, ResolvedProcessExecution}
 
 /*
@@ -336,6 +337,28 @@ trait ActionCallFeaturePart extends BehaviorFeaturePart { self: ActionCall.Core.
     compatibility: String
   ): Option[String] =
     config_string(primary).orElse(config_string(compatibility))
+
+  protected final def component_configuration[A](
+    key: ComponentConfigurationKey[A]
+  ): Consequence[ComponentConfigurationResolution[A]] =
+    ComponentConfigurationAccess(_component_configuration_sources).resolve(key)
+
+  private def _component_configuration_sources: ComponentConfigurationSources = {
+    val componentconfiguration = component.flatMap(_.applicationConfig.config).getOrElse(Configuration.empty)
+    val subsystemconfiguration = component.flatMap(_.subsystem).map(_.configuration.configuration).getOrElse(Configuration.empty)
+    val runtimeconfiguration = _runtime_configuration(executionContext.runtime)
+    ComponentConfigurationSources(componentconfiguration, subsystemconfiguration, runtimeconfiguration)
+  }
+
+  @annotation.tailrec
+  private def _runtime_configuration(scope: ScopeContext): Configuration =
+    scope match {
+      case m: GlobalRuntimeContext => m.resolvedConfiguration.configuration
+      case _ => scope.parent match {
+        case Some(parent) => _runtime_configuration(parent)
+        case None => Configuration.empty
+      }
+    }
 
   private def _component_configuration: Option[ResolvedConfiguration] = {
     val subsystemconfiguration = component.flatMap(_.subsystem).map(_.configuration)

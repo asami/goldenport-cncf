@@ -27,15 +27,15 @@ Status: DONE
 
 ## RB-03: Declared Typed Component Configuration
 
-Status: OPEN
+Status: DONE
 
-- [ ] Define typed key, decoder, optional/required result, and access contracts.
-- [ ] Define component/subsystem/runtime precedence and safe provenance.
-- [ ] Reject undeclared, missing required, malformed, and policy-denied values
+- [x] Define typed key, decoder, optional/required result, and access contracts.
+- [x] Define component/subsystem/runtime precedence and safe provenance.
+- [x] Reject undeclared, missing required, malformed, and policy-denied values
   with structured `Conclusion` failures.
-- [ ] Prevent action/request properties from overriding protected runtime
+- [x] Prevent action/request properties from overriding protected runtime
   declarations.
-- [ ] Provide deterministic test-descriptor coverage.
+- [x] Provide deterministic test-descriptor coverage.
 
 ## RB-04: Opaque Secret References
 
