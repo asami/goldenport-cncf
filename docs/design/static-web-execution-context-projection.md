@@ -237,6 +237,23 @@ application-owned script-data element using the reserved
 renderer also exposes read-only
 `pageContext.execution.*` placeholders derived from that same typed value.
 
+Client code consumes the same value synchronously from the reserved element
+before starting application requests:
+
+```javascript
+const element = document.querySelector("#textus-page-context");
+const pageContext = element ? JSON.parse(element.textContent || "{}") : {};
+const execution = pageContext.execution || {};
+```
+
+The stable selector is `#textus-page-context`; the stable JSON member is
+`execution`. Applications must treat unknown members as additive metadata and
+must not infer internal runtime state from them. The framework emits the
+element after leading head metadata such as `meta[charset]` and before the
+first application script in `head`, so synchronous application startup can
+consume it without delaying first render or issuing a locale-discovery REST
+request.
+
 ## Security Boundary
 
 The execution projection must not contain:
@@ -268,10 +285,10 @@ provider principal preferences remain part of the resolved subject context.
 
 ## Integration Boundary
 
-ArtScene consumes the projection before its first application render. It may
-then remove browser-locale, local-storage, startup-locale REST, and delayed
-visibility workarounds. `DescribeApplication` remains responsible for business
-state such as workspace and feature availability.
+ArtScene consumes the projection before its first application render. Browser
+locale, local-storage locale, startup-locale REST, and delayed visibility are
+not valid execution-locale fallbacks. `DescribeApplication` remains
+responsible for business state such as workspace and feature availability.
 
 ArtScene-specific translation catalogs, business state, and preference editing
 remain outside CNCF.

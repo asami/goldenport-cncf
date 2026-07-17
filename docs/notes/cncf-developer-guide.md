@@ -547,6 +547,39 @@ page under `/web/{component}/{webApp}` or an explicit component entry app, and
 link from that page to `/form/{component}` or operation-specific `/form/...`
 routes.
 
+### Static Web First-Render Context
+
+CNCF injects one framework-owned JSON script-data block into a rendered Static
+Web document:
+
+```html
+<script id="textus-page-context" type="application/json"></script>
+```
+
+Read it synchronously before starting application requests:
+
+```javascript
+function readPageContext(document) {
+  const element = document.querySelector("#textus-page-context");
+  return element ? JSON.parse(element.textContent || "{}") : {};
+}
+
+const execution = readPageContext(document).execution || {};
+```
+
+Use `execution.locale`, `execution.timezone`, `execution.applicationMode`, and
+the other documented public fields for first-render presentation. The stable
+integration identifiers are `#textus-page-context` and its `execution` member;
+do not depend on a generated DOM path or on the block's exact sibling
+position. Treat additional JSON members as additive.
+
+Do not call an application operation such as `DescribeApplication` to discover
+execution locale or timezone. Such operations remain business-state APIs.
+Browser language, local storage, and hidden-until-fetch rendering are not
+fallbacks for CNCF execution context. Query parameters may still implement an
+explicit application-level language switch, but they do not redefine the
+server-side execution projection or authorization context.
+
 ## Component-Local Embedded Datastore
 
 Use the embedded datastore internal DSL when a component needs durable

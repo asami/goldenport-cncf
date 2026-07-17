@@ -215,6 +215,18 @@ from the first HTML response without an additional REST operation.
 `DescribeApplication` and other application operations MUST remain business
 state APIs and MUST NOT be required for initial execution-context discovery.
 
+Client code MUST locate the framework value through the stable
+`#textus-page-context` selector and parse its text as JSON. It MUST read the
+execution projection from the stable `execution` member and tolerate unknown
+additive members. It MUST NOT depend on the script element's physical sibling
+position.
+
+The framework MUST place `#textus-page-context` after leading head metadata
+that must remain early, including `meta[charset]`, and before the first
+application script in `head`. A Static Web application MUST NOT hide the page,
+wait for a business REST operation, inspect browser locale, or consult browser
+storage merely to discover the initial execution locale.
+
 ## Required Executable Examples
 
 ### E1: Standalone Configuration Wins

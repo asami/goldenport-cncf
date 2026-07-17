@@ -140,15 +140,28 @@ Evidence:
 
 ## SW-07: Developer and ArtScene Integration Guidance
 
-Status: OPEN
+Status: DONE
 
-- [ ] Update Static Web design/spec and component developer documentation.
-- [ ] Document the client-side consumption contract and safe selector/block
+- [x] Update Static Web design/spec and component developer documentation.
+- [x] Document the client-side consumption contract and safe selector/block
   identifiers.
-- [ ] Validate ArtScene Japanese standalone first-render behavior without an
+- [x] Validate ArtScene Japanese standalone first-render behavior without an
   initial locale REST request.
-- [ ] Record removal of browser-locale, local-storage, and delayed-render
+- [x] Record removal of browser-locale, local-storage, and delayed-render
   workarounds as downstream application work.
+
+Evidence:
+
+- Static Web design, normative spec, and component developer guidance now use
+  `#textus-page-context` and its `execution` member as the stable client
+  integration identifiers.
+- ArtScene synchronously reads `execution.locale` before its first application
+  request; explicit `lang` remains an application-level override.
+- ArtScene no longer uses browser locale, local storage, startup application
+  locale, or hidden-until-fetch rendering for initial locale discovery.
+- `check-phase10e-role-usability.sh` proves Japanese first-render locale is
+  applied before the first mocked request, and `ArtSceneApplicationModeSpec`
+  remains green with 10 executable examples.
 
 ## SW-08: Verification and Closure
 

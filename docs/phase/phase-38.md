@@ -2,7 +2,7 @@
 
 Stage Status:
 - Current status: IN_PROGRESS
-- Current step: SW-07 Developer and ArtScene integration guidance
+- Current step: SW-08 Verification and closure
 - Start condition: Phase 36 is closed and the existing Static Web rendering
   path can supply the effective request execution context.
 - Dependency relation: Phase 38 may start independently of Phase 37.
@@ -91,7 +91,7 @@ models and temporary delayed-render workarounds.
   context without changing application business operations.
 - F (DONE): SW-06 - Add security, locale-precedence, and hostile-input
   executable specifications.
-- G (OPEN): SW-07 - Update Static Web developer guidance and validate the
+- G (DONE): SW-07 - Update Static Web developer guidance and validate the
   ArtScene integration handoff.
 - H (OPEN): SW-08 - Run full verification, review, and close Phase 38.
 
@@ -190,6 +190,12 @@ not call application business operations. Executable runtime evidence is in
 SW-06 added integrated runtime evidence for authenticated-user precedence,
 execution-owned fallback formatting, public capability allowlisting, hostile
 public display text, excluded security/runtime data, and page-context ordering
-before application JavaScript. The template projection now installs its
-framework-owned context at the start of `<head>` rather than after existing
-startup scripts.
+before application JavaScript. The template projection now preserves leading
+head metadata such as `meta[charset]` and installs its framework-owned context
+before the first application script rather than after startup code.
+
+SW-07 documented `#textus-page-context` and its `execution` member as the
+stable browser contract. ArtScene now applies the projected execution locale
+synchronously before its first request and no longer depends on browser
+locale, local storage, application-description locale, or hidden-until-fetch
+rendering for initial localization.
