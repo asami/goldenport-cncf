@@ -45,14 +45,25 @@ Evidence:
 
 ## SW-03: Locale, Timezone, and Display-format Resolution
 
-Status: OPEN
+Status: DONE
 
-- [ ] Resolve standalone configuration before runtime defaults.
-- [ ] Resolve authenticated-user preferences before application/runtime
+- [x] Resolve standalone configuration before runtime defaults.
+- [x] Resolve authenticated-user preferences before application/runtime
   fallbacks in multi-user mode.
-- [ ] Prevent `Accept-Language` from overriding resolved execution policy.
-- [ ] Keep explicit display override and HTTP negotiation opt-in and bounded.
-- [ ] Keep application display formats distinct from diagnostics formatting.
+- [x] Prevent `Accept-Language` from overriding resolved execution policy.
+- [x] Keep explicit display override and HTTP negotiation opt-in and bounded.
+- [x] Keep application display formats distinct from diagnostics formatting.
+
+Evidence:
+
+- `WebExecutionResolutionPolicy` decodes canonical runtime configuration and
+  compatibility aliases with structured failures for malformed values.
+- `WebExecutionResolver` applies mode-aware locale/timezone precedence and maps
+  execution display policy to stable public format identifiers.
+- `IngressSecurityResolver` no longer applies `Accept-Language` implicitly.
+- `WebExecutionResolutionSpec` covers standalone, multi-user, opt-in override,
+  bounded HTTP negotiation, strict config decoding, display-format mapping,
+  and property-based browser-language precedence.
 
 ## SW-04: Static Template Projection
 

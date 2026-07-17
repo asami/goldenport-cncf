@@ -4,7 +4,6 @@ import cats.free.Free
 import cats.~>
 import java.time.ZoneId
 import java.util.Locale
-import scala.jdk.CollectionConverters.*
 import org.goldenport.{Consequence, ConsequenceT}
 import org.goldenport.cncf.action.CommandExecutionMode
 import org.goldenport.cncf.config.RuntimeConfig
@@ -250,10 +249,6 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
     val formatting1 = _find_first(attrs, Vector("locale", "user.locale", "textus.locale"))
       .orElse(_find_first(ingressattributes, Vector("locale", "user.locale", "textus.locale")))
       .flatMap(_parse_locale)
-      .orElse(
-        _find_first(ingressattributes, Vector("Accept-Language"))
-          .flatMap(_parse_accept_language)
-      )
       .map(formatting0.withLocale)
       .getOrElse(formatting0)
     val formatting2 = _find_first(attrs, Vector("timeZone", "timezone", "time_zone", "user.timeZone", "user.timezone"))
@@ -276,13 +271,6 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
     else
       Some(Locale.forLanguageTag(value.replace('_', '-')))
   }
-
-  private def _parse_accept_language(p: String): Option[Locale] =
-    scala.util.Try(Locale.LanguageRange.parse(p)).toOption
-      .toVector
-      .flatMap(_.asScala)
-      .find(range => range.getWeight > 0.0 && range.getRange != "*")
-      .flatMap(range => _parse_locale(range.getRange))
 
   private def _parse_timezone(p: String): Option[ZoneId] =
     scala.util.Try(ZoneId.of(p.trim)).toOption

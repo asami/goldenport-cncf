@@ -146,6 +146,38 @@ client-side presentation adapters consume the same identifiers.
 Operational logs and diagnostics continue to use the existing ISO policy and
 are never changed by page projection.
 
+The initial stable identifiers are `localized-medium` and
+`application-default`. The execution policy value `default` maps to
+`application-default`; `localized` and `localized-medium` map to
+`localized-medium`. A Web policy may define another lowercase hyphenated
+identifier, but it must never expose a formatter implementation name or
+pattern.
+
+## Web Execution Policy Configuration
+
+The runtime-level policy uses the `textus.web.execution.*` namespace:
+
+```text
+application-mode
+locale
+timezone
+date-format
+date-time-format
+display-override.enabled
+http-language-negotiation.enabled
+public-capabilities
+```
+
+Canonical fully qualified keys therefore start with
+`textus.web.execution.`. Existing Textus runtime and CNCF compatibility
+namespaces are accepted as aliases. The canonical namespace has precedence.
+
+Display override and HTTP language negotiation are disabled by default. The
+policy decoder validates configured values before rendering. The application
+or page-specific policy used by later renderer integration may narrow or
+override this runtime policy explicitly; request data cannot enable either
+policy by itself.
+
 ## Subject Projection
 
 The subject projection is deliberately smaller than `SecuritySubject` or

@@ -2,7 +2,7 @@
 
 Stage Status:
 - Current status: IN_PROGRESS
-- Current step: SW-03 locale, timezone, and display-format resolution
+- Current step: SW-04 Static template projection
 - Start condition: Phase 36 is closed and the existing Static Web rendering
   path can supply the effective request execution context.
 - Dependency relation: Phase 38 may start independently of Phase 37.
@@ -84,7 +84,7 @@ models and temporary delayed-render workarounds.
 - A (DONE): SW-01 - Audit Static Web page context and freeze the normative
   projection and resolution contract.
 - B (DONE): SW-02 - Implement the immutable Web-safe execution projection.
-- C (OPEN): SW-03 - Implement mode-aware locale, timezone, and display-format
+- C (DONE): SW-03 - Implement mode-aware locale, timezone, and display-format
   resolution.
 - D (OPEN): SW-04 - Add first-render template and escaped JSON projection.
 - E (OPEN): SW-05 - Integrate the projection with Static Web routes and page
@@ -170,3 +170,11 @@ locale/timezone/application-mode values, and uses stable display-format policy
 identifiers instead of formatter implementation strings. Executable evidence
 is in `WebExecutionProjectionSpec`, including property-based capability-order
 and duplication checks.
+
+SW-03 added `WebExecutionResolutionPolicy` and `WebExecutionResolver` with
+strict configuration decoding, standalone and multi-user precedence,
+opt-in-only display overrides and HTTP language negotiation, and deterministic
+display-format policy mapping. Shared ingress no longer applies
+`Accept-Language` implicitly. `WebExecutionResolutionSpec` and
+`IngressSecurityResolverSpec` provide behavior and property-based precedence
+evidence.

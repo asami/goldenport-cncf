@@ -374,7 +374,7 @@ final class IngressSecurityResolverSpec extends AnyWordSpec with Matchers with G
       resolved.executionContext.runtime.context.formatting.timezone shouldBe ZoneId.of("Asia/Tokyo")
     }
 
-    "restore locale from the standard Accept-Language ingress header" in {
+    "leave locale unchanged for Accept-Language without explicit Web negotiation policy" in {
       Given("an ingress request whose preferred language is Japanese")
       val base = _subsystem(fallbackenabled = false).components.head.logic.executionContext()
 
@@ -384,12 +384,12 @@ final class IngressSecurityResolverSpec extends AnyWordSpec with Matchers with G
         Map("Accept-Language" -> "ja-JP,ja;q=0.9,en-US;q=0.8")
       )
 
-      Then("the highest-priority acceptable locale is restored")
+      Then("shared ingress does not treat browser negotiation as execution-owned locale")
       result shouldBe a[Consequence.Success[_]]
-      result.toOption.get.executionContext.runtime.context.formatting.locale shouldBe Locale.forLanguageTag("ja-JP")
+      result.toOption.get.executionContext.runtime.context.formatting.locale shouldBe base.runtime.context.formatting.locale
     }
 
-    "exclude an unacceptable leading Accept-Language range" in {
+    "leave locale unchanged for weighted Accept-Language ranges" in {
       Given("an ingress request that lists Japanese first with zero quality and English second with full quality")
       val base = _subsystem(fallbackenabled = false).components.head.logic.executionContext()
 
@@ -399,9 +399,9 @@ final class IngressSecurityResolverSpec extends AnyWordSpec with Matchers with G
         Map("Accept-Language" -> "ja-JP;q=0,en-US;q=1")
       )
 
-      Then("the unacceptable language is skipped")
+      Then("shared ingress leaves weighted browser language resolution to the Web policy resolver")
       result shouldBe a[Consequence.Success[_]]
-      result.toOption.get.executionContext.runtime.context.formatting.locale shouldBe Locale.forLanguageTag("en-US")
+      result.toOption.get.executionContext.runtime.context.formatting.locale shouldBe base.runtime.context.formatting.locale
     }
 
     "restore authenticated security from x-textus-session header" in {

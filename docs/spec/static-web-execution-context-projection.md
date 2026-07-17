@@ -102,6 +102,35 @@ timestamps MUST retain their existing ISO policy.
 The initial identifier vocabulary and fallback mapping MUST be deterministic
 and executable before SW-03 is complete.
 
+The initial public format vocabulary is:
+
+- `localized-medium` for the localized application date or date/time policy;
+- `application-default` for the CNCF application display default; and
+- another lowercase hyphenated identifier explicitly selected by Web policy.
+
+Execution policy `default` maps to `application-default`. Execution policy
+`localized` and `localized-medium` map to `localized-medium`. Formatter object
+names, patterns, and `toString` output are invalid public identifiers.
+
+The canonical runtime configuration keys are:
+
+```text
+textus.web.execution.application-mode
+textus.web.execution.locale
+textus.web.execution.timezone
+textus.web.execution.date-format
+textus.web.execution.date-time-format
+textus.web.execution.display-override.enabled
+textus.web.execution.http-language-negotiation.enabled
+textus.web.execution.public-capabilities
+```
+
+The corresponding `textus.runtime.*`, `cncf.*`, and `cncf.runtime.*` forms are
+compatibility aliases. Display override and HTTP language negotiation both
+default to disabled. Invalid configured mode, locale, timezone, format ID, or
+boolean policy MUST produce a structured failure rather than silently selecting
+a fallback.
+
 ## SWEP-6: Subject Safety
 
 `subject.authenticated` MUST be derived from the effective authenticated
