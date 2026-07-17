@@ -3,7 +3,7 @@ package org.goldenport.cncf.action
 import java.nio.charset.StandardCharsets
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.ExecutionContext
-import org.goldenport.cncf.resource.{ResourceAccess, ResourceContent, ResourceReference}
+import org.goldenport.cncf.resource.{ResourceAccess, ResourceContent, ResourceReference, ResourceTreeAccess, ResourceTreeEntry, ResourceTreeReference}
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -12,7 +12,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * Executable specification for the component-facing resource internal DSL.
  *
  * @since   Jul. 16, 2026
- * @version Jul. 16, 2026
+ * @version Jul. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ResourceAccessDslSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -50,6 +50,24 @@ final class ResourceAccessDslSpec extends AnyWordSpec with Matchers with GivenWh
       Then("the context returns a structured unavailable-service failure")
       result.isFaillure shouldBe true
     }
+
+    "read an injected logical resource tree without granting ambient directory access" in {
+      Given("an execution context with an explicitly injected in-memory resource tree")
+      val reference = ResourceTreeReference.parseC("component-input").toOption.get
+      val entry = ResourceTreeEntry.createC("source/input.txt", "hello".getBytes(StandardCharsets.UTF_8).toVector).toOption.get
+      val context = ExecutionContext.withResourceTreeAccess(
+        ExecutionContext.create(),
+        ResourceTreeAccess.inMemory(Map(reference -> Vector(entry)))
+      )
+      val behavior = new _ResourceBehavior(Behavior.Core(context, None, None))
+
+      When("component behavior snapshots the named tree through its DSL helper")
+      val result = behavior.readTree(reference)
+
+      Then("only immutable logical entries are returned")
+      result.toOption.map(_.entries.map(_.relativePath)) shouldBe Some(Vector("source/input.txt"))
+      result.toOption.map(_.entries.head.bytes) shouldBe Some("hello".getBytes(StandardCharsets.UTF_8).toVector)
+    }
   }
 
   private final class _ResourceBehavior(
@@ -60,5 +78,8 @@ final class ResourceAccessDslSpec extends AnyWordSpec with Matchers with GivenWh
 
     def readText(reference: ResourceReference): Consequence[String] =
       read_resource_text(reference)
+
+    def readTree(reference: ResourceTreeReference) =
+      read_resource_tree(reference)
   }
 }

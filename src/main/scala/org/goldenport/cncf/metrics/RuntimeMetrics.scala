@@ -130,6 +130,12 @@ object RuntimeMetricsCatalog {
       Vector("outcome", "capability", "driver", "termination", "diagnostic_key")
     ),
     MetricScopeDefinition(
+      "resource-tree.snapshot",
+      "Resource tree snapshot",
+      "Read-only admitted resource tree snapshot counts and failures without physical paths or content.",
+      Vector("outcome", "tree", "provider", "diagnostic_key")
+    ),
+    MetricScopeDefinition(
       "diagnostic-payload.externalization",
       "Diagnostic payload externalization",
       "Diagnostic payload externalization outcomes grouped by payload kind and destination.",

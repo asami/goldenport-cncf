@@ -17,8 +17,8 @@ import org.goldenport.cncf.entity.EntityStoreSpace
 import org.goldenport.cncf.entity.runtime.EntitySpace
 import org.goldenport.cncf.unitofwork.UnitOfWork
 import org.goldenport.cncf.unitofwork.UnitOfWorkOp
-import org.goldenport.cncf.observability.{CallTreeContext, DslChokepointHook, ResourceAccessObservation}
-import org.goldenport.cncf.resource.{ResourceAccess, ResourceAccessTestProfile}
+import org.goldenport.cncf.observability.{CallTreeContext, DslChokepointHook, ResourceAccessObservation, ResourceTreeAccessObservation}
+import org.goldenport.cncf.resource.{ResourceAccess, ResourceAccessTestProfile, ResourceTreeAccess}
 import cats.~>
 
 /**
@@ -45,7 +45,7 @@ import cats.~>
  *  version Feb. 25, 2026
  *  version Apr. 25, 2026
  *  version May. 31, 2026
- * @version Jul. 16, 2026
+ * @version Jul. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class ExecutionContext
@@ -69,6 +69,9 @@ abstract class ExecutionContext
   override def resources: ResourceAccess =
     ResourceAccessObservation.observed(cncfCore.resources)(using this)
 
+  override def resourceTrees: ResourceTreeAccess =
+    ResourceTreeAccessObservation.observed(cncfCore.resourceTrees)(using this)
+
   def isAggregateInternalRead: Boolean = cncfCore.scope.isAggregateInternalRead
 
   lazy val transactionContext = TransactionContext(runtime)
@@ -88,7 +91,8 @@ object ExecutionContext {
     idGeneration: IdGenerationContext = IdGenerationContext.default(IdGenerationContext.DefaultNamespace),
     executionControl: ExecutionControlContext = ExecutionControlContext.standard,
     tagSpaces: TagSpaceContext = TagSpaceContext.default,
-    resources: ResourceAccess = ResourceAccess.unavailable
+    resources: ResourceAccess = ResourceAccess.unavailable,
+    resourceTrees: ResourceTreeAccess = ResourceTreeAccess.unavailable
   ) {
     def major: String = idGeneration.namespace.major
     def minor: String = idGeneration.namespace.minor
@@ -110,6 +114,7 @@ object ExecutionContext {
       def executionControl: ExecutionControlContext = cncfCore.executionControl
       def tagSpaces: TagSpaceContext = cncfCore.tagSpaces
       def resources: ResourceAccess = cncfCore.resources
+      def resourceTrees: ResourceTreeAccess = cncfCore.resourceTrees
       def major = cncfCore.major
       def minor = cncfCore.minor
     }
@@ -230,7 +235,8 @@ object ExecutionContext {
         jobContext = org.goldenport.cncf.job.JobContext.empty,
         idGeneration = idgeneration,
         executionControl = executioncontrol,
-        resources = _resource_access(scope)
+        resources = _resource_access(scope),
+        resourceTrees = _resource_tree_access(scope)
       )
     )
     context
@@ -401,6 +407,18 @@ object ExecutionContext {
     profile: ResourceAccessTestProfile
   ): ExecutionContext =
     withResourceAccess(ctx, profile.resourceAccess)
+
+  def withResourceTreeAccess(
+    ctx: ExecutionContext,
+    resourceTrees: ResourceTreeAccess
+  ): ExecutionContext = ctx match {
+    case i: Instance =>
+      i.copy(
+        cncfCore = i.cncfCore.copy(resourceTrees = resourceTrees)
+      )
+    case _ =>
+      ctx
+  }
 
   def withRuntimeContextContext(
     ctx: ExecutionContext,
@@ -690,6 +708,13 @@ object ExecutionContext {
         )
       }
       .getOrElse(ResourceAccess.unavailable)
+
+  private def _resource_tree_access(
+    scope: ScopeContext
+  ): ResourceTreeAccess =
+    _global_runtime_context(scope)
+      .map(global => ResourceTreeAccess.local(global.config.resourceTreePolicy))
+      .getOrElse(ResourceTreeAccess.unavailable)
 
   private def _core(clock: Clock): CoreExecutionContext.Core =
     CoreExecutionContext.Core(

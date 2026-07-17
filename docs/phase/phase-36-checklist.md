@@ -50,16 +50,16 @@ Status: DONE
 
 ## RB-05: Admitted Read-only Resource Trees
 
-Status: OPEN
+Status: DONE
 
-- [ ] Define logical tree identity/reference, limits, entries, and immutable
+- [x] Define logical tree identity/reference, limits, entries, and immutable
   snapshot contracts.
-- [ ] Bind named physical roots only at runtime configuration/provider
+- [x] Bind named physical roots only at runtime configuration/provider
   boundaries.
-- [ ] Enforce deterministic ordering, depth, count, per-file, total-byte,
+- [x] Enforce deterministic ordering, depth, count, per-file, total-byte,
   traversal, and symlink policies.
-- [ ] Provide an in-memory provider for executable specifications.
-- [ ] Add payload-safe CallTree and metrics diagnostics.
+- [x] Provide an in-memory provider for executable specifications.
+- [x] Add payload-safe CallTree and metrics diagnostics.
 
 ## RB-06: Process WorkArea Tree Materialization
 

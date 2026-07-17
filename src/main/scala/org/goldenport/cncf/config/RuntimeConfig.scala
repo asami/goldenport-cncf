@@ -14,7 +14,7 @@ import org.goldenport.cncf.action.CommandExecutionMode
 import org.goldenport.cncf.context.{ExecutionProfileResolver, IdGenerationContext, ResolvedExecutionProfile, RuntimeClock}
 import org.goldenport.cncf.observability.{DiagnosticPayloadExternalizationConfig, ObservabilityEngine, OpenTelemetryExportConfig}
 import org.goldenport.cncf.blob.BlobStoreConfig
-import org.goldenport.cncf.resource.{ResourceUrlPolicy, TextusUrnResourcePolicy, UrnResourceProvider, UrnResourceProviderConfig}
+import org.goldenport.cncf.resource.{ResourceTreePolicy, ResourceUrlPolicy, TextusUrnResourcePolicy, UrnResourceProvider, UrnResourceProviderConfig}
 
 /*
  * @since   Jan. 18, 2026
@@ -23,7 +23,7 @@ import org.goldenport.cncf.resource.{ResourceUrlPolicy, TextusUrnResourcePolicy,
  *  version Mar. 28, 2026
  *  version Apr. 30, 2026
  *  version Jun. 19, 2026
- * @version Jul. 16, 2026
+ * @version Jul. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class RuntimeConfig(
@@ -58,7 +58,8 @@ final case class RuntimeConfig(
   executionProfile: ResolvedExecutionProfile = RuntimeConfig.DEFAULT_EXECUTION_PROFILE,
   resourceUrlPolicy: ResourceUrlPolicy = ResourceUrlPolicy(),
   textusUrnResourcePolicy: TextusUrnResourcePolicy = TextusUrnResourcePolicy(),
-  urnResourceProviders: Vector[UrnResourceProvider] = Vector.empty
+  urnResourceProviders: Vector[UrnResourceProvider] = Vector.empty,
+  resourceTreePolicy: ResourceTreePolicy = ResourceTreePolicy()
 ) {
   def executionClock: RuntimeClock = executionProfile.runtimeClock
 }
@@ -315,6 +316,8 @@ object RuntimeConfig {
   val RuntimeResourceTextusUrnFileRootsKey = "textus.runtime.resource.urn.textus.file-roots"
   val ResourceUrnProvidersKey = "textus.resource.urn.providers"
   val RuntimeResourceUrnProvidersKey = "textus.runtime.resource.urn.providers"
+  val ResourceTreeFileRootsKey = "textus.resource.tree.file-roots"
+  val RuntimeResourceTreeFileRootsKey = "textus.runtime.resource.tree.file-roots"
 
   val DefaultServerEmulatorBaseUrl = "http://localhost/"
   val DefaultHttpDriverName = "real"
@@ -365,7 +368,8 @@ object RuntimeConfig {
       executionProfile = DEFAULT_EXECUTION_PROFILE,
       resourceUrlPolicy = ResourceUrlPolicy(),
       textusUrnResourcePolicy = TextusUrnResourcePolicy(),
-      urnResourceProviders = Vector.empty
+      urnResourceProviders = Vector.empty,
+      resourceTreePolicy = ResourceTreePolicy()
     )
 
   def from(
@@ -441,6 +445,7 @@ object RuntimeConfig {
     val resourceurlpolicy = _resource_url_policy(configuration)
     val textusurnresourcepolicy = _textus_urn_resource_policy(configuration)
     val urnresourceproviders = _urn_resource_providers(configuration)
+    val resourcetreepolicy = _resource_tree_policy(configuration)
     val idnamespace = _id_namespace(configuration)
     val executionprofile = profileoverride.getOrElse(_execution_profile(configuration, operationmode))
     val weboperationdispatcher =
@@ -507,7 +512,8 @@ object RuntimeConfig {
       executionProfile = executionprofile,
       resourceUrlPolicy = resourceurlpolicy,
       textusUrnResourcePolicy = textusurnresourcepolicy,
-      urnResourceProviders = urnresourceproviders
+      urnResourceProviders = urnresourceproviders,
+      resourceTreePolicy = resourcetreepolicy
     )
     _validate(config)
     config
@@ -745,6 +751,17 @@ object RuntimeConfig {
         throw conclusion.getException.getOrElse(new IllegalArgumentException(conclusion.display))
     }
 
+  private def _resource_tree_policy(
+    configuration: ResolvedConfiguration
+  ): ResourceTreePolicy =
+    ResourceTreePolicy.fromValuesC(
+      _split_csv(_get_string(configuration, ResourceTreeFileRootsKey))
+    ) match {
+      case Consequence.Success(value) => value
+      case Consequence.Failure(conclusion) =>
+        throw conclusion.getException.getOrElse(new IllegalArgumentException(conclusion.display))
+    }
+
   private def _execution_profile(
     configuration: ResolvedConfiguration,
     operationmode: OperationMode
@@ -881,6 +898,7 @@ object RuntimeConfig {
         case ResourceUrlHttpsHostsKey => Vector(RuntimeResourceUrlHttpsHostsKey)
         case ResourceTextusUrnFileRootsKey => Vector(RuntimeResourceTextusUrnFileRootsKey)
         case ResourceUrnProvidersKey => Vector(RuntimeResourceUrnProvidersKey)
+        case ResourceTreeFileRootsKey => Vector(RuntimeResourceTreeFileRootsKey)
         case _ => Vector.empty
       }
     val cncfaliases =

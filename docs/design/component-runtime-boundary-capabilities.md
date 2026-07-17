@@ -112,6 +112,32 @@ Providers enforce traversal, symlink, depth, file-count, per-file, and
 aggregate-byte policy before a snapshot becomes visible to a component.
 Deterministic ordering is part of the snapshot contract.
 
+### Initial Runtime Binding
+
+RB-05 provides `ResourceTreeReference`, `ResourceTreeLimits`,
+`ResourceTreeEntry`, `ResourceTreeSnapshot`, and `ResourceTreeAccess` as the
+separate component-facing read-only tree capability. Components construct only
+a validated logical reference and request a bounded immutable snapshot through
+the protected ActionCall internal DSL. `ResourceAccess` remains a
+single-resource read capability.
+
+The initial local provider is bound only by runtime configuration:
+
+```text
+textus.resource.tree.file-roots=<logical-tree-name>=<absolute-path>,...
+```
+
+`textus.runtime.*` and `cncf.*` aliases follow the normal runtime
+configuration alias policy. The physical binding is retained by the runtime
+provider and is never returned by `ExecutionContext`, the ActionCall DSL,
+provider metadata, CallTree, metrics, or structured diagnostics.
+
+The initial local-provider symlink policy is deny-all, including a symbolic
+configured root. A future provider may add an explicitly specified policy, but
+it must never allow an entry to escape the admitted root. The deterministic
+in-memory provider is executable-specification support and does not inspect
+the host filesystem.
+
 ## Process Execution Materialization
 
 An admitted resource-tree snapshot may be represented as a distinct Process
@@ -137,3 +163,9 @@ Every capability has deterministic in-memory or fake runtime support for
 executable specifications. Production secret providers, physical-tree
 providers, and external Process Execution drivers remain runtime-owned
 implementations of the same contracts.
+
+RB-05 records tree snapshot success/failure through the standard DSL
+chokepoint and a `resource-tree.snapshot` runtime metric. These diagnostics
+contain only the logical tree name, provider family, configured limits, and a
+structured diagnostic projection on failure. They never contain a physical
+root, entry path, or resource-tree payload.

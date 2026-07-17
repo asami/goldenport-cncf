@@ -2,6 +2,7 @@ package org.goldenport.cncf.http
 
 import java.time.Instant
 import org.goldenport.cncf.metrics.{ComponentMetricEntry, ComponentMetricsRegistry, EntityAccessMetricEntry, EntityAccessMetricsRegistry, RuntimeMetricPoint, RuntimeMetricsCatalog, RuntimeMetricsSnapshot}
+import org.goldenport.cncf.observability.ConclusionDiagnostics
 import org.goldenport.record.Record
 
 /*
@@ -108,6 +109,7 @@ object RuntimeDashboardMetrics {
   private var _rule_events = Vector.empty[Event]
   private var _spi_events = Vector.empty[Event]
   private var _process_execution_events = Vector.empty[Event]
+  private var _resource_tree_events = Vector.empty[Event]
   private var _payload_externalization_events = Vector.empty[PayloadExternalizationEvent]
   private var _open_telemetry_export_events = Vector.empty[OpenTelemetryExportEvent]
   private var _recent = Vector.empty[RequestEntry]
@@ -119,7 +121,8 @@ object RuntimeDashboardMetrics {
     "blob" -> "Blob",
     "rule" -> "Rule",
     "spi" -> "SPI",
-    "process-execution" -> "Process Execution"
+    "process-execution" -> "Process Execution",
+    "resource-tree" -> "Resource Tree"
   )
 
   def recordHtmlRequest(
@@ -301,6 +304,26 @@ object RuntimeDashboardMetrics {
     )).takeRight(10000)
   }
 
+  def recordResourceTreeSnapshot(
+    tree: String,
+    provider: String,
+    error: Boolean,
+    diagnostic: Option[ConclusionDiagnostics.Classification] = None
+  ): Unit = synchronized {
+    val cleandiagnostickey = if (error) diagnostic.map(_.diagnosticKey).filter(_.nonEmpty) else None
+    _resource_tree_events = (_resource_tree_events :+ Event(
+      observedAt = java.time.Instant.now.toEpochMilli,
+      error = error,
+      diagnosticKey = cleandiagnostickey,
+      diagnosticRecord = if (error) diagnostic.map(_.toRecord) else None,
+      labels = _clean_labels(Map(
+        "tree" -> tree,
+        "provider" -> provider,
+        "diagnostic_key" -> cleandiagnostickey.getOrElse("")
+      ))
+    )).takeRight(10000)
+  }
+
   def recordDiagnosticPayloadExternalization(
     payloadKind: String,
     status: String,
@@ -456,6 +479,23 @@ object RuntimeDashboardMetrics {
     _diagnostic_records(_process_execution_events)
   }
 
+  def resourceTreeSnapshot: Snapshot = synchronized {
+    _snapshot(_resource_tree_events, Vector.empty)
+  }
+
+  def resourceTreeDiagnosticCounts: Map[String, Long] = synchronized {
+    _resource_tree_events
+      .filter(_.error)
+      .groupBy(_.diagnosticKey.getOrElse("unknown"))
+      .view
+      .mapValues(_.size.toLong)
+      .toMap
+  }
+
+  def resourceTreeDiagnosticRecords: Map[String, Record] = synchronized {
+    _diagnostic_records(_resource_tree_events)
+  }
+
   def diagnosticScopes: Vector[DiagnosticScope] = synchronized {
     Vector(
       _diagnostic_scope("authorization", _authorization_events),
@@ -464,7 +504,8 @@ object RuntimeDashboardMetrics {
       _diagnostic_scope("blob", _blob_events),
       _diagnostic_scope("rule", _rule_events),
       _diagnostic_scope("spi", _spi_events),
-      _diagnostic_scope("process-execution", _process_execution_events)
+      _diagnostic_scope("process-execution", _process_execution_events),
+      _diagnostic_scope("resource-tree", _resource_tree_events)
     )
   }
 
@@ -578,6 +619,9 @@ object RuntimeDashboardMetrics {
         event.labels ++ _outcome_label(event)
       ),
       _event_points("process.execution", "executions", _process_execution_events, event =>
+        event.labels ++ _outcome_label(event)
+      ),
+      _event_points("resource-tree.snapshot", "snapshots", _resource_tree_events, event =>
         event.labels ++ _outcome_label(event)
       ),
       _payload_externalization_points,

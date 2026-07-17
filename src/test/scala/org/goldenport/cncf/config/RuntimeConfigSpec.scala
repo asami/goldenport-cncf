@@ -14,7 +14,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Apr. 18, 2026
  *  version Apr. 28, 2026
  *  version Jun. 19, 2026
- * @version Jul. 16, 2026
+ * @version Jul. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class RuntimeConfigSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -165,6 +165,34 @@ final class RuntimeConfigSpec extends AnyWordSpec with Matchers with GivenWhenTh
 
       Then("configuration fails before a Textus URN provider is installed")
       thrown.getMessage should include ("textus.resource.urn.textus.file-roots")
+    }
+
+    "parse named resource-tree roots only through runtime configuration aliases" in {
+      Given("runtime and CNCF aliases for logical resource-tree roots")
+      val runtimeconfiguration = ResolvedConfiguration(
+        Configuration(Map(
+          RuntimeConfig.RuntimeResourceTreeFileRootsKey -> ConfigurationValue.StringValue("catalog=/tmp/catalog")
+        )),
+        ConfigurationTrace.empty
+      )
+      val cncfconfiguration = ResolvedConfiguration(
+        Configuration(Map(
+          "cncf.resource.tree.file-roots" -> ConfigurationValue.StringValue("review-target=/tmp/review-target")
+        )),
+        ConfigurationTrace.empty
+      )
+
+      When("the runtime configuration is resolved before component execution")
+      val runtimeconfig = RuntimeConfig.from(runtimeconfiguration)
+      val cncfconfig = RuntimeConfig.from(cncfconfiguration)
+
+      Then("only logical tree names are bound to the runtime provider policy")
+      runtimeconfig.resourceTreePolicy.normalizedFileRoots.map { case (name, root) =>
+        name -> root.toString
+      } shouldBe Map("catalog" -> "/tmp/catalog")
+      cncfconfig.resourceTreePolicy.normalizedFileRoots.map { case (name, root) =>
+        name -> root.toString
+      } shouldBe Map("review-target" -> "/tmp/review-target")
     }
 
     "parse id namespace configuration and aliases" in {

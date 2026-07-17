@@ -83,6 +83,15 @@ traversal, symlink, depth, entry-count, per-file-byte, and aggregate-byte
 failures before it returns a snapshot. These failures MUST be normal structured
 `Consequence.Failure(Conclusion)` values.
 
+The initial local runtime binding key is
+`textus.resource.tree.file-roots`, whose values are
+`<logical-tree-name>=<absolute-path>` bindings. Runtime and CNCF aliases MAY
+provide the same setting. A component-visible value, protected DSL result,
+provider metadata value, CallTree record, metric, or diagnostic MUST NOT
+contain the bound physical path. The initial local-provider symlink policy is
+deny-all. A future policy extension MUST remain root-confined and explicitly
+specified.
+
 ## Single-resource Compatibility (R7)
 
 `ResourceAccess` remains a single logical content-read capability. It MUST NOT
@@ -166,3 +175,14 @@ pass that reference to a runtime-owned operation but cannot inspect its locator
 or resolve it to bytes. A deterministic in-memory runtime resolver is
 executable-specification evidence only; concrete Vault, cloud, and provider SPI
 integrations are explicitly deferred.
+
+### E7: Admitted Resource Tree
+
+A component parses the logical `review-target` ResourceTreeReference through
+its validated factory and requests it through the protected ActionCall
+resource-tree DSL. The runtime resolves the named local root from
+`textus.resource.tree.file-roots`, constructs a deterministic immutable
+snapshot under configured limits, and records only logical/provider metadata.
+Unknown names, unsafe traversal entries, symbolic links, and limit violations
+return normal structured failures without exposing physical paths or payload
+content.

@@ -2,7 +2,7 @@
 
 Stage Status:
 - Current status: IN_PROGRESS
-- Current step: RB-05 admitted read-only resource trees
+- Current step: RB-06 Process WorkArea tree materialization
 - Owner: Phase 36 Component Runtime Boundary Capabilities
 - Update rule: Update this block and `phase-36-checklist.md` whenever a stable
   work-item state changes. Close the phase only when every in-scope checklist
@@ -71,7 +71,7 @@ CAR Review, and application-specific models.
 - B (DONE): RB-02 - Confirm the component execution-time contract.
 - C (DONE): RB-03 - Implement declared typed component configuration.
 - D (DONE): RB-04 - Implement the opaque secret-reference boundary.
-- E (IN PROGRESS): RB-05 - Implement admitted read-only resource trees.
+- E (DONE): RB-05 - Implement admitted read-only resource trees.
 - F (OPEN): RB-06 - Materialize admitted trees into Process WorkAreas.
 - G (OPEN): RB-07 - Verify the provider-neutral external-tool pattern.
 - H (OPEN): RB-08 - Update design/spec/developer documentation.
@@ -146,3 +146,11 @@ secret resolution. Secret configuration keys return only references, while
 confidential values remain denied from the component boundary. Deterministic
 in-memory resolution proves redaction and copied material behavior without
 claiming a concrete secret-provider integration.
+
+RB-05 has established `ResourceTreeReference`, bounded
+`ResourceTreeSnapshot`, and a separate `ResourceTreeAccess` capability. Named
+local roots are bound only by runtime configuration, while the in-memory
+provider supplies deterministic executable evidence. The local provider denies
+symbolic links and returns structured failures for unknown trees, unsafe
+entries, and depth/count/byte limits. DSL chokepoints and the
+`resource-tree.snapshot` metric retain only logical/provider metadata.

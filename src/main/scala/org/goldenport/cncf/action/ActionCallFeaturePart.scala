@@ -16,7 +16,7 @@ import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.http.HttpResponse
 import org.goldenport.process.{ShellCommand, ShellCommandResult}
 import org.goldenport.cncf.context.{ExecutionContext, ExecutionSchedulerMode, GlobalRuntimeContext, ScopeContext}
-import org.goldenport.cncf.resource.{ResourceContent, ResourceReference}
+import org.goldenport.cncf.resource.{ResourceContent, ResourceReference, ResourceTreeLimits, ResourceTreeReference, ResourceTreeSnapshot}
 import org.goldenport.cncf.unitofwork.{ExecUowM, UnitOfWork, UnitOfWorkAuthorization}
 import org.goldenport.cncf.unitofwork.UnitOfWorkInterpreter
 import org.goldenport.cncf.unitofwork.UnitOfWorkOp
@@ -98,6 +98,12 @@ trait BehaviorFeaturePart { self: Behavior.Core.Holder =>
     charset: Option[Charset] = None
   ): Consequence[String] =
     execution_context.resources.readText(reference, charset)
+
+  protected final def read_resource_tree(
+    reference: ResourceTreeReference,
+    limits: ResourceTreeLimits = ResourceTreeLimits.default
+  ): Consequence[ResourceTreeSnapshot] =
+    execution_context.resourceTrees.snapshot(reference, limits)
 
   protected final def await_delay(duration: Duration): Consequence[Unit] =
     if (duration.isNegative)
