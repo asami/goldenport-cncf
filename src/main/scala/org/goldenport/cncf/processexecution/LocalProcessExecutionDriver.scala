@@ -10,7 +10,7 @@ import org.goldenport.Consequence
 
 /*
  * @since   Jul. 17, 2026
- * @version Jul. 17, 2026
+ * @version Jul. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 /**
@@ -22,8 +22,6 @@ final class LocalProcessExecutionDriver(
   val safeIdentity: String = "local-process",
   private[processexecution] val _launcher: LocalProcessLauncher = LocalProcessLauncher.local
 ) extends ProcessExecutionDriver with AutoCloseable {
-  private val _launch_executor: ExecutorService =
-    Executors.newCachedThreadPool(new _daemon_thread_factory("cncf-process-launch"))
   private val _active_processes: java.util.Set[Process] =
     ConcurrentHashMap.newKeySet[Process]()
   private val _active_handles: java.util.Set[_local_process_execution_handle] =
@@ -68,7 +66,6 @@ final class LocalProcessExecutionDriver(
     }
     _active_handles.clear()
     _active_processes.clear()
-    _launch_executor.shutdownNow()
   }
 
   private def _validate_prelaunch_c(
@@ -119,7 +116,7 @@ final class LocalProcessExecutionDriver(
     val abandoned = new AtomicBoolean(false)
     val launched = new AtomicReference[Process](null)
     val command = execution.definition._executable_location +: execution.effectiveArguments
-    val task = _launch_executor.submit(new Callable[Process] {
+    val task = LocalProcessExecutionDriver._launch_executor.submit(new Callable[Process] {
       def call(): Process = {
         val process = workingdirectory match {
           case Some(value) => _launcher.startBlocking(command, value, execution.definition._environment.values)
@@ -218,6 +215,13 @@ final class LocalProcessExecutionDriver(
       execution.definition.safeProgramIdentity
     ))
   }
+}
+
+object LocalProcessExecutionDriver {
+  // The local driver is component-scoped, while launch workers are process-scoped
+  // daemon infrastructure. Closing one component driver must not disable another.
+  private val _launch_executor: ExecutorService =
+    Executors.newCachedThreadPool(new _daemon_thread_factory("cncf-process-launch"))
 }
 
 private[processexecution] trait LocalProcessLauncher {
