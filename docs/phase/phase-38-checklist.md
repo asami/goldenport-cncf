@@ -5,14 +5,22 @@ This checklist is the Phase 38 state ledger. The summary dashboard is
 
 ## SW-01: Contract Audit and Scope Freeze
 
-Status: OPEN
+Status: DONE
 
-- [ ] Inventory the current Static Web page context, formatting-context
+- [x] Inventory the current Static Web page context, formatting-context
   restoration, authentication projection, and template injection paths.
-- [ ] Define the typed Web-safe execution projection in design/spec documents.
-- [ ] Freeze mode-aware locale/timezone precedence and optional HTTP language
+- [x] Define the typed Web-safe execution projection in design/spec documents.
+- [x] Freeze mode-aware locale/timezone precedence and optional HTTP language
   negotiation policy.
-- [ ] Confirm the safe public capability and subject projection vocabulary.
+- [x] Confirm the safe public capability and subject projection vocabulary.
+
+Evidence:
+
+- `docs/design/static-web-execution-context-projection.md` records the current
+  runtime audit, ownership model, resolution policy, and implementation order.
+- `docs/spec/static-web-execution-context-projection.md` fixes the public shape,
+  default-deny capability projection, typed public subject source, excluded
+  data, HTML escaping, and required executable examples.
 
 ## SW-02: Web-safe Execution Projection
 

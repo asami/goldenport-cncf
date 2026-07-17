@@ -181,7 +181,7 @@ modeling capabilities that later phases will build upon.
 - `docs/work/phase-3.md`
 
 **Phase Ordering**
-Phase 3 begins only after Phase 2.9 completes; the documented flow remains Phase 1 → 1.5 → 2 → … → 2.9, then Phase 3 and beyond.  
+Phase 3 begins only after Phase 2.9 completes; the documented flow remains Phase 1 → 1.5 → 2 → … → 2.9, then Phase 3 and beyond.
 AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treated as production readiness until future phases explicitly reclassify it.
 
 ### Phase 4: State Machine Foundation
@@ -652,12 +652,13 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Notes contain execution details and results for each phase.
 
 ## Process Status Pointers
-- Active phase dashboard: `docs/phase/phase-36.md`.
-- Active phase checklist: `docs/phase/phase-36-checklist.md`.
-- Latest closed phase dashboard: `docs/phase/phase-35.md`.
-- Latest closed phase checklist: `docs/phase/phase-35-checklist.md`.
-- Previous closed phase dashboard: `docs/phase/phase-34.md`
-- Previous closed phase checklist: `docs/phase/phase-34-checklist.md`
+- Active phase dashboard: `docs/phase/phase-38.md`.
+- Active phase checklist: `docs/phase/phase-38-checklist.md`.
+- Concurrent planned downstream phase dashboard: `docs/phase/phase-37.md`.
+- Concurrent planned downstream phase checklist:
+  `docs/phase/phase-37-checklist.md`.
+- Latest closed phase dashboard: `docs/phase/phase-36.md`.
+- Latest closed phase checklist: `docs/phase/phase-36-checklist.md`.
 - Status interpretation rules: `docs/rules/stage-status-and-checklist-convention.md`
 - Latest post-closure maintenance: Jul. 15, 2026 descriptor-bound component
   runtime configuration preservation. Materialized component instances retain
@@ -832,7 +833,7 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Phase 35: closed (`docs/phase/phase-35.md`)
 - Phase 36: closed (`docs/phase/phase-36.md`)
 - Phase 37: planned (`docs/phase/phase-37.md`)
-- Phase 38: planned (`docs/phase/phase-38.md`)
+- Phase 38: active (`docs/phase/phase-38.md`)
 
 ## 8. Completed Development Item History
 
@@ -2370,7 +2371,7 @@ Planned for Phase 37 after Phase 36 closes.
   - CBD Support CAR ABI publication and release management.
 
 ### 9.33 Static Web Execution-Context Projection
-Planned for Phase 38 (Jul. 17, 2026).
+Active in Phase 38 (Jul. 17, 2026).
 
 - Goal: let Static Web Apps render their first HTML response from a safe,
   resolved execution-context projection without browser-owned locale state or

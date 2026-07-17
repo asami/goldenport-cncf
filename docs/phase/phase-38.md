@@ -1,7 +1,8 @@
 # Phase 38 - Static Web Execution-Context Projection
 
 Stage Status:
-- Current status: PLANNED
+- Current status: IN_PROGRESS
+- Current step: SW-02 Web-safe execution projection
 - Start condition: Phase 36 is closed and the existing Static Web rendering
   path can supply the effective request execution context.
 - Dependency relation: Phase 38 may start independently of Phase 37.
@@ -11,7 +12,7 @@ Stage Status:
   locale policy, rendering integration, safety evidence, and documentation are
   complete.
 
-status = planned
+status = active
 
 ## 1. Purpose
 
@@ -80,7 +81,7 @@ models and temporary delayed-render workarounds.
 
 ## 5. Planned Work Stack
 
-- A (OPEN): SW-01 - Audit Static Web page context and freeze the normative
+- A (DONE): SW-01 - Audit Static Web page context and freeze the normative
   projection and resolution contract.
 - B (OPEN): SW-02 - Implement the immutable Web-safe execution projection.
 - C (OPEN): SW-03 - Implement mode-aware locale, timezone, and display-format
@@ -153,3 +154,11 @@ The non-normative implementation handoff is
 `docs/journal/2026/07/static-web-execution-context-projection-handoff-2026-07-17.md`.
 Accepted decisions must be promoted to design/spec documents and executable
 specifications before they are treated as a stable public CNCF Web contract.
+
+SW-01 completed the runtime audit and promoted the accepted boundary to
+`docs/design/static-web-execution-context-projection.md` and
+`docs/spec/static-web-execution-context-projection.md`. The audit confirmed
+that existing provider-owned flat page values are not a safe authority for the
+new projection, `Accept-Language` currently participates too broadly in ingress
+formatting, and the renderer already has the effective request execution
+context before first HTML generation.

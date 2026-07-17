@@ -618,6 +618,23 @@ Packaging must preserve the Static Form Web App rule: server-rendered HTML and
 Operation/Form API contracts remain authoritative, while assets and islands are
 progressive enhancement.
 
+### Static Web Execution-Context Projection
+
+Static Web first-render context includes a framework-owned, typed, Web-safe
+projection of the effective request execution context. It is separate from
+component `WebPageContextProvider` values and is not a serialization of
+`ExecutionContext` or an authentication session.
+
+The projection contract, locale/timezone precedence, public subject and
+capability boundary, and script-data escaping requirements are defined by:
+
+- `docs/design/static-web-execution-context-projection.md`; and
+- `docs/spec/static-web-execution-context-projection.md`.
+
+Static Web applications must use this first-render projection for execution
+locale and formatting rather than browser language state or a startup REST
+operation.
+
 ## Built-In Web Apps
 
 Dashboard, Management Console, Manual, Performance, and Console are built-in
