@@ -1,8 +1,8 @@
 # Phase 38 - Static Web Execution-Context Projection
 
 Stage Status:
-- Current status: IN_PROGRESS
-- Current step: SW-08 Verification and closure
+- Current status: CLOSED
+- Current step: Complete
 - Start condition: Phase 36 is closed and the existing Static Web rendering
   path can supply the effective request execution context.
 - Dependency relation: Phase 38 may start independently of Phase 37.
@@ -12,7 +12,7 @@ Stage Status:
   locale policy, rendering integration, safety evidence, and documentation are
   complete.
 
-status = active
+status = closed
 
 ## 1. Purpose
 
@@ -93,7 +93,7 @@ models and temporary delayed-render workarounds.
   executable specifications.
 - G (DONE): SW-07 - Update Static Web developer guidance and validate the
   ArtScene integration handoff.
-- H (OPEN): SW-08 - Run full verification, review, and close Phase 38.
+- H (DONE): SW-08 - Run full verification, review, and close Phase 38.
 
 ## 6. Locale and Timezone Resolution Contract
 
@@ -199,3 +199,19 @@ stable browser contract. ArtScene now applies the projected execution locale
 synchronously before its first request and no longer depends on browser
 locale, local storage, application-description locale, or hidden-until-fetch
 rendering for initial localization.
+
+## 10. Closure Record
+
+Phase 38 closed on Jul. 17, 2026.
+
+- The focused execution projection, resolution, template, runtime,
+  integration, and ingress-security suites passed 48 tests.
+- `sbt --batch Test/compile` passed and the full CNCF suite passed 1,986 tests
+  in 289 suites with no failures.
+- ArtScene's maintained role/browser acceptance proved Japanese execution
+  locale is active before the first application request; its full suite passed
+  335 tests in 38 suites with no failures.
+- Scoped review found no actionable Static Web execution-projection finding.
+- Deferred scope remains client-side preference editing, application-private
+  page metadata, SPA-only rendering, and ArtScene-specific translation or
+  business-state development.

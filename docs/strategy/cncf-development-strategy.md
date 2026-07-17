@@ -833,7 +833,7 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Phase 35: closed (`docs/phase/phase-35.md`)
 - Phase 36: closed (`docs/phase/phase-36.md`)
 - Phase 37: planned (`docs/phase/phase-37.md`)
-- Phase 38: active (`docs/phase/phase-38.md`)
+- Phase 38: closed (`docs/phase/phase-38.md`)
 
 ## 8. Completed Development Item History
 
@@ -2371,7 +2371,7 @@ Planned for Phase 37 after Phase 36 closes.
   - CBD Support CAR ABI publication and release management.
 
 ### 9.33 Static Web Execution-Context Projection
-Active in Phase 38 (Jul. 17, 2026).
+Completed in Phase 38 (Jul. 17, 2026).
 
 - Goal: let Static Web Apps render their first HTML response from a safe,
   resolved execution-context projection without browser-owned locale state or
@@ -2411,3 +2411,10 @@ Active in Phase 38 (Jul. 17, 2026).
   - arbitrary execution-context fields or application-private data;
   - replacing Static Web rendering with SPA-only startup behavior;
   - ArtScene application-specific translation catalogs and business state.
+- Closure evidence:
+  - CNCF focused execution projection, resolution, template, runtime,
+    integration, and ingress-security suites passed 48 tests;
+  - the full CNCF suite passed 1,986 tests in 289 suites;
+  - ArtScene passed its maintained first-render browser acceptance and full
+    335-test suite without browser-locale, local-storage, startup-locale REST,
+    or delayed-visibility fallback.

@@ -165,10 +165,22 @@ Evidence:
 
 ## SW-08: Verification and Closure
 
-Status: OPEN
+Status: DONE
 
-- [ ] Run focused Static Web, ingress security, formatting, escaping, and
+- [x] Run focused Static Web, ingress security, formatting, escaping, and
   ArtScene integration specifications.
-- [ ] Run `sbt --batch Test/compile` and the full CNCF test suite.
-- [ ] Run scoped review and resolve actionable findings.
-- [ ] Update strategy/phase closure evidence and close Phase 38.
+- [x] Run `sbt --batch Test/compile` and the full CNCF test suite.
+- [x] Run scoped review and resolve actionable findings.
+- [x] Update strategy/phase closure evidence and close Phase 38.
+
+Evidence:
+
+- Focused CNCF execution projection, resolution, template, runtime,
+  integration, and ingress-security verification passed 48 tests in 6 suites.
+- `sbt --batch Test/compile` passed; the full CNCF suite passed 1,986 tests in
+  289 suites with no failures.
+- ArtScene's maintained role/browser acceptance passed, including Japanese
+  first-render locale before the first application request; its full suite
+  passed 335 tests in 38 suites with no failures.
+- Scoped review found no actionable finding; CAR lint reported no FAIL and
+  retained only the existing ABI-baseline and development SNAPSHOT warnings.
