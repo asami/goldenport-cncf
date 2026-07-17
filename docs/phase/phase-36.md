@@ -1,14 +1,14 @@
 # Phase 36 - Component Runtime Boundary Capabilities
 
 Stage Status:
-- Current status: IN_PROGRESS
-- Current step: RB-09 Verification and closure
+- Current status: CLOSED
+- Current step: CLOSED
 - Owner: Phase 36 Component Runtime Boundary Capabilities
 - Update rule: Update this block and `phase-36-checklist.md` whenever a stable
   work-item state changes. Close the phase only when every in-scope checklist
   item is complete or explicitly relocated.
 
-status = active
+status = closed
 
 ## 1. Purpose
 
@@ -75,7 +75,7 @@ CAR Review, and application-specific models.
 - F (DONE): RB-06 - Materialize admitted trees into Process WorkAreas.
 - G (DONE): RB-07 - Verify the provider-neutral external-tool pattern.
 - H (DONE): RB-08 - Update design/spec/developer documentation.
-- I (OPEN): RB-09 - Run full verification, prepare the CBD handoff, and close
+- I (DONE): RB-09 - Run full verification, prepare the CBD handoff, and close
   Phase 36.
 
 ## 6. Candidate Public Contracts
@@ -126,9 +126,8 @@ contracts.
 
 RB-01 has promoted the Phase 36 capability boundary to
 `docs/design/component-runtime-boundary-capabilities.md` and
-`docs/spec/component-runtime-boundary-capabilities.md`. RB-02 through RB-08
-are complete; RB-09 remains open. The static contract reflects
-only APIs backed by executable specifications.
+`docs/spec/component-runtime-boundary-capabilities.md`. The static contract
+reflects only APIs backed by executable specifications.
 
 RB-02 has confirmed the existing clock boundary through
 `ExecutionClockDslSpec`: fixed and controlled runtime clocks reach component
@@ -174,3 +173,19 @@ policy documentation. `ProcessExecutionResourceTreeInput.createC` is the
 documented composition point from an opaque admitted tree to an admitted
 WorkArea-relative tool input. Phase 37 records the separately owned CBD Support
 adoption handoff without changing CNCF provider neutrality.
+
+RB-09 closed Phase 36 on Jul. 17, 2026 with the following evidence:
+
+- 68 focused executable specifications passed across execution-clock,
+  declared-configuration, opaque-secret, resource-tree, Process Execution,
+  WorkArea, provider-adapter, and UnitOfWork lifecycle boundaries;
+- `sbt --batch Test/compile` passed;
+- a fresh `sbt --batch test` pass completed successfully, including the suite
+  after `AdminSystemPingExecutionSpec`; and
+- scoped review found no actionable implementation or documentation findings.
+
+Production secret providers, remote/container Process Execution, general shell
+execution, CAR ABI publication, deployment automation, and CBD Support
+adoption remain outside this closed phase. Phase 37 owns the downstream CBD
+Support adoption work; future provider capabilities remain separately scoped
+strategy work.

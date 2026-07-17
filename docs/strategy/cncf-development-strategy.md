@@ -830,7 +830,7 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Phase 33: closed (`docs/phase/phase-33.md`)
 - Phase 34: closed (`docs/phase/phase-34.md`)
 - Phase 35: closed (`docs/phase/phase-35.md`)
-- Phase 36: active (`docs/phase/phase-36.md`)
+- Phase 36: closed (`docs/phase/phase-36.md`)
 - Phase 37: planned (`docs/phase/phase-37.md`)
 
 ## 8. Completed Development Item History
@@ -2281,7 +2281,7 @@ Completed in Phase 35 (Jul. 17, 2026).
   - legacy shell migration and BPM/process orchestration.
 
 ### 9.31 Component Runtime Boundary Capabilities
-Active in Phase 36 (Jul. 17, 2026).
+Completed in Phase 36 (Jul. 17, 2026).
 
 - Goal: let reusable components consume execution time, declared runtime
   configuration, secrets, read-only local resource trees, and external-tool
@@ -2324,6 +2324,13 @@ Active in Phase 36 (Jul. 17, 2026).
     Process Execution fixtures;
   - verify the complete component-to-runtime path without a live Cozy install
     or host-dependent test directory.
+- Completion evidence:
+  - focused execution-clock, configuration, secret, resource-tree, Process
+    Execution, WorkArea, provider-adapter, and lifecycle specifications pass;
+  - `Test/compile` and the full CNCF suite pass after
+    `AdminSystemPingExecutionSpec`; and
+  - scoped review confirms the promoted design/spec/developer guidance and
+    explicit relocation of downstream provider work.
 - Deferred scope:
   - Vault, AWS Secrets Manager, and other production secret providers;
   - mutable filesystem access, arbitrary directory browsing, and

@@ -97,12 +97,12 @@ Status: DONE
 
 ## RB-09: Verification and Closure
 
-Status: OPEN
+Status: DONE
 
-- [ ] Run focused execution-context, configuration, resource, and Process
+- [x] Run focused execution-context, configuration, resource, and Process
   Execution executable specifications.
-- [ ] Run `sbt --batch Test/compile` and the full CNCF test suite.
-- [ ] Run scoped review and resolve actionable findings.
-- [ ] Update strategy/phase closure evidence.
-- [ ] Relocate production secret providers, remote/container execution, CBD
+- [x] Run `sbt --batch Test/compile` and the full CNCF test suite.
+- [x] Run scoped review and resolve actionable findings.
+- [x] Update strategy/phase closure evidence.
+- [x] Relocate production secret providers, remote/container execution, CBD
   migration, and CAR ABI publication to explicit downstream work.
