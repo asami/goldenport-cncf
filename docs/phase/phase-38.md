@@ -2,7 +2,7 @@
 
 Stage Status:
 - Current status: IN_PROGRESS
-- Current step: SW-06 Executable security and policy evidence
+- Current step: SW-07 Developer and ArtScene integration guidance
 - Start condition: Phase 36 is closed and the existing Static Web rendering
   path can supply the effective request execution context.
 - Dependency relation: Phase 38 may start independently of Phase 37.
@@ -89,7 +89,7 @@ models and temporary delayed-render workarounds.
 - D (DONE): SW-04 - Add first-render template and escaped JSON projection.
 - E (DONE): SW-05 - Integrate the projection with Static Web routes and page
   context without changing application business operations.
-- F (OPEN): SW-06 - Add security, locale-precedence, and hostile-input
+- F (DONE): SW-06 - Add security, locale-precedence, and hostile-input
   executable specifications.
 - G (OPEN): SW-07 - Update Static Web developer guidance and validate the
   ArtScene integration handoff.
@@ -186,3 +186,10 @@ component-owned Static Web request routes through the selected component
 runtime `ExecutionContext`; it preserves structured policy failures and does
 not call application business operations. Executable runtime evidence is in
 `StaticWebExecutionProjectionIntegrationSpec`.
+
+SW-06 added integrated runtime evidence for authenticated-user precedence,
+execution-owned fallback formatting, public capability allowlisting, hostile
+public display text, excluded security/runtime data, and page-context ordering
+before application JavaScript. The template projection now installs its
+framework-owned context at the start of `<head>` rather than after existing
+startup scripts.

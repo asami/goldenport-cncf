@@ -34,13 +34,14 @@ object WebExecutionRuntimeProjection {
   ): Consequence[WebExecutionProjection] = {
     given ExecutionContext = executioncontext
     val subject = SecuritySubject.current
+    val runtimecontext = executioncontext.runtime.context
     for {
       policy <- WebExecutionResolutionPolicy.fromConfiguration(configuration)
       formatting <- WebExecutionResolver.resolve(
         policy,
         WebExecutionResolutionInput(
-          runtimeLocale = Some(executioncontext.core.locale),
-          runtimeTimezone = Some(executioncontext.core.timezone),
+          runtimeLocale = Some(runtimecontext.formatting.locale),
+          runtimeTimezone = Some(runtimecontext.formatting.timezone),
           runtimeDateTimeFormatPolicy = Some(executioncontext.core.i18n.dateTimeFormatPolicy),
           authenticated = subject.isAuthenticated,
           userLocale = _attribute(executioncontext, _user_locale_keys),

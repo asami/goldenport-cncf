@@ -114,16 +114,29 @@ Evidence:
 
 ## SW-06: Executable Security and Policy Evidence
 
-Status: OPEN
+Status: DONE
 
-- [ ] Cover configured standalone locale versus conflicting
+- [x] Cover configured standalone locale versus conflicting
   `Accept-Language`.
-- [ ] Cover authenticated-user locale versus conflicting `Accept-Language`.
-- [ ] Cover deterministic runtime-default fallback.
-- [ ] Cover hostile display-name and script-data values.
-- [ ] Prove session/token/internal-id/configuration/datastore/debug data is
+- [x] Cover authenticated-user locale versus conflicting `Accept-Language`.
+- [x] Cover deterministic runtime-default fallback.
+- [x] Cover hostile display-name and script-data values.
+- [x] Prove session/token/internal-id/configuration/datastore/debug data is
   absent.
-- [ ] Prove projection content exists before application JavaScript executes.
+- [x] Prove projection content exists before application JavaScript executes.
+
+Evidence:
+
+- `StaticWebExecutionProjectionIntegrationSpec` covers configured standalone
+  locale against conflicting browser negotiation through the public route.
+- `WebExecutionRuntimeProjectionSpec` covers authenticated-user preference,
+  runtime fallback, capability allowlisting, internal security-data redaction,
+  hostile public text, and framework context ordering before application
+  JavaScript.
+- `WebExecutionProjectionSpec`, `WebExecutionResolutionSpec`, and
+  `WebExecutionTemplateProjectionSpec` retain property-based and focused
+  evidence for deterministic capability selection, locale precedence, and
+  script-data-safe serialization.
 
 ## SW-07: Developer and ArtScene Integration Guidance
 

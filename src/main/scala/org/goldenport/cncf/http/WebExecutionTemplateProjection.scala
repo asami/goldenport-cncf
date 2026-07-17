@@ -11,7 +11,9 @@ object WebExecutionTemplateProjection {
   private val _html_open_pattern = "(?is)<html\\b([^>]*)>".r
   private val _html_document_pattern =
     "(?is)^\\s*(?:<!doctype\\s+html[^>]*>\\s*)?<html\\b".r
+  private val _head_open_pattern = "(?is)<head\\b[^>]*>".r
   private val _head_close_pattern = "(?is)</head\\s*>".r
+  private val _script_open_pattern = "(?is)<script\\b".r
   private val _existing_context_pattern =
     "(?is)<script\\b(?=[^>]*\\bid\\s*=\\s*(?:(['\"])textus-page-context\\1|textus-page-context(?=\\s|>)))[^>]*>.*?</script\\s*>".r
   private val _lang_attribute_pattern =
@@ -25,9 +27,9 @@ object WebExecutionTemplateProjection {
     _html_document_pattern.findPrefixOf(withoutcontext) match {
       case Some(_) =>
         val withattributes = _set_html_attributes(withoutcontext, projection.locale)
-        _head_close_pattern.findFirstMatchIn(withattributes) match {
+        _head_open_pattern.findFirstMatchIn(withattributes) match {
           case Some(m) =>
-            withattributes.substring(0, m.start) + script + "\n" + withattributes.substring(m.start)
+            _insert_page_context_in_head(withattributes, m, script)
           case None =>
             _html_open_pattern.findFirstMatchIn(withattributes).map { m =>
               withattributes.substring(0, m.end) + "\n" + script + withattributes.substring(m.end)
@@ -41,6 +43,24 @@ object WebExecutionTemplateProjection {
            |<body>${withoutcontext}</body>
            |</html>""".stripMargin
     }
+  }
+
+  private def _insert_page_context_in_head(
+    html: String,
+    headopen: scala.util.matching.Regex.Match,
+    script: String
+  ): String = {
+    val afterhead = html.substring(headopen.end)
+    val insertion = _head_close_pattern.findFirstMatchIn(afterhead) match {
+      case Some(headclose) =>
+        val headcontent = afterhead.substring(0, headclose.start)
+        _script_open_pattern.findFirstMatchIn(headcontent)
+          .map(headscript => headopen.end + headscript.start)
+          .getOrElse(headopen.end + headclose.start)
+      case None =>
+        headopen.end
+    }
+    html.substring(0, insertion) + script + "\n" + html.substring(insertion)
   }
 
   private def _set_html_attributes(html: String, locale: String): String =
