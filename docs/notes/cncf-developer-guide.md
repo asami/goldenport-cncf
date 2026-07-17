@@ -547,7 +547,29 @@ page under `/web/{component}/{webApp}` or an explicit component entry app, and
 link from that page to `/form/{component}` or operation-specific `/form/...`
 routes.
 
-### Static Web First-Render Context
+### Static Web Rendering and First-Render Context
+
+Use Static Web as the normal human-facing component application path. The
+server resolves the execution context, locale messages, route query, and page
+View before sending HTML. Do not build a default-language HTML shell and use
+browser REST calls to fetch its primary content, determine its workspace, or
+replace its language after first paint.
+
+Avoid browser REST for ordinary page rendering. A page with several hydrated
+regions multiplies HTTP dispatch, serialization, authorization, and datastore
+work for every user. Compose the full initial page View on the server and send
+it in the document. REST is for external clients, automation, and carefully
+bounded browser enhancements, not for initial application-page assembly.
+
+Normal Web writes use aggregate-command forms and Post/Redirect/Get. REST and
+Form API remain public integration surfaces and may support bounded progressive
+enhancements, but they are not the bootstrap path for an ordinary page.
+
+Use an asynchronous browser request only for a narrow exceptional region:
+genuinely live state such as a notification badge, progress for a long-running
+command, or a browser-only surface such as Canvas. Embed the initial model in
+the rendered HTML whenever it was available to the server; do not make a
+second request merely to retrieve the same page data.
 
 CNCF injects one framework-owned JSON script-data block into a rendered Static
 Web document:
@@ -556,7 +578,9 @@ Web document:
 <script id="textus-page-context" type="application/json"></script>
 ```
 
-Read it synchronously before starting application requests:
+Read it synchronously only when a bounded enhancement needs Web-safe execution
+metadata; server templates already use the same resolved context for initial
+locale messages and page rendering:
 
 ```javascript
 function readPageContext(document) {
@@ -568,17 +592,18 @@ const execution = readPageContext(document).execution || {};
 ```
 
 Use `execution.locale`, `execution.timezone`, `execution.applicationMode`, and
-the other documented public fields for first-render presentation. The stable
-integration identifiers are `#textus-page-context` and its `execution` member;
-do not depend on a generated DOM path or on the block's exact sibling
+the other documented public fields only for local progressive enhancement. The
+stable integration identifiers are `#textus-page-context` and its `execution`
+member; do not depend on a generated DOM path or on the block's exact sibling
 position. Treat additional JSON members as additive.
 
 Do not call an application operation such as `DescribeApplication` to discover
 execution locale or timezone. Such operations remain business-state APIs.
-Browser language, local storage, and hidden-until-fetch rendering are not
-fallbacks for CNCF execution context. Query parameters may still implement an
-explicit application-level language switch, but they do not redefine the
-server-side execution projection or authorization context.
+Browser language, local storage, client-side language replacement, and
+hidden-until-fetch rendering are not fallbacks for CNCF execution context. An
+enabled language query override produces a newly server-rendered document; it
+does not redefine authorization context or translate an existing page in
+place. See `docs/spec/static-web-application.md` for the full contract.
 
 ## Component-Local Embedded Datastore
 

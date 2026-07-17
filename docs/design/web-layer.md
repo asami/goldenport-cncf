@@ -9,12 +9,25 @@ does not introduce a separate application API layer between Web clients and
 CNCF Component / Service / Operation metadata. Operations remain the source of
 truth for execution, authorization, observability, and domain behavior.
 
-The primary application Web strategy is REST-first. CNCF provides the
-application tier through Component / Service / Operation execution, and a
-separate Web tier may use any suitable Web technology to build a production
-user interface over REST. Static Form Web UI is the lightweight built-in path
-for management, development-time checking and debugging, prototypes, and simple
-internal-use screens.
+The primary human-facing application Web strategy is Static Web-first. CNCF
+renders ordinary application pages from the resolved execution context,
+locale-aware messages, and application View models; browser-native forms invoke
+aggregate commands. REST and Form API remain the canonical machine-facing
+operation surfaces and are available to external Web tiers, automation, and
+explicit progressive enhancements.
+
+Static Web is not restricted to generated administration, prototypes, or
+internal screens. It is the scalable default for component-owned application
+pages because an initial page does not require a browser fan-out of REST calls
+to assemble navigation, locale, authorization-aware content, and its primary
+View. The detailed target contract is
+`docs/spec/static-web-application.md`.
+
+Avoid browser REST for ordinary Web rendering as a system-wide scalability
+policy. It is not sufficient that individual calls are fast: a hydrated page
+multiplies HTTP dispatch, serialization, authorization, and datastore work for
+each visible region and each concurrent user. Compose the route's page View on
+the server and return it in the HTML document.
 
 ## Product And Runtime Naming
 
@@ -54,9 +67,9 @@ REST versioning is major-only at the path level:
 - non-breaking additions remain within the same major version
 - breaking changes require a new namespace such as `/rest/v2/...`
 
-## Static Form App
+## Static Web Application
 
-Static Form App is the first Web application shape.
+Static Form App is the first Static Web Application shape.
 
 It is based on:
 
@@ -67,10 +80,15 @@ It is based on:
 - convention-based result page resolution
 - Textus widgets for result, action, table, and later card rendering
 
-Static Form App intentionally avoids arbitrary template programming. It should
-not grow loops, conditionals, or application logic in HTML. When an application
-needs richer control flow, it should use an external Web framework and call
-CNCF through REST or Form API.
+Static Web templates intentionally avoid arbitrary template programming. They
+do not own domain policy, authorization, mutation, or aggregate/view joins.
+Instead, a route binds to an Application-tier page View before rendering and
+receives a typed, template-safe page model. Framework locale message resolution
+supplies static labels from the resolved `ExecutionContext` before HTML is sent.
+
+When an application needs a separate SPA or native frontend, that frontend may
+call CNCF through REST or Form API. It is a distinct Web architecture and does
+not redefine the Static Web Application contract.
 
 ## Island Architecture
 
@@ -79,27 +97,33 @@ Web App pages.
 
 The baseline page remains server-rendered, static HTML:
 
-- page shell, navigation, forms, result pages, and Textus widgets are rendered
-  on the server.
-- HTML FORM submission and convention-based result pages remain usable without
-  client-side JavaScript.
+- page shell, navigation, locale messages, View content, forms, result pages,
+  and Textus widgets are rendered on the server.
+- HTML FORM submission binds to aggregate commands and returns through
+  Post/Redirect/Get; it remains usable without client-side JavaScript.
 - Form API and REST endpoints provide machine-readable integration points for
   progressive enhancement.
 
 Interactive islands may be attached to specific page regions when a feature
 needs local browser behavior, for example:
 
-- dashboard auto-refresh and charts
+- a genuinely live notification badge
+- a long-running command's progress or completion state
 - field-level dynamic assistance
 - lookup/autocomplete controls
-- client-side validation assistance
-- async command await/status widgets
-- richer table/card filtering where the server contract is still authoritative
+- Canvas or another browser-only visualization
+- client-side validation assistance where the server form remains authoritative
 
 Island code must be optional enhancement. It must not become the primary source
-of domain behavior, authorization, persistence, or operation dispatch. The
-server-rendered page and Operation/Form API contracts remain the fallback and
-the source of truth.
+of domain behavior, authorization, persistence, operation dispatch, execution
+context selection, or initial page content. The server-rendered page and
+aggregate/View contracts remain the fallback and the source of truth.
+
+When an island needs asynchronous rendering, its initial model should be part
+of the server-rendered document. An island must not add a request just to obtain
+data available during page rendering. Additional communication is reserved for
+freshness, long-running command state, or a browser-only capability and must be
+limited to the relevant region.
 
 Island assets should be local and scoped. The first-class baseline remains
 Bootstrap 5 plus server-rendered HTML; a broad SPA framework or application-wide
@@ -167,13 +191,14 @@ debug-only details, and navigation links respectively. `result` is not a CNCF
 response-envelope root; protocol adapters such as JSON-RPC/MCP may still use it
 only where the external protocol requires it.
 
-Static Form page rendering uses an Application-tier page view context for
-screen chrome and other display support values that are backed by domain state.
-The Web tier should not fetch notification counts, job badges, session display
-state, tag summaries, or similar header/navigation data by issuing many
-independent Domain-tier calls. Instead, the renderer asks the Application tier
-for a single page context for the current app/page/route/session/query and
-exposes the result to layouts and partials as properties such as
+Static Web page rendering uses an Application-tier page View and page context
+for primary content, screen chrome, and other display support values backed by
+domain state. The Web tier must not fetch notification counts, job badges,
+session display state, tag summaries, filters, or primary content by issuing
+many independent Domain-tier calls or by asking the browser to perform that
+fan-out after initial HTML. Instead, the renderer asks the Application tier for
+a page View/context for the current app/page/route/session/query and exposes
+the result to layouts and partials as properties such as
 `${pageContext.notification.unconfirmedCount}`,
 `${pageContext.jobs.activeCount}`, and
 `${pageContext.jobs.unconfirmedCount}`. Job active count means submitted,
@@ -182,6 +207,11 @@ unconfirmed count means terminal application jobs updated after the subject
 last opened that app's jobs page. Missing providers, anonymous sessions, or
 domain lookup failures must degrade to empty/zero/unavailable values and must
 not break HTML rendering.
+
+Page View composition is an application-tier invocation within the server
+rendering path, not a loopback call to `/rest/v1`. REST is an external boundary:
+use it for automation, external clients, and deliberately isolated browser
+enhancements, not as an internal page-assembly protocol.
 
 `/form-api` remains useful for input assistance, validation, optional refresh,
 async status checks, editor helpers, and other progressive enhancement. It is

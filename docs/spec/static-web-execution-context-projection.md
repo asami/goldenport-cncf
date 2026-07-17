@@ -227,6 +227,12 @@ application script in `head`. A Static Web application MUST NOT hide the page,
 wait for a business REST operation, inspect browser locale, or consult browser
 storage merely to discover the initial execution locale.
 
+The execution projection is not a substitute for server-side localization of a
+normal page. The Static Web Application contract requires locale messages and
+the primary page View to be rendered before first paint; JavaScript may read
+this projection only for bounded progressive enhancement. See
+`docs/spec/static-web-application.md`.
+
 ## Required Executable Examples
 
 ### E1: Standalone Configuration Wins
@@ -269,3 +275,4 @@ public capabilities appear, in normalized deterministic order.
 - `docs/design/execution-context.md`
 - `docs/design/execution-determinism.md`
 - `docs/phase/phase-38.md`
+- `docs/spec/static-web-application.md`
