@@ -24,13 +24,24 @@ Evidence:
 
 ## SW-02: Web-safe Execution Projection
 
-Status: OPEN
+Status: DONE
 
-- [ ] Add the immutable projection type without exposing `ExecutionContext`.
-- [ ] Project locale, timezone, application display formats, application mode,
+- [x] Add the immutable projection type without exposing `ExecutionContext`.
+- [x] Project locale, timezone, application display formats, application mode,
   safe subject fields, and public capabilities.
-- [ ] Keep arbitrary request/session attributes outside the projection.
-- [ ] Add deterministic Record/JSON projection evidence.
+- [x] Keep arbitrary request/session attributes outside the projection.
+- [x] Add deterministic Record/JSON projection evidence.
+
+Evidence:
+
+- `WebExecutionProjection` is an immutable typed public model and does not
+  accept `ExecutionContext`, session attributes, principal identifiers, or
+  provider maps.
+- `WebExecutionProjectionPolicy` defaults to standalone mode and an empty
+  public capability allowlist.
+- `WebExecutionProjectionSpec` verifies the stable Record/JSON shape, typed
+  display-name boundary, excluded internal data, canonical policy identifiers,
+  and property-based deterministic capability selection.
 
 ## SW-03: Locale, Timezone, and Display-format Resolution
 
