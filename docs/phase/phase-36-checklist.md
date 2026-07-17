@@ -39,14 +39,14 @@ Status: DONE
 
 ## RB-04: Opaque Secret References
 
-Status: OPEN
+Status: DONE
 
-- [ ] Define an opaque secret-reference value with no public value accessor.
-- [ ] Classify public configuration, confidential configuration, and secret
+- [x] Define an opaque secret-reference value with no public value accessor.
+- [x] Classify public configuration, confidential configuration, and secret
   references.
-- [ ] Keep secret resolution inside authorized runtime providers/drivers.
-- [ ] Prove diagnostics and failures do not expose secret references or values.
-- [ ] Relocate concrete Vault/cloud secret providers outside Phase 36.
+- [x] Keep secret resolution inside authorized runtime providers/drivers.
+- [x] Prove diagnostics and failures do not expose secret references or values.
+- [x] Relocate concrete Vault/cloud secret providers outside Phase 36.
 
 ## RB-05: Admitted Read-only Resource Trees
 

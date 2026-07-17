@@ -84,6 +84,22 @@ application configuration. This does not create a request-parameter override
 path. Confidential declarations are deliberately denied from this public value
 API until RB-04 supplies an authorized opaque-reference or safe-use boundary.
 
+### Opaque Secret Reference Boundary
+
+RB-04 adds `SecretReference` as a non-product opaque value: it has no public
+locator or value accessor and always renders as redacted. The declared
+configuration model separates three classifications: `Public` values are typed
+component values, `Confidential` values are denied at the component boundary,
+and `Secret` values are available only as `SecretReference` through dedicated
+key constructors.
+
+`RuntimeSecretResolver` and `SecretMaterial` remain CNCF runtime internals.
+They are neither available from `ExecutionContext` nor installed into a
+component socket. The in-memory resolver exists solely for deterministic
+executable evidence. Production secret-provider selection, authorization, and
+driver integration remain downstream runtime work and must not be replaced by
+component-visible resolution APIs.
+
 ## Resource Trees
 
 A resource tree is a named, admitted, read-only logical capability. Its public

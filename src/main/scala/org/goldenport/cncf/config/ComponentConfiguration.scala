@@ -16,6 +16,7 @@ enum ComponentConfigurationRequirement {
 enum ComponentConfigurationConfidentiality {
   case Public
   case Confidential
+  case Secret
 }
 
 enum ComponentConfigurationProvenance {
@@ -69,40 +70,88 @@ object ComponentConfigurationDecoder {
             Consequence.configurationInvalid("declared component configuration requires a boolean value")
         }
     }
+
+  private[config] val _secret_reference: ComponentConfigurationDecoder[SecretReference] =
+    new ComponentConfigurationDecoder[SecretReference] {
+      def decode(value: ConfigurationValue): Consequence[SecretReference] =
+        value match {
+          case ConfigurationValue.StringValue(v) => SecretReference.fromConfiguration(v)
+          case _ => Consequence.configurationInvalid("declared component configuration requires a secret reference")
+        }
+    }
 }
 
-final case class ComponentConfigurationKey[A](
-  name: String,
-  decoder: ComponentConfigurationDecoder[A],
-  requirement: ComponentConfigurationRequirement = ComponentConfigurationRequirement.Required,
-  confidentiality: ComponentConfigurationConfidentiality = ComponentConfigurationConfidentiality.Public
-) {
-  require(Option(name).exists(_.trim.nonEmpty), "component configuration key name is required")
-}
+final class ComponentConfigurationKey[A] private (
+  val name: String,
+  val decoder: ComponentConfigurationDecoder[A],
+  val requirement: ComponentConfigurationRequirement,
+  val confidentiality: ComponentConfigurationConfidentiality
+)
 
 object ComponentConfigurationKey {
+  def required[A](
+    name: String,
+    decoder: ComponentConfigurationDecoder[A]
+  ): ComponentConfigurationKey[A] =
+    _create(name, decoder, ComponentConfigurationRequirement.Required, ComponentConfigurationConfidentiality.Public)
+
+  def optional[A](
+    name: String,
+    decoder: ComponentConfigurationDecoder[A]
+  ): ComponentConfigurationKey[A] =
+    _create(name, decoder, ComponentConfigurationRequirement.Optional, ComponentConfigurationConfidentiality.Public)
+
   def requiredString(name: String): ComponentConfigurationKey[String] =
-    ComponentConfigurationKey(name, ComponentConfigurationDecoder.string)
+    required(name, ComponentConfigurationDecoder.string)
 
   def optionalString(name: String): ComponentConfigurationKey[String] =
-    ComponentConfigurationKey(
-      name,
-      ComponentConfigurationDecoder.string,
-      ComponentConfigurationRequirement.Optional
-    )
+    optional(name, ComponentConfigurationDecoder.string)
 
   def requiredInt(name: String): ComponentConfigurationKey[Int] =
-    ComponentConfigurationKey(name, ComponentConfigurationDecoder.int)
+    required(name, ComponentConfigurationDecoder.int)
 
   def optionalInt(name: String): ComponentConfigurationKey[Int] =
-    ComponentConfigurationKey(
-      name,
-      ComponentConfigurationDecoder.int,
-      ComponentConfigurationRequirement.Optional
-    )
+    optional(name, ComponentConfigurationDecoder.int)
 
   def requiredBoolean(name: String): ComponentConfigurationKey[Boolean] =
-    ComponentConfigurationKey(name, ComponentConfigurationDecoder.boolean)
+    required(name, ComponentConfigurationDecoder.boolean)
+
+  def requiredSecretReference(name: String): ComponentConfigurationKey[SecretReference] =
+    _create(
+      name,
+      ComponentConfigurationDecoder._secret_reference,
+      ComponentConfigurationRequirement.Required,
+      ComponentConfigurationConfidentiality.Secret
+    )
+
+  def optionalSecretReference(name: String): ComponentConfigurationKey[SecretReference] =
+    _create(
+      name,
+      ComponentConfigurationDecoder._secret_reference,
+      ComponentConfigurationRequirement.Optional,
+      ComponentConfigurationConfidentiality.Secret
+    )
+
+  def confidentialRequired(name: String): ComponentConfigurationKey[Nothing] =
+    _create(
+      name,
+      new ComponentConfigurationDecoder[Nothing] {
+        def decode(value: ConfigurationValue): Consequence[Nothing] =
+          Consequence.configurationInvalid("confidential component configuration is not available through the component runtime boundary")
+      },
+      ComponentConfigurationRequirement.Required,
+      ComponentConfigurationConfidentiality.Confidential
+    )
+
+  private def _create[A](
+    name: String,
+    decoder: ComponentConfigurationDecoder[A],
+    requirement: ComponentConfigurationRequirement,
+    confidentiality: ComponentConfigurationConfidentiality
+  ): ComponentConfigurationKey[A] = {
+    require(Option(name).exists(_.trim.nonEmpty), "component configuration key name is required")
+    new ComponentConfigurationKey(name, decoder, requirement, confidentiality)
+  }
 }
 
 final case class ComponentConfigurationResolution[A](
@@ -127,7 +176,8 @@ final class ComponentConfigurationAccess(
         Consequence.configurationInvalid(
           s"confidential declared component configuration is not available through the component runtime boundary: ${key.name}"
         )
-      case ComponentConfigurationConfidentiality.Public =>
+      case ComponentConfigurationConfidentiality.Public |
+          ComponentConfigurationConfidentiality.Secret =>
         _resolve_public(key)
     }
 

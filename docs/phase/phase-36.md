@@ -2,7 +2,7 @@
 
 Stage Status:
 - Current status: IN_PROGRESS
-- Current step: RB-04 opaque secret-reference boundary
+- Current step: RB-05 admitted read-only resource trees
 - Owner: Phase 36 Component Runtime Boundary Capabilities
 - Update rule: Update this block and `phase-36-checklist.md` whenever a stable
   work-item state changes. Close the phase only when every in-scope checklist
@@ -70,8 +70,8 @@ CAR Review, and application-specific models.
 - A (DONE): RB-01 - Audit existing contracts and freeze Phase 36 scope.
 - B (DONE): RB-02 - Confirm the component execution-time contract.
 - C (DONE): RB-03 - Implement declared typed component configuration.
-- D (IN PROGRESS): RB-04 - Implement the opaque secret-reference boundary.
-- E (OPEN): RB-05 - Implement admitted read-only resource trees.
+- D (DONE): RB-04 - Implement the opaque secret-reference boundary.
+- E (IN PROGRESS): RB-05 - Implement admitted read-only resource trees.
 - F (OPEN): RB-06 - Materialize admitted trees into Process WorkAreas.
 - G (OPEN): RB-07 - Verify the provider-neutral external-tool pattern.
 - H (OPEN): RB-08 - Update design/spec/developer documentation.
@@ -140,3 +140,9 @@ Public values resolve `component > subsystem > runtime`; malformed, missing,
 and denied values remain structured `Consequence` failures. `test.yaml`
 assembly component config is executable evidence for deterministic test
 configuration, while action/request properties cannot override a declared key.
+
+RB-04 has established opaque `SecretReference` values and runtime-internal
+secret resolution. Secret configuration keys return only references, while
+confidential values remain denied from the component boundary. Deterministic
+in-memory resolution proves redaction and copied material behavior without
+claiming a concrete secret-provider integration.

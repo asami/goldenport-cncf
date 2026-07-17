@@ -62,6 +62,14 @@ credential text. Only an authorized runtime-owned provider or driver may
 resolve a secret value, and that value MUST NOT be returned through the normal
 component runtime API or diagnostics.
 
+`ComponentConfigurationKey.requiredSecretReference` and
+`optionalSecretReference` are the only declared-configuration constructors for
+this category. They decode a configured locator into an opaque reference; a
+component cannot combine a secret classification with a raw-string decoder.
+`Confidential` configuration remains unavailable from the component API. The
+runtime-internal resolver and its material type are not bound into
+`ExecutionContext`, `ActionCall`, or an SPI socket for component consumption.
+
 ## Admitted Read-only Resource Trees (R6)
 
 `ResourceTreeReference` identifies a named logical resource tree.
@@ -149,3 +157,12 @@ override may supply the component binding's `config` for deterministic
 executable specifications. Request properties do not participate in this
 resolution. Missing required, malformed, and policy-denied declarations remain
 structured failures; optional absence returns `Absent` provenance.
+
+### E6: Opaque Secret Reference
+
+A declared `requiredSecretReference("provider.token")` converts a runtime
+configuration locator into a `SecretReference`. The component can retain or
+pass that reference to a runtime-owned operation but cannot inspect its locator
+or resolve it to bytes. A deterministic in-memory runtime resolver is
+executable-specification evidence only; concrete Vault, cloud, and provider SPI
+integrations are explicitly deferred.

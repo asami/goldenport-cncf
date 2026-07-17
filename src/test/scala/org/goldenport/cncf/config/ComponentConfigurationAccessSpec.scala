@@ -60,11 +60,7 @@ final class ComponentConfigurationAccessSpec extends AnyWordSpec with Matchers w
         val emptyaccess = ComponentConfigurationAccess(ComponentConfigurationSources())
         val optionalkey = ComponentConfigurationKey.optionalString("provider.optional")
         val malformedkey = ComponentConfigurationKey.requiredInt("provider.limit")
-        val confidentialkey = ComponentConfigurationKey(
-          "provider.token",
-          ComponentConfigurationDecoder.string,
-          confidentiality = ComponentConfigurationConfidentiality.Confidential
-        )
+        val confidentialkey = ComponentConfigurationKey.confidentialRequired("provider.token")
         val malformedaccess = ComponentConfigurationAccess(
           ComponentConfigurationSources(component = _configuration("provider.limit" -> "not-an-int"))
         )
