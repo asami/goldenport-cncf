@@ -930,7 +930,11 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
   ): Consequence[ProcessExecutionResult] = {
     var registration = Option.empty[UnitOfWorkResourceRegistration]
     try {
-      driver.startC(execution, workspace).flatMap { handle =>
+      for {
+        _ <- workspace.materializeInputsC(execution)
+        _ <- workspace.prepareOutputsC(execution)
+        handle <- driver.startC(execution, workspace)
+        result <- {
         val jobregistration = uow.executionContext.jobContext.cancellationScope.map(
           _.register(handle.cancelC)
         )
@@ -951,7 +955,8 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
         } finally {
           jobregistration.foreach(_.close())
         }
-      }
+        }
+      } yield result
     } finally {
       if (registration.isEmpty)
         workspace.close()

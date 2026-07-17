@@ -2,6 +2,7 @@ package org.goldenport.cncf.processexecution
 
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.ScopeContext
+import org.goldenport.cncf.resource.{ResourceTreeLimits, ResourceTreeReference, ResourceTreeSnapshot}
 
 /*
  * @since   Jul. 17, 2026
@@ -116,6 +117,39 @@ object ProcessExecutionInputFile {
       )
     else
       Consequence.success(ProcessExecutionInputFile(name, path, content, maximumbytes))
+}
+
+/**
+ * A logical, already-admitted resource tree to materialize under the
+ * runtime-owned Process WorkArea. The component cannot supply a host path or
+ * forge the opaque tree snapshot.
+ */
+final case class ProcessExecutionResourceTreeInput private (
+  tree: ResourceTreeSnapshot,
+  target: WorkAreaRelativePath,
+  requestedLimits: ResourceTreeLimits
+)
+
+object ProcessExecutionResourceTreeInput {
+  def createC(
+    tree: ResourceTreeSnapshot,
+    target: WorkAreaRelativePath
+  ): Consequence[ProcessExecutionResourceTreeInput] =
+    createC(tree, target, tree.limits)
+
+  def createC(
+    tree: ResourceTreeSnapshot,
+    target: WorkAreaRelativePath,
+    requestedlimits: ResourceTreeLimits
+  ): Consequence[ProcessExecutionResourceTreeInput] =
+    tree.tightenC(requestedlimits).map(_ => ProcessExecutionResourceTreeInput(tree, target, requestedlimits))
+
+  private[processexecution] def fromAdmitted(
+    tree: ResourceTreeSnapshot,
+    target: WorkAreaRelativePath,
+    requestedlimits: ResourceTreeLimits
+  ): ProcessExecutionResourceTreeInput =
+    ProcessExecutionResourceTreeInput(tree, target, requestedlimits)
 }
 
 final case class ProcessExecutionOutputDeclaration private (
@@ -331,7 +365,8 @@ final class ProcessProgramDefinition private (
   val maximumLimits: ProcessExecutionLimits,
   val allowedArtifacts: Set[ProcessArtifactName],
   val allowsWorkingDirectory: Boolean,
-  val allowedInputFiles: Set[ProcessArtifactName]
+  val allowedInputFiles: Set[ProcessArtifactName],
+  val allowedResourceTrees: Map[ResourceTreeReference, ResourceTreeLimits]
 ) {
   def validateRequestC(
     request: ProcessExecutionRequest,
@@ -343,6 +378,7 @@ final class ProcessProgramDefinition private (
       _ <- _validate_working_directory_c(request)
       _ <- _validate_artifacts_c(request)
       _ <- _validate_input_files_c(request, limits)
+      _ <- _validate_managed_input_bytes_c(request, limits)
       _ <- _validate_input_c(request.input, limits)
       _ <- _validate_output_limits_c(request.outputs, limits)
     } yield ()
@@ -372,6 +408,51 @@ final class ProcessProgramDefinition private (
     }
   }
 
+  def resolveResourceTreesC(
+    request: ProcessExecutionRequest,
+    grant: ProcessExecutionGrant
+  ): Consequence[Vector[ProcessExecutionResourceTreeInput]] =
+    request.resourceTrees.foldLeft(Consequence.success(Vector.empty[ProcessExecutionResourceTreeInput])) { (z, input) =>
+      z.flatMap { inputs =>
+        allowedResourceTrees.get(input.tree.reference) match {
+          case Some(maximum) =>
+            for {
+              requested <- input.tree.tightenC(input.requestedLimits)
+              programbounded <- requested.narrowC(maximum)
+              grantlimits <- _grant_tree_limits_c(input.tree.reference, grant)
+              grantbounded <- grantlimits.fold(Consequence.success(programbounded))(programbounded.narrowC)
+            } yield inputs :+ ProcessExecutionResourceTreeInput.fromAdmitted(
+              grantbounded,
+              input.target,
+              grantbounded.limits
+            )
+          case None =>
+            Consequence.argumentPolicyViolation(
+              "resourceTrees",
+              "process.execution.resource-tree-policy",
+              "runtime-declared resource tree",
+              input.tree.reference.name
+            )
+        }
+      }
+    }
+
+  private def _grant_tree_limits_c(
+    reference: ResourceTreeReference,
+    grant: ProcessExecutionGrant
+  ): Consequence[Option[ResourceTreeLimits]] =
+    if (grant.resourceTreeLimits.isEmpty)
+      Consequence.success(None)
+    else
+      grant.resourceTreeLimits.get(reference).map(x => Consequence.success(Some(x))).getOrElse(
+        Consequence.argumentPolicyViolation(
+          "resourceTrees",
+          "process.execution.resource-tree-grant",
+          "grant-authorized resource tree",
+          reference.name
+        )
+      )
+
   private def _validate_input_c(
     input: ProcessExecutionInput,
     limits: ProcessExecutionLimits
@@ -392,7 +473,6 @@ final class ProcessProgramDefinition private (
     limits: ProcessExecutionLimits
   ): Consequence[Unit] = {
     val rejected = request.inputFiles.find(x => !allowedInputFiles.contains(x.name))
-    val total = request.inputFiles.foldLeft(BigInt(0))((z, x) => z + BigInt(x.content.length))
     rejected match {
       case Some(_) =>
         Consequence.argumentPolicyViolation(
@@ -401,15 +481,26 @@ final class ProcessProgramDefinition private (
           "registered input-file declaration",
           "unapproved"
         )
-      case None if total > BigInt(limits.workAreaBytes.get) =>
-        Consequence.argumentLimitExceeded(
-          "inputFiles",
-          limits.workAreaBytes.get,
-          total.longValue,
-          "process.execution.workarea-bytes"
-        )
       case None => Consequence.unit
     }
+  }
+
+  private def _validate_managed_input_bytes_c(
+    request: ProcessExecutionRequest,
+    limits: ProcessExecutionLimits
+  ): Consequence[Unit] = {
+    val fixed = request.inputFiles.foldLeft(BigInt(0))((z, x) => z + BigInt(x.content.length))
+    val trees = request.resourceTrees.foldLeft(BigInt(0))((z, x) => z + BigInt(x.tree.totalByteSize))
+    val total = fixed + trees
+    if (total > BigInt(limits.workAreaBytes.get))
+      Consequence.argumentLimitExceeded(
+        "resourceTrees",
+        limits.workAreaBytes.get,
+        total.longValue,
+        "process.execution.workarea-bytes"
+      )
+    else
+      Consequence.unit
   }
 
   private def _validate_output_limits_c(
@@ -456,7 +547,8 @@ object ProcessProgramDefinition {
     maximumlimits: ProcessExecutionLimits,
     allowedartifacts: Set[ProcessArtifactName],
     allowsworkingdirectory: Boolean = false,
-    allowedinputfiles: Set[ProcessArtifactName] = Set.empty
+    allowedinputfiles: Set[ProcessArtifactName] = Set.empty,
+    allowedresourcetrees: Map[ResourceTreeReference, ResourceTreeLimits] = Map.empty
   ): Consequence[ProcessProgramDefinition] = {
     val identity = Option(safeprogramidentity).map(_.trim.toLowerCase).getOrElse("")
     val executable = Option(executablelocation).map(_.trim).getOrElse("")
@@ -464,6 +556,7 @@ object ProcessProgramDefinition {
       _ <- _validate_identity_c(identity)
       _ <- _validate_executable_c(executable)
       _ <- maximumlimits.requireFiniteC
+      _ <- _validate_resource_tree_limits_c(allowedresourcetrees)
     } yield new ProcessProgramDefinition(
       capability,
       identity,
@@ -473,7 +566,8 @@ object ProcessProgramDefinition {
       maximumlimits,
       allowedartifacts,
       allowsworkingdirectory,
-      allowedinputfiles
+      allowedinputfiles,
+      allowedresourcetrees
     )
   }
 
@@ -488,11 +582,19 @@ object ProcessProgramDefinition {
       Consequence.unit
     else
       Consequence.argumentFormatError("runtimeExecutable", "runtime-owned executable location", "invalid")
+
+  private def _validate_resource_tree_limits_c(
+    trees: Map[ResourceTreeReference, ResourceTreeLimits]
+  ): Consequence[Unit] =
+    trees.values.foldLeft(Consequence.unit) { (z, limits) =>
+      z.flatMap(_ => limits.validateC.map(_ => ()))
+    }
 }
 
 final case class ProcessExecutionGrant(
   capability: ProcessCapabilityId,
-  maximumLimits: ProcessExecutionLimits = ProcessExecutionLimits.empty
+  maximumLimits: ProcessExecutionLimits = ProcessExecutionLimits.empty,
+  resourceTreeLimits: Map[ResourceTreeReference, ResourceTreeLimits] = Map.empty
 )
 
 /**
@@ -532,7 +634,13 @@ object ProcessExecutionAdmission {
       )
     else
       grants.foldLeft(Consequence.unit) { (z, grant) =>
-        z.flatMap(_ => grant.maximumLimits.validateOptionalC)
+        z.flatMap { _ =>
+          grant.maximumLimits.validateOptionalC.flatMap { _ =>
+            grant.resourceTreeLimits.values.foldLeft(Consequence.unit) { (zz, limits) =>
+              zz.flatMap(_ => limits.validateC.map(_ => ()))
+            }
+          }
+        }
       }.map(_ => new ProcessExecutionAdmission(policy, grants.map(x => x.capability -> x).toMap))
   }
 
@@ -552,14 +660,16 @@ final case class ProcessExecutionRequest(
   workingDirectory: Option[WorkAreaRelativePath] = None,
   outputs: Vector[ProcessExecutionOutputDeclaration] = Vector.empty,
   requestedLimits: ProcessExecutionLimits = ProcessExecutionLimits.empty,
-  inputFiles: Vector[ProcessExecutionInputFile] = Vector.empty
+  inputFiles: Vector[ProcessExecutionInputFile] = Vector.empty,
+  resourceTrees: Vector[ProcessExecutionResourceTreeInput] = Vector.empty
 ) {
   def validateC: Consequence[Unit] =
     for {
       _ <- _validate_arguments_c(arguments)
       _ <- _validate_input_files_c(inputFiles)
+      _ <- _validate_resource_trees_c(resourceTrees)
       _ <- _validate_outputs_c(outputs)
-      _ <- _validate_input_output_paths_c(inputFiles, workingDirectory, outputs)
+      _ <- _validate_input_output_paths_c(inputFiles, resourceTrees, workingDirectory, outputs)
       _ <- requestedLimits.validateOptionalC
     } yield ()
 
@@ -591,14 +701,30 @@ final case class ProcessExecutionRequest(
       Consequence.unit
   }
 
+  private def _validate_resource_trees_c(
+    trees: Vector[ProcessExecutionResourceTreeInput]
+  ): Consequence[Unit] = {
+    val references = trees.map(_.tree.reference)
+    val targets = trees.map(_.target)
+    if (references.distinct.size != references.size)
+      Consequence.argumentPolicyViolation("resourceTrees", "process.execution.resource-tree-policy", "unique tree references", "duplicate")
+    else if (_has_overlapping_paths(targets.map(_.value)))
+      Consequence.argumentPolicyViolation("resourceTrees", "process.execution.resource-tree-policy", "non-overlapping WorkArea targets", "collision")
+    else
+      Consequence.unit
+  }
+
   private def _validate_input_output_paths_c(
     files: Vector[ProcessExecutionInputFile],
+    trees: Vector[ProcessExecutionResourceTreeInput],
     workingdirectory: Option[WorkAreaRelativePath],
     outputs: Vector[ProcessExecutionOutputDeclaration]
   ): Consequence[Unit] = {
     val outputpaths = outputs.map { output =>
       workingdirectory.fold(output.path.value)(directory => s"${directory.value}/${output.path.value}")
     }.toSet
+    val inputpaths = files.map(_.path.value)
+    val treepaths = trees.map(_.target.value)
     if (files.exists(file => outputpaths.contains(file.path.value)))
       Consequence.argumentPolicyViolation(
         "inputFiles",
@@ -606,9 +732,31 @@ final case class ProcessExecutionRequest(
         "input paths distinct from declared output paths",
         "collision"
       )
+    else if (treepaths.exists(target => inputpaths.exists(_path_overlap(_, target))))
+      Consequence.argumentPolicyViolation(
+        "resourceTrees",
+        "process.execution.resource-tree-policy",
+        "tree targets distinct from fixed input paths",
+        "collision"
+      )
+    else if (treepaths.exists(target => outputpaths.exists(_path_overlap(_, target))))
+      Consequence.argumentPolicyViolation(
+        "resourceTrees",
+        "process.execution.resource-tree-policy",
+        "tree targets distinct from declared output paths",
+        "collision"
+      )
     else
       Consequence.unit
   }
+
+  private def _path_overlap(left: String, right: String): Boolean =
+    left == right || left.startsWith(s"${right}/") || right.startsWith(s"${left}/")
+
+  private def _has_overlapping_paths(paths: Vector[String]): Boolean =
+    paths.indices.exists { index =>
+      paths.drop(index + 1).exists(_path_overlap(paths(index), _))
+    }
 }
 
 final case class ResolvedProcessExecution(
@@ -636,8 +784,10 @@ final class ProcessExecutionPolicy private (
         grant.maximumLimits,
         request.requestedLimits
       )
-      _ <- definition.validateRequestC(request, effective)
-    } yield ResolvedProcessExecution(request, definition, effective)
+      trees <- definition.resolveResourceTreesC(request, grant)
+      admittedrequest = request.copy(resourceTrees = trees)
+      _ <- definition.validateRequestC(admittedrequest, effective)
+    } yield ResolvedProcessExecution(admittedrequest, definition, effective)
 
   private def _definition_c(capability: ProcessCapabilityId): Consequence[ProcessProgramDefinition] =
     _definitions.get(capability).map(Consequence.success).getOrElse(
@@ -654,7 +804,11 @@ final class ProcessExecutionPolicy private (
     grant: ProcessExecutionGrant
   ): Consequence[Unit] =
     if (grant.capability == capability)
-      grant.maximumLimits.validateOptionalC
+      grant.maximumLimits.validateOptionalC.flatMap { _ =>
+        grant.resourceTreeLimits.values.foldLeft(Consequence.unit) { (z, limits) =>
+          z.flatMap(_ => limits.validateC.map(_ => ()))
+        }
+      }
     else
       Consequence.argumentPolicyViolation(
         "capability",

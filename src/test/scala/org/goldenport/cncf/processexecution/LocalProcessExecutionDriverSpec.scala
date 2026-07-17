@@ -4,6 +4,7 @@ import java.io.IOException
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import org.goldenport.cncf.config.RuntimeConfig
+import org.goldenport.cncf.resource.{ResourceTreeAccess, ResourceTreeEntry, ResourceTreeLimits, ResourceTreeReference}
 import org.goldenport.cncf.workarea.WorkAreaSpace
 import org.scalacheck.{Gen, Prop, Test}
 import org.scalatest.GivenWhenThen
@@ -238,6 +239,34 @@ final class LocalProcessExecutionDriverSpec extends AnyWordSpec with Matchers wi
       driver.activeHandleCount shouldBe 0
     }
 
+    "reject admitted resource trees when the WorkArea overload is bypassed" in {
+      Given("an admitted logical resource tree on an otherwise resolved local Process request")
+      val reference = ResourceTreeReference.parseC("fixtures").toOption.get
+      val target = WorkAreaRelativePath.parseC("fixtures").toOption.get
+      val limits = ResourceTreeLimits(maxDepth = 1, maxEntries = 1, maxFileBytes = 16L, maxTotalBytes = 16L)
+      val entry = ResourceTreeEntry.createC("request.txt", Vector(1.toByte)).toOption.get
+      val snapshot = ResourceTreeAccess.inMemory(Map(reference -> Vector(entry))).snapshot(reference, limits).toOption.get
+      val tree = ProcessExecutionResourceTreeInput.createC(snapshot, target).toOption.get
+      val execution = _execution(
+        Vector("streams", "literal"),
+        resourceTrees = Vector(tree),
+        allowedresourcetrees = Map(reference -> limits)
+      )
+      val driver = new LocalProcessExecutionDriver()
+
+      When("the driver is called without the runtime-owned WorkArea")
+      val result = try {
+        driver.startC(execution)
+      } finally {
+        driver.close()
+      }
+
+      Then("the driver rejects the tree rather than creating a host-materialized input")
+      result.isFaillure shouldBe true
+      driver.activeProcessCount shouldBe 0
+      driver.activeHandleCount shouldBe 0
+    }
+
     "run against an execution WorkArea without exposing host paths in logical artifacts" in {
       Given("a runtime-owned WorkArea, a declared output, and a WorkArea-backed stdin file")
       val inputpath = WorkAreaRelativePath.parseC("input/request.txt").toOption.get
@@ -321,7 +350,9 @@ final class LocalProcessExecutionDriverSpec extends AnyWordSpec with Matchers wi
     limits: ProcessExecutionLimits = _limits(),
     input: ProcessExecutionInput = ProcessExecutionInput.Empty,
     outputs: Vector[ProcessExecutionOutputDeclaration] = Vector.empty,
-    workingdirectory: Option[WorkAreaRelativePath] = None
+    workingdirectory: Option[WorkAreaRelativePath] = None,
+    resourceTrees: Vector[ProcessExecutionResourceTreeInput] = Vector.empty,
+    allowedresourcetrees: Map[ResourceTreeReference, ResourceTreeLimits] = Map.empty
   ): ResolvedProcessExecution = {
     val capability = ProcessCapabilityId.parseC("local-probe").toOption.get
     val definition = ProcessProgramDefinition.fromRuntimeC(
@@ -332,7 +363,8 @@ final class LocalProcessExecutionDriverSpec extends AnyWordSpec with Matchers wi
       ProcessArgumentPolicy(_fixed_arguments, arguments.toSet),
       limits,
       outputs.map(_.name).toSet,
-      allowsworkingdirectory = workingdirectory.nonEmpty
+      allowsworkingdirectory = workingdirectory.nonEmpty,
+      allowedresourcetrees = allowedresourcetrees
     ).toOption.get
     val policy = ProcessExecutionPolicy.createC(Vector(definition)).toOption.get
     policy.resolveC(
@@ -341,7 +373,8 @@ final class LocalProcessExecutionDriverSpec extends AnyWordSpec with Matchers wi
         arguments = arguments,
         input = input,
         workingDirectory = workingdirectory,
-        outputs = outputs
+        outputs = outputs,
+        resourceTrees = resourceTrees
       ),
       ProcessExecutionGrant(capability)
     ).toOption.get

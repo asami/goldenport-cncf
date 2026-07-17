@@ -119,7 +119,9 @@ RB-05 provides `ResourceTreeReference`, `ResourceTreeLimits`,
 separate component-facing read-only tree capability. Components construct only
 a validated logical reference and request a bounded immutable snapshot through
 the protected ActionCall internal DSL. `ResourceAccess` remains a
-single-resource read capability.
+single-resource read capability. Snapshot construction is runtime-private; a
+component can pass an admitted snapshot onward but cannot synthesize one from
+arbitrary bytes or paths.
 
 The initial local provider is bound only by runtime configuration:
 
@@ -140,16 +142,25 @@ the host filesystem.
 
 ## Process Execution Materialization
 
-An admitted resource-tree snapshot may be represented as a distinct Process
-Execution tree input. The runtime materializes that input under a
-WorkArea-relative target after Process Execution admission. A component or
-request never supplies an arbitrary host path as a Process Execution input.
+An admitted resource-tree snapshot may be represented only through
+`ProcessExecutionResourceTreeInput`: an opaque snapshot, a validated
+WorkArea-relative target, and optional narrower limits. It is distinct from
+`ProcessExecutionInputFile`, whose bounded bytes are caller-supplied fixed
+files. Neither type accepts a component-selected host path.
 
-Tree admission and Process Execution admission are separate checks. Process
-capability policy declares which logical tree identities are accepted. Request
-limits may narrow runtime and program limits but never widen them. WorkArea and
-UnitOfWork cleanup apply equally to fixed input files and materialized tree
-inputs.
+Tree admission and Process Execution admission are separate checks. The
+selected Process program declares permitted logical tree identities and their
+maximum limits; an optional execution grant may further restrict both. A
+request may narrow its snapshot limits but cannot broaden them. The resolved
+tree is revalidated under the effective tree/program/grant cap before a
+filesystem write occurs.
+
+The `UnitOfWorkInterpreter`, not an individual Process driver, materializes
+fixed files and admitted trees and prepares declared output parents before
+calling `ProcessExecutionDriver.startC`. Every trusted driver consequently
+receives the same prepared runtime-owned WorkArea. UnitOfWork cleanup applies
+equally to fixed input files and materialized tree inputs on every terminal
+path.
 
 ## Observability And Testability
 

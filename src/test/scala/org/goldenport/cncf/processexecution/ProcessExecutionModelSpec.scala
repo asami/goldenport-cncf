@@ -1,6 +1,7 @@
 package org.goldenport.cncf.processexecution
 
 import org.goldenport.Consequence
+import org.goldenport.cncf.resource.{ResourceTreeAccess, ResourceTreeEntry, ResourceTreeLimits, ResourceTreeReference}
 import org.scalacheck.{Gen, Prop, Test}
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
@@ -133,6 +134,106 @@ final class ProcessExecutionModelSpec extends AnyWordSpec with Matchers with Giv
       rejected.isFaillure shouldBe true
     }
 
+    "admit only program-declared opaque resource trees under narrowing limits" in {
+      Given("an admitted logical resource tree, a declared Process capability, and a smaller program cap")
+      val capability = ProcessCapabilityId.parseC("codex-cli").toOption.get
+      val reference = ResourceTreeReference.parseC("fixtures").toOption.get
+      val target = WorkAreaRelativePath.parseC("fixtures").toOption.get
+      val entry = ResourceTreeEntry.createC("schema.json", Vector(1.toByte, 2.toByte)).toOption.get
+      val sourceLimits = ResourceTreeLimits(maxDepth = 2, maxEntries = 4, maxFileBytes = 8L, maxTotalBytes = 8L)
+      val snapshot = ResourceTreeAccess.inMemory(Map(reference -> Vector(entry))).snapshot(reference, sourceLimits).toOption.get
+      val requested = ResourceTreeLimits(maxDepth = 1, maxEntries = 1, maxFileBytes = 2L, maxTotalBytes = 2L)
+      val input = ProcessExecutionResourceTreeInput.createC(snapshot, target, requested).toOption.get
+      val definition = _definition(capability, allowedresourcetrees = Map(reference -> requested))
+      val policy = ProcessExecutionPolicy.createC(Vector(definition)).toOption.get
+      val grant = ProcessExecutionGrant(capability, resourceTreeLimits = Map(reference -> requested))
+
+      When("the request supplies the declared tree and an undeclared tree identity")
+      val admitted = policy.resolveC(ProcessExecutionRequest(capability, resourceTrees = Vector(input)), grant)
+      val unknown = ResourceTreeReference.parseC("unknown").toOption.get
+      val unknownsnapshot = ResourceTreeAccess.inMemory(Map(unknown -> Vector(entry))).snapshot(unknown, sourceLimits).toOption.get
+      val rejectedinput = ProcessExecutionResourceTreeInput.createC(unknownsnapshot, target).toOption.get
+      val rejected = policy.resolveC(ProcessExecutionRequest(capability, resourceTrees = Vector(rejectedinput)), grant)
+
+      Then("admission retains the narrowed snapshot and rejects undeclared tree identities before a driver exists")
+      admitted.toOption.map(_.request.resourceTrees.head.tree.limits) shouldBe Some(requested)
+      rejected.isFaillure shouldBe true
+    }
+
+    "leave tree limits unchanged when a capability grant has no tree-specific restriction" in {
+      Given("an admitted tree whose declared depth exceeds the generic resource-tree default")
+      val capability = ProcessCapabilityId.parseC("codex-cli").toOption.get
+      val reference = ResourceTreeReference.parseC("deep-fixtures").toOption.get
+      val target = WorkAreaRelativePath.parseC("fixtures").toOption.get
+      val path = Vector.fill(17)("nested").mkString("/") + "/input.txt"
+      val limits = ResourceTreeLimits(maxDepth = 20, maxEntries = 2, maxFileBytes = 8L, maxTotalBytes = 8L)
+      val entry = ResourceTreeEntry.createC(path, Vector(1.toByte)).toOption.get
+      val snapshot = ResourceTreeAccess.inMemory(Map(reference -> Vector(entry))).snapshot(reference, limits).toOption.get
+      val input = ProcessExecutionResourceTreeInput.createC(snapshot, target).toOption.get
+      val definition = _definition(capability, allowedresourcetrees = Map(reference -> limits))
+      val policy = ProcessExecutionPolicy.createC(Vector(definition)).toOption.get
+
+      When("the matching capability grant omits a tree-specific restriction")
+      val admitted = policy.resolveC(
+        ProcessExecutionRequest(capability, resourceTrees = Vector(input)),
+        ProcessExecutionGrant(capability)
+      )
+
+      Then("program policy remains the effective cap rather than an unrelated default")
+      admitted.toOption.map(_.request.resourceTrees.head.tree.limits.maxDepth) shouldBe Some(20)
+    }
+
+    "reject resource-tree limit widening and WorkArea path collisions before filesystem access" in {
+      Given("an admitted tree with a bounded source policy and a fixed input path beneath its target")
+      val capability = ProcessCapabilityId.parseC("codex-cli").toOption.get
+      val reference = ResourceTreeReference.parseC("fixtures").toOption.get
+      val target = WorkAreaRelativePath.parseC("input").toOption.get
+      val entry = ResourceTreeEntry.createC("schema.json", Vector(1.toByte)).toOption.get
+      val limits = ResourceTreeLimits(maxDepth = 1, maxEntries = 1, maxFileBytes = 4L, maxTotalBytes = 4L)
+      val snapshot = ResourceTreeAccess.inMemory(Map(reference -> Vector(entry))).snapshot(reference, limits).toOption.get
+      val widened = ProcessExecutionResourceTreeInput.createC(snapshot, target, ResourceTreeLimits.default)
+      val schema = ProcessArtifactName.parseC("schema").toOption.get
+      val inputpath = WorkAreaRelativePath.parseC("input/schema.json").toOption.get
+      val fixed = ProcessExecutionInputFile.createC(schema, inputpath, Vector(1.toByte), 4L).toOption.get
+      val tree = ProcessExecutionResourceTreeInput.createC(snapshot, target).toOption.get
+      val definition = _definition(capability, allowedinputfiles = Set(schema), allowedresourcetrees = Map(reference -> limits))
+      val policy = ProcessExecutionPolicy.createC(Vector(definition)).toOption.get
+
+      When("the component requests broader tree limits or a fixed-file collision")
+      val collision = policy.resolveC(
+        ProcessExecutionRequest(capability, inputFiles = Vector(fixed), resourceTrees = Vector(tree)),
+        ProcessExecutionGrant(capability)
+      )
+
+      Then("the request is rejected without accepting broader limits or overlapping WorkArea intent")
+      widened.isFaillure shouldBe true
+      collision.isFaillure shouldBe true
+    }
+
+    "reject nested resource-tree targets before a WorkArea can be materialized" in {
+      Given("two admitted trees whose distinct targets overlap as parent and child paths")
+      val capability = ProcessCapabilityId.parseC("codex-cli").toOption.get
+      val first = ResourceTreeReference.parseC("first-tree").toOption.get
+      val second = ResourceTreeReference.parseC("second-tree").toOption.get
+      val limits = ResourceTreeLimits(maxDepth = 1, maxEntries = 1, maxFileBytes = 4L, maxTotalBytes = 4L)
+      val entry = ResourceTreeEntry.createC("input.txt", Vector(1.toByte)).toOption.get
+      val firstsnapshot = ResourceTreeAccess.inMemory(Map(first -> Vector(entry))).snapshot(first, limits).toOption.get
+      val secondsnapshot = ResourceTreeAccess.inMemory(Map(second -> Vector(entry))).snapshot(second, limits).toOption.get
+      val firstinput = ProcessExecutionResourceTreeInput.createC(firstsnapshot, WorkAreaRelativePath.parseC("fixtures").toOption.get).toOption.get
+      val secondinput = ProcessExecutionResourceTreeInput.createC(secondsnapshot, WorkAreaRelativePath.parseC("fixtures/schema").toOption.get).toOption.get
+      val definition = _definition(capability, allowedresourcetrees = Map(first -> limits, second -> limits))
+      val policy = ProcessExecutionPolicy.createC(Vector(definition)).toOption.get
+
+      When("the Process request is admitted before any driver or WorkArea exists")
+      val rejected = policy.resolveC(
+        ProcessExecutionRequest(capability, resourceTrees = Vector(firstinput, secondinput)),
+        ProcessExecutionGrant(capability)
+      )
+
+      Then("the overlapping logical targets are rejected deterministically")
+      rejected.isFaillure shouldBe true
+    }
+
     "reject input files whose WorkArea paths collide with declared outputs" in {
       Given("a runtime definition with one allowed schema file and one output artifact")
       val capability = ProcessCapabilityId.parseC("codex-cli").toOption.get
@@ -221,7 +322,8 @@ final class ProcessExecutionModelSpec extends AnyWordSpec with Matchers with Giv
     capability: ProcessCapabilityId,
     artifacts: Set[ProcessArtifactName] = Set.empty,
     allowedinputfiles: Set[ProcessArtifactName] = Set.empty,
-    allowsworkingdirectory: Boolean = false
+    allowsworkingdirectory: Boolean = false,
+    allowedresourcetrees: Map[ResourceTreeReference, ResourceTreeLimits] = Map.empty
   ): ProcessProgramDefinition =
     ProcessProgramDefinition.fromRuntimeC(
       capability,
@@ -232,7 +334,8 @@ final class ProcessExecutionModelSpec extends AnyWordSpec with Matchers with Giv
       _limits(100L),
       artifacts,
       allowsworkingdirectory = allowsworkingdirectory,
-      allowedinputfiles = allowedinputfiles
+      allowedinputfiles = allowedinputfiles,
+      allowedresourcetrees = allowedresourcetrees
     ).toOption.get
 
   private def _limits(value: Long): ProcessExecutionLimits =

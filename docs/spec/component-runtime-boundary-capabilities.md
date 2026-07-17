@@ -77,6 +77,9 @@ runtime-internal resolver and its material type are not bound into
 deterministically ordered `ResourceTreeEntry` values subject to declared
 `ResourceTreeLimits`. The public values MUST NOT expose a physical root, host
 `Path`, provider handle, credential, or mutable directory operation.
+`ResourceTreeSnapshot` construction MUST remain runtime-private; component
+code may retain and submit an admitted snapshot but MUST NOT construct one
+from arbitrary paths or bytes.
 
 The runtime binds a tree identity to a provider and enforces unknown-tree,
 traversal, symlink, depth, entry-count, per-file-byte, and aggregate-byte
@@ -101,15 +104,21 @@ separate capability and does not change existing `ResourceReference` or
 
 ## Process Execution Tree Input (R8)
 
-`ProcessExecutionResourceTreeInput` represents only an admitted logical tree
-snapshot and a WorkArea-relative materialization target. It MUST NOT accept a
-component-selected host path. Fixed `ProcessExecutionInputFile` values remain
-bounded caller-supplied bytes and are not interchangeable with tree inputs.
+`ProcessExecutionResourceTreeInput` represents only an opaque admitted logical
+tree snapshot, a WorkArea-relative materialization target, and limits that are
+no broader than the snapshot. It MUST NOT accept a component-selected host
+path. Fixed `ProcessExecutionInputFile` values remain bounded caller-supplied
+bytes and are not interchangeable with tree inputs.
 
 Process Execution admission MUST validate the logical tree identity against
-the selected program capability before materialization. The runtime performs
-materialization inside the owned WorkArea after admission. Request-level limits
-may narrow but MUST NOT widen runtime, tree, grant, or program limits.
+the selected program capability before materialization. A configured
+per-tree execution grant MAY further restrict the accepted identity and
+limits. The runtime MUST revalidate the snapshot under the effective source,
+request, program, and grant limits before materialization. The
+`UnitOfWorkInterpreter` MUST materialize fixed inputs and admitted trees inside
+the owned WorkArea before `ProcessExecutionDriver.startC`; a driver MUST NOT
+be responsible for this admission step. Request-level limits may narrow but
+MUST NOT widen runtime, tree, grant, or program limits.
 
 ## Lifecycle And Diagnostics (R9)
 

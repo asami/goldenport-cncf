@@ -40,17 +40,43 @@ final class ProcessExecutionWorkArea private[processexecution] (
 
   /** Materializes only policy-admitted bounded inputs before process launch. */
   def materializeInputsC(execution: ResolvedProcessExecution): Consequence[Unit] =
+    _materialize_input_files_c(execution).flatMap(_ => _materialize_resource_trees_c(execution))
+
+  private def _materialize_input_files_c(execution: ResolvedProcessExecution): Consequence[Unit] =
     execution.request.inputFiles.foldLeft(Consequence.unit) { (z, input) =>
       z.flatMap { _ =>
-        _resolve_c(input.path, createparents = true).flatMap { resolved =>
-          try {
-            Files.write(resolved, input.content.toArray)
-            Consequence.unit
-          } catch {
-            case _: java.io.IOException =>
-              Consequence.operationIllegal("process_exec", "WorkArea input file is unavailable")
+        _write_c(input.path, input.content)
+      }
+    }
+
+  private def _materialize_resource_trees_c(execution: ResolvedProcessExecution): Consequence[Unit] =
+    execution.request.resourceTrees.foldLeft(Consequence.unit) { (z, input) =>
+      z.flatMap { _ =>
+        input.tree.entries.foldLeft(Consequence.unit) { (zz, entry) =>
+          zz.flatMap { _ =>
+            _tree_entry_path_c(input.target, entry.relativePath).flatMap(_write_c(_, entry.bytes))
           }
         }
+      }
+    }
+
+  private def _tree_entry_path_c(
+    target: WorkAreaRelativePath,
+    relativepath: String
+  ): Consequence[WorkAreaRelativePath] =
+    WorkAreaRelativePath.parseC(s"${target.value}/${relativepath}")
+
+  private def _write_c(
+    path: WorkAreaRelativePath,
+    content: Vector[Byte]
+  ): Consequence[Unit] =
+    _resolve_c(path, createparents = true).flatMap { resolved =>
+      try {
+        Files.write(resolved, content.toArray)
+        Consequence.unit
+      } catch {
+        case _: java.io.IOException =>
+          Consequence.operationIllegal("process_exec", "WorkArea input file is unavailable")
       }
     }
 

@@ -63,15 +63,15 @@ Status: DONE
 
 ## RB-06: Process WorkArea Tree Materialization
 
-Status: OPEN
+Status: DONE
 
-- [ ] Define logical admitted tree input separately from fixed bounded input
+- [x] Define logical admitted tree input separately from fixed bounded input
   files.
-- [ ] Require Process program admission to allow each tree identity.
-- [ ] Allow request limits to narrow, never broaden, runtime tree limits.
-- [ ] Materialize the tree inside the runtime-owned WorkArea boundary.
-- [ ] Reject arbitrary component/request paths before filesystem access.
-- [ ] Preserve Phase 35 UnitOfWork cleanup on success, failure, timeout, and
+- [x] Require Process program admission to allow each tree identity.
+- [x] Allow request limits to narrow, never broaden, runtime tree limits.
+- [x] Materialize the tree inside the runtime-owned WorkArea boundary.
+- [x] Reject arbitrary component/request paths before filesystem access.
+- [x] Preserve Phase 35 UnitOfWork cleanup on success, failure, timeout, and
   cancellation.
 
 ## RB-07: Provider-neutral External-tool Pattern

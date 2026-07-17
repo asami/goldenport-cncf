@@ -43,6 +43,42 @@ final case class ResourceTreeLimits(
       Consequence.argumentInvalid("maxTotalBytes", "a non-negative resource tree byte limit", maxTotalBytes)
     else
       Consequence.success(this)
+
+  /**
+   * Applies a caller request without permitting it to broaden the admitted
+   * resource-tree limits.
+   */
+  def tightenC(requested: ResourceTreeLimits): Consequence[ResourceTreeLimits] =
+    for {
+      _ <- validateC
+      _ <- requested.validateC
+      depth <- _tighten_c("maxDepth", maxDepth.toLong, requested.maxDepth.toLong)
+      entries <- _tighten_c("maxEntries", maxEntries.toLong, requested.maxEntries.toLong)
+      filebytes <- _tighten_c("maxFileBytes", maxFileBytes, requested.maxFileBytes)
+      totalbytes <- _tighten_c("maxTotalBytes", maxTotalBytes, requested.maxTotalBytes)
+    } yield ResourceTreeLimits(depth.toInt, entries.toInt, filebytes, totalbytes)
+
+  /** Applies a runtime/program cap to already admitted limits. */
+  def narrowC(maximum: ResourceTreeLimits): Consequence[ResourceTreeLimits] =
+    for {
+      _ <- validateC
+      _ <- maximum.validateC
+    } yield ResourceTreeLimits(
+      math.min(maxDepth, maximum.maxDepth),
+      math.min(maxEntries, maximum.maxEntries),
+      math.min(maxFileBytes, maximum.maxFileBytes),
+      math.min(maxTotalBytes, maximum.maxTotalBytes)
+    )
+
+  private def _tighten_c(
+    name: String,
+    maximum: Long,
+    requested: Long
+  ): Consequence[Long] =
+    if (requested > maximum)
+      Consequence.argumentLimitExceeded(name, maximum, requested, "resource.tree.limit")
+    else
+      Consequence.success(requested)
 }
 
 object ResourceTreeLimits {
@@ -96,11 +132,23 @@ object ResourceTreeEntry {
   }
 }
 
-final case class ResourceTreeSnapshot(
+final case class ResourceTreeSnapshot private[resource] (
   reference: ResourceTreeReference,
   entries: Vector[ResourceTreeEntry],
-  totalByteSize: Long
-)
+  totalByteSize: Long,
+  limits: ResourceTreeLimits
+) {
+  /**
+   * Revalidates this opaque snapshot under a narrower request. This preserves
+   * the resource admission boundary while allowing a consumer to request less.
+   */
+  def tightenC(requested: ResourceTreeLimits): Consequence[ResourceTreeSnapshot] =
+    limits.tightenC(requested).flatMap(ResourceTreeSnapshot._revalidate_c(this, _))
+
+  /** Revalidates this opaque snapshot under a runtime/program cap. */
+  def narrowC(maximum: ResourceTreeLimits): Consequence[ResourceTreeSnapshot] =
+    limits.narrowC(maximum).flatMap(ResourceTreeSnapshot._revalidate_c(this, _))
+}
 
 object ResourceTreeSnapshot {
   private[resource] def admitC(
@@ -115,9 +163,15 @@ object ResourceTreeSnapshot {
         Consequence.resourceInvalid("resource tree contains duplicate logical paths")
       else
         _validate_entries_c(sorted, checkedlimits).map { total =>
-          ResourceTreeSnapshot(reference, sorted, total)
+          ResourceTreeSnapshot(reference, sorted, total, checkedlimits)
         }
     }
+
+  private[resource] def _revalidate_c(
+    snapshot: ResourceTreeSnapshot,
+    limits: ResourceTreeLimits
+  ): Consequence[ResourceTreeSnapshot] =
+    admitC(snapshot.reference, snapshot.entries, limits)
 
   private def _validate_entries_c(
     entries: Vector[ResourceTreeEntry],

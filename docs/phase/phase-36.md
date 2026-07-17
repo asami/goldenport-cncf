@@ -2,7 +2,7 @@
 
 Stage Status:
 - Current status: IN_PROGRESS
-- Current step: RB-06 Process WorkArea tree materialization
+- Current step: RB-07 Provider-neutral external-tool pattern
 - Owner: Phase 36 Component Runtime Boundary Capabilities
 - Update rule: Update this block and `phase-36-checklist.md` whenever a stable
   work-item state changes. Close the phase only when every in-scope checklist
@@ -72,7 +72,7 @@ CAR Review, and application-specific models.
 - C (DONE): RB-03 - Implement declared typed component configuration.
 - D (DONE): RB-04 - Implement the opaque secret-reference boundary.
 - E (DONE): RB-05 - Implement admitted read-only resource trees.
-- F (OPEN): RB-06 - Materialize admitted trees into Process WorkAreas.
+- F (DONE): RB-06 - Materialize admitted trees into Process WorkAreas.
 - G (OPEN): RB-07 - Verify the provider-neutral external-tool pattern.
 - H (OPEN): RB-08 - Update design/spec/developer documentation.
 - I (OPEN): RB-09 - Run full verification, prepare the CBD handoff, and close
@@ -127,8 +127,8 @@ contracts.
 RB-01 has promoted the Phase 36 capability boundary to
 `docs/design/component-runtime-boundary-capabilities.md` and
 `docs/spec/component-runtime-boundary-capabilities.md`. RB-02 through RB-06
-remain implementation work; the new static contract does not claim those APIs
-are available before their executable specifications are completed.
+are complete; RB-07 through RB-09 remain open. The static contract reflects
+only APIs backed by executable specifications.
 
 RB-02 has confirmed the existing clock boundary through
 `ExecutionClockDslSpec`: fixed and controlled runtime clocks reach component
@@ -154,3 +154,10 @@ provider supplies deterministic executable evidence. The local provider denies
 symbolic links and returns structured failures for unknown trees, unsafe
 entries, and depth/count/byte limits. DSL chokepoints and the
 `resource-tree.snapshot` metric retain only logical/provider metadata.
+
+RB-06 has established opaque `ProcessExecutionResourceTreeInput` values with
+validated WorkArea-relative targets. Process program and optional grant policy
+admit tree identities and narrow source limits before the
+`UnitOfWorkInterpreter` materializes inputs. Drivers receive an already
+prepared WorkArea, never a component-selected host path. Existing UnitOfWork
+cleanup reclaims materialized trees on all terminal paths.

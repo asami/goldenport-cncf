@@ -47,8 +47,6 @@ final class LocalProcessExecutionDriver(
       Consequence.serviceUnavailable("Local Process Execution driver is closed")
     else
       for {
-        _ <- workArea.materializeInputsC(execution)
-        _ <- workArea.prepareOutputsC(execution)
         workingDirectory <- workArea.workingDirectoryC(execution.request.workingDirectory)
         inputFile <- _input_file_c(execution, workArea)
         handle <- _launch_c(execution, Some(workingDirectory), inputFile, Some(workArea))
@@ -96,6 +94,11 @@ final class LocalProcessExecutionDriver(
         Consequence.operationIllegal(
           "process_exec",
           "managed input files require Process Execution WorkArea support"
+        )
+      case _ if execution.request.resourceTrees.nonEmpty =>
+        Consequence.operationIllegal(
+          "process_exec",
+          "managed resource trees require Process Execution WorkArea support"
         )
       case _ =>
         Consequence.unit
