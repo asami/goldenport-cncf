@@ -29,7 +29,7 @@ import org.goldenport.configuration.ConfigurationTrace
  * @since   Feb.  4, 2026
  *  version Apr. 25, 2026
  *  version May. 25, 2026
- * @version Jul. 16, 2026
+ * @version Jul. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAndAfterAll with GivenWhenThen {
@@ -39,6 +39,24 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
   }
 
   "ComponentDirRepository" should {
+    "exclude Scala 3 package implementation classes from component discovery" in {
+      ComponentRepository._is_discoverable_component_class(
+        "org.example.ArtSceneScalarDatatypes$package"
+      ) shouldBe false
+      ComponentRepository._is_discoverable_component_class(
+        "org.example.ArtSceneScalarDatatypes$package$"
+      ) shouldBe false
+      ComponentRepository._is_discoverable_component_class(
+        "org.example.ArtSceneScalarDatatypes$package$$anon$1"
+      ) shouldBe false
+      ComponentRepository._is_discoverable_component_class(
+        "org.example.ArtSceneComponent$BundleFactory"
+      ) shouldBe true
+      ComponentRepository._is_discoverable_component_class(
+        "org.example.PackageFactory"
+      ) shouldBe true
+    }
+
     "expose SimpleModeling CAR and SAR standard repository URLs" in {
       ComponentRepository.standardComponentRepositoryUrl() shouldBe
         "https://www.simplemodeling.org/repository/car"

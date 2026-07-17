@@ -31,7 +31,7 @@ import org.goldenport.configuration.{Configuration, ConfigurationTrace, Resolved
  *  version Mar. 22, 2026
  *  version Apr. 25, 2026
  *  version May. 25, 2026
- * @version Jul. 16, 2026
+ * @version Jul. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 sealed abstract class ComponentRepository {
@@ -2168,7 +2168,11 @@ object ComponentRepository extends GlobalObservable {
       _class_files(root).foreach { classfile =>
         val classname = _class_name(root, classfile)
         val basename = _base_class_name(classname)
-        if (_accept_class(basename, packagePrefixes) && !seen.contains(basename)) {
+        if (
+          _is_discoverable_component_class(classname) &&
+          _accept_class(basename, packagePrefixes) &&
+          !seen.contains(basename)
+        ) {
           seen += basename
         }
       }
@@ -2254,6 +2258,11 @@ object ComponentRepository extends GlobalObservable {
       base
     }
   }
+
+  // Scala 3 compiles top-level declarations in Foo.scala to Foo$package classes.
+  // They are implementation containers, never component or factory classes.
+  private[repository] def _is_discoverable_component_class(name: String): Boolean =
+    !name.matches(".*\\$package(?:\\$.*)?")
 
   private def _accept_class(
     name: String,
