@@ -38,6 +38,22 @@ final class ProcessExecutionWorkArea private[processexecution] (
         Consequence.operationIllegal("process_exec", "WorkArea input file is not available")
     }
 
+  /** Materializes only policy-admitted bounded inputs before process launch. */
+  def materializeInputsC(execution: ResolvedProcessExecution): Consequence[Unit] =
+    execution.request.inputFiles.foldLeft(Consequence.unit) { (z, input) =>
+      z.flatMap { _ =>
+        _resolve_c(input.path, createparents = true).flatMap { resolved =>
+          try {
+            Files.write(resolved, input.content.toArray)
+            Consequence.unit
+          } catch {
+            case _: java.io.IOException =>
+              Consequence.operationIllegal("process_exec", "WorkArea input file is unavailable")
+          }
+        }
+      }
+    }
+
   /**
    * Creates only the parents of declared output paths. The child process
    * remains responsible for creating the declared artifact itself.

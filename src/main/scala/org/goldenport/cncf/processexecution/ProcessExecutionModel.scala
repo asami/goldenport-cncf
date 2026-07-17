@@ -82,6 +82,42 @@ object ProcessExecutionInput {
   }
 }
 
+/**
+ * A bounded runtime-materialized WorkArea file. Providers use this for fixed
+ * capability inputs such as a schema file without receiving a host Path.
+ */
+final case class ProcessExecutionInputFile private (
+  name: ProcessArtifactName,
+  path: WorkAreaRelativePath,
+  content: Vector[Byte],
+  maximumBytes: Long
+)
+
+object ProcessExecutionInputFile {
+  def createC(
+    name: ProcessArtifactName,
+    path: WorkAreaRelativePath,
+    content: Vector[Byte],
+    maximumbytes: Long
+  ): Consequence[ProcessExecutionInputFile] =
+    if (maximumbytes <= 0L)
+      Consequence.argumentLimitExceeded(
+        "maximumBytes",
+        1L,
+        maximumbytes,
+        "process.execution.input-file"
+      )
+    else if (content.length.toLong > maximumbytes)
+      Consequence.argumentLimitExceeded(
+        "content",
+        maximumbytes,
+        content.length.toLong,
+        "process.execution.input-file"
+      )
+    else
+      Consequence.success(ProcessExecutionInputFile(name, path, content, maximumbytes))
+}
+
 final case class ProcessExecutionOutputDeclaration private (
   name: ProcessArtifactName,
   path: WorkAreaRelativePath,
@@ -294,7 +330,8 @@ final class ProcessProgramDefinition private (
   val argumentPolicy: ProcessArgumentPolicy,
   val maximumLimits: ProcessExecutionLimits,
   val allowedArtifacts: Set[ProcessArtifactName],
-  val allowsWorkingDirectory: Boolean
+  val allowsWorkingDirectory: Boolean,
+  val allowedInputFiles: Set[ProcessArtifactName]
 ) {
   def validateRequestC(
     request: ProcessExecutionRequest,
@@ -305,6 +342,7 @@ final class ProcessProgramDefinition private (
       _ <- argumentPolicy.validateC(request.arguments, limits)
       _ <- _validate_working_directory_c(request)
       _ <- _validate_artifacts_c(request)
+      _ <- _validate_input_files_c(request, limits)
       _ <- _validate_input_c(request.input, limits)
       _ <- _validate_output_limits_c(request.outputs, limits)
     } yield ()
@@ -349,6 +387,31 @@ final class ProcessProgramDefinition private (
       case _ => Consequence.unit
     }
 
+  private def _validate_input_files_c(
+    request: ProcessExecutionRequest,
+    limits: ProcessExecutionLimits
+  ): Consequence[Unit] = {
+    val rejected = request.inputFiles.find(x => !allowedInputFiles.contains(x.name))
+    val total = request.inputFiles.foldLeft(BigInt(0))((z, x) => z + BigInt(x.content.length))
+    rejected match {
+      case Some(_) =>
+        Consequence.argumentPolicyViolation(
+          "inputFiles",
+          "process.execution.input-file-policy",
+          "registered input-file declaration",
+          "unapproved"
+        )
+      case None if total > BigInt(limits.workAreaBytes.get) =>
+        Consequence.argumentLimitExceeded(
+          "inputFiles",
+          limits.workAreaBytes.get,
+          total.longValue,
+          "process.execution.workarea-bytes"
+        )
+      case None => Consequence.unit
+    }
+  }
+
   private def _validate_output_limits_c(
     outputs: Vector[ProcessExecutionOutputDeclaration],
     limits: ProcessExecutionLimits
@@ -392,7 +455,8 @@ object ProcessProgramDefinition {
     argumentpolicy: ProcessArgumentPolicy,
     maximumlimits: ProcessExecutionLimits,
     allowedartifacts: Set[ProcessArtifactName],
-    allowsworkingdirectory: Boolean = false
+    allowsworkingdirectory: Boolean = false,
+    allowedinputfiles: Set[ProcessArtifactName] = Set.empty
   ): Consequence[ProcessProgramDefinition] = {
     val identity = Option(safeprogramidentity).map(_.trim.toLowerCase).getOrElse("")
     val executable = Option(executablelocation).map(_.trim).getOrElse("")
@@ -408,7 +472,8 @@ object ProcessProgramDefinition {
       argumentpolicy,
       maximumlimits,
       allowedartifacts,
-      allowsworkingdirectory
+      allowsworkingdirectory,
+      allowedinputfiles
     )
   }
 
@@ -486,12 +551,15 @@ final case class ProcessExecutionRequest(
   input: ProcessExecutionInput = ProcessExecutionInput.Empty,
   workingDirectory: Option[WorkAreaRelativePath] = None,
   outputs: Vector[ProcessExecutionOutputDeclaration] = Vector.empty,
-  requestedLimits: ProcessExecutionLimits = ProcessExecutionLimits.empty
+  requestedLimits: ProcessExecutionLimits = ProcessExecutionLimits.empty,
+  inputFiles: Vector[ProcessExecutionInputFile] = Vector.empty
 ) {
   def validateC: Consequence[Unit] =
     for {
       _ <- _validate_arguments_c(arguments)
+      _ <- _validate_input_files_c(inputFiles)
       _ <- _validate_outputs_c(outputs)
+      _ <- _validate_input_output_paths_c(inputFiles, workingDirectory, outputs)
       _ <- requestedLimits.validateOptionalC
     } yield ()
 
@@ -508,6 +576,36 @@ final case class ProcessExecutionRequest(
       Consequence.argumentPolicyViolation("outputs", "process.execution.artifact-policy", "unique artifact names", "duplicate")
     else if (paths.distinct.size != paths.size)
       Consequence.argumentPolicyViolation("outputs", "process.execution.artifact-policy", "unique artifact paths", "duplicate")
+    else
+      Consequence.unit
+  }
+
+  private def _validate_input_files_c(files: Vector[ProcessExecutionInputFile]): Consequence[Unit] = {
+    val names = files.map(_.name)
+    val paths = files.map(_.path)
+    if (names.distinct.size != names.size)
+      Consequence.argumentPolicyViolation("inputFiles", "process.execution.input-file-policy", "unique input-file names", "duplicate")
+    else if (paths.distinct.size != paths.size)
+      Consequence.argumentPolicyViolation("inputFiles", "process.execution.input-file-policy", "unique input-file paths", "duplicate")
+    else
+      Consequence.unit
+  }
+
+  private def _validate_input_output_paths_c(
+    files: Vector[ProcessExecutionInputFile],
+    workingdirectory: Option[WorkAreaRelativePath],
+    outputs: Vector[ProcessExecutionOutputDeclaration]
+  ): Consequence[Unit] = {
+    val outputpaths = outputs.map { output =>
+      workingdirectory.fold(output.path.value)(directory => s"${directory.value}/${output.path.value}")
+    }.toSet
+    if (files.exists(file => outputpaths.contains(file.path.value)))
+      Consequence.argumentPolicyViolation(
+        "inputFiles",
+        "process.execution.input-file-policy",
+        "input paths distinct from declared output paths",
+        "collision"
+      )
     else
       Consequence.unit
   }

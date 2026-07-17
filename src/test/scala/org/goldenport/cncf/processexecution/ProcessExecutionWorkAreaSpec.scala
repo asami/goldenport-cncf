@@ -21,6 +21,29 @@ final class ProcessExecutionWorkAreaSpec
   private val _quota_excesses = Gen.choose(1, 32)
 
   "Process Execution WorkArea" should {
+    "materialize only declared bounded input files inside the execution root" in {
+      Given("an execution-scoped WorkArea and an admitted schema input file")
+      val workspace = ProcessExecutionWorkArea.allocateC(WorkAreaSpace.create(RuntimeConfig.default)).toOption.get
+      val name = ProcessArtifactName.parseC("schema").toOption.get
+      val path = WorkAreaRelativePath.parseC("schema.json").toOption.get
+      val input = ProcessExecutionInputFile.createC(name, path, "{}".getBytes(StandardCharsets.UTF_8).toVector, 16L).toOption.get
+      val execution = _execution(Vector.empty, artifactBytes = 16L, workAreaBytes = 1024L, inputFiles = Vector(input))
+      val root = workspace.root
+
+      When("the runtime materializes the declared input")
+      val materialized = try {
+        workspace.materializeInputsC(execution).map { _ =>
+          new String(Files.readAllBytes(root.resolve("schema.json")), StandardCharsets.UTF_8)
+        }
+      } finally {
+        workspace.close()
+      }
+
+      Then("the file is confined to the WorkArea and is removed during cleanup")
+      materialized.toOption shouldBe Some("{}")
+      Files.exists(root) shouldBe false
+    }
+
     "collect only declared bounded artifacts and remove the execution root" in {
       Given("an execution-scoped WorkArea and one declared output")
       val workspace = ProcessExecutionWorkArea.allocateC(WorkAreaSpace.create(RuntimeConfig.default)).toOption.get
@@ -113,7 +136,8 @@ final class ProcessExecutionWorkAreaSpec
   private def _execution(
     outputs: Vector[ProcessExecutionOutputDeclaration],
     artifactBytes: Long,
-    workAreaBytes: Long
+    workAreaBytes: Long,
+    inputFiles: Vector[ProcessExecutionInputFile] = Vector.empty
   ): ResolvedProcessExecution = {
     val capability = ProcessCapabilityId.parseC("workarea-test").toOption.get
     val limits = ProcessExecutionLimits(
@@ -127,8 +151,9 @@ final class ProcessExecutionWorkAreaSpec
       Vector.empty,
       ProcessArgumentPolicy(Vector.empty, Set.empty),
       limits,
-      outputs.map(_.name).toSet
+      outputs.map(_.name).toSet,
+      allowedinputfiles = inputFiles.map(_.name).toSet
     ).toOption.get
-    ResolvedProcessExecution(ProcessExecutionRequest(capability, outputs = outputs), definition, limits)
+    ResolvedProcessExecution(ProcessExecutionRequest(capability, inputFiles = inputFiles, outputs = outputs), definition, limits)
   }
 }

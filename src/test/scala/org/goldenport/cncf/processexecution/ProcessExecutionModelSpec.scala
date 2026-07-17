@@ -112,6 +112,73 @@ final class ProcessExecutionModelSpec extends AnyWordSpec with Matchers with Giv
       outputrejected.isFaillure shouldBe true
     }
 
+    "admit only runtime-declared bounded input files before a driver is selected" in {
+      Given("a runtime program definition that declares one schema input file")
+      val capability = ProcessCapabilityId.parseC("codex-cli").toOption.get
+      val schema = ProcessArtifactName.parseC("schema").toOption.get
+      val unknown = ProcessArtifactName.parseC("unknown").toOption.get
+      val path = WorkAreaRelativePath.parseC("schema.json").toOption.get
+      val input = ProcessExecutionInputFile.createC(schema, path, Vector(1.toByte), 16L).toOption.get
+      val rejectedinput = ProcessExecutionInputFile.createC(unknown, path, Vector(1.toByte), 16L).toOption.get
+      val definition = _definition(capability, allowedinputfiles = Set(schema))
+      val policy = ProcessExecutionPolicy.createC(Vector(definition)).toOption.get
+      val grant = ProcessExecutionGrant(capability)
+
+      When("a request supplies declared and undeclared WorkArea input files")
+      val admitted = policy.resolveC(ProcessExecutionRequest(capability, inputFiles = Vector(input)), grant)
+      val rejected = policy.resolveC(ProcessExecutionRequest(capability, inputFiles = Vector(rejectedinput)), grant)
+
+      Then("only the registered logical input file is admitted")
+      admitted.toOption.map(_.request.inputFiles.map(_.name.print)) shouldBe Some(Vector("schema"))
+      rejected.isFaillure shouldBe true
+    }
+
+    "reject input files whose WorkArea paths collide with declared outputs" in {
+      Given("a runtime definition with one allowed schema file and one output artifact")
+      val capability = ProcessCapabilityId.parseC("codex-cli").toOption.get
+      val schema = ProcessArtifactName.parseC("schema").toOption.get
+      val result = ProcessArtifactName.parseC("result").toOption.get
+      val directory = WorkAreaRelativePath.parseC("input").toOption.get
+      val inputpath = WorkAreaRelativePath.parseC("input/schema.json").toOption.get
+      val outputpath = WorkAreaRelativePath.parseC("schema.json").toOption.get
+      val input = ProcessExecutionInputFile.createC(schema, inputpath, Vector(1.toByte), 16L).toOption.get
+      val output = ProcessExecutionOutputDeclaration.createC(result, outputpath, ProcessArtifactKind.File, 16L).toOption.get
+      val definition = _definition(capability, Set(result), Set(schema), allowsworkingdirectory = true)
+      val policy = ProcessExecutionPolicy.createC(Vector(definition)).toOption.get
+
+      When("the selected output directory makes the input and output paths equal")
+      val rejected = policy.resolveC(
+        ProcessExecutionRequest(
+          capability,
+          workingDirectory = Some(directory),
+          outputs = Vector(output),
+          inputFiles = Vector(input)
+        ),
+        ProcessExecutionGrant(capability)
+      )
+
+      Then("admission rejects the request before a driver can project input as output")
+      rejected.isFaillure shouldBe true
+    }
+
+    "retain legacy positional construction while defaulting input files to empty" in {
+      Given("the Process Execution request shape before managed input files")
+      val capability = ProcessCapabilityId.parseC("codex-cli").toOption.get
+
+      When("a caller constructs the request with its original positional fields")
+      val request = ProcessExecutionRequest(
+        capability,
+        Vector.empty,
+        ProcessExecutionInput.Empty,
+        None,
+        Vector.empty,
+        ProcessExecutionLimits.empty
+      )
+
+      Then("the new managed input collection preserves the empty default")
+      request.inputFiles shouldBe Vector.empty
+    }
+
     "reject unsafe runtime metadata without reflecting raw executable locations" in {
       Given("a malformed safe program identity and a raw host executable location")
       val capability = ProcessCapabilityId.parseC("codex-cli").toOption.get
@@ -152,7 +219,9 @@ final class ProcessExecutionModelSpec extends AnyWordSpec with Matchers with Giv
 
   private def _definition(
     capability: ProcessCapabilityId,
-    artifacts: Set[ProcessArtifactName] = Set.empty
+    artifacts: Set[ProcessArtifactName] = Set.empty,
+    allowedinputfiles: Set[ProcessArtifactName] = Set.empty,
+    allowsworkingdirectory: Boolean = false
   ): ProcessProgramDefinition =
     ProcessProgramDefinition.fromRuntimeC(
       capability,
@@ -162,7 +231,8 @@ final class ProcessExecutionModelSpec extends AnyWordSpec with Matchers with Giv
       ProcessArgumentPolicy(Vector("exec"), Set("--json")),
       _limits(100L),
       artifacts,
-      allowsworkingdirectory = false
+      allowsworkingdirectory = allowsworkingdirectory,
+      allowedinputfiles = allowedinputfiles
     ).toOption.get
 
   private def _limits(value: Long): ProcessExecutionLimits =

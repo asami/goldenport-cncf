@@ -47,6 +47,7 @@ final class LocalProcessExecutionDriver(
       Consequence.serviceUnavailable("Local Process Execution driver is closed")
     else
       for {
+        _ <- workArea.materializeInputsC(execution)
         _ <- workArea.prepareOutputsC(execution)
         workingDirectory <- workArea.workingDirectoryC(execution.request.workingDirectory)
         inputFile <- _input_file_c(execution, workArea)
@@ -90,6 +91,11 @@ final class LocalProcessExecutionDriver(
         Consequence.operationIllegal(
           "process_exec",
           "declared artifacts require Process Execution WorkArea support"
+        )
+      case _ if execution.request.inputFiles.nonEmpty =>
+        Consequence.operationIllegal(
+          "process_exec",
+          "managed input files require Process Execution WorkArea support"
         )
       case _ =>
         Consequence.unit

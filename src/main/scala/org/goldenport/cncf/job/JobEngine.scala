@@ -1804,7 +1804,12 @@ final class InMemoryJobEngine(
           var completed = done
           try {
             while (!completed && !_shutdown_requested && _now().isBefore(deadline)) {
-              _state_monitor.wait()
+              val remainingnanos = Duration.between(_now(), deadline).toNanos
+              if (remainingnanos > 0L) {
+                val waitmillis = remainingnanos / 1000000L
+                val waitnanos = (remainingnanos % 1000000L).toInt
+                _state_monitor.wait(waitmillis, waitnanos)
+              }
               completed = done
             }
             if (completed) _WaitOutcome.Completed else _WaitOutcome.TimedOut

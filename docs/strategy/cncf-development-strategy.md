@@ -652,12 +652,12 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Notes contain execution details and results for each phase.
 
 ## Process Status Pointers
-- No active phase is selected after Phase 35 closure.
+- Active phase dashboard: `docs/phase/phase-36.md`.
+- Active phase checklist: `docs/phase/phase-36-checklist.md`.
 - Latest closed phase dashboard: `docs/phase/phase-35.md`.
 - Latest closed phase checklist: `docs/phase/phase-35-checklist.md`.
 - Previous closed phase dashboard: `docs/phase/phase-34.md`
 - Previous closed phase checklist: `docs/phase/phase-34-checklist.md`
-- Select the next development item before opening a new phase.
 - Status interpretation rules: `docs/rules/stage-status-and-checklist-convention.md`
 - Latest post-closure maintenance: Jul. 15, 2026 descriptor-bound component
   runtime configuration preservation. Materialized component instances retain
@@ -830,6 +830,7 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Phase 33: closed (`docs/phase/phase-33.md`)
 - Phase 34: closed (`docs/phase/phase-34.md`)
 - Phase 35: closed (`docs/phase/phase-35.md`)
+- Phase 36: active (`docs/phase/phase-36.md`)
 
 ## 8. Completed Development Item History
 
@@ -2277,3 +2278,53 @@ Completed in Phase 35 (Jul. 17, 2026).
   - generic cleanup retry, resource retention, and resource-leak management UI;
   - making external side effects transactional or automatically compensatable;
   - legacy shell migration and BPM/process orchestration.
+
+### 9.31 Component Runtime Boundary Capabilities
+Active in Phase 36 (Jul. 17, 2026).
+
+- Goal: let reusable components consume execution time, declared runtime
+  configuration, secrets, read-only local resource trees, and external-tool
+  inputs only through explicit CNCF runtime capabilities rather than ambient
+  JVM/OS access.
+- Driver:
+  - CBD Support runtime hardening is the first downstream driver;
+  - all CNCF contracts remain provider-neutral and contain no CBD Support,
+    Cozy, CAR Review, or application-specific types.
+- Reused foundations:
+  - Phase 31 `ExecutionContext` clock and controlled execution profiles own
+    component-observable time;
+  - Phase 33 `ResourceReference` and `ResourceAccess` own single-resource
+    reads;
+  - Phase 34 `ProcessExec` owns admitted external-tool execution and WorkArea
+    confinement;
+  - Phase 35 UnitOfWork resource lifecycle owns process and WorkArea terminal
+    reclamation.
+- Scope:
+  - promote existing execution-time access as the canonical component
+    contract and add missing integration evidence rather than another clock;
+  - add declared typed component configuration with structured missing,
+    format, policy, provenance, and confidentiality outcomes;
+  - expose only opaque secret references to components, leaving credential
+    value resolution inside authorized runtime providers/drivers;
+  - add logical, admitted, bounded, read-only resource-tree snapshots without
+    exposing host `Path` values;
+  - materialize only runtime-admitted resource trees into Process Execution
+    WorkAreas while preserving capability admission, request-level limit
+    tightening, diagnostics safety, and UnitOfWork cleanup;
+  - document the provider-neutral external-tool integration pattern and
+    prepare a separate CBD Support migration handoff.
+- First implementation direction:
+  - audit and freeze the existing capability boundaries before adding APIs;
+  - keep fixed bounded Process Execution files distinct from admitted tree
+    provenance;
+  - provide deterministic in-memory/fake configuration, resource-tree, and
+    Process Execution fixtures;
+  - verify the complete component-to-runtime path without a live Cozy install
+    or host-dependent test directory.
+- Deferred scope:
+  - Vault, AWS Secrets Manager, and other production secret providers;
+  - mutable filesystem access, arbitrary directory browsing, and
+    component-visible host paths;
+  - remote/container Process Execution and general shell execution;
+  - CBD Support provider implementation, CAR Review semantics, CAR ABI
+    publication, and deployment automation.

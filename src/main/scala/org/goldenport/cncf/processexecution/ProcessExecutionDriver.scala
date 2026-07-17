@@ -59,7 +59,9 @@ object ProcessExecutionTestProfile {
    */
   def admittedC(
     capability: ProcessCapabilityId,
-    result: ProcessExecutionResult
+    result: ProcessExecutionResult,
+    permittedarguments: Set[String] = Set.empty,
+    allowedinputfiles: Set[ProcessArtifactName] = Set.empty
   ): Consequence[ProcessExecutionTestFixture] = {
     val profile = ProcessExecutionTestProfile(Map(capability -> result))
     for {
@@ -68,9 +70,10 @@ object ProcessExecutionTestProfile {
         "deterministic-test-program",
         "test-runtime-owned-location",
         Vector.empty,
-        ProcessArgumentPolicy(Vector.empty, Set.empty),
+        ProcessArgumentPolicy(Vector.empty, permittedarguments),
         _limits,
-        Set.empty
+        Set.empty,
+        allowedinputfiles = allowedinputfiles
       )
       policy <- ProcessExecutionPolicy.createC(Vector(definition))
       admission <- ProcessExecutionAdmission.createC(policy, Vector(ProcessExecutionGrant(capability)))

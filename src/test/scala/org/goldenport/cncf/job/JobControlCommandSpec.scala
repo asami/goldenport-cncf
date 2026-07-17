@@ -1,6 +1,7 @@
 package org.goldenport.cncf.job
 
 import java.util.concurrent.{CountDownLatch, TimeUnit}
+import java.util.concurrent.atomic.AtomicInteger
 import org.goldenport.Consequence
 import org.goldenport.protocol.Request
 import org.goldenport.protocol.operation.OperationResponse
@@ -108,24 +109,16 @@ final class JobControlCommandSpec
     }
 
     "map sync timeout deterministically for retry" in {
-      Given("a cancelled long-running job")
+      Given("a failed job whose retry attempt remains in progress")
       val engine = createJobEngine()
-      val firstEntered = new CountDownLatch(1)
-      val firstRelease = new CountDownLatch(1)
       val retryEntered = new CountDownLatch(1)
       val retryRelease = new CountDownLatch(1)
-      val firstTask = BlockingTask(ActionId.generate(), firstEntered, firstRelease)
-      val retryTask = BlockingTask(ActionId.generate(), retryEntered, retryRelease)
-      val jobid = _jobid(engine.submit(List(firstTask, retryTask), ExecutionContext.test()))
-      firstEntered.await(DefaultAwaitTimeoutMillis, TimeUnit.MILLISECONDS) shouldBe true
+      val task = FailThenBlockTask(ActionId.generate(), retryEntered, retryRelease)
+      val jobid = _jobid(engine.submit(List(task), ExecutionContext.test()))
+      awaitStatus(engine, jobid, Set(JobStatus.Failed)) shouldBe Some(JobStatus.Failed)
 
       given ExecutionContext = ExecutionContext.test(SecurityContext.Privilege.ApplicationContentManager)
       try {
-        val _ = engine.control(jobid, JobControlRequest(JobControlCommand.Cancel))
-        firstRelease.countDown()
-        awaitStatus(engine, jobid, Set(JobStatus.Cancelled)) shouldBe Some(JobStatus.Cancelled)
-        awaitResult(engine, jobid).nonEmpty shouldBe true
-
         When("retry is requested in sync mode with short timeout")
         val result = engine.control(
           jobid,
@@ -146,7 +139,6 @@ final class JobControlCommandSpec
             fail("expected timeout failure")
         }
       } finally {
-        firstRelease.countDown()
         retryRelease.countDown()
       }
     }
@@ -231,6 +223,25 @@ final class JobControlCommandSpec
       entered.countDown()
       release.await()
       TaskSucceeded(OperationResponse.Void())
+    }
+  }
+
+  private final case class FailThenBlockTask(
+    actionId: ActionId,
+    retryEntered: CountDownLatch,
+    retryRelease: CountDownLatch
+  ) extends JobTask {
+    private val attempt = new AtomicInteger(0)
+
+    def run(ctx: ExecutionContext): TaskOutcome = {
+      val _ = ctx
+      if (attempt.getAndIncrement() == 0)
+        TaskFailed(Consequence.stateInvalid[Nothing]("initial attempt failed").conclusion)
+      else {
+        retryEntered.countDown()
+        retryRelease.await()
+        TaskSucceeded(OperationResponse.Void())
+      }
     }
   }
 

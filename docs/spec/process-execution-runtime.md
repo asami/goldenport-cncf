@@ -18,6 +18,8 @@ A `ProcessExecutionRequest` contains only logical execution intent:
 - an argument vector;
 - bounded input supplied as no input, immutable bytes, or a WorkArea-relative
   file;
+- bounded runtime-materialized input files with logical names and
+  WorkArea-relative paths;
 - an optional WorkArea-relative working directory;
 - declared output artifacts; and
 - an optional request-level limit tightening.
@@ -105,6 +107,15 @@ Input files, working directories, and declared outputs are confined to the
 execution WorkArea. Relative paths MUST be non-empty normalized relative paths
 without traversal segments. Runtime path validation MUST prevent real-path and
 symlink escape before launch or artifact collection.
+
+A runtime-materialized input file is admitted by logical name, bounded before
+write, materialized by CNCF before launch, and removed with the WorkArea. It is
+not an unrestricted provider-controlled host file.
+
+A materialized input path MUST NOT equal the effective WorkArea path of a
+declared output. Admission rejects the collision before input materialization,
+so caller-supplied bytes cannot be projected as process output without a
+program write.
 
 A declared output path is interpreted relative to the selected execution
 working directory. When no working directory is declared, it is relative to the
