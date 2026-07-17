@@ -227,6 +227,16 @@ the JSON by string concatenation.
 `html[lang]`, semantic attributes, and embedded JSON are generated from the
 same projection instance.
 
+The first-render implementation stores the typed projection separately from
+the extensible flat `WebPageContext.values`. Provider context merge may add
+application values and diagnostics but cannot replace the framework-owned
+execution projection. `WebExecutionTemplateProjection` serializes the typed
+projection with Circe, neutralizes HTML script-data delimiters, replaces any
+application-owned script-data element using the reserved
+`textus-page-context` identifier, and emits one canonical element. The
+renderer also exposes read-only
+`pageContext.execution.*` placeholders derived from that same typed value.
+
 ## Security Boundary
 
 The execution projection must not contain:

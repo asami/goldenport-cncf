@@ -32,7 +32,8 @@ import io.circe.parser.parse
 /*
  * @since   May. 18, 2026
  *  version Jun. 19, 2026
- * @version Jul.  7, 2026
+ *  version Jul.  7, 2026
+ * @version Jul. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 trait StaticFormAppRendererCorePart {
@@ -72,31 +73,46 @@ trait StaticFormAppRendererCorePart {
     pageContext: WebPageContext = WebPageContext.empty,
     webdescriptor: WebDescriptor = WebDescriptor.empty
   ): Page = {
-    val pageName =
+    val pagename =
       if (page.isEmpty) "index"
       else page.mkString("/")
     val profile = webdescriptor.staticPageProfile(app, page)
     val properties = FormPageProperties(
       app,
       "web",
-      pageName,
+      pagename,
       Map(
         "app" -> app,
-        "page.name" -> pageName,
+        "page.name" -> pagename,
         "page.path" -> ("/web/" + (app +: page).mkString("/")),
         "page.uxProfile" -> profile.name,
         "textus.uxProfile" -> profile.name
       ) ++ page_context_properties(pageContext)
     )
     val rendered = render_template(template, properties, Map.empty)
-    Page(complete_widget_assets(template, rendered, assetCompletion.copy(uxProfile = profile)))
+    val projected = pageContext.execution.fold(rendered)(WebExecutionTemplateProjection.render(rendered, _))
+    Page(complete_widget_assets(template, projected, assetCompletion.copy(uxProfile = profile)))
   }
 
   protected def page_context_properties(
     pageContext: WebPageContext
   ): Map[String, String] = {
-    defaultPageViewContextValues ++ pageContext.values
+    defaultPageViewContextValues ++ pageContext.values ++ pageContext.execution.map(_execution_page_context_properties).getOrElse(Map.empty)
   }
+
+  private def _execution_page_context_properties(
+    projection: WebExecutionProjection
+  ): Map[String, String] =
+    Map(
+      "pageContext.execution.locale" -> projection.locale,
+      "pageContext.execution.timezone" -> projection.timezone,
+      "pageContext.execution.format.date" -> projection.format.date.name,
+      "pageContext.execution.format.dateTime" -> projection.format.dateTime.name,
+      "pageContext.execution.applicationMode" -> projection.applicationMode.name,
+      "pageContext.execution.subject.authenticated" -> projection.subject.authenticated.toString,
+      "pageContext.execution.subject.displayName" -> projection.subject.displayName.getOrElse(""),
+      "pageContext.execution.capabilities" -> projection.capabilities.mkString(",")
+    )
 
   def isHtmlDocumentTemplate(template: String): Boolean =
     is_html_document(template)

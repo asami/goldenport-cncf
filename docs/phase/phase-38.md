@@ -2,7 +2,7 @@
 
 Stage Status:
 - Current status: IN_PROGRESS
-- Current step: SW-04 Static template projection
+- Current step: SW-05 Static Web runtime integration
 - Start condition: Phase 36 is closed and the existing Static Web rendering
   path can supply the effective request execution context.
 - Dependency relation: Phase 38 may start independently of Phase 37.
@@ -86,7 +86,7 @@ models and temporary delayed-render workarounds.
 - B (DONE): SW-02 - Implement the immutable Web-safe execution projection.
 - C (DONE): SW-03 - Implement mode-aware locale, timezone, and display-format
   resolution.
-- D (OPEN): SW-04 - Add first-render template and escaped JSON projection.
+- D (DONE): SW-04 - Add first-render template and escaped JSON projection.
 - E (OPEN): SW-05 - Integrate the projection with Static Web routes and page
   context without changing application business operations.
 - F (OPEN): SW-06 - Add security, locale-precedence, and hostile-input

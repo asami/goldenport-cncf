@@ -67,12 +67,24 @@ Evidence:
 
 ## SW-04: Static Template Projection
 
-Status: OPEN
+Status: DONE
 
-- [ ] Make `pageContext.execution` available during first HTML generation.
-- [ ] Emit matching `html[lang]` and semantic locale attributes.
-- [ ] Emit one stable `textus-page-context` JSON script-data block.
-- [ ] Escape hostile script-data values without application-local JavaScript.
+- [x] Make `pageContext.execution` available during first HTML generation.
+- [x] Emit matching `html[lang]` and semantic locale attributes.
+- [x] Emit one stable `textus-page-context` JSON script-data block.
+- [x] Escape hostile script-data values without application-local JavaScript.
+
+Evidence:
+
+- `WebPageContext` owns a typed framework execution member separately from
+  provider-extensible flat values and preserves it across provider merge.
+- `StaticFormAppRendererCorePart` derives read-only execution placeholders and
+  first-render HTML from the same projection.
+- `WebExecutionTemplateProjection` emits canonical semantic attributes and a
+  single script-data-safe JSON block.
+- `WebExecutionTemplateProjectionSpec` covers first-render consistency,
+  reserved-element replacement, provider merge isolation, hostile text, and
+  property-based serialization safety.
 
 ## SW-05: Static Web Runtime Integration
 

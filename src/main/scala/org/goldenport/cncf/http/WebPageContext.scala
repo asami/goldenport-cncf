@@ -8,7 +8,8 @@ import org.goldenport.protocol.Property
 
 /*
  * @since   May. 10, 2026
- * @version Jun. 18, 2026
+ *  version Jun. 18, 2026
+ * @version Jul. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class WebPageContextRequest(
@@ -22,10 +23,14 @@ final case class WebPageContextRequest(
 
 final case class WebPageContext(
   values: Map[String, String] = Map.empty,
-  diagnostics: Vector[String] = Vector.empty
+  diagnostics: Vector[String] = Vector.empty,
+  execution: Option[WebExecutionProjection] = None
 ) {
   def merge(rhs: WebPageContext): WebPageContext =
-    WebPageContext(values ++ rhs.values, diagnostics ++ rhs.diagnostics)
+    WebPageContext(values ++ rhs.values, diagnostics ++ rhs.diagnostics, execution)
+
+  private[http] def _with_execution(projection: WebExecutionProjection): WebPageContext =
+    copy(execution = Some(projection))
 }
 
 object WebPageContext {

@@ -185,6 +185,12 @@ Application templates MUST NOT construct this JSON by string concatenation.
 `html[lang]`, semantic attributes, and embedded JSON MUST come from the same
 projection instance.
 
+`textus-page-context` is a framework-reserved script-data element identifier.
+If an application template contains a script element with that identifier,
+the renderer MUST replace it with the framework projection rather than
+duplicate or trust application-supplied JSON. Extensible `WebPageContext`
+provider values MUST NOT replace the typed execution projection.
+
 ## SWEP-9: Excluded Data
 
 The execution projection MUST NOT contain:
