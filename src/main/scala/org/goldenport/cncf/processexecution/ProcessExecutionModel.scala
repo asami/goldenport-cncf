@@ -331,7 +331,8 @@ object ProcessExecutionLimits {
 
 final case class ProcessArgumentPolicy(
   fixedPrefix: Vector[String],
-  permittedArguments: Set[String] = Set.empty
+  permittedArguments: Set[String] = Set.empty,
+  permittedArgumentVectors: Set[Vector[String]] = Set.empty
 ) {
   def validateC(arguments: Vector[String], limits: ProcessExecutionLimits): Consequence[Unit] =
     for {
@@ -341,16 +342,28 @@ final case class ProcessArgumentPolicy(
     } yield ()
 
   private def _validate_arguments_c(arguments: Vector[String]): Consequence[Unit] = {
-    val rejected = arguments.find(x => !permittedArguments.contains(x))
-    rejected match {
-      case Some(_) =>
+    if (permittedArgumentVectors.nonEmpty)
+      if (permittedArgumentVectors.contains(arguments))
+        Consequence.unit
+      else
         Consequence.argumentPolicyViolation(
           "arguments",
           "process.execution.argument-policy",
-          "registered argument value",
+          "registered argument vector",
           "unapproved"
         )
-      case None => Consequence.unit
+    else {
+      val rejected = arguments.find(x => !permittedArguments.contains(x))
+      rejected match {
+        case Some(_) =>
+          Consequence.argumentPolicyViolation(
+            "arguments",
+            "process.execution.argument-policy",
+            "registered argument value",
+            "unapproved"
+          )
+        case None => Consequence.unit
+      }
     }
   }
 
@@ -397,6 +410,7 @@ final class ProcessProgramDefinition private (
   val allowedArtifacts: Set[ProcessArtifactName],
   val allowsWorkingDirectory: Boolean,
   val allowedInputFiles: Set[ProcessArtifactName],
+  val allowedInputFilePaths: Map[ProcessArtifactName, WorkAreaRelativePath],
   val allowedResourceTrees: Map[ResourceTreeReference, ResourceTreeLimits],
   private[processexecution] val _environment: ProcessEnvironment
 ) {
@@ -505,6 +519,9 @@ final class ProcessProgramDefinition private (
     limits: ProcessExecutionLimits
   ): Consequence[Unit] = {
     val rejected = request.inputFiles.find(x => !allowedInputFiles.contains(x.name))
+    val misplaced = request.inputFiles.find { input =>
+      allowedInputFilePaths.get(input.name).exists(_ != input.path)
+    }
     rejected match {
       case Some(_) =>
         Consequence.argumentPolicyViolation(
@@ -513,7 +530,14 @@ final class ProcessProgramDefinition private (
           "registered input-file declaration",
           "unapproved"
         )
-      case None => Consequence.unit
+      case None => misplaced.fold(Consequence.unit) { _ =>
+        Consequence.argumentPolicyViolation(
+          "inputFiles",
+          "process.execution.input-file-path-policy",
+          "runtime-declared WorkArea path",
+          "unapproved"
+        )
+      }
     }
   }
 
@@ -570,7 +594,12 @@ final class ProcessProgramDefinition private (
 object ProcessProgramDefinition {
   private val _safe_identity_pattern = "[a-z][a-z0-9-]{0,63}".r
 
-  private[processexecution] def fromRuntimeC(
+  /**
+   * Creates a definition during trusted runtime assembly. Component and
+   * provider behavior must submit only ProcessExecutionRequest values to an
+   * already-installed admission service.
+   */
+  def fromRuntimeC(
     capability: ProcessCapabilityId,
     safeprogramidentity: String,
     executablelocation: String,
@@ -580,6 +609,7 @@ object ProcessProgramDefinition {
     allowedartifacts: Set[ProcessArtifactName],
     allowsworkingdirectory: Boolean = false,
     allowedinputfiles: Set[ProcessArtifactName] = Set.empty,
+    allowedinputfilepaths: Map[ProcessArtifactName, WorkAreaRelativePath] = Map.empty,
     allowedresourcetrees: Map[ResourceTreeReference, ResourceTreeLimits] = Map.empty,
     environment: Map[String, String] = Map.empty
   ): Consequence[ProcessProgramDefinition] = {
@@ -589,6 +619,7 @@ object ProcessProgramDefinition {
       _ <- _validate_identity_c(identity)
       _ <- _validate_executable_c(executable)
       _ <- maximumlimits.requireFiniteC
+      _ <- _validate_input_file_paths_c(allowedinputfiles, allowedinputfilepaths)
       _ <- _validate_resource_tree_limits_c(allowedresourcetrees)
       processenvironment <- ProcessEnvironment.fixedC(environment)
     } yield new ProcessProgramDefinition(
@@ -601,6 +632,7 @@ object ProcessProgramDefinition {
       allowedartifacts,
       allowsworkingdirectory,
       allowedinputfiles,
+      allowedinputfilepaths,
       allowedresourcetrees,
       processenvironment
     )
@@ -624,6 +656,20 @@ object ProcessProgramDefinition {
     trees.values.foldLeft(Consequence.unit) { (z, limits) =>
       z.flatMap(_ => limits.validateC.map(_ => ()))
     }
+
+  private def _validate_input_file_paths_c(
+    files: Set[ProcessArtifactName],
+    paths: Map[ProcessArtifactName, WorkAreaRelativePath]
+  ): Consequence[Unit] =
+    if (paths.keys.forall(files.contains))
+      Consequence.unit
+    else
+      Consequence.argumentPolicyViolation(
+        "allowedInputFilePaths",
+        "process.execution.input-file-policy",
+        "declared input-file name",
+        "unapproved"
+      )
 }
 
 final case class ProcessExecutionGrant(

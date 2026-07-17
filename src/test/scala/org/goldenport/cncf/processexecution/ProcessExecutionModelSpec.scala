@@ -134,6 +134,52 @@ final class ProcessExecutionModelSpec extends AnyWordSpec with Matchers with Giv
       rejected.isFaillure shouldBe true
     }
 
+    "enforce declared argument vectors and input-file paths before a driver is selected" in {
+      Given("a runtime capability with two exact argument forms and one schema path")
+      val capability = ProcessCapabilityId.parseC("codex-cli").toOption.get
+      val schema = ProcessArtifactName.parseC("schema").toOption.get
+      val schemapath = WorkAreaRelativePath.parseC("schema.json").toOption.get
+      val alternatepath = WorkAreaRelativePath.parseC("other-schema.json").toOption.get
+      val input = ProcessExecutionInputFile.createC(schema, schemapath, Vector(1.toByte), 16L).toOption.get
+      val alternate = ProcessExecutionInputFile.createC(schema, alternatepath, Vector(1.toByte), 16L).toOption.get
+      val definition = ProcessProgramDefinition.fromRuntimeC(
+        capability,
+        "codex-cli",
+        "/opt/cncf/bin/codex",
+        Vector("exec"),
+        ProcessArgumentPolicy(
+          Vector("exec"),
+          Set("-", "--output-schema", "schema.json"),
+          Set(Vector("-"), Vector("--output-schema", "schema.json", "-"))
+        ),
+        _limits(100L),
+        Set.empty,
+        allowedinputfiles = Set(schema),
+        allowedinputfilepaths = Map(schema -> schemapath)
+      ).toOption.get
+      val policy = ProcessExecutionPolicy.createC(Vector(definition)).toOption.get
+      val grant = ProcessExecutionGrant(capability)
+
+      When("a provider submits an admitted form, a reordered form, and a relocated input")
+      val admitted = policy.resolveC(
+        ProcessExecutionRequest(capability, Vector("--output-schema", "schema.json", "-"), inputFiles = Vector(input)),
+        grant
+      )
+      val reordered = policy.resolveC(
+        ProcessExecutionRequest(capability, Vector("-", "--output-schema", "schema.json")),
+        grant
+      )
+      val relocated = policy.resolveC(
+        ProcessExecutionRequest(capability, Vector("-"), inputFiles = Vector(alternate)),
+        grant
+      )
+
+      Then("only the runtime-declared protocol reaches a resolved execution")
+      admitted.toOption.map(_.effectiveArguments) shouldBe Some(Vector("exec", "--output-schema", "schema.json", "-"))
+      reordered.isFaillure shouldBe true
+      relocated.isFaillure shouldBe true
+    }
+
     "admit only program-declared opaque resource trees under narrowing limits" in {
       Given("an admitted logical resource tree, a declared Process capability, and a smaller program cap")
       val capability = ProcessCapabilityId.parseC("codex-cli").toOption.get
