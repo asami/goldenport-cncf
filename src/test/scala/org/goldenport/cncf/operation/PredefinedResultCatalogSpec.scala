@@ -7,7 +7,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jul. 15, 2026
- * @version Jul. 15, 2026
+ * @version Jul. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 class PredefinedResultCatalogSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -56,6 +56,27 @@ class PredefinedResultCatalogSpec extends AnyWordSpec with Matchers with GivenWh
       unknown shouldBe None
       mismatched shouldBe None
       catalog.contains("IntResult") shouldBe true
+    }
+
+    "accept the operation-field constructor emitted before validation hints" in {
+      Given("the positional operation-field values emitted by an older generated CAR")
+
+      When("the generated source calls the original nine-argument constructor")
+      val field = CmlOperationField(
+        "query",
+        "string",
+        "1",
+        Some("Query"),
+        Some("text"),
+        Some("Search terms"),
+        Some("Terms used by the query"),
+        Some(true),
+        Some("public")
+      )
+
+      Then("CNCF supplies empty validation hints without changing the older fields")
+      field.name shouldBe "query"
+      field.validation shouldBe org.goldenport.schema.WebValidationHints.empty
     }
   }
 }

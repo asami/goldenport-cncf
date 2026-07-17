@@ -9,7 +9,7 @@ import org.goldenport.schema.DataConfidentiality
  * @since   Mar. 22, 2026
  *  version Mar. 28, 2026
  *  version May.  8, 2026
- * @version Jul. 16, 2026
+ * @version Jul. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class CmlOperationAssociationBinding(
@@ -141,6 +141,33 @@ final case class CmlOperationField(
 ) {
   def effectiveConfidentiality: DataConfidentiality =
     DataConfidentiality.getOrPublic(confidentiality)
+}
+
+object CmlOperationField {
+  // Retain the constructor shape emitted by CARs generated before validation hints.
+  def apply(
+    name: String,
+    datatype: String,
+    multiplicity: String,
+    label: Option[String],
+    controlType: Option[String],
+    placeholder: Option[String],
+    help: Option[String],
+    required: Option[Boolean],
+    confidentiality: Option[String]
+  ): CmlOperationField =
+    new CmlOperationField(
+      name,
+      datatype,
+      multiplicity,
+      label,
+      controlType,
+      placeholder,
+      help,
+      required,
+      confidentiality,
+      org.goldenport.schema.WebValidationHints.empty
+    )
 }
 
 final case class CmlOperationAccess(
