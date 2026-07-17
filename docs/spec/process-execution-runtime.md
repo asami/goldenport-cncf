@@ -143,6 +143,23 @@ cancellation scope immediately after launch and unregisters it on every
 terminal path. Job cancellation signals the active handle and must lead to
 process-tree termination according to the effective termination policy.
 
+The interpreter MUST also register the handle and its WorkArea with the owning
+UnitOfWork resource lifecycle. UnitOfWork commit, abort, rollback, or explicit
+dispose before terminal completion MUST cancel, await, and reclaim the process
+resource. A completed process MUST unregister before UnitOfWork completion and
+MUST NOT be cancelled again.
+
+The executable lifecycle rules are:
+
+- R1: Active Job cancellation signals the registered Process Execution handle.
+- R2: A confirmed terminal process completion unregisters before later Job
+  cancellation and is not cancelled retroactively.
+- R3: UnitOfWork termination cancels, awaits, and reclaims an active process and
+  its WorkArea.
+- R4: An `awaitC` failure that does not confirm terminal completion MUST retain
+  UnitOfWork ownership; later UnitOfWork termination MUST still cancel, await,
+  and reclaim the process resource.
+
 The active execution cancellation scope is Job-owned and effect-neutral. A
 Process Execution registration contains only a cancellation callback; the Job
 runtime MUST NOT depend on a Process Execution driver or handle type. A

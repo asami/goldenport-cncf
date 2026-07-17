@@ -193,3 +193,8 @@ Phase 34 closed on Jul. 17, 2026.
   network behavior, container/remote drivers, arbitrary shell access, legacy
   shell migration, process retention, BPM/process orchestration, and an
   independent process scheduler.
+
+Post-closure annotation (Jul. 17, 2026): Phase 35 adds the generic
+UnitOfWork-owned operational resource lifecycle. Phase 34's Job cancellation
+contract remains valid; Phase 35 closes the distinct UnitOfWork termination and
+resource-reclamation gap without reopening Phase 34.

@@ -2,6 +2,7 @@ package org.goldenport.cncf.processexecution
 
 import java.nio.file.attribute.BasicFileAttributes
 import java.nio.file.{FileVisitResult, Files, LinkOption, Path, SimpleFileVisitor}
+import scala.util.control.NonFatal
 import org.goldenport.Consequence
 import org.goldenport.cncf.workarea.WorkAreaSpace
 
@@ -18,6 +19,8 @@ import org.goldenport.cncf.workarea.WorkAreaSpace
 final class ProcessExecutionWorkArea private[processexecution] (
   private val _root: Path
 ) extends AutoCloseable {
+  private var _closed = false
+
   def root: Path = _root
 
   def workingDirectoryC(path: Option[WorkAreaRelativePath]): Consequence[Path] =
@@ -28,7 +31,7 @@ final class ProcessExecutionWorkArea private[processexecution] (
     }
 
   def inputPathC(path: WorkAreaRelativePath): Consequence[Path] =
-    _resolve_c(path, createParents = false).flatMap { resolved =>
+    _resolve_c(path, createparents = false).flatMap { resolved =>
       if (Files.isRegularFile(resolved, LinkOption.NOFOLLOW_LINKS))
         Consequence.success(resolved)
       else
@@ -42,7 +45,7 @@ final class ProcessExecutionWorkArea private[processexecution] (
   def prepareOutputsC(execution: ResolvedProcessExecution): Consequence[Unit] =
     execution.request.outputs.foldLeft(Consequence.unit) { (z, declaration) =>
       z.flatMap { _ =>
-        _output_path_c(execution, declaration.path, createParents = true).map(_ => ())
+        _output_path_c(execution, declaration.path, createparents = true).map(_ => ())
       }
     }
 
@@ -57,9 +60,9 @@ final class ProcessExecutionWorkArea private[processexecution] (
   private def _collect_declared_artifacts_c(
     execution: ResolvedProcessExecution
   ): Consequence[ProcessExecutionArtifactCollection] = {
-    val countLimit = execution.effectiveLimits.artifactCount.get
-    val totalLimit = execution.effectiveLimits.artifactBytes.get
-    if (execution.request.outputs.size > countLimit)
+    val countlimit = execution.effectiveLimits.artifactCount.get
+    val totallimit = execution.effectiveLimits.artifactBytes.get
+    if (execution.request.outputs.size > countlimit)
       Consequence.success(ProcessExecutionArtifactCollection(Vector.empty, limitExceeded = true))
     else {
       execution.request.outputs.foldLeft(Consequence.success((Vector.empty[ProcessExecutionArtifact], 0L, false))) {
@@ -68,14 +71,14 @@ final class ProcessExecutionWorkArea private[processexecution] (
             if (exceeded)
               Consequence.success((artifacts, total, exceeded))
             else
-            _output_path_c(execution, declaration.path, createParents = false).flatMap { resolved =>
+            _output_path_c(execution, declaration.path, createparents = false).flatMap { resolved =>
               if (!Files.exists(resolved, LinkOption.NOFOLLOW_LINKS))
                 Consequence.success((artifacts, total, false))
               else if (!Files.isRegularFile(resolved, LinkOption.NOFOLLOW_LINKS))
                 Consequence.operationIllegal("process_exec", "declared artifact is not a regular file")
               else {
                 val bytes = Files.size(resolved)
-                if (bytes > declaration.maximumBytes || bytes > totalLimit - total)
+                if (bytes > declaration.maximumBytes || bytes > totallimit - total)
                   Consequence.success((artifacts, total, true))
                 else
                   Consequence.success(
@@ -113,30 +116,40 @@ final class ProcessExecutionWorkArea private[processexecution] (
         Consequence.operationIllegal("process_exec", "WorkArea is unavailable")
     }
 
-  def close(): Unit =
-    if (Files.exists(_root, LinkOption.NOFOLLOW_LINKS))
-      Files.walkFileTree(_root, new SimpleFileVisitor[Path] {
-        override def visitFile(file: Path, attributes: BasicFileAttributes): FileVisitResult = {
-          Files.deleteIfExists(file)
-          FileVisitResult.CONTINUE
-        }
+  def close(): Unit = synchronized {
+    if (!_closed) {
+      _closed = true
+      try {
+        if (Files.exists(_root, LinkOption.NOFOLLOW_LINKS))
+          Files.walkFileTree(_root, new SimpleFileVisitor[Path] {
+            override def visitFile(file: Path, attributes: BasicFileAttributes): FileVisitResult = {
+              Files.deleteIfExists(file)
+              FileVisitResult.CONTINUE
+            }
 
-        override def postVisitDirectory(directory: Path, error: java.io.IOException): FileVisitResult = {
-          if (error != null) throw error
-          Files.deleteIfExists(directory)
-          FileVisitResult.CONTINUE
-        }
-      })
+            override def postVisitDirectory(directory: Path, error: java.io.IOException): FileVisitResult = {
+              if (error != null) throw error
+              Files.deleteIfExists(directory)
+              FileVisitResult.CONTINUE
+            }
+          })
+      } catch {
+        case NonFatal(e) =>
+          _closed = false
+          throw e
+      }
+    }
+  }
 
   private def _resolve_c(
     path: WorkAreaRelativePath,
-    createParents: Boolean
+    createparents: Boolean
   ): Consequence[Path] =
     try {
       val candidate = _root.resolve(path.value).normalize
       if (!candidate.startsWith(_root))
         Consequence.operationIllegal("process_exec", "WorkArea path escapes its execution root")
-      else if (createParents)
+      else if (createparents)
         _create_parent_directories_c(candidate).flatMap(_ => _verify_no_symlink_c(candidate).map(_ => candidate))
       else
         _verify_no_symlink_c(candidate).map(_ => candidate)
@@ -148,13 +161,13 @@ final class ProcessExecutionWorkArea private[processexecution] (
   private def _output_path_c(
     execution: ResolvedProcessExecution,
     path: WorkAreaRelativePath,
-    createParents: Boolean
+    createparents: Boolean
   ): Consequence[Path] = {
     val relative = execution.request.workingDirectory match {
       case Some(workingdirectory) => s"${workingdirectory.value}/${path.value}"
       case None => path.value
     }
-    WorkAreaRelativePath.parseC(relative).flatMap(_resolve_c(_, createParents))
+    WorkAreaRelativePath.parseC(relative).flatMap(_resolve_c(_, createparents))
   }
 
   private def _verify_no_symlink_c(candidate: Path): Consequence[Unit] = {
@@ -174,7 +187,7 @@ final class ProcessExecutionWorkArea private[processexecution] (
   }
 
   private def _ensure_directory_c(path: WorkAreaRelativePath): Consequence[Path] =
-    _resolve_c(path, createParents = true).flatMap { candidate =>
+    _resolve_c(path, createparents = true).flatMap { candidate =>
       try {
         if (Files.exists(candidate, LinkOption.NOFOLLOW_LINKS)) {
           if (Files.isSymbolicLink(candidate) || !Files.isDirectory(candidate, LinkOption.NOFOLLOW_LINKS))

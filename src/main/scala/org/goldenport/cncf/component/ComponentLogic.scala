@@ -32,7 +32,7 @@ import org.goldenport.cncf.operation.CmlOperationDefinition
  *  version Mar. 31, 2026
  *  version Apr. 24, 2026
  *  version Jun.  9, 2026
- * @version Jul. 16, 2026
+ * @version Jul. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 /**
@@ -269,7 +269,7 @@ case class ComponentLogic(
   ): Option[CmlOperationDefinition] =
     component.operationDefinitions.find(_.name == operationname)
 
-  private final case class _JobDefinitionBinding(
+  private final case class JobDefinitionBinding(
     option: JobSubmitOption,
     compensation: Option[JobFailureHook]
   )
@@ -278,16 +278,16 @@ case class ComponentLogic(
     action: Action,
     base: JobSubmitOption,
     ctx: ExecutionContext
-  ): Consequence[_JobDefinitionBinding] =
+  ): Consequence[JobDefinitionBinding] =
     _job_definition_ref(action) match {
-      case None => Consequence.success(_JobDefinitionBinding(base, None))
+      case None => Consequence.success(JobDefinitionBinding(base, None))
       case Some(ref) =>
         given ExecutionContext = ctx
         _load_job_definition(ref, ctx).flatMap {
           case Some(entity) if entity.isActive =>
             val snapshot = JobDefinitionSnapshot.from(entity)
             _job_definition_compensation(entity).map { compensation =>
-              _JobDefinitionBinding(
+              JobDefinitionBinding(
                 base.copy(
                   declaredProfile = base.declaredProfile.orElse(snapshot.profile),
                   jobDefinitionSnapshot = Some(snapshot)
@@ -619,15 +619,18 @@ case class ComponentLogic(
       core = core,
       unitOfWorkSupplier = uowsupplier,
       unitOfWorkInterpreterFn = consequenceinterpreter,
-      commitAction = commitUow => {
-        val _ = commitUow.commit()
+      commitAction = commituow => {
+        val _ = commituow.commit()
         ()
       },
-      abortAction = abortUow => {
-        val _ = abortUow.rollback()
+      abortAction = abortuow => {
+        val _ = abortuow.rollback()
         ()
       },
-      disposeAction = _ => (),
+      disposeAction = disposeuow => {
+        val _ = disposeuow.dispose()
+        ()
+      },
       token = "component-runtime-context",
       operationMode = global
         .map(_.config.operationMode)

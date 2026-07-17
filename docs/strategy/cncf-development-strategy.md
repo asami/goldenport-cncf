@@ -652,11 +652,11 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Notes contain execution details and results for each phase.
 
 ## Process Status Pointers
-- No active phase is selected after Phase 34 closure.
-- Latest closed phase dashboard: `docs/phase/phase-34.md`.
-- Latest closed phase checklist: `docs/phase/phase-34-checklist.md`.
-- Previous closed phase dashboard: `docs/phase/phase-33.md`
-- Previous closed phase checklist: `docs/phase/phase-33-checklist.md`
+- No active phase is selected after Phase 35 closure.
+- Latest closed phase dashboard: `docs/phase/phase-35.md`.
+- Latest closed phase checklist: `docs/phase/phase-35-checklist.md`.
+- Previous closed phase dashboard: `docs/phase/phase-34.md`
+- Previous closed phase checklist: `docs/phase/phase-34-checklist.md`
 - Select the next development item before opening a new phase.
 - Status interpretation rules: `docs/rules/stage-status-and-checklist-convention.md`
 - Latest post-closure maintenance: Jul. 15, 2026 descriptor-bound component
@@ -827,6 +827,9 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Phase 30: closed (`docs/phase/phase-30.md`)
 - Phase 31: closed (`docs/phase/phase-31.md`)
 - Phase 32: closed (`docs/phase/phase-32.md`)
+- Phase 33: closed (`docs/phase/phase-33.md`)
+- Phase 34: closed (`docs/phase/phase-34.md`)
+- Phase 35: closed (`docs/phase/phase-35.md`)
 
 ## 8. Completed Development Item History
 
@@ -2246,3 +2249,31 @@ Completed in Phase 34 (Jul. 17, 2026).
     process/environment access;
   - BPM/process orchestration, process scheduling, retention, and advanced
     process lifecycle UI.
+
+### 9.30 UnitOfWork Resource Lifecycle
+Completed in Phase 35 (Jul. 17, 2026).
+
+- Goal: make UnitOfWork the explicit owner of non-transactional runtime
+  resources acquired during operation execution, with deterministic terminal
+  release on commit, abort, rollback, and disposal.
+- Scope:
+  - define a generic `UnitOfWorkResource` lifecycle separate from
+    `CommitProtocol` transaction participants;
+  - provide thread-safe registration, unregister, LIFO release,
+    late-registration reclamation, and exactly-once terminal draining;
+  - make Process Execution handle and WorkArea ownership pass through this
+    generic lifecycle;
+  - preserve Job cancellation as prompt stop notification while UnitOfWork
+    termination performs cancel-and-reap cleanup;
+  - record cleanup failures through normal `Conclusion` diagnostics.
+- Completed implementation:
+  - use Process Execution as the driver;
+  - executable specifications cover commit, abort, dispose, release failure,
+    late registration, and the process abort/reap race;
+  - transaction and operational resource semantics remain explicitly separate;
+  - cleanup failures retain the primary operation failure through normal
+    `Conclusion` causal composition.
+- Deferred scope:
+  - generic cleanup retry, resource retention, and resource-leak management UI;
+  - making external side effects transactional or automatically compensatable;
+  - legacy shell migration and BPM/process orchestration.

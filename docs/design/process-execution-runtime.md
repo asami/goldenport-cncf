@@ -135,10 +135,11 @@ deterministic fixture: it returns configured results and never creates a host
 process.
 
 The interpreter owns timeout and cancellation coordination. It registers a
-handle immediately after launch, requests graceful termination when policy
-allows, escalates to forced process-tree termination when required, waits for
-stream readers to reach a stable terminal state, and unregisters the handle in
-a finally-safe path. A terminal completion that wins a race with cancellation
+handle immediately after launch with both the Job cancellation scope and the
+owning UnitOfWork resource registry. The Job scope promptly signals cancellation;
+the UnitOfWork resource releases a still-active handle by cancelling, awaiting,
+and closing the WorkArea. Normal completion unregisters both registrations in a
+finally-safe path. A terminal completion that wins a race with cancellation
 keeps its actual terminal result; later cancellation is a no-op.
 
 `JobCancellationScope` is the Job-owned generic active-work boundary. The Job
@@ -151,6 +152,12 @@ cancellation is signalled immediately, which closes the launch/cancel race.
 Registration is removed when `awaitC` reaches a terminal result. Retrying a
 cancelled Job creates a fresh scope, so an old task cannot cancel active work
 from the retry.
+
+The generic lifecycle contract is defined by
+`docs/design/unit-of-work-resource-lifecycle.md`. A process handle is an
+operational resource, not a transaction participant: database rollback cannot
+undo an external program, but UnitOfWork termination must still stop and reap
+the runtime resource it owns.
 
 ## Result And Failure Boundary
 

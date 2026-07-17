@@ -2,7 +2,7 @@ package org.goldenport.cncf.context
 
 import java.text.NumberFormat
 import java.time.{Instant, LocalDate, LocalDateTime, LocalTime, OffsetDateTime, ZoneId, ZonedDateTime}
-import java.time.format.{DateTimeFormatter, FormatStyle}
+import java.time.format.{DateTimeFormatter, DateTimeFormatterBuilder, FormatStyle}
 import java.util.Locale
 import cats.~>
 import org.goldenport.Consequence
@@ -24,7 +24,7 @@ import org.goldenport.util.StringUtils
  *  version Apr. 28, 2026
  *  version May. 10, 2026
  *  version Jun. 18, 2026
- * @version Jul. 15, 2026
+ * @version Jul. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class RuntimeContext(
@@ -241,17 +241,12 @@ object RuntimeContext {
     locale: Locale = Locale.ROOT,
     timezone: ZoneId = ZoneId.of("UTC"),
     numberStyle: NumberStyle = NumberStyle.Plain,
-    dateFormatter: DateTimeFormatter = FormattingContext.dateFormatter(Locale.ROOT),
-    timeFormatter: DateTimeFormatter = FormattingContext.timeFormatter(Locale.ROOT),
-    dateTimeFormatter: DateTimeFormatter = FormattingContext.dateTimeFormatter(Locale.ROOT)
+    dateFormatter: DateTimeFormatter = FormattingContext.defaultDateFormatter,
+    timeFormatter: DateTimeFormatter = FormattingContext.defaultTimeFormatter,
+    dateTimeFormatter: DateTimeFormatter = FormattingContext.defaultDateTimeFormatter
   ) {
     def withLocale(p: Locale): FormattingContext =
-      copy(
-        locale = p,
-        dateFormatter = FormattingContext.dateFormatter(p),
-        timeFormatter = FormattingContext.timeFormatter(p),
-        dateTimeFormatter = FormattingContext.dateTimeFormatter(p)
-      )
+      copy(locale = p)
 
     def withTimezone(p: ZoneId): FormattingContext =
       copy(timezone = p)
@@ -259,17 +254,49 @@ object RuntimeContext {
     def transformRecord(record: Record): Record =
       Record(record.fields.map(_transform_field))
 
+    /**
+     * Formats a temporal value for an application-facing response.
+     *
+     * This deliberately uses minute precision.  Operational diagnostics should
+     * call [[formatLogDateTime]] instead so that machine-readable ISO output
+     * remains an explicit choice.
+     */
+    def formatApplicationDateTime(value: ZonedDateTime): String =
+      _application_date_time_formatter.format(value.withZoneSameInstant(timezone))
+
+    def formatApplicationDateTime(value: OffsetDateTime): String =
+      formatApplicationDateTime(value.toZonedDateTime)
+
+    def formatApplicationDateTime(value: LocalDateTime): String =
+      _application_date_time_formatter.format(value.atZone(timezone))
+
+    def formatApplicationDateTime(value: Instant): String =
+      _application_date_time_formatter.format(value.atZone(timezone))
+
+    /** Formats a temporal value for logs and diagnostics in ISO 8601. */
+    def formatLogDateTime(value: ZonedDateTime): String =
+      FormattingContext.logDateTimeFormatter.format(value.withZoneSameInstant(timezone))
+
+    def formatLogDateTime(value: OffsetDateTime): String =
+      formatLogDateTime(value.toZonedDateTime)
+
+    def formatLogDateTime(value: LocalDateTime): String =
+      formatLogDateTime(value.atZone(timezone))
+
+    def formatLogDateTime(value: Instant): String =
+      formatLogDateTime(value.atZone(timezone))
+
     def formatValue(value: Any): Any =
       value match {
         case r: Record => transformRecord(r)
         case xs: Iterable[?] => xs.iterator.map(formatValue).toVector
         case xs: Array[?] => xs.toVector.map(formatValue)
-        case x: ZonedDateTime => dateTimeFormatter.withLocale(locale).withZone(timezone).format(x.withZoneSameInstant(timezone))
-        case x: OffsetDateTime => dateTimeFormatter.withLocale(locale).withZone(timezone).format(x.atZoneSameInstant(timezone))
-        case x: LocalDateTime => dateTimeFormatter.withLocale(locale).withZone(timezone).format(x.atZone(timezone))
-        case x: Instant => dateTimeFormatter.withLocale(locale).withZone(timezone).format(x.atZone(timezone))
-        case x: LocalDate => dateFormatter.withLocale(locale).format(x)
-        case x: LocalTime => timeFormatter.withLocale(locale).format(x)
+        case x: ZonedDateTime => formatApplicationDateTime(x)
+        case x: OffsetDateTime => formatApplicationDateTime(x)
+        case x: LocalDateTime => formatApplicationDateTime(x)
+        case x: Instant => formatApplicationDateTime(x)
+        case x: LocalDate => _date_formatter.format(x)
+        case x: LocalTime => _time_formatter.format(x)
         case x: BigDecimal => numberStyle.format(x.bigDecimal, locale)
         case x: java.math.BigDecimal => numberStyle.format(x, locale)
         case x: Double => numberStyle.formatDecimal(x, locale)
@@ -293,19 +320,62 @@ object RuntimeContext {
         field.key,
         Field.Value.Single(formatValue(field.value.single))
       )
+
+    private def _application_date_time_formatter: DateTimeFormatter =
+      _resolve_formatter(
+        dateTimeFormatter,
+        FormattingContext.defaultDateTimeFormatter,
+        FormattingContext.dateTimeFormatter(locale)
+      )
+        .withLocale(locale)
+        .withZone(timezone)
+
+    private def _date_formatter: DateTimeFormatter =
+      _resolve_formatter(
+        dateFormatter,
+        FormattingContext.defaultDateFormatter,
+        FormattingContext.dateFormatter(locale)
+      )
+        .withLocale(locale)
+
+    private def _time_formatter: DateTimeFormatter =
+      _resolve_formatter(
+        timeFormatter,
+        FormattingContext.defaultTimeFormatter,
+        FormattingContext.timeFormatter(locale)
+      )
+        .withLocale(locale)
+
+    private def _resolve_formatter(
+      specified: DateTimeFormatter,
+      default: DateTimeFormatter,
+      localized: => DateTimeFormatter
+    ): DateTimeFormatter =
+      if (specified eq default) localized else specified
   }
 
   object FormattingContext {
-    val default: FormattingContext = FormattingContext()
-
     def dateFormatter(p: Locale): DateTimeFormatter =
       DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withLocale(p)
 
     def timeFormatter(p: Locale): DateTimeFormatter =
-      DateTimeFormatter.ofLocalizedTime(FormatStyle.MEDIUM).withLocale(p)
+      DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT).withLocale(p)
 
     def dateTimeFormatter(p: Locale): DateTimeFormatter =
-      DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM).withLocale(p)
+      if (p.getLanguage == Locale.JAPANESE.getLanguage)
+        new DateTimeFormatterBuilder()
+          .appendPattern("M'月'd'日' H'時'mm'分' (z)")
+          .toFormatter(p)
+      else
+        DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM, FormatStyle.SHORT).withLocale(p)
+
+    val logDateTimeFormatter: DateTimeFormatter =
+      DateTimeFormatter.ISO_OFFSET_DATE_TIME
+
+    val defaultDateFormatter: DateTimeFormatter = dateFormatter(Locale.ROOT)
+    val defaultTimeFormatter: DateTimeFormatter = timeFormatter(Locale.ROOT)
+    val defaultDateTimeFormatter: DateTimeFormatter = dateTimeFormatter(Locale.ROOT)
+    val default: FormattingContext = FormattingContext()
   }
 
   final case class I18nContext(

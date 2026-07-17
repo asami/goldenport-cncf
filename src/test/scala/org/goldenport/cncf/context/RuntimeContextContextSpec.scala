@@ -10,7 +10,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Apr.  5, 2026
  *  version Apr. 25, 2026
- * @version Jul. 15, 2026
+ * @version Jul. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class RuntimeContextContextSpec
@@ -60,8 +60,25 @@ final class RuntimeContextContextSpec
       When("transforming the record")
       val transformed = ctx.transformRecord(record)
 
-      Then("the timestamp is rendered as a timezone-adjusted string")
-      transformed.getString("updated_at").map(_.replace('\u202f', ' ')) shouldBe Some("Apr 5, 2026, 9:00:00 AM")
+      Then("the timestamp is rendered as a timezone-adjusted application string without seconds")
+      transformed.getString("updated_at").map(_.replace('\u202f', ' ')) shouldBe Some("Apr 5, 2026, 9:00 AM")
+    }
+
+    "use minute-precision Japanese application dates and ISO log dates" in {
+      Given("a Japanese formatting context in Asia/Tokyo")
+      val formatting = RuntimeContext.FormattingContext(
+        locale = Locale.JAPAN,
+        timezone = ZoneId.of("Asia/Tokyo")
+      )
+      val timestamp = Instant.parse("2026-07-17T14:04:59Z")
+
+      When("formatting the timestamp for an application and for a log")
+      val application = formatting.formatApplicationDateTime(timestamp)
+      val log = formatting.formatLogDateTime(timestamp)
+
+      Then("the application display omits seconds while the log remains ISO 8601")
+      application shouldBe "7月17日 23時04分 (JST)"
+      log shouldBe "2026-07-17T23:04:59+09:00"
     }
 
     "optionally render numbers as localized strings" in {

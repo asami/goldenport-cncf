@@ -74,7 +74,8 @@ Engine is the execution boundary.
 
 Engine responsibilities:
 - invoke authorization (decision only)
-- manage runtime lifecycle (commit / abort / dispose)
+- manage runtime lifecycle (commit / abort / dispose), including release of
+  UnitOfWork-owned operational resources on every terminal path
 - emit observability events
 - coordinate execution phases
 

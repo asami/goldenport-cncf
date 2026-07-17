@@ -9,16 +9,17 @@ import org.goldenport.cncf.subsystem.{GenericSubsystemAuthenticationBinding, Gen
 import org.goldenport.cncf.event.EventReception
 import org.goldenport.cncf.job.{ActionId, JobId, TaskId}
 import org.goldenport.protocol.{Property, Protocol, Request}
+import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 20, 2026
  *  version Apr. 28, 2026
- * @version Jul. 15, 2026
+ * @version Jul. 17, 2026
  * @author  ASAMI, Tomoharu
  */
-final class IngressSecurityResolverSpec extends AnyWordSpec with Matchers {
+final class IngressSecurityResolverSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   "IngressSecurityResolver" should {
     "resolve anonymous privilege when no protocol security attributes are present" in {
       val request = Request.of(component = "domain", service = "entity", operation = "loadPerson")
@@ -133,7 +134,7 @@ final class IngressSecurityResolverSpec extends AnyWordSpec with Matchers {
     }
 
     "deny when authentication providers do not resolve and privilege fallback is disabled by resolved wiring" in {
-      val subsystem = _subsystem(fallbackEnabled = false)
+      val subsystem = _subsystem(fallbackenabled = false)
       val base = subsystem.components.head.logic.executionContext()
 
       val result = IngressSecurityResolver.resolve(base, Map("access_token" -> "missing-token", "capability" -> "content_manager"))
@@ -143,7 +144,7 @@ final class IngressSecurityResolverSpec extends AnyWordSpec with Matchers {
 
     "try the next provider when the first provider does not match" in {
       val subsystem = _subsystem(
-        fallbackEnabled = true,
+        fallbackenabled = true,
         providers = Vector(
           _provider("first-provider", _ => Consequence.success(None)),
           _provider(
@@ -165,7 +166,7 @@ final class IngressSecurityResolverSpec extends AnyWordSpec with Matchers {
 
     "propagate provider failure instead of falling back to privilege resolution" in {
       val subsystem = _subsystem(
-        fallbackEnabled = true,
+        fallbackenabled = true,
         providers = Vector(
           _provider("failing-provider", _ => Consequence.argumentInvalid("invalid credentials"))
         )
@@ -184,7 +185,7 @@ final class IngressSecurityResolverSpec extends AnyWordSpec with Matchers {
     }
 
     "allow anonymous resolution when providers are configured but no authentication material is present" in {
-      val subsystem = _subsystem(fallbackEnabled = false)
+      val subsystem = _subsystem(fallbackenabled = false)
       val base = subsystem.components.head.logic.executionContext()
 
       val result = IngressSecurityResolver.resolve(base, Map.empty[String, String])
@@ -197,8 +198,8 @@ final class IngressSecurityResolverSpec extends AnyWordSpec with Matchers {
 
     "install the trusted local subject when standalone ingress has no authentication material" in {
       val subsystem = _subsystem(
-        fallbackEnabled = false,
-        localSubject = Some(_local_subject)
+        fallbackenabled = false,
+        localsubject = Some(_local_subject)
       )
       val base = subsystem.components.head.logic.executionContext()
 
@@ -219,14 +220,14 @@ final class IngressSecurityResolverSpec extends AnyWordSpec with Matchers {
 
     "prefer a provider-authenticated subject over the configured local subject" in {
       val subsystem = _subsystem(
-        fallbackEnabled = false,
+        fallbackenabled = false,
         providers = Vector(
           _provider(
             "account-provider",
             _ => Consequence.success(Some(AuthenticationResult(PrincipalId("account-user"), attributes = Map.empty)))
           )
         ),
-        localSubject = Some(_local_subject)
+        localsubject = Some(_local_subject)
       )
       val base = subsystem.components.head.logic.executionContext()
 
@@ -241,8 +242,8 @@ final class IngressSecurityResolverSpec extends AnyWordSpec with Matchers {
 
     "reject unmatched credentials instead of substituting the configured local subject" in {
       val subsystem = _subsystem(
-        fallbackEnabled = false,
-        localSubject = Some(_local_subject)
+        fallbackenabled = false,
+        localsubject = Some(_local_subject)
       )
       val base = subsystem.components.head.logic.executionContext()
 
@@ -253,8 +254,8 @@ final class IngressSecurityResolverSpec extends AnyWordSpec with Matchers {
 
     "keep an unresolved session outside the configured local subject" in {
       val subsystem = _subsystem(
-        fallbackEnabled = false,
-        localSubject = Some(_local_subject)
+        fallbackenabled = false,
+        localsubject = Some(_local_subject)
       )
       val base = subsystem.components.head.logic.executionContext()
 
@@ -267,7 +268,7 @@ final class IngressSecurityResolverSpec extends AnyWordSpec with Matchers {
     }
 
     "allow anonymous resolution for public signup attributes when providers do not match and fallback privilege is disabled" in {
-      val subsystem = _subsystem(fallbackEnabled = false)
+      val subsystem = _subsystem(fallbackenabled = false)
       val base = subsystem.components.head.logic.executionContext()
 
       val result = IngressSecurityResolver.resolve(
@@ -286,7 +287,7 @@ final class IngressSecurityResolverSpec extends AnyWordSpec with Matchers {
     }
 
     "allow anonymous resolution when only a stale session id is present and fallback privilege is disabled" in {
-      val subsystem = _subsystem(fallbackEnabled = false)
+      val subsystem = _subsystem(fallbackenabled = false)
       val base = subsystem.components.head.logic.executionContext()
 
       val result = IngressSecurityResolver.resolve(
@@ -306,7 +307,7 @@ final class IngressSecurityResolverSpec extends AnyWordSpec with Matchers {
     }
 
     "allow anonymous resolution for login credentials when providers do not match and fallback privilege is disabled" in {
-      val subsystem = _subsystem(fallbackEnabled = false)
+      val subsystem = _subsystem(fallbackenabled = false)
       val base = subsystem.components.head.logic.executionContext()
 
       val result = IngressSecurityResolver.resolve(
@@ -329,7 +330,7 @@ final class IngressSecurityResolverSpec extends AnyWordSpec with Matchers {
         tokenId = Some("token-1")
       )
       val subsystem = _subsystem(
-        fallbackEnabled = true,
+        fallbackenabled = true,
         providers = Vector(
           _provider(
             "session-provider",
@@ -350,7 +351,7 @@ final class IngressSecurityResolverSpec extends AnyWordSpec with Matchers {
 
     "restore locale and timezone from authenticated provider attributes" in {
       val subsystem = _subsystem(
-        fallbackEnabled = true,
+        fallbackenabled = true,
         providers = Vector(
           _provider(
             "locale-provider",
@@ -373,9 +374,39 @@ final class IngressSecurityResolverSpec extends AnyWordSpec with Matchers {
       resolved.executionContext.runtime.context.formatting.timezone shouldBe ZoneId.of("Asia/Tokyo")
     }
 
+    "restore locale from the standard Accept-Language ingress header" in {
+      Given("an ingress request whose preferred language is Japanese")
+      val base = _subsystem(fallbackenabled = false).components.head.logic.executionContext()
+
+      When("the standard Accept-Language header is resolved")
+      val result = IngressSecurityResolver.resolve(
+        base,
+        Map("Accept-Language" -> "ja-JP,ja;q=0.9,en-US;q=0.8")
+      )
+
+      Then("the highest-priority acceptable locale is restored")
+      result shouldBe a[Consequence.Success[_]]
+      result.toOption.get.executionContext.runtime.context.formatting.locale shouldBe Locale.forLanguageTag("ja-JP")
+    }
+
+    "exclude an unacceptable leading Accept-Language range" in {
+      Given("an ingress request that lists Japanese first with zero quality and English second with full quality")
+      val base = _subsystem(fallbackenabled = false).components.head.logic.executionContext()
+
+      When("the weighted Accept-Language header is resolved")
+      val result = IngressSecurityResolver.resolve(
+        base,
+        Map("Accept-Language" -> "ja-JP;q=0,en-US;q=1")
+      )
+
+      Then("the unacceptable language is skipped")
+      result shouldBe a[Consequence.Success[_]]
+      result.toOption.get.executionContext.runtime.context.formatting.locale shouldBe Locale.forLanguageTag("en-US")
+    }
+
     "restore authenticated security from x-textus-session header" in {
       val subsystem = _subsystem(
-        fallbackEnabled = true,
+        fallbackenabled = true,
         providers = Vector(
           _provider(
             "session-header-provider",
@@ -408,7 +439,7 @@ final class IngressSecurityResolverSpec extends AnyWordSpec with Matchers {
 
     "prefer explicit x-textus-session over cookie session value" in {
       val subsystem = _subsystem(
-        fallbackEnabled = true,
+        fallbackenabled = true,
         providers = Vector(
           _provider(
             "session-precedence-provider",
@@ -455,7 +486,7 @@ final class IngressSecurityResolverSpec extends AnyWordSpec with Matchers {
     }
 
     "fallback to privilege resolution when providers do not resolve and fallback remains enabled" in {
-      val subsystem = _subsystem(fallbackEnabled = true)
+      val subsystem = _subsystem(fallbackenabled = true)
       val base = subsystem.components.head.logic.executionContext()
 
       val result = IngressSecurityResolver.resolve(
@@ -473,9 +504,9 @@ final class IngressSecurityResolverSpec extends AnyWordSpec with Matchers {
   }
 
   private def _subsystem(
-    fallbackEnabled: Boolean,
+    fallbackenabled: Boolean,
     providers: Vector[AuthenticationProvider] = Vector(_provider("dummy-provider", _ => Consequence.success(None))),
-    localSubject: Option[GenericSubsystemLocalSubjectBinding] = None
+    localsubject: Option[GenericSubsystemLocalSubjectBinding] = None
   ): Subsystem = {
     val subsystem = Subsystem(
       name = "security-test",
@@ -492,7 +523,7 @@ final class IngressSecurityResolverSpec extends AnyWordSpec with Matchers {
         org.goldenport.configuration.ConfigurationTrace.empty
       )
     )
-    val ownerSubsystem = subsystem
+    val ownersubsystem = subsystem
     val component = new Component() {
       override val core: Component.Core =
         Component.Core.create(
@@ -501,7 +532,7 @@ final class IngressSecurityResolverSpec extends AnyWordSpec with Matchers {
           ComponentInstanceId.default(ComponentId("dummy")),
           Protocol.empty
         )
-      override def subsystem: Option[Subsystem] = Some(ownerSubsystem)
+      override def subsystem: Option[Subsystem] = Some(ownersubsystem)
       override def authenticationProviders: Vector[AuthenticationProvider] = providers
     }.withArtifactMetadata(
       Component.ArtifactMetadata(
@@ -521,8 +552,8 @@ final class IngressSecurityResolverSpec extends AnyWordSpec with Matchers {
             authentication = Some(
               GenericSubsystemAuthenticationBinding(
                 convention = Some("enabled"),
-                fallbackPrivilege = Some(if (fallbackEnabled) "enabled" else "disabled"),
-                localSubject = localSubject,
+                fallbackPrivilege = Some(if (fallbackenabled) "enabled" else "disabled"),
+                localSubject = localsubject,
                 providers = providers.map { provider =>
                   GenericSubsystemAuthenticationProviderBinding(
                     name = provider.name,
@@ -554,11 +585,11 @@ final class IngressSecurityResolverSpec extends AnyWordSpec with Matchers {
     )
 
   private def _provider(
-    providerName: String,
+    providername: String,
     f: AuthenticationRequest => Consequence[Option[AuthenticationResult]]
   ): AuthenticationProvider =
     new AuthenticationProvider {
-      override val name: String = providerName
+      override val name: String = providername
       def authenticate(request: AuthenticationRequest)(using ExecutionContext): Consequence[Option[AuthenticationResult]] =
         f(request)
     }

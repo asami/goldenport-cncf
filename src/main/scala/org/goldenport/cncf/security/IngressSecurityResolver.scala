@@ -4,6 +4,7 @@ import cats.free.Free
 import cats.~>
 import java.time.ZoneId
 import java.util.Locale
+import scala.jdk.CollectionConverters.*
 import org.goldenport.{Consequence, ConsequenceT}
 import org.goldenport.cncf.action.CommandExecutionMode
 import org.goldenport.cncf.config.RuntimeConfig
@@ -21,7 +22,7 @@ import org.goldenport.protocol.Request
  * - Reception ingress
  *
  * @since   Mar. 20, 2026
- * @version Jul. 15, 2026
+ * @version Jul. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ResolvedIngressSecurity(
@@ -71,11 +72,11 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
   )
 
   def resolve(request: Request): Consequence[ResolvedIngressSecurity] = {
-    val fromProperties = request.properties.foldLeft(Map.empty[String, String]) { (z, p) =>
+    val fromproperties = request.properties.foldLeft(Map.empty[String, String]) { (z, p) =>
       val value = Option(p.value).map(_.toString).getOrElse("")
       if (p.name.nonEmpty && value.nonEmpty) z.updated(p.name, value) else z
     }
-    val attrs = request.arguments.foldLeft(fromProperties) { (z, a) =>
+    val attrs = request.arguments.foldLeft(fromproperties) { (z, a) =>
       val value = Option(a.value).map(_.toString).getOrElse("")
       if (a.name.nonEmpty && value.nonEmpty) z.updated(a.name, value) else z
     }
@@ -83,11 +84,11 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
   }
 
   def resolve(base: ExecutionContext, request: Request): Consequence[ResolvedIngressSecurity] = {
-    val fromProperties = request.properties.foldLeft(Map.empty[String, String]) { (z, p) =>
+    val fromproperties = request.properties.foldLeft(Map.empty[String, String]) { (z, p) =>
       val value = Option(p.value).map(_.toString).getOrElse("")
       if (p.name.nonEmpty && value.nonEmpty) z.updated(p.name, value) else z
     }
-    val attrs = request.arguments.foldLeft(fromProperties) { (z, a) =>
+    val attrs = request.arguments.foldLeft(fromproperties) { (z, a) =>
       val value = Option(a.value).map(_.toString).getOrElse("")
       if (a.name.nonEmpty && value.nonEmpty) z.updated(a.name, value) else z
     }
@@ -100,7 +101,7 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
     privilege.flatMap { p =>
       val ctx0 = ExecutionContext.withSecurityContext(ExecutionContext.create(p), _security_context(p, attributes))
       val ctx1 = _production_runtime_context(ctx0)
-      val ctx2 = _restore_formatting_context(ctx0.security, ctx1)
+      val ctx2 = _restore_formatting_context(ctx0.security, attributes, ctx1)
       val ctx = _bind_context(attributes, ctx2)
       if (caps.isEmpty || ctx.security.hasAnyCapability(caps))
         Consequence.success(ResolvedIngressSecurity(ctx, p, caps))
@@ -115,13 +116,13 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
   def resolve(base: ExecutionContext, attributes: Map[String, String]): Consequence[ResolvedIngressSecurity] = {
     val caps = _resolve_requested_capabilities(attributes)
     val request = AuthenticationRequest(attributes)
-    val resolvedProviders = _resolved_authentication_providers(base)
+    val resolvedproviders = _resolved_authentication_providers(base)
     val localsubject =
       if (_has_local_subject_override_material(request)) None
       else _resolved_local_subject(base)
     val security0 =
-      if (resolvedProviders.nonEmpty)
-        _resolve_authenticated_security(resolvedProviders, base, request)
+      if (resolvedproviders.nonEmpty)
+        _resolve_authenticated_security(resolvedproviders, base, request)
       else
         Consequence.success(None)
     security0.flatMap {
@@ -144,7 +145,7 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
       val ctx0 = ExecutionContext.withSecurityContext(base, security)
       val ctx1 = _production_runtime_context_from_base(ctx0)
       val ctx1a = _rebind_runtime_unit_of_work(ctx1, "ingress-security")
-      val ctx2 = _restore_formatting_context(security, ctx1a)
+      val ctx2 = _restore_formatting_context(security, attributes, ctx1a)
       val ctx = _bind_context(attributes, ctx2)
       if (caps.isEmpty || ctx.security.hasAnyCapability(caps))
         Consequence.success(ResolvedIngressSecurity(ctx, privilege, caps))
@@ -240,13 +241,19 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
 
   private def _restore_formatting_context(
     security: SecurityContext,
+    ingressattributes: Map[String, String],
     ctx: ExecutionContext
   ): ExecutionContext = {
     val attrs = security.principal.attributes
     val base = ctx.runtime.context
     val formatting0 = base.formatting
     val formatting1 = _find_first(attrs, Vector("locale", "user.locale", "textus.locale"))
+      .orElse(_find_first(ingressattributes, Vector("locale", "user.locale", "textus.locale")))
       .flatMap(_parse_locale)
+      .orElse(
+        _find_first(ingressattributes, Vector("Accept-Language"))
+          .flatMap(_parse_accept_language)
+      )
       .map(formatting0.withLocale)
       .getOrElse(formatting0)
     val formatting2 = _find_first(attrs, Vector("timeZone", "timezone", "time_zone", "user.timeZone", "user.timezone"))
@@ -269,6 +276,13 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
     else
       Some(Locale.forLanguageTag(value.replace('_', '-')))
   }
+
+  private def _parse_accept_language(p: String): Option[Locale] =
+    scala.util.Try(Locale.LanguageRange.parse(p)).toOption
+      .toVector
+      .flatMap(_.asScala)
+      .find(range => range.getWeight > 0.0 && range.getRange != "*")
+      .flatMap(range => _parse_locale(range.getRange))
 
   private def _parse_timezone(p: String): Option[ZoneId] =
     scala.util.Try(ZoneId.of(p.trim)).toOption
@@ -363,12 +377,12 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
 
   private def _security_context(
     privilege: SecurityContext.Privilege,
-    ingressAttributes: Map[String, String] = Map.empty
+    ingressattributes: Map[String, String] = Map.empty
   ): SecurityContext =
     SecurityContext(
       principal = new Principal {
-        val id: PrincipalId = _resolve_principal_id(ingressAttributes).getOrElse(privilege.principalId)
-        val attributes: Map[String, String] = privilege.attributes ++ _security_subject_attributes(ingressAttributes)
+        val id: PrincipalId = _resolve_principal_id(ingressattributes).getOrElse(privilege.principalId)
+        val attributes: Map[String, String] = privilege.attributes ++ _security_subject_attributes(ingressattributes)
       },
       capabilities = privilege.capabilities,
       level = privilege.level,
@@ -712,10 +726,10 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
   private def _read_universal_id(
     attributes: Map[String, String],
     keys: Vector[String],
-    expectedKind: String
+    expectedkind: String
   ): Option[org.goldenport.id.UniversalId.Parts] =
     _find_first(attributes, keys).flatMap(v =>
-      org.goldenport.id.UniversalId.parseParts(v, expectedKind).toOption
+      org.goldenport.id.UniversalId.parseParts(v, expectedkind).toOption
     )
 
   private def _normalize_token(p: String): String =

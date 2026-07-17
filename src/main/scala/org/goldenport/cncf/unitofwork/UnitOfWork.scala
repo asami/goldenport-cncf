@@ -30,7 +30,7 @@ import org.goldenport.cncf.http.HttpDriver
  *  version Feb. 27, 2026
  *  version Mar. 24, 2026
  *  version Apr. 28, 2026
- * @version Jul. 16, 2026
+ * @version Jul. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 class UnitOfWork(
@@ -44,6 +44,7 @@ class UnitOfWork(
   private val _dirty_entities: mutable.Map[EntityId, Entity] = mutable.Map.empty
   private var _pending_events: Vector[DomainEvent] = Vector.empty
   private var _post_commit_callbacks: Vector[() => Unit] = Vector.empty
+  private val _resource_registry = new UnitOfWorkResourceRegistry
 
   def transactionContext = context.transactionContext
 
@@ -118,8 +119,8 @@ class UnitOfWork(
 
   def commit(
     events: Seq[DomainEvent]
-  ): Consequence[CommitResult] =
-    try {
+  ): Consequence[CommitResult] = {
+    val result = try {
       val tx = TransactionContext.create(context.transactionContext)
       val all = _pending_events ++ events.toVector
       eventengine.stage(all, EventRecordFactory.from(context))
@@ -152,9 +153,15 @@ class UnitOfWork(
       case e: Throwable =>
         Consequence.Failure(Conclusion.from(e))
     }
+    val termination = result match {
+      case _: Consequence.Success[CommitResult] => UnitOfWorkTermination.Committed
+      case _ => UnitOfWorkTermination.Aborted
+    }
+    _complete_c(result, termination)
+  }
 
-  def abort(): Consequence[AbortResult] =
-    try {
+  def abort(): Consequence[AbortResult] = {
+    val result = try {
       val tx = TransactionContext.create(context.transactionContext)
       recorder.record("UnitOfWork.abort")
       eventengine.abort(tx) // TODO
@@ -166,9 +173,23 @@ class UnitOfWork(
       case e: Throwable =>
         Consequence.Failure(Conclusion.from(e))
     }
+    _complete_c(result, UnitOfWorkTermination.Aborted)
+  }
 
   def rollback(): Consequence[AbortResult] =
     abort()
+
+  /**
+   * Releases runtime resources when a caller ends a UnitOfWork outside the
+   * ordinary commit or abort path. It does not change transaction outcome.
+   */
+  def dispose(): Consequence[Unit] =
+    _resource_registry.terminateC(UnitOfWorkTermination.Disposed)
+
+  def registerResourceC(
+    resource: UnitOfWorkResource
+  ): Consequence[UnitOfWorkResourceRegistration] =
+    _resource_registry.registerC(resource)
 
   def record(message: String): Unit =
     recorder.record(message)
@@ -185,6 +206,21 @@ class UnitOfWork(
     _post_commit_callbacks = _post_commit_callbacks :+ (() => callback)
 
   def executionContext: ExecutionContext = context
+
+  private def _complete_c[A](
+    result: Consequence[A],
+    termination: UnitOfWorkTermination
+  ): Consequence[A] =
+    _resource_registry.terminateC(termination) match {
+      case Consequence.Failure(cleanup) =>
+        result match {
+          case Consequence.Success(_) => Consequence.Failure(cleanup)
+          case Consequence.Failure(primary) =>
+            // Keep the primary failure authoritative while retaining cleanup diagnostics.
+            Consequence.Failure(cleanup ++ primary)
+        }
+      case _ => result
+    }
 }
 
 object UnitOfWork {

@@ -20,7 +20,7 @@ import org.goldenport.process.ShellCommandExecutor
 import org.goldenport.cncf.statemachine.TransitionValidationHook
 import org.goldenport.cncf.security.OperationAccessPolicy
 import org.goldenport.cncf.metrics.EntityAccessMetricsRegistry
-import org.goldenport.cncf.processexecution.{ProcessExecutionDriver, ProcessExecutionResult, ProcessExecutionWorkArea, ResolvedProcessExecution}
+import org.goldenport.cncf.processexecution.{ProcessExecutionDriver, ProcessExecutionHandle, ProcessExecutionResult, ProcessExecutionWorkArea, ResolvedProcessExecution}
 import org.goldenport.configuration.ConfigurationValue
 import org.goldenport.record.Record
 import org.goldenport.record.io.RecordEncoder
@@ -55,23 +55,28 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
         program.value.foldMap(_step)
       } catch {
         case e: Throwable =>
-          uow.abort()
-          return Consequence.Failure(Conclusion.from(e))
+          return _abort_failure_c(Conclusion.from(e))
       }
     result match {
       case Consequence.Success(inner) =>
         inner match {
           case Consequence.Success(value) =>
             uow.commit().map(_ => value)
-          case failure: Consequence.Failure[_] =>
-            uow.abort()
-            failure.asInstanceOf[Consequence[R]]
+          case Consequence.Failure(primary) =>
+            _abort_failure_c(primary)
         }
-      case failure: Consequence.Failure[_] =>
-        uow.abort()
-        failure.asInstanceOf[Consequence[R]]
+      case Consequence.Failure(primary) =>
+        _abort_failure_c(primary)
     }
   }
+
+  private def _abort_failure_c[R](primary: Conclusion): Consequence[R] =
+    uow.abort() match {
+      case Consequence.Failure(cleanup) =>
+        Consequence.Failure(cleanup ++ primary)
+      case _ =>
+        Consequence.Failure(primary)
+    }
 
   // def this(uow: UnitOfWork, http: HttpDriver) = {
   //   this(uow.withHttpDriver(Some(http)))
@@ -124,14 +129,14 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
         Consequence.dataStoreUnavailable("DataStore not wired: DataStoreDelete")
       }
 
-    case UnitOfWorkOp.LocalDataDir(componentName) =>
-      _with_calltree("uow:local-data:dir", Map("component" -> componentName)) {
-        _local_data_dir(componentName)
+    case UnitOfWorkOp.LocalDataDir(componentname) =>
+      _with_calltree("uow:local-data:dir", Map("component" -> componentname)) {
+        _local_data_dir(componentname)
       }
 
-    case UnitOfWorkOp.EmbeddedDataStoreOpen(componentName, name, path) =>
-      _with_calltree("uow:embedded-datastore:open", Map("component" -> componentName, "name" -> name)) {
-        _embedded_datastore(componentName, name, path)
+    case UnitOfWorkOp.EmbeddedDataStoreOpen(componentname, name, path) =>
+      _with_calltree("uow:embedded-datastore:open", Map("component" -> componentname, "name" -> name)) {
+        _embedded_datastore(componentname, name, path)
       }
 
     case UnitOfWorkOp.EmbeddedDataStoreRead(store, statement) =>
@@ -163,7 +168,7 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
 
     case m: (UnitOfWorkOp.EntityStoreLoad[t] @unchecked) =>
       val op = _canonical_load_op(m)
-      _with_calltree("uow:entityspace:load", _entity_calltree_attributes(op.id, "entity-space", realIo = !_working_set_enabled)) {
+      _with_calltree("uow:entityspace:load", _entity_calltree_attributes(op.id, "entity-space", realio = !_working_set_enabled)) {
         _authorize(op.authorization, Some(() => _load_record(op.id))).flatMap { _ =>
           val loaded =
             if (_working_set_enabled)
@@ -182,7 +187,7 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
 
     case m: (UnitOfWorkOp.EntityStoreLoadDirect[t] @unchecked) =>
       val id = _canonical_entity_id(m.id)
-      _with_calltree("uow:entitystore:load:direct", _entity_calltree_attributes(id, "entity-store", realIo = true)) {
+      _with_calltree("uow:entitystore:load:direct", _entity_calltree_attributes(id, "entity-store", realio = true)) {
         _entity_store_space.load(UnitOfWorkOp.EntityStoreLoad(id, m.tc))
       }
 
@@ -288,7 +293,7 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
       }
 
     case m: (UnitOfWorkOp.EntityStoreSearch[t] @unchecked) =>
-      _with_calltree("uow:entityspace:search", _entity_search_calltree_attributes(m.query, "entity-space", realIo = !_working_set_enabled)) {
+      _with_calltree("uow:entityspace:search", _entity_search_calltree_attributes(m.query, "entity-space", realio = !_working_set_enabled)) {
         _authorize(m.authorization).flatMap { _ =>
           if (_working_set_enabled)
             _entity_space_search(m)
@@ -298,7 +303,7 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
       }
 
     case m: (UnitOfWorkOp.EntityStoreSearchDirect[t] @unchecked) =>
-      _with_calltree("uow:entitystore:search:direct", _entity_search_calltree_attributes(m.query, "entity-store", realIo = true)) {
+      _with_calltree("uow:entitystore:search:direct", _entity_search_calltree_attributes(m.query, "entity-store", realio = true)) {
         val op = UnitOfWorkOp.EntityStoreSearch(m.query, m.tc, m.authorization)
         _authorize(m.authorization).flatMap { _ =>
           _entity_store_space.search(UnitOfWorkOp.EntityStoreSearch(m.query, m.tc)).flatMap(_filter_search_result(op, _))
@@ -306,7 +311,7 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
       }
 
     case m: (UnitOfWorkOp.EntityStoreSearchInternal[t] @unchecked) =>
-      _with_calltree("uow:entitystore:search:internal", _entity_search_calltree_attributes(m.query, "entity-store", realIo = true)) {
+      _with_calltree("uow:entitystore:search:internal", _entity_search_calltree_attributes(m.query, "entity-store", realio = true)) {
         _entity_store_space.searchInternal(m)
       }
 
@@ -410,10 +415,10 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
   private def _entity_store_space: EntityStoreSpace = uow.executionContext.entityStoreSpace
 
   private def _local_data_dir(
-    componentName: String
+    componentname: String
   ): Consequence[Path] =
     try {
-      val normalized = _normalized_local_data_component(componentName)
+      val normalized = _normalized_local_data_component(componentname)
       val path = _configured_path(Vector(
         s"cncf.local-data.$normalized.dir",
         s"textus.local-data.$normalized.dir"
@@ -431,12 +436,12 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
     }
 
   private def _embedded_datastore(
-    componentName: String,
+    componentname: String,
     name: String,
     path: Option[Path]
   ): Consequence[EmbeddedDataStore] =
-    _local_data_dir(componentName).map { dir =>
-      val normalizedcomponent = _normalized_local_data_component(componentName)
+    _local_data_dir(componentname).map { dir =>
+      val normalizedcomponent = _normalized_local_data_component(componentname)
       val normalizedname = _normalized_embedded_datastore_name(name)
       val effectivepath =
         path
@@ -623,13 +628,13 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
     }
 
   private def _emit_working_set_loading_fallback(
-    entityName: String,
+    entityname: String,
     state: String
   ): Unit =
     EntityAccessMetricsRegistry.shared.record(
       "entity.search.fallback.working-set-loading",
       Record.dataAuto(
-        "entity" -> entityName,
+        "entity" -> entityname,
         "source" -> "entity-store",
         "outcome" -> "fallback",
         "reason" -> "working-set-loading",
@@ -638,12 +643,12 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
     )
 
   private def _emit_entity_search_fallback(
-    entityName: String
+    entityname: String
   ): Unit =
     EntityAccessMetricsRegistry.shared.record(
       "entity.search.fallback.entity-store",
       Record.dataAuto(
-        "entity" -> entityName,
+        "entity" -> entityname,
         "source" -> "entity-store",
         "outcome" -> "fallback"
       )
@@ -701,11 +706,11 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
 
   private def _authorize(
     authorization: Option[UnitOfWorkAuthorization],
-    loadRecord: Option[() => Consequence[Option[org.goldenport.record.Record]]] = None
+    loadrecord: Option[() => Consequence[Option[org.goldenport.record.Record]]] = None
   ): Consequence[Unit] =
     authorization.fold(Consequence.unit) { a =>
       val loader: EntityId => Consequence[Option[org.goldenport.record.Record]] = id =>
-        loadRecord match {
+        loadrecord match {
           case Some(f) => f()
           case None => _load_record(id)
         }
@@ -799,25 +804,25 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
   private def _entity_calltree_attributes(
     id: EntityId,
     layer: String,
-    realIo: Boolean
+    realio: Boolean
   ): Map[String, String] =
     Map(
       "entity" -> id.collection.name,
       "id" -> id.value,
       "cache_layer" -> layer,
-      "real_io" -> realIo.toString,
+      "real_io" -> realio.toString,
       "working_set_enabled" -> _working_set_enabled.toString
     )
 
   private def _entity_search_calltree_attributes(
     query: EntityQuery[?],
     layer: String,
-    realIo: Boolean
+    realio: Boolean
   ): Map[String, String] =
     Map(
       "entity" -> query.collection.name,
       "cache_layer" -> layer,
-      "real_io" -> realIo.toString,
+      "real_io" -> realio.toString,
       "working_set_enabled" -> _working_set_enabled.toString,
       "query" -> _calltree_entity_query_json(query)
     )
@@ -923,20 +928,67 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
     execution: ResolvedProcessExecution,
     workspace: ProcessExecutionWorkArea
   ): Consequence[ProcessExecutionResult] = {
+    var registration = Option.empty[UnitOfWorkResourceRegistration]
     try {
       driver.startC(execution, workspace).flatMap { handle =>
-        val registration = uow.executionContext.jobContext.cancellationScope.map(
+        val jobregistration = uow.executionContext.jobContext.cancellationScope.map(
           _.register(handle.cancelC)
         )
         try {
-          handle.awaitC
+          uow.registerResourceC(_process_execution_resource(handle, workspace)).flatMap { value =>
+            registration = Some(value)
+            handle.awaitC.flatMap { result =>
+              try {
+                workspace.close()
+                value.close()
+                registration = None
+                Consequence.success(result)
+              } catch {
+                case NonFatal(e) => Consequence.Failure(Conclusion.from(e))
+              }
+            }
+          }
         } finally {
-          registration.foreach(_.close())
+          jobregistration.foreach(_.close())
         }
       }
     } finally {
-      workspace.close()
+      if (registration.isEmpty)
+        workspace.close()
     }
+  }
+
+  private def _process_execution_resource(
+    handle: ProcessExecutionHandle,
+    workspace: ProcessExecutionWorkArea
+  ): UnitOfWorkResource =
+    new UnitOfWorkResource {
+      def releaseC(termination: UnitOfWorkTermination): Consequence[Unit] = {
+        val _ = termination
+        val cancelled = _attempt_cleanup_c(handle.cancelC)
+        val awaited = _attempt_cleanup_c(handle.awaitC.map(_ => ()))
+        val closed = _attempt_cleanup_c {
+          workspace.close()
+          Consequence.unit
+        }
+        _combine_cleanup_c(Vector(cancelled, awaited, closed))
+      }
+    }
+
+  private def _attempt_cleanup_c(
+    cleanup: => Consequence[Unit]
+  ): Consequence[Unit] =
+    try {
+      cleanup
+    } catch {
+      case NonFatal(e) => Consequence.Failure(Conclusion.from(e))
+    }
+
+  private def _combine_cleanup_c(
+    results: Vector[Consequence[Unit]]
+  ): Consequence[Unit] = {
+    val failures = results.collect { case Consequence.Failure(conclusion) => conclusion }
+    failures.reduceOption(_ ++ _).map(Consequence.Failure(_)).getOrElse(Consequence.unit)
   }
 
   private def _execute_process_c(
