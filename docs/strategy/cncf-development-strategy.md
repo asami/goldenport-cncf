@@ -658,6 +658,12 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Latest closure by phase number: `docs/phase/phase-38.md` with
   `docs/phase/phase-38-checklist.md` (Jul. 17, 2026).
 - Status interpretation rules: `docs/rules/stage-status-and-checklist-convention.md`
+- Latest post-closure maintenance: Jul. 18, 2026 scoped concurrency admission.
+  CNCF now exposes a runtime-installed, per-logical-scope, nonblocking permit
+  gate inherited through `ScopeContext`. It rejects saturated or unconfigured
+  scopes structurally and provides deterministic permit release for synchronous
+  `Consequence` work. Textus AI is the first planned consumer; provider and
+  application policy configuration remain outside this framework primitive.
 - Latest post-closure maintenance: Jul. 15, 2026 descriptor-bound component
   runtime configuration preservation. Materialized component instances retain
   their repository origin, so later duplicate discovery cannot replace a

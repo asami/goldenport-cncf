@@ -7,6 +7,7 @@ import org.goldenport.cncf.context.EntityStoreContext
 import org.goldenport.cncf.context.EntitySpaceContext
 import org.goldenport.cncf.workarea.WorkAreaSpace
 import org.goldenport.cncf.http.HttpDriver
+import org.goldenport.cncf.admission.ScopedConcurrencyAdmission
 import org.goldenport.cncf.processexecution.{ProcessExecutionAdmission, ProcessExecutionDriver}
 import org.goldenport.cncf.datastore.DataStoreSpace
 import org.goldenport.cncf.entity.EntityStoreSpace
@@ -16,7 +17,7 @@ import org.goldenport.cncf.entity.runtime.EntitySpace
  * @since   Jan.  7, 2026
  *  version Jan. 20, 2026
  *  version Feb. 25, 2026
- * @version Jul. 17, 2026
+ * @version Jul. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 enum ScopeKind {
@@ -60,6 +61,10 @@ abstract class ScopeContext() extends ObservationDsl with ScopeContext.Core.Hold
   def processExecutionAdmissionOption: Option[ProcessExecutionAdmission] =
     core.processExecutionAdmissionOption orElse parent.flatMap(_.processExecutionAdmissionOption)
 
+  /** Runtime-owned, per-logical-scope concurrency admission. */
+  def scopedConcurrencyAdmissionOption: Option[ScopedConcurrencyAdmission] =
+    core.scopedConcurrencyAdmissionOption orElse parent.flatMap(_.scopedConcurrencyAdmissionOption)
+
   def formatPing: String =
     parent match {
       case Some(p) => p.formatPing
@@ -93,7 +98,8 @@ object ScopeContext {
     entityspace: Option[EntitySpaceContext] = None,
     aggregateInternalRead: Boolean = false,
     processExecutionDriverOption: Option[ProcessExecutionDriver] = None,
-    processExecutionAdmissionOption: Option[ProcessExecutionAdmission] = None
+    processExecutionAdmissionOption: Option[ProcessExecutionAdmission] = None,
+    scopedConcurrencyAdmissionOption: Option[ScopedConcurrencyAdmission] = None
   )
   object Core {
     trait Holder {
@@ -140,7 +146,8 @@ object ScopeContext {
     observabilityContext: ObservabilityContext,
     httpDriverOption: Option[HttpDriver] = None,
     processExecutionDriverOption: Option[ProcessExecutionDriver] = None,
-    processExecutionAdmissionOption: Option[ProcessExecutionAdmission] = None
+    processExecutionAdmissionOption: Option[ProcessExecutionAdmission] = None,
+    scopedConcurrencyAdmissionOption: Option[ScopedConcurrencyAdmission] = None
   ): ScopeContext = {
     Instance(
       ScopeContext.Core(
@@ -150,7 +157,8 @@ object ScopeContext {
         observabilityContext = observabilityContext,
         httpDriverOption = httpDriverOption,
         processExecutionDriverOption = processExecutionDriverOption,
-        processExecutionAdmissionOption = processExecutionAdmissionOption
+        processExecutionAdmissionOption = processExecutionAdmissionOption,
+        scopedConcurrencyAdmissionOption = scopedConcurrencyAdmissionOption
       )
     )
   }
