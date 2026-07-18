@@ -2430,3 +2430,30 @@ Completed in Phase 38 (Jul. 17, 2026).
   - ArtScene passed its maintained first-render browser acceptance and full
     335-test suite without browser-locale, local-storage, startup-locale REST,
     or delayed-visibility fallback.
+
+### 9.34 Server Port Allocation
+Completed in Phase 39 (Jul. 19, 2026).
+
+- Goal: allocate stable machine-local HTTP defaults for independently runnable
+  CAR and SAR artifacts without making component code choose ports.
+- Scope:
+  - resolve explicit `textus.server.port` and legacy `cncf.server.port`
+    overrides before automatic allocation;
+  - retain `8080` for a bare CNCF runtime;
+  - assign CAR defaults from `18000-27999`, SAR defaults from `28000-37999`,
+    and additional instances from `38000-47999`;
+  - persist machine-local assignments under a locked runtime-owned registry;
+  - project authored `textus.server.default-port` configuration from CAR
+    metadata to the packaged descriptor; and
+  - emit the selected endpoint after the HTTP server binds.
+- Boundary:
+  - artifact metadata declares a stable default, but CNCF owns classification,
+    registry locking, availability probing, and additional-instance selection;
+  - explicit operator ports are never silently reassigned; and
+  - the official Textus artifact catalog remains owned by Textus Control
+    Center, not by CNCF.
+- Closure evidence:
+  - `ServerPortPolicySpec` covers CAR/SAR/runtimes, explicit overrides,
+    additional-instance selection, stable registry allocation, and conflicts;
+  - `CncfRuntime` delegates HTTP port resolution to the policy; and
+  - the runtime emits its bound port only after successful server startup.

@@ -38,6 +38,9 @@ Read these first when starting component development:
      and value types.
 8. `docs/notes/unitofwork-guideline.md`
    - UnitOfWork usage and persistence/authorization boundary guidance.
+9. `docs/design/server-port-allocation.md`
+   - CAR/SAR local server port ranges, automatic allocation, and explicit
+     override precedence.
 
 After these, choose the task-specific section below.
 

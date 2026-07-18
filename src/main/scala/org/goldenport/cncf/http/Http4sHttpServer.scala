@@ -4,7 +4,7 @@ package org.goldenport.cncf.http
  * @since   May. 18, 2026
  *  version May. 30, 2026
  *  version Jun. 19, 2026
- * @version Jul. 17, 2026
+ * @version Jul. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 import cats.effect.IO
@@ -64,7 +64,7 @@ import org.goldenport.observation.{Cause, Descriptor}
  *  version Apr. 30, 2026
  *  version May. 25, 2026
  *  version Jun. 19, 2026
- * @version Jul. 17, 2026
+ * @version Jul. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Http4sHttpServer(
@@ -120,7 +120,7 @@ final class Http4sHttpServer(
       .build
       .use { _ =>
         // Block forever to keep server mode alive.
-        IO.never
+        IO.println(s"HTTP server started on port ${port}.") *> IO.never
       }
   }
 

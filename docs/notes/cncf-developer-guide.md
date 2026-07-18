@@ -32,6 +32,22 @@ Read these documents in this order:
    - Task-oriented links for Web, authorization, packaging, descriptors, and
      runtime wiring.
 
+## Local Server Ports
+
+CNCF assigns separate local server ranges so that multiple Textus artifacts can
+run on one machine: CAR starts at `18000`, and SAR starts at `28000`. Each
+production artifact records its assigned `textus.server.default-port` in
+`project.yaml` (CAR) or `subsystem-descriptor.yaml` (SAR); the machine registry
+is only the runtime mirror and undeclared-development fallback. Each
+artifact receives one consecutive stable default in the machine-local
+assignment registry. Simultaneous additional instances use the dynamic range
+beginning at `38000`. Component code must not choose ports itself.
+
+Use `textus.server.port` only when an application or operator requires a fixed
+endpoint. An explicit value is authoritative and is not automatically moved to
+another port. See `docs/design/server-port-allocation.md` for the complete
+classification and precedence contract.
+
 ## Component Implementation Rule
 
 Handwritten component logic should normally live in generated/custom

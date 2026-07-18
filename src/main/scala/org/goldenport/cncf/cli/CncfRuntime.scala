@@ -39,7 +39,7 @@ import org.goldenport.protocol.spec.ParameterDefinition
 import org.goldenport.schema.{Multiplicity, ValueDomain, XFileBundle, XString}
 import org.goldenport.value.BaseContent
 import org.goldenport.cncf.log.{LogBackend, LogBackendHolder}
-import org.goldenport.cncf.http.{FakeHttpDriver, Http4sHttpServer, HttpDriver, HttpExecutionEngine, HttpDriverFactory}
+import org.goldenport.cncf.http.{FakeHttpDriver, Http4sHttpServer, HttpDriver, HttpExecutionEngine, HttpDriverFactory, ServerPortPolicy}
 import org.goldenport.cncf.subsystem.resolver.OperationResolver.ResolutionResult
 import org.goldenport.cncf.subsystem.resolver.OperationResolver.ResolutionStage
 import org.goldenport.cncf.subsystem.{DefaultSubsystemFactory, Subsystem}
@@ -66,7 +66,7 @@ import org.goldenport.cncf.spi.SpiResolver
  *  version Apr. 30, 2026
  *  version May. 25, 2026
  *  version Jun. 29, 2026
- * @version Jul. 15, 2026
+ * @version Jul. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 object CncfRuntime extends GlobalObservable {
@@ -3837,27 +3837,7 @@ class CncfRuntime() extends GlobalObservable {
   private def _server_port(
     subsystem: Subsystem
   ): Consequence[Int] =
-    _configuration_int(subsystem.configuration, "textus.server.port").flatMap {
-      case Some(port) => Consequence.success(port)
-      case None =>
-        _configuration_int(subsystem.configuration, "cncf.server.port").map {
-          _.getOrElse(Http4sHttpServer.defaultPort)
-        }
-    }
-
-  private def _configuration_int(
-    configuration: ResolvedConfiguration,
-    key: String
-  ): Consequence[Option[Int]] =
-    ConfigurationAccess.getString(configuration, key) match {
-      case Some(value) =>
-        scala.util.Try(value.trim.toInt).toOption match {
-          case Some(port) => Consequence.success(Some(port))
-          case None => Consequence.argumentInvalid(s"invalid integer configuration: ${key}=${value}")
-        }
-      case None =>
-        Consequence.success(None)
-    }
+    ServerPortPolicy.resolve(subsystem)
 
   def executeClient(subsystem: Subsystem, req: Request): Int = {
     val args = _make_args(req)
