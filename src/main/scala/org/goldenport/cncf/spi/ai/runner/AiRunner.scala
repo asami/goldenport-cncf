@@ -14,7 +14,7 @@ import org.goldenport.schema.DataConfidentiality
  * SPI; consumer components depend only on this CNCF-owned protocol.
  *
  * @since   Jul.  2, 2026
- * @version Jul. 11, 2026
+ * @version Jul. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 trait AiRunner {
@@ -111,6 +111,9 @@ final case class AiRunnerRequirement(
   // Purpose and model are per-call hints, so one component can mix cheap
   // worker calls and expensive judge calls through the same AI runner socket.
   purpose: Option[String] = None,
+  // A required purpose must be resolved by the selected runtime before it can
+  // inherit any component-level provider selection.
+  purposeRequired: Boolean = false,
   model: Option[String] = None,
   tools: Vector[AiTool] = Vector.empty
 )
