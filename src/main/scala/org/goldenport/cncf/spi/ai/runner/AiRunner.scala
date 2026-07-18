@@ -115,8 +115,26 @@ final case class AiRunnerRequirement(
   // inherit any component-level provider selection.
   purposeRequired: Boolean = false,
   model: Option[String] = None,
-  tools: Vector[AiTool] = Vector.empty
+  tools: Vector[AiTool] = Vector.empty,
+  // Caller-selected execution intent. Providers and models remain runtime policy.
+  executionClass: Option[AiExecutionClass] = None
 )
+
+enum AiExecutionClass(val id: String):
+  case SimpleWork extends AiExecutionClass("simple-work")
+  case StandardWork extends AiExecutionClass("standard-work")
+  case StandardConsideration extends AiExecutionClass("standard-consideration")
+  case DeepConsideration extends AiExecutionClass("deep-consideration")
+
+object AiExecutionClass:
+  def parse(s: String): Option[AiExecutionClass] =
+    Option(s).map(_.trim.toLowerCase(java.util.Locale.ROOT)).flatMap {
+      case "simple-work" => Some(SimpleWork)
+      case "standard-work" => Some(StandardWork)
+      case "standard-consideration" => Some(StandardConsideration)
+      case "deep-consideration" => Some(DeepConsideration)
+      case _ => None
+    }
 
 enum AiTool(val id: String):
   case UrlContext extends AiTool("url_context")
