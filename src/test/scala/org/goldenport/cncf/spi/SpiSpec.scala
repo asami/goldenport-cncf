@@ -6,7 +6,7 @@ import org.goldenport.cncf.component.{Component, ComponentId, ComponentInit, Com
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.http.RuntimeDashboardMetrics
 import org.goldenport.cncf.metrics.EntityAccessMetricsRegistry
-import org.goldenport.cncf.spi.ai.runner.{AiGenerateRequest, AiGenerateResponse, AiRecordRequest, AiRecordResponse, AiRunner, AiRunnerSocket, AiRunnerSocketSet}
+import org.goldenport.cncf.spi.ai.runner.{AiGenerateRequest, AiGenerateResponse, AiRecordRequest, AiRecordResponse, AiRunner, AiRunnerApplicationPurpose, AiRunnerApplicationPurposeRegistration, AiRunnerApplicationPurposeRegistrationSocketSet, AiRunnerSocket, AiRunnerSocketSet}
 import org.goldenport.cncf.spi.geo.resolver.{GeoResolver, GeoResolverSocket, GeoResolverSocketSet}
 import org.goldenport.cncf.spi.toolchain.runner.{ConvertSvgPagesToPdfRequest, ToolchainArtifactResponse, ToolchainRunner, ToolchainRunnerSocket, ToolchainRunnerSocketSet}
 import org.goldenport.cncf.subsystem.{GenericSubsystemAssemblyDescriptorSource, GenericSubsystemComponentBinding, GenericSubsystemDescriptor}
@@ -18,7 +18,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jul.  2, 2026
- * @version Jul. 11, 2026
+ * @version Jul. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 final class SpiSpec
@@ -32,14 +32,45 @@ final class SpiSpec
       val aiset = new AiRunnerSocketSet {}
       val geoset = new GeoResolverSocketSet {}
       val toolset = new ToolchainRunnerSocketSet {}
+      val registrationset = new AiRunnerApplicationPurposeRegistrationSocketSet {}
 
       When("their socket-set forms are constructed without providers")
-      val contracts = Vector(aiset.spiContract.name, geoset.spiContract.name, toolset.spiContract.name)
+      val contracts = Vector(
+        aiset.spiContract.name,
+        geoset.spiContract.name,
+        toolset.spiContract.name,
+        registrationset.spiContract.name
+      )
 
       Then("each standard contract exposes an optional empty set alongside its existing single socket")
-      contracts shouldBe Vector("ai-runner", "geo-resolver", "toolchain-runner")
-      Vector(aiset, geoset, toolset).forall(_.spiMembers.isEmpty) shouldBe true
-      Vector(aiset, geoset, toolset).forall(!_.spiRequired) shouldBe true
+      contracts shouldBe Vector(
+        "ai-runner",
+        "geo-resolver",
+        "toolchain-runner",
+        "ai-runner-application-purpose-registration"
+      )
+      Vector(aiset, geoset, toolset, registrationset).forall(_.spiMembers.isEmpty) shouldBe true
+      Vector(aiset, geoset, toolset, registrationset).forall(!_.spiRequired) shouldBe true
+    }
+
+    "collect application-purpose registrations through Component.Port at bootstrap" in {
+      Given("an application registration output and a Textus AI registration input socket")
+      given ExecutionContext = ExecutionContext.create()
+      val registrationset = new AiRunnerApplicationPurposeRegistrationSocketSet {}
+      val application = new Component() {}
+        .withPort(Component.Port.of(AiRunnerApplicationPurposeRegistration(Vector(
+          AiRunnerApplicationPurpose("sanpomap-scenario-generation", "structured-extraction")
+        ))))
+      val runtime = new Component() {}
+        .withPort(Component.Port.input(registrationset))
+
+      When("SPI resolution runs across the bootstrap component set")
+      val result = SpiResolver.resolve(Vector(application, runtime))
+
+      Then("the AI runtime input receives the application-owned registration")
+      result shouldBe a[Consequence.Success[_]]
+      registrationset.registrations.flatMap(_.purposes.map(_.name)) shouldBe
+        Vector("sanpomap-scenario-generation")
     }
 
     "resolve automatic and compatibility providers" which {

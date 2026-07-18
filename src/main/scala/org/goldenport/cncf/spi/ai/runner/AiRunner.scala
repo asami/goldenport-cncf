@@ -104,6 +104,51 @@ trait AiRunnerSocketSet extends StandardSpiSocketSet[AiRunner] {
     SpiContract("ai-runner", classOf[AiRunner])
 }
 
+/*
+ * Bootstrap-time application-purpose registration carried on the CNCF
+ * AiRunner Port. An application owns its domain name and default policy;
+ * the selected AI runtime validates the standard-purpose vocabulary and
+ * resolves the concrete provider binding.
+ *
+ * @since   Jul. 18, 2026
+ * @version Jul. 18, 2026
+ * @author  ASAMI, Tomoharu
+ */
+final case class AiRunnerApplicationPurposePolicy(
+  maxInputTokens: Option[Int] = None,
+  maxOutputTokens: Option[Int] = None,
+  maxReasoningTokens: Option[Int] = None,
+  maxCostMicrounits: Option[Long] = None,
+  rateSchedule: Option[String] = None,
+  timeoutSeconds: Option[Long] = None,
+  recordRetryLimit: Option[Int] = None,
+  maxConcurrent: Option[Int] = None,
+  outputSchemaId: Option[String] = None,
+  promptContractId: Option[String] = None
+)
+
+final case class AiRunnerApplicationPurpose(
+  name: String,
+  defaultStandardPurpose: String,
+  defaultPolicy: AiRunnerApplicationPurposePolicy = AiRunnerApplicationPurposePolicy()
+)
+
+final case class AiRunnerApplicationPurposeRegistration(
+  purposes: Vector[AiRunnerApplicationPurpose]
+)
+
+trait AiRunnerApplicationPurposeRegistrationSocketSet
+  extends StandardSpiSocketSet[AiRunnerApplicationPurposeRegistration] {
+  def registrations: Vector[AiRunnerApplicationPurposeRegistration] =
+    spiMembers.map(_.service)
+
+  override def spiContract: SpiContract[AiRunnerApplicationPurposeRegistration] =
+    SpiContract(
+      "ai-runner-application-purpose-registration",
+      classOf[AiRunnerApplicationPurposeRegistration]
+    )
+}
+
 final case class AiRunnerRequirement(
   provider: Option[String] = None,
   mode: Option[String] = None,
