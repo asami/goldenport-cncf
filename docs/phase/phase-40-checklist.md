@@ -57,7 +57,8 @@ Status: IN_PROGRESS
 - [x] Cover repeated powertype clear and optional scalar null assignment at
   the CNCF typed-mapping boundary.
 - [x] Cover omitted and blank Form values as unchanged/no-op behavior.
-- [ ] Cover overwrite, prepend, append, and remove regression behavior.
+- [x] Cover overwrite, prepend, append, and remove regression behavior through
+  the shared request boundary without changing generated binder semantics.
 - [x] Cover duplicate, unknown, incompatible, and conflicting directives as
   structured HTTP 400 failures.
 - [x] Prove equivalent transport semantics and order-independent validation.

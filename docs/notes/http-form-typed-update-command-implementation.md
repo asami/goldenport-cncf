@@ -268,6 +268,11 @@ command semantics.
 
 Executable evidence also confirms that incompatible commands pass through the
 normal operation request boundary and return a structured HTTP 400 response.
+Property-based shared-boundary evidence covers the existing `__overwrite`,
+`__prepend`, `__append`, and `__remove` carriers in both Form-property and
+REST-argument positions. CNCF preserves their names, repeated values, and
+carrier positions so generated operation binders retain ownership of their
+established value-bearing update semantics.
 The route-level fixture records the ordinary authorization-decision,
 ActionCall, and operation-request-validation metrics: a compatible REST null
 command reaches ActionCall as `Update.SetNull`, while incompatible Form/REST

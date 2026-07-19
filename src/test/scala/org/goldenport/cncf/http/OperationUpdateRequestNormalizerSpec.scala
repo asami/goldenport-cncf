@@ -4,6 +4,7 @@ import org.goldenport.Consequence
 import org.goldenport.cncf.operation.{CmlOperationDefinition, CmlOperationField, CmlOperationUpdateField}
 import org.goldenport.protocol.{Argument, Property, Request}
 import org.goldenport.record.Record
+import org.scalacheck.{Gen, Prop, Test}
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -53,6 +54,34 @@ final class OperationUpdateRequestNormalizerSpec
 
       Then("the value is not reinterpreted as an operand-less command")
       normalized shouldBe Consequence.success(request)
+    }
+
+    "preserve value-bearing update operators for the generated operation binder" in {
+      Given("every existing value-bearing operator in Form and REST carrier positions")
+      val operators = Vector("overwrite", "prepend", "append", "remove")
+
+      When("the requests pass through the shared typed-update boundary")
+      val checks = operators.map { operator =>
+        val inputs = for {
+          usearguments <- Gen.oneOf(true, false)
+          size <- Gen.choose(1, 4)
+          values <- Gen.listOfN(size, Gen.alphaNumStr.suchThat(_.nonEmpty))
+        } yield {
+          val name = s"tags__$operator"
+          val carriers = values.map(value => name -> value)
+          if (usearguments)
+            _request(arguments = carriers.map { case (key, value) => Argument(key, value) })
+          else
+            _request(properties = carriers.map { case (key, value) => Property(key, value, None) })
+        }
+        val property = Prop.forAll(inputs) { request =>
+          OperationUpdateRequestNormalizer.normalize(_operation, request) == Consequence.success(request)
+        }
+        Test.check(Test.Parameters.default.withMinSuccessfulTests(20), property)
+      }
+
+      Then("CNCF leaves carrier names, repeated values, and transport position to the existing binder semantics")
+      checks.foreach(_.passed shouldBe true)
     }
 
     "reject cross-transport duplicate command carriers deterministically" in {
