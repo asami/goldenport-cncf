@@ -1814,6 +1814,11 @@ trait StaticFormAppRendererFormPart {
       val selectedvalues =
         if (descriptor.exists(_.multiple)) split_form_field_values(value).toSet
         else Set(value)
+      val emptyvalue =
+        if (descriptor.exists(_.multiple) && !readonly)
+          s"""<input type="hidden" name="${escape(name)}" value="">"""
+        else
+          ""
       val placeholderoption =
         descriptor
           .flatMap(_.placeholder)
@@ -1830,6 +1835,7 @@ trait StaticFormAppRendererFormPart {
       }).mkString("\n")
       s"""<div class="mb-3"${fieldselector}>
          |  <label class="form-label" for="${escape(id)}">${escape(displaylabel)}</label>
+         |  ${emptyvalue}
          |  <select class="form-select${invalidclass}" id="${escape(id)}" name="${escape(name)}"${required}${multiple}${disabled}${validationattr}>
          |    ${options}
          |  </select>

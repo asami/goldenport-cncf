@@ -8461,9 +8461,28 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         )),
         multipledescriptor
       ).body
+      multiplehtml should include ("<input type=\"hidden\" name=\"approved\" value=\"\">")
       multiplehtml should include ("<select class=\"form-select\" id=\"field-approved\" name=\"approved\" required multiple>")
       multiplehtml should include ("<option value=\"true\" selected>true</option>")
       multiplehtml should include ("<option value=\"false\" selected>false</option>")
+
+      And("an empty multiple-select prefill carries an explicit clear value")
+      val clearmultiplehtml = _renderer.renderStaticTemplate(
+        subsystem,
+        "notice-board",
+        "planning-app",
+        Vector("detail"),
+        template,
+        StaticFormAppLayout.AssetCompletionOptions(),
+        WebPageContext(values = Map(
+          "notice.id" -> "notice_1",
+          "notice.approved" -> ""
+        )),
+        multipledescriptor
+      ).body
+      clearmultiplehtml should include ("<input type=\"hidden\" name=\"approved\" value=\"\">")
+      clearmultiplehtml should not include ("<option value=\"true\" selected>true</option>")
+      clearmultiplehtml should not include ("<option value=\"false\" selected>false</option>")
 
       val unboundhtml = _renderer.renderStaticTemplate(
         subsystem,
@@ -8492,7 +8511,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val response = server._submit_operation_form(
         _post_form_request(
           "/form/notice-board/notice-aggregate/approve-notice-aggregate",
-          "id=notice_1&approved=true&csrf=token-1"
+          "id=notice_1&approved=false&approved=true&csrf=token-1"
         ),
         "notice-board",
         "notice-aggregate",

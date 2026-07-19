@@ -2801,14 +2801,14 @@ final class Http4sHttpServer(
       form.getString(source).filter(_.nonEmpty).map(target -> _)
     }
     val frameworkcontext = _framework_passthrough_form_values(form)
-    val operationinput = _strip_blank_update_form_values(app, operation, _strip_framework_form_record(form))
+    val operationinput = _strip_framework_form_record(form)
     WebFormValueDecoder.decode(
       engine.webDescriptor,
       app,
       service,
       operation,
       operationinput
-    ).flatMap(_normalize_boundary_record(app, service, operation, _)).map { operationform =>
+    ).map(_strip_blank_update_form_values(app, operation, _)).flatMap(_normalize_boundary_record(app, service, operation, _)).map { operationform =>
       Record(operationform.fields ++ Record.create(admincontext ++ frameworkcontext).fields)
     }
   }
@@ -6234,9 +6234,24 @@ final class Http4sHttpServer(
     service: String,
     operation: String,
     form: Record
-  ): Consequence[Map[String, String]] =
-    _normalize_boundary_record(app, service, operation, Record.create(_strip_framework_form_values(form.asMap).toVector)).map { record =>
-      record.asMap.map { case (k, v) => k -> v.toString }
+  ): Consequence[Map[String, String]] = {
+    val operationinput = _strip_framework_form_record(form)
+    WebFormValueDecoder.decode(
+      engine.webDescriptor,
+      app,
+      service,
+      operation,
+      operationinput
+    ).map(_strip_blank_update_form_values(app, operation, _)).flatMap(_normalize_boundary_record(app, service, operation, _)).map { record =>
+      record.asMap.map { case (k, v) => k -> _operation_form_value(v) }
+    }
+  }
+
+  private def _operation_form_value(value: Any): String =
+    value match {
+      case xs: Vector[?] => xs.map(_.toString).mkString(",")
+      case xs: Seq[?] => xs.map(_.toString).mkString(",")
+      case x => Option(x).map(_.toString).getOrElse("")
     }
 
   private def _operation_form_values_for_rerender(
