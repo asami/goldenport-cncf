@@ -15,12 +15,10 @@ This directory does **not** contain design details or thinking processes.
 
 Current baseline:
 
-- Active phase: none.
-- Latest closure by date: `phase-37.md` - Downstream Runtime Boundary Adoption.
-- Latest checklist by date: `phase-37-checklist.md`.
-- Latest closure by phase number: `phase-38.md` - Static Web
-  Execution-Context Projection.
-- Latest checklist by phase number: `phase-38-checklist.md`.
+- Active phase: `phase-40.md` - HTTP/Form Typed Update Commands.
+- Active checklist: `phase-40-checklist.md`.
+- Latest closed phase: `phase-39.md` - Server Port Allocation.
+- Latest closed checklist: `phase-39-checklist.md`.
 - Closed phase set currently includes:
   - `phase-4.md`
   - `phase-5.md`
@@ -56,6 +54,7 @@ Current baseline:
   - `phase-36.md`
   - `phase-37.md`
   - `phase-38.md`
+  - `phase-39.md`
 
 ## Related Rules
 

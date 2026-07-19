@@ -652,11 +652,10 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Notes contain execution details and results for each phase.
 
 ## Process Status Pointers
-- Active phase: none. Phase 37 and Phase 38 are closed.
-- Latest closure by date: `docs/phase/phase-37.md` with
-  `docs/phase/phase-37-checklist.md` (Jul. 18, 2026).
-- Latest closure by phase number: `docs/phase/phase-38.md` with
-  `docs/phase/phase-38-checklist.md` (Jul. 17, 2026).
+- Active phase: `docs/phase/phase-40.md` with
+  `docs/phase/phase-40-checklist.md`.
+- Latest closed phase: `docs/phase/phase-39.md` with
+  `docs/phase/phase-39-checklist.md` (Jul. 19, 2026).
 - Status interpretation rules: `docs/rules/stage-status-and-checklist-convention.md`
 - Latest post-closure maintenance: Jul. 18, 2026 scoped concurrency admission.
   CNCF now exposes a runtime-installed, per-logical-scope, nonblocking permit
@@ -838,6 +837,8 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Phase 36: closed (`docs/phase/phase-36.md`)
 - Phase 37: closed (`docs/phase/phase-37.md`)
 - Phase 38: closed (`docs/phase/phase-38.md`)
+- Phase 39: closed (`docs/phase/phase-39.md`)
+- Phase 40: in progress (`docs/phase/phase-40.md`)
 
 ## 8. Completed Development Item History
 
@@ -2460,3 +2461,43 @@ Completed in Phase 39 (Jul. 19, 2026).
   - `CncfRuntime` delegates HTTP port resolution to the policy; and
   - the runtime emits and publishes its bound endpoint only after successful
     server startup, then clears the handshake on shutdown.
+
+### 9.35 HTTP/Form Typed Update Commands
+In progress in Phase 40.
+
+- Goal: preserve operand-less update intent from generic HTTP/Form input to
+  generated typed `Update` values without redefining blank Form semantics.
+- Driver:
+  - ArtScene must clear the stored `Facility.fetch_methods` override through
+    generated automatic REST and return to its application default policy.
+- Scope:
+  - introduce `<field>__update_command=clear|null` as the provisional
+    operand-less command carrier;
+  - preserve duplicate field occurrences until conflict validation;
+  - validate commands against selected operation parameter metadata;
+  - map repeated clear to a typed empty collection and compatible scalar null
+    to `Update.setNull`;
+  - share normalization across URL-encoded Form, multipart, automatic REST,
+    and JSON Record input;
+  - project compatible commands to generated Form definition/help/schema
+    metadata and no-dummy-value controls; and
+  - retain existing plain assignment and value-bearing update operators.
+- Boundary:
+  - direct Scala calls continue to use typed `Update` values;
+  - internal Record command sentinels are not public syntax;
+  - invalid directives use structured `Consequence/Conclusion` failures;
+  - authorization, observability, and persistence remain behind the normal
+    ActionCall boundary; and
+  - CNCF contains no ArtScene-specific operation or field policy.
+- Documentation gate:
+  - the handoff and implementation note remain non-normative while work is in
+    progress;
+  - after CNCF executable verification and ArtScene integration pass, promote
+    the confirmed parameter grammar, metadata rules, transport behavior, and
+    errors to `docs/design` and `docs/spec`; and
+  - annotate historical proposals that differ from the confirmed contract
+    instead of rewriting their original text.
+- Planning references:
+  - `docs/notes/http-form-typed-update-command-implementation.md`;
+  - `docs/phase/phase-40.md`; and
+  - `docs/phase/phase-40-checklist.md`.
