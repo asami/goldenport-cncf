@@ -186,6 +186,25 @@ subject-specific pages. Subject-specific pages MUST be private or otherwise
 keyed so they cannot be served across subjects. Components MUST NOT treat
 browser-hidden controls as an authorization boundary.
 
+The default Static Web cache policy is:
+
+- a multi-user anonymous GET without a session or request/response cookie MAY
+  use `Cache-Control: public, max-age=0, must-revalidate` and MUST vary on
+  `Accept-Language`, `Cookie`, `Authorization`, and `X-Textus-Session` so a
+  subject-bearing request cannot reuse the anonymous representation;
+- standalone documents use `Cache-Control: private, no-store`, because the
+  local operator remains the effective subject without an authentication
+  session;
+- authenticated or session-associated documents use
+  `Cache-Control: private, no-store`;
+- a document that consumes flash state, emits a CSRF token, or otherwise
+  carries request/response cookie state uses `private, no-store`; and
+- an unknown or unresolved execution mode fails closed to `private, no-store`.
+
+Applications MUST NOT weaken this policy merely because markup omits a visible
+subject identifier. Cache classification is derived from resolved execution
+and HTTP state before the response leaves CNCF.
+
 ## SWA-7: Required Evidence
 
 Every Static Web Application implementation MUST provide executable evidence

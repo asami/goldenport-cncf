@@ -36,9 +36,9 @@ Status: DONE
 
 ## SW-04: Privacy and Acceptance
 
-Status: OPEN
+Status: DONE
 
-- [ ] Define public, standalone, and authenticated page cache policy.
-- [ ] Verify subject-specific data cannot enter shared responses.
-- [ ] Verify no browser REST bootstrap for primary content or execution
+- [x] Define public, standalone, and authenticated page cache policy.
+- [x] Verify subject-specific data cannot enter shared responses.
+- [x] Verify no browser REST bootstrap for primary content or execution
   context.

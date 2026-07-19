@@ -4462,7 +4462,7 @@ final class Http4sHttpServer(
             StaticFormAppRenderer.Page(expandedhtml)
 
         val rendered = _render_page_(pagecontext)
-        req.filter(_ => _requires_form_csrf(rendered.body)) match {
+        val secured = req.filter(_ => _requires_form_csrf(rendered.body)) match {
           case Some(request) =>
             val csrf = _web_csrf_context(request)
             val securecontext = pagecontext.copy(values = pagecontext.values + ("csrf" -> csrf.token))
@@ -4470,6 +4470,7 @@ final class Http4sHttpServer(
           case None =>
             rendered
         }
+        secured.copy(cachePolicy = Some(_static_web_page_cache_policy(pagecontext, req, secured)))
       }
     }
   }
@@ -5842,6 +5843,27 @@ final class Http4sHttpServer(
     req.uri.scheme.exists(_.value.equalsIgnoreCase("https")) ||
       _request_header_value(req, "X-Forwarded-Proto").exists(_.equalsIgnoreCase("https"))
 
+  private def _static_web_page_cache_policy(
+    context: WebPageContext,
+    req: Option[org.http4s.Request[IO]],
+    page: StaticFormAppRenderer.Page
+  ): StaticFormAppRenderer.PageCachePolicy = {
+    val execution = context.execution
+    val ispublic =
+      execution.exists(_.applicationMode == WebApplicationMode.MultiUser) &&
+        execution.exists(x => !x.subject.authenticated) &&
+        req.exists { request =>
+          request.cookies.isEmpty &&
+            _session_id_(request).isEmpty &&
+            _request_header_value(request, "Authorization").isEmpty
+        } &&
+        page.responseCookies.isEmpty
+    if (ispublic)
+      StaticFormAppRenderer.PageCachePolicy.PublicRevalidate
+    else
+      StaticFormAppRenderer.PageCachePolicy.PrivateNoStore
+  }
+
   private def _session_cookie_names(req: org.http4s.Request[IO]): Vector[String] =
     (_session_cookie_name +: _web_app_session_cookie_name(req).toVector).distinct
 
@@ -6400,11 +6422,13 @@ final class Http4sHttpServer(
   ): IO[HResponse[IO]] =
     IO.pure(
       _with_page_cookies(page,
-        _with_content_language(
-        HResponse[IO](HStatus.Ok)
-          .withEntity(_themed_html(page.body, appName, componentName))
-          .withContentType(`Content-Type`(MediaType.text.html, Some(Charset.`UTF-8`))),
-        page.contentLanguage
+        _with_page_cache_policy(page,
+          _with_content_language(
+            HResponse[IO](HStatus.Ok)
+              .withEntity(_themed_html(page.body, appName, componentName))
+              .withContentType(`Content-Type`(MediaType.text.html, Some(Charset.`UTF-8`))),
+            page.contentLanguage
+          )
         )
       )
     )
@@ -6440,7 +6464,7 @@ final class Http4sHttpServer(
               .withContentType(`Content-Type`(MediaType.text.html, Some(Charset.`UTF-8`))),
             page.contentLanguage
           )
-        val withcookies = _with_page_cookies(page, response)
+        val withcookies = _with_page_cookies(page, _with_page_cache_policy(page, response))
         val completed = componentname
           .filter(name => requestoption.exists(request => _request_flash_cookie(request, name).nonEmpty))
           .fold(withcookies)(name => withcookies.addCookie(_expired_flash_cookie(name)))
@@ -6504,6 +6528,18 @@ final class Http4sHttpServer(
       ))
     }
 
+  private def _with_page_cache_policy(
+    page: StaticFormAppRenderer.Page,
+    response: HResponse[IO]
+  ): HResponse[IO] =
+    page.cachePolicy.fold(response) { policy =>
+      val cached = response.putHeaders(Header.Raw(CIString("Cache-Control"), policy.cacheControl))
+      if (policy.vary.isEmpty)
+        cached
+      else
+        cached.putHeaders(Header.Raw(CIString("Vary"), policy.vary.mkString(", ")))
+    }
+
   private def _same_site(value: String): Option[SameSite] =
     value.trim.toLowerCase(java.util.Locale.ROOT) match {
       case "strict" => Some(SameSite.Strict)
@@ -6556,11 +6592,13 @@ final class Http4sHttpServer(
   ): IO[HResponse[IO]] =
     IO.pure(
       _with_page_cookies(p,
-        _with_content_language(
-        HResponse[IO](status)
-          .withEntity(_themed_html(p.body, appName, None))
-          .withContentType(`Content-Type`(MediaType.text.html, Some(Charset.`UTF-8`))),
-        p.contentLanguage
+        _with_page_cache_policy(p,
+          _with_content_language(
+            HResponse[IO](status)
+              .withEntity(_themed_html(p.body, appName, None))
+              .withContentType(`Content-Type`(MediaType.text.html, Some(Charset.`UTF-8`))),
+            p.contentLanguage
+          )
         )
       )
     )

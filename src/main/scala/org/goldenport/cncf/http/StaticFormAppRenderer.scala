@@ -3,7 +3,8 @@ package org.goldenport.cncf.http
 /*
  * @since   Apr. 12, 2026
  *  version Apr. 30, 2026
- * @version May. 20, 2026
+ *  version May. 20, 2026
+ * @version Jul. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 object StaticFormAppRenderer {
@@ -11,6 +12,8 @@ object StaticFormAppRenderer {
   val Page = StaticFormAppRendererSupport.Page
   type PageCookie = StaticFormAppRendererSupport.PageCookie
   val PageCookie = StaticFormAppRendererSupport.PageCookie
+  type PageCachePolicy = StaticFormAppRendererSupport.PageCachePolicy
+  val PageCachePolicy = StaticFormAppRendererSupport.PageCachePolicy
   type PageRequest = StaticFormAppRendererSupport.PageRequest
   val PageRequest = StaticFormAppRendererSupport.PageRequest
   type FormPageProperties = StaticFormAppRendererSupport.FormPageProperties

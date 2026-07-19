@@ -34,20 +34,34 @@ import io.circe.parser.parse
  * @since   May. 18, 2026
  *  version May. 24, 2026
  *  version Jun. 19, 2026
- * @version Jul. 19, 2026
+ * @version Jul. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 object StaticFormAppRendererSupport {
   final case class Page(
     body: String,
     contentLanguage: Option[String] = None,
-    responseCookies: Vector[PageCookie] = Vector.empty
+    responseCookies: Vector[PageCookie] = Vector.empty,
+    cachePolicy: Option[PageCachePolicy] = None
   ) {
-    def this(body: String) = this(body, None, Vector.empty)
+    def this(body: String) = this(body, None, Vector.empty, None)
   }
 
   object Page {
-    def apply(body: String): Page = new Page(body, None, Vector.empty)
+    def apply(body: String): Page = new Page(body, None, Vector.empty, None)
+  }
+  enum PageCachePolicy(
+    val cacheControl: String,
+    val vary: Vector[String]
+  ) {
+    case PublicRevalidate extends PageCachePolicy(
+      "public, max-age=0, must-revalidate",
+      Vector("Accept-Language", "Cookie", "Authorization", "X-Textus-Session")
+    )
+    case PrivateNoStore extends PageCachePolicy(
+      "private, no-store",
+      Vector.empty
+    )
   }
   final case class PageCookie(
     name: String,

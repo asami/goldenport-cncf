@@ -919,6 +919,14 @@ The runtime scope also lets a page submit a typed operation form to another
 assembled component without treating component identity as a CSRF boundary;
 normal target-component authorization still applies.
 
+Static Web HTML cache policy is resolved by the HTTP adapter from the same
+execution projection used for page rendering. A multi-user anonymous page with
+no session or cookie state is public but requires revalidation and varies by
+accepted language plus canonical Cookie/authorization/session inputs.
+Standalone, authenticated, session-associated, flash, and
+CSRF-form documents are `private, no-store`. Missing execution evidence also
+fails closed to `private, no-store`; templates do not select cache headers.
+
 Command-style operation execution should prefer asynchronous execution when the
 operation semantics allow it. The Web response may expose a `jobId` plus
 tracking identifiers such as an entity id, allowing a static page to offer an

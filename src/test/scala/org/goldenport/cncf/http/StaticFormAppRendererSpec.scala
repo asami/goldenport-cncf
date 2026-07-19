@@ -8590,6 +8590,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       cookie shouldBe s"${cookiename}=${token}"
       setcookie should include ("HttpOnly")
       setcookie should include ("SameSite=Lax")
+      getresponse.headers.get(org.typelevel.ci.CIString("Cache-Control")).map(_.head.value) shouldBe
+        Some("private, no-store")
       html should include ("action=\"/form/notice-admin/notice-aggregate/approve-notice-aggregate\"")
       WebCsrf.isValid(None, token) shouldBe true
 
@@ -8647,6 +8649,79 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         Some(sessiontoken),
         Some(sessiontoken)
       ) shouldBe false
+    }
+
+    "apply subject-safe cache policy to Static Web documents" in {
+      Given("a read-only Static Web page in multi-user mode")
+      val root = Files.createTempDirectory("cncf-static-web-cache-")
+      val approot = root.resolve("planning-app")
+      Files.createDirectories(approot)
+      Files.writeString(root.resolve("web.yaml"), "form: {}\n", StandardCharsets.UTF_8)
+      Files.writeString(
+        approot.resolve("index.html"),
+        "<!doctype html><html><head><title>Planning</title></head><body><main>Public planning page</main></body></html>",
+        StandardCharsets.UTF_8
+      )
+      val multiconfiguration = Configuration(Map(
+        RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web.yaml").toString),
+        WebExecutionResolutionPolicy.APPLICATION_MODE_KEY -> ConfigurationValue.StringValue("multi-user")
+      ))
+      val multisubsystem = _aggregate_http_fixture_subsystem(multiconfiguration)
+      val multiserver = new Http4sHttpServer(new HttpExecutionEngine(multisubsystem))
+      def _header_(response: org.http4s.Response[IO], name: String): Option[String] =
+        response.headers.get(org.typelevel.ci.CIString(name)).map(_.head.value)
+
+      When("an anonymous browser without a session loads the public document")
+      val publicresponse = multiserver._component_web_app(
+        "notice-board",
+        "planning-app",
+        Vector.empty,
+        Some(_get_request("/web/notice-board/planning-app"))
+      ).unsafeRunSync()
+
+      Then("shared storage is allowed only with revalidation and language variance")
+      _header_(publicresponse, "Cache-Control") shouldBe Some("public, max-age=0, must-revalidate")
+      _header_(publicresponse, "Vary") shouldBe
+        Some("Accept-Language, Cookie, Authorization, X-Textus-Session")
+
+      When("the same multi-user document is requested with a session")
+      val sessionresponse = multiserver._component_web_app(
+        "notice-board",
+        "planning-app",
+        Vector.empty,
+        Some(_with_session(_get_request("/web/notice-board/planning-app"), "subject-session"))
+      ).unsafeRunSync()
+
+      Then("the subject-associated document cannot enter a shared cache")
+      _header_(sessionresponse, "Cache-Control") shouldBe Some("private, no-store")
+      _header_(sessionresponse, "Vary") shouldBe None
+
+      And("an authorization-bearing request also remains private without a session cookie")
+      val authorizationresponse = multiserver._component_web_app(
+        "notice-board",
+        "planning-app",
+        Vector.empty,
+        Some(_get_request("/web/notice-board/planning-app").putHeaders(
+          org.http4s.Header.Raw(org.typelevel.ci.CIString("Authorization"), "Bearer subject-token")
+        ))
+      ).unsafeRunSync()
+      _header_(authorizationresponse, "Cache-Control") shouldBe Some("private, no-store")
+      _header_(authorizationresponse, "Vary") shouldBe None
+
+      And("standalone documents remain private even without an authentication session")
+      val standaloneconfiguration = Configuration(Map(
+        RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web.yaml").toString)
+      ))
+      val standalonesubsystem = _aggregate_http_fixture_subsystem(standaloneconfiguration)
+      val standaloneserver = new Http4sHttpServer(new HttpExecutionEngine(standalonesubsystem))
+      val standaloneresponse = standaloneserver._component_web_app(
+        "notice-board",
+        "planning-app",
+        Vector.empty,
+        Some(_get_request("/web/notice-board/planning-app"))
+      ).unsafeRunSync()
+      _header_(standaloneresponse, "Cache-Control") shouldBe Some("private, no-store")
+      _header_(standaloneresponse, "Vary") shouldBe None
     }
 
     "carry a declared failure flash without exposing the operation response" in {

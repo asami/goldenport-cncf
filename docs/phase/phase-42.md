@@ -1,8 +1,8 @@
 # Phase 42 - Static Web Server Rendering Contract
 
 Stage Status:
-- Current status: ACTIVE
-- Current step: Static Web page cache and privacy policy
+- Current status: DONE
+- Current step: Complete
 - Owner: CNCF Web runtime and Static Web renderer.
 
 status = active
@@ -53,8 +53,12 @@ without browser REST fan-out for execution context or primary page content.
   tokens are statelessly HMAC-bound to the current session; standalone forms
   use a strong double-submit token. Missing, mismatched, malformed, and
   session-stale submissions return HTTP 403 before operation dispatch.
+- Static Web responses now classify multi-user anonymous cookie-free pages as
+  public with mandatory revalidation and language variance. Standalone,
+  authenticated, session-associated, flash, and CSRF-form documents are
+  `private, no-store`; unresolved execution state also fails closed.
 
 ## 5. Resume Point
 
-Define and verify page cache/privacy policy for public, standalone, and
-authenticated subject-specific documents.
+Phase 42 is complete. Application CARs can migrate ordinary reads and writes to
+the server-rendered View and aggregate-form contract.
