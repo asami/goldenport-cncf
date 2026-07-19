@@ -32,7 +32,7 @@ import io.circe.parser.parse
 /*
  * @since   May. 18, 2026
  *  version Jun. 19, 2026
- * @version Jul. 19, 2026
+ * @version Jul. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 trait StaticFormAppRendererCorePart {
@@ -136,7 +136,8 @@ trait StaticFormAppRendererCorePart {
         operationcomponent.getOrElse(app),
         template,
         properties,
-        webdescriptor
+        webdescriptor,
+        value => render_property_expansions(value, properties)
       ))
       .getOrElse(template)
     val rendered = render_template(withoperationforms, properties, Map.empty)

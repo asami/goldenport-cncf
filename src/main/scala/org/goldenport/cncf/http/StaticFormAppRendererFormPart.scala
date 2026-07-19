@@ -33,7 +33,7 @@ import io.circe.parser.parse
 /*
  * @since   May. 18, 2026
  *  version Jun. 19, 2026
- * @version Jul. 19, 2026
+ * @version Jul. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 trait StaticFormAppRendererFormPart {
@@ -45,12 +45,14 @@ trait StaticFormAppRendererFormPart {
     defaultcomponent: String,
     template: String,
     properties: FormPageProperties,
-    webdescriptor: WebDescriptor
+    webdescriptor: WebDescriptor,
+    resolveattribute: String => String
   ): String = {
     val operationform =
       """<textus(?::operation-form|-operation-form)\b([^>]*)></textus(?::operation-form|-operation-form)>""".r
     operationform.replaceAllIn(template, m => {
       val attrs = StaticFormAppRendererSupport.widgetAttributes(m.group(1))
+        .view.mapValues(resolveattribute).toMap
       java.util.regex.Matcher.quoteReplacement(
         render_static_operation_form(subsystem, defaultcomponent, attrs, properties, webdescriptor)
       )

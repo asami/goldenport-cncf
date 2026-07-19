@@ -8365,7 +8365,13 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         expose = Map(selector -> WebDescriptor.Exposure.Protected),
         form = Map(selector -> WebDescriptor.Form(
           successRedirect = Some("/web/notice-board/detail?outcome=approved"),
-          controls = Map("id" -> WebDescriptor.FormControl(hidden = true))
+          controls = Map(
+            "id" -> WebDescriptor.FormControl(hidden = true),
+            "approved" -> WebDescriptor.FormControl(
+              controlType = Some("select"),
+              values = Vector("true", "false")
+            )
+          )
         ))
       )
       val template =
@@ -8373,6 +8379,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           |  <textus:operation-form service="notice-aggregate"
           |                         operation="approve-notice-aggregate"
           |                         value-id="${notice.id}"
+          |                         value-approved="${notice.approved}"
           |                         submit-label="${message.action.approve}"></textus:operation-form>
           |</main>""".stripMargin
 
@@ -8385,7 +8392,12 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         template,
         StaticFormAppLayout.AssetCompletionOptions(),
         WebPageContext(
-          values = Map("notice.id" -> "notice_1", "id" -> "unrelated-page-id", "csrf" -> "token-1"),
+          values = Map(
+            "notice.id" -> "notice_1",
+            "notice.approved" -> "true",
+            "id" -> "unrelated-page-id",
+            "csrf" -> "token-1"
+          ),
           messages = Map("action.approve" -> "Approve")
         ),
         descriptor
@@ -8397,10 +8409,33 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       html should include ("type=\"hidden\"")
       html should include ("name=\"id\"")
       html should include ("value=\"notice_1\"")
+      html should include ("<option value=\"true\" selected>true</option>")
       html should include ("name=\"csrf\" value=\"token-1\"")
       html should include (">Approve</button>")
       html should not include ("/form-api/")
       html should not include ("<textus:operation-form")
+
+      And("dynamic boolean values select a schema-backed checkbox before widget rendering")
+      val checkboxdescriptor = descriptor.copy(form = Map(selector -> WebDescriptor.Form(
+        controls = Map(
+          "id" -> WebDescriptor.FormControl(hidden = true),
+          "approved" -> WebDescriptor.FormControl(controlType = Some("checkbox"))
+        )
+      )))
+      val checkboxhtml = _renderer.renderStaticTemplate(
+        subsystem,
+        "notice-board",
+        "planning-app",
+        Vector("detail"),
+        template,
+        StaticFormAppLayout.AssetCompletionOptions(),
+        WebPageContext(values = Map(
+          "notice.id" -> "notice_1",
+          "notice.approved" -> "true"
+        )),
+        checkboxdescriptor
+      ).body
+      checkboxhtml should include ("type=\"checkbox\" value=\"true\" checked")
 
       val unboundhtml = _renderer.renderStaticTemplate(
         subsystem,
@@ -8429,7 +8464,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val response = server._submit_operation_form(
         _post_form_request(
           "/form/notice-board/notice-aggregate/approve-notice-aggregate",
-          "id=notice_1&csrf=token-1"
+          "id=notice_1&approved=true&csrf=token-1"
         ),
         "notice-board",
         "notice-aggregate",
