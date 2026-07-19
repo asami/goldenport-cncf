@@ -50,6 +50,10 @@ final class AggregateViewProjectionAlignmentSpec
       _string_vector(_record(help("details")).asMap("views")) shouldBe Vector("person_view", "summary_view")
       _string_vector(_record(help("details")).asMap("operationDefinitions")) shouldBe Vector("getPerson", "savePerson")
       _string_vector(_record(help("details")).asMap("updateCommands")) shouldBe Vector("savePerson.aliases=clear")
+      _string_vector(_record(help("details")).asMap("updateValueCarriers")) shouldBe Vector(
+        "savePerson.aliases=value",
+        "savePerson.aliases=value_or_clear"
+      )
       _string_vector(_record(help("details")).asMap("origin")) shouldBe Vector("active car projection-alignment@0.1.0")
       _string_vector(_record(help("details")).asMap("artifactName")) shouldBe Vector("projection-alignment")
       _string_vector(_record(help("details")).asMap("artifactVersion")) shouldBe Vector("0.1.0")
@@ -75,29 +79,30 @@ final class AggregateViewProjectionAlignmentSpec
       val describeupdateparameter = _records(_records(describe("operationDefinitions")).last.asMap("parameters")).last
       describeupdateparameter.getString("sourceMultiplicity") shouldBe Some("*")
       _string_vector(describeupdateparameter.asMap("updateCommands")) shouldBe Vector("clear")
-      val describeEntity = _records(describe("entityCollections")).head
-      describeEntity.getString("entityName") shouldBe Some("Person")
-      describeEntity.getString("collectionId") shouldBe Some("sys-sys-Person")
-      describeEntity.getString("memoryPolicy") shouldBe Some("LoadToMemory")
-      val describeStorageShape = _record(describeEntity.asMap("storageShape"))
-      describeStorageShape.getString("policy") shouldBe Some("simple_entity_default")
-      val describeStorageFields = _records(describeStorageShape.asMap("fields"))
-      _storage_kind(describeStorageFields, "shortId") shouldBe Some("expanded_column")
-      _storage_name(describeStorageFields, "shortId") shouldBe Some("short_id")
-      _storage_kind(describeStorageFields, "ownerId") shouldBe Some("expanded_column")
-      _storage_name(describeStorageFields, "ownerId") shouldBe Some("owner_id")
-      _storage_kind(describeStorageFields, "permission") shouldBe Some("compact_json_text")
-      describeStorageFields.exists(_.getString("logicalName").contains("owner.read")) shouldBe false
-      _storage_kind(describeStorageFields, "body") shouldBe Some("column")
-      _storage_kind(describeStorageFields, "tenantId") shouldBe Some("expanded_column")
-      _storage_name(describeStorageFields, "tenantId") shouldBe Some("tenant_id")
-      _storage_kind(describeStorageFields, "traceId") shouldBe Some("expanded_column")
-      _storage_name(describeStorageFields, "traceId") shouldBe Some("trace_id")
-      _storage_kind(describeStorageFields, "lineItems") shouldBe Some("delegated_collection")
-      _storage_kind(describeStorageFields, "person_aggregate") shouldBe None
-      _storage_kind(describeStorageFields, "person_view") shouldBe None
-      _storage_kind(describeStorageFields, "securityAttributes") shouldBe None
-      _storage_kind(describeStorageFields, "lifecycleAttributes") shouldBe None
+      _string_vector(describeupdateparameter.asMap("updateValueCarriers")) shouldBe Vector("value", "value_or_clear")
+      val describeentity = _records(describe("entityCollections")).head
+      describeentity.getString("entityName") shouldBe Some("Person")
+      describeentity.getString("collectionId") shouldBe Some("sys-sys-Person")
+      describeentity.getString("memoryPolicy") shouldBe Some("LoadToMemory")
+      val describestorageshape = _record(describeentity.asMap("storageShape"))
+      describestorageshape.getString("policy") shouldBe Some("simple_entity_default")
+      val describestoragefields = _records(describestorageshape.asMap("fields"))
+      _storage_kind(describestoragefields, "shortId") shouldBe Some("expanded_column")
+      _storage_name(describestoragefields, "shortId") shouldBe Some("short_id")
+      _storage_kind(describestoragefields, "ownerId") shouldBe Some("expanded_column")
+      _storage_name(describestoragefields, "ownerId") shouldBe Some("owner_id")
+      _storage_kind(describestoragefields, "permission") shouldBe Some("compact_json_text")
+      describestoragefields.exists(_.getString("logicalName").contains("owner.read")) shouldBe false
+      _storage_kind(describestoragefields, "body") shouldBe Some("column")
+      _storage_kind(describestoragefields, "tenantId") shouldBe Some("expanded_column")
+      _storage_name(describestoragefields, "tenantId") shouldBe Some("tenant_id")
+      _storage_kind(describestoragefields, "traceId") shouldBe Some("expanded_column")
+      _storage_name(describestoragefields, "traceId") shouldBe Some("trace_id")
+      _storage_kind(describestoragefields, "lineItems") shouldBe Some("delegated_collection")
+      _storage_kind(describestoragefields, "person_aggregate") shouldBe None
+      _storage_kind(describestoragefields, "person_view") shouldBe None
+      _storage_kind(describestoragefields, "securityAttributes") shouldBe None
+      _storage_kind(describestoragefields, "lifecycleAttributes") shouldBe None
 
       _records(schema("aggregateCollections")).map(_.getString("name").getOrElse("")) shouldBe Vector("person_aggregate", "profile_aggregate")
       _records(schema("viewCollections")).map(_.getString("name").getOrElse("")) shouldBe Vector("person_view", "summary_view")
@@ -110,14 +115,15 @@ final class AggregateViewProjectionAlignmentSpec
       _records(_records(schema("operationDefinitions")).last.asMap("parameters")).map(_.getString("name").getOrElse("")) shouldBe Vector("id", "name", "aliases")
       val schemaupdateparameter = _records(_records(schema("operationDefinitions")).last.asMap("parameters")).last
       _string_vector(schemaupdateparameter.asMap("updateCommands")) shouldBe Vector("clear")
-      val schemaEntity = _records(schema("entityCollections")).head
-      schemaEntity.getString("entityName") shouldBe Some("Person")
-      val schemaStorageFields = _records(_record(schemaEntity.asMap("storageShape")).asMap("fields"))
-      _storage_name(schemaStorageFields, "createdAt") shouldBe Some("created_at")
-      _storage_name(schemaStorageFields, "updatedBy") shouldBe Some("updated_by")
-      _storage_name(schemaStorageFields, "groupId") shouldBe Some("group_id")
-      _storage_name(schemaStorageFields, "privilegeId") shouldBe Some("privilege_id")
-      _storage_kind(schemaStorageFields, "status") shouldBe Some("column")
+      _string_vector(schemaupdateparameter.asMap("updateValueCarriers")) shouldBe Vector("value", "value_or_clear")
+      val schemaentity = _records(schema("entityCollections")).head
+      schemaentity.getString("entityName") shouldBe Some("Person")
+      val schemastoragefields = _records(_record(schemaentity.asMap("storageShape")).asMap("fields"))
+      _storage_name(schemastoragefields, "createdAt") shouldBe Some("created_at")
+      _storage_name(schemastoragefields, "updatedBy") shouldBe Some("updated_by")
+      _storage_name(schemastoragefields, "groupId") shouldBe Some("group_id")
+      _storage_name(schemastoragefields, "privilegeId") shouldBe Some("privilege_id")
+      _storage_kind(schemastoragefields, "status") shouldBe Some("column")
 
       help shouldBe help2
       describe shouldBe describe2
@@ -145,6 +151,7 @@ final class AggregateViewProjectionAlignmentSpec
       first should include("\"outputType\":\"SavePersonResult\"")
       first should include("\"inputValueKind\":\"ENTITY_UPDATE\"")
       first should include("\"x-textus-update-commands\":[\"clear\"]")
+      first should include("\"x-textus-update-value-carriers\":[\"value\",\"value_or_clear\"]")
       first should include("\"datatype\":\"EntityId\"")
       first should include("\"datatype\":\"Name\"")
       first should include("\"name\":\"person_view\"")
@@ -322,21 +329,21 @@ final class AggregateViewProjectionAlignmentSpec
 
   private def _storage_field(
     fields: Vector[Record],
-    logicalName: String
+    logicalname: String
   ): Option[Record] =
-    fields.find(_.getString("logicalName").contains(logicalName))
+    fields.find(_.getString("logicalName").contains(logicalname))
 
   private def _storage_kind(
     fields: Vector[Record],
-    logicalName: String
+    logicalname: String
   ): Option[String] =
-    _storage_field(fields, logicalName).flatMap(_.getString("storageKind"))
+    _storage_field(fields, logicalname).flatMap(_.getString("storageKind"))
 
   private def _storage_name(
     fields: Vector[Record],
-    logicalName: String
+    logicalname: String
   ): Option[String] =
-    _storage_field(fields, logicalName).flatMap(_.getString("storageName"))
+    _storage_field(fields, logicalname).flatMap(_.getString("storageName"))
 }
 
 private final case class _NoopOperation(

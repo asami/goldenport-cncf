@@ -160,6 +160,13 @@ final case class CmlOperationUpdateField(
       Option.when(isCollectionValued)("clear"),
       Option.when(nullAllowed && !isCollectionValued)("null")
     ).flatten
+
+  def availableValueCarriers: Vector[String] =
+    Vector(
+      Some("value"),
+      Option.when(isCollectionValued)("value_or_clear"),
+      Option.when(nullAllowed && !isCollectionValued)("value_or_null")
+    ).flatten
 }
 
 object CmlOperationField {

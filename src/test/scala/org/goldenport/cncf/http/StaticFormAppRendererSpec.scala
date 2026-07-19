@@ -2087,7 +2087,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     "validate component entity update forms by detail view fields before full schema fields" in {
       val subsystem = _management_console_fixture_subsystem(
         schema = _schema("id", "title", "author"),
-        viewFields = Map(
+        viewfields = Map(
           "summary" -> Vector("id", "title"),
           "detail" -> Vector("id", "title"),
           "create" -> Vector("title", "author")
@@ -2123,7 +2123,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     "reject component entity update forms when a required detail view field is empty" in {
       val subsystem = _management_console_fixture_subsystem(
         schema = _schema("id", "title", "author"),
-        viewFields = Map(
+        viewfields = Map(
           "summary" -> Vector("id", "title"),
           "detail" -> Vector("id", "title"),
           "create" -> Vector("title", "author")
@@ -2435,7 +2435,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           "subject",
           "body"
         ),
-        viewFields = Map(
+        viewfields = Map(
           "summary" -> Vector("id", "subject"),
           "detail" -> Vector("id", "senderName", "recipientName", "subject", "body"),
           "create" -> Vector("senderName", "recipientName", "subject", "body")
@@ -2496,7 +2496,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     "create admin entity records without exposing id when create view fields omit it" in {
       val subsystem = _management_console_fixture_subsystem(
         schema = _schema("id", "title", "author"),
-        viewFields = Map(
+        viewfields = Map(
           "summary" -> Vector("id", "title"),
           "detail" -> Vector("id", "title", "author"),
           "create" -> Vector("title", "author")
@@ -6517,7 +6517,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       fields.downN(1).downField("hidden").as[Boolean].toOption shouldBe Some(true)
     }
 
-    "project typed update commands into form definitions and generated controls" in {
+    "typed update carriers" which {
+      "project typed update commands into form definitions and generated controls" in {
       val component = new org.goldenport.cncf.component.Component() {
         override def operationDefinitions: Vector[CmlOperationDefinition] =
           Vector(CmlOperationDefinition(
@@ -6568,15 +6569,17 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       json.hcursor.downField("source").as[String].toOption shouldBe Some("Schema")
       fields.downN(0).downField("name").as[String].toOption shouldBe Some("tags")
       fields.downN(0).downField("updateCommands").as[Vector[String]].toOption shouldBe Some(Vector("clear"))
+      fields.downN(0).downField("updateValueCarriers").as[Vector[String]].toOption shouldBe Some(Vector("value", "value_or_clear"))
       fields.downN(1).downField("name").as[String].toOption shouldBe Some("nickname")
       fields.downN(1).downField("updateCommands").as[Vector[String]].toOption shouldBe Some(Vector("null"))
+      fields.downN(1).downField("updateValueCarriers").as[Vector[String]].toOption shouldBe Some(Vector("value", "value_or_null"))
       html should include ("name=\"tags__update_command\" value=\"clear\"")
       html should include ("name=\"nickname__update_command\" value=\"null\"")
       html should not include "name=\"tags__update_command\" value=\"null\""
       html should not include "name=\"nickname__update_command\" value=\"clear\""
-    }
+      }
 
-    "normalize URL-encoded and multipart typed update commands before Web dispatch" in {
+      "normalize URL-encoded and multipart typed update commands before Web dispatch" in {
       Given("an entity update operation exposed through Form API")
       val component = new org.goldenport.cncf.component.Component() {
         override def operationDefinitions: Vector[CmlOperationDefinition] =
@@ -6609,32 +6612,110 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       ))
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem), operationDispatcherOption = Some(dispatcher))
 
-      When("URL-encoded and multipart forms submit collection clear with a blank ordinary control")
+      When("URL-encoded and multipart forms submit adaptive clear and an explicit empty value")
       val urlencoded = server.routes(null).orNotFound.run(
         _post_form_request(
           "/form-api/notice-board/notice/update-notice",
-          "tags=&tags__update_command=clear"
+          "tags=&tags__value_or_clear=&nickname__value="
         )
       ).unsafeRunSync()
       val multipart = server.routes(null).orNotFound.run(
         _post_multipart_request(
           "/form-api/notice-board/notice/update-notice",
-          Vector("tags" -> "", "tags__update_command" -> "clear"),
+          Vector("tags" -> "", "tags__value_or_clear" -> "", "nickname__value" -> ""),
           Vector.empty
         )
       ).unsafeRunSync()
 
-      Then("both transport adapters omit the blank value and preserve the command carrier")
+      Then("both transport adapters omit the ordinary blank and preserve explicit carriers")
       urlencoded.status.code shouldBe 200
       multipart.status.code shouldBe 200
       dispatcher.forms should have size 2
       dispatcher.forms.foreach { form =>
         form.getAny("tags") shouldBe None
-        form.getString("tags__update_command") shouldBe Some("clear")
+        form.getString("tags__value_or_clear") shouldBe Some("")
+        form.getString("nickname__value") shouldBe Some("")
       }
-    }
+      }
 
-    "return structured HTTP 400 for incompatible typed update commands" in {
+      "deliver explicit empty, adaptive clear, and adaptive null values to ActionCall" in {
+        Given("executable entity update operations using all accepted typed value carriers")
+        val component = new org.goldenport.cncf.component.Component() {
+          override def operationDefinitions: Vector[CmlOperationDefinition] =
+            Vector(
+              CmlOperationDefinition(
+                name = "update-nickname",
+                kind = "COMMAND",
+                inputType = "Notice",
+                outputType = "Unit",
+                inputValueKind = "ENTITY_UPDATE",
+                parameters = Vector(
+                  CmlOperationField("nickname", "string", "?", update = Some(CmlOperationUpdateField("?", nullAllowed = true)))
+                )
+              ),
+              CmlOperationDefinition(
+                name = "clear-tags",
+                kind = "COMMAND",
+                inputType = "Notice",
+                outputType = "Unit",
+                inputValueKind = "ENTITY_UPDATE",
+                parameters = Vector(
+                  CmlOperationField("tags", "string", "*", update = Some(CmlOperationUpdateField("*", nullAllowed = false)))
+                )
+              )
+            )
+        }
+        val protocol = Protocol(
+          services = spec.ServiceDefinitionGroup(Vector(spec.ServiceDefinition(
+            name = "notice",
+            operations = spec.OperationDefinitionGroup(NonEmptyVector.of(
+              _InspectingAggregateOperation("update-nickname", "nickname", "nickname"),
+              _InspectingAggregateOperation("clear-tags", "tags", "tags")
+            ))
+          ))),
+          handler = ProtocolHandler(
+            ingresses = IngressCollection(Vector(RestIngress())),
+            egresses = EgressCollection(Vector(RestEgress())),
+            projections = ProjectionCollection()
+          )
+        )
+        _initialize_component("notice_board", component, protocol)
+        val subsystem = DefaultSubsystemFactory.default(Some("server")).add(Vector(component))
+        val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+
+        When("Form API submits explicit empty, adaptive clear, and adaptive null carriers")
+        val explicit = server.routes(null).orNotFound.run(
+          _post_form_request(
+            "/form-api/notice-board/notice/update-nickname",
+            "nickname__value="
+          )
+        ).unsafeRunSync()
+        val clear = server.routes(null).orNotFound.run(
+          _post_form_request(
+            "/form-api/notice-board/notice/clear-tags",
+            "tags__value_or_clear="
+          )
+        ).unsafeRunSync()
+        val nullvalue = server.routes(null).orNotFound.run(
+          _post_form_request(
+            "/form-api/notice-board/notice/update-nickname",
+            "nickname__value_or_null="
+          )
+        ).unsafeRunSync()
+        val explicitbody = explicit.as[String].unsafeRunSync()
+        val clearbody = clear.as[String].unsafeRunSync()
+        val nullbody = nullvalue.as[String].unsafeRunSync()
+
+        Then("ComponentLogic binds each carrier to a present ActionCall argument with typed semantics")
+        withClue(explicitbody) { explicit.status.code shouldBe 200 }
+        withClue(clearbody) { clear.status.code shouldBe 200 }
+        withClue(nullbody) { nullvalue.status.code shouldBe 200 }
+        explicitbody should include ("nickname:present:")
+        clearbody should include ("tags:present:Vector()")
+        nullbody should include ("nickname:present:SetNull")
+      }
+
+      "return structured HTTP 400 for incompatible typed update commands" in {
       Given("an executable entity update operation using the shared request boundary")
       val component = new org.goldenport.cncf.component.Component() {
         override def operationDefinitions: Vector[CmlOperationDefinition] =
@@ -6713,6 +6794,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       afteracceptedactioncalls should be > afterformactioncalls
       afterrejectedactioncalls shouldBe afteracceptedactioncalls
       afterrejectedvalidation should be > afterformvalidation
+      }
     }
 
     "render operation image binding controls and Form API metadata" in {
@@ -7095,7 +7177,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     "serve admin entity update form definition API from detail view fields" in {
       val subsystem = _management_console_fixture_subsystem(
         schema = _schema("id", "title", "author"),
-        viewFields = Map(
+        viewfields = Map(
           "summary" -> Vector("id", "title"),
           "detail" -> Vector("id", "title"),
           "create" -> Vector("title", "author")
@@ -12392,7 +12474,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
   private def _management_console_fixture_subsystem(
     configuration: Configuration = Configuration.empty,
     schema: Schema = _schema("id", "title", "author"),
-    viewFields: Map[String, Vector[String]] = Map.empty,
+    viewfields: Map[String, Vector[String]] = Map.empty,
     relationships: Vector[CmlEntityRelationshipDefinition] = Vector.empty
   ): Subsystem = {
     val resolvedconfiguration = ResolvedConfiguration(configuration, ConfigurationTrace.empty)
@@ -12424,7 +12506,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       )
     )
     val component =
-      if (viewFields.isEmpty && relationships.isEmpty) {
+      if (viewfields.isEmpty && relationships.isEmpty) {
         TestComponentFactory.create("notice_board", Protocol.empty)
       } else {
         val c = new org.goldenport.cncf.component.Component() {
@@ -12433,8 +12515,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
               ViewDefinition(
                 name = "notice_view",
                 entityName = "notice",
-                viewNames = viewFields.keys.toVector,
-                viewFields = viewFields
+                viewNames = viewfields.keys.toVector,
+                viewFields = viewfields
               )
             )
           override def relationshipDefinitions: Vector[CmlEntityRelationshipDefinition] =
@@ -12513,7 +12595,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       .create("notice_board", Protocol.empty)
       .withComponentDescriptors(Vector(descriptor))
     val subsystem = DefaultSubsystemFactory.default(Some("server")).add(Vector(component))
-    val webDescriptor = WebDescriptor(admin = Map(
+    val webdescriptor = WebDescriptor(admin = Map(
       "notice-board.entity.notice" -> WebDescriptor.AdminSurface(fields = Vector(
         WebDescriptor.AdminField("id"),
         WebDescriptor.AdminField(
@@ -12532,7 +12614,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         )
       ))
     ))
-    subsystem -> webDescriptor
+    subsystem -> webdescriptor
   }
 
   private def _data_schema_web_descriptor(
@@ -12809,8 +12891,8 @@ private final case class _NoopOperation(
 
 private final case class _SuccessfulAggregateOperation(
   opname: String,
-  argumentName: String,
-  resultPrefix: String
+  argumentname: String,
+  resultprefix: String
 ) extends spec.OperationDefinition {
   override val specification: spec.OperationDefinition.Specification =
     spec.OperationDefinition.Specification(
@@ -12818,7 +12900,7 @@ private final case class _SuccessfulAggregateOperation(
       request = spec.RequestDefinition(
         parameters = List(
           spec.ParameterDefinition(
-            content = BaseContent.simple(argumentName),
+            content = BaseContent.simple(argumentname),
             kind = spec.ParameterDefinition.Kind.Argument
           )
         )
@@ -12827,26 +12909,69 @@ private final case class _SuccessfulAggregateOperation(
     )
 
   override def createOperationRequest(req: GRequest): Consequence[OperationRequest] =
-    Consequence.success(_SuccessfulAggregateAction(OperationRequest.Core(req), argumentName, resultPrefix))
+    Consequence.success(_SuccessfulAggregateAction(OperationRequest.Core(req), argumentname, resultprefix))
 }
 
 private final case class _SuccessfulAggregateAction(
   core: OperationRequest.Core,
-  argumentName: String,
-  resultPrefix: String
+  argumentname: String,
+  resultprefix: String
 ) extends QueryAction with OperationRequest.Core.Holder {
   override def createCall(core: ActionCall.Core): ActionCall =
-    _SuccessfulAggregateActionCall(core, argumentName, resultPrefix)
+    _SuccessfulAggregateActionCall(core, argumentname, resultprefix)
 }
 
 private final case class _SuccessfulAggregateActionCall(
   core: ActionCall.Core,
-  argumentName: String,
-  resultPrefix: String
+  argumentname: String,
+  resultprefix: String
 ) extends ProcedureActionCall {
   override def execute(): Consequence[OperationResponse] = {
-    val value = core.action.arguments.find(_.name == argumentName).map(_.value).getOrElse("")
-    Consequence.success(OperationResponse.Scalar(s"${resultPrefix}:${value}"))
+    val value = core.action.arguments.find(_.name == argumentname).map(_.value).getOrElse("")
+    Consequence.success(OperationResponse.Scalar(s"${resultprefix}:${value}"))
+  }
+}
+
+private final case class _InspectingAggregateOperation(
+  opname: String,
+  argumentname: String,
+  resultprefix: String
+) extends spec.OperationDefinition {
+  override val specification: spec.OperationDefinition.Specification =
+    spec.OperationDefinition.Specification(
+      name = opname,
+      request = spec.RequestDefinition(
+        parameters = List(
+          spec.ParameterDefinition(
+            content = BaseContent.simple(argumentname),
+            kind = spec.ParameterDefinition.Kind.Argument
+          )
+        )
+      ),
+      response = spec.ResponseDefinition.void
+    )
+
+  override def createOperationRequest(req: GRequest): Consequence[OperationRequest] =
+    Consequence.success(_InspectingAggregateAction(OperationRequest.Core(req), argumentname, resultprefix))
+}
+
+private final case class _InspectingAggregateAction(
+  core: OperationRequest.Core,
+  argumentname: String,
+  resultprefix: String
+) extends QueryAction with OperationRequest.Core.Holder {
+  override def createCall(core: ActionCall.Core): ActionCall =
+    _InspectingAggregateActionCall(core, argumentname, resultprefix)
+}
+
+private final case class _InspectingAggregateActionCall(
+  core: ActionCall.Core,
+  argumentname: String,
+  resultprefix: String
+) extends ProcedureActionCall {
+  override def execute(): Consequence[OperationResponse] = {
+    val value = core.action.arguments.find(_.name == argumentname).map(x => s"present:${x.value}").getOrElse("absent")
+    Consequence.success(OperationResponse.Scalar(s"${resultprefix}:${value}"))
   }
 }
 

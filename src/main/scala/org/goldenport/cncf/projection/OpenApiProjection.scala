@@ -15,21 +15,21 @@ object OpenApiProjection {
   import MetaProjectionSupport._
 
   def projectComponent(component: Component): String = {
-    val componentName = component.name
+    val componentname = component.name
     val paths = component.protocol.services.services.flatMap { service =>
       service.operations.operations.toVector.map { op =>
         val path = NamingConventions.toNormalizedPath(component.name, service.name, op.name)
         val method = _infer_method(service.name, op.name)
-        val operationId = NamingConventions.toOperationId(component.name, service.name, op.name)
+        val operationid = NamingConventions.toOperationId(component.name, service.name, op.name)
         val summary = _operation_summary(service, op).getOrElse(s"${service.name}.${op.name}")
         val description = _operation_description(service, op)
-        s""""${_escape(path)}":{"${method}":{"operationId":"${_escape(operationId)}","summary":"${_escape(summary)}","description":"${_escape(description)}","responses":{"200":{"description":"OK"}}}}"""
+        s""""${_escape(path)}":{"${method}":{"operationId":"${_escape(operationid)}","summary":"${_escape(summary)}","description":"${_escape(description)}","responses":{"200":{"description":"OK"}}}}"""
       }
     }.mkString(",")
     val aggregates = _json_array_strings(aggregateMetas(component).map(_.name))
     val views = _json_array_views(viewMetas(component))
     val operations = _json_array_operations(operationMetas(component))
-    s"""{"openapi":"3.0.0","info":{"title":"${_escape(componentName)} API","version":"0.1.0","x-cncf-aggregate-collections":${aggregates},"x-cncf-view-collections":${views},"x-cncf-operation-definitions":${operations}},"paths":{${paths}}}"""
+    s"""{"openapi":"3.0.0","info":{"title":"${_escape(componentname)} API","version":"0.1.0","x-cncf-aggregate-collections":${aggregates},"x-cncf-view-collections":${views},"x-cncf-operation-definitions":${operations}},"paths":{${paths}}}"""
   }
 
   private def _trim_i18n(p: Option[I18nString]): Option[String] =
@@ -46,9 +46,9 @@ object OpenApiProjection {
       orElse(_operation_summary(service, op)).
       getOrElse(s"${service.name}.${op.name}")
 
-  private def _infer_method(serviceName: String, operationName: String): String = {
-    val lowered = operationName.toLowerCase
-    if (serviceName.toLowerCase == "http" && (lowered == "post" || lowered == "put" || lowered == "delete"))
+  private def _infer_method(servicename: String, operationname: String): String = {
+    val lowered = operationname.toLowerCase
+    if (servicename.toLowerCase == "http" && (lowered == "post" || lowered == "put" || lowered == "delete"))
       lowered
     else if (lowered == "post" || lowered == "put" || lowered == "delete")
       lowered
@@ -69,13 +69,13 @@ object OpenApiProjection {
         val expr = q.expression.map(_escape).getOrElse("")
         s"""{"name":"${_escape(q.name)}","expression":"${expr}"}"""
       }.mkString("[", ",", "]")
-      val sourceEvents = _json_array_strings(x.sourceEvents)
-      val searchableFields = _json_array_strings(x.searchableFields)
-      val filterFields = _json_array_strings(x.filterFields)
-      val sortableFields = _json_array_strings(x.sortableFields)
-      val searchModes = _json_array_strings(x.searchModes)
+      val sourceevents = _json_array_strings(x.sourceEvents)
+      val searchablefields = _json_array_strings(x.searchableFields)
+      val filterfields = _json_array_strings(x.filterFields)
+      val sortablefields = _json_array_strings(x.sortableFields)
+      val searchmodes = _json_array_strings(x.searchModes)
       val rebuildable = x.rebuildable.getOrElse(false)
-      s"""{"name":"${_escape(x.name)}","entityName":"${_escape(x.entityName)}","viewNames":${names},"queries":${queries},"searchableFields":${searchableFields},"filterFields":${filterFields},"sortableFields":${sortableFields},"searchModes":${searchModes},"defaultSearchMode":"${_escape(x.defaultSearchMode)}","sourceEvents":${sourceEvents},"rebuildable":${rebuildable}}"""
+      s"""{"name":"${_escape(x.name)}","entityName":"${_escape(x.entityName)}","viewNames":${names},"queries":${queries},"searchableFields":${searchablefields},"filterFields":${filterfields},"sortableFields":${sortablefields},"searchModes":${searchmodes},"defaultSearchMode":"${_escape(x.defaultSearchMode)}","sourceEvents":${sourceevents},"rebuildable":${rebuildable}}"""
     }
     entries.mkString("[", ",", "]")
   }
@@ -86,7 +86,8 @@ object OpenApiProjection {
         val required = p.getBoolean("required").getOrElse(false)
         val validation = p.getRecord("validation").map(_json_validation).getOrElse("{}")
         val updatecommands = _json_array_strings(_record_string_vector(p, "updateCommands"))
-        s"""{"name":"${_escape(p.getString("name").getOrElse(""))}","datatype":"${_escape(p.getString("datatype").getOrElse(""))}","multiplicity":"${_escape(p.getString("multiplicity").getOrElse(""))}","required":${required},"validation":${validation},"x-textus-confidentiality":"${_escape(p.getString("confidentiality").getOrElse("public"))}","x-textus-update-commands":${updatecommands}}"""
+        val updatevaluecarriers = _json_array_strings(_record_string_vector(p, "updateValueCarriers"))
+        s"""{"name":"${_escape(p.getString("name").getOrElse(""))}","datatype":"${_escape(p.getString("datatype").getOrElse(""))}","multiplicity":"${_escape(p.getString("multiplicity").getOrElse(""))}","required":${required},"validation":${validation},"x-textus-confidentiality":"${_escape(p.getString("confidentiality").getOrElse("public"))}","x-textus-update-commands":${updatecommands},"x-textus-update-value-carriers":${updatevaluecarriers}}"""
       }.mkString("[", ",", "]")
       s"""{"name":"${_escape(x.name)}","kind":"${_escape(x.kind)}","inputType":"${_escape(x.inputType)}","outputType":"${_escape(x.outputType)}","inputValueKind":"${_escape(x.inputValueKind)}","parameters":${parameters}}"""
     }

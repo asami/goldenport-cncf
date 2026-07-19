@@ -72,7 +72,8 @@ object WebSchemaResolver {
     validation: WebValidationHints = WebValidationHints.empty,
     confidentiality: DataConfidentiality = DataConfidentiality.Public,
     source: Source = Source.Empty,
-    updateCommands: Vector[String] = Vector.empty
+    updateCommands: Vector[String] = Vector.empty,
+    updateValueCarriers: Vector[String] = Vector.empty
   ) {
     def controlType: String =
       control.controlType.getOrElse(defaultControlType)
@@ -159,8 +160,8 @@ object WebSchemaResolver {
         Source.Sampling,
         fieldOrderStrategy
       ),
-      baseSource = if (fallbackFields.nonEmpty) Source.Sampling else Source.Empty,
-      adminFields = webDescriptor.adminFields(componentPath, "data", dataName)
+      basesource = if (fallbackFields.nonEmpty) Source.Sampling else Source.Empty,
+      adminfields = webDescriptor.adminFields(componentPath, "data", dataName)
     )
 
   def resolveOperation(
@@ -171,13 +172,13 @@ object WebSchemaResolver {
     parameters: Vector[ParameterDefinition],
     webDescriptor: WebDescriptor
   ): ResolvedWebSchema = {
-    val adminFields = webDescriptor.adminOperationFields(componentPath, surfaceName, collectionName, operationName)
+    val adminfields = webDescriptor.adminOperationFields(componentPath, surfaceName, collectionName, operationName)
     _merge(
       selector = s"${componentPath}.${surfaceName}.${collectionName}.${operationName}",
       surface = Surface.Operation,
       base = parameters.map(_operation_field),
-      baseSource = if (parameters.nonEmpty) Source.Schema else Source.Empty,
-      adminFields = adminFields
+      basesource = if (parameters.nonEmpty) Source.Schema else Source.Empty,
+      adminfields = adminfields
     )
   }
 
@@ -187,13 +188,13 @@ object WebSchemaResolver {
     controls: Map[String, WebDescriptor.FormControl]
   ): ResolvedWebSchema = {
     val base = parameters.map(_operation_field)
-    val baseNames = base.map(_.name).toSet
+    val basenames = base.map(_.name).toSet
     val merged = base.map { field =>
       controls.get(field.name).map(control =>
         _with_control(field, control, Source.WebDescriptor)
       ).getOrElse(field)
     } ++ controls.toVector.sortBy(_._1).collect {
-      case (name, control) if !baseNames.contains(name) =>
+      case (name, control) if !basenames.contains(name) =>
         _with_control(ResolvedWebField(name = name), control, Source.WebDescriptor)
     }
     ResolvedWebSchema(
@@ -240,39 +241,39 @@ object WebSchemaResolver {
 
   private def _resolve_entity_like(
     component: Component,
-    componentPath: String,
+    componentpath: String,
     surface: Surface,
-    surfaceName: String,
-    collectionName: String,
-    entityName: String,
-    webDescriptor: WebDescriptor,
-    fallbackFields: => Vector[String],
-    viewFields: Option[Vector[String]],
-    fieldOrderStrategy: FieldOrderStrategy
+    surfacename: String,
+    collectionname: String,
+    entityname: String,
+    webdescriptor: WebDescriptor,
+    fallbackfields: => Vector[String],
+    viewfields: Option[Vector[String]],
+    fieldorderstrategy: FieldOrderStrategy
   ): ResolvedWebSchema = {
-    val runtimeDescriptor = _entity_runtime_descriptor(component, entityName, collectionName, surfaceName)
-    val effectiveSchema = runtimeDescriptor.flatMap(_.schema).orElse(_generated_entity_schema(component, entityName, collectionName, surfaceName))
-    val schemaFields = _select_fields(effectiveSchema.map(fromSchema).getOrElse(Vector.empty), viewFields)
-    val fallback = if (schemaFields.nonEmpty) Vector.empty else fallbackFields
+    val runtimedescriptor = _entity_runtime_descriptor(component, entityname, collectionname, surfacename)
+    val effectiveschema = runtimedescriptor.flatMap(_.schema).orElse(_generated_entity_schema(component, entityname, collectionname, surfacename))
+    val schemafields = _select_fields(effectiveschema.map(fromSchema).getOrElse(Vector.empty), viewfields)
+    val fallback = if (schemafields.nonEmpty) Vector.empty else fallbackfields
     val base =
-      if (schemaFields.nonEmpty)
-        _order_fields(schemaFields, Source.Schema, fieldOrderStrategy)
+      if (schemafields.nonEmpty)
+        _order_fields(schemafields, Source.Schema, fieldorderstrategy)
       else
         _order_fields(
           fallback.map(name => ResolvedWebField(name = name, source = Source.Sampling)),
           Source.Sampling,
-          fieldOrderStrategy
+          fieldorderstrategy
         )
     val source =
-      if (schemaFields.nonEmpty) Source.Schema
+      if (schemafields.nonEmpty) Source.Schema
       else if (fallback.nonEmpty) Source.Sampling
       else Source.Empty
     _merge(
-      selector = s"${componentPath}.${surfaceName}.${collectionName}",
+      selector = s"${componentpath}.${surfacename}.${collectionname}",
       surface = surface,
       base = base,
-      baseSource = source,
-      adminFields = webDescriptor.adminFields(componentPath, surfaceName, collectionName)
+      basesource = source,
+      adminfields = webdescriptor.adminFields(componentpath, surfacename, collectionname)
     )
   }
 
@@ -286,11 +287,11 @@ object WebSchemaResolver {
 
   private def _entity_runtime_descriptor(
     component: Component,
-    entityName: String,
-    collectionName: String,
-    surfaceName: String
+    entityname: String,
+    collectionname: String,
+    surfacename: String
   ): Option[org.goldenport.cncf.entity.runtime.EntityRuntimeDescriptor] =
-    _entity_name_candidates(entityName, collectionName, surfaceName)
+    _entity_name_candidates(entityname, collectionname, surfacename)
       .iterator
       .flatMap(component.entityRuntimeDescriptor)
       .toSeq
@@ -298,24 +299,24 @@ object WebSchemaResolver {
 
   private def _generated_entity_schema(
     component: Component,
-    entityName: String,
-    collectionName: String,
-    surfaceName: String
+    entityname: String,
+    collectionname: String,
+    surfacename: String
   ): Option[Schema] =
-    _entity_name_candidates(entityName, collectionName, surfaceName)
+    _entity_name_candidates(entityname, collectionname, surfacename)
       .iterator
       .flatMap(_generated_entity_module(component, _).flatMap(_extract_schema))
       .toSeq
       .headOption
 
   private def _entity_name_candidates(
-    entityName: String,
-    collectionName: String,
-    surfaceName: String
+    entityname: String,
+    collectionname: String,
+    surfacename: String
   ): Vector[String] = {
-    val suffix = s"-${NamingConventions.toNormalizedSegment(surfaceName)}"
-    Vector(entityName, collectionName) ++
-      Vector(entityName, collectionName).flatMap(_strip_suffix(_, suffix))
+    val suffix = s"-${NamingConventions.toNormalizedSegment(surfacename)}"
+    Vector(entityname, collectionname) ++
+      Vector(entityname, collectionname).flatMap(_strip_suffix(_, suffix))
   }.map(_.trim).filter(_.nonEmpty).distinct
 
   private def _strip_suffix(
@@ -333,22 +334,22 @@ object WebSchemaResolver {
     selector: String,
     surface: Surface,
     base: Vector[ResolvedWebField],
-    baseSource: Source,
-    adminFields: Vector[WebDescriptor.AdminField]
+    basesource: Source,
+    adminfields: Vector[WebDescriptor.AdminField]
   ): ResolvedWebSchema = {
-    val byName = base.map(x => x.name -> x).toMap
+    val byname = base.map(x => x.name -> x).toMap
     val fields =
-      if (adminFields.nonEmpty)
-        adminFields.map { field =>
-          byName.get(field.name).map { baseField =>
-            _with_control(baseField, field.control, Source.WebDescriptor)
+      if (adminfields.nonEmpty)
+        adminfields.map { field =>
+          byname.get(field.name).map { basefield =>
+            _with_control(basefield, field.control, Source.WebDescriptor)
           }.getOrElse {
             _with_control(ResolvedWebField(name = field.name), field.control, Source.WebDescriptor)
           }
         }
       else
         base
-    ResolvedWebSchema(selector, surface, fields, if (adminFields.nonEmpty) Source.WebDescriptor else baseSource)
+    ResolvedWebSchema(selector, surface, fields, if (adminfields.nonEmpty) Source.WebDescriptor else basesource)
   }
 
   private def _operation_field(
@@ -387,17 +388,17 @@ object WebSchemaResolver {
 
   private def _generated_entity_module(
     component: Component,
-    entityName: String
+    entityname: String
   ): Option[AnyRef] = {
-    val packageNames = _generated_module_package_names(component)
-    val className = _entity_class_name(entityName)
-    val candidates = packageNames.flatMap { pkg =>
+    val packagenames = _generated_module_package_names(component)
+    val classname = _entity_class_name(entityname)
+    val candidates = packagenames.flatMap { pkg =>
       Vector(
-        s"${pkg}.entity.${className}$$",
-        s"${pkg}.entity.aggregate.${className}$$",
-        s"${pkg}.entity.operation.${className}$$",
-        s"${pkg}.entity.read.${className}$$",
-        s"${pkg}.entity.view.${className}$$"
+        s"${pkg}.entity.${classname}$$",
+        s"${pkg}.entity.aggregate.${classname}$$",
+        s"${pkg}.entity.operation.${classname}$$",
+        s"${pkg}.entity.read.${classname}$$",
+        s"${pkg}.entity.view.${classname}$$"
       )
     }
     val loader = component.getClass.getClassLoader
@@ -412,9 +413,9 @@ object WebSchemaResolver {
     }
 
   private def _entity_class_name(
-    entityName: String
+    entityname: String
   ): String =
-    NamingConventions.toNormalizedSegment(entityName)
+    NamingConventions.toNormalizedSegment(entityname)
       .split("-")
       .toVector
       .filter(_.nonEmpty)
@@ -431,7 +432,7 @@ object WebSchemaResolver {
 
   private def _load_scala_module(
     loader: ClassLoader,
-    className: String
+    classname: String
   ): Option[AnyRef] = {
     val loaders = Vector(
       Option(loader),
@@ -439,7 +440,7 @@ object WebSchemaResolver {
     ).flatten.distinct
     loaders.iterator.flatMap { cl =>
       try {
-        val cls = Class.forName(className, true, cl)
+        val cls = Class.forName(classname, true, cl)
         val field = cls.getField("MODULE$")
         Option(field.get(null).asInstanceOf[AnyRef])
       } catch {
@@ -453,51 +454,51 @@ object WebSchemaResolver {
     control: WebDescriptor.FormControl,
     source: Source
   ): ResolvedWebField = {
-    val mergedControl = _merge_control(field.control, control)
+    val mergedcontrol = _merge_control(field.control, control)
     field.copy(
-      control = mergedControl,
-      hidden = mergedControl.hidden,
-      system = mergedControl.system,
-      values = mergedControl.values,
-      multiple = mergedControl.multiple,
-      readonly = mergedControl.readonly,
+      control = mergedcontrol,
+      hidden = mergedcontrol.hidden,
+      system = mergedcontrol.system,
+      values = mergedcontrol.values,
+      multiple = mergedcontrol.multiple,
+      readonly = mergedcontrol.readonly,
       placeholder = control.placeholder.orElse(field.placeholder),
       help = control.help.orElse(field.help),
-      validation = mergedControl.validation,
+      validation = mergedcontrol.validation,
       source = source
     )
   }
 
   private def _merge_control(
     base: WebDescriptor.FormControl,
-    overrideControl: WebDescriptor.FormControl
+    overridecontrol: WebDescriptor.FormControl
   ): WebDescriptor.FormControl =
     WebDescriptor.FormControl(
-      controlType = overrideControl.controlType.orElse(base.controlType),
-      hidden = base.hidden || overrideControl.hidden,
-      system = base.system || overrideControl.system,
-      values = if (overrideControl.values.nonEmpty) overrideControl.values else base.values,
-      multiple = base.multiple || overrideControl.multiple,
-      required = overrideControl.required.orElse(base.required),
-      readonly = base.readonly || overrideControl.readonly,
-      label = overrideControl.label.orElse(base.label),
-      placeholder = overrideControl.placeholder.orElse(base.placeholder),
-      help = overrideControl.help.orElse(base.help),
-      defaultValue = overrideControl.defaultValue.orElse(base.defaultValue),
-      validation = _merge_validation(base.validation, overrideControl.validation)
+      controlType = overridecontrol.controlType.orElse(base.controlType),
+      hidden = base.hidden || overridecontrol.hidden,
+      system = base.system || overridecontrol.system,
+      values = if (overridecontrol.values.nonEmpty) overridecontrol.values else base.values,
+      multiple = base.multiple || overridecontrol.multiple,
+      required = overridecontrol.required.orElse(base.required),
+      readonly = base.readonly || overridecontrol.readonly,
+      label = overridecontrol.label.orElse(base.label),
+      placeholder = overridecontrol.placeholder.orElse(base.placeholder),
+      help = overridecontrol.help.orElse(base.help),
+      defaultValue = overridecontrol.defaultValue.orElse(base.defaultValue),
+      validation = _merge_validation(base.validation, overridecontrol.validation)
     )
 
   private def _merge_validation(
     base: WebValidationHints,
-    overrideHints: WebValidationHints
+    overridehints: WebValidationHints
   ): WebValidationHints =
     WebValidationHints(
-      min = _max_decimal(base.min, overrideHints.min),
-      max = _min_decimal(base.max, overrideHints.max),
-      step = overrideHints.step.orElse(base.step),
-      minLength = _max_int(base.minLength, overrideHints.minLength),
-      maxLength = _min_int(base.maxLength, overrideHints.maxLength),
-      pattern = overrideHints.pattern.orElse(base.pattern)
+      min = _max_decimal(base.min, overridehints.min),
+      max = _min_decimal(base.max, overridehints.max),
+      step = overridehints.step.orElse(base.step),
+      minLength = _max_int(base.minLength, overridehints.minLength),
+      maxLength = _min_int(base.maxLength, overridehints.maxLength),
+      pattern = overridehints.pattern.orElse(base.pattern)
     )
 
   private def _max_decimal(

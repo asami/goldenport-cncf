@@ -1043,14 +1043,22 @@ trait StaticFormAppRendererFormPart {
             operationparameters ++ cmlparameters,
             descriptorcontrols
           )
-          val updatecommands = cml_operation_definition(component, operation.name)
+          val updatefields = cml_operation_definition(component, operation.name)
             .toVector
             .flatMap(_.parameters)
-            .flatMap(field => field.update.map(update => field.name -> update.availableCommands))
+            .flatMap(field => field.update.map(update => field.name -> update))
+          val updatecommands = updatefields
+            .map { case (name, update) => name -> update.availableCommands }
+            .toMap
+          val updatevaluecarriers = updatefields
+            .map { case (name, update) => name -> update.availableValueCarriers }
             .toMap
           val webschema = basewebschema.copy(
             fields = basewebschema.fields.map(field =>
-              field.copy(updateCommands = updatecommands.getOrElse(field.name, Vector.empty))
+              field.copy(
+                updateCommands = updatecommands.getOrElse(field.name, Vector.empty),
+                updateValueCarriers = updatevaluecarriers.getOrElse(field.name, Vector.empty)
+              )
             )
           )
           Some(OperationWebSchemaContext(
@@ -1641,6 +1649,7 @@ trait StaticFormAppRendererFormPart {
       "placeholder" -> field.placeholder.map(Json.fromString).getOrElse(Json.Null),
       "help" -> field.help.map(Json.fromString).getOrElse(Json.Null),
       "updateCommands" -> Json.arr(field.updateCommands.map(Json.fromString)*),
+      "updateValueCarriers" -> Json.arr(field.updateValueCarriers.map(Json.fromString)*),
       "confidentiality" -> Json.fromString(field.confidentiality.label),
       "validation" -> web_validation_hints_json(field.validation),
       "source" -> Json.fromString(field.source.toString)

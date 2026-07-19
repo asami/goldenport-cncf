@@ -45,6 +45,40 @@ final class OperationUpdateRequestNormalizerSpec
       normalized.properties.map(x => x.name -> x.value) shouldBe List("nickname" -> Update.SetNull)
     }
 
+    "materialize explicit and adaptive value carriers as generated parameters" in {
+      Given("literal empty, adaptive clear, and adaptive null requests")
+      val literal = _request(properties = List(Property("nickname__value", "", None)))
+      val clear = _request(arguments = List(Argument("tags__value_or_clear", "")))
+      val nullvalue = _request(properties = List(Property("nickname__value_or_null", "", None)))
+
+      When("the requests pass through the shared operation boundary")
+      val normalizedliteral = OperationUpdateRequestNormalizer.normalize(_operation, literal).toOption.get
+      val normalizedclear = OperationUpdateRequestNormalizer.normalize(_operation, clear).toOption.get
+      val normalizednull = OperationUpdateRequestNormalizer.normalize(_operation, nullvalue).toOption.get
+
+      Then("the generated binder receives three distinct update intents")
+      normalizedliteral.properties.map(x => x.name -> x.value) shouldBe List("nickname" -> "")
+      normalizedclear.arguments.map(x => x.name -> x.value) shouldBe List("tags" -> Vector.empty)
+      normalizednull.properties.map(x => x.name -> x.value) shouldBe List("nickname" -> Update.SetNull)
+    }
+
+    "materialize repeated non-empty adaptive collection values" in {
+      Given("a repeated collection carrier whose values are all non-empty")
+      val request = _request(properties = List(
+        Property("tags__value_or_clear", "red", None),
+        Property("tags__value_or_clear", "blue", None)
+      ))
+
+      When("the request passes through the shared operation boundary")
+      val normalized = OperationUpdateRequestNormalizer.normalize(_operation, request).toOption.get
+
+      Then("the carrier suffix is removed without losing order or multiplicity")
+      normalized.properties.map(x => x.name -> x.value) shouldBe List(
+        "tags" -> "red",
+        "tags" -> "blue"
+      )
+    }
+
     "leave ordinary JSON empty arrays unchanged" in {
       Given("a request with an ordinary empty collection and no command carrier")
       val request = _request(properties = List(Property("tags", Vector.empty, None)))
@@ -104,6 +138,8 @@ final class OperationUpdateRequestNormalizerSpec
         "tags" -> "",
         "tags__update_command" -> "clear",
         "nickname" -> "",
+        "nickname__value" -> "",
+        "tags__value_or_clear" -> "",
         "ordinary" -> ""
       )
 
@@ -114,6 +150,8 @@ final class OperationUpdateRequestNormalizerSpec
       normalized.getAny("tags") shouldBe None
       normalized.getAny("nickname") shouldBe None
       normalized.getString("tags__update_command") shouldBe Some("clear")
+      normalized.getString("nickname__value") shouldBe Some("")
+      normalized.getString("tags__value_or_clear") shouldBe Some("")
       normalized.getString("ordinary") shouldBe Some("")
     }
 
@@ -124,6 +162,12 @@ final class OperationUpdateRequestNormalizerSpec
       Then("only semantically valid operand-less commands are advertised")
       fields("tags") shouldBe Vector("clear")
       fields("nickname") shouldBe Vector("null")
+
+      val carriers = _operation.parameters
+        .map(field => field.name -> field.update.toVector.flatMap(_.availableValueCarriers))
+        .toMap
+      carriers("tags") shouldBe Vector("value", "value_or_clear")
+      carriers("nickname") shouldBe Vector("value", "value_or_null")
     }
   }
 

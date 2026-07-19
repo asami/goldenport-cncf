@@ -21,50 +21,50 @@ object HelpProjection {
   def projectModel(base: Component, selector: Option[String] = None): HelpModel =
     resolve(base, selector) match {
       case Target.Subsystem(components, name) =>
-        val effectiveName = _subsystem_effective_name(components, name)
-        val domainVisionModels = _subsystem_domain_vision_models(components, effectiveName)
-        val domainContextModels = _subsystem_domain_context_models(components, effectiveName)
-        val domainSystemContextModels = _subsystem_domain_system_context_models(components, effectiveName)
-        val domainContextMapModels = _subsystem_domain_context_map_models(components, effectiveName)
-        val domainCapabilityModels = _subsystem_domain_capability_models(components, effectiveName)
-        val domainQualityModels = _subsystem_domain_quality_models(components, effectiveName)
-        val domainConstraintModels = _subsystem_domain_constraint_models(components, effectiveName)
-        val domainUseCaseModels = _subsystem_domain_use_case_models(components, effectiveName)
-        val domainVisions = domainVisionModels.flatMap(_render_vision)
-        val domainContexts = domainContextModels.flatMap(_render_context)
-        val domainSystemContexts = domainSystemContextModels.flatMap(_render_system_context)
-        val domainContextMaps = domainContextMapModels.flatMap(_render_context_map)
-        val domainCapabilities = domainCapabilityModels.flatMap(_render_capability)
-        val domainQualities = domainQualityModels.flatMap(_render_quality)
-        val domainConstraints = domainConstraintModels.flatMap(_render_constraint)
-        val domainUseCases = domainUseCaseModels.flatMap(_render_use_case)
+        val effectivename = _subsystem_effective_name(components, name)
+        val domainvisionmodels = _subsystem_domain_vision_models(components, effectivename)
+        val domaincontextmodels = _subsystem_domain_context_models(components, effectivename)
+        val domainsystemcontextmodels = _subsystem_domain_system_context_models(components, effectivename)
+        val domaincontextmapmodels = _subsystem_domain_context_map_models(components, effectivename)
+        val domaincapabilitymodels = _subsystem_domain_capability_models(components, effectivename)
+        val domainqualitymodels = _subsystem_domain_quality_models(components, effectivename)
+        val domainconstraintmodels = _subsystem_domain_constraint_models(components, effectivename)
+        val domainusecasemodels = _subsystem_domain_use_case_models(components, effectivename)
+        val domainvisions = domainvisionmodels.flatMap(_render_vision)
+        val domaincontexts = domaincontextmodels.flatMap(_render_context)
+        val domainsystemcontexts = domainsystemcontextmodels.flatMap(_render_system_context)
+        val domaincontextmaps = domaincontextmapmodels.flatMap(_render_context_map)
+        val domaincapabilities = domaincapabilitymodels.flatMap(_render_capability)
+        val domainqualities = domainqualitymodels.flatMap(_render_quality)
+        val domainconstraints = domainconstraintmodels.flatMap(_render_constraint)
+        val domainusecases = domainusecasemodels.flatMap(_render_use_case)
         HelpModel(
           `type` = "subsystem",
-          name = effectiveName,
+          name = effectivename,
           summary = "Subsystem help",
-          selector = Some(_subsystem_selector(effectiveName)),
+          selector = Some(_subsystem_selector(effectivename)),
           children = components.map(_.name),
           details = Map("components" -> components.map(_.name)) ++
-            (if (domainVisions.nonEmpty) Map("domainVisions" -> domainVisions) else Map.empty) ++
-            (if (domainContexts.nonEmpty) Map("domainContexts" -> domainContexts) else Map.empty) ++
-            (if (domainSystemContexts.nonEmpty) Map("domainSystemContexts" -> domainSystemContexts) else Map.empty) ++
-            (if (domainContextMaps.nonEmpty) Map("domainContextMaps" -> domainContextMaps) else Map.empty) ++
-            (if (domainCapabilities.nonEmpty) Map("domainCapabilities" -> domainCapabilities) else Map.empty) ++
-            (if (domainQualities.nonEmpty) Map("domainQualities" -> domainQualities) else Map.empty) ++
-            (if (domainConstraints.nonEmpty) Map("domainConstraints" -> domainConstraints) else Map.empty) ++
-            (if (domainUseCases.nonEmpty) Map("domainUseCases" -> domainUseCases) else Map.empty),
+            (if (domainvisions.nonEmpty) Map("domainVisions" -> domainvisions) else Map.empty) ++
+            (if (domaincontexts.nonEmpty) Map("domainContexts" -> domaincontexts) else Map.empty) ++
+            (if (domainsystemcontexts.nonEmpty) Map("domainSystemContexts" -> domainsystemcontexts) else Map.empty) ++
+            (if (domaincontextmaps.nonEmpty) Map("domainContextMaps" -> domaincontextmaps) else Map.empty) ++
+            (if (domaincapabilities.nonEmpty) Map("domainCapabilities" -> domaincapabilities) else Map.empty) ++
+            (if (domainqualities.nonEmpty) Map("domainQualities" -> domainqualities) else Map.empty) ++
+            (if (domainconstraints.nonEmpty) Map("domainConstraints" -> domainconstraints) else Map.empty) ++
+            (if (domainusecases.nonEmpty) Map("domainUseCases" -> domainusecases) else Map.empty),
           usage = Vector("command meta.help <component>"),
-          domainVisions = domainVisionModels,
-          domainContexts = domainContextModels,
-          domainSystemContexts = domainSystemContextModels,
-          domainContextMaps = domainContextMapModels,
-          domainCapabilities = domainCapabilityModels,
-          domainQualities = domainQualityModels,
-          domainConstraints = domainConstraintModels,
-          domainUseCases = domainUseCaseModels
+          domainVisions = domainvisionmodels,
+          domainContexts = domaincontextmodels,
+          domainSystemContexts = domainsystemcontextmodels,
+          domainContextMaps = domaincontextmapmodels,
+          domainCapabilities = domaincapabilitymodels,
+          domainQualities = domainqualitymodels,
+          domainConstraints = domainconstraintmodels,
+          domainUseCases = domainusecasemodels
         )
       case Target.ComponentTarget(component) =>
-        val componentName = component.name
+        val componentname = component.name
         val services = component.protocol.services.services.sortBy(_.name)
         val aggregates = aggregateMetas(component).map(_.name)
         val views = viewMetas(component).map(_.name)
@@ -74,16 +74,21 @@ object HelpProjection {
             field.update.toVector.flatMap(_.availableCommands.map(command => s"${operation.name}.${field.name}=$command"))
           }
         }.sorted
+        val updatevaluecarriers = component.operationDefinitions.flatMap { operation =>
+          operation.parameters.flatMap { field =>
+            field.update.toVector.flatMap(_.availableValueCarriers.map(carrier => s"${operation.name}.${field.name}=$carrier"))
+          }
+        }.sorted
         val relationships = component.relationshipDefinitions.map(relationship_definition_record).sortBy(_.getString("name").getOrElse(""))
-        val useCaseModels = _component_use_case_models(component)
-        val useCases = useCaseModels.flatMap(_render_use_case)
-        val artifactName = component.artifactMetadata.map(_.name).toVector
-        val artifactVersion = component.artifactMetadata.map(_.version).toVector
+        val usecasemodels = _component_use_case_models(component)
+        val usecases = usecasemodels.flatMap(_render_use_case)
+        val artifactname = component.artifactMetadata.map(_.name).toVector
+        val artifactversion = component.artifactMetadata.map(_.version).toVector
         HelpModel(
           `type` = "component",
-          name = componentName,
-          summary = s"Component: $componentName",
-          selector = Some(_component_selector(componentName)),
+          name = componentname,
+          summary = s"Component: $componentname",
+          selector = Some(_component_selector(componentname)),
           children = services.map(_.name),
           details = Map(
             "services" -> services.map(_.name),
@@ -92,70 +97,77 @@ object HelpProjection {
             "relationshipDefinitions" -> relationships.flatMap(_.getString("name")),
             "operationDefinitions" -> operations,
             "updateCommands" -> updatecommands,
+            "updateValueCarriers" -> updatevaluecarriers,
             "origin" -> Vector(user_origin_label(component.origin.label)),
-            "artifactName" -> artifactName,
-            "artifactVersion" -> artifactVersion
-          ) ++ (if (useCases.nonEmpty) Map("useCases" -> useCases) else Map.empty),
+            "artifactName" -> artifactname,
+            "artifactVersion" -> artifactversion
+          ) ++ (if (usecases.nonEmpty) Map("useCases" -> usecases) else Map.empty),
           relationshipDefinitions = relationships,
-          usage = services.headOption.map(s => Vector(s"command help $componentName.${s.name}")).getOrElse(Vector.empty),
-          useCases = useCaseModels,
+          usage = services.headOption.map(s => Vector(s"command help $componentname.${s.name}")).getOrElse(Vector.empty),
+          useCases = usecasemodels,
         )
       case Target.ServiceTarget(component, service) =>
-        val componentName = component.name
-        val serviceName = service.name
+        val componentname = component.name
+        val servicename = service.name
         val operations = service.operations.operations.toVector.sortBy(_.name)
         val summary = _service_summary(service).getOrElse(s"Service: ${service.name}")
-        val useCaseModels = _service_use_case_models(service)
-        val useCases = useCaseModels.flatMap(_render_use_case)
+        val usecasemodels = _service_use_case_models(service)
+        val usecases = usecasemodels.flatMap(_render_use_case)
         HelpModel(
           `type` = "service",
-          name = serviceName,
+          name = servicename,
           summary = summary,
-          component = Some(componentName),
-          selector = Some(_service_selector(componentName, serviceName)),
+          component = Some(componentname),
+          selector = Some(_service_selector(componentname, servicename)),
           children = operations.map(_.name),
-          details = Map("operations" -> operations.map(_.name)) ++ (if (useCases.nonEmpty) Map("useCases" -> useCases) else Map.empty),
-          usage = operations.headOption.map(op => Vector(s"command help ${_service_cli_selector(componentName, serviceName)}.${NamingConventions.toNormalizedSegment(op.name)}")).getOrElse(Vector.empty),
-          useCases = useCaseModels
+          details = Map("operations" -> operations.map(_.name)) ++ (if (usecases.nonEmpty) Map("useCases" -> usecases) else Map.empty),
+          usage = operations.headOption.map(op => Vector(s"command help ${_service_cli_selector(componentname, servicename)}.${NamingConventions.toNormalizedSegment(op.name)}")).getOrElse(Vector.empty),
+          useCases = usecasemodels
         )
       case Target.OperationTarget(component, service, operation) =>
-        val componentName = component.name
-        val serviceName = service.name
-        val operationName = operation.name
+        val componentname = component.name
+        val servicename = service.name
+        val operationname = operation.name
         val parameters = operation.specification.request.parameters.toVector
         val args = parameters.map(_.name)
         val argumentdetails = parameters.map(_argument_detail)
         val returns = render_operation_returns(operation)
         val summary = _operation_summary(service, operation).getOrElse(s"Operation: ${service.name}.${operation.name}")
-        val descriptionDetails = _trim_i18n(operation.specification.description).fold(Map.empty[String, Vector[String]])(x => Map("description" -> Vector(x)))
-        val childEntityBindings = operation_child_entity_bindings(component, operation).map(child_entity_binding_record)
-        val associationBinding = operation_association_binding(component, operation).map(association_binding_record)
-        val imageBinding = operation_image_binding(component, operation).map(image_binding_record)
-        val commandExecution = _command_execution_record(component, operation)
+        val descriptiondetails = _trim_i18n(operation.specification.description).fold(Map.empty[String, Vector[String]])(x => Map("description" -> Vector(x)))
+        val childentitybindings = operation_child_entity_bindings(component, operation).map(child_entity_binding_record)
+        val associationbinding = operation_association_binding(component, operation).map(association_binding_record)
+        val imagebinding = operation_image_binding(component, operation).map(image_binding_record)
+        val commandexecution = _command_execution_record(component, operation)
         val updatecommands = component.operationDefinitions
           .find(x => NamingConventions.equivalentByNormalized(x.name, operation.name))
           .toVector
           .flatMap(_.parameters)
           .flatMap(field => field.update.toVector.flatMap(_.availableCommands.map(command => s"${field.name}=$command")))
+        val updatevaluecarriers = component.operationDefinitions
+          .find(x => NamingConventions.equivalentByNormalized(x.name, operation.name))
+          .toVector
+          .flatMap(_.parameters)
+          .flatMap(field => field.update.toVector.flatMap(_.availableValueCarriers.map(carrier => s"${field.name}=$carrier")))
         HelpModel(
           `type` = "operation",
-          name = operationName,
+          name = operationname,
           summary = summary,
-          component = Some(componentName),
-          service = Some(serviceName),
-          selector = Some(_operation_selector(componentName, serviceName, operationName)),
+          component = Some(componentname),
+          service = Some(servicename),
+          selector = Some(_operation_selector(componentname, servicename, operationname)),
           children = Vector.empty,
           details = Map(
             "arguments" -> args,
             "argumentDetails" -> argumentdetails,
             "returns" -> Vector(returns),
-            "updateCommands" -> updatecommands
-          ) ++ descriptionDetails,
-          childEntityBindings = childEntityBindings,
-          associationBinding = associationBinding,
-          imageBinding = imageBinding,
-          commandExecution = commandExecution,
-          usage = Vector(s"command ${_operation_cli_selector(componentName, serviceName, operationName)}")
+            "updateCommands" -> updatecommands,
+            "updateValueCarriers" -> updatevaluecarriers
+          ) ++ descriptiondetails,
+          childEntityBindings = childentitybindings,
+          associationBinding = associationbinding,
+          imageBinding = imagebinding,
+          commandExecution = commandexecution,
+          usage = Vector(s"command ${_operation_cli_selector(componentname, servicename, operationname)}")
         )
       case Target.NotFound(target) =>
         HelpModel(
@@ -306,11 +318,11 @@ object HelpProjection {
 
   private def _subsystem_effective_name(
     components: Vector[Component],
-    runtimeSubsystemName: String
+    runtimesubsystemname: String
   ): String =
-    Option(runtimeSubsystemName).map(_.trim).filter(_.nonEmpty).
+    Option(runtimesubsystemname).map(_.trim).filter(_.nonEmpty).
       orElse(
-        _subsystem_definition_record(components, runtimeSubsystemName).
+        _subsystem_definition_record(components, runtimesubsystemname).
       flatMap(_.getString("name")).
       orElse(components.flatMap(_.artifactMetadata.flatMap(_.subsystem)).headOption).
       orElse(components match {
@@ -318,7 +330,7 @@ object HelpProjection {
         case _ => None
       })
       ).
-      getOrElse(runtimeSubsystemName)
+      getOrElse(runtimesubsystemname)
 
   private def _subsystem_domain_vision_models(
     components: Vector[Component],
@@ -556,46 +568,46 @@ object HelpProjection {
     )
   }
 
-  private def _component_selector(componentName: String): HelpSelectorModel = {
-    val cli = NamingConventions.toNormalizedSegment(componentName)
+  private def _component_selector(componentname: String): HelpSelectorModel = {
+    val cli = NamingConventions.toNormalizedSegment(componentname)
     HelpSelectorModel(
-      canonical = componentName,
+      canonical = componentname,
       cli = cli,
       rest = s"/$cli",
-      accepted = Vector(componentName)
+      accepted = Vector(componentname)
     )
   }
 
-  private def _service_selector(componentName: String, serviceName: String): HelpSelectorModel = {
-    val canonical = s"$componentName.$serviceName"
-    val cliComponent = NamingConventions.toNormalizedSegment(componentName)
-    val cliService = NamingConventions.toNormalizedSegment(serviceName)
+  private def _service_selector(componentname: String, servicename: String): HelpSelectorModel = {
+    val canonical = s"$componentname.$servicename"
+    val clicomponent = NamingConventions.toNormalizedSegment(componentname)
+    val cliservice = NamingConventions.toNormalizedSegment(servicename)
     HelpSelectorModel(
       canonical = canonical,
-      cli = s"$cliComponent.$cliService",
-      rest = s"/$cliComponent/$cliService",
+      cli = s"$clicomponent.$cliservice",
+      rest = s"/$clicomponent/$cliservice",
       accepted = Vector(canonical)
     )
   }
 
-  private def _operation_selector(componentName: String, serviceName: String, operationName: String): HelpSelectorModel = {
-    val canonical = s"$componentName.$serviceName.$operationName"
-    val cliComponent = NamingConventions.toNormalizedSegment(componentName)
-    val cliService = NamingConventions.toNormalizedSegment(serviceName)
-    val cliOperation = NamingConventions.toNormalizedSegment(operationName)
+  private def _operation_selector(componentname: String, servicename: String, operationname: String): HelpSelectorModel = {
+    val canonical = s"$componentname.$servicename.$operationname"
+    val clicomponent = NamingConventions.toNormalizedSegment(componentname)
+    val cliservice = NamingConventions.toNormalizedSegment(servicename)
+    val clioperation = NamingConventions.toNormalizedSegment(operationname)
     HelpSelectorModel(
       canonical = canonical,
-      cli = s"$cliComponent.$cliService.$cliOperation",
-      rest = s"/$cliComponent/$cliService/$cliOperation",
+      cli = s"$clicomponent.$cliservice.$clioperation",
+      rest = s"/$clicomponent/$cliservice/$clioperation",
       accepted = Vector(canonical)
     )
   }
 
-  private def _service_cli_selector(componentName: String, serviceName: String): String =
-    s"${NamingConventions.toNormalizedSegment(componentName)}.${NamingConventions.toNormalizedSegment(serviceName)}"
+  private def _service_cli_selector(componentname: String, servicename: String): String =
+    s"${NamingConventions.toNormalizedSegment(componentname)}.${NamingConventions.toNormalizedSegment(servicename)}"
 
-  private def _operation_cli_selector(componentName: String, serviceName: String, operationName: String): String =
-    s"${NamingConventions.toNormalizedSegment(componentName)}.${NamingConventions.toNormalizedSegment(serviceName)}.${NamingConventions.toNormalizedSegment(operationName)}"
+  private def _operation_cli_selector(componentname: String, servicename: String, operationname: String): String =
+    s"${NamingConventions.toNormalizedSegment(componentname)}.${NamingConventions.toNormalizedSegment(servicename)}.${NamingConventions.toNormalizedSegment(operationname)}"
 
   private def _render_capability(p: HelpCapabilityModel): Vector[String] = {
     val name = p.name

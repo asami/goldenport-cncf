@@ -3,6 +3,11 @@
 This checklist is the authoritative Phase 40 state ledger. The summary and
 closure conditions are in `phase-40.md`.
 
+Post-close note (July 19, 2026): executable coverage now also fixes the
+explicit `__value` and metadata-compatible `__value_or_clear` /
+`__value_or_null` carrier semantics. The completed checklist below is retained
+as the Phase 40 closure record.
+
 ## UT-01: Contract and Ingress Audit
 
 Status: DONE

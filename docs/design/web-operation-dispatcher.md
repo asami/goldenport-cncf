@@ -2,7 +2,7 @@
 
 /*
  * @since   Apr. 15, 2026
- * @version Apr. 15, 2026
+ * @version Jul. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 
@@ -222,6 +222,15 @@ The public operand-less command carrier is
 `<field>__remove`. A blank Form value remains absent/no-op and is not an alias
 for either operand-less command.
 
+Explicit value intent uses `<field>__value=<value>`. Unlike an ordinary Form
+control, this carrier assigns a zero-length string when it is present with an
+empty operand. Metadata-sensitive Form integrations may use
+`<field>__value_or_clear=<value>` for collection fields and
+`<field>__value_or_null=<value>` for nullable scalar fields. Their zero-length
+operand selects the named command; a non-empty operand follows the ordinary
+typed assignment path. Absence remains no-op, and whitespace is not treated as
+an empty operand.
+
 Compatibility is determined from generated source-field metadata, not request
 multiplicity or field naming. Collection `clear` becomes an empty typed
 collection assignment. Scalar `null` becomes `Update.setNull` only when the
@@ -234,6 +243,39 @@ the same normalizer. Ordinary JSON arrays, including an empty array, remain
 ordinary values unless the explicit command carrier is present. The normalized
 request continues through the normal Operation, authorization, observability,
 ActionCall, UnitOfWork, and persistence boundaries.
+
+### Typed Update Request Pipeline
+
+Typed update handling is part of shared Operation request construction, not a
+Form-renderer behavior and not an ActionCall-specific parser. The pipeline is:
+
+```text
+transport occurrences
+  -> preserve explicit carrier occurrences
+  -> normalize one directive per base parameter
+  -> validate against CmlOperationField.update metadata
+  -> materialize typed value under the base parameter name
+  -> construct the OperationRequest
+  -> create and execute the ActionCall
+```
+
+The transport adapter may remove an ordinary blank Form control only after it
+has distinguished typed carrier names. It must preserve a zero-length
+`__value`, `__value_or_clear`, or `__value_or_null` occurrence because presence
+is semantic input for the shared normalizer.
+
+Directive normalization owns occurrence grouping, duplicate/conflict checks,
+and zero-length adaptive behavior. Metadata mapping owns collection/null
+compatibility and generated `Update` values. Request materialization removes
+the carrier suffix and supplies the base Operation parameter. Consequently,
+generated request binders and ActionCalls consume only normal parameter names
+and typed values; they do not know the HTTP carrier grammar.
+
+This boundary also ensures that explicit empty string, empty collection, and
+explicit null remain present ActionCall arguments. Omission remains the only
+no-update representation. Invalid directives terminate request construction
+before ActionCall creation, while valid directives use the ordinary
+authorization, observability, ActionCall, and UnitOfWork execution path.
 
 The static parameter contract is defined in
 `docs/spec/http-form-typed-update-parameters.md`.

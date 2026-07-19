@@ -10,6 +10,10 @@ Stage Status:
 
 status = closed
 
+Post-close note (July 19, 2026): the typed update boundary was extended with
+the explicit `__value` carrier and metadata-compatible `__value_or_clear` /
+`__value_or_null` adaptive carriers. This does not reopen Phase 40.
+
 ## 1. Purpose
 
 Phase 40 preserves operand-less update intent from generic HTTP/Form input

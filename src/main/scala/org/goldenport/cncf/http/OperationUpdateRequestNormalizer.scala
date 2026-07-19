@@ -41,11 +41,39 @@ private[cncf] object OperationUpdateRequestNormalizer {
     request: Request,
     directives: OperationTypedUpdateDirectiveSet
   ): Request = {
-    val assignments = directives.directives.values.collect {
-      case assignment: TypedAssignment => assignment
-    }.toVector
-    assignments.foldLeft(request)(_materialize_assignment)
+    directives.directives.values.toVector.foldLeft(request) {
+      case (z, assignment: TypedAssignment) => _materialize_assignment(z, assignment)
+      case (z, OperationTypedUpdateDirective.Existing(
+            assignment: OperationUpdateDirective.ExplicitValueAssignment
+          )) => _materialize_explicit_value_assignment(z, assignment)
+      case (z, _) => z
+    }
   }
+
+  private def _materialize_explicit_value_assignment(
+    request: Request,
+    assignment: OperationUpdateDirective.ExplicitValueAssignment
+  ): Request = {
+    val parametername = assignment.parameterName
+    request.copy(
+      arguments = request.arguments.map { argument =>
+        if (_is_carrier_for(argument.name, parametername))
+          Argument(parametername, argument.value, argument.spec)
+        else
+          argument
+      },
+      properties = request.properties.map { property =>
+        if (_is_carrier_for(property.name, parametername))
+          Property(parametername, property.value, property.spec)
+        else
+          property
+      }
+    )
+  }
+
+  private def _is_carrier_for(name: String, parametername: String): Boolean =
+    OperationUpdateDirectiveNormalizer.isUpdateCarrier(name) &&
+      OperationUpdateDirectiveNormalizer.parameterName(name) == parametername
 
   private def _materialize_assignment(
     request: Request,

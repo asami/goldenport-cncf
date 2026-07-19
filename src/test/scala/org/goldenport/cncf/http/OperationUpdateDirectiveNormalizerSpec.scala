@@ -57,6 +57,62 @@ final class OperationUpdateDirectiveNormalizerSpec
       )))
     }
 
+    "preserve explicit empty values and expand adaptive empty carriers" in {
+      Given("an explicit empty value and the two metadata-sensitive empty carriers")
+      val value = Record.dataAuto("nickname__value" -> "")
+      val clear = Record.dataAuto("tags__value_or_clear" -> "")
+      val nullvalue = Record.dataAuto("nickname__value_or_null" -> "")
+
+      When("the carriers are normalized before Form blank removal can discard intent")
+      val valueresult = OperationUpdateDirectiveNormalizer.normalize(value)
+      val clearresult = OperationUpdateDirectiveNormalizer.normalize(clear)
+      val nullresult = OperationUpdateDirectiveNormalizer.normalize(nullvalue)
+
+      Then("value retains the literal empty operand while adaptive carriers become commands")
+      valueresult shouldBe Consequence.success(OperationUpdateDirectiveSet(Map(
+        "nickname" -> ExplicitValueAssignment(
+          "nickname",
+          ExplicitValueAssignment.Kind.Value,
+          Vector("")
+        )
+      )))
+      clearresult shouldBe Consequence.success(OperationUpdateDirectiveSet(Map(
+        "tags" -> OperandlessCommand("tags", OperandlessCommand.Kind.Clear)
+      )))
+      nullresult shouldBe Consequence.success(OperationUpdateDirectiveSet(Map(
+        "nickname" -> OperandlessCommand("nickname", OperandlessCommand.Kind.Null)
+      )))
+    }
+
+    "preserve non-empty adaptive values without trimming whitespace" in {
+      Given("adaptive value carriers with ordinary and whitespace-only operands")
+      val tags = Record.create(Vector(
+        "tags__value_or_clear" -> "red",
+        "tags__value_or_clear" -> "blue"
+      ))
+      val whitespace = Record.dataAuto("nickname__value_or_null" -> " ")
+
+      When("the adaptive carriers are normalized")
+      val tagsresult = OperationUpdateDirectiveNormalizer.normalize(tags)
+      val whitespaceresult = OperationUpdateDirectiveNormalizer.normalize(whitespace)
+
+      Then("only a zero-length operand selects clear or null")
+      tagsresult shouldBe Consequence.success(OperationUpdateDirectiveSet(Map(
+        "tags" -> ExplicitValueAssignment(
+          "tags",
+          ExplicitValueAssignment.Kind.ValueOrClear,
+          Vector("red", "blue")
+        )
+      )))
+      whitespaceresult shouldBe Consequence.success(OperationUpdateDirectiveSet(Map(
+        "nickname" -> ExplicitValueAssignment(
+          "nickname",
+          ExplicitValueAssignment.Kind.ValueOrNull,
+          Vector(" ")
+        )
+      )))
+    }
+
     "represent an absent parameter explicitly as no directive" in {
       Given("an empty occurrence set")
       val normalized = OperationUpdateDirectiveNormalizer.normalize(Vector.empty)
@@ -139,6 +195,21 @@ final class OperationUpdateDirectiveNormalizerSpec
 
       Then("the normalizer rejects selecting a winner by request order")
       result shouldBe a[Consequence.Failure[?]]
+    }
+
+    "reject mixed explicit value intents instead of selecting by occurrence order" in {
+      Given("a value-or-clear carrier containing both an empty command and a value")
+      val occurrences = Vector(
+        FieldOccurrence("tags__value_or_clear", ""),
+        FieldOccurrence("tags__value_or_clear", "red")
+      )
+
+      When("the occurrences are normalized in either order")
+      val results = Vector(occurrences, occurrences.reverse)
+        .map(OperationUpdateDirectiveNormalizer.normalize)
+
+      Then("both orderings fail through the structured directive policy")
+      results.foreach(_ shouldBe a[Consequence.Failure[?]])
     }
   }
 

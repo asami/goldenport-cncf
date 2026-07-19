@@ -2473,6 +2473,9 @@ Completed in Phase 40.
 - Scope:
   - define `<field>__update_command=clear|null` as the canonical
     operand-less command carrier;
+  - support explicit `<field>__value` assignment, including a zero-length
+    string, plus metadata-compatible `__value_or_clear` and `__value_or_null`
+    adaptive Form carriers;
   - preserve duplicate field occurrences until conflict validation;
   - validate commands against selected operation parameter metadata;
   - map repeated clear to a typed empty collection and compatible scalar null

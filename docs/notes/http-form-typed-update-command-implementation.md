@@ -51,6 +51,21 @@ The Phase 40 implementation target is:
 <field>__update_command=null
 ```
 
+Post-close extension (July 19, 2026): the same normalization boundary also
+accepts explicit and adaptive value carriers:
+
+```text
+<field>__value=<value>
+<field>__value_or_clear=<value>
+<field>__value_or_null=<value>
+```
+
+`__value` preserves an explicitly submitted zero-length string. The adaptive
+carriers translate only a zero-length operand to `clear` or `null`; non-empty
+operands are materialized back to the selected generated parameter before its
+typed binder runs. Compatibility still comes from generated source-field
+metadata, and mixed carrier intent is rejected before ActionCall construction.
+
 Rules:
 
 - plain assignment and the existing value-bearing operators keep their

@@ -118,6 +118,48 @@ final class OperationTypedUpdateMapperSpec
       Then("clear follows collection-valued semantics and null requires a nullable scalar")
       checked.passed shouldBe true
     }
+
+    "accept adaptive value carriers only for compatible source fields" in {
+      Given("value-or-clear and value-or-null assignments for compatible and incompatible fields")
+      val clearcompatible = OperationUpdateDirectiveSet(Map(
+        "tags" -> ExplicitValueAssignment(
+          "tags",
+          ExplicitValueAssignment.Kind.ValueOrClear,
+          Vector("red")
+        )
+      ))
+      val nullcompatible = OperationUpdateDirectiveSet(Map(
+        "nickname" -> ExplicitValueAssignment(
+          "nickname",
+          ExplicitValueAssignment.Kind.ValueOrNull,
+          Vector("Alice")
+        )
+      ))
+      val clearincompatible = OperationUpdateDirectiveSet(Map(
+        "nickname" -> ExplicitValueAssignment(
+          "nickname",
+          ExplicitValueAssignment.Kind.ValueOrClear,
+          Vector("Alice")
+        )
+      ))
+      val nullincompatible = OperationUpdateDirectiveSet(Map(
+        "tags" -> ExplicitValueAssignment(
+          "tags",
+          ExplicitValueAssignment.Kind.ValueOrNull,
+          Vector("red")
+        )
+      ))
+
+      When("source update metadata validates the carrier promises")
+      val accepted = Vector(clearcompatible, nullcompatible)
+        .map(OperationTypedUpdateMapper.map(_operation, _))
+      val rejected = Vector(clearincompatible, nullincompatible)
+        .map(OperationTypedUpdateMapper.map(_operation, _))
+
+      Then("only semantically compatible adaptive carriers proceed to binding")
+      accepted.foreach(_.isSuccess shouldBe true)
+      rejected.foreach(_.isFaillure shouldBe true)
+    }
   }
 
   private def _operation: CmlOperationDefinition =

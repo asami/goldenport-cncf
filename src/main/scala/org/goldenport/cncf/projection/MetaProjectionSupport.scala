@@ -92,18 +92,18 @@ private[projection] object MetaProjectionSupport {
       case Some(s) =>
         val segments = s.split("\\.").toVector.filter(_.nonEmpty)
         segments match {
-          case Vector(componentName) =>
-            _find_component(comps, componentName).map(Target.ComponentTarget.apply).getOrElse(Target.NotFound(Some(s)))
-          case Vector(componentName, serviceName) =>
+          case Vector(componentname) =>
+            _find_component(comps, componentname).map(Target.ComponentTarget.apply).getOrElse(Target.NotFound(Some(s)))
+          case Vector(componentname, servicename) =>
             (for {
-              comp <- _find_component(comps, componentName)
-              service <- _find_service(comp, serviceName)
+              comp <- _find_component(comps, componentname)
+              service <- _find_service(comp, servicename)
             } yield Target.ServiceTarget(comp, service)).getOrElse(Target.NotFound(Some(s)))
-          case Vector(componentName, serviceName, operationName) =>
+          case Vector(componentname, servicename, operationname) =>
             (for {
-              comp <- _find_component(comps, componentName)
-              service <- _find_service(comp, serviceName)
-              op <- _find_operation(service, operationName)
+              comp <- _find_component(comps, componentname)
+              service <- _find_service(comp, servicename)
+              op <- _find_operation(service, operationname)
             } yield Target.OperationTarget(comp, service, op)).getOrElse(Target.NotFound(Some(s)))
           case _ =>
             Target.NotFound(Some(s))
@@ -198,7 +198,8 @@ private[projection] object MetaProjectionSupport {
         base.update(
           "sourceMultiplicity" -> update.sourceMultiplicity,
           "nullAllowed" -> update.nullAllowed,
-          "updateCommands" -> update.availableCommands
+          "updateCommands" -> update.availableCommands,
+          "updateValueCarriers" -> update.availableValueCarriers
         )
       }
     }
@@ -465,6 +466,7 @@ private[projection] object MetaProjectionSupport {
               "sourceMultiplicity" -> p.update.map(_.sourceMultiplicity),
               "nullAllowed" -> p.update.map(_.nullAllowed),
               "updateCommands" -> p.update.map(_.availableCommands).getOrElse(Vector.empty),
+              "updateValueCarriers" -> p.update.map(_.availableValueCarriers).getOrElse(Vector.empty),
               "validation" -> web_validation_record(p.validation),
               "confidentiality" -> p.effectiveConfidentiality.label
             )
@@ -515,19 +517,19 @@ private[projection] object MetaProjectionSupport {
     descriptor: EntityRuntimeDescriptor
   ): Vector[Record] = {
     val platform = _management_storage_fields ++ _security_storage_fields ++ Vector(_permission_storage_field)
-    val platformKeys = platform.map(_.getString("logicalName").getOrElse("")).map(_normalize).toSet
+    val platformkeys = platform.map(_.getString("logicalName").getOrElse("")).map(_normalize).toSet
     val domain =
       descriptor.schema.toVector.flatMap(_.columns).flatMap { column =>
         val logical = column.name.value
-        if (platformKeys.contains(_normalize(logical)) || _non_storage_schema_keys.contains(_normalize(logical)))
+        if (platformkeys.contains(_normalize(logical)) || _non_storage_schema_keys.contains(_normalize(logical)))
           None
         else
           Some(_field_record(
-            logicalName = logical,
-            storageName = SimpleEntityStorageShapePolicy.targetName(logical),
+            logicalname = logical,
+            storagename = SimpleEntityStorageShapePolicy.targetName(logical),
             classification = "scalar_attribute",
-            storageKind = "column",
-            dataType = Some(column.domain.datatype.name)
+            storagekind = "column",
+            datatype = Some(column.domain.datatype.name)
           ))
       }
     val delegated = _delegated_collection_fields(component, descriptor)
@@ -564,11 +566,11 @@ private[projection] object MetaProjectionSupport {
         }
     }
 
-  private def _find_service(component: Component, serviceName: String): Option[ServiceDefinition] =
-    component.protocol.services.services.find(x => NamingConventions.equivalentByNormalized(x.name, serviceName))
+  private def _find_service(component: Component, servicename: String): Option[ServiceDefinition] =
+    component.protocol.services.services.find(x => NamingConventions.equivalentByNormalized(x.name, servicename))
 
-  private def _find_operation(service: ServiceDefinition, operationName: String): Option[OperationDefinition] =
-    service.operations.operations.find(x => NamingConventions.equivalentByNormalized(x.name, operationName))
+  private def _find_operation(service: ServiceDefinition, operationname: String): Option[OperationDefinition] =
+    service.operations.operations.find(x => NamingConventions.equivalentByNormalized(x.name, operationname))
 
   private def _render_data_types(xs: Seq[DataType]): String =
     xs.toVector match {
@@ -580,29 +582,29 @@ private[projection] object MetaProjectionSupport {
   private def _management_storage_fields: Vector[Record] =
     SimpleEntityStorageShapePolicy.ManagementLogicalFields.map { logical =>
       _field_record(
-        logicalName = logical,
-        storageName = SimpleEntityStorageShapePolicy.targetName(logical),
+        logicalname = logical,
+        storagename = SimpleEntityStorageShapePolicy.targetName(logical),
         classification = "management",
-        storageKind = "expanded_column"
+        storagekind = "expanded_column"
       )
     }
 
   private def _security_storage_fields: Vector[Record] =
     SimpleEntityStorageShapePolicy.SecurityIdentityLogicalFields.map { logical =>
       _field_record(
-        logicalName = logical,
-        storageName = SimpleEntityStorageShapePolicy.targetName(logical),
+        logicalname = logical,
+        storagename = SimpleEntityStorageShapePolicy.targetName(logical),
         classification = "security_identity",
-        storageKind = "expanded_column"
+        storagekind = "expanded_column"
       )
     }
 
   private def _permission_storage_field: Record =
     _field_record(
-      logicalName = "permission",
-      storageName = SimpleEntityStorageShapePolicy.PermissionField,
+      logicalname = "permission",
+      storagename = SimpleEntityStorageShapePolicy.PermissionField,
       classification = "permission",
-      storageKind = "compact_json_text"
+      storagekind = "compact_json_text"
     )
 
   private def _delegated_collection_fields(
@@ -615,29 +617,29 @@ private[projection] object MetaProjectionSupport {
       .map(_.name)
     aggregatemembers.distinct.sorted.map(name =>
       _field_record(
-        logicalName = name,
-        storageName = name,
+        logicalname = name,
+        storagename = name,
         classification = "delegated_collection",
-        storageKind = "delegated_collection",
+        storagekind = "delegated_collection",
         source = Some("aggregate")
       )
     ).toVector
   }
 
   private def _field_record(
-    logicalName: String,
-    storageName: String,
+    logicalname: String,
+    storagename: String,
     classification: String,
-    storageKind: String,
-    dataType: Option[String] = None,
+    storagekind: String,
+    datatype: Option[String] = None,
     source: Option[String] = None
   ): Record =
     Record.data(
-      "logicalName" -> logicalName,
-      "storageName" -> storageName,
+      "logicalName" -> logicalname,
+      "storageName" -> storagename,
       "classification" -> classification,
-      "storageKind" -> storageKind,
-      "dataType" -> dataType.getOrElse(""),
+      "storageKind" -> storagekind,
+      "dataType" -> datatype.getOrElse(""),
       "source" -> source.getOrElse("")
     )
 

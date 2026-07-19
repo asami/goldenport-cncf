@@ -90,7 +90,7 @@ private[cncf] final case class OperationTypedUpdateDirectiveSet(
 
 private[cncf] object OperationTypedUpdateMapper {
   import OperationTypedUpdateDirective.*
-  import OperationUpdateDirective.OperandlessCommand
+  import OperationUpdateDirective.{ExplicitValueAssignment, OperandlessCommand}
 
   private val POLICY = "operation-update-command-compatibility"
 
@@ -131,6 +131,21 @@ private[cncf] object OperationTypedUpdateMapper {
             case OperandlessCommand.Kind.Clear =>
               _failure(metadata.name, "collection-valued update parameter", metadata.sourceMultiplicity)
             case OperandlessCommand.Kind.Null =>
+              _failure(metadata.name, "null-assignable update parameter", metadata.sourceMultiplicity)
+          }
+        }
+      case assignment: ExplicitValueAssignment =>
+        OperationUpdateParameterMetadata.resolve(operation, assignment.parameterName).flatMap { metadata =>
+          assignment.carrier match {
+            case ExplicitValueAssignment.Kind.Value =>
+              Consequence.success(Existing(assignment))
+            case ExplicitValueAssignment.Kind.ValueOrClear if metadata.collectionValued =>
+              Consequence.success(Existing(assignment))
+            case ExplicitValueAssignment.Kind.ValueOrNull if metadata.nullAllowed && !metadata.collectionValued =>
+              Consequence.success(Existing(assignment))
+            case ExplicitValueAssignment.Kind.ValueOrClear =>
+              _failure(metadata.name, "collection-valued update parameter", metadata.sourceMultiplicity)
+            case ExplicitValueAssignment.Kind.ValueOrNull =>
               _failure(metadata.name, "null-assignable update parameter", metadata.sourceMultiplicity)
           }
         }
