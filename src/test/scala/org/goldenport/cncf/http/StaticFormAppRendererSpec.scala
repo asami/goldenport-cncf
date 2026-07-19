@@ -8437,6 +8437,34 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       ).body
       checkboxhtml should include ("type=\"checkbox\" value=\"true\" checked")
 
+      And("multiple select prefill marks every schema-backed value")
+      val multipledescriptor = descriptor.copy(form = Map(selector -> WebDescriptor.Form(
+        controls = Map(
+          "id" -> WebDescriptor.FormControl(hidden = true),
+          "approved" -> WebDescriptor.FormControl(
+            controlType = Some("select"),
+            values = Vector("true", "false"),
+            multiple = true
+          )
+        )
+      )))
+      val multiplehtml = _renderer.renderStaticTemplate(
+        subsystem,
+        "notice-board",
+        "planning-app",
+        Vector("detail"),
+        template,
+        StaticFormAppLayout.AssetCompletionOptions(),
+        WebPageContext(values = Map(
+          "notice.id" -> "notice_1",
+          "notice.approved" -> "true,false"
+        )),
+        multipledescriptor
+      ).body
+      multiplehtml should include ("<select class=\"form-select\" id=\"field-approved\" name=\"approved\" required multiple>")
+      multiplehtml should include ("<option value=\"true\" selected>true</option>")
+      multiplehtml should include ("<option value=\"false\" selected>false</option>")
+
       val unboundhtml = _renderer.renderStaticTemplate(
         subsystem,
         "notice-board",

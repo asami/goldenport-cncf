@@ -32,7 +32,9 @@ Status: DONE
 - [x] Keep JavaScript-disabled form operation complete.
 - [x] Provide one-time localized outcome/flash state.
 - [x] Enforce session CSRF tokens rather than only preserving the reserved
-  hidden context field.
+      hidden context field.
+- [x] Restore every bound value when redisplaying schema-backed multiple-select
+      controls.
 
 ## SW-04: Privacy and Acceptance
 

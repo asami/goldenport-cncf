@@ -1,11 +1,11 @@
 # Phase 42 - Static Web Server Rendering Contract
 
 Stage Status:
-- Current status: DONE
+- Current status: CLOSED
 - Current step: Complete
 - Owner: CNCF Web runtime and Static Web renderer.
 
-status = active
+status = closed
 
 ## 1. Purpose
 
@@ -57,8 +57,11 @@ without browser REST fan-out for execution context or primary page content.
   public with mandatory revalidation and language variance. Standalone,
   authenticated, session-associated, flash, and CSRF-form documents are
   `private, no-store`; unresolved execution state also fails closed.
+- Schema-backed multiple-select controls restore every comma-separated bound
+  value during server redisplay, preserving repeated-field editing without
+  browser-side reconstruction.
 
 ## 5. Resume Point
 
-Phase 42 is complete. Application CARs can migrate ordinary reads and writes to
+Phase 42 is closed. Application CARs can migrate ordinary reads and writes to
 the server-rendered View and aggregate-form contract.

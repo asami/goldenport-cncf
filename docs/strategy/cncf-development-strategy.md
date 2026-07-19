@@ -652,10 +652,9 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Notes contain execution details and results for each phase.
 
 ## Process Status Pointers
-- Active phase: `docs/phase/phase-42.md` with
-  `docs/phase/phase-42-checklist.md` (Jul. 19, 2026).
-- Latest closed phase: `docs/phase/phase-41.md` with
-  `docs/phase/phase-41-checklist.md` (Jul. 19, 2026).
+- Active phase: none selected.
+- Latest closed phase: `docs/phase/phase-42.md` with
+  `docs/phase/phase-42-checklist.md` (Jul. 20, 2026).
 - Status interpretation rules: `docs/rules/stage-status-and-checklist-convention.md`
 - Latest post-closure maintenance: Jul. 18, 2026 scoped concurrency admission.
   CNCF now exposes a runtime-installed, per-logical-scope, nonblocking permit
@@ -840,7 +839,7 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Phase 39: closed (`docs/phase/phase-39.md`)
 - Phase 40: closed (`docs/phase/phase-40.md`)
 - Phase 41: closed (`docs/phase/phase-41.md`)
-- Phase 42: active (`docs/phase/phase-42.md`)
+- Phase 42: closed (`docs/phase/phase-42.md`)
 
 ## 8. Completed Development Item History
 
@@ -1403,12 +1402,9 @@ Completed work areas are recorded in section 8. When a development item closes,
 remove its completion record from this section and add or update the
 corresponding completed-history entry.
 
-Current development item: Phase 42 Static Web Server Rendering Contract.
-
-The active slice makes one server-rendered document the normal application
-read path. Typed component page Views and server-side widget rendering are
-available. Locale-aware message rendering, aggregate command forms, and
-subject-safe cache semantics remain active work.
+Current development item: none selected. Phase 42 Static Web Server Rendering
+Contract is complete; the next phase should be selected explicitly from the
+remaining development items below.
 
 ### 9.1 Web Next Stage Follow-ups
 Web/platform follow-up index.

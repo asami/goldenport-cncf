@@ -1811,6 +1811,9 @@ trait StaticFormAppRendererFormPart {
       val multiple = if (descriptor.exists(_.multiple)) " multiple" else ""
       val disabled = if (readonly) " disabled" else ""
       val values = descriptor.toVector.flatMap(_.values)
+      val selectedvalues =
+        if (descriptor.exists(_.multiple)) split_form_field_values(value).toSet
+        else Set(value)
       val placeholderoption =
         descriptor
           .flatMap(_.placeholder)
@@ -1822,7 +1825,7 @@ trait StaticFormAppRendererFormPart {
           }
           .toVector
       val options = (placeholderoption ++ values.map { candidate =>
-        val selected = if (candidate == value) " selected" else ""
+        val selected = if (selectedvalues.contains(candidate)) " selected" else ""
         s"""<option value="${escape(candidate)}"${selected}>${escape(candidate)}</option>"""
       }).mkString("\n")
       s"""<div class="mb-3"${fieldselector}>
