@@ -33,7 +33,7 @@ import io.circe.parser.parse
  * @since   May. 18, 2026
  *  version May. 30, 2026
  *  version Jun. 19, 2026
- * @version Jul. 19, 2026
+ * @version Jul. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 trait StaticFormAppRendererTemplatePart {
@@ -101,8 +101,8 @@ trait StaticFormAppRendererTemplatePart {
     val table = """<textus:table\b([^>]*)></textus:table>""".r
     val card = """(?s)<textus(?::card(?!-)|-card(?!-))\b([^>]*)>(.*?)</textus(?::card|-card)>""".r
     val recordcard = """<textus(?::record-card|-record-card)\b([^>]*)></textus(?::record-card|-record-card)>""".r
-    val cardlist = """<textus(?::card-list|-card-list)\b([^>]*)></textus(?::card-list|-card-list)>""".r
-    val linelist = """<textus(?::line-list|-line-list)\b([^>]*)></textus(?::line-list|-line-list)>""".r
+    val cardlist = """(?s)<textus(?::card-list|-card-list)\b([^>]*)>\s*</textus(?::card-list|-card-list)>""".r
+    val linelist = """(?s)<textus(?::line-list|-line-list)\b([^>]*)>\s*</textus(?::line-list|-line-list)>""".r
     val editablelinelist = """(?s)<textus:editable-line-list\b([^>]*)>(.*?)</textus:editable-line-list>""".r
     val summarycard = """<textus(?::summary-card|-summary-card)\b([^>]*)></textus(?::summary-card|-summary-card)>""".r
     val actioncard = """<textus(?::action-card|-action-card)\b([^>]*)></textus(?::action-card|-action-card)>""".r

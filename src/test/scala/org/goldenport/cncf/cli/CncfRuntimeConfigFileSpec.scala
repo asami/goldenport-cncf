@@ -13,7 +13,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Apr. 15, 2026
  *  version Apr. 25, 2026
- * @version Jul. 15, 2026
+ * @version Jul. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -74,6 +74,60 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with Giv
       assemblyonly.configuration.trace
         .get("textus.artscene.application.mode")
         .flatMap(_.sourceType) shouldBe Some("assembly-descriptor")
+    }
+
+    "retain assembly Web execution config across the launcher subsystem handoff" in {
+      Given("an assembly default consumed after launcher repository resolution")
+      val cwd = Files.createTempDirectory("cncf-assembly-web-execution-config")
+      val assemblydescriptor = cwd.resolve("assembly.yaml")
+      Files.writeString(
+        assemblydescriptor,
+        """subsystem: config-target
+          |components: []
+          |config:
+          |  textus.web.execution.display-override.enabled: true
+          |  textus.web.execution.sample-count: 8
+          |  textus.web.execution.sample-ratio: 1.5
+          |""".stripMargin
+      )
+      val args = Array(s"--textus.assembly.descriptor=${assemblydescriptor}", "server")
+
+      When("the launcher resolves the assembly descriptor and repository invocation")
+      val bootstrap = CncfRuntime.bootstrap(cwd, args)
+      val active = bootstrap.repositories.activeRepositories.toOption.get
+      val search = bootstrap.repositories.searchRepositories.toOption.get
+      val invocation = CncfRuntime.resolveSubsystemInvocation(bootstrap.invocation, search, active)
+      val extras = CncfRuntime.componentExtraFunction(active, bootstrap.front)
+
+      Then("boolean and numeric YAML scalars remain available as runtime configuration strings")
+      RuntimeConfig.getString(
+        bootstrap.configuration,
+        "textus.web.execution.display-override.enabled"
+      ) shouldBe Some("true")
+      RuntimeConfig.getString(bootstrap.configuration, "textus.web.execution.sample-count") shouldBe Some("8")
+      RuntimeConfig.getString(bootstrap.configuration, "textus.web.execution.sample-ratio") shouldBe Some("1.5")
+
+      And("the resolved invocation retains the assembly descriptor source")
+      invocation.actualArgs.exists(_.startsWith(s"--${RuntimeConfig.AssemblyDescriptorKey}=")) shouldBe true
+
+      When("the resolved launcher invocation initializes the runtime subsystem")
+      val runtime = new CncfRuntime()
+      try {
+        val subsystem = runtime.initializeForEmbedding(
+          cwd = cwd,
+          args = invocation.actualArgs,
+          modeHint = Some(RunMode.Server),
+          extraComponents = extras
+        ).toOption.get
+
+        Then("the subsystem configuration still owns the assembly Web policy")
+        RuntimeConfig.getString(
+          subsystem.configuration,
+          "textus.web.execution.display-override.enabled"
+        ) shouldBe Some("true")
+      } finally {
+        runtime.closeEmbedding()
+      }
     }
 
     "select search repositories only as development assembly API sources" in {

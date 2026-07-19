@@ -18,7 +18,7 @@ import org.goldenport.cncf.spi.{SpiCardinality, SpiProviderSelector, SpiRuntimeB
  * @since   Apr.  7, 2026
  *  version Apr. 28, 2026
  *  version May.  7, 2026
- * @version Jul. 16, 2026
+ * @version Jul. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class GenericSubsystemAuthenticationProviderBinding(
@@ -1121,7 +1121,25 @@ object GenericSubsystemDescriptor {
       Record.create(rec.asMap.toVector :+ ("name" -> name))
 
   private def _string_map_value(rec: Record, keys: List[String]): Map[String, String] =
-    _record_value(rec, keys).map(_.asMap.collect { case (k, v: String) => k -> v }).getOrElse(Map.empty)
+    _record_value(rec, keys).map(_.asMap.flatMap { case (key, value) =>
+      _config_scalar_string(value).map(key -> _)
+    }).getOrElse(Map.empty)
+
+  private def _config_scalar_string(p: Any): Option[String] =
+    p match {
+      case null => None
+      case x: String => Some(x)
+      case x: Boolean => Some(x.toString)
+      case x: Byte => Some(x.toString)
+      case x: Short => Some(x.toString)
+      case x: Int => Some(x.toString)
+      case x: Long => Some(x.toString)
+      case x: Float => Some(x.toString)
+      case x: Double => Some(x.toString)
+      case x: BigDecimal => Some(x.toString)
+      case x: java.math.BigDecimal => Some(x.toString)
+      case _ => None
+    }
 
   private def _operation_authorization_value(
     rec: Record

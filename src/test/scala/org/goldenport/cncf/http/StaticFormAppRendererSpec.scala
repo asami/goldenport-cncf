@@ -10973,6 +10973,63 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       html should not include ("x-textus-session=session-1")
     }
 
+    "render multiline card-list attributes used by application templates" in {
+      Given("a result record and a card-list whose attributes span multiple lines")
+      val properties = StaticFormAppRenderer.FormResultProperties(
+        StaticFormAppRenderer.FormPageProperties("art-scene", "timeline", "list-timeline"),
+        200,
+        "application/json",
+        """{"data":[{"facility_name":"Museum A","exhibition_count":2,"exhibition_summary":"A, B"}]}"""
+      )
+
+      When("the Static Form result page is rendered")
+      val html = _renderer.renderFormResult(
+        properties,
+        """<section>
+          |  <textus:card-list
+          |    source="result.body.data"
+          |    title="facility_name"
+          |    columns="exhibition_count:Count,exhibition_summary:Exhibitions"
+          |    cols="1">
+          |  </textus:card-list>
+          |</section>""".stripMargin
+      ).body
+
+      Then("the widget is expanded into a server-rendered record card")
+      html should include ("textus-record-card")
+      html should include ("Museum A")
+      html should include ("Exhibitions")
+      html should not include ("<textus:card-list")
+    }
+
+    "render multiline line-list attributes used by application templates" in {
+      Given("a result record and a line-list whose attributes span multiple lines")
+      val properties = StaticFormAppRenderer.FormResultProperties(
+        StaticFormAppRenderer.FormPageProperties("art-scene", "timeline", "list-timeline"),
+        200,
+        "application/json",
+        """{"data":[{"facility_name":"Museum A","exhibition_count":2,"exhibition_summary":"A, B"}]}"""
+      )
+
+      When("the Static Form result page is rendered")
+      val html = _renderer.renderFormResult(
+        properties,
+        """<section>
+          |  <textus:line-list
+          |    source="result.body.data"
+          |    title="facility_name"
+          |    columns="exhibition_count:Count,exhibition_summary:Exhibitions">
+          |  </textus:line-list>
+          |</section>""".stripMargin
+      ).body
+
+      Then("the widget is expanded into a server-rendered line item")
+      html should include ("data-textus-widget=\"textus:line-list\"")
+      html should include ("Museum A")
+      html should include ("Exhibitions")
+      html should not include ("<textus:line-list")
+    }
+
     "render textus record card with CML summary columns" in {
       val columns = Vector(
         StaticFormAppRenderer.TableColumn("title", "Title"),
