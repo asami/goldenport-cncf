@@ -15,10 +15,10 @@ This directory does **not** contain design details or thinking processes.
 
 Current baseline:
 
-- Active phase: `phase-40.md` - HTTP/Form Typed Update Commands.
-- Active checklist: `phase-40-checklist.md`.
-- Latest closed phase: `phase-39.md` - Server Port Allocation.
-- Latest closed checklist: `phase-39-checklist.md`.
+- Active phase: none.
+- Active checklist: none.
+- Latest closed phase: `phase-40.md` - HTTP/Form Typed Update Commands.
+- Latest closed checklist: `phase-40-checklist.md`.
 - Closed phase set currently includes:
   - `phase-4.md`
   - `phase-5.md`
@@ -55,6 +55,7 @@ Current baseline:
   - `phase-37.md`
   - `phase-38.md`
   - `phase-39.md`
+  - `phase-40.md`
 
 ## Related Rules
 

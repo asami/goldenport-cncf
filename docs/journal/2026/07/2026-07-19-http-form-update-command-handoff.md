@@ -7,6 +7,11 @@ normative CNCF contract. Promote the accepted grammar and behavior to CNCF
 design/specification documents after implementation and executable
 specifications settle the details.
 
+> Post-implementation annotation (2026-07-19): Phase 40 is complete. The
+> canonical contract is `docs/spec/http-form-typed-update-parameters.md`, with
+> design context in `docs/design/web-operation-dispatcher.md`. This handoff
+> remains the historical implementation input and does not override them.
+
 ## Problem
 
 ArtScene needs to restore a repeated facility attribute to its default

@@ -1,14 +1,14 @@
 # Phase 40 - HTTP/Form Typed Update Commands
 
 Stage Status:
-- Current status: IN_PROGRESS
-- Current step: UT-05 executable CNCF evidence; generated binder integration remains in UT-03.
+- Current status: CLOSED
+- Current step: Complete
 - Owner: CNCF HTTP/Form ingress and generated operation binding.
 - Update rule: Update this block and `phase-40-checklist.md` whenever a stable
   work-item state changes. Close only after every checklist item is checked and
   confirmed parameter behavior is promoted to design/spec documents.
 
-status = in_progress
+status = closed
 
 ## 1. Purpose
 
@@ -67,19 +67,20 @@ design/spec documents.
   freeze the provisional grammar and metadata requirements.
 - B (DONE): UT-02 - Implement transport-neutral directive grouping, duplicate
   preservation, and conflict validation.
-- C (IN_PROGRESS): UT-03 - CNCF metadata contract, compatibility checks,
-  typed clear/null mapper, and runtime projection are implemented; generator
-  emission and generated null binding remain to be connected.
+- C (DONE): UT-03 - CNCF metadata contract, compatibility checks, typed
+  clear/null mapper, generator emission, and generated null binding are
+  implemented.
 - D (DONE): UT-04 - The shared `ComponentLogic` request boundary,
   URL-encoded/multipart Form adaptation, REST/JSON carrier normalization,
   metadata projections, and generated Form controls are implemented.
-- E (IN_PROGRESS): UT-05 - Structured HTTP 400 and transport-equivalence
-  evidence is implemented; regression, authorization, and
-  observability executable evidence.
-- F (OPEN): UT-06 - Validate the ArtScene generated-REST clear scenario.
-- G (OPEN): UT-07 - Promote confirmed parameter behavior to design/spec and
-  annotate superseded historical proposals.
-- H (OPEN): UT-08 - Run full validation, review, and close Phase 40.
+- E (DONE): UT-05 - Structured HTTP 400, transport-equivalence, regression,
+  authorization, observability, generated binding, and persistence evidence.
+- F (DONE): UT-06 - ArtScene generated-REST clear, generated search read-back,
+  stored empty collection, and default policy restoration are verified.
+- G (DONE): UT-07 - Confirmed parameter behavior is promoted to design/spec;
+  historical proposals remain explicitly non-normative.
+- H (DONE): UT-08 - Full validation and scoped review are complete; Phase 40
+  is closed.
 
 ## 6. Completion Conditions
 
@@ -106,3 +107,18 @@ Phase 40 closes only when:
 - Client-side dynamic form editors beyond emitting the confirmed fields.
 - Record-library redesign unrelated to the shared CNCF ingress requirement.
 - Application-specific migration of stored values.
+
+## 8. Completion Evidence
+
+- CNCF focused typed-update specs: 23 succeeded, 0 failed.
+- Static Form update-focused specs: 18 succeeded, 0 failed.
+- CNCF full suite: 2023 succeeded, 0 failed, 1 canceled, 1 ignored, and 59
+  pending.
+- simple-modeler full suite: 36 succeeded, 0 failed; its updated snapshot was
+  published locally for downstream generation.
+- Cozy `ModelerScalaGenerationSpec`: 27 succeeded, 0 failed.
+- ArtScene regenerated and compiled 165 Scala sources, built
+  `textus-art-scene-0.1.1-SNAPSHOT.car`, and passed the maintained component
+  API assembly acceptance with generated clear/read-back/persistence/default
+  policy evidence.
+- Scoped review found no actionable naming, specification, or runtime finding.

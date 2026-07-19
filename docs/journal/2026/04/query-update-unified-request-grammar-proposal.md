@@ -5,6 +5,16 @@ status=journal
 published_at=2026-04-06
 category=request / grammar / web
 
+Post-Implementation Annotation (2026-07-19)
+-------------------------------------------
+
+Phase 40 completed the operand-less HTTP/Form update-command implementation.
+The canonical contract is now
+`docs/spec/http-form-typed-update-parameters.md`, with design context in
+`docs/design/web-operation-dispatcher.md`. The unified grammar below remains a
+historical proposal and does not override the implemented
+`<field>__update_command=clear|null` carrier.
+
 Overview
 --------
 

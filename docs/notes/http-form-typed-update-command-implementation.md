@@ -1,6 +1,6 @@
 # HTTP/Form Typed Update Command Implementation Note
 
-status=implementation-in-progress
+status=implemented
 updated_at=2026-07-19
 
 ## 1. Role
@@ -363,3 +363,25 @@ and `__remove` for value-bearing operations plus
 `__update_command=clear|null` for operand-less commands. Older
 `__update_clear`, `__clear`, and `__update_null` spellings remain historical or
 internal candidates and are not part of the provisional public surface.
+
+## Implementation Status Addendum: Generated Binding And Acceptance Result
+
+Cozy now projects each generated Entity update field's source multiplicity and
+null-assignment capability into simple-modeler metadata. simple-modeler carries
+that metadata into `CmlOperationField.update` and generated Scala request
+binding recognizes `Update.SetNull` before ordinary datatype decoding.
+
+The generated ArtScene CAR compiles without an ABI compatibility overload.
+Its maintained component API assembly smoke proves both generated read/write
+roundtrip and application behavior: a seeded `Facility.fetch_methods` override
+is set and cleared through generated automatic REST, generated Entity search no
+longer returns the cleared values, SQLite stores the clear as `[]`, and a newly
+registered Facility resumes its default fetch policy after the same command.
+
+The verified contract is now normative in:
+
+- `docs/design/web-operation-dispatcher.md`; and
+- `docs/spec/http-form-typed-update-parameters.md`.
+
+This note remains the non-normative implementation record. Historical grammar
+proposals retain their original text and do not override the promoted contract.

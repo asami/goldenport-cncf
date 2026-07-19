@@ -838,7 +838,7 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Phase 37: closed (`docs/phase/phase-37.md`)
 - Phase 38: closed (`docs/phase/phase-38.md`)
 - Phase 39: closed (`docs/phase/phase-39.md`)
-- Phase 40: in progress (`docs/phase/phase-40.md`)
+- Phase 40: closed (`docs/phase/phase-40.md`)
 
 ## 8. Completed Development Item History
 
@@ -2463,7 +2463,7 @@ Completed in Phase 39 (Jul. 19, 2026).
     server startup, then clears the handshake on shutdown.
 
 ### 9.35 HTTP/Form Typed Update Commands
-In progress in Phase 40.
+Completed in Phase 40.
 
 - Goal: preserve operand-less update intent from generic HTTP/Form input to
   generated typed `Update` values without redefining blank Form semantics.
@@ -2471,7 +2471,7 @@ In progress in Phase 40.
   - ArtScene must clear the stored `Facility.fetch_methods` override through
     generated automatic REST and return to its application default policy.
 - Scope:
-  - introduce `<field>__update_command=clear|null` as the provisional
+  - define `<field>__update_command=clear|null` as the canonical
     operand-less command carrier;
   - preserve duplicate field occurrences until conflict validation;
   - validate commands against selected operation parameter metadata;
@@ -2489,14 +2489,16 @@ In progress in Phase 40.
   - authorization, observability, and persistence remain behind the normal
     ActionCall boundary; and
   - CNCF contains no ArtScene-specific operation or field policy.
-- Documentation gate:
-  - the handoff and implementation note remain non-normative while work is in
-    progress;
-  - after CNCF executable verification and ArtScene integration pass, promote
-    the confirmed parameter grammar, metadata rules, transport behavior, and
-    errors to `docs/design` and `docs/spec`; and
-  - annotate historical proposals that differ from the confirmed contract
-    instead of rewriting their original text.
+- Completion evidence:
+  - generated source multiplicity/nullability metadata and generated
+    `Update.SetNull` binding are connected through Cozy and simple-modeler;
+  - CNCF focused and full executable specifications pass;
+  - ArtScene generated automatic REST clears `Facility.fetch_methods`,
+    generated search reflects the clear, persistence stores `[]`, and default
+    fetch policy resumes; and
+  - the canonical contract is recorded in
+    `docs/design/web-operation-dispatcher.md` and
+    `docs/spec/http-form-typed-update-parameters.md`.
 - Planning references:
   - `docs/notes/http-form-typed-update-command-implementation.md`;
   - `docs/phase/phase-40.md`; and

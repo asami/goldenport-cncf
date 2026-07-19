@@ -16,3 +16,7 @@ Current runtime/I18N specs:
 - `rule-engine-inference-runtime.md`
 - `resource-reference-dsl.md`
 - `process-execution-runtime.md`
+
+Current HTTP/Form operation specs:
+
+- `http-form-typed-update-parameters.md`

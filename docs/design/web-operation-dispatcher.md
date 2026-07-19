@@ -209,6 +209,35 @@ Create/update Operations are synchronous browser form commands in the current
 baseline and return a scalar status message. Their persistence effect must occur
 inside the target Operation, not in the Web HTML route.
 
+## Typed Update Parameter Normalization
+
+HTTP and Form adapters preserve update intent until the selected Operation and
+its parameter metadata are available. The shared request-construction boundary
+normalizes update directives before generated request binding and before any
+single-value Record access can discard duplicate occurrences.
+
+The public operand-less command carrier is
+`<field>__update_command=clear|null`. Existing value-bearing carriers remain
+`<field>__overwrite`, `<field>__prepend`, `<field>__append`, and
+`<field>__remove`. A blank Form value remains absent/no-op and is not an alias
+for either operand-less command.
+
+Compatibility is determined from generated source-field metadata, not request
+multiplicity or field naming. Collection `clear` becomes an empty typed
+collection assignment. Scalar `null` becomes `Update.setNull` only when the
+source field permits null assignment. Incompatible, unknown, duplicate, or
+conflicting directives fail before ActionCall construction as structured
+argument failures.
+
+URL-encoded Form, multipart Form, REST/query input, and JSON Record input use
+the same normalizer. Ordinary JSON arrays, including an empty array, remain
+ordinary values unless the explicit command carrier is present. The normalized
+request continues through the normal Operation, authorization, observability,
+ActionCall, UnitOfWork, and persistence boundaries.
+
+The static parameter contract is defined in
+`docs/spec/http-form-typed-update-parameters.md`.
+
 ## Open Items
 
 - RuntimeConfig keys for dispatcher mode and REST base URL

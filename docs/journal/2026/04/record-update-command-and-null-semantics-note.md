@@ -5,6 +5,15 @@ status=journal
 published_at=2026-04-06
 category=web / form / update
 
+Post-Implementation Annotation (2026-07-19)
+-------------------------------------------
+
+Phase 40 completed the CNCF transport-to-generated-update boundary. The
+canonical parameter contract is now
+`docs/spec/http-form-typed-update-parameters.md`, with design context in
+`docs/design/web-operation-dispatcher.md`. The Record observations below remain
+historical implementation context and are not public HTTP/Form aliases.
+
 Overview
 --------
 

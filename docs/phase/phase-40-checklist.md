@@ -24,9 +24,9 @@ Status: DONE
 
 ## UT-03: Typed Update Mapping
 
-Status: IN_PROGRESS
+Status: DONE
 
-- [ ] Populate source multiplicity and null support in generated
+- [x] Populate source multiplicity and null support in generated
   `CmlOperationField.update` metadata and resolve it at runtime.
 - [x] Map repeated `clear` to `Update.set(empty typed collection)`.
 - [x] Map compatible scalar `null` to `Update.setNull`.
@@ -52,7 +52,7 @@ Status: DONE
 
 ## UT-05: Executable CNCF Evidence
 
-Status: IN_PROGRESS
+Status: DONE
 
 - [x] Cover repeated powertype clear and optional scalar null assignment at
   the CNCF typed-mapping boundary.
@@ -64,39 +64,38 @@ Status: IN_PROGRESS
 - [x] Prove equivalent transport semantics and order-independent validation.
 - [x] Prove generated forms expose only type-compatible commands and submit the
   same grammar accepted by automatic REST.
-- [ ] Prove authorization, validation observability, and persistence still use
-  the normal ActionCall path. Authorization, ActionCall, and request-validation
-  metrics are covered; generated persistence remains pending UT-03/UT-06.
+- [x] Prove authorization, validation observability, and persistence still use
+  the normal ActionCall path.
 
 ## UT-06: ArtScene Driver Validation
 
-Status: OPEN
+Status: DONE
 
-- [ ] Clear `Facility.fetch_methods` through generated automatic REST.
-- [ ] Confirm generated read/search no longer returns the stored override.
-- [ ] Confirm ArtScene restores its default fetch policy without a bespoke
+- [x] Clear `Facility.fetch_methods` through generated automatic REST.
+- [x] Confirm generated read/search no longer returns the stored override.
+- [x] Confirm ArtScene restores its default fetch policy without a bespoke
   operation.
 
 ## UT-07: Canonical Documentation Promotion
 
-Status: OPEN
+Status: DONE
 
-- [ ] Compare implemented behavior with the provisional note and historical
+- [x] Compare implemented behavior with the provisional note and historical
   grammar proposals.
-- [ ] Promote confirmed parameter names, type rules, conflicts, transport
+- [x] Promote confirmed parameter names, type rules, conflicts, transport
   behavior, and error semantics to `docs/design`.
-- [ ] Promote the static parameter contract and executable-spec references to
+- [x] Promote the static parameter contract and executable-spec references to
   `docs/spec`.
-- [ ] Annotate historical journal/notes where their proposal differs from the
+- [x] Annotate historical journal/notes where their proposal differs from the
   confirmed contract; do not rewrite historical text.
 
 ## UT-08: Verification and Closure
 
-Status: OPEN
+Status: DONE
 
-- [ ] Run focused HTTP/Form, request-binding, generated update, authorization,
+- [x] Run focused HTTP/Form, request-binding, generated update, authorization,
   and observability specifications.
-- [ ] Run `sbt --batch Test/compile` and the full CNCF test suite.
-- [ ] Run the maintained ArtScene integration smoke.
-- [ ] Run scoped review and resolve all actionable findings.
-- [ ] Update strategy/phase closure evidence and close Phase 40.
+- [x] Run `sbt --batch Test/compile` and the full CNCF test suite.
+- [x] Run the maintained ArtScene integration smoke.
+- [x] Run scoped review and resolve all actionable findings.
+- [x] Update strategy/phase closure evidence and close Phase 40.
