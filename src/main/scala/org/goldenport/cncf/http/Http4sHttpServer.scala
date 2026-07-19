@@ -4627,6 +4627,7 @@ final class Http4sHttpServer(
             app = webappname,
             page = page,
             routePath = "/web/" + (webappname +: page).mkString("/"),
+            values = _query_values(r),
             sessionId = sessionid,
             authenticated = authenticated
           )

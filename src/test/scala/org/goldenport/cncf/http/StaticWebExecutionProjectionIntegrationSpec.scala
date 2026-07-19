@@ -23,7 +23,7 @@ import org.typelevel.ci.CIString
 
 /*
  * @since   Jul. 17, 2026
- * @version Jul. 19, 2026
+ * @version Jul. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 final class StaticWebExecutionProjectionIntegrationSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -133,6 +133,46 @@ final class StaticWebExecutionProjectionIntegrationSpec extends AnyWordSpec with
       pagecontext.hcursor.downField("execution").get[String]("locale").toOption shouldBe Some("en-US")
     }
 
+    "pass page query values to component page-context providers" in {
+      Given("a Static Web page request with application filter values")
+      val root = Files.createTempDirectory("static-web-page-query-context-")
+      Files.createDirectories(root.resolve("debug-app"))
+      Files.writeString(
+        root.resolve("web.yaml"),
+        """web:
+          |  apps:
+          |    - name: debug-app
+          |""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+      Files.writeString(
+        root.resolve("debug-app").resolve("index.html"),
+        """<!doctype html><html><head></head><body><main>Query context</main></body></html>""",
+        StandardCharsets.UTF_8
+      )
+      val configuration = ResolvedConfiguration(
+        Configuration(Map(
+          RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web.yaml").toString)
+        )),
+        ConfigurationTrace.empty
+      )
+      val subsystem = DefaultSubsystemFactory.default(None, configuration)
+      subsystem.add(_static_page_view_component(subsystem))
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val request = Request[IO](
+        method = Method.GET,
+        uri = Uri.unsafeFromString("/web/debug/debug-app?date=2026-07-20&timeline_range=current_future")
+      )
+
+      When("the component page-context provider resolves the first document")
+      val response = server.routes(null).orNotFound.run(request).unsafeRunSync()
+      val pagecontext = _page_context(response.as[String].unsafeRunSync())
+
+      Then("the provider receives the canonical query values without a browser REST request")
+      pagecontext.hcursor.downField("view").downField("query").get[String]("date").toOption shouldBe Some("2026-07-20")
+      pagecontext.hcursor.downField("view").downField("query").get[String]("timeline_range").toOption shouldBe Some("current_future")
+    }
+
     "keep unrelated runtime messages out of the selected locale catalog" in {
       Given("Japanese application catalogs and an English runtime message map")
       val subsystem = DefaultSubsystemFactory.default(
@@ -195,7 +235,8 @@ final class StaticWebExecutionProjectionIntegrationSpec extends AnyWordSpec with
         )(using ExecutionContext): Consequence[WebPageContext] =
           if (request.app == "debug-app" && request.page.isEmpty)
             Consequence.success(WebPageContext(view = Record.data(
-              "items" -> Vector(Record.data("title" -> "展示A", "status" -> "開催中"))
+              "items" -> Vector(Record.data("title" -> "展示A", "status" -> "開催中")),
+              "query" -> Record.data(request.values.toSeq*)
             )))
           else
             Consequence.success(WebPageContext.empty)
