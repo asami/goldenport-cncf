@@ -26,15 +26,20 @@ Status: DONE
 
 Status: IN_PROGRESS
 
-- [ ] Resolve multiplicity, element datatype, null support, and update-bearing
-  status from operation metadata.
-- [ ] Map repeated `clear` to `Update.set(empty typed collection)`.
-- [ ] Map compatible scalar `null` to `Update.setNull`.
-- [ ] Reject incompatible commands before ActionCall execution.
+- [ ] Populate source multiplicity and null support in generated
+  `CmlOperationField.update` metadata and resolve it at runtime.
+- [x] Map repeated `clear` to `Update.set(empty typed collection)`.
+- [x] Map compatible scalar `null` to `Update.setNull`.
+- [x] Reject incompatible commands before ActionCall execution.
 
 ## UT-04: Shared Transport Integration
 
-Status: OPEN
+Status: IN_PROGRESS
+
+- [x] Connect directive normalization to the shared
+  `ComponentLogic.makeOperationRequest(Request)` boundary.
+- [x] Preserve Form/property and REST/argument carrier positions while using
+  one conflict validator and typed mapper.
 
 - [ ] Integrate URL-encoded Form input through the shared normalizer.
 - [ ] Integrate multipart form fields through the shared normalizer.

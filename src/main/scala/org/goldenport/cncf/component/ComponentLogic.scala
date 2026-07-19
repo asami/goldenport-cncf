@@ -17,6 +17,7 @@ import org.goldenport.cncf.datastore.DataStore
 import org.goldenport.cncf.entity.EntityStore
 import org.goldenport.cncf.event.{EventEngine, EventReception, EventStore, ReceptionInput}
 import org.goldenport.cncf.http.HttpDriver
+import org.goldenport.cncf.http.OperationUpdateRequestNormalizer
 import org.goldenport.cncf.job.{ActionId, ActionTask, JobBatchDefinition, JobControlPolicy, JobControlRequest, JobControlResponse, JobDefinitionEntity, JobDefinitionSnapshot, JobEngine, JobFailureHook, JobId, JobInput, JobInputPayload, JobInputRetentionPolicy, JobPersistencePolicy, JobResult, JobRunMode, JobStatus, JobSubmitOption, JobTask}
 import org.goldenport.cncf.subsystem.resolver.OperationResolver
 import org.goldenport.cncf.unitofwork.UnitOfWork
@@ -32,7 +33,7 @@ import org.goldenport.cncf.operation.CmlOperationDefinition
  *  version Mar. 31, 2026
  *  version Apr. 24, 2026
  *  version Jun.  9, 2026
- * @version Jul. 17, 2026
+ * @version Jul. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 /**
@@ -48,8 +49,14 @@ case class ComponentLogic(
     component.protocolLogic.makeOperationRequest(args)
 
   def makeOperationRequest(request: Request): Consequence[OperationRequest] =
-//    _ping_action_(request).getOrElse(component.protocolLogic.makeOperationRequest(request))
-    component.protocolLogic.makeOperationRequest(request)
+    _operation_definition(request.operation) match {
+      case Some(operation) =>
+        OperationUpdateRequestNormalizer.normalize(operation, request).flatMap(
+          component.protocolLogic.makeOperationRequest
+        )
+      case None =>
+        component.protocolLogic.makeOperationRequest(request)
+    }
 
   def makeStringOperationResponse(res: OperationResponse): Consequence[String] =
     component.protocolLogic.makeStringOperationResponse(res)

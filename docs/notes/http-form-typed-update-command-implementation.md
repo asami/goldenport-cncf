@@ -251,7 +251,52 @@ and ArtScene smoke pass:
 
 Phase 40 cannot close before this promotion is complete.
 
-## 13. Verified Ingress Audit
+## 13. UT-03 Typed Mapping Result
+
+The CNCF runtime now has an explicit typed mapping boundary based on
+`CmlOperationDefinition.inputValueKind=ENTITY_UPDATE` and
+`CmlOperationField.update`. The update metadata retains the source entity
+multiplicity separately from the request parameter multiplicity and records
+whether null assignment is allowed.
+
+This separation is required because generated update operations make an
+originally required scalar parameter optional at the request boundary so that
+omission can mean `Update.noop`. The request multiplicity therefore cannot be
+used to infer whether `Update.setNull` is valid.
+
+The implemented mapper:
+
+- maps collection `clear` to `Update.set(Vector.empty)` while retaining the
+  element datatype in the typed directive;
+- maps `null` only for a scalar whose source metadata permits null assignment;
+- rejects unknown parameters, incompatible commands, non-entity-update
+  operations, and missing source update metadata with structured argument
+  policy failures; and
+- leaves plain assignments and existing value-bearing operations on their
+  established binding path.
+
+The metadata consumer and mapping behavior are executable. Generator
+projection is still pending: Cozy/simple-modeler must populate
+`CmlOperationUpdateField` from the source entity attribute before the shared
+transport integration can use the mapper end to end. CNCF deliberately does
+not infer nullability from the update request multiplicity and does not add a
+string sentinel as a fallback.
+
+The shared CNCF request boundary is also connected at
+`ComponentLogic.makeOperationRequest(Request)`. It activates only when a
+recognized update carrier is present, combines argument and property
+occurrences before conflict validation, and preserves the carrier position
+when materializing the typed operation value. Consequently Subsystem and
+direct Service request execution use the same normalization point.
+
+The materialized collection clear is an ordinary empty collection consumed by
+the existing generated collection decoder. Explicit null remains the existing
+`Update.SetNull` value. The generated update builder must recognize that value
+before ordinary datatype decoding; this generator change remains part of the
+pending end-to-end connection. A normal JSON empty array has no command carrier
+and passes through unchanged.
+
+## 14. Verified Ingress Audit
 
 The Jul. 19 implementation audit confirmed these concrete boundaries:
 

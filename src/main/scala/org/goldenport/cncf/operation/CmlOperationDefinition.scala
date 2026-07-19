@@ -137,11 +137,17 @@ final case class CmlOperationField(
   help: Option[String] = None,
   required: Option[Boolean] = None,
   confidentiality: Option[String] = None,
-  validation: org.goldenport.schema.WebValidationHints = org.goldenport.schema.WebValidationHints.empty
+  validation: org.goldenport.schema.WebValidationHints = org.goldenport.schema.WebValidationHints.empty,
+  update: Option[CmlOperationUpdateField] = None
 ) {
   def effectiveConfidentiality: DataConfidentiality =
     DataConfidentiality.getOrPublic(confidentiality)
 }
+
+final case class CmlOperationUpdateField(
+  sourceMultiplicity: String,
+  nullAllowed: Boolean
+)
 
 object CmlOperationField {
   // Retain the constructor shape emitted by CARs generated before validation hints.

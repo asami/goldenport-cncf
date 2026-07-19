@@ -67,10 +67,12 @@ design/spec documents.
   freeze the provisional grammar and metadata requirements.
 - B (DONE): UT-02 - Implement transport-neutral directive grouping, duplicate
   preservation, and conflict validation.
-- C (IN_PROGRESS): UT-03 - Implement operation-metadata compatibility checks and typed
-  clear/null mapping.
-- D (OPEN): UT-04 - Integrate URL-encoded, multipart, automatic REST, and JSON
-  request paths and generated Form controls through the shared contract.
+- C (IN_PROGRESS): UT-03 - CNCF metadata contract, compatibility checks, and
+  typed clear/null mapper are implemented; generated source multiplicity and
+  nullability projection remains to be connected.
+- D (IN_PROGRESS): UT-04 - The shared `ComponentLogic` request boundary and
+  transport-position-preserving materialization are implemented; HTTP adapter
+  evidence, generated null binding, projections, and Form controls remain.
 - E (OPEN): UT-05 - Add structured error, regression, authorization, and
   observability executable evidence.
 - F (OPEN): UT-06 - Validate the ArtScene generated-REST clear scenario.

@@ -8,11 +8,11 @@ import org.goldenport.record.Record
  * @version Jul. 19, 2026
  * @author  ASAMI, Tomoharu
  */
-private[http] sealed trait OperationUpdateDirective {
+private[cncf] sealed trait OperationUpdateDirective {
   def parameterName: String
 }
 
-private[http] object OperationUpdateDirective {
+private[cncf] object OperationUpdateDirective {
   final case class NoDirective(parameterName: String) extends OperationUpdateDirective
 
   final case class PlainAssignment(
@@ -55,14 +55,14 @@ private[http] object OperationUpdateDirective {
   }
 }
 
-private[http] final case class OperationUpdateDirectiveSet(
+private[cncf] final case class OperationUpdateDirectiveSet(
   directives: Map[String, OperationUpdateDirective]
 ) {
   def directive(parametername: String): OperationUpdateDirective =
     directives.getOrElse(parametername, OperationUpdateDirective.NoDirective(parametername))
 }
 
-private[http] object OperationUpdateDirectiveNormalizer {
+private[cncf] object OperationUpdateDirectiveNormalizer {
   import OperationUpdateDirective.*
 
   private val COMMAND_SUFFIX = "__update_command"
@@ -75,6 +75,12 @@ private[http] object OperationUpdateDirectiveNormalizer {
 
   def normalize(record: Record): Consequence[OperationUpdateDirectiveSet] =
     normalize(record.fields.map(field => FieldOccurrence(field.key, field.value.single)))
+
+  def isUpdateCarrier(name: String): Boolean =
+    _split(FieldOccurrence(name, ()))._2 != PlainOccurrence
+
+  def parameterName(name: String): String =
+    _split(FieldOccurrence(name, ()))._1
 
   def normalize(
     occurrences: Vector[FieldOccurrence]
