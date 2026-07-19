@@ -64,6 +64,27 @@ trait StaticFormAppRendererCorePart {
   }
 
   def renderStaticTemplate(
+    subsystem: Subsystem,
+    componentname: String,
+    app: String,
+    page: Vector[String],
+    template: String,
+    assetcompletion: StaticFormAppLayout.AssetCompletionOptions,
+    pagecontext: WebPageContext,
+    webdescriptor: WebDescriptor
+  ): Page =
+    _render_static_template(
+      Some(subsystem),
+      Some(componentname),
+      app,
+      page,
+      template,
+      assetcompletion,
+      pagecontext,
+      webdescriptor
+    )
+
+  def renderStaticTemplate(
     app: String,
     page: Vector[String],
     template: String,
@@ -71,6 +92,27 @@ trait StaticFormAppRendererCorePart {
       StaticFormAppLayout.AssetCompletionOptions(),
     pageContext: WebPageContext = WebPageContext.empty,
     webdescriptor: WebDescriptor = WebDescriptor.empty
+  ): Page =
+    _render_static_template(
+      None,
+      None,
+      app,
+      page,
+      template,
+      assetCompletion,
+      pageContext,
+      webdescriptor
+    )
+
+  private def _render_static_template(
+    subsystem: Option[Subsystem],
+    operationcomponent: Option[String],
+    app: String,
+    page: Vector[String],
+    template: String,
+    assetCompletion: StaticFormAppLayout.AssetCompletionOptions,
+    pageContext: WebPageContext,
+    webdescriptor: WebDescriptor
   ): Page = {
     val pagename =
       if (page.isEmpty) "index"
@@ -88,7 +130,16 @@ trait StaticFormAppRendererCorePart {
         "textus.uxProfile" -> profile.name
       ) ++ page_context_properties(pageContext)
     )
-    val rendered = render_template(template, properties, Map.empty)
+    val withoperationforms = subsystem
+      .map(render_static_operation_form_widgets(
+        _,
+        operationcomponent.getOrElse(app),
+        template,
+        properties,
+        webdescriptor
+      ))
+      .getOrElse(template)
+    val rendered = render_template(withoperationforms, properties, Map.empty)
     val projected = WebExecutionTemplateProjection.render(rendered, pageContext)
     Page(
       complete_widget_assets(template, projected, assetCompletion.copy(uxProfile = profile)),

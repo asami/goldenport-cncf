@@ -25,9 +25,14 @@ Status: DONE
 
 Status: ACTIVE
 
-- [ ] Bind normal HTML forms to aggregate commands.
-- [ ] Provide validation, authorization, flash state, and PRG.
-- [ ] Keep JavaScript-disabled form operation complete.
+- [x] Bind schema-generated Static Web HTML forms to aggregate commands through
+  the canonical `/form` ingress.
+- [x] Reuse server validation, authorization, failure redisplay, and configured
+  PRG behavior.
+- [x] Keep JavaScript-disabled form operation complete.
+- [ ] Provide one-time localized outcome/flash state.
+- [ ] Enforce session CSRF tokens rather than only preserving the reserved
+  hidden context field.
 
 ## SW-04: Privacy and Acceptance
 

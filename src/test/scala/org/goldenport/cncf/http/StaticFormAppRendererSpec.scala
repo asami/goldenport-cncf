@@ -8356,6 +8356,89 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       pagehtml should include (">material</article>")
     }
 
+    "render a schema-backed operation form inside a Static Web page" in {
+      Given("an aggregate command exposed to a Static Web template")
+      val subsystem = _aggregate_http_fixture_subsystem()
+      val selector = "notice-board.notice-aggregate.approve-notice-aggregate"
+      val descriptor = WebDescriptor(
+        expose = Map(selector -> WebDescriptor.Exposure.Protected),
+        form = Map(selector -> WebDescriptor.Form(
+          successRedirect = Some("/web/notice-board/detail?outcome=approved"),
+          controls = Map("id" -> WebDescriptor.FormControl(hidden = true))
+        ))
+      )
+      val template =
+        """<main>
+          |  <textus:operation-form service="notice-aggregate"
+          |                         operation="approve-notice-aggregate"
+          |                         value-id="${notice.id}"
+          |                         submit-label="${message.action.approve}"></textus:operation-form>
+          |</main>""".stripMargin
+
+      When("the framework renders the page without a browser Form API request")
+      val html = _renderer.renderStaticTemplate(
+        subsystem,
+        "notice-board",
+        "planning-app",
+        Vector("detail"),
+        template,
+        StaticFormAppLayout.AssetCompletionOptions(),
+        WebPageContext(
+          values = Map("notice.id" -> "notice_1", "id" -> "unrelated-page-id", "csrf" -> "token-1"),
+          messages = Map("action.approve" -> "Approve")
+        ),
+        descriptor
+      ).body
+
+      Then("the operation schema, values, hidden context, and canonical HTML Form ingress are present")
+      html should include ("action=\"/form/notice-board/notice-aggregate/approve-notice-aggregate\"")
+      html should include ("data-textus-widget=\"textus:operation-form\"")
+      html should include ("type=\"hidden\"")
+      html should include ("name=\"id\"")
+      html should include ("value=\"notice_1\"")
+      html should include ("name=\"csrf\" value=\"token-1\"")
+      html should include (">Approve</button>")
+      html should not include ("/form-api/")
+      html should not include ("<textus:operation-form")
+
+      val unboundhtml = _renderer.renderStaticTemplate(
+        subsystem,
+        "notice-board",
+        "planning-app",
+        Vector("detail"),
+        """<textus:operation-form service="notice-aggregate" operation="approve-notice-aggregate"></textus:operation-form>""",
+        StaticFormAppLayout.AssetCompletionOptions(),
+        WebPageContext(values = Map("id" -> "unrelated-page-id")),
+        descriptor
+      ).body
+      unboundhtml should not include ("unrelated-page-id")
+
+      val unresolvedhtml = _renderer.renderStaticTemplate(
+        "planning-app",
+        Vector("detail"),
+        template,
+        pageContext = WebPageContext(values = Map("notice.id" -> "notice_1")),
+        webdescriptor = descriptor
+      ).body
+      unresolvedhtml should not include ("<textus:operation-form")
+      unresolvedhtml should not include ("data-textus-widget=\"textus:operation-form\"")
+
+      And("submitting the rendered form dispatches the aggregate command and redirects with GET")
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem, Some(descriptor)))
+      val response = server._submit_operation_form(
+        _post_form_request(
+          "/form/notice-board/notice-aggregate/approve-notice-aggregate",
+          "id=notice_1&csrf=token-1"
+        ),
+        "notice-board",
+        "notice-aggregate",
+        "approve-notice-aggregate"
+      ).unsafeRunSync()
+      response.status.code shouldBe 303
+      response.headers.get[org.http4s.headers.Location].map(_.uri.renderString) shouldBe
+        Some("/web/notice-board/detail?outcome=approved")
+    }
+
     "resolve legacy result.body.data paths against unwrapped JSON response bodies" in {
       val properties = StaticFormAppRenderer.FormResultProperties(
         StaticFormAppRenderer.FormPageProperties(

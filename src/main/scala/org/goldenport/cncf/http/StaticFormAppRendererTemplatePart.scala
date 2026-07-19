@@ -96,6 +96,8 @@ trait StaticFormAppRendererTemplatePart {
     defaultTableView: String
   ): String = {
     val resultview = """<textus-result-view\s+source="([^"]+)"\s*></textus-result-view>""".r
+    val unresolvedoperationform =
+      """<textus(?::operation-form|-operation-form)\b([^>]*)></textus(?::operation-form|-operation-form)>""".r
     val table = """<textus:table\b([^>]*)></textus:table>""".r
     val card = """(?s)<textus(?::card(?!-)|-card(?!-))\b([^>]*)>(.*?)</textus(?::card|-card)>""".r
     val recordcard = """<textus(?::record-card|-record-card)\b([^>]*)></textus(?::record-card|-record-card)>""".r
@@ -127,7 +129,8 @@ trait StaticFormAppRendererTemplatePart {
     val capabilitymessage = """(?s)<textus(?::capability-message|-capability-message)\b([^>]*)>(.*?)</textus(?::capability-message|-capability-message)>""".r
     val propertylist = """<textus-property-list\s+source="([^"]+)"\s*></textus-property-list>""".r
     val errorpanel = """<textus-error-panel\s+source="([^"]+)"\s*></textus-error-panel>""".r
-    val a = resultview.replaceAllIn(template, m =>
+    val prepared = unresolvedoperationform.replaceAllIn(template, _ => "")
+    val a = resultview.replaceAllIn(prepared, m =>
       java.util.regex.Matcher.quoteReplacement(render_result_view(m.group(1), properties))
     )
     val b = table.replaceAllIn(a, m => {
@@ -2020,9 +2023,7 @@ trait StaticFormAppRendererTemplatePart {
     s"${source}|entity=${NamingConventions.toNormalizedSegment(entity)}|view=${NamingConventions.toNormalizedSegment(view)}"
 
   protected def widget_attrs(source: String): Map[String, String] =
-    """([A-Za-z0-9_.:-]+)\s*=\s*(?:"([^"]*)"|'([^']*)')""".r.findAllMatchIn(source).map { m =>
-      m.group(1) -> Option(m.group(2)).getOrElse(m.group(3))
-    }.toMap
+    StaticFormAppRendererSupport.widgetAttributes(source)
 
   protected def source_text(
     source: String,

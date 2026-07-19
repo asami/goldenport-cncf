@@ -40,6 +40,72 @@ trait StaticFormAppRendererFormPart {
   this: StaticFormAppRendererSupport with StaticFormAppRendererBlobTagPart with StaticFormAppRendererComponentAdminPart with StaticFormAppRendererCorePart with StaticFormAppRendererFormResultPart with StaticFormAppRendererSystemAdminPart =>
   import StaticFormAppRendererSupport.*
 
+  protected def render_static_operation_form_widgets(
+    subsystem: Subsystem,
+    defaultcomponent: String,
+    template: String,
+    properties: FormPageProperties,
+    webdescriptor: WebDescriptor
+  ): String = {
+    val operationform =
+      """<textus(?::operation-form|-operation-form)\b([^>]*)></textus(?::operation-form|-operation-form)>""".r
+    operationform.replaceAllIn(template, m => {
+      val attrs = StaticFormAppRendererSupport.widgetAttributes(m.group(1))
+      java.util.regex.Matcher.quoteReplacement(
+        render_static_operation_form(subsystem, defaultcomponent, attrs, properties, webdescriptor)
+      )
+    })
+  }
+
+  protected def render_static_operation_form(
+    subsystem: Subsystem,
+    defaultcomponent: String,
+    attrs: Map[String, String],
+    properties: FormPageProperties,
+    webdescriptor: WebDescriptor
+  ): String = {
+    val component = attrs.get("component").filter(_.trim.nonEmpty).getOrElse(defaultcomponent)
+    val service = attrs.get("service").filter(_.trim.nonEmpty)
+    val operation = attrs.get("operation").filter(_.trim.nonEmpty)
+    (service, operation) match {
+      case (Some(servicename), Some(operationname)) =>
+        resolve_operation_web_schema_context(
+          subsystem,
+          component,
+          servicename,
+          operationname,
+          webdescriptor
+        ).map { context =>
+          val explicitvalues = attrs.collect {
+            case (key, value) if key.startsWith("value-") && key.length > 6 =>
+              key.drop(6) -> value
+          }
+          val hiddencontextvalues = hidden_form_context_values(properties.values).toMap
+          val values = operation_form_prefill_values(
+            subsystem,
+            context,
+            hiddencontextvalues ++ explicitvalues
+          )
+          val action = s"/form/${context.componentpath}/${context.servicepath}/${context.operationpath}"
+          val selector = Vector(context.componentpath, context.servicepath, context.operationpath).mkString(".")
+          val css = attrs.getOrElse("class", "textus-operation-form")
+          val submitlabel = attrs.getOrElse("submit-label", "Run")
+          val controls = operation_form_controls(context, values)
+          val hiddencontext = hidden_form_context_inputs(values)
+          val enctype = operation_form_enctype(context.webschema, context.imagebinding)
+          s"""<form method="post" action="${escape(action)}" class="${escape(css)}"${enctype} data-textus-widget="textus:operation-form" data-textus-form="${escape(selector)}">
+             |  <div data-textus-section="form-controls">${controls}</div>
+             |  ${hiddencontext}
+             |  <div class="d-flex flex-wrap gap-2 mt-3" data-textus-section="form-actions">
+             |    <button type="submit" class="${escape(attrs.getOrElse("button-class", "btn btn-primary"))}" data-textus-action="submit">${escape(submitlabel)}</button>
+             |  </div>
+             |</form>""".stripMargin
+        }.getOrElse("")
+      case _ =>
+        ""
+    }
+  }
+
   protected final case class OperationWebSchemaContext(
     component: Component,
     servicename: String,

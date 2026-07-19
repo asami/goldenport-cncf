@@ -39,7 +39,12 @@ without browser REST fan-out for execution context or primary page content.
 - Generated Static Web pages carry typed response-language metadata so
   `html[lang]`, `Content-Language`, timezone, and page messages share one
   execution projection.
+- `textus:operation-form` renders operation-schema controls inside Static Web
+  pages and submits aggregate commands through the existing server-validated
+  `/form` ingress. Executable coverage verifies hidden context and configured
+  Post/Redirect/Get without `/form-api` or JavaScript.
 
 ## 5. Resume Point
 
-Bind aggregate command forms with server validation and Post/Redirect/Get.
+Complete one-time localized outcome state and session-backed CSRF enforcement,
+then define page cache/privacy policy.

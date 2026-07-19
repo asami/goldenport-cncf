@@ -102,6 +102,11 @@ Normal user-facing mutations MUST bind HTML forms to component aggregate
 commands. CNCF MUST perform validation and authorization on the server and
 complete successful form submissions with Post/Redirect/Get.
 
+Static Web templates MAY use `textus:operation-form` to generate a typed HTML
+form from component operation schema and `WebDescriptor` metadata. The widget
+posts to the canonical `/form` ingress and MUST NOT depend on JavaScript or
+`/form-api` for normal submission.
+
 The redirected page MUST render the committed View and an appropriately
 localized outcome or flash message. Validation failures MUST return a
 localized, accessible form response without requiring JavaScript.

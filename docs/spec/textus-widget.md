@@ -1293,6 +1293,45 @@ Required behavior:
 
 ## Form Helper Widgets
 
+### `textus:operation-form` / `textus-operation-form`
+
+Server-rendered operation form widget. It resolves the selected component
+operation schema and `WebDescriptor` controls while the Static Web document is
+being rendered, then emits an ordinary HTML form whose action is the canonical
+`/form/{component}/{service}/{operation}` ingress. It never targets
+`/form-api` and does not require JavaScript.
+
+Required attributes:
+
+- `service`: operation service name.
+- `operation`: operation name.
+
+Optional attributes:
+
+- `component`: target component; defaults to the component that owns the
+  Static Web page.
+- `value-{field}`: initial field value. Template properties are resolved after
+  widget rendering, so a value such as `value-id="${pageContext.view.id}"` is
+  supported.
+- `submit-label`: submit button label; defaults to `Run`.
+- `class`: form CSS class; defaults to `textus-operation-form`.
+- `button-class`: submit button CSS class; defaults to `btn btn-primary`.
+
+The widget includes available standard hidden form context such as origin,
+paging, optimistic tokens, and `csrf`. The ordinary CNCF Form ingress remains
+responsible for server validation, authorization, dispatch, validation-error
+redisplay, and configured Post/Redirect/Get behavior. Missing, disabled, or
+unknown operations fail closed and render no form.
+
+Example:
+
+```html
+<textus:operation-form service="exhibition-candidate"
+                       operation="review-exhibition"
+                       value-exhibition_id="${pageContext.view.exhibition.id}"
+                       submit-label="${message.action.review}"></textus:operation-form>
+```
+
 ### `textus:form-errors` / `textus-form-errors`
 
 Validation summary widget.

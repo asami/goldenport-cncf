@@ -382,6 +382,11 @@ object StaticFormAppRendererSupport {
   def hasTextusMarkup(template: String): Boolean =
     """<textus(?::|-)[A-Za-z0-9-]+\b""".r.findFirstIn(template).nonEmpty
 
+  def widgetAttributes(source: String): Map[String, String] =
+    """([A-Za-z0-9_.:-]+)\s*=\s*(?:"([^"]*)"|'([^']*)')""".r.findAllMatchIn(source).map { m =>
+      m.group(1) -> Option(m.group(2)).getOrElse(m.group(3))
+    }.toMap
+
   def tableColumnKey(
     source: String,
     entity: String,

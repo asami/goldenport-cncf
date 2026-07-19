@@ -4427,6 +4427,8 @@ final class Http4sHttpServer(
             (!_static_form_app_renderer.isHtmlDocumentTemplate(expandedhtml) && _has_property_placeholder(expandedhtml))
         if (needstemplaterendering)
           _static_form_app_renderer.renderStaticTemplate(
+            engine.runtimeSubsystem,
+            componentName.getOrElse(webappname),
             webappname,
             page,
             expandedhtml,
