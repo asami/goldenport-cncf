@@ -6547,7 +6547,6 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       _initialize_component("notice_board", component, protocol)
       val subsystem = DefaultSubsystemFactory.default(Some("server")).add(Vector(component))
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
-
       val response = server
         ._operation_form_api_definition(
           _get_request("/form-api/notice-board/notice/update-notice"),
@@ -6666,6 +6665,9 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       _initialize_component("notice_board", component, protocol)
       val subsystem = DefaultSubsystemFactory.default(Some("server")).add(Vector(component))
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val beforeactioncalls = RuntimeDashboardMetrics.actionCallSnapshot.summary.cumulative.total
+      val beforeauthorization = RuntimeDashboardMetrics.authorizationDecisionSnapshot.summary.cumulative.total
+      val beforevalidation = RuntimeDashboardMetrics.operationRequestValidationSnapshot.summary.cumulative.total
 
       When("the form submits collection clear for a nullable scalar")
       val rejected = server.routes(null).orNotFound.run(
@@ -6675,6 +6677,9 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         )
       ).unsafeRunSync()
       val rejectedjson = parse(rejected.as[String].unsafeRunSync()).getOrElse(fail("error JSON is invalid")).hcursor
+      val afterformactioncalls = RuntimeDashboardMetrics.actionCallSnapshot.summary.cumulative.total
+      val afterformauthorization = RuntimeDashboardMetrics.authorizationDecisionSnapshot.summary.cumulative.total
+      val afterformvalidation = RuntimeDashboardMetrics.operationRequestValidationSnapshot.summary.cumulative.total
 
       And("the canonical REST route submits the same null command grammar")
       val restaccepted = server.routes(null).orNotFound.run(
@@ -6684,6 +6689,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         ).withEntity("{\"nickname__update_command\":\"null\"}")
           .withContentType(org.http4s.headers.`Content-Type`.parse("application/json").toOption.get)
       ).unsafeRunSync()
+      val restacceptedbody = restaccepted.as[String].unsafeRunSync()
+      val afteracceptedactioncalls = RuntimeDashboardMetrics.actionCallSnapshot.summary.cumulative.total
       val restrejected = server.routes(null).orNotFound.run(
         Request[IO](
           method = Method.POST,
@@ -6691,12 +6698,21 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         ).withEntity("{\"nickname__update_command\":\"clear\"}")
           .withContentType(org.http4s.headers.`Content-Type`.parse("application/json").toOption.get)
       ).unsafeRunSync()
+      val afterrejectedactioncalls = RuntimeDashboardMetrics.actionCallSnapshot.summary.cumulative.total
+      val afterrejectedvalidation = RuntimeDashboardMetrics.operationRequestValidationSnapshot.summary.cumulative.total
 
       Then("the normal operation boundary returns a structured client error")
       rejected.status.code shouldBe 400
       rejectedjson.downField("error").get[Int]("status") shouldBe Right(400)
       restaccepted.status.code shouldBe 200
+      restacceptedbody should include ("updated:SetNull")
       restrejected.status.code shouldBe 400
+      afterformactioncalls shouldBe beforeactioncalls
+      afterformauthorization should be > beforeauthorization
+      afterformvalidation should be > beforevalidation
+      afteracceptedactioncalls should be > afterformactioncalls
+      afterrejectedactioncalls shouldBe afteracceptedactioncalls
+      afterrejectedvalidation should be > afterformvalidation
     }
 
     "render operation image binding controls and Form API metadata" in {

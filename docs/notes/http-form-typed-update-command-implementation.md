@@ -268,6 +268,11 @@ command semantics.
 
 Executable evidence also confirms that incompatible commands pass through the
 normal operation request boundary and return a structured HTTP 400 response.
+The route-level fixture records the ordinary authorization-decision,
+ActionCall, and operation-request-validation metrics: a compatible REST null
+command reaches ActionCall as `Update.SetNull`, while incompatible Form/REST
+commands fail before ActionCall and remain visible as request-validation
+diagnostics.
 Generator emission of the source metadata and generated `Update.SetNull`
 binder handling remain separate UT-03 completion work.
 

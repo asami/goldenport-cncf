@@ -64,7 +64,8 @@ Status: IN_PROGRESS
 - [x] Prove generated forms expose only type-compatible commands and submit the
   same grammar accepted by automatic REST.
 - [ ] Prove authorization, validation observability, and persistence still use
-  the normal ActionCall path.
+  the normal ActionCall path. Authorization, ActionCall, and request-validation
+  metrics are covered; generated persistence remains pending UT-03/UT-06.
 
 ## UT-06: ArtScene Driver Validation
 
