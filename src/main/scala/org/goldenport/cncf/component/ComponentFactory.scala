@@ -42,7 +42,7 @@ import scala.util.Try
  *  version Apr. 25, 2026
  *  version Apr. 26, 2026
  *  version May.  7, 2026
- * @version Jul. 16, 2026
+ * @version Jul. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactory(
@@ -887,16 +887,10 @@ final class ComponentFactory(
     val cid = _bootstrap_collection_id(component, entityname)
     val query = EntityQuery[Any](cid, q)
     given EntityPersistent[Any] = _bootstrap_entity_persistent(component, entityname)
-    entityspace.entityOption[Any](entityname) match {
-      case Some(collection) =>
-        collection.search(query).map(_.data).flatMap { xs =>
-          if (xs.nonEmpty) Consequence.success(xs)
-          else EntityStore.standard().search[Any](query).map(_.data)
-        }.recoverWith { case _ =>
-          EntityStore.standard().search[Any](query).map(_.data)
-        }
-      case None =>
-        EntityStore.standard().search[Any](query).map(_.data)
+    EntityStore.standard().search[Any](query).map(_.data).recoverWith { case _ =>
+      entityspace.entityOption[Any](entityname)
+        .map(_.search(query).map(_.data))
+        .getOrElse(Consequence.success(Vector.empty))
     }
   }
 
@@ -906,7 +900,14 @@ final class ComponentFactory(
     entityname: String,
     q: Query[?]
   )(using ctx: ExecutionContext): Consequence[Int] =
-    _count_entities(component, entityspace, entityname, q)
+    {
+      val cid = _bootstrap_collection_id(component, entityname)
+      val query = EntityQuery[Any](cid, _with_count_controls(_sanitize_query_record(_query_record(q)), q))
+      given EntityPersistent[Any] = _bootstrap_entity_persistent(component, entityname)
+      EntityStore.standard().search[Any](query).flatMap(_total_count_from_result).recoverWith { case _ =>
+        _count_entities(component, entityspace, entityname, q)
+      }
+    }
 
   private def _build_default_aggregate(
     component: Component,

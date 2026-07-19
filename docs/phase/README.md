@@ -17,8 +17,8 @@ Current baseline:
 
 - Active phase: none.
 - Active checklist: none.
-- Latest closed phase: `phase-40.md` - HTTP/Form Typed Update Commands.
-- Latest closed checklist: `phase-40-checklist.md`.
+- Latest closed phase: `phase-41.md` - Persistent View Source Completeness.
+- Latest closed checklist: `phase-41-checklist.md`.
 - Closed phase set currently includes:
   - `phase-4.md`
   - `phase-5.md`
@@ -56,6 +56,7 @@ Current baseline:
   - `phase-38.md`
   - `phase-39.md`
   - `phase-40.md`
+  - `phase-41.md`
 
 ## Related Rules
 

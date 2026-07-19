@@ -652,10 +652,9 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Notes contain execution details and results for each phase.
 
 ## Process Status Pointers
-- Active phase: `docs/phase/phase-40.md` with
-  `docs/phase/phase-40-checklist.md`.
-- Latest closed phase: `docs/phase/phase-39.md` with
-  `docs/phase/phase-39-checklist.md` (Jul. 19, 2026).
+- Active phase: none.
+- Latest closed phase: `docs/phase/phase-41.md` with
+  `docs/phase/phase-41-checklist.md` (Jul. 19, 2026).
 - Status interpretation rules: `docs/rules/stage-status-and-checklist-convention.md`
 - Latest post-closure maintenance: Jul. 18, 2026 scoped concurrency admission.
   CNCF now exposes a runtime-installed, per-logical-scope, nonblocking permit
@@ -1890,6 +1889,10 @@ Future scalability development item.
   adoption pressure to justify read-side scaling beyond runtime memory cache.
 - The current v1 model remains store-backed canonical Entities plus
   `ViewCollection` runtime memory cache with invalidate-on-write.
+- Aggregate-backed View source search and count use the persistent entity store
+  as canonical input. Process-local resident entities are a fallback, not a
+  complete-data shortcut, because a runtime may hold only a partial resident
+  subset.
 - A future materialized view store would own durable projection rows,
   incremental synchronization, replay/rebuild, stale projection detection, and
   query/index optimization.
