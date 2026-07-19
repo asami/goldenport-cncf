@@ -12,7 +12,7 @@ import org.simplemodeling.model.directive.Update
 
 /*
  * @since   Jul. 19, 2026
- * @version Jul. 19, 2026
+ * @version Jul. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 final class OperationUpdateRequestNormalizerSpec
@@ -153,6 +153,30 @@ final class OperationUpdateRequestNormalizerSpec
       normalized.getString("nickname__value") shouldBe Some("")
       normalized.getString("tags__value_or_clear") shouldBe Some("")
       normalized.getString("ordinary") shouldBe Some("")
+    }
+
+    "preserve a decoded empty collection while removing blank update scalars" in {
+      Given("a browser form whose multiple-select hidden input is blank")
+      val descriptor = WebDescriptor(form = Map(
+        WebDescriptor.formSelector("example", "entity", "updateExample") -> WebDescriptor.Form(
+          controls = Map("tags" -> WebDescriptor.FormControl(multiple = true))
+        )
+      ))
+      val form = Record.data("tags" -> "", "nickname" -> "")
+
+      When("form controls are decoded before update blank normalization")
+      val decoded = WebFormValueDecoder.decode(
+        descriptor,
+        "example",
+        "entity",
+        "updateExample",
+        form
+      ).toOption.get
+      val normalized = OperationUpdateFormNormalizer.normalize(_operation, decoded)
+
+      Then("the empty collection remains an explicit clear while the blank scalar is absent")
+      normalized.getAny("tags") shouldBe Some(Vector.empty)
+      normalized.getAny("nickname") shouldBe None
     }
 
     "derive available commands from source multiplicity and nullability" in {

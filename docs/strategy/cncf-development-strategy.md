@@ -652,7 +652,8 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Notes contain execution details and results for each phase.
 
 ## Process Status Pointers
-- Active phase: none selected.
+- Active phase: `docs/phase/phase-43.md` with
+  `docs/phase/phase-43-checklist.md` (Jul. 20, 2026).
 - Latest closed phase: `docs/phase/phase-42.md` with
   `docs/phase/phase-42-checklist.md` (Jul. 20, 2026).
 - Status interpretation rules: `docs/rules/stage-status-and-checklist-convention.md`
@@ -840,6 +841,8 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Phase 40: closed (`docs/phase/phase-40.md`)
 - Phase 41: closed (`docs/phase/phase-41.md`)
 - Phase 42: closed (`docs/phase/phase-42.md`)
+- Phase 43: active (`docs/phase/phase-43.md`)
+- Phase 44: planned (`docs/phase/phase-44.md`)
 
 ## 8. Completed Development Item History
 
@@ -1402,9 +1405,8 @@ Completed work areas are recorded in section 8. When a development item closes,
 remove its completion record from this section and add or update the
 corresponding completed-history entry.
 
-Current development item: none selected. Phase 42 Static Web Server Rendering
-Contract is complete; the next phase should be selected explicitly from the
-remaining development items below.
+Current development item: Phase 43 Bounded Resource Tree Query. Phase 44
+Managed Service Container Runtime is the selected next phase after Phase 43.
 
 ### 9.1 Web Next Stage Follow-ups
 Web/platform follow-up index.
@@ -2513,3 +2515,71 @@ Completed in Phase 40.
   - `docs/notes/http-form-typed-update-command-implementation.md`;
   - `docs/phase/phase-40.md`; and
   - `docs/phase/phase-40-checklist.md`.
+
+### 9.36 Bounded Resource Tree Query
+Active in Phase 43.
+
+- Goal: let a component discover a bounded set of named logical files in a
+  large admitted resource tree without requesting a complete immutable
+  snapshot or receiving a physical host path.
+- Driver:
+  - CBD Support must discover each `project.yaml` below the logical `working`
+    development tree;
+  - the CNCF contract remains a generic exact-leaf-name query and contains no
+    CBD-specific source or observation type.
+- Scope:
+  - add a read-only `ResourceTreeQuery` capability alongside strict
+    `ResourceTreeAccess.snapshot`;
+  - initially support an exact leaf-name selector, deterministic logical-path
+    ordering, and immutable bounded result entries;
+  - enforce maximum depth, visited directories, matched entries, per-entry
+    bytes, and aggregate result bytes before returning data;
+  - keep a symbolic configured root invalid, never follow symbolic links, and
+    skip unrelated nested symlink entries during query traversal;
+  - expose the query through the ExecutionContext/ActionCall internal DSL and
+    record only logical/provider/count/limit diagnostics;
+  - validate CBD Support against a development workspace containing many
+    unrelated files and symbolic links.
+- Boundary:
+  - strict full-tree snapshot semantics do not change;
+  - no glob, regex, content search, write, delete, watch, or host-path API is
+    introduced;
+  - `project.yaml` is selected by CBD Support, not hard-coded by CNCF.
+- Planning references:
+  - `docs/journal/2026/07/2026-07-20-cbd-working-resource-tree-handoff.md`;
+  - `docs/phase/phase-43.md`; and
+  - `docs/phase/phase-43-checklist.md`.
+
+### 9.37 Managed Service Container Runtime
+Planned for Phase 44.
+
+- Goal: provide a typed component/runtime-owned lifecycle for long-lived
+  service containers while keeping one-shot Docker command execution,
+  external endpoints, and provider-specific initialization distinct.
+- Drivers:
+  - Textus AI local Ollama/Gemma service ownership;
+  - Textus SIE owned Fuseki and embedding/vector-store service deployments.
+- Scope:
+  - introduce provider-neutral service-container definition, ownership,
+    create-or-reuse, persistence, readiness, endpoint, lifecycle, and cleanup
+    contracts;
+  - provide a Docker driver behind a constrained gateway with deterministic
+    inspect/create/start/stop/remove behavior and ownership labels;
+  - resolve an explicit external endpoint as a first-class bypass that causes
+    no Docker inspection or mutation;
+  - register runtime-owned service lifecycles outside UnitOfWork terminal
+    cleanup while retaining explicit shutdown/removal ownership;
+  - provide fake-gateway executable specifications and payload-safe CallTree,
+    metrics, and structured failures;
+  - validate Textus AI and Textus SIE as downstream consumers after the CNCF
+    contract is complete.
+- Boundary:
+  - do not complete the existing one-shot `DockerAdapter.execute(DockerInput)`
+    shape as the service lifecycle API;
+  - no Docker Compose interpreter, arbitrary Docker arguments, arbitrary host
+    mounts, credential projection, or provider-specific model/data catalog;
+  - live Docker execution is explicit heavy-test evidence only.
+- Planning references:
+  - `docs/journal/2026/07/2026-07-20-stateful-docker-container-adapter-handoff.md`;
+  - `docs/phase/phase-44.md`; and
+  - `docs/phase/phase-44-checklist.md`.
