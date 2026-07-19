@@ -224,6 +224,8 @@ case class ComponentLogic(
             policy.interfaceMode match {
               case CommandInterfaceMode.Async =>
                 Consequence.success(OperationResponse.Scalar(jobid.value))
+              case CommandInterfaceMode.Sync if policy.asyncContinuation =>
+                _primary_job_result(jobid)
               case CommandInterfaceMode.Sync =>
                 awaitJobResult(jobid)
             }
@@ -553,6 +555,15 @@ case class ComponentLogic(
       case JobResult.Failure(conclusion) => Consequence.Failure(conclusion)
     }
   }
+
+  private def _primary_job_result(
+    jobid: JobId
+  ): Consequence[OperationResponse] =
+    component.jobEngine.getPrimaryResult(jobid) match {
+      case Some(JobResult.Success(response)) => Consequence.success(response)
+      case Some(JobResult.Failure(conclusion)) => Consequence.Failure(conclusion)
+      case None => Consequence.stateConflict(s"primary job result unavailable: ${jobid.value}")
+    }
 
   private def _note_job_response(
     ctx: ExecutionContext,

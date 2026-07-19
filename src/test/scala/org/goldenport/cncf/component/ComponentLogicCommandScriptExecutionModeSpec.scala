@@ -13,7 +13,7 @@ import org.goldenport.cncf.datastore.DataStore
 import org.goldenport.cncf.dsl.script.ScriptAction
 import org.goldenport.cncf.event.{ActionCallDispatcher, CmlEventCategory, CmlEventDefinition, CmlSubscriptionDefinition, DispatchRoute, DomainEvent, EventBus, EventEngine, EventReception, EventReceptionCondition, EventReceptionExecutionPolicy, EventReceptionRule, EventStore, ReceptionOutcome}
 import org.goldenport.cncf.http.FakeHttpDriver
-import org.goldenport.cncf.job.{ActionId, JobId}
+import org.goldenport.cncf.job.{ActionId, InMemoryJobEngine, JobId}
 import org.goldenport.cncf.path.AliasResolver
 import org.goldenport.cncf.protocol.OperationResponseFormatter
 import org.goldenport.cncf.subsystem.Subsystem
@@ -29,7 +29,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Mar. 21, 2026
  *  version Mar. 28, 2026
  *  version May. 31, 2026
- * @version Jul. 16, 2026
+ * @version Jul. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentLogicCommandScriptExecutionModeSpec
@@ -297,6 +297,7 @@ final class ComponentLogicCommandScriptExecutionModeSpec
         outcome shouldBe ReceptionOutcome.Routed.toString
 
         And("the residual action runs through a continuation Task in the returned primary Job")
+        val _ = component.jobEngine.asInstanceOf[InMemoryJobEngine].drainOne()
         _await_condition(calls.nonEmpty) shouldBe true
         calls.toVector shouldBe Vector("followup.action")
         val jobs = component.jobEngine.listJobs(limit = 20, persistentOnly = false)

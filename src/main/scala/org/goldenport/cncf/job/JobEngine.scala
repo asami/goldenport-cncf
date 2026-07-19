@@ -34,7 +34,7 @@ import org.goldenport.cncf.observability.{DiagnosticPayloadExternalizer, Observa
  * @since   Jan.  4, 2026
  *  version Mar. 30, 2026
  *  version May. 31, 2026
- * @version Jul. 17, 2026
+ * @version Jul. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class JobId(
@@ -763,6 +763,7 @@ trait JobEngine {
   def shutdown(): Unit = ()
   def getStatus(jobId: JobId): Option[JobStatus]
   def getResult(jobId: JobId): Option[JobResult]
+  def getPrimaryResult(jobId: JobId): Option[JobResult] = getResult(jobId)
   def awaitResult(jobId: JobId, timeoutMillis: Long): Consequence[JobResult]
   def control(
     jobId: JobId,
@@ -1028,6 +1029,9 @@ final class InMemoryJobEngine(
   def getResult(jobId: JobId): Option[JobResult] =
     _get_record(jobId).flatMap(_.result)
 
+  override def getPrimaryResult(jobId: JobId): Option[JobResult] =
+    _get_record(jobId).flatMap(record => record.primaryResult.orElse(record.result))
+
   override def awaitResult(
     jobId: JobId,
     timeoutMillis: Long
@@ -1175,7 +1179,7 @@ final class InMemoryJobEngine(
     _get_record(jobId) match {
       case Some(_) =>
         val taskid = TaskId.create("same-job.enqueue", ctx.clock.instant(), ctx.idGeneration)
-        _append_timeline(jobId, "job.same-job-async.queued", Some(taskid), ctx.jobContext.currentTask, Some(task.operationName.getOrElse(task.actionId.print)))
+        _append_same_job_task_queued(jobId, taskid, task, ctx.jobContext.currentTask)
         val priority = _get_record(jobId).map(_.priority).getOrElse(0)
         _enqueue_work(SchedulerWorkItem.SameJobTask(_next_sequence(), priority, jobId, task, ctx, taskid))
         Consequence.success(taskid)
@@ -1426,7 +1430,14 @@ final class InMemoryJobEngine(
       cancellationScope = Some(_cancellation_scope(jobid))
     )
     val executioncontext = _job_execution_context(jobid, ctx, jobcontext)
-    _append_task_running(jobid, taskid, parent, startedat, task)
+    _append_task_running(
+      jobid,
+      taskid,
+      parent,
+      startedat,
+      task,
+      admittedFromQueue = forcedTaskId.isDefined
+    )
     val outcome = task.run(executioncontext)
     outcome match {
       case TaskSucceeded(res) =>
@@ -1867,7 +1878,8 @@ final class InMemoryJobEngine(
     startedat: Instant,
     taskdef: JobTask,
     relation: Option[String] = None,
-    compensatesTaskId: Option[TaskId] = None
+    compensatesTaskId: Option[TaskId] = None,
+    admittedFromQueue: Boolean = false
   ): Unit =
     _mutate_record(jobid) { record =>
       val task = JobTaskReadModel(
@@ -1899,6 +1911,9 @@ final class InMemoryJobEngine(
       record.copy(
         status = JobStatus.Running,
         activeTaskCount = record.activeTaskCount + 1,
+        pendingTaskCount =
+          if (admittedFromQueue) math.max(0, record.pendingTaskCount - 1)
+          else record.pendingTaskCount,
         taskReadModels = record.taskReadModels :+ task,
         taskDefinitions = record.taskDefinitions.updated(taskId, taskdef),
         timeline = timeline,
@@ -1963,6 +1978,7 @@ final class InMemoryJobEngine(
     _mutate_record(jobid) { record =>
       record.copy(
         baseTasksCompleted = true,
+        primaryResult = result.orElse(record.primaryResult),
         deferredResult = result.orElse(record.deferredResult),
         updatedAt = _now()
       )
@@ -1982,30 +1998,32 @@ final class InMemoryJobEngine(
     }
 
   private def _settle_if_ready(jobid: JobId): Unit =
-    _get_record(jobid).foreach { record =>
-      if (record.baseTasksCompleted && record.activeTaskCount == 0) {
-        record.deferredResult match {
-          case Some(JobResult.Failure(c)) if record.status != JobStatus.Cancelled =>
-            _handle_failed_settlement(jobid, record, c)
-          case Some(JobResult.Failure(_)) =>
-            () // A cancellation is terminal even when an already-admitted task returns later.
-          case Some(success @ JobResult.Success(_)) =>
-            _append_timeline(jobid, "job.succeeded", None, None, None)
-            _update_record(jobid, JobStatus.Succeeded, Some(success))
-            _append_event(
-              jobid = jobid,
-              name = "job.succeeded",
-              payload = Map(
-                "job-id" -> jobid.value,
-                "status" -> JobStatus.Succeeded.toString
+    _state_monitor.synchronized {
+      _get_record(jobid).foreach { record =>
+        if (record.baseTasksCompleted && record.activeTaskCount == 0 && record.pendingTaskCount == 0) {
+          record.deferredResult match {
+            case Some(JobResult.Failure(c)) if record.status != JobStatus.Cancelled =>
+              _handle_failed_settlement(jobid, record, c)
+            case Some(JobResult.Failure(_)) =>
+              () // A cancellation is terminal even when an already-admitted task returns later.
+            case Some(success @ JobResult.Success(_)) =>
+              _append_timeline(jobid, "job.succeeded", None, None, None)
+              _update_record(jobid, JobStatus.Succeeded, Some(success))
+              _append_event(
+                jobid = jobid,
+                name = "job.succeeded",
+                payload = Map(
+                  "job-id" -> jobid.value,
+                  "status" -> JobStatus.Succeeded.toString
+                )
               )
-            )
-          case None =>
-            ()
+            case None =>
+              ()
+          }
+          _mutate_record(jobid)(_.copy(baseTasksCompleted = false, deferredResult = None, updatedAt = _now()))
+          if (_get_record(jobid).exists(record => JobStatus.isTerminal(record.status)))
+            _cancellation_scopes.remove(jobid)
         }
-        _mutate_record(jobid)(_.copy(baseTasksCompleted = false, deferredResult = None, updatedAt = _now()))
-        if (_get_record(jobid).exists(record => JobStatus.isTerminal(record.status)))
-          _cancellation_scopes.remove(jobid)
       }
     }
 
@@ -2187,6 +2205,33 @@ final class InMemoryJobEngine(
     _mutate_record(jobid) { record =>
       record.copy(
         timeline = _next_timeline(record.timeline, kind, taskId, parent, note),
+        updatedAt = _now()
+      )
+    }
+
+  private def _append_same_job_task_queued(
+    jobid: JobId,
+    taskid: TaskId,
+    task: JobTask,
+    parent: Option[TaskId]
+  ): Unit =
+    _mutate_record(jobid) { record =>
+      val reopening = JobStatus.isTerminal(record.status)
+      record.copy(
+        status = if (reopening) JobStatus.Running else record.status,
+        result = if (reopening) None else record.result,
+        deferredResult =
+          if (reopening) record.primaryResult.orElse(record.result).orElse(record.deferredResult)
+          else record.deferredResult,
+        baseTasksCompleted = record.baseTasksCompleted || reopening,
+        pendingTaskCount = record.pendingTaskCount + 1,
+        timeline = _next_timeline(
+          record.timeline,
+          "job.same-job-async.queued",
+          Some(taskid),
+          parent,
+          Some(task.operationName.getOrElse(task.actionId.print))
+        ),
         updatedAt = _now()
       )
     }
@@ -2462,8 +2507,10 @@ final class InMemoryJobEngine(
     }
 
   private def _mutate_record(jobid: JobId)(f: JobRecord => JobRecord): Unit =
-    _get_record(jobid).foreach { current =>
-      _put_record(f(current))
+    _state_monitor.synchronized {
+      _get_record(jobid).foreach { current =>
+        _put_record(f(current))
+      }
     }
 
   private def _put_record(record: JobRecord): Unit = {
@@ -3156,5 +3203,7 @@ final case class JobRecord(
   retry: JobRetryState = JobRetryState(),
   deferredResult: Option[JobResult] = None,
   activeTaskCount: Int = 0,
-  baseTasksCompleted: Boolean = false
+  baseTasksCompleted: Boolean = false,
+  primaryResult: Option[JobResult] = None,
+  pendingTaskCount: Int = 0
 )
