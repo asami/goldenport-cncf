@@ -14,7 +14,7 @@ import org.goldenport.cncf.operation.{AssociationBindingOperationDefinition, Chi
 /*
  * @since   Mar.  5, 2026
  *  version May. 31, 2026
- * @version Jul. 16, 2026
+ * @version Jul. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 private[projection] object MetaProjectionSupport {
@@ -181,6 +181,29 @@ private[projection] object MetaProjectionSupport {
     )
   }
 
+  def operation_parameter_records(
+    component: Component,
+    operation: OperationDefinition
+  ): Vector[Record] = {
+    val updates = component.operationDefinitions
+      .find(x => NamingConventions.equivalentByNormalized(x.name, operation.name))
+      .toVector
+      .flatMap(_.parameters)
+      .flatMap(field => field.update.map(field.name -> _))
+    operation.specification.request.parameters.toVector.map { parameter =>
+      val base = parameter_record(parameter)
+      updates.find { case (name, _) =>
+        NamingConventions.equivalentByNormalized(name, parameter.name)
+      }.fold(base) { case (_, update) =>
+        base.update(
+          "sourceMultiplicity" -> update.sourceMultiplicity,
+          "nullAllowed" -> update.nullAllowed,
+          "updateCommands" -> update.availableCommands
+        )
+      }
+    }
+  }
+
   def web_validation_record(
     validation: org.goldenport.schema.WebValidationHints
   ): Record =
@@ -219,7 +242,7 @@ private[projection] object MetaProjectionSupport {
     component: Component,
     operation: OperationDefinition
   ): Record = {
-    val args = operation.specification.request.parameters.toVector.map(parameter_record)
+    val args = operation_parameter_records(component, operation)
     val returns = render_operation_returns(operation)
     Record.dataAuto(
       "arguments" -> args,
@@ -434,11 +457,14 @@ private[projection] object MetaProjectionSupport {
             .getOrElse("default"),
           jobDefinitionRef = x.jobDefinitionRef,
           parameters = x.parameters.map { p =>
-            Record.data(
+            Record.dataAuto(
               "name" -> p.name,
               "datatype" -> p.datatype,
               "multiplicity" -> p.multiplicity,
               "required" -> p.required.getOrElse(p.multiplicity == "1" || p.multiplicity == "+"),
+              "sourceMultiplicity" -> p.update.map(_.sourceMultiplicity),
+              "nullAllowed" -> p.update.map(_.nullAllowed),
+              "updateCommands" -> p.update.map(_.availableCommands).getOrElse(Vector.empty),
               "validation" -> web_validation_record(p.validation),
               "confidentiality" -> p.effectiveConfidentiality.label
             )

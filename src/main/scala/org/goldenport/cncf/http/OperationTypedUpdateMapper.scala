@@ -2,6 +2,7 @@ package org.goldenport.cncf.http
 
 import org.goldenport.Consequence
 import org.goldenport.cncf.operation.{CmlOperationDefinition, CmlOperationField, CmlOperationUpdateField}
+import org.goldenport.record.Record
 import org.simplemodeling.model.directive.Update
 
 /*
@@ -54,16 +55,9 @@ private[cncf] object OperationUpdateParameterMetadata {
       name = field.name,
       elementDatatype = field.datatype,
       sourceMultiplicity = update.sourceMultiplicity,
-      collectionValued = _is_collection(update.sourceMultiplicity),
+      collectionValued = update.isCollectionValued,
       nullAllowed = update.nullAllowed
     )
-
-  private def _is_collection(p: String): Boolean =
-    Option(p).map(_.trim.toLowerCase(java.util.Locale.ROOT)).exists {
-      case "*" | "+" | "0..*" | "1..*" | "zeromore" | "zero-more" |
-          "zero_more" | "onemore" | "one-more" | "one_more" => true
-      case _ => false
-    }
 
   private def _failure[A](
     parametername: String,
@@ -159,4 +153,23 @@ private[cncf] object OperationTypedUpdateMapper {
     actual: String
   ): Consequence[A] =
     Consequence.argumentPolicyViolation(parametername, POLICY, expected, actual)
+}
+
+private[http] object OperationUpdateFormNormalizer {
+  def normalize(
+    operation: CmlOperationDefinition,
+    record: Record
+  ): Record = {
+    val updatefields = operation.parameters.filter(_.update.isDefined).map(_.name)
+    Record(record.fields.filterNot { field =>
+      updatefields.exists(name => _equivalent(name, field.key)) &&
+        Option(field.value.single).exists {
+          case value: String => value.trim.isEmpty
+          case _ => false
+        }
+    })
+  }
+
+  private def _equivalent(lhs: String, rhs: String): Boolean =
+    org.goldenport.cncf.naming.NamingConventions.equivalentByNormalized(lhs, rhs)
 }

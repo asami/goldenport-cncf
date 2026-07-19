@@ -9,7 +9,7 @@ import org.goldenport.schema.DataConfidentiality
  * @since   Mar. 22, 2026
  *  version Mar. 28, 2026
  *  version May.  8, 2026
- * @version Jul. 18, 2026
+ * @version Jul. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class CmlOperationAssociationBinding(
@@ -147,7 +147,20 @@ final case class CmlOperationField(
 final case class CmlOperationUpdateField(
   sourceMultiplicity: String,
   nullAllowed: Boolean
-)
+) {
+  def isCollectionValued: Boolean =
+    Option(sourceMultiplicity).map(_.trim.toLowerCase(java.util.Locale.ROOT)).exists {
+      case "*" | "+" | "0..*" | "1..*" | "zeromore" | "zero-more" |
+          "zero_more" | "onemore" | "one-more" | "one_more" => true
+      case _ => false
+    }
+
+  def availableCommands: Vector[String] =
+    Vector(
+      Option.when(isCollectionValued)("clear"),
+      Option.when(nullAllowed && !isCollectionValued)("null")
+    ).flatten
+}
 
 object CmlOperationField {
   // Retain the constructor shape emitted by CARs generated before validation hints.

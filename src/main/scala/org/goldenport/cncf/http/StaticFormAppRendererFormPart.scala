@@ -15,7 +15,7 @@ import org.goldenport.cncf.metrics.RuntimeMetricPoint
 import org.goldenport.cncf.CncfVersion
 import org.goldenport.cncf.config.{OperationMode, RuntimeConfig}
 import org.goldenport.cncf.observability.{DiagnosticPayloadExternalizationConfig, DiagnosticPayloadReference}
-import org.goldenport.cncf.operation.{AssociationBindingOperationDefinition, CmlEntityRelationshipDefinition, CmlOperationAssociationBinding, CmlOperationImageBinding, ImageBindingOperationDefinition}
+import org.goldenport.cncf.operation.{AssociationBindingOperationDefinition, CmlEntityRelationshipDefinition, CmlOperationAssociationBinding, CmlOperationImageBinding, CmlOperationDefinition, ImageBindingOperationDefinition}
 import org.goldenport.cncf.projection.{AuthorizationPolicyProjection, DescribeProjection, HelpProjection, SchemaProjection}
 import org.goldenport.cncf.search.{SearchMode, SearchPlanningProfile, WebSearchQueryPlanner}
 import org.goldenport.configuration.{ConfigurationValue, ResolvedConfiguration}
@@ -33,7 +33,7 @@ import io.circe.parser.parse
 /*
  * @since   May. 18, 2026
  *  version Jun. 19, 2026
- * @version Jul. 16, 2026
+ * @version Jul. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 trait StaticFormAppRendererFormPart {
@@ -48,6 +48,7 @@ trait StaticFormAppRendererFormPart {
     servicepath: String,
     operationpath: String,
     webschema: WebSchemaResolver.ResolvedWebSchema,
+    updatecommands: Map[String, Vector[String]] = Map.empty,
     associationBinding: Option[CmlOperationAssociationBinding] = None,
     imagebinding: Option[CmlOperationImageBinding] = None
   )
@@ -843,7 +844,7 @@ trait StaticFormAppRendererFormPart {
         val required = if (field.required) " required" else ""
         val help = web_schema_field_help(field)
         val fieldmessages = validationmessages.getOrElse(name, Vector.empty)
-        operation_parameter_control(
+        val inputcontrol = operation_parameter_control(
           name,
           id,
           field.controlType,
@@ -857,6 +858,7 @@ trait StaticFormAppRendererFormPart {
           validationmessages = fieldmessages,
           textusfieldselector = true
         )
+        inputcontrol + operation_update_command_controls(name, context.updatecommands.getOrElse(name, Vector.empty))
       }.mkString("\n")
       val extravalues = visible_form_values(values).filterNot { case (key, _) =>
         fieldnames.contains(key) || is_operation_binding_only_field(context, key)
@@ -870,6 +872,26 @@ trait StaticFormAppRendererFormPart {
          |${bindingcontrols}
          |${extra}""".stripMargin
     }
+  }
+
+  protected def operation_update_command_controls(
+    name: String,
+    commands: Vector[String]
+  ): String = {
+    val buttons = commands.distinct.map { command =>
+      val label = command match {
+        case "clear" => "Clear values"
+        case "null" => "Set null"
+        case other => humanize_field_name(other)
+      }
+      s"""<button type="submit" class="btn btn-sm btn-outline-secondary" name="${escape(name)}__update_command" value="${escape(command)}" data-textus-action="update-${escape(command)}">${escape(label)}</button>"""
+    }.mkString("\n")
+    if (buttons.isEmpty)
+      ""
+    else
+      s"""<div class="d-flex flex-wrap gap-2 mt-2" data-textus-widget="update-command" data-textus-field="${escape(name)}">
+         |  ${buttons}
+         |</div>""".stripMargin
   }
 
   protected def operation_binding_controls(
@@ -1016,10 +1038,20 @@ trait StaticFormAppRendererFormPart {
               Vector.empty
             else
               cml_operation_parameters(component, service.name, operation.name)
-          val webschema = WebSchemaResolver.resolveOperationControls(
+          val basewebschema = WebSchemaResolver.resolveOperationControls(
             resolvedselector,
             operationparameters ++ cmlparameters,
             descriptorcontrols
+          )
+          val updatecommands = cml_operation_definition(component, operation.name)
+            .toVector
+            .flatMap(_.parameters)
+            .flatMap(field => field.update.map(update => field.name -> update.availableCommands))
+            .toMap
+          val webschema = basewebschema.copy(
+            fields = basewebschema.fields.map(field =>
+              field.copy(updateCommands = updatecommands.getOrElse(field.name, Vector.empty))
+            )
           )
           Some(OperationWebSchemaContext(
             component,
@@ -1029,6 +1061,7 @@ trait StaticFormAppRendererFormPart {
             servicepath,
             operationpath,
             webschema,
+            updatecommands = updatecommands,
             associationBinding = operation_association_binding(component, operation),
             imagebinding = operation_image_binding(component, operation)
           ))
@@ -1036,6 +1069,14 @@ trait StaticFormAppRendererFormPart {
       }
     } yield
       context
+
+  protected def cml_operation_definition(
+    component: Component,
+    operationname: String
+  ): Option[CmlOperationDefinition] =
+    component.operationDefinitions.find(definition =>
+      NamingConventions.equivalentByNormalized(definition.name, operationname)
+    )
 
   protected def operation_association_binding(
     component: Component,
@@ -1599,6 +1640,7 @@ trait StaticFormAppRendererFormPart {
       "multiple" -> Json.fromBoolean(control.multiple),
       "placeholder" -> field.placeholder.map(Json.fromString).getOrElse(Json.Null),
       "help" -> field.help.map(Json.fromString).getOrElse(Json.Null),
+      "updateCommands" -> Json.arr(field.updateCommands.map(Json.fromString)*),
       "confidentiality" -> Json.fromString(field.confidentiality.label),
       "validation" -> web_validation_hints_json(field.validation),
       "source" -> Json.fromString(field.source.toString)

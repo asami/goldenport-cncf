@@ -3,6 +3,7 @@ package org.goldenport.cncf.http
 import org.goldenport.Consequence
 import org.goldenport.cncf.operation.{CmlOperationDefinition, CmlOperationField, CmlOperationUpdateField}
 import org.goldenport.protocol.{Argument, Property, Request}
+import org.goldenport.record.Record
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -66,6 +67,34 @@ final class OperationUpdateRequestNormalizerSpec
 
       Then("the request fails instead of selecting one transport position")
       normalized shouldBe a[Consequence.Failure[?]]
+    }
+
+    "omit blank form values only for typed update fields" in {
+      Given("a browser form with a clicked command carrier and blank ordinary controls")
+      val form = Record.data(
+        "tags" -> "",
+        "tags__update_command" -> "clear",
+        "nickname" -> "",
+        "ordinary" -> ""
+      )
+
+      When("the Form adapter prepares the operation input")
+      val normalized = OperationUpdateFormNormalizer.normalize(_operation, form)
+
+      Then("typed update blanks are absent while the command and unrelated blank remain")
+      normalized.getAny("tags") shouldBe None
+      normalized.getAny("nickname") shouldBe None
+      normalized.getString("tags__update_command") shouldBe Some("clear")
+      normalized.getString("ordinary") shouldBe Some("")
+    }
+
+    "derive available commands from source multiplicity and nullability" in {
+      Given("collection and nullable scalar update metadata")
+      val fields = _operation.parameters.map(field => field.name -> field.update.toVector.flatMap(_.availableCommands)).toMap
+
+      Then("only semantically valid operand-less commands are advertised")
+      fields("tags") shouldBe Vector("clear")
+      fields("nickname") shouldBe Vector("null")
     }
   }
 

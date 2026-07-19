@@ -2,7 +2,7 @@
 
 Stage Status:
 - Current status: IN_PROGRESS
-- Current step: UT-03 typed update mapping.
+- Current step: UT-05 executable CNCF evidence; generated binder integration remains in UT-03.
 - Owner: CNCF HTTP/Form ingress and generated operation binding.
 - Update rule: Update this block and `phase-40-checklist.md` whenever a stable
   work-item state changes. Close only after every checklist item is checked and
@@ -67,13 +67,14 @@ design/spec documents.
   freeze the provisional grammar and metadata requirements.
 - B (DONE): UT-02 - Implement transport-neutral directive grouping, duplicate
   preservation, and conflict validation.
-- C (IN_PROGRESS): UT-03 - CNCF metadata contract, compatibility checks, and
-  typed clear/null mapper are implemented; generated source multiplicity and
-  nullability projection remains to be connected.
-- D (IN_PROGRESS): UT-04 - The shared `ComponentLogic` request boundary and
-  transport-position-preserving materialization are implemented; HTTP adapter
-  evidence, generated null binding, projections, and Form controls remain.
-- E (OPEN): UT-05 - Add structured error, regression, authorization, and
+- C (IN_PROGRESS): UT-03 - CNCF metadata contract, compatibility checks,
+  typed clear/null mapper, and runtime projection are implemented; generator
+  emission and generated null binding remain to be connected.
+- D (DONE): UT-04 - The shared `ComponentLogic` request boundary,
+  URL-encoded/multipart Form adaptation, REST/JSON carrier normalization,
+  metadata projections, and generated Form controls are implemented.
+- E (IN_PROGRESS): UT-05 - Structured HTTP 400 and transport-equivalence
+  evidence is implemented; regression, authorization, and
   observability executable evidence.
 - F (OPEN): UT-06 - Validate the ArtScene generated-REST clear scenario.
 - G (OPEN): UT-07 - Promote confirmed parameter behavior to design/spec and

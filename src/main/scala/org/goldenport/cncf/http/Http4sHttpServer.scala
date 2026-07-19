@@ -2791,12 +2791,13 @@ final class Http4sHttpServer(
       form.getString(source).filter(_.nonEmpty).map(target -> _)
     }
     val frameworkcontext = _framework_passthrough_form_values(form)
+    val operationinput = _strip_blank_update_form_values(app, operation, _strip_framework_form_record(form))
     WebFormValueDecoder.decode(
       engine.webDescriptor,
       app,
       service,
       operation,
-      _strip_framework_form_record(form)
+      operationinput
     ).flatMap(_normalize_boundary_record(app, service, operation, _)).map { operationform =>
       Record(operationform.fields ++ Record.create(admincontext ++ frameworkcontext).fields)
     }
@@ -6118,6 +6119,17 @@ final class Http4sHttpServer(
     record: Record
   ): Record =
     Record(record.fields.filterNot(field => _is_framework_or_security_form_key(field.key) || _is_form_context_key(field.key)))
+
+  private def _strip_blank_update_form_values(
+    app: String,
+    operation: String,
+    record: Record
+  ): Record =
+    _component(app).toVector
+      .flatMap(_.operationDefinitions)
+      .find(definition => NamingConventions.equivalentByNormalized(definition.name, operation))
+      .map(OperationUpdateFormNormalizer.normalize(_, record))
+      .getOrElse(record)
 
   private def _framework_passthrough_form_values(
     form: Record

@@ -7,7 +7,7 @@ import org.goldenport.cncf.naming.NamingConventions
 /*
  * @since   Mar.  5, 2026
  *  version May. 31, 2026
- * @version Jul. 16, 2026
+ * @version Jul. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 object DescribeProjection {
@@ -113,7 +113,7 @@ object DescribeProjection {
           "type" -> "operation",
           "name" -> s"${component.name}.${service.name}.${operation.name}",
           "summary" -> s"Operation ${service.name}.${operation.name}",
-          "arguments" -> operation.specification.request.parameters.toVector.map(parameter_record),
+          "arguments" -> operation_parameter_records(component, operation),
           "returns" -> render_operation_returns(operation),
           "commandExecution" -> component.operationDefinitions
             .find(x => NamingConventions.equivalentByNormalized(x.name, operation.name))

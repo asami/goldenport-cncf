@@ -6,7 +6,7 @@ import org.goldenport.cncf.component.Component
 /*
  * @since   Mar.  5, 2026
  *  version May.  7, 2026
- * @version Jul. 16, 2026
+ * @version Jul. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 object SchemaProjection {
@@ -97,7 +97,7 @@ object SchemaProjection {
           "targetType" -> "operation",
           "name" -> s"${component.name}.${service.name}.${operation.name}",
           "request" -> Record.data(
-            "parameters" -> operation.specification.request.parameters.toVector.map(parameter_record)
+            "parameters" -> operation_parameter_records(component, operation)
           ),
           "response" -> Record.data(
             "result" -> render_operation_returns(operation)

@@ -34,33 +34,34 @@ Status: IN_PROGRESS
 
 ## UT-04: Shared Transport Integration
 
-Status: IN_PROGRESS
+Status: DONE
 
 - [x] Connect directive normalization to the shared
   `ComponentLogic.makeOperationRequest(Request)` boundary.
 - [x] Preserve Form/property and REST/argument carrier positions while using
   one conflict validator and typed mapper.
 
-- [ ] Integrate URL-encoded Form input through the shared normalizer.
-- [ ] Integrate multipart form fields through the shared normalizer.
-- [ ] Integrate automatic REST/query-style operation input where supported.
-- [ ] Integrate JSON Record input without reinterpreting ordinary arrays as
+- [x] Integrate URL-encoded Form input through the shared normalizer.
+- [x] Integrate multipart form fields through the shared normalizer.
+- [x] Integrate automatic REST/query-style operation input where supported.
+- [x] Integrate JSON Record input without reinterpreting ordinary arrays as
   operand-less commands.
-- [ ] Project compatible commands through Form definition/help/schema metadata.
-- [ ] Render generated update controls that submit the canonical command
+- [x] Project compatible commands through Form definition/help/schema metadata.
+- [x] Render generated update controls that submit the canonical command
   carrier without a dummy value.
 
 ## UT-05: Executable CNCF Evidence
 
-Status: OPEN
+Status: IN_PROGRESS
 
-- [ ] Cover repeated powertype clear and optional scalar null assignment.
-- [ ] Cover omitted and blank Form values as unchanged/no-op behavior.
+- [x] Cover repeated powertype clear and optional scalar null assignment at
+  the CNCF typed-mapping boundary.
+- [x] Cover omitted and blank Form values as unchanged/no-op behavior.
 - [ ] Cover overwrite, prepend, append, and remove regression behavior.
-- [ ] Cover duplicate, unknown, incompatible, and conflicting directives as
+- [x] Cover duplicate, unknown, incompatible, and conflicting directives as
   structured HTTP 400 failures.
-- [ ] Prove equivalent transport semantics and order-independent validation.
-- [ ] Prove generated forms expose only type-compatible commands and submit the
+- [x] Prove equivalent transport semantics and order-independent validation.
+- [x] Prove generated forms expose only type-compatible commands and submit the
   same grammar accepted by automatic REST.
 - [ ] Prove authorization, validation observability, and persistence still use
   the normal ActionCall path.

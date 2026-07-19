@@ -4,7 +4,7 @@ package org.goldenport.cncf.http
  * @since   May. 18, 2026
  *  version May. 27, 2026
  *  version Jun. 19, 2026
- * @version Jul. 16, 2026
+ * @version Jul. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 import scala.collection.mutable.ListBuffer
@@ -52,7 +52,7 @@ import org.goldenport.cncf.entity.{EntityPersistent, EntityStoreSpace}
 import org.goldenport.cncf.entity.aggregate.{AggregateBuilder, AggregateCollection, AggregateCommandDefinition, AggregateCreateDefinition, AggregateDefinition, AggregateMemberDefinition}
 import org.goldenport.cncf.entity.runtime.*
 import org.goldenport.cncf.entity.view.{Browser, ViewBuilder, ViewCollection, ViewDefinition, ViewQueryDefinition}
-import org.goldenport.cncf.operation.{CmlEntityRelationshipDefinition, CmlOperationAssociationBinding, CmlOperationDefinition, CmlOperationField, CmlOperationImageBinding}
+import org.goldenport.cncf.operation.{CmlEntityRelationshipDefinition, CmlOperationAssociationBinding, CmlOperationDefinition, CmlOperationField, CmlOperationImageBinding, CmlOperationUpdateField}
 import org.goldenport.cncf.job.{ActionId, ActionTask, JobPersistencePolicy, JobRunMode, JobSubmitOption}
 import org.goldenport.cncf.information.*
 import org.goldenport.cncf.knowledge.*
@@ -70,7 +70,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Apr. 12, 2026
  *  version May. 27, 2026
  *  version Jun. 19, 2026
- * @version Jul. 16, 2026
+ * @version Jul. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -6517,19 +6517,18 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       fields.downN(1).downField("hidden").as[Boolean].toOption shouldBe Some(true)
     }
 
-    "serve operation form definition API from CML operation parameters when protocol parameters are empty" in {
+    "project typed update commands into form definitions and generated controls" in {
       val component = new org.goldenport.cncf.component.Component() {
         override def operationDefinitions: Vector[CmlOperationDefinition] =
           Vector(CmlOperationDefinition(
-            name = "search-notices",
-            kind = "QUERY",
-            inputType = "SearchNotices",
-            outputType = "SearchNoticesResult",
-            inputValueKind = "QUERY_VALUE",
+            name = "update-notice",
+            kind = "COMMAND",
+            inputType = "Notice",
+            outputType = "Unit",
+            inputValueKind = "ENTITY_UPDATE",
             parameters = Vector(
-              CmlOperationField("recipientName", "name", "1"),
-              CmlOperationField("offset", "integer", "?"),
-              CmlOperationField("limit", "integer", "?")
+              CmlOperationField("tags", "string", "*", update = Some(CmlOperationUpdateField("*", nullAllowed = false))),
+              CmlOperationField("nickname", "string", "?", update = Some(CmlOperationUpdateField("?", nullAllowed = true)))
             )
           ))
       }
@@ -6539,7 +6538,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
             spec.ServiceDefinition(
               name = "notice",
               operations = spec.OperationDefinitionGroup(
-                operations = NonEmptyVector.of(_NoopOperation("search-notices"))
+                operations = NonEmptyVector.of(_NoopOperation("update-notice"))
               )
             )
           )
@@ -6551,25 +6550,153 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
 
       val response = server
         ._operation_form_api_definition(
-          _get_request("/form-api/notice-board/notice/search-notices"),
+          _get_request("/form-api/notice-board/notice/update-notice"),
           "notice-board",
           "notice",
-          "search-notices"
+          "update-notice"
         )
         .unsafeRunSync()
       val json = parse(response.as[String].unsafeRunSync()).getOrElse(fail("form definition JSON is invalid"))
       val fields = json.hcursor.downField("fields")
+      val html = _renderer.renderOperationForm(
+        subsystem,
+        "notice-board",
+        "notice",
+        "update-notice"
+      ).map(_.body).getOrElse(fail("operation form is missing"))
 
       response.status.code shouldBe 200
       json.hcursor.downField("source").as[String].toOption shouldBe Some("Schema")
-      fields.downN(0).downField("name").as[String].toOption shouldBe Some("recipientName")
-      fields.downN(0).downField("required").as[Boolean].toOption shouldBe Some(true)
-      fields.downN(1).downField("name").as[String].toOption shouldBe Some("offset")
-      fields.downN(1).downField("type").as[String].toOption shouldBe Some("number")
-      fields.downN(1).downField("required").as[Boolean].toOption shouldBe Some(false)
-      fields.downN(2).downField("name").as[String].toOption shouldBe Some("limit")
-      fields.downN(2).downField("type").as[String].toOption shouldBe Some("number")
-      fields.downN(2).downField("required").as[Boolean].toOption shouldBe Some(false)
+      fields.downN(0).downField("name").as[String].toOption shouldBe Some("tags")
+      fields.downN(0).downField("updateCommands").as[Vector[String]].toOption shouldBe Some(Vector("clear"))
+      fields.downN(1).downField("name").as[String].toOption shouldBe Some("nickname")
+      fields.downN(1).downField("updateCommands").as[Vector[String]].toOption shouldBe Some(Vector("null"))
+      html should include ("name=\"tags__update_command\" value=\"clear\"")
+      html should include ("name=\"nickname__update_command\" value=\"null\"")
+      html should not include "name=\"tags__update_command\" value=\"null\""
+      html should not include "name=\"nickname__update_command\" value=\"clear\""
+    }
+
+    "normalize URL-encoded and multipart typed update commands before Web dispatch" in {
+      Given("an entity update operation exposed through Form API")
+      val component = new org.goldenport.cncf.component.Component() {
+        override def operationDefinitions: Vector[CmlOperationDefinition] =
+          Vector(CmlOperationDefinition(
+            name = "update-notice",
+            kind = "COMMAND",
+            inputType = "Notice",
+            outputType = "Unit",
+            inputValueKind = "ENTITY_UPDATE",
+            parameters = Vector(
+              CmlOperationField("tags", "string", "*", update = Some(CmlOperationUpdateField("*", nullAllowed = false))),
+              CmlOperationField("nickname", "string", "?", update = Some(CmlOperationUpdateField("?", nullAllowed = true)))
+            )
+          ))
+      }
+      val protocol = Protocol(
+        services = spec.ServiceDefinitionGroup(Vector(spec.ServiceDefinition(
+          name = "notice",
+          operations = spec.OperationDefinitionGroup(NonEmptyVector.of(_NoopOperation("update-notice")))
+        )))
+      )
+      _initialize_component("notice_board", component, protocol)
+      val subsystem = DefaultSubsystemFactory.default(Some("server")).add(Vector(component))
+      val dispatcher = new RecordingWebOperationDispatcher(new StaticWebOperationDispatcher(
+        HttpResponse.Text(
+          HttpStatus.Ok,
+          ContentType(MimeType("text/plain"), Some(StandardCharsets.UTF_8)),
+          Bag.text("updated", StandardCharsets.UTF_8)
+        )
+      ))
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem), operationDispatcherOption = Some(dispatcher))
+
+      When("URL-encoded and multipart forms submit collection clear with a blank ordinary control")
+      val urlencoded = server.routes(null).orNotFound.run(
+        _post_form_request(
+          "/form-api/notice-board/notice/update-notice",
+          "tags=&tags__update_command=clear"
+        )
+      ).unsafeRunSync()
+      val multipart = server.routes(null).orNotFound.run(
+        _post_multipart_request(
+          "/form-api/notice-board/notice/update-notice",
+          Vector("tags" -> "", "tags__update_command" -> "clear"),
+          Vector.empty
+        )
+      ).unsafeRunSync()
+
+      Then("both transport adapters omit the blank value and preserve the command carrier")
+      urlencoded.status.code shouldBe 200
+      multipart.status.code shouldBe 200
+      dispatcher.forms should have size 2
+      dispatcher.forms.foreach { form =>
+        form.getAny("tags") shouldBe None
+        form.getString("tags__update_command") shouldBe Some("clear")
+      }
+    }
+
+    "return structured HTTP 400 for incompatible typed update commands" in {
+      Given("an executable entity update operation using the shared request boundary")
+      val component = new org.goldenport.cncf.component.Component() {
+        override def operationDefinitions: Vector[CmlOperationDefinition] =
+          Vector(CmlOperationDefinition(
+            name = "update-notice",
+            kind = "COMMAND",
+            inputType = "Notice",
+            outputType = "Unit",
+            inputValueKind = "ENTITY_UPDATE",
+            parameters = Vector(
+              CmlOperationField("nickname", "string", "?", update = Some(CmlOperationUpdateField("?", nullAllowed = true)))
+            )
+          ))
+      }
+      val protocol = Protocol(
+        services = spec.ServiceDefinitionGroup(Vector(spec.ServiceDefinition(
+          name = "notice",
+          operations = spec.OperationDefinitionGroup(NonEmptyVector.of(
+            _SuccessfulAggregateOperation("update-notice", "nickname", "updated")
+          ))
+        ))),
+        handler = ProtocolHandler(
+          ingresses = IngressCollection(Vector(RestIngress())),
+          egresses = EgressCollection(Vector(RestEgress())),
+          projections = ProjectionCollection()
+        )
+      )
+      _initialize_component("notice_board", component, protocol)
+      val subsystem = DefaultSubsystemFactory.default(Some("server")).add(Vector(component))
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+
+      When("the form submits collection clear for a nullable scalar")
+      val rejected = server.routes(null).orNotFound.run(
+        _post_form_request(
+          "/form-api/notice-board/notice/update-notice",
+          "nickname__update_command=clear"
+        )
+      ).unsafeRunSync()
+      val rejectedjson = parse(rejected.as[String].unsafeRunSync()).getOrElse(fail("error JSON is invalid")).hcursor
+
+      And("the canonical REST route submits the same null command grammar")
+      val restaccepted = server.routes(null).orNotFound.run(
+        Request[IO](
+          method = Method.POST,
+          uri = Uri.unsafeFromString("/rest/v1/notice-board/notice/update-notice")
+        ).withEntity("{\"nickname__update_command\":\"null\"}")
+          .withContentType(org.http4s.headers.`Content-Type`.parse("application/json").toOption.get)
+      ).unsafeRunSync()
+      val restrejected = server.routes(null).orNotFound.run(
+        Request[IO](
+          method = Method.POST,
+          uri = Uri.unsafeFromString("/rest/v1/notice-board/notice/update-notice")
+        ).withEntity("{\"nickname__update_command\":\"clear\"}")
+          .withContentType(org.http4s.headers.`Content-Type`.parse("application/json").toOption.get)
+      ).unsafeRunSync()
+
+      Then("the normal operation boundary returns a structured client error")
+      rejected.status.code shouldBe 400
+      rejectedjson.downField("error").get[Int]("status") shouldBe Right(400)
+      restaccepted.status.code shouldBe 200
+      restrejected.status.code shouldBe 400
     }
 
     "render operation image binding controls and Form API metadata" in {

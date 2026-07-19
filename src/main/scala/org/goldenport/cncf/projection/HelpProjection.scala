@@ -12,7 +12,7 @@ import org.goldenport.datatype.I18nString
  *  version Mar. 28, 2026
  *  version Apr. 30, 2026
  *  version May. 31, 2026
- * @version Jul. 16, 2026
+ * @version Jul. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 object HelpProjection {
@@ -69,6 +69,11 @@ object HelpProjection {
         val aggregates = aggregateMetas(component).map(_.name)
         val views = viewMetas(component).map(_.name)
         val operations = operationMetas(component).map(_.name)
+        val updatecommands = component.operationDefinitions.flatMap { operation =>
+          operation.parameters.flatMap { field =>
+            field.update.toVector.flatMap(_.availableCommands.map(command => s"${operation.name}.${field.name}=$command"))
+          }
+        }.sorted
         val relationships = component.relationshipDefinitions.map(relationship_definition_record).sortBy(_.getString("name").getOrElse(""))
         val useCaseModels = _component_use_case_models(component)
         val useCases = useCaseModels.flatMap(_render_use_case)
@@ -86,6 +91,7 @@ object HelpProjection {
             "views" -> views,
             "relationshipDefinitions" -> relationships.flatMap(_.getString("name")),
             "operationDefinitions" -> operations,
+            "updateCommands" -> updatecommands,
             "origin" -> Vector(user_origin_label(component.origin.label)),
             "artifactName" -> artifactName,
             "artifactVersion" -> artifactVersion
@@ -126,6 +132,11 @@ object HelpProjection {
         val associationBinding = operation_association_binding(component, operation).map(association_binding_record)
         val imageBinding = operation_image_binding(component, operation).map(image_binding_record)
         val commandExecution = _command_execution_record(component, operation)
+        val updatecommands = component.operationDefinitions
+          .find(x => NamingConventions.equivalentByNormalized(x.name, operation.name))
+          .toVector
+          .flatMap(_.parameters)
+          .flatMap(field => field.update.toVector.flatMap(_.availableCommands.map(command => s"${field.name}=$command")))
         HelpModel(
           `type` = "operation",
           name = operationName,
@@ -137,7 +148,8 @@ object HelpProjection {
           details = Map(
             "arguments" -> args,
             "argumentDetails" -> argumentdetails,
-            "returns" -> Vector(returns)
+            "returns" -> Vector(returns),
+            "updateCommands" -> updatecommands
           ) ++ descriptionDetails,
           childEntityBindings = childEntityBindings,
           associationBinding = associationBinding,

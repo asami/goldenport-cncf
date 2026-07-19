@@ -8,7 +8,7 @@ import org.goldenport.protocol.spec.{ServiceDefinition, OperationDefinition}
 /*
  * @since   Mar.  5, 2026
  *  version May.  8, 2026
- * @version Jul. 16, 2026
+ * @version Jul. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 object OpenApiProjection {
@@ -85,7 +85,8 @@ object OpenApiProjection {
       val parameters = x.parameters.map { p =>
         val required = p.getBoolean("required").getOrElse(false)
         val validation = p.getRecord("validation").map(_json_validation).getOrElse("{}")
-        s"""{"name":"${_escape(p.getString("name").getOrElse(""))}","datatype":"${_escape(p.getString("datatype").getOrElse(""))}","multiplicity":"${_escape(p.getString("multiplicity").getOrElse(""))}","required":${required},"validation":${validation},"x-textus-confidentiality":"${_escape(p.getString("confidentiality").getOrElse("public"))}"}"""
+        val updatecommands = _json_array_strings(_record_string_vector(p, "updateCommands"))
+        s"""{"name":"${_escape(p.getString("name").getOrElse(""))}","datatype":"${_escape(p.getString("datatype").getOrElse(""))}","multiplicity":"${_escape(p.getString("multiplicity").getOrElse(""))}","required":${required},"validation":${validation},"x-textus-confidentiality":"${_escape(p.getString("confidentiality").getOrElse("public"))}","x-textus-update-commands":${updatecommands}}"""
       }.mkString("[", ",", "]")
       s"""{"name":"${_escape(x.name)}","kind":"${_escape(x.kind)}","inputType":"${_escape(x.inputType)}","outputType":"${_escape(x.outputType)}","inputValueKind":"${_escape(x.inputValueKind)}","parameters":${parameters}}"""
     }
@@ -103,4 +104,15 @@ object OpenApiProjection {
     ).flatten
     fields.mkString("{", ",", "}")
   }
+
+  private def _record_string_vector(
+    record: org.goldenport.record.Record,
+    key: String
+  ): Vector[String] =
+    record.getAny(key).toVector.flatMap {
+      case xs: Vector[?] => xs.map(_.toString)
+      case xs: Seq[?] => xs.toVector.map(_.toString)
+      case xs: Array[?] => xs.toVector.map(_.toString)
+      case x => Vector(x.toString)
+    }
 }

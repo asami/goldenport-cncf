@@ -13,7 +13,8 @@ import scala.util.Try
  * @since   Apr. 16, 2026
  *  version Apr. 17, 2026
  *  version Apr. 27, 2026
- * @version May.  8, 2026
+ *  version May.  8, 2026
+ * @version Jul. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 object WebSchemaResolver {
@@ -70,7 +71,8 @@ object WebSchemaResolver {
     help: Option[String] = None,
     validation: WebValidationHints = WebValidationHints.empty,
     confidentiality: DataConfidentiality = DataConfidentiality.Public,
-    source: Source = Source.Empty
+    source: Source = Source.Empty,
+    updateCommands: Vector[String] = Vector.empty
   ) {
     def controlType: String =
       control.controlType.getOrElse(defaultControlType)
@@ -116,7 +118,7 @@ object WebSchemaResolver {
     fallbackFields: => Vector[String] = Vector.empty,
     fieldOrderStrategy: FieldOrderStrategy = FieldOrderStrategy.IdFirst
   ): ResolvedWebSchema =
-    resolveEntityLike(component, componentPath, Surface.Entity, "entity", entityName, entityName, webDescriptor, fallbackFields, None, fieldOrderStrategy)
+    _resolve_entity_like(component, componentPath, Surface.Entity, "entity", entityName, entityName, webDescriptor, fallbackFields, None, fieldOrderStrategy)
 
   def resolveView(
     component: Component,
@@ -128,7 +130,7 @@ object WebSchemaResolver {
     viewFields: Option[Vector[String]] = None,
     fieldOrderStrategy: FieldOrderStrategy = FieldOrderStrategy.IdFirst
   ): ResolvedWebSchema =
-    resolveEntityLike(component, componentPath, Surface.View, "view", viewName, entityName.getOrElse(viewName), webDescriptor, fallbackFields, viewFields, fieldOrderStrategy)
+    _resolve_entity_like(component, componentPath, Surface.View, "view", viewName, entityName.getOrElse(viewName), webDescriptor, fallbackFields, viewFields, fieldOrderStrategy)
 
   def resolveAggregate(
     component: Component,
@@ -140,7 +142,7 @@ object WebSchemaResolver {
     viewFields: Option[Vector[String]] = None,
     fieldOrderStrategy: FieldOrderStrategy = FieldOrderStrategy.IdFirst
   ): ResolvedWebSchema =
-    resolveEntityLike(component, componentPath, Surface.Aggregate, "aggregate", aggregateName, entityName.getOrElse(aggregateName), webDescriptor, fallbackFields, viewFields, fieldOrderStrategy)
+    _resolve_entity_like(component, componentPath, Surface.Aggregate, "aggregate", aggregateName, entityName.getOrElse(aggregateName), webDescriptor, fallbackFields, viewFields, fieldOrderStrategy)
 
   def resolveData(
     componentPath: String,
@@ -236,7 +238,7 @@ object WebSchemaResolver {
       )
     }
 
-  private def resolveEntityLike(
+  private def _resolve_entity_like(
     component: Component,
     componentPath: String,
     surface: Surface,

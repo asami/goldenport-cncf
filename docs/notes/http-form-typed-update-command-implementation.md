@@ -251,7 +251,27 @@ and ArtScene smoke pass:
 
 Phase 40 cannot close before this promotion is complete.
 
-## 13. UT-03 Typed Mapping Result
+## Implementation Status Addendum: UT-04 Transport and Projection Result
+
+The CNCF runtime now derives compatible operand-less commands from
+`CmlOperationUpdateField.sourceMultiplicity` and `nullAllowed`. The same
+derived command list is projected through component help, describe, schema,
+OpenAPI metadata, Form definitions, and generated controls.
+
+Generated Form controls use submit buttons named
+`<field>__update_command`. A carrier is therefore present only when the user
+selects a command; no dummy field value is required. At the Form adapter
+boundary, blank ordinary controls for update-bearing fields are omitted before
+the carrier reaches shared request normalization. This keeps the established
+blank/no-op behavior while URL-encoded and multipart forms preserve equivalent
+command semantics.
+
+Executable evidence also confirms that incompatible commands pass through the
+normal operation request boundary and return a structured HTTP 400 response.
+Generator emission of the source metadata and generated `Update.SetNull`
+binder handling remain separate UT-03 completion work.
+
+## Implementation Status Addendum: UT-03 Typed Mapping Result
 
 The CNCF runtime now has an explicit typed mapping boundary based on
 `CmlOperationDefinition.inputValueKind=ENTITY_UPDATE` and
@@ -296,7 +316,7 @@ before ordinary datatype decoding; this generator change remains part of the
 pending end-to-end connection. A normal JSON empty array has no command carrier
 and passes through unchanged.
 
-## 14. Verified Ingress Audit
+## Implementation Status Addendum: Verified Ingress Audit
 
 The Jul. 19 implementation audit confirmed these concrete boundaries:
 

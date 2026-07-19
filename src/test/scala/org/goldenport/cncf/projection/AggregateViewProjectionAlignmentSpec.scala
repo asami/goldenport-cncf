@@ -10,7 +10,7 @@ import org.goldenport.cncf.component._
 import org.goldenport.cncf.entity.runtime.{EntityMemoryPolicy, EntityRuntimeDescriptor, PartitionStrategy}
 import org.goldenport.cncf.entity.aggregate.{AggregateDefinition, AggregateMemberDefinition}
 import org.goldenport.cncf.entity.view.{ViewDefinition, ViewQueryDefinition}
-import org.goldenport.cncf.operation.{CmlOperationDefinition, CmlOperationField}
+import org.goldenport.cncf.operation.{CmlOperationDefinition, CmlOperationField, CmlOperationUpdateField}
 import org.goldenport.cncf.testutil.TestComponentFactory
 import org.goldenport.schema.{Column, Multiplicity, Schema, ValueDomain, XString}
 import org.goldenport.value.BaseContent
@@ -23,7 +23,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Mar. 21, 2026
  *  version Mar. 23, 2026
  *  version Apr. 11, 2026
- * @version Apr. 26, 2026
+ * @version Jul. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 final class AggregateViewProjectionAlignmentSpec
@@ -49,6 +49,7 @@ final class AggregateViewProjectionAlignmentSpec
       _string_vector(_record(help("details")).asMap("aggregates")) shouldBe Vector("person_aggregate", "profile_aggregate")
       _string_vector(_record(help("details")).asMap("views")) shouldBe Vector("person_view", "summary_view")
       _string_vector(_record(help("details")).asMap("operationDefinitions")) shouldBe Vector("getPerson", "savePerson")
+      _string_vector(_record(help("details")).asMap("updateCommands")) shouldBe Vector("savePerson.aliases=clear")
       _string_vector(_record(help("details")).asMap("origin")) shouldBe Vector("active car projection-alignment@0.1.0")
       _string_vector(_record(help("details")).asMap("artifactName")) shouldBe Vector("projection-alignment")
       _string_vector(_record(help("details")).asMap("artifactVersion")) shouldBe Vector("0.1.0")
@@ -71,6 +72,9 @@ final class AggregateViewProjectionAlignmentSpec
       _records(describe("operationDefinitions")).head.getString("outputType") shouldBe Some("GetPersonResult")
       _records(describe("operationDefinitions")).head.getString("inputValueKind") shouldBe Some("QUERY_VALUE")
       _records(_records(describe("operationDefinitions")).head.asMap("parameters")).map(_.getString("name").getOrElse("")) shouldBe Vector("id")
+      val describeupdateparameter = _records(_records(describe("operationDefinitions")).last.asMap("parameters")).last
+      describeupdateparameter.getString("sourceMultiplicity") shouldBe Some("*")
+      _string_vector(describeupdateparameter.asMap("updateCommands")) shouldBe Vector("clear")
       val describeEntity = _records(describe("entityCollections")).head
       describeEntity.getString("entityName") shouldBe Some("Person")
       describeEntity.getString("collectionId") shouldBe Some("sys-sys-Person")
@@ -103,7 +107,9 @@ final class AggregateViewProjectionAlignmentSpec
       _records(schema("operationDefinitions")).last.getString("kind") shouldBe Some("COMMAND")
       _records(schema("operationDefinitions")).last.getString("inputType") shouldBe Some("SavePersonInput")
       _records(schema("operationDefinitions")).last.getString("outputType") shouldBe Some("SavePersonResult")
-      _records(_records(schema("operationDefinitions")).last.asMap("parameters")).map(_.getString("name").getOrElse("")) shouldBe Vector("id", "name")
+      _records(_records(schema("operationDefinitions")).last.asMap("parameters")).map(_.getString("name").getOrElse("")) shouldBe Vector("id", "name", "aliases")
+      val schemaupdateparameter = _records(_records(schema("operationDefinitions")).last.asMap("parameters")).last
+      _string_vector(schemaupdateparameter.asMap("updateCommands")) shouldBe Vector("clear")
       val schemaEntity = _records(schema("entityCollections")).head
       schemaEntity.getString("entityName") shouldBe Some("Person")
       val schemaStorageFields = _records(_record(schemaEntity.asMap("storageShape")).asMap("fields"))
@@ -137,7 +143,8 @@ final class AggregateViewProjectionAlignmentSpec
       first should include("\"kind\":\"COMMAND\"")
       first should include("\"inputType\":\"GetPerson\"")
       first should include("\"outputType\":\"SavePersonResult\"")
-      first should include("\"inputValueKind\":\"COMMAND_VALUE\"")
+      first should include("\"inputValueKind\":\"ENTITY_UPDATE\"")
+      first should include("\"x-textus-update-commands\":[\"clear\"]")
       first should include("\"datatype\":\"EntityId\"")
       first should include("\"datatype\":\"Name\"")
       first should include("\"name\":\"person_view\"")
@@ -190,10 +197,11 @@ final class AggregateViewProjectionAlignmentSpec
             kind = "COMMAND",
             inputType = "SavePersonInput",
             outputType = "SavePersonResult",
-            inputValueKind = "COMMAND_VALUE",
+            inputValueKind = "ENTITY_UPDATE",
             parameters = Vector(
               CmlOperationField("id", "EntityId", "one"),
-              CmlOperationField("name", "Name", "one")
+              CmlOperationField("name", "Name", "one"),
+              CmlOperationField("aliases", "Name", "*", update = Some(CmlOperationUpdateField("*", nullAllowed = false)))
             )
           ),
           CmlOperationDefinition(
