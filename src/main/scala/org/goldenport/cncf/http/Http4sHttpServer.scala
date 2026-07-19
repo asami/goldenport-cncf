@@ -120,8 +120,11 @@ final class Http4sHttpServer(
       .build
       .use { _ =>
         // Block forever to keep server mode alive.
-        IO.println(s"HTTP server started on port ${port}.") *> IO.never
+        IO(Http4sHttpServer._publish_bound_base_url(port)) *>
+          IO.println(s"HTTP server started on port ${port}.") *>
+          IO.never
       }
+      .guarantee(IO(Http4sHttpServer._clear_bound_base_url()))
   }
 
   private[http] def routes(wsb: WebSocketBuilder2[IO]): HttpRoutes[IO] = HttpRoutes.of[IO] {
@@ -7006,7 +7009,14 @@ object Http4sHttpServer {
 
   val PORT_PROPERTY_KEY = "textus.server.port"
   val LEGACY_PORT_PROPERTY_KEY = "cncf.server.port"
+  val BOUND_BASE_URL_PROPERTY_KEY = "textus.server.bound-base-url"
   val DEMO_ASSIST_MANIFEST_QUERY_KEY = "textus.demo.manifest"
+
+  private[http] def _publish_bound_base_url(port: Int): Unit =
+    sys.props.update(BOUND_BASE_URL_PROPERTY_KEY, s"http://127.0.0.1:$port")
+
+  private[http] def _clear_bound_base_url(): Unit =
+    sys.props.remove(BOUND_BASE_URL_PROPERTY_KEY)
 
   private[http] def fallbackHttpDiagnosticRecord(
     status: Int

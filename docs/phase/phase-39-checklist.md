@@ -24,11 +24,13 @@ Status: DONE
 - [x] Define `textus.server.default-port` as authored CAR/SAR metadata.
 - [x] Document Textus Control Center ownership of the official catalog.
 - [x] Report the actual endpoint after successful HTTP binding.
+- [x] Publish and clear the bound endpoint for delayed launcher registration.
 
 ## SP-04: Executable Evidence and Closure
 
 Status: DONE
 
 - [x] Cover default, override, allocation, persistence, and conflict behavior.
+- [x] Cover bound-endpoint publication and shutdown cleanup.
 - [x] Record the stable design and developer guidance.
 - [x] Validate the CNCF runtime suite before release commit.

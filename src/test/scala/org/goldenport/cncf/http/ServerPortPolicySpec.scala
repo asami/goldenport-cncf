@@ -123,6 +123,26 @@ final class ServerPortPolicySpec extends AnyWordSpec with Matchers with GivenWhe
       Then("the duplicate application number is rejected")
       result.isFaillure shouldBe true
     }
+
+    "publish the actual bound endpoint for launcher registration" in {
+      Given("a runtime server that has selected an additional-instance port")
+      Http4sHttpServer._clear_bound_base_url()
+      try {
+        When("the HTTP server reports that it has bound")
+        Http4sHttpServer._publish_bound_base_url(38002)
+
+        Then("the launcher handshake exposes the selected endpoint until server shutdown")
+        sys.props.get(Http4sHttpServer.BOUND_BASE_URL_PROPERTY_KEY) shouldBe Some("http://127.0.0.1:38002")
+
+        When("the HTTP server shuts down")
+        Http4sHttpServer._clear_bound_base_url()
+
+        Then("the stale endpoint is removed")
+        sys.props.get(Http4sHttpServer.BOUND_BASE_URL_PROPERTY_KEY) shouldBe None
+      } finally {
+        Http4sHttpServer._clear_bound_base_url()
+      }
+    }
   }
 
   private def _subsystem(values: Map[String, String] = Map.empty): Subsystem =

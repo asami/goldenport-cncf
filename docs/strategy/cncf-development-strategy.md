@@ -2445,7 +2445,8 @@ Completed in Phase 39 (Jul. 19, 2026).
   - persist machine-local assignments under a locked runtime-owned registry;
   - project authored `textus.server.default-port` configuration from CAR
     metadata to the packaged descriptor; and
-  - emit the selected endpoint after the HTTP server binds.
+  - emit the selected endpoint after the HTTP server binds and expose it to
+    launcher registration through a process-local lifecycle handshake.
 - Boundary:
   - artifact metadata declares a stable default, but CNCF owns classification,
     registry locking, availability probing, and additional-instance selection;
@@ -2454,6 +2455,8 @@ Completed in Phase 39 (Jul. 19, 2026).
     Center, not by CNCF.
 - Closure evidence:
   - `ServerPortPolicySpec` covers CAR/SAR/runtimes, explicit overrides,
-    additional-instance selection, stable registry allocation, and conflicts;
+    additional-instance selection, stable registry allocation, conflicts, and
+    bound-endpoint publication and cleanup;
   - `CncfRuntime` delegates HTTP port resolution to the policy; and
-  - the runtime emits its bound port only after successful server startup.
+  - the runtime emits and publishes its bound endpoint only after successful
+    server startup, then clears the handshake on shutdown.

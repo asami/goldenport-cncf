@@ -116,3 +116,11 @@ instance from the shared additional-instance range beginning at `38000`.
 The selected automatic port is printed when the HTTP server has bound
 successfully. Clients connecting to one of several local servers should use
 that endpoint or an explicitly configured base URL.
+
+After a successful bind, the runtime publishes the selected loopback endpoint
+through the process-local `textus.server.bound-base-url` handshake property.
+The CNCF and Textus launchers use this internal signal to delay optional Textus
+Control Center registration until the actual default or additional-instance
+port is known. The property is cleared when the server stops. It is not a user
+configuration key and does not replace the explicit public `base-url` override
+used when a server is exposed through a proxy or a different host name.

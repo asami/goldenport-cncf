@@ -39,7 +39,9 @@ instances through a machine-local registry.
 - `ServerPortPolicySpec` verifies CAR/SAR defaults, additional instances,
   explicit overrides, bare-runtime compatibility, persistent assignment, and
   conflict rejection.
-- `Http4sHttpServer` reports the actual port only after binding succeeds.
+- `Http4sHttpServer` reports the actual port only after binding succeeds and
+  publishes a process-local bound-endpoint handshake for delayed launcher
+  registration.
 - `docs/design/server-port-allocation.md` and the CNCF developer guide record
   the artifact metadata and operational contract.
 
