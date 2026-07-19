@@ -111,6 +111,7 @@ trait StaticFormAppRendererTemplatePart {
     val jobpanel = """<textus(?::job-panel|-job-panel)\b([^>]*)></textus(?::job-panel|-job-panel)>""".r
     val jobticket = """<textus(?::job-ticket|-job-ticket)\b([^>]*)></textus(?::job-ticket|-job-ticket)>""".r
     val jobactions = """<textus(?::job-actions|-job-actions)\b([^>]*)></textus(?::job-actions|-job-actions)>""".r
+    val flash = """<textus(?::flash|-flash)\b([^>]*)></textus(?::flash|-flash)>""".r
     val alert = """<textus(?::alert|-alert)\b([^>]*)></textus(?::alert|-alert)>""".r
     val emptystate = """<textus(?::empty-state|-empty-state)\b([^>]*)></textus(?::empty-state|-empty-state)>""".r
     val statusbadge = """<textus(?::status-badge|-status-badge)\b([^>]*)></textus(?::status-badge|-status-badge)>""".r
@@ -187,7 +188,11 @@ trait StaticFormAppRendererTemplatePart {
       val attrs = widget_attrs(m.group(1))
       java.util.regex.Matcher.quoteReplacement(render_job_actions(attrs, properties))
     })
-    val f = alert.replaceAllIn(f1, m => {
+    val f1a = flash.replaceAllIn(f1, m => {
+      val attrs = widget_attrs(m.group(1))
+      java.util.regex.Matcher.quoteReplacement(render_flash(attrs, properties))
+    })
+    val f = alert.replaceAllIn(f1a, m => {
       val attrs = widget_attrs(m.group(1))
       java.util.regex.Matcher.quoteReplacement(render_alert(attrs, properties))
     })
@@ -1690,6 +1695,19 @@ trait StaticFormAppRendererTemplatePart {
       ""
     }
   }
+
+  protected def render_flash(
+    attrs: Map[String, String],
+    properties: FormPageProperties
+  ): String =
+    if (!property_non_empty(properties, "pageContext.flash.present").contains("true"))
+      ""
+    else {
+      val variant = properties.value("pageContext.flash.variant")
+      val message = properties.value("pageContext.flash.message")
+      render_alert(attrs ++ Map("variant" -> variant, "message" -> message), properties)
+        .replace("data-textus-widget=\"textus:alert\"", "data-textus-widget=\"textus:flash\"")
+    }
 
   protected def render_empty_state(
     attrs: Map[String, String],

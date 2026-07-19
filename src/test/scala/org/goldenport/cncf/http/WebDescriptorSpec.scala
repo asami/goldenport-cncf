@@ -54,6 +54,8 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
           |      profile: compact
           |      successRedirect: /web/${component}/admin/aggregates/${service}/${result.id}
           |      failureRedirect: /form/${component}/${service}/${operation}
+          |      successMessageKey: notice.approved
+          |      failure-message-key: notice.approval-failed
           |      stayOnError: true
           |      assets:
           |        css:
@@ -198,6 +200,8 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
       descriptor.form("notice-board.notice.search-notices").profile shouldBe Some(WebUxProfile.Compact)
       descriptor.form("notice-board.notice.search-notices").successRedirect shouldBe Some("/web/${component}/admin/aggregates/${service}/${result.id}")
       descriptor.form("notice-board.notice.search-notices").failureRedirect shouldBe Some("/form/${component}/${service}/${operation}")
+      descriptor.form("notice-board.notice.search-notices").successMessageKey shouldBe Some("notice.approved")
+      descriptor.form("notice-board.notice.search-notices").failureMessageKey shouldBe Some("notice.approval-failed")
       descriptor.form("notice-board.notice.search-notices").stayOnError shouldBe true
       descriptor.form("notice-board.notice.search-notices").assets.css shouldBe Vector("/web/notice-board/notice-board/assets/search.css")
       descriptor.form("notice-board.notice.search-notices").assets.js shouldBe Vector("/web/notice-board/notice-board/assets/search.js")
@@ -564,6 +568,7 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
       val base = WebDescriptor(form = Map(
         selector -> WebDescriptor.Form(
           successRedirect = Some("/web/notice-board/detail?id=${result.id}"),
+          successMessageKey = Some("notice.saved"),
           stayOnError = true,
           controls = Map("query" -> WebDescriptor.FormControl(controlType = Some("text")))
         )
@@ -579,6 +584,7 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
 
       form.enabled shouldBe Some(true)
       form.successRedirect shouldBe Some("/web/notice-board/detail?id=${result.id}")
+      form.successMessageKey shouldBe Some("notice.saved")
       form.stayOnError shouldBe true
       form.controls.keySet should contain ("query")
       form.assets.css should contain ("/web/notice-board/search.css")

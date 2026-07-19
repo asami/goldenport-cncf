@@ -2,7 +2,7 @@
 
 Stage Status:
 - Current status: ACTIVE
-- Current step: Aggregate command forms
+- Current step: Aggregate command form CSRF enforcement
 - Owner: CNCF Web runtime and Static Web renderer.
 
 status = active
@@ -43,8 +43,13 @@ without browser REST fan-out for execution context or primary page content.
   pages and submits aggregate commands through the existing server-validated
   `/form` ingress. Executable coverage verifies hidden context and configured
   Post/Redirect/Get without `/form-api` or JavaScript.
+- Redirecting operation forms can carry an explicitly declared, bounded
+  message key in a short-lived component-scoped cookie. The next Static Web
+  response resolves it through the request locale catalog, renders
+  `textus:flash`, and expires the cookie without browser REST hydration or
+  server-local flash state.
 
 ## 5. Resume Point
 
-Complete one-time localized outcome state and session-backed CSRF enforcement,
-then define page cache/privacy policy.
+Complete session-backed CSRF enforcement, then define page cache/privacy
+policy.

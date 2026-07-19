@@ -111,6 +111,23 @@ The redirected page MUST render the committed View and an appropriately
 localized outcome or flash message. Validation failures MUST return a
 localized, accessible form response without requiring JavaScript.
 
+An operation form MAY declare `successMessageKey` and `failureMessageKey` in
+its `WebDescriptor.Form` entry. When the corresponding redirect is selected,
+CNCF carries only that bounded message key and a framework-selected visual
+variant in a short-lived, component-scoped, `HttpOnly`, `SameSite=Lax` cookie.
+The next Static Web document resolves the key through the already selected
+request locale catalog, exposes it as server-only `pageContext.flash.*`
+template properties, and expires the cookie in the same response. The cookie
+MUST NOT carry operation result bodies, display text, subject data, or
+authorization state.
+
+Only message keys explicitly declared by a form belonging to the target
+component are eligible for rendering. A flash is presentation feedback, not
+proof that a command succeeded; authorization and committed state remain
+owned by the command and redirected View. Static templates render the feedback
+with `textus:flash`, so no browser REST request or client-side locale pass is
+needed after Post/Redirect/Get.
+
 Generated entity CRUD, automatic REST, and Form API remain valid for
 administration, automation, diagnostics, and explicit integration. They are
 not the required normal Web mutation model when an aggregate command exists.

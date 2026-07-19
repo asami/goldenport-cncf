@@ -347,7 +347,12 @@ object StaticFormAppRendererSupport {
     "pageContext.jobs.visible" -> "false",
     "pageContext.jobs.hidden" -> "hidden",
     "pageContext.jobs.activeBadgeHidden" -> "hidden",
-    "pageContext.jobs.unconfirmedBadgeHidden" -> "hidden"
+    "pageContext.jobs.unconfirmedBadgeHidden" -> "hidden",
+    "pageContext.flash.present" -> "false",
+    "pageContext.flash.hidden" -> "hidden",
+    "pageContext.flash.variant" -> "info",
+    "pageContext.flash.messageKey" -> "",
+    "pageContext.flash.message" -> ""
   )
 
   private val _hidden_form_context_exact_keys: Set[String] =

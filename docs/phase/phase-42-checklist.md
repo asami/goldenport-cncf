@@ -30,7 +30,7 @@ Status: ACTIVE
 - [x] Reuse server validation, authorization, failure redisplay, and configured
   PRG behavior.
 - [x] Keep JavaScript-disabled form operation complete.
-- [ ] Provide one-time localized outcome/flash state.
+- [x] Provide one-time localized outcome/flash state.
 - [ ] Enforce session CSRF tokens rather than only preserving the reserved
   hidden context field.
 

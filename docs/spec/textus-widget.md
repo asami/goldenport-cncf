@@ -1212,6 +1212,35 @@ page and previous/next controls. `has-next="false"` disables the next link.
 
 ## Feedback Widgets
 
+### `textus:flash` / `textus-flash`
+
+One-time, server-rendered operation outcome feedback for Static Web
+Post/Redirect/Get.
+
+Required behavior:
+
+- reads only framework-owned `pageContext.flash.*` values;
+- renders a Bootstrap alert when a validated flash is present;
+- renders nothing when no flash is present or its message key is not declared
+  for the owning component;
+- never fetches outcome text through REST or JavaScript.
+
+The operation form descriptor declares `successMessageKey` and/or
+`failureMessageKey`. CNCF carries the bounded key across the redirect, resolves
+the localized message during the next document render, and consumes the flash
+cookie. Template authors do not pass arbitrary outcome text to this widget.
+
+Optional attributes:
+
+- `title`: literal title or property reference, rendered before the framework
+  outcome message.
+
+Example:
+
+```html
+<textus:flash></textus:flash>
+```
+
 ### `textus:alert` / `textus-alert`
 
 Bootstrap alert.

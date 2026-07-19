@@ -538,6 +538,8 @@ object WebDescriptor {
     access: Option[Exposure] = None,
     successRedirect: Option[String] = None,
     failureRedirect: Option[String] = None,
+    successMessageKey: Option[String] = None,
+    failureMessageKey: Option[String] = None,
     stayOnError: Boolean = false,
     resultTemplate: Option[String] = None,
     layout: Option[String] = None,
@@ -552,6 +554,8 @@ object WebDescriptor {
         access = rhs.access.orElse(access),
         successRedirect = rhs.successRedirect.orElse(successRedirect),
         failureRedirect = rhs.failureRedirect.orElse(failureRedirect),
+        successMessageKey = rhs.successMessageKey.orElse(successMessageKey),
+        failureMessageKey = rhs.failureMessageKey.orElse(failureMessageKey),
         stayOnError = stayOnError || rhs.stayOnError,
         resultTemplate = rhs.resultTemplate.orElse(resultTemplate),
         layout = rhs.layout.orElse(layout),
@@ -1243,6 +1247,10 @@ object WebDescriptor {
             access = _string(r, "access").orElse(_string(r, "expose")).flatMap(Exposure.parse),
             successRedirect = _string(r, "successRedirect").orElse(_string(r, "success-redirect")),
             failureRedirect = _string(r, "failureRedirect").orElse(_string(r, "failure-redirect")),
+            successMessageKey = _string(r, "successMessageKey")
+              .orElse(_string(r, "success-message-key")),
+            failureMessageKey = _string(r, "failureMessageKey")
+              .orElse(_string(r, "failure-message-key")),
             stayOnError = _boolean(r, "stayOnError").orElse(_boolean(r, "stay-on-error")).getOrElse(false),
             resultTemplate = _string(r, "resultTemplate").orElse(_string(r, "result-template")),
             layout = _string(r, "layout"),

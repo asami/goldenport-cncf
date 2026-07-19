@@ -3774,7 +3774,18 @@ final class Http4sHttpServer(
         descriptor.flatMap(_.failureRedirect)
     redirect match {
       case Some(template) =>
-        IO.pure(_see_other(_render_redirect_template(template, app, service, operation, form, response, properties.executionMetadata)))
+        val redirectresponse = _see_other(
+          _render_redirect_template(template, app, service, operation, form, response, properties.executionMetadata)
+        )
+        val messagekey =
+          if (ok) descriptor.flatMap(_.successMessageKey)
+          else descriptor.flatMap(_.failureMessageKey)
+        IO.pure(messagekey.flatMap(key => _flash_cookie(
+          _dispatch_component_segment(app),
+          if (ok) "success" else "danger",
+          key
+        ))
+          .fold(redirectresponse)(redirectresponse.addCookie))
       case None =>
         if (!ok && descriptor.exists(_.stayOnError))
           _html(_static_form_app_renderer.renderOperationForm(
@@ -4516,14 +4527,46 @@ final class Http4sHttpServer(
             executioncontext.runtime.context.i18n.locale,
             executioncontext.runtime.context.i18n.messages
           )
-          _page_view_context(
+          val flashvalues = _web_flash_context_values(request, componentname.getOrElse(webappname), messages)
+          val pagecontext = _page_view_context(
             req,
             webappname,
             page,
             Some(executioncontext)
-          )._with_messages(messages)._with_execution(projection)
+          )
+          pagecontext.copy(values = pagecontext.values ++ flashvalues)
+            ._with_messages(messages)
+            ._with_execution(projection)
         }
     }
+
+  private def _web_flash_context_values(
+    req: org.http4s.Request[IO],
+    componentname: String,
+    messages: Map[String, String]
+  ): Map[String, String] = {
+    val component = NamingConventions.toNormalizedSegment(componentname)
+    val allowedkeys = engine.webDescriptor.form.iterator.collect {
+      case (selector, form)
+          if selector.split("\\.", 2).headOption
+            .exists(x => _dispatch_component_segment(x) == component) =>
+        form.successMessageKey.toVector ++ form.failureMessageKey.toVector
+    }.flatten.toSet
+    val flash = req.cookies
+      .find(_.name == WebFlash.cookieName(componentname))
+      .flatMap(cookie => WebFlash.decode(cookie.content))
+      .filter(value => allowedkeys.contains(value.messageKey))
+      .flatMap(value => messages.get(value.messageKey).map(value -> _))
+    flash.map { case (value, message) =>
+      Map(
+        "pageContext.flash.present" -> "true",
+        "pageContext.flash.hidden" -> "",
+        "pageContext.flash.variant" -> value.variant,
+        "pageContext.flash.messageKey" -> value.messageKey,
+        "pageContext.flash.message" -> message
+      )
+    }.getOrElse(Map.empty)
+  }
 
   private def _page_query_context_values(
     req: Option[org.http4s.Request[IO]]
@@ -6288,17 +6331,52 @@ final class Http4sHttpServer(
     req match {
       case Some(request) if _is_demo_assist_manifest_request(request) =>
         _demo_assist_manifest_response(html)
-      case _ =>
-        IO.pure(
+      case requestoption =>
+        val response =
           _with_content_language(
             HResponse[IO](HStatus.Ok)
               .withEntity(html)
               .withContentType(`Content-Type`(MediaType.text.html, Some(Charset.`UTF-8`))),
             page.contentLanguage
           )
-        )
+        val completed = componentname
+          .filter(name => requestoption.exists(request => _request_flash_cookie(request, name).nonEmpty))
+          .fold(response)(name => response.addCookie(_expired_flash_cookie(name)))
+        IO.pure(completed)
     }
   }
+
+  private def _request_flash_cookie(
+    req: org.http4s.Request[IO],
+    componentname: String
+  ): Option[String] =
+    req.cookies.find(_.name == WebFlash.cookieName(componentname)).map(_.content)
+
+  private def _flash_cookie(
+    componentname: String,
+    variant: String,
+    messagekey: String
+  ): Option[ResponseCookie] =
+    WebFlash.encode(WebFlash.Value(variant, messagekey)).map { content =>
+      ResponseCookie(
+        name = WebFlash.cookieName(componentname),
+        content = content,
+        path = Some("/web"),
+        httpOnly = true,
+        sameSite = Some(SameSite.Lax),
+        maxAge = Some(WebFlash.MaxAgeSeconds)
+      )
+    }
+
+  private def _expired_flash_cookie(componentname: String): ResponseCookie =
+    ResponseCookie(
+      name = WebFlash.cookieName(componentname),
+      content = "",
+      path = Some("/web"),
+      httpOnly = true,
+      sameSite = Some(SameSite.Lax),
+      maxAge = Some(0L)
+    )
 
   private def _html_content(
     req: Option[org.http4s.Request[IO]],

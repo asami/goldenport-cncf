@@ -8439,6 +8439,149 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         Some("/web/notice-board/detail?outcome=approved")
     }
 
+    "render a localized one-time flash after operation-form Post Redirect Get" in {
+      Given("an aggregate command with an explicit redirect message key")
+      val root = Files.createTempDirectory("cncf-static-web-flash-")
+      val approot = root.resolve("planning-app")
+      Files.createDirectories(approot)
+      Files.writeString(root.resolve("web.yaml"), "form: {}\n", StandardCharsets.UTF_8)
+      Files.writeString(
+        approot.resolve("detail.html"),
+        """<!doctype html><html><head><title>Detail</title></head><body><textus:flash></textus:flash><main>Committed view</main></body></html>""",
+        StandardCharsets.UTF_8
+      )
+      val configuration = Configuration(Map(
+        RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web.yaml").toString),
+        WebExecutionResolutionPolicy.LOCALE_KEY -> ConfigurationValue.StringValue("ja-JP")
+      ))
+      val subsystem = _aggregate_http_fixture_subsystem(
+        configuration,
+        Vector(WebMessageCatalog(
+          "planning-app",
+          java.util.Locale.JAPAN,
+          Map(
+            "notice.approved" -> "承認しました",
+            "other.message" -> "Forged outcome"
+          )
+        ))
+      )
+      val selector = "notice-board.notice-aggregate.approve-notice-aggregate"
+      val descriptor = WebDescriptor(
+        expose = Map(selector -> WebDescriptor.Exposure.Protected),
+        form = Map(
+          selector -> WebDescriptor.Form(
+            successRedirect = Some("/web/notice-board/planning-app/detail"),
+            successMessageKey = Some("notice.approved")
+          ),
+          "other-component.notice.approve" -> WebDescriptor.Form(
+            successMessageKey = Some("other.message")
+          )
+        )
+      )
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem, Some(descriptor)))
+
+      When("the command succeeds and the browser follows the redirect")
+      val redirect = server._submit_operation_form(
+        _post_form_request(
+          "/form/notice-board/notice-aggregate/approve-notice-aggregate",
+          "id=notice_1"
+        ),
+        "notice-board",
+        "notice-aggregate",
+        "approve-notice-aggregate"
+      ).unsafeRunSync()
+      val setcookie = redirect.headers.headers
+        .find(_.name.toString.equalsIgnoreCase("Set-Cookie"))
+        .map(_.value)
+        .getOrElse(fail("flash cookie is missing"))
+      val cookie = setcookie.takeWhile(_ != ';')
+      val request = _get_request("/web/notice-board/planning-app/detail")
+        .putHeaders(org.http4s.Header.Raw(org.typelevel.ci.CIString("Cookie"), cookie))
+      val response = server._component_web_app(
+        "notice-board",
+        "planning-app",
+        Vector("detail"),
+        Some(request)
+      ).unsafeRunSync()
+      val html = response.as[String].unsafeRunSync()
+
+      Then("the redirect carries only a bounded key and the next HTML response localizes and consumes it")
+      redirect.status.code shouldBe 303
+      setcookie should include ("HttpOnly")
+      setcookie should include ("SameSite=Lax")
+      setcookie should include ("Max-Age=120")
+      setcookie should not include ("承認しました")
+      html should include ("承認しました")
+      html should include ("alert-success")
+      html should include ("data-textus-widget=\"textus:flash\"")
+      html should include ("Committed view")
+      html should not include ("<textus:flash")
+      response.headers.headers
+        .filter(_.name.toString.equalsIgnoreCase("Set-Cookie"))
+        .map(_.value).mkString("\n") should include ("Max-Age=0")
+
+      And("an unconfigured cross-component key cannot select catalog text")
+      val rejectedcookie = WebFlash.encode(WebFlash.Value("success", "other.message"))
+        .getOrElse(fail("test flash value was not encoded"))
+      val rejectedrequest = _get_request("/web/notice-board/planning-app/detail")
+        .putHeaders(org.http4s.Header.Raw(
+          org.typelevel.ci.CIString("Cookie"),
+          s"${WebFlash.cookieName("notice-board")}=${rejectedcookie}"
+        ))
+      val rejected = server._component_web_app(
+        "notice-board",
+        "planning-app",
+        Vector("detail"),
+        Some(rejectedrequest)
+      ).unsafeRunSync().as[String].unsafeRunSync()
+      rejected should not include ("other.message")
+      rejected should not include ("Forged outcome")
+      rejected should not include ("data-textus-widget=\"textus:flash\"")
+    }
+
+    "carry a declared failure flash without exposing the operation response" in {
+      val subsystem = _aggregate_http_fixture_subsystem()
+      val selector = "notice-board.notice-aggregate.approve-notice-aggregate"
+      val descriptor = WebDescriptor(
+        expose = Map(selector -> WebDescriptor.Exposure.Protected),
+        form = Map(selector -> WebDescriptor.Form(
+          failureRedirect = Some("/web/notice-board/planning-app/detail"),
+          failureMessageKey = Some("notice.approval-failed")
+        ))
+      )
+      val dispatcher = new StaticWebOperationDispatcher(
+        HttpResponse.Text(
+          HttpStatus.BadRequest,
+          ContentType(MimeType("text/plain"), Some(StandardCharsets.UTF_8)),
+          Bag.text("sensitive operation failure detail", StandardCharsets.UTF_8)
+        )
+      )
+      val server = new Http4sHttpServer(
+        new HttpExecutionEngine(subsystem, Some(descriptor)),
+        operationDispatcherOption = Some(dispatcher)
+      )
+
+      val response = server._submit_operation_form(
+        _post_form_request(
+          "/form/notice-board/notice-aggregate/approve-notice-aggregate",
+          "id=notice_1"
+        ),
+        "notice-board",
+        "notice-aggregate",
+        "approve-notice-aggregate"
+      ).unsafeRunSync()
+      val setcookie = response.headers.headers
+        .find(_.name.toString.equalsIgnoreCase("Set-Cookie"))
+        .map(_.value)
+        .getOrElse(fail("failure flash cookie is missing"))
+      val encoded = setcookie.takeWhile(_ != ';').split("=", 2).lift(1)
+        .getOrElse(fail("failure flash cookie value is missing"))
+
+      response.status.code shouldBe 303
+      WebFlash.decode(encoded) shouldBe Some(WebFlash.Value("danger", "notice.approval-failed"))
+      setcookie should not include ("sensitive operation failure detail")
+    }
+
     "resolve legacy result.body.data paths against unwrapped JSON response bodies" in {
       val properties = StaticFormAppRenderer.FormResultProperties(
         StaticFormAppRenderer.FormPageProperties(
@@ -12409,9 +12552,12 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     )
 
   private def _aggregate_http_fixture_subsystem(
-    configuration: Configuration = Configuration.empty
+    configuration: Configuration = Configuration.empty,
+    messageCatalogs: Vector[WebMessageCatalog] = Vector.empty
   ): Subsystem = {
     val component = new org.goldenport.cncf.component.Component() {
+      override def webMessageCatalogs: Vector[WebMessageCatalog] = messageCatalogs
+
       override def aggregateDefinitions: Vector[AggregateDefinition] =
         Vector(
           AggregateDefinition(
