@@ -47,6 +47,24 @@ in place. Templates MUST use framework-provided locale message resolution; a
 component MUST NOT emit a default-language shell and replace static text with
 JavaScript after first paint.
 
+Components publish application message catalogs through
+`Component.webMessageCatalogs`. CNCF selects root, language, and exact-locale
+catalog layers from the already resolved request execution locale and exposes
+the result as server-only `${message.<key>}` template properties. The exact
+locale layer overrides the language layer, which overrides the root catalog;
+later assembled component catalogs override earlier catalogs at the same
+layer. Runtime-context messages remain the base layer. Message catalogs are
+not added to the public page-context JSON merely to support server rendering.
+A runtime message map participates only when its declared locale is root, the
+selected locale, or the selected locale's language; messages from an unrelated
+runtime locale MUST NOT leak into another user's rendered page.
+
+The Static Web renderer carries the selected locale as typed page response
+metadata. The HTTP adapter MUST use that metadata for `Content-Language`; it
+MUST NOT independently negotiate or infer the response language after
+rendering. Therefore template messages, `html[lang]`, `Content-Language`, and
+the execution timezone are projections of the same resolved request context.
+
 ## SWA-3: Page View Binding
 
 Each normal application page MUST bind to one explicit read-side page View or

@@ -2,6 +2,7 @@ package org.goldenport.cncf.http
 
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
+import java.util.Locale
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
@@ -41,7 +42,7 @@ final class StaticWebExecutionProjectionIntegrationSpec extends AnyWordSpec with
       )
       Files.writeString(
         root.resolve("debug-app").resolve("index.html"),
-        """<!doctype html><html lang="en"><head><title>Debug</title></head><body><main id="application"><textus:line-list source="pageContext.view.items" columns="title,status"></textus:line-list></main></body></html>""",
+        """<!doctype html><html lang="en"><head><title>${message.page.title}</title></head><body><main id="application"><h1>${message.page.heading}</h1><textus:line-list source="pageContext.view.items" columns="title,status"></textus:line-list></main></body></html>""",
         StandardCharsets.UTF_8
       )
       val configuration = ResolvedConfiguration(
@@ -69,7 +70,10 @@ final class StaticWebExecutionProjectionIntegrationSpec extends AnyWordSpec with
 
       Then("the response keeps application content while execution-owned locale and timezone drive first-render metadata")
       response.status.code shouldBe 200
+      response.headers.headers.find(_.name == CIString("Content-Language")).map(_.value) shouldBe Some("ja-JP")
       html should include ("<main id=\"application\">")
+      html should include ("<title>展覧会</title>")
+      html should include ("<h1>鑑賞計画</h1>")
       html should include ("展示A")
       html should include ("開催中")
       html should not include "<textus:line-list"
@@ -97,16 +101,18 @@ final class StaticWebExecutionProjectionIntegrationSpec extends AnyWordSpec with
       )
       Files.writeString(
         root.resolve("debug-app").resolve("index.html"),
-        """<!doctype html><html lang="en"><head><title>Debug</title></head><body><main id="application">Ready</main></body></html>""",
+        """<!doctype html><html lang="ja"><head><title>${message.page.title}</title></head><body><main id="application">${message.page.heading}</main></body></html>""",
         StandardCharsets.UTF_8
       )
       val configuration = ResolvedConfiguration(
         Configuration(Map(
-          RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web.yaml").toString)
+          RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web.yaml").toString),
+          WebExecutionResolutionPolicy.LOCALE_KEY -> ConfigurationValue.StringValue("en-US")
         )),
         ConfigurationTrace.empty
       )
       val subsystem = DefaultSubsystemFactory.default(None, configuration)
+      subsystem.add(_static_page_view_component(subsystem))
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
       val request = Request[IO](
         method = Method.GET,
@@ -120,8 +126,34 @@ final class StaticWebExecutionProjectionIntegrationSpec extends AnyWordSpec with
 
       Then("the first render retains the execution-owned runtime locale")
       response.status.code shouldBe 200
-      html should include ("<html lang=\"und\" data-textus-locale=\"und\">")
-      pagecontext.hcursor.downField("execution").get[String]("locale").toOption shouldBe Some("und")
+      response.headers.headers.find(_.name == CIString("Content-Language")).map(_.value) shouldBe Some("en-US")
+      html should include ("<html lang=\"en-US\" data-textus-locale=\"en-US\">")
+      html should include ("<title>Exhibitions</title>")
+      html should include ("<main id=\"application\">Planning</main>")
+      pagecontext.hcursor.downField("execution").get[String]("locale").toOption shouldBe Some("en-US")
+    }
+
+    "keep unrelated runtime messages out of the selected locale catalog" in {
+      Given("Japanese application catalogs and an English runtime message map")
+      val subsystem = DefaultSubsystemFactory.default(
+        None,
+        ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty)
+      )
+      subsystem.add(_static_page_view_component(subsystem))
+
+      When("the framework resolves the Japanese catalog layers")
+      val messages = WebMessageCatalogRuntime.resolve(
+        subsystem,
+        "debug-app",
+        Locale.JAPAN,
+        Locale.US,
+        Map("runtime.only" -> "English runtime text")
+      )
+
+      Then("root, language, and exact application layers resolve without the unrelated runtime text")
+      messages.get("page.title") shouldBe Some("展覧会")
+      messages.get("page.heading") shouldBe Some("鑑賞計画")
+      messages should not contain key ("runtime.only")
     }
   }
 
@@ -132,6 +164,30 @@ final class StaticWebExecutionProjectionIntegrationSpec extends AnyWordSpec with
   }
 
   private final class StaticPageViewComponent extends Component {
+    override def webMessageCatalogs: Vector[WebMessageCatalog] =
+      Vector(
+        WebMessageCatalog(
+          "debug-app",
+          Locale.ROOT,
+          Map("page.title" -> "Application", "page.heading" -> "Application")
+        ),
+        WebMessageCatalog(
+          "debug-app",
+          Locale.JAPANESE,
+          Map("page.heading" -> "鑑賞計画")
+        ),
+        WebMessageCatalog(
+          "debug-app",
+          Locale.JAPAN,
+          Map("page.title" -> "展覧会")
+        ),
+        WebMessageCatalog(
+          "debug-app",
+          Locale.US,
+          Map("page.title" -> "Exhibitions", "page.heading" -> "Planning")
+        )
+      )
+
     override def webPageContextProviders: Vector[WebPageContextProvider] =
       Vector(new WebPageContextProvider {
         override def resolve(

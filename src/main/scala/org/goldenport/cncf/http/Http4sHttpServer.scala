@@ -1621,7 +1621,7 @@ final class Http4sHttpServer(
           val expanded = _web_operation_result_inline_content(req, componentName, webappname, page, content)
           _web_app_static_page(Some(componentName), webappname, page, expanded, req) match {
             case Consequence.Success(page) =>
-              _html_content(req, page.body, Some(webappname), Some(componentName))
+              _html_content(req, page, Some(webappname), Some(componentName))
             case Consequence.Failure(conclusion) =>
               _web_error_response(
                 Some(webappname),
@@ -4506,12 +4506,21 @@ final class Http4sHttpServer(
               acceptLanguage = _request_header_value(request, "Accept-Language")
             )
           )
-        } yield _page_view_context(
-          req,
-          webappname,
-          page,
-          Some(executioncontext)
-        )._with_execution(projection)
+        } yield {
+          val messages = WebMessageCatalogRuntime.resolve(
+            engine.runtimeSubsystem,
+            webappname,
+            java.util.Locale.forLanguageTag(projection.locale),
+            executioncontext.runtime.context.i18n.locale,
+            executioncontext.runtime.context.i18n.messages
+          )
+          _page_view_context(
+            req,
+            webappname,
+            page,
+            Some(executioncontext)
+          )._with_messages(messages)._with_execution(projection)
+        }
     }
 
   private def _page_query_context_values(
@@ -6171,14 +6180,14 @@ final class Http4sHttpServer(
     p: StaticFormAppRenderer.Page,
     appName: Option[String]
   ): IO[HResponse[IO]] =
-    _html_content(p.body, appName)
+    _html_content(p, appName)
 
   private def _html(
     req: Option[org.http4s.Request[IO]],
     p: StaticFormAppRenderer.Page,
     appname: Option[String]
   ): IO[HResponse[IO]] =
-    _html_content(req, p.body, appname, None)
+    _html_content(req, p, appname, None)
 
   private def _html_in_app_shell(
     req: org.http4s.Request[IO],
@@ -6191,7 +6200,7 @@ final class Http4sHttpServer(
       case WebDescriptor.PageDisplay.ApplicationShell =>
         _web_app_static_page(Some(app), app, page, content, Some(req)) match {
           case Consequence.Success(page) =>
-            _html_content(Some(req), page.body, Some(app), Some(app))
+            _html_content(Some(req), page, Some(app), Some(app))
           case Consequence.Failure(conclusion) =>
             _web_error_response(Some(app), conclusion, s"/web/${app}/${page.mkString("/")}")
         }
@@ -6201,7 +6210,7 @@ final class Http4sHttpServer(
             _standalone_back_button(app) + content
           else
             content
-        _html_content(Some(req), body, Some(app), Some(app))
+        _html_content(Some(req), sourcePage.copy(body = body), Some(app), Some(app))
     }
   }
 
@@ -6235,40 +6244,75 @@ final class Http4sHttpServer(
   }
 
   private def _html_content(
+    page: StaticFormAppRenderer.Page,
+    appName: Option[String]
+  ): IO[HResponse[IO]] =
+    _html_content(page, appName, None)
+
+  private def _html_content(
+    page: StaticFormAppRenderer.Page,
+    appName: Option[String],
+    componentName: Option[String]
+  ): IO[HResponse[IO]] =
+    IO.pure(
+      _with_content_language(
+        HResponse[IO](HStatus.Ok)
+          .withEntity(_themed_html(page.body, appName, componentName))
+          .withContentType(`Content-Type`(MediaType.text.html, Some(Charset.`UTF-8`))),
+        page.contentLanguage
+      )
+    )
+
+  private def _html_content(
     body: String,
     appName: Option[String]
   ): IO[HResponse[IO]] =
-    _html_content(body, appName, None)
+    _html_content(StaticFormAppRenderer.Page(body), appName)
 
   private def _html_content(
     body: String,
     appName: Option[String],
     componentName: Option[String]
   ): IO[HResponse[IO]] =
-    IO.pure(
-      HResponse[IO](HStatus.Ok)
-        .withEntity(_themed_html(body, appName, componentName))
-        .withContentType(`Content-Type`(MediaType.text.html, Some(Charset.`UTF-8`)))
-    )
+    _html_content(StaticFormAppRenderer.Page(body), appName, componentName)
+
+  private def _html_content(
+    req: Option[org.http4s.Request[IO]],
+    page: StaticFormAppRenderer.Page,
+    appname: Option[String],
+    componentname: Option[String]
+  ): IO[HResponse[IO]] = {
+    val html = _themed_html(page.body, appname, componentname)
+    req match {
+      case Some(request) if _is_demo_assist_manifest_request(request) =>
+        _demo_assist_manifest_response(html)
+      case _ =>
+        IO.pure(
+          _with_content_language(
+            HResponse[IO](HStatus.Ok)
+              .withEntity(html)
+              .withContentType(`Content-Type`(MediaType.text.html, Some(Charset.`UTF-8`))),
+            page.contentLanguage
+          )
+        )
+    }
+  }
 
   private def _html_content(
     req: Option[org.http4s.Request[IO]],
     body: String,
     appname: Option[String],
     componentname: Option[String]
-  ): IO[HResponse[IO]] = {
-    val html = _themed_html(body, appname, componentname)
-    req match {
-      case Some(request) if _is_demo_assist_manifest_request(request) =>
-        _demo_assist_manifest_response(html)
-      case _ =>
-        IO.pure(
-          HResponse[IO](HStatus.Ok)
-            .withEntity(html)
-            .withContentType(`Content-Type`(MediaType.text.html, Some(Charset.`UTF-8`)))
-        )
+  ): IO[HResponse[IO]] =
+    _html_content(req, StaticFormAppRenderer.Page(body), appname, componentname)
+
+  private def _with_content_language(
+    response: HResponse[IO],
+    language: Option[String]
+  ): HResponse[IO] =
+    language.map(_.trim).filter(_.nonEmpty).fold(response) { value =>
+      response.putHeaders(Header.Raw(CIString("Content-Language"), value))
     }
-  }
 
   private def _is_demo_assist_manifest_request(
     req: org.http4s.Request[IO]
@@ -6305,9 +6349,12 @@ final class Http4sHttpServer(
     appName: Option[String]
   ): IO[HResponse[IO]] =
     IO.pure(
-      HResponse[IO](status)
-        .withEntity(_themed_html(p.body, appName, None))
-        .withContentType(`Content-Type`(MediaType.text.html, Some(Charset.`UTF-8`)))
+      _with_content_language(
+        HResponse[IO](status)
+          .withEntity(_themed_html(p.body, appName, None))
+          .withContentType(`Content-Type`(MediaType.text.html, Some(Charset.`UTF-8`))),
+        p.contentLanguage
+      )
     )
 
   private def _themed_html(

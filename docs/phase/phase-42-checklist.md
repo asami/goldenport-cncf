@@ -14,16 +14,16 @@ Status: DONE
 
 ## SW-02: Locale-Correct First Render
 
-Status: ACTIVE
+Status: DONE
 
-- [ ] Resolve template message keys from `ExecutionContext.locale`.
-- [ ] Derive `html[lang]`, `Content-Language`, and timezone from the same
+- [x] Resolve template message keys from `ExecutionContext.locale`.
+- [x] Derive `html[lang]`, `Content-Language`, and timezone from the same
   resolved context.
-- [ ] Verify Japanese and English first paint without a translation pass.
+- [x] Verify Japanese and English first paint without a translation pass.
 
 ## SW-03: Aggregate Forms
 
-Status: OPEN
+Status: ACTIVE
 
 - [ ] Bind normal HTML forms to aggregate commands.
 - [ ] Provide validation, authorization, flash state, and PRG.

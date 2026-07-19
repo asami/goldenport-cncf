@@ -26,18 +26,23 @@ final case class WebPageContext(
   values: Map[String, String] = Map.empty,
   diagnostics: Vector[String] = Vector.empty,
   execution: Option[WebExecutionProjection] = None,
-  view: Record = Record.empty
+  view: Record = Record.empty,
+  messages: Map[String, String] = Map.empty
 ) {
   def merge(rhs: WebPageContext): WebPageContext =
     WebPageContext(
       values ++ rhs.values,
       diagnostics ++ rhs.diagnostics,
       execution,
-      view.removeKeys(rhs.view.fields.iterator.map(_.key).toSet) ++ rhs.view
+      view.removeKeys(rhs.view.fields.iterator.map(_.key).toSet) ++ rhs.view,
+      messages ++ rhs.messages
     )
 
   private[http] def _with_execution(projection: WebExecutionProjection): WebPageContext =
     copy(execution = Some(projection))
+
+  private[http] def _with_messages(values: Map[String, String]): WebPageContext =
+    copy(messages = messages ++ values)
 }
 
 object WebPageContext {

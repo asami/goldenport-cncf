@@ -34,11 +34,20 @@ import io.circe.parser.parse
  * @since   May. 18, 2026
  *  version May. 24, 2026
  *  version Jun. 19, 2026
- * @version Jul. 16, 2026
+ * @version Jul. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 object StaticFormAppRendererSupport {
-  final case class Page(body: String)
+  final case class Page(
+    body: String,
+    contentLanguage: Option[String] = None
+  ) {
+    def this(body: String) = this(body, None)
+  }
+
+  object Page {
+    def apply(body: String): Page = new Page(body, None)
+  }
   final case class PageRequest(
     page: Int = 1,
     pageSize: Int = 20,

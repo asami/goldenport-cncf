@@ -20,7 +20,7 @@ import org.goldenport.cncf.context.{CorrelationId, EntitySpaceContext, Execution
 import org.goldenport.cncf.action.{Action, ActionCall, ActionEngine, AggregateBehavior, ProcedureActionCall, QueryAction}
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.configuration.{Configuration, ConfigurationValue, ResolvedConfiguration}
-import org.goldenport.cncf.http.{HttpDriver, WebPageContextProvider}
+import org.goldenport.cncf.http.{HttpDriver, WebMessageCatalog, WebPageContextProvider}
 import org.goldenport.cncf.job.{InMemoryJobEngine, JobEngine}
 import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.cncf.service.{Service, ServiceGroup}
@@ -56,7 +56,7 @@ import org.goldenport.schema.{DataType, XString}
  *  version Apr. 30, 2026
  *  version May. 20, 2026
  *  version Jun. 18, 2026
- * @version Jul. 16, 2026
+ * @version Jul. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class Component() extends Component.Core.Holder {
@@ -352,6 +352,7 @@ abstract class Component() extends Component.Core.Holder {
   def authenticationProviders: Vector[AuthenticationProvider] = Vector.empty
   def messageDeliveryProviders: Vector[MessageDeliveryProvider] = Vector.empty
   def userNotificationProviders: Vector[UserNotificationProvider] = Vector.empty
+  def webMessageCatalogs: Vector[WebMessageCatalog] = Vector.empty
   def webPageContextProviders: Vector[WebPageContextProvider] = Vector.empty
 
   def artifactMetadata: Option[Component.ArtifactMetadata] =

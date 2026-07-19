@@ -2,7 +2,7 @@
 
 Stage Status:
 - Current status: ACTIVE
-- Current step: Locale-aware first render
+- Current step: Aggregate command forms
 - Owner: CNCF Web runtime and Static Web renderer.
 
 status = active
@@ -34,8 +34,12 @@ without browser REST fan-out for execution context or primary page content.
 - The same model is safely embedded for progressive enhancement.
 - The HTTP integration specification proves locale-correct HTML and primary
   View content without browser REST bootstrap.
+- Component message catalogs are selected from the resolved request execution
+  locale and projected as server-only `message.*` template properties.
+- Generated Static Web pages carry typed response-language metadata so
+  `html[lang]`, `Content-Language`, timezone, and page messages share one
+  execution projection.
 
 ## 5. Resume Point
 
-Implement locale message catalogs and make template messages, `html[lang]`,
-`Content-Language`, and timezone derive from the same resolved request context.
+Bind aggregate command forms with server validation and Post/Redirect/Get.

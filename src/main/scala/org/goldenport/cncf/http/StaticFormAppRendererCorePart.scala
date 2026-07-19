@@ -90,7 +90,10 @@ trait StaticFormAppRendererCorePart {
     )
     val rendered = render_template(template, properties, Map.empty)
     val projected = WebExecutionTemplateProjection.render(rendered, pageContext)
-    Page(complete_widget_assets(template, projected, assetCompletion.copy(uxProfile = profile)))
+    Page(
+      complete_widget_assets(template, projected, assetCompletion.copy(uxProfile = profile)),
+      pageContext.execution.map(_.locale)
+    )
   }
 
   protected def page_context_properties(
@@ -98,6 +101,7 @@ trait StaticFormAppRendererCorePart {
   ): Map[String, String] = {
     defaultPageViewContextValues ++
       pageContext.values ++
+      pageContext.messages.map { case (key, value) => s"message.${key}" -> value } ++
       Map("pageContext.view" -> org.goldenport.record.io.RecordEncoder.json(pageContext.view)) ++
       pageContext.execution.map(_execution_page_context_properties).getOrElse(Map.empty)
   }
