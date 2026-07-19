@@ -6,9 +6,14 @@ import java.nio.file.Files
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import io.circe.parser.parse
+import org.goldenport.Consequence
+import org.goldenport.cncf.component.{Component, ComponentId, ComponentInit, ComponentInstanceId, ComponentOrigin}
 import org.goldenport.cncf.config.RuntimeConfig
+import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.subsystem.DefaultSubsystemFactory
 import org.goldenport.configuration.{Configuration, ConfigurationTrace, ConfigurationValue, ResolvedConfiguration}
+import org.goldenport.record.Record
+import org.goldenport.protocol.Protocol
 import org.http4s.{Header, Method, Request, Uri}
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
@@ -17,7 +22,7 @@ import org.typelevel.ci.CIString
 
 /*
  * @since   Jul. 17, 2026
- * @version Jul. 17, 2026
+ * @version Jul. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 final class StaticWebExecutionProjectionIntegrationSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -36,7 +41,7 @@ final class StaticWebExecutionProjectionIntegrationSpec extends AnyWordSpec with
       )
       Files.writeString(
         root.resolve("debug-app").resolve("index.html"),
-        """<!doctype html><html lang="en"><head><title>Debug</title></head><body><main id="application">Ready</main></body></html>""",
+        """<!doctype html><html lang="en"><head><title>Debug</title></head><body><main id="application"><textus:line-list source="pageContext.view.items" columns="title,status"></textus:line-list></main></body></html>""",
         StandardCharsets.UTF_8
       )
       val configuration = ResolvedConfiguration(
@@ -50,6 +55,7 @@ final class StaticWebExecutionProjectionIntegrationSpec extends AnyWordSpec with
         ConfigurationTrace.empty
       )
       val subsystem = DefaultSubsystemFactory.default(None, configuration)
+      subsystem.add(_static_page_view_component(subsystem))
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
       val request = Request[IO](
         method = Method.GET,
@@ -63,7 +69,10 @@ final class StaticWebExecutionProjectionIntegrationSpec extends AnyWordSpec with
 
       Then("the response keeps application content while execution-owned locale and timezone drive first-render metadata")
       response.status.code shouldBe 200
-      html should include ("<main id=\"application\">Ready</main>")
+      html should include ("<main id=\"application\">")
+      html should include ("展示A")
+      html should include ("開催中")
+      html should not include "<textus:line-list"
       html should include ("<html lang=\"ja-JP\" data-textus-locale=\"ja-JP\">")
       html.indexOf("textus-page-context") should be < html.indexOf("id=\"application\"")
       pagecontext.hcursor.downField("execution").get[String]("locale").toOption shouldBe Some("ja-JP")
@@ -71,6 +80,7 @@ final class StaticWebExecutionProjectionIntegrationSpec extends AnyWordSpec with
       pagecontext.hcursor.downField("execution").get[String]("applicationMode").toOption shouldBe Some("standalone")
       pagecontext.hcursor.downField("execution").downField("subject").get[Boolean]("authenticated").toOption shouldBe Some(false)
       pagecontext.hcursor.downField("execution").get[Vector[String]]("capabilities").toOption shouldBe Some(Vector.empty)
+      pagecontext.hcursor.downField("view").downField("items").downArray.get[String]("title").toOption shouldBe Some("展示A")
     }
 
     "ignore arbitrary request formatting headers when display override is disabled" in {
@@ -119,5 +129,31 @@ final class StaticWebExecutionProjectionIntegrationSpec extends AnyWordSpec with
     val pattern = "(?s)<script id=\"textus-page-context\" type=\"application/json\">(.*?)</script>".r
     val source = pattern.findFirstMatchIn(html).map(_.group(1)).getOrElse(fail("Missing page context"))
     parse(source).fold(throw _, identity)
+  }
+
+  private final class StaticPageViewComponent extends Component {
+    override def webPageContextProviders: Vector[WebPageContextProvider] =
+      Vector(new WebPageContextProvider {
+        override def resolve(
+          request: WebPageContextRequest
+        )(using ExecutionContext): Consequence[WebPageContext] =
+          if (request.app == "debug-app" && request.page.isEmpty)
+            Consequence.success(WebPageContext(view = Record.data(
+              "items" -> Vector(Record.data("title" -> "展示A", "status" -> "開催中"))
+            )))
+          else
+            Consequence.success(WebPageContext.empty)
+      })
+  }
+
+  private def _static_page_view_component(
+    subsystem: org.goldenport.cncf.subsystem.Subsystem
+  ): Component = {
+    val id = ComponentId("static_page_view")
+    new StaticPageViewComponent().initialize(ComponentInit(
+      subsystem,
+      Component.Core.create("static_page_view", id, ComponentInstanceId.default(id), Protocol.empty),
+      ComponentOrigin.Main
+    ))
   }
 }

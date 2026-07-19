@@ -33,7 +33,7 @@ import io.circe.parser.parse
  * @since   May. 18, 2026
  *  version May. 30, 2026
  *  version Jun. 19, 2026
- * @version Jul.  8, 2026
+ * @version Jul. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 trait StaticFormAppRendererTemplatePart {
@@ -2034,7 +2034,9 @@ trait StaticFormAppRendererTemplatePart {
     source: String,
     properties: FormPageProperties
   ): Option[Json] =
-    property_value(properties, source).flatMap(parse(_).toOption).orElse {
+    property_value(properties, source).flatMap(parse(_).toOption)
+      .orElse(nested_source_json("pageContext.view", source, properties))
+      .orElse {
       properties.resultBodyJson.flatMap { json =>
         val path =
           if (source.startsWith("result.body."))
@@ -2054,6 +2056,20 @@ trait StaticFormAppRendererTemplatePart {
           }
       }
     }
+
+  protected def nested_source_json(
+    root: String,
+    source: String,
+    properties: FormPageProperties
+  ): Option[Json] = {
+    val prefix = s"${root}."
+    if (source.startsWith(prefix))
+      property_value(properties, root)
+        .flatMap(parse(_).toOption)
+        .flatMap(json_at(_, source.stripPrefix(prefix).split('.').toVector))
+    else
+      None
+  }
 
   protected def json_at(
     json: Json,

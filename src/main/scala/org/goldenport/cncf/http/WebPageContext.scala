@@ -5,11 +5,12 @@ import org.goldenport.cncf.composite.{CompositeQueryEngine, CompositeQueryReques
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.protocol.Property
+import org.goldenport.record.Record
 
 /*
  * @since   May. 10, 2026
  *  version Jun. 18, 2026
- * @version Jul. 17, 2026
+ * @version Jul. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class WebPageContextRequest(
@@ -24,10 +25,16 @@ final case class WebPageContextRequest(
 final case class WebPageContext(
   values: Map[String, String] = Map.empty,
   diagnostics: Vector[String] = Vector.empty,
-  execution: Option[WebExecutionProjection] = None
+  execution: Option[WebExecutionProjection] = None,
+  view: Record = Record.empty
 ) {
   def merge(rhs: WebPageContext): WebPageContext =
-    WebPageContext(values ++ rhs.values, diagnostics ++ rhs.diagnostics, execution)
+    WebPageContext(
+      values ++ rhs.values,
+      diagnostics ++ rhs.diagnostics,
+      execution,
+      view.removeKeys(rhs.view.fields.iterator.map(_.key).toSet) ++ rhs.view
+    )
 
   private[http] def _with_execution(projection: WebExecutionProjection): WebPageContext =
     copy(execution = Some(projection))

@@ -15,8 +15,8 @@ This directory does **not** contain design details or thinking processes.
 
 Current baseline:
 
-- Active phase: none.
-- Active checklist: none.
+- Active phase: `phase-42.md` - Static Web Server Rendering Contract.
+- Active checklist: `phase-42-checklist.md`.
 - Latest closed phase: `phase-41.md` - Persistent View Source Completeness.
 - Latest closed checklist: `phase-41-checklist.md`.
 - Closed phase set currently includes:
@@ -57,6 +57,8 @@ Current baseline:
   - `phase-39.md`
   - `phase-40.md`
   - `phase-41.md`
+- Active phase set currently includes:
+  - `phase-42.md`
 
 ## Related Rules
 

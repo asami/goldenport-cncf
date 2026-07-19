@@ -8,10 +8,11 @@ import org.scalacheck.{Gen, Prop, Test}
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
+import org.goldenport.record.Record
 
 /*
  * @since   Jul. 17, 2026
- * @version Jul. 17, 2026
+ * @version Jul. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 final class WebExecutionTemplateProjectionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -102,10 +103,17 @@ final class WebExecutionTemplateProjectionSpec extends AnyWordSpec with Matchers
       Given("framework and provider page contexts with conflicting execution projections")
       val frameworkprojection = _projection("ja-JP", None)
       val providerprojection = _projection("en-US", None)
-      val frameworkcontext = WebPageContext(execution = Some(frameworkprojection))
+      val frameworkcontext = WebPageContext(
+        execution = Some(frameworkprojection),
+        view = Record.data("summary" -> Record.data("count" -> 1, "owner" -> "framework"))
+      )
       val providercontext = WebPageContext(
         values = Map("article.title" -> "Provider title"),
-        execution = Some(providerprojection)
+        execution = Some(providerprojection),
+        view = Record.data(
+          "summary" -> Record.data("count" -> 2, "owner" -> "provider"),
+          "items" -> Vector(Record.data("title" -> "Exhibition A"))
+        )
       )
 
       When("the provider context is merged into the framework context")
@@ -114,6 +122,67 @@ final class WebExecutionTemplateProjectionSpec extends AnyWordSpec with Matchers
       Then("application values merge but framework execution metadata cannot be replaced")
       merged.values.get("article.title") shouldBe Some("Provider title")
       merged.execution shouldBe Some(frameworkprojection)
+      merged.view.getAny("summary").collect { case record: Record => record.getAny("count") } shouldBe Some(Some(2))
+      merged.view.getAny("items").collect { case records: Vector[?] => records.size } shouldBe Some(1)
+    }
+
+    "render a typed page View through widgets and publish the same model for progressive enhancement" in {
+      Given("a component page View containing typed exhibition rows")
+      val context = WebPageContext(
+        execution = Some(_projection("ja-JP", None)),
+        view = Record.data(
+          "items" -> Vector(
+            Record.data("title" -> "展示A", "status" -> "開催中"),
+            Record.data("title" -> "展示B", "status" -> "開催予定")
+          ),
+          "total" -> 2
+        )
+      )
+      val template =
+        """<!doctype html><html><head><title>Timeline</title></head><body>
+          |<textus:line-list source="pageContext.view.items" columns="title,status"></textus:line-list>
+          |</body></html>""".stripMargin
+
+      When("the Static Web renderer builds the initial document")
+      val html = _renderer.renderStaticTemplate("art-scene", Vector("timeline"), template, pageContext = context).body
+      val json = _page_context_json(html)
+
+      Then("the widget is server-rendered without REST and the embedded View keeps its types")
+      html should not include "<textus:line-list"
+      html should include ("展示A")
+      html should include ("開催予定")
+      json.hcursor.downField("view").get[Int]("total").toOption shouldBe Some(2)
+      json.hcursor.downField("view").downField("items").downArray.get[String]("title").toOption shouldBe Some("展示A")
+    }
+
+    "neutralize hostile page View text in the shared HTML script-data context" in {
+      Given("a provider page View containing hostile public source text")
+      val hostile = "</script><img src=x>&\u2028\u2029"
+      val context = WebPageContext(
+        execution = Some(_projection("ja-JP", None)),
+        view = Record.data("items" -> Vector(Record.data("title" -> hostile)))
+      )
+
+      When("the View is projected into the initial document")
+      val html = _renderer.renderStaticTemplate(
+        "art-scene",
+        Vector("timeline"),
+        "<html><head></head><body></body></html>",
+        pageContext = context
+      ).body
+      val source = _page_context_source(html)
+
+      Then("the script-data remains singular, safe, and lossless")
+      _count(html, "</script>") shouldBe 1
+      source should not include "<"
+      source should not include ">"
+      source should not include "&"
+      _page_context_json(html).hcursor
+        .downField("view")
+        .downField("items")
+        .downArray
+        .get[String]("title")
+        .toOption shouldBe Some(hostile)
     }
 
     "normalize projected fragments into a semantic first-render document" in {

@@ -1,8 +1,13 @@
 package org.goldenport.cncf.http
 
+import io.circe.Json
+import io.circe.parser.parse
+import org.goldenport.record.Record
+import org.goldenport.record.io.RecordEncoder
+
 /*
  * @since   Jul. 17, 2026
- * @version Jul. 17, 2026
+ * @version Jul. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 object WebExecutionTemplateProjection {
@@ -22,8 +27,13 @@ object WebExecutionTemplateProjection {
     "(?is)\\s+data-textus-locale\\s*=\\s*(?:(['\"])[^'\"]*\\1|[^\\s>]+)".r
 
   def render(html: String, projection: WebExecutionProjection): String = {
+    render(html, WebPageContext(execution = Some(projection)))
+  }
+
+  def render(html: String, context: WebPageContext): String =
+    context.execution.fold(html) { projection =>
     val withoutcontext = _existing_context_pattern.replaceAllIn(html, "")
-    val script = _page_context_script(projection)
+    val script = _page_context_script(projection, context.view)
     _html_document_pattern.findPrefixOf(withoutcontext) match {
       case Some(_) =>
         val withattributes = _set_html_attributes(withoutcontext, projection.locale)
@@ -43,7 +53,7 @@ object WebExecutionTemplateProjection {
            |<body>${withoutcontext}</body>
            |</html>""".stripMargin
     }
-  }
+    }
 
   private def _insert_page_context_in_head(
     html: String,
@@ -74,10 +84,19 @@ object WebExecutionTemplateProjection {
       html.substring(0, m.start) + replacement + html.substring(m.end)
     }.getOrElse(html)
 
-  private def _page_context_script(projection: WebExecutionProjection): String = {
-    val json = _escape_script_data(projection.toPageContextJson.noSpaces)
+  private def _page_context_script(projection: WebExecutionProjection, view: Record): String = {
+    val json = _escape_script_data(Json.obj(
+      "execution" -> projection.toJson,
+      "view" -> _record_json(view)
+    ).noSpaces)
     s"<script id=\"${PAGE_CONTEXT_ELEMENT_ID}\" type=\"application/json\">${json}</script>"
   }
+
+  private def _record_json(record: Record): Json =
+    parse(RecordEncoder.json(record)).fold(
+      error => throw new IllegalArgumentException("Unable to encode Static Web page view", error),
+      identity
+    )
 
   private def _escape_script_data(value: String): String =
     value

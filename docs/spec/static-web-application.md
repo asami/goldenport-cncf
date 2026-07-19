@@ -2,9 +2,12 @@
 
 ## Status
 
-PLANNED. This specification defines the target contract for CNCF Static Web
-Applications. It extends, but does not replace, the execution-context
-projection contract in `docs/spec/static-web-execution-context-projection.md`.
+IN PROGRESS. This specification defines the target contract for CNCF Static
+Web Applications. The typed page View projection described in SWA-3 is
+implemented; locale message resolution, aggregate form binding, and complete
+cache policy remain follow-up work. This specification extends, but does not
+replace, the execution-context projection contract in
+`docs/spec/static-web-execution-context-projection.md`.
 
 ## SWA-1: Delivery Model
 
@@ -49,6 +52,26 @@ JavaScript after first paint.
 Each normal application page MUST bind to one explicit read-side page View or
 page-context query. The binding receives the resolved execution context and
 validated page query and returns a typed, template-safe page model.
+
+The runtime binding uses `WebPageContextProvider.queries` to compose component
+read-side queries once on the server. A provider returns the page model in
+`WebPageContext.view` as a `Record`; application data MUST NOT replace the
+framework-owned `WebPageContext.execution` projection. Multiple provider
+results are merged by top-level View field with later providers replacing only
+fields of the same name.
+
+The Static Web renderer exposes that model to server-side widgets as
+`pageContext.view`. Nested widget sources such as
+`pageContext.view.exhibitions` resolve typed arrays and records before HTML is
+sent. The renderer also emits the same model under `view` in the single
+`textus-page-context` JSON script block. This second representation is for
+bounded progressive enhancement and MUST NOT be used to replace meaningful
+server-rendered primary content.
+
+Both execution and View data use JSON script-data escaping. Components remain
+responsible for returning only subject-authorized, Web-safe View fields; the
+page model is not a serialization of component internals or the complete
+`ExecutionContext`.
 
 The Web renderer MUST NOT reconstruct page state through multiple unrelated
 domain operations for headers, navigation, counters, filters, and primary

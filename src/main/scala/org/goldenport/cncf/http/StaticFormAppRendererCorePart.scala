@@ -32,8 +32,7 @@ import io.circe.parser.parse
 /*
  * @since   May. 18, 2026
  *  version Jun. 19, 2026
- *  version Jul.  7, 2026
- * @version Jul. 17, 2026
+ * @version Jul. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 trait StaticFormAppRendererCorePart {
@@ -90,14 +89,17 @@ trait StaticFormAppRendererCorePart {
       ) ++ page_context_properties(pageContext)
     )
     val rendered = render_template(template, properties, Map.empty)
-    val projected = pageContext.execution.fold(rendered)(WebExecutionTemplateProjection.render(rendered, _))
+    val projected = WebExecutionTemplateProjection.render(rendered, pageContext)
     Page(complete_widget_assets(template, projected, assetCompletion.copy(uxProfile = profile)))
   }
 
   protected def page_context_properties(
     pageContext: WebPageContext
   ): Map[String, String] = {
-    defaultPageViewContextValues ++ pageContext.values ++ pageContext.execution.map(_execution_page_context_properties).getOrElse(Map.empty)
+    defaultPageViewContextValues ++
+      pageContext.values ++
+      Map("pageContext.view" -> org.goldenport.record.io.RecordEncoder.json(pageContext.view)) ++
+      pageContext.execution.map(_execution_page_context_properties).getOrElse(Map.empty)
   }
 
   private def _execution_page_context_properties(

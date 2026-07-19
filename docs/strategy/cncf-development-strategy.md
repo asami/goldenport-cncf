@@ -652,7 +652,8 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Notes contain execution details and results for each phase.
 
 ## Process Status Pointers
-- Active phase: none.
+- Active phase: `docs/phase/phase-42.md` with
+  `docs/phase/phase-42-checklist.md` (Jul. 19, 2026).
 - Latest closed phase: `docs/phase/phase-41.md` with
   `docs/phase/phase-41-checklist.md` (Jul. 19, 2026).
 - Status interpretation rules: `docs/rules/stage-status-and-checklist-convention.md`
@@ -838,6 +839,8 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Phase 38: closed (`docs/phase/phase-38.md`)
 - Phase 39: closed (`docs/phase/phase-39.md`)
 - Phase 40: closed (`docs/phase/phase-40.md`)
+- Phase 41: closed (`docs/phase/phase-41.md`)
+- Phase 42: active (`docs/phase/phase-42.md`)
 
 ## 8. Completed Development Item History
 
@@ -1400,7 +1403,12 @@ Completed work areas are recorded in section 8. When a development item closes,
 remove its completion record from this section and add or update the
 corresponding completed-history entry.
 
-Current development item: none.
+Current development item: Phase 42 Static Web Server Rendering Contract.
+
+The active slice makes one server-rendered document the normal application
+read path. Typed component page Views and server-side widget rendering are
+available. Locale-aware message rendering, aggregate command forms, and
+subject-safe cache semantics remain active work.
 
 ### 9.1 Web Next Stage Follow-ups
 Web/platform follow-up index.
