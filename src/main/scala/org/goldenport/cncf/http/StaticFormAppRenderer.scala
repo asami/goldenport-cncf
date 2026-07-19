@@ -9,6 +9,8 @@ package org.goldenport.cncf.http
 object StaticFormAppRenderer {
   type Page = StaticFormAppRendererSupport.Page
   val Page = StaticFormAppRendererSupport.Page
+  type PageCookie = StaticFormAppRendererSupport.PageCookie
+  val PageCookie = StaticFormAppRendererSupport.PageCookie
   type PageRequest = StaticFormAppRendererSupport.PageRequest
   val PageRequest = StaticFormAppRendererSupport.PageRequest
   type FormPageProperties = StaticFormAppRendererSupport.FormPageProperties

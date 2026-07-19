@@ -907,6 +907,18 @@ Validation redisplay uses the same split. The rendered form keeps framework
 context as hidden fields, while validation and Operation dispatch see only the
 operation input values.
 
+The Static Web renderer owns `csrf`. For a page containing
+`textus:operation-form`, it emits one strong token in both a hidden field and a
+runtime-scoped `HttpOnly`, `SameSite=Lax` cookie. Authenticated tokens are
+HMAC-bound to the current session identifier; standalone tokens use stateless
+double-submit verification. `/form` rejects missing, mismatched, malformed, or
+session-stale values with HTTP 403 before operation validation and dispatch.
+No JVM-local CSRF registry is used, so this contract remains compatible with
+multi-instance Web routing.
+The runtime scope also lets a page submit a typed operation form to another
+assembled component without treating component identity as a CSRF boundary;
+normal target-component authorization still applies.
+
 Command-style operation execution should prefer asynchronous execution when the
 operation semantics allow it. The Web response may expose a `jobId` plus
 tracking identifiers such as an entity id, allowing a static page to offer an

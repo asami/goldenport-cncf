@@ -23,7 +23,7 @@ Status: DONE
 
 ## SW-03: Aggregate Forms
 
-Status: ACTIVE
+Status: DONE
 
 - [x] Bind schema-generated Static Web HTML forms to aggregate commands through
   the canonical `/form` ingress.
@@ -31,7 +31,7 @@ Status: ACTIVE
   PRG behavior.
 - [x] Keep JavaScript-disabled form operation complete.
 - [x] Provide one-time localized outcome/flash state.
-- [ ] Enforce session CSRF tokens rather than only preserving the reserved
+- [x] Enforce session CSRF tokens rather than only preserving the reserved
   hidden context field.
 
 ## SW-04: Privacy and Acceptance

@@ -128,6 +128,27 @@ owned by the command and redirected View. Static templates render the feedback
 with `textus:flash`, so no browser REST request or client-side locale pass is
 needed after Post/Redirect/Get.
 
+CNCF owns the CSRF value used by `textus:operation-form`; page providers,
+query parameters, and application templates do not choose it. A rendered form
+receives the same strong token in a hidden `csrf` field and a runtime-scoped,
+`HttpOnly`, `SameSite=Lax` cookie. The `/form` ingress MUST reject a missing,
+mismatched, malformed, or stale token with HTTP 403 before validation or
+operation dispatch. CSRF context remains framework context and MUST be removed
+from operation arguments.
+
+For an authenticated request, the token is cryptographically bound to the
+current session identifier and therefore becomes invalid after session
+rotation. For standalone requests without an authentication session, CNCF uses
+the same server-issued random token as a double-submit cookie. Both forms are
+stateless at the Web runtime, so verification does not require JVM-local
+session or token storage and remains valid when GET and POST reach different
+runtime instances.
+
+The CSRF cookie scope is the same-origin CNCF Web runtime, not an individual
+component. This permits a Static Web page to use the documented
+`textus:operation-form component="..."` contract for another assembled
+component; target-component authorization remains independent and mandatory.
+
 Generated entity CRUD, automatic REST, and Form API remain valid for
 administration, automation, diagnostics, and explicit integration. They are
 not the required normal Web mutation model when an aggregate command exists.

@@ -40,14 +40,24 @@ import io.circe.parser.parse
 object StaticFormAppRendererSupport {
   final case class Page(
     body: String,
-    contentLanguage: Option[String] = None
+    contentLanguage: Option[String] = None,
+    responseCookies: Vector[PageCookie] = Vector.empty
   ) {
-    def this(body: String) = this(body, None)
+    def this(body: String) = this(body, None, Vector.empty)
   }
 
   object Page {
-    def apply(body: String): Page = new Page(body, None)
+    def apply(body: String): Page = new Page(body, None, Vector.empty)
   }
+  final case class PageCookie(
+    name: String,
+    content: String,
+    path: Option[String] = Some("/"),
+    httpOnly: Boolean = true,
+    secure: Boolean = false,
+    sameSite: Option[String] = Some("Lax"),
+    maxAge: Option[Long] = None
+  )
   final case class PageRequest(
     page: Int = 1,
     pageSize: Int = 20,

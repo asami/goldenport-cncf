@@ -4,7 +4,7 @@ package org.goldenport.cncf.http
  * @since   May. 18, 2026
  *  version May. 27, 2026
  *  version Jun. 19, 2026
- * @version Jul. 19, 2026
+ * @version Jul. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 import scala.collection.mutable.ListBuffer
@@ -70,11 +70,12 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Apr. 12, 2026
  *  version May. 27, 2026
  *  version Jun. 19, 2026
- * @version Jul. 19, 2026
+ * @version Jul. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _renderer = StaticFormAppRenderer()
+  private val _test_csrf_token = WebCsrf.issue(None)
   "StaticFormAppRenderer" should {
     "render subsystem dashboard state contract" in {
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
@@ -5461,7 +5462,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       html should include ("20")
       html should include ("1000")
       html should include ("phase12")
-      html should include ("token-1")
+      html should include (_test_csrf_token)
       html should include ("form id: notice_1")
       html should include ("form page: </p>")
       html should not include ("${crud.origin.href}")
@@ -8111,7 +8112,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       html should include ("value=\"101\"")
       html should include ("type=\"hidden\" name=\"crud.origin.href\" value=\"/web/notice-board\"")
       html should include ("type=\"hidden\" name=\"paging.page\" value=\"3\"")
-      html should include ("type=\"hidden\" name=\"csrf\" value=\"token-1\"")
+      html should include (s"type=\"hidden\" name=\"csrf\" value=\"${_test_csrf_token}\"")
       html should not include ("DISPATCHED")
     }
 
@@ -8537,6 +8538,115 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       rejected should not include ("other.message")
       rejected should not include ("Forged outcome")
       rejected should not include ("data-textus-widget=\"textus:flash\"")
+    }
+
+    "issue and enforce a session-associated CSRF token for Static Web operation forms" in {
+      Given("a Static Web page with one aggregate command form")
+      val root = Files.createTempDirectory("cncf-static-web-csrf-")
+      val approot = root.resolve("planning-app")
+      Files.createDirectories(approot)
+      Files.writeString(root.resolve("web.yaml"), "form: {}\n", StandardCharsets.UTF_8)
+      Files.writeString(
+        approot.resolve("detail.html"),
+        """<!doctype html><html><head><title>Detail</title></head><body><textus:operation-form component="notice-admin" service="notice-aggregate" operation="approve-notice-aggregate" value-id="notice_1"></textus:operation-form></body></html>""",
+        StandardCharsets.UTF_8
+      )
+      val configuration = Configuration(Map(
+        RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web.yaml").toString)
+      ))
+      val subsystem = _aggregate_http_fixture_subsystem_with_componentlets(configuration)
+      val selector = "notice-admin.notice-aggregate.approve-notice-aggregate"
+      val descriptor = WebDescriptor(
+        expose = Map(selector -> WebDescriptor.Exposure.Protected),
+        form = Map(selector -> WebDescriptor.Form(
+          successRedirect = Some("/web/notice-board/planning-app/detail")
+        ))
+      )
+      val engine = new HttpExecutionEngine(subsystem, Some(descriptor))
+      val dispatcher = new RecordingWebOperationDispatcher(WebOperationDispatcher.Local(engine))
+      val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
+
+      When("the browser loads the page")
+      val getrequest = _get_request("/web/notice-board/planning-app/detail")
+      val getresponse = server._component_web_app(
+        "notice-board",
+        "planning-app",
+        Vector("detail"),
+        Some(getrequest)
+      ).unsafeRunSync()
+      val html = getresponse.as[String].unsafeRunSync()
+      val cookiename = WebCsrf.cookieName
+      val setcookie = getresponse.headers.headers
+        .filter(_.name.toString.equalsIgnoreCase("Set-Cookie"))
+        .map(_.value)
+        .find(_.startsWith(s"${cookiename}="))
+        .getOrElse(fail("CSRF cookie is missing"))
+      val cookie = setcookie.takeWhile(_ != ';')
+      val token = """name="csrf" value="([^"]+)""".r.findFirstMatchIn(html)
+        .map(_.group(1))
+        .getOrElse(fail("CSRF hidden field is missing"))
+
+      Then("the response synchronizes a strong hidden token and HttpOnly cookie")
+      cookie shouldBe s"${cookiename}=${token}"
+      setcookie should include ("HttpOnly")
+      setcookie should include ("SameSite=Lax")
+      html should include ("action=\"/form/notice-admin/notice-aggregate/approve-notice-aggregate\"")
+      WebCsrf.isValid(None, token) shouldBe true
+
+      And("only a matching browser submission reaches operation dispatch")
+      val validrequest = Request[IO](
+        method = Method.POST,
+        uri = Uri.unsafeFromString("/form/notice-admin/notice-aggregate/approve-notice-aggregate")
+      ).withEntity(s"id=notice_1&csrf=${token}")
+        .putHeaders(org.http4s.Header.Raw(org.typelevel.ci.CIString("Cookie"), cookie))
+      val validresponse = server._submit_operation_form(
+        validrequest,
+        "notice-admin",
+        "notice-aggregate",
+        "approve-notice-aggregate"
+      ).unsafeRunSync()
+      validresponse.status.code shouldBe 303
+      dispatcher.forms.size shouldBe 1
+      dispatcher.forms.last.getString("csrf") shouldBe None
+
+      val missingresponse = server._submit_operation_form(
+        Request[IO](
+          method = Method.POST,
+          uri = Uri.unsafeFromString("/form/notice-admin/notice-aggregate/approve-notice-aggregate")
+        ).withEntity("id=notice_1"),
+        "notice-admin",
+        "notice-aggregate",
+        "approve-notice-aggregate"
+      ).unsafeRunSync()
+      missingresponse.status.code shouldBe 403
+      dispatcher.forms.size shouldBe 1
+
+      val othertoken = WebCsrf.issue(None)
+      val mismatchresponse = server._submit_operation_form(
+        Request[IO](
+          method = Method.POST,
+          uri = Uri.unsafeFromString("/form/notice-admin/notice-aggregate/approve-notice-aggregate")
+        ).withEntity(s"id=notice_1&csrf=${othertoken}")
+          .putHeaders(org.http4s.Header.Raw(org.typelevel.ci.CIString("Cookie"), cookie)),
+        "notice-admin",
+        "notice-aggregate",
+        "approve-notice-aggregate"
+      ).unsafeRunSync()
+      mismatchresponse.status.code shouldBe 403
+      dispatcher.forms.size shouldBe 1
+
+      And("an authenticated token is invalid after the session changes")
+      val sessiontoken = WebCsrf.issue(Some("session-one"))
+      WebCsrf.verify(
+        Some("session-one"),
+        Some(sessiontoken),
+        Some(sessiontoken)
+      ) shouldBe true
+      WebCsrf.verify(
+        Some("session-two"),
+        Some(sessiontoken),
+        Some(sessiontoken)
+      ) shouldBe false
     }
 
     "carry a declared failure flash without exposing the operation response" in {
@@ -9126,7 +9236,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       html should include ("form id: notice_1")
       html should include ("form page: </p>")
       html should include ("type=\"hidden\" name=\"paging.page\" value=\"2\"")
-      html should include ("type=\"hidden\" name=\"csrf\" value=\"token-1\"")
+      html should include (s"type=\"hidden\" name=\"csrf\" value=\"${_test_csrf_token}\"")
       html should not include ("Static Error Alias")
       html should not include ("${crud.origin.href}")
       html should not include ("<textus:hidden-context")
@@ -12039,12 +12149,31 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
 
   private def _post_form_request(
     path: String,
-    body: String
-  ): Request[IO] =
-    Request[IO](
+    body: String,
+    csrfvalue: Option[String] = Some(_test_csrf_token),
+    csrfcookie: Option[String] = None
+  ): Request[IO] = {
+    val request = Request[IO](
       method = Method.POST,
       uri = Uri.unsafeFromString(path)
-    ).withEntity(body)
+    )
+    if (!path.startsWith("/form/") || path.startsWith("/form-api/"))
+      request.withEntity(body)
+    else {
+      csrfvalue match {
+        case Some(token) =>
+          val fields = body.split("&", -1).toVector.filterNot(_.startsWith("csrf="))
+          val effectivebody = (fields :+ s"csrf=${token}").filter(_.nonEmpty).mkString("&")
+          val cookie = csrfcookie.getOrElse(token)
+          request.withEntity(effectivebody).putHeaders(org.http4s.Header.Raw(
+            org.typelevel.ci.CIString("Cookie"),
+            s"${WebCsrf.cookieName}=${cookie}"
+          ))
+        case None =>
+          request.withEntity(body)
+      }
+    }
+  }
 
   private def _post_multipart_request(
     path: String,
@@ -12052,7 +12181,12 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     files: Vector[(String, String, String, Array[Byte])]
   ): Request[IO] = {
     val boundary = s"----cncf-test-${java.util.UUID.randomUUID().toString.replace("-", "")}"
-    val fieldparts = fields.map { case (name, value) =>
+    val effectivefields =
+      if (path.startsWith("/form/") && !path.startsWith("/form-api/"))
+        fields.filterNot(_._1 == "csrf") :+ ("csrf" -> _test_csrf_token)
+      else
+        fields
+    val fieldparts = effectivefields.map { case (name, value) =>
       s"--${boundary}\r\nContent-Disposition: form-data; name=\"${name}\"\r\n\r\n${value}\r\n".getBytes(StandardCharsets.UTF_8)
     }
     val fileparts = files.map { case (name, filename, contentType, bytes) =>
@@ -12063,13 +12197,20 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
     val trailer = s"--${boundary}--\r\n".getBytes(StandardCharsets.UTF_8)
     val body = (fieldparts ++ fileparts).foldLeft(Array.emptyByteArray)(_ ++ _) ++ trailer
-    Request[IO](
+    val request = Request[IO](
       method = Method.POST,
       uri = Uri.unsafeFromString(path),
       body = fs2.Stream.emits(body).covary[IO]
     ).putHeaders(
       org.http4s.headers.`Content-Type`.parse(s"multipart/form-data; boundary=${boundary}").toOption.get
     )
+    if (path.startsWith("/form/") && !path.startsWith("/form-api/"))
+      request.putHeaders(org.http4s.Header.Raw(
+        org.typelevel.ci.CIString("Cookie"),
+        s"${WebCsrf.cookieName}=${_test_csrf_token}"
+      ))
+    else
+      request
   }
 
   private def _get_request(

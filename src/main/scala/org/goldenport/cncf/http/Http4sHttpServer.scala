@@ -4,7 +4,7 @@ package org.goldenport.cncf.http
  * @since   May. 18, 2026
  *  version May. 30, 2026
  *  version Jun. 19, 2026
- * @version Jul. 19, 2026
+ * @version Jul. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 import cats.effect.IO
@@ -64,7 +64,7 @@ import org.goldenport.observation.{Cause, Descriptor}
  *  version Apr. 30, 2026
  *  version May. 25, 2026
  *  version Jun. 19, 2026
- * @version Jul. 19, 2026
+ * @version Jul. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Http4sHttpServer(
@@ -84,6 +84,10 @@ final class Http4sHttpServer(
   private final case class WebTemplateComposition(
     html: String,
     appliedLayout: Boolean
+  )
+  private final case class WebCsrfContext(
+    token: String,
+    responseCookie: Option[StaticFormAppRenderer.PageCookie]
   )
   private enum WebTemplatePartScope {
     case Default
@@ -2163,11 +2167,15 @@ final class Http4sHttpServer(
   ): IO[HResponse[IO]] =
     if (!_is_web_authorized(app, service, operation, Some(req)))
       _forbidden_web(req, Some(app), Some(service), Some(operation))
-    else _static_form_app_renderer.renderOperationForm(engine.runtimeSubsystem, app, service, operation, engine.webDescriptor, _query_values(req)) match {
+    else {
+      val csrf = _web_csrf_context(req)
+      val values = _query_values(req) + ("csrf" -> csrf.token)
+      _static_form_app_renderer.renderOperationForm(engine.runtimeSubsystem, app, service, operation, engine.webDescriptor, values) match {
       case Some(p) =>
-        _html(Some(req), p, Some(app))
+        _html(Some(req), _with_csrf_cookie(p, csrf), Some(app))
       case None =>
         IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Operation form not found"))
+      }
     }
 
   private[http] def _operation_form_api_definition(
@@ -2303,7 +2311,9 @@ final class Http4sHttpServer(
       form <- _to_form_record(req)
       pagevalues = _form_values(form)
       response <-
-        _operation_form_values(app, service, operation, form) match {
+        if (!_verify_operation_form_csrf(req, form))
+          _csrf_forbidden_response(req, app, started)
+        else _operation_form_values(app, service, operation, form) match {
           case Consequence.Success(operationvalues) =>
             val validation = _static_form_app_renderer.validateOperationForm(
               engine.runtimeSubsystem,
@@ -4436,19 +4446,30 @@ final class Http4sHttpServer(
             _static_form_app_renderer.hasTextusMarkup(expandedhtml) ||
             _has_textus_include(expandedhtml) ||
             (!_static_form_app_renderer.isHtmlDocumentTemplate(expandedhtml) && _has_property_placeholder(expandedhtml))
-        if (needstemplaterendering)
-          _static_form_app_renderer.renderStaticTemplate(
-            engine.runtimeSubsystem,
-            componentName.getOrElse(webappname),
-            webappname,
-            page,
-            expandedhtml,
-            _web_app_asset_completion(webappname),
-            pagecontext,
-            engine.webDescriptor
-          )
-        else
-          StaticFormAppRenderer.Page(expandedhtml)
+        def _render_page_(context: WebPageContext): StaticFormAppRenderer.Page =
+          if (needstemplaterendering)
+            _static_form_app_renderer.renderStaticTemplate(
+              engine.runtimeSubsystem,
+              componentName.getOrElse(webappname),
+              webappname,
+              page,
+              expandedhtml,
+              _web_app_asset_completion(webappname),
+              context,
+              engine.webDescriptor
+            )
+          else
+            StaticFormAppRenderer.Page(expandedhtml)
+
+        val rendered = _render_page_(pagecontext)
+        req.filter(_ => _requires_form_csrf(rendered.body)) match {
+          case Some(request) =>
+            val csrf = _web_csrf_context(request)
+            val securecontext = pagecontext.copy(values = pagecontext.values + ("csrf" -> csrf.token))
+            _with_csrf_cookie(_render_page_(securecontext), csrf)
+          case None =>
+            rendered
+        }
       }
     }
   }
@@ -5743,6 +5764,84 @@ final class Http4sHttpServer(
   private def _valid_session_id(value: String): Option[String] =
     SessionId.option(value).map(_.value)
 
+  private def _web_csrf_context(
+    req: org.http4s.Request[IO]
+  ): WebCsrfContext = {
+    val sessionid = _session_id_(req)
+    val existing = _request_csrf_cookie(req)
+      .filter(WebCsrf.isValid(sessionid, _))
+    existing match {
+      case Some(token) =>
+        WebCsrfContext(token, None)
+      case None =>
+        val token = WebCsrf.issue(sessionid)
+        WebCsrfContext(token, Some(StaticFormAppRenderer.PageCookie(
+          name = WebCsrf.cookieName,
+          content = token,
+          path = Some("/"),
+          httpOnly = true,
+          secure = _is_https_request(req),
+          sameSite = Some("Lax")
+        )))
+    }
+  }
+
+  private def _request_csrf_cookie(
+    req: org.http4s.Request[IO]
+  ): Option[String] =
+    req.cookies.find(_.name == WebCsrf.cookieName).map(_.content)
+
+  private def _verify_operation_form_csrf(
+    req: org.http4s.Request[IO],
+    form: Record
+  ): Boolean =
+    WebCsrf.verify(
+      _session_id_(req),
+      _request_csrf_cookie(req),
+      form.getString("csrf")
+    )
+
+  private def _requires_form_csrf(html: String): Boolean =
+    """(?is)<form\b(?=[^>]*\bmethod\s*=\s*["']?post\b)(?=[^>]*\baction\s*=\s*["']?/form/)""".r
+      .findFirstIn(html)
+      .nonEmpty
+
+  private def _csrf_forbidden_response(
+    req: org.http4s.Request[IO],
+    componentname: String,
+    started: Long
+  ): IO[HResponse[IO]] = {
+    val error = StructuredHttpError.fromMessage(
+      "The form security token is missing, expired, or does not match this browser session. Reload the page and submit the form again.",
+      HStatus.Forbidden.code,
+      req.uri.path.renderString,
+      req.method.name,
+      _operation_mode,
+      component = Some(componentname)
+    )
+    _web_error_response(Some(componentname), error).map { response =>
+      RuntimeDashboardMetrics.recordHtmlRequest(
+        req.method.name,
+        req.uri.path.renderString,
+        HStatus.Forbidden.code,
+        (System.nanoTime() - started) / 1000000L
+      )
+      response
+    }
+  }
+
+  private def _with_csrf_cookie(
+    page: StaticFormAppRenderer.Page,
+    csrf: WebCsrfContext
+  ): StaticFormAppRenderer.Page =
+    csrf.responseCookie.fold(page)(cookie => page.copy(responseCookies = page.responseCookies :+ cookie))
+
+  private def _is_https_request(
+    req: org.http4s.Request[IO]
+  ): Boolean =
+    req.uri.scheme.exists(_.value.equalsIgnoreCase("https")) ||
+      _request_header_value(req, "X-Forwarded-Proto").exists(_.equalsIgnoreCase("https"))
+
   private def _session_cookie_names(req: org.http4s.Request[IO]): Vector[String] =
     (_session_cookie_name +: _web_app_session_cookie_name(req).toVector).distinct
 
@@ -6300,11 +6399,13 @@ final class Http4sHttpServer(
     componentName: Option[String]
   ): IO[HResponse[IO]] =
     IO.pure(
-      _with_content_language(
+      _with_page_cookies(page,
+        _with_content_language(
         HResponse[IO](HStatus.Ok)
           .withEntity(_themed_html(page.body, appName, componentName))
           .withContentType(`Content-Type`(MediaType.text.html, Some(Charset.`UTF-8`))),
         page.contentLanguage
+        )
       )
     )
 
@@ -6339,9 +6440,10 @@ final class Http4sHttpServer(
               .withContentType(`Content-Type`(MediaType.text.html, Some(Charset.`UTF-8`))),
             page.contentLanguage
           )
+        val withcookies = _with_page_cookies(page, response)
         val completed = componentname
           .filter(name => requestoption.exists(request => _request_flash_cookie(request, name).nonEmpty))
-          .fold(response)(name => response.addCookie(_expired_flash_cookie(name)))
+          .fold(withcookies)(name => withcookies.addCookie(_expired_flash_cookie(name)))
         IO.pure(completed)
     }
   }
@@ -6386,6 +6488,30 @@ final class Http4sHttpServer(
   ): IO[HResponse[IO]] =
     _html_content(req, StaticFormAppRenderer.Page(body), appname, componentname)
 
+  private def _with_page_cookies(
+    page: StaticFormAppRenderer.Page,
+    response: HResponse[IO]
+  ): HResponse[IO] =
+    page.responseCookies.foldLeft(response) { (z, cookie) =>
+      z.addCookie(ResponseCookie(
+        name = cookie.name,
+        content = cookie.content,
+        path = cookie.path,
+        httpOnly = cookie.httpOnly,
+        secure = cookie.secure,
+        sameSite = cookie.sameSite.flatMap(_same_site),
+        maxAge = cookie.maxAge
+      ))
+    }
+
+  private def _same_site(value: String): Option[SameSite] =
+    value.trim.toLowerCase(java.util.Locale.ROOT) match {
+      case "strict" => Some(SameSite.Strict)
+      case "lax" => Some(SameSite.Lax)
+      case "none" => Some(SameSite.None)
+      case _ => None
+    }
+
   private def _with_content_language(
     response: HResponse[IO],
     language: Option[String]
@@ -6429,11 +6555,13 @@ final class Http4sHttpServer(
     appName: Option[String]
   ): IO[HResponse[IO]] =
     IO.pure(
-      _with_content_language(
+      _with_page_cookies(p,
+        _with_content_language(
         HResponse[IO](status)
           .withEntity(_themed_html(p.body, appName, None))
           .withContentType(`Content-Type`(MediaType.text.html, Some(Charset.`UTF-8`))),
         p.contentLanguage
+        )
       )
     )
 

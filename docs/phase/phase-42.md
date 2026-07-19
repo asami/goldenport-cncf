@@ -2,7 +2,7 @@
 
 Stage Status:
 - Current status: ACTIVE
-- Current step: Aggregate command form CSRF enforcement
+- Current step: Static Web page cache and privacy policy
 - Owner: CNCF Web runtime and Static Web renderer.
 
 status = active
@@ -48,8 +48,13 @@ without browser REST fan-out for execution context or primary page content.
   response resolves it through the request locale catalog, renders
   `textus:flash`, and expires the cookie without browser REST hydration or
   server-local flash state.
+- Static Web operation forms receive a framework-owned CSRF token in an
+  runtime-scoped `HttpOnly`, `SameSite=Lax` cookie and hidden field. Authenticated
+  tokens are statelessly HMAC-bound to the current session; standalone forms
+  use a strong double-submit token. Missing, mismatched, malformed, and
+  session-stale submissions return HTTP 403 before operation dispatch.
 
 ## 5. Resume Point
 
-Complete session-backed CSRF enforcement, then define page cache/privacy
-policy.
+Define and verify page cache/privacy policy for public, standalone, and
+authenticated subject-specific documents.
