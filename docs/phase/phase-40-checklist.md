@@ -5,26 +5,26 @@ closure conditions are in `phase-40.md`.
 
 ## UT-01: Contract and Ingress Audit
 
-Status: IN_PROGRESS
+Status: DONE
 
-- [ ] Audit URL-encoded, multipart, automatic REST, and JSON decoding paths.
-- [ ] Identify where duplicate field occurrences are currently collapsed.
-- [ ] Freeze the provisional command grammar and metadata requirements.
-- [ ] Reconcile the Jul. 19 handoff with the historical April grammar notes.
+- [x] Audit URL-encoded, multipart, automatic REST, and JSON decoding paths.
+- [x] Identify where duplicate field occurrences are currently collapsed.
+- [x] Freeze the provisional command grammar and metadata requirements.
+- [x] Reconcile the Jul. 19 handoff with the historical April grammar notes.
 
 ## UT-02: Directive Normalization
 
-Status: OPEN
+Status: DONE
 
-- [ ] Add a transport-neutral field-occurrence/update-directive model.
-- [ ] Group plain assignment, value-bearing operators, and operand-less
+- [x] Add a transport-neutral field-occurrence/update-directive model.
+- [x] Group plain assignment, value-bearing operators, and operand-less
   commands by selected operation parameter.
-- [ ] Reject duplicate commands and conflicts independent of request order.
-- [ ] Keep internal Record sentinel values outside the public interface.
+- [x] Reject duplicate commands and conflicts independent of request order.
+- [x] Keep internal Record sentinel values outside the public interface.
 
 ## UT-03: Typed Update Mapping
 
-Status: OPEN
+Status: IN_PROGRESS
 
 - [ ] Resolve multiplicity, element datatype, null support, and update-bearing
   status from operation metadata.

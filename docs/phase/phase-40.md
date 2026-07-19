@@ -2,7 +2,7 @@
 
 Stage Status:
 - Current status: IN_PROGRESS
-- Current step: UT-01 contract and ingress audit.
+- Current step: UT-03 typed update mapping.
 - Owner: CNCF HTTP/Form ingress and generated operation binding.
 - Update rule: Update this block and `phase-40-checklist.md` whenever a stable
   work-item state changes. Close only after every checklist item is checked and
@@ -63,11 +63,11 @@ design/spec documents.
 
 ## 5. Work Stack
 
-- A (IN_PROGRESS): UT-01 - Audit all transport decoding and operation-binding paths;
+- A (DONE): UT-01 - Audit all transport decoding and operation-binding paths;
   freeze the provisional grammar and metadata requirements.
-- B (OPEN): UT-02 - Implement transport-neutral directive grouping, duplicate
+- B (DONE): UT-02 - Implement transport-neutral directive grouping, duplicate
   preservation, and conflict validation.
-- C (OPEN): UT-03 - Implement operation-metadata compatibility checks and typed
+- C (IN_PROGRESS): UT-03 - Implement operation-metadata compatibility checks and typed
   clear/null mapping.
 - D (OPEN): UT-04 - Integrate URL-encoded, multipart, automatic REST, and JSON
   request paths and generated Form controls through the shared contract.

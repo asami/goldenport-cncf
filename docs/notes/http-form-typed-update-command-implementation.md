@@ -1,6 +1,6 @@
 # HTTP/Form Typed Update Command Implementation Note
 
-status=implementation-planning
+status=implementation-in-progress
 updated_at=2026-07-19
 
 ## 1. Role
@@ -250,3 +250,41 @@ and ArtScene smoke pass:
    the confirmed contract rather than rewriting their original text.
 
 Phase 40 cannot close before this promotion is complete.
+
+## 13. Verified Ingress Audit
+
+The Jul. 19 implementation audit confirmed these concrete boundaries:
+
+- URL-encoded form input is decoded by `HttpRequest.parseQuery`, which creates
+  one `Record.Field` per submitted occurrence.
+- Multipart form input is decoded to `Vector[(String, Any)]` before
+  `Record.create`, and therefore also retains repeated occurrences initially.
+- JSON input is decoded directly to `Record`; JSON arrays remain one ordinary
+  field value rather than command syntax.
+- `Record.fields` retains duplicate keys, while `Record.asMap`, `getAny`, and
+  `upsertSingle` collapse or select occurrences.
+- Static Form operation metadata becomes available in
+  `Http4sHttpServer._normalize_boundary_record` through the selected
+  `OperationDefinition` and its `ParameterDefinition` values.
+- `WebFormValueDecoder` currently uses `getAny` and `upsertSingle` for JSON
+  controls, so update-directive normalization must precede that collapsing
+  path for directive-bearing fields.
+- automatic HTTP operation dispatch also carries form input as a `Record`, but
+  framework-property projection and request binding use map/single-value
+  access later in the path.
+
+The shared implementation boundary is therefore split deliberately:
+
+1. parse and group update directives from `Record.fields` while occurrences
+   are intact;
+2. validate and translate the grouped directive using the selected operation
+   metadata; and
+3. pass the normalized ordinary/internal Record through the existing Web,
+   REST, request-binding, authorization, and ActionCall path.
+
+The audit also reconciled the April proposals with the Jul. 19 handoff. The
+Phase 40 canonical candidate remains `__overwrite`, `__prepend`, `__append`,
+and `__remove` for value-bearing operations plus
+`__update_command=clear|null` for operand-less commands. Older
+`__update_clear`, `__clear`, and `__update_null` spellings remain historical or
+internal candidates and are not part of the provisional public surface.
