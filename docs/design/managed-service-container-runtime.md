@@ -53,6 +53,39 @@ or remove the backing service only through the constrained gateway. A
 same-name resource is reusable only when deterministic ownership labels and
 the admitted compatibility contract both match.
 
+## Runtime Model
+
+`ServiceContainerOwner` combines an explicit owner kind with a safe logical
+owner id. `ServiceContainerId` identifies the logical service within that
+owner. `ServiceContainerRegistryKey` is their product; a service name alone is
+never a registry key.
+
+`ServiceContainerDefinition.External` contains only the logical service id and
+a validated credential-free HTTP(S) endpoint.
+`ServiceContainerDefinition.RuntimeOwned` contains the owner, image identity,
+unique logical/container ports, bounded readiness policy, persistence policy,
+reuse policy, and cleanup policy. Readiness references a declared logical
+port. Persistence is either ephemeral or a set of validated named volumes; it
+cannot carry a host path.
+
+The initial readiness probes are HTTP and TCP. Both use a positive bounded
+timeout and polling interval. HTTP readiness also carries a safe absolute path
+and a non-empty expected status set. The gateway implementation owns actual
+transport execution.
+
+The initial reuse policies are `CreateOrReuse` and `RequireExisting`. The
+initial runtime-shutdown cleanup policies are `Keep`, `Stop`, and `Remove`.
+Registry status is one of `Declared`, `Absent`, `Created`, `Starting`, `Ready`,
+`Unhealthy`, `Stopped`, or `Failed`; transition legality belongs to the
+lifecycle runtime. The typed transition vocabulary is `Inspect`, `Create`,
+`Reuse`, `Start`, `CheckReadiness`, `Stop`, `Restart`, and `Remove`.
+
+`ServiceContainerRegistry` admits runtime-owned definitions only. Exact repeat
+registration is idempotent, while a different definition under the same owner
+and service id is an incompatibility conflict. Status updates and removal use
+monotonic revisions so concurrent lifecycle decisions cannot silently replace
+one another. A `Ready` registry entry always has a validated endpoint.
+
 ## Lifecycle Ownership
 
 The service registry belongs to the component/runtime lifecycle, not to an
@@ -101,6 +134,13 @@ identity, ownership mode, transition, readiness outcome, elapsed time, and a
 credential-free endpoint authority. They must not include credentials,
 environment values, sensitive mount details, provider payloads, prompts,
 models, datasets, or arbitrary gateway output.
+
+Lifecycle failures use ordinary `Consequence.Failure(Conclusion)` values.
+Gateway unavailable, image unavailable, ownership conflict, incompatible
+existing service, port conflict, startup failure, readiness timeout, unhealthy
+service, and stale registry revision remain structurally distinguishable
+through existing taxonomy, `Cause.Kind`, and descriptor facets. The runtime
+does not define a parallel error envelope or application `detailCode`.
 
 ## Non-Goals
 

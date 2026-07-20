@@ -14,13 +14,13 @@ Status: DONE
 
 ## SC-02: Runtime Model
 
-Status: PLANNED
+Status: DONE
 
-- [ ] Define logical service, image, ownership, reuse, endpoint, readiness,
+- [x] Define logical service, image, ownership, reuse, endpoint, readiness,
       persistence, cleanup, status, and transition models.
-- [ ] Define a runtime-owned registry keyed by admitted owner and logical
+- [x] Define a runtime-owned registry keyed by admitted owner and logical
       service identity.
-- [ ] Define structured lifecycle failure outcomes.
+- [x] Define structured lifecycle failure outcomes.
 
 ## SC-03: Docker Gateway and Fake Evidence
 

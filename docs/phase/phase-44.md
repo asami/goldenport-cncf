@@ -2,7 +2,7 @@
 
 Stage Status:
 - Current status: ACTIVE
-- Current step: SC-02 runtime model
+- Current step: SC-03 Docker gateway and fake evidence
 - Owner: CNCF managed service runtime, with Textus AI and Textus SIE as
   downstream drivers.
 
@@ -98,3 +98,11 @@ and specification now fix explicit external/runtime-owned modes, runtime-level
 ownership, the UnitOfWork and Process Execution boundaries, constrained
 gateway ownership, and retirement of the obsolete `ServerDockerAdapter`
 direction. Begin SC-02 with provider-neutral model and registry types.
+
+SC-02 completed Jul. 20, 2026. CNCF now has validated provider-neutral owner,
+service, external/owned definition, endpoint, image, port, readiness,
+persistence, reuse, cleanup, status, registry-entry, and structured diagnostic
+models. The in-memory registry provides owner-scoped deterministic keys,
+idempotent exact registration, incompatibility rejection, revision-checked
+updates/removal, and Ready endpoint enforcement. Begin SC-03 with the
+constrained gateway and deterministic fake evidence.

@@ -4,10 +4,9 @@ Status: normative static specification
 
 ## Scope
 
-This specification fixes the ownership and execution boundary for long-lived
-container-backed services managed by CNCF. Detailed runtime model, gateway,
-transition, readiness, persistence, and failure records are specified by later
-Phase 44 work.
+This specification fixes the ownership, model, registry, and execution boundary
+for long-lived container-backed services managed by CNCF. Gateway behavior and
+lifecycle transition execution are specified by later Phase 44 work.
 
 ## Terms
 
@@ -78,16 +77,67 @@ time, and credential-free endpoint authority. They MUST NOT expose
 credentials, environment values, sensitive mounts, arbitrary gateway output,
 provider payloads, prompts, models, or datasets.
 
+### Validated Runtime Model (SC2-R1)
+
+Owner ids, logical service ids, image identities, endpoint values, logical port
+names, container ports, readiness paths, readiness timing, and named volumes
+MUST be validated before a definition reaches the registry or gateway.
+
+An external definition MUST contain a logical service id and credential-free
+absolute HTTP(S) endpoint without user information, query, or fragment. A
+runtime-owned definition MUST contain an explicit owner, image identity, at
+least one unique declared port, bounded readiness policy, persistence policy,
+reuse policy, and cleanup policy. Its readiness probe MUST reference one of its
+declared logical ports.
+
+Persistence MUST be either ephemeral or use validated named volumes. It MUST
+NOT represent an arbitrary host path or host mount.
+
+### Runtime Registry (SC2-R2)
+
+`ServiceContainerRegistry` MUST accept runtime-owned definitions only and MUST
+key each entry by `ServiceContainerOwner` plus `ServiceContainerId`.
+Registering the exact same definition repeatedly MUST return the same logical
+entry. Registering a different definition under an occupied key MUST return a
+structured incompatibility conflict.
+
+Registry enumeration MUST be deterministic. Status update and removal MUST use
+the expected monotonic revision and MUST reject stale revisions. A registry
+entry in `Ready` status MUST contain a validated endpoint.
+
+### Status And Policy Vocabulary (SC2-R3)
+
+The initial reuse policies are `CreateOrReuse` and `RequireExisting`. The
+initial cleanup policies are `Keep`, `Stop`, and `Remove`. The initial statuses
+are `Declared`, `Absent`, `Created`, `Starting`, `Ready`, `Unhealthy`,
+`Stopped`, and `Failed`. The typed transitions are `Inspect`, `Create`, `Reuse`,
+`Start`, `CheckReadiness`, `Stop`, `Restart`, and `Remove`. SC2-R3 defines
+vocabulary only; legal lifecycle transitions belong to the lifecycle runtime
+contract.
+
+### Structured Lifecycle Failures (SC2-R4)
+
+Lifecycle failures MUST use `Consequence.Failure(Conclusion)` and MUST NOT
+introduce an independent error envelope or framework-owned application detail
+code. The model MUST preserve distinct structured diagnostics for gateway
+unavailable, image unavailable, ownership conflict, incompatible existing
+service, port conflict, startup failure, readiness timeout, unhealthy service,
+and stale registry revision. Machine classification MUST use taxonomy,
+`Cause.Kind`, and descriptor facets rather than display-message parsing.
+
 ## Deferred Contract
 
-The following contract details belong to later Phase 44 slices: concrete model
-types, registry implementation, reuse compatibility fields, gateway methods,
-readiness probes, persistence declarations, transition outcomes, structured
-failure vocabulary, CallTree projection, metrics, and runtime shutdown wiring.
+The following contract details belong to later Phase 44 slices: gateway
+methods, ownership-label projection, compatibility resolution beyond exact
+definition equality, legal transition execution, readiness transport,
+CallTree projection, metrics, and runtime shutdown wiring.
 
 ## Executable Evidence
 
-Phase 44 fake-gateway and lifecycle executable specifications will provide the
-behavioral evidence for these requirements when the model and runtime are
-implemented. Normal executable specifications must not require a Docker
-daemon.
+`ServiceContainerModelSpec` covers safe identities, endpoints, ports,
+readiness, persistence, and structured diagnostics.
+`ServiceContainerRegistrySpec` covers owner-scoped keys, idempotent admission,
+definition conflicts, deterministic enumeration, revision checks, Ready
+endpoint requirements, and removal. Later fake-gateway and lifecycle specs
+cover transition execution. Normal executable specifications must not require
+a Docker daemon.
