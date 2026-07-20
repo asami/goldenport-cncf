@@ -53,12 +53,12 @@ Status: DONE
 
 ## SC-06: Textus AI Driver
 
-Status: PLANNED
+Status: DONE
 
-- [ ] Preserve explicit Ollama endpoint precedence.
-- [ ] Use the managed service runtime only when an owned local service is
+- [x] Preserve explicit Ollama endpoint precedence.
+- [x] Use the managed service runtime only when an owned local service is
       selected.
-- [ ] Keep model installation as a provider-owned observable follow-up step.
+- [x] Keep model installation as a provider-owned observable follow-up step.
 
 ## SC-07: Textus SIE Driver
 

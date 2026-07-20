@@ -248,6 +248,11 @@ A Subsystem MAY install one service-container runtime. Reinstalling the same
 runtime MUST be idempotent; replacing it MUST fail as a structured conflict so
 owned resources cannot be orphaned.
 
+Component bootstrap MUST request the runtime through the observed Subsystem
+boundary. An absent installation MUST remain a structured gateway-unavailable
+failure for the requested logical service rather than exposing `None`, a raw
+gateway, or an ambient Docker fallback to component behavior.
+
 Subsystem shutdown MUST first quiesce the JobEngine and then invoke the
 service-container runtime's best-effort cleanup. Failure of either stage MUST
 NOT skip the other stage. If both fail, their Conclusions MUST be combined.
@@ -255,11 +260,25 @@ The structured shutdown result MUST be available through `shutdownC`; the
 legacy Unit-returning shutdown entrypoint MAY discard the value only after the
 lifecycle metric/diagnostic path has observed it.
 
+### Textus AI Ollama Consumer (SC6-R1)
+
+When no explicit Ollama endpoint is configured, Textus AI MUST resolve its
+local Ollama endpoint through the observed Subsystem service-container runtime.
+It MUST NOT represent inspect, create, start, reuse, stop, or remove as
+component-owned Process Execution capabilities.
+
+An explicit Ollama endpoint MUST take precedence and MUST NOT request or mutate
+the managed service runtime. Model installation MUST occur only after readiness
+as a separate provider-owned operation against the resolved endpoint. It MUST
+NOT require or expose the provider container identity. Repeated successful
+bootstrap MUST converge without repeating lifecycle creation or model
+installation.
+
 ## Deferred Contract
 
 The following contract details belong to later Phase 44 slices: Docker
-transport implementation and readiness transport, plus provider-specific
-consumer integration.
+transport implementation and readiness transport, plus additional
+provider-specific consumer integration.
 
 ## Executable Evidence
 
@@ -275,3 +294,8 @@ refusal, readiness failure state, restart, idempotent stop/remove, and runtime
 cleanup policies. `ServiceContainerObservabilitySpec` covers payload-safe
 CallTree fields, provider failure-text exclusion, bounded runtime metrics,
 Subsystem-owned idempotent cleanup, and runtime replacement refusal.
+Textus AI's `OllamaManagedServiceRuntimeSpec` covers fake-gateway endpoint
+resolution, model-install convergence through the internal HTTP DSL, and the
+structured unavailable-runtime boundary. Its `ComponentFactorySpec` covers
+external endpoint precedence and proves that Ollama lifecycle is absent from
+the component Process Execution scope.

@@ -118,6 +118,25 @@ final class ServiceContainerObservabilitySpec extends AnyWordSpec with Matchers 
   }
 
   "Subsystem managed service lifecycle" should {
+    "return an observed runtime or a structured unavailable diagnostic to a component" in {
+      Given("one subsystem without a runtime and another with an installed fake runtime")
+      given context: ExecutionContext = _execution_context()
+      val missing = SubsystemTestFixture.Startup.Empty.create(SubsystemTestFixture.Params())
+      val installed = SubsystemTestFixture.Startup.Empty.create(SubsystemTestFixture.Params())
+      val runtime = ServiceContainerRuntime.create(ServiceContainerRegistry.inMemory(), FakeServiceContainerGateway.create())
+      installed.installServiceContainerRuntimeC(runtime).isSuccess shouldBe true
+
+      When("component bootstrap requests the managed service runtime")
+      val unavailable = missing.serviceContainerRuntimeC(_service_id("ollama"))
+      val available = installed.serviceContainerRuntimeC(_service_id("ollama"))
+
+      Then("absence remains a structured gateway failure and an installation returns the observed boundary")
+      unavailable.isFaillure shouldBe true
+      available.isSuccess shouldBe true
+      available.toOption.exists(_ ne runtime) shouldBe true
+      installed.shutdown()
+    }
+
     "own idempotent service cleanup outside UnitOfWork termination" in {
       Given("a subsystem with one installed stop-policy managed service runtime")
       val subsystem = SubsystemTestFixture.Startup.Empty.create(SubsystemTestFixture.Params())

@@ -2,7 +2,7 @@
 
 Stage Status:
 - Current status: ACTIVE
-- Current step: SC-06 Textus AI driver
+- Current step: SC-07 Textus SIE driver
 - Owner: CNCF managed service runtime, with Textus AI and Textus SIE as
   downstream drivers.
 
@@ -131,3 +131,12 @@ payloads are excluded. Subsystem shutdown now quiesces jobs before
 best-effort managed-service cleanup, exposes a structured shutdown result, and
 rejects runtime replacement that could orphan owned resources. Begin SC-06
 with the Textus AI Ollama consumer migration.
+
+SC-06 completed Jul. 20, 2026. Textus AI now declares an owned Ollama service
+through the Subsystem managed service-container runtime instead of installing
+Docker inspect/start/run commands in its Process Execution scope. Explicit
+endpoints bypass lifecycle resolution. The resolved endpoint drives a separate
+provider-owned `/api/pull` follow-up through CNCF's internal HTTP DSL, cached
+only after all models succeed. Fake-gateway consumer specs verify convergence
+and structured missing-runtime failure. Begin SC-07 with the Textus SIE owned
+Fuseki/vector deployment path.

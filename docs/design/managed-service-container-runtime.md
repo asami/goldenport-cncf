@@ -221,6 +221,21 @@ process after UnitOfWork termination. Provider initialization performed after
 readiness, such as installing a model or preparing a dataset, remains a
 separate observable consumer operation.
 
+## Textus AI Consumer
+
+Textus AI is the first runtime consumer. Without an explicit deployment
+endpoint, it declares one component-runtime-owned Ollama service with typed
+image, named persistence, port, readiness, reuse, and cleanup policy. It
+requests the observed runtime from its owning Subsystem when provider execution
+first needs the endpoint. It does not install inspect/start/run Docker commands
+in its component Process Execution scope.
+
+The resolved endpoint is authoritative. Provider model installation follows
+readiness as a separate Ollama HTTP operation through CNCF's internal HTTP DSL,
+and is cached only after all selected models succeed. An explicit Ollama
+endpoint constructs no runtime-owned definition and does not request the
+service-container runtime.
+
 ## Existing Docker Adapter Boundary
 
 `CommandDockerAdapter` remains a legacy one-shot `docker run --rm` adapter and
