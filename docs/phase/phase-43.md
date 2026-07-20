@@ -2,7 +2,7 @@
 
 Stage Status:
 - Current status: ACTIVE
-- Current step: RQ-03 Query providers
+- Current step: RQ-04 DSL and observability
 - Owner: CNCF resource-tree runtime, with CBD Support as the first downstream
   driver.
 
@@ -88,3 +88,9 @@ RQ-02 completed Jul. 20, 2026. CNCF now has validated query selector and
 limit models, an immutable result model, conservative limit tightening, and
 deterministic in-memory exact-name query evidence. Start RQ-03. Local provider
 traversal must preserve strict snapshot behavior before DSL and CBD adoption.
+RQ-03 completed Jul. 20, 2026. In-memory and local providers now apply finite
+provider caps, return deterministic exact-name results, preserve strict
+snapshot symlink rejection, and fail rather than silently truncating discovery
+when local traversal limits prevent complete evaluation. Start RQ-04. Query
+access needs the protected DSL, CallTree, and metrics boundary before CBD uses
+it.

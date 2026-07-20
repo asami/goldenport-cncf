@@ -21,12 +21,12 @@ Status: DONE
 
 ## RQ-03: Providers
 
-Status: PLANNED
+Status: DONE
 
-- [ ] Add deterministic in-memory query behavior.
-- [ ] Add bounded local traversal without following symbolic links.
-- [ ] Keep strict snapshot behavior unchanged.
-- [ ] Cover root symlink, nested symlink, depth, visit, match, per-entry, and
+- [x] Add deterministic in-memory query behavior.
+- [x] Add bounded local traversal without following symbolic links.
+- [x] Keep strict snapshot behavior unchanged.
+- [x] Cover root symlink, nested symlink, depth, visit, match, per-entry, and
       aggregate-byte boundaries with executable specifications.
 
 ## RQ-04: DSL and Observability

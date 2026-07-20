@@ -158,6 +158,11 @@ logical reference, selected entries, effective limits, and safe counts; it
 does not expose a physical root, host `Path`, skipped path, provider handle, or
 unmatched tree content.
 
+The local provider preserves complete-discovery semantics. If an admitted
+depth or directory-visit bound prevents evaluation of a directory whose
+descendants would otherwise be in scope, it fails the query rather than
+returning a partial result whose missing selected entries cannot be known.
+
 The local provider rejects a symbolic configured root. During query traversal
 it never follows symbolic links. A nested symbolic link that does not match the
 selector is skipped; a matching symbolic link or matching non-regular entry is

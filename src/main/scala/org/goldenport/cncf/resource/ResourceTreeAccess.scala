@@ -93,15 +93,15 @@ object ResourceTreeLimits {
 sealed abstract class ResourceTreeEntrySelector {
   def kind: String
 
-  private[resource] def matches(entry: ResourceTreeEntry): Boolean
+  private[resource] def matches(relativepath: String): Boolean
 }
 
 object ResourceTreeEntrySelector {
   final case class ExactLeafName private[resource] (name: String) extends ResourceTreeEntrySelector {
     val kind = "exact-leaf-name"
 
-    private[resource] def matches(entry: ResourceTreeEntry): Boolean =
-      entry.relativePath.split("/").lastOption.contains(name)
+    private[resource] def matches(relativepath: String): Boolean =
+      relativepath.split("/").lastOption.contains(name)
   }
 
   def exactLeafNameC(value: String): Consequence[ResourceTreeEntrySelector] =
@@ -232,20 +232,20 @@ object ResourceTreeQueryResult {
   private[resource] def admitC(
     query: ResourceTreeQuery,
     entries: Vector[ResourceTreeEntry],
-    visitedDirectoryCount: Int
+    visitedcount: Int
   ): Consequence[ResourceTreeQueryResult] =
     query.limits.validateC.flatMap { _ =>
       val sorted = entries.sortBy(_.relativePath)
       val paths = sorted.map(_.relativePath)
-      if (visitedDirectoryCount < 0 || visitedDirectoryCount > query.limits.maxVisitedDirectories)
+      if (visitedcount < 0 || visitedcount > query.limits.maxVisitedDirectories)
         Consequence.resourceInvalid("resource tree query exceeds the configured directory visit limit")
       else if (paths.distinct.size != paths.size)
         Consequence.resourceInvalid("resource tree query contains duplicate logical paths")
-      else if (sorted.exists(entry => !query.selector.matches(entry)))
+      else if (sorted.exists(entry => !query.selector.matches(entry.relativePath)))
         Consequence.resourceInvalid("resource tree query provider returned an entry outside the selector")
       else
         _validate_entries_c(query, sorted).map { total =>
-          ResourceTreeQueryResult(query, sorted, total, visitedDirectoryCount)
+          ResourceTreeQueryResult(query, sorted, total, visitedcount)
         }
     }
 
@@ -450,16 +450,18 @@ object ResourceTreeAccess {
   }
 
   def inMemory(
-    trees: Map[ResourceTreeReference, Vector[ResourceTreeEntry]]
+    trees: Map[ResourceTreeReference, Vector[ResourceTreeEntry]],
+    querylimits: ResourceTreeQueryLimits = ResourceTreeQueryLimits.default
   ): ResourceTreeAccess =
-    new InMemoryResourceTreeAccess(trees)
+    new InMemoryResourceTreeAccess(trees, querylimits)
 
   def local(policy: ResourceTreePolicy): ResourceTreeAccess =
     new LocalResourceTreeAccess(policy)
 }
 
 final case class ResourceTreePolicy(
-  fileRoots: Map[String, Path] = Map.empty
+  fileRoots: Map[String, Path] = Map.empty,
+  queryLimits: ResourceTreeQueryLimits = ResourceTreeQueryLimits.default
 ) {
   lazy val normalizedFileRoots: Map[String, Path] =
     fileRoots.map { case (name, root) =>
@@ -508,7 +510,8 @@ object ResourceTreePolicy {
 }
 
 private final class InMemoryResourceTreeAccess(
-  trees: Map[ResourceTreeReference, Vector[ResourceTreeEntry]]
+  trees: Map[ResourceTreeReference, Vector[ResourceTreeEntry]],
+  querylimits: ResourceTreeQueryLimits
 ) extends ResourceTreeAccess {
   private val _trees = trees
 
@@ -522,18 +525,23 @@ private final class InMemoryResourceTreeAccess(
     }
 
   override def query(query: ResourceTreeQuery): Consequence[ResourceTreeQueryResult] =
-    _trees.get(query.reference) match {
-      case Some(entries) =>
-        ResourceTreeQueryResult.admitC(
-          query,
-          entries.filter(query.selector.matches),
-          visitedDirectoryCount = 0
-        )
-      case None => Consequence.resourceNotFound("configured logical resource tree is not available")
+    _effective_query_c(query).flatMap { effective =>
+      _trees.get(effective.reference) match {
+        case Some(entries) =>
+          ResourceTreeQueryResult.admitC(
+            effective,
+            entries.filter(entry => effective.selector.matches(entry.relativePath)),
+            visitedcount = 0
+          )
+        case None => Consequence.resourceNotFound("configured logical resource tree is not available")
+      }
     }
 
   override def providerMetadata(reference: ResourceTreeReference): ResourceTreeProviderMetadata =
     ResourceTreeProviderMetadata("in-memory", reference.name, _trees.contains(reference))
+
+  private def _effective_query_c(query: ResourceTreeQuery): Consequence[ResourceTreeQuery] =
+    querylimits.tightenC(query.limits).flatMap(query.tightenC)
 }
 
 private final class LocalResourceTreeAccess(
@@ -547,6 +555,12 @@ private final class LocalResourceTreeAccess(
     byteSize: Long
   )
 
+  private final case class _LocalQueryState(
+    entries: Vector[ResourceTreeEntry],
+    totalbytes: Long,
+    visitedcount: Int
+  )
+
   def snapshot(
     reference: ResourceTreeReference,
     limits: ResourceTreeLimits
@@ -556,8 +570,168 @@ private final class LocalResourceTreeAccess(
       case None => Consequence.resourceNotFound("configured logical resource tree is not available")
     }
 
+  override def query(query: ResourceTreeQuery): Consequence[ResourceTreeQueryResult] =
+    _effective_query_c(query).flatMap { effective =>
+      _roots.get(effective.reference.name) match {
+        case Some(root) =>
+          _query_entries_c(root, effective).flatMap { state =>
+            ResourceTreeQueryResult.admitC(
+              effective,
+              state.entries,
+              state.visitedcount
+            )
+          }
+        case None => Consequence.resourceNotFound("configured logical resource tree is not available")
+      }
+    }
+
   override def providerMetadata(reference: ResourceTreeReference): ResourceTreeProviderMetadata =
     ResourceTreeProviderMetadata("local", reference.name, _roots.contains(reference.name))
+
+  private def _effective_query_c(query: ResourceTreeQuery): Consequence[ResourceTreeQuery] =
+    policy.queryLimits.tightenC(query.limits).flatMap(query.tightenC)
+
+  private def _query_entries_c(
+    root: Path,
+    query: ResourceTreeQuery
+  ): Consequence[_LocalQueryState] =
+    if (Files.isSymbolicLink(root))
+      Consequence.resourceUnsupported("configured resource tree root must not be a symbolic link")
+    else if (!Files.isDirectory(root, LinkOption.NOFOLLOW_LINKS))
+      Consequence.resourceNotFound("configured logical resource tree is not available")
+    else if (query.limits.maxVisitedDirectories < 1)
+      Consequence.resourceInvalid("resource tree query exceeds the configured directory visit limit")
+    else
+      _query_walk_c(
+        root,
+        root,
+        query,
+        _LocalQueryState(Vector.empty, totalbytes = 0L, visitedcount = 1)
+      )
+
+  private def _query_walk_c(
+    root: Path,
+    directory: Path,
+    query: ResourceTreeQuery,
+    state: _LocalQueryState
+  ): Consequence[_LocalQueryState] =
+    _children_c(directory).flatMap { paths =>
+      paths.foldLeft(Consequence.success(state)) { (z, path) =>
+        z.flatMap(_query_path_c(root, path, query, _))
+      }
+    }
+
+  private def _query_path_c(
+    root: Path,
+    path: Path,
+    query: ResourceTreeQuery,
+    state: _LocalQueryState
+  ): Consequence[_LocalQueryState] =
+    _relative_path_c(root, path).flatMap { relative =>
+      val matches = query.selector.matches(relative)
+      if (Files.isSymbolicLink(path))
+        if (matches)
+          Consequence.resourceUnsupported("configured resource tree query contains a matching symbolic link")
+        else
+          Consequence.success(state)
+      else if (Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS))
+        if (matches)
+          Consequence.resourceUnsupported("configured resource tree query contains a matching non-regular entry")
+        else if (_depth(relative) >= query.limits.maxDepth)
+          Consequence.resourceInvalid("resource tree query exceeds the configured depth limit")
+        else
+          _enter_query_directory_c(root, path, query, state)
+      else if (!Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS))
+        if (matches)
+          Consequence.resourceUnsupported("configured resource tree query contains a matching non-regular entry")
+        else
+          Consequence.success(state)
+      else if (!matches)
+        Consequence.success(state)
+      else if (_depth(relative) > query.limits.maxDepth)
+        Consequence.resourceInvalid("resource tree query exceeds the configured depth limit")
+      else
+        _read_query_entry_c(path, relative, query, state)
+    }
+
+  private def _enter_query_directory_c(
+    root: Path,
+    directory: Path,
+    query: ResourceTreeQuery,
+    state: _LocalQueryState
+  ): Consequence[_LocalQueryState] =
+    if (state.visitedcount >= query.limits.maxVisitedDirectories)
+      Consequence.resourceInvalid("resource tree query exceeds the configured directory visit limit")
+    else
+      _query_walk_c(
+        root,
+        directory,
+        query,
+        state.copy(visitedcount = state.visitedcount + 1)
+      )
+
+  private def _read_query_entry_c(
+    path: Path,
+    relative: String,
+    query: ResourceTreeQuery,
+    state: _LocalQueryState
+  ): Consequence[_LocalQueryState] =
+    try {
+      val bytesize = Files.size(path)
+      if (bytesize > query.limits.maxEntryBytes)
+        Consequence.resourceInvalid("resource tree query entry exceeds the configured byte limit")
+      else {
+        val entry = ResourceTreeEntry.fromValidated(
+          relative,
+          Files.readAllBytes(path).toVector,
+          Option(Files.probeContentType(path))
+        )
+        _append_query_entry_c(query, state, entry)
+      }
+    } catch {
+      case NonFatal(_) =>
+        Consequence.resourceInvalid("configured resource tree query entry cannot be read")
+    }
+
+  private def _append_query_entry_c(
+    query: ResourceTreeQuery,
+    state: _LocalQueryState,
+    entry: ResourceTreeEntry
+  ): Consequence[_LocalQueryState] =
+    if (state.entries.size >= query.limits.maxEntries)
+      Consequence.resourceInvalid("resource tree query exceeds the configured entry limit")
+    else if (entry.byteSize > query.limits.maxEntryBytes)
+      Consequence.resourceInvalid("resource tree query entry exceeds the configured byte limit")
+    else
+      Try(Math.addExact(state.totalbytes, entry.byteSize)).toOption match {
+        case Some(total) if total <= query.limits.maxTotalBytes =>
+          Consequence.success(state.copy(entries = state.entries :+ entry, totalbytes = total))
+        case _ =>
+          Consequence.resourceInvalid("resource tree query exceeds the configured aggregate byte limit")
+      }
+
+  private def _children_c(directory: Path): Consequence[Vector[Path]] =
+    try {
+      val stream = Files.newDirectoryStream(directory)
+      try {
+        Consequence.success(stream.iterator.asScala.toVector.sortBy(_.getFileName.toString))
+      } finally {
+        stream.close()
+      }
+    } catch {
+      case NonFatal(_) => Consequence.resourceInvalid("configured resource tree query cannot be read")
+    }
+
+  private def _relative_path_c(root: Path, path: Path): Consequence[String] =
+    try {
+      val relative = root.relativize(path).iterator.asScala.map(_.toString).mkString("/")
+      ResourceTreeEntry.relativePathC(relative)
+    } catch {
+      case NonFatal(_) => Consequence.resourceInvalid("configured resource tree query cannot be read")
+    }
+
+  private def _depth(path: String): Int =
+    path.split("/").length
 
   private def _entries_c(
     root: Path,

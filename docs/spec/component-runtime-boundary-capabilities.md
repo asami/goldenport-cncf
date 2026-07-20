@@ -117,6 +117,11 @@ logical relative path. A result MAY expose only the logical tree reference,
 logical relative paths for returned entries, entry bytes, effective limits, and
 safe count/size metadata.
 
+The query is complete within its admitted tree or fails. CNCF MUST NOT silently
+return a partial result when a directory cannot be evaluated because the depth
+or visited-directory limit has been exhausted; it MUST return a structured
+limit failure instead.
+
 The local provider MUST reject a symbolic configured root and MUST NOT follow
 a nested symbolic link. It MUST skip a non-matching symbolic link. A symbolic
 link or non-regular entry that matches the selector MUST return a structured
