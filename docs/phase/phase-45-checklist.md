@@ -6,22 +6,22 @@ phase=[Phase 45 - MCP Client and AI Tool Boundary](phase-45.md)
 ## Stage MC-01 - Client Boundary Specification
 
 Stage Status:
-- Current status: IN_PROGRESS
+- Current status: DONE
 - Owner: CNCF runtime maintainers
 - Update rule: Mark DONE only when the client contract and its ownership,
   transport, and server-publication boundaries are recorded in a normative
   design/specification.
 
-- [ ] Promote the MCP client direction to normative design/specification.
-- [ ] Define the separation between remote MCP client consumption and the
+- [x] Promote the MCP client direction to normative design/specification.
+- [x] Define the separation between remote MCP client consumption and the
   existing CNCF MCP server projection.
-- [ ] Specify the public consumer contract and prohibit caller-controlled
+- [x] Specify the public consumer contract and prohibit caller-controlled
   endpoint, credential, transport, and tool selection.
 
 ## Stage MC-02 - Typed Protocol Model
 
 Stage Status:
-- Current status: OPEN
+- Current status: IN_PROGRESS
 - Owner: CNCF runtime maintainers
 - Update rule: Mark DONE only when all client data crosses the Port as typed
   values and no provider wire format is exposed.

@@ -39,6 +39,11 @@ Long-lived component/runtime-owned service lifecycles are defined in
 operation-scoped Process Execution boundary and from legacy one-shot Docker
 adapters.
 
+Provider-neutral remote MCP tool consumption is defined in
+`docs/design/mcp-client-boundary.md`. It uses runtime-owned Port/ExtensionPoint
+wiring and remains separate from the MCP server projection that publishes CNCF
+Operations.
+
 ## Subsystem Construction
 
 Subsystem construction is performed from resolved Components.

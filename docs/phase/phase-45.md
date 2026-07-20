@@ -49,8 +49,8 @@ not control an MCP endpoint, transport, credential, header, or raw payload.
 
 | ID | Stage | Outcome | Status |
 | --- | --- | --- | --- |
-| MC-01 | Client boundary specification | The client direction, ownership model, server/publication separation, and external contract are fixed. | in progress |
-| MC-02 | Typed protocol model | Server sets, tool catalog, calls, results, limits, and diagnostics are represented without provider wire formats. | planned |
+| MC-01 | Client boundary specification | The client direction, ownership model, server/publication separation, and external contract are fixed. | done |
+| MC-02 | Typed protocol model | Server sets, tool catalog, calls, results, limits, and diagnostics are represented without provider wire formats. | in progress |
 | MC-03 | Port and transport ExtensionPoint | Consumers resolve tools and invoke them through a runtime-owned Port with Streamable HTTP and fake implementations. | planned |
 | MC-04 | Admission and safety | Endpoint, credential-reference, tool, resource-limit, and failure policy is enforced before transport execution. | planned |
 | MC-05 | Observability and lifecycle | CallTree, metrics, and shutdown behavior expose only safe MCP execution facts. | planned |
@@ -78,5 +78,6 @@ provider work is not part of this phase.
 ## References
 
 - [Phase 45 Checklist](phase-45-checklist.md)
-- `docs/notes/`
+- [MCP Client Boundary Design](../design/mcp-client-boundary.md)
+- [MCP Client Boundary Specification](../spec/mcp-client-boundary.md)
 - Textus AI: `textus-ai/docs/phase/phase-6.md`

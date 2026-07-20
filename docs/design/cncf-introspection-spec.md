@@ -78,6 +78,12 @@ MCP tool identity and collision behavior:
 - JSON-RPC `tools/list` and `tools/call` fail closed with internal error
   `-32603` while the catalog has an identity conflict.
 
+This MCP projection is a server/publication surface. Remote MCP catalogs
+consumed through the runtime-owned client boundary are not introspection tools,
+are not added to `meta.mcp`, and are not assigned CNCF
+`<component>.<service>.<operation>` identities. The opposite client boundary is
+defined in `docs/design/mcp-client-boundary.md`.
+
 ## Output Channels
 
 The same projected structure is rendered for multiple channels:

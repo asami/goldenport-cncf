@@ -2593,3 +2593,5 @@ Active in Phase 45.
 - Artifacts:
   - `docs/phase/phase-45.md`
   - `docs/phase/phase-45-checklist.md`
+  - `docs/design/mcp-client-boundary.md`
+  - `docs/spec/mcp-client-boundary.md`
