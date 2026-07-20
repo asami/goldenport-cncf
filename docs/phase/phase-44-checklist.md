@@ -24,11 +24,11 @@ Status: DONE
 
 ## SC-03: Docker Gateway and Fake Evidence
 
-Status: PLANNED
+Status: DONE
 
-- [ ] Define a constrained Docker gateway with no arbitrary argument surface.
-- [ ] Add deterministic fake-gateway executable specifications.
-- [ ] Verify ownership labels and compatibility checks before reuse.
+- [x] Define a constrained Docker gateway with no arbitrary argument surface.
+- [x] Add deterministic fake-gateway executable specifications.
+- [x] Verify ownership labels and compatibility checks before reuse.
 
 ## SC-04: Lifecycle Runtime
 

@@ -2,7 +2,7 @@
 
 Stage Status:
 - Current status: ACTIVE
-- Current step: SC-03 Docker gateway and fake evidence
+- Current step: SC-04 lifecycle runtime
 - Owner: CNCF managed service runtime, with Textus AI and Textus SIE as
   downstream drivers.
 
@@ -106,3 +106,11 @@ models. The in-memory registry provides owner-scoped deterministic keys,
 idempotent exact registration, incompatibility rejection, revision-checked
 updates/removal, and Ready endpoint enforcement. Begin SC-03 with the
 constrained gateway and deterministic fake evidence.
+
+SC-03 completed Jul. 20, 2026. The constrained gateway now accepts only typed
+inspect/create/start/readiness/stop/restart/remove intents, derives
+framework-owned labels and a deterministic definition digest, and distinguishes
+ownership conflicts from incompatible definitions before reuse. The
+deterministic fake gateway provides daemon-free lifecycle evidence and typed
+transition history. Begin SC-04 with external bypass and lifecycle
+orchestration across the registry and gateway.

@@ -4,9 +4,9 @@ Status: normative static specification
 
 ## Scope
 
-This specification fixes the ownership, model, registry, and execution boundary
-for long-lived container-backed services managed by CNCF. Gateway behavior and
-lifecycle transition execution are specified by later Phase 44 work.
+This specification fixes the ownership, model, registry, gateway, and execution
+boundary for long-lived container-backed services managed by CNCF. Lifecycle
+transition orchestration is specified by later Phase 44 work.
 
 ## Terms
 
@@ -125,11 +125,49 @@ service, port conflict, startup failure, readiness timeout, unhealthy service,
 and stale registry revision. Machine classification MUST use taxonomy,
 `Cause.Kind`, and descriptor facets rather than display-message parsing.
 
+### Constrained Gateway (SC3-R1)
+
+`ServiceContainerGateway` MUST expose only typed inspect, create, start,
+readiness-check, stop, restart, and remove intents. Create MUST receive an
+admitted runtime-owned definition and MUST derive infrastructure ownership
+labels from that definition. The gateway MUST NOT accept arbitrary Docker
+arguments, shell text, component-supplied environment maps, host paths, host
+mounts, or raw provider commands.
+
+Gateway inspection MUST project only the provider container identity, admitted
+registry key, safe image identity, declared ports, ownership labels, lifecycle
+status, and credential-free endpoint. Component behavior MUST NOT receive the
+inspection or provider handle directly.
+
+### Ownership Labels And Compatibility (SC3-R2)
+
+Runtime-owned creation MUST apply deterministic framework-owned labels for the
+managed marker, owner kind, owner id, logical service id, and admitted contract
+digest. Component input MUST NOT replace these labels.
+
+Reuse MUST require both matching ownership identity and matching admitted
+contract evidence. Missing or mismatched ownership evidence MUST produce the
+ownership-conflict outcome. Matching ownership with a changed contract, image,
+or declared port set MUST produce the incompatible-existing-service outcome.
+A same-name resource MUST NOT be adopted from its name alone.
+
+The contract digest MUST be deterministic for one admitted definition and MUST
+cover owner/service identity, image, declared ports, readiness, persistence,
+reuse policy, and cleanup policy. The digest is compatibility evidence, not a
+credential or an application identity.
+
+### Deterministic Gateway Evidence (SC3-R3)
+
+Normal executable specifications MUST use a deterministic fake implementation
+of the constrained gateway and MUST NOT require a Docker daemon. The fake MUST
+record typed transitions, produce deterministic instance identity, preserve
+normal structured failures, and implement the same gateway surface expected of
+a Docker-backed implementation.
+
 ## Deferred Contract
 
-The following contract details belong to later Phase 44 slices: gateway
-methods, ownership-label projection, compatibility resolution beyond exact
-definition equality, legal transition execution, readiness transport,
+The following contract details belong to later Phase 44 slices: legal lifecycle
+transition orchestration, Docker transport implementation, readiness transport,
 CallTree projection, metrics, and runtime shutdown wiring.
 
 ## Executable Evidence
@@ -138,6 +176,7 @@ CallTree projection, metrics, and runtime shutdown wiring.
 readiness, persistence, and structured diagnostics.
 `ServiceContainerRegistrySpec` covers owner-scoped keys, idempotent admission,
 definition conflicts, deterministic enumeration, revision checks, Ready
-endpoint requirements, and removal. Later fake-gateway and lifecycle specs
-cover transition execution. Normal executable specifications must not require
-a Docker daemon.
+endpoint requirements, and removal. `ServiceContainerGatewaySpec` covers
+deterministic ownership labels, compatibility refusal, typed fake transitions,
+readiness, and missing-instance behavior. Later lifecycle specs cover
+transition orchestration.

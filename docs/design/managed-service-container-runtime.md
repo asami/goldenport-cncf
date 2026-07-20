@@ -86,6 +86,41 @@ and service id is an incompatibility conflict. Status updates and removal use
 monotonic revisions so concurrent lifecycle decisions cannot silently replace
 one another. A `Ready` registry entry always has a validated endpoint.
 
+## Constrained Gateway
+
+`ServiceContainerGateway` is the only infrastructure lifecycle boundary used
+by the service-container runtime. Its surface is deliberately narrower than a
+Docker client: inspect by admitted registry key, create from an admitted
+runtime-owned definition, and start, readiness-check, stop, restart, or remove
+by safe provider instance identity. It has no generic argument vector,
+environment map, host path, host mount, shell text, or provider-command escape
+hatch.
+
+Create derives framework-owned infrastructure labels from the admitted
+definition. The fixed labels identify the managed marker, owner kind, owner id,
+logical service id, and a deterministic admitted-contract digest. Components
+cannot supply or override those labels. The digest covers the full definition
+that affects lifecycle compatibility; it is evidence for reuse and is not an
+application id or secret.
+
+Inspection is an internal runtime projection rather than a component API. It
+contains safe provider instance identity, registry key, image, declared ports,
+ownership evidence, status, and optional credential-free endpoint. It does not
+project raw provider output or a provider handle.
+
+Compatibility has three results. Exact ownership and definition evidence is
+`Compatible`. Missing or mismatched owner/service evidence is
+`OwnershipConflict`. Matching ownership with a changed contract digest, image,
+or port declaration is `IncompatibleDefinition`. The lifecycle runtime must
+resolve this result before selecting reuse; a matching name alone is never
+evidence of ownership.
+
+`FakeServiceContainerGateway` implements the same typed surface without a
+Docker daemon. It assigns deterministic instance identities, records typed
+transition order, and returns ordinary structured `Consequence` failures. It
+is the default executable-specification driver. A Docker transport
+implementation remains constrained by this contract and cannot broaden it.
+
 ## Lifecycle Ownership
 
 The service registry belongs to the component/runtime lifecycle, not to an
