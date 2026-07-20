@@ -116,6 +116,17 @@ projects an admitted client service; it does not expose the underlying server
 set configuration to operation callers. Credential values never enter the
 provider-neutral catalog or consumer request/response models.
 
+The initial Streamable HTTP provider models authentication as an optional
+runtime-owned Bearer credential reference. Its server configuration retains
+only the opaque `SecretReference`. `RuntimeSecretResolver` is injected into the
+transport provider, remains unavailable through the consumer Port, and resolves
+material at the final HTTP request boundary. Resolution is deliberately not
+performed by the Component and the resulting `Authorization` header never
+crosses into provider-neutral MCP values or diagnostics. Resolver absence,
+unresolved references, invalid UTF-8, and invalid Bearer material are rejected
+before exchange. Other authentication schemes require explicit later policy
+types rather than arbitrary caller-supplied headers.
+
 ## MCP Server Separation
 
 The existing MCP server surface projects MCP-ready CNCF Operations and accepts
@@ -147,6 +158,12 @@ stateful HTTP `404` as session expiry. It discards that session, performs one
 fresh initialization, and replays the interrupted logical request once. It
 also validates the JSON-RPC 2.0 envelope and required tool-result shape before
 projecting any typed value.
+
+When a server declares Bearer authentication, every initialize, notification,
+catalog, tool-call, and session-delete request resolves the same opaque
+credential reference at the HTTP driver boundary. The transport configuration
+cannot embed user-info in the endpoint and the consumer cannot supply or
+override authentication headers.
 
 Every HTTP request carries the server-set timeout and output-byte ceiling. The
 JDK exchange reads response streams through a bounded reader instead of an
@@ -213,4 +230,5 @@ The fake transport is deterministic and does not require a remote MCP service.
 session/protocol headers, JSON and SSE responses, catalog pagination, standard
 typed content blocks, redacted remote-tool failures, endpoint shape admission,
 pre-decode allowlist filtering, session expiry recovery, JSON-RPC/result shape
-validation, and session DELETE through a deterministic HTTP exchange.
+validation, runtime-owned Bearer credential-reference admission, and session
+DELETE through a deterministic HTTP exchange.

@@ -3,8 +3,10 @@ package org.goldenport.cncf.mcp.client
 import java.io.ByteArrayOutputStream
 import java.net.URI
 import java.net.http.{HttpClient, HttpRequest, HttpResponse, HttpTimeoutException}
-import java.nio.charset.StandardCharsets
+import java.nio.ByteBuffer
+import java.nio.charset.{CodingErrorAction, StandardCharsets}
 import java.time.Duration
+import java.util.Arrays
 import java.util.Locale
 import java.util.concurrent.{Callable, ConcurrentHashMap, Executors, TimeUnit, TimeoutException}
 import java.util.concurrent.atomic.AtomicLong
@@ -16,6 +18,7 @@ import io.circe.{Json, JsonObject}
 import io.circe.parser.parse
 import org.goldenport.Consequence
 import org.goldenport.cncf.component.{Component, ExtensionPoint, Port, ServiceContract, VariationSelection}
+import org.goldenport.cncf.config.{RuntimeSecretResolver, SecretMaterial, SecretReference}
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.observation.{Cause, Descriptor}
 
@@ -26,11 +29,30 @@ import org.goldenport.observation.{Cause, Descriptor}
  * @version Jul. 21, 2026
  * @author  ASAMI, Tomoharu
  */
+sealed abstract class McpStreamableHttpCredential private[client] () {
+  private[client] def secretReference: SecretReference
+}
+
+object McpStreamableHttpCredential {
+  def bearerC(reference: SecretReference): Consequence[McpStreamableHttpCredential] =
+    Option(reference).map(x => Consequence.success(new _Bearer(x))).getOrElse(
+      Consequence.argumentMissing("credentialReference")
+    )
+
+  private final class _Bearer(
+    val secretReference: SecretReference
+  ) extends McpStreamableHttpCredential {
+    override def toString: String =
+      "McpStreamableHttpCredential.Bearer(<redacted>)"
+  }
+}
+
 final case class McpStreamableHttpServerConfig private (
   serverId: McpServerId,
   endpoint: URI,
   requestedProtocolVersion: String,
-  supportedProtocolVersions: Set[String]
+  supportedProtocolVersions: Set[String],
+  credential: Option[McpStreamableHttpCredential]
 )
 
 object McpStreamableHttpServerConfig {
@@ -48,9 +70,16 @@ object McpStreamableHttpServerConfig {
     serverid: McpServerId,
     endpoint: String,
     requestedprotocolversion: String = DEFAULT_PROTOCOL_VERSION,
-    supportedprotocolversions: Set[String] = DEFAULT_SUPPORTED_PROTOCOL_VERSIONS
+    supportedprotocolversions: Set[String] = DEFAULT_SUPPORTED_PROTOCOL_VERSIONS,
+    credential: Option[McpStreamableHttpCredential] = None
   ): Consequence[McpStreamableHttpServerConfig] =
-    _uri_c(endpoint).flatMap { uri =>
+    if (credential.exists(_ == null))
+      Consequence.argumentInvalid(
+        "credential",
+        "an admitted MCP Streamable HTTP credential",
+        "null"
+      )
+    else _uri_c(endpoint).flatMap { uri =>
       val requested = Option(requestedprotocolversion).map(_.trim).getOrElse("")
       val supported = supportedprotocolversions.map(_.trim).filter(_.nonEmpty)
       if (!supported.contains(requested))
@@ -65,7 +94,8 @@ object McpStreamableHttpServerConfig {
           serverid,
           uri,
           requested,
-          supported
+          supported,
+          credential
         ))
     }
 
@@ -115,6 +145,7 @@ object McpStreamableHttpServerSetConfig {
 
 final class McpStreamableHttpTransportProvider private (
   private val _configs: Map[McpServerSetId, McpStreamableHttpServerSetConfig],
+  secretresolver: Option[RuntimeSecretResolver],
   exchangefactory: () => McpStreamableHttpExchange
 ) extends ExtensionPoint[McpClientTransport] {
   def supports(
@@ -130,7 +161,7 @@ final class McpStreamableHttpTransportProvider private (
   )(using ExecutionContext): Consequence[McpClientTransport] =
     McpClientTransportPortApi.serverSetId(contract).flatMap(_configs.get) match {
       case Some(config) =>
-        Consequence.success(new McpStreamableHttpTransport(config, exchangefactory()))
+        Consequence.success(new McpStreamableHttpTransport(config, secretresolver, exchangefactory()))
       case None =>
         Consequence.serviceUnavailable(
           "MCP Streamable HTTP transport is not configured",
@@ -157,16 +188,30 @@ object McpStreamableHttpTransportProvider {
   def createC(
     configs: Vector[McpStreamableHttpServerSetConfig]
   ): Consequence[McpStreamableHttpTransportProvider] =
-    _create_c(configs, () => new JavaMcpStreamableHttpExchange(HttpClient.newHttpClient()))
+    _create_c(configs, None, () => new JavaMcpStreamableHttpExchange(HttpClient.newHttpClient()))
+
+  private[cncf] def createC(
+    configs: Vector[McpStreamableHttpServerSetConfig],
+    secretresolver: RuntimeSecretResolver
+  ): Consequence[McpStreamableHttpTransportProvider] =
+    _create_c(configs, Some(secretresolver), () => new JavaMcpStreamableHttpExchange(HttpClient.newHttpClient()))
 
   private[client] def createC(
     configs: Vector[McpStreamableHttpServerSetConfig],
     exchangefactory: () => McpStreamableHttpExchange
   ): Consequence[McpStreamableHttpTransportProvider] =
-    _create_c(configs, exchangefactory)
+    _create_c(configs, None, exchangefactory)
+
+  private[client] def createC(
+    configs: Vector[McpStreamableHttpServerSetConfig],
+    secretresolver: RuntimeSecretResolver,
+    exchangefactory: () => McpStreamableHttpExchange
+  ): Consequence[McpStreamableHttpTransportProvider] =
+    _create_c(configs, Some(secretresolver), exchangefactory)
 
   private def _create_c(
     configs: Vector[McpStreamableHttpServerSetConfig],
+    secretresolver: Option[RuntimeSecretResolver],
     exchangefactory: () => McpStreamableHttpExchange
   ): Consequence[McpStreamableHttpTransportProvider] = {
     val identities = configs.map(_.serverSetId)
@@ -177,8 +222,14 @@ object McpStreamableHttpTransportProvider {
         "unique server-set identities",
         "duplicate"
       )
+    else if (configs.flatMap(_.servers).exists(_.credential.nonEmpty) && secretresolver.isEmpty)
+      Consequence.configurationInvalid("MCP Streamable HTTP credential references require a runtime secret resolver")
     else
-      Consequence.success(new McpStreamableHttpTransportProvider(configs.map(x => x.serverSetId -> x).toMap, exchangefactory))
+      Consequence.success(new McpStreamableHttpTransportProvider(
+        configs.map(x => x.serverSetId -> x).toMap,
+        secretresolver,
+        exchangefactory
+      ))
   }
 }
 
@@ -360,6 +411,7 @@ private final class JavaMcpStreamableHttpExchange(
 
 private final class McpStreamableHttpTransport(
   config: McpStreamableHttpServerSetConfig,
+  secretresolver: Option[RuntimeSecretResolver],
   exchange: McpStreamableHttpExchange
 ) extends McpClientTransport {
   private final case class _SessionId(value: String)
@@ -455,14 +507,14 @@ private final class McpStreamableHttpTransport(
       Option(_sessions.remove(serverconfig.serverId)).foreach { session =>
         val limits = Option(_limits.remove(serverconfig.serverId)).getOrElse(McpClientLimits.default)
         session.sessionId.foreach { sessionid =>
-          exchange.execute(McpStreamableHttpRequest(
+          _execute_server_c(serverconfig, McpStreamableHttpRequest(
             "DELETE",
             serverconfig.endpoint,
             _headers(Some(sessionid), Some(session.protocolVersion), accept = "application/json, text/event-stream"),
             None,
             limits.timeoutMillis,
             limits.maximumOutputBytes
-          ))
+          ), None)
         }
       }
     }
@@ -519,7 +571,7 @@ private final class McpStreamableHttpTransport(
     limits: McpClientLimits,
     enforceinputlimit: Boolean
   )(using ExecutionContext): Consequence[(McpStreamableHttpResponse, Json)] =
-    _execute_c(McpStreamableHttpRequest(
+    _execute_server_c(serverconfig, McpStreamableHttpRequest(
       "POST",
       serverconfig.endpoint,
       _headers(session.sessionId, Some(session.protocolVersion), "application/json, text/event-stream"),
@@ -557,7 +609,7 @@ private final class McpStreamableHttpTransport(
     requestid: Long,
     limits: McpClientLimits
   ): Consequence[(McpStreamableHttpResponse, Json)] =
-    _execute_c(McpStreamableHttpRequest(
+    _execute_server_c(serverconfig, McpStreamableHttpRequest(
       "POST",
       serverconfig.endpoint,
       _headers(sessionid, protocolversion, "application/json, text/event-stream"),
@@ -577,7 +629,7 @@ private final class McpStreamableHttpTransport(
     message: Json,
     limits: McpClientLimits
   ): Consequence[Unit] =
-    _execute_c(McpStreamableHttpRequest(
+    _execute_server_c(serverconfig, McpStreamableHttpRequest(
       "POST",
       serverconfig.endpoint,
       _headers(session.sessionId, Some(session.protocolVersion), "application/json, text/event-stream"),
@@ -589,6 +641,15 @@ private final class McpStreamableHttpTransport(
         Consequence.unit
       else
         _transport_status_failure(response.status)
+    }
+
+  private def _execute_server_c(
+    serverconfig: McpStreamableHttpServerConfig,
+    request: McpStreamableHttpRequest,
+    maximuminputbytes: Option[Long]
+  ): Consequence[McpStreamableHttpResponse] =
+    _authorization_headers_c(serverconfig).flatMap { authorizationheaders =>
+      _execute_c(request.copy(headers = request.headers ++ authorizationheaders), maximuminputbytes)
     }
 
   private def _execute_c(
@@ -615,6 +676,50 @@ private final class McpStreamableHttpTransport(
       else
         Consequence.success(response)
     }
+
+  private def _authorization_headers_c(
+    serverconfig: McpStreamableHttpServerConfig
+  ): Consequence[Map[String, String]] =
+    serverconfig.credential match {
+      case None => Consequence.success(Map.empty)
+      case Some(credential) =>
+        secretresolver match {
+          case Some(resolver) =>
+            resolver.resolveSecret(credential.secretReference) match {
+              case Consequence.Success(material) => _bearer_header_c(material)
+              case _: Consequence.Failure[?] => _credential_failure("credential-reference-unresolved")
+            }
+          case None => _credential_failure("credential-resolver-unavailable")
+        }
+    }
+
+  private def _bearer_header_c(
+    material: SecretMaterial
+  ): Consequence[Map[String, String]] = {
+    val bytes = material._copy_bytes
+    try {
+      val decoder = StandardCharsets.UTF_8.newDecoder()
+        .onMalformedInput(CodingErrorAction.REPORT)
+        .onUnmappableCharacter(CodingErrorAction.REPORT)
+      val token = Try(decoder.decode(ByteBuffer.wrap(bytes)).toString).toOption
+      token.filter(_.matches("[A-Za-z0-9\\-._~+/]+={0,}")) match {
+        case Some(value) => Consequence.success(Map("Authorization" -> s"Bearer $value"))
+        case None => _credential_failure("credential-material-invalid")
+      }
+    } finally {
+      Arrays.fill(bytes, 0.toByte)
+    }
+  }
+
+  private def _credential_failure[A](reason: String): Consequence.Failure[A] =
+    Consequence.serviceUnavailable(
+      "MCP Streamable HTTP credential policy rejected the request",
+      Cause.Kind.Policy,
+      Vector(
+        Descriptor.Facet.Reason(reason),
+        Descriptor.Facet.Policy("mcp-client.credential-reference")
+      )
+    )
 
   private def _limit_failure[A](
     reason: String,

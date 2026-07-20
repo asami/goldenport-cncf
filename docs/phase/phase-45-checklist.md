@@ -48,7 +48,7 @@ Stage Status:
 ## Stage MC-04 - Admission And Safety
 
 Stage Status:
-- Current status: IN_PROGRESS
+- Current status: DONE
 - Owner: CNCF runtime maintainers
 - Update rule: Mark DONE only when policy rejects unsafe inputs before a
   transport call and preserves structured outcomes.
@@ -62,9 +62,10 @@ Verified progress:
   invocations and reject exhaustion before `callTool`.
 - Streamable HTTP applies configured timeout and bounded UTF-8 input/output
   policy before exchange or protocol decoding.
-- Endpoint credential-reference enforcement remains open.
+- Runtime-owned opaque Bearer credential references resolve only at the HTTP
+  request boundary; resolver absence and invalid material fail before exchange.
 
-- [ ] Enforce named server-set, endpoint, credential-reference, and tool
+- [x] Enforce named server-set, endpoint, credential-reference, and tool
   allowlist admission.
 - [x] Enforce timeout, call-count, input-byte, output-byte, and concurrency
   limits.

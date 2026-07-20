@@ -52,14 +52,14 @@ not control an MCP endpoint, transport, credential, header, or raw payload.
 | MC-01 | Client boundary specification | The client direction, ownership model, server/publication separation, and external contract are fixed. | done |
 | MC-02 | Typed protocol model | Server sets, tool catalog, calls, results, limits, and diagnostics are represented without provider wire formats. | done |
 | MC-03 | Port and transport ExtensionPoint | Port/registry, Streamable HTTP, and deterministic fake transport are complete. | done |
-| MC-04 | Admission and safety | Endpoint, credential-reference, tool, resource-limit, and failure policy is enforced before transport execution. | in progress |
+| MC-04 | Admission and safety | Endpoint, credential-reference, tool, resource-limit, and failure policy is enforced before transport execution. | done |
 | MC-05 | Observability and lifecycle | CallTree, metrics, and shutdown behavior expose only safe MCP execution facts. | planned |
 | MC-06 | Consumer evidence and closure | CNCF fake evidence and Textus AI integration prove the boundary without a required remote MCP service. | planned |
 
-MC-04 currently has exact per-server tool allowlisting, recursive typed-input
-admission, invocation-scoped call/concurrency budgets, and transport-enforced
-timeout/input/output byte limits. Endpoint credential-reference policy remains
-in progress.
+MC-04 has exact per-server tool allowlisting, recursive typed-input admission,
+invocation-scoped call/concurrency budgets, transport-enforced
+timeout/input/output byte limits, and runtime-owned opaque Bearer credential
+resolution immediately before HTTP exchange.
 
 ## Acceptance
 

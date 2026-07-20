@@ -161,6 +161,17 @@ Admission MUST occur before transport execution. It MUST cover:
 
 A denied or exhausted request MUST NOT invoke the transport.
 
+The initial Streamable HTTP credential policy supports runtime-owned Bearer
+authentication only. A server transport configuration MAY retain an opaque
+`SecretReference`; it MUST NOT retain credential material. The transport
+provider MUST receive the runtime-internal secret resolver separately from the
+consumer Port and MUST resolve the reference immediately before constructing
+the HTTP request. A configured reference without a resolver, an unresolved
+reference, malformed UTF-8 material, or material outside the admitted Bearer
+token grammar MUST fail before HTTP exchange. Neither the reference locator nor
+the resolved material may enter diagnostics, typed client values, or consumer
+service methods.
+
 The Streamable HTTP transport MUST apply the configured timeout to initialize,
 catalog, and tool-call requests. It MUST reject an oversized serialized
 `tools/call` request before HTTP exchange and MUST bound every response before
@@ -229,4 +240,6 @@ typed content blocks, redacted tool errors, endpoint form validation, and
 session cleanup without a live remote service. It also fixes visible-ASCII
 session admission, one-time session-expiry recovery, JSON-RPC envelope
 validation, required tool-result shape validation, and pre-decode omission of
-unlisted tool metadata.
+unlisted tool metadata. Runtime-owned Bearer credential references, resolver
+requirements, and pre-exchange rejection of unresolved or malformed material
+are fixed without exposing secret locators or values.

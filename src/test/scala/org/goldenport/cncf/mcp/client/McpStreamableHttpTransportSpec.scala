@@ -9,6 +9,7 @@ import scala.collection.mutable.{ArrayBuffer, Queue}
 
 import io.circe.parser.parse
 import org.goldenport.Consequence
+import org.goldenport.cncf.config.{RuntimeSecretResolver, SecretReference}
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.observation.{Cause, Descriptor}
 import org.scalacheck.{Gen, Prop, Test}
@@ -313,6 +314,113 @@ final class McpStreamableHttpTransportSpec extends AnyWordSpec with Matchers wit
       rejected.forall(_.isFaillure) shouldBe true
     }
 
+    "resolve an opaque Bearer credential only at the HTTP request boundary" in {
+      Given("a runtime-owned secret reference, resolver, and authenticated MCP server")
+      given ExecutionContext = ExecutionContext.create()
+      val locator = "test://mcp-private-token"
+      val token = "private-token-123"
+      val reference = SecretReference.fromConfiguration(locator).toOption.get
+      val resolver = RuntimeSecretResolver.inMemory(Vector(reference -> token.getBytes(StandardCharsets.UTF_8)))
+      val fake = new _FakeExchange(Vector(
+        _initialize_response(1),
+        _response(202, "application/json", ""),
+        _json_response(200, _tools_list_response(2, None))
+      ))
+
+      When("the consumer discovers the admitted catalog through the runtime service")
+      val service = _registry(fake, credential = Some(reference -> resolver))
+        .resolve(_server_set_id("research")).toOption.get
+      val result = service.catalog
+
+      Then("the driver authenticates every exchange while the consumer and configuration surfaces remain redacted")
+      result.isSuccess shouldBe true
+      all(fake.requests.map(_.headers.get("Authorization"))) shouldBe Some(s"Bearer $token")
+      service.getClass.getMethods.map(_.getName).toSet should not contain "credential"
+      McpStreamableHttpCredential.bearerC(reference).toOption.get.toString should not include locator
+      McpStreamableHttpCredential.bearerC(reference).toOption.get.toString should not include token
+    }
+
+    "reject unresolved or malformed credentials before HTTP exchange" in {
+      Given("configured credential references with empty, malformed UTF-8, and invalid Bearer material")
+      given ExecutionContext = ExecutionContext.create()
+      val unresolvedreference = SecretReference.fromConfiguration("test://missing-token").toOption.get
+      val invalidutf8reference = SecretReference.fromConfiguration("test://invalid-utf8-token").toOption.get
+      val invalidtokenreference = SecretReference.fromConfiguration("test://invalid-bearer-token").toOption.get
+      val unresolvedfake = new _FakeExchange(Vector.empty)
+      val invalidutf8fake = new _FakeExchange(Vector.empty)
+      val invalidtokenfake = new _FakeExchange(Vector.empty)
+      val unresolvedresolver = RuntimeSecretResolver.inMemory(Vector.empty)
+      val invalidutf8resolver = RuntimeSecretResolver.inMemory(Vector(
+        invalidutf8reference -> Array(0xc3.toByte, 0x28.toByte)
+      ))
+      val invalidtokenresolver = RuntimeSecretResolver.inMemory(Vector(
+        invalidtokenreference -> "invalid token\n".getBytes(StandardCharsets.UTF_8)
+      ))
+
+      When("catalog initialization reaches credential admission")
+      val unresolved = _registry(unresolvedfake, credential = Some(unresolvedreference -> unresolvedresolver))
+        .resolve(_server_set_id("research")).toOption.get.catalog
+      val invalidutf8 = _registry(invalidutf8fake, credential = Some(invalidutf8reference -> invalidutf8resolver))
+        .resolve(_server_set_id("research")).toOption.get.catalog
+      val invalidtoken = _registry(invalidtokenfake, credential = Some(invalidtokenreference -> invalidtokenresolver))
+        .resolve(_server_set_id("research")).toOption.get.catalog
+
+      Then("every failure is structured and neither request nor secret locator crosses the exchange boundary")
+      unresolved.isFaillure shouldBe true
+      invalidutf8.isFaillure shouldBe true
+      invalidtoken.isFaillure shouldBe true
+      _failure_kind(unresolved) shouldBe Some(Cause.Kind.Policy)
+      _failure_facets(unresolved) should contain (Descriptor.Facet.Reason("credential-reference-unresolved"))
+      _failure_facets(invalidutf8) should contain (Descriptor.Facet.Reason("credential-material-invalid"))
+      _failure_facets(invalidtoken) should contain (Descriptor.Facet.Reason("credential-material-invalid"))
+      unresolvedfake.requests shouldBe empty
+      invalidutf8fake.requests shouldBe empty
+      invalidtokenfake.requests shouldBe empty
+      _failure_display(unresolved) should not include "test://missing-token"
+      _failure_display(invalidutf8) should not include "test://invalid-utf8-token"
+      _failure_display(invalidtoken) should not include "invalid token"
+    }
+
+    "require a runtime secret resolver when credential references are configured" in {
+      Given("a Streamable HTTP server config containing only an opaque credential reference")
+      val reference = SecretReference.fromConfiguration("test://mcp-token").toOption.get
+      val config = McpStreamableHttpServerSetConfig.createC(
+        _server_set_id("research"),
+        Vector(McpStreamableHttpServerConfig.createC(
+          _server_id("catalog"),
+          "https://mcp.example.test/service",
+          credential = Some(McpStreamableHttpCredential.bearerC(reference).toOption.get)
+        ).toOption.get)
+      ).toOption.get
+      val fake = new _FakeExchange(Vector.empty)
+
+      When("the runtime constructs a provider without its secret resolver")
+      val result = McpStreamableHttpTransportProvider.createC(Vector(config), () => fake)
+
+      Then("configuration fails before provider installation or HTTP exchange")
+      result.isFaillure shouldBe true
+      fake.requests shouldBe empty
+      _failure_display(result) should not include "test://mcp-token"
+    }
+
+    "reject null credential values at their public construction boundaries" in {
+      Given("null references supplied through Java-compatible public APIs")
+
+      When("the credential factory and server config validate those values")
+      val credential = McpStreamableHttpCredential.bearerC(null)
+      val config = McpStreamableHttpServerConfig.createC(
+        _server_id("catalog"),
+        "https://mcp.example.test/service",
+        credential = Some(null)
+      )
+
+      Then("both boundaries return deterministic argument failures instead of retaining null")
+      credential.isFaillure shouldBe true
+      config.isFaillure shouldBe true
+      _failure_display(credential) should include ("credentialReference")
+      _failure_display(config) should include ("credential")
+    }
+
     "enforce configured timeout and serialized tool input before HTTP exchange" in {
       Given("an initialized catalog with a request smaller than catalog traffic but larger than the tool input budget")
       given ExecutionContext = ExecutionContext.create()
@@ -425,18 +533,25 @@ final class McpStreamableHttpTransportSpec extends AnyWordSpec with Matchers wit
 
   private def _registry(
     fake: _FakeExchange,
-    limits: McpClientLimits = McpClientLimits.default
+    limits: McpClientLimits = McpClientLimits.default,
+    credential: Option[(SecretReference, RuntimeSecretResolver)] = None
   )(using ExecutionContext): McpClientRuntimeRegistry = {
     val serversetid = _server_set_id("research")
     val serverid = _server_id("catalog")
     val transportconfig = McpStreamableHttpServerSetConfig.createC(
       serversetid,
-      Vector(McpStreamableHttpServerConfig.createC(serverid, "https://mcp.example.test/service").toOption.get)
+      Vector(McpStreamableHttpServerConfig.createC(
+        serverid,
+        "https://mcp.example.test/service",
+        credential = credential.map(x => McpStreamableHttpCredential.bearerC(x._1).toOption.get)
+      ).toOption.get)
     ).toOption.get
-    val provider = McpStreamableHttpTransportProvider.createC(
-      Vector(transportconfig),
-      () => fake
-    ).toOption.get
+    val provider = credential match {
+      case Some((_, resolver)) =>
+        McpStreamableHttpTransportProvider.createC(Vector(transportconfig), resolver, () => fake).toOption.get
+      case None =>
+        McpStreamableHttpTransportProvider.createC(Vector(transportconfig), () => fake).toOption.get
+    }
     val serverset = McpClientServerSet.createC(
       serversetid,
       Vector(McpClientServer.createC(serverid, Set(_tool_name("paper.search"), _tool_name("paper.read"))).toOption.get),
@@ -444,6 +559,12 @@ final class McpStreamableHttpTransportSpec extends AnyWordSpec with Matchers wit
     ).toOption.get
     McpClientRuntimeRegistry.createC(Vector(serverset), provider.binding).toOption.get
   }
+
+  private def _failure_display[A](result: Consequence[A]): String =
+    result match {
+      case Consequence.Failure(conclusion) => conclusion.display
+      case _ => fail("expected failure")
+    }
 
   private def _initialize_response(
     id: Long,
