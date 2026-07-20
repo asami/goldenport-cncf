@@ -42,13 +42,13 @@ Status: DONE
 
 ## SC-05: Observability and Safety
 
-Status: PLANNED
+Status: DONE
 
-- [ ] Add payload-safe CallTree and service-container lifecycle metrics.
-- [ ] Redact credentials, environment values, sensitive mounts, and provider
+- [x] Add payload-safe CallTree and service-container lifecycle metrics.
+- [x] Redact credentials, environment values, sensitive mounts, and provider
       payloads.
-- [ ] Keep endpoint projection credential-free.
-- [ ] Wire service-container cleanup into host/subsystem runtime shutdown with
+- [x] Keep endpoint projection credential-free.
+- [x] Wire service-container cleanup into host/subsystem runtime shutdown with
       structured diagnostics.
 
 ## SC-06: Textus AI Driver

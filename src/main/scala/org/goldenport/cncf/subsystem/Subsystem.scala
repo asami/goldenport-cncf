@@ -47,6 +47,8 @@ import org.goldenport.cncf.config.{ResolvedParameter, ResolvedParameters}
 import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.metrics.{ComponentMetricsRegistry, EntityAccessMetricsRegistry}
 import org.goldenport.cncf.spi.{ComponentApiResolver, ResolvedSpiBinding, SpiInvoker, SpiOperationSelector}
+import org.goldenport.cncf.servicecontainer.{ServiceContainerCleanupOutcome, ServiceContainerRuntime}
+import org.goldenport.cncf.observability.ServiceContainerRuntimeObservation
 
 /*
  * @since   Jan.  7, 2026
@@ -105,6 +107,7 @@ final class Subsystem(
   private lazy val _spi_invoker: SpiInvoker = SpiInvoker._create(this)
   private var _resolved_security_wiring: ResolvedSecurityWiring = ResolvedSecurityWiring.empty
   private var _user_notification_forwarding_registered: Boolean = false
+  private var _service_container_runtime: Option[ServiceContainerRuntime] = None
 
   def globalRuntimeContext: GlobalRuntimeContext = {
     val a = _find_global_runtime_context(scopeContext)
@@ -135,8 +138,44 @@ final class Subsystem(
   def descriptor: Option[GenericSubsystemDescriptor] = _descriptor
   def resolvedSecurityWiring: ResolvedSecurityWiring = _resolved_security_wiring
 
-  def shutdown(): Unit =
-    _job_engine.shutdown()
+  def serviceContainerRuntime(using context: ExecutionContext): Option[ServiceContainerRuntime] =
+    _service_container_runtime.map(ServiceContainerRuntimeObservation.observed)
+
+  def installServiceContainerRuntimeC(runtime: ServiceContainerRuntime): Consequence[Unit] = synchronized {
+    _service_container_runtime match {
+      case None =>
+        _service_container_runtime = Some(runtime)
+        Consequence.success(())
+      case Some(current) if current.eq(runtime) =>
+        Consequence.success(())
+      case Some(_) =>
+        Consequence.operationConflict("service-container runtime installation", Vector.empty)
+    }
+  }
+
+  def shutdownC(): Consequence[Vector[ServiceContainerCleanupOutcome]] = {
+    val jobresult =
+      try {
+        _job_engine.shutdown()
+        Consequence.success(())
+      } catch {
+        case e: Throwable => Consequence.Failure(org.goldenport.Conclusion.from(e))
+      }
+    val serviceresult = _service_container_runtime
+      .map(ServiceContainerRuntimeObservation.shutdownC)
+      .getOrElse(Consequence.success(Vector.empty))
+    (jobresult, serviceresult) match {
+      case (Consequence.Success(_), result) => result
+      case (Consequence.Failure(jobfailure), Consequence.Success(_)) =>
+        Consequence.Failure(jobfailure)
+      case (Consequence.Failure(jobfailure), Consequence.Failure(servicefailure)) =>
+        Consequence.Failure(servicefailure ++ jobfailure)
+    }
+  }
+
+  def shutdown(): Unit = {
+    val _ = shutdownC()
+  }
 
   def withDescriptor(descriptor: GenericSubsystemDescriptor): Subsystem = {
     _descriptor = Some(descriptor)

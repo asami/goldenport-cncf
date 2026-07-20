@@ -111,6 +111,7 @@ object RuntimeDashboardMetrics {
   private var _process_execution_events = Vector.empty[Event]
   private var _resource_tree_events = Vector.empty[Event]
   private var _resource_tree_query_events = Vector.empty[Event]
+  private var _service_container_events = Vector.empty[Event]
   private var _payload_externalization_events = Vector.empty[PayloadExternalizationEvent]
   private var _open_telemetry_export_events = Vector.empty[OpenTelemetryExportEvent]
   private var _recent = Vector.empty[RequestEntry]
@@ -124,7 +125,8 @@ object RuntimeDashboardMetrics {
     "spi" -> "SPI",
     "process-execution" -> "Process Execution",
     "resource-tree" -> "Resource Tree",
-    "resource-tree-query" -> "Resource Tree Query"
+    "resource-tree-query" -> "Resource Tree Query",
+    "service-container" -> "Service Container"
   )
 
   def recordHtmlRequest(
@@ -358,6 +360,39 @@ object RuntimeDashboardMetrics {
     )).takeRight(10000)
   }
 
+  def recordServiceContainerLifecycle(
+    operation: String,
+    ownershipmode: Option[String],
+    ownerkind: Option[String],
+    ownerid: Option[String],
+    serviceid: Option[String],
+    cleanuppolicy: Option[String],
+    status: Option[String],
+    error: Boolean,
+    diagnostic: Option[ConclusionDiagnostics.Classification] = None,
+    elapsedmillis: Option[Long] = None
+  ): Unit = synchronized {
+    val cleandiagnostickey = if (error) diagnostic.map(_.diagnosticKey).filter(_.nonEmpty) else None
+    _service_container_events = (_service_container_events :+ Event(
+      observedAt = java.time.Instant.now.toEpochMilli,
+      error = error,
+      diagnosticKey = cleandiagnostickey,
+      diagnosticRecord = if (error) diagnostic.map(_service_container_diagnostic_record) else None,
+      operation = Some(operation).filter(_.nonEmpty),
+      elapsedMillis = elapsedmillis,
+      labels = _clean_labels(Map(
+        "operation" -> operation,
+        "ownership_mode" -> ownershipmode.getOrElse(""),
+        "owner_kind" -> ownerkind.getOrElse(""),
+        "owner_id" -> ownerid.getOrElse(""),
+        "service_id" -> serviceid.getOrElse(""),
+        "cleanup_policy" -> cleanuppolicy.getOrElse(""),
+        "status" -> status.getOrElse(""),
+        "diagnostic_key" -> cleandiagnostickey.getOrElse("")
+      ))
+    )).takeRight(10000)
+  }
+
   def recordDiagnosticPayloadExternalization(
     payloadKind: String,
     status: String,
@@ -547,6 +582,23 @@ object RuntimeDashboardMetrics {
     _diagnostic_records(_resource_tree_query_events)
   }
 
+  def serviceContainerLifecycleSnapshot: Snapshot = synchronized {
+    _snapshot(_service_container_events, Vector.empty)
+  }
+
+  def serviceContainerDiagnosticCounts: Map[String, Long] = synchronized {
+    _service_container_events
+      .filter(_.error)
+      .groupBy(_.diagnosticKey.getOrElse("unknown"))
+      .view
+      .mapValues(_.size.toLong)
+      .toMap
+  }
+
+  def serviceContainerDiagnosticRecords: Map[String, Record] = synchronized {
+    _diagnostic_records(_service_container_events)
+  }
+
   def diagnosticScopes: Vector[DiagnosticScope] = synchronized {
     Vector(
       _diagnostic_scope("authorization", _authorization_events),
@@ -557,7 +609,8 @@ object RuntimeDashboardMetrics {
       _diagnostic_scope("spi", _spi_events),
       _diagnostic_scope("process-execution", _process_execution_events),
       _diagnostic_scope("resource-tree", _resource_tree_events),
-      _diagnostic_scope("resource-tree-query", _resource_tree_query_events)
+      _diagnostic_scope("resource-tree-query", _resource_tree_query_events),
+      _diagnostic_scope("service-container", _service_container_events)
     )
   }
 
@@ -598,6 +651,19 @@ object RuntimeDashboardMetrics {
       .flatMap(e => e.diagnosticKey.map(_ -> e.diagnosticRecord))
       .groupBy(_._1)
       .flatMap { case (key, values) => values.reverse.collectFirst { case (_, Some(record)) => key -> record } }
+
+  private def _service_container_diagnostic_record(
+    diagnostic: ConclusionDiagnostics.Classification
+  ): Record =
+    Record.dataAuto(
+      "diagnosticKey" -> diagnostic.diagnosticKey,
+      "taxonomyCategory" -> diagnostic.taxonomyCategory,
+      "taxonomySymptom" -> diagnostic.taxonomySymptom,
+      "causeKind" -> diagnostic.causeKind,
+      "webStatus" -> diagnostic.webStatus,
+      "statusText" -> diagnostic.statusText,
+      "policy" -> diagnostic.policy.filter(_.startsWith("service-container."))
+    )
 
   private def _diagnostic_scope(
     scope: String,
@@ -677,6 +743,9 @@ object RuntimeDashboardMetrics {
         event.labels ++ _outcome_label(event)
       ),
       _event_points("resource-tree.query", "queries", _resource_tree_query_events, event =>
+        event.labels ++ _outcome_label(event)
+      ),
+      _event_points("service-container.lifecycle", "operations", _service_container_events, event =>
         event.labels ++ _outcome_label(event)
       ),
       _payload_externalization_points,

@@ -210,11 +210,56 @@ be registered as UnitOfWork terminal cleanup. Wiring the entrypoint into the
 host/subsystem shutdown sequence and projecting cleanup diagnostics belong to
 SC5.
 
+### Lifecycle Observability (SC5-R1)
+
+Component-facing access to an installed service-container runtime MUST use the
+ExecutionContext-bound observed runtime. Its CallTree label MUST be
+`service-container:<operation>` with `calltree_kind=service-container`.
+
+CallTree input MAY contain operation, ownership mode, logical owner kind/id,
+logical service id, cleanup policy, and validated safe image identity. Success
+output MAY contain lifecycle status and credential-free endpoint authority.
+Failure output MAY contain only HTTP status and the diagnostic key projected by
+`ConclusionDiagnostics`. It MUST NOT include provider failure display text.
+
+CallTree and lifecycle diagnostics MUST NOT contain endpoint path/query,
+provider instance identity, contract digest, arbitrary provider labels,
+environment values, credentials, host paths or mounts, raw provider output,
+prompts, models, or datasets.
+
+### Lifecycle Metrics (SC5-R2)
+
+The runtime metric scope MUST be `service-container.lifecycle`. Its bounded
+labels are `outcome`, `operation`, `ownership_mode`, `owner_kind`, `owner_id`,
+`service_id`, `cleanup_policy`, `status`, and `diagnostic_key`. Image identity,
+endpoint data, provider instance identity, contract digest, and provider
+payload values MUST NOT be metric labels.
+
+Failures MUST use `ConclusionDiagnostics` for diagnostic aggregation and MUST
+appear in the common diagnostic scope `service-container`. No private failure
+kind, detail code, or display-message parser is permitted. The persisted
+diagnostic projection MUST omit display text and previous-Conclusion records;
+only common classification fields and a framework-owned `service-container.*`
+policy MAY be retained.
+
+### Subsystem Shutdown Integration (SC5-R3)
+
+A Subsystem MAY install one service-container runtime. Reinstalling the same
+runtime MUST be idempotent; replacing it MUST fail as a structured conflict so
+owned resources cannot be orphaned.
+
+Subsystem shutdown MUST first quiesce the JobEngine and then invoke the
+service-container runtime's best-effort cleanup. Failure of either stage MUST
+NOT skip the other stage. If both fail, their Conclusions MUST be combined.
+The structured shutdown result MUST be available through `shutdownC`; the
+legacy Unit-returning shutdown entrypoint MAY discard the value only after the
+lifecycle metric/diagnostic path has observed it.
+
 ## Deferred Contract
 
 The following contract details belong to later Phase 44 slices: Docker
-transport implementation, readiness transport, CallTree projection, metrics,
-and host/subsystem runtime-shutdown wiring.
+transport implementation and readiness transport, plus provider-specific
+consumer integration.
 
 ## Executable Evidence
 
@@ -227,4 +272,6 @@ deterministic ownership labels, compatibility refusal, typed fake transitions,
 readiness, and missing-instance behavior. `ServiceContainerRuntimeSpec` covers
 external bypass, convergent create-or-reuse, RequireExisting refusal, ownership
 refusal, readiness failure state, restart, idempotent stop/remove, and runtime
-cleanup policies.
+cleanup policies. `ServiceContainerObservabilitySpec` covers payload-safe
+CallTree fields, provider failure-text exclusion, bounded runtime metrics,
+Subsystem-owned idempotent cleanup, and runtime replacement refusal.

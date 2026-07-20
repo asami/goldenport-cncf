@@ -142,6 +142,12 @@ object RuntimeMetricsCatalog {
       Vector("outcome", "tree", "provider", "selector", "max_depth", "max_visited_directories", "max_entries", "max_entry_bytes", "max_total_bytes", "visited_directories", "matched_entries", "diagnostic_key")
     ),
     MetricScopeDefinition(
+      "service-container.lifecycle",
+      "Service container lifecycle",
+      "Managed service lifecycle counts, failures, and elapsed time without provider payloads or credentials.",
+      Vector("outcome", "operation", "ownership_mode", "owner_kind", "owner_id", "service_id", "cleanup_policy", "status", "diagnostic_key")
+    ),
+    MetricScopeDefinition(
       "diagnostic-payload.externalization",
       "Diagnostic payload externalization",
       "Diagnostic payload externalization outcomes grouped by payload kind and destination.",

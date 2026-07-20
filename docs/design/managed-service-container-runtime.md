@@ -161,6 +161,41 @@ UnitOfWork resource or terminal callback. The host/subsystem shutdown sequence
 invokes it in the subsequent runtime-integration slice, where cleanup
 diagnostics are also projected.
 
+## Observability Boundary
+
+Subsystems store the raw lifecycle runtime internally but expose only an
+ExecutionContext-bound observed wrapper to component behavior. This keeps
+CallTree attribution in the calling component's execution context while
+leaving shutdown usable outside an ActionCall.
+
+The observed wrapper emits one `service-container:<operation>` CallTree node.
+Inputs are restricted to logical owner/service identity, ownership mode,
+cleanup policy, and validated image identity. Success may add lifecycle status
+and credential-free endpoint authority. Failure adds only status and the common
+`ConclusionDiagnostics` key; provider display text is deliberately omitted.
+
+The corresponding metric scope is `service-container.lifecycle`. Metrics use
+only outcome, operation, ownership mode, logical owner/service identity,
+cleanup policy, status, and common diagnostic key. Image, endpoint, provider
+identity, digest, paths, credentials, and payloads are excluded to keep labels
+bounded and safe. Failures also participate in the common
+`service-container` diagnostic scope. Its stored diagnostic record is a
+restricted re-projection: display text and previous-Conclusion chains are
+omitted, and only framework-owned service-container policy names survive.
+
+## Host Shutdown
+
+A Subsystem admits at most one lifecycle runtime. Reinstalling the identical
+instance is idempotent, while replacement is rejected because it could orphan
+resources owned by the first registry.
+
+Shutdown first quiesces the JobEngine so active tasks cannot race service
+cleanup. It then runs deterministic best-effort service cleanup even when job
+shutdown fails. Both failures are represented with ordinary Conclusions and
+combined when necessary. `shutdownC` exposes this structured result; the
+legacy Unit-returning `shutdown` entrypoint delegates to it after metrics and
+diagnostics have been recorded.
+
 ## Lifecycle Ownership
 
 The service registry belongs to the component/runtime lifecycle, not to an

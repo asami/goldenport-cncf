@@ -2,7 +2,7 @@
 
 Stage Status:
 - Current status: ACTIVE
-- Current step: SC-05 observability, safety, and runtime shutdown
+- Current step: SC-06 Textus AI driver
 - Owner: CNCF managed service runtime, with Textus AI and Textus SIE as
   downstream drivers.
 
@@ -122,3 +122,12 @@ applies Keep/Stop/Remove through a deterministic runtime-owned shutdown
 entrypoint. Readiness failure preserves its structured `Conclusion` while
 moving registry state to Unhealthy. Begin SC-05 with CallTree/metrics,
 payload-safe diagnostics, and host/subsystem shutdown wiring.
+
+SC-05 completed Jul. 20, 2026. Component-facing lifecycle access now records
+payload-safe `service-container:<operation>` CallTree nodes and bounded
+`service-container.lifecycle` metrics using common Conclusion diagnostics.
+Provider failure text, endpoint paths, instance ids, digests, credentials, and
+payloads are excluded. Subsystem shutdown now quiesces jobs before
+best-effort managed-service cleanup, exposes a structured shutdown result, and
+rejects runtime replacement that could orphan owned resources. Begin SC-06
+with the Textus AI Ollama consumer migration.
