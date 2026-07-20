@@ -41,6 +41,30 @@ only an admitted tool identity obtained from that catalog and a typed argument
 value. It does not expose endpoint, header, credential, transport, JSON-RPC,
 HTTP, or provider-native payload controls.
 
+## Typed Client Model
+
+The client model is owned by `org.goldenport.cncf.mcp.client` and is separate
+from the JSON/Circe models used by the MCP server adapter.
+
+- `McpClientServerSet` contains one logical server-set identity, unique logical
+  servers, and positive execution limits.
+- `McpClientCatalog` contains only tools belonging to those servers and orders
+  complete server/tool identities deterministically.
+- `McpInputSchema` represents recursive object, array, scalar, null, and
+  unconstrained input shapes without retaining JSON Schema wire objects.
+- `McpValue` represents recursive provider-neutral invocation/result values.
+- `McpClientCall` carries one admitted tool identity and object arguments.
+- `McpClientResult` carries typed text or structured content. A remote MCP
+  `isError` result is mapped to `Consequence.Failure`, not retained as a
+  successful result flag.
+- `McpClientDiagnostic` carries only a typed diagnostic kind, bounded logical
+  reason, and optional pre-redacted bounded summary.
+
+Arguments and results remain semantic values rather than encoded byte arrays.
+The selected transport measures their encoded size and enforces the server
+set's input/output byte limits before those values cross the transport policy
+boundary.
+
 ## Runtime Ownership
 
 The runtime owns:

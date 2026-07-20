@@ -37,6 +37,34 @@ Operation implementations MAY select among admitted tools as part of trusted
 Component domain logic. They MUST NOT forward application-supplied MCP
 infrastructure selectors or raw tool names directly to the client service.
 
+## Typed Model Contract
+
+Logical server-set and server identities MUST be lowercase, bounded, and
+independent of endpoint or host syntax. Tool identity MUST contain one admitted
+logical server identity and one bounded MCP tool name. Catalog construction
+MUST reject duplicate tool identities and tools belonging to a server outside
+the bound server set. Catalog ordering MUST be deterministic.
+
+Input schemas MUST use the recursive provider-neutral `McpInputSchema` algebra.
+Invocation and result values MUST use the recursive provider-neutral
+`McpValue` algebra. Neither algebra may retain Circe values, JSON-RPC records,
+HTTP entities, or provider-native objects.
+
+Every server set MUST carry positive timeout, call-count, input-byte,
+output-byte, and concurrency limits. Input/output byte limits apply to the
+transport encoding measured at the admission/transport boundary; semantic
+argument and result values MUST NOT carry encoded transport bytes solely for
+limit accounting.
+
+A successful `McpClientResult` MUST contain only typed content. A remote tool
+error MUST become a structured `Consequence.Failure(Conclusion)` and MUST NOT
+be represented as a successful result with an error boolean.
+
+Diagnostic metadata MUST use a typed diagnostic kind and bounded logical
+reason. An optional display summary MUST be explicitly pre-redacted, bounded,
+and free of control characters. It MUST NOT be created directly from raw
+transport or remote error text.
+
 ## Port And Transport Contract
 
 The MCP client requirement MUST resolve through canonical `PortApi` and
@@ -119,3 +147,7 @@ Later Phase 45 stages MUST provide executable specifications for typed catalog
 normalization, admitted invocation, rejection before transport execution,
 bounded limits, structured failures, payload-safe observability, lifecycle
 cleanup, and unchanged MCP server publication behavior.
+
+`McpClientModelSpec` fixes logical identity admission, deterministic catalog
+normalization, duplicate/foreign-tool rejection, recursive schema/value
+representation, positive execution limits, and bounded diagnostic metadata.

@@ -21,21 +21,21 @@ Stage Status:
 ## Stage MC-02 - Typed Protocol Model
 
 Stage Status:
-- Current status: IN_PROGRESS
+- Current status: DONE
 - Owner: CNCF runtime maintainers
 - Update rule: Mark DONE only when all client data crosses the Port as typed
   values and no provider wire format is exposed.
 
-- [ ] Define typed server-set, server, tool, schema, call, result, limit, and
+- [x] Define typed server-set, server, tool, schema, call, result, limit, and
   redacted diagnostic values.
-- [ ] Define structured outcome kinds for admission, transport, protocol, and
+- [x] Define structured outcome kinds for admission, transport, protocol, and
   remote tool failures.
-- [ ] Define bounded identity, argument, result, and diagnostic summary rules.
+- [x] Define bounded identity, argument, result, and diagnostic summary rules.
 
 ## Stage MC-03 - Port And Transport ExtensionPoint
 
 Stage Status:
-- Current status: OPEN
+- Current status: IN_PROGRESS
 - Owner: CNCF runtime maintainers
 - Update rule: Mark DONE only when a consumer uses a runtime-owned Port with
   Streamable HTTP and deterministic fake implementations.
