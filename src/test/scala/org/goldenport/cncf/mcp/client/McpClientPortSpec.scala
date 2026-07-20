@@ -2,7 +2,7 @@ package org.goldenport.cncf.mcp.client
 
 import scala.collection.mutable.ArrayBuffer
 import java.util.concurrent.{CountDownLatch, TimeUnit}
-import java.util.concurrent.atomic.AtomicReference
+import java.util.concurrent.atomic.{AtomicBoolean, AtomicReference}
 
 import org.goldenport.Consequence
 import org.goldenport.cncf.component.{Component, ExtensionPoint, Port, ServiceContract, VariationSelection}
@@ -336,6 +336,98 @@ final class McpClientPortSpec extends AnyWordSpec with Matchers with GivenWhenTh
       calltree.toRecord.print should include ("duration_ms")
       RuntimeDashboardMetrics.mcpClientInvocationSnapshot.summary.cumulative.total shouldBe before + 2L
     }
+
+    "stop admission, drain an interrupted call, and close its transport exactly once" in {
+      Given("one admitted call blocked inside an interruption-aware transport")
+      given context: ExecutionContext = ExecutionContext.create()
+      val tool = _tool("catalog", "paper.search")
+      val serverset = _server_set("lifecycle", "catalog", Set(tool.identity.toolName))
+      val entered = new CountDownLatch(1)
+      val release = new CountDownLatch(1)
+      val fake = new _FakeTransport(Map(_server_id("catalog") -> Vector(tool)), Some(entered -> release))
+      val registry = McpClientRuntimeRegistry.createC(
+        Vector(serverset),
+        _transport_binding(fake, Set(serverset.id))
+      ).toOption.get
+      val service = registry.resolve(serverset.id).toOption.get
+      service.catalog.isSuccess shouldBe true
+      val result = new AtomicReference[Consequence[McpClientResult]]()
+      val worker = new Thread(() => result.set(service.withInvocation(_.invoke(_call(tool.identity, "blocking")))(using context)))
+      worker.start()
+      entered.await(5L, TimeUnit.SECONDS) shouldBe true
+
+      When("the registry closes while the tool call remains in flight")
+      registry.close()
+      registry.close()
+      worker.join(5000L)
+
+      Then("the call leaves the tracked set before one transport close and later admission is rejected")
+      worker.isAlive shouldBe false
+      result.get().isFaillure shouldBe true
+      fake.events.takeRight(2) shouldBe Vector("call-interrupted:catalog/paper.search", "close")
+      fake.closeCount shouldBe 1
+      val bodyexecuted = new AtomicBoolean(false)
+      val rejected = service.withInvocation { _ =>
+        bodyexecuted.set(true)
+        Consequence.unit
+      }
+      rejected.isFaillure shouldBe true
+      bodyexecuted.get() shouldBe false
+      _failure_facets(rejected) should contain (Descriptor.Facet.Policy("mcp-client.lifecycle"))
+      registry.resolve(serverset.id).isFaillure shouldBe true
+      fake.closeCount shouldBe 1
+    }
+
+    "close every server-set transport in normalized order despite an earlier cleanup failure" in {
+      Given("two independently owned transports declared in reverse order with the first close failing")
+      given ExecutionContext = ExecutionContext.create()
+      val closeorder = ArrayBuffer.empty[String]
+      val alpha = _server_set("alpha", "alpha-server")
+      val zeta = _server_set("zeta", "zeta-server")
+      val alphatransport = new _FakeTransport(
+        Map(_server_id("alpha-server") -> Vector.empty),
+        onclose = () => {
+          closeorder.synchronized(closeorder += "alpha")
+          throw new IllegalStateException("expected alpha cleanup failure")
+        }
+      )
+      val zetatransport = new _FakeTransport(
+        Map(_server_id("zeta-server") -> Vector.empty),
+        onclose = () => closeorder.synchronized(closeorder += "zeta")
+      )
+      val registry = McpClientRuntimeRegistry.createC(
+        Vector(zeta, alpha),
+        _transport_binding(Map(alpha.id -> alphatransport, zeta.id -> zetatransport))
+      ).toOption.get
+
+      When("the runtime registry closes")
+      val failure = intercept[IllegalStateException](registry.close())
+
+      Then("the first failure is retained while every transport closes once in normalized order")
+      failure.getMessage shouldBe "expected alpha cleanup failure"
+      closeorder.toVector shouldBe Vector("alpha", "zeta")
+      alphatransport.closeCount shouldBe 1
+      zetatransport.closeCount shouldBe 1
+    }
+
+    "rollback acquired transports when registry assembly fails" in {
+      Given("one acquired alpha transport followed by an unavailable zeta binding")
+      given ExecutionContext = ExecutionContext.create()
+      val alpha = _server_set("alpha", "alpha-server")
+      val zeta = _server_set("zeta", "zeta-server")
+      val alphatransport = new _FakeTransport(Map(_server_id("alpha-server") -> Vector.empty))
+
+      When("registry assembly fails while binding the second normalized server set")
+      val result = McpClientRuntimeRegistry.createC(
+        Vector(zeta, alpha),
+        _transport_binding(Map(alpha.id -> alphatransport))
+      )
+
+      Then("the registry failure is retained and the previously acquired transport is closed")
+      result.isFaillure shouldBe true
+      alphatransport.closeCount shouldBe 1
+      alphatransport.events shouldBe Vector("close")
+    }
   }
 
   private def _transport_binding(
@@ -361,14 +453,45 @@ final class McpClientPortSpec extends AnyWordSpec with Matchers with GivenWhenTh
       variation = McpClientTransportSelectionPoint
     ))
 
+  private def _transport_binding(
+    transports: Map[McpServerSetId, McpClientTransport]
+  ): Component.Binding[McpClientTransportRequirement, McpClientTransport] =
+    Component.Binding(Port(
+      api = McpClientTransportPortApi,
+      spi = Vector(new ExtensionPoint[McpClientTransport] {
+        def supports(
+          contract: ServiceContract[McpClientTransport],
+          variation: VariationSelection
+        )(using ExecutionContext): Boolean =
+          variation == VariationSelection() &&
+            McpClientTransportPortApi.serverSetId(contract).exists(transports.contains)
+
+        def provide(
+          contract: ServiceContract[McpClientTransport],
+          variation: VariationSelection
+        )(using ExecutionContext): Consequence[McpClientTransport] =
+          McpClientTransportPortApi.serverSetId(contract).flatMap(transports.get) match {
+            case Some(transport) => Consequence.success(transport)
+            case None => Consequence.serviceUnavailable("MCP test transport is unavailable")
+          }
+      }),
+      variation = McpClientTransportSelectionPoint
+    ))
+
   private final class _FakeTransport(
     catalogs: Map[McpServerId, Vector[McpClientTool]],
-    blocking: Option[(CountDownLatch, CountDownLatch)] = None
+    blocking: Option[(CountDownLatch, CountDownLatch)] = None,
+    onclose: () => Unit = () => ()
   ) extends McpClientTransport {
     private val _events = ArrayBuffer.empty[String]
+    private var _close_count = 0
 
     def events: Vector[String] = synchronized {
       _events.toVector
+    }
+
+    def closeCount: Int = synchronized {
+      _close_count
     }
 
     def initialize(
@@ -393,21 +516,47 @@ final class McpClientPortSpec extends AnyWordSpec with Matchers with GivenWhenTh
       limits: McpClientLimits
     )(using ExecutionContext): Consequence[McpClientResult] = {
       _record_event(s"call:${call.toolIdentity.print}")
-      blocking.foreach { case (entered, release) =>
+      val interrupted = blocking.flatMap { case (entered, release) =>
         entered.countDown()
-        release.await(5L, TimeUnit.SECONDS)
+        try {
+          release.await(5L, TimeUnit.SECONDS)
+          None
+        }
+        catch {
+          case _: InterruptedException =>
+            _record_event(s"call-interrupted:${call.toolIdentity.print}")
+            Thread.currentThread().interrupt()
+            Some(Consequence.serviceUnavailable(
+              "MCP test transport call interrupted",
+              Cause.Kind.Exhaustion,
+              Vector(
+                Descriptor.Facet.Reason("interrupted"),
+                Descriptor.Facet.Policy("mcp-client.lifecycle")
+              )
+            ))
+        }
       }
-      val query = call.arguments.fields.collectFirst {
-        case (name, McpValue.StringValue(value)) if name.print == "query" => value
-      }.getOrElse("")
-      Consequence.success(McpClientResult(
-        Vector.empty,
-        Some(McpValue.StringValue(s"found:${query}"))
-      ))
+      interrupted.getOrElse {
+        val query = call.arguments.fields.collectFirst {
+          case (name, McpValue.StringValue(value)) if name.print == "query" => value
+        }.getOrElse("")
+        Consequence.success(McpClientResult(
+          Vector.empty,
+          Some(McpValue.StringValue(s"found:${query}"))
+        ))
+      }
     }
 
     private def _record_event(event: String): Unit = synchronized {
       _events += event
+    }
+
+    override def close(): Unit = synchronized {
+      if (_close_count == 0) {
+        _close_count += 1
+        _events += "close"
+        onclose()
+      }
     }
   }
 

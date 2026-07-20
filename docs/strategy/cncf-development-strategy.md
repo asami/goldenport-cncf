@@ -2572,9 +2572,11 @@ MC-04 admission and safety is complete. Exact per-server tool allowlisting,
 recursive typed-input admission, invocation-scoped call/concurrency limits,
 Streamable HTTP timeout/input/output byte enforcement, and runtime-owned opaque
 Bearer credential resolution are enforced before HTTP exchange.
-MC-05 is in progress with caller-context `mcp-client:catalog` and
-`mcp-client:invoke` CallTree spans plus payload-safe `mcp-client.invocation`
-runtime metrics. Deterministic in-flight cleanup and shutdown ordering remain.
+MC-05 is complete with caller-context `mcp-client:catalog` and
+`mcp-client:invoke` CallTree spans, payload-safe `mcp-client.invocation`
+runtime metrics, and deterministic lifecycle cleanup. Registry shutdown stops
+admission, interrupts and drains tracked calls, and closes each transport once
+in normalized server-set order. MC-06 consumer evidence and closure remains.
 
 - Goal: provide a provider-neutral, runtime-owned MCP client boundary so
   consumers can execute only admitted tools without exposing endpoint,

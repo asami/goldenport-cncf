@@ -217,8 +217,27 @@ Transport resources are runtime-owned and participate in runtime shutdown.
 Cancellation and timeout must not leave an in-flight call or transport resource
 untracked.
 
-The runtime registry closes the transports it owns. More precise in-flight
-call, cancellation, and shutdown ordering is fixed by MC-05 lifecycle work.
+The runtime registry owns shutdown and applies this order:
+
+1. close registry admission so no new service can be resolved;
+2. close each server-set service in deterministic server-set order;
+3. close service admission so no new catalog or tool call can begin;
+4. interrupt and drain every operation already admitted by that service; and
+5. close the owned transport exactly once after the service has no in-flight
+   operation.
+
+An admitted transport operation must honor thread interruption and its bounded
+timeout. Service shutdown waits for admitted operations to leave the tracked
+set, and registry shutdown continues cleanup of the remaining server sets if
+one service close fails. Closing a registry or service is idempotent. Calls and
+service resolution attempted after shutdown return structured lifecycle
+failures and do not cross the transport boundary.
+
+Registry assembly owns each transport as soon as its ExtensionPoint binding
+succeeds. If a later server-set binding fails, assembly closes all transports
+already acquired in reverse acquisition order before returning the structured
+binding failure. A failed assembly therefore never transfers a partial registry
+or leaves its earlier transport resources orphaned.
 
 ## Consumer Responsibility
 

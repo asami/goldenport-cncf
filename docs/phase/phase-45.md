@@ -53,7 +53,7 @@ not control an MCP endpoint, transport, credential, header, or raw payload.
 | MC-02 | Typed protocol model | Server sets, tool catalog, calls, results, limits, and diagnostics are represented without provider wire formats. | done |
 | MC-03 | Port and transport ExtensionPoint | Port/registry, Streamable HTTP, and deterministic fake transport are complete. | done |
 | MC-04 | Admission and safety | Endpoint, credential-reference, tool, resource-limit, and failure policy is enforced before transport execution. | done |
-| MC-05 | Observability and lifecycle | CallTree, metrics, and shutdown behavior expose only safe MCP execution facts. | in progress |
+| MC-05 | Observability and lifecycle | CallTree, metrics, and shutdown behavior expose only safe MCP execution facts. | done |
 | MC-06 | Consumer evidence and closure | CNCF fake evidence and Textus AI integration prove the boundary without a required remote MCP service. | planned |
 
 MC-04 has exact per-server tool allowlisting, recursive typed-input admission,
@@ -61,9 +61,11 @@ invocation-scoped call/concurrency budgets, transport-enforced
 timeout/input/output byte limits, and runtime-owned opaque Bearer credential
 resolution immediately before HTTP exchange.
 
-MC-05 now records payload-safe consumer-side catalog and tool invocation spans
-and `mcp-client.invocation` metrics. In-flight cancellation and deterministic
-runtime shutdown ordering remain open.
+MC-05 records payload-safe consumer-side catalog and tool invocation spans and
+`mcp-client.invocation` metrics. Runtime shutdown closes registry admission,
+interrupts and drains tracked in-flight operations, then closes each transport
+once in deterministic server-set order. MC-06 consumer evidence and closure is
+the remaining Phase 45 work.
 
 ## Acceptance
 

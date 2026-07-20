@@ -74,13 +74,13 @@ Verified progress:
 ## Stage MC-05 - Observability And Lifecycle
 
 Stage Status:
-- Current status: IN_PROGRESS
+- Current status: DONE
 - Owner: CNCF runtime maintainers
 - Update rule: Mark DONE only when MCP client observability is payload-safe and
   lifecycle cleanup cannot leak or orphan transport resources.
 
 - [x] Record safe server-set/tool/outcome facts in CallTree and runtime metrics.
-- [ ] Define lifecycle and cleanup behavior for client resources and in-flight
+- [x] Define lifecycle and cleanup behavior for client resources and in-flight
   calls.
 
 ## Stage MC-06 - Consumer Evidence And Closure

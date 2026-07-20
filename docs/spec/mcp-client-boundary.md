@@ -225,6 +225,27 @@ Transport resources MUST be owned by the CNCF runtime and released during
 runtime shutdown. Timeout or cancellation MUST leave no untracked in-flight
 call or transport resource.
 
+Registry shutdown MUST stop new service resolution before closing services.
+Services MUST stop new catalog and invocation admission before cancellation,
+MUST track each admitted operation until its `finally` release, MUST interrupt
+and drain those operations, and MUST close their transport exactly once only
+after the tracked set is empty. Transport implementations MUST respond to
+thread interruption and configured timeout bounds. Registry shutdown MUST
+visit services in normalized server-set order and MUST attempt cleanup of every
+service even when an earlier close fails. Registry and service close operations
+MUST be idempotent.
+
+Service resolution, invocation-scope creation, catalog discovery, and tool
+invocation attempted after the owning boundary starts shutdown MUST fail with
+a normal structured `Conclusion` using `Policy("mcp-client.lifecycle")` and
+MUST NOT invoke the transport.
+
+Registry assembly MUST own every successfully bound transport immediately. If
+a later server-set transport binding fails, it MUST close all transports
+already acquired in reverse acquisition order before returning failure. A
+cleanup failure MUST be combined structurally with the primary binding failure;
+it MUST NOT cause a partial registry to be returned.
+
 Normal executable specifications MUST use a deterministic fake transport and
 MUST NOT require a remote MCP service. Optional live Streamable HTTP evidence
 MUST be explicitly enabled as heavy validation.
@@ -244,7 +265,9 @@ representation, positive execution limits, and bounded diagnostic metadata.
 invocation through deterministic fake transport, caller selector rejection,
 unbound server-set rejection, exact allowlist filtering, recursive input
 admission, stale-tool rejection before `callTool`, and payload-safe caller-side
-CallTree/runtime metric evidence.
+CallTree/runtime metric evidence. It also fixes shutdown admission, cooperative
+in-flight cancellation/drain, deterministic cleanup order, and idempotent
+transport close, plus rollback cleanup when registry assembly fails partway.
 
 `McpStreamableHttpTransportSpec` fixes Streamable HTTP lifecycle order,
 session/protocol headers, JSON/SSE response handling, pagination, all standard
