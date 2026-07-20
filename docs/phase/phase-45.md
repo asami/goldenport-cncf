@@ -19,6 +19,10 @@ not control an MCP endpoint, transport, credential, header, or raw payload.
 - Keep server-set identity, endpoint admission, credential references, tool
   allowlists, timeouts, byte limits, and call limits under operator/runtime
   ownership.
+- Allow operator-selected Codex MCP definitions to be imported as a
+  configuration source, then normalize them into CNCF-owned server sets before
+  admission. Codex configuration is not an execution boundary and is never
+  passed through to a provider.
 - Use deterministic fake transport and redacted diagnostics so normal
   executable specifications do not need a remote MCP service.
 - Keep the existing CNCF MCP server projection separate. It publishes CNCF
@@ -32,6 +36,8 @@ not control an MCP endpoint, transport, credential, header, or raw payload.
 - Streamable HTTP initialization, `tools/list`, and `tools/call` semantics.
 - Named server-set admission, endpoint and credential policy, tool allowlists,
   bounded calls, and redacted CallTree/metric facts.
+- A Codex MCP definition importer for the CNCF-supported subset, with explicit
+  CNCF policy overlays for allowlists, limits, and credential references.
 - Deterministic fake transport and a first Textus AI consumer contract.
 
 ## Boundaries
@@ -40,6 +46,10 @@ not control an MCP endpoint, transport, credential, header, or raw payload.
   filesystem transport.
 - No provider-native remote-MCP pass-through, provider-specific function-call
   serialization, prompt management, or agent scheduling.
+- No direct execution of Codex stdio commands, arguments, environment values,
+  raw headers, embedded credentials, or unrestricted tool publication.
+- Textus AI does not read Codex configuration directly. Import and
+  normalization are CNCF runtime responsibilities.
 - No application caller configuration for endpoint, header, credential,
   transport, server, or tool selection.
 - The CNCF MCP server projector and JSON-RPC adapter remain unchanged unless a
@@ -54,7 +64,8 @@ not control an MCP endpoint, transport, credential, header, or raw payload.
 | MC-03 | Port and transport ExtensionPoint | Port/registry, Streamable HTTP, and deterministic fake transport are complete. | done |
 | MC-04 | Admission and safety | Endpoint, credential-reference, tool, resource-limit, and failure policy is enforced before transport execution. | done |
 | MC-05 | Observability and lifecycle | CallTree, metrics, and shutdown behavior expose only safe MCP execution facts. | done |
-| MC-06 | Consumer evidence and closure | CNCF fake evidence and Textus AI integration prove the boundary without a required remote MCP service. | planned |
+| MC-06 | Codex MCP definition import | Operator-selected Codex MCP definitions become admitted CNCF server sets through a bounded import adapter and CNCF policy overlay. | planned |
+| MC-07 | Consumer evidence and closure | CNCF fake evidence and Textus AI integration prove the boundary without a required remote MCP service. | planned |
 
 MC-04 has exact per-server tool allowlisting, recursive typed-input admission,
 invocation-scoped call/concurrency budgets, transport-enforced
@@ -64,8 +75,9 @@ resolution immediately before HTTP exchange.
 MC-05 records payload-safe consumer-side catalog and tool invocation spans and
 `mcp-client.invocation` metrics. Runtime shutdown closes registry admission,
 interrupts and drains tracked in-flight operations, then closes each transport
-once in deterministic server-set order. MC-06 consumer evidence and closure is
-the remaining Phase 45 work.
+once in deterministic server-set order. MC-06 adds Codex configuration as an
+import source without making Codex a runtime authority. MC-07 consumer evidence
+and closure remains the final Phase 45 work.
 
 ## Acceptance
 
@@ -79,6 +91,9 @@ the remaining Phase 45 work.
 - CallTree and metrics record safe identities, outcome kinds, and bounded
   summaries only.
 - Existing MCP server publication behavior remains unchanged.
+- Supported Codex MCP definitions can be imported deterministically, while
+  unsupported transports and unsafe embedded configuration are rejected before
+  registry creation.
 
 ## Downstream
 

@@ -25,6 +25,63 @@ import org.scalatest.wordspec.AnyWordSpec
  */
 final class McpClientPortSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   "MCP client Port" should {
+    "install a consumer socket atomically from logical server-set requirements" in {
+      Given("a component declaring two logical MCP server sets without transport configuration")
+      given ExecutionContext = ExecutionContext.create()
+      val alpha = _server_set("alpha", "alpha-server")
+      val beta = _server_set("beta", "beta-server")
+      val socket = McpClientSocket.createC(Vector(
+        McpClientRequirement(beta.id),
+        McpClientRequirement(alpha.id)
+      )).toOption.get
+      val component = new Component() {}.withPort(Component.Port.input(socket))
+      val registry = McpClientRuntimeRegistry.createC(
+        Vector(beta, alpha),
+        _transport_binding(Map(
+          alpha.id -> new _FakeTransport(Map(_server_id("alpha-server") -> Vector.empty)),
+          beta.id -> new _FakeTransport(Map(_server_id("beta-server") -> Vector.empty))
+        ))
+      ).toOption.get
+
+      When("runtime assembly installs the component input socket")
+      val result = registry.install(component)
+
+      Then("the socket exposes only both admitted services in normalized logical order")
+      result.toOption shouldBe Some(component)
+      socket.serverSetIds.map(_.print) shouldBe Vector("alpha", "beta")
+      socket.isInstalled shouldBe true
+      socket.service(alpha.id).toOption.map(_.serverSetId) shouldBe Some(alpha.id)
+      socket.service(beta.id).toOption.map(_.serverSetId) shouldBe Some(beta.id)
+    }
+
+    "leave a consumer socket empty when one declared server set is unavailable" in {
+      Given("a component whose complete MCP requirement set cannot be admitted")
+      given ExecutionContext = ExecutionContext.create()
+      val admitted = _server_set("admitted", "catalog")
+      val missing = _server_set_id("missing")
+      val socket = McpClientSocket.createC(Vector(
+        McpClientRequirement(admitted.id),
+        McpClientRequirement(missing)
+      )).toOption.get
+      val component = new Component() {}.withPort(Component.Port.input(socket))
+      val registry = McpClientRuntimeRegistry.createC(
+        Vector(admitted),
+        _transport_binding(
+          new _FakeTransport(Map(_server_id("catalog") -> Vector.empty)),
+          Set(admitted.id)
+        )
+      ).toOption.get
+
+      When("runtime assembly attempts atomic socket installation")
+      val result = registry.install(component)
+
+      Then("installation fails and even the admitted service remains unavailable through the socket")
+      result.isFaillure shouldBe true
+      socket.isInstalled shouldBe false
+      socket.service(admitted.id).isFaillure shouldBe true
+      socket.service(missing).isFaillure shouldBe true
+    }
+
     "install one server-set-bound service and invoke only its typed catalog" in {
       Given("a runtime server set and deterministic fake transport ExtensionPoint")
       given ExecutionContext = ExecutionContext.create()

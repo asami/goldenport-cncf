@@ -83,13 +83,40 @@ Stage Status:
 - [x] Define lifecycle and cleanup behavior for client resources and in-flight
   calls.
 
-## Stage MC-06 - Consumer Evidence And Closure
+## Stage MC-06 - Codex MCP Definition Import
+
+Stage Status:
+- Current status: OPEN
+- Owner: CNCF runtime maintainers
+- Update rule: Mark DONE only after Codex MCP definitions are treated solely as
+  an import source, normalized into the CNCF client model, and subjected to the
+  same CNCF-owned admission policy as native definitions.
+
+- [ ] Define a Codex configuration import adapter that is isolated from the
+  canonical MCP client model and resilient to external schema evolution.
+- [ ] Import only the CNCF-supported Streamable HTTP subset and normalize
+  logical server identity and endpoint configuration deterministically.
+- [ ] Require CNCF-owned server-set, tool allowlist, limit, and credential
+  reference policy overlays before registry activation.
+- [ ] Reject stdio command/argument/environment definitions, raw headers,
+  embedded credentials, unsupported transports, and unrestricted tool
+  publication.
+- [ ] Prove that Textus AI receives only the normalized admitted Port service
+  and never reads or forwards Codex MCP configuration directly.
+
+## Stage MC-07 - Consumer Evidence And Closure
 
 Stage Status:
 - Current status: OPEN
 - Owner: CNCF runtime maintainers
 - Update rule: Close only after CNCF fake evidence and a Textus AI consumer
   prove the contract without requiring a live remote MCP service.
+
+Verified progress:
+- A consumer can declare only logical server-set requirements through an
+  `McpClientSocket` input Port. Runtime registry installation resolves the
+  complete set atomically, so unavailable policy cannot expose a partial MCP
+  service surface.
 
 - [ ] Verify discovery, invocation, admission, limit, and diagnostic behavior
   through deterministic fake transport specifications.

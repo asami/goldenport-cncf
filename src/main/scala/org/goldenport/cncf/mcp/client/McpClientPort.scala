@@ -18,6 +18,63 @@ final case class McpClientRequirement(
   serverSetId: McpServerSetId
 )
 
+/** Consumer input socket populated atomically by runtime assembly. */
+final class McpClientSocket private (
+  val requirements: Vector[McpClientRequirement]
+) {
+  private val _monitor = new Object()
+  private var _services = Map.empty[McpServerSetId, McpClientService]
+
+  def serverSetIds: Vector[McpServerSetId] =
+    requirements.map(_.serverSetId)
+
+  def isInstalled: Boolean =
+    _monitor.synchronized {
+      _services.size == requirements.size
+    }
+
+  def service(serversetid: McpServerSetId): Consequence[McpClientService] =
+    _monitor.synchronized {
+      _services.get(serversetid) match {
+        case Some(service) => Consequence.success(service)
+        case None => Consequence.serviceUnavailable(
+          s"MCP client service is not installed: ${serversetid.print}"
+        )
+      }
+    }
+
+  private[client] def install(
+    services: Map[McpServerSetId, McpClientService]
+  ): Unit =
+    _monitor.synchronized {
+      _services = services
+    }
+}
+
+object McpClientSocket {
+  def createC(
+    requirements: Vector[McpClientRequirement]
+  ): Consequence[McpClientSocket] = {
+    val normalized = requirements.sortBy(_.serverSetId.print)
+    val identities = normalized.map(_.serverSetId)
+    if (normalized.isEmpty)
+      Consequence.argumentInvalid(
+        "requirements",
+        "one or more MCP client server-set requirements",
+        "empty"
+      )
+    else if (identities.distinct.size != identities.size)
+      Consequence.argumentPolicyViolation(
+        "requirements",
+        "mcp-client.socket",
+        "unique server-set identities",
+        "duplicate"
+      )
+    else
+      Consequence.success(new McpClientSocket(normalized))
+  }
+}
+
 /** Provider-neutral service installed in a consumer Component.Port. */
 abstract class McpClientService {
   def serverSetId: McpServerSetId
@@ -174,6 +231,20 @@ final class McpClientRuntimeRegistry private (
       variation = McpClientSelectionPoint
     ))
 
+  /** Installs every MCP input socket after resolving its complete requirement set. */
+  def install(component: Component): Consequence[Component] = {
+    val sockets = component.port.inputEntries.collect {
+      case socket: McpClientSocket => socket
+    }
+    val requirements = sockets.flatMap(_.requirements).distinct
+    _resolve_services_c(requirements).map { services =>
+      sockets.foreach { socket =>
+        socket.install(socket.serverSetIds.map(id => id -> services(id)).toMap)
+      }
+      component
+    }
+  }
+
   def close(): Unit = {
     val services = _lifecycle_monitor.synchronized {
       if (_closed)
@@ -199,6 +270,17 @@ final class McpClientRuntimeRegistry private (
   private def _is_open_contract(contract: ServiceContract[McpClientService]): Boolean =
     _lifecycle_monitor.synchronized {
       !_closed && McpClientPortApi.serverSetId(contract).exists(_services.contains)
+    }
+
+  private def _resolve_services_c(
+    requirements: Vector[McpClientRequirement]
+  ): Consequence[Map[McpServerSetId, McpClientService]] =
+    requirements.foldLeft(Consequence.success(Map.empty[McpServerSetId, McpClientService])) {
+      case (z, requirement) =>
+        for {
+          services <- z
+          service <- resolve(requirement.serverSetId)
+        } yield services.updated(requirement.serverSetId, service)
     }
 
   private def _lifecycle_failure[A](reason: String): Consequence.Failure[A] =

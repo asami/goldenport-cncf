@@ -2576,7 +2576,11 @@ MC-05 is complete with caller-context `mcp-client:catalog` and
 `mcp-client:invoke` CallTree spans, payload-safe `mcp-client.invocation`
 runtime metrics, and deterministic lifecycle cleanup. Registry shutdown stops
 admission, interrupts and drains tracked calls, and closes each transport once
-in normalized server-set order. MC-06 consumer evidence and closure remains.
+in normalized server-set order. MC-06 imports an operator-selected, supported
+subset of Codex MCP definitions into CNCF-owned server sets; Codex configuration
+remains an input format rather than an execution or policy authority. CNCF
+policy overlays still own allowlists, limits, credential references, and
+transport admission. MC-07 consumer evidence and closure remains.
 
 - Goal: provide a provider-neutral, runtime-owned MCP client boundary so
   consumers can execute only admitted tools without exposing endpoint,

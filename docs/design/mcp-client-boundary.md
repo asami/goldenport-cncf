@@ -47,6 +47,14 @@ ExtensionPoint behind that contract. It installs `McpClientService` in the
 consumer `Component.Port`; neither the application request nor a caller-side
 variation can select an infrastructure provider or transport.
 
+A consumer declares the logical server sets it needs with an
+`McpClientSocket` in its input Port. Runtime assembly asks the registry to
+install that socket after server-set and transport admission are complete. The
+registry resolves the complete requirement set before mutating the socket, so
+an unavailable server set cannot leave a consumer with a partial catalog
+surface. The socket is the consumer-facing holder; it contains no endpoint,
+credential, transport, or protocol configuration.
+
 Transport selection is a separate canonical Port binding using
 `McpClientTransportPortApi`. Runtime assembly resolves that binding before it
 creates the client registry. The resulting `McpClientTransport` exposes only

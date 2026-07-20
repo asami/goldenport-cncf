@@ -16,6 +16,13 @@ server, server set, credential, header, tool allowlist, or raw protocol payload.
 A consumer Component MUST receive its MCP client service through a resolved
 `Component.Port`.
 
+A consumer Component MUST declare its logical server-set requirements through
+an `McpClientSocket` installed as a `Component.Port` input. Runtime assembly
+MUST resolve every declared requirement through the runtime-owned registry
+before installing any service in that socket. If any requirement is unavailable,
+socket installation MUST fail atomically and MUST NOT leave a partially
+installed service set.
+
 The resolved service MUST be bound to one admitted server-set policy. The
 service MUST NOT expose endpoint, credential, header, transport, JSON-RPC, or
 HTTP configuration through its public consumer contract.
@@ -123,6 +130,12 @@ runtime-owned `McpClientService`. `McpClientRuntimeRegistry` MUST resolve that
 contract through a canonical ExtensionPoint and MUST reject an unregistered
 server set. Caller-supplied `VariationSelection` infrastructure fields MUST NOT
 select or replace an MCP provider or transport.
+
+`McpClientSocket` MUST expose only its declared logical server-set identities
+and the services installed for those identities. It MUST NOT expose or accept
+endpoint, credential, header, transport, provider-wire, or caller variation
+configuration. A service lookup before successful runtime installation MUST
+fail structurally.
 
 Transport selection MUST use the separate `McpClientTransportPortApi` and
 canonical Port/ExtensionPoint wiring before the runtime registry is created.
