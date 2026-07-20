@@ -1,5 +1,6 @@
 package org.goldenport.cncf.mcp.client
 
+import org.goldenport.cncf.observability.ConclusionDiagnostics
 import org.scalacheck.{Gen, Prop, Test}
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
@@ -40,7 +41,10 @@ final class McpClientModelSpec extends AnyWordSpec with Matchers with GivenWhenT
       val beta = _server_id("beta")
       val serverset = McpClientServerSet.createC(
         _server_set_id("research"),
-        Vector(McpClientServer(beta), McpClientServer(alpha))
+        Vector(
+          McpClientServer.createC(beta, Set(_tool_name("search.web"))).toOption.get,
+          McpClientServer.createC(alpha, Set(_tool_name("library.lookup"))).toOption.get
+        )
       ).toOption.get
       val tools = Vector(
         _tool(beta, "search.web"),
@@ -62,7 +66,7 @@ final class McpClientModelSpec extends AnyWordSpec with Matchers with GivenWhenT
       val foreign = _server_id("foreign")
       val serverset = McpClientServerSet.createC(
         _server_set_id("safe"),
-        Vector(McpClientServer(admitted))
+        Vector(McpClientServer.createC(admitted, Set(_tool_name("catalog.read"))).toOption.get)
       ).toOption.get
       val tool = _tool(admitted, "catalog.read")
 
@@ -102,6 +106,54 @@ final class McpClientModelSpec extends AnyWordSpec with Matchers with GivenWhenT
       schema.toOption.map(_.kind) shouldBe Some(McpValueKind.ObjectValue)
       call.toOption.map(_.arguments.fields.map(_._1.print)) shouldBe Some(Vector("query", "tags"))
       call.toOption.flatMap(_.arguments.get(queryname)).map(_.kind) shouldBe Some(McpValueKind.StringValue)
+    }
+
+    "validate recursive object and array values with deterministic JSON Pointer diagnostics" in {
+      Given("a nested schema whose field name requires JSON Pointer escaping")
+      val profilename = _field_name("profile")
+      val scoresname = _field_name("scores/total~raw")
+      val schema = McpInputSchema.objectC(Vector(
+        McpInputField.createC(
+          profilename,
+          McpInputSchema.objectC(Vector(
+            McpInputField.createC(
+              scoresname,
+              McpInputSchema.array(McpInputSchema.NumberValue),
+              required = true
+            ).toOption.get
+          )).toOption.get,
+          required = true
+        ).toOption.get
+      )).toOption.get
+      val tool = McpClientTool.createC(
+        McpToolIdentity(_server_id("catalog"), _tool_name("score.validate")),
+        schema
+      ).toOption.get
+      val numbers = Gen.listOf(Gen.chooseNum(-100000, 100000))
+      val property = Prop.forAll(numbers) { values =>
+        val arguments = _nested_arguments(
+          profilename,
+          scoresname,
+          values.map(x => McpValue.IntegerValue(x)).toVector
+        )
+        tool.validateArgumentsC(arguments).isSuccess
+      }
+
+      When("generated numeric arrays and one invalid nested item are validated")
+      val checked = Test.check(Test.Parameters.default.withMinSuccessfulTests(64), property)
+      val invalid = tool.validateArgumentsC(_nested_arguments(
+        profilename,
+        scoresname,
+        Vector(McpValue.IntegerValue(1), McpValue.StringValue("invalid"))
+      ))
+
+      Then("all generated values pass and the failure identifies one unambiguous nested path")
+      checked.passed shouldBe true
+      val diagnosticpath = invalid match {
+        case org.goldenport.Consequence.Failure(conclusion) => ConclusionDiagnostics.classify(conclusion).fieldPath
+        case _ => None
+      }
+      diagnosticpath shouldBe Some("/arguments/profile/scores~1total~0raw/1")
     }
 
     "preserve bounded JSON property names instead of imposing identifier syntax" in {
@@ -194,4 +246,15 @@ final class McpClientModelSpec extends AnyWordSpec with Matchers with GivenWhenT
       McpToolIdentity(serverid, _tool_name(name)),
       McpInputSchema.objectC(Vector.empty).toOption.get
     ).toOption.get
+
+  private def _nested_arguments(
+    profilename: McpFieldName,
+    scoresname: McpFieldName,
+    values: Vector[McpValue]
+  ): McpValue.ObjectValue =
+    McpValue.objectC(Vector(
+      profilename -> McpValue.objectC(Vector(
+        scoresname -> McpValue.ArrayValue(values)
+      )).toOption.get
+    )).toOption.get
 }

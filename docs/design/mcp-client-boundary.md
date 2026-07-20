@@ -61,6 +61,9 @@ from the JSON/Circe models used by the MCP server adapter.
 
 - `McpClientServerSet` contains one logical server-set identity, unique logical
   servers, and positive execution limits.
+- Each logical server retains a deterministic exact tool-name allowlist. The
+  Streamable HTTP transport parses only the remote tool name before admission;
+  schema and display metadata are decoded only for admitted names.
 - `McpClientCatalog` contains only tools belonging to those servers and orders
   complete server/tool identities deterministically.
 - `McpInputSchema` represents recursive object, array, scalar, null, and
@@ -70,6 +73,9 @@ from the JSON/Circe models used by the MCP server adapter.
   than language identifiers, while titles and descriptions admit ordinary
   multiline text whitespace.
 - `McpClientCall` carries one admitted tool identity and object arguments.
+- Recursive typed input validation runs before `callTool`. Nested diagnostics
+  use escaped JSON Pointer paths rooted at `/arguments`, so arbitrary JSON keys
+  remain unambiguous.
 - `McpClientResult` carries typed text or structured content. A remote MCP
   `isError` result is mapped to `Consequence.Failure`, not retained as a
   successful result flag.
@@ -184,12 +190,12 @@ consumer. They are not MCP transport responsibilities.
 
 `McpClientPortSpec` fixes canonical Port installation, server-set-bound catalog
 discovery and invocation, rejection of caller infrastructure selection,
-rejection of an unbound server set, and stale-tool rejection before the fake
-transport call boundary. The fake transport is deterministic and does not
-require a remote MCP service.
+rejection of an unbound server set, exact allowlist filtering, recursive input
+validation, and stale-tool rejection before the fake transport call boundary.
+The fake transport is deterministic and does not require a remote MCP service.
 
 `McpStreamableHttpTransportSpec` fixes initialization and notification order,
 session/protocol headers, JSON and SSE responses, catalog pagination, standard
 typed content blocks, redacted remote-tool failures, endpoint shape admission,
-session expiry recovery, JSON-RPC/result shape validation, and session DELETE
-through a deterministic HTTP exchange.
+pre-decode allowlist filtering, session expiry recovery, JSON-RPC/result shape
+validation, and session DELETE through a deterministic HTTP exchange.

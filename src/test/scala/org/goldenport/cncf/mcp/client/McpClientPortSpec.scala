@@ -105,6 +105,64 @@ final class McpClientPortSpec extends AnyWordSpec with Matchers with GivenWhenTh
       result.isFaillure shouldBe true
       fake.events.toVector shouldBe Vector("initialize:catalog", "list:catalog")
     }
+
+    "publish and invoke only tools named by the runtime allowlist" in {
+      Given("one server reporting one admitted and one unlisted tool")
+      given ExecutionContext = ExecutionContext.create()
+      val admitted = _tool("catalog", "paper.search")
+      val denied = _tool("catalog", "paper.delete")
+      val serverset = _server_set("research", "catalog", Set(admitted.identity.toolName))
+      val fake = new _FakeTransport(Map(_server_id("catalog") -> Vector(denied, admitted)))
+      val registry = McpClientRuntimeRegistry.createC(
+        Vector(serverset),
+        _transport_binding(fake, Set(serverset.id))
+      ).toOption.get
+      val service = registry.resolve(serverset.id).toOption.get
+
+      When("the consumer discovers the catalog and attempts the unlisted identity")
+      val catalog = service.catalog
+      val result = service.invoke(_call(denied.identity, "paper"))
+
+      Then("only the exact admitted identity is visible and denial occurs before callTool")
+      catalog.toOption.map(_.tools.map(_.identity)) shouldBe Some(Vector(admitted.identity))
+      result.isFaillure shouldBe true
+      fake.events.toVector shouldBe Vector("initialize:catalog", "list:catalog")
+    }
+
+    "validate required declared input fields before callTool" in {
+      Given("an admitted tool requiring a string query and rejecting additional fields")
+      given ExecutionContext = ExecutionContext.create()
+      val tool = _tool("catalog", "paper.search")
+      val serverset = _server_set("research", "catalog", Set(tool.identity.toolName))
+      val fake = new _FakeTransport(Map(_server_id("catalog") -> Vector(tool)))
+      val registry = McpClientRuntimeRegistry.createC(
+        Vector(serverset),
+        _transport_binding(fake, Set(serverset.id))
+      ).toOption.get
+      val service = registry.resolve(serverset.id).toOption.get
+      val missing = McpClientCall.createC(
+        tool.identity,
+        McpValue.objectC(Vector.empty).toOption.get
+      ).toOption.get
+      val wrongtype = McpClientCall.createC(
+        tool.identity,
+        McpValue.objectC(Vector(_field_name("query") -> McpValue.IntegerValue(1))).toOption.get
+      ).toOption.get
+      val additional = McpClientCall.createC(
+        tool.identity,
+        McpValue.objectC(Vector(
+          _field_name("query") -> McpValue.StringValue("paper"),
+          _field_name("rawEndpoint") -> McpValue.StringValue("https://foreign.example")
+        )).toOption.get
+      ).toOption.get
+
+      When("missing wrong-kind and additional inputs are invoked")
+      val results = Vector(missing, wrongtype, additional).map(service.invoke)
+
+      Then("each fails structurally before the transport call boundary")
+      results.forall(_.isFaillure) shouldBe true
+      fake.events.toVector shouldBe Vector("initialize:catalog", "list:catalog")
+    }
   }
 
   private def _transport_binding(
@@ -160,10 +218,14 @@ final class McpClientPortSpec extends AnyWordSpec with Matchers with GivenWhenTh
     }
   }
 
-  private def _server_set(name: String, server: String): McpClientServerSet =
+  private def _server_set(
+    name: String,
+    server: String,
+    admittedtools: Set[McpToolName] = Set(_tool_name("paper.search"))
+  ): McpClientServerSet =
     McpClientServerSet.createC(
       _server_set_id(name),
-      Vector(McpClientServer(_server_id(server)))
+      Vector(McpClientServer.createC(_server_id(server), admittedtools).toOption.get)
     ).toOption.get
 
   private def _server_set_id(value: String): McpServerSetId =

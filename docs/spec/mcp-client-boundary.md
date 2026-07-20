@@ -50,6 +50,16 @@ Invocation and result values MUST use the recursive provider-neutral
 `McpValue` algebra. Neither algebra may retain Circe values, JSON-RPC records,
 HTTP entities, or provider-native objects.
 
+Each configured server MUST carry an exact, normalized tool-name allowlist.
+Catalog discovery MUST omit every unlisted tool before decoding its schema or
+display metadata. An unlisted tool therefore MUST NOT become visible and its
+malformed non-identity metadata MUST NOT deny admitted catalog entries.
+
+An admitted invocation MUST validate required fields, additional-field policy,
+recursive object/array shape, and scalar kinds against the admitted typed input
+schema before `callTool`. Validation diagnostics MUST identify nested values
+with escaped JSON Pointer field paths rooted at `/arguments`.
+
 Every server set MUST carry positive timeout, call-count, input-byte,
 output-byte, and concurrency limits. Input/output byte limits apply to the
 transport encoding measured at the admission/transport boundary; semantic
@@ -193,11 +203,13 @@ representation, positive execution limits, and bounded diagnostic metadata.
 
 `McpClientPortSpec` fixes runtime-owned Port installation, typed discovery and
 invocation through deterministic fake transport, caller selector rejection,
-unbound server-set rejection, and stale-tool rejection before `callTool`.
+unbound server-set rejection, exact allowlist filtering, recursive input
+admission, and stale-tool rejection before `callTool`.
 
 `McpStreamableHttpTransportSpec` fixes Streamable HTTP lifecycle order,
 session/protocol headers, JSON/SSE response handling, pagination, all standard
 typed content blocks, redacted tool errors, endpoint form validation, and
 session cleanup without a live remote service. It also fixes visible-ASCII
 session admission, one-time session-expiry recovery, JSON-RPC envelope
-validation, and required tool-result shape validation.
+validation, required tool-result shape validation, and pre-decode omission of
+unlisted tool metadata.

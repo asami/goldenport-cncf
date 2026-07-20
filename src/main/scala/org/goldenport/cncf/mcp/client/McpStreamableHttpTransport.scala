@@ -371,11 +371,12 @@ private final class McpStreamableHttpTransport(
         ).flatMap { case (_, result) =>
           result.hcursor.downField("tools").focus.flatMap(_.asArray) match {
             case Some(values) =>
-              _traverse(values.toVector)(_tool_c(server.id, _)).flatMap { tools =>
+              _traverse(values.toVector)(_admitted_tool_c(server, _)).flatMap { tools =>
+                val admittedtools = tools.flatten
                 val next = result.hcursor.get[String]("nextCursor").toOption.filter(_.nonEmpty)
                 next match {
-                  case Some(value) => _list_tools(serverconfig, server, Some(value), pages + 1, accumulator ++ tools)
-                  case None => Consequence.success(accumulator ++ tools)
+                  case Some(value) => _list_tools(serverconfig, server, Some(value), pages + 1, accumulator ++ admittedtools)
+                  case None => Consequence.success(accumulator ++ admittedtools)
                 }
               }
             case None => _protocol_failure("tools-list-missing")
@@ -514,14 +515,28 @@ private final class McpStreamableHttpTransport(
     events.result()
   }
 
-  private def _tool_c(
-    serverid: McpServerId,
+  private def _admitted_tool_c(
+    server: McpClientServer,
     value: Json
-  ): Consequence[McpClientTool] = {
+  ): Consequence[Option[McpClientTool]] = {
     val cursor = value.hcursor
     for {
       namevalue <- cursor.get[String]("name").fold(_ => _protocol_failure("tool-name"), Consequence.success)
       name <- McpToolName.parseC(namevalue)
+      tool <- if (server.admits(name))
+        _tool_c(server.id, name, value).map(Some(_))
+      else
+        Consequence.success(None)
+    } yield tool
+  }
+
+  private def _tool_c(
+    serverid: McpServerId,
+    name: McpToolName,
+    value: Json
+  ): Consequence[McpClientTool] = {
+    val cursor = value.hcursor
+    for {
       schemajson <- cursor.downField("inputSchema").focus.map(Consequence.success).getOrElse(_protocol_failure("tool-input-schema"))
       schema <- _schema_c(schemajson)
       title <- _display_text_option_c(cursor.get[String]("title").toOption)

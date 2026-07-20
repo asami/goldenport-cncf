@@ -53,6 +53,13 @@ Stage Status:
 - Update rule: Mark DONE only when policy rejects unsafe inputs before a
   transport call and preserves structured outcomes.
 
+Verified progress:
+- Exact per-server tool allowlists filter unlisted wire entries before metadata
+  decoding and before invocation.
+- Recursive required/type/additional-field input admission runs before
+  `callTool`, with deterministic JSON Pointer diagnostics.
+- Endpoint credential-reference and resource-limit enforcement remain open.
+
 - [ ] Enforce named server-set, endpoint, credential-reference, and tool
   allowlist admission.
 - [ ] Enforce timeout, call-count, input-byte, output-byte, and concurrency

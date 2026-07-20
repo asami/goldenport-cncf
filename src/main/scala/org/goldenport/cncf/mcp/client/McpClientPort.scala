@@ -212,10 +212,12 @@ final class DefaultMcpClientService private[client] (
   def invoke(call: McpClientCall)(using ExecutionContext): Consequence[McpClientResult] =
     catalog.flatMap { current =>
       current.tool(call.toolIdentity) match {
-        case Some(_) =>
-          serverset.servers.find(_.id == call.toolIdentity.serverId) match {
-            case Some(server) => transport.callTool(server, call)
-            case None => Consequence.operationNotFound(s"MCP server not admitted: ${call.toolIdentity.serverId.print}")
+        case Some(tool) =>
+          tool.validateArgumentsC(call.arguments).flatMap { _ =>
+            serverset.servers.find(_.id == call.toolIdentity.serverId) match {
+              case Some(server) => transport.callTool(server, call)
+              case None => Consequence.operationNotFound(s"MCP server not admitted: ${call.toolIdentity.serverId.print}")
+            }
           }
         case None => Consequence.operationNotFound(s"MCP tool not admitted: ${call.toolIdentity.print}")
       }

@@ -167,6 +167,72 @@ object McpInputSchema {
     else
       Consequence.success(ObjectValue(fields.sortBy(_.name.print), allowsadditionalfields))
   }
+
+  private[client] def validateValueC(
+    schema: McpInputSchema,
+    value: McpValue,
+    fieldpath: String
+  ): Consequence[Unit] =
+    (schema, value) match {
+      case (AnyValue, _) => Consequence.unit
+      case (NullValue, McpValue.NullValue) => Consequence.unit
+      case (StringValue, _: McpValue.StringValue) => Consequence.unit
+      case (BooleanValue, _: McpValue.BooleanValue) => Consequence.unit
+      case (IntegerValue, _: McpValue.IntegerValue) => Consequence.unit
+      case (NumberValue, _: McpValue.NumberValue | _: McpValue.IntegerValue) => Consequence.unit
+      case (ArrayValue(items), McpValue.ArrayValue(values)) =>
+        values.zipWithIndex.foldLeft(Consequence.unit) { case (z, (child, index)) =>
+          z.flatMap(_ => validateValueC(items, child, s"${fieldpath}/${index}"))
+        }
+      case (ObjectValue(fields, allowsadditionalfields), objectvalue: McpValue.ObjectValue) =>
+        _validate_object_c(fields, allowsadditionalfields, objectvalue, fieldpath)
+      case _ =>
+        Consequence.argumentFieldInvalid(fieldpath, schema.kind.name, value.kind.name)
+    }
+
+  private def _validate_object_c(
+    fields: Vector[McpInputField],
+    allowsadditionalfields: Boolean,
+    value: McpValue.ObjectValue,
+    fieldpath: String
+  ): Consequence[Unit] = {
+    val inputfields = value.fields.toMap
+    fields.find(x => x.required && !inputfields.contains(x.name)) match {
+      case Some(field) =>
+        Consequence.argumentFieldPolicyViolation(
+          _json_pointer_child(fieldpath, field.name),
+          "mcp-client.input-schema",
+          "required field",
+          "missing"
+        )
+      case None =>
+        val declared = fields.map(_.name).toSet
+        value.fields.find(x => !declared.contains(x._1) && !allowsadditionalfields) match {
+          case Some((name, _)) =>
+            Consequence.argumentFieldPolicyViolation(
+              _json_pointer_child(fieldpath, name),
+              "mcp-client.input-schema",
+              "declared field",
+              "additional field"
+            )
+          case None =>
+            fields.foldLeft(Consequence.unit) { case (z, field) =>
+              inputfields.get(field.name) match {
+                case Some(child) => z.flatMap(_ => validateValueC(field.schema, child, _json_pointer_child(fieldpath, field.name)))
+                case None => z
+              }
+            }
+        }
+    }
+  }
+
+  private def _json_pointer_child(
+    parent: String,
+    name: McpFieldName
+  ): String = {
+    val escaped = name.print.replace("~", "~0").replace("/", "~1")
+    s"${parent}/${escaped}"
+  }
 }
 
 final case class McpInputField private (
@@ -287,9 +353,31 @@ object McpClientLimits {
   }
 }
 
-final case class McpClientServer(
-  id: McpServerId
-)
+final case class McpClientServer private (
+  id: McpServerId,
+  admittedToolNames: Vector[McpToolName]
+) {
+  def admits(name: McpToolName): Boolean =
+    admittedToolNames.contains(name)
+}
+
+object McpClientServer {
+  def createC(
+    id: McpServerId,
+    admittedtoolnames: Iterable[McpToolName]
+  ): Consequence[McpClientServer] = {
+    val names = admittedtoolnames.toVector
+    if (names.distinct.size != names.size)
+      Consequence.argumentPolicyViolation(
+        "admittedToolNames",
+        "mcp-client.tool-allowlist",
+        "unique tool identities",
+        "duplicate"
+      )
+    else
+      Consequence.success(McpClientServer(id, names.sortBy(_.print)))
+  }
+}
 
 final case class McpClientServerSet private (
   id: McpServerSetId,
@@ -321,7 +409,10 @@ final case class McpClientTool private (
   title: Option[McpDisplayText],
   description: Option[McpDisplayText],
   inputSchema: McpInputSchema
-)
+) {
+  private[client] def validateArgumentsC(arguments: McpValue.ObjectValue): Consequence[Unit] =
+    McpInputSchema.validateValueC(inputSchema, arguments, "/arguments")
+}
 
 object McpClientTool {
   def createC(
@@ -346,24 +437,26 @@ object McpClientCatalog {
     serverset: McpClientServerSet,
     tools: Vector[McpClientTool]
   ): Consequence[McpClientCatalog] = {
-    val identities = tools.map(_.identity)
-    val serverids = serverset.servers.map(_.id).toSet
-    if (identities.distinct.size != identities.size)
-      Consequence.argumentPolicyViolation(
-        "tools",
-        "mcp-client.catalog",
-        "unique admitted tool identities",
-        "duplicate"
-      )
-    else if (identities.exists(x => !serverids.contains(x.serverId)))
+    val servers = serverset.servers.map(x => x.id -> x).toMap
+    val serverids = servers.keySet
+    val admittedtools = tools.filter(x => servers.get(x.identity.serverId).exists(_.admits(x.identity.toolName)))
+    val identities = admittedtools.map(_.identity)
+    if (tools.exists(x => !serverids.contains(x.identity.serverId)))
       Consequence.argumentPolicyViolation(
         "tools",
         "mcp-client.catalog",
         "tool identities belonging to the bound server set",
         "foreign-server"
       )
+    else if (identities.distinct.size != identities.size)
+      Consequence.argumentPolicyViolation(
+        "tools",
+        "mcp-client.catalog",
+        "unique admitted tool identities",
+        "duplicate"
+      )
     else
-      Consequence.success(McpClientCatalog(serverset, tools.sortBy(_.identity.print)))
+      Consequence.success(McpClientCatalog(serverset, admittedtools.sortBy(_.identity.print)))
   }
 }
 

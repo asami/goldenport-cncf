@@ -90,6 +90,26 @@ final class McpStreamableHttpTransportSpec extends AnyWordSpec with Matchers wit
         .flatMap(_.hcursor.downField("params").get[String]("cursor").toOption) shouldBe Some("next-page")
     }
 
+    "discard unlisted tool metadata before decoding its schema" in {
+      Given("a server response containing an unlisted malformed tool before one valid admitted tool")
+      given ExecutionContext = ExecutionContext.create()
+      val fake = new _FakeExchange(Vector(
+        _initialize_response(1),
+        _response(202, "application/json", ""),
+        _json_response(
+          200,
+          """{"jsonrpc":"2.0","id":2,"result":{"tools":[{"name":"paper.delete","description":"not admitted"},{"name":"paper.search","inputSchema":{"type":"object","properties":{"query":{"type":"string"}},"required":["query"]}}]}}"""
+        )
+      ))
+      val service = _registry(fake).resolve(_server_set_id("research")).toOption.get
+
+      When("the catalog crosses the Streamable HTTP admission boundary")
+      val catalog = service.catalog
+
+      Then("malformed metadata outside the allowlist cannot deny the admitted catalog")
+      catalog.toOption.map(_.tools.map(_.identity.print)) shouldBe Some(Vector("catalog/paper.search"))
+    }
+
     "reinitialize one expired session and replay the interrupted logical request once" in {
       Given("a catalog session that expires before one admitted tool invocation")
       given ExecutionContext = ExecutionContext.create()
@@ -320,7 +340,7 @@ final class McpStreamableHttpTransportSpec extends AnyWordSpec with Matchers wit
     ).toOption.get
     val serverset = McpClientServerSet.createC(
       serversetid,
-      Vector(McpClientServer(serverid))
+      Vector(McpClientServer.createC(serverid, Set(_tool_name("paper.search"), _tool_name("paper.read"))).toOption.get)
     ).toOption.get
     McpClientRuntimeRegistry.createC(Vector(serverset), provider.binding).toOption.get
   }
@@ -383,4 +403,7 @@ final class McpStreamableHttpTransportSpec extends AnyWordSpec with Matchers wit
 
   private def _field_name(value: String): McpFieldName =
     McpFieldName.parseC(value).toOption.get
+
+  private def _tool_name(value: String): McpToolName =
+    McpToolName.parseC(value).toOption.get
 }

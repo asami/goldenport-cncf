@@ -56,6 +56,10 @@ not control an MCP endpoint, transport, credential, header, or raw payload.
 | MC-05 | Observability and lifecycle | CallTree, metrics, and shutdown behavior expose only safe MCP execution facts. | planned |
 | MC-06 | Consumer evidence and closure | CNCF fake evidence and Textus AI integration prove the boundary without a required remote MCP service. | planned |
 
+MC-04 currently has exact per-server tool allowlisting and recursive typed-input
+admission. Endpoint credential-reference policy and invocation-scoped resource
+limits remain in progress.
+
 ## Acceptance
 
 - An admitted named server set resolves a typed tool catalog and executes only
