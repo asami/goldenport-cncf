@@ -2541,6 +2541,11 @@ Completed in Phase 40.
 ### 9.37 Managed Service Container Runtime
 Active in Phase 44.
 
+Implementation status (Jul. 20, 2026): SC-01 through SC-07 are complete.
+CNCF lifecycle/runtime contracts, Textus AI Ollama consumption, and Textus SIE
+Fuseki/vector consumption have executable evidence. SC-08 full downstream and
+opt-in live Docker verification remains before Phase 44 closure.
+
 - Goal: provide a typed component/runtime-owned lifecycle for long-lived
   service containers while keeping one-shot Docker command execution,
   external endpoints, and provider-specific initialization distinct.

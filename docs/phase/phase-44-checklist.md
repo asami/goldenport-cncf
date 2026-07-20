@@ -62,12 +62,12 @@ Status: DONE
 
 ## SC-07: Textus SIE Driver
 
-Status: PLANNED
+Status: DONE
 
-- [ ] Validate owned Fuseki/vector service lifecycle through the common
+- [x] Validate owned Fuseki/vector service lifecycle through the common
       contract.
-- [ ] Keep compose scripts as development/heavy-test tooling.
-- [ ] Keep SIE provider policy outside CNCF core.
+- [x] Keep compose scripts as development/heavy-test tooling.
+- [x] Keep SIE provider policy outside CNCF core.
 
 ## SC-08: Verification and Closure
 

@@ -2,7 +2,7 @@
 
 Stage Status:
 - Current status: ACTIVE
-- Current step: SC-07 Textus SIE driver
+- Current step: SC-08 verification and closure
 - Owner: CNCF managed service runtime, with Textus AI and Textus SIE as
   downstream drivers.
 
@@ -140,3 +140,14 @@ provider-owned `/api/pull` follow-up through CNCF's internal HTTP DSL, cached
 only after all models succeed. Fake-gateway consumer specs verify convergence
 and structured missing-runtime failure. Begin SC-07 with the Textus SIE owned
 Fuseki/vector deployment path.
+
+SC-07 completed Jul. 20, 2026. Textus SIE now keeps external Fuseki and
+Chroma-compatible endpoints as the default while allowing each selected
+provider to opt into the common runtime-owned service lifecycle. SIE owns the
+typed images, logical ports, readiness paths, named volumes, and semantic
+provider policy; CNCF owns lifecycle resolution and endpoint publication.
+Provider-facing ActionCalls resolve both managed endpoints before provider
+construction, preserve structured failures, and cache the resolved provider
+runtime. Compose and provider initialization remain development/deployment
+tooling. Begin SC-08 with full fake-gateway, downstream, and opt-in live Docker
+closure validation.
