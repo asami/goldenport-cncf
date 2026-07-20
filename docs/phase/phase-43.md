@@ -2,7 +2,7 @@
 
 Stage Status:
 - Current status: ACTIVE
-- Current step: RQ-05 CBD Support driver
+- Current step: RQ-06 verification and closure
 - Owner: CNCF resource-tree runtime, with CBD Support as the first downstream
   driver.
 
@@ -97,3 +97,7 @@ it. RQ-04 completed Jul. 20, 2026. Component behavior can query an admitted
 tree only through the protected internal DSL, while the ExecutionContext
 decorator emits payload-safe `resource-tree.query` CallTree spans and runtime
 metrics from structured `Consequence` outcomes. Start RQ-05.
+RQ-05 completed Jul. 20, 2026. CBD Support now queries every bounded
+`project.yaml` under a declared development tree, projects each result as
+independent `working` evidence, and initializes local inputs before its
+catalog/status ActionCall projections. Start RQ-06.

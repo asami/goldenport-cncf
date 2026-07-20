@@ -39,12 +39,12 @@ Status: DONE
 
 ## RQ-05: CBD Support Driver
 
-Status: PLANNED
+Status: DONE
 
-- [ ] Query exact leaf name `project.yaml` from logical tree `working`.
-- [ ] Emit one working observation per returned descriptor.
-- [ ] Initialize local inputs before status and catalog readiness projection.
-- [ ] Keep physical roots and ambient filesystem access out of CBD code.
+- [x] Query exact leaf name `project.yaml` from logical tree `working`.
+- [x] Emit one working observation per returned descriptor.
+- [x] Initialize local inputs before status and catalog readiness projection.
+- [x] Keep physical roots and ambient filesystem access out of CBD code.
 
 ## RQ-06: Verification and Closure
 
