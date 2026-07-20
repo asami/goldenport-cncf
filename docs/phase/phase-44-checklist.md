@@ -4,12 +4,12 @@ This checklist is the authoritative planned Phase 44 state ledger.
 
 ## SC-01: Contract Promotion
 
-Status: PLANNED
+Status: DONE
 
-- [ ] Define service-container ownership, lifecycle, and external endpoint
+- [x] Define service-container ownership, lifecycle, and external endpoint
       semantics in normative design/spec documents.
-- [ ] Keep one-shot Process Execution and service-container lifecycle distinct.
-- [ ] Record how the obsolete `ServerDockerAdapter` stub is retired or
+- [x] Keep one-shot Process Execution and service-container lifecycle distinct.
+- [x] Record how the obsolete `ServerDockerAdapter` stub is retired or
       redirected without making it the public contract.
 
 ## SC-02: Runtime Model

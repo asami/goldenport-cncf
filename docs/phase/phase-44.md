@@ -1,12 +1,12 @@
 # Phase 44 - Managed Service Container Runtime
 
 Stage Status:
-- Current status: PLANNED
-- Current step: Ready to begin SC-01
+- Current status: ACTIVE
+- Current step: SC-02 runtime model
 - Owner: CNCF managed service runtime, with Textus AI and Textus SIE as
   downstream drivers.
 
-status = planned
+status = active
 
 ## 1. Purpose
 
@@ -92,3 +92,9 @@ Docker scripts.
 
 Phase 43 closed Jul. 20, 2026. Begin SC-01 with the runtime-level
 owner/registry contract, not Docker command construction.
+
+SC-01 completed Jul. 20, 2026. The normative managed service-container design
+and specification now fix explicit external/runtime-owned modes, runtime-level
+ownership, the UnitOfWork and Process Execution boundaries, constrained
+gateway ownership, and retirement of the obsolete `ServerDockerAdapter`
+direction. Begin SC-02 with provider-neutral model and registry types.

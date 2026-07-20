@@ -34,6 +34,11 @@ Component runtime capabilities for reusable component code are defined in
 behavioral contract is
 `docs/spec/component-runtime-boundary-capabilities.md`.
 
+Long-lived component/runtime-owned service lifecycles are defined in
+`docs/design/managed-service-container-runtime.md`. They are distinct from the
+operation-scoped Process Execution boundary and from legacy one-shot Docker
+adapters.
+
 ## Subsystem Construction
 
 Subsystem construction is performed from resolved Components.

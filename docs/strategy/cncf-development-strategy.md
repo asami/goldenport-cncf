@@ -842,7 +842,7 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Phase 41: closed (`docs/phase/phase-41.md`)
 - Phase 42: closed (`docs/phase/phase-42.md`)
 - Phase 43: closed (`docs/phase/phase-43.md`)
-- Phase 44: planned (`docs/phase/phase-44.md`)
+- Phase 44: active (`docs/phase/phase-44.md`)
 
 ## 8. Completed Development Item History
 
@@ -1428,8 +1428,7 @@ Completed work areas are recorded in section 8. When a development item closes,
 remove its completion record from this section and add or update the
 corresponding completed-history entry.
 
-Current development item: Phase 44 Managed Service Container Runtime is the
-selected next planned phase.
+Current development item: Phase 44 Managed Service Container Runtime.
 
 ### 9.1 Web Next Stage Follow-ups
 Web/platform follow-up index.
@@ -2540,7 +2539,7 @@ Completed in Phase 40.
   - `docs/phase/phase-40-checklist.md`.
 
 ### 9.37 Managed Service Container Runtime
-Planned for Phase 44.
+Active in Phase 44.
 
 - Goal: provide a typed component/runtime-owned lifecycle for long-lived
   service containers while keeping one-shot Docker command execution,
