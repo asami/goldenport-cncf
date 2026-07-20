@@ -98,18 +98,27 @@ final class ServiceContainerModelSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "permit only runtime-owned named volumes rather than host mount paths" in {
-      Given("a named volume and host-oriented volume text")
-      val volume = ServiceContainerVolumeName.parseC("ollama-models")
+      Given("a named volume, container target, and host-oriented invalid values")
+      val volume = for {
+        name <- ServiceContainerVolumeName.parseC("ollama-models")
+        target <- ServiceContainerMountPath.parseC("/root/.ollama")
+        mount <- ServiceContainerVolume.createC(name, target)
+      } yield mount
       val hostpath = ServiceContainerVolumeName.parseC("/var/lib/ollama")
+      val traversal = ServiceContainerMountPath.parseC("/root/../host")
+      val mountoption = ServiceContainerMountPath.parseC("/root/data,readonly")
 
       When("the persistence declaration is assembled")
       val persistence = volume.flatMap(x => ServiceContainerPersistence.namedVolumesC(Vector(x)))
 
       Then("the named volume is retained and the host path is rejected")
       persistence.toOption.collect {
-        case ServiceContainerPersistence.NamedVolumes(volumes) => volumes.map(_.print)
-      } shouldBe Some(Vector("ollama-models"))
+        case ServiceContainerPersistence.NamedVolumes(volumes) =>
+          volumes.map(x => x.name.print -> x.target.print)
+      } shouldBe Some(Vector("ollama-models" -> "/root/.ollama"))
       hostpath.isFaillure shouldBe true
+      traversal.isFaillure shouldBe true
+      mountoption.isFaillure shouldBe true
     }
 
     "express lifecycle failures through structured Conclusion diagnostics" in {

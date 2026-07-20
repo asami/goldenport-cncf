@@ -90,8 +90,10 @@ least one unique declared port, bounded readiness policy, persistence policy,
 reuse policy, and cleanup policy. Its readiness probe MUST reference one of its
 declared logical ports.
 
-Persistence MUST be either ephemeral or use validated named volumes. It MUST
-NOT represent an arbitrary host path or host mount.
+Persistence MUST be either ephemeral or use validated named volumes. Every
+named volume MUST have one validated absolute container target path. Volume
+names and target paths MUST each be unique within a definition. Persistence
+MUST NOT represent an arbitrary host path or host mount.
 
 ### Runtime Registry (SC2-R2)
 
@@ -163,6 +165,21 @@ of the constrained gateway and MUST NOT require a Docker daemon. The fake MUST
 record typed transitions, produce deterministic instance identity, preserve
 normal structured failures, and implement the same gateway surface expected of
 a Docker-backed implementation.
+
+### Docker Gateway Projection (SC3-R4)
+
+The Docker gateway MUST invoke Docker through an argument vector without a
+shell. It MUST derive container names and labels from the admitted definition,
+publish declared ports only on loopback with runtime-selected host ports, and
+project only admitted named-volume/container-target pairs. Inspection MUST
+filter by the complete framework ownership key before adoption. Raw Docker
+stdout or stderr MUST NOT become component-visible lifecycle diagnostics.
+
+Docker driver installation MUST be opt-in through deployment configuration.
+`textus.service-container.driver=docker` is canonical and the default driver
+MUST be `none`. Driver creation MUST NOT contact Docker; the first typed
+lifecycle operation is the provider contact boundary. Unknown drivers and
+malformed executable configuration MUST fail deterministically.
 
 ### Lifecycle Resolution (SC4-R1)
 
@@ -274,11 +291,23 @@ NOT require or expose the provider container identity. Repeated successful
 bootstrap MUST converge without repeating lifecycle creation or model
 installation.
 
-## Deferred Contract
+### Textus SIE Managed Consumers (SC7-R1)
 
-The following contract details belong to later Phase 44 slices: Docker
-transport implementation and readiness transport, plus additional
-provider-specific consumer integration.
+Textus SIE MUST preserve explicit external Fuseki and vector endpoints. A
+provider selected as managed MUST resolve through the common Subsystem runtime
+and MUST declare its image, logical port, readiness, named volume, container
+target, reuse, and cleanup policy. Fuseki persistence targets
+`/fuseki/databases`; the initial vector provider persistence targets `/data`.
+Provider dataset initialization MUST remain outside generic lifecycle
+resolution.
+
+### Closure Verification (SC8-R1)
+
+Normal tests MUST use fake or scripted gateways and MUST not require Docker.
+The real Docker gateway MUST also have an explicitly enabled live executable
+specification that proves create, readiness, repeated reuse, and cleanup on a
+local daemon. The live specification MUST remain disabled unless
+`CNCF_LIVE_DOCKER_TEST=true` is supplied.
 
 ## Executable Evidence
 
@@ -299,3 +328,9 @@ resolution, model-install convergence through the internal HTTP DSL, and the
 structured unavailable-runtime boundary. Its `ComponentFactorySpec` covers
 external endpoint precedence and proves that Ollama lifecycle is absent from
 the component Process Execution scope.
+`DockerServiceContainerGatewaySpec` fixes constrained Docker command and
+ownership-filter projection. `ServiceContainerRuntimeConfigurationSpec` fixes
+opt-in deployment selection. `DockerServiceContainerGatewayLiveSpec` is the
+explicitly enabled daemon-backed create/readiness/reuse/remove evidence.
+Textus SIE's `SemanticManagedServiceRuntimeSpec` fixes external precedence and
+the managed Fuseki/vector definitions, including their container targets.

@@ -71,9 +71,9 @@ Status: DONE
 
 ## SC-08: Verification and Closure
 
-Status: PLANNED
+Status: DONE
 
-- [ ] Run focused fake-gateway and lifecycle executable specifications.
-- [ ] Run full CNCF and affected downstream tests.
-- [ ] Run opt-in live Docker integration as heavy validation.
-- [ ] Update strategy/phase evidence and close Phase 44.
+- [x] Run focused fake-gateway and lifecycle executable specifications.
+- [x] Run full CNCF and affected downstream tests.
+- [x] Run opt-in live Docker integration as heavy validation.
+- [x] Update strategy/phase evidence and close Phase 44.

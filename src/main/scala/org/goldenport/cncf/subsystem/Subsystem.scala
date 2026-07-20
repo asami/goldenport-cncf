@@ -47,7 +47,7 @@ import org.goldenport.cncf.config.{ResolvedParameter, ResolvedParameters}
 import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.metrics.{ComponentMetricsRegistry, EntityAccessMetricsRegistry}
 import org.goldenport.cncf.spi.{ComponentApiResolver, ResolvedSpiBinding, SpiInvoker, SpiOperationSelector}
-import org.goldenport.cncf.servicecontainer.{ServiceContainerCleanupOutcome, ServiceContainerDiagnostics, ServiceContainerId, ServiceContainerRuntime}
+import org.goldenport.cncf.servicecontainer.{ServiceContainerCleanupOutcome, ServiceContainerDiagnostics, ServiceContainerId, ServiceContainerRuntime, ServiceContainerRuntimeConfiguration}
 import org.goldenport.cncf.observability.ServiceContainerRuntimeObservation
 
 /*
@@ -143,10 +143,17 @@ final class Subsystem(
 
   def serviceContainerRuntimeC(
     serviceid: ServiceContainerId
-  )(using context: ExecutionContext): Consequence[ServiceContainerRuntime] =
-    serviceContainerRuntime
-      .map(Consequence.success)
-      .getOrElse(ServiceContainerDiagnostics.gatewayUnavailableC(serviceid))
+  )(using context: ExecutionContext): Consequence[ServiceContainerRuntime] = synchronized {
+    serviceContainerRuntime match {
+      case Some(runtime) => Consequence.success(runtime)
+      case None =>
+        ServiceContainerRuntimeConfiguration.createC(configuration).flatMap {
+          case Some(runtime) =>
+            installServiceContainerRuntimeC(runtime).map(_ => ServiceContainerRuntimeObservation.observed(runtime))
+          case None => ServiceContainerDiagnostics.gatewayUnavailableC(serviceid)
+        }
+    }
+  }
 
   def installServiceContainerRuntimeC(runtime: ServiceContainerRuntime): Consequence[Unit] = synchronized {
     _service_container_runtime match {

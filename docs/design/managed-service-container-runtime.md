@@ -65,8 +65,10 @@ a validated credential-free HTTP(S) endpoint.
 `ServiceContainerDefinition.RuntimeOwned` contains the owner, image identity,
 unique logical/container ports, bounded readiness policy, persistence policy,
 reuse policy, and cleanup policy. Readiness references a declared logical
-port. Persistence is either ephemeral or a set of validated named volumes; it
-cannot carry a host path.
+port. Persistence is either ephemeral or a set of validated named volumes
+paired with validated absolute container target paths; it cannot carry a host
+path. The provider consumer owns the target because it is part of the provider
+image contract; CNCF owns validation and infrastructure projection.
 
 The initial readiness probes are HTTP and TCP. Both use a positive bounded
 timeout and polling interval. HTTP readiness also carries a safe absolute path
@@ -118,8 +120,25 @@ evidence of ownership.
 `FakeServiceContainerGateway` implements the same typed surface without a
 Docker daemon. It assigns deterministic instance identities, records typed
 transition order, and returns ordinary structured `Consequence` failures. It
-is the default executable-specification driver. A Docker transport
-implementation remains constrained by this contract and cannot broaden it.
+is the default executable-specification driver.
+
+`DockerServiceContainerGateway` is the production infrastructure driver. It
+constructs `docker` process argument vectors only from validated model values
+and never invokes a shell. Creation publishes ports on random loopback host
+ports, projects only framework-owned labels, and materializes only admitted
+named-volume/container-target pairs. Inspection uses the complete owner/service
+label key before decoding provider state. Readiness probes contact only the
+projected loopback port. Provider stdout/stderr is not exposed as lifecycle
+diagnostic data.
+
+Docker runtime installation is deployment opt-in. The canonical selector is
+`textus.service-container.driver=docker`; compatibility aliases under
+`textus.runtime.*`, `cncf.*`, and `cncf.runtime.*` are accepted. The default is
+`none`. A deployment may select the Docker executable with
+`textus.service-container.docker.executable`; it is passed directly to
+`ProcessBuilder` as one executable value and is never parsed as shell text.
+Subsystems resolve and install this runtime lazily when a component first asks
+for managed lifecycle access. External endpoint mode does not request it.
 
 ## Lifecycle Runtime
 
@@ -225,7 +244,8 @@ separate observable consumer operation.
 
 Textus AI is the first runtime consumer. Without an explicit deployment
 endpoint, it declares one component-runtime-owned Ollama service with typed
-image, named persistence, port, readiness, reuse, and cleanup policy. It
+image, named persistence targeting `/root/.ollama`, port, readiness, reuse,
+and cleanup policy. It
 requests the observed runtime from its owning Subsystem when provider execution
 first needs the endpoint. It does not install inspect/start/run Docker commands
 in its component Process Execution scope.
@@ -235,6 +255,15 @@ readiness as a separate Ollama HTTP operation through CNCF's internal HTTP DSL,
 and is cached only after all selected models succeed. An explicit Ollama
 endpoint constructs no runtime-owned definition and does not request the
 service-container runtime.
+
+## Textus SIE Consumer
+
+Textus SIE keeps explicit Fuseki and Chroma-compatible endpoints as its
+default deployment mode. When a provider is selected as managed, SIE declares
+component-owned Fuseki and vector services through the common runtime. SIE
+owns image, readiness, and container persistence targets
+`/fuseki/databases` and `/data`; CNCF owns lifecycle and safe endpoint
+publication. Provider dataset initialization remains a separate SIE operation.
 
 ## Existing Docker Adapter Boundary
 

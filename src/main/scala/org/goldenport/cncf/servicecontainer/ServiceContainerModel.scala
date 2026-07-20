@@ -217,21 +217,64 @@ object ServiceContainerVolumeName {
   }
 }
 
+final case class ServiceContainerMountPath private (value: String) {
+  def print: String = value
+}
+
+object ServiceContainerMountPath {
+  private val _segment_pattern = "[A-Za-z0-9._-]+".r
+
+  def parseC(value: String): Consequence[ServiceContainerMountPath] = {
+    val text = Option(value).map(_.trim).getOrElse("")
+    val segments = text.split("/", -1).toVector.drop(1)
+    if (
+      !text.startsWith("/") ||
+      text.length < 2 ||
+      text.length > 512 ||
+      text.exists(x => x.isControl || x.isWhitespace) ||
+      segments.exists(x => x == "." || x == ".." || !_segment_pattern.matches(x))
+    )
+      Consequence.argumentFormatError(
+        "mountPath",
+        "safe absolute container path without traversal",
+        "invalid"
+      )
+    else
+      Consequence.success(ServiceContainerMountPath(text))
+  }
+}
+
+final case class ServiceContainerVolume private (
+  name: ServiceContainerVolumeName,
+  target: ServiceContainerMountPath
+)
+
+object ServiceContainerVolume {
+  def createC(
+    name: ServiceContainerVolumeName,
+    target: ServiceContainerMountPath
+  ): Consequence[ServiceContainerVolume] =
+    Consequence.success(ServiceContainerVolume(name, target))
+}
+
 sealed abstract class ServiceContainerPersistence
 
 object ServiceContainerPersistence {
   case object Ephemeral extends ServiceContainerPersistence
 
   final case class NamedVolumes private[servicecontainer] (
-    volumes: Vector[ServiceContainerVolumeName]
+    volumes: Vector[ServiceContainerVolume]
   ) extends ServiceContainerPersistence
 
   def namedVolumesC(
-    volumes: Vector[ServiceContainerVolumeName]
+    volumes: Vector[ServiceContainerVolume]
   ): Consequence[ServiceContainerPersistence] =
     if (volumes.isEmpty)
       Consequence.argumentMissing("volumes")
-    else if (volumes.distinct.size != volumes.size)
+    else if (
+      volumes.map(_.name).distinct.size != volumes.size ||
+      volumes.map(_.target).distinct.size != volumes.size
+    )
       Consequence.argumentPolicyViolation(
         "volumes",
         "service-container.persistence",

@@ -1,12 +1,12 @@
 # Phase 44 - Managed Service Container Runtime
 
 Stage Status:
-- Current status: ACTIVE
-- Current step: SC-08 verification and closure
+- Current status: CLOSED
+- Current step: Phase 44 closure complete
 - Owner: CNCF managed service runtime, with Textus AI and Textus SIE as
   downstream drivers.
 
-status = active
+status = closed
 
 ## 1. Purpose
 
@@ -151,3 +151,12 @@ construction, preserve structured failures, and cache the resolved provider
 runtime. Compose and provider initialization remain development/deployment
 tooling. Begin SC-08 with full fake-gateway, downstream, and opt-in live Docker
 closure validation.
+
+SC-08 completed Jul. 20, 2026. The constrained production Docker gateway now
+projects only framework-owned labels, random loopback port publication, and
+validated named-volume/container-target pairs from typed definitions. Runtime
+installation is deployment opt-in and lazy. Normal CNCF service-container
+specs pass without Docker; the opt-in live Docker specification proves create,
+HTTP readiness, repeated reuse, and Remove cleanup. Full CNCF, Textus AI, and
+Textus SIE suites pass with provider-owned Ollama, Fuseki, and vector
+persistence targets. Phase 44 is closed.

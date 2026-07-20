@@ -842,7 +842,7 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Phase 41: closed (`docs/phase/phase-41.md`)
 - Phase 42: closed (`docs/phase/phase-42.md`)
 - Phase 43: closed (`docs/phase/phase-43.md`)
-- Phase 44: active (`docs/phase/phase-44.md`)
+- Phase 44: closed (`docs/phase/phase-44.md`)
 
 ## 8. Completed Development Item History
 
@@ -1421,6 +1421,30 @@ Completed in Phase 43.
 - Deferred scope includes glob/regex/content selectors, mutation, watch,
   unrestricted filesystem search, and host-path APIs.
 
+### 8.23 Managed Service Container Runtime
+Completed in Phase 44.
+
+- Closed dashboard: `docs/phase/phase-44.md`
+- Closed checklist: `docs/phase/phase-44-checklist.md`
+- Decided designs:
+  - `docs/design/managed-service-container-runtime.md`
+  - `docs/spec/managed-service-container-runtime.md`
+- Completed scope:
+  - provider-neutral external and runtime-owned lifecycle definitions,
+    owner-scoped registry, readiness, reuse, cleanup, and structured failures;
+  - constrained production Docker gateway with framework ownership labels,
+    random loopback ports, admitted named-volume targets, and no shell or host
+    mount surface;
+  - payload-safe CallTree, runtime metrics, Subsystem shutdown ownership, and
+    opt-in lazy Docker runtime configuration;
+  - Textus AI managed Ollama and Textus SIE managed Fuseki/vector consumers
+    with explicit external endpoint precedence; and
+  - daemon-free fake/scripted executable specifications plus live Docker
+    create/readiness/reuse/remove evidence.
+- Deferred scope includes Docker Compose interpretation, arbitrary Docker
+  arguments or host mounts, orchestration/scheduling, and provider-specific
+  model or dataset initialization inside the generic lifecycle runtime.
+
 ## 9. Development Item Status
 
 This final section lists planned active and future development areas only.
@@ -1428,7 +1452,8 @@ Completed work areas are recorded in section 8. When a development item closes,
 remove its completion record from this section and add or update the
 corresponding completed-history entry.
 
-Current development item: Phase 44 Managed Service Container Runtime.
+Current development item: none; select the next strategy item before opening a
+new implementation phase.
 
 ### 9.1 Web Next Stage Follow-ups
 Web/platform follow-up index.
@@ -2537,42 +2562,3 @@ Completed in Phase 40.
   - `docs/notes/http-form-typed-update-command-implementation.md`;
   - `docs/phase/phase-40.md`; and
   - `docs/phase/phase-40-checklist.md`.
-
-### 9.37 Managed Service Container Runtime
-Active in Phase 44.
-
-Implementation status (Jul. 20, 2026): SC-01 through SC-07 are complete.
-CNCF lifecycle/runtime contracts, Textus AI Ollama consumption, and Textus SIE
-Fuseki/vector consumption have executable evidence. SC-08 full downstream and
-opt-in live Docker verification remains before Phase 44 closure.
-
-- Goal: provide a typed component/runtime-owned lifecycle for long-lived
-  service containers while keeping one-shot Docker command execution,
-  external endpoints, and provider-specific initialization distinct.
-- Drivers:
-  - Textus AI local Ollama/Gemma service ownership;
-  - Textus SIE owned Fuseki and embedding/vector-store service deployments.
-- Scope:
-  - introduce provider-neutral service-container definition, ownership,
-    create-or-reuse, persistence, readiness, endpoint, lifecycle, and cleanup
-    contracts;
-  - provide a Docker driver behind a constrained gateway with deterministic
-    inspect/create/start/stop/remove behavior and ownership labels;
-  - resolve an explicit external endpoint as a first-class bypass that causes
-    no Docker inspection or mutation;
-  - register runtime-owned service lifecycles outside UnitOfWork terminal
-    cleanup while retaining explicit shutdown/removal ownership;
-  - provide fake-gateway executable specifications and payload-safe CallTree,
-    metrics, and structured failures;
-  - validate Textus AI and Textus SIE as downstream consumers after the CNCF
-    contract is complete.
-- Boundary:
-  - do not complete the existing one-shot `DockerAdapter.execute(DockerInput)`
-    shape as the service lifecycle API;
-  - no Docker Compose interpreter, arbitrary Docker arguments, arbitrary host
-    mounts, credential projection, or provider-specific model/data catalog;
-  - live Docker execution is explicit heavy-test evidence only.
-- Planning references:
-  - `docs/journal/2026/07/2026-07-20-stateful-docker-container-adapter-handoff.md`;
-  - `docs/phase/phase-44.md`; and
-  - `docs/phase/phase-44-checklist.md`.

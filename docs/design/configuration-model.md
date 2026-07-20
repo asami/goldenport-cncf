@@ -777,6 +777,8 @@ Prefer a concrete semantic owner:
 - `textus.logging.backend`
 - `textus.logging.level`
 - `textus.logging.file.path`
+- `textus.service-container.driver`
+- `textus.service-container.docker.executable`
 
 `textus.command.execution-mode` accepts the canonical production values
 `sync`, `job-sync`, `job-async`, and `job-sync-with-async-cont`. The long alias
@@ -816,6 +818,13 @@ the execution succeeds and is not slow.
 
 `textus.execution.history.*` controls the retained action execution history
 used by `admin.execution.history` and `admin.execution.calltree`.
+
+`textus.service-container.driver` selects the opt-in long-lived managed
+service driver. Its values are `none` (default) and `docker`.
+`textus.service-container.docker.executable` optionally selects the Docker
+executable path without adding a shell or arbitrary Docker argument surface.
+The runtime is installed lazily only when a component requests a managed
+service. See `docs/design/managed-service-container-runtime.md`.
 
 Diagnostic payload externalization policy is described in
 `docs/design/observability/diagnostic-payload-externalization-policy.md`.

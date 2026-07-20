@@ -98,7 +98,7 @@ object ServiceContainerOwnershipLabels {
     persistence match {
       case ServiceContainerPersistence.Ephemeral => "ephemeral"
       case x: ServiceContainerPersistence.NamedVolumes =>
-        s"named:${x.volumes.map(_.print).sorted.mkString(",")}"
+        s"named:${x.volumes.map(v => s"${v.name.print}:${v.target.print}").sorted.mkString(",")}"
     }
 }
 
