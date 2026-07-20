@@ -3,7 +3,8 @@ package org.goldenport.cncf.composite
 import cats.data.NonEmptyVector
 import org.goldenport.Consequence
 import org.goldenport.cncf.action.{ActionCall, CommandAction, ProcedureActionCall, QueryAction}
-import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.cncf.context.{ExecutionContext, Principal, PrincipalId, SecurityContext}
+import org.goldenport.cncf.security.SecuritySubject
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.cncf.testutil.TestComponentFactory
 import org.goldenport.protocol.{Property, Protocol, Request}
@@ -16,7 +17,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   May. 10, 2026
- * @version May. 10, 2026
+ * @version Jul. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 final class CompositeQueryEngineSpec extends AnyWordSpec with Matchers {
@@ -75,6 +76,7 @@ final class CompositeQueryEngineSpec extends AnyWordSpec with Matchers {
     }
 
     "reject trace-job execution in the query-only subsystem boundary" in {
+      given ExecutionContext = ExecutionContext.test()
       val request = _request("echo").copy(
         properties = List(Property("textus.debug.trace-job", "true", None))
       )
@@ -85,6 +87,27 @@ final class CompositeQueryEngineSpec extends AnyWordSpec with Matchers {
         case Consequence.Failure(conclusion) =>
           conclusion.show should include ("trace-job")
       }
+    }
+
+    "preserve the caller security subject across the query-only boundary" in {
+      val base = ExecutionContext.create(SecurityContext.Privilege.User)
+      given ExecutionContext = ExecutionContext.withSecurityContext(
+        base,
+        base.security.copy(principal = new Principal {
+          val id: PrincipalId = PrincipalId("composite-query-user")
+          val attributes: Map[String, String] =
+            base.security.principal.attributes ++ Map("authenticated" -> "true")
+        })
+      )
+
+      val response = _success(CompositeQueryEngine(_subsystem()).execute(CompositeQueryRequest(Vector(
+        NamedQuery("subject", _request("echo"), required = true)
+      ))))
+
+      response.requiredRecord("subject").toOption.flatMap(_.getString("subject_id")) shouldBe
+        Some("composite-query-user")
+      response.requiredRecord("subject").toOption.flatMap(_.getBoolean("authenticated")) shouldBe
+        Some(true)
     }
 
     "capture optional query failure and continue" in {
@@ -192,10 +215,14 @@ private final case class _EchoAction(request: Request) extends QueryAction {
 }
 
 private final case class _EchoActionCall(core: ActionCall.Core) extends ProcedureActionCall {
-  def execute(): Consequence[OperationResponse] =
+  def execute(): Consequence[OperationResponse] = {
+    val subject = SecuritySubject.current(using core.executionContext)
     Consequence.success(OperationResponse.RecordResponse(Record.dataAuto(
-      "operation" -> core.action.request.operation
+      "operation" -> core.action.request.operation,
+      "subject_id" -> subject.subjectId,
+      "authenticated" -> subject.isAuthenticated
     )))
+  }
 }
 
 private final case class _FailAction(request: Request) extends QueryAction {

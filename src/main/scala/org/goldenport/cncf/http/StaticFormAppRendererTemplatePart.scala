@@ -98,7 +98,7 @@ trait StaticFormAppRendererTemplatePart {
     val resultview = """<textus-result-view\s+source="([^"]+)"\s*></textus-result-view>""".r
     val unresolvedoperationform =
       """<textus(?::operation-form|-operation-form)\b([^>]*)></textus(?::operation-form|-operation-form)>""".r
-    val table = """<textus:table\b([^>]*)></textus:table>""".r
+    val table = """(?s)<textus:table\b([^>]*)>\s*</textus:table>""".r
     val card = """(?s)<textus(?::card(?!-)|-card(?!-))\b([^>]*)>(.*?)</textus(?::card|-card)>""".r
     val recordcard = """<textus(?::record-card|-record-card)\b([^>]*)></textus(?::record-card|-record-card)>""".r
     val cardlist = """(?s)<textus(?::card-list|-card-list)\b([^>]*)>\s*</textus(?::card-list|-card-list)>""".r

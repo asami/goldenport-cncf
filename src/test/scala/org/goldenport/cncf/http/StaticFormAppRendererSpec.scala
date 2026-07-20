@@ -10862,7 +10862,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           |    source="result.body.data"
           |    detail-href="/web/notices/detail"
           |    detail-param-id="{id}"
-          |    row-link="true"></textus:table>
+          |    row-link="true">
+          |  </textus:table>
           |</article>""".stripMargin
       ).body
 

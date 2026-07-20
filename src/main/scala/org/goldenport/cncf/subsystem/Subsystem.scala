@@ -53,7 +53,7 @@ import org.goldenport.cncf.spi.{ComponentApiResolver, ResolvedSpiBinding, SpiInv
  *  version Jan. 31, 2026
  *  version Feb.  4, 2026
  *  version Apr. 30, 2026
- * @version Jul. 16, 2026
+ * @version Jul. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Subsystem(
@@ -325,7 +325,9 @@ final class Subsystem(
   ): Consequence[ExecutionResult] =
     _execute_with_metadata(request, Some(httpRequest))
 
-  def executeQueryOnlyWithMetadata(request: Request): Consequence[ExecutionResult] = {
+  def executeQueryOnlyWithMetadata(
+    request: Request
+  )(using executionContext: ExecutionContext): Consequence[ExecutionResult] = {
     _execute_query_only_with_metadata(request, None)
   }
 
@@ -475,7 +477,7 @@ final class Subsystem(
   private def _execute_query_only_with_metadata(
     request: Request,
     httprequest: Option[HttpRequest]
-  ): Consequence[ExecutionResult] = {
+  )(using executionContext: ExecutionContext): Consequence[ExecutionResult] = {
     val r: Consequence[ExecutionResult] = for {
       route <- _resolve_route(request) match {
         case Some(r) =>
@@ -487,37 +489,57 @@ final class Subsystem(
       response <- {
         val (component, _, _) = route
         val domainrequest = _domain_request(normalizedrequest)
-        IngressSecurityResolver.resolve(component.logic.executionContext(), normalizedrequest).flatMap { security =>
-          val executioncontext =
-            _with_http_runtime_parameters(security.executionContext, httprequest)
-          given ExecutionContext = executioncontext
-          if (executioncontext.framework.traceJob) {
-            Consequence.operationInvalid("CompositeQuery accepts only direct Query execution; trace-job is not allowed")
-          } else _authorize_operation(route, executioncontext).flatMap { _ =>
+        val resolvedExecutionContext =
+          _with_http_runtime_parameters(executionContext, httprequest)
+        given ExecutionContext = resolvedExecutionContext
+        if (
+          resolvedExecutionContext.framework.traceJob ||
+          _query_only_trace_job_requested(normalizedrequest)
+        ) {
+          Consequence.operationInvalid("CompositeQuery accepts only direct Query execution; trace-job is not allowed")
+        } else _authorize_operation(route, resolvedExecutionContext).flatMap { _ =>
             val operationdomainrequest = _operation_business_request(route, domainrequest)
             val oprequest = component.logic.makeOperationRequest(operationdomainrequest)
             _observe_operation_request_validation_failure(
               route,
               operationdomainrequest,
               oprequest,
-              executioncontext
+              resolvedExecutionContext
             )
             oprequest.flatMap {
               case action: QueryAction =>
-                component.logic.executeAction(action, executioncontext).map { response =>
-                  ExecutionResult(response, executioncontext.runtime.executionMetadata)
+                component.logic.executeAction(action, resolvedExecutionContext).map { response =>
+                  ExecutionResult(response, resolvedExecutionContext.runtime.executionMetadata)
                 }
               case action: Action =>
                 Consequence.operationInvalid(s"CompositeQuery accepts only Query operations: ${action.request.name}")
               case _ =>
                 Consequence.argumentInvalid("OperationRequest must be Action")
             }
-          }
         }
       }
     } yield response
     _observe_execute_failure(request, r)
     r
+  }
+
+  private def _query_only_trace_job_requested(
+    request: Request
+  ): Boolean = {
+    val keys = Set(
+      RuntimeConfig.DebugTraceJobKey,
+      RuntimeConfig.RuntimeDebugTraceJobKey,
+      "cncf.debug.trace-job",
+      "cncf.runtime.debug.trace-job",
+      "x-textus-debug-trace-job"
+    ).map(_.toLowerCase(java.util.Locale.ROOT))
+    request.properties.exists { property =>
+      keys.contains(property.name.toLowerCase(java.util.Locale.ROOT)) &&
+        (property.value.toString.trim.toLowerCase(java.util.Locale.ROOT) match {
+          case "true" | "1" | "yes" | "on" => true
+          case _ => false
+        })
+    }
   }
 
   private def _apply_operation_association_bindings(
