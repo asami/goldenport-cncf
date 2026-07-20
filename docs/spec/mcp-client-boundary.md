@@ -79,6 +79,16 @@ transport boundary.
 The initial implementation MUST NOT admit stdio, legacy SSE, arbitrary process
 execution, arbitrary HTTP, or filesystem transports.
 
+`McpClientPortApi` MUST bind one logical `McpClientRequirement` to one
+runtime-owned `McpClientService`. `McpClientRuntimeRegistry` MUST resolve that
+contract through a canonical ExtensionPoint and MUST reject an unregistered
+server set. Caller-supplied `VariationSelection` infrastructure fields MUST NOT
+select or replace an MCP provider or transport.
+
+Transport selection MUST use the separate `McpClientTransportPortApi` and
+canonical Port/ExtensionPoint wiring before the runtime registry is created.
+The consumer-facing service MUST NOT expose that transport binding.
+
 ## Server Publication Separation
 
 The existing CNCF MCP server projection MUST continue to publish MCP-ready CNCF
@@ -151,3 +161,7 @@ cleanup, and unchanged MCP server publication behavior.
 `McpClientModelSpec` fixes logical identity admission, deterministic catalog
 normalization, duplicate/foreign-tool rejection, recursive schema/value
 representation, positive execution limits, and bounded diagnostic metadata.
+
+`McpClientPortSpec` fixes runtime-owned Port installation, typed discovery and
+invocation through deterministic fake transport, caller selector rejection,
+unbound server-set rejection, and stale-tool rejection before `callTool`.

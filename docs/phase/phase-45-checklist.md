@@ -40,10 +40,10 @@ Stage Status:
 - Update rule: Mark DONE only when a consumer uses a runtime-owned Port with
   Streamable HTTP and deterministic fake implementations.
 
-- [ ] Define the MCP client Port and runtime registry/binding contract.
+- [x] Define the MCP client Port and runtime registry/binding contract.
 - [ ] Implement the Streamable HTTP transport ExtensionPoint for initialize,
   `tools/list`, and `tools/call`.
-- [ ] Implement deterministic fake transport evidence without a remote service.
+- [x] Implement deterministic fake transport evidence without a remote service.
 
 ## Stage MC-04 - Admission And Safety
 

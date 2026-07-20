@@ -41,6 +41,19 @@ only an admitted tool identity obtained from that catalog and a typed argument
 value. It does not expose endpoint, header, credential, transport, JSON-RPC,
 HTTP, or provider-native payload controls.
 
+`McpClientPortApi` resolves a logical `McpClientRequirement` to a contract
+bound to one server set. `McpClientRuntimeRegistry` is the runtime-owned
+ExtensionPoint behind that contract. It installs `McpClientService` in the
+consumer `Component.Port`; neither the application request nor a caller-side
+variation can select an infrastructure provider or transport.
+
+Transport selection is a separate canonical Port binding using
+`McpClientTransportPortApi`. Runtime assembly resolves that binding before it
+creates the client registry. The resulting `McpClientTransport` exposes only
+typed initialize, catalog discovery, and invocation operations to the runtime
+service. Protocol method names and wire records remain implementation details
+of the concrete transport.
+
 ## Typed Client Model
 
 The client model is owned by `org.goldenport.cncf.mcp.client` and is separate
@@ -133,6 +146,9 @@ Transport resources are runtime-owned and participate in runtime shutdown.
 Cancellation and timeout must not leave an in-flight call or transport resource
 untracked.
 
+The runtime registry closes the transports it owns. More precise in-flight
+call, cancellation, and shutdown ordering is fixed by MC-05 lifecycle work.
+
 ## Consumer Responsibility
 
 A consumer Component translates domain behavior to admitted tool usage. It may
@@ -142,3 +158,11 @@ not expose MCP infrastructure controls as ordinary Operation parameters.
 AI-provider function-definition serialization, model continuation loops,
 prompt construction, and agent scheduling belong to Textus AI or another
 consumer. They are not MCP transport responsibilities.
+
+## Executable Evidence
+
+`McpClientPortSpec` fixes canonical Port installation, server-set-bound catalog
+discovery and invocation, rejection of caller infrastructure selection,
+rejection of an unbound server set, and stale-tool rejection before the fake
+transport call boundary. The fake transport is deterministic and does not
+require a remote MCP service.
