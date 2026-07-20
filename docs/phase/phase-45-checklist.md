@@ -58,13 +58,17 @@ Verified progress:
   decoding and before invocation.
 - Recursive required/type/additional-field input admission runs before
   `callTool`, with deterministic JSON Pointer diagnostics.
-- Endpoint credential-reference and resource-limit enforcement remain open.
+- Invocation-scoped call-count/concurrency limits reset between consumer
+  invocations and reject exhaustion before `callTool`.
+- Streamable HTTP applies configured timeout and bounded UTF-8 input/output
+  policy before exchange or protocol decoding.
+- Endpoint credential-reference enforcement remains open.
 
 - [ ] Enforce named server-set, endpoint, credential-reference, and tool
   allowlist admission.
-- [ ] Enforce timeout, call-count, input-byte, output-byte, and concurrency
+- [x] Enforce timeout, call-count, input-byte, output-byte, and concurrency
   limits.
-- [ ] Prove denied and exhausted paths do not invoke the transport.
+- [x] Prove denied and exhausted paths do not invoke the transport.
 
 ## Stage MC-05 - Observability And Lifecycle
 

@@ -91,6 +91,14 @@ The selected transport measures their encoded size and enforces the server
 set's input/output byte limits before those values cross the transport policy
 boundary.
 
+`McpClientService` owns reusable catalog discovery, while each consumer action
+opens an explicit `McpClientInvocation`. The invocation owns call-count and
+active-concurrency state and closes after the consumer body returns. This
+prevents a long-lived installed service from being permanently exhausted and
+makes the configured budget correspond to one domain invocation. Only an
+admitted tool call consumes the count; failed remote execution still consumes
+that admitted slot.
+
 ## Runtime Ownership
 
 The runtime owns:
@@ -139,6 +147,13 @@ stateful HTTP `404` as session expiry. It discards that session, performs one
 fresh initialization, and replays the interrupted logical request once. It
 also validates the JSON-RPC 2.0 envelope and required tool-result shape before
 projecting any typed value.
+
+Every HTTP request carries the server-set timeout and output-byte ceiling. The
+JDK exchange reads response streams through a bounded reader instead of an
+unbounded string body handler, and the transport repeats the output check for
+custom/fake exchanges. The exact UTF-8 `tools/call` request body is checked
+before exchange. Initialization and `tools/list` remain control traffic and do
+not consume the user tool-input budget.
 
 Stdio, legacy SSE, arbitrary subprocess execution, arbitrary HTTP calls, and
 filesystem transport are outside the initial boundary. Adding another

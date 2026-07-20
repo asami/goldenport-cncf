@@ -342,13 +342,21 @@ object McpClientLimits {
       case Some((name, value)) =>
         Consequence.argumentLimitExceeded(name, 1L, value, "mcp-client.limits")
       case None =>
-        Consequence.success(McpClientLimits(
-          timeoutmillis,
-          maximumcalls,
-          maximuminputbytes,
-          maximumoutputbytes,
-          maximumconcurrency
-        ))
+        Vector(
+          "maximumInputBytes" -> maximuminputbytes,
+          "maximumOutputBytes" -> maximumoutputbytes
+        ).find(_._2 > Int.MaxValue.toLong) match {
+          case Some((name, value)) =>
+            Consequence.argumentLimitExceeded(name, Int.MaxValue.toLong, value, "mcp-client.jvm-byte-buffer")
+          case None =>
+            Consequence.success(McpClientLimits(
+              timeoutmillis,
+              maximumcalls,
+              maximuminputbytes,
+              maximumoutputbytes,
+              maximumconcurrency
+            ))
+        }
     }
   }
 }

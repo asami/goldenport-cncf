@@ -1,10 +1,16 @@
 package org.goldenport.cncf.mcp.client
 
+import java.io.{ByteArrayInputStream, InputStream}
+import java.nio.charset.StandardCharsets
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.locks.LockSupport
+
 import scala.collection.mutable.{ArrayBuffer, Queue}
 
 import io.circe.parser.parse
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.observation.{Cause, Descriptor}
 import org.scalacheck.{Gen, Prop, Test}
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
@@ -46,7 +52,7 @@ final class McpStreamableHttpTransportSpec extends AnyWordSpec with Matchers wit
       When("the consumer discovers and invokes one admitted tool")
       val catalog = service.catalog
       val tool = catalog.toOption.get.tools.head
-      val result = service.invoke(_call(tool.identity, "semantic runtime"))
+      val result = service.withInvocation(_.invoke(_call(tool.identity, "semantic runtime")))
 
       Then("the typed boundary hides HTTP and preserves negotiated session semantics")
       catalog.toOption.map(_.tools.map(_.identity.print)) shouldBe Some(Vector("catalog/paper.search"))
@@ -126,7 +132,7 @@ final class McpStreamableHttpTransportSpec extends AnyWordSpec with Matchers wit
       val tool = service.catalog.toOption.get.tools.head
 
       When("the server reports the established session as expired")
-      val result = service.invoke(_call(tool.identity, "paper"))
+      val result = service.withInvocation(_.invoke(_call(tool.identity, "paper")))
 
       Then("the transport negotiates a fresh session and retries without changing the logical request id")
       result.toOption.map(_.content) shouldBe Some(Vector(McpClientContent.Text("recovered")))
@@ -189,10 +195,10 @@ final class McpStreamableHttpTransportSpec extends AnyWordSpec with Matchers wit
       When("both result forms cross independent transport boundaries")
       val missingservice = _registry(missingcontent).resolve(_server_set_id("research")).toOption.get
       val missingtool = missingservice.catalog.toOption.get.tools.head
-      val missingresult = missingservice.invoke(_call(missingtool.identity, "paper"))
+      val missingresult = missingservice.withInvocation(_.invoke(_call(missingtool.identity, "paper")))
       val scalarservice = _registry(scalarstructured).resolve(_server_set_id("research")).toOption.get
       val scalartool = scalarservice.catalog.toOption.get.tools.head
-      val scalarresult = scalarservice.invoke(_call(scalartool.identity, "paper"))
+      val scalarresult = scalarservice.withInvocation(_.invoke(_call(scalartool.identity, "paper")))
 
       Then("both malformed results fail instead of being normalized into valid empty data")
       missingresult.isFaillure shouldBe true
@@ -215,7 +221,7 @@ final class McpStreamableHttpTransportSpec extends AnyWordSpec with Matchers wit
       val tool = service.catalog.toOption.get.tools.head
 
       When("the admitted tool returns an MCP tool error")
-      val result = service.invoke(_call(tool.identity, "paper"))
+      val result = service.withInvocation(_.invoke(_call(tool.identity, "paper")))
 
       Then("the normal Conclusion path carries classification but not raw remote payload")
       result.isFaillure shouldBe true
@@ -244,7 +250,7 @@ final class McpStreamableHttpTransportSpec extends AnyWordSpec with Matchers wit
       val tool = service.catalog.toOption.get.tools.head
 
       When("the standard content blocks cross the provider-neutral Port")
-      val result = service.invoke(_call(tool.identity, "paper")).toOption.get
+      val result = service.withInvocation(_.invoke(_call(tool.identity, "paper"))).toOption.get
 
       Then("each block has one typed representation and no Circe value")
       result.content.map(_.getClass.getSimpleName) shouldBe Vector(
@@ -306,6 +312,96 @@ final class McpStreamableHttpTransportSpec extends AnyWordSpec with Matchers wit
       checked.passed shouldBe true
       rejected.forall(_.isFaillure) shouldBe true
     }
+
+    "enforce configured timeout and serialized tool input before HTTP exchange" in {
+      Given("an initialized catalog with a request smaller than catalog traffic but larger than the tool input budget")
+      given ExecutionContext = ExecutionContext.create()
+      val fake = new _FakeExchange(Vector(
+        _initialize_response(1),
+        _response(202, "application/json", ""),
+        _json_response(200, _tools_list_response(2, None))
+      ))
+      val limits = McpClientLimits.createC(1234L, 4, 64L, 4096L, 1).toOption.get
+      val service = _registry(fake, limits).resolve(_server_set_id("research")).toOption.get
+      val tool = service.catalog.toOption.get.tools.head
+
+      When("the consumer invokes the tool with a serialized body above the configured maximum")
+      val result = service.withInvocation(_.invoke(_call(tool.identity, "x" * 256)))
+
+      Then("the call fails structurally before tools/call reaches HTTP and every sent request uses the configured timeout")
+      result.isFaillure shouldBe true
+      _failure_kind(result) shouldBe Some(Cause.Kind.Limit)
+      _failure_facets(result) should contain (Descriptor.Facet.Reason("maximum-input-bytes"))
+      fake.requests.flatMap(_method) should not contain "tools/call"
+      fake.requests.map(_.timeoutMillis).distinct.toVector shouldBe Vector(1234L)
+    }
+
+    "reject an oversized tool response before protocol decoding" in {
+      Given("an admitted call whose HTTP result exceeds the configured output budget")
+      given ExecutionContext = ExecutionContext.create()
+      val fake = new _FakeExchange(Vector(
+        _initialize_response(1),
+        _response(202, "application/json", ""),
+        _json_response(200, _tools_list_response(2, None)),
+        _json_response(200, s"""{"jsonrpc":"2.0","id":3,"result":{"content":[{"type":"text","text":"${"x" * 2048}"}]}}""")
+      ))
+      val limits = McpClientLimits.createC(1234L, 4, 4096L, 1024L, 1).toOption.get
+      val service = _registry(fake, limits).resolve(_server_set_id("research")).toOption.get
+      val tool = service.catalog.toOption.get.tools.head
+
+      When("the oversized response crosses the exchange boundary")
+      val result = service.withInvocation(_.invoke(_call(tool.identity, "paper")))
+
+      Then("the response is rejected with output-limit diagnostics rather than parsed")
+      result.isFaillure shouldBe true
+      _failure_kind(result) shouldBe Some(Cause.Kind.Limit)
+      _failure_facets(result) should contain allOf (
+        Descriptor.Facet.Reason("maximum-output-bytes"),
+        Descriptor.Facet.Policy("mcp-client.limits"),
+        Descriptor.Facet.Limit(1024L)
+      )
+      fake.requests.flatMap(_method).lastOption shouldBe Some("tools/call")
+    }
+
+    "bound streamed response materialization by deadline and byte ceiling" in {
+      Given("the exact body reader used by the JDK exchange plus stalled and oversized streams")
+      val reader = new McpStreamableHttpBodyReader()
+      val stalled = new _StalledInputStream()
+      val oversized = new ByteArrayInputStream(("x" * 2048).getBytes(StandardCharsets.UTF_8))
+
+      When("both streams cross independently bounded reads")
+      val startedat = System.nanoTime()
+      val timedout = reader.readC(stalled, 1024L, 50L)
+      val elapsedmillis = java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedat)
+      val exceeded = reader.readC(oversized, 1024L, 1000L)
+      reader.close()
+
+      Then("the stalled stream closes promptly and the oversized stream fails before full materialization")
+      _failure_kind(timedout) shouldBe Some(Cause.Kind.Timeout)
+      _failure_facets(timedout) should contain (Descriptor.Facet.Reason("timeout"))
+      stalled.isClosed shouldBe true
+      elapsedmillis should be < 2000L
+      _failure_kind(exceeded) shouldBe Some(Cause.Kind.Limit)
+      _failure_facets(exceeded) should contain allOf (
+        Descriptor.Facet.Reason("maximum-output-bytes"),
+        Descriptor.Facet.Limit(1024L)
+      )
+    }
+  }
+
+  private final class _StalledInputStream extends InputStream {
+    private val _closed = new AtomicBoolean(false)
+
+    def isClosed: Boolean = _closed.get()
+
+    def read(): Int = {
+      while (!_closed.get())
+        LockSupport.parkNanos(1000000L)
+      -1
+    }
+
+    override def close(): Unit =
+      _closed.set(true)
   }
 
   private final class _FakeExchange(
@@ -327,7 +423,10 @@ final class McpStreamableHttpTransportSpec extends AnyWordSpec with Matchers wit
       closed = true
   }
 
-  private def _registry(fake: _FakeExchange)(using ExecutionContext): McpClientRuntimeRegistry = {
+  private def _registry(
+    fake: _FakeExchange,
+    limits: McpClientLimits = McpClientLimits.default
+  )(using ExecutionContext): McpClientRuntimeRegistry = {
     val serversetid = _server_set_id("research")
     val serverid = _server_id("catalog")
     val transportconfig = McpStreamableHttpServerSetConfig.createC(
@@ -340,7 +439,8 @@ final class McpStreamableHttpTransportSpec extends AnyWordSpec with Matchers wit
     ).toOption.get
     val serverset = McpClientServerSet.createC(
       serversetid,
-      Vector(McpClientServer.createC(serverid, Set(_tool_name("paper.search"), _tool_name("paper.read"))).toOption.get)
+      Vector(McpClientServer.createC(serverid, Set(_tool_name("paper.search"), _tool_name("paper.read"))).toOption.get),
+      limits
     ).toOption.get
     McpClientRuntimeRegistry.createC(Vector(serverset), provider.binding).toOption.get
   }
@@ -406,4 +506,16 @@ final class McpStreamableHttpTransportSpec extends AnyWordSpec with Matchers wit
 
   private def _tool_name(value: String): McpToolName =
     McpToolName.parseC(value).toOption.get
+
+  private def _failure_kind[A](result: Consequence[A]): Option[Cause.Kind] =
+    result match {
+      case Consequence.Failure(conclusion) => conclusion.observation.cause.kind
+      case _ => fail("failure is required")
+    }
+
+  private def _failure_facets[A](result: Consequence[A]): Vector[Descriptor.Facet] =
+    result match {
+      case Consequence.Failure(conclusion) => conclusion.observation.cause.descriptor.facets
+      case _ => fail("failure is required")
+    }
 }

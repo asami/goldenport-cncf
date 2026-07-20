@@ -2568,9 +2568,10 @@ Active in Phase 45.
 Implementation status (Jul. 21, 2026): MC-01 through MC-03 are complete. The
 runtime-owned Port/registry, deterministic fake transport, and Streamable HTTP
 initialize, `tools/list`, and `tools/call` paths have executable evidence.
-MC-04 admission and resource-limit enforcement is active. Exact per-server
-tool allowlisting and recursive typed-input admission are implemented;
-endpoint credential-reference and resource-limit enforcement remain.
+MC-04 admission and safety work is active. Exact per-server tool allowlisting,
+recursive typed-input admission, invocation-scoped call/concurrency limits,
+and Streamable HTTP timeout/input/output byte enforcement are implemented;
+endpoint credential-reference enforcement remains.
 
 - Goal: provide a provider-neutral, runtime-owned MCP client boundary so
   consumers can execute only admitted tools without exposing endpoint,

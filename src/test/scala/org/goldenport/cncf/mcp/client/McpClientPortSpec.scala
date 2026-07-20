@@ -1,10 +1,13 @@
 package org.goldenport.cncf.mcp.client
 
 import scala.collection.mutable.ArrayBuffer
+import java.util.concurrent.{CountDownLatch, TimeUnit}
+import java.util.concurrent.atomic.AtomicReference
 
 import org.goldenport.Consequence
 import org.goldenport.cncf.component.{Component, ExtensionPoint, Port, ServiceContract, VariationSelection}
 import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.observation.{Cause, Descriptor}
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -34,7 +37,7 @@ final class McpClientPortSpec extends AnyWordSpec with Matchers with GivenWhenTh
       val installed = registry.binding.install(component, McpClientRequirement(serverset.id))
       val service = installed.toOption.get.port.get[McpClientService].get
       val catalog = service.catalog
-      val result = service.invoke(_call(tool.identity, "paper"))
+      val result = service.withInvocation(_.invoke(_call(tool.identity, "paper")))
 
       Then("the consumer sees typed catalog and result values without transport configuration")
       catalog.toOption.map(_.tools.map(_.identity.print)) shouldBe Some(Vector("catalog/paper.search"))
@@ -96,10 +99,10 @@ final class McpClientPortSpec extends AnyWordSpec with Matchers with GivenWhenTh
       val service = registry.resolve(serverset.id).toOption.get
 
       When("the typed call carries a stale non-catalog tool identity")
-      val result = service.invoke(_call(
+      val result = service.withInvocation(_.invoke(_call(
         McpToolIdentity(_server_id("catalog"), _tool_name("paper.delete")),
         "paper"
-      ))
+      )))
 
       Then("catalog discovery occurs but the fake call boundary is not crossed")
       result.isFaillure shouldBe true
@@ -121,7 +124,7 @@ final class McpClientPortSpec extends AnyWordSpec with Matchers with GivenWhenTh
 
       When("the consumer discovers the catalog and attempts the unlisted identity")
       val catalog = service.catalog
-      val result = service.invoke(_call(denied.identity, "paper"))
+      val result = service.withInvocation(_.invoke(_call(denied.identity, "paper")))
 
       Then("only the exact admitted identity is visible and denial occurs before callTool")
       catalog.toOption.map(_.tools.map(_.identity)) shouldBe Some(Vector(admitted.identity))
@@ -157,11 +160,83 @@ final class McpClientPortSpec extends AnyWordSpec with Matchers with GivenWhenTh
       ).toOption.get
 
       When("missing wrong-kind and additional inputs are invoked")
-      val results = Vector(missing, wrongtype, additional).map(service.invoke)
+      val results = service.withInvocation { invocation =>
+        Consequence.success(Vector(missing, wrongtype, additional).map(invocation.invoke))
+      }.toOption.get
 
       Then("each fails structurally before the transport call boundary")
       results.forall(_.isFaillure) shouldBe true
       fake.events.toVector shouldBe Vector("initialize:catalog", "list:catalog")
+    }
+
+    "bound calls within one invocation and reset the budget for the next invocation" in {
+      Given("one admitted tool and a one-call invocation limit")
+      given ExecutionContext = ExecutionContext.create()
+      val tool = _tool("catalog", "paper.search")
+      val limits = McpClientLimits.createC(30000L, 1, 1024L, 1024L, 1).toOption.get
+      val serverset = _server_set("research", "catalog", limits = limits)
+      val fake = new _FakeTransport(Map(_server_id("catalog") -> Vector(tool)))
+      val service = McpClientRuntimeRegistry.createC(
+        Vector(serverset),
+        _transport_binding(fake, Set(serverset.id))
+      ).toOption.get.resolve(serverset.id).toOption.get
+
+      When("two calls share one invocation and another call uses a fresh invocation")
+      val within = service.withInvocation { invocation =>
+        val first = invocation.invoke(_call(tool.identity, "first"))
+        val second = invocation.invoke(_call(tool.identity, "second"))
+        Consequence.success(first -> second)
+      }.toOption.get
+      val fresh = service.withInvocation(_.invoke(_call(tool.identity, "fresh")))
+
+      Then("only the second shared call is rejected with structured limit diagnostics")
+      within._1.isSuccess shouldBe true
+      within._2.isFaillure shouldBe true
+      _failure_kind(within._2) shouldBe Some(Cause.Kind.Limit)
+      _failure_facets(within._2) should contain allOf (
+        Descriptor.Facet.Reason("maximum-calls"),
+        Descriptor.Facet.Policy("mcp-client.limits"),
+        Descriptor.Facet.Limit(1L),
+        Descriptor.Facet.Actual(2L)
+      )
+      fresh.isSuccess shouldBe true
+      fake.events.count(_.startsWith("call:")) shouldBe 2
+    }
+
+    "reject concurrent calls beyond the invocation limit before transport execution" in {
+      Given("one blocking transport call and a single-concurrency invocation")
+      given context: ExecutionContext = ExecutionContext.create()
+      val tool = _tool("catalog", "paper.search")
+      val limits = McpClientLimits.createC(30000L, 4, 1024L, 1024L, 1).toOption.get
+      val serverset = _server_set("research", "catalog", limits = limits)
+      val entered = new CountDownLatch(1)
+      val release = new CountDownLatch(1)
+      val fake = new _FakeTransport(Map(_server_id("catalog") -> Vector(tool)), Some(entered -> release))
+      val service = McpClientRuntimeRegistry.createC(
+        Vector(serverset),
+        _transport_binding(fake, Set(serverset.id))
+      ).toOption.get.resolve(serverset.id).toOption.get
+
+      When("a second call is attempted while the first one owns the transport slot")
+      val results = service.withInvocation { invocation =>
+        val first = new AtomicReference[Consequence[McpClientResult]]()
+        val worker = new Thread(() => first.set(invocation.invoke(_call(tool.identity, "first"))(using context)))
+        worker.start()
+        val enteredtransport = entered.await(5L, TimeUnit.SECONDS)
+        val second = invocation.invoke(_call(tool.identity, "second"))
+        release.countDown()
+        worker.join(5000L)
+        Consequence.success((first.get(), second, enteredtransport, worker.isAlive))
+      }.toOption.get
+
+      Then("the first call completes and the second receives concurrency diagnostics")
+      results._3 shouldBe true
+      results._4 shouldBe false
+      results._1.isSuccess shouldBe true
+      results._2.isFaillure shouldBe true
+      _failure_kind(results._2) shouldBe Some(Cause.Kind.Limit)
+      _failure_facets(results._2) should contain (Descriptor.Facet.Reason("maximum-concurrency"))
+      fake.events.count(_.startsWith("call:")) shouldBe 1
     }
   }
 
@@ -189,25 +264,37 @@ final class McpClientPortSpec extends AnyWordSpec with Matchers with GivenWhenTh
     ))
 
   private final class _FakeTransport(
-    catalogs: Map[McpServerId, Vector[McpClientTool]]
+    catalogs: Map[McpServerId, Vector[McpClientTool]],
+    blocking: Option[(CountDownLatch, CountDownLatch)] = None
   ) extends McpClientTransport {
     val events = ArrayBuffer.empty[String]
 
-    def initialize(server: McpClientServer)(using ExecutionContext): Consequence[Unit] = {
+    def initialize(
+      server: McpClientServer,
+      limits: McpClientLimits
+    )(using ExecutionContext): Consequence[Unit] = {
       events += s"initialize:${server.id.print}"
       Consequence.unit
     }
 
-    def listTools(server: McpClientServer)(using ExecutionContext): Consequence[Vector[McpClientTool]] = {
+    def listTools(
+      server: McpClientServer,
+      limits: McpClientLimits
+    )(using ExecutionContext): Consequence[Vector[McpClientTool]] = {
       events += s"list:${server.id.print}"
       Consequence.success(catalogs.getOrElse(server.id, Vector.empty))
     }
 
     def callTool(
       server: McpClientServer,
-      call: McpClientCall
+      call: McpClientCall,
+      limits: McpClientLimits
     )(using ExecutionContext): Consequence[McpClientResult] = {
       events += s"call:${call.toolIdentity.print}"
+      blocking.foreach { case (entered, release) =>
+        entered.countDown()
+        release.await(5L, TimeUnit.SECONDS)
+      }
       val query = call.arguments.fields.collectFirst {
         case (name, McpValue.StringValue(value)) if name.print == "query" => value
       }.getOrElse("")
@@ -221,11 +308,13 @@ final class McpClientPortSpec extends AnyWordSpec with Matchers with GivenWhenTh
   private def _server_set(
     name: String,
     server: String,
-    admittedtools: Set[McpToolName] = Set(_tool_name("paper.search"))
+    admittedtools: Set[McpToolName] = Set(_tool_name("paper.search")),
+    limits: McpClientLimits = McpClientLimits.default
   ): McpClientServerSet =
     McpClientServerSet.createC(
       _server_set_id(name),
-      Vector(McpClientServer.createC(_server_id(server), admittedtools).toOption.get)
+      Vector(McpClientServer.createC(_server_id(server), admittedtools).toOption.get),
+      limits
     ).toOption.get
 
   private def _server_set_id(value: String): McpServerSetId =
@@ -255,4 +344,16 @@ final class McpClientPortSpec extends AnyWordSpec with Matchers with GivenWhenTh
         _field_name("query") -> McpValue.StringValue(query)
       )).toOption.get
     ).toOption.get
+
+  private def _failure_kind[A](result: Consequence[A]): Option[Cause.Kind] =
+    result match {
+      case Consequence.Failure(conclusion) => conclusion.observation.cause.kind
+      case _ => fail("failure is required")
+    }
+
+  private def _failure_facets[A](result: Consequence[A]): Vector[Descriptor.Facet] =
+    result match {
+      case Consequence.Failure(conclusion) => conclusion.observation.cause.descriptor.facets
+      case _ => fail("failure is required")
+    }
 }

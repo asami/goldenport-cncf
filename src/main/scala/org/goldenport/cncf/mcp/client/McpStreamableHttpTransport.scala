@@ -1,11 +1,12 @@
 package org.goldenport.cncf.mcp.client
 
+import java.io.ByteArrayOutputStream
 import java.net.URI
 import java.net.http.{HttpClient, HttpRequest, HttpResponse, HttpTimeoutException}
 import java.nio.charset.StandardCharsets
 import java.time.Duration
 import java.util.Locale
-import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.{Callable, ConcurrentHashMap, Executors, TimeUnit, TimeoutException}
 import java.util.concurrent.atomic.AtomicLong
 
 import scala.jdk.CollectionConverters.*
@@ -186,7 +187,8 @@ private[client] final case class McpStreamableHttpRequest(
   endpoint: URI,
   headers: Map[String, String],
   body: Option[String],
-  timeoutMillis: Long
+  timeoutMillis: Long,
+  maximumResponseBytes: Long
 )
 
 private[client] final case class McpStreamableHttpResponse(
@@ -203,10 +205,96 @@ private[client] abstract class McpStreamableHttpExchange extends AutoCloseable {
   def close(): Unit = ()
 }
 
+private[client] final class McpStreamableHttpBodyReader extends AutoCloseable {
+  private val _executor = Executors.newVirtualThreadPerTaskExecutor()
+
+  def readC(
+    input: java.io.InputStream,
+    maximumbytes: Long,
+    timeoutmillis: Long
+  ): Consequence[String] = {
+    val future = _executor.submit(new Callable[Consequence[String]] {
+      def call(): Consequence[String] =
+        _read_body_c(input, maximumbytes)
+    })
+    try
+      future.get(timeoutmillis, TimeUnit.MILLISECONDS)
+    catch {
+      case _: TimeoutException =>
+        Try(input.close())
+        future.cancel(true)
+        _transport_failure("timeout", Cause.Kind.Timeout)
+      case _: InterruptedException =>
+        Try(input.close())
+        future.cancel(true)
+        Thread.currentThread().interrupt()
+        _transport_failure("interrupted", Cause.Kind.Exhaustion)
+      case _: Throwable =>
+        Try(input.close())
+        future.cancel(true)
+        _transport_failure("unavailable", Cause.Kind.Unknown)
+    }
+  }
+
+  def close(): Unit =
+    _executor.shutdownNow()
+
+  private def _read_body_c(
+    input: java.io.InputStream,
+    maximumbytes: Long
+  ): Consequence[String] = {
+    val output = new ByteArrayOutputStream()
+    val buffer = new Array[Byte](8192)
+    var count = 0L
+    try {
+      var length = input.read(buffer)
+      while (length >= 0 && count + length <= maximumbytes) {
+        if (length > 0) {
+          output.write(buffer, 0, length)
+          count += length
+        }
+        length = input.read(buffer)
+      }
+      if (length >= 0)
+        _response_limit_failure(maximumbytes, count + length)
+      else
+        Consequence.success(output.toString(StandardCharsets.UTF_8))
+    } finally {
+      input.close()
+      output.close()
+    }
+  }
+
+  private def _response_limit_failure[A](limit: Long, actual: Long): Consequence.Failure[A] =
+    Consequence.serviceUnavailable(
+      "MCP Streamable HTTP response exceeds its byte limit",
+      Cause.Kind.Limit,
+      Vector(
+        Descriptor.Facet.Reason("maximum-output-bytes"),
+        Descriptor.Facet.Policy("mcp-client.limits"),
+        Descriptor.Facet.Limit(limit),
+        Descriptor.Facet.Actual(actual)
+      )
+    )
+
+  private def _transport_failure[A](reason: String, kind: Cause.Kind): Consequence.Failure[A] =
+    Consequence.serviceUnavailable(
+      "MCP Streamable HTTP transport failed",
+      kind,
+      Vector(
+        Descriptor.Facet.Reason(reason),
+        Descriptor.Facet.Policy("mcp-client.streamable-http")
+      )
+    )
+}
+
 private final class JavaMcpStreamableHttpExchange(
   client: HttpClient
 ) extends McpStreamableHttpExchange {
+  private val _body_reader = new McpStreamableHttpBodyReader()
+
   def execute(request: McpStreamableHttpRequest): Consequence[McpStreamableHttpResponse] = {
+    val startedat = System.nanoTime()
     val builder = HttpRequest.newBuilder(request.endpoint)
       .timeout(Duration.ofMillis(request.timeoutMillis))
     request.headers.toVector.sortBy(_._1).foreach { case (name, value) =>
@@ -218,14 +306,8 @@ private final class JavaMcpStreamableHttpExchange(
       case method => builder.method(method, HttpRequest.BodyPublishers.noBody())
     }
     try {
-      val response = client.send(builder.build(), HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8))
-      Consequence.success(McpStreamableHttpResponse(
-        response.statusCode(),
-        response.headers().map().asScala.toVector.map { case (name, values) =>
-          name.toLowerCase(Locale.ROOT) -> values.asScala.headOption.getOrElse("")
-        }.toMap,
-        response.body()
-      ))
+      val response = client.send(builder.build(), HttpResponse.BodyHandlers.ofInputStream())
+      _read_response_c(response, request, startedat)
     } catch {
       case _: HttpTimeoutException =>
         _transport_failure("timeout", Cause.Kind.Timeout)
@@ -235,6 +317,31 @@ private final class JavaMcpStreamableHttpExchange(
       case _: Throwable =>
         _transport_failure("unavailable", Cause.Kind.Unknown)
     }
+  }
+
+  override def close(): Unit =
+    _body_reader.close()
+
+  private def _read_response_c(
+    response: HttpResponse[java.io.InputStream],
+    request: McpStreamableHttpRequest,
+    startedat: Long
+  ): Consequence[McpStreamableHttpResponse] = {
+    val elapsedmillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedat)
+    val remainingmillis = request.timeoutMillis - elapsedmillis
+    if (remainingmillis <= 0L) {
+      Try(response.body().close())
+      _transport_failure("timeout", Cause.Kind.Timeout)
+    } else
+      _body_reader.readC(response.body(), request.maximumResponseBytes, remainingmillis).map { body =>
+        McpStreamableHttpResponse(
+          response.statusCode(),
+          response.headers().map().asScala.toVector.map { case (name, values) =>
+            name.toLowerCase(Locale.ROOT) -> values.asScala.headOption.getOrElse("")
+          }.toMap,
+          body
+        )
+      }
   }
 
   private def _transport_failure[A](
@@ -264,9 +371,13 @@ private final class McpStreamableHttpTransport(
 
   private val _request_id = new AtomicLong(0L)
   private val _sessions = new ConcurrentHashMap[McpServerId, _Session]()
+  private val _limits = new ConcurrentHashMap[McpServerId, McpClientLimits]()
   private val _configs = config.servers.map(x => x.serverId -> x).toMap
 
-  def initialize(server: McpClientServer)(using ExecutionContext): Consequence[Unit] = synchronized {
+  def initialize(
+    server: McpClientServer,
+    limits: McpClientLimits
+  )(using ExecutionContext): Consequence[Unit] = synchronized {
     Option(_sessions.get(server.id)) match {
       case Some(_) => Consequence.unit
       case None =>
@@ -280,7 +391,7 @@ private final class McpStreamableHttpTransport(
               "version" -> Json.fromString("phase-45")
             )
           )))
-          _post_request(serverconfig, None, None, message, requestid).flatMap { case (response, result) =>
+          _post_request(serverconfig, None, None, message, requestid, limits).flatMap { case (response, result) =>
             result.hcursor.get[String]("protocolVersion").toOption match {
               case Some(version) if serverconfig.supportedProtocolVersions.contains(version) =>
                 _session_id_option_c(response.header("mcp-session-id")).flatMap { sessionid =>
@@ -288,9 +399,11 @@ private final class McpStreamableHttpTransport(
                   _post_notification(
                     serverconfig,
                     session,
-                    _notification("notifications/initialized", None)
+                    _notification("notifications/initialized", None),
+                    limits
                   ).map { _ =>
                     _sessions.put(server.id, session)
+                    _limits.put(server.id, limits)
                     ()
                   }
                 }
@@ -301,16 +414,20 @@ private final class McpStreamableHttpTransport(
     }
   }
 
-  def listTools(server: McpClientServer)(using ExecutionContext): Consequence[Vector[McpClientTool]] =
+  def listTools(
+    server: McpClientServer,
+    limits: McpClientLimits
+  )(using ExecutionContext): Consequence[Vector[McpClientTool]] =
     for {
       serverconfig <- _config_c(server)
       _ <- _session_c(server)
-      tools <- _list_tools(serverconfig, server, None, 0, Vector.empty)
+      tools <- _list_tools(serverconfig, server, None, 0, Vector.empty, limits)
     } yield tools
 
   def callTool(
     server: McpClientServer,
-    call: McpClientCall
+    call: McpClientCall,
+    limits: McpClientLimits
   )(using ExecutionContext): Consequence[McpClientResult] =
     for {
       serverconfig <- _config_c(server)
@@ -326,7 +443,9 @@ private final class McpStreamableHttpTransport(
         session,
         _request(requestid, "tools/call", Some(params)),
         requestid,
-        allowreinitialize = true
+        allowreinitialize = true,
+        limits = limits,
+        enforceinputlimit = true
       )
       result <- _call_result_c(response._2)
     } yield result
@@ -334,13 +453,15 @@ private final class McpStreamableHttpTransport(
   override def close(): Unit = synchronized {
     _configs.values.toVector.sortBy(_.serverId.print).foreach { serverconfig =>
       Option(_sessions.remove(serverconfig.serverId)).foreach { session =>
+        val limits = Option(_limits.remove(serverconfig.serverId)).getOrElse(McpClientLimits.default)
         session.sessionId.foreach { sessionid =>
           exchange.execute(McpStreamableHttpRequest(
             "DELETE",
             serverconfig.endpoint,
             _headers(Some(sessionid), Some(session.protocolVersion), accept = "application/json, text/event-stream"),
             None,
-            McpClientLimits.DEFAULT_TIMEOUT_MILLIS
+            limits.timeoutMillis,
+            limits.maximumOutputBytes
           ))
         }
       }
@@ -353,7 +474,8 @@ private final class McpStreamableHttpTransport(
     server: McpClientServer,
     cursor: Option[String],
     pages: Int,
-    accumulator: Vector[McpClientTool]
+    accumulator: Vector[McpClientTool],
+    limits: McpClientLimits
   )(using ExecutionContext): Consequence[Vector[McpClientTool]] =
     if (pages >= 128)
       _protocol_failure("catalog-page-limit")
@@ -367,7 +489,9 @@ private final class McpStreamableHttpTransport(
           session,
           _request(requestid, "tools/list", params),
           requestid,
-          allowreinitialize = true
+          allowreinitialize = true,
+          limits = limits,
+          enforceinputlimit = false
         ).flatMap { case (_, result) =>
           result.hcursor.downField("tools").focus.flatMap(_.asArray) match {
             case Some(values) =>
@@ -375,7 +499,7 @@ private final class McpStreamableHttpTransport(
                 val admittedtools = tools.flatten
                 val next = result.hcursor.get[String]("nextCursor").toOption.filter(_.nonEmpty)
                 next match {
-                  case Some(value) => _list_tools(serverconfig, server, Some(value), pages + 1, accumulator ++ admittedtools)
+                  case Some(value) => _list_tools(serverconfig, server, Some(value), pages + 1, accumulator ++ admittedtools, limits)
                   case None => Consequence.success(accumulator ++ admittedtools)
                 }
               }
@@ -391,18 +515,21 @@ private final class McpStreamableHttpTransport(
     session: _Session,
     message: Json,
     requestid: Long,
-    allowreinitialize: Boolean
+    allowreinitialize: Boolean,
+    limits: McpClientLimits,
+    enforceinputlimit: Boolean
   )(using ExecutionContext): Consequence[(McpStreamableHttpResponse, Json)] =
-    exchange.execute(McpStreamableHttpRequest(
+    _execute_c(McpStreamableHttpRequest(
       "POST",
       serverconfig.endpoint,
       _headers(session.sessionId, Some(session.protocolVersion), "application/json, text/event-stream"),
       Some(message.noSpaces),
-      McpClientLimits.DEFAULT_TIMEOUT_MILLIS
-    )).flatMap { response =>
+      limits.timeoutMillis,
+      limits.maximumOutputBytes
+    ), if (enforceinputlimit) Some(limits.maximumInputBytes) else None).flatMap { response =>
       if (response.status == 404 && session.sessionId.nonEmpty && allowreinitialize) {
         _sessions.remove(server.id, session)
-        initialize(server).flatMap { _ =>
+        initialize(server, limits).flatMap { _ =>
           _session_c(server).flatMap { freshsession =>
             _post_session_request(
               serverconfig,
@@ -410,7 +537,9 @@ private final class McpStreamableHttpTransport(
               freshsession,
               message,
               requestid,
-              allowreinitialize = false
+              allowreinitialize = false,
+              limits = limits,
+              enforceinputlimit = enforceinputlimit
             )
           }
         }
@@ -425,15 +554,17 @@ private final class McpStreamableHttpTransport(
     sessionid: Option[_SessionId],
     protocolversion: Option[String],
     message: Json,
-    requestid: Long
+    requestid: Long,
+    limits: McpClientLimits
   ): Consequence[(McpStreamableHttpResponse, Json)] =
-    exchange.execute(McpStreamableHttpRequest(
+    _execute_c(McpStreamableHttpRequest(
       "POST",
       serverconfig.endpoint,
       _headers(sessionid, protocolversion, "application/json, text/event-stream"),
       Some(message.noSpaces),
-      McpClientLimits.DEFAULT_TIMEOUT_MILLIS
-    )).flatMap { response =>
+      limits.timeoutMillis,
+      limits.maximumOutputBytes
+    ), None).flatMap { response =>
       if (response.status / 100 != 2)
         _transport_status_failure(response.status)
       else
@@ -443,20 +574,63 @@ private final class McpStreamableHttpTransport(
   private def _post_notification(
     serverconfig: McpStreamableHttpServerConfig,
     session: _Session,
-    message: Json
+    message: Json,
+    limits: McpClientLimits
   ): Consequence[Unit] =
-    exchange.execute(McpStreamableHttpRequest(
+    _execute_c(McpStreamableHttpRequest(
       "POST",
       serverconfig.endpoint,
       _headers(session.sessionId, Some(session.protocolVersion), "application/json, text/event-stream"),
       Some(message.noSpaces),
-      McpClientLimits.DEFAULT_TIMEOUT_MILLIS
-    )).flatMap { response =>
+      limits.timeoutMillis,
+      limits.maximumOutputBytes
+    ), None).flatMap { response =>
       if (response.status == 202)
         Consequence.unit
       else
         _transport_status_failure(response.status)
     }
+
+  private def _execute_c(
+    request: McpStreamableHttpRequest,
+    maximuminputbytes: Option[Long]
+  ): Consequence[McpStreamableHttpResponse] =
+    maximuminputbytes match {
+      case Some(limit) =>
+        val actual = request.body.map(_.getBytes(StandardCharsets.UTF_8).length.toLong).getOrElse(0L)
+        if (actual > limit)
+          _limit_failure("maximum-input-bytes", limit, actual)
+        else
+          _execute_response_c(request)
+      case None => _execute_response_c(request)
+    }
+
+  private def _execute_response_c(
+    request: McpStreamableHttpRequest
+  ): Consequence[McpStreamableHttpResponse] =
+    exchange.execute(request).flatMap { response =>
+      val actual = response.body.getBytes(StandardCharsets.UTF_8).length.toLong
+      if (actual > request.maximumResponseBytes)
+        _limit_failure("maximum-output-bytes", request.maximumResponseBytes, actual)
+      else
+        Consequence.success(response)
+    }
+
+  private def _limit_failure[A](
+    reason: String,
+    limit: Long,
+    actual: Long
+  ): Consequence.Failure[A] =
+    Consequence.operationInvalid(
+      "MCP client resource limit exceeded",
+      Cause.Kind.Limit,
+      Vector(
+        Descriptor.Facet.Reason(reason),
+        Descriptor.Facet.Policy("mcp-client.limits"),
+        Descriptor.Facet.Limit(limit),
+        Descriptor.Facet.Actual(actual)
+      )
+    )
 
   private def _response_result_c(
     response: McpStreamableHttpResponse,

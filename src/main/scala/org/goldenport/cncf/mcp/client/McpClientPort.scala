@@ -3,6 +3,7 @@ package org.goldenport.cncf.mcp.client
 import org.goldenport.Consequence
 import org.goldenport.cncf.component.{Component, ExtensionPoint, Port, PortApi, ServiceContract, VariationPoint, VariationSelection}
 import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.observation.{Cause, Descriptor}
 
 /*
  * Runtime-owned MCP client Port and transport boundary.
@@ -19,16 +20,31 @@ final case class McpClientRequirement(
 abstract class McpClientService {
   def serverSetId: McpServerSetId
   def catalog(using ExecutionContext): Consequence[McpClientCatalog]
+  def withInvocation[A](
+    body: McpClientInvocation => Consequence[A]
+  )(using ExecutionContext): Consequence[A]
+}
+
+/** One consumer invocation scope carrying bounded MCP tool-call state. */
+abstract class McpClientInvocation {
+  def catalog(using ExecutionContext): Consequence[McpClientCatalog]
   def invoke(call: McpClientCall)(using ExecutionContext): Consequence[McpClientResult]
 }
 
 /** Runtime-internal protocol boundary implemented by an admitted transport. */
 abstract class McpClientTransport extends AutoCloseable {
-  def initialize(server: McpClientServer)(using ExecutionContext): Consequence[Unit]
-  def listTools(server: McpClientServer)(using ExecutionContext): Consequence[Vector[McpClientTool]]
+  def initialize(
+    server: McpClientServer,
+    limits: McpClientLimits
+  )(using ExecutionContext): Consequence[Unit]
+  def listTools(
+    server: McpClientServer,
+    limits: McpClientLimits
+  )(using ExecutionContext): Consequence[Vector[McpClientTool]]
   def callTool(
     server: McpClientServer,
-    call: McpClientCall
+    call: McpClientCall,
+    limits: McpClientLimits
   )(using ExecutionContext): Consequence[McpClientResult]
 
   def close(): Unit = ()
@@ -204,24 +220,83 @@ final class DefaultMcpClientService private[client] (
       case (z, server) =>
         for {
           xs <- z
-          _ <- transport.initialize(server)
-          tools <- transport.listTools(server)
+          _ <- transport.initialize(server, serverset.limits)
+          tools <- transport.listTools(server, serverset.limits)
         } yield xs ++ tools
     }.flatMap(McpClientCatalog.createC(serverset, _))
 
-  def invoke(call: McpClientCall)(using ExecutionContext): Consequence[McpClientResult] =
-    catalog.flatMap { current =>
-      current.tool(call.toolIdentity) match {
-        case Some(tool) =>
-          tool.validateArgumentsC(call.arguments).flatMap { _ =>
-            serverset.servers.find(_.id == call.toolIdentity.serverId) match {
-              case Some(server) => transport.callTool(server, call)
-              case None => Consequence.operationNotFound(s"MCP server not admitted: ${call.toolIdentity.serverId.print}")
+  def withInvocation[A](
+    body: McpClientInvocation => Consequence[A]
+  )(using ExecutionContext): Consequence[A] = {
+    val invocation = new _Invocation()
+    try body(invocation)
+    finally invocation.close()
+  }
+
+  private final class _Invocation extends McpClientInvocation with AutoCloseable {
+    private var _calls = 0
+    private var _active = 0
+    private var _closed = false
+
+    def catalog(using ExecutionContext): Consequence[McpClientCatalog] =
+      DefaultMcpClientService.this.catalog
+
+    def invoke(call: McpClientCall)(using ExecutionContext): Consequence[McpClientResult] =
+      catalog.flatMap { current =>
+        current.tool(call.toolIdentity) match {
+          case Some(tool) =>
+            tool.validateArgumentsC(call.arguments).flatMap { _ =>
+              serverset.servers.find(_.id == call.toolIdentity.serverId) match {
+                case Some(server) =>
+                  _admit_c.flatMap { _ =>
+                    try transport.callTool(server, call, serverset.limits)
+                    finally _release()
+                  }
+                case None => Consequence.operationNotFound(s"MCP server not admitted: ${call.toolIdentity.serverId.print}")
+              }
             }
-          }
-        case None => Consequence.operationNotFound(s"MCP tool not admitted: ${call.toolIdentity.print}")
+          case None => Consequence.operationNotFound(s"MCP tool not admitted: ${call.toolIdentity.print}")
+        }
+      }
+
+    private def _admit_c: Consequence[Unit] = synchronized {
+      if (_closed)
+        _limit_failure("invocation-closed", 0L, 1L)
+      else if (_calls >= serverset.limits.maximumCalls)
+        _limit_failure("maximum-calls", serverset.limits.maximumCalls.toLong, _calls.toLong + 1L)
+      else if (_active >= serverset.limits.maximumConcurrency)
+        _limit_failure("maximum-concurrency", serverset.limits.maximumConcurrency.toLong, _active.toLong + 1L)
+      else {
+        _calls += 1
+        _active += 1
+        Consequence.unit
       }
     }
+
+    private def _release(): Unit = synchronized {
+      _active -= 1
+    }
+
+    private def _limit_failure(
+      reason: String,
+      limit: Long,
+      actual: Long
+    ): Consequence.Failure[Unit] =
+      Consequence.operationInvalid(
+        "MCP client invocation limit exceeded",
+        Cause.Kind.Limit,
+        Vector(
+          Descriptor.Facet.Reason(reason),
+          Descriptor.Facet.Policy("mcp-client.limits"),
+          Descriptor.Facet.Limit(limit),
+          Descriptor.Facet.Actual(actual)
+        )
+      )
+
+    def close(): Unit = synchronized {
+      _closed = true
+    }
+  }
 
   def close(): Unit = transport.close()
 }

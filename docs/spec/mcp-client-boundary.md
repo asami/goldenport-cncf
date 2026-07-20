@@ -128,6 +128,14 @@ Transport selection MUST use the separate `McpClientTransportPortApi` and
 canonical Port/ExtensionPoint wiring before the runtime registry is created.
 The consumer-facing service MUST NOT expose that transport binding.
 
+Tool calls MUST execute through an explicit `McpClientInvocation` created by
+`McpClientService.withInvocation`. Call-count and concurrency limits apply to
+that invocation scope, not to the lifetime of the installed service. Catalog
+discovery MAY be cached by the service and MUST NOT consume the tool-call
+budget. A failed transport call consumes one admitted call; a denied tool or
+invalid input rejected before admission does not. Closing one invocation MUST
+not exhaust the budget of a later invocation.
+
 ## Server Publication Separation
 
 The existing CNCF MCP server projection MUST continue to publish MCP-ready CNCF
@@ -152,6 +160,15 @@ Admission MUST occur before transport execution. It MUST cover:
 - concurrency limits.
 
 A denied or exhausted request MUST NOT invoke the transport.
+
+The Streamable HTTP transport MUST apply the configured timeout to initialize,
+catalog, and tool-call requests. It MUST reject an oversized serialized
+`tools/call` request before HTTP exchange and MUST bound every response before
+protocol decoding. Initialization and catalog protocol traffic do not consume
+the tool input-byte budget. Limit failures MUST use `Cause.Kind.Limit` and
+structured `Policy`, `Reason`, `Limit`, and `Actual` facets.
+Configured input/output byte ceilings MUST also fit the runtime's bounded byte
+buffer representation and MUST fail configuration deterministically otherwise.
 
 ## Failure Contract
 

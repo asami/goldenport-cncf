@@ -201,10 +201,15 @@ final class McpClientModelSpec extends AnyWordSpec with Matchers with GivenWhenT
       When("the runtime validates generated and zero-valued limits")
       val checked = Test.check(Test.Parameters.default.withMinSuccessfulTests(64), property)
       val rejected = McpClientLimits.createC(0L, 1, 1L, 1L, 1)
+      val unrepresentable = Vector(
+        McpClientLimits.createC(1L, 1, Int.MaxValue.toLong + 1L, 1L, 1),
+        McpClientLimits.createC(1L, 1, 1L, Int.MaxValue.toLong + 1L, 1)
+      )
 
-      Then("every positive tuple survives exactly and a non-positive member fails")
+      Then("representable positive tuples survive while non-positive and unbufferable byte limits fail")
       checked.passed shouldBe true
       rejected.isFaillure shouldBe true
+      unrepresentable.forall(_.isFaillure) shouldBe true
     }
 
     "keep diagnostic metadata bounded and pre-redacted" in {
