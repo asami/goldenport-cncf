@@ -10,7 +10,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * Executable specification for payload-safe resource-tree diagnostics.
  *
  * @since   Jul. 17, 2026
- * @version Jul. 17, 2026
+ * @version Jul. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ResourceTreeAccessObservationSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -36,6 +36,23 @@ final class ResourceTreeAccessObservationSpec extends AnyWordSpec with Matchers 
       rendered should include("dsl:resource-tree.snapshot")
       rendered should not include "private-review-content"
       after shouldBe before + 1
+    }
+
+    "preserve resource-tree query capability through the observed decorator" in {
+      Given("an observed in-memory tree with one matching entry")
+      val reference = ResourceTreeReference.parseC("source-tree").toOption.get
+      val entry = ResourceTreeEntry.createC("review/project.yaml", Vector(1.toByte)).toOption.get
+      val context = ExecutionContext.withResourceTreeAccess(
+        ExecutionContext.create(),
+        ResourceTreeAccess.inMemory(Map(reference -> Vector(entry)))
+      )
+      val query = ResourceTreeQuery.exactLeafNameC(reference, "project.yaml").toOption.get
+
+      When("component code queries through ExecutionContext.resourceTrees")
+      val result = context.resourceTrees.query(query)
+
+      Then("the decorator delegates to the installed provider instead of changing query semantics")
+      result.toOption.map(_.entries.map(_.relativePath)) shouldBe Some(Vector("review/project.yaml"))
     }
   }
 }

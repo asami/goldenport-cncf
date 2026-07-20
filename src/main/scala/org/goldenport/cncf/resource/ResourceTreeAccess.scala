@@ -9,7 +9,7 @@ import org.goldenport.Consequence
 
 /*
  * @since   Jul. 17, 2026
- * @version Jul. 17, 2026
+ * @version Jul. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ResourceTreeReference private[resource] (name: String)
@@ -88,6 +88,200 @@ object ResourceTreeLimits {
   val DefaultMaxTotalBytes: Long = 64L * 1024L * 1024L
 
   val default: ResourceTreeLimits = ResourceTreeLimits()
+}
+
+sealed abstract class ResourceTreeEntrySelector {
+  def kind: String
+
+  private[resource] def matches(entry: ResourceTreeEntry): Boolean
+}
+
+object ResourceTreeEntrySelector {
+  final case class ExactLeafName private[resource] (name: String) extends ResourceTreeEntrySelector {
+    val kind = "exact-leaf-name"
+
+    private[resource] def matches(entry: ResourceTreeEntry): Boolean =
+      entry.relativePath.split("/").lastOption.contains(name)
+  }
+
+  def exactLeafNameC(value: String): Consequence[ResourceTreeEntrySelector] =
+    _exact_leaf_name_c(value).map(ExactLeafName(_))
+
+  private def _exact_leaf_name_c(value: String): Consequence[String] = {
+    val name = Option(value).map(_.trim).getOrElse("")
+    if (
+      name.isEmpty ||
+      name == "." ||
+      name == ".." ||
+      name.contains("/") ||
+      name.contains("\\") ||
+      name.exists(_.isControl)
+    )
+      Consequence.argumentFormatError("leafName", "a safe bare resource-tree file name", value)
+    else
+      Consequence.success(name)
+  }
+}
+
+final case class ResourceTreeQueryLimits(
+  maxDepth: Int = ResourceTreeQueryLimits.DefaultMaxDepth,
+  maxVisitedDirectories: Int = ResourceTreeQueryLimits.DefaultMaxVisitedDirectories,
+  maxEntries: Int = ResourceTreeQueryLimits.DefaultMaxEntries,
+  maxEntryBytes: Long = ResourceTreeQueryLimits.DefaultMaxEntryBytes,
+  maxTotalBytes: Long = ResourceTreeQueryLimits.DefaultMaxTotalBytes
+) {
+  def validateC: Consequence[ResourceTreeQueryLimits] =
+    if (maxDepth < 0)
+      Consequence.argumentInvalid("maxDepth", "a non-negative resource tree query depth", maxDepth)
+    else if (maxVisitedDirectories < 0)
+      Consequence.argumentInvalid("maxVisitedDirectories", "a non-negative resource tree query directory count", maxVisitedDirectories)
+    else if (maxEntries < 0)
+      Consequence.argumentInvalid("maxEntries", "a non-negative resource tree query entry count", maxEntries)
+    else if (maxEntryBytes < 0)
+      Consequence.argumentInvalid("maxEntryBytes", "a non-negative resource tree query byte limit", maxEntryBytes)
+    else if (maxTotalBytes < 0)
+      Consequence.argumentInvalid("maxTotalBytes", "a non-negative resource tree query byte limit", maxTotalBytes)
+    else
+      Consequence.success(this)
+
+  def tightenC(requested: ResourceTreeQueryLimits): Consequence[ResourceTreeQueryLimits] =
+    for {
+      _ <- validateC
+      _ <- requested.validateC
+      depth <- _tighten_c("maxDepth", maxDepth.toLong, requested.maxDepth.toLong)
+      directories <- _tighten_c("maxVisitedDirectories", maxVisitedDirectories.toLong, requested.maxVisitedDirectories.toLong)
+      entries <- _tighten_c("maxEntries", maxEntries.toLong, requested.maxEntries.toLong)
+      entrybytes <- _tighten_c("maxEntryBytes", maxEntryBytes, requested.maxEntryBytes)
+      totalbytes <- _tighten_c("maxTotalBytes", maxTotalBytes, requested.maxTotalBytes)
+    } yield ResourceTreeQueryLimits(
+      depth.toInt,
+      directories.toInt,
+      entries.toInt,
+      entrybytes,
+      totalbytes
+    )
+
+  /** Applies a runtime/program cap to already admitted query limits. */
+  def narrowC(maximum: ResourceTreeQueryLimits): Consequence[ResourceTreeQueryLimits] =
+    for {
+      _ <- validateC
+      _ <- maximum.validateC
+    } yield ResourceTreeQueryLimits(
+      math.min(maxDepth, maximum.maxDepth),
+      math.min(maxVisitedDirectories, maximum.maxVisitedDirectories),
+      math.min(maxEntries, maximum.maxEntries),
+      math.min(maxEntryBytes, maximum.maxEntryBytes),
+      math.min(maxTotalBytes, maximum.maxTotalBytes)
+    )
+
+  private def _tighten_c(
+    name: String,
+    maximum: Long,
+    requested: Long
+  ): Consequence[Long] =
+    if (requested > maximum)
+      Consequence.argumentLimitExceeded(name, maximum, requested, "resource.tree.query.limit")
+    else
+      Consequence.success(requested)
+}
+
+object ResourceTreeQueryLimits {
+  val DefaultMaxDepth: Int = 16
+  val DefaultMaxVisitedDirectories: Int = 1000
+  val DefaultMaxEntries: Int = 1000
+  val DefaultMaxEntryBytes: Long = 16L * 1024L * 1024L
+  val DefaultMaxTotalBytes: Long = 64L * 1024L * 1024L
+
+  val default: ResourceTreeQueryLimits = ResourceTreeQueryLimits()
+}
+
+final case class ResourceTreeQuery private[resource] (
+  reference: ResourceTreeReference,
+  selector: ResourceTreeEntrySelector,
+  limits: ResourceTreeQueryLimits
+) {
+  /** Rebinds this immutable query to a narrower component request. */
+  def tightenC(requested: ResourceTreeQueryLimits): Consequence[ResourceTreeQuery] =
+    limits.tightenC(requested).map(x => copy(limits = x))
+
+  /** Rebinds this immutable query to a runtime/program cap. */
+  def narrowC(maximum: ResourceTreeQueryLimits): Consequence[ResourceTreeQuery] =
+    limits.narrowC(maximum).map(x => copy(limits = x))
+}
+
+object ResourceTreeQuery {
+  def exactLeafNameC(
+    reference: ResourceTreeReference,
+    name: String,
+    limits: ResourceTreeQueryLimits = ResourceTreeQueryLimits.default
+  ): Consequence[ResourceTreeQuery] =
+    for {
+      selector <- ResourceTreeEntrySelector.exactLeafNameC(name)
+      checkedlimits <- limits.validateC
+    } yield ResourceTreeQuery(reference, selector, checkedlimits)
+}
+
+final case class ResourceTreeQueryResult private[resource] (
+  query: ResourceTreeQuery,
+  entries: Vector[ResourceTreeEntry],
+  totalByteSize: Long,
+  visitedDirectoryCount: Int
+)
+
+object ResourceTreeQueryResult {
+  private[resource] def admitC(
+    query: ResourceTreeQuery,
+    entries: Vector[ResourceTreeEntry],
+    visitedDirectoryCount: Int
+  ): Consequence[ResourceTreeQueryResult] =
+    query.limits.validateC.flatMap { _ =>
+      val sorted = entries.sortBy(_.relativePath)
+      val paths = sorted.map(_.relativePath)
+      if (visitedDirectoryCount < 0 || visitedDirectoryCount > query.limits.maxVisitedDirectories)
+        Consequence.resourceInvalid("resource tree query exceeds the configured directory visit limit")
+      else if (paths.distinct.size != paths.size)
+        Consequence.resourceInvalid("resource tree query contains duplicate logical paths")
+      else if (sorted.exists(entry => !query.selector.matches(entry)))
+        Consequence.resourceInvalid("resource tree query provider returned an entry outside the selector")
+      else
+        _validate_entries_c(query, sorted).map { total =>
+          ResourceTreeQueryResult(query, sorted, total, visitedDirectoryCount)
+        }
+    }
+
+  private def _validate_entries_c(
+    query: ResourceTreeQuery,
+    entries: Vector[ResourceTreeEntry]
+  ): Consequence[Long] =
+    if (entries.size > query.limits.maxEntries)
+      Consequence.resourceInvalid("resource tree query exceeds the configured entry limit")
+    else {
+      entries.foldLeft(Consequence.success(0L)) { (z, entry) =>
+        z.flatMap { total =>
+          ResourceTreeEntry.relativePathC(entry.relativePath).flatMap { _ =>
+            if (_depth(entry.relativePath) > query.limits.maxDepth)
+              Consequence.resourceInvalid("resource tree query exceeds the configured depth limit")
+            else if (entry.byteSize > query.limits.maxEntryBytes)
+              Consequence.resourceInvalid("resource tree query entry exceeds the configured byte limit")
+            else
+              _add_size_c(total, entry.byteSize, query.limits.maxTotalBytes)
+          }
+        }
+      }
+    }
+
+  private def _depth(path: String): Int =
+    path.split("/").length
+
+  private def _add_size_c(
+    total: Long,
+    size: Long,
+    maximum: Long
+  ): Consequence[Long] =
+    Try(Math.addExact(total, size)).toOption match {
+      case Some(next) if next <= maximum => Consequence.success(next)
+      case _ => Consequence.resourceInvalid("resource tree query exceeds the configured aggregate byte limit")
+    }
 }
 
 final case class ResourceTreeEntry private[resource] (
@@ -232,6 +426,9 @@ trait ResourceTreeAccess {
     limits: ResourceTreeLimits = ResourceTreeLimits.default
   ): Consequence[ResourceTreeSnapshot]
 
+  def query(query: ResourceTreeQuery): Consequence[ResourceTreeQueryResult] =
+    Consequence.notImplemented("resource tree query is not implemented for this provider")
+
   def providerMetadata(reference: ResourceTreeReference): ResourceTreeProviderMetadata =
     ResourceTreeProviderMetadata.unconfigured(reference)
 }
@@ -244,6 +441,11 @@ object ResourceTreeAccess {
     ): Consequence[ResourceTreeSnapshot] =
       Consequence.serviceUnavailable(
         s"resource tree access is not configured for ${reference.name}"
+      )
+
+    override def query(query: ResourceTreeQuery): Consequence[ResourceTreeQueryResult] =
+      Consequence.serviceUnavailable(
+        s"resource tree access is not configured for ${query.reference.name}"
       )
   }
 
@@ -316,6 +518,17 @@ private final class InMemoryResourceTreeAccess(
   ): Consequence[ResourceTreeSnapshot] =
     _trees.get(reference) match {
       case Some(entries) => ResourceTreeSnapshot.admitC(reference, entries, limits)
+      case None => Consequence.resourceNotFound("configured logical resource tree is not available")
+    }
+
+  override def query(query: ResourceTreeQuery): Consequence[ResourceTreeQueryResult] =
+    _trees.get(query.reference) match {
+      case Some(entries) =>
+        ResourceTreeQueryResult.admitC(
+          query,
+          entries.filter(query.selector.matches),
+          visitedDirectoryCount = 0
+        )
       case None => Consequence.resourceNotFound("configured logical resource tree is not available")
     }
 

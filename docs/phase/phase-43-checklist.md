@@ -13,11 +13,11 @@ Status: DONE
 
 ## RQ-02: Query Model
 
-Status: PLANNED
+Status: DONE
 
-- [ ] Add validated selector, query-limit, and immutable result models.
-- [ ] Define conservative caller/runtime limit composition.
-- [ ] Preserve logical relative paths and deterministic result ordering.
+- [x] Add validated selector, query-limit, and immutable result models.
+- [x] Define conservative caller/runtime limit composition.
+- [x] Preserve logical relative paths and deterministic result ordering.
 
 ## RQ-03: Providers
 

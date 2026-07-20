@@ -2,7 +2,7 @@
 
 Stage Status:
 - Current status: ACTIVE
-- Current step: RQ-02 Query model
+- Current step: RQ-03 Query providers
 - Owner: CNCF resource-tree runtime, with CBD Support as the first downstream
   driver.
 
@@ -84,5 +84,7 @@ access to its physical root.
 RQ-01 completed Jul. 20, 2026. The resource-tree design and static
 specification now define the separate bounded query contract, initial exact
 leaf-name selector, limit dimensions, symlink handling, and safe diagnostics.
-Start RQ-02. Query model and executable specifications must precede provider
-implementation and CBD Support adoption.
+RQ-02 completed Jul. 20, 2026. CNCF now has validated query selector and
+limit models, an immutable result model, conservative limit tightening, and
+deterministic in-memory exact-name query evidence. Start RQ-03. Local provider
+traversal must preserve strict snapshot behavior before DSL and CBD adoption.

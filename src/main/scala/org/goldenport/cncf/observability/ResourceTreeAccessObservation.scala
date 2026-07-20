@@ -3,12 +3,12 @@ package org.goldenport.cncf.observability
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.http.RuntimeDashboardMetrics
-import org.goldenport.cncf.resource.{ResourceTreeAccess, ResourceTreeLimits, ResourceTreeReference, ResourceTreeSnapshot}
+import org.goldenport.cncf.resource.{ResourceTreeAccess, ResourceTreeLimits, ResourceTreeQuery, ResourceTreeQueryResult, ResourceTreeReference, ResourceTreeSnapshot}
 import org.goldenport.record.Record
 
 /*
  * @since   Jul. 17, 2026
- * @version Jul. 17, 2026
+ * @version Jul. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 object ResourceTreeAccessObservation {
@@ -55,6 +55,10 @@ object ResourceTreeAccessObservation {
         }
         result
       }
+
+      // Keep the decorator capability-transparent until query tracing is added.
+      override def query(query: ResourceTreeQuery): Consequence[ResourceTreeQueryResult] =
+        access.query(query)
 
       override def providerMetadata(reference: ResourceTreeReference) =
         access.providerMetadata(reference)
