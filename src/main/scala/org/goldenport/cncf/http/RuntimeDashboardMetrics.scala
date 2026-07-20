@@ -8,7 +8,7 @@ import org.goldenport.record.Record
 /*
  * @since   Apr. 12, 2026
  *  version May. 11, 2026
- * @version Jul. 20, 2026
+ * @version Jul. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 object RuntimeDashboardMetrics {
@@ -108,6 +108,7 @@ object RuntimeDashboardMetrics {
   private var _blob_events = Vector.empty[Event]
   private var _rule_events = Vector.empty[Event]
   private var _spi_events = Vector.empty[Event]
+  private var _mcp_client_events = Vector.empty[Event]
   private var _process_execution_events = Vector.empty[Event]
   private var _resource_tree_events = Vector.empty[Event]
   private var _resource_tree_query_events = Vector.empty[Event]
@@ -123,6 +124,7 @@ object RuntimeDashboardMetrics {
     "blob" -> "Blob",
     "rule" -> "Rule",
     "spi" -> "SPI",
+    "mcp-client" -> "MCP Client",
     "process-execution" -> "Process Execution",
     "resource-tree" -> "Resource Tree",
     "resource-tree-query" -> "Resource Tree Query",
@@ -278,6 +280,34 @@ object RuntimeDashboardMetrics {
         "provider_component" -> providerComponent,
         "socket_component" -> socketComponent,
         "selection_basis" -> selectionBasis.getOrElse(""),
+        "diagnostic_key" -> cleandiagnostickey.getOrElse("")
+      ))
+    )).takeRight(10000)
+  }
+
+  def recordMcpClientInvocation(
+    operation: String,
+    serverSet: String,
+    server: Option[String],
+    tool: Option[String],
+    error: Boolean,
+    diagnosticKey: Option[String] = None,
+    diagnosticRecord: Option[Record] = None,
+    elapsedMillis: Option[Long] = None
+  ): Unit = synchronized {
+    val cleandiagnostickey = if (error) diagnosticKey.filter(_.nonEmpty) else None
+    _mcp_client_events = (_mcp_client_events :+ Event(
+      observedAt = java.time.Instant.now.toEpochMilli,
+      error = error,
+      diagnosticKey = cleandiagnostickey,
+      diagnosticRecord = if (error) diagnosticRecord else None,
+      operation = Some(operation).filter(_.nonEmpty),
+      elapsedMillis = elapsedMillis,
+      labels = _clean_labels(Map(
+        "operation" -> operation,
+        "server_set" -> serverSet,
+        "server" -> server.getOrElse(""),
+        "tool" -> tool.getOrElse(""),
         "diagnostic_key" -> cleandiagnostickey.getOrElse("")
       ))
     )).takeRight(10000)
@@ -531,6 +561,23 @@ object RuntimeDashboardMetrics {
     _diagnostic_records(_spi_events)
   }
 
+  def mcpClientInvocationSnapshot: Snapshot = synchronized {
+    _snapshot(_mcp_client_events, Vector.empty)
+  }
+
+  def mcpClientDiagnosticCounts: Map[String, Long] = synchronized {
+    _mcp_client_events
+      .filter(_.error)
+      .groupBy(_.diagnosticKey.getOrElse("unknown"))
+      .view
+      .mapValues(_.size.toLong)
+      .toMap
+  }
+
+  def mcpClientDiagnosticRecords: Map[String, Record] = synchronized {
+    _diagnostic_records(_mcp_client_events)
+  }
+
   def processExecutionSnapshot: Snapshot = synchronized {
     _snapshot(_process_execution_events, Vector.empty)
   }
@@ -607,6 +654,7 @@ object RuntimeDashboardMetrics {
       _diagnostic_scope("blob", _blob_events),
       _diagnostic_scope("rule", _rule_events),
       _diagnostic_scope("spi", _spi_events),
+      _diagnostic_scope("mcp-client", _mcp_client_events),
       _diagnostic_scope("process-execution", _process_execution_events),
       _diagnostic_scope("resource-tree", _resource_tree_events),
       _diagnostic_scope("resource-tree-query", _resource_tree_query_events),
@@ -734,6 +782,9 @@ object RuntimeDashboardMetrics {
         event.labels ++ _outcome_label(event)
       ),
       _event_points("spi.invocation", "invocations", _spi_events, event =>
+        event.labels ++ _outcome_label(event)
+      ),
+      _event_points("mcp-client.invocation", "invocations", _mcp_client_events, event =>
         event.labels ++ _outcome_label(event)
       ),
       _event_points("process.execution", "executions", _process_execution_events, event =>

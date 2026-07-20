@@ -7,7 +7,11 @@ import java.util.concurrent.atomic.AtomicReference
 import org.goldenport.Consequence
 import org.goldenport.cncf.component.{Component, ExtensionPoint, Port, ServiceContract, VariationSelection}
 import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.cncf.http.RuntimeDashboardMetrics
+import org.goldenport.cncf.metrics.EntityAccessMetricsRegistry
 import org.goldenport.observation.{Cause, Descriptor}
+import org.goldenport.observation.calltree.{CallTree, CallTreeNode}
+import org.goldenport.tree.{TreeDir, TreeLeaf, TreeNode}
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -238,6 +242,100 @@ final class McpClientPortSpec extends AnyWordSpec with Matchers with GivenWhenTh
       _failure_facets(results._2) should contain (Descriptor.Facet.Reason("maximum-concurrency"))
       fake.events.count(_.startsWith("call:")) shouldBe 1
     }
+
+    "record payload-safe catalog and invocation observability in the caller context" in {
+      Given("an admitted service, enabled caller CallTree, and payload text that must remain private")
+      given ExecutionContext = ExecutionContext.withFrameworkCallTreeEnabled(ExecutionContext.create(), enabled = true)
+      val tool = _tool("catalog", "paper.search")
+      val serverset = _server_set("research", "catalog", Set(tool.identity.toolName))
+      val fake = new _FakeTransport(Map(_server_id("catalog") -> Vector(tool)))
+      val service = McpClientRuntimeRegistry.createC(
+        Vector(serverset),
+        _transport_binding(fake, Set(serverset.id))
+      ).toOption.get.resolve(serverset.id).toOption.get
+      val before = RuntimeDashboardMetrics.mcpClientInvocationSnapshot.summary.cumulative
+      val privatepayload = "private-paper-query"
+
+      When("the caller discovers, invokes, and attempts one non-admitted tool")
+      val catalog = service.catalog
+      val success = service.withInvocation(_.invoke(_call(tool.identity, privatepayload)))
+      val denied = service.withInvocation(_.invoke(_call(
+        McpToolIdentity(_server_id("catalog"), _tool_name("paper.delete")),
+        privatepayload
+      )))
+
+      Then("logical identities and structured outcomes are visible without arguments, results, or transport data")
+      catalog.isSuccess shouldBe true
+      success.isSuccess shouldBe true
+      denied.isFaillure shouldBe true
+      val calltree = summon[ExecutionContext].observability.callTreeContext.build().getOrElse(fail("calltree missing")).toRecord.print
+      calltree should include ("mcp-client:catalog")
+      calltree should include ("mcp-client:invoke")
+      calltree should include ("calltree_kind=mcp-client")
+      calltree should include ("server_set=research")
+      calltree should include ("server=catalog")
+      calltree should include ("tool=paper.search")
+      calltree should include ("outcome=success")
+      calltree should include ("outcome=failure")
+      calltree should not include privatepayload
+      calltree should not include "endpoint"
+      calltree should not include "Authorization"
+      val after = RuntimeDashboardMetrics.mcpClientInvocationSnapshot.summary.cumulative
+      after.total shouldBe before.total + 3L
+      after.errors shouldBe before.errors + 1L
+      val points = RuntimeDashboardMetrics.runtimeMetricsSnapshot(EntityAccessMetricsRegistry.shared).points
+      points.exists(point =>
+        point.scope == "mcp-client.invocation" &&
+          point.labels.get("operation").contains("invoke") &&
+          point.labels.get("server_set").contains("research") &&
+          point.labels.get("server").contains("catalog") &&
+          point.labels.get("tool").contains("paper.search") &&
+          !point.labels.values.exists(_.contains(privatepayload))
+      ) shouldBe true
+      RuntimeDashboardMetrics.mcpClientDiagnosticRecords.values.map(_.print).mkString(" ") should not include privatepayload
+    }
+
+    "record concurrent invocations without sharing open CallTree stack frames" in {
+      Given("one caller CallTree and two admitted calls that overlap in the transport")
+      given context: ExecutionContext = ExecutionContext.withFrameworkCallTreeEnabled(ExecutionContext.create(), enabled = true)
+      val tool = _tool("catalog", "paper.search")
+      val limits = McpClientLimits.createC(30000L, 4, 1024L, 1024L, 2).toOption.get
+      val serverset = _server_set("concurrent", "catalog", Set(tool.identity.toolName), limits)
+      val entered = new CountDownLatch(2)
+      val release = new CountDownLatch(1)
+      val fake = new _FakeTransport(Map(_server_id("catalog") -> Vector(tool)), Some(entered -> release))
+      val service = McpClientRuntimeRegistry.createC(
+        Vector(serverset),
+        _transport_binding(fake, Set(serverset.id))
+      ).toOption.get.resolve(serverset.id).toOption.get
+      service.catalog.isSuccess shouldBe true
+      val before = RuntimeDashboardMetrics.mcpClientInvocationSnapshot.summary.cumulative.total
+
+      When("both calls complete against the same invocation and caller observability context")
+      val results = service.withInvocation { invocation =>
+        val first = new AtomicReference[Consequence[McpClientResult]]()
+        val second = new AtomicReference[Consequence[McpClientResult]]()
+        val firstworker = new Thread(() => first.set(invocation.invoke(_call(tool.identity, "first"))(using context)))
+        val secondworker = new Thread(() => second.set(invocation.invoke(_call(tool.identity, "second"))(using context)))
+        firstworker.start()
+        secondworker.start()
+        val bothoverlapped = entered.await(5L, TimeUnit.SECONDS)
+        release.countDown()
+        firstworker.join(5000L)
+        secondworker.join(5000L)
+        Consequence.success(Vector(first.get(), second.get()) -> bothoverlapped)
+      }.toOption.get
+
+      Then("both outcomes become independent completed spans and leave no open MCP frame")
+      results._2 shouldBe true
+      results._1.forall(_.isSuccess) shouldBe true
+      val calltreecontext = summon[ExecutionContext].observability.callTreeContext
+      calltreecontext.currentLabels shouldBe empty
+      val calltree = calltreecontext.build().getOrElse(fail("calltree missing"))
+      _calltree_enter_count(calltree, "mcp-client:invoke") shouldBe 2
+      calltree.toRecord.print should include ("duration_ms")
+      RuntimeDashboardMetrics.mcpClientInvocationSnapshot.summary.cumulative.total shouldBe before + 2L
+    }
   }
 
   private def _transport_binding(
@@ -267,13 +365,17 @@ final class McpClientPortSpec extends AnyWordSpec with Matchers with GivenWhenTh
     catalogs: Map[McpServerId, Vector[McpClientTool]],
     blocking: Option[(CountDownLatch, CountDownLatch)] = None
   ) extends McpClientTransport {
-    val events = ArrayBuffer.empty[String]
+    private val _events = ArrayBuffer.empty[String]
+
+    def events: Vector[String] = synchronized {
+      _events.toVector
+    }
 
     def initialize(
       server: McpClientServer,
       limits: McpClientLimits
     )(using ExecutionContext): Consequence[Unit] = {
-      events += s"initialize:${server.id.print}"
+      _record_event(s"initialize:${server.id.print}")
       Consequence.unit
     }
 
@@ -281,7 +383,7 @@ final class McpClientPortSpec extends AnyWordSpec with Matchers with GivenWhenTh
       server: McpClientServer,
       limits: McpClientLimits
     )(using ExecutionContext): Consequence[Vector[McpClientTool]] = {
-      events += s"list:${server.id.print}"
+      _record_event(s"list:${server.id.print}")
       Consequence.success(catalogs.getOrElse(server.id, Vector.empty))
     }
 
@@ -290,7 +392,7 @@ final class McpClientPortSpec extends AnyWordSpec with Matchers with GivenWhenTh
       call: McpClientCall,
       limits: McpClientLimits
     )(using ExecutionContext): Consequence[McpClientResult] = {
-      events += s"call:${call.toolIdentity.print}"
+      _record_event(s"call:${call.toolIdentity.print}")
       blocking.foreach { case (entered, release) =>
         entered.countDown()
         release.await(5L, TimeUnit.SECONDS)
@@ -302,6 +404,10 @@ final class McpClientPortSpec extends AnyWordSpec with Matchers with GivenWhenTh
         Vector.empty,
         Some(McpValue.StringValue(s"found:${query}"))
       ))
+    }
+
+    private def _record_event(event: String): Unit = synchronized {
+      _events += event
     }
   }
 
@@ -356,4 +462,14 @@ final class McpClientPortSpec extends AnyWordSpec with Matchers with GivenWhenTh
       case Consequence.Failure(conclusion) => conclusion.observation.cause.descriptor.facets
       case _ => fail("failure is required")
     }
+
+  private def _calltree_enter_count(calltree: CallTree, label: String): Int = {
+    def _count(node: TreeNode[CallTreeNode]): Int =
+      node match {
+        case TreeLeaf(CallTreeNode.Enter(candidate, _), _) if candidate == label => 1
+        case TreeLeaf(_, _) => 0
+        case TreeDir(children) => children.map(entry => _count(entry.node)).sum
+      }
+    _count(calltree.tree.root)
+  }
 }

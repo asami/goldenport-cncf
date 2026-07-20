@@ -5,7 +5,7 @@ import org.goldenport.record.Record
 
 /*
  * @since   May. 11, 2026
- * @version Jul. 20, 2026
+ * @version Jul. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class MetricScopeDefinition(
@@ -122,6 +122,12 @@ object RuntimeMetricsCatalog {
       "SPI invocation",
       "Canonical SPI invocation counts, failures, provider/socket components, and elapsed time.",
       Vector("outcome", "contract", "operation", "provider_component", "socket_component", "diagnostic_key")
+    ),
+    MetricScopeDefinition(
+      "mcp-client.invocation",
+      "MCP client invocation",
+      "Provider-neutral MCP catalog and tool invocation counts, failures, and elapsed time without payload or transport data.",
+      Vector("outcome", "operation", "server_set", "server", "tool", "diagnostic_key")
     ),
     MetricScopeDefinition(
       "process.execution",

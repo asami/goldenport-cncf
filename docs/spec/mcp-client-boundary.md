@@ -203,6 +203,17 @@ CallTree and runtime metrics MAY contain bounded server-set identity, normalized
 tool identity, operation kind, duration, outcome, and structured diagnostic
 classification.
 
+The consumer-side `McpClientService` / `McpClientInvocation` boundary MUST emit
+one `mcp-client:catalog` or `mcp-client:invoke` CallTree span and one
+`mcp-client.invocation` runtime metric for each attempted operation. Catalog
+loading used internally by invocation MUST NOT create a duplicate catalog span.
+Because one invocation permits bounded concurrent calls, MCP spans MUST be
+added as concurrency-safe completed spans and MUST NOT leave a shared mutable
+CallTree stack frame open across transport execution.
+The invoke span and metric MAY contain only the bounded server-set, server, and
+tool identities plus outcome, elapsed time, status, and a classification
+projected by `ConclusionDiagnostics`.
+
 They MUST NOT contain endpoint URLs, credential values or references, request
 headers, raw arguments, raw results, provider payloads, or transport bodies.
 Transport error text MUST be redacted or mapped to structured diagnostics
@@ -232,7 +243,8 @@ representation, positive execution limits, and bounded diagnostic metadata.
 `McpClientPortSpec` fixes runtime-owned Port installation, typed discovery and
 invocation through deterministic fake transport, caller selector rejection,
 unbound server-set rejection, exact allowlist filtering, recursive input
-admission, and stale-tool rejection before `callTool`.
+admission, stale-tool rejection before `callTool`, and payload-safe caller-side
+CallTree/runtime metric evidence.
 
 `McpStreamableHttpTransportSpec` fixes Streamable HTTP lifecycle order,
 session/protocol headers, JSON/SSE response handling, pagination, all standard

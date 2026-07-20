@@ -204,7 +204,10 @@ final class DefaultMcpClientService private[client] (
 
   def serverSetId: McpServerSetId = serverset.id
 
-  def catalog(using ExecutionContext): Consequence[McpClientCatalog] = synchronized {
+  def catalog(using ExecutionContext): Consequence[McpClientCatalog] =
+    McpClientObservability.catalog(serverset.id)(_catalog_c)
+
+  private def _catalog_c(using ExecutionContext): Consequence[McpClientCatalog] = synchronized {
     _catalog match {
       case Some(catalog) => Consequence.success(catalog)
       case None =>
@@ -242,20 +245,22 @@ final class DefaultMcpClientService private[client] (
       DefaultMcpClientService.this.catalog
 
     def invoke(call: McpClientCall)(using ExecutionContext): Consequence[McpClientResult] =
-      catalog.flatMap { current =>
-        current.tool(call.toolIdentity) match {
-          case Some(tool) =>
-            tool.validateArgumentsC(call.arguments).flatMap { _ =>
-              serverset.servers.find(_.id == call.toolIdentity.serverId) match {
-                case Some(server) =>
-                  _admit_c.flatMap { _ =>
-                    try transport.callTool(server, call, serverset.limits)
-                    finally _release()
+      McpClientObservability.invoke(serverset.id, call.toolIdentity) {
+        DefaultMcpClientService.this._catalog_c.flatMap { current =>
+          current.tool(call.toolIdentity) match {
+            case Some(tool) =>
+              tool.validateArgumentsC(call.arguments).flatMap { _ =>
+                serverset.servers.find(_.id == call.toolIdentity.serverId) match {
+                  case Some(server) =>
+                    _admit_c.flatMap { _ =>
+                      try transport.callTool(server, call, serverset.limits)
+                      finally _release()
+                    }
+                  case None => Consequence.operationNotFound(s"MCP server not admitted: ${call.toolIdentity.serverId.print}")
                   }
-                case None => Consequence.operationNotFound(s"MCP server not admitted: ${call.toolIdentity.serverId.print}")
               }
-            }
-          case None => Consequence.operationNotFound(s"MCP tool not admitted: ${call.toolIdentity.print}")
+            case None => Consequence.operationNotFound(s"MCP tool not admitted: ${call.toolIdentity.print}")
+          }
         }
       }
 

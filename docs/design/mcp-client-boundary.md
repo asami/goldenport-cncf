@@ -201,6 +201,18 @@ identity, operation kind, duration, outcome, and structured diagnostic
 classification. They must not record endpoint URLs, credentials, headers, raw
 arguments, raw results, provider payloads, or transport bodies.
 
+Tracing is owned by the consumer-side MCP client service rather than by the
+transport provider. Explicit catalog discovery creates
+`mcp-client:catalog`; each attempted typed invocation creates
+`mcp-client:invoke`. Internal catalog loading performed as part of invocation
+uses the same service state without producing a duplicate catalog span. Both
+spans project to `mcp-client.invocation` metrics and carry only bounded logical
+identities, outcome, duration, status, and `ConclusionDiagnostics`
+classification. Typed arguments and results are never summarized into these
+records. Since bounded calls may overlap within one invocation, the service
+adds each result as an atomic completed CallTree span after execution rather
+than sharing open `enter`/`leave` stack frames across threads.
+
 Transport resources are runtime-owned and participate in runtime shutdown.
 Cancellation and timeout must not leave an in-flight call or transport resource
 untracked.
