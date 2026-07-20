@@ -4,12 +4,12 @@ This checklist is the authoritative Phase 43 state ledger.
 
 ## RQ-01: Contract Promotion
 
-Status: ACTIVE
+Status: DONE
 
-- [ ] Amend the resource-tree design with a distinct query contract.
-- [ ] Amend the static specification with selector, limits, result, symlink,
+- [x] Amend the resource-tree design with a distinct query contract.
+- [x] Amend the static specification with selector, limits, result, symlink,
       and diagnostics requirements.
-- [ ] Keep exact leaf-name selection generic and CBD-independent.
+- [x] Keep exact leaf-name selection generic and CBD-independent.
 
 ## RQ-02: Query Model
 

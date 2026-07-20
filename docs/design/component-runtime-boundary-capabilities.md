@@ -140,6 +140,37 @@ it must never allow an entry to escape the admitted root. The deterministic
 in-memory provider is executable-specification support and does not inspect
 the host filesystem.
 
+### Bounded Named-entry Queries
+
+`ResourceTreeQuery` is a distinct read-only capability for discovering a
+bounded set of entries in an admitted tree. It does not construct a
+`ResourceTreeSnapshot`, and it does not weaken complete-snapshot admission
+rules. The initial selector vocabulary is
+`ResourceTreeEntrySelector.ExactLeafName`; it selects a validated bare file
+name independently of the caller's physical directory layout.
+
+`ResourceTreeQueryLimits` separately bound traversal depth, visited directory
+count, matched entry count, one matched-entry byte size, and aggregate matched
+entry bytes. Runtime/provider limits are the admission ceiling. A component
+request may narrow but never broaden those limits. A query result is immutable
+and deterministically ordered by logical relative path. It exposes only the
+logical reference, selected entries, effective limits, and safe counts; it
+does not expose a physical root, host `Path`, skipped path, provider handle, or
+unmatched tree content.
+
+The local provider rejects a symbolic configured root. During query traversal
+it never follows symbolic links. A nested symbolic link that does not match the
+selector is skipped; a matching symbolic link or matching non-regular entry is
+a structured query failure, because it cannot be returned as an admitted
+regular-file result. This preserves safe discovery in a development workspace
+without treating the workspace as a complete immutable snapshot.
+
+Components access the query through the same bound resource-tree capability
+and protected internal DSL as snapshots. Observability records only logical
+tree identity, selector kind, provider family, effective limits, visited and
+matched counts, outcome, and structured diagnostics. It never records a
+physical root, logical entry path, or entry content.
+
 ## Process Execution Materialization
 
 An admitted resource-tree snapshot may be represented only through

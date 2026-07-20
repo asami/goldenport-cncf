@@ -95,6 +95,44 @@ contain the bound physical path. The initial local-provider symlink policy is
 deny-all. A future policy extension MUST remain root-confined and explicitly
 specified.
 
+## Bounded Resource Tree Query (R6a)
+
+`ResourceTreeQuery` MUST remain distinct from `ResourceTreeAccess.snapshot`.
+It returns only a bounded immutable result for selected entries and MUST NOT
+construct, expose, or imply a complete `ResourceTreeSnapshot`.
+
+The initial selector vocabulary MUST contain only
+`ResourceTreeEntrySelector.ExactLeafName`. The selected name MUST be a safe
+bare file name: it contains neither a path separator, a control character, nor
+`.` or `..` as a path segment. CNCF MUST NOT assign application semantics to a
+selected name; a component may select `project.yaml`, but that is not a
+CNCF-special filename.
+
+`ResourceTreeQueryLimits` MUST bound traversal depth, visited directories,
+matched entries, matched-entry byte size, and aggregate matched-entry bytes.
+Provider/runtime policy establishes the maximum admitted query limits. A
+component request MAY narrow those limits and MUST fail when it attempts to
+broaden them. Returned entries MUST be regular files and MUST be sorted by
+logical relative path. A result MAY expose only the logical tree reference,
+logical relative paths for returned entries, entry bytes, effective limits, and
+safe count/size metadata.
+
+The local provider MUST reject a symbolic configured root and MUST NOT follow
+a nested symbolic link. It MUST skip a non-matching symbolic link. A symbolic
+link or non-regular entry that matches the selector MUST return a structured
+failure rather than being followed, represented as a regular file, or silently
+accepted. Unknown trees, invalid selectors, unsafe roots, depth/visit/match
+limits, per-entry size, and aggregate size failures MUST be normal
+`Consequence.Failure(Conclusion)` values. Their diagnostics MUST NOT expose a
+physical root, host path, skipped entry path, or entry content.
+
+The component-visible query path MUST be the bound
+`ExecutionContext.resourceTrees` capability and its protected internal DSL.
+CallTree and metrics MAY expose logical tree identity, selector kind, provider
+family, effective limits, visited/matched counts, outcome, and structured
+diagnostics. They MUST NOT expose physical roots, returned logical paths, or
+entry bytes.
+
 ## Single-resource Compatibility (R7)
 
 `ResourceAccess` remains a single logical content-read capability. It MUST NOT
@@ -138,6 +176,11 @@ specification coverage using an explicit in-memory or fake runtime provider.
 The evidence MUST prove that component code cannot bypass the capability
 boundary through an ambient host dependency. Live external tools, production
 secret managers, and host-specific directories are not required evidence.
+
+Bounded resource-tree query evidence MUST cover deterministic exact-name
+selection, result ordering, limit narrowing, symbolic-root rejection,
+non-matching symbolic-link skipping, matching symbolic-link rejection, and
+payload-safe diagnostics.
 
 ## Examples
 
