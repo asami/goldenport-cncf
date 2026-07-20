@@ -16,7 +16,7 @@ import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.http.HttpResponse
 import org.goldenport.process.{ShellCommand, ShellCommandResult}
 import org.goldenport.cncf.context.{ExecutionContext, ExecutionSchedulerMode, GlobalRuntimeContext, ScopeContext}
-import org.goldenport.cncf.resource.{ResourceContent, ResourceReference, ResourceTreeLimits, ResourceTreeReference, ResourceTreeSnapshot}
+import org.goldenport.cncf.resource.{ResourceContent, ResourceReference, ResourceTreeLimits, ResourceTreeQuery, ResourceTreeQueryResult, ResourceTreeReference, ResourceTreeSnapshot}
 import org.goldenport.cncf.unitofwork.{ExecUowM, UnitOfWork, UnitOfWorkAuthorization}
 import org.goldenport.cncf.unitofwork.UnitOfWorkInterpreter
 import org.goldenport.cncf.unitofwork.UnitOfWorkOp
@@ -74,7 +74,7 @@ import org.goldenport.cncf.processexecution.{ProcessExecutionAdmission, ProcessE
  *  version Mar. 30, 2026
  *  version Apr. 29, 2026
  *  version May. 25, 2026
- * @version Jul. 17, 2026
+ * @version Jul. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 trait BehaviorFeaturePart { self: Behavior.Core.Holder =>
@@ -104,6 +104,11 @@ trait BehaviorFeaturePart { self: Behavior.Core.Holder =>
     limits: ResourceTreeLimits = ResourceTreeLimits.default
   ): Consequence[ResourceTreeSnapshot] =
     execution_context.resourceTrees.snapshot(reference, limits)
+
+  protected final def query_resource_tree(
+    query: ResourceTreeQuery
+  ): Consequence[ResourceTreeQueryResult] =
+    execution_context.resourceTrees.query(query)
 
   protected final def await_delay(duration: Duration): Consequence[Unit] =
     if (duration.isNegative)

@@ -5,7 +5,7 @@ import org.goldenport.record.Record
 
 /*
  * @since   May. 11, 2026
- * @version Jul. 17, 2026
+ * @version Jul. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class MetricScopeDefinition(
@@ -134,6 +134,12 @@ object RuntimeMetricsCatalog {
       "Resource tree snapshot",
       "Read-only admitted resource tree snapshot counts and failures without physical paths or content.",
       Vector("outcome", "tree", "provider", "diagnostic_key")
+    ),
+    MetricScopeDefinition(
+      "resource-tree.query",
+      "Resource tree query",
+      "Bounded admitted resource tree query counts and failures without physical paths, selector values, or content.",
+      Vector("outcome", "tree", "provider", "selector", "max_depth", "max_visited_directories", "max_entries", "max_entry_bytes", "max_total_bytes", "visited_directories", "matched_entries", "diagnostic_key")
     ),
     MetricScopeDefinition(
       "diagnostic-payload.externalization",

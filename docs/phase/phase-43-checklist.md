@@ -31,11 +31,11 @@ Status: DONE
 
 ## RQ-04: DSL and Observability
 
-Status: PLANNED
+Status: DONE
 
-- [ ] Expose resource-tree query through ExecutionContext and protected DSL.
-- [ ] Add payload-safe CallTree and `resource-tree.query` metrics.
-- [ ] Preserve structured `Consequence/Conclusion` failures.
+- [x] Expose resource-tree query through ExecutionContext and protected DSL.
+- [x] Add payload-safe CallTree and `resource-tree.query` metrics.
+- [x] Preserve structured `Consequence/Conclusion` failures.
 
 ## RQ-05: CBD Support Driver
 

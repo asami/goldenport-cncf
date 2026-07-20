@@ -3,7 +3,7 @@ package org.goldenport.cncf.action
 import java.nio.charset.StandardCharsets
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.ExecutionContext
-import org.goldenport.cncf.resource.{ResourceAccess, ResourceContent, ResourceReference, ResourceTreeAccess, ResourceTreeEntry, ResourceTreeReference}
+import org.goldenport.cncf.resource.{ResourceAccess, ResourceContent, ResourceReference, ResourceTreeAccess, ResourceTreeEntry, ResourceTreeQuery, ResourceTreeReference}
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -12,7 +12,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * Executable specification for the component-facing resource internal DSL.
  *
  * @since   Jul. 16, 2026
- * @version Jul. 17, 2026
+ * @version Jul. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ResourceAccessDslSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -68,6 +68,24 @@ final class ResourceAccessDslSpec extends AnyWordSpec with Matchers with GivenWh
       result.toOption.map(_.entries.map(_.relativePath)) shouldBe Some(Vector("source/input.txt"))
       result.toOption.map(_.entries.head.bytes) shouldBe Some("hello".getBytes(StandardCharsets.UTF_8).toVector)
     }
+
+    "query an injected logical resource tree through the protected DSL helper" in {
+      Given("an execution context with a named in-memory tree")
+      val reference = ResourceTreeReference.parseC("component-input").toOption.get
+      val entry = ResourceTreeEntry.createC("source/project.yaml", "name: demo".getBytes(StandardCharsets.UTF_8).toVector).toOption.get
+      val context = ExecutionContext.withResourceTreeAccess(
+        ExecutionContext.create(),
+        ResourceTreeAccess.inMemory(Map(reference -> Vector(entry)))
+      )
+      val behavior = new _ResourceBehavior(Behavior.Core(context, None, None))
+      val query = ResourceTreeQuery.exactLeafNameC(reference, "project.yaml").toOption.get
+
+      When("component behavior queries the named tree through its DSL helper")
+      val result = behavior.queryTree(query)
+
+      Then("the query returns only the matching immutable logical entry")
+      result.toOption.map(_.entries.map(_.relativePath)) shouldBe Some(Vector("source/project.yaml"))
+    }
   }
 
   private final class _ResourceBehavior(
@@ -81,5 +99,8 @@ final class ResourceAccessDslSpec extends AnyWordSpec with Matchers with GivenWh
 
     def readTree(reference: ResourceTreeReference) =
       read_resource_tree(reference)
+
+    def queryTree(query: ResourceTreeQuery) =
+      query_resource_tree(query)
   }
 }

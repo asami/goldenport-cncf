@@ -8,7 +8,7 @@ import org.goldenport.record.Record
 /*
  * @since   Apr. 12, 2026
  *  version May. 11, 2026
- * @version Jul. 17, 2026
+ * @version Jul. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 object RuntimeDashboardMetrics {
@@ -110,6 +110,7 @@ object RuntimeDashboardMetrics {
   private var _spi_events = Vector.empty[Event]
   private var _process_execution_events = Vector.empty[Event]
   private var _resource_tree_events = Vector.empty[Event]
+  private var _resource_tree_query_events = Vector.empty[Event]
   private var _payload_externalization_events = Vector.empty[PayloadExternalizationEvent]
   private var _open_telemetry_export_events = Vector.empty[OpenTelemetryExportEvent]
   private var _recent = Vector.empty[RequestEntry]
@@ -122,7 +123,8 @@ object RuntimeDashboardMetrics {
     "rule" -> "Rule",
     "spi" -> "SPI",
     "process-execution" -> "Process Execution",
-    "resource-tree" -> "Resource Tree"
+    "resource-tree" -> "Resource Tree",
+    "resource-tree-query" -> "Resource Tree Query"
   )
 
   def recordHtmlRequest(
@@ -324,6 +326,38 @@ object RuntimeDashboardMetrics {
     )).takeRight(10000)
   }
 
+  def recordResourceTreeQuery(
+    tree: String,
+    provider: String,
+    selector: String,
+    limits: org.goldenport.cncf.resource.ResourceTreeQueryLimits,
+    visiteddirectories: Option[Int] = None,
+    matchedentries: Option[Int] = None,
+    error: Boolean,
+    diagnostic: Option[ConclusionDiagnostics.Classification] = None
+  ): Unit = synchronized {
+    val cleandiagnostickey = if (error) diagnostic.map(_.diagnosticKey).filter(_.nonEmpty) else None
+    _resource_tree_query_events = (_resource_tree_query_events :+ Event(
+      observedAt = java.time.Instant.now.toEpochMilli,
+      error = error,
+      diagnosticKey = cleandiagnostickey,
+      diagnosticRecord = if (error) diagnostic.map(_.toRecord) else None,
+      labels = _clean_labels(Map(
+        "tree" -> tree,
+        "provider" -> provider,
+        "selector" -> selector,
+        "max_depth" -> limits.maxDepth.toString,
+        "max_visited_directories" -> limits.maxVisitedDirectories.toString,
+        "max_entries" -> limits.maxEntries.toString,
+        "max_entry_bytes" -> limits.maxEntryBytes.toString,
+        "max_total_bytes" -> limits.maxTotalBytes.toString,
+        "visited_directories" -> visiteddirectories.map(_.toString).getOrElse(""),
+        "matched_entries" -> matchedentries.map(_.toString).getOrElse(""),
+        "diagnostic_key" -> cleandiagnostickey.getOrElse("")
+      ))
+    )).takeRight(10000)
+  }
+
   def recordDiagnosticPayloadExternalization(
     payloadKind: String,
     status: String,
@@ -496,6 +530,23 @@ object RuntimeDashboardMetrics {
     _diagnostic_records(_resource_tree_events)
   }
 
+  def resourceTreeQuerySnapshot: Snapshot = synchronized {
+    _snapshot(_resource_tree_query_events, Vector.empty)
+  }
+
+  def resourceTreeQueryDiagnosticCounts: Map[String, Long] = synchronized {
+    _resource_tree_query_events
+      .filter(_.error)
+      .groupBy(_.diagnosticKey.getOrElse("unknown"))
+      .view
+      .mapValues(_.size.toLong)
+      .toMap
+  }
+
+  def resourceTreeQueryDiagnosticRecords: Map[String, Record] = synchronized {
+    _diagnostic_records(_resource_tree_query_events)
+  }
+
   def diagnosticScopes: Vector[DiagnosticScope] = synchronized {
     Vector(
       _diagnostic_scope("authorization", _authorization_events),
@@ -505,7 +556,8 @@ object RuntimeDashboardMetrics {
       _diagnostic_scope("rule", _rule_events),
       _diagnostic_scope("spi", _spi_events),
       _diagnostic_scope("process-execution", _process_execution_events),
-      _diagnostic_scope("resource-tree", _resource_tree_events)
+      _diagnostic_scope("resource-tree", _resource_tree_events),
+      _diagnostic_scope("resource-tree-query", _resource_tree_query_events)
     )
   }
 
@@ -622,6 +674,9 @@ object RuntimeDashboardMetrics {
         event.labels ++ _outcome_label(event)
       ),
       _event_points("resource-tree.snapshot", "snapshots", _resource_tree_events, event =>
+        event.labels ++ _outcome_label(event)
+      ),
+      _event_points("resource-tree.query", "queries", _resource_tree_query_events, event =>
         event.labels ++ _outcome_label(event)
       ),
       _payload_externalization_points,
