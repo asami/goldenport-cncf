@@ -652,10 +652,10 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Notes contain execution details and results for each phase.
 
 ## Process Status Pointers
-- Active phase: `docs/phase/phase-43.md` with
-  `docs/phase/phase-43-checklist.md` (Jul. 20, 2026).
-- Latest closed phase: `docs/phase/phase-42.md` with
-  `docs/phase/phase-42-checklist.md` (Jul. 20, 2026).
+- Active phase: `docs/phase/phase-45.md` with
+  `docs/phase/phase-45-checklist.md` (Jul. 21, 2026).
+- Latest closed phase: `docs/phase/phase-44.md` with
+  `docs/phase/phase-44-checklist.md` (Jul. 20, 2026).
 - Status interpretation rules: `docs/rules/stage-status-and-checklist-convention.md`
 - Latest post-closure maintenance: Jul. 18, 2026 scoped concurrency admission.
   CNCF now exposes a runtime-installed, per-logical-scope, nonblocking permit
@@ -1452,8 +1452,7 @@ Completed work areas are recorded in section 8. When a development item closes,
 remove its completion record from this section and add or update the
 corresponding completed-history entry.
 
-Current development item: none; select the next strategy item before opening a
-new implementation phase.
+Current development item: `9.38 MCP Client and AI Tool Boundary`.
 
 ### 9.1 Web Next Stage Follow-ups
 Web/platform follow-up index.
@@ -2562,3 +2561,35 @@ Completed in Phase 40.
   - `docs/notes/http-form-typed-update-command-implementation.md`;
   - `docs/phase/phase-40.md`; and
   - `docs/phase/phase-40-checklist.md`.
+
+### 9.38 MCP Client and AI Tool Boundary
+Active in Phase 45.
+
+- Goal: provide a provider-neutral, runtime-owned MCP client boundary so
+  consumers can execute only admitted tools without exposing endpoint,
+  transport, credential, or raw-payload control to application callers.
+- Scope:
+  - define typed MCP server-set, tool catalog, tool-call, result, limit, and
+    redacted diagnostic contracts behind a CNCF Port and transport
+    ExtensionPoint;
+  - support operator-admitted Streamable HTTP MCP initialization,
+    `tools/list`, and `tools/call` first;
+  - resolve named server sets, endpoint allow policy, credential references,
+    tool allowlists, and bounded resource limits under runtime ownership; and
+  - provide deterministic fake transport evidence, safe CallTree facts, and
+    structured admission, transport, and tool failures.
+- Boundary:
+  - existing CNCF MCP server projection/publication remains a separate
+    direction from this client capability;
+  - no application caller selects a server, endpoint, header, credential,
+    transport, or concrete tool;
+  - no stdio, SSE, arbitrary subprocess, arbitrary HTTP, or provider-specific
+    wire format is in the initial CNCF scope; and
+  - AI-provider function-call continuation remains a Textus AI concern, not a
+    CNCF MCP transport concern.
+- Downstream consumer: Textus AI Phase 6 will convert the admitted CNCF
+  catalog to Gemma/Ollama, OpenAI, and Gemini function-call formats without
+  provider-native remote-MCP pass-through in its initial slice.
+- Artifacts:
+  - `docs/phase/phase-45.md`
+  - `docs/phase/phase-45-checklist.md`
