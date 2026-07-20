@@ -2,7 +2,7 @@
 
 Stage Status:
 - Current status: PLANNED
-- Current step: Waiting for Phase 43 closure
+- Current step: Ready to begin SC-01
 - Owner: CNCF managed service runtime, with Textus AI and Textus SIE as
   downstream drivers.
 
@@ -90,5 +90,5 @@ Docker scripts.
 
 ## 8. Resume Point
 
-Begin SC-01 after Phase 43 closes. The first decision is the runtime-level
+Phase 43 closed Jul. 20, 2026. Begin SC-01 with the runtime-level
 owner/registry contract, not Docker command construction.

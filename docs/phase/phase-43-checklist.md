@@ -10,6 +10,8 @@ Status: DONE
 - [x] Amend the static specification with selector, limits, result, symlink,
       and diagnostics requirements.
 - [x] Keep exact leaf-name selection generic and CBD-independent.
+- [x] Fix the boundary between generic `Tree[A]`, complete ResourceTree
+      snapshots, and sparse ResourceTree query results.
 
 ## RQ-02: Query Model
 
@@ -48,11 +50,22 @@ Status: DONE
 
 ## RQ-06: Verification and Closure
 
-Status: PLANNED
+Status: DONE
 
-- [ ] Run focused ResourceTree and DSL executable specifications.
-- [ ] Run full CNCF tests.
-- [ ] Run CBD Support CAR lint and full tests.
-- [ ] Validate a live bounded workspace query without snapshotting the whole
+- [x] Run focused ResourceTree and DSL executable specifications.
+- [x] Run full CNCF tests.
+- [x] Run CBD Support CAR lint and full tests.
+- [x] Validate a live bounded workspace query without snapshotting the whole
       workspace.
-- [ ] Update strategy/phase evidence and close Phase 43.
+- [x] Update strategy/phase evidence and close Phase 43.
+
+Closure evidence, Jul. 20, 2026:
+
+- focused ResourceTree, DSL, observability, and RuntimeConfig specs: 50 passed;
+- full CNCF suite: 2,062 passed, 0 failed;
+- full CBD Support suite: 231 passed, 0 failed;
+- normal CBD Support CAR lint: no FAIL findings, with publish-readiness WARNs
+  for the absent prior ABI baseline and development sbt-cozy SNAPSHOT;
+- live `/Users/asami/src/dev2026` query: 48,176 directories visited, 18
+  descriptors projected, and `working=ready` through MCP `status` and
+  `listCatalogs`.

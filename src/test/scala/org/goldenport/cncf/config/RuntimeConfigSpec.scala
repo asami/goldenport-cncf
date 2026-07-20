@@ -14,7 +14,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Apr. 18, 2026
  *  version Apr. 28, 2026
  *  version Jun. 19, 2026
- * @version Jul. 17, 2026
+ * @version Jul. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 final class RuntimeConfigSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -193,6 +193,54 @@ final class RuntimeConfigSpec extends AnyWordSpec with Matchers with GivenWhenTh
       cncfconfig.resourceTreePolicy.normalizedFileRoots.map { case (name, root) =>
         name -> root.toString
       } shouldBe Map("review-target" -> "/tmp/review-target")
+    }
+
+    "parse finite resource-tree query caps through runtime and CNCF aliases" in {
+      Given("runtime configuration that narrows every resource-tree query limit")
+      val configuration = ResolvedConfiguration(
+        Configuration(Map(
+          RuntimeConfig.RUNTIME_RESOURCE_TREE_QUERY_MAX_DEPTH_KEY -> ConfigurationValue.StringValue("20"),
+          "cncf.resource.tree.query.max-visited-directories" -> ConfigurationValue.StringValue("50000"),
+          RuntimeConfig.RESOURCE_TREE_QUERY_MAX_ENTRIES_KEY -> ConfigurationValue.StringValue("40"),
+          RuntimeConfig.RESOURCE_TREE_QUERY_MAX_ENTRY_BYTES_KEY -> ConfigurationValue.StringValue("4096"),
+          RuntimeConfig.RESOURCE_TREE_QUERY_MAX_TOTAL_BYTES_KEY -> ConfigurationValue.StringValue("65536")
+        )),
+        ConfigurationTrace.empty
+      )
+
+      When("the runtime resource-tree provider policy is resolved")
+      val limits = RuntimeConfig.from(configuration).resourceTreePolicy.queryLimits
+
+      Then("all configured caps remain explicit finite admission ceilings")
+      limits.maxDepth shouldBe 20
+      limits.maxVisitedDirectories shouldBe 50000
+      limits.maxEntries shouldBe 40
+      limits.maxEntryBytes shouldBe 4096L
+      limits.maxTotalBytes shouldBe 65536L
+    }
+
+    "reject malformed or negative resource-tree query caps deterministically" in {
+      Given("invalid integer and byte query limits")
+      val malformed = ResolvedConfiguration(
+        Configuration(Map(
+          RuntimeConfig.RESOURCE_TREE_QUERY_MAX_VISITED_DIRECTORIES_KEY -> ConfigurationValue.StringValue("many")
+        )),
+        ConfigurationTrace.empty
+      )
+      val negative = ResolvedConfiguration(
+        Configuration(Map(
+          RuntimeConfig.RESOURCE_TREE_QUERY_MAX_TOTAL_BYTES_KEY -> ConfigurationValue.StringValue("-1")
+        )),
+        ConfigurationTrace.empty
+      )
+
+      When("each invalid runtime policy is resolved")
+      val malformederror = intercept[IllegalArgumentException](RuntimeConfig.from(malformed))
+      val negativeerror = intercept[IllegalArgumentException](RuntimeConfig.from(negative))
+
+      Then("the failing configuration key remains identifiable")
+      malformederror.getMessage should include (RuntimeConfig.RESOURCE_TREE_QUERY_MAX_VISITED_DIRECTORIES_KEY)
+      negativeerror.getMessage should include (RuntimeConfig.RESOURCE_TREE_QUERY_MAX_TOTAL_BYTES_KEY)
     }
 
     "parse id namespace configuration and aliases" in {

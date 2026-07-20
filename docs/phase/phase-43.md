@@ -1,12 +1,12 @@
 # Phase 43 - Bounded Resource Tree Query
 
 Stage Status:
-- Current status: ACTIVE
-- Current step: RQ-06 verification and closure
+- Current status: CLOSED
+- Current step: Complete
 - Owner: CNCF resource-tree runtime, with CBD Support as the first downstream
   driver.
 
-status = active
+status = closed
 
 ## 1. Purpose
 
@@ -23,6 +23,10 @@ access to its physical root.
   `project.yaml`; CBD Support selects that name through the generic query.
 - A query result contains only deterministic logical relative paths and
   bounded bytes.
+- Core `org.goldenport.tree.Tree[A]` remains the generic structural IR;
+  `ResourceTree*` remains the runtime capability/admission model. Complete
+  snapshots may be projected one way for runtime-owned structural processing,
+  while sparse query results never imply a complete tree.
 - Query limits cover maximum depth, directory visits, matched entries,
   per-entry bytes, and aggregate result bytes.
 - A symbolic configured root is invalid. Nested symbolic links are never
@@ -76,6 +80,7 @@ access to its physical root.
 ## 7. Source
 
 - `docs/journal/2026/07/2026-07-20-cbd-working-resource-tree-handoff.md`
+- `docs/journal/2026/07/2026-07-20-resource-tree-and-generic-tree-boundary.md`
 - `docs/design/component-runtime-boundary-capabilities.md`
 - `docs/spec/component-runtime-boundary-capabilities.md`
 
@@ -101,3 +106,12 @@ RQ-05 completed Jul. 20, 2026. CBD Support now queries every bounded
 `project.yaml` under a declared development tree, projects each result as
 independent `working` evidence, and initializes local inputs before its
 catalog/status ActionCall projections. Start RQ-06.
+RQ-06 completed Jul. 20, 2026. The standard finite query ceiling was adjusted
+to a practical multi-project workspace bound and made deployment-configurable.
+The focused ResourceTree/DSL/configuration specifications passed 50 tests; the
+full CNCF suite passed 2,062 tests; the full CBD Support suite passed 231
+tests; and normal CAR lint reported no failures. A live MCP run admitted
+`working=/Users/asami/src/dev2026`, visited 48,176 directories without a broad
+snapshot, returned 18 `project.yaml` observations, and reported
+`simplemodeling=ready, working=ready`. Phase 43 is closed. Phase 44 remains the
+selected next planned phase.

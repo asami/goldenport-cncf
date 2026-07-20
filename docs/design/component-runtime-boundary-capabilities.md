@@ -158,6 +158,16 @@ logical reference, selected entries, effective limits, and safe counts; it
 does not expose a physical root, host `Path`, skipped path, provider handle, or
 unmatched tree content.
 
+The standard local-provider ceiling is finite but sized for a multi-project
+development workspace: depth 32, 100,000 visited directories, 1,000 matches,
+16 MiB per matched entry, and 64 MiB in aggregate. Deployments may configure
+each finite provider ceiling through `textus.resource.tree.query.max-depth`,
+`textus.resource.tree.query.max-visited-directories`,
+`textus.resource.tree.query.max-entries`,
+`textus.resource.tree.query.max-entry-bytes`, and
+`textus.resource.tree.query.max-total-bytes`, including their standard
+`textus.runtime.*` and `cncf.*` aliases.
+
 The local provider preserves complete-discovery semantics. If an admitted
 depth or directory-visit bound prevents evaluation of a directory whose
 descendants would otherwise be in scope, it fails the query rather than
@@ -175,6 +185,34 @@ and protected internal DSL as snapshots. Observability records only logical
 tree identity, selector kind, provider family, effective limits, visited and
 matched counts, outcome, and structured diagnostics. It never records a
 physical root, logical entry path, or entry content.
+
+### Relationship To The Generic Tree IR
+
+The core `org.goldenport.tree.Tree[A]` and CNCF `ResourceTree*` models have
+different responsibilities. `Tree[A]` is an immutable, execution-oriented
+structural IR with directory/leaf nodes, order-preserving traversal, and value
+transformation. It does not represent runtime admission, provider ownership,
+resource limits, or authorization.
+
+`ResourceTreeReference`, `ResourceTreeAccess`, `ResourceTreeSnapshot`, and
+`ResourceTreeQueryResult` form the CNCF runtime capability and admission
+model. Their canonical flat logical paths make deterministic ordering,
+limit validation, sparse query results, and payload-safe diagnostics explicit
+without exposing a general tree traversal or mutation surface to components.
+They do not replace the generic tree IR.
+
+An admitted complete `ResourceTreeSnapshot` may be projected one way into a
+generic `Tree[A]` when a runtime-owned materializer or adapter needs structural
+processing. Such a projection does not transfer admission semantics to
+`Tree[A]`, and conversion in the opposite direction must pass normal
+ResourceTree admission again. A `ResourceTreeQueryResult` is a sparse selected
+entry set: absent parents, siblings, and unrelated entries are not evidence of
+absence in the source tree. It must therefore not be implicitly represented as
+or interpreted as a complete generic `Tree[A]`.
+
+Domain-specific trees such as `TagTree`, `JobTraceTree`, and introspection
+`TreeModel` remain independent read models. Their use of tree structure does
+not grant resource-tree capability or alter ResourceTree completeness rules.
 
 ## Process Execution Materialization
 

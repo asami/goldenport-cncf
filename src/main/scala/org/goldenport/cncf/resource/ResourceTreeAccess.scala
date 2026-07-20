@@ -186,8 +186,8 @@ final case class ResourceTreeQueryLimits(
 }
 
 object ResourceTreeQueryLimits {
-  val DefaultMaxDepth: Int = 16
-  val DefaultMaxVisitedDirectories: Int = 1000
+  val DefaultMaxDepth: Int = 32
+  val DefaultMaxVisitedDirectories: Int = 100000
   val DefaultMaxEntries: Int = 1000
   val DefaultMaxEntryBytes: Long = 16L * 1024L * 1024L
   val DefaultMaxTotalBytes: Long = 64L * 1024L * 1024L
@@ -471,6 +471,12 @@ final case class ResourceTreePolicy(
 
 object ResourceTreePolicy {
   def fromValuesC(values: Vector[String]): Consequence[ResourceTreePolicy] =
+    fromValuesC(values, ResourceTreeQueryLimits.default)
+
+  def fromValuesC(
+    values: Vector[String],
+    querylimits: ResourceTreeQueryLimits
+  ): Consequence[ResourceTreePolicy] =
     values.foldLeft(Consequence.success(Map.empty[String, Path])) { (z, value) =>
       for {
         roots <- z
@@ -484,7 +490,9 @@ object ResourceTreePolicy {
         else
           Consequence.unit
       } yield roots + binding
-    }.map(ResourceTreePolicy(_))
+    }.flatMap { roots =>
+      querylimits.validateC.map(ResourceTreePolicy(roots, _))
+    }
 
   private def _binding_c(value: String): Consequence[(String, Path)] =
     value.trim.split("=", 2).toVector match {

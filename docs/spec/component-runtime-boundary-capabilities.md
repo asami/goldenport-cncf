@@ -117,6 +117,17 @@ logical relative path. A result MAY expose only the logical tree reference,
 logical relative paths for returned entries, entry bytes, effective limits, and
 safe count/size metadata.
 
+The standard runtime policy MUST remain finite. Its default query ceiling is
+depth 32, 100,000 visited directories, 1,000 matched entries, 16 MiB per
+matched entry, and 64 MiB of matched bytes. Runtime configuration MAY set each
+finite provider ceiling through `textus.resource.tree.query.max-depth`,
+`textus.resource.tree.query.max-visited-directories`,
+`textus.resource.tree.query.max-entries`,
+`textus.resource.tree.query.max-entry-bytes`, and
+`textus.resource.tree.query.max-total-bytes`, including their standard runtime
+and CNCF aliases. Invalid or negative values MUST fail runtime configuration
+deterministically.
+
 The query is complete within its admitted tree or fails. CNCF MUST NOT silently
 return a partial result when a directory cannot be evaluated because the depth
 or visited-directory limit has been exhausted; it MUST return a structured
@@ -137,6 +148,27 @@ CallTree and metrics MAY expose logical tree identity, selector kind, provider
 family, effective limits, visited/matched counts, outcome, and structured
 diagnostics. They MUST NOT expose physical roots, returned logical paths, or
 entry bytes.
+
+### Generic Tree IR Compatibility (R6b)
+
+The core `org.goldenport.tree.Tree[A]` is a generic structural IR and MUST NOT
+be treated as a ResourceTree admission token, provider handle, authorization
+grant, or proof of snapshot completeness. CNCF `ResourceTree*` values are the
+runtime capability and admission model and MUST NOT expose generic tree
+mutation or unrestricted traversal as a way to bypass that boundary.
+
+An admitted complete `ResourceTreeSnapshot` MAY be projected into a generic
+`Tree[A]` by runtime-owned code. The projection MUST preserve validated logical
+paths and deterministic entry order, and the resulting `Tree[A]` MUST NOT be
+accepted back as an admitted ResourceTree without reapplying ResourceTree
+validation and limits.
+
+A `ResourceTreeQueryResult` is a sparse selected-entry result. It MUST NOT be
+implicitly converted to or described as a complete generic tree, and the
+absence of a node from that result MUST NOT be interpreted as evidence that
+the node is absent from the admitted source tree. Domain-specific tree read
+models, including Tag, Job, and introspection trees, remain outside this
+resource capability contract.
 
 ## Single-resource Compatibility (R7)
 

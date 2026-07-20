@@ -17,6 +17,25 @@ final class ResourceTreeQuerySpec extends AnyWordSpec with Matchers with GivenWh
     Gen.nonEmptyListOf(Gen.alphaLowerChar).map(_.mkString.take(8))
 
   "ResourceTreeQuery" should {
+    "use finite defaults that admit a bounded multi-project development workspace" in {
+      Given("the standard resource-tree query policy")
+      val limits = ResourceTreeQueryLimits.default
+
+      When("its traversal boundaries are inspected")
+      val dimensions = Vector(
+        limits.maxDepth.toLong,
+        limits.maxVisitedDirectories.toLong,
+        limits.maxEntries.toLong,
+        limits.maxEntryBytes,
+        limits.maxTotalBytes
+      )
+
+      Then("every dimension is finite and the workspace traversal caps remain practical")
+      dimensions.forall(x => x > 0L && x < Long.MaxValue) shouldBe true
+      limits.maxDepth shouldBe 32
+      limits.maxVisitedDirectories shouldBe 100000
+    }
+
     "select only an exact safe leaf name from an injected tree" in {
       Given("an in-memory tree containing matching and non-matching logical entries")
       val reference = ResourceTreeReference.parseC("working").toOption.get

@@ -14,7 +14,7 @@ import org.goldenport.cncf.action.CommandExecutionMode
 import org.goldenport.cncf.context.{ExecutionProfileResolver, IdGenerationContext, ResolvedExecutionProfile, RuntimeClock}
 import org.goldenport.cncf.observability.{DiagnosticPayloadExternalizationConfig, ObservabilityEngine, OpenTelemetryExportConfig}
 import org.goldenport.cncf.blob.BlobStoreConfig
-import org.goldenport.cncf.resource.{ResourceTreePolicy, ResourceUrlPolicy, TextusUrnResourcePolicy, UrnResourceProvider, UrnResourceProviderConfig}
+import org.goldenport.cncf.resource.{ResourceTreePolicy, ResourceTreeQueryLimits, ResourceUrlPolicy, TextusUrnResourcePolicy, UrnResourceProvider, UrnResourceProviderConfig}
 
 /*
  * @since   Jan. 18, 2026
@@ -23,7 +23,7 @@ import org.goldenport.cncf.resource.{ResourceTreePolicy, ResourceUrlPolicy, Text
  *  version Mar. 28, 2026
  *  version Apr. 30, 2026
  *  version Jun. 19, 2026
- * @version Jul. 17, 2026
+ * @version Jul. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class RuntimeConfig(
@@ -318,6 +318,16 @@ object RuntimeConfig {
   val RuntimeResourceUrnProvidersKey = "textus.runtime.resource.urn.providers"
   val ResourceTreeFileRootsKey = "textus.resource.tree.file-roots"
   val RuntimeResourceTreeFileRootsKey = "textus.runtime.resource.tree.file-roots"
+  val RESOURCE_TREE_QUERY_MAX_DEPTH_KEY = "textus.resource.tree.query.max-depth"
+  val RUNTIME_RESOURCE_TREE_QUERY_MAX_DEPTH_KEY = "textus.runtime.resource.tree.query.max-depth"
+  val RESOURCE_TREE_QUERY_MAX_VISITED_DIRECTORIES_KEY = "textus.resource.tree.query.max-visited-directories"
+  val RUNTIME_RESOURCE_TREE_QUERY_MAX_VISITED_DIRECTORIES_KEY = "textus.runtime.resource.tree.query.max-visited-directories"
+  val RESOURCE_TREE_QUERY_MAX_ENTRIES_KEY = "textus.resource.tree.query.max-entries"
+  val RUNTIME_RESOURCE_TREE_QUERY_MAX_ENTRIES_KEY = "textus.runtime.resource.tree.query.max-entries"
+  val RESOURCE_TREE_QUERY_MAX_ENTRY_BYTES_KEY = "textus.resource.tree.query.max-entry-bytes"
+  val RUNTIME_RESOURCE_TREE_QUERY_MAX_ENTRY_BYTES_KEY = "textus.runtime.resource.tree.query.max-entry-bytes"
+  val RESOURCE_TREE_QUERY_MAX_TOTAL_BYTES_KEY = "textus.resource.tree.query.max-total-bytes"
+  val RUNTIME_RESOURCE_TREE_QUERY_MAX_TOTAL_BYTES_KEY = "textus.runtime.resource.tree.query.max-total-bytes"
 
   val DefaultServerEmulatorBaseUrl = "http://localhost/"
   val DefaultHttpDriverName = "real"
@@ -755,11 +765,51 @@ object RuntimeConfig {
     configuration: ResolvedConfiguration
   ): ResourceTreePolicy =
     ResourceTreePolicy.fromValuesC(
-      _split_csv(_get_string(configuration, ResourceTreeFileRootsKey))
+      _split_csv(_get_string(configuration, ResourceTreeFileRootsKey)),
+      _resource_tree_query_limits(configuration)
     ) match {
       case Consequence.Success(value) => value
       case Consequence.Failure(conclusion) =>
         throw conclusion.getException.getOrElse(new IllegalArgumentException(conclusion.display))
+    }
+
+  private def _resource_tree_query_limits(
+    configuration: ResolvedConfiguration
+  ): ResourceTreeQueryLimits = {
+    val defaults = ResourceTreeQueryLimits.default
+    ResourceTreeQueryLimits(
+      maxDepth = _resource_tree_query_int(configuration, RESOURCE_TREE_QUERY_MAX_DEPTH_KEY, defaults.maxDepth),
+      maxVisitedDirectories = _resource_tree_query_int(
+        configuration,
+        RESOURCE_TREE_QUERY_MAX_VISITED_DIRECTORIES_KEY,
+        defaults.maxVisitedDirectories
+      ),
+      maxEntries = _resource_tree_query_int(configuration, RESOURCE_TREE_QUERY_MAX_ENTRIES_KEY, defaults.maxEntries),
+      maxEntryBytes = _resource_tree_query_long(configuration, RESOURCE_TREE_QUERY_MAX_ENTRY_BYTES_KEY, defaults.maxEntryBytes),
+      maxTotalBytes = _resource_tree_query_long(configuration, RESOURCE_TREE_QUERY_MAX_TOTAL_BYTES_KEY, defaults.maxTotalBytes)
+    )
+  }
+
+  private def _resource_tree_query_int(
+    configuration: ResolvedConfiguration,
+    key: String,
+    default: Int
+  ): Int =
+    _get_string(configuration, key).fold(default) { value =>
+      scala.util.Try(value.trim.toInt).toOption.filter(_ >= 0).getOrElse {
+        throw new IllegalArgumentException(s"${key} must be a non-negative integer: ${value}")
+      }
+    }
+
+  private def _resource_tree_query_long(
+    configuration: ResolvedConfiguration,
+    key: String,
+    default: Long
+  ): Long =
+    _get_string(configuration, key).fold(default) { value =>
+      scala.util.Try(value.trim.toLong).toOption.filter(_ >= 0L).getOrElse {
+        throw new IllegalArgumentException(s"${key} must be a non-negative integer: ${value}")
+      }
     }
 
   private def _execution_profile(
@@ -899,6 +949,11 @@ object RuntimeConfig {
         case ResourceTextusUrnFileRootsKey => Vector(RuntimeResourceTextusUrnFileRootsKey)
         case ResourceUrnProvidersKey => Vector(RuntimeResourceUrnProvidersKey)
         case ResourceTreeFileRootsKey => Vector(RuntimeResourceTreeFileRootsKey)
+        case RESOURCE_TREE_QUERY_MAX_DEPTH_KEY => Vector(RUNTIME_RESOURCE_TREE_QUERY_MAX_DEPTH_KEY)
+        case RESOURCE_TREE_QUERY_MAX_VISITED_DIRECTORIES_KEY => Vector(RUNTIME_RESOURCE_TREE_QUERY_MAX_VISITED_DIRECTORIES_KEY)
+        case RESOURCE_TREE_QUERY_MAX_ENTRIES_KEY => Vector(RUNTIME_RESOURCE_TREE_QUERY_MAX_ENTRIES_KEY)
+        case RESOURCE_TREE_QUERY_MAX_ENTRY_BYTES_KEY => Vector(RUNTIME_RESOURCE_TREE_QUERY_MAX_ENTRY_BYTES_KEY)
+        case RESOURCE_TREE_QUERY_MAX_TOTAL_BYTES_KEY => Vector(RUNTIME_RESOURCE_TREE_QUERY_MAX_TOTAL_BYTES_KEY)
         case _ => Vector.empty
       }
     val cncfaliases =
