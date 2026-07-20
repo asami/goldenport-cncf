@@ -16,13 +16,13 @@ final case class ServiceContainerInstanceId private (value: String) {
 }
 
 object ServiceContainerInstanceId {
-  private val _pattern = "[a-z0-9][a-z0-9._-]{0,127}".r
+  private val _pattern = "[A-Za-z0-9][A-Za-z0-9._-]{0,127}".r
 
   def parseC(value: String): Consequence[ServiceContainerInstanceId] = {
-    val text = Option(value).map(_.trim.toLowerCase(java.util.Locale.ROOT)).getOrElse("")
+    val text = Option(value).map(_.trim).getOrElse("")
     text match {
       case _pattern() => Consequence.success(ServiceContainerInstanceId(text))
-      case _ => Consequence.argumentFormatError("instanceId", "safe provider container identity", "invalid")
+      case _ => Consequence.argumentFormatError("instanceId", "opaque safe provider container identity", "invalid")
     }
   }
 }
@@ -184,15 +184,21 @@ abstract class ServiceContainerGateway {
 
 object FakeServiceContainerGateway {
   def create(
-    readinessendpoints: Map[ServiceContainerRegistryKey, ServiceContainerEndpoint] = Map.empty
+    readinessendpoints: Map[ServiceContainerRegistryKey, ServiceContainerEndpoint] = Map.empty,
+    initialinspections: Vector[ServiceContainerInspection] = Vector.empty,
+    failuretransitions: Set[(ServiceContainerTransition, ServiceContainerRegistryKey)] = Set.empty
   ): FakeServiceContainerGateway =
-    new FakeServiceContainerGateway(readinessendpoints)
+    new FakeServiceContainerGateway(readinessendpoints, initialinspections, failuretransitions)
 }
 
 final class FakeServiceContainerGateway private (
-  readinessendpoints: Map[ServiceContainerRegistryKey, ServiceContainerEndpoint]
+  readinessendpoints: Map[ServiceContainerRegistryKey, ServiceContainerEndpoint],
+  initialinspections: Vector[ServiceContainerInspection],
+  failuretransitions: Set[(ServiceContainerTransition, ServiceContainerRegistryKey)]
 ) extends ServiceContainerGateway {
-  private val _containers = mutable.LinkedHashMap.empty[ServiceContainerInstanceId, ServiceContainerInspection]
+  private val _containers = mutable.LinkedHashMap.from(
+    initialinspections.sortBy(_.registryKey.print).map(x => x.instanceId -> x)
+  )
   private val _transitions = mutable.ArrayBuffer.empty[(ServiceContainerTransition, ServiceContainerRegistryKey)]
 
   def transitions: Vector[(ServiceContainerTransition, ServiceContainerRegistryKey)] = synchronized {
@@ -207,7 +213,8 @@ final class FakeServiceContainerGateway private (
     key: ServiceContainerRegistryKey
   ): Consequence[Option[ServiceContainerInspection]] = synchronized {
     _record(ServiceContainerTransition.Inspect, key)
-    Consequence.success(_containers.values.find(_.registryKey == key))
+    _failure_c[Option[ServiceContainerInspection]](ServiceContainerTransition.Inspect, key)
+      .getOrElse(Consequence.success(_containers.values.find(_.registryKey == key)))
   }
 
   def createC(
@@ -215,28 +222,30 @@ final class FakeServiceContainerGateway private (
   ): Consequence[ServiceContainerInspection] = synchronized {
     val key = definition.registryKey
     _record(ServiceContainerTransition.Create, key)
-    _containers.values.find(_.registryKey == key) match {
-      case Some(_) => ServiceContainerDiagnostics.incompatibleExistingServiceC(key)
-      case None =>
-        val instanceid = _instance_id(definition)
-        val inspection = ServiceContainerInspection(
-          instanceid,
-          key,
-          definition.image,
-          definition.ports,
-          ServiceContainerOwnershipLabels.from(definition),
-          ServiceContainerStatus.Created,
-          None
-        )
-        _containers.put(instanceid, inspection)
-        Consequence.success(inspection)
+    _failure_c[ServiceContainerInspection](ServiceContainerTransition.Create, key).getOrElse {
+      _containers.values.find(_.registryKey == key) match {
+        case Some(_) => ServiceContainerDiagnostics.incompatibleExistingServiceC(key)
+        case None =>
+          val instanceid = _instance_id(definition)
+          val inspection = ServiceContainerInspection(
+            instanceid,
+            key,
+            definition.image,
+            definition.ports,
+            ServiceContainerOwnershipLabels.from(definition),
+            ServiceContainerStatus.Created,
+            None
+          )
+          _containers.put(instanceid, inspection)
+          Consequence.success(inspection)
+      }
     }
   }
 
   def startC(
     instanceid: ServiceContainerInstanceId
   ): Consequence[ServiceContainerInspection] = synchronized {
-    _update_c(instanceid, ServiceContainerTransition.Start)(_.copy(
+    _transition_update_c(instanceid, ServiceContainerTransition.Start)(_.copy(
       status = ServiceContainerStatus.Starting,
       endpoint = None
     ))
@@ -250,14 +259,19 @@ final class FakeServiceContainerGateway private (
       case None => _not_found_c(instanceid)
       case Some(inspection) =>
         _record(ServiceContainerTransition.CheckReadiness, inspection.registryKey)
-        readinessendpoints.get(inspection.registryKey) match {
-          case None => ServiceContainerDiagnostics.unhealthyC(inspection.registryKey.serviceId)
-          case Some(endpoint) =>
-            _containers.put(instanceid, inspection.copy(
-              status = ServiceContainerStatus.Ready,
-              endpoint = Some(endpoint)
-            ))
-            Consequence.success(ServiceContainerReadinessResult(endpoint))
+        _failure_c[ServiceContainerReadinessResult](
+          ServiceContainerTransition.CheckReadiness,
+          inspection.registryKey
+        ).getOrElse {
+          readinessendpoints.get(inspection.registryKey) match {
+            case None => ServiceContainerDiagnostics.unhealthyC(inspection.registryKey.serviceId)
+            case Some(endpoint) =>
+              _containers.put(instanceid, inspection.copy(
+                status = ServiceContainerStatus.Ready,
+                endpoint = Some(endpoint)
+              ))
+              Consequence.success(ServiceContainerReadinessResult(endpoint))
+          }
         }
     }
   }
@@ -265,7 +279,7 @@ final class FakeServiceContainerGateway private (
   def stopC(
     instanceid: ServiceContainerInstanceId
   ): Consequence[ServiceContainerInspection] = synchronized {
-    _update_c(instanceid, ServiceContainerTransition.Stop)(_.copy(
+    _transition_update_c(instanceid, ServiceContainerTransition.Stop)(_.copy(
       status = ServiceContainerStatus.Stopped,
       endpoint = None
     ))
@@ -274,7 +288,7 @@ final class FakeServiceContainerGateway private (
   def restartC(
     instanceid: ServiceContainerInstanceId
   ): Consequence[ServiceContainerInspection] = synchronized {
-    _update_c(instanceid, ServiceContainerTransition.Restart)(_.copy(
+    _transition_update_c(instanceid, ServiceContainerTransition.Restart)(_.copy(
       status = ServiceContainerStatus.Starting,
       endpoint = None
     ))
@@ -287,12 +301,15 @@ final class FakeServiceContainerGateway private (
       case None => _not_found_c(instanceid)
       case Some(inspection) =>
         _record(ServiceContainerTransition.Remove, inspection.registryKey)
-        _containers.remove(instanceid)
-        Consequence.success(inspection)
+        _failure_c[ServiceContainerInspection](ServiceContainerTransition.Remove, inspection.registryKey)
+          .getOrElse {
+            _containers.remove(instanceid)
+            Consequence.success(inspection)
+          }
     }
   }
 
-  private def _update_c(
+  private def _transition_update_c(
     instanceid: ServiceContainerInstanceId,
     transition: ServiceContainerTransition
   )(f: ServiceContainerInspection => ServiceContainerInspection): Consequence[ServiceContainerInspection] =
@@ -300,9 +317,11 @@ final class FakeServiceContainerGateway private (
       case None => _not_found_c(instanceid)
       case Some(inspection) =>
         _record(transition, inspection.registryKey)
-        val result = f(inspection)
-        _containers.put(instanceid, result)
-        Consequence.success(result)
+        _failure_c[ServiceContainerInspection](transition, inspection.registryKey).getOrElse {
+          val result = f(inspection)
+          _containers.put(instanceid, result)
+          Consequence.success(result)
+        }
     }
 
   private def _record(
@@ -317,6 +336,23 @@ final class FakeServiceContainerGateway private (
     ServiceContainerInstanceId.parseC(
       s"fake-${ServiceContainerOwnershipLabels.contractDigest(definition).take(24)}"
     ).toOption.get
+
+  private def _failure_c[A](
+    transition: ServiceContainerTransition,
+    key: ServiceContainerRegistryKey
+  ): Option[Consequence.Failure[A]] =
+    Option.when(failuretransitions.contains(transition -> key)) {
+      transition match {
+        case ServiceContainerTransition.Create =>
+          ServiceContainerDiagnostics.imageUnavailableC(key.serviceId)
+        case ServiceContainerTransition.Start | ServiceContainerTransition.Restart =>
+          ServiceContainerDiagnostics.startupFailureC(key.serviceId)
+        case ServiceContainerTransition.CheckReadiness =>
+          ServiceContainerDiagnostics.readinessTimeoutC(key.serviceId)
+        case _ =>
+          ServiceContainerDiagnostics.gatewayUnavailableC(key.serviceId)
+      }
+    }
 
   private def _not_found_c[A](
     instanceid: ServiceContainerInstanceId

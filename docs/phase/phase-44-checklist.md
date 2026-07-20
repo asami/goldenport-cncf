@@ -32,13 +32,13 @@ Status: DONE
 
 ## SC-04: Lifecycle Runtime
 
-Status: PLANNED
+Status: DONE
 
-- [ ] Implement external bypass, inspect, create-or-reuse, start, readiness,
+- [x] Implement external bypass, inspect, create-or-reuse, start, readiness,
       stop, restart, and remove semantics.
-- [ ] Attach owned services to runtime shutdown rather than UnitOfWork terminal
-      cleanup.
-- [ ] Make transition and cleanup outcomes idempotent.
+- [x] Provide runtime-owned shutdown cleanup outside UnitOfWork terminal
+      cleanup; host/subsystem shutdown wiring remains SC-05.
+- [x] Make transition and cleanup outcomes idempotent.
 
 ## SC-05: Observability and Safety
 
@@ -48,6 +48,8 @@ Status: PLANNED
 - [ ] Redact credentials, environment values, sensitive mounts, and provider
       payloads.
 - [ ] Keep endpoint projection credential-free.
+- [ ] Wire service-container cleanup into host/subsystem runtime shutdown with
+      structured diagnostics.
 
 ## SC-06: Textus AI Driver
 

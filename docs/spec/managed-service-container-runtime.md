@@ -164,11 +164,57 @@ record typed transitions, produce deterministic instance identity, preserve
 normal structured failures, and implement the same gateway surface expected of
 a Docker-backed implementation.
 
+### Lifecycle Resolution (SC4-R1)
+
+`ServiceContainerRuntime.resolveC` MUST return an external definition's
+validated endpoint without registry or gateway access. A runtime-owned
+definition MUST be admitted to the owner-scoped registry before gateway
+inspection.
+
+`CreateOrReuse` with no observed resource MUST create, start, and wait for
+readiness. `RequireExisting` with no observed resource MUST fail without
+creation. An observed resource MUST pass ownership and definition compatibility
+before any start, restart, readiness, stop, or remove operation. A created or
+stopped compatible resource MUST be started; an unhealthy or failed compatible
+resource MUST be restarted; a starting or ready compatible resource MUST be
+readiness-checked without creation.
+
+Successful readiness MUST synchronize the registry to `Ready` with the
+credential-free endpoint. Failed readiness MUST preserve the original
+structured failure and synchronize the registry to `Unhealthy`. Repeated
+resolution of one compatible ready definition MUST converge on one provider
+instance without unnecessary registry revision changes.
+
+### Explicit Lifecycle Operations (SC4-R2)
+
+Restart MUST require a registered, observed, compatible provider resource and
+MUST return only after its readiness contract succeeds. Stop and remove MUST
+inspect and verify compatibility before mutation. Repeated stop or remove after
+the requested state is reached MUST succeed without repeating the provider
+mutation.
+
+### Runtime-Owned Cleanup (SC4-R3)
+
+The lifecycle runtime MUST provide an idempotent runtime-shutdown cleanup
+entrypoint over deterministic registry order. Cleanup MUST continue across all
+registered services after an individual failure and MUST return the aggregated
+structured failures after best-effort recovery. `Keep` MUST preserve provider
+and registry state. `Stop` MUST stop a compatible provider resource at most
+once and retain a `Stopped` registry entry. `Remove` MUST remove a compatible
+provider resource at most once and release its registry entry. An already
+absent provider resource MUST converge to absent registry state without a
+provider mutation.
+
+This cleanup entrypoint belongs to the service-container runtime and MUST NOT
+be registered as UnitOfWork terminal cleanup. Wiring the entrypoint into the
+host/subsystem shutdown sequence and projecting cleanup diagnostics belong to
+SC5.
+
 ## Deferred Contract
 
-The following contract details belong to later Phase 44 slices: legal lifecycle
-transition orchestration, Docker transport implementation, readiness transport,
-CallTree projection, metrics, and runtime shutdown wiring.
+The following contract details belong to later Phase 44 slices: Docker
+transport implementation, readiness transport, CallTree projection, metrics,
+and host/subsystem runtime-shutdown wiring.
 
 ## Executable Evidence
 
@@ -178,5 +224,7 @@ readiness, persistence, and structured diagnostics.
 definition conflicts, deterministic enumeration, revision checks, Ready
 endpoint requirements, and removal. `ServiceContainerGatewaySpec` covers
 deterministic ownership labels, compatibility refusal, typed fake transitions,
-readiness, and missing-instance behavior. Later lifecycle specs cover
-transition orchestration.
+readiness, and missing-instance behavior. `ServiceContainerRuntimeSpec` covers
+external bypass, convergent create-or-reuse, RequireExisting refusal, ownership
+refusal, readiness failure state, restart, idempotent stop/remove, and runtime
+cleanup policies.

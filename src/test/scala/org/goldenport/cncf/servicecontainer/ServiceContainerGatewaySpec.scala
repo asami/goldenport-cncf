@@ -17,6 +17,17 @@ import org.scalatest.wordspec.AnyWordSpec
  */
 final class ServiceContainerGatewaySpec extends AnyWordSpec with Matchers with GivenWhenThen {
   "Managed service-container gateway" should {
+    "preserve opaque provider instance identity without case normalization" in {
+      Given("a safe mixed-case provider identity")
+      val value = "ProviderContainer-A1"
+
+      When("the gateway identity is admitted")
+      val result = ServiceContainerInstanceId.parseC(value)
+
+      Then("the exact provider identity remains available for later lifecycle calls")
+      result.toOption.map(_.print) shouldBe Some(value)
+    }
+
     "derive stable runtime-owned labels from the admitted definition" in {
       Given("generated safe owner names and one admitted service contract")
       val owners = Gen.nonEmptyListOf(Gen.alphaLowerChar).map(_.mkString.take(20)).suchThat(_.nonEmpty)

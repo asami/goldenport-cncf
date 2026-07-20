@@ -217,7 +217,7 @@ object ServiceContainerVolumeName {
   }
 }
 
-abstract class ServiceContainerPersistence
+sealed abstract class ServiceContainerPersistence
 
 object ServiceContainerPersistence {
   case object Ephemeral extends ServiceContainerPersistence
@@ -242,7 +242,7 @@ object ServiceContainerPersistence {
       Consequence.success(new NamedVolumes(volumes))
 }
 
-abstract class ServiceContainerReadinessProbe {
+sealed abstract class ServiceContainerReadinessProbe {
   def portName: ServiceContainerPortName
 }
 
@@ -332,7 +332,7 @@ enum ServiceContainerOwnershipMode(val name: String) {
   case RuntimeOwned extends ServiceContainerOwnershipMode("runtime-owned")
 }
 
-abstract class ServiceContainerDefinition {
+sealed abstract class ServiceContainerDefinition {
   def serviceId: ServiceContainerId
   def ownershipMode: ServiceContainerOwnershipMode
 }
@@ -433,6 +433,12 @@ object ServiceContainerDiagnostics {
     _conflict_c(
       "service-container compatibility",
       _key_facets(key, "incompatible-existing-service")
+    )
+
+  def requiredExistingServiceC[A](key: ServiceContainerRegistryKey): Consequence.Failure[A] =
+    Consequence.resourceNotFound(
+      s"Required managed service does not exist: ${key.print}.",
+      _key_facets(key, "required-existing-service")
     )
 
   def portConflictC[A](serviceid: ServiceContainerId): Consequence.Failure[A] =

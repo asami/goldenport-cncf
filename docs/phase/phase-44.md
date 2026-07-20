@@ -2,7 +2,7 @@
 
 Stage Status:
 - Current status: ACTIVE
-- Current step: SC-04 lifecycle runtime
+- Current step: SC-05 observability, safety, and runtime shutdown
 - Owner: CNCF managed service runtime, with Textus AI and Textus SIE as
   downstream drivers.
 
@@ -114,3 +114,11 @@ ownership conflicts from incompatible definitions before reuse. The
 deterministic fake gateway provides daemon-free lifecycle evidence and typed
 transition history. Begin SC-04 with external bypass and lifecycle
 orchestration across the registry and gateway.
+
+SC-04 completed Jul. 20, 2026. `ServiceContainerRuntime` now bypasses owned
+state for external endpoints, converges create-or-reuse through compatibility
+and readiness, supports RequireExisting, restart, idempotent stop/remove, and
+applies Keep/Stop/Remove through a deterministic runtime-owned shutdown
+entrypoint. Readiness failure preserves its structured `Conclusion` while
+moving registry state to Unhealthy. Begin SC-05 with CallTree/metrics,
+payload-safe diagnostics, and host/subsystem shutdown wiring.

@@ -121,6 +121,46 @@ transition order, and returns ordinary structured `Consequence` failures. It
 is the default executable-specification driver. A Docker transport
 implementation remains constrained by this contract and cannot broaden it.
 
+## Lifecycle Runtime
+
+`ServiceContainerRuntime` coordinates definitions, registry state, and the
+gateway. It is the component-facing endpoint-resolution boundary; gateway
+inspection and provider instance identity remain internal.
+
+External definitions return their validated endpoint directly. They never
+enter the owned registry and never call the gateway. Runtime-owned definitions
+are registered by explicit owner/service key and then inspected. Absence under
+`CreateOrReuse` selects create and start. Absence under `RequireExisting` is a
+structured failure. Presence selects compatibility checking before any
+mutation. Created or stopped instances start, unhealthy or failed instances
+restart, and starting or ready instances proceed directly to readiness.
+
+Readiness is the completion boundary for resolution and restart. Success
+returns a `ServiceContainerResolution` containing the safe endpoint and enough
+runtime metadata to distinguish creation from reuse. Failure keeps the original
+`Conclusion` authoritative and moves registry state to `Unhealthy`; a registry
+synchronization failure is retained as secondary diagnostic evidence.
+
+Registry synchronization avoids a revision update when status and endpoint are
+already equal. Consequently repeated resolution of one ready compatible
+service observes and verifies readiness but does not create another provider
+resource or churn registry revision.
+
+Explicit stop and remove are idempotent. They verify current ownership and
+compatibility before provider mutation. An already stopped service is not
+stopped again; an already removed service returns an absent no-op outcome.
+Restart requires a currently registered and observed compatible provider
+resource and completes only after readiness.
+
+The runtime owns `shutdownC`, which applies cleanup policies in deterministic
+registry order. `Keep` preserves state, `Stop` converges to a retained stopped
+entry, and `Remove` converges to absent provider and registry state. One cleanup
+failure does not prevent later entries from being recovered; failures are
+aggregated after the deterministic best-effort pass. This method is not a
+UnitOfWork resource or terminal callback. The host/subsystem shutdown sequence
+invokes it in the subsequent runtime-integration slice, where cleanup
+diagnostics are also projected.
+
 ## Lifecycle Ownership
 
 The service registry belongs to the component/runtime lifecycle, not to an
