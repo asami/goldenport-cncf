@@ -2565,9 +2565,10 @@ Completed in Phase 40.
 ### 9.38 MCP Client and AI Tool Boundary
 Active in Phase 45.
 
-Implementation status (Jul. 21, 2026): MC-01 and MC-02 are complete. MC-03 has
-canonical Port/runtime-registry wiring and deterministic fake transport
-evidence; Streamable HTTP initialize, `tools/list`, and `tools/call` remain.
+Implementation status (Jul. 21, 2026): MC-01 through MC-03 are complete. The
+runtime-owned Port/registry, deterministic fake transport, and Streamable HTTP
+initialize, `tools/list`, and `tools/call` paths have executable evidence.
+MC-04 admission and resource-limit enforcement is active.
 
 - Goal: provide a provider-neutral, runtime-owned MCP client boundary so
   consumers can execute only admitted tools without exposing endpoint,

@@ -1,5 +1,7 @@
 package org.goldenport.cncf.mcp.client
 
+import java.net.URI
+import java.time.Instant
 import java.util.Locale
 
 import org.goldenport.Consequence
@@ -77,14 +79,12 @@ final case class McpFieldName private (value: String) {
 }
 
 object McpFieldName {
-  private val _pattern = "[A-Za-z_][A-Za-z0-9_.-]{0,127}".r
-
   def parseC(value: String): Consequence[McpFieldName] = {
-    val text = Option(value).map(_.trim).getOrElse("")
-    text match {
-      case _pattern() => Consequence.success(McpFieldName(text))
-      case _ => Consequence.argumentFormatError("field", "bounded MCP field name", value)
-    }
+    val text = Option(value).getOrElse("")
+    if (text.nonEmpty && text.length <= 256 && !text.exists(_.isControl))
+      Consequence.success(McpFieldName(text))
+    else
+      Consequence.argumentFormatError("field", "non-empty bounded JSON field name without control characters", "invalid")
   }
 }
 
@@ -95,7 +95,8 @@ final case class McpDisplayText private (value: String) {
 object McpDisplayText {
   def parseC(value: String): Consequence[McpDisplayText] = {
     val text = Option(value).map(_.trim).getOrElse("")
-    if (text.isEmpty || text.length > 2048 || text.exists(_.isControl))
+    val hasunsafecontrol = text.exists(x => x.isControl && x != '\n' && x != '\r' && x != '\t')
+    if (text.isEmpty || text.length > 2048 || hasunsafecontrol)
       Consequence.argumentFormatError("displayText", "non-empty bounded display text", "invalid")
     else
       Consequence.success(McpDisplayText(text))
@@ -379,11 +380,128 @@ object McpClientCall {
     Consequence.success(McpClientCall(toolidentity, arguments))
 }
 
-sealed abstract class McpClientContent
+final case class McpMimeType private (value: String) {
+  def print: String = value
+}
+
+object McpMimeType {
+  private val _pattern = "[A-Za-z0-9!#$&^_.+-]+/[A-Za-z0-9!#$&^_.+-]+".r
+
+  def parseC(value: String): Consequence[McpMimeType] = {
+    val text = Option(value).map(_.trim.toLowerCase(Locale.ROOT)).getOrElse("")
+    text match {
+      case _pattern() => Consequence.success(McpMimeType(text))
+      case _ => Consequence.argumentFormatError("mimeType", "MIME media type", value)
+    }
+  }
+}
+
+final case class McpBase64Data private (value: String) {
+  def print: String = value
+}
+
+object McpBase64Data {
+  private val _pattern = "(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?".r
+
+  def parseC(value: String): Consequence[McpBase64Data] = {
+    val text = Option(value).map(_.trim).getOrElse("")
+    text match {
+      case _pattern() => Consequence.success(McpBase64Data(text))
+      case _ => Consequence.argumentFormatError("data", "base64 content", "invalid")
+    }
+  }
+}
+
+final case class McpResourceUri private (value: URI) {
+  def print: String = value.toASCIIString
+}
+
+object McpResourceUri {
+  def parseC(value: String): Consequence[McpResourceUri] =
+    scala.util.Try(URI.create(Option(value).map(_.trim).getOrElse(""))).toOption match {
+      case Some(uri) if uri.isAbsolute && !uri.toASCIIString.exists(_.isControl) =>
+        Consequence.success(McpResourceUri(uri))
+      case _ => Consequence.argumentFormatError("uri", "absolute resource URI", value)
+    }
+}
+
+enum McpContentRole(val name: String) {
+  case User extends McpContentRole("user")
+  case Assistant extends McpContentRole("assistant")
+}
+
+object McpContentRole {
+  def parseC(value: String): Consequence[McpContentRole] =
+    Option(value).map(_.trim.toLowerCase(Locale.ROOT)) match {
+      case Some("user") => Consequence.success(McpContentRole.User)
+      case Some("assistant") => Consequence.success(McpContentRole.Assistant)
+      case _ => Consequence.argumentFormatError("audience", "user or assistant", value)
+    }
+}
+
+final case class McpContentAnnotations private (
+  audience: Set[McpContentRole],
+  priority: Option[BigDecimal],
+  lastModified: Option[Instant]
+)
+
+object McpContentAnnotations {
+  def createC(
+    audience: Set[McpContentRole] = Set.empty,
+    priority: Option[BigDecimal] = None,
+    lastmodified: Option[Instant] = None
+  ): Consequence[McpContentAnnotations] =
+    priority match {
+      case Some(value) if value < 0 || value > 1 =>
+        Consequence.argumentInvalid("priority", "number from 0 through 1", value)
+      case _ => Consequence.success(McpContentAnnotations(audience, priority, lastmodified))
+    }
+}
+
+sealed abstract class McpClientContent {
+  def annotations: Option[McpContentAnnotations]
+}
 
 object McpClientContent {
-  final case class Text(value: String) extends McpClientContent
-  final case class Structured(value: McpValue) extends McpClientContent
+  final case class Text(
+    value: String,
+    annotations: Option[McpContentAnnotations] = None
+  ) extends McpClientContent
+  final case class Image(
+    data: McpBase64Data,
+    mimeType: McpMimeType,
+    annotations: Option[McpContentAnnotations] = None
+  ) extends McpClientContent
+  final case class Audio(
+    data: McpBase64Data,
+    mimeType: McpMimeType,
+    annotations: Option[McpContentAnnotations] = None
+  ) extends McpClientContent
+  final case class ResourceLink(
+    uri: McpResourceUri,
+    name: McpDisplayText,
+    title: Option[McpDisplayText] = None,
+    description: Option[McpDisplayText] = None,
+    mimeType: Option[McpMimeType] = None,
+    size: Option[Long] = None,
+    annotations: Option[McpContentAnnotations] = None
+  ) extends McpClientContent
+  final case class EmbeddedTextResource(
+    uri: McpResourceUri,
+    text: String,
+    mimeType: Option[McpMimeType] = None,
+    annotations: Option[McpContentAnnotations] = None
+  ) extends McpClientContent
+  final case class EmbeddedBlobResource(
+    uri: McpResourceUri,
+    blob: McpBase64Data,
+    mimeType: Option[McpMimeType] = None,
+    annotations: Option[McpContentAnnotations] = None
+  ) extends McpClientContent
+  final case class Structured(
+    value: McpValue,
+    annotations: Option[McpContentAnnotations] = None
+  ) extends McpClientContent
 }
 
 final case class McpClientResult(

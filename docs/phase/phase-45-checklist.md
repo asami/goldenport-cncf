@@ -35,20 +35,20 @@ Stage Status:
 ## Stage MC-03 - Port And Transport ExtensionPoint
 
 Stage Status:
-- Current status: IN_PROGRESS
+- Current status: DONE
 - Owner: CNCF runtime maintainers
 - Update rule: Mark DONE only when a consumer uses a runtime-owned Port with
   Streamable HTTP and deterministic fake implementations.
 
 - [x] Define the MCP client Port and runtime registry/binding contract.
-- [ ] Implement the Streamable HTTP transport ExtensionPoint for initialize,
+- [x] Implement the Streamable HTTP transport ExtensionPoint for initialize,
   `tools/list`, and `tools/call`.
 - [x] Implement deterministic fake transport evidence without a remote service.
 
 ## Stage MC-04 - Admission And Safety
 
 Stage Status:
-- Current status: OPEN
+- Current status: IN_PROGRESS
 - Owner: CNCF runtime maintainers
 - Update rule: Mark DONE only when policy rejects unsafe inputs before a
   transport call and preserves structured outcomes.

@@ -104,6 +104,32 @@ final class McpClientModelSpec extends AnyWordSpec with Matchers with GivenWhenT
       call.toOption.flatMap(_.arguments.get(queryname)).map(_.kind) shouldBe Some(McpValueKind.StringValue)
     }
 
+    "preserve bounded JSON property names instead of imposing identifier syntax" in {
+      Given("JSON object keys containing schema punctuation spaces and non-ASCII text")
+      val names = Vector("$schema", "customer name", "価格（税込）")
+
+      When("the keys cross the provider-neutral field-name boundary")
+      val admitted = names.map(McpFieldName.parseC)
+      val rejected = Vector("", "control\u0000field").map(McpFieldName.parseC)
+
+      Then("valid JSON keys retain their exact spelling while unsafe keys fail")
+      admitted.flatMap(_.toOption).map(_.print) shouldBe names
+      rejected.forall(_.isFaillure) shouldBe true
+    }
+
+    "admit multiline MCP descriptions while rejecting unsafe control characters" in {
+      Given("a multiline description and one display value containing a non-text control")
+      val multiline = "Search papers\nby title or author\tusing the catalog"
+
+      When("both values cross the display-text boundary")
+      val admitted = McpDisplayText.parseC(multiline)
+      val rejected = McpDisplayText.parseC("unsafe\u0000description")
+
+      Then("normal textual whitespace is preserved and the unsafe value fails")
+      admitted.toOption.map(_.print) shouldBe Some(multiline)
+      rejected.isFaillure shouldBe true
+    }
+
     "admit only positive bounded execution limits for every generated valid tuple" in {
       Given("arbitrary positive timeout call byte and concurrency limits")
       val positive = Gen.chooseNum(1, 1000000)

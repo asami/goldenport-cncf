@@ -66,10 +66,17 @@ from the JSON/Circe models used by the MCP server adapter.
 - `McpInputSchema` represents recursive object, array, scalar, null, and
   unconstrained input shapes without retaining JSON Schema wire objects.
 - `McpValue` represents recursive provider-neutral invocation/result values.
+- JSON object and schema property names remain exact bounded strings rather
+  than language identifiers, while titles and descriptions admit ordinary
+  multiline text whitespace.
 - `McpClientCall` carries one admitted tool identity and object arguments.
 - `McpClientResult` carries typed text or structured content. A remote MCP
   `isError` result is mapped to `Consequence.Failure`, not retained as a
   successful result flag.
+- Standard tool result blocks are represented as typed text, image, audio,
+  resource-link, embedded-text-resource, and embedded-blob-resource values.
+  Optional audience, priority, and last-modified annotations remain typed.
+  Circe/JSON values never cross this content boundary.
 - `McpClientDiagnostic` carries only a typed diagnostic kind, bounded logical
   reason, and optional pre-redacted bounded summary.
 
@@ -112,6 +119,20 @@ The first transport ExtensionPoint is Streamable HTTP. It implements
 initialization, `tools/list`, and `tools/call` for runtime-admitted endpoints.
 The provider-neutral Port does not expose those protocol method names or wire
 records to consumers.
+
+The initial implementation requests protocol revision `2025-11-25` and can
+negotiate `2025-11-25`, `2025-06-18`, or `2025-03-26`. It sends the required
+initialized notification, retains an optional `Mcp-Session-Id`, sends the
+negotiated `MCP-Protocol-Version` on subsequent requests, follows paged tool
+catalogs, accepts JSON and SSE responses, and attempts HTTP DELETE when a
+stateful session closes. Endpoint URIs exist only in runtime transport
+configuration.
+
+The transport validates session identifiers before retention and treats a
+stateful HTTP `404` as session expiry. It discards that session, performs one
+fresh initialization, and replays the interrupted logical request once. It
+also validates the JSON-RPC 2.0 envelope and required tool-result shape before
+projecting any typed value.
 
 Stdio, legacy SSE, arbitrary subprocess execution, arbitrary HTTP calls, and
 filesystem transport are outside the initial boundary. Adding another
@@ -166,3 +187,9 @@ discovery and invocation, rejection of caller infrastructure selection,
 rejection of an unbound server set, and stale-tool rejection before the fake
 transport call boundary. The fake transport is deterministic and does not
 require a remote MCP service.
+
+`McpStreamableHttpTransportSpec` fixes initialization and notification order,
+session/protocol headers, JSON and SSE responses, catalog pagination, standard
+typed content blocks, redacted remote-tool failures, endpoint shape admission,
+session expiry recovery, JSON-RPC/result shape validation, and session DELETE
+through a deterministic HTTP exchange.

@@ -60,6 +60,16 @@ A successful `McpClientResult` MUST contain only typed content. A remote tool
 error MUST become a structured `Consequence.Failure(Conclusion)` and MUST NOT
 be represented as a successful result with an error boolean.
 
+The typed result MUST represent standard MCP text, image, audio, resource-link,
+embedded text-resource, and embedded blob-resource content blocks without
+retaining their wire JSON. Content annotations MUST preserve admitted audience,
+priority, and last-modified values as typed metadata.
+
+JSON object and JSON Schema property names MUST remain bounded exact strings;
+the client MUST NOT impose Scala/Java identifier syntax on them or normalize
+their spelling. MCP titles and descriptions MAY contain normal multiline text
+whitespace, but MUST reject other control characters at the typed boundary.
+
 Diagnostic metadata MUST use a typed diagnostic kind and bounded logical
 reason. An optional display summary MUST be explicitly pre-redacted, bounded,
 and free of control characters. It MUST NOT be created directly from raw
@@ -75,6 +85,25 @@ The initial admitted transport MUST be Streamable HTTP. It MUST implement the
 protocol interactions required for initialization, `tools/list`, and
 `tools/call`. These protocol method names and wire models MUST remain behind the
 transport boundary.
+
+Every accepted JSON-RPC response MUST declare `jsonrpc: "2.0"` and match the
+request identity before its result is interpreted. A successful `tools/call`
+result MUST contain the required content array. Optional `structuredContent`
+MUST be object-shaped. Missing or malformed required fields MUST become a
+structured protocol failure rather than an empty successful result.
+
+The transport MUST send `notifications/initialized` after successful
+initialization, retain and resend an optional `Mcp-Session-Id`, send the
+negotiated `MCP-Protocol-Version` on subsequent requests, accept both JSON and
+SSE request responses, and follow `tools/list` cursors. Runtime shutdown MUST
+attempt session DELETE when the server established a session. The initial
+supported protocol revisions are `2025-11-25`, `2025-06-18`, and `2025-03-26`.
+
+A received `Mcp-Session-Id` MUST contain only visible ASCII characters before
+the client stores or resends it. When a stateful request receives HTTP `404`,
+the transport MUST discard that expired session, initialize one fresh session,
+and replay the interrupted logical request at most once. A repeated `404` MUST
+remain a structured transport failure and MUST NOT enter an unbounded retry.
 
 The initial implementation MUST NOT admit stdio, legacy SSE, arbitrary process
 execution, arbitrary HTTP, or filesystem transports.
@@ -165,3 +194,10 @@ representation, positive execution limits, and bounded diagnostic metadata.
 `McpClientPortSpec` fixes runtime-owned Port installation, typed discovery and
 invocation through deterministic fake transport, caller selector rejection,
 unbound server-set rejection, and stale-tool rejection before `callTool`.
+
+`McpStreamableHttpTransportSpec` fixes Streamable HTTP lifecycle order,
+session/protocol headers, JSON/SSE response handling, pagination, all standard
+typed content blocks, redacted tool errors, endpoint form validation, and
+session cleanup without a live remote service. It also fixes visible-ASCII
+session admission, one-time session-expiry recovery, JSON-RPC envelope
+validation, and required tool-result shape validation.
