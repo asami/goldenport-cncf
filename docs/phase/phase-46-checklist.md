@@ -111,7 +111,7 @@ Stage Status:
 ## MT-06: Downstream Acceptance and Closure
 
 Stage Status:
-- Current status: IN PROGRESS
+- Current status: DONE
 - Owner: CNCF maintainers, with Textus AI and Sanpomap maintainers as
   downstream acceptance owners
 - Update rule: Mark DONE only after both downstream consumers use the intended
@@ -121,11 +121,23 @@ Stage Status:
   from its remote `McpClientSocket` source.
 - [x] Verify Textus AI alone composes both admitted catalogs into
   provider-neutral function definitions without identity collisions.
-- [ ] Remove the Sanpomap Phase 2 dependency on local MCP loopback for builtin
+- [x] Remove the Sanpomap Phase 2 dependency on local MCP loopback for builtin
   tools while retaining external CNCF server/client interoperability evidence.
-- [ ] Record Sanpomap assembled policy evidence for URL, host, private network,
+- [x] Record Sanpomap assembled policy evidence for URL, host, private network,
   redirect, content size, and timeout.
-- [ ] Run focused MCP/tool suites, full CNCF tests, affected Textus AI tests,
+- [x] Run focused MCP/tool suites, full CNCF tests, affected Textus AI tests,
   and the Sanpomap Phase 2 assembly check.
-- [ ] Run CNCF review, resolve actionable findings and naming/specification
+- [x] Run CNCF review, resolve actionable findings and naming/specification
   debt, create the validated release commit, and close Phase 46.
+
+Closure evidence, 2026-07-21:
+
+- CNCF runtime checkpoint: `b14196bf`;
+- Textus AI downstream acceptance: `b69fbb7`;
+- Sanpomap assembled acceptance: `be5d385`;
+- focused CNCF MCP/tool suites: 76 passed;
+- complete CNCF suite: 2,215 passed;
+- complete Textus AI suite: 137 passed, 1 intentionally canceled;
+- complete Sanpomap suite: 75 passed; and
+- source-built CAR assembly check: passed with one internal Operation call,
+  one remote MCP call, and exactly one external `tools/call`.

@@ -1,7 +1,8 @@
 # Phase 46 - Internal Operation Tool Source and MCP Server Interoperability
 
-status=active
+status=closed
 started_at=2026-07-21
+closed_at=2026-07-21
 strategy=[CNCF Development Strategy](../strategy/cncf-development-strategy.md)
 checklist=[Phase 46 Checklist](phase-46-checklist.md)
 
@@ -93,7 +94,7 @@ but CNCF does not perform provider-function composition.
 | MT-03 | Shared protocol negotiation | CNCF server and client use one shared revision model and reject unsupported initialization deterministically. | done |
 | MT-04 | Notification-aware HTTP server | The adapter and HTTP route distinguish request responses from accepted notifications and validate lifecycle headers. | done |
 | MT-05 | Executable interoperability evidence | Real HTTP server/client and internal no-loopback specifications cover success, policy rejection, and payload safety. | done |
-| MT-06 | Downstream acceptance and closure | Textus AI and Sanpomap consume the corrected boundaries and all phase closure evidence passes. | in progress |
+| MT-06 | Downstream acceptance and closure | Textus AI and Sanpomap consume the corrected boundaries and all phase closure evidence passes. | done |
 
 ## Acceptance
 
@@ -153,14 +154,37 @@ but CNCF does not perform provider-function composition.
 - `McpClientPortSpec` and `McpStreamableHttpTransportSpec` fix payload-safe
   diagnostics, transport limits, protocol decoding, and lifecycle cleanup.
 
-## Resume Point
+## Closure Record
 
-Textus AI now publishes separate `OperationToolSocket` and `McpClientSocket`
-requirements, receives runtime-installed services for both, composes only
-their admitted definitions, invokes each owning scope, and reports total plus
-source-specific call counts. CNCF generic subsystem startup now activates the
-operator-owned `textus.operation-tools.policy` atomically.
+Phase 46 closed on 2026-07-21 with these implementation and downstream
+checkpoints:
 
-Continue MT-06 with Sanpomap Phase 2 assembled policy evidence. Remove its
-local MCP loopback dependency for builtin tools while retaining external MCP
-interoperability, then run the complete downstream and closure validation.
+- CNCF `b14196bf` activates runtime-owned internal Operation tool policies;
+  the preceding Phase 46 commits fix the provider-neutral catalog, shared MCP
+  protocol negotiation, notification-aware HTTP lifecycle, and real
+  server/client interoperability.
+- Textus AI `b69fbb7` installs separate `OperationToolSocket` and
+  `McpClientSocket` sources, composes their admitted definitions without
+  identity collapse, and preserves original structured terminal failures.
+- Sanpomap `be5d385` builds its declared CAR before assembled acceptance,
+  invokes `tool.time.now` in-process, invokes one external
+  `location.lookup` through MCP, and proves that only the external call reaches
+  `tools/call`.
+- Sanpomap records the six builtin Web policy dimensions as assembled policy
+  evidence linked to executable CNCF specifications at the exact runtime
+  revision; it does not claim that its deterministic local fixture executes
+  arbitrary Web traffic.
+
+Validation evidence:
+
+- Phase 46 focused CNCF tool/MCP suites: 76 tests, 0 failures;
+- complete CNCF suite: 2,215 tests, 0 failures;
+- complete Textus AI suite: 137 tests, 0 failures, 1 intentionally canceled
+  live-provider check;
+- complete Sanpomap suite: 75 tests, 0 failures; and
+- `scripts/check-phase2-mcp-ai-assembly.sh`: passed with a source-built CAR and
+  deterministic local Operation, Ollama, and Streamable HTTP MCP fixtures.
+
+Stateful MCP sessions, server-initiated sampling/resources/prompts,
+unsupported transports, dangerous dynamic tools, and live remote-provider
+heavy validation remain deferred. They are not implicit Phase 46 debt.
