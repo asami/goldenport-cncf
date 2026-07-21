@@ -652,10 +652,10 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Notes contain execution details and results for each phase.
 
 ## Process Status Pointers
-- Active phase: `docs/phase/phase-45.md` with
+- Active phase: `docs/phase/phase-46.md` with
+  `docs/phase/phase-46-checklist.md` (started Jul. 21, 2026).
+- Latest closed phase: `docs/phase/phase-45.md` with
   `docs/phase/phase-45-checklist.md` (Jul. 21, 2026).
-- Latest closed phase: `docs/phase/phase-44.md` with
-  `docs/phase/phase-44-checklist.md` (Jul. 20, 2026).
 - Status interpretation rules: `docs/rules/stage-status-and-checklist-convention.md`
 - Latest post-closure maintenance: Jul. 18, 2026 scoped concurrency admission.
   CNCF now exposes a runtime-installed, per-logical-scope, nonblocking permit
@@ -843,6 +843,8 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Phase 42: closed (`docs/phase/phase-42.md`)
 - Phase 43: closed (`docs/phase/phase-43.md`)
 - Phase 44: closed (`docs/phase/phase-44.md`)
+- Phase 45: closed (`docs/phase/phase-45.md`)
+- Phase 46: active (`docs/phase/phase-46.md`)
 
 ## 8. Completed Development Item History
 
@@ -1477,8 +1479,8 @@ Completed work areas are recorded in section 8. When a development item closes,
 remove its completion record from this section and add or update the
 corresponding completed-history entry.
 
-Current development item: none; select the next strategy item before opening a
-new phase.
+Current development item: 9.37 Internal Operation Tool Source and MCP Server
+Interoperability, active as Phase 46.
 
 ### 9.1 Web Next Stage Follow-ups
 Web/platform follow-up index.
@@ -2587,3 +2589,55 @@ Completed in Phase 40.
   - `docs/notes/http-form-typed-update-command-implementation.md`;
   - `docs/phase/phase-40.md`; and
   - `docs/phase/phase-40-checklist.md`.
+
+### 9.37 Internal Operation Tool Source and MCP Server Interoperability
+Active CNCF development item in Phase 46.
+
+- Goal:
+  - expose policy-admitted CNCF Operations as a provider-neutral internal tool
+    source through normal Subsystem execution; and
+  - make the CNCF MCP server projection and Streamable HTTP client interoperable
+    through one shared protocol and notification lifecycle.
+- Driver:
+  - Textus AI must compose internal Operation tools and remote MCP tools without
+    converting either identity domain into the other;
+  - builtin tools must remain normal ActionCall/UnitOfWork Operations and must
+    not call the local MCP HTTP endpoint;
+  - the current MCP server advertises fixed revision `2026-03-19`, while the
+    client accepts only `2025-*` revisions; and
+  - the client requires HTTP `202` for `notifications/initialized`, while the
+    current adapter and route always produce a JSON response with HTTP `200`.
+- Boundary:
+  - CNCF owns internal Operation admission/execution and both MCP transport
+    directions, but does not compose provider function definitions;
+  - Textus AI owns internal/remote catalog composition and provider
+    continuation semantics;
+  - internal identity remains `component.service.operation`, remote identity
+    remains `server/tool`, and no local MCP loopback is admitted;
+  - application callers cannot select tools, endpoints, transports,
+    credentials, headers, or provider functions.
+- Stages:
+  - MT-01 — fix the internal/remote ownership, identity, admission, and
+    Streamable HTTP lifecycle contract normatively;
+  - MT-02 — implement a typed internal Operation-tool catalog and invocation
+    source over `Subsystem.executeOperationResponse`;
+  - MT-03 — share and negotiate one supported MCP protocol revision;
+  - MT-04 — make the server adapter and HTTP route notification-aware and
+    protocol-status correct;
+  - MT-05 — prove internal no-loopback execution and actual HTTP server/client
+    interoperability with safe negative Web-tool evidence;
+  - MT-06 — validate Textus AI and Sanpomap adoption, resolve review debt, and
+    close the phase.
+- Acceptance:
+  - internal builtin discovery/invocation performs no HTTP exchange and
+    preserves normal authorization, execution, failure, and observability;
+  - CNCF's production server and client complete initialize, initialized
+    notification, tool discovery, and deterministic invocation over real HTTP;
+  - private-network Web access is rejected before ResourceAccess with no
+    sensitive diagnostic leakage;
+  - Textus AI, not CNCF, composes internal and remote admitted tools; and
+  - Sanpomap records the assembled Phase 2 policy evidence without an
+    application protocol workaround.
+- Phase documents:
+  - `docs/phase/phase-46.md`;
+  - `docs/phase/phase-46-checklist.md`.
