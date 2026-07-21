@@ -1,0 +1,117 @@
+# Phase 47 - Component Initialization Parameter Resolution
+
+status=active
+started_at=2026-07-22
+strategy=[CNCF Development Strategy](../strategy/cncf-development-strategy.md)
+checklist=[Phase 47 Checklist](phase-47-checklist.md)
+
+## Purpose
+
+Provide a general CNCF mechanism that interprets configuration and other
+property values in the correct component-instance context before component
+initialization, then delivers typed initialization parameters without exposing
+raw configuration maps to component code.
+
+## Selected Direction
+
+- Resolve initialization parameters in CNCF from the already resolved
+  configuration and assembly context.
+- Bind resolution to both `ComponentId` and `ComponentInstanceId`.
+- Deliver typed parameters through the component bootstrap boundary.
+- Keep source precedence, safe provenance, and confidential-value handling
+  under CNCF ownership.
+- Keep component-specific declaration, projection, and domain validation under
+  component ownership.
+- Preserve `ComponentConfigurationAccess` as the separate operation-time
+  declared configuration boundary.
+- Use Textus AI or CBD Support as the first real downstream consumer.
+
+## Scope
+
+- Normative design and static specification for initialization-time parameter
+  resolution.
+- Typed keys, values, resolution outcomes, parameter collections, and safe
+  provenance.
+- Deterministic input-layer precedence for packaged defaults, assembly
+  defaults, subsystem/SAR instance settings, runtime configuration, and
+  explicit test overlays.
+- Component-instance isolation.
+- Integration with `ComponentFactory.bootstrap` and special-component
+  initialization.
+- Secret-reference and confidential-parameter boundaries.
+- Payload-safe diagnostics and optional bootstrap observability.
+- Executable specifications and one downstream migration.
+
+## Boundaries
+
+- `ResolvedConfiguration` remains the raw resolved key/value store and does
+  not gain component-domain semantics.
+- CNCF owns source precedence, component-context selection, typed decoding,
+  required/optional semantics, safe provenance, and bootstrap delivery.
+- Components own their parameter declarations, typed domain projection, and
+  combination validation.
+- Components do not receive the raw configuration map through this mechanism.
+- Request parameters, action properties, ambient environment access, and
+  arbitrary runtime lookups cannot override initialization parameters.
+- Runtime `ComponentConfigurationAccess` is preserved and is not replaced by
+  this phase.
+- Secret values are not exposed through parameter APIs, default diagnostics,
+  or observability.
+
+## Stages
+
+| ID | Stage | Outcome | Status |
+| --- | --- | --- | --- |
+| CIP-01 | Normative contract | Design and specification define initialization parameter resolution separately from runtime component configuration. | in_progress |
+| CIP-02 | Typed parameter model | CNCF provides the resolver, typed key/value, result, collection, and safe provenance vocabulary. | open |
+| CIP-03 | Resolution layers | All admitted initialization sources have one deterministic precedence contract. | open |
+| CIP-04 | Instance context | Resolution is isolated by component and component-instance identity. | open |
+| CIP-05 | Bootstrap integration | Component factories and special components receive typed initialization parameters without raw maps. | open |
+| CIP-06 | Confidential values | Secret references and confidential parameters remain opaque and payload-safe. | open |
+| CIP-07 | Diagnostics and observability | Bootstrap resolution exposes bounded identity and provenance facts only. | open |
+| CIP-08 | Executable evidence | Deterministic specifications cover success, failure, precedence, isolation, overlays, and confidentiality. | open |
+| CIP-09 | Downstream acceptance | Textus AI or CBD Support consumes the mechanism and the phase closes with validated evidence. | open |
+
+## Acceptance
+
+- A component declares and receives typed initialization parameters before
+  operation execution.
+- `ComponentInstanceId` selects the applicable context and isolates component
+  instances.
+- The documented layer order is deterministic and executable-specification
+  backed.
+- Missing required and malformed values fail during initialization with
+  structured `Consequence`/`Conclusion` results.
+- Component code cannot observe a raw configuration map through the new API.
+- Provenance is available without exposing physical paths, credentials,
+  confidential values, or unrelated configuration.
+- Existing operation-time `ComponentConfigurationAccess` behavior remains
+  compatible.
+- Explicit test overlays remain deterministic and cannot become an implicit
+  production source.
+- Textus AI or CBD Support uses the mechanism without owning CNCF source
+  precedence or leaking application-specific keys into a reusable component.
+
+## Non-goals
+
+- Organization-wide configuration management.
+- Dynamic mutation of initialization parameters after bootstrap.
+- Per-request initialization-parameter overrides.
+- A secret-value accessor for component code.
+- Migration of every existing component.
+- UI tooling for editing component parameter policies.
+
+## Source
+
+- `docs/journal/2026/07/2026-07-22-component-initialization-parameter-resolution-consideration.md`
+- `docs/spec/config-resolution.md`
+- `docs/spec/component-runtime-boundary-capabilities.md`
+- `docs/design/configuration-model.md`
+- `docs/design/typed-component-api-and-multi-instance-spi.md`
+
+## Current Resume Point
+
+Start CIP-01 by promoting the recorded decision into normative design and
+static specification documents. Fix the initialization-time boundary and its
+relationship to `ResolvedConfiguration`, `ComponentFactory.bootstrap`, and
+runtime `ComponentConfigurationAccess` before adding implementation types.

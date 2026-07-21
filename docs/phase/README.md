@@ -15,10 +15,11 @@ This directory does **not** contain design details or thinking processes.
 
 Current baseline:
 
-- Active phase: `phase-42.md` - Static Web Server Rendering Contract.
-- Active checklist: `phase-42-checklist.md`.
-- Latest closed phase: `phase-41.md` - Persistent View Source Completeness.
-- Latest closed checklist: `phase-41-checklist.md`.
+- Active phase: `phase-47.md` - Component Initialization Parameter Resolution.
+- Active checklist: `phase-47-checklist.md`.
+- Latest closed phase: `phase-46.md` - Internal Operation Tool Source and MCP
+  Server Interoperability.
+- Latest closed checklist: `phase-46-checklist.md`.
 - Closed phase set currently includes:
   - `phase-4.md`
   - `phase-5.md`
@@ -57,8 +58,13 @@ Current baseline:
   - `phase-39.md`
   - `phase-40.md`
   - `phase-41.md`
-- Active phase set currently includes:
   - `phase-42.md`
+  - `phase-43.md`
+  - `phase-44.md`
+  - `phase-45.md`
+  - `phase-46.md`
+- Active phase set currently includes:
+  - `phase-47.md`
 
 ## Related Rules
 

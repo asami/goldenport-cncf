@@ -652,10 +652,10 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Notes contain execution details and results for each phase.
 
 ## Process Status Pointers
-- Active phase: `docs/phase/phase-46.md` with
-  `docs/phase/phase-46-checklist.md` (started Jul. 21, 2026).
-- Latest closed phase: `docs/phase/phase-45.md` with
-  `docs/phase/phase-45-checklist.md` (Jul. 21, 2026).
+- Active phase: `docs/phase/phase-47.md` with
+  `docs/phase/phase-47-checklist.md` (started Jul. 22, 2026).
+- Latest closed phase: `docs/phase/phase-46.md` with
+  `docs/phase/phase-46-checklist.md` (Jul. 21, 2026).
 - Status interpretation rules: `docs/rules/stage-status-and-checklist-convention.md`
 - Latest post-closure maintenance: Jul. 18, 2026 scoped concurrency admission.
   CNCF now exposes a runtime-installed, per-logical-scope, nonblocking permit
@@ -845,6 +845,7 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Phase 44: closed (`docs/phase/phase-44.md`)
 - Phase 45: closed (`docs/phase/phase-45.md`)
 - Phase 46: closed (`docs/phase/phase-46.md`)
+- Phase 47: active (`docs/phase/phase-47.md`)
 
 ## 8. Completed Development Item History
 
@@ -1505,8 +1506,8 @@ Completed work areas are recorded in section 8. When a development item closes,
 remove its completion record from this section and add or update the
 corresponding completed-history entry.
 
-There is no active development item after Phase 46 closure. Select the next
-defined 9.x item before opening another implementation phase.
+The active development item is 9.37, tracked as Phase 47. Other 9.x items
+remain future development candidates until explicitly selected.
 
 ### 9.1 Web Next Stage Follow-ups
 Web/platform follow-up index.
@@ -2615,3 +2616,108 @@ Completed in Phase 40.
   - `docs/notes/http-form-typed-update-command-implementation.md`;
   - `docs/phase/phase-40.md`; and
   - `docs/phase/phase-40-checklist.md`.
+
+### 9.37 Component Initialization Parameter Resolution
+Active CNCF development item, tracked in `docs/phase/phase-47.md` and
+`docs/phase/phase-47-checklist.md`.
+
+- Goal:
+  - provide a general CNCF mechanism that interprets configuration and other
+    property values in the correct component context before component
+    initialization, then delivers typed initialization parameters without
+    exposing raw configuration maps to component code.
+- Driver:
+  - user-wide defaults, component-instance settings, subsystem/SAR assembly
+    settings, runtime profile settings, and test overlays need one documented
+    interpretation path;
+  - reusable components should not read environment variables, system
+    properties, configuration files, or arbitrary `ResolvedConfiguration` keys
+    to obtain ordinary component parameters;
+  - Textus AI and CBD Support CAR Review need global AI defaults and
+    reviewed-component-specific AI policy without making Textus AI understand
+    CBD Support component keys or making CBD Support reimplement CNCF source
+    precedence.
+- Dependencies:
+  - current configuration source resolution and stable precedence
+    `HOME -> PROJECT -> CWD -> ENV -> ARGS`;
+  - `ResolvedConfiguration` as the raw resolved key/value store with trace;
+  - existing `ComponentId`, `ComponentInstanceId`, `ComponentDescriptor`, and
+    `ComponentFactory.bootstrap` boundaries;
+  - current `ComponentConfigurationKey[A]`,
+    `ComponentConfigurationSources`, and `ComponentConfigurationAccess`
+    runtime configuration model;
+  - generic SAR/component instance descriptor metadata and test descriptor
+    overlay support.
+- Boundary:
+  - CNCF owns low-level source precedence, component-context selection,
+    typed decoding, required/optional semantics, safe provenance, secret and
+    confidential value boundaries, and bootstrap-time parameter delivery;
+  - components own parameter declaration, component-specific projection, and
+    domain-specific combination validation;
+  - `ResolvedConfiguration` remains a raw resolved store and does not gain
+    component-domain semantics;
+  - runtime `ComponentConfigurationAccess` remains the operation-time declared
+    configuration boundary and is not replaced by this initialization
+    mechanism;
+  - request parameters, action properties, ambient environment, and arbitrary
+    runtime lookups cannot override initialization parameters.
+- Stages:
+  - CIP-01 — promote the journal record into normative design and static
+    specification documents that define initialization parameter resolution
+    separately from runtime component configuration access;
+  - CIP-02 — define vocabulary and typed values for
+    `ComponentParameterResolver`, `ComponentInitializationParameters`,
+    `ComponentParameterKey[A]`, `ComponentParameterResolution[A]`, and safe
+    provenance;
+  - CIP-03 — define resolver input layers for packaged defaults, component
+    assembly defaults, subsystem/SAR instance settings, runtime configuration,
+    and explicit test overlays;
+  - CIP-04 — bind resolution to `ComponentId` and `ComponentInstanceId` so
+    overrides for one component instance cannot affect another instance;
+  - CIP-05 — connect `ComponentFactory.bootstrap` and special-component
+    initialization to resolved typed initialization parameters without passing
+    raw configuration maps to components;
+  - CIP-06 — define secret-reference and confidential-parameter behavior so
+    initialization can receive opaque references but cannot expose secret
+    values through component APIs or diagnostics;
+  - CIP-07 — add safe bootstrap diagnostics and optional CallTree/runtime
+    metadata that show parameter identity and provenance without leaking
+    confidential values or physical configuration locations;
+  - CIP-08 — prove missing required values, malformed values, precedence,
+    instance isolation, test overlays, secret boundaries, and no-raw-config
+    behavior with deterministic executable specifications;
+  - CIP-09 — migrate one real consumer, preferably Textus AI or CBD Support,
+    to consume initialization parameters without custom configuration-source
+    precedence logic.
+- Acceptance:
+  - a component can declare and receive initialization parameters through a
+    typed CNCF path before operation execution;
+  - `ComponentInstanceId` selects the applicable parameter context and isolates
+    settings between component instances;
+  - the documented layer order is applied consistently and is covered by
+    executable specifications;
+  - malformed and missing required parameters fail with structured
+    `Consequence/Conclusion` failures during initialization;
+  - component code cannot observe a raw configuration map through the new
+    initialization API;
+  - safe provenance is available for diagnostics without exposing unrelated
+    source details, physical paths, credentials, or confidential values;
+  - existing operation-time `ComponentConfigurationAccess` behavior remains
+    compatible;
+  - test overlays can supply deterministic initialization parameters without
+    becoming an implicit production source;
+  - Textus AI or CBD Support can consume the mechanism as a first downstream
+    user while preserving their domain boundaries.
+- Deferred scope:
+  - a full organization-wide configuration management product;
+  - dynamic runtime mutation of component initialization parameters after
+    bootstrap;
+  - per-request parameter override semantics;
+  - a secret value accessor for component code;
+  - migration of every existing component in the first phase;
+  - UI tooling for editing component parameter policies.
+- Planning references:
+  - `docs/journal/2026/07/2026-07-22-component-initialization-parameter-resolution-consideration.md`;
+  - `docs/spec/component-runtime-boundary-capabilities.md`;
+  - `docs/design/configuration-model.md`;
+  - `docs/design/typed-component-api-and-multi-instance-spi.md`.
