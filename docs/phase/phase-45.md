@@ -74,7 +74,7 @@ not control an MCP endpoint, transport, credential, header, or raw payload.
 | MC-04 | Admission and safety | Endpoint, credential-reference, tool, resource-limit, and failure policy is enforced before transport execution. | done |
 | MC-05 | Observability and lifecycle | CallTree, metrics, and shutdown behavior expose only safe MCP execution facts. | done |
 | MC-06 | Codex MCP definition import | Operator-selected Codex MCP definitions become admitted CNCF server sets through a bounded import adapter and CNCF policy overlay. | done |
-| MC-07 | Builtin tool baseline | Common resource, Web, time, calculation, and Web-search contracts are available through normal CNCF Operations and MCP projection. | planned |
+| MC-07 | Builtin tool baseline | Common resource, Web, time, calculation, and Web-search contracts are available through normal CNCF Operations and MCP projection. | in progress |
 | MC-08 | Consumer evidence and closure | CNCF fake evidence and Textus AI integration prove the boundary without a required remote MCP service. | planned |
 
 MC-04 has exact per-server tool allowlisting, recursive typed-input admission,
@@ -93,6 +93,13 @@ normalized `McpClientSocket`, while application-purpose configuration cannot
 select MCP infrastructure. MC-07 adds a safe,
 operation-backed builtin tool baseline. MC-08 consumer evidence and closure
 remains the final Phase 45 work.
+
+MC-07 now includes the first pure builtin Operations. `tool.time.now` reads one
+execution-context clock instant and applies a bounded IANA timezone contract.
+`tool.decimal.calculate` performs bounded exact-decimal add, subtract, and
+multiply without expression or script evaluation. Both Operations use
+FunctionalActionCall/UoW and are published by the existing MCP server catalog.
+Resource, static Web, and provider-neutral Web-search work remains open.
 
 ## Acceptance
 

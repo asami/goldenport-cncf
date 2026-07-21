@@ -259,6 +259,34 @@ runtime lifecycle. Import or policy failure MUST occur before transport
 allocation. The import adapter, source record, and import result MUST NOT be
 available to consumer components.
 
+## Builtin Operation Tool Contract
+
+Builtin local tools MUST execute as normal CNCF Operations through
+ActionCall/UoW. They MUST NOT call the local MCP HTTP endpoint, bypass normal
+operation authorization, or define a parallel error or observability path.
+
+`tool.time.now` MUST read `ExecutionContext.clock`. Its optional `timezone`
+property MUST be no more than 128 characters and MUST be either `UTC` or a
+registered IANA region identifier. If omitted, the Operation MUST use the
+execution-context timezone. An invalid or oversized timezone MUST return a
+structured argument failure. The response MUST contain `instant`,
+`epochMillis`, `timezone`, and `zonedDateTime` values derived from one clock
+read.
+
+`tool.decimal.calculate` MUST accept required string properties `operator`,
+`left`, and `right`. Each operand MUST use plain base-10 decimal notation, MUST
+be no more than 128 characters, and MUST have at most 128 significant digits.
+The initial operator set is exactly `add`, `subtract`, and `multiply`. The
+response MUST contain canonical plain decimal strings for `left`, `right`, and
+`value`. Implementations MUST NOT use binary floating-point conversion or
+evaluate expressions, functions, scripts, or host-language code. Division and
+rounding are outside the initial contract.
+
+Both Operations MUST be eligible for the existing MCP server projection under
+the identities `tool.time.now` and `tool.decimal.calculate`. MCP publication
+MUST execute the same Operation implementation as CLI, REST, and internal
+subsystem dispatch.
+
 ## Lifecycle Contract
 
 Transport resources MUST be owned by the CNCF runtime and released during

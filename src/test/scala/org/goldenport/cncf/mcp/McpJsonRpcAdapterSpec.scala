@@ -11,7 +11,8 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Mar. 19, 2026
  *  version May. 18, 2026
- * @version Jul. 14, 2026
+ *  version Jul. 14, 2026
+ * @version Jul. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 final class McpJsonRpcAdapterSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -48,11 +49,13 @@ final class McpJsonRpcAdapterSpec extends AnyWordSpec with Matchers with GivenWh
       val tools = json.hcursor.downField("result").downField("tools").focus
         .flatMap(_.asArray)
         .getOrElse(fail("tools are missing"))
-      Then("only ready operations from the primary admin participant are listed")
+      Then("ready operations from the primary admin and builtin tool participants are listed")
       tools should not be empty
       val toolnames = tools.map(_.hcursor.get[String]("name").toOption.getOrElse(""))
       toolnames should contain ("admin.system.ping")
-      all(toolnames) should startWith ("admin.system.")
+      toolnames should contain ("tool.time.now")
+      toolnames should contain ("tool.decimal.calculate")
+      all(toolnames.map(name => name.startsWith("admin.system.") || name.startsWith("tool."))) shouldBe true
     }
 
     "project integer and boolean parameter schemas" in {

@@ -14,6 +14,7 @@ import org.goldenport.cncf.component.builtin.metrics.MetricsComponent
 import org.goldenport.cncf.component.builtin.messagedeliverystub.MessageDeliveryStubComponent
 import org.goldenport.cncf.component.builtin.specification.SpecificationComponent
 import org.goldenport.cncf.component.builtin.tag.TagComponent
+import org.goldenport.cncf.component.builtin.tool.ToolComponent
 import org.goldenport.cncf.component.builtin.workflow.WorkflowComponent
 import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, ScopeContext, ScopeKind}
 import org.goldenport.cncf.cli.RunMode
@@ -33,7 +34,8 @@ import org.goldenport.protocol.spec as spec
  *  version Feb. 15, 2026
  *  version Mar. 29, 2026
  *  version Apr. 26, 2026
- * @version May.  5, 2026
+ *  version May.  5, 2026
+ * @version Jul. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 object DefaultSubsystemFactory {
@@ -54,6 +56,7 @@ object DefaultSubsystemFactory {
       _client,
       BlobComponent.Factory,
       TagComponent.Factory,
+      ToolComponent.Factory,
       DebugComponent.Factory,
       EventComponent.Factory,
       JobControlComponent.Factory,
@@ -86,7 +89,6 @@ object DefaultSubsystemFactory {
   ): Subsystem = {
     val subsystem = default(mode)
     if (extraComponents.nonEmpty) {
-      val modeLabel = mode.flatMap(RunMode.from).getOrElse(RuntimeConfig.default.mode)
       val extras = extraComponents // extraComponents.map(_.withSystemContext(SystemContext.empty))
       subsystem.add(extras)
     }
@@ -114,13 +116,13 @@ object DefaultSubsystemFactory {
       case None =>
         ()
     }
-    val subsystemName =
+    val subsystemname =
       RuntimeConfig
         .getString(configuration, RuntimeConfig.SubsystemNameKey)
         .map(_.trim)
         .filter(_.nonEmpty)
         .getOrElse(_subsystem_name)
-    subsystemName match {
+    subsystemname match {
       case "textus-identity" =>
         TextusIdentitySubsystemFactory.defaultWithScope(
           context = context,
@@ -137,7 +139,7 @@ object DefaultSubsystemFactory {
           aliasResolver = aliasResolver
         )
       case _ =>
-        _defaultWithScope(
+        _default_with_scope(
           context = context,
           mode = mode,
           configuration = configuration,
@@ -146,7 +148,7 @@ object DefaultSubsystemFactory {
     }
   }
 
-  private def _defaultWithScope(
+  private def _default_with_scope(
     context: ScopeContext,
     mode: Option[RunMode] = None,
     configuration: ResolvedConfiguration =
@@ -155,9 +157,9 @@ object DefaultSubsystemFactory {
       .map(_.aliasResolver)
       .getOrElse(AliasResolver.empty)
   ): Subsystem = {
-    val runtimeConfig = RuntimeConfig.from(configuration)
-    val runMode = mode.getOrElse(runtimeConfig.mode)
-    val driver = _resolve_http_driver(runtimeConfig, _subsystem_name)
+    val runtimeconfig = RuntimeConfig.from(configuration)
+    val runmode = mode.getOrElse(runtimeconfig.mode)
+    val driver = _resolve_http_driver(runtimeconfig)
     val subsystem =
       Subsystem(
         name = _subsystem_name,
@@ -179,17 +181,16 @@ object DefaultSubsystemFactory {
         httpdriver = Some(driver),
         configuration = configuration,
         aliasResolver = aliasResolver,
-        runMode = runMode
+        runMode = runmode
       )
     val comps = builtinComponents(subsystem)
     subsystem.add(comps)
   }
 
   private def _resolve_http_driver(
-    runtimeConfig: RuntimeConfig,
-    subsystemName: String
+    runtimeconfig: RuntimeConfig
   ): org.goldenport.cncf.http.HttpDriver = {
-    val driver = runtimeConfig.httpDriver
+    val driver = runtimeconfig.httpDriver
     // val baseurl = sys.props.getOrElse("cncf.http.baseurl", ClientConfig.DefaultBaseUrl)
     // if (driver == "fake" || driver == "nop") {
     //   val ping = GlobalRuntimeContext.current

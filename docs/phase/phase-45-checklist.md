@@ -133,12 +133,23 @@ Stage Status:
   CNCF Operations through ActionCall/UoW and are projected through MCP without
   a local MCP loopback or a parallel authorization path.
 
+Verified progress:
+- `tool.time.now` reads one injected execution-clock instant and returns a
+  consistent projection in an optional bounded IANA region timezone.
+- `tool.decimal.calculate` accepts bounded plain-decimal strings and the closed
+  `add` / `subtract` / `multiply` operator set; property-based evidence proves
+  exact results without binary floating-point conversion.
+- Both services are MCP-ready normal Operations implemented with
+  `FunctionalActionCall` and the existing UoW interpreter. The existing MCP
+  catalog publishes `tool.time.now` and `tool.decimal.calculate` without local
+  loopback.
+
 - [ ] Implement `resource.read` using the canonical `ResourceAccess` boundary.
 - [ ] Implement static `web.fetch` and `web.head` with scheme, host,
   private-network, redirect, content-type, byte-size, and timeout policy.
-- [ ] Implement deterministic `time.now` using the runtime clock and a bounded
+- [x] Implement deterministic `time.now` using the runtime clock and a bounded
   timezone contract.
-- [ ] Implement deterministic decimal calculation without arbitrary code or
+- [x] Implement deterministic decimal calculation without arbitrary code or
   script evaluation.
 - [ ] Define a provider-neutral `web.search` Operation contract while keeping
   provider credentials and selection under runtime ownership.

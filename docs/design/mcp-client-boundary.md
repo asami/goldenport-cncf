@@ -319,6 +319,31 @@ AI-provider function-definition serialization, model continuation loops,
 prompt construction, and agent scheduling belong to Textus AI or another
 consumer. They are not MCP transport responsibilities.
 
+## Deterministic Builtin Operation Baseline
+
+Common local tools are ordinary builtin CNCF Operations. They do not call the
+local MCP endpoint and do not introduce a second tool runtime. ActionCall/UoW,
+operation authorization, Conclusion diagnostics, CallTree, and runtime metrics
+remain the execution boundary; the MCP server catalog is only an external
+projection of that boundary.
+
+The first pure baseline uses component `tool`:
+
+- `tool.time.now` reads the execution-context clock. An optional timezone is
+  either `UTC` or a bounded IANA region identifier; omission uses the runtime
+  timezone. The result contains the same instant rendered in the selected
+  timezone.
+- `tool.decimal.calculate` accepts an exact decimal operator and two bounded
+  decimal strings. The initial closed operator set is `add`, `subtract`, and
+  `multiply`. It returns decimal strings and never passes through binary
+  floating-point conversion.
+
+Decimal calculation is deliberately not an expression language. Division,
+rounding, functions, variables, reflection, arbitrary code, and script
+evaluation are outside this contract. Both services are MCP-ready because the
+same normal Operations are safe to publish; there is no separate MCP-only
+implementation.
+
 ## Executable Evidence
 
 `McpClientPortSpec` fixes canonical Port installation, server-set-bound catalog
