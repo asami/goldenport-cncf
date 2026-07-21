@@ -216,6 +216,28 @@ therefore win on duplicate keys.
 
 Schema validation belongs to higher layers.
 
+6.5 Component Initialization Projection Boundary
+
+`ResolvedConfiguration` MAY be supplied as one explicit input to CNCF
+component initialization parameter resolution. The configuration source
+resolver defined by this specification MUST NOT:
+
+    - select a component or component instance
+    - interpret a component parameter declaration
+    - decode a component-domain value
+    - merge assembly metadata into `ResolvedConfiguration`
+    - expose its raw map to component initialization code
+
+Assembly, subsystem component-instance settings, packaged defaults, and
+explicit test overlays remain separate admitted inputs to the higher-level
+initialization resolver. Their parameter precedence MUST NOT alter or
+reinterpret the source precedence defined in Section 5.
+
+Component initialization parameter resolution is specified by
+`docs/spec/component-runtime-boundary-capabilities.md`. This source resolver
+remains responsible only for the deterministic raw runtime configuration
+result.
+
 
 ----------------------------------------------------------------------
 7. Public API Contract

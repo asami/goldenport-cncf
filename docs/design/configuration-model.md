@@ -134,7 +134,7 @@ Component.Config
 Each layer:
 
 - Lives next to its owning runtime object
-- Reads from `ResolvedConfiguration`
+- Receives a CNCF-owned semantic projection appropriate to its lifecycle
 - Does **not** mutate or re-resolve configuration
 
 ---
@@ -212,7 +212,10 @@ Characteristics:
 
 - Optional values
 - Defaults inherited from Subsystem behaviorally (not structurally)
-- Built via `Component.Config.from(ResolvedConfiguration)`
+- Initialization values are projected from declared typed initialization
+  parameters
+- Operation-time values remain available only through declared
+  `ComponentConfigurationAccess`
 
 ---
 
@@ -226,12 +229,17 @@ Characteristics:
 
 #### Semantic Builders
 
-Each config layer defines a **semantic builder**:
+Runtime and subsystem assembly may define CNCF-owned semantic builders over
+the raw resolved configuration:
 
 ```scala
 Subsystem.Config.from(conf: ResolvedConfiguration): Consequence[Subsystem.Config]
-Component.Config.from(conf: ResolvedConfiguration): Consequence[Component.Config]
 ```
+
+Component initialization is not another raw semantic builder. CNCF first
+selects the component-instance context and resolves its declared typed
+initialization parameters. The component-owned projection receives that typed
+snapshot, not `ResolvedConfiguration`.
 
 Properties:
 
@@ -240,6 +248,69 @@ Properties:
 - Explicit required keys
 - No side effects
 - No cascading construction
+
+### Component Initialization Parameter Resolution
+
+Component initialization parameter resolution is a semantic projection owned
+by CNCF. It starts only after configuration source resolution and assembly have
+identified the component type and `ComponentInstanceId`, and it completes
+before component-specific construction or initialization may consume the
+values.
+
+The lifecycle is:
+
+```text
+configuration source resolution
+  -> ResolvedConfiguration
+  -> component and component-instance context selection
+  -> declared initialization parameter resolution
+  -> component-owned typed initialization projection
+  -> component construction and initialization
+  -> component installation
+```
+
+`ResolvedConfiguration` remains a raw resolved key/value store with source
+trace. It does not know component parameter declarations, decode
+component-domain values, select a component instance, or validate combinations
+of component parameters. The initialization resolver receives only explicitly
+admitted named layers from configuration and assembly processing; it does not
+discover an ambient source or reinterpret the source-resolution precedence.
+The exact initialization-layer precedence is a separate component-parameter
+contract and does not change the `HOME -> PROJECT -> CWD -> ENV -> ARGS`
+precedence used to construct the runtime configuration layer.
+
+CNCF owns:
+
+- component and component-instance context selection;
+- admitted initialization-layer precedence;
+- typed decoding and required-or-optional semantics;
+- safe, bounded provenance;
+- structured failure before component installation; and
+- delivery through the component factory/bootstrap boundary.
+
+The component owns, through its factory or equivalent component definition:
+
+- the declaration of required initialization parameters;
+- projection of generic typed resolutions into its initialization value; and
+- validation of component-domain parameter combinations.
+
+The declaration must be available before component-specific construction. A
+component must not receive `ResolvedConfiguration`, an untyped configuration
+map, or a source-discovery handle as its initialization contract. Failed
+resolution or projection leaves no partially initialized component visible in
+the subsystem.
+
+The delivered initialization parameters form an immutable snapshot for one
+`ComponentInstanceId`. They are distinct from operation-time
+`ComponentConfigurationAccess`, which resolves a declared key through the
+bound ActionCall runtime context. Neither mechanism is a fallback for the
+other, and request parameters, action properties, ambient environment access,
+or arbitrary runtime lookup cannot override the initialization snapshot.
+
+Initialization may carry an opaque secret reference but never secret material.
+Parameter values, secret references, physical source locations, credentials,
+and unrelated configuration keys are absent from default diagnostics and
+provenance.
 
 ### Declared Component Runtime Configuration
 

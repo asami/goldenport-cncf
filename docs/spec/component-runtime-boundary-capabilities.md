@@ -46,6 +46,43 @@ It accepts only a declared key and returns the decoded optional-or-required
 result with `Component`, `Subsystem`, `Runtime`, or `Absent` provenance. It
 does not expose a raw configuration map or arbitrary key lookup operation.
 
+## Component Initialization Parameters (R3a)
+
+Initialization parameter resolution MUST occur after CNCF has selected the
+component type and `ComponentInstanceId` and before component-specific
+construction or initialization consumes parameter values. A component factory
+or equivalent component definition MUST own the parameter declaration and its
+component-domain initialization projection. CNCF MUST own context selection,
+admitted layer precedence, typed decoding, required-or-optional handling, safe
+provenance, structured failure, and bootstrap delivery.
+
+The parameter declaration MUST be available before component-specific
+construction. A required missing value, malformed value, ambiguous
+component-instance context, policy-rejected value, or invalid domain
+projection MUST produce `Consequence.Failure(Conclusion)` and MUST prevent the
+partially initialized component from becoming visible in the subsystem.
+
+One successful resolution MUST produce an immutable initialization snapshot
+bound to exactly one `ComponentInstanceId`. Component initialization code MUST
+NOT receive `ResolvedConfiguration`, a raw or untyped configuration map, a
+configuration source reader, a physical source location, or an arbitrary-key
+lookup API. Request parameters, action properties, ambient environment or
+system-property access, and operation-time configuration lookup MUST NOT
+override or mutate the snapshot.
+
+`ResolvedConfiguration` MUST remain a raw source-resolution result without
+component declaration or domain semantics. `ComponentConfigurationAccess`
+MUST remain the separate operation-time protected DSL boundary. Neither
+initialization nor operation-time access may act as an implicit fallback for
+the other.
+
+Initialization provenance MAY expose only bounded logical layer and parameter
+identity. Default results, diagnostics, and observability MUST NOT expose
+parameter values, secret references or material, credentials, physical source
+locations, or unrelated configuration keys. Secret material MUST NOT cross the
+component initialization boundary; only an opaque secret reference admitted by
+the initialization parameter contract may be delivered.
+
 ## Configuration Precedence (R4)
 
 The runtime resolves declared configuration according to explicit component,

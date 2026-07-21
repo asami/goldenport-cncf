@@ -84,6 +84,38 @@ application configuration. This does not create a request-parameter override
 path. Confidential declarations are deliberately denied from this public value
 API until RB-04 supplies an authorized opaque-reference or safe-use boundary.
 
+### Initialization-time Parameter Boundary
+
+Initialization parameters and operation-time declared configuration are
+separate temporal boundaries. Initialization resolution occurs after CNCF has
+selected the component and component-instance assembly context and before a
+component factory constructs or initializes the component. It is not an
+ActionCall operation and does not expose an `ExecutionContext` configuration
+lookup surface.
+
+CNCF resolves only declarations supplied by the component factory or
+equivalent component definition. CNCF owns admitted layer precedence, typed
+decoding, required-or-optional handling, bounded provenance, and structured
+failure. The component owns its declaration, typed initialization projection,
+and domain-level combination validation. Resolution or projection failure
+prevents subsystem installation of the component.
+
+One successful resolution produces an immutable snapshot bound to one
+`ComponentInstanceId`. The component does not receive the underlying
+`ResolvedConfiguration`, an untyped map, a physical source identity, or an
+ambient source reader. Operation parameters, action properties, and runtime
+configuration access cannot mutate or replace that snapshot.
+
+`ComponentConfigurationAccess` remains the operation-time protected DSL
+boundary. It does not implicitly read initialization parameters, and
+initialization does not fall back to operation-time access. The common
+principles are typed declaration, structured `Consequence` failure, safe
+provenance, component-instance isolation, and opaque secret references.
+
+The complete lifecycle and ownership contract is defined in
+`docs/design/configuration-model.md`; static requirements are defined in
+`docs/spec/component-runtime-boundary-capabilities.md`.
+
 ### Opaque Secret Reference Boundary
 
 RB-04 adds `SecretReference` as a non-product opaque value: it has no public

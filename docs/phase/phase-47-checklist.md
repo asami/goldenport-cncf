@@ -8,22 +8,31 @@ This checklist is the authoritative planned Phase 47 state ledger.
 ## CIP-01: Normative Contract
 
 Stage Status:
-- Current status: IN_PROGRESS
+- Current status: DONE
 - Owner: CNCF runtime maintainers
 - Update rule: Mark DONE only after normative design and specification define
   initialization-time parameter resolution and distinguish it from runtime
   component configuration access.
 
-- [ ] Define CNCF and component ownership of initialization parameter
+Verified evidence:
+- Normative text is defined in `docs/design/configuration-model.md`,
+  `docs/design/component-runtime-boundary-capabilities.md`,
+  `docs/spec/config-resolution.md`, and
+  `docs/spec/component-runtime-boundary-capabilities.md`.
+- Independent review found and resolved the obsolete raw
+  `Component.Config.from(ResolvedConfiguration)` path.
+- Documentation validation passed for the Phase 47 CIP-01 release checkpoint.
+
+- [x] Define CNCF and component ownership of initialization parameter
   declaration, resolution, validation, and delivery.
-- [ ] Define the relationship to source resolution and
+- [x] Define the relationship to source resolution and
   `ResolvedConfiguration` without adding component-domain semantics to the raw
   store.
-- [ ] Define the relationship to operation-time
+- [x] Define the relationship to operation-time
   `ComponentConfigurationAccess` without creating a competing runtime API.
-- [ ] Fix the prohibition on raw configuration-map delivery and ambient source
+- [x] Fix the prohibition on raw configuration-map delivery and ambient source
   lookup from component initialization code.
-- [ ] Record the normative design and static specification references in the
+- [x] Record the normative design and static specification references in the
   Phase 47 dashboard.
 
 ## CIP-02: Typed Parameter Model

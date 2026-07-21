@@ -62,7 +62,7 @@ raw configuration maps to component code.
 
 | ID | Stage | Outcome | Status |
 | --- | --- | --- | --- |
-| CIP-01 | Normative contract | Design and specification define initialization parameter resolution separately from runtime component configuration. | in_progress |
+| CIP-01 | Normative contract | Design and specification define initialization parameter resolution separately from runtime component configuration. | done |
 | CIP-02 | Typed parameter model | CNCF provides the resolver, typed key/value, result, collection, and safe provenance vocabulary. | open |
 | CIP-03 | Resolution layers | All admitted initialization sources have one deterministic precedence contract. | open |
 | CIP-04 | Instance context | Resolution is isolated by component and component-instance identity. | open |
@@ -107,11 +107,17 @@ raw configuration maps to component code.
 - `docs/spec/config-resolution.md`
 - `docs/spec/component-runtime-boundary-capabilities.md`
 - `docs/design/configuration-model.md`
+- `docs/design/component-runtime-boundary-capabilities.md`
 - `docs/design/typed-component-api-and-multi-instance-spi.md`
 
 ## Current Resume Point
 
-Start CIP-01 by promoting the recorded decision into normative design and
-static specification documents. Fix the initialization-time boundary and its
-relationship to `ResolvedConfiguration`, `ComponentFactory.bootstrap`, and
-runtime `ComponentConfigurationAccess` before adding implementation types.
+CIP-01 is complete. The configuration and component runtime boundary
+design/specification documents define initialization ownership, the
+pre-construction/bootstrap lifecycle, the `ResolvedConfiguration` raw-store
+boundary, operation-time `ComponentConfigurationAccess` separation, structured
+failure, and raw-map/ambient-lookup prohibitions.
+
+Plan CIP-02 next. Define the typed parameter and provenance vocabulary without
+implementing source-layer precedence, bootstrap integration, diagnostics, or a
+downstream migration in the same slice.
