@@ -62,7 +62,8 @@ final case class RuntimeConfig(
   textusUrnResourcePolicy: TextusUrnResourcePolicy = TextusUrnResourcePolicy(),
   urnResourceProviders: Vector[UrnResourceProvider] = Vector.empty,
   resourceTreePolicy: ResourceTreePolicy = ResourceTreePolicy(),
-  mcpClientPolicyPath: Option[Path] = None
+  mcpClientPolicyPath: Option[Path] = None,
+  operationToolPolicyPath: Option[Path] = None
 ) {
   def executionClock: RuntimeClock = executionProfile.runtimeClock
 }
@@ -254,6 +255,8 @@ object RuntimeConfig {
   val RuntimeComponentFileKey = "textus.runtime.component.file"
   val MCP_CLIENT_POLICY_KEY = "textus.mcp.client.policy"
   val RUNTIME_MCP_CLIENT_POLICY_KEY = "textus.runtime.mcp.client.policy"
+  val OPERATION_TOOL_POLICY_KEY = "textus.operation-tools.policy"
+  val RUNTIME_OPERATION_TOOL_POLICY_KEY = "textus.runtime.operation-tools.policy"
   val ComponentDevDirKey = "textus.component.dev.dir"
   val ComponentCarDirKey = "textus.component.car.dir"
   val AssemblyDescriptorKey = "textus.assembly.descriptor"
@@ -466,6 +469,10 @@ object RuntimeConfig {
       .map(_.trim)
       .filter(_.nonEmpty)
       .map(Paths.get(_).toAbsolutePath.normalize())
+    val operationtoolpolicypath = _get_string(configuration, OPERATION_TOOL_POLICY_KEY)
+      .map(_.trim)
+      .filter(_.nonEmpty)
+      .map(Paths.get(_).toAbsolutePath.normalize())
     val idnamespace = _id_namespace(configuration)
     val executionprofile = profileoverride.getOrElse(_execution_profile(configuration, operationmode))
     val weboperationdispatcher =
@@ -534,7 +541,8 @@ object RuntimeConfig {
       textusUrnResourcePolicy = textusurnresourcepolicy,
       urnResourceProviders = urnresourceproviders,
       resourceTreePolicy = resourcetreepolicy,
-      mcpClientPolicyPath = mcpclientpolicypath
+      mcpClientPolicyPath = mcpclientpolicypath,
+      operationToolPolicyPath = operationtoolpolicypath
     )
     _validate(config)
     config
@@ -930,6 +938,7 @@ object RuntimeConfig {
         case SubsystemSarDirKey => Vector(RuntimeSubsystemSarDirKey)
         case ComponentFileKey => Vector(RuntimeComponentFileKey)
         case MCP_CLIENT_POLICY_KEY => Vector(RUNTIME_MCP_CLIENT_POLICY_KEY)
+        case OPERATION_TOOL_POLICY_KEY => Vector(RUNTIME_OPERATION_TOOL_POLICY_KEY)
         case TEST_DESCRIPTOR_KEY => Vector(RUNTIME_TEST_DESCRIPTOR_KEY)
         case TEST_HOME_MODE_KEY => Vector(RUNTIME_TEST_HOME_MODE_KEY)
         case TEST_HOME_PATH_KEY => Vector(RUNTIME_TEST_HOME_PATH_KEY)

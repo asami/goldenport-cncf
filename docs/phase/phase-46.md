@@ -93,7 +93,7 @@ but CNCF does not perform provider-function composition.
 | MT-03 | Shared protocol negotiation | CNCF server and client use one shared revision model and reject unsupported initialization deterministically. | done |
 | MT-04 | Notification-aware HTTP server | The adapter and HTTP route distinguish request responses from accepted notifications and validate lifecycle headers. | done |
 | MT-05 | Executable interoperability evidence | Real HTTP server/client and internal no-loopback specifications cover success, policy rejection, and payload safety. | done |
-| MT-06 | Downstream acceptance and closure | Textus AI and Sanpomap consume the corrected boundaries and all phase closure evidence passes. | open |
+| MT-06 | Downstream acceptance and closure | Textus AI and Sanpomap consume the corrected boundaries and all phase closure evidence passes. | in progress |
 
 ## Acceptance
 
@@ -155,6 +155,12 @@ but CNCF does not perform provider-function composition.
 
 ## Resume Point
 
-Begin MT-06 by verifying the Textus AI internal/remote catalog composition and
-Sanpomap Phase 2 assembled policy evidence without restoring a local MCP
-loopback workaround.
+Textus AI now publishes separate `OperationToolSocket` and `McpClientSocket`
+requirements, receives runtime-installed services for both, composes only
+their admitted definitions, invokes each owning scope, and reports total plus
+source-specific call counts. CNCF generic subsystem startup now activates the
+operator-owned `textus.operation-tools.policy` atomically.
+
+Continue MT-06 with Sanpomap Phase 2 assembled policy evidence. Remove its
+local MCP loopback dependency for builtin tools while retaining external MCP
+interoperability, then run the complete downstream and closure validation.

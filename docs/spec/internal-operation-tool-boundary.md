@@ -48,6 +48,16 @@ MCP allowlists MUST NOT admit internal Operations. Admission MUST be immutable
 for one invocation and MUST include positive call-count, input-byte,
 result-byte, and concurrency limits.
 
+The runtime MUST load internal tool-set admission only from the operator-owned
+policy selected by `textus.operation-tools.policy`,
+`textus.runtime.operation-tools.policy`, or the corresponding `cncf.*` alias.
+The policy record MUST contain `toolSets`; every entry MUST contain a unique
+`id` and one or more exact `operations`. Optional positive integral limits are
+`maximumCalls`, `maximumInputBytes`, `maximumResultBytes`, and
+`maximumConcurrency`. A missing, malformed, duplicate, stale, or unsupported
+entry MUST fail runtime activation atomically. It MUST NOT leave a partially
+installed consumer socket.
+
 Unknown, stale, duplicate, unadmitted, malformed, or over-limit calls MUST fail
 before business operation execution when the limit is measurable before
 dispatch. Result size MUST be checked immediately after execution and before

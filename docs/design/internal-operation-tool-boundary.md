@@ -90,6 +90,31 @@ and are not replaced by a second tool-local scheduler. Unknown, duplicate,
 unadmitted, malformed, or pre-execution over-limit calls fail before business
 operation execution.
 
+The runtime policy is selected through `textus.operation-tools.policy`; the
+runtime and CNCF namespace aliases are
+`textus.runtime.operation-tools.policy` and `cncf.operation-tools.policy`.
+Its provider-neutral record shape is:
+
+```yaml
+toolSets:
+  - id: builtin-tools
+    operations:
+      - admin.system.ping
+      - tool.time.now
+    limits:
+      maximumCalls: 8
+      maximumInputBytes: 16384
+      maximumResultBytes: 16384
+      maximumConcurrency: 1
+```
+
+Omitted limits receive the bounded values shown above. Generic subsystem
+startup resolves every exact identity, creates one registry, and installs its
+services into consumer-owned `OperationToolSocket` values. Components added
+after activation receive the retained registry as part of subsystem assembly.
+Activation is atomic: invalid policy or any unresolved socket requirement
+leaves the registry and all affected sockets unpublished.
+
 ## Invocation
 
 Invocation resolves the admitted identity to the normal CNCF `Request` and

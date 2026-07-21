@@ -111,15 +111,15 @@ Stage Status:
 ## MT-06: Downstream Acceptance and Closure
 
 Stage Status:
-- Current status: OPEN
+- Current status: IN PROGRESS
 - Owner: CNCF maintainers, with Textus AI and Sanpomap maintainers as
   downstream acceptance owners
 - Update rule: Mark DONE only after both downstream consumers use the intended
   boundaries, all validation passes, and the phase dashboard records closure.
 
-- [ ] Verify Textus AI consumes the internal Operation-tool source separately
+- [x] Verify Textus AI consumes the internal Operation-tool source separately
   from its remote `McpClientSocket` source.
-- [ ] Verify Textus AI alone composes both admitted catalogs into
+- [x] Verify Textus AI alone composes both admitted catalogs into
   provider-neutral function definitions without identity collisions.
 - [ ] Remove the Sanpomap Phase 2 dependency on local MCP loopback for builtin
   tools while retaining external CNCF server/client interoperability evidence.

@@ -47,6 +47,7 @@ import org.goldenport.cncf.config.{ResolvedParameter, ResolvedParameters}
 import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.metrics.{ComponentMetricsRegistry, EntityAccessMetricsRegistry}
 import org.goldenport.cncf.mcp.client.{CodexMcpRuntimeAssembly, CodexMcpRuntimeConfiguration, McpServerSetId}
+import org.goldenport.cncf.operationtool.{OperationToolRuntimeConfiguration, OperationToolRuntimeRegistry, OperationToolSetId}
 import org.goldenport.cncf.spi.{ComponentApiResolver, ResolvedSpiBinding, SpiInvoker, SpiOperationSelector}
 import org.goldenport.cncf.servicecontainer.{ServiceContainerCleanupOutcome, ServiceContainerDiagnostics, ServiceContainerId, ServiceContainerRuntime, ServiceContainerRuntimeConfiguration}
 import org.goldenport.cncf.observability.ServiceContainerRuntimeObservation
@@ -110,6 +111,7 @@ final class Subsystem(
   private var _user_notification_forwarding_registered: Boolean = false
   private var _service_container_runtime: Option[ServiceContainerRuntime] = None
   private var _mcp_client_runtime: Option[CodexMcpRuntimeAssembly] = None
+  private var _operation_tool_runtime: Option[OperationToolRuntimeRegistry] = None
 
   def globalRuntimeContext: GlobalRuntimeContext = {
     val a = _find_global_runtime_context(scopeContext)
@@ -141,6 +143,8 @@ final class Subsystem(
   def resolvedSecurityWiring: ResolvedSecurityWiring = _resolved_security_wiring
   def mcpClientServerSetIds: Vector[McpServerSetId] =
     _mcp_client_runtime.toVector.flatMap(_.serverSetIds)
+  def operationToolSetIds: Vector[OperationToolSetId] =
+    _operation_tool_runtime.toVector.flatMap(_.toolSetIds)
 
   def serviceContainerRuntime(using context: ExecutionContext): Option[ServiceContainerRuntime] =
     _service_container_runtime.map(ServiceContainerRuntimeObservation.observed)
@@ -198,6 +202,27 @@ final class Subsystem(
             Consequence.unit
           case Consequence.Failure(conclusion) =>
             Consequence.Failure[Unit](conclusion)
+        }
+    }
+  }
+
+  private[cncf] def activateOperationToolRuntimeC(
+    path: java.nio.file.Path
+  )(using context: ExecutionContext): Consequence[Unit] = synchronized {
+    _operation_tool_runtime match {
+      case Some(_) =>
+        Consequence.operationConflict("Operation tool runtime activation", Vector.empty)
+      case None =>
+        val result = for {
+          configuration <- OperationToolRuntimeConfiguration.loadC(path)
+          runtime <- OperationToolRuntimeRegistry.createC(this, configuration.admissions)
+          _ <- runtime.install(components)
+        } yield runtime
+        result match {
+          case Consequence.Success(runtime) =>
+            _operation_tool_runtime = Some(runtime)
+            Consequence.unit
+          case Consequence.Failure(conclusion) => Consequence.Failure[Unit](conclusion)
         }
     }
   }
@@ -271,6 +296,13 @@ final class Subsystem(
           throw conclusion.getException.getOrElse(new IllegalStateException(conclusion.display))
       }
     }
+    _operation_tool_runtime.foreach { runtime =>
+      runtime.install(injected) match {
+        case Consequence.Success(_) => ()
+        case Consequence.Failure(conclusion) =>
+          throw conclusion.getException.getOrElse(new IllegalStateException(conclusion.display))
+      }
+    }
     _component_space = _component_space.add(injected)
     _rebuild_resolver()
     this
@@ -288,6 +320,13 @@ final class Subsystem(
     injected.foreach(_bind_runtime_services)
     _mcp_client_runtime.foreach { runtime =>
       _install_mcp_client_runtime_c(runtime, injected) match {
+        case Consequence.Success(_) => ()
+        case Consequence.Failure(conclusion) =>
+          throw conclusion.getException.getOrElse(new IllegalStateException(conclusion.display))
+      }
+    }
+    _operation_tool_runtime.foreach { runtime =>
+      runtime.install(injected) match {
         case Consequence.Success(_) => ()
         case Consequence.Failure(conclusion) =>
           throw conclusion.getException.getOrElse(new IllegalStateException(conclusion.display))

@@ -323,7 +323,7 @@ object GenericSubsystemFactory {
     val builtins = DefaultSubsystemFactory.builtinComponents(subsystem)
     val components = _collapse_duplicate_components(builtins ++ components0)
     subsystem.add(components)
-    _activate_mcp_client_runtime_or_raise(subsystem, runtimeconfig)
+    _activate_tool_runtimes_or_raise(subsystem, runtimeconfig)
     subsystem
   }
 
@@ -390,20 +390,29 @@ object GenericSubsystemFactory {
     subsystem.add(resolution.components)
     subsystem.withComponentApiResolver(resolution.componentApiResolver)
     subsystem.withDescriptor(descriptor)
-    _activate_mcp_client_runtime_or_raise(subsystem, runtimeconfig)
+    _activate_tool_runtimes_or_raise(subsystem, runtimeconfig)
     subsystem
   }
 
-  private def _activate_mcp_client_runtime_or_raise(
+  private def _activate_tool_runtimes_or_raise(
     subsystem: Subsystem,
     runtimeconfig: RuntimeConfig
   ): Unit =
-    runtimeconfig.mcpClientPolicyPath.foreach { path =>
+    {
       given ExecutionContext = ExecutionContext.create()
-      subsystem.activateCodexMcpClientRuntimeC(path) match {
-        case Consequence.Success(_) => ()
-        case Consequence.Failure(conclusion) =>
-          throw conclusion.getException.getOrElse(new IllegalStateException(conclusion.display))
+      runtimeconfig.mcpClientPolicyPath.foreach { path =>
+        subsystem.activateCodexMcpClientRuntimeC(path) match {
+          case Consequence.Success(_) => ()
+          case Consequence.Failure(conclusion) =>
+            throw conclusion.getException.getOrElse(new IllegalStateException(conclusion.display))
+        }
+      }
+      runtimeconfig.operationToolPolicyPath.foreach { path =>
+        subsystem.activateOperationToolRuntimeC(path) match {
+          case Consequence.Success(_) => ()
+          case Consequence.Failure(conclusion) =>
+            throw conclusion.getException.getOrElse(new IllegalStateException(conclusion.display))
+        }
       }
     }
 

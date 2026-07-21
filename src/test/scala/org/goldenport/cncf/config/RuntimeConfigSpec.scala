@@ -32,6 +32,7 @@ final class RuntimeConfigSpec extends AnyWordSpec with Matchers with GivenWhenTh
       config.idNamespace shouldBe IdGenerationContext.DefaultNamespace
       config.executionClock.isVirtual shouldBe false
       config.mcpClientPolicyPath shouldBe None
+      config.operationToolPolicyPath shouldBe None
     }
 
     "parse MCP client policy path and runtime aliases" in {
@@ -51,6 +52,33 @@ final class RuntimeConfigSpec extends AnyWordSpec with Matchers with GivenWhenTh
         Some("config/mcp-client.yaml")
       config.mcpClientPolicyPath.map(_.isAbsolute) shouldBe Some(true)
       config.mcpClientPolicyPath.map(_.endsWith("config/mcp-client.yaml")) shouldBe Some(true)
+    }
+
+    "parse Operation tool policy configuration and aliases" in {
+      Given("the runtime alias for an internal Operation tool policy")
+      val configuration = ResolvedConfiguration(
+        Configuration(Map(
+          RuntimeConfig.RUNTIME_OPERATION_TOOL_POLICY_KEY ->
+            ConfigurationValue.StringValue("config/operation-tools.yaml")
+        )),
+        ConfigurationTrace.empty
+      )
+
+      When("the runtime configuration is resolved")
+      val config = RuntimeConfig.from(configuration)
+
+      Then("the normalized absolute policy path is retained")
+      config.operationToolPolicyPath.map(_.isAbsolute) shouldBe Some(true)
+      config.operationToolPolicyPath.map(_.endsWith("config/operation-tools.yaml")) shouldBe Some(true)
+
+      And("the legacy CNCF namespace resolves to the same canonical key")
+      val alias = ResolvedConfiguration(
+        Configuration(Map(
+          "cncf.operation-tools.policy" -> ConfigurationValue.StringValue("config/operation-tools.yaml")
+        )),
+        ConfigurationTrace.empty
+      )
+      RuntimeConfig.from(alias).operationToolPolicyPath shouldBe config.operationToolPolicyPath
     }
 
     "parse an advancing virtual clock start and its compatibility aliases" in {
