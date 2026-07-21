@@ -340,6 +340,11 @@ The first pure baseline uses component `tool`:
   response-size ceilings, and accept only static textual media types. `head`
   deliberately reuses the admitted GET-backed read path and omits text from
   its projection, matching CNCF's correctness-first HEAD policy.
+- `tool.web.search` accepts only a bounded logical query and result count. A
+  CNCF-owned `web-search` SPI socket selects the provider at runtime; callers
+  cannot select providers, credentials, headers, or provider-specific options.
+  CNCF revalidates result count, text bounds, duplicate URLs, and public-network
+  HTTPS admission before projecting provider-neutral `items` and `count`.
 - `tool.time.now` reads the execution-context clock. An optional timezone is
   either `UTC` or a bounded IANA region identifier; omission uses the runtime
   timezone. The result contains the same instant rendered in the selected

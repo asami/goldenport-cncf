@@ -5,6 +5,7 @@ import org.goldenport.Consequence
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.mcp.McpToolCatalog
 import org.goldenport.cncf.resource.{InMemoryUrnResourceProvider, ResourceAccess, ResourceAccessTestProfile, ResourceContent, ResourceReference, ResourceUrlPolicy, StaticWebUrlResourceProvider}
+import org.goldenport.cncf.spi.web.search.{WebSearch, WebSearchItem, WebSearchRequest, WebSearchResponse}
 import org.goldenport.cncf.subsystem.{DefaultSubsystemFactory, Subsystem}
 import org.goldenport.protocol.{Property, Request}
 import org.goldenport.protocol.operation.OperationResponse
@@ -28,6 +29,8 @@ final class ToolComponentSpec extends AnyWordSpec with Matchers with GivenWhenTh
     afterWord("in spec:mcp-client-boundary, tool:tool.resource.read, phase:45, stage:MC-07")
   private val _web_metadata =
     afterWord("in spec:mcp-client-boundary, tools:tool.web.fetch/tool.web.head, phase:45, stage:MC-07")
+  private val _web_search_metadata =
+    afterWord("in spec:mcp-client-boundary, tool:tool.web.search, phase:45, stage:MC-07")
 
   "Builtin resource Operation" should {
     "read bounded text only through the execution-context ResourceAccess" must _resource_metadata {
@@ -230,6 +233,138 @@ final class ToolComponentSpec extends AnyWordSpec with Matchers with GivenWhenTh
     }
   }
 
+  "Builtin Web search Operation" should {
+    "query only the runtime-installed provider and return bounded safe results" must _web_search_metadata {
+      "when a provider-neutral WebSearch SPI is installed" in {
+        Given("the builtin tool component with one deterministic runtime-owned search provider")
+        val subsystem = DefaultSubsystemFactory.default(Some("command"))
+        val tool = subsystem.findComponent("tool").get.asInstanceOf[ToolComponent]
+        var observed: Option[WebSearchRequest] = None
+        tool.withWebSearch(new WebSearch {
+          def search(req: WebSearchRequest)(using ExecutionContext): Consequence[WebSearchResponse] = {
+            observed = Some(req)
+            Consequence.success(WebSearchResponse(Vector(
+              WebSearchItem("CNCF design", "https://example.org/cncf", Some("Provider-neutral result"))
+            )))
+          }
+        })
+        given ExecutionContext = ExecutionContext.create()
+
+        When("tool.web.search receives only a logical query and result limit")
+        val record = subsystem.executeQueryOnlyWithMetadata(
+          _request("web", "search", "query" -> "CNCF architecture", "limit" -> 2)
+        ).map(_.response).flatMap(_record_response_c).toOption.get
+
+        Then("the runtime provider receives no caller provider or credential selection")
+        observed shouldBe Some(WebSearchRequest("CNCF architecture", 2))
+        record.getLong("count") shouldBe Some(1L)
+        record.getAny("items").map(_.toString).getOrElse("") should include ("https://example.org/cncf")
+        record.asMap.keySet should not contain "provider"
+      }
+    }
+
+    "preserve missing providers and invalid provider output as structured failures" must _web_search_metadata {
+      "when providers emit unsafe duplicate or blank result fields" in {
+        Given("subsystems for missing unsafe duplicate and blank provider outcomes")
+        val missing = DefaultSubsystemFactory.default(Some("command"))
+        val invalid = DefaultSubsystemFactory.default(Some("command"))
+        val duplicate = DefaultSubsystemFactory.default(Some("command"))
+        val blank = DefaultSubsystemFactory.default(Some("command"))
+        invalid.findComponent("tool").get.asInstanceOf[ToolComponent].withWebSearch(new WebSearch {
+          def search(req: WebSearchRequest)(using ExecutionContext): Consequence[WebSearchResponse] =
+            Consequence.success(WebSearchResponse(Vector(
+              WebSearchItem("internal", "https://127.0.0.1/private")
+            )))
+        })
+        duplicate.findComponent("tool").get.asInstanceOf[ToolComponent].withWebSearch(new WebSearch {
+          def search(req: WebSearchRequest)(using ExecutionContext): Consequence[WebSearchResponse] =
+            Consequence.success(WebSearchResponse(Vector(
+              WebSearchItem("first", "https://example.org/result"),
+              WebSearchItem("second", " https://example.org/result ")
+            )))
+        })
+        blank.findComponent("tool").get.asInstanceOf[ToolComponent].withWebSearch(new WebSearch {
+          def search(req: WebSearchRequest)(using ExecutionContext): Consequence[WebSearchResponse] =
+            Consequence.success(WebSearchResponse(Vector(
+              WebSearchItem("blank snippet", "https://example.org/blank", Some("   "))
+            )))
+        })
+        given ExecutionContext = ExecutionContext.create()
+
+        When("all requests execute through the normal Operation boundary")
+        val absent = missing.executeOperationResponse(
+          _request("web", "search", "query" -> "missing provider")
+        )
+        val unsafe = invalid.executeOperationResponse(
+          _request("web", "search", "query" -> "unsafe result")
+        )
+        val repeated = duplicate.executeOperationResponse(
+          _request("web", "search", "query" -> "duplicate result")
+        )
+        val empty = blank.executeOperationResponse(
+          _request("web", "search", "query" -> "blank snippet")
+        )
+
+        Then("no missing or invalid provider state is projected as success")
+        absent.isSuccess shouldBe false
+        unsafe.isSuccess shouldBe false
+        repeated.isSuccess shouldBe false
+        empty.isSuccess shouldBe false
+      }
+    }
+
+    "enforce query limit result-count bounds and the default result limit" must _web_search_metadata {
+      "when request and provider values meet or cross their declared boundaries" in {
+        Given("a provider that records admitted requests and returns two safe results")
+        val subsystem = DefaultSubsystemFactory.default(Some("command"))
+        val tool = subsystem.findComponent("tool").get.asInstanceOf[ToolComponent]
+        var observed: Vector[WebSearchRequest] = Vector.empty
+        tool.withWebSearch(new WebSearch {
+          def search(req: WebSearchRequest)(using ExecutionContext): Consequence[WebSearchResponse] = {
+            observed = observed :+ req
+            Consequence.success(WebSearchResponse(Vector(
+              WebSearchItem("first", "https://example.org/first"),
+              WebSearchItem("second", "https://example.org/second")
+            )))
+          }
+        })
+        given ExecutionContext = ExecutionContext.create()
+
+        When("default bounded and over-limit requests cross the normal Operation boundary")
+        val defaulted = subsystem.executeOperationResponse(
+          _request("web", "search", "query" -> "default limit")
+        )
+        val countoverflow = subsystem.executeOperationResponse(
+          _request("web", "search", "query" -> "one result", "limit" -> 1)
+        )
+        val queryoverflow = subsystem.executeOperationResponse(
+          _request("web", "search", "query" -> ("q" * 513))
+        )
+        val zero = subsystem.executeOperationResponse(
+          _request("web", "search", "query" -> "zero", "limit" -> 0)
+        )
+        val eleven = subsystem.executeOperationResponse(
+          _request("web", "search", "query" -> "eleven", "limit" -> 11)
+        )
+        val fractional = subsystem.executeOperationResponse(
+          _request("web", "search", "query" -> "fractional", "limit" -> 1.5)
+        )
+
+        Then("only the valid default request succeeds and every boundary violation is structured")
+        defaulted.isSuccess shouldBe true
+        observed shouldBe Vector(
+          WebSearchRequest("default limit", 10),
+          WebSearchRequest("one result", 1)
+        )
+        countoverflow.isSuccess shouldBe false
+        queryoverflow.isSuccess shouldBe false
+        zero.isSuccess shouldBe false
+        eleven.isSuccess shouldBe false
+        fractional.isSuccess shouldBe false
+      }
+    }
+  }
+
   "Builtin decimal Operation" should {
     "calculate exact bounded decimal values without floating-point conversion" must _decimal_metadata {
       "when bounded add, subtract, and multiply inputs are generated" in {
@@ -299,6 +434,7 @@ final class ToolComponentSpec extends AnyWordSpec with Matchers with GivenWhenTh
         val resource = tools.find(_.name == "tool.resource.read")
         val webfetch = tools.find(_.name == "tool.web.fetch")
         val webhead = tools.find(_.name == "tool.web.head")
+        val websearch = tools.find(_.name == "tool.web.search")
 
         Then("all identities are present without a separate MCP implementation")
         time should not be empty
@@ -306,9 +442,13 @@ final class ToolComponentSpec extends AnyWordSpec with Matchers with GivenWhenTh
         resource should not be empty
         webfetch should not be empty
         webhead should not be empty
+        websearch should not be empty
         resource.get.inputSchema.hcursor.downField("properties")
           .downField("reference").get[String]("type") shouldBe Right("string")
         val properties = decimal.get.inputSchema.hcursor.downField("properties")
+        val searchproperties = websearch.get.inputSchema.hcursor.downField("properties")
+        searchproperties.downField("query").get[String]("type") shouldBe Right("string")
+        searchproperties.downField("limit").get[String]("type") shouldBe Right("integer")
         properties.downField("left").get[String]("type") shouldBe Right("string")
         properties.downField("right").get[String]("type") shouldBe Right("string")
       }

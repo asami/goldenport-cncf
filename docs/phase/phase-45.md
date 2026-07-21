@@ -102,8 +102,9 @@ FunctionalActionCall/UoW and are published by the existing MCP server catalog.
 `tool.resource.read` now adds bounded text reads through the canonical
 execution-context `ResourceAccess` boundary. `tool.web.fetch` and
 `tool.web.head` add static HTTPS reads with public-network, host, redirect,
-timeout, content-type, and byte-size admission. Provider-neutral Web-search
-work remains open.
+timeout, content-type, and byte-size admission. `tool.web.search` adds a
+bounded provider-neutral query/result contract over the runtime-owned
+`web-search` SPI without exposing provider selection or credentials.
 
 ## Acceptance
 

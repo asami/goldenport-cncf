@@ -292,6 +292,21 @@ content-type, and byte-limit outcomes MUST remain structured failures.
 text value. Neither Operation may accept headers, credentials, method, redirect
 policy, timeout, or provider-selection parameters from its caller.
 
+`tool.web.search` MUST accept one required string property `query` and one
+optional integer property `limit`. The normalized query MUST be non-empty and
+no more than 512 characters. `limit` MUST be from 1 through 10 and defaults to
+10. The Operation MUST NOT accept provider, mode, engine, credential, header,
+or provider-specific request properties. Provider selection and credentials
+MUST remain runtime-owned behind the CNCF `web-search` SPI socket.
+
+The provider-neutral response MUST contain at most the requested number of
+items. Each item MUST contain a non-empty title of at most 512 characters and
+an absolute public-network HTTPS URL of at most 2,048 characters with no
+user-info, fragment, or non-default port. An optional non-empty snippet MUST be
+at most 4,096 characters. URLs MUST be distinct. CNCF MUST validate provider
+output before projecting `items` and `count`, and MUST NOT expose provider
+identity, credentials, ranking internals, or raw provider payloads.
+
 `tool.time.now` MUST read `ExecutionContext.clock`. Its optional `timezone`
 property MUST be no more than 128 characters and MUST be either `UTC` or a
 registered IANA region identifier. If omitted, the Operation MUST use the
@@ -311,7 +326,8 @@ rounding are outside the initial contract.
 
 All builtin tool Operations MUST be eligible for the existing MCP server
 projection, including the identities `tool.resource.read`, `tool.time.now`,
-`tool.decimal.calculate`, `tool.web.fetch`, and `tool.web.head`. MCP publication
+`tool.decimal.calculate`, `tool.web.fetch`, `tool.web.head`, and
+`tool.web.search`. MCP publication
 MUST execute the same Operation implementation as CLI, REST, and internal
 subsystem dispatch.
 

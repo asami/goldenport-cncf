@@ -141,6 +141,9 @@ Verified progress:
   host policy after HTTPS/public-network admission, fixed redirect/timeout/
   byte-size policy, and static textual content-type admission. `head` is
   GET-backed and omits text from its response projection.
+- `tool.web.search` accepts only a bounded query and result count, delegates to
+  the runtime-installed `web-search` SPI, and revalidates bounded public-network
+  HTTPS result records without exposing provider selection or credentials.
 - `tool.time.now` reads one injected execution-clock instant and returns a
   consistent projection in an optional bounded IANA region timezone.
 - `tool.decimal.calculate` accepts bounded plain-decimal strings and the closed
@@ -148,8 +151,9 @@ Verified progress:
   exact results without binary floating-point conversion.
 - All builtin services are MCP-ready normal Operations implemented with
   `FunctionalActionCall` and the existing UoW interpreter. The existing MCP
-  catalog publishes `tool.resource.read`, `tool.time.now`, and
-  `tool.decimal.calculate` without local loopback.
+  catalog publishes `tool.resource.read`, `tool.time.now`,
+  `tool.decimal.calculate`, `tool.web.fetch`, `tool.web.head`, and
+  `tool.web.search` without local loopback.
 
 - [x] Implement `resource.read` using the canonical `ResourceAccess` boundary.
 - [x] Implement static `web.fetch` and `web.head` with scheme, host,
@@ -158,7 +162,7 @@ Verified progress:
   timezone contract.
 - [x] Implement deterministic decimal calculation without arbitrary code or
   script evaluation.
-- [ ] Define a provider-neutral `web.search` Operation contract while keeping
+- [x] Define a provider-neutral `web.search` Operation contract while keeping
   provider credentials and selection under runtime ownership.
 - [ ] Verify builtin tools use normal authorization, Consequence/Conclusion,
   CallTree, metrics, and MCP Operation projection semantics.

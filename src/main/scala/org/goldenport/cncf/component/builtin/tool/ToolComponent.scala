@@ -10,13 +10,14 @@ import org.goldenport.Consequence
 import org.goldenport.cncf.action.{ActionCall, FunctionalActionCall, QueryAction}
 import org.goldenport.cncf.component.{Component, ComponentCreate, ComponentId, ComponentInstanceId}
 import org.goldenport.cncf.resource.{ResourceContent, ResourceReference, WebTargetAdmission}
+import org.goldenport.cncf.spi.web.search.{WebSearchItem, WebSearchRequest, WebSearchResponse, WebSearchSocket}
 import org.goldenport.cncf.unitofwork.ExecUowM
 import org.goldenport.protocol.{Protocol, Request}
 import org.goldenport.protocol.handler.ProtocolHandler
 import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
 import org.goldenport.protocol.spec as spec
 import org.goldenport.record.Record
-import org.goldenport.schema.{DataType, Multiplicity, ValueDomain, XString}
+import org.goldenport.schema.{DataType, Multiplicity, ValueDomain, XInteger, XString}
 import org.goldenport.value.BaseContent
 
 /*
@@ -26,7 +27,9 @@ import org.goldenport.value.BaseContent
  * @version Jul. 21, 2026
  * @author  ASAMI, Tomoharu
  */
-final class ToolComponent() extends Component
+final class ToolComponent() extends Component with WebSearchSocket {
+  override def spiRequired: Boolean = false
+}
 
 object ToolComponent {
   val name: String = "tool"
@@ -37,6 +40,10 @@ object ToolComponent {
   private val _max_resource_byte_size = 1024 * 1024
   private val _max_resource_reference_length = 2048
   private val _max_timezone_length = 128
+  private val _max_web_search_query_length = 512
+  private val _max_web_search_results = 10
+  private val _max_web_search_title_length = 512
+  private val _max_web_search_snippet_length = 4096
   private val _decimal_pattern = "[+-]?(?:[0-9]+(?:\\.[0-9]*)?|\\.[0-9]+)".r
 
   private enum DecimalOperator(val name: String) {
@@ -62,7 +69,7 @@ object ToolComponent {
       component: Component
     ): Component.Core = {
       val _ = params
-      val _ = component
+      val toolcomponent = component.asInstanceOf[ToolComponent]
       val recordresponse = spec.ResponseDefinition(result = List(DataType.Named("Record")))
       val timeservice = spec.ServiceDefinition(
         name = "time",
@@ -81,7 +88,8 @@ object ToolComponent {
         operations = spec.OperationDefinitionGroup(
           operations = NonEmptyVector.of(
             new WebReadOperationDefinition(WebReadMode.Fetch, recordresponse),
-            new WebReadOperationDefinition(WebReadMode.Head, recordresponse)
+            new WebReadOperationDefinition(WebReadMode.Head, recordresponse),
+            new WebSearchOperationDefinition(toolcomponent, recordresponse)
           )
         )
       )
@@ -145,6 +153,30 @@ object ToolComponent {
         .flatMap(_bounded_resource_reference_c)
         .flatMap(ResourceReference.parseC)
         .map(ResourceReadAction(request, _))
+  }
+
+  private final class WebSearchOperationDefinition(
+    component: ToolComponent,
+    response: spec.ResponseDefinition
+  ) extends spec.OperationDefinition {
+    val specification: spec.OperationDefinition.Specification =
+      spec.OperationDefinition.Specification(
+        content = BaseContent.Builder("search")
+          .summary("Search the Web through the runtime-selected provider.")
+          .description("Submit a bounded provider-neutral query without caller provider or credential selection.")
+          .build(),
+        request = spec.RequestDefinition(parameters = List(
+          _required_property("query"),
+          _optional_integer_property("limit")
+        )),
+        response = response
+      )
+
+    def createOperationRequest(request: Request): Consequence[OperationRequest] =
+      for {
+        query <- _required_string(request, "query").flatMap(_web_search_query_c)
+        limit <- _optional_positive_int_c(request, "limit", _max_web_search_results)
+      } yield WebSearchAction(request, component, WebSearchRequest(query, limit))
   }
 
   private final class TimeNowOperationDefinition(
@@ -224,6 +256,15 @@ object ToolComponent {
       DecimalCalculateActionCall(core, operator, left, right)
   }
 
+  private final case class WebSearchAction(
+    request: Request,
+    tool: ToolComponent,
+    searchrequest: WebSearchRequest
+  ) extends QueryAction() {
+    def createCall(core: ActionCall.Core): ActionCall =
+      WebSearchActionCall(core, tool, searchrequest)
+  }
+
   private final case class TimeNowActionCall(
     core: ActionCall.Core,
     timezone: Option[ZoneId]
@@ -281,6 +322,19 @@ object ToolComponent {
         "value" -> _decimal_text(result)
       )))
     }
+  }
+
+  private final case class WebSearchActionCall(
+    core: ActionCall.Core,
+    tool: ToolComponent,
+    searchrequest: WebSearchRequest
+  ) extends FunctionalActionCall {
+    protected def build_Program: ExecUowM[OperationResponse] =
+      for {
+        search <- exec_from(tool.webSearchC)
+        response <- exec_from(search.search(searchrequest)(using execution_context))
+        admitted <- exec_from(_web_search_response_c(searchrequest, response))
+      } yield OperationResponse.RecordResponse(_web_search_record(admitted))
   }
 
   private def _time_record(instant: Instant, timezone: ZoneId): Record = {
@@ -357,6 +411,100 @@ object ToolComponent {
       "charset" -> content.declaredCharset.getOrElse(StandardCharsets.UTF_8).name
     )
 
+  private def _web_search_query_c(value: String): Consequence[String] = {
+    val normalized = value.trim
+    if (normalized.length <= _max_web_search_query_length)
+      Consequence.success(normalized)
+    else
+      Consequence.argumentLimitExceeded(
+        "query",
+        _max_web_search_query_length,
+        normalized.length,
+        "tool.web.search.query-length"
+      )
+  }
+
+  private def _web_search_response_c(
+    request: WebSearchRequest,
+    response: WebSearchResponse
+  ): Consequence[WebSearchResponse] = {
+    val items = response.items
+    if (items.size > request.limit || items.size > _max_web_search_results)
+      Consequence.argumentFieldLimitExceeded(
+        "response.items",
+        math.min(request.limit, _max_web_search_results),
+        items.size,
+        "tool.web.search.result-count"
+      )
+    else
+      items.foldLeft(Consequence.success(Vector.empty[WebSearchItem])) { (result, item) =>
+        for {
+          xs <- result
+          admitted <- _web_search_item_c(item)
+        } yield xs :+ admitted
+      }.flatMap { admitted =>
+        if (admitted.map(_.url).distinct.size == admitted.size)
+          Consequence.success(WebSearchResponse(admitted))
+        else
+          Consequence.argumentFieldPolicyViolation(
+            "response.items.url",
+            "tool.web.search.unique-url",
+            "distinct result URLs",
+            "duplicate URL"
+          )
+      }
+  }
+
+  private def _web_search_item_c(item: WebSearchItem): Consequence[WebSearchItem] = {
+    val title = item.title.trim
+    val url = item.url.trim
+    val snippet = item.snippet.map(_.trim)
+    for {
+      _ <- _bounded_nonempty_c("response.items.title", title, _max_web_search_title_length)
+      _ <- _bounded_nonempty_c("response.items.url", url, _max_resource_reference_length)
+      _ <- snippet.map(_bounded_nonempty_c("response.items.snippet", _, _max_web_search_snippet_length))
+        .getOrElse(Consequence.unit)
+      _ <- _web_search_result_url_c(url)
+    } yield WebSearchItem(title, url, snippet)
+  }
+
+  private def _web_search_result_url_c(value: String): Consequence[Unit] =
+    ResourceReference.parseC(value)
+      .flatMap(WebTargetAdmission.admitC)
+      .map(_ => ())
+
+  private def _bounded_nonempty_c(
+    field: String,
+    value: String,
+    limit: Int
+  ): Consequence[Unit] =
+    if (value.isEmpty)
+      Consequence.argumentFieldPolicyViolation(field, "tool.web.search.non-empty", "non-empty text", "empty")
+    else
+      _bounded_text_c(field, value, limit)
+
+  private def _bounded_text_c(
+    field: String,
+    value: String,
+    limit: Int
+  ): Consequence[Unit] =
+    if (value.length <= limit)
+      Consequence.unit
+    else
+      Consequence.argumentFieldLimitExceeded(field, limit, value.length, "tool.web.search.text-length")
+
+  private def _web_search_record(response: WebSearchResponse): Record =
+    Record.dataAuto(
+      "items" -> response.items.map { item =>
+        Record.dataAuto(
+          "title" -> item.title,
+          "url" -> item.url,
+          "snippet" -> item.snippet
+        )
+      },
+      "count" -> response.items.size
+    )
+
   private def _operator_c(value: String): Consequence[DecimalOperator] = {
     val normalized = value.trim.toLowerCase(Locale.ROOT)
     DecimalOperator.values.find(_.name == normalized) match {
@@ -414,6 +562,28 @@ object ToolComponent {
       case Some(value) => Consequence.argumentExpectedActualMismatch(name, "IANA timezone string", value)
     }
 
+  private def _optional_positive_int_c(
+    request: Request,
+    name: String,
+    default: Int
+  ): Consequence[Int] =
+    _property_value(request, name) match {
+      case None => Consequence.success(default)
+      case Some(value: Byte) if value > 0 && value <= default => Consequence.success(value.toInt)
+      case Some(value: Short) if value > 0 && value <= default => Consequence.success(value.toInt)
+      case Some(value: Int) if value > 0 && value <= default => Consequence.success(value)
+      case Some(value: Long) if value > 0 && value <= default => Consequence.success(value.toInt)
+      case Some(value: java.math.BigInteger) if value.signum > 0 && value.bitLength < 31 && value.intValue <= default =>
+        Consequence.success(value.intValue)
+      case Some(value: String) =>
+        value.trim.toIntOption.filter(x => x > 0 && x <= default) match {
+          case Some(limit) => Consequence.success(limit)
+          case None => Consequence.argumentExpectedActualMismatch(name, s"integer from 1 to ${default}", value)
+        }
+      case Some(value) =>
+        Consequence.argumentExpectedActualMismatch(name, s"integer from 1 to ${default}", value)
+    }
+
   private def _timezone_c(name: String, value: String): Consequence[ZoneId] = {
     val normalized = value.trim
     if (normalized.length > _max_timezone_length)
@@ -441,6 +611,13 @@ object ToolComponent {
 
   private def _optional_property(name: String): spec.ParameterDefinition =
     _property(name, Multiplicity.ZeroOne)
+
+  private def _optional_integer_property(name: String): spec.ParameterDefinition =
+    spec.ParameterDefinition(
+      content = BaseContent.simple(name),
+      kind = spec.ParameterDefinition.Kind.Property,
+      domain = ValueDomain(datatype = XInteger, multiplicity = Multiplicity.ZeroOne)
+    )
 
   private def _property(name: String, multiplicity: Multiplicity): spec.ParameterDefinition =
     spec.ParameterDefinition(
