@@ -9,7 +9,7 @@ import cats.syntax.all.*
 import org.goldenport.Consequence
 import org.goldenport.cncf.action.{ActionCall, FunctionalActionCall, QueryAction}
 import org.goldenport.cncf.component.{Component, ComponentCreate, ComponentId, ComponentInstanceId}
-import org.goldenport.cncf.resource.{ResourceContent, ResourceReference}
+import org.goldenport.cncf.resource.{ResourceContent, ResourceReference, WebTargetAdmission}
 import org.goldenport.cncf.unitofwork.ExecUowM
 import org.goldenport.protocol.{Protocol, Request}
 import org.goldenport.protocol.handler.ProtocolHandler
@@ -45,11 +45,16 @@ object ToolComponent {
     case Multiply extends DecimalOperator("multiply")
   }
 
+  private enum WebReadMode(val name: String, val includeText: Boolean) {
+    case Fetch extends WebReadMode("fetch", includeText = true)
+    case Head extends WebReadMode("head", includeText = false)
+  }
+
   object Factory extends Component.SinglePrimaryBundleFactory {
     protected def create_Component(params: ComponentCreate): Component = {
       val _ = params
       val component = ToolComponent()
-      component.withMcpReadyServices(Set("resource", "time", "decimal"))
+      component.withMcpReadyServices(Set("resource", "web", "time", "decimal"))
     }
 
     protected def create_Core(
@@ -71,6 +76,15 @@ object ToolComponent {
           operations = NonEmptyVector.one(new ResourceReadOperationDefinition(recordresponse))
         )
       )
+      val webservice = spec.ServiceDefinition(
+        name = "web",
+        operations = spec.OperationDefinitionGroup(
+          operations = NonEmptyVector.of(
+            new WebReadOperationDefinition(WebReadMode.Fetch, recordresponse),
+            new WebReadOperationDefinition(WebReadMode.Head, recordresponse)
+          )
+        )
+      )
       val decimalservice = spec.ServiceDefinition(
         name = "decimal",
         operations = spec.OperationDefinitionGroup(
@@ -79,7 +93,7 @@ object ToolComponent {
       )
       val protocol = Protocol(
         services = spec.ServiceDefinitionGroup(
-          services = Vector(resourceservice, timeservice, decimalservice)
+          services = Vector(resourceservice, webservice, timeservice, decimalservice)
         ),
         handler = ProtocolHandler.default
       )
@@ -90,6 +104,27 @@ object ToolComponent {
         protocol
       )
     }
+  }
+
+  private final class WebReadOperationDefinition(
+    mode: WebReadMode,
+    response: spec.ResponseDefinition
+  ) extends spec.OperationDefinition {
+    val specification: spec.OperationDefinition.Specification =
+      spec.OperationDefinition.Specification(
+        content = BaseContent.Builder(mode.name)
+          .summary(s"${mode.name.capitalize} one policy-admitted static Web resource.")
+          .description("Read an HTTPS URL through the configured ResourceAccess host policy without redirects.")
+          .build(),
+        request = spec.RequestDefinition(parameters = List(_required_property("url"))),
+        response = response
+      )
+
+    def createOperationRequest(request: Request): Consequence[OperationRequest] =
+      _required_string(request, "url")
+        .flatMap(_bounded_resource_reference_c)
+        .flatMap(ResourceReference.parseC)
+        .map(WebReadAction(request, mode, _))
   }
 
   private final class ResourceReadOperationDefinition(
@@ -170,6 +205,15 @@ object ToolComponent {
       ResourceReadActionCall(core, reference)
   }
 
+  private final case class WebReadAction(
+    request: Request,
+    mode: WebReadMode,
+    reference: ResourceReference
+  ) extends QueryAction() {
+    def createCall(core: ActionCall.Core): ActionCall =
+      WebReadActionCall(core, mode, reference)
+  }
+
   private final case class DecimalCalculateAction(
     request: Request,
     operator: DecimalOperator,
@@ -201,6 +245,21 @@ object ToolComponent {
         _ <- exec_from(_resource_size_c(content))
         text <- exec_from(content.textC())
       } yield OperationResponse.RecordResponse(_resource_record(content, text))
+  }
+
+  private final case class WebReadActionCall(
+    core: ActionCall.Core,
+    mode: WebReadMode,
+    reference: ResourceReference
+  ) extends FunctionalActionCall {
+    protected def build_Program: ExecUowM[OperationResponse] =
+      for {
+        admitted <- exec_from(WebTargetAdmission.admitC(reference))
+        content <- exec_from(read_static_web_resource(admitted))
+        _ <- exec_from(_resource_size_c(content))
+        _ <- exec_from(_web_content_type_c(content))
+        text <- if (mode.includeText) exec_from(content.textC()).map(Some(_)) else exec_pure(None)
+      } yield OperationResponse.RecordResponse(_web_record(mode, content, text))
   }
 
   private final case class DecimalCalculateActionCall(
@@ -258,6 +317,39 @@ object ToolComponent {
 
   private def _resource_record(content: ResourceContent, text: String): Record =
     Record.dataAuto(
+      "text" -> text,
+      "byteSize" -> content.byteSize,
+      "scheme" -> content.reference.scheme,
+      "mediaType" -> content.mediaType,
+      "charset" -> content.declaredCharset.getOrElse(StandardCharsets.UTF_8).name
+    )
+
+  private def _web_content_type_c(content: ResourceContent): Consequence[Unit] = {
+    val mediatype = content.mediaType.map(_.split(";", 2).head.trim.toLowerCase(Locale.ROOT))
+    val accepted = mediatype.exists { value =>
+      value.startsWith("text/") ||
+        value == "application/json" ||
+        value == "application/xml" ||
+        value == "application/xhtml+xml"
+    }
+    if (accepted)
+      Consequence.unit
+    else
+      Consequence.argumentFieldPolicyViolation(
+        "response.mediaType",
+        "tool.web.static-content-type",
+        "text/*, application/json, application/xml, or application/xhtml+xml",
+        mediatype.getOrElse("missing")
+      )
+  }
+
+  private def _web_record(
+    mode: WebReadMode,
+    content: ResourceContent,
+    text: Option[String]
+  ): Record =
+    Record.dataAuto(
+      "mode" -> mode.name,
       "text" -> text,
       "byteSize" -> content.byteSize,
       "scheme" -> content.reference.scheme,

@@ -74,7 +74,7 @@ import org.goldenport.cncf.processexecution.{ProcessExecutionAdmission, ProcessE
  *  version Mar. 30, 2026
  *  version Apr. 29, 2026
  *  version May. 25, 2026
- * @version Jul. 20, 2026
+ * @version Jul. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 trait BehaviorFeaturePart { self: Behavior.Core.Holder =>
@@ -98,6 +98,11 @@ trait BehaviorFeaturePart { self: Behavior.Core.Holder =>
     charset: Option[Charset] = None
   ): Consequence[String] =
     execution_context.resources.readText(reference, charset)
+
+  protected final def read_static_web_resource(
+    reference: ResourceReference
+  ): Consequence[ResourceContent] =
+    execution_context.resources.readStaticWeb(reference)
 
   protected final def read_resource_tree(
     reference: ResourceTreeReference,

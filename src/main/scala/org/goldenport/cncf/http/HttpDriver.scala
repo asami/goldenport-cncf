@@ -15,7 +15,7 @@ import org.slf4j.LoggerFactory
  *  version Feb.  7, 2026
  *  version Apr. 29, 2026
  *  version May. 30, 2026
- * @version Jul. 16, 2026
+ * @version Jul. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 trait HttpDriver {
@@ -39,7 +39,7 @@ final class UrlConnectionHttpDriver(
   ): HttpResponse = {
     val conn = _open_connection(_build_url(path), "GET", properties)
     headers.foreach { case (k, v) => conn.setRequestProperty(k, v) }
-    _execute(conn, None)
+    _execute(conn, None, properties)
   }
 
   def post(
@@ -50,7 +50,7 @@ final class UrlConnectionHttpDriver(
   ): HttpResponse = {
     val conn = _open_connection(_build_url(path), "POST", properties)
     headers.foreach { case (k, v) => conn.setRequestProperty(k, v) }
-    _execute(conn, body.map(Bag.text(_, StandardCharsets.UTF_8)))
+    _execute(conn, body.map(Bag.text(_, StandardCharsets.UTF_8)), properties)
   }
 
   override def postBag(
@@ -61,7 +61,7 @@ final class UrlConnectionHttpDriver(
   ): HttpResponse = {
     val conn = _open_connection(_build_url(path), "POST", properties)
     headers.foreach { case (k, v) => conn.setRequestProperty(k, v) }
-    _execute(conn, body)
+    _execute(conn, body, properties)
   }
 
   def put(
@@ -72,7 +72,7 @@ final class UrlConnectionHttpDriver(
   ): HttpResponse = {
     val conn = _open_connection(_build_url(path), "PUT", properties)
     headers.foreach { case (k, v) => conn.setRequestProperty(k, v) }
-    _execute(conn, body.map(Bag.text(_, StandardCharsets.UTF_8)))
+    _execute(conn, body.map(Bag.text(_, StandardCharsets.UTF_8)), properties)
   }
 
   private val _log = LoggerFactory.getLogger(classOf[UrlConnectionHttpDriver])
@@ -82,6 +82,11 @@ final class UrlConnectionHttpDriver(
     method: String,
     properties: Vector[Property]
   ): HttpURLConnection = {
+    if (
+      _public_network_only(properties) &&
+      !Option(url.getHost).exists(PublicNetworkAdmission.admitHostC(_).isSuccess)
+    )
+      throw new java.io.IOException("HTTP target does not satisfy public-network policy")
     val conn = url.openConnection().asInstanceOf[HttpURLConnection]
     conn.setRequestMethod(method)
     conn.setConnectTimeout(_connect_timeout_ms(properties))
@@ -114,6 +119,11 @@ final class UrlConnectionHttpDriver(
     _property_string(properties, Vector("http.follow-redirects"))
       .flatMap(_.toBooleanOption)
       .getOrElse(true)
+
+  private def _public_network_only(properties: Vector[Property]): Boolean =
+    _property_string(properties, Vector("http.public-network-only"))
+      .flatMap(_.toBooleanOption)
+      .getOrElse(false)
 
   private def _timeout_ms(
     properties: Vector[Property],
@@ -154,38 +164,42 @@ final class UrlConnectionHttpDriver(
 
   private def _execute(
     conn: HttpURLConnection,
-    body: Option[Bag]
+    body: Option[Bag],
+    properties: Vector[Property]
   ): HttpResponse = {
-    body.foreach { b =>
-      val in = b.openInputStream()
-      val out = conn.getOutputStream
-      try {
-        val buffer = new Array[Byte](8192)
-        var read = in.read(buffer)
-        while (read != -1) {
-          out.write(buffer, 0, read)
-          read = in.read(buffer)
+    try {
+      body.foreach { b =>
+        val in = b.openInputStream()
+        val out = conn.getOutputStream
+        try {
+          val buffer = new Array[Byte](8192)
+          var read = in.read(buffer)
+          while (read != -1) {
+            out.write(buffer, 0, read)
+            read = in.read(buffer)
+          }
+          out.flush()
+        } finally {
+          in.close()
+          out.close()
         }
-        out.flush()
-      } finally {
-        in.close()
-        out.close()
       }
+      val code = conn.getResponseCode
+      val stream = _response_stream(conn)
+      val contenttype = _content_type(conn.getContentType)
+      val status = _status(code)
+      val bytes = _read_bytes(stream, _max_response_bytes(properties))
+      val response =
+        if (contenttype.mimeType.isText) {
+          val charset = contenttype.charset.getOrElse(StandardCharsets.UTF_8)
+          HttpResponse.Text(status, contenttype, Bag.text(new String(bytes, charset), charset))
+        } else {
+          HttpResponse.Binary(status, contenttype, Bag.binary(bytes))
+        }
+      response.withHeader(_response_header(conn))
+    } finally {
+      conn.disconnect()
     }
-    val code = conn.getResponseCode
-    val stream = _response_stream(conn)
-    val contentType = _content_type(conn.getContentType)
-    val status = _status(code)
-    val bytes = _read_bytes(stream)
-    val response =
-      if (contentType.mimeType.isText) {
-        val charset = contentType.charset.getOrElse(StandardCharsets.UTF_8)
-        HttpResponse.Text(status, contentType, Bag.text(new String(bytes, charset), charset))
-      } else {
-        HttpResponse.Binary(status, contentType, Bag.binary(bytes))
-      }
-    response
-      .withHeader(_response_header(conn))
   }
 
   private def _response_header(
@@ -211,22 +225,34 @@ final class UrlConnectionHttpDriver(
     stream: InputStream,
     charset: Charset
   ): String = {
-    new String(_read_bytes(stream), charset)
+    new String(_read_bytes(stream, None), charset)
   }
 
   private def _read_bytes(
-    stream: InputStream
+    stream: InputStream,
+    maxbytes: Option[Long]
   ): Array[Byte] = {
     val buffer = new ByteArrayOutputStream
     val bytes = new Array[Byte](8192)
     var read = stream.read(bytes)
     while (read != -1) {
+      maxbytes.foreach { limit =>
+        if (buffer.size.toLong + read.toLong > limit) {
+          stream.close()
+          throw new java.io.IOException("HTTP response exceeds configured byte limit")
+        }
+      }
       buffer.write(bytes, 0, read)
       read = stream.read(bytes)
     }
     stream.close()
     buffer.toByteArray
   }
+
+  private def _max_response_bytes(properties: Vector[Property]): Option[Long] =
+    _property_string(properties, Vector("http.max-response-bytes"))
+      .flatMap(_.toLongOption)
+      .filter(_ >= 0)
 
   private def _content_type(
     value: String

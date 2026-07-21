@@ -7,7 +7,7 @@ import org.goldenport.Consequence
 
 /*
  * @since   Jul. 16, 2026
- * @version Jul. 16, 2026
+ * @version Jul. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ResourceContent(
@@ -35,6 +35,9 @@ final case class ResourceContent(
 trait ResourceAccess {
   def read(reference: ResourceReference): Consequence[ResourceContent]
 
+  def readStaticWeb(reference: ResourceReference): Consequence[ResourceContent] =
+    Consequence.resourceUnsupported("static Web access is not configured")
+
   /**
    * Returns only provider-selection information safe for runtime diagnostics.
    * It must not contain a URL/NSS, configured root, or resource content.
@@ -56,6 +59,11 @@ object ResourceAccess {
     def read(reference: ResourceReference): Consequence[ResourceContent] =
       Consequence.serviceUnavailable(
         s"resource access is not configured for ${reference.scheme} references"
+      )
+
+    override def readStaticWeb(reference: ResourceReference): Consequence[ResourceContent] =
+      Consequence.serviceUnavailable(
+        s"static Web access is not configured for ${reference.scheme} references"
       )
   }
 
@@ -120,6 +128,13 @@ object ResourceAccess {
           case _: ResourceReference.Url => urlaccess.read(reference)
           case urn: ResourceReference.Urn if urn.nid == "textus" => textusaccess.read(reference)
           case _: ResourceReference.Urn => urnaccess.read(reference)
+        }
+
+      override def readStaticWeb(reference: ResourceReference): Consequence[ResourceContent] =
+        reference match {
+          case _: ResourceReference.Url => urlaccess.readStaticWeb(reference)
+          case _: ResourceReference.Urn =>
+            Consequence.resourceUnsupported("static Web access requires an HTTPS URL")
         }
 
       override def providerMetadata(reference: ResourceReference): ResourceProviderMetadata =

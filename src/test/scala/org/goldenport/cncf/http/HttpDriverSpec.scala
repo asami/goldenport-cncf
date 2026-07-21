@@ -12,7 +12,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr. 25, 2026
- * @version Jul. 16, 2026
+ * @version Jul. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 final class HttpDriverSpec
@@ -147,6 +147,51 @@ final class HttpDriverSpec
         targetcalls shouldBe 0
       } finally {
         server.stop(0)
+      }
+    }
+
+    "stop materializing a response at the configured byte ceiling" in {
+      Given("an HTTP server whose body is larger than the admitted response budget")
+      val server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0)
+      val payload = "oversized".getBytes(StandardCharsets.UTF_8)
+      server.createContext("/large", new HttpHandler {
+        def handle(exchange: HttpExchange): Unit = {
+          exchange.getResponseHeaders.add("Content-Type", "text/plain; charset=utf-8")
+          exchange.sendResponseHeaders(200, payload.length)
+          exchange.getResponseBody.write(payload)
+          exchange.close()
+        }
+      })
+      server.start()
+
+      try {
+        When("the driver reads with a smaller explicit maximum")
+        val port = server.getAddress.getPort
+        val driver = new UrlConnectionHttpDriver(s"http://127.0.0.1:${port}")
+
+        Then("the transport aborts before returning a partially accepted response")
+        an[java.io.IOException] shouldBe thrownBy {
+          driver.get(
+            "/large",
+            properties = Vector(Property("http.max-response-bytes", "4", None))
+          )
+        }
+      } finally {
+        server.stop(0)
+      }
+    }
+
+    "recheck public-network policy at the transport boundary" in {
+      Given("a loopback endpoint and a runtime-owned public-network-only property")
+      val driver = new UrlConnectionHttpDriver("http://127.0.0.1:9")
+
+      When("the request reaches URL connection admission")
+      Then("the private target is rejected before a connection is opened")
+      an[java.io.IOException] shouldBe thrownBy {
+        driver.get(
+          "/internal",
+          properties = Vector(Property("http.public-network-only", "true", None))
+        )
       }
     }
   }

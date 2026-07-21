@@ -334,6 +334,12 @@ The first pure baseline uses component `tool`:
   projection is text-only and bounded to 1 MiB. It returns content metadata
   safe for a tool consumer without exposing provider roots, credentials, or
   provider-selection details.
+- `tool.web.fetch` and `tool.web.head` accept static HTTPS targets only. They
+  reject private-network resolution before the configured ResourceAccess host
+  policy is invoked, disable redirects, apply fixed transport timeout and
+  response-size ceilings, and accept only static textual media types. `head`
+  deliberately reuses the admitted GET-backed read path and omits text from
+  its projection, matching CNCF's correctness-first HEAD policy.
 - `tool.time.now` reads the execution-context clock. An optional timezone is
   either `UTC` or a bounded IANA region identifier; omission uses the runtime
   timezone. The result contains the same instant rendered in the selected
@@ -345,7 +351,7 @@ The first pure baseline uses component `tool`:
 
 Decimal calculation is deliberately not an expression language. Division,
 rounding, functions, variables, reflection, arbitrary code, and script
-evaluation are outside this contract. All three services are MCP-ready because
+evaluation are outside this contract. The builtin services are MCP-ready because
 the same normal Operations are safe to publish; there is no separate MCP-only
 implementation.
 

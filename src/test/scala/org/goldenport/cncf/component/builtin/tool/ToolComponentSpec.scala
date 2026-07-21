@@ -4,7 +4,7 @@ import java.time.{Clock, Instant, ZoneOffset}
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.mcp.McpToolCatalog
-import org.goldenport.cncf.resource.{InMemoryUrnResourceProvider, ResourceAccess, ResourceAccessTestProfile, ResourceContent, ResourceReference}
+import org.goldenport.cncf.resource.{InMemoryUrnResourceProvider, ResourceAccess, ResourceAccessTestProfile, ResourceContent, ResourceReference, ResourceUrlPolicy, StaticWebUrlResourceProvider}
 import org.goldenport.cncf.subsystem.{DefaultSubsystemFactory, Subsystem}
 import org.goldenport.protocol.{Property, Request}
 import org.goldenport.protocol.operation.OperationResponse
@@ -26,6 +26,8 @@ final class ToolComponentSpec extends AnyWordSpec with Matchers with GivenWhenTh
     afterWord("in spec:mcp-client-boundary, tool:tool.decimal.calculate, phase:45, stage:MC-07")
   private val _resource_metadata =
     afterWord("in spec:mcp-client-boundary, tool:tool.resource.read, phase:45, stage:MC-07")
+  private val _web_metadata =
+    afterWord("in spec:mcp-client-boundary, tools:tool.web.fetch/tool.web.head, phase:45, stage:MC-07")
 
   "Builtin resource Operation" should {
     "read bounded text only through the execution-context ResourceAccess" must _resource_metadata {
@@ -136,6 +138,98 @@ final class ToolComponentSpec extends AnyWordSpec with Matchers with GivenWhenTh
     }
   }
 
+  "Builtin static Web Operations" should {
+    "fetch text and project HEAD metadata through one admitted read path" must _web_metadata {
+      "when a public HTTPS target is explicitly configured" in {
+        Given("a public literal target and deterministic configured HTTPS provider")
+        val subsystem = DefaultSubsystemFactory.default(Some("command"))
+        val access = ResourceAccess.url(
+          ResourceUrlPolicy(httpsHosts = Vector("8.8.8.8")),
+          Vector(new StaticWebUrlResourceProvider {
+            val scheme = "https"
+            def read(reference: ResourceReference.Url): Consequence[ResourceContent] =
+              readStaticWeb(reference)
+            def readStaticWeb(reference: ResourceReference.Url): Consequence[ResourceContent] =
+              Consequence.success(ResourceContent(
+                reference,
+                "static web content".getBytes(java.nio.charset.StandardCharsets.UTF_8).toVector,
+                mediaType = Some("text/plain"),
+                declaredCharset = Some(java.nio.charset.StandardCharsets.UTF_8)
+              ))
+          })
+        )
+        given ExecutionContext = ExecutionContext.withResourceAccess(ExecutionContext.create(), access)
+
+        When("fetch and GET-backed head execute through normal Query operations")
+        val fetch = subsystem.executeQueryOnlyWithMetadata(
+          _request("web", "fetch", "url" -> "https://8.8.8.8/article")
+        ).map(_.response).flatMap(_record_response_c).toOption.get
+        val head = subsystem.executeQueryOnlyWithMetadata(
+          _request("web", "head", "url" -> "https://8.8.8.8/article")
+        ).map(_.response).flatMap(_record_response_c).toOption.get
+
+        Then("fetch contains text while head exposes only safe metadata")
+        fetch.getString("text") shouldBe Some("static web content")
+        fetch.getString("mode") shouldBe Some("fetch")
+        head.getString("text") shouldBe None
+        head.getString("mode") shouldBe Some("head")
+        head.getString("mediaType") shouldBe Some("text/plain")
+      }
+    }
+
+    "reject private-network targets before ResourceAccess" must _web_metadata {
+      "when loopback and private literal targets are requested" in {
+        Given("a provider that would reveal any request crossing admission")
+        val subsystem = DefaultSubsystemFactory.default(Some("command"))
+        var reads = 0
+        val access = new ResourceAccess {
+          def read(reference: ResourceReference): Consequence[ResourceContent] = {
+            reads += 1
+            Consequence.success(ResourceContent(reference, Vector.empty, Some("text/plain")))
+          }
+        }
+        given ExecutionContext = ExecutionContext.withResourceAccess(ExecutionContext.create(), access)
+
+        When("the targets are dispatched through web.fetch")
+        val results = Vector("127.0.0.1", "10.0.0.1", "192.168.1.1").map { host =>
+          subsystem.executeQueryOnlyWithMetadata(
+            _request("web", "fetch", "url" -> s"https://${host}/internal")
+          )
+        }
+
+        Then("all fail before the provider boundary")
+        results.forall(!_.isSuccess) shouldBe true
+        reads shouldBe 0
+      }
+    }
+
+    "reject non-textual content before projecting a Web result" must _web_metadata {
+      "when an admitted provider returns image content" in {
+        Given("a public target whose configured provider returns a binary media type")
+        val subsystem = DefaultSubsystemFactory.default(Some("command"))
+        val access = ResourceAccess.url(
+          ResourceUrlPolicy(httpsHosts = Vector("8.8.8.8")),
+          Vector(new StaticWebUrlResourceProvider {
+            val scheme = "https"
+            def read(reference: ResourceReference.Url): Consequence[ResourceContent] =
+              readStaticWeb(reference)
+            def readStaticWeb(reference: ResourceReference.Url): Consequence[ResourceContent] =
+              Consequence.success(ResourceContent(reference, Vector(1, 2, 3), Some("image/png")))
+          })
+        )
+        given ExecutionContext = ExecutionContext.withResourceAccess(ExecutionContext.create(), access)
+
+        When("web.fetch validates the provider result")
+        val result = subsystem.executeQueryOnlyWithMetadata(
+          _request("web", "fetch", "url" -> "https://8.8.8.8/image.png")
+        )
+
+        Then("the media policy is a structured failure and no binary data is projected")
+        result.isSuccess shouldBe false
+      }
+    }
+  }
+
   "Builtin decimal Operation" should {
     "calculate exact bounded decimal values without floating-point conversion" must _decimal_metadata {
       "when bounded add, subtract, and multiply inputs are generated" in {
@@ -195,7 +289,7 @@ final class ToolComponentSpec extends AnyWordSpec with Matchers with GivenWhenTh
   "Builtin tool MCP projection" should {
     "publish the same normal Operations with typed string inputs" must _decimal_metadata {
       "when the default subsystem MCP catalog is projected" in {
-        Given("the builtin tool component with MCP-ready resource, time, and decimal services")
+        Given("the builtin tool component with MCP-ready resource, Web, time, and decimal services")
         val subsystem = DefaultSubsystemFactory.default(Some("server"))
 
         When("the existing MCP server catalog projects normal Operations")
@@ -203,11 +297,15 @@ final class ToolComponentSpec extends AnyWordSpec with Matchers with GivenWhenTh
         val time = tools.find(_.name == "tool.time.now")
         val decimal = tools.find(_.name == "tool.decimal.calculate")
         val resource = tools.find(_.name == "tool.resource.read")
+        val webfetch = tools.find(_.name == "tool.web.fetch")
+        val webhead = tools.find(_.name == "tool.web.head")
 
         Then("all identities are present without a separate MCP implementation")
         time should not be empty
         decimal should not be empty
         resource should not be empty
+        webfetch should not be empty
+        webhead should not be empty
         resource.get.inputSchema.hcursor.downField("properties")
           .downField("reference").get[String]("type") shouldBe Right("string")
         val properties = decimal.get.inputSchema.hcursor.downField("properties")

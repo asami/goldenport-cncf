@@ -100,8 +100,10 @@ execution-context clock instant and applies a bounded IANA timezone contract.
 multiply without expression or script evaluation. Both Operations use
 FunctionalActionCall/UoW and are published by the existing MCP server catalog.
 `tool.resource.read` now adds bounded text reads through the canonical
-execution-context `ResourceAccess` boundary. Static Web and provider-neutral
-Web-search work remains open.
+execution-context `ResourceAccess` boundary. `tool.web.fetch` and
+`tool.web.head` add static HTTPS reads with public-network, host, redirect,
+timeout, content-type, and byte-size admission. Provider-neutral Web-search
+work remains open.
 
 ## Acceptance
 

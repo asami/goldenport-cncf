@@ -8,7 +8,7 @@ import org.goldenport.Consequence
 
 /*
  * @since   Jul. 16, 2026
- * @version Jul. 16, 2026
+ * @version Jul. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ResourceUrlPolicy(
@@ -83,6 +83,10 @@ trait UrlResourceProvider {
   def read(reference: ResourceReference.Url): Consequence[ResourceContent]
 }
 
+trait StaticWebUrlResourceProvider extends UrlResourceProvider {
+  def readStaticWeb(reference: ResourceReference.Url): Consequence[ResourceContent]
+}
+
 final class FileUrlResourceProvider(
   policy: ResourceUrlPolicy
 ) extends UrlResourceProvider {
@@ -133,20 +137,38 @@ final class FileUrlResourceProvider(
 final class HttpsUrlResourceProvider(
   policy: ResourceUrlPolicy,
   httpdriver: org.goldenport.cncf.http.HttpDriver
-) extends UrlResourceProvider {
+) extends StaticWebUrlResourceProvider {
   val scheme: String = "https"
 
   def read(reference: ResourceReference.Url): Consequence[ResourceContent] =
     _authorize_c(reference.uri).flatMap { _ =>
-      _response_c(reference).flatMap { response =>
-        if (response.isSuccess)
-          _content_c(reference, response)
-        else if (response.isNotFound)
-          Consequence.resourceNotFound("configured HTTPS resource is not available")
-        else
-          Consequence.resourceInvalid(s"configured HTTPS resource returned HTTP ${response.code}")
+      _response_c(reference, staticweb = false).flatMap { response =>
+        _content_response_c(reference, response, requirecontenttype = false)
       }
     }
+
+  def readStaticWeb(reference: ResourceReference.Url): Consequence[ResourceContent] =
+    WebTargetAdmission.admitC(reference).flatMap { admitted =>
+      _authorize_c(admitted.uri).flatMap { _ =>
+        _response_c(admitted, staticweb = true).flatMap { response =>
+          _content_response_c(admitted, response, requirecontenttype = true)
+        }
+      }
+    }
+
+  private def _content_response_c(
+    reference: ResourceReference.Url,
+    response: org.goldenport.http.HttpResponse,
+    requirecontenttype: Boolean
+  ): Consequence[ResourceContent] =
+    if (response.isSuccess && requirecontenttype && response.headerValue("Content-Type").isEmpty)
+      Consequence.resourceInvalid("static Web resource does not declare a Content-Type")
+    else if (response.isSuccess)
+      _content_c(reference, response)
+    else if (response.isNotFound)
+      Consequence.resourceNotFound("configured HTTPS resource is not available")
+    else
+      Consequence.resourceInvalid(s"configured HTTPS resource returned HTTP ${response.code}")
 
   private def _authorize_c(uri: URI): Consequence[Unit] =
     Option(uri.getHost).filter(policy.permitsHttpsHost) match {
@@ -156,17 +178,33 @@ final class HttpsUrlResourceProvider(
     }
 
   private def _response_c(
-    reference: ResourceReference.Url
+    reference: ResourceReference.Url,
+    staticweb: Boolean
   ): Consequence[org.goldenport.http.HttpResponse] =
     try {
       Consequence.success(httpdriver.get(
         reference.print,
-        properties = Vector(org.goldenport.protocol.Property("http.follow-redirects", "false", None))
+        properties = _request_properties(staticweb)
       ))
     } catch {
       case NonFatal(_) =>
         Consequence.resourceInvalid("configured HTTPS resource cannot be read")
     }
+
+  private def _request_properties(staticweb: Boolean): Vector[org.goldenport.protocol.Property] = {
+    val base = Vector(
+      org.goldenport.protocol.Property("http.follow-redirects", "false", None)
+    )
+    if (staticweb)
+      base ++ Vector(
+        org.goldenport.protocol.Property("http.connect-timeout-ms", "5000", None),
+        org.goldenport.protocol.Property("http.read-timeout-ms", "5000", None),
+        org.goldenport.protocol.Property("http.max-response-bytes", "1048576", None),
+        org.goldenport.protocol.Property("http.public-network-only", "true", None)
+      )
+    else
+      base
+  }
 
   private def _content_c(
     reference: ResourceReference.Url,
@@ -205,6 +243,25 @@ private final class UrlResourceAccess(
         }
       case _: ResourceReference.Urn =>
         Consequence.resourceUnsupported("URN resource providers are not configured")
+    }
+
+  override def readStaticWeb(reference: ResourceReference): Consequence[ResourceContent] =
+    reference match {
+      case url: ResourceReference.Url if url.scheme == "https" =>
+        _authorize_c(url).flatMap { _ =>
+          _providers.get("https") match {
+            case Some(provider: StaticWebUrlResourceProvider) => provider.readStaticWeb(url)
+            case Some(_) =>
+              Consequence.resourceUnsupported(
+                "configured HTTPS provider does not support static Web admission"
+              )
+            case None => _unconfigured_scheme(url.scheme)
+          }
+        }
+      case _: ResourceReference.Url =>
+        Consequence.resourceUnsupported("static Web access requires HTTPS")
+      case _: ResourceReference.Urn =>
+        Consequence.resourceUnsupported("static Web access requires an HTTPS URL")
     }
 
   override def providerMetadata(reference: ResourceReference): ResourceProviderMetadata =

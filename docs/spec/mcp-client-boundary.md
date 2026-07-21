@@ -275,6 +275,23 @@ MUST contain `text`, `byteSize`, `scheme`, `mediaType`, and `charset`. It MUST
 NOT expose provider roots, provider identity, credentials, raw bytes, or an
 independent filesystem/network access path.
 
+`tool.web.fetch` and `tool.web.head` MUST accept one required string property
+`url`. The URL MUST pass the common resource-reference grammar and MUST use
+HTTPS with no user-info, fragment, or non-default port. Every resolved address
+MUST be public: any-local, loopback, link-local, site-local/private,
+multicast, and IPv6 unique-local targets MUST fail before ResourceAccess. The
+configured ResourceAccess host allowlist remains independently authoritative.
+
+Web reads MUST disable redirects, use a 5-second connect timeout and 5-second
+read timeout, and enforce a 1,048,576-byte transport and projection ceiling.
+Only `text/*`, `application/json`, `application/xml`, and
+`application/xhtml+xml` are admitted. Redirect, timeout, resolution,
+content-type, and byte-limit outcomes MUST remain structured failures.
+`tool.web.fetch` MUST return bounded decoded text and safe content metadata.
+`tool.web.head` MUST use the same admitted GET-backed path but MUST omit the
+text value. Neither Operation may accept headers, credentials, method, redirect
+policy, timeout, or provider-selection parameters from its caller.
+
 `tool.time.now` MUST read `ExecutionContext.clock`. Its optional `timezone`
 property MUST be no more than 128 characters and MUST be either `UTC` or a
 registered IANA region identifier. If omitted, the Operation MUST use the
@@ -294,7 +311,7 @@ rounding are outside the initial contract.
 
 All builtin tool Operations MUST be eligible for the existing MCP server
 projection, including the identities `tool.resource.read`, `tool.time.now`,
-and `tool.decimal.calculate`. MCP publication
+`tool.decimal.calculate`, `tool.web.fetch`, and `tool.web.head`. MCP publication
 MUST execute the same Operation implementation as CLI, REST, and internal
 subsystem dispatch.
 

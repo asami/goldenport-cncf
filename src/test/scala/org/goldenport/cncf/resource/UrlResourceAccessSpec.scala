@@ -4,8 +4,10 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import org.goldenport.bag.Bag
 import org.goldenport.cncf.http.{FakeHttpDriver, HttpDriver}
+import org.goldenport.datatype.ContentType
 import org.goldenport.http.{HttpResponse, HttpStatus}
 import org.goldenport.protocol.Property
+import org.goldenport.record.Record
 import org.scalacheck.{Gen, Prop, Test}
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
@@ -15,7 +17,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * Executable specification for Phase 33 RR-02 URL provider policy.
  *
  * @since   Jul. 16, 2026
- * @version Jul. 16, 2026
+ * @version Jul. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UrlResourceAccessSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -90,15 +92,16 @@ final class UrlResourceAccessSpec extends AnyWordSpec with Matchers with GivenWh
       result.isFaillure shouldBe true
     }
 
-    "disable automatic redirects before invoking the HTTPS transport" in {
-      Given("a configured host and a driver that records request properties")
+    "apply fixed static Web policy before invoking the HTTPS transport" in {
+      Given("a configured static Web host and a driver that records request properties")
       var observed = Vector.empty[Property]
       val access = ResourceAccess.url(
-        ResourceUrlPolicy(httpsHosts = Vector("catalog.example.test")),
+        ResourceUrlPolicy(httpsHosts = Vector("8.8.8.8")),
         new HttpDriver {
           def get(path: String, headers: Map[String, String], properties: Vector[Property]): HttpResponse = {
             observed = properties
             HttpResponse.text(HttpStatus.Ok, "catalog-content")
+              .withHeader(Record.dataAuto("Content-Type" -> "text/plain"))
           }
 
           def post(path: String, body: Option[String], headers: Map[String, String], properties: Vector[Property]): HttpResponse =
@@ -111,15 +114,21 @@ final class UrlResourceAccessSpec extends AnyWordSpec with Matchers with GivenWh
             throw new UnsupportedOperationException("unused")
         }
       )
-      val reference = ResourceReference.parseC("https://catalog.example.test/items/1").toOption.get
+      val reference = ResourceReference.parseC("https://8.8.8.8/items/1").toOption.get
 
-      When("the resource DSL reads the configured reference")
-      val result = access.readText(reference)
+      When("the static Web resource DSL reads the configured reference")
+      val result = access.readStaticWeb(reference).flatMap(_.textC())
 
-      Then("the transport receives the no-redirect policy")
+      Then("the transport receives no-redirect timeout byte and network policy")
       result.toOption shouldBe Some("catalog-content")
       observed.map(property => property.name -> property.value.toString) should contain (
         "http.follow-redirects" -> "false"
+      )
+      observed.map(property => property.name -> property.value.toString) should contain allOf (
+        "http.connect-timeout-ms" -> "5000",
+        "http.read-timeout-ms" -> "5000",
+        "http.max-response-bytes" -> "1048576",
+        "http.public-network-only" -> "true"
       )
     }
 
@@ -137,6 +146,55 @@ final class UrlResourceAccessSpec extends AnyWordSpec with Matchers with GivenWh
 
       Then("each request returns a structured policy failure")
       results.forall(_.isFaillure) shouldBe true
+    }
+
+    "deny static Web reads through a provider without the static admission capability" in {
+      Given("an allowlisted HTTPS host and a generic URL provider")
+      var reads = 0
+      val access = ResourceAccess.url(
+        ResourceUrlPolicy(httpsHosts = Vector("8.8.8.8")),
+        Vector(new UrlResourceProvider {
+          val scheme = "https"
+          def read(reference: ResourceReference.Url): org.goldenport.Consequence[ResourceContent] = {
+            reads += 1
+            org.goldenport.Consequence.success(ResourceContent(reference, Vector.empty))
+          }
+        })
+      )
+      val reference = ResourceReference.parseC("https://8.8.8.8/static").toOption.get
+
+      When("the static Web boundary requests the resource")
+      val result = access.readStaticWeb(reference)
+
+      Then("the generic provider cannot bypass transport-level static admission")
+      result.isSuccess shouldBe false
+      reads shouldBe 0
+    }
+
+    "reject static Web responses without an explicit content type" in {
+      Given("an admitted static Web target whose transport response omits Content-Type")
+      val access = ResourceAccess.url(
+        ResourceUrlPolicy(httpsHosts = Vector("8.8.8.8")),
+        new HttpDriver {
+          def get(path: String, headers: Map[String, String], properties: Vector[Property]): HttpResponse =
+            HttpResponse.Text(
+              HttpStatus.Ok,
+              ContentType.TEXT_PLAIN,
+              Bag.text("undeclared-content")
+            )
+          def post(path: String, body: Option[String], headers: Map[String, String], properties: Vector[Property]): HttpResponse =
+            throw new UnsupportedOperationException("unused")
+          def put(path: String, body: Option[String], headers: Map[String, String], properties: Vector[Property]): HttpResponse =
+            throw new UnsupportedOperationException("unused")
+        }
+      )
+      val reference = ResourceReference.parseC("https://8.8.8.8/undeclared").toOption.get
+
+      When("the static Web read applies response admission")
+      val result = access.readStaticWeb(reference)
+
+      Then("the transport default cannot masquerade as a declared media type")
+      result.isSuccess shouldBe false
     }
 
     "match HTTPS policy host names exactly and case-insensitively" in {
