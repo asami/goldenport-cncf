@@ -265,6 +265,16 @@ Builtin local tools MUST execute as normal CNCF Operations through
 ActionCall/UoW. They MUST NOT call the local MCP HTTP endpoint, bypass normal
 operation authorization, or define a parallel error or observability path.
 
+`tool.resource.read` MUST accept one required string property `reference`,
+MUST limit it to 2,048 characters, and MUST parse it through
+`ResourceReference`. It MUST read only through the
+`ResourceAccess` bound to the admitted execution context. The initial contract
+is text-only: content MUST decode strictly with its declared charset or UTF-8,
+and content larger than 1,048,576 bytes MUST fail structurally. The response
+MUST contain `text`, `byteSize`, `scheme`, `mediaType`, and `charset`. It MUST
+NOT expose provider roots, provider identity, credentials, raw bytes, or an
+independent filesystem/network access path.
+
 `tool.time.now` MUST read `ExecutionContext.clock`. Its optional `timezone`
 property MUST be no more than 128 characters and MUST be either `UTC` or a
 registered IANA region identifier. If omitted, the Operation MUST use the
@@ -282,8 +292,9 @@ response MUST contain canonical plain decimal strings for `left`, `right`, and
 evaluate expressions, functions, scripts, or host-language code. Division and
 rounding are outside the initial contract.
 
-Both Operations MUST be eligible for the existing MCP server projection under
-the identities `tool.time.now` and `tool.decimal.calculate`. MCP publication
+All builtin tool Operations MUST be eligible for the existing MCP server
+projection, including the identities `tool.resource.read`, `tool.time.now`,
+and `tool.decimal.calculate`. MCP publication
 MUST execute the same Operation implementation as CLI, REST, and internal
 subsystem dispatch.
 

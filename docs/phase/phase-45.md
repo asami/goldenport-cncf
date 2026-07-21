@@ -99,7 +99,9 @@ execution-context clock instant and applies a bounded IANA timezone contract.
 `tool.decimal.calculate` performs bounded exact-decimal add, subtract, and
 multiply without expression or script evaluation. Both Operations use
 FunctionalActionCall/UoW and are published by the existing MCP server catalog.
-Resource, static Web, and provider-neutral Web-search work remains open.
+`tool.resource.read` now adds bounded text reads through the canonical
+execution-context `ResourceAccess` boundary. Static Web and provider-neutral
+Web-search work remains open.
 
 ## Acceptance
 

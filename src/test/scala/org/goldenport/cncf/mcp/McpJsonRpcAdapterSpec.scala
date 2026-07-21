@@ -53,6 +53,7 @@ final class McpJsonRpcAdapterSpec extends AnyWordSpec with Matchers with GivenWh
       tools should not be empty
       val toolnames = tools.map(_.hcursor.get[String]("name").toOption.getOrElse(""))
       toolnames should contain ("admin.system.ping")
+      toolnames should contain ("tool.resource.read")
       toolnames should contain ("tool.time.now")
       toolnames should contain ("tool.decimal.calculate")
       all(toolnames.map(name => name.startsWith("admin.system.") || name.startsWith("tool."))) shouldBe true

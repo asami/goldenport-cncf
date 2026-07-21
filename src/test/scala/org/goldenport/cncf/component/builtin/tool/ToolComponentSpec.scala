@@ -4,6 +4,7 @@ import java.time.{Clock, Instant, ZoneOffset}
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.mcp.McpToolCatalog
+import org.goldenport.cncf.resource.{InMemoryUrnResourceProvider, ResourceAccess, ResourceAccessTestProfile, ResourceContent, ResourceReference}
 import org.goldenport.cncf.subsystem.{DefaultSubsystemFactory, Subsystem}
 import org.goldenport.protocol.{Property, Request}
 import org.goldenport.protocol.operation.OperationResponse
@@ -23,6 +24,78 @@ final class ToolComponentSpec extends AnyWordSpec with Matchers with GivenWhenTh
     afterWord("in spec:mcp-client-boundary, tool:tool.time.now, phase:45, stage:MC-07")
   private val _decimal_metadata =
     afterWord("in spec:mcp-client-boundary, tool:tool.decimal.calculate, phase:45, stage:MC-07")
+  private val _resource_metadata =
+    afterWord("in spec:mcp-client-boundary, tool:tool.resource.read, phase:45, stage:MC-07")
+
+  "Builtin resource Operation" should {
+    "read bounded text only through the execution-context ResourceAccess" must _resource_metadata {
+      "when an admitted logical URN is supplied" in {
+        Given("a runtime with one explicit in-memory URN provider")
+        val subsystem = DefaultSubsystemFactory.default(Some("command"))
+        val profile = ResourceAccessTestProfile(
+          urnProviders = Vector(new InMemoryUrnResourceProvider(
+            "example",
+            Map("article:1" -> "bounded semantic content")
+          ))
+        )
+        given ExecutionContext = ExecutionContext.withResourceAccessTestProfile(
+          ExecutionContext.create(),
+          profile
+        )
+
+        When("tool.resource.read resolves the logical reference")
+        val record = subsystem.executeQueryOnlyWithMetadata(
+          _request("resource", "read", "reference" -> "urn:example:article:1")
+        ).map(_.response).flatMap(_record_response_c).toOption.get
+
+        Then("the response exposes text and safe content metadata without provider identity")
+        record.getString("text") shouldBe Some("bounded semantic content")
+        record.getString("scheme") shouldBe Some("urn")
+        record.getLong("byteSize") shouldBe Some(24L)
+        record.asMap.keySet should not contain "provider"
+        record.asMap.keySet should not contain "reference"
+      }
+    }
+
+    "preserve reference parsing and provider admission as structured failures" must _resource_metadata {
+      "when a relative reference and an unconfigured absolute reference are supplied" in {
+        Given("the normal runtime without an arbitrary resource provider")
+        val subsystem = DefaultSubsystemFactory.default(Some("command"))
+
+        When("both values cross the normal Operation boundary")
+        val relative = subsystem.executeOperationResponse(
+          _request("resource", "read", "reference" -> "relative/file.txt")
+        )
+        val unconfigured = subsystem.executeOperationResponse(
+          _request("resource", "read", "reference" -> "urn:example:missing")
+        )
+
+        Then("neither request creates an independent filesystem or network path")
+        relative.isSuccess shouldBe false
+        unconfigured.isSuccess shouldBe false
+      }
+    }
+
+    "reject content above the builtin tool projection limit" must _resource_metadata {
+      "when an admitted provider returns more than one MiB" in {
+        Given("a deterministic provider whose logical resource exceeds the tool response budget")
+        val subsystem = DefaultSubsystemFactory.default(Some("command"))
+        val access = new ResourceAccess {
+          def read(reference: ResourceReference): Consequence[ResourceContent] =
+            Consequence.success(ResourceContent(reference, Vector.fill(1024 * 1024 + 1)('a'.toByte)))
+        }
+        given ExecutionContext = ExecutionContext.withResourceAccess(ExecutionContext.create(), access)
+
+        When("the resource crosses the builtin Operation projection boundary")
+        val result = subsystem.executeQueryOnlyWithMetadata(
+          _request("resource", "read", "reference" -> "urn:example:oversized")
+        )
+
+        Then("the normal structured limit failure is returned without text projection")
+        result.isSuccess shouldBe false
+      }
+    }
+  }
 
   "Builtin time Operation" should {
     "read one instant from the controlled runtime clock" must _time_metadata {
@@ -122,17 +195,21 @@ final class ToolComponentSpec extends AnyWordSpec with Matchers with GivenWhenTh
   "Builtin tool MCP projection" should {
     "publish the same normal Operations with typed string inputs" must _decimal_metadata {
       "when the default subsystem MCP catalog is projected" in {
-        Given("the builtin tool component with MCP-ready time and decimal services")
+        Given("the builtin tool component with MCP-ready resource, time, and decimal services")
         val subsystem = DefaultSubsystemFactory.default(Some("server"))
 
         When("the existing MCP server catalog projects normal Operations")
         val tools = McpToolCatalog.toolsForSubsystem(subsystem)
         val time = tools.find(_.name == "tool.time.now")
         val decimal = tools.find(_.name == "tool.decimal.calculate")
+        val resource = tools.find(_.name == "tool.resource.read")
 
-        Then("both identities are present without a separate MCP implementation")
+        Then("all identities are present without a separate MCP implementation")
         time should not be empty
         decimal should not be empty
+        resource should not be empty
+        resource.get.inputSchema.hcursor.downField("properties")
+          .downField("reference").get[String]("type") shouldBe Right("string")
         val properties = decimal.get.inputSchema.hcursor.downField("properties")
         properties.downField("left").get[String]("type") shouldBe Right("string")
         properties.downField("right").get[String]("type") shouldBe Right("string")

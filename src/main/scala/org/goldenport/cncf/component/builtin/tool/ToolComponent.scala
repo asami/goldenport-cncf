@@ -1,12 +1,15 @@
 package org.goldenport.cncf.component.builtin.tool
 
+import java.nio.charset.StandardCharsets
 import java.time.{Instant, ZoneId, ZonedDateTime}
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import cats.data.NonEmptyVector
+import cats.syntax.all.*
 import org.goldenport.Consequence
 import org.goldenport.cncf.action.{ActionCall, FunctionalActionCall, QueryAction}
 import org.goldenport.cncf.component.{Component, ComponentCreate, ComponentId, ComponentInstanceId}
+import org.goldenport.cncf.resource.{ResourceContent, ResourceReference}
 import org.goldenport.cncf.unitofwork.ExecUowM
 import org.goldenport.protocol.{Protocol, Request}
 import org.goldenport.protocol.handler.ProtocolHandler
@@ -29,10 +32,12 @@ object ToolComponent {
   val name: String = "tool"
   val componentId: ComponentId = ComponentId(name)
 
-  private val MAX_DECIMAL_TEXT_LENGTH = 128
-  private val MAX_DECIMAL_PRECISION = 128
-  private val MAX_TIMEZONE_LENGTH = 128
-  private val DECIMAL_PATTERN = "[+-]?(?:[0-9]+(?:\\.[0-9]*)?|\\.[0-9]+)".r
+  private val _max_decimal_text_length = 128
+  private val _max_decimal_precision = 128
+  private val _max_resource_byte_size = 1024 * 1024
+  private val _max_resource_reference_length = 2048
+  private val _max_timezone_length = 128
+  private val _decimal_pattern = "[+-]?(?:[0-9]+(?:\\.[0-9]*)?|\\.[0-9]+)".r
 
   private enum DecimalOperator(val name: String) {
     case Add extends DecimalOperator("add")
@@ -44,7 +49,7 @@ object ToolComponent {
     protected def create_Component(params: ComponentCreate): Component = {
       val _ = params
       val component = ToolComponent()
-      component.withMcpReadyServices(Set("time", "decimal"))
+      component.withMcpReadyServices(Set("resource", "time", "decimal"))
     }
 
     protected def create_Core(
@@ -60,6 +65,12 @@ object ToolComponent {
           operations = NonEmptyVector.one(new TimeNowOperationDefinition(recordresponse))
         )
       )
+      val resourceservice = spec.ServiceDefinition(
+        name = "resource",
+        operations = spec.OperationDefinitionGroup(
+          operations = NonEmptyVector.one(new ResourceReadOperationDefinition(recordresponse))
+        )
+      )
       val decimalservice = spec.ServiceDefinition(
         name = "decimal",
         operations = spec.OperationDefinitionGroup(
@@ -67,7 +78,9 @@ object ToolComponent {
         )
       )
       val protocol = Protocol(
-        services = spec.ServiceDefinitionGroup(services = Vector(timeservice, decimalservice)),
+        services = spec.ServiceDefinitionGroup(
+          services = Vector(resourceservice, timeservice, decimalservice)
+        ),
         handler = ProtocolHandler.default
       )
       Component.Core.create(
@@ -77,6 +90,26 @@ object ToolComponent {
         protocol
       )
     }
+  }
+
+  private final class ResourceReadOperationDefinition(
+    response: spec.ResponseDefinition
+  ) extends spec.OperationDefinition {
+    val specification: spec.OperationDefinition.Specification =
+      spec.OperationDefinition.Specification(
+        content = BaseContent.Builder("read")
+          .summary("Read one bounded logical text resource.")
+          .description("Resolve an absolute URL or URN only through the runtime ResourceAccess policy.")
+          .build(),
+        request = spec.RequestDefinition(parameters = List(_required_property("reference"))),
+        response = response
+      )
+
+    def createOperationRequest(request: Request): Consequence[OperationRequest] =
+      _required_string(request, "reference")
+        .flatMap(_bounded_resource_reference_c)
+        .flatMap(ResourceReference.parseC)
+        .map(ResourceReadAction(request, _))
   }
 
   private final class TimeNowOperationDefinition(
@@ -129,6 +162,14 @@ object ToolComponent {
       TimeNowActionCall(core, timezone)
   }
 
+  private final case class ResourceReadAction(
+    request: Request,
+    reference: ResourceReference
+  ) extends QueryAction() {
+    def createCall(core: ActionCall.Core): ActionCall =
+      ResourceReadActionCall(core, reference)
+  }
+
   private final case class DecimalCalculateAction(
     request: Request,
     operator: DecimalOperator,
@@ -148,6 +189,18 @@ object ToolComponent {
       val zone = timezone.getOrElse(execution_context.timezone)
       exec_pure(OperationResponse.RecordResponse(_time_record(instant, zone)))
     }
+  }
+
+  private final case class ResourceReadActionCall(
+    core: ActionCall.Core,
+    reference: ResourceReference
+  ) extends FunctionalActionCall {
+    protected def build_Program: ExecUowM[OperationResponse] =
+      for {
+        content <- exec_from(read_resource(reference))
+        _ <- exec_from(_resource_size_c(content))
+        text <- exec_from(content.textC())
+      } yield OperationResponse.RecordResponse(_resource_record(content, text))
   }
 
   private final case class DecimalCalculateActionCall(
@@ -181,6 +234,37 @@ object ToolComponent {
     )
   }
 
+  private def _resource_size_c(content: ResourceContent): Consequence[Unit] =
+    if (content.byteSize <= _max_resource_byte_size)
+      Consequence.success(())
+    else
+      Consequence.argumentFieldLimitExceeded(
+        "payload.byteSize",
+        _max_resource_byte_size,
+        content.byteSize,
+        "tool.resource.max-byte-size"
+      )
+
+  private def _bounded_resource_reference_c(value: String): Consequence[String] =
+    if (value.length <= _max_resource_reference_length)
+      Consequence.success(value)
+    else
+      Consequence.argumentLimitExceeded(
+        "reference",
+        _max_resource_reference_length,
+        value.length,
+        "tool.resource.reference-length"
+      )
+
+  private def _resource_record(content: ResourceContent, text: String): Record =
+    Record.dataAuto(
+      "text" -> text,
+      "byteSize" -> content.byteSize,
+      "scheme" -> content.reference.scheme,
+      "mediaType" -> content.mediaType,
+      "charset" -> content.declaredCharset.getOrElse(StandardCharsets.UTF_8).name
+    )
+
   private def _operator_c(value: String): Consequence[DecimalOperator] = {
     val normalized = value.trim.toLowerCase(Locale.ROOT)
     DecimalOperator.values.find(_.name == normalized) match {
@@ -196,23 +280,23 @@ object ToolComponent {
 
   private def _decimal_c(name: String, value: String): Consequence[BigDecimal] = {
     val normalized = value.trim
-    if (normalized.length > MAX_DECIMAL_TEXT_LENGTH)
+    if (normalized.length > _max_decimal_text_length)
       Consequence.argumentLimitExceeded(
         name,
-        MAX_DECIMAL_TEXT_LENGTH,
+        _max_decimal_text_length,
         normalized.length,
         "tool.decimal.input-length"
       )
-    else if (!DECIMAL_PATTERN.matches(normalized))
+    else if (!_decimal_pattern.matches(normalized))
       Consequence.argumentFormatError(name, "plain base-10 decimal string", value)
     else
       scala.util.Try(BigDecimal(normalized)).toOption match {
-        case Some(decimal) if decimal.precision <= MAX_DECIMAL_PRECISION =>
+        case Some(decimal) if decimal.precision <= _max_decimal_precision =>
           Consequence.success(decimal)
         case Some(decimal) =>
           Consequence.argumentLimitExceeded(
             name,
-            MAX_DECIMAL_PRECISION,
+            _max_decimal_precision,
             decimal.precision,
             "tool.decimal.precision"
           )
@@ -240,10 +324,10 @@ object ToolComponent {
 
   private def _timezone_c(name: String, value: String): Consequence[ZoneId] = {
     val normalized = value.trim
-    if (normalized.length > MAX_TIMEZONE_LENGTH)
+    if (normalized.length > _max_timezone_length)
       Consequence.argumentLimitExceeded(
         name,
-        MAX_TIMEZONE_LENGTH,
+        _max_timezone_length,
         normalized.length,
         "tool.time.timezone-length"
       )

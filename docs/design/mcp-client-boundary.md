@@ -329,6 +329,11 @@ projection of that boundary.
 
 The first pure baseline uses component `tool`:
 
+- `tool.resource.read` parses one logical absolute URL or URN and reads it only
+  through the `ResourceAccess` bound to the execution context. The initial
+  projection is text-only and bounded to 1 MiB. It returns content metadata
+  safe for a tool consumer without exposing provider roots, credentials, or
+  provider-selection details.
 - `tool.time.now` reads the execution-context clock. An optional timezone is
   either `UTC` or a bounded IANA region identifier; omission uses the runtime
   timezone. The result contains the same instant rendered in the selected
@@ -340,8 +345,8 @@ The first pure baseline uses component `tool`:
 
 Decimal calculation is deliberately not an expression language. Division,
 rounding, functions, variables, reflection, arbitrary code, and script
-evaluation are outside this contract. Both services are MCP-ready because the
-same normal Operations are safe to publish; there is no separate MCP-only
+evaluation are outside this contract. All three services are MCP-ready because
+the same normal Operations are safe to publish; there is no separate MCP-only
 implementation.
 
 ## Executable Evidence

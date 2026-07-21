@@ -134,17 +134,20 @@ Stage Status:
   a local MCP loopback or a parallel authorization path.
 
 Verified progress:
+- `tool.resource.read` parses a logical reference, delegates only to the
+  execution-context `ResourceAccess`, and returns a bounded text projection
+  without provider or physical-storage details.
 - `tool.time.now` reads one injected execution-clock instant and returns a
   consistent projection in an optional bounded IANA region timezone.
 - `tool.decimal.calculate` accepts bounded plain-decimal strings and the closed
   `add` / `subtract` / `multiply` operator set; property-based evidence proves
   exact results without binary floating-point conversion.
-- Both services are MCP-ready normal Operations implemented with
+- All three services are MCP-ready normal Operations implemented with
   `FunctionalActionCall` and the existing UoW interpreter. The existing MCP
-  catalog publishes `tool.time.now` and `tool.decimal.calculate` without local
-  loopback.
+  catalog publishes `tool.resource.read`, `tool.time.now`, and
+  `tool.decimal.calculate` without local loopback.
 
-- [ ] Implement `resource.read` using the canonical `ResourceAccess` boundary.
+- [x] Implement `resource.read` using the canonical `ResourceAccess` boundary.
 - [ ] Implement static `web.fetch` and `web.head` with scheme, host,
   private-network, redirect, content-type, byte-size, and timeout policy.
 - [x] Implement deterministic `time.now` using the runtime clock and a bounded
