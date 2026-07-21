@@ -14,7 +14,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Apr. 18, 2026
  *  version Apr. 28, 2026
  *  version Jun. 19, 2026
- * @version Jul. 20, 2026
+ * @version Jul. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 final class RuntimeConfigSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -31,6 +31,26 @@ final class RuntimeConfigSpec extends AnyWordSpec with Matchers with GivenWhenTh
       config.webProductionAdminJobsRoles shouldBe Vector("system_admin", "audit_viewer")
       config.idNamespace shouldBe IdGenerationContext.DefaultNamespace
       config.executionClock.isVirtual shouldBe false
+      config.mcpClientPolicyPath shouldBe None
+    }
+
+    "parse MCP client policy path and runtime aliases" in {
+      Given("a CNCF runtime configuration selecting an MCP client operator policy")
+      val configuration = ResolvedConfiguration(
+        Configuration(Map(
+          "cncf.runtime.mcp.client.policy" -> ConfigurationValue.StringValue("config/mcp-client.yaml")
+        )),
+        ConfigurationTrace.empty
+      )
+
+      When("the runtime configuration is resolved")
+      val config = RuntimeConfig.from(configuration)
+
+      Then("the canonical key resolves the alias to an absolute normalized path")
+      RuntimeConfig.getString(configuration, RuntimeConfig.MCP_CLIENT_POLICY_KEY) shouldBe
+        Some("config/mcp-client.yaml")
+      config.mcpClientPolicyPath.map(_.isAbsolute) shouldBe Some(true)
+      config.mcpClientPolicyPath.map(_.endsWith("config/mcp-client.yaml")) shouldBe Some(true)
     }
 
     "parse an advancing virtual clock start and its compatibility aliases" in {

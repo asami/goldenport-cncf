@@ -232,16 +232,20 @@ final class McpClientRuntimeRegistry private (
     ))
 
   /** Installs every MCP input socket after resolving its complete requirement set. */
-  def install(component: Component): Consequence[Component] = {
-    val sockets = component.port.inputEntries.collect {
+  def install(component: Component): Consequence[Component] =
+    install(Vector(component)).map(_ => component)
+
+  /** Resolves every requirement before atomically publishing services to any socket. */
+  def install(components: Seq[Component]): Consequence[Unit] = {
+    val sockets = components.flatMap(_.port.inputEntries).collect {
       case socket: McpClientSocket => socket
-    }
+    }.toVector
     val requirements = sockets.flatMap(_.requirements).distinct
     _resolve_services_c(requirements).map { services =>
       sockets.foreach { socket =>
         socket.install(socket.serverSetIds.map(id => id -> services(id)).toMap)
       }
-      component
+      ()
     }
   }
 

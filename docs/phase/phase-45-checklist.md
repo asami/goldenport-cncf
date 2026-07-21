@@ -102,6 +102,10 @@ Verified progress:
   references. Generic core Record decoding handles TOML and recursively
   normalizes YAML mappings; malformed present limits fail instead of silently
   reverting to defaults.
+- `textus.mcp.client.policy` and its runtime/CNCF aliases now activate the
+  imported runtime as a Subsystem-owned resource. Existing and later consumer
+  sockets receive only admitted services, and Subsystem shutdown closes the
+  installed service and transport lifecycle.
 
 - [x] Define a Codex configuration import adapter that is isolated from the
   canonical MCP client model and resilient to external schema evolution.

@@ -1,5 +1,7 @@
 package org.goldenport.cncf.config
 
+import java.nio.file.{Path, Paths}
+
 import org.goldenport.Consequence
 import org.goldenport.configuration.ResolvedConfiguration
 import org.goldenport.cncf.cli.RunMode
@@ -23,7 +25,7 @@ import org.goldenport.cncf.resource.{ResourceTreePolicy, ResourceTreeQueryLimits
  *  version Mar. 28, 2026
  *  version Apr. 30, 2026
  *  version Jun. 19, 2026
- * @version Jul. 20, 2026
+ * @version Jul. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class RuntimeConfig(
@@ -59,7 +61,8 @@ final case class RuntimeConfig(
   resourceUrlPolicy: ResourceUrlPolicy = ResourceUrlPolicy(),
   textusUrnResourcePolicy: TextusUrnResourcePolicy = TextusUrnResourcePolicy(),
   urnResourceProviders: Vector[UrnResourceProvider] = Vector.empty,
-  resourceTreePolicy: ResourceTreePolicy = ResourceTreePolicy()
+  resourceTreePolicy: ResourceTreePolicy = ResourceTreePolicy(),
+  mcpClientPolicyPath: Option[Path] = None
 ) {
   def executionClock: RuntimeClock = executionProfile.runtimeClock
 }
@@ -249,6 +252,8 @@ object RuntimeConfig {
   val RuntimeSubsystemSarDirKey = "textus.runtime.subsystem.sar.dir"
   val ComponentFileKey = "textus.component.file"
   val RuntimeComponentFileKey = "textus.runtime.component.file"
+  val MCP_CLIENT_POLICY_KEY = "textus.mcp.client.policy"
+  val RUNTIME_MCP_CLIENT_POLICY_KEY = "textus.runtime.mcp.client.policy"
   val ComponentDevDirKey = "textus.component.dev.dir"
   val ComponentCarDirKey = "textus.component.car.dir"
   val AssemblyDescriptorKey = "textus.assembly.descriptor"
@@ -379,7 +384,8 @@ object RuntimeConfig {
       resourceUrlPolicy = ResourceUrlPolicy(),
       textusUrnResourcePolicy = TextusUrnResourcePolicy(),
       urnResourceProviders = Vector.empty,
-      resourceTreePolicy = ResourceTreePolicy()
+      resourceTreePolicy = ResourceTreePolicy(),
+      mcpClientPolicyPath = None
     )
 
   def from(
@@ -456,6 +462,10 @@ object RuntimeConfig {
     val textusurnresourcepolicy = _textus_urn_resource_policy(configuration)
     val urnresourceproviders = _urn_resource_providers(configuration)
     val resourcetreepolicy = _resource_tree_policy(configuration)
+    val mcpclientpolicypath = _get_string(configuration, MCP_CLIENT_POLICY_KEY)
+      .map(_.trim)
+      .filter(_.nonEmpty)
+      .map(Paths.get(_).toAbsolutePath.normalize())
     val idnamespace = _id_namespace(configuration)
     val executionprofile = profileoverride.getOrElse(_execution_profile(configuration, operationmode))
     val weboperationdispatcher =
@@ -523,7 +533,8 @@ object RuntimeConfig {
       resourceUrlPolicy = resourceurlpolicy,
       textusUrnResourcePolicy = textusurnresourcepolicy,
       urnResourceProviders = urnresourceproviders,
-      resourceTreePolicy = resourcetreepolicy
+      resourceTreePolicy = resourcetreepolicy,
+      mcpClientPolicyPath = mcpclientpolicypath
     )
     _validate(config)
     config
@@ -918,6 +929,7 @@ object RuntimeConfig {
         case SubsystemDevDirKey => Vector(RuntimeSubsystemDevDirKey)
         case SubsystemSarDirKey => Vector(RuntimeSubsystemSarDirKey)
         case ComponentFileKey => Vector(RuntimeComponentFileKey)
+        case MCP_CLIENT_POLICY_KEY => Vector(RUNTIME_MCP_CLIENT_POLICY_KEY)
         case TEST_DESCRIPTOR_KEY => Vector(RUNTIME_TEST_DESCRIPTOR_KEY)
         case TEST_HOME_MODE_KEY => Vector(RUNTIME_TEST_HOME_MODE_KEY)
         case TEST_HOME_PATH_KEY => Vector(RUNTIME_TEST_HOME_PATH_KEY)

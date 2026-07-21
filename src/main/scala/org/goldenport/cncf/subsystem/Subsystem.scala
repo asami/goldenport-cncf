@@ -46,6 +46,7 @@ import org.goldenport.cncf.security.{AdminAuthorizationPolicy, IngressSecurityRe
 import org.goldenport.cncf.config.{ResolvedParameter, ResolvedParameters}
 import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.metrics.{ComponentMetricsRegistry, EntityAccessMetricsRegistry}
+import org.goldenport.cncf.mcp.client.{CodexMcpRuntimeAssembly, CodexMcpRuntimeConfiguration, McpServerSetId}
 import org.goldenport.cncf.spi.{ComponentApiResolver, ResolvedSpiBinding, SpiInvoker, SpiOperationSelector}
 import org.goldenport.cncf.servicecontainer.{ServiceContainerCleanupOutcome, ServiceContainerDiagnostics, ServiceContainerId, ServiceContainerRuntime, ServiceContainerRuntimeConfiguration}
 import org.goldenport.cncf.observability.ServiceContainerRuntimeObservation
@@ -55,7 +56,7 @@ import org.goldenport.cncf.observability.ServiceContainerRuntimeObservation
  *  version Jan. 31, 2026
  *  version Feb.  4, 2026
  *  version Apr. 30, 2026
- * @version Jul. 20, 2026
+ * @version Jul. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Subsystem(
@@ -108,6 +109,7 @@ final class Subsystem(
   private var _resolved_security_wiring: ResolvedSecurityWiring = ResolvedSecurityWiring.empty
   private var _user_notification_forwarding_registered: Boolean = false
   private var _service_container_runtime: Option[ServiceContainerRuntime] = None
+  private var _mcp_client_runtime: Option[CodexMcpRuntimeAssembly] = None
 
   def globalRuntimeContext: GlobalRuntimeContext = {
     val a = _find_global_runtime_context(scopeContext)
@@ -137,6 +139,8 @@ final class Subsystem(
   def serverEmulatorBaseUrl: String = globalRuntimeContext.serverEmulatorBaseUrl
   def descriptor: Option[GenericSubsystemDescriptor] = _descriptor
   def resolvedSecurityWiring: ResolvedSecurityWiring = _resolved_security_wiring
+  def mcpClientServerSetIds: Vector[McpServerSetId] =
+    _mcp_client_runtime.toVector.flatMap(_.serverSetIds)
 
   def serviceContainerRuntime(using context: ExecutionContext): Option[ServiceContainerRuntime] =
     _service_container_runtime.map(ServiceContainerRuntimeObservation.observed)
@@ -167,6 +171,37 @@ final class Subsystem(
     }
   }
 
+  private[cncf] def activateCodexMcpClientRuntimeC(
+    path: java.nio.file.Path
+  )(using context: ExecutionContext): Consequence[Unit] = synchronized {
+    _mcp_client_runtime match {
+      case Some(_) =>
+        Consequence.operationConflict("MCP client runtime activation", Vector.empty)
+      case None =>
+        val assemblyresult = for {
+          configuration <- CodexMcpRuntimeConfiguration.loadC(path)
+          source <- org.goldenport.record.io.RecordSourceLoader.load(configuration.definitionSource)
+          assembly <- CodexMcpRuntimeAssembly.createC(source, configuration.policy)
+        } yield assembly
+        val installed: Consequence[CodexMcpRuntimeAssembly] = assemblyresult.flatMap { assembly =>
+          _install_mcp_client_runtime_c(assembly, components) match {
+            case Consequence.Success(_) => Consequence.success(assembly)
+            case Consequence.Failure(conclusion) =>
+              try assembly.close()
+              catch { case _: Throwable => () }
+              Consequence.Failure[CodexMcpRuntimeAssembly](conclusion)
+          }
+        }
+        installed match {
+          case Consequence.Success(assembly) =>
+            _mcp_client_runtime = Some(assembly)
+            Consequence.unit
+          case Consequence.Failure(conclusion) =>
+            Consequence.Failure[Unit](conclusion)
+        }
+    }
+  }
+
   def shutdownC(): Consequence[Vector[ServiceContainerCleanupOutcome]] = {
     val jobresult =
       try {
@@ -178,12 +213,22 @@ final class Subsystem(
     val serviceresult = _service_container_runtime
       .map(ServiceContainerRuntimeObservation.shutdownC)
       .getOrElse(Consequence.success(Vector.empty))
-    (jobresult, serviceresult) match {
-      case (Consequence.Success(_), result) => result
-      case (Consequence.Failure(jobfailure), Consequence.Success(_)) =>
-        Consequence.Failure(jobfailure)
-      case (Consequence.Failure(jobfailure), Consequence.Failure(servicefailure)) =>
-        Consequence.Failure(servicefailure ++ jobfailure)
+    val mcpresult = _mcp_client_runtime match {
+      case Some(runtime) =>
+        try {
+          runtime.close()
+          Consequence.unit
+        } catch {
+          case e: Throwable => Consequence.Failure(org.goldenport.Conclusion.from(e))
+        }
+      case None => Consequence.unit
+    }
+    val failures = Vector(jobresult, mcpresult, serviceresult).collect {
+      case Consequence.Failure(conclusion) => conclusion
+    }
+    failures.reduceOption(_ ++ _) match {
+      case Some(conclusion) => Consequence.Failure(conclusion)
+      case None => serviceresult
     }
   }
 
@@ -219,6 +264,13 @@ final class Subsystem(
     val bootstrapped = comps.map(_component_factory.bootstrap)
     val injected = bootstrapped.map(x => _inject_context(x.name, x))
     injected.foreach(_bind_runtime_services)
+    _mcp_client_runtime.foreach { runtime =>
+      _install_mcp_client_runtime_c(runtime, injected) match {
+        case Consequence.Success(_) => ()
+        case Consequence.Failure(conclusion) =>
+          throw conclusion.getException.getOrElse(new IllegalStateException(conclusion.display))
+      }
+    }
     _component_space = _component_space.add(injected)
     _rebuild_resolver()
     this
@@ -234,6 +286,13 @@ final class Subsystem(
     val bootstrapped = comps.map(_component_factory.bootstrap)
     val injected = bootstrapped.map(x => _inject_context(x.name, x))
     injected.foreach(_bind_runtime_services)
+    _mcp_client_runtime.foreach { runtime =>
+      _install_mcp_client_runtime_c(runtime, injected) match {
+        case Consequence.Success(_) => ()
+        case Consequence.Failure(conclusion) =>
+          throw conclusion.getException.getOrElse(new IllegalStateException(conclusion.display))
+      }
+    }
     _component_space = _component_space.upsert(injected)
     _rebuild_resolver()
     this
@@ -281,6 +340,12 @@ final class Subsystem(
     }
     component.eventReception.foreach(registerEventReception(component.name, _))
   }
+
+  private def _install_mcp_client_runtime_c(
+    runtime: CodexMcpRuntimeAssembly,
+    targetcomponents: Seq[Component]
+  ): Consequence[Unit] =
+    runtime.installC(targetcomponents)
 
   // private val _components: Map[String, Component] =
   //   components.map { case (componentname, component) =>

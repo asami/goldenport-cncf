@@ -222,6 +222,12 @@ paths resolve against the descriptor directory. Present limit values must be
 integral; malformed values fail configuration loading rather than falling back
 to defaults.
 
+The runtime selects this descriptor with `textus.mcp.client.policy` (or the
+`textus.runtime.*` / `cncf.*` aliases). The Subsystem owns the resulting runtime
+assembly, installs admitted services into consumer-owned logical sockets after
+component assembly, applies the same installation to later component additions,
+and closes the registry and transport resources during Subsystem shutdown.
+
 ```yaml
 source:
   kind: codex

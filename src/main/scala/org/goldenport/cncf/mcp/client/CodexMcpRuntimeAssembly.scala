@@ -22,6 +22,9 @@ private[cncf] final class CodexMcpRuntimeAssembly private (
   def installC(component: Component): Consequence[Component] =
     registry.install(component)
 
+  def installC(components: Seq[Component]): Consequence[Unit] =
+    registry.install(components)
+
   def close(): Unit =
     registry.close()
 }
