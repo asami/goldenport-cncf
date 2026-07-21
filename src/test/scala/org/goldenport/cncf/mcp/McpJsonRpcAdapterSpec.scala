@@ -11,27 +11,54 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Mar. 19, 2026
  *  version May. 18, 2026
- *  version Jul. 14, 2026
  * @version Jul. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 final class McpJsonRpcAdapterSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   "McpJsonRpcAdapter" should {
-    "handle initialize request" in {
-      Given("an MCP adapter and initialize request")
+    "negotiate every shared supported initialize revision exactly" in {
+      Given("an MCP adapter and each shared supported protocol revision")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       val adapter = new McpJsonRpcAdapter(subsystem)
-      val raw = """{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}"""
 
-      When("the request is handled")
-      val json = parse(adapter.handle(raw)).fold(
-        err => fail(s"response is not valid JSON: ${err.getMessage}"),
-        identity
+      When("each exact revision is requested")
+      val negotiated = McpProtocolRevision.SUPPORTED.map { revision =>
+        val raw = s"""{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"${revision.print}"}}"""
+        val json = parse(adapter.handle(raw)).fold(
+          err => fail(s"response is not valid JSON: ${err.getMessage}"),
+          identity
+        )
+        json.hcursor.downField("result").get[String]("protocolVersion")
+      }
+
+      Then("the server echoes every accepted revision without inventing another version")
+      negotiated shouldBe McpProtocolRevision.SUPPORTED.map(x => Right(x.print))
+    }
+
+    "reject missing malformed non-string and unsupported initialize revisions" in {
+      Given("initialize requests violating each revision boundary")
+      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val adapter = new McpJsonRpcAdapter(subsystem)
+      val params = Vector(
+        "{}",
+        "{\"protocolVersion\":25}",
+        "{\"protocolVersion\":\"2025-1\"}",
+        "{\"protocolVersion\":\" 2025-11-25 \"}",
+        "{\"protocolVersion\":\"2026-03-19\"}"
       )
-      Then("the adapter returns the negotiated MCP protocol version")
-      val c = json.hcursor
-      c.get[String]("jsonrpc") shouldBe Right("2.0")
-      c.downField("result").downField("protocolVersion").as[String].isRight shouldBe true
+
+      When("the adapter validates each request")
+      val errors = params.map { value =>
+        val raw = s"""{"jsonrpc":"2.0","id":"revision","method":"initialize","params":$value}"""
+        parse(adapter.handle(raw)).fold(
+          error => fail(s"response is not valid JSON: ${error.getMessage}"),
+          identity
+        ).hcursor.downField("error")
+      }
+
+      Then("every invalid revision fails as bounded invalid params")
+      all(errors.map(_.get[Int]("code"))) shouldBe Right(-32602)
+      all(errors.map(_.get[String]("message").toOption.getOrElse(""))) should not include "2026-03-19"
     }
 
     "handle tools/list request" in {

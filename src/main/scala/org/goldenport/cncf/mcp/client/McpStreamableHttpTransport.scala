@@ -20,6 +20,7 @@ import org.goldenport.Consequence
 import org.goldenport.cncf.component.{Component, ExtensionPoint, Port, ServiceContract, VariationSelection}
 import org.goldenport.cncf.config.{RuntimeSecretResolver, SecretMaterial, SecretReference}
 import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.cncf.mcp.McpProtocolRevision
 import org.goldenport.observation.{Cause, Descriptor}
 
 /*
@@ -50,21 +51,14 @@ object McpStreamableHttpCredential {
 final case class McpStreamableHttpServerConfig private (
   serverId: McpServerId,
   endpoint: URI,
-  requestedProtocolVersion: String,
-  supportedProtocolVersions: Set[String],
+  requestedProtocolVersion: McpProtocolRevision,
+  supportedProtocolVersions: Set[McpProtocolRevision],
   credential: Option[McpStreamableHttpCredential]
 )
 
 object McpStreamableHttpServerConfig {
-  val PROTOCOL_VERSION_2025_03_26 = "2025-03-26"
-  val PROTOCOL_VERSION_2025_06_18 = "2025-06-18"
-  val PROTOCOL_VERSION_2025_11_25 = "2025-11-25"
-  val DEFAULT_PROTOCOL_VERSION = PROTOCOL_VERSION_2025_11_25
-  val DEFAULT_SUPPORTED_PROTOCOL_VERSIONS = Set(
-    PROTOCOL_VERSION_2025_03_26,
-    PROTOCOL_VERSION_2025_06_18,
-    PROTOCOL_VERSION_2025_11_25
-  )
+  val DEFAULT_PROTOCOL_VERSION = McpProtocolRevision.PREFERRED.print
+  val DEFAULT_SUPPORTED_PROTOCOL_VERSIONS = McpProtocolRevision.SUPPORTED.map(_.print).toSet
 
   def createC(
     serverid: McpServerId,
@@ -79,25 +73,38 @@ object McpStreamableHttpServerConfig {
         "an admitted MCP Streamable HTTP credential",
         "null"
       )
-    else _uri_c(endpoint).flatMap { uri =>
-      val requested = Option(requestedprotocolversion).map(_.trim).getOrElse("")
-      val supported = supportedprotocolversions.map(_.trim).filter(_.nonEmpty)
-      if (!supported.contains(requested))
+    else for {
+      uri <- _uri_c(endpoint)
+      requested <- McpProtocolRevision.parseC(requestedprotocolversion)
+      supported <- _supported_revisions_c(supportedprotocolversions)
+      _ <- if (supported.contains(requested)) Consequence.unit else
         Consequence.argumentPolicyViolation(
           "requestedProtocolVersion",
           "mcp-client.protocol-version",
-          "one supported protocol version",
-          requested
+          "one configured supported protocol version",
+          "not configured"
         )
-      else
-        Consequence.success(McpStreamableHttpServerConfig(
-          serverid,
-          uri,
-          requested,
-          supported,
-          credential
-        ))
-    }
+    } yield McpStreamableHttpServerConfig(
+      serverid,
+      uri,
+      requested,
+      supported,
+      credential
+    )
+
+  private def _supported_revisions_c(
+    values: Set[String]
+  ): Consequence[Set[McpProtocolRevision]] =
+    if (values.isEmpty)
+      Consequence.argumentMissing("supportedProtocolVersions")
+    else
+      values.toVector.sorted.foldLeft(Consequence.success(Set.empty[McpProtocolRevision])) {
+        case (z, value) =>
+          for {
+            revisions <- z
+            revision <- McpProtocolRevision.parseC(value)
+          } yield revisions + revision
+      }
 
   private def _uri_c(value: String): Consequence[URI] =
     Try(URI.create(Option(value).map(_.trim).getOrElse(""))).toOption match {
@@ -417,7 +424,7 @@ private final class McpStreamableHttpTransport(
   private final case class _SessionId(value: String)
 
   private final case class _Session(
-    protocolVersion: String,
+    protocolVersion: McpProtocolRevision,
     sessionId: Option[_SessionId]
   )
 
@@ -436,7 +443,7 @@ private final class McpStreamableHttpTransport(
         _config_c(server).flatMap { serverconfig =>
           val requestid = _request_id.incrementAndGet()
           val message = _request(requestid, "initialize", Some(Json.obj(
-            "protocolVersion" -> Json.fromString(serverconfig.requestedProtocolVersion),
+            "protocolVersion" -> Json.fromString(serverconfig.requestedProtocolVersion.print),
             "capabilities" -> Json.obj(),
             "clientInfo" -> Json.obj(
               "name" -> Json.fromString("cncf"),
@@ -444,7 +451,9 @@ private final class McpStreamableHttpTransport(
             )
           )))
           _post_request(serverconfig, None, None, message, requestid, limits).flatMap { case (response, result) =>
-            result.hcursor.get[String]("protocolVersion").toOption match {
+            result.hcursor.get[String]("protocolVersion").toOption.flatMap(
+              McpProtocolRevision.parseC(_).toOption
+            ) match {
               case Some(version) if serverconfig.supportedProtocolVersions.contains(version) =>
                 _session_id_option_c(response.header("mcp-session-id")).flatMap { sessionid =>
                   val session = _Session(version, sessionid)
@@ -604,7 +613,7 @@ private final class McpStreamableHttpTransport(
   private def _post_request(
     serverconfig: McpStreamableHttpServerConfig,
     sessionid: Option[_SessionId],
-    protocolversion: Option[String],
+    protocolversion: Option[McpProtocolRevision],
     message: Json,
     requestid: Long,
     limits: McpClientLimits
@@ -1046,13 +1055,13 @@ private final class McpStreamableHttpTransport(
 
   private def _headers(
     sessionid: Option[_SessionId],
-    protocolversion: Option[String],
+    protocolversion: Option[McpProtocolRevision],
     accept: String
   ): Map[String, String] =
     Map(
       "Accept" -> accept,
       "Content-Type" -> "application/json"
-    ) ++ sessionid.map(x => "Mcp-Session-Id" -> x.value) ++ protocolversion.map("MCP-Protocol-Version" -> _)
+    ) ++ sessionid.map(x => "Mcp-Session-Id" -> x.value) ++ protocolversion.map(x => "MCP-Protocol-Version" -> x.print)
 
   private def _session_id_option_c(value: Option[String]): Consequence[Option[_SessionId]] =
     value match {

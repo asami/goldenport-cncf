@@ -11,6 +11,7 @@ import io.circe.parser.parse
 import org.goldenport.Consequence
 import org.goldenport.cncf.config.{RuntimeSecretResolver, SecretReference}
 import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.cncf.mcp.McpProtocolRevision
 import org.goldenport.observation.{Cause, Descriptor}
 import org.scalacheck.{Gen, Prop, Test}
 import org.scalatest.GivenWhenThen
@@ -175,6 +176,52 @@ final class McpStreamableHttpTransportSpec extends AnyWordSpec with Matchers wit
       Then("the response fails at the protocol boundary")
       result.isFaillure shouldBe true
       fake.requests.map(_method).toVector shouldBe Vector(Some("initialize"))
+    }
+
+    "reject a server initialize revision outside the shared supported set" in {
+      Given("a valid JSON-RPC initialize response containing an unsupported revision")
+      given ExecutionContext = ExecutionContext.create()
+      val fake = new _FakeExchange(Vector(
+        _json_response(
+          200,
+          """{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2026-03-19","serverInfo":{"name":"catalog","version":"1"},"capabilities":{"tools":{}}}}"""
+        )
+      ))
+      val service = _registry(fake).resolve(_server_set_id("research")).toOption.get
+
+      When("the client validates the negotiated revision")
+      val result = service.catalog
+
+      Then("initialization fails before initialized notification or catalog discovery")
+      result.isFaillure shouldBe true
+      fake.requests.map(_method).toVector shouldBe Vector(Some("initialize"))
+      result.display should not include "2026-03-19"
+    }
+
+    "validate configured client revisions through the shared protocol model" in {
+      Given("the shared preferred revision and malformed unsupported configuration")
+      val serverid = _server_id("catalog")
+
+      When("server configurations are constructed")
+      val accepted = McpStreamableHttpServerConfig.createC(
+        serverid,
+        "https://catalog.example/mcp"
+      )
+      val malformed = McpStreamableHttpServerConfig.createC(
+        serverid,
+        "https://catalog.example/mcp",
+        requestedprotocolversion = "2025-1"
+      )
+      val unsupported = McpStreamableHttpServerConfig.createC(
+        serverid,
+        "https://catalog.example/mcp",
+        supportedprotocolversions = Set("2026-03-19")
+      )
+
+      Then("only the shared preferred and supported set are admitted")
+      accepted.toOption.map(_.requestedProtocolVersion) shouldBe Some(McpProtocolRevision.PREFERRED)
+      malformed.isFaillure shouldBe true
+      unsupported.isFaillure shouldBe true
     }
 
     "require tool result content and object-shaped structured content" in {

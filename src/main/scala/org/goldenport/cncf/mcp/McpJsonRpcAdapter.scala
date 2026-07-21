@@ -11,7 +11,7 @@ import org.goldenport.cncf.subsystem.Subsystem
  *  version Mar. 27, 2026
  *  version Apr. 15, 2026
  *  version May. 20, 2026
- * @version Jul. 15, 2026
+ * @version Jul. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 final class McpJsonRpcAdapter(
@@ -37,7 +37,7 @@ final class McpJsonRpcAdapter(
           val params = obj("params")
           methodopt.get match {
             case "initialize" =>
-              _result(id, _initialize_result())
+              _initialize(id, params)
             case "tools/list" =>
               _tools_list(id)
             case "tools/call" =>
@@ -50,9 +50,24 @@ final class McpJsonRpcAdapter(
         _error(Json.Null, -32600, "invalid request")
     }
 
-  private def _initialize_result(): Json =
+  private def _initialize(
+    id: Json,
+    params: Option[Json]
+  ): Json =
+    params.flatMap(_.asObject).flatMap(_("protocolVersion")) match {
+      case None => _error(id, -32602, "invalid params: protocolVersion is required")
+      case Some(value) => value.asString match {
+        case None => _error(id, -32602, "invalid params: protocolVersion must be a string")
+        case Some(version) => McpProtocolRevision.parseC(version) match {
+          case Consequence.Success(revision) => _result(id, _initialize_result(revision))
+          case Consequence.Failure(_) => _error(id, -32602, "invalid params: unsupported protocolVersion")
+        }
+      }
+    }
+
+  private def _initialize_result(revision: McpProtocolRevision): Json =
     Json.obj(
-      "protocolVersion" -> Json.fromString("2026-03-19"),
+      "protocolVersion" -> Json.fromString(revision.print),
       "serverInfo" -> Json.obj(
         "name" -> Json.fromString(subsystem.name),
         "version" -> Json.fromString(subsystem.version.getOrElse("0.1.0"))

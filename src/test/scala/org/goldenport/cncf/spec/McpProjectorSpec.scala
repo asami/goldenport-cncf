@@ -1,7 +1,7 @@
 package org.goldenport.cncf.spec
 
 import io.circe.parser.parse
-import org.goldenport.cncf.mcp.McpProjector
+import org.goldenport.cncf.mcp.{McpProjector, McpProtocolRevision}
 import org.goldenport.cncf.subsystem.DefaultSubsystemFactory
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
@@ -9,7 +9,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 19, 2026
- * @version Jul. 14, 2026
+ * @version Jul. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 final class McpProjectorSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -27,7 +27,7 @@ final class McpProjectorSpec extends AnyWordSpec with Matchers with GivenWhenThe
 
       Then("the projection contains versioned, described, typed tools")
       val top = json.hcursor
-      top.get[String]("mcpVersion").isRight shouldBe true
+      top.get[String]("mcpVersion") shouldBe Right(McpProtocolRevision.PREFERRED.print)
 
       val tools = top.downField("tools").focus
         .flatMap(_.asArray)

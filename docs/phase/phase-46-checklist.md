@@ -50,20 +50,20 @@ Stage Status:
 ## MT-03: Shared Protocol Negotiation
 
 Stage Status:
-- Current status: OPEN
+- Current status: DONE
 - Owner: CNCF MCP maintainers
 - Update rule: Mark DONE only after server and client share one protocol model
   and initialize negotiation has exact positive and negative specifications.
 
-- [ ] Introduce a shared MCP protocol-revision type and canonical supported
+- [x] Introduce a shared MCP protocol-revision type and canonical supported
   revision set used by both server and Streamable HTTP client.
-- [ ] Replace the server's fixed `2026-03-19` response with validation and
+- [x] Replace the server's fixed `2026-03-19` response with validation and
   negotiation of `initialize.params.protocolVersion`.
-- [ ] Use `2025-11-25` as the initial canonical revision unless the normative
+- [x] Use `2025-11-25` as the initial canonical revision unless the normative
   specification records and tests a newer common revision.
-- [ ] Reject missing, malformed, and unsupported revisions with bounded
+- [x] Reject missing, malformed, and unsupported revisions with bounded
   structured protocol diagnostics.
-- [ ] Verify the exact negotiated revision instead of merely checking that the
+- [x] Verify the exact negotiated revision instead of merely checking that the
   response field is parseable.
 
 ## MT-04: Notification-aware HTTP Server
