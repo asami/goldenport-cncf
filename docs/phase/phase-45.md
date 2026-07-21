@@ -74,7 +74,7 @@ not control an MCP endpoint, transport, credential, header, or raw payload.
 | MC-04 | Admission and safety | Endpoint, credential-reference, tool, resource-limit, and failure policy is enforced before transport execution. | done |
 | MC-05 | Observability and lifecycle | CallTree, metrics, and shutdown behavior expose only safe MCP execution facts. | done |
 | MC-06 | Codex MCP definition import | Operator-selected Codex MCP definitions become admitted CNCF server sets through a bounded import adapter and CNCF policy overlay. | done |
-| MC-07 | Builtin tool baseline | Common resource, Web, time, calculation, and Web-search contracts are available through normal CNCF Operations and MCP projection. | in progress |
+| MC-07 | Builtin tool baseline | Common resource, Web, time, calculation, and Web-search contracts are available through normal CNCF Operations and MCP projection. | done |
 | MC-08 | Consumer evidence and closure | CNCF fake evidence and Textus AI integration prove the boundary without a required remote MCP service. | planned |
 
 MC-04 has exact per-server tool allowlisting, recursive typed-input admission,
@@ -90,8 +90,9 @@ runtime assembly and an operator-owned policy descriptor that combines a
 generic TOML definition source with exact CNCF admission policy. Textus AI
 now proves the consumer sees only a logical server-set requirement and the
 normalized `McpClientSocket`, while application-purpose configuration cannot
-select MCP infrastructure. MC-07 adds a safe,
-operation-backed builtin tool baseline. MC-08 consumer evidence and closure
+select MCP infrastructure. MC-07 provides a safe,
+operation-backed builtin tool baseline with normal authorization, structured
+failure, CallTree, metrics, and MCP projection evidence. MC-08 consumer evidence and closure
 remains the final Phase 45 work.
 
 MC-07 now includes the first pure builtin Operations. `tool.time.now` reads one
@@ -105,6 +106,12 @@ execution-context `ResourceAccess` boundary. `tool.web.fetch` and
 timeout, content-type, and byte-size admission. `tool.web.search` adds a
 bounded provider-neutral query/result contract over the runtime-owned
 `web-search` SPI without exposing provider selection or credentials.
+Descriptor denial is verified before provider invocation; successful and
+invalid requests use the generic ActionCall CallTree/metrics and operation
+request validation observers. The builtin `tool` MCP surface is fixed to these
+six bounded Operations, leaving browser automation, filesystem/process access,
+script evaluation, unrestricted headers, and mutation tools to optional
+Components.
 
 ## Acceptance
 

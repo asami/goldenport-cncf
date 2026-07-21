@@ -1,12 +1,16 @@
 package org.goldenport.cncf.component.builtin.tool
 
+import java.nio.file.Path
 import java.time.{Clock, Instant, ZoneOffset}
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.cncf.http.RuntimeDashboardMetrics
 import org.goldenport.cncf.mcp.McpToolCatalog
+import org.goldenport.cncf.observability.ConclusionDiagnostics
 import org.goldenport.cncf.resource.{InMemoryUrnResourceProvider, ResourceAccess, ResourceAccessTestProfile, ResourceContent, ResourceReference, ResourceUrlPolicy, StaticWebUrlResourceProvider}
+import org.goldenport.cncf.security.OperationAuthorizationRule
 import org.goldenport.cncf.spi.web.search.{WebSearch, WebSearchItem, WebSearchRequest, WebSearchResponse}
-import org.goldenport.cncf.subsystem.{DefaultSubsystemFactory, Subsystem}
+import org.goldenport.cncf.subsystem.{DefaultSubsystemFactory, GenericSubsystemDescriptor, Subsystem}
 import org.goldenport.protocol.{Property, Request}
 import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.record.Record
@@ -31,6 +35,8 @@ final class ToolComponentSpec extends AnyWordSpec with Matchers with GivenWhenTh
     afterWord("in spec:mcp-client-boundary, tools:tool.web.fetch/tool.web.head, phase:45, stage:MC-07")
   private val _web_search_metadata =
     afterWord("in spec:mcp-client-boundary, tool:tool.web.search, phase:45, stage:MC-07")
+  private val _framework_boundary_metadata =
+    afterWord("in spec:mcp-client-boundary, component:tool, phase:45, stage:MC-07")
 
   "Builtin resource Operation" should {
     "read bounded text only through the execution-context ResourceAccess" must _resource_metadata {
@@ -451,6 +457,103 @@ final class ToolComponentSpec extends AnyWordSpec with Matchers with GivenWhenTh
         searchproperties.downField("limit").get[String]("type") shouldBe Right("integer")
         properties.downField("left").get[String]("type") shouldBe Right("string")
         properties.downField("right").get[String]("type") shouldBe Right("string")
+      }
+    }
+  }
+
+  "Builtin tool framework boundary" should {
+    "enforce descriptor authorization before invoking a runtime provider" must _framework_boundary_metadata {
+      "when a normal operation authorization rule denies Web search" in {
+        Given("the builtin tool component with a provider and a descriptor-level deny rule")
+        val subsystem = DefaultSubsystemFactory.default(Some("command"))
+        val tool = subsystem.findComponent("tool").get.asInstanceOf[ToolComponent]
+        var providercalled = false
+        tool.withWebSearch(new WebSearch {
+          def search(req: WebSearchRequest)(using ExecutionContext): Consequence[WebSearchResponse] = {
+            providercalled = true
+            Consequence.success(WebSearchResponse(Vector.empty))
+          }
+        })
+        subsystem.withDescriptor(GenericSubsystemDescriptor(
+          path = Path.of("<tool-framework-boundary>"),
+          subsystemName = subsystem.name,
+          operationAuthorization = Map(
+            "tool.web.search" -> OperationAuthorizationRule(deny = true)
+          )
+        ))
+        given ExecutionContext = ExecutionContext.create()
+
+        When("the request crosses normal Subsystem dispatch")
+        val result = subsystem.executeQueryOnlyWithMetadata(
+          _request("web", "search", "query" -> "denied")
+        )
+
+        Then("authorization returns a structured Conclusion before the provider boundary")
+        result match {
+          case Consequence.Failure(conclusion) =>
+            conclusion.status.webCode.code shouldBe 403
+            conclusion.display should include ("tool.web.search")
+          case other =>
+            fail(s"expected authorization failure but got $other")
+        }
+        providercalled shouldBe false
+      }
+    }
+
+    "record normal ActionCall CallTree and dashboard metrics" must _framework_boundary_metadata {
+      "when a builtin Query succeeds and another request fails during parameter validation" in {
+        Given("an enabled framework CallTree and baseline ActionCall and validation metrics")
+        val subsystem = DefaultSubsystemFactory.default(Some("command"))
+        val context = ExecutionContext.withFrameworkCallTreeEnabled(
+          ExecutionContext.create(),
+          enabled = true
+        )
+        val beforeactions = RuntimeDashboardMetrics.actionCallSnapshot.summary.cumulative.total
+        val beforevalidation = RuntimeDashboardMetrics.operationRequestValidationSnapshot.summary.cumulative.total
+        given ExecutionContext = context
+
+        When("time.now succeeds and an invalid timezone fails through request construction")
+        val success = subsystem.executeQueryOnlyWithMetadata(_request("time", "now"))
+        val invalid = subsystem.executeQueryOnlyWithMetadata(
+          _request("time", "now", "timezone" -> "+09:00")
+        )
+        val calltree = context.observability.callTreeContext.build()
+          .map(_.toRecord.print)
+          .getOrElse(fail("builtin tool CallTree missing"))
+
+        Then("the generic ActionCall and validation observers expose both outcomes")
+        success.isSuccess shouldBe true
+        invalid match {
+          case Consequence.Failure(conclusion) =>
+            ConclusionDiagnostics.isValidation(conclusion) shouldBe true
+          case other =>
+            fail(s"expected validation failure but got $other")
+        }
+        calltree should include ("action:tool.time.now")
+        calltree should include ("calltree_kind")
+        RuntimeDashboardMetrics.actionCallSnapshot.summary.cumulative.total should be > beforeactions
+        RuntimeDashboardMetrics.operationRequestValidationSnapshot.summary.cumulative.total should be > beforevalidation
+      }
+    }
+
+    "publish only the bounded safe builtin capability set" must _framework_boundary_metadata {
+      "when the tool component MCP catalog is projected" in {
+        Given("the default builtin tool component without optional automation Components")
+        val subsystem = DefaultSubsystemFactory.default(Some("server"))
+        val tool = subsystem.findComponent("tool").get
+
+        When("the existing MCP projection reads the component's admitted Operations")
+        val identities = McpToolCatalog.toolsForComponent(tool).map(_.name)
+
+        Then("dynamic browser filesystem process script and mutation tools remain absent")
+        identities shouldBe Vector(
+          "tool.decimal.calculate",
+          "tool.resource.read",
+          "tool.time.now",
+          "tool.web.fetch",
+          "tool.web.head",
+          "tool.web.search"
+        )
       }
     }
   }

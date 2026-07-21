@@ -127,7 +127,7 @@ Verified progress:
 ## Stage MC-07 - Builtin Tool Baseline
 
 Stage Status:
-- Current status: OPEN
+- Current status: DONE
 - Owner: CNCF runtime maintainers
 - Update rule: Mark DONE only after the common builtin tools execute as normal
   CNCF Operations through ActionCall/UoW and are projected through MCP without
@@ -154,6 +154,13 @@ Verified progress:
   catalog publishes `tool.resource.read`, `tool.time.now`,
   `tool.decimal.calculate`, `tool.web.fetch`, `tool.web.head`, and
   `tool.web.search` without local loopback.
+- Descriptor authorization denial is proven before provider invocation;
+  successful and invalid requests retain generic ActionCall CallTree/metrics,
+  structured Conclusion, and operation-request validation behavior.
+- The builtin `tool` MCP catalog is exactly the six bounded baseline
+  Operations. Dynamic browser, filesystem/process, script evaluation,
+  unrestricted-header, and mutation capabilities remain outside the builtin
+  component boundary.
 
 - [x] Implement `resource.read` using the canonical `ResourceAccess` boundary.
 - [x] Implement static `web.fetch` and `web.head` with scheme, host,
@@ -164,9 +171,9 @@ Verified progress:
   script evaluation.
 - [x] Define a provider-neutral `web.search` Operation contract while keeping
   provider credentials and selection under runtime ownership.
-- [ ] Verify builtin tools use normal authorization, Consequence/Conclusion,
+- [x] Verify builtin tools use normal authorization, Consequence/Conclusion,
   CallTree, metrics, and MCP Operation projection semantics.
-- [ ] Keep dynamic browser automation, arbitrary filesystem/process access,
+- [x] Keep dynamic browser automation, arbitrary filesystem/process access,
   unrestricted headers, JavaScript evaluation, and external mutation tools in
   optional Components rather than the builtin baseline.
 
