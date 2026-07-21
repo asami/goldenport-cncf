@@ -1,0 +1,23 @@
+{
+  "schemaVersion": "cncf.component-repository-index.v1",
+  "generatedAt": "2026-07-21T00:00:00Z",
+  "artifacts": [
+    {
+      "kind": "sar",
+      "artifactId": "textus-platform",
+      "catalog": "sar/textus-platform.yaml",
+      "status": "active",
+      "recommended": "1.0.0",
+      "latestStable": "1.0.0"
+    },
+    {
+      "kind": "car",
+      "artifactId": "textus-blog",
+      "catalog": "car/textus-blog.yaml",
+      "status": "active",
+      "recommended": "1.2.0",
+      "latestStable": "1.2.0",
+      "latestSnapshot": "1.3.0-SNAPSHOT"
+    }
+  ]
+}

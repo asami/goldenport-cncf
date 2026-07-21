@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://www.simplemodeling.org/schema/cncf/component-repository-index-v1.json",
+  "title": "CNCF Component Repository Index",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "generatedAt", "artifacts"],
+  "properties": {
+    "schemaVersion": { "const": "cncf.component-repository-index.v1" },
+    "generatedAt": { "type": "string", "format": "date-time" },
+    "artifacts": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/artifact" }
+    }
+  },
+  "$defs": {
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "artifactId", "catalog", "status"],
+      "properties": {
+        "kind": { "enum": ["car", "sar"] },
+        "artifactId": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$" },
+        "catalog": {
+          "type": "string",
+          "pattern": "^(car|sar)/[A-Za-z0-9][A-Za-z0-9._-]*\\.(yaml|yml|json)$"
+        },
+        "status": { "enum": ["active", "deprecated", "disabled"] },
+        "recommended": { "type": "string", "minLength": 1 },
+        "latestStable": { "type": "string", "minLength": 1 },
+        "latestSnapshot": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}
