@@ -73,7 +73,7 @@ not control an MCP endpoint, transport, credential, header, or raw payload.
 | MC-03 | Port and transport ExtensionPoint | Port/registry, Streamable HTTP, and deterministic fake transport are complete. | done |
 | MC-04 | Admission and safety | Endpoint, credential-reference, tool, resource-limit, and failure policy is enforced before transport execution. | done |
 | MC-05 | Observability and lifecycle | CallTree, metrics, and shutdown behavior expose only safe MCP execution facts. | done |
-| MC-06 | Codex MCP definition import | Operator-selected Codex MCP definitions become admitted CNCF server sets through a bounded import adapter and CNCF policy overlay. | planned |
+| MC-06 | Codex MCP definition import | Operator-selected Codex MCP definitions become admitted CNCF server sets through a bounded import adapter and CNCF policy overlay. | active |
 | MC-07 | Builtin tool baseline | Common resource, Web, time, calculation, and Web-search contracts are available through normal CNCF Operations and MCP projection. | planned |
 | MC-08 | Consumer evidence and closure | CNCF fake evidence and Textus AI integration prove the boundary without a required remote MCP service. | planned |
 
@@ -85,8 +85,10 @@ resolution immediately before HTTP exchange.
 MC-05 records payload-safe consumer-side catalog and tool invocation spans and
 `mcp-client.invocation` metrics. Runtime shutdown closes registry admission,
 interrupts and drains tracked in-flight operations, then closes each transport
-once in deterministic server-set order. MC-06 adds Codex configuration as an
-import source without making Codex a runtime authority. MC-07 adds a safe,
+once in deterministic server-set order. MC-06 now has a package-restricted
+runtime assembly and an operator-owned policy descriptor that combines a
+generic TOML definition source with exact CNCF admission policy. Textus AI
+isolation evidence remains before MC-06 closure. MC-07 adds a safe,
 operation-backed builtin tool baseline. MC-08 consumer evidence and closure
 remains the final Phase 45 work.
 

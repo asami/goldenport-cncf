@@ -97,6 +97,11 @@ Verified progress:
   Streamable HTTP transport binding and the client registry, installs only
   normalized services into consumer sockets, and owns deterministic registry
   closure. Unsafe selected definitions fail before transport allocation.
+- An operator-owned policy descriptor now resolves a relative Codex definition
+  source, exact selected server/tool admission, limits, and opaque credential
+  references. Generic core Record decoding handles TOML and recursively
+  normalizes YAML mappings; malformed present limits fail instead of silently
+  reverting to defaults.
 
 - [x] Define a Codex configuration import adapter that is isolated from the
   canonical MCP client model and resilient to external schema evolution.

@@ -210,6 +210,37 @@ and closes the registry and its transports. Definition or policy failure occurs
 before transport allocation; components cannot invoke the importer or retain
 the source configuration.
 
+An operator selects the external definition file through a separate CNCF MCP
+client policy descriptor. That descriptor owns the source kind/path,
+server-set identity, selected Codex source names, exact admitted tools, limits,
+and optional opaque credential references. The generic core Record loader
+decodes both the CNCF descriptor and Codex TOML source; TOML syntax remains
+outside the MCP client model and component Port.
+
+The operator descriptor has the following normalized shape. Relative source
+paths resolve against the descriptor directory. Present limit values must be
+integral; malformed values fail configuration loading rather than falling back
+to defaults.
+
+```yaml
+source:
+  kind: codex
+  path: config.toml
+serverSet:
+  id: research
+  limits:
+    timeoutMillis: 12000
+    maximumCalls: 3
+    maximumInputBytes: 4096
+    maximumOutputBytes: 8192
+    maximumConcurrency: 1
+  servers:
+    - sourceName: research_service
+      admittedTools:
+        - paper.search
+      credentialReference: env://MCP_RESEARCH_TOKEN
+```
+
 ## Execution And Failure Semantics
 
 Every discovery or invocation crosses runtime admission before transport
