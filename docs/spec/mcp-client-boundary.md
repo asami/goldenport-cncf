@@ -252,6 +252,13 @@ tool policy, timeout, credential, and transport authority MUST NOT broaden that
 overlay. Imported source names MUST normalize deterministically to logical MCP
 server identities, and normalization collisions MUST fail.
 
+The runtime MUST activate a successful import through a runtime-owned assembly
+that creates the transport provider and client registry, installs only
+normalized services into consumer sockets, and closes the registry with the
+runtime lifecycle. Import or policy failure MUST occur before transport
+allocation. The import adapter, source record, and import result MUST NOT be
+available to consumer components.
+
 ## Lifecycle Contract
 
 Transport resources MUST be owned by the CNCF runtime and released during

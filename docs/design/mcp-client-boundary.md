@@ -203,6 +203,13 @@ servers; unrelated source definitions are ignored. Textus AI receives only the
 eventual `McpClientSocket` service and never receives this source record or the
 import result.
 
+Runtime activation composes that import result with the Streamable HTTP
+transport provider and `McpClientRuntimeRegistry` inside a package-restricted
+assembly owner. The owner installs normalized services into consumer sockets
+and closes the registry and its transports. Definition or policy failure occurs
+before transport allocation; components cannot invoke the importer or retain
+the source configuration.
+
 ## Execution And Failure Semantics
 
 Every discovery or invocation crosses runtime admission before transport

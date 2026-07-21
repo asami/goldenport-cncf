@@ -92,6 +92,12 @@ Stage Status:
   an import source, normalized into the CNCF client model, and subjected to the
   same CNCF-owned admission policy as native definitions.
 
+Verified progress:
+- A package-restricted runtime assembly now composes successful imports with
+  Streamable HTTP transport binding and the client registry, installs only
+  normalized services into consumer sockets, and owns deterministic registry
+  closure. Unsafe selected definitions fail before transport allocation.
+
 - [x] Define a Codex configuration import adapter that is isolated from the
   canonical MCP client model and resilient to external schema evolution.
 - [x] Import only the CNCF-supported Streamable HTTP subset and normalize
