@@ -75,7 +75,7 @@ not control an MCP endpoint, transport, credential, header, or raw payload.
 | MC-05 | Observability and lifecycle | CallTree, metrics, and shutdown behavior expose only safe MCP execution facts. | done |
 | MC-06 | Codex MCP definition import | Operator-selected Codex MCP definitions become admitted CNCF server sets through a bounded import adapter and CNCF policy overlay. | done |
 | MC-07 | Builtin tool baseline | Common resource, Web, time, calculation, and Web-search contracts are available through normal CNCF Operations and MCP projection. | done |
-| MC-08 | Consumer evidence and closure | CNCF fake evidence and Textus AI integration prove the boundary without a required remote MCP service. | planned |
+| MC-08 | Consumer evidence and closure | CNCF fake evidence and Textus AI integration prove the boundary without a required remote MCP service. | in progress |
 
 MC-04 has exact per-server tool allowlisting, recursive typed-input admission,
 invocation-scoped call/concurrency budgets, transport-enforced
@@ -90,7 +90,9 @@ runtime assembly and an operator-owned policy descriptor that combines a
 generic TOML definition source with exact CNCF admission policy. Textus AI
 now proves the consumer sees only a logical server-set requirement and the
 normalized `McpClientSocket`, while application-purpose configuration cannot
-select MCP infrastructure. MC-07 provides a safe,
+select MCP infrastructure. A deterministic Textus AI consumer specification
+now installs the runtime-owned service into the actual component and proves
+that an extra transport tool remains absent from the admitted catalog. MC-07 provides a safe,
 operation-backed builtin tool baseline with normal authorization, structured
 failure, CallTree, metrics, and MCP projection evidence. MC-08 consumer evidence and closure
 remains the final Phase 45 work.
@@ -136,10 +138,13 @@ Components.
 
 ## Downstream
 
-Textus AI Phase 6 is the first consumer. It will adapt the admitted catalog to
-provider function definitions, combine internal Operation tools with remote MCP
-tools while preserving source identity, and execute provider continuation
-loops. That provider work is not part of this phase.
+Textus AI Phase 6 is the first consumer. Phase 45 closes on the typed consumer
+Port, admitted-catalog installation, and separate internal/remote identity
+domains. Textus AI MO-02 will adapt those identities into one provider-neutral
+provider catalog, convert it to provider function definitions, and execute
+provider continuation loops. That composition and provider work is not part of
+this phase. Optional live remote MCP evidence remains Textus AI MO-05 heavy
+validation rather than a Phase 45 closure gate.
 
 ## References
 

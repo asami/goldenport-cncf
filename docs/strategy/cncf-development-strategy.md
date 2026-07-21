@@ -2586,7 +2586,12 @@ deterministic decimal calculation, and a provider-neutral Web search contract.
 These tools retain ActionCall/UoW authorization and observability and use MCP
 only as an external projection; dynamic browser, arbitrary filesystem/process,
 JavaScript, and unrestricted HTTP capabilities remain optional Components.
-MC-08 consumer evidence and closure remains.
+MC-08 now has deterministic discovery, invocation, admission, limit,
+diagnostic, lifecycle, and MCP server-projection evidence. The actual Textus AI
+runtime component receives only the runtime-admitted catalog through its
+logical input socket, while internal Operation and remote `server/tool`
+identities remain separate. Unified provider catalog/function orchestration is
+owned by Textus AI Phase 6 MO-02; only the Phase 45 closure audit remains.
 
 - Goal: provide a provider-neutral, runtime-owned MCP client boundary so
   consumers can execute only admitted tools without exposing endpoint,

@@ -198,12 +198,20 @@ Verified progress:
   `component.service.operation` publication even when the remote tool name
   matches a builtin Operation name. Existing MCP server projection continues
   to publish only declared CNCF Operations.
+- Textus AI's actual runtime component receives its logical server-set service
+  through the input socket. Deterministic transport evidence reports an extra
+  tool but the consumer catalog contains only the CNCF allowlisted identity;
+  application-purpose configuration remains unable to select connectivity.
+- Phase 45 fixes the separate internal Operation and remote `server/tool`
+  identity domains. Combining them into provider function definitions is
+  Textus AI MO-02 work and is not a Phase 45 closure dependency.
 
 - [x] Verify discovery, invocation, admission, limit, and diagnostic behavior
   through deterministic fake transport specifications.
 - [x] Verify existing MCP server projection behavior remains unchanged.
-- [ ] Verify Textus AI receives only an admitted catalog and cannot bypass the
+- [x] Verify Textus AI receives only an admitted catalog and cannot bypass the
   client policy through provider-native remote MCP configuration.
-- [ ] Verify Textus AI distinguishes internal Operation tool identities from
-  remote MCP tool identities while presenting one provider-neutral catalog.
-- [ ] Record optional live remote MCP evidence as a heavy test.
+- [x] Verify internal Operation and remote MCP tool identities remain distinct
+  at the CNCF boundary before Textus AI MO-02 composes a provider catalog.
+- [x] Keep live remote MCP evidence optional and assign it to Textus AI MO-05
+  heavy validation rather than the Phase 45 closure gate.
