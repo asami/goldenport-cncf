@@ -31,7 +31,7 @@ import org.goldenport.configuration.{Configuration, ConfigurationTrace, Resolved
  *  version Mar. 22, 2026
  *  version Apr. 25, 2026
  *  version May. 25, 2026
- * @version Jul. 17, 2026
+ * @version Jul. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 sealed abstract class ComponentRepository {
@@ -923,12 +923,7 @@ object ComponentRepository extends GlobalObservable {
     previousspecs: Seq[Specification],
     descriptors: Vector[ComponentDescriptor]
   ): Vector[ComponentDescriptor] =
-    spec match {
-      case _: StandardRepository.Specification =>
-        descriptors.filterNot(d => _is_descriptor_satisfied_by_specs(d, previousspecs))
-      case _ =>
-        descriptors
-    }
+    descriptors.filterNot(d => _is_descriptor_satisfied_by_specs(d, previousspecs))
 
   private[cncf] def unresolvedDescriptorsForSearch(
     previousspecs: Seq[Specification],

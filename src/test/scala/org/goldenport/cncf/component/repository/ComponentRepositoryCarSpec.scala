@@ -29,7 +29,7 @@ import org.goldenport.configuration.ConfigurationTrace
  * @since   Feb.  4, 2026
  *  version Apr. 25, 2026
  *  version May. 25, 2026
- * @version Jul. 17, 2026
+ * @version Jul. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAndAfterAll with GivenWhenThen {
@@ -866,6 +866,48 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
 
         Then("it does not fall back to scanning every CAR")
         components shouldBe empty
+      }
+    }
+
+    "preserve repository priority when the same component coordinate exists later" in {
+      Given("an active component directory followed by a stale local component directory")
+      _with_temp_dir { root =>
+        val active = Files.createDirectories(root.resolve("active"))
+        val stale = Files.createDirectories(root.resolve("stale"))
+        Vector(active, stale).foreach { componentdir =>
+          val componentjar = _create_fake_component_jar(
+            componentdir.resolve("assets").resolve("component-main.jar")
+          )
+          val descriptorfile = componentdir.resolve("component-descriptor.json")
+          Files.writeString(
+            descriptorfile,
+            """{"name":"priority-component","version":"0.1.0-SNAPSHOT","component":"priority-component"}"""
+          )
+          _create_car(
+            componentdir.resolve("priority-component-0.1.0-SNAPSHOT.car"),
+            Seq(
+              "component/main.jar" -> componentjar,
+              "component-descriptor.json" -> descriptorfile
+            )
+          )
+        }
+        val requested = ComponentDescriptor(
+          name = Some("priority-component"),
+          version = Some("0.1.0-SNAPSHOT"),
+          componentName = Some("priority-component")
+        )
+        val activespec = ComponentRepository.ComponentDirRepository.Specification(active)
+        val stalespec = ComponentRepository.ComponentDirRepository.Specification(stale)
+
+        When("the later repository receives assembly component descriptors")
+        val remaining = ComponentRepository.descriptorsForSpecification(
+          stalespec,
+          Vector(activespec),
+          Vector(requested)
+        )
+
+        Then("the coordinate already satisfied by the active repository is not resolved again")
+        remaining shouldBe empty
       }
     }
 
