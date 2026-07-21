@@ -27,24 +27,25 @@ Stage Status:
 ## MT-02: Internal Operation Tool Source
 
 Stage Status:
-- Current status: OPEN
+- Current status: DONE
 - Owner: CNCF runtime maintainers
 - Update rule: Mark DONE only after one typed, policy-admitted internal catalog
   and invocation path execute through normal Subsystem operation semantics.
 
-- [ ] Define typed internal tool identity, definition, input schema,
+- [x] Define typed internal tool identity, definition, input schema,
   invocation, result, and logical tool-set/admission values.
-- [ ] Extract generic Operation definition/schema construction from
+- [x] Extract generic Operation definition/schema construction from
   `McpToolCatalog`; keep MCP JSON projection in the MCP adapter.
-- [ ] Construct catalogs deterministically from only explicitly admitted
+- [x] Construct catalogs deterministically from only explicitly admitted
   assembled Operations; default discovery remains empty/denied.
-- [ ] Invoke admitted tools through `Subsystem.executeOperationResponse` with
+- [x] Invoke admitted tools through `Subsystem.executeOperationResponse` with
   the caller's ExecutionContext and no local HTTP callback.
-- [ ] Preserve normal request binding, ActionCall/UnitOfWork authorization,
+- [x] Preserve normal request binding, ActionCall/UnitOfWork authorization,
   Consequence/Conclusion, CallTree, metrics, timeout, and cancellation
   behavior.
-- [ ] Reject unknown, unadmitted, malformed, and over-limit calls before
-  business operation execution.
+- [x] Reject unknown, unadmitted, malformed, and pre-dispatch over-limit calls
+  before business operation execution; reject oversized results before they
+  cross the tool boundary.
 
 ## MT-03: Shared Protocol Negotiation
 

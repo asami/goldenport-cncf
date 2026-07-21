@@ -46,11 +46,15 @@ runtime-owned tool-set policy.
 MCP publication readiness MUST NOT by itself grant internal admission. Remote
 MCP allowlists MUST NOT admit internal Operations. Admission MUST be immutable
 for one invocation and MUST include positive call-count, input-byte,
-result-byte, timeout, and concurrency limits.
+result-byte, and concurrency limits.
 
 Unknown, stale, duplicate, unadmitted, malformed, or over-limit calls MUST fail
-before business operation execution. A denied call MUST NOT be retried through
-local MCP HTTP.
+before business operation execution when the limit is measurable before
+dispatch. Result size MUST be checked immediately after execution and before
+the result crosses the tool boundary. Existing Operation timeout and
+cancellation policy MUST remain authoritative; the internal source MUST NOT
+create a second scheduler or detach execution from the caller transaction. A
+denied call MUST NOT be retried through local MCP HTTP.
 
 ## Execution Contract
 

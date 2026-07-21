@@ -89,7 +89,7 @@ but CNCF does not perform provider-function composition.
 | ID | Stage | Outcome | Status |
 | --- | --- | --- | --- |
 | MT-01 | Boundary and protocol contract | Internal Operation tools, remote MCP tools, ownership, identity, and protocol lifecycle are fixed normatively. | done |
-| MT-02 | Internal Operation tool source | A policy-admitted typed catalog and invocation path execute through normal Subsystem operation semantics. | open |
+| MT-02 | Internal Operation tool source | A policy-admitted typed catalog and invocation path execute through normal Subsystem operation semantics. | done |
 | MT-03 | Shared protocol negotiation | CNCF server and client use one shared revision model and reject unsupported initialization deterministically. | open |
 | MT-04 | Notification-aware HTTP server | The adapter and HTTP route distinguish request responses from accepted notifications and validate lifecycle headers. | open |
 | MT-05 | Executable interoperability evidence | Real HTTP server/client and internal no-loopback specifications cover success, policy rejection, and payload safety. | open |
@@ -145,7 +145,7 @@ but CNCF does not perform provider-function composition.
 
 ## Resume Point
 
-Begin MT-02 by extracting provider-neutral Operation identity, definition, and
-typed schema construction from `McpToolCatalog`. Add deny-by-default runtime
-tool-set admission and invoke admitted definitions through
-`Subsystem.executeOperationResponse` without an HTTP callback.
+Begin MT-03 by introducing one shared MCP protocol revision model for the
+server and Streamable HTTP client. Negotiate `initialize` against the common
+supported set and reject missing, malformed, and unsupported revisions
+structurally.

@@ -433,6 +433,23 @@ final class Subsystem(
     executeWithMetadata(request).map(_.response)
   }
 
+  /** Executes a framework-admitted in-process call with the caller's existing context. */
+  private[cncf] def executeOperationResponse(
+    request: Request,
+    executioncontext: ExecutionContext
+  ): Consequence[OperationResponse] = {
+    val result = for {
+      route <- _resolve_route(request) match {
+        case Some(value) => Consequence.success(value)
+        case None => Consequence.operationNotFound("operation route")
+      }
+      normalized <- _prepare_filebundle_parameters(route._3, request)
+      response <- _execute_resolved_operation(route, normalized, executioncontext)
+    } yield response
+    _observe_execute_failure(request, result)
+    result
+  }
+
   def executeWithMetadata(request: Request): Consequence[ExecutionResult] = {
     _execute_with_metadata(request, None)
   }
@@ -445,7 +462,7 @@ final class Subsystem(
 
   def executeQueryOnlyWithMetadata(
     request: Request
-  )(using executionContext: ExecutionContext): Consequence[ExecutionResult] = {
+  )(using executioncontext: ExecutionContext): Consequence[ExecutionResult] = {
     _execute_query_only_with_metadata(request, None)
   }
 
@@ -527,7 +544,7 @@ final class Subsystem(
     binding: ResolvedSpiBinding,
     selector: SpiOperationSelector,
     record: Record
-  )(using executionContext: ExecutionContext): Consequence[OperationResponse] =
+  )(using executioncontext: ExecutionContext): Consequence[OperationResponse] =
     if (!binding._target_component.subsystem.contains(this))
       Consequence.serviceUnavailable(
         s"resolved SPI binding belongs to another subsystem: provider=${binding.provider.instanceId.canonicalKey}"
@@ -542,7 +559,7 @@ final class Subsystem(
           properties = record.fields.map(field => Property(field.key, field.value.single, None)).toList
         )
         normalized <- _prepare_filebundle_parameters(route._3, request)
-        response <- _execute_resolved_operation(route, normalized, executionContext)
+        response <- _execute_resolved_operation(route, normalized, executioncontext)
       } yield response
 
   private def _resolve_spi_route(
@@ -595,7 +612,7 @@ final class Subsystem(
   private def _execute_query_only_with_metadata(
     request: Request,
     httprequest: Option[HttpRequest]
-  )(using executionContext: ExecutionContext): Consequence[ExecutionResult] = {
+  )(using executioncontext: ExecutionContext): Consequence[ExecutionResult] = {
     val r: Consequence[ExecutionResult] = for {
       route <- _resolve_route(request) match {
         case Some(r) =>
@@ -607,27 +624,27 @@ final class Subsystem(
       response <- {
         val (component, _, _) = route
         val domainrequest = _domain_request(normalizedrequest)
-        val resolvedExecutionContext =
-          _with_http_runtime_parameters(executionContext, httprequest)
-        given ExecutionContext = resolvedExecutionContext
+        val resolvedexecutioncontext =
+          _with_http_runtime_parameters(executioncontext, httprequest)
+        given ExecutionContext = resolvedexecutioncontext
         if (
-          resolvedExecutionContext.framework.traceJob ||
+          resolvedexecutioncontext.framework.traceJob ||
           _query_only_trace_job_requested(normalizedrequest)
         ) {
           Consequence.operationInvalid("CompositeQuery accepts only direct Query execution; trace-job is not allowed")
-        } else _authorize_operation(route, resolvedExecutionContext).flatMap { _ =>
+        } else _authorize_operation(route, resolvedexecutioncontext).flatMap { _ =>
             val operationdomainrequest = _operation_business_request(route, domainrequest)
             val oprequest = component.logic.makeOperationRequest(operationdomainrequest)
             _observe_operation_request_validation_failure(
               route,
               operationdomainrequest,
               oprequest,
-              resolvedExecutionContext
+              resolvedexecutioncontext
             )
             oprequest.flatMap {
               case action: QueryAction =>
-                component.logic.executeAction(action, resolvedExecutionContext).map { response =>
-                  ExecutionResult(response, resolvedExecutionContext.runtime.executionMetadata)
+                component.logic.executeAction(action, resolvedexecutioncontext).map { response =>
+                  ExecutionResult(response, resolvedexecutioncontext.runtime.executionMetadata)
                 }
               case action: Action =>
                 Consequence.operationInvalid(s"CompositeQuery accepts only Query operations: ${action.request.name}")

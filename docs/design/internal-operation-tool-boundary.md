@@ -82,8 +82,12 @@ but it is not an implicit grant to every internal consumer. Remote MCP client
 allowlists do not admit internal Operations.
 
 Admission is immutable for one invocation and carries positive limits for
-call count, input size, result size, timeout, and active concurrency. Unknown,
-duplicate, unadmitted, malformed, or over-limit calls fail before business
+call count, input size, result size, and active concurrency. Call-count,
+input-size, and concurrency denial occurs before business execution; result
+size is measured immediately after execution and before the result crosses the
+tool boundary. Operation-defined timeout and cancellation remain authoritative
+and are not replaced by a second tool-local scheduler. Unknown, duplicate,
+unadmitted, malformed, or pre-execution over-limit calls fail before business
 operation execution.
 
 ## Invocation
