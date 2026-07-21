@@ -17,38 +17,107 @@ import org.goldenport.cncf.subsystem.Subsystem
 final class McpJsonRpcAdapter(
   subsystem: Subsystem
 ) {
-  def handle(input: String): String =
+  import McpJsonRpcOutcome.*
+
+  def handle(
+    input: String,
+    protocolversionheader: Option[String]
+  ): McpJsonRpcOutcome =
+    _handle(input, protocolversionheader, enforceprotocolversion = true)
+
+  def handleWebSocketCompatibility(input: String): McpJsonRpcOutcome =
+    _handle(input, None, enforceprotocolversion = false)
+
+  private def _handle(
+    input: String,
+    protocolversionheader: Option[String],
+    enforceprotocolversion: Boolean
+  ): McpJsonRpcOutcome =
     parse(input) match {
       case Left(_) =>
-        _error(Json.Null, -32600, "invalid request").noSpaces
+        ProtocolFailure(Some(_error(Json.Null, -32600, "invalid request")))
       case Right(json) =>
-        _handle_json(json).noSpaces
+        _handle_json(json, protocolversionheader, enforceprotocolversion)
     }
 
-  private def _handle_json(json: Json): Json =
+  private def _handle_json(
+    json: Json,
+    protocolversionheader: Option[String],
+    enforceprotocolversion: Boolean
+  ): McpJsonRpcOutcome =
     json.asObject match {
       case Some(obj) =>
+        val isrequest = obj.contains("id")
         val id = obj("id").getOrElse(Json.Null)
         val jsonrpcok = obj("jsonrpc").flatMap(_.asString).contains("2.0")
         val methodopt = obj("method").flatMap(_.asString)
         if (!jsonrpcok || methodopt.isEmpty) {
-          _error(id, -32600, "invalid request")
+          ProtocolFailure(Some(_error(id, -32600, "invalid request")))
+        } else if (isrequest) {
+          _handle_request(id, methodopt.get, obj("params"), protocolversionheader, enforceprotocolversion)
         } else {
-          val params = obj("params")
-          methodopt.get match {
-            case "initialize" =>
-              _initialize(id, params)
-            case "tools/list" =>
-              _tools_list(id)
-            case "tools/call" =>
-              _tools_call(id, params)
-            case _ =>
-              _error(id, -32601, "method not found")
-          }
+          _handle_notification(methodopt.get, protocolversionheader, enforceprotocolversion)
         }
       case None =>
-        _error(Json.Null, -32600, "invalid request")
+        ProtocolFailure(Some(_error(Json.Null, -32600, "invalid request")))
     }
+
+  private def _handle_request(
+    id: Json,
+    method: String,
+    params: Option[Json],
+    protocolversionheader: Option[String],
+    enforceprotocolversion: Boolean
+  ): McpJsonRpcOutcome =
+    method match {
+      case "initialize" =>
+        _response(_initialize(id, params))
+      case "notifications/initialized" =>
+        ProtocolFailure(Some(_error(id, -32600, "invalid request: initialized must be a notification")))
+      case _ =>
+        _validate_protocol_version(protocolversionheader, enforceprotocolversion) match {
+          case Some(message) => ProtocolFailure(Some(_error(id, -32600, message)))
+          case None => method match {
+            case "tools/list" => _response(_tools_list(id))
+            case "tools/call" => _response(_tools_call(id, params))
+            case _ => ProtocolFailure(Some(_error(id, -32601, "method not found")))
+          }
+        }
+    }
+
+  private def _handle_notification(
+    method: String,
+    protocolversionheader: Option[String],
+    enforceprotocolversion: Boolean
+  ): McpJsonRpcOutcome =
+    if (method != "notifications/initialized")
+      ProtocolFailure(None)
+    else
+      _validate_protocol_version(protocolversionheader, enforceprotocolversion) match {
+        case Some(_) => ProtocolFailure(None)
+        case None => AcceptedNotification
+      }
+
+  private def _validate_protocol_version(
+    protocolversionheader: Option[String],
+    enforceprotocolversion: Boolean
+  ): Option[String] =
+    if (!enforceprotocolversion)
+      None
+    else
+      protocolversionheader match {
+        case None => Some("invalid request: MCP-Protocol-Version is required")
+        case Some(value) => McpProtocolRevision.parseC(value) match {
+          case Consequence.Success(_) => None
+          case Consequence.Failure(_) => Some("invalid request: unsupported MCP-Protocol-Version")
+        }
+      }
+
+  private def _response(json: Json): McpJsonRpcOutcome =
+    if (json.hcursor.downField("error").succeeded)
+      ProtocolFailure(Some(json))
+    else
+      Response(json)
 
   private def _initialize(
     id: Json,
@@ -209,4 +278,27 @@ final class McpJsonRpcAdapter(
         "message" -> Json.fromString(message)
       )
     )
+}
+
+/*
+ * @since   Jul. 21, 2026
+ * @version Jul. 21, 2026
+ * @author  ASAMI, Tomoharu
+ */
+sealed abstract class McpJsonRpcOutcome {
+  def responseBody: Option[Json]
+}
+
+object McpJsonRpcOutcome {
+  final case class Response(body: Json) extends McpJsonRpcOutcome {
+    def responseBody: Option[Json] = Some(body)
+  }
+
+  case object AcceptedNotification extends McpJsonRpcOutcome {
+    def responseBody: Option[Json] = None
+  }
+
+  final case class ProtocolFailure(body: Option[Json]) extends McpJsonRpcOutcome {
+    def responseBody: Option[Json] = body
+  }
 }

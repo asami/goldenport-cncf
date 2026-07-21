@@ -51,6 +51,11 @@ The JSON-RPC adapter distinguishes:
 The HTTP route maps those typed outcomes to HTTP status and content type. A
 string-only adapter result cannot represent this lifecycle correctly.
 
+Request-shaped protocol failures retain a bounded JSON-RPC error body and HTTP
+`200`. A rejected notification receives HTTP `400` with no JSON-RPC body; an
+accepted `notifications/initialized` notification alone receives HTTP `202`.
+The presence of the `id` member determines request shape, including `id: null`.
+
 ## Operation Publication And Invocation
 
 The server publishes only MCP-ready Operations admitted by assembled runtime
@@ -68,6 +73,10 @@ The existing WebSocket `/mcp` route is a compatibility transport over the same
 adapter. It is not normative for new development, does not define a second
 execution model, and must not receive lifecycle features that diverge from
 Streamable HTTP. Streamable HTTP POST is the canonical server transport.
+
+Because WebSocket has no Streamable HTTP protocol-version header, its explicit
+compatibility context does not claim initialize-session continuity. It reuses
+the same request execution adapter and suppresses notification response frames.
 
 WebSocket compatibility and removal may be handled in a later migration slice.
 Until then, documentation and introspection must not advertise it as an

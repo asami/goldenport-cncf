@@ -1,7 +1,7 @@
 package org.goldenport.cncf.mcp
 
 import cats.data.NonEmptyVector
-import io.circe.parser.parse
+import io.circe.Json
 import org.goldenport.cncf.component.*
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.cncf.testutil.TestComponentFactory
@@ -14,7 +14,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jul. 15, 2026
- * @version Jul. 15, 2026
+ * @version Jul. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 final class McpToolCatalogSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -61,10 +61,12 @@ final class McpToolCatalogSpec extends AnyWordSpec with Matchers with GivenWhenT
 
       When("the catalog is listed and the colliding identity is called")
       val listed = _json(adapter.handle(
-        """{"jsonrpc":"2.0","id":"list","method":"tools/list","params":{}}"""
+        """{"jsonrpc":"2.0","id":"list","method":"tools/list","params":{}}""",
+        Some(McpProtocolRevision.PREFERRED.print)
       ))
       val called = _json(adapter.handle(
-        """{"jsonrpc":"2.0","id":"call","method":"tools/call","params":{"name":"shared-search.Query.find","arguments":{}}}"""
+        """{"jsonrpc":"2.0","id":"call","method":"tools/call","params":{"name":"shared-search.Query.find","arguments":{}}}""",
+        Some(McpProtocolRevision.PREFERRED.print)
       ))
 
       Then("neither request can observe a hidden winner")
@@ -121,9 +123,6 @@ final class McpToolCatalogSpec extends AnyWordSpec with Matchers with GivenWhenT
     ).primary.withMcpReadyServices(Set("Query"))
   }
 
-  private def _json(value: String) =
-    parse(value).fold(
-      error => fail(s"response is not valid JSON: ${error.getMessage}"),
-      identity
-    )
+  private def _json(outcome: McpJsonRpcOutcome): Json =
+    outcome.responseBody.getOrElse(fail("MCP outcome has no JSON response body"))
 }

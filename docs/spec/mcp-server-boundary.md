@@ -39,6 +39,12 @@ protocol-failure outcomes so that the HTTP route can preserve these status and
 body semantics. It MUST NOT synthesize JSON-RPC responses for accepted
 notifications.
 
+A request-shaped protocol failure MUST receive HTTP `200` with one bounded
+JSON-RPC error response. A rejected notification MUST receive HTTP `400` with
+no JSON-RPC body. The presence of an `id` member, including `id: null`, MUST
+make a message request-shaped. Duplicate, missing, malformed, and unsupported
+post-initialize protocol-version headers MUST fail deterministically.
+
 ## Publication And Execution Contract
 
 The server MUST publish only uniquely identified, MCP-ready Operations admitted
@@ -70,3 +76,7 @@ WebSocket route MAY remain as compatibility behavior over the same Operation
 execution adapter, but MUST NOT define a second execution model or be
 advertised as lifecycle-equivalent. New lifecycle behavior MUST target
 Streamable HTTP first.
+
+The WebSocket compatibility context MAY omit Streamable HTTP header validation,
+but it MUST NOT claim retained negotiation and MUST NOT emit a response frame
+for a notification outcome.

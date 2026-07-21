@@ -91,7 +91,7 @@ but CNCF does not perform provider-function composition.
 | MT-01 | Boundary and protocol contract | Internal Operation tools, remote MCP tools, ownership, identity, and protocol lifecycle are fixed normatively. | done |
 | MT-02 | Internal Operation tool source | A policy-admitted typed catalog and invocation path execute through normal Subsystem operation semantics. | done |
 | MT-03 | Shared protocol negotiation | CNCF server and client use one shared revision model and reject unsupported initialization deterministically. | done |
-| MT-04 | Notification-aware HTTP server | The adapter and HTTP route distinguish request responses from accepted notifications and validate lifecycle headers. | open |
+| MT-04 | Notification-aware HTTP server | The adapter and HTTP route distinguish request responses from accepted notifications and validate lifecycle headers. | done |
 | MT-05 | Executable interoperability evidence | Real HTTP server/client and internal no-loopback specifications cover success, policy rejection, and payload safety. | open |
 | MT-06 | Downstream acceptance and closure | Textus AI and Sanpomap consume the corrected boundaries and all phase closure evidence passes. | open |
 
@@ -145,7 +145,6 @@ but CNCF does not perform provider-function composition.
 
 ## Resume Point
 
-Begin MT-04 by replacing the string-only JSON-RPC adapter result with typed
-request-response, accepted-notification, and protocol-failure outcomes. Map
-`notifications/initialized` to HTTP `202 Accepted` with no response body and
-validate the negotiated protocol header on later requests.
+Begin MT-05 with a real loopback Streamable HTTP executable specification that
+uses the production server route and client exchange for initialize,
+`notifications/initialized`, `tools/list`, and one deterministic `tools/call`.

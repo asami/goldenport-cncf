@@ -69,22 +69,22 @@ Stage Status:
 ## MT-04: Notification-aware HTTP Server
 
 Stage Status:
-- Current status: OPEN
+- Current status: DONE
 - Owner: CNCF MCP and HTTP maintainers
 - Update rule: Mark DONE only after JSON-RPC requests and notifications produce
   their protocol-correct HTTP outcomes and lifecycle headers are validated.
 
-- [ ] Replace the adapter's string-only result with typed JSON response,
+- [x] Replace the adapter's string-only result with typed JSON response,
   accepted-notification, and protocol-failure outcomes.
-- [ ] Accept `notifications/initialized` only as a notification without an
+- [x] Accept `notifications/initialized` only as a notification without an
   `id` and return HTTP `202` with no response body.
-- [ ] Keep normal JSON-RPC request responses at HTTP `200` with
+- [x] Keep normal JSON-RPC request responses at HTTP `200` with
   `application/json` and matching request ids.
-- [ ] Validate the negotiated `MCP-Protocol-Version` on post-initialize
+- [x] Validate the negotiated `MCP-Protocol-Version` on post-initialize
   requests without inventing a session when the server is stateless.
-- [ ] Preserve bounded invalid-request, method-not-found, invalid-params, and
+- [x] Preserve bounded invalid-request, method-not-found, invalid-params, and
   internal-error mappings without emitting responses to notifications.
-- [ ] Add HTTP route specifications for content type, empty notification body,
+- [x] Add HTTP route specifications for content type, empty notification body,
   protocol header, and unsupported lifecycle requests.
 
 ## MT-05: Executable Interoperability Evidence

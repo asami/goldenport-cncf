@@ -12,6 +12,7 @@ import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.information.*
 import org.goldenport.cncf.job.JobId
 import org.goldenport.cncf.knowledge.{KnowledgeNode, KnowledgeNodeId, KnowledgeWorkingSetSnapshot}
+import org.goldenport.cncf.mcp.McpProtocolRevision
 import org.goldenport.cncf.security.{AuthenticationProvider, AuthenticationRequest, AuthenticationResult}
 import org.goldenport.cncf.subsystem.DefaultSubsystemFactory
 import org.goldenport.cncf.testutil.TestComponentFactory
@@ -32,7 +33,7 @@ import org.typelevel.ci.CIStringSyntax
  *  version Apr. 25, 2026
  *  version May. 25, 2026
  *  version Jun. 19, 2026
- * @version Jul. 16, 2026
+ * @version Jul. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -990,6 +991,7 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
       val request = HRequest[IO](method = Method.POST, uri = Uri.unsafeFromString("/mcp"))
         .withEntity("""{"jsonrpc":"2.0","id":"tools","method":"tools/list","params":{}}""")
         .withContentType(`Content-Type`.parse("application/json").toOption.get)
+        .putHeaders(org.http4s.Header.Raw(ci"MCP-Protocol-Version", McpProtocolRevision.PREFERRED.print))
 
       val response = app.run(request).unsafeRunSync()
 
@@ -997,6 +999,74 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
       val body = response.as[String].unsafeRunSync()
       body should include (""""id":"tools"""")
       body should include (""""tools"""")
+    }
+
+    "preserve MCP Streamable HTTP request and notification lifecycle outcomes" in {
+      Given("an MCP HTTP route and the shared preferred protocol revision")
+      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val app = server.routes(null.asInstanceOf[org.http4s.server.websocket.WebSocketBuilder2[IO]]).orNotFound
+      val protocolheader = org.http4s.Header.Raw(
+        ci"MCP-Protocol-Version",
+        McpProtocolRevision.PREFERRED.print
+      )
+      def _post_(body: String, headers: Vector[org.http4s.Header.Raw] = Vector.empty) = {
+        val request = HRequest[IO](method = Method.POST, uri = Uri.unsafeFromString("/mcp"))
+          .withEntity(body)
+          .withContentType(`Content-Type`.parse("application/json").toOption.get)
+        app.run(request.withHeaders(org.http4s.Headers(request.headers.headers ++ headers))).unsafeRunSync()
+      }
+
+      When("initialize, initialized notification, and lifecycle failures are posted")
+      val initialize = _post_(
+        s"""{"jsonrpc":"2.0","id":"init","method":"initialize","params":{"protocolVersion":"${McpProtocolRevision.PREFERRED.print}"}}"""
+      )
+      val initialized = _post_(
+        """{"jsonrpc":"2.0","method":"notifications/initialized"}""",
+        Vector(protocolheader)
+      )
+      val requestshapedinitialized = _post_(
+        """{"jsonrpc":"2.0","id":"bad-init","method":"notifications/initialized"}""",
+        Vector(protocolheader)
+      )
+      val missingheader = _post_(
+        """{"jsonrpc":"2.0","id":"missing-header","method":"tools/list","params":{}}"""
+      )
+      val unsupportedheader = _post_(
+        """{"jsonrpc":"2.0","id":"unsupported-header","method":"tools/list","params":{}}""",
+        Vector(org.http4s.Header.Raw(ci"MCP-Protocol-Version", "2026-03-19"))
+      )
+      val duplicateheader = _post_(
+        """{"jsonrpc":"2.0","id":"duplicate-header","method":"tools/list","params":{}}""",
+        Vector(protocolheader, protocolheader)
+      )
+      val unknownnotification = _post_(
+        """{"jsonrpc":"2.0","method":"notifications/unknown"}""",
+        Vector(protocolheader)
+      )
+
+      Then("requests receive JSON while only the accepted notification receives an empty 202")
+      initialize.status.code shouldBe 200
+      initialize.contentType.map(_.mediaType) shouldBe Some(MediaType.application.json)
+      parse(initialize.as[String].unsafeRunSync()).toOption.flatMap(_.hcursor.get[String]("id").toOption) shouldBe Some("init")
+      initialized.status.code shouldBe 202
+      initialized.contentType shouldBe None
+      initialized.body.compile.to(Array).unsafeRunSync().toVector shouldBe Vector.empty
+      requestshapedinitialized.status.code shouldBe 200
+      requestshapedinitialized.contentType.map(_.mediaType) shouldBe Some(MediaType.application.json)
+      requestshapedinitialized.as[String].unsafeRunSync() should include ("bad-init")
+      missingheader.status.code shouldBe 200
+      missingheader.as[String].unsafeRunSync() should include ("MCP-Protocol-Version is required")
+      unsupportedheader.status.code shouldBe 200
+      unsupportedheader.as[String].unsafeRunSync() should not include "2026-03-19"
+      duplicateheader.status.code shouldBe 200
+      val duplicatebody = parse(duplicateheader.as[String].unsafeRunSync()).toOption
+        .getOrElse(fail("duplicate-header response is not JSON"))
+      duplicatebody.hcursor.get[String]("id") shouldBe Right("duplicate-header")
+      duplicatebody.hcursor.downField("error").get[Int]("code") shouldBe Right(-32600)
+      unknownnotification.status.code shouldBe 400
+      unknownnotification.contentType shouldBe None
+      unknownnotification.body.compile.to(Array).unsafeRunSync().toVector shouldBe Vector.empty
     }
   }
 

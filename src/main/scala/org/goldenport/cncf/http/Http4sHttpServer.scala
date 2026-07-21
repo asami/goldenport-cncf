@@ -4,7 +4,7 @@ package org.goldenport.cncf.http
  * @since   May. 18, 2026
  *  version May. 30, 2026
  *  version Jun. 19, 2026
- * @version Jul. 20, 2026
+ * @version Jul. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 import cats.effect.IO
@@ -49,7 +49,7 @@ import org.goldenport.cncf.blob.{BlobKind, BlobPayloadSupport, BlobRepository, B
 import org.goldenport.cncf.naming.{NamingConventions, PropertyValueResolver}
 import org.goldenport.cncf.job.{JobId, JobInput, JobInputRetentionPolicy, JobQueryReadModel, JobStatus}
 import org.goldenport.cncf.observability.{ConclusionDiagnostics, DiagnosticPayloadReferenceCodec, DslChokepointContext, DslChokepointPhase, DslChokepointRunner}
-import org.goldenport.cncf.mcp.McpJsonRpcAdapter
+import org.goldenport.cncf.mcp.{McpJsonRpcAdapter, McpJsonRpcOutcome}
 import org.goldenport.cncf.openapi.OpenApiProjector
 import org.goldenport.cncf.security.{AuthenticationRequest, IngressSecurityResolver, SessionId}
 import org.goldenport.protocol.spec.OperationDefinition
@@ -64,7 +64,7 @@ import org.goldenport.observation.{Cause, Descriptor}
  *  version Apr. 30, 2026
  *  version May. 25, 2026
  *  version Jun. 19, 2026
- * @version Jul. 20, 2026
+ * @version Jul. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Http4sHttpServer(
@@ -531,7 +531,10 @@ final class Http4sHttpServer(
       val send = Stream.repeatEval(queue.take)
       val receive: Pipe[IO, WebSocketFrame, Unit] = _.evalMap {
         case WebSocketFrame.Text(text, _) =>
-          queue.offer(WebSocketFrame.Text(adapter.handle(text)))
+          adapter.handleWebSocketCompatibility(text).responseBody match {
+            case Some(body) => queue.offer(WebSocketFrame.Text(body.noSpaces))
+            case None => IO.unit
+          }
         case _ =>
           IO.unit
       }
@@ -542,11 +545,37 @@ final class Http4sHttpServer(
     req: HRequest[IO],
     adapter: McpJsonRpcAdapter
   ): IO[HResponse[IO]] =
-    req.as[String].map(adapter.handle).map { body =>
-      HResponse[IO](HStatus.Ok)
-        .withEntity(body)
-        .withContentType(`Content-Type`(MediaType.application.json, Some(Charset.`UTF-8`)))
+    req.as[String].map { body =>
+      val protocolversion = _single_header_value(req, "MCP-Protocol-Version")
+      adapter.handle(body, protocolversion) match {
+        case McpJsonRpcOutcome.Response(json) =>
+          _mcp_json_response(json)
+        case McpJsonRpcOutcome.AcceptedNotification =>
+          HResponse[IO](HStatus.Accepted)
+        case McpJsonRpcOutcome.ProtocolFailure(Some(json)) =>
+          _mcp_json_response(json)
+        case McpJsonRpcOutcome.ProtocolFailure(None) =>
+          HResponse[IO](HStatus.BadRequest)
+      }
     }
+
+  private def _mcp_json_response(body: Json): HResponse[IO] =
+    HResponse[IO](HStatus.Ok)
+      .withEntity(body.noSpaces)
+      .withContentType(`Content-Type`(MediaType.application.json, Some(Charset.`UTF-8`)))
+
+  private def _single_header_value(
+    req: HRequest[IO],
+    name: String
+  ): Option[String] = {
+    val values = req.headers.headers.collect {
+      case header if header.name == CIString(name) => header.value
+    }
+    values match {
+      case List(value) => Some(value)
+      case _ => None
+    }
+  }
 
   private def _bootstrap_css(): IO[HResponse[IO]] =
     IO.pure(
