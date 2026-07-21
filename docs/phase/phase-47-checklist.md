@@ -38,18 +38,28 @@ Verified evidence:
 ## CIP-02: Typed Parameter Model
 
 Stage Status:
-- Current status: OPEN
+- Current status: DONE
 - Owner: CNCF runtime maintainers
 - Update rule: Mark DONE only after the public and protected types provide a
   typed initialization path with structured failure and safe provenance.
 
-- [ ] Define `ComponentParameterKey[A]` with typed decoding and
+Verified evidence:
+- Typed keys, decoders, resolutions, bounded provenance, a CNCF-protected
+  resolver, and an immutable snapshot are implemented in
+  `org.goldenport.cncf.config`.
+- `ComponentInitializationParametersSpec` provides deterministic typed,
+  failure, identity, raw-access prohibition, and provenance evidence.
+- Independent review and re-review found no actionable findings.
+- Focused executable specifications, full CNCF tests, and diff validation
+  passed for the CIP-02 release checkpoint.
+
+- [x] Define `ComponentParameterKey[A]` with typed decoding and
   required/optional semantics.
-- [ ] Define `ComponentParameterResolution[A]` and structured
+- [x] Define `ComponentParameterResolution[A]` and structured
   `Consequence`/`Conclusion` failures.
-- [ ] Define `ComponentInitializationParameters` without a raw-map accessor.
-- [ ] Define `ComponentParameterResolver` and its input/output contract.
-- [ ] Define `ComponentParameterProvenance` with bounded, non-physical source
+- [x] Define `ComponentInitializationParameters` without a raw-map accessor.
+- [x] Define `ComponentParameterResolver` and its input/output contract.
+- [x] Define `ComponentParameterProvenance` with bounded, non-physical source
   identities.
 
 ## CIP-03: Resolution Layers

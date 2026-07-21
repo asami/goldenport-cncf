@@ -83,6 +83,25 @@ locations, or unrelated configuration keys. Secret material MUST NOT cross the
 component initialization boundary; only an opaque secret reference admitted by
 the initialization parameter contract may be delivered.
 
+`ComponentParameterKey[A]` MUST be distinct from the operation-time
+`ComponentConfigurationKey[A]`. It MUST carry a typed decoder and
+required-or-optional semantics. `ComponentParameterResolver` MUST expose only
+typed key resolution publicly; source and context lookup MUST remain protected
+CNCF runtime behavior. Its result MUST be
+`Consequence[ComponentParameterResolution[A]]`.
+
+`ComponentParameterProvenance` MUST be a finite, non-physical vocabulary for
+packaged default, assembly default, subsystem instance, runtime configuration,
+test overlay, and absence. It MUST NOT carry a path, environment variable,
+argument spelling, provider handle, credential, or raw value.
+
+`ComponentInitializationParameters` MUST contain only successfully resolved
+declarations and MUST resolve only the exact `ComponentParameterKey` identities
+used to construct that snapshot. Duplicate declaration names MUST fail before
+snapshot construction. The public snapshot surface MAY expose typed resolution
+and bounded counts; it MUST NOT expose entries, raw values, a map conversion,
+arbitrary name lookup, `ConfigurationValue`, or `ResolvedConfiguration`.
+
 ## Configuration Precedence (R4)
 
 The runtime resolves declared configuration according to explicit component,

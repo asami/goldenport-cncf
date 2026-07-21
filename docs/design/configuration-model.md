@@ -312,6 +312,28 @@ Parameter values, secret references, physical source locations, credentials,
 and unrelated configuration keys are absent from default diagnostics and
 provenance.
 
+The typed initialization vocabulary is lifecycle-specific:
+
+- `ComponentParameterKey[A]` is a stable declaration identity with a typed
+  decoder and required-or-optional policy;
+- `ComponentParameterResolver` is a CNCF-owned, context-bound resolver whose
+  public operation accepts only a declared key;
+- `ComponentParameterResolution[A]` carries the decoded optional value and one
+  bounded `ComponentParameterProvenance` category; and
+- `ComponentInitializationParameters` is the immutable validated snapshot.
+
+The snapshot resolves only the exact key identities used in its declaration.
+It exposes no raw entry collection, map conversion, arbitrary name lookup,
+`ConfigurationValue`, or `ResolvedConfiguration`. This identity rule keeps
+heterogeneous decoded values type-safe without retaining or re-decoding raw
+configuration in component code.
+
+The resolver's source/context lookup is CNCF-protected. A runtime resolver
+implementation captures the applicable context and admitted sources; those
+inputs are not arguments to component code. Required absence, malformed
+decoding, duplicate declaration names, and keys outside the validated snapshot
+are structured `Consequence` failures.
+
 ### Declared Component Runtime Configuration
 
 Raw configuration remains an assembly/runtime concern. Component behavior uses
