@@ -333,3 +333,10 @@ typed content blocks, redacted remote-tool failures, endpoint shape admission,
 pre-decode allowlist filtering, session expiry recovery, JSON-RPC/result shape
 validation, runtime-owned Bearer credential-reference admission, and session
 DELETE through a deterministic HTTP exchange.
+
+Textus AI's `AiRuntimeProfileSpec` and `ComponentFactorySpec` fix the first
+consumer boundary. A runtime execution class selects only a logical server-set
+identity, the component publishes only the resulting `McpClientSocket` input,
+and application-purpose configuration cannot select MCP connectivity. Codex
+source definitions, endpoints, transports, and credentials therefore remain
+owned by CNCF runtime assembly rather than the AI consumer.

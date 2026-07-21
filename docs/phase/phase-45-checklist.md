@@ -86,7 +86,7 @@ Stage Status:
 ## Stage MC-06 - Codex MCP Definition Import
 
 Stage Status:
-- Current status: OPEN
+- Current status: DONE
 - Owner: CNCF runtime maintainers
 - Update rule: Mark DONE only after Codex MCP definitions are treated solely as
   an import source, normalized into the CNCF client model, and subjected to the
@@ -106,6 +106,11 @@ Verified progress:
   imported runtime as a Subsystem-owned resource. Existing and later consumer
   sockets receive only admitted services, and Subsystem shutdown closes the
   installed service and transport lifecycle.
+- Textus AI runtime execution classes now select only a logical server-set
+  identity and publish the resulting `McpClientSocket` as an input Port.
+  Application-purpose configuration cannot select MCP connectivity, while
+  endpoint, transport, credential, and Codex source configuration remain
+  absent from the consumer contract.
 
 - [x] Define a Codex configuration import adapter that is isolated from the
   canonical MCP client model and resilient to external schema evolution.
@@ -116,7 +121,7 @@ Verified progress:
 - [x] Reject stdio command/argument/environment definitions, raw headers,
   embedded credentials, unsupported transports, and unrestricted tool
   publication.
-- [ ] Prove that Textus AI receives only the normalized admitted Port service
+- [x] Prove that Textus AI receives only the normalized admitted Port service
   and never reads or forwards Codex MCP configuration directly.
 
 ## Stage MC-07 - Builtin Tool Baseline
