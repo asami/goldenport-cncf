@@ -44,6 +44,13 @@ Provider-neutral remote MCP tool consumption is defined in
 wiring and remains separate from the MCP server projection that publishes CNCF
 Operations.
 
+Internal Operation tools and the MCP server are separate boundaries. The
+in-process source is defined in
+`docs/design/internal-operation-tool-boundary.md`; the external server
+lifecycle is defined in `docs/design/mcp-server-boundary.md`. Internal tool
+invocation never loops back through `/mcp`, while the server remains an adapter
+over normal Subsystem Operation execution.
+
 ## Subsystem Construction
 
 Subsystem construction is performed from resolved Components.

@@ -5,23 +5,23 @@ This checklist is the authoritative planned Phase 46 state ledger.
 ## MT-01: Boundary and Protocol Contract
 
 Stage Status:
-- Current status: OPEN
+- Current status: DONE
 - Owner: CNCF runtime maintainers
 - Update rule: Mark DONE only after normative design and specification fix the
   internal/remote ownership split, identity domains, no-loopback rule, and
   shared Streamable HTTP lifecycle.
 
-- [ ] Define the provider-neutral internal Operation-tool source separately
+- [x] Define the provider-neutral internal Operation-tool source separately
   from MCP wire models and provider-function models.
-- [ ] Fix internal identity as `component.service.operation` and remote MCP
+- [x] Fix internal identity as `component.service.operation` and remote MCP
   identity as `server/tool` with no implicit conversion in either direction.
-- [ ] Fix Textus AI as the owner of admitted internal/remote catalog
+- [x] Fix Textus AI as the owner of admitted internal/remote catalog
   composition and provider-function mapping.
-- [ ] Specify exact runtime admission, invocation limits, structured failures,
+- [x] Specify exact runtime admission, invocation limits, structured failures,
   and payload-safe observability for internal Operation tools.
-- [ ] Specify shared initialize negotiation, initialized notification, protocol
+- [x] Specify shared initialize negotiation, initialized notification, protocol
   header, stateless server, and HTTP status semantics.
-- [ ] Record the normative status or retirement path of the existing WebSocket
+- [x] Record the normative status or retirement path of the existing WebSocket
   `/mcp` route without making it a second execution model.
 
 ## MT-02: Internal Operation Tool Source

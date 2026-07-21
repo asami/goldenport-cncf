@@ -146,6 +146,12 @@ remote calls through `McpJsonRpcAdapter`, or publish remote tools through
 `meta.mcp`. Shared protocol vocabulary may be factored only when it preserves
 the opposite ownership and trust directions of the two boundaries.
 
+The server lifecycle and the shared protocol-revision model are defined in
+`docs/design/mcp-server-boundary.md`. Provider-neutral in-process Operation
+tools are a third, non-transport boundary defined in
+`docs/design/internal-operation-tool-boundary.md`; they do not call either MCP
+transport direction.
+
 ## Initial Transport
 
 The first transport ExtensionPoint is Streamable HTTP. It implements

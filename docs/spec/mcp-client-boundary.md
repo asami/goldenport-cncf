@@ -160,6 +160,11 @@ Operation identities, or executed through `McpJsonRpcAdapter`. Client and
 server types MAY share protocol vocabulary only when that reuse does not merge
 their ownership, admission, or execution boundaries.
 
+The shared revision set and server-side initialize/notification lifecycle MUST
+follow `docs/spec/mcp-server-boundary.md`. Internal Operation tools MUST follow
+`docs/spec/internal-operation-tool-boundary.md` and MUST NOT use the MCP client
+or server transport as an in-process execution path.
+
 ## Admission Contract
 
 Admission MUST occur before transport execution. It MUST cover:
