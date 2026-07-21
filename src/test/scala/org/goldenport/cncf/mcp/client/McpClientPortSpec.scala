@@ -8,7 +8,11 @@ import org.goldenport.Consequence
 import org.goldenport.cncf.component.{Component, ExtensionPoint, Port, ServiceContract, VariationSelection}
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.http.RuntimeDashboardMetrics
+import org.goldenport.cncf.mcp.McpToolCatalog
 import org.goldenport.cncf.metrics.EntityAccessMetricsRegistry
+import org.goldenport.cncf.subsystem.DefaultSubsystemFactory
+import org.goldenport.cncf.testutil.TestComponentFactory
+import org.goldenport.protocol.Protocol
 import org.goldenport.observation.{Cause, Descriptor}
 import org.goldenport.observation.calltree.{CallTree, CallTreeNode}
 import org.goldenport.tree.{TreeDir, TreeLeaf, TreeNode}
@@ -108,6 +112,50 @@ final class McpClientPortSpec extends AnyWordSpec with Matchers with GivenWhenTh
         "list:catalog",
         "call:catalog/paper.search"
       )
+    }
+
+    "keep installed remote tool identities outside internal Operation publication" in {
+      Given("an admitted remote tool whose name equals one builtin Operation identity")
+      given ExecutionContext = ExecutionContext.create()
+      val serverset = _server_set(
+        "research",
+        "catalog",
+        Set(_tool_name("tool.time.now"))
+      )
+      val remotetool = _tool("catalog", "tool.time.now")
+      val registry = McpClientRuntimeRegistry.createC(
+        Vector(serverset),
+        _transport_binding(
+          new _FakeTransport(Map(_server_id("catalog") -> Vector(remotetool))),
+          Set(serverset.id)
+        )
+      ).toOption.get
+      val socket = McpClientSocket.createC(Vector(McpClientRequirement(serverset.id))).toOption.get
+      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val consumer = TestComponentFactory
+        .create("mcp_consumer", Protocol.empty, subsystem = subsystem)
+        .withPort(Component.Port.input(socket))
+
+      When("the runtime installs the remote catalog and the MCP server projector reads both component surfaces")
+      val evidence = try {
+        val installed = registry.install(consumer)
+        val remotecatalog = socket.service(serverset.id).flatMap(_.catalog)
+        val consumerpublication = McpToolCatalog.toolsForComponent(consumer)
+        val internalpublication = subsystem.findComponent("tool")
+          .map(McpToolCatalog.toolsForComponent)
+          .getOrElse(Vector.empty)
+        (installed, remotecatalog, consumerpublication, internalpublication)
+      } finally {
+        registry.close()
+        subsystem.shutdown()
+      }
+
+      Then("remote server/tool identity remains distinct and is never projected as a CNCF Operation")
+      evidence._1.isSuccess shouldBe true
+      evidence._2.toOption.map(_.tools.map(_.identity.print)) shouldBe
+        Some(Vector("catalog/tool.time.now"))
+      evidence._3 shouldBe Vector.empty
+      evidence._4.map(_.name) should contain ("tool.time.now")
     }
 
     "reject infrastructure variation at the consumer Port boundary" in {

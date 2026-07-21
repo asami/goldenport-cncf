@@ -190,10 +190,18 @@ Verified progress:
   `McpClientSocket` input Port. Runtime registry installation resolves the
   complete set atomically, so unavailable policy cannot expose a partial MCP
   service surface.
+- Deterministic fake transports now verify typed discovery and invocation,
+  allowlist and recursive input admission, per-invocation call and concurrency
+  limits, payload-safe diagnostics, lifecycle cleanup, and transport failure
+  handling without a live MCP service.
+- A remote `server/tool` identity remains outside internal
+  `component.service.operation` publication even when the remote tool name
+  matches a builtin Operation name. Existing MCP server projection continues
+  to publish only declared CNCF Operations.
 
-- [ ] Verify discovery, invocation, admission, limit, and diagnostic behavior
+- [x] Verify discovery, invocation, admission, limit, and diagnostic behavior
   through deterministic fake transport specifications.
-- [ ] Verify existing MCP server projection behavior remains unchanged.
+- [x] Verify existing MCP server projection behavior remains unchanged.
 - [ ] Verify Textus AI receives only an admitted catalog and cannot bypass the
   client policy through provider-native remote MCP configuration.
 - [ ] Verify Textus AI distinguishes internal Operation tool identities from
