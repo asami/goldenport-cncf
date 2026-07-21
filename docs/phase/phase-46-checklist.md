@@ -90,21 +90,21 @@ Stage Status:
 ## MT-05: Executable Interoperability Evidence
 
 Stage Status:
-- Current status: OPEN
+- Current status: DONE
 - Owner: CNCF runtime maintainers
 - Update rule: Mark DONE only after deterministic internal no-loopback and real
   Streamable HTTP server/client paths both pass their complete evidence sets.
 
-- [ ] Verify internal catalog discovery and deterministic builtin invocation
+- [x] Verify internal catalog discovery and deterministic builtin invocation
   without any HTTP exchange.
-- [ ] Start a real loopback CNCF HTTP server and consume it through
+- [x] Start a real loopback CNCF HTTP server and consume it through
   `McpClientRuntimeRegistry` using the production Streamable HTTP exchange.
-- [ ] Verify initialize, `notifications/initialized`, `tools/list`, and one
+- [x] Verify initialize, `notifications/initialized`, `tools/list`, and one
   deterministic `tools/call` end to end.
-- [ ] Verify unsupported protocol and malformed notification failures.
-- [ ] Verify private-network `tool.web.fetch` rejection occurs before
+- [x] Verify unsupported protocol and malformed notification failures.
+- [x] Verify private-network `tool.web.fetch` rejection occurs before
   ResourceAccess and preserve host, redirect, content-size, and timeout tests.
-- [ ] Verify CallTree, metrics, and diagnostics expose only safe identities and
+- [x] Verify CallTree, metrics, and diagnostics expose only safe identities and
   bounded outcomes, not endpoint, header, credential, URL, arguments, or raw
   result payloads.
 
