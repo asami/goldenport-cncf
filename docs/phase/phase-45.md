@@ -38,6 +38,9 @@ not control an MCP endpoint, transport, credential, header, or raw payload.
   bounded calls, and redacted CallTree/metric facts.
 - A Codex MCP definition importer for the CNCF-supported subset, with explicit
   CNCF policy overlays for allowlists, limits, and credential references.
+- A conservative builtin tool baseline implemented as ordinary CNCF Operations:
+  resource read, static Web fetch/HEAD, runtime time, deterministic decimal
+  calculation, and a provider-neutral Web search contract.
 - Deterministic fake transport and a first Textus AI consumer contract.
 
 ## Boundaries
@@ -50,6 +53,12 @@ not control an MCP endpoint, transport, credential, header, or raw payload.
   raw headers, embedded credentials, or unrestricted tool publication.
 - Textus AI does not read Codex configuration directly. Import and
   normalization are CNCF runtime responsibilities.
+- Builtin tools do not call back through the local MCP HTTP endpoint. Their
+  source of truth is the normal ActionCall/UoW Operation path; MCP is an
+  external projection of that same operation contract.
+- Dynamic browser automation, arbitrary filesystem access, shell/process
+  execution, arbitrary JavaScript, unrestricted HTTP headers, and external
+  mutation tools are not part of the builtin baseline.
 - No application caller configuration for endpoint, header, credential,
   transport, server, or tool selection.
 - The CNCF MCP server projector and JSON-RPC adapter remain unchanged unless a
@@ -65,7 +74,8 @@ not control an MCP endpoint, transport, credential, header, or raw payload.
 | MC-04 | Admission and safety | Endpoint, credential-reference, tool, resource-limit, and failure policy is enforced before transport execution. | done |
 | MC-05 | Observability and lifecycle | CallTree, metrics, and shutdown behavior expose only safe MCP execution facts. | done |
 | MC-06 | Codex MCP definition import | Operator-selected Codex MCP definitions become admitted CNCF server sets through a bounded import adapter and CNCF policy overlay. | planned |
-| MC-07 | Consumer evidence and closure | CNCF fake evidence and Textus AI integration prove the boundary without a required remote MCP service. | planned |
+| MC-07 | Builtin tool baseline | Common resource, Web, time, calculation, and Web-search contracts are available through normal CNCF Operations and MCP projection. | planned |
+| MC-08 | Consumer evidence and closure | CNCF fake evidence and Textus AI integration prove the boundary without a required remote MCP service. | planned |
 
 MC-04 has exact per-server tool allowlisting, recursive typed-input admission,
 invocation-scoped call/concurrency budgets, transport-enforced
@@ -76,8 +86,9 @@ MC-05 records payload-safe consumer-side catalog and tool invocation spans and
 `mcp-client.invocation` metrics. Runtime shutdown closes registry admission,
 interrupts and drains tracked in-flight operations, then closes each transport
 once in deterministic server-set order. MC-06 adds Codex configuration as an
-import source without making Codex a runtime authority. MC-07 consumer evidence
-and closure remains the final Phase 45 work.
+import source without making Codex a runtime authority. MC-07 adds a safe,
+operation-backed builtin tool baseline. MC-08 consumer evidence and closure
+remains the final Phase 45 work.
 
 ## Acceptance
 
@@ -94,12 +105,18 @@ and closure remains the final Phase 45 work.
 - Supported Codex MCP definitions can be imported deterministically, while
   unsupported transports and unsafe embedded configuration are rejected before
   registry creation.
+- Builtin tools execute through ActionCall/UoW authorization and observability,
+  and are projected through the existing MCP server boundary without local
+  MCP loopback.
+- Web access rejects unsafe schemes, disallowed hosts, private-network targets,
+  unsafe redirects, oversized content, and timeout exhaustion structurally.
 
 ## Downstream
 
 Textus AI Phase 6 is the first consumer. It will adapt the admitted catalog to
-provider function definitions and execute provider continuation loops. That
-provider work is not part of this phase.
+provider function definitions, combine internal Operation tools with remote MCP
+tools while preserving source identity, and execute provider continuation
+loops. That provider work is not part of this phase.
 
 ## References
 

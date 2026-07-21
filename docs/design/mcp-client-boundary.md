@@ -185,6 +185,24 @@ filesystem transport are outside the initial boundary. Adding another
 transport requires a separate ExtensionPoint and runtime admission policy; it
 does not broaden the consumer service contract.
 
+## Codex Definition Import
+
+Codex configuration is an optional input format, not a provider or policy
+authority. A dedicated adapter accepts the generic `Record` produced by the
+configuration decoder and extracts only selected URL-based `mcp_servers`
+entries. Keeping the adapter at this edge prevents TOML and externally evolving
+Codex schema types from entering the typed MCP client model.
+
+The CNCF import policy is constructed independently. It supplies the target
+server-set identity, exact tool allowlists, limits, and optional opaque
+credential references. The adapter combines only the source endpoint with that
+policy and produces the normal `McpClientServerSet` plus
+`McpStreamableHttpServerSetConfig`. Command, environment, header, embedded
+credential, and unsupported transport declarations are rejected for selected
+servers; unrelated source definitions are ignored. Textus AI receives only the
+eventual `McpClientSocket` service and never receives this source record or the
+import result.
+
 ## Execution And Failure Semantics
 
 Every discovery or invocation crosses runtime admission before transport

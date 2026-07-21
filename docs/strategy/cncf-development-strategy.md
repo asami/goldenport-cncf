@@ -2580,7 +2580,13 @@ in normalized server-set order. MC-06 imports an operator-selected, supported
 subset of Codex MCP definitions into CNCF-owned server sets; Codex configuration
 remains an input format rather than an execution or policy authority. CNCF
 policy overlays still own allowlists, limits, credential references, and
-transport admission. MC-07 consumer evidence and closure remains.
+transport admission. MC-07 adds a conservative builtin tool baseline backed by
+ordinary CNCF Operations: resource read, static Web fetch/HEAD, runtime time,
+deterministic decimal calculation, and a provider-neutral Web search contract.
+These tools retain ActionCall/UoW authorization and observability and use MCP
+only as an external projection; dynamic browser, arbitrary filesystem/process,
+JavaScript, and unrestricted HTTP capabilities remain optional Components.
+MC-08 consumer evidence and closure remains.
 
 - Goal: provide a provider-neutral, runtime-owned MCP client boundary so
   consumers can execute only admitted tools without exposing endpoint,

@@ -232,6 +232,26 @@ headers, raw arguments, raw results, provider payloads, or transport bodies.
 Transport error text MUST be redacted or mapped to structured diagnostics
 before it crosses the provider-neutral boundary.
 
+## External Definition Import
+
+Codex MCP configuration MAY be used as an operator-selected definition source.
+The importer MUST consume a generic decoded `Record` through an isolated
+adapter; the canonical MCP client model MUST NOT depend on TOML or Codex model
+types.
+
+An import MUST select definitions by exact source name and MUST read only an
+absolute HTTP(S) `url` from each selected definition. Unselected definitions
+MUST NOT affect the result. A selected definition containing command,
+arguments, environment, raw-header, embedded credential, or unsupported
+transport configuration MUST fail before a transport provider is created.
+
+Every import MUST receive a separate CNCF policy overlay containing the target
+server-set identity, exact non-empty tool allowlist for each selected server,
+positive client limits, and any opaque CNCF credential reference. Source-side
+tool policy, timeout, credential, and transport authority MUST NOT broaden that
+overlay. Imported source names MUST normalize deterministically to logical MCP
+server identities, and normalization collisions MUST fail.
+
 ## Lifecycle Contract
 
 Transport resources MUST be owned by the CNCF runtime and released during

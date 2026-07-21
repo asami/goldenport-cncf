@@ -92,19 +92,43 @@ Stage Status:
   an import source, normalized into the CNCF client model, and subjected to the
   same CNCF-owned admission policy as native definitions.
 
-- [ ] Define a Codex configuration import adapter that is isolated from the
+- [x] Define a Codex configuration import adapter that is isolated from the
   canonical MCP client model and resilient to external schema evolution.
-- [ ] Import only the CNCF-supported Streamable HTTP subset and normalize
+- [x] Import only the CNCF-supported Streamable HTTP subset and normalize
   logical server identity and endpoint configuration deterministically.
-- [ ] Require CNCF-owned server-set, tool allowlist, limit, and credential
+- [x] Require CNCF-owned server-set, tool allowlist, limit, and credential
   reference policy overlays before registry activation.
-- [ ] Reject stdio command/argument/environment definitions, raw headers,
+- [x] Reject stdio command/argument/environment definitions, raw headers,
   embedded credentials, unsupported transports, and unrestricted tool
   publication.
 - [ ] Prove that Textus AI receives only the normalized admitted Port service
   and never reads or forwards Codex MCP configuration directly.
 
-## Stage MC-07 - Consumer Evidence And Closure
+## Stage MC-07 - Builtin Tool Baseline
+
+Stage Status:
+- Current status: OPEN
+- Owner: CNCF runtime maintainers
+- Update rule: Mark DONE only after the common builtin tools execute as normal
+  CNCF Operations through ActionCall/UoW and are projected through MCP without
+  a local MCP loopback or a parallel authorization path.
+
+- [ ] Implement `resource.read` using the canonical `ResourceAccess` boundary.
+- [ ] Implement static `web.fetch` and `web.head` with scheme, host,
+  private-network, redirect, content-type, byte-size, and timeout policy.
+- [ ] Implement deterministic `time.now` using the runtime clock and a bounded
+  timezone contract.
+- [ ] Implement deterministic decimal calculation without arbitrary code or
+  script evaluation.
+- [ ] Define a provider-neutral `web.search` Operation contract while keeping
+  provider credentials and selection under runtime ownership.
+- [ ] Verify builtin tools use normal authorization, Consequence/Conclusion,
+  CallTree, metrics, and MCP Operation projection semantics.
+- [ ] Keep dynamic browser automation, arbitrary filesystem/process access,
+  unrestricted headers, JavaScript evaluation, and external mutation tools in
+  optional Components rather than the builtin baseline.
+
+## Stage MC-08 - Consumer Evidence And Closure
 
 Stage Status:
 - Current status: OPEN
@@ -123,4 +147,6 @@ Verified progress:
 - [ ] Verify existing MCP server projection behavior remains unchanged.
 - [ ] Verify Textus AI receives only an admitted catalog and cannot bypass the
   client policy through provider-native remote MCP configuration.
+- [ ] Verify Textus AI distinguishes internal Operation tool identities from
+  remote MCP tool identities while presenting one provider-neutral catalog.
 - [ ] Record optional live remote MCP evidence as a heavy test.
