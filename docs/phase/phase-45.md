@@ -1,7 +1,8 @@
 # Phase 45 - MCP Client and AI Tool Boundary
 
-status=active
+status=closed
 started_at=2026-07-21
+closed_at=2026-07-21
 strategy=[CNCF Development Strategy](../strategy/cncf-development-strategy.md)
 
 ## Purpose
@@ -75,7 +76,7 @@ not control an MCP endpoint, transport, credential, header, or raw payload.
 | MC-05 | Observability and lifecycle | CallTree, metrics, and shutdown behavior expose only safe MCP execution facts. | done |
 | MC-06 | Codex MCP definition import | Operator-selected Codex MCP definitions become admitted CNCF server sets through a bounded import adapter and CNCF policy overlay. | done |
 | MC-07 | Builtin tool baseline | Common resource, Web, time, calculation, and Web-search contracts are available through normal CNCF Operations and MCP projection. | done |
-| MC-08 | Consumer evidence and closure | CNCF fake evidence and Textus AI integration prove the boundary without a required remote MCP service. | in progress |
+| MC-08 | Consumer evidence and closure | CNCF fake evidence and Textus AI integration prove the boundary without a required remote MCP service. | done |
 
 MC-04 has exact per-server tool allowlisting, recursive typed-input admission,
 invocation-scoped call/concurrency budgets, transport-enforced
@@ -92,10 +93,12 @@ now proves the consumer sees only a logical server-set requirement and the
 normalized `McpClientSocket`, while application-purpose configuration cannot
 select MCP infrastructure. A deterministic Textus AI consumer specification
 now installs the runtime-owned service into the actual component and proves
-that an extra transport tool remains absent from the admitted catalog. MC-07 provides a safe,
-operation-backed builtin tool baseline with normal authorization, structured
-failure, CallTree, metrics, and MCP projection evidence. MC-08 consumer evidence and closure
-remains the final Phase 45 work.
+that an extra transport tool remains absent from the admitted catalog. MC-07
+provides a safe, operation-backed builtin tool baseline with normal
+authorization, structured failure, CallTree, metrics, and MCP projection
+evidence. MC-08 completes the phase with deterministic client evidence,
+unchanged server projection, and an actual Textus AI consumer receiving only
+its admitted catalog.
 
 MC-07 now includes the first pure builtin Operations. `tool.time.now` reads one
 execution-context clock instant and applies a bounded IANA timezone contract.
@@ -145,6 +148,22 @@ provider catalog, convert it to provider function definitions, and execute
 provider continuation loops. That composition and provider work is not part of
 this phase. Optional live remote MCP evidence remains Textus AI MO-05 heavy
 validation rather than a Phase 45 closure gate.
+
+## Closure
+
+Phase 45 closed Jul. 21, 2026.
+
+- All MC-01 through MC-08 checklist items are complete.
+- CNCF full validation passed 316 suites and 2,190 tests with no failures.
+- Focused MCP client/server validation passed 8 suites and 69 tests with no
+  failures.
+- Textus AI clean-commit validation passed 13 suites and 113 tests with no
+  failures; its CAR lint reported no blocking failures.
+- Final review found no actionable implementation, naming, executable-spec,
+  or documentation findings.
+- Provider function definitions, unified internal/remote provider catalogs,
+  continuation loops, and optional live remote MCP evidence remain Textus AI
+  Phase 6 MO-02 through MO-05 work.
 
 ## References
 

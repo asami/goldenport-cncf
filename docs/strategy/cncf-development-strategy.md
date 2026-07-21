@@ -1445,6 +1445,31 @@ Completed in Phase 44.
   arguments or host mounts, orchestration/scheduling, and provider-specific
   model or dataset initialization inside the generic lifecycle runtime.
 
+### 8.24 MCP Client and AI Tool Boundary
+Completed in Phase 45.
+
+- Closed dashboard: `docs/phase/phase-45.md`
+- Closed checklist: `docs/phase/phase-45-checklist.md`
+- Decided designs:
+  - `docs/design/mcp-client-boundary.md`
+  - `docs/spec/mcp-client-boundary.md`
+- Completed scope:
+  - provider-neutral typed server-set, catalog, schema, call, result, limit,
+    diagnostic, Port, registry, and transport ExtensionPoint contracts;
+  - admitted Streamable HTTP initialize, tool discovery, and tool invocation
+    with endpoint, credential-reference, allowlist, timeout, byte, call, and
+    concurrency policy;
+  - payload-safe CallTree/metrics, deterministic lifecycle cleanup, and
+    daemon-free fake transport evidence;
+  - bounded Codex MCP definition import under CNCF-owned policy overlays;
+  - six conservative builtin tools implemented as normal ActionCall/UoW
+    Operations and projected through the existing MCP server boundary; and
+  - actual Textus AI consumer installation with admitted-catalog and separate
+    internal Operation/remote tool identity evidence.
+- Deferred scope remains Textus AI Phase 6 provider catalog/function
+  adaptation and continuation, optional live remote MCP heavy validation,
+  unsupported transports, and dynamic or dangerous optional tool Components.
+
 ## 9. Development Item Status
 
 This final section lists planned active and future development areas only.
@@ -1452,7 +1477,8 @@ Completed work areas are recorded in section 8. When a development item closes,
 remove its completion record from this section and add or update the
 corresponding completed-history entry.
 
-Current development item: `9.38 MCP Client and AI Tool Boundary`.
+Current development item: none; select the next strategy item before opening a
+new phase.
 
 ### 9.1 Web Next Stage Follow-ups
 Web/platform follow-up index.
@@ -2561,65 +2587,3 @@ Completed in Phase 40.
   - `docs/notes/http-form-typed-update-command-implementation.md`;
   - `docs/phase/phase-40.md`; and
   - `docs/phase/phase-40-checklist.md`.
-
-### 9.38 MCP Client and AI Tool Boundary
-Active in Phase 45.
-
-Implementation status (Jul. 21, 2026): MC-01 through MC-03 are complete. The
-runtime-owned Port/registry, deterministic fake transport, and Streamable HTTP
-initialize, `tools/list`, and `tools/call` paths have executable evidence.
-MC-04 admission and safety is complete. Exact per-server tool allowlisting,
-recursive typed-input admission, invocation-scoped call/concurrency limits,
-Streamable HTTP timeout/input/output byte enforcement, and runtime-owned opaque
-Bearer credential resolution are enforced before HTTP exchange.
-MC-05 is complete with caller-context `mcp-client:catalog` and
-`mcp-client:invoke` CallTree spans, payload-safe `mcp-client.invocation`
-runtime metrics, and deterministic lifecycle cleanup. Registry shutdown stops
-admission, interrupts and drains tracked calls, and closes each transport once
-in normalized server-set order. MC-06 imports an operator-selected, supported
-subset of Codex MCP definitions into CNCF-owned server sets; Codex configuration
-remains an input format rather than an execution or policy authority. CNCF
-policy overlays still own allowlists, limits, credential references, and
-transport admission. MC-07 adds a conservative builtin tool baseline backed by
-ordinary CNCF Operations: resource read, static Web fetch/HEAD, runtime time,
-deterministic decimal calculation, and a provider-neutral Web search contract.
-These tools retain ActionCall/UoW authorization and observability and use MCP
-only as an external projection; dynamic browser, arbitrary filesystem/process,
-JavaScript, and unrestricted HTTP capabilities remain optional Components.
-MC-08 now has deterministic discovery, invocation, admission, limit,
-diagnostic, lifecycle, and MCP server-projection evidence. The actual Textus AI
-runtime component receives only the runtime-admitted catalog through its
-logical input socket, while internal Operation and remote `server/tool`
-identities remain separate. Unified provider catalog/function orchestration is
-owned by Textus AI Phase 6 MO-02; only the Phase 45 closure audit remains.
-
-- Goal: provide a provider-neutral, runtime-owned MCP client boundary so
-  consumers can execute only admitted tools without exposing endpoint,
-  transport, credential, or raw-payload control to application callers.
-- Scope:
-  - define typed MCP server-set, tool catalog, tool-call, result, limit, and
-    redacted diagnostic contracts behind a CNCF Port and transport
-    ExtensionPoint;
-  - support operator-admitted Streamable HTTP MCP initialization,
-    `tools/list`, and `tools/call` first;
-  - resolve named server sets, endpoint allow policy, credential references,
-    tool allowlists, and bounded resource limits under runtime ownership; and
-  - provide deterministic fake transport evidence, safe CallTree facts, and
-    structured admission, transport, and tool failures.
-- Boundary:
-  - existing CNCF MCP server projection/publication remains a separate
-    direction from this client capability;
-  - no application caller selects a server, endpoint, header, credential,
-    transport, or concrete tool;
-  - no stdio, SSE, arbitrary subprocess, arbitrary HTTP, or provider-specific
-    wire format is in the initial CNCF scope; and
-  - AI-provider function-call continuation remains a Textus AI concern, not a
-    CNCF MCP transport concern.
-- Downstream consumer: Textus AI Phase 6 will convert the admitted CNCF
-  catalog to Gemma/Ollama, OpenAI, and Gemini function-call formats without
-  provider-native remote-MCP pass-through in its initial slice.
-- Artifacts:
-  - `docs/phase/phase-45.md`
-  - `docs/phase/phase-45-checklist.md`
-  - `docs/design/mcp-client-boundary.md`
-  - `docs/spec/mcp-client-boundary.md`

@@ -1,6 +1,6 @@
 # Phase 45 Checklist - MCP Client and AI Tool Boundary
 
-status=active
+status=closed
 phase=[Phase 45 - MCP Client and AI Tool Boundary](phase-45.md)
 
 ## Stage MC-01 - Client Boundary Specification
@@ -180,7 +180,7 @@ Verified progress:
 ## Stage MC-08 - Consumer Evidence And Closure
 
 Stage Status:
-- Current status: OPEN
+- Current status: DONE
 - Owner: CNCF runtime maintainers
 - Update rule: Close only after CNCF fake evidence and a Textus AI consumer
   prove the contract without requiring a live remote MCP service.
