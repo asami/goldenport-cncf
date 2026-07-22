@@ -2383,6 +2383,9 @@ Completed in Phase 34 (Jul. 17, 2026).
   - deterministic fake-driver, local-driver, WorkArea, Job cancellation,
     payload-safe diagnostics, and provider-neutral consumer coverage are
     complete.
+  - post-closure hardening on Jul. 22, 2026 adds explicit bounded dynamic-text
+    argument admission and rejects any argument-policy prefix that differs from
+    the runtime-owned fixed invocation before driver selection.
 - Deferred scope:
   - live Textus AI/Codex provider implementation, account integration, and
     network-dependent verification;

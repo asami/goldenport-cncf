@@ -6,7 +6,7 @@ import org.goldenport.cncf.resource.{ResourceTreeLimits, ResourceTreeReference, 
 
 /*
  * @since   Jul. 17, 2026
- * @version Jul. 17, 2026
+ * @version Jul. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ProcessCapabilityId private (value: String) {
@@ -329,10 +329,16 @@ object ProcessExecutionLimits {
     } yield result
 }
 
+enum ProcessArgumentAdmission {
+  case Registered
+  case BoundedText
+}
+
 final case class ProcessArgumentPolicy(
   fixedPrefix: Vector[String],
   permittedArguments: Set[String] = Set.empty,
-  permittedArgumentVectors: Set[Vector[String]] = Set.empty
+  permittedArgumentVectors: Set[Vector[String]] = Set.empty,
+  admission: ProcessArgumentAdmission = ProcessArgumentAdmission.Registered
 ) {
   def validateC(arguments: Vector[String], limits: ProcessExecutionLimits): Consequence[Unit] =
     for {
@@ -342,7 +348,9 @@ final case class ProcessArgumentPolicy(
     } yield ()
 
   private def _validate_arguments_c(arguments: Vector[String]): Consequence[Unit] = {
-    if (permittedArgumentVectors.nonEmpty)
+    if (admission == ProcessArgumentAdmission.BoundedText)
+      _validate_bounded_text_c(arguments)
+    else if (permittedArgumentVectors.nonEmpty)
       if (permittedArgumentVectors.contains(arguments))
         Consequence.unit
       else
@@ -364,6 +372,29 @@ final case class ProcessArgumentPolicy(
           )
         case None => Consequence.unit
       }
+    }
+  }
+
+  private def _validate_bounded_text_c(arguments: Vector[String]): Consequence[Unit] = {
+    val rejected = arguments.find(argument =>
+      argument.trim.isEmpty ||
+      argument.exists(character => character.isControl && character != '\n' && character != '\r' && character != '\t')
+    )
+    if (arguments.isEmpty)
+      Consequence.argumentPolicyViolation(
+        "arguments",
+        "process.execution.argument-policy",
+        "at least one bounded text argument",
+        "absent"
+      )
+    else rejected match {
+      case Some(_) =>
+        Consequence.argumentFormatError(
+          "arguments",
+          "non-empty bounded text arguments without unsafe control characters",
+          "invalid"
+        )
+      case None => Consequence.unit
     }
   }
 
@@ -618,6 +649,7 @@ object ProcessProgramDefinition {
     for {
       _ <- _validate_identity_c(identity)
       _ <- _validate_executable_c(executable)
+      _ <- _validate_argument_policy_c(fixedarguments, argumentpolicy)
       _ <- maximumlimits.requireFiniteC
       _ <- _validate_input_file_paths_c(allowedinputfiles, allowedinputfilepaths)
       _ <- _validate_resource_tree_limits_c(allowedresourcetrees)
@@ -649,6 +681,20 @@ object ProcessProgramDefinition {
       Consequence.unit
     else
       Consequence.argumentFormatError("runtimeExecutable", "runtime-owned executable location", "invalid")
+
+  private def _validate_argument_policy_c(
+    fixedarguments: Vector[String],
+    argumentpolicy: ProcessArgumentPolicy
+  ): Consequence[Unit] =
+    if (argumentpolicy.fixedPrefix == fixedarguments)
+      Consequence.unit
+    else
+      Consequence.argumentPolicyViolation(
+        "argumentPolicy.fixedPrefix",
+        "process.execution.argument-policy-prefix",
+        "fixed prefix identical to the runtime-owned fixed arguments",
+        "mismatch"
+      )
 
   private def _validate_resource_tree_limits_c(
     trees: Map[ResourceTreeReference, ResourceTreeLimits]
@@ -755,10 +801,10 @@ final case class ProcessExecutionRequest(
     } yield ()
 
   private def _validate_arguments_c(arguments: Vector[String]): Consequence[Unit] =
-    if (arguments.forall(x => x != null && !x.exists(_.isControl)))
+    if (arguments.forall(x => x != null && !x.contains('\u0000')))
       Consequence.unit
     else
-      Consequence.argumentFormatError("arguments", "non-control argument vector", "invalid")
+      Consequence.argumentFormatError("arguments", "non-null argument vector without NUL", "invalid")
 
   private def _validate_outputs_c(outputs: Vector[ProcessExecutionOutputDeclaration]): Consequence[Unit] = {
     val names = outputs.map(_.name)

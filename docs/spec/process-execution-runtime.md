@@ -34,6 +34,14 @@ The resolved program definition validates fixed prefixes, flags, option values,
 path arguments, mutually exclusive options, argument count, and encoded size
 as applicable to that capability.
 
+The argument policy fixed prefix MUST be element-for-element identical to the
+runtime-owned fixed arguments. Program-definition construction rejects a
+mismatch without reflecting either argument vector in diagnostics. The default
+argument admission accepts only registered values or vectors. An explicitly
+declared bounded-text admission may accept dynamic non-empty text arguments,
+but finite argument-count and encoded-size limits remain mandatory and unsafe
+control characters are rejected before driver selection.
+
 ## Program Definition And Effective Policy
 
 `ProcessProgramDefinition` is runtime configuration or framework registration,

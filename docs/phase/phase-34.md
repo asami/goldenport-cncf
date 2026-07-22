@@ -79,6 +79,8 @@ provider or run a live Codex account.
   confidentiality.
 - H (DONE): PE-08 - Verify the provider-neutral consumer contract and close
   Phase 34.
+- I (DONE): PE-09 - Harden bounded dynamic-text admission and fixed-prefix
+  integrity after closure.
 
 ## 5. Development Items
 
@@ -93,6 +95,8 @@ provider or run a live Codex account.
   confidentiality.
 - [x] PE-08: Verify the consumer contract, document the handoff, and close the
   phase.
+- [x] PE-09: Add bounded dynamic-text admission and reject runtime
+  fixed-argument / policy-prefix mismatch before driver selection.
 
 Detailed task tracking and acceptance evidence are in
 `phase-34-checklist.md`.
@@ -198,3 +202,10 @@ Post-closure annotation (Jul. 17, 2026): Phase 35 adds the generic
 UnitOfWork-owned operational resource lifecycle. Phase 34's Job cancellation
 contract remains valid; Phase 35 closes the distinct UnitOfWork termination and
 resource-reclamation gap without reopening Phase 34.
+
+Post-closure annotation (Jul. 22, 2026): PE-09 adds explicit bounded dynamic
+text arguments for shell-less CLI protocols. Program-definition construction
+now requires the argument-policy fixed prefix to equal the runtime-owned fixed
+arguments, and diagnostics omit both vectors when rejecting a mismatch. The
+normative specification and grouped executable model specification record this
+hardening without reopening Phase 34.

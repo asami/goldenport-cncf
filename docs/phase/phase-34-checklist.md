@@ -175,3 +175,28 @@ tests, and the full CNCF suite passed 1,918 tests in 278 suites with no
 failures. The design/spec, component developer index,
 and historical source handoff record the consumer boundary and the deferred
 live-provider/container/remote/legacy-shell/BPM scope.
+
+## PE-09: Bounded Dynamic Argument Hardening
+
+Status: DONE (Jul. 22, 2026)
+
+- [x] Add explicit bounded dynamic-text argument admission for shell-less CLI
+  protocols while retaining finite argument-count and encoded-size limits.
+- [x] Reject empty text and unsafe control characters before driver selection.
+- [x] Require the argument-policy fixed prefix to equal the runtime-owned fixed
+  arguments during program-definition construction.
+- [x] Keep both argument vectors absent from mismatch diagnostics.
+- [x] Group the model specification by policy, managed input, WorkArea, and
+  compatibility boundaries.
+
+Acceptance evidence:
+
+- A matching bounded-text definition admits multiline prompt data under finite
+  count and byte limits.
+- Absent, blank, excess, oversized, and unsafe-control arguments are rejected.
+- A mismatched fixed prefix fails before a component argument can reach an
+  unintended executable position.
+
+Evidence: `ProcessExecutionModelSpec` passed 18 tests and the six focused
+Process Execution suites passed 51 tests. Full CNCF regression is required by
+the release-commit validation before this item is committed.
