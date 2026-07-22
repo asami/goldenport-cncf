@@ -2,11 +2,12 @@ package org.goldenport.cncf.projection
 
 import org.goldenport.record.Record
 import org.goldenport.cncf.component.Component
+import org.goldenport.cncf.naming.NamingConventions
 
 /*
  * @since   Mar.  5, 2026
  *  version May.  7, 2026
- * @version Jul. 19, 2026
+ * @version Jul. 23, 2026
  * @author  ASAMI, Tomoharu
  */
 object SchemaProjection {
@@ -62,6 +63,7 @@ object SchemaProjection {
             "effectiveCommandExecutionMode" -> x.effectiveCommandExecutionMode,
             "commandExecutionPolicySource" -> x.commandExecutionPolicySource,
             "jobDefinitionRef" -> x.jobDefinitionRef,
+            "evaluation" -> x.evaluation,
             "parameters" -> x.parameters
           )
         }
@@ -92,7 +94,7 @@ object SchemaProjection {
           }
         )
       case Target.OperationTarget(component, service, operation) =>
-        Record.data(
+        Record.dataAuto(
           "type" -> "schema",
           "targetType" -> "operation",
           "name" -> s"${component.name}.${service.name}.${operation.name}",
@@ -101,7 +103,11 @@ object SchemaProjection {
           ),
           "response" -> Record.data(
             "result" -> render_operation_returns(operation)
-          )
+          ),
+          "evaluation" -> component.operationDefinitions
+            .find(x => NamingConventions.equivalentByNormalized(x.name, operation.name))
+            .flatMap(_.evaluation)
+            .map(_.toRecord)
         )
       case Target.NotFound(target) =>
         Record.data(

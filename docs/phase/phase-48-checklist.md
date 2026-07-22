@@ -36,21 +36,29 @@ Evidence:
 ## OE-02: Capture Model
 
 Stage Status:
-- Current status: IN_PROGRESS
+- Current status: DONE
 - Owner: CNCF operation runtime maintainers
 - Update rule: Mark DONE only when the typed model and executable model specs
   satisfy every OE-02 checklist item.
 
-- [ ] Define bounded operation/execution identity and correlation values.
-- [ ] Define automatic start and terminal facts.
-- [ ] Define corpus candidate, experiment observation, supplemental fact,
+- [x] Define bounded operation/execution identity and correlation values.
+- [x] Define automatic start and terminal facts.
+- [x] Define corpus candidate, experiment observation, supplemental fact,
   limitation, and delivery-result values.
-- [ ] Distinguish framework, application, and provider fact sources.
+- [x] Distinguish framework, application, and provider fact sources.
+
+Evidence:
+- `src/main/scala/org/goldenport/cncf/operation/evaluation/OperationEvaluationModel.scala`
+- `src/test/scala/org/goldenport/cncf/operation/evaluation/OperationEvaluationModelSpec.scala`
+- `src/test/scala/org/goldenport/cncf/projection/GeneratedHelpProjectionSpec.scala`
+- Kaleidox `OperationEvaluationModelSpec`
+- Cozy `ModelerServiceOperationSpec` evaluation generation scenario
+- Cozy `cozy/operation-evaluation-contract` scripted Scala 3 compilation
 
 ## OE-03: Standard SPI
 
 Stage Status:
-- Current status: OPEN
+- Current status: NEXT
 - Owner: CNCF operation runtime maintainers
 - Update rule: Mark IN_PROGRESS only after OE-02 closes; mark DONE only when
   every OE-03 checklist item is complete.

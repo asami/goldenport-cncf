@@ -7,8 +7,9 @@ Status: normative static contract
 This specification defines the observable CNCF contract for automatic
 operation capture, explicit Corpus/Experiment admission, supplemental
 application facts, sink delivery, correlation, confidentiality, and failure
-isolation. Concrete Scala value types and SPI method signatures are introduced
-by later Phase 48 stages.
+isolation. OE-02 defines the concrete provider-neutral Scala capture values and
+CML declaration syntax. Later Phase 48 stages define SPI signatures and runtime
+policy.
 
 ## Automatic Capture Contract
 
@@ -138,6 +139,48 @@ bytes, aggregate queued bytes, and saturation/overflow handling.
 - Delivery retry, buffering, or at-least-once handling MUST preserve stable fact
   identity.
 - Delivery diagnostics MUST NOT become Corpus/Experiment membership evidence.
+
+## Declaration and Typed Model Contract
+
+The canonical operation declaration MUST use the `evaluation.corpus` and
+`evaluation.experiment` metadata roots.
+
+- Corpus `capture` MUST be `candidate`.
+- Admission MUST be `optional` or `required`.
+- Corpus outcomes MUST be selected from `success`, `failure`, `timeout`, and
+  `cancellation`.
+- Logical profile, purpose, sampling, redaction, and variant-profile names MUST
+  be bounded and normalized.
+- The declaration MUST NOT contain concrete revision, case, experiment, arm,
+  run, provider, model, credential, tenant, or payload values.
+- An absent declaration MUST remain eligible for automatic structural facts and
+  MUST NOT establish membership or assignment.
+
+Execution, attempt, fact, and supplemental-intent identities MUST be distinct
+opaque CNCF identifiers. Corpus and Experiment references MUST remain bounded
+opaque provider-owned references. CNCF MUST NOT parse one identity family as
+another.
+
+An Experiment run correlation MUST contain an Experiment, arm, and immutable
+Corpus revision. Retry MUST retain logical execution and admitted assignment
+identity while using a distinct attempt identity.
+
+Every fact MUST identify one source: `framework`, `application`, or `provider`.
+Every fact and provider delivery result MUST carry `DataConfidentiality`.
+Bounded text and reference limits MUST be evaluated in UTF-8 bytes.
+Measurements MUST contain at most 34 decimal digits with scale from -128
+through 128. A delivery result MUST contain at most 16 limitations. Automatic facts MUST NOT expose raw request,
+response, prompt, generated content, credential, provider payload, or mutable
+handle values.
+
+Terminal failure diagnostics MUST use the existing structured
+`ConclusionDiagnostics.Classification`. Capture facts MUST NOT introduce an
+application detail code, a component-local error taxonomy, or display-message
+classification.
+
+Application Corpus candidates and Experiment observations MUST use bounded
+summary, label, and measurement collections. Provider delivery results MUST
+contain only logical sink identity, status, and bounded limitations.
 
 ## Reentrancy Contract
 

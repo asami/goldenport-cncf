@@ -112,6 +112,70 @@ may read only its admitted logical variant or execution-plan reference. It may
 not allocate an arm, inspect global experiment state, or substitute an
 undeclared assignment.
 
+### Operation Declaration Model
+
+An operation declares logical evaluation policy through `evaluation` metadata.
+The canonical CML shape is:
+
+```yaml
+evaluation:
+  corpus:
+    capture: candidate
+    profile: route-resolution
+    admission: optional
+    outcomes: [success, failure]
+    sampling: representative
+    redaction: default
+  experiment:
+    eligible: true
+    purpose: route-resolution
+    admission: optional
+    variant-profile: execution-plan
+```
+
+`capture` is `candidate`. `admission` is `optional` or `required`. Corpus
+outcomes are selected from `success`, `failure`, `timeout`, and
+`cancellation`. Profile, purpose, sampling, redaction, and variant-profile are
+bounded logical names. Concrete Corpus revision/case, Experiment/arm/run,
+provider, model, credential, tenant, or payload values do not belong to CML
+operation metadata.
+
+The declaration is additive operation metadata and is projected through help,
+describe, and schema surfaces. Its absence does not disable automatic capture.
+Runtime admission resolves concrete external references in a later execution
+stage.
+
+### Typed Capture Model
+
+The provider-neutral model distinguishes logical execution, attempt, fact, and
+supplemental-intent identities. These are opaque CNCF IDs generated through
+the execution `IdGenerationContext`. Provider-owned Corpus revision/case and
+Experiment/arm/run identities are separate bounded opaque references and are
+never parsed as CNCF identifiers.
+
+One immutable correlation value contains operation identity, logical
+execution, attempt, optional parent execution, ExecutionContext, Job, Task,
+trace, observability correlation, and admitted Corpus/Experiment references.
+An Experiment run requires both an arm and an immutable Corpus revision. A
+retry retains logical execution and admitted assignment while receiving a new
+attempt identity.
+
+Capture facts identify their source as `framework`, `application`, or
+`provider`:
+
+- framework start and terminal facts contain structural execution data only;
+- application Corpus candidates and Experiment observations contain bounded
+  summaries, labels, and measurements;
+- provider delivery results contain sink identity, status, and bounded
+  limitations only.
+
+Every fact and provider delivery result carries existing `DataConfidentiality`
+metadata. Text and external reference limits are UTF-8 byte limits.
+Measurements use at most 34 decimal digits and a scale from -128 through 128.
+Delivery results contain at most 16 limitations. Terminal failures use the existing
+`ConclusionDiagnostics.Classification`; facts do not add application detail
+codes or derive classification from display text.
+
 ### Supplemental Application Capture
 
 Applications submit additional corpus candidates, experiment observations,
@@ -284,5 +348,6 @@ different authority.
 This contract does not define production traffic allocation, sticky-user
 assignment, feature flags, online arm randomization, experiment UI, automatic
 candidate promotion, provider-specific schemas, or a durable outbox protocol.
-Concrete value types, SPI method signatures, configuration defaults, and CML
-syntax are fixed by later Phase 48 stages under this design.
+SPI method signatures, configuration defaults, and remaining runtime policy
+are fixed by later Phase 48 stages under this design. The typed capture values
+and CML declaration syntax are normative from OE-02 onward.

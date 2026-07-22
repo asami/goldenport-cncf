@@ -1,11 +1,12 @@
 package org.goldenport.cncf.cli.renderer
 
 import org.goldenport.cncf.projection.model.HelpModel
+import org.goldenport.record.io.RecordEncoder
 
 /*
  * @since   Mar.  5, 2026
  *  version Mar. 28, 2026
- * @version Apr.  6, 2026
+ * @version Jul. 23, 2026
  * @author  ASAMI, Tomoharu
  */
 object CliHelpYamlRenderer {
@@ -35,6 +36,10 @@ object CliHelpYamlRenderer {
         lines += s"$k:"
         values.foreach(v => lines += s"  - $v")
       }
+    }
+    model.evaluation.foreach { evaluation =>
+      lines += "evaluation:"
+      RecordEncoder.yaml(evaluation).linesIterator.foreach(line => lines += s"  $line")
     }
     if (model.useCases.nonEmpty) {
       lines += "structuredUseCases:"

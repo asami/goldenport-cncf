@@ -12,7 +12,7 @@ import org.goldenport.datatype.I18nString
  *  version Mar. 28, 2026
  *  version Apr. 30, 2026
  *  version May. 31, 2026
- * @version Jul. 19, 2026
+ * @version Jul. 23, 2026
  * @author  ASAMI, Tomoharu
  */
 object HelpProjection {
@@ -138,6 +138,10 @@ object HelpProjection {
         val associationbinding = operation_association_binding(component, operation).map(association_binding_record)
         val imagebinding = operation_image_binding(component, operation).map(image_binding_record)
         val commandexecution = _command_execution_record(component, operation)
+        val evaluation = component.operationDefinitions
+          .find(x => NamingConventions.equivalentByNormalized(x.name, operation.name))
+          .flatMap(_.evaluation)
+          .map(_.toRecord)
         val updatecommands = component.operationDefinitions
           .find(x => NamingConventions.equivalentByNormalized(x.name, operation.name))
           .toVector
@@ -167,6 +171,7 @@ object HelpProjection {
           associationBinding = associationbinding,
           imageBinding = imagebinding,
           commandExecution = commandexecution,
+          evaluation = evaluation,
           usage = Vector(s"command ${_operation_cli_selector(componentname, servicename, operationname)}")
         )
       case Target.NotFound(target) =>
@@ -202,6 +207,7 @@ object HelpProjection {
       "associationBinding" -> model.associationBinding,
       "imageBinding" -> model.imageBinding,
       "commandExecution" -> model.commandExecution,
+      "evaluation" -> model.evaluation,
       "domainContexts" -> model.domainContexts.map(_context_record),
       "domainSystemContexts" -> model.domainSystemContexts.map(_system_context_record),
       "domainContextMaps" -> model.domainContextMaps.map(_context_map_record),

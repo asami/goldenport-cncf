@@ -13,7 +13,7 @@ import org.scalatest.wordspec.AnyWordSpec
  *  version Mar. 28, 2026
  *  version Apr.  6, 2026
  *  version May. 31, 2026
- * @version Jul. 16, 2026
+ * @version Jul. 23, 2026
  * @author  ASAMI, Tomoharu
  */
 final class GeneratedHelpProjectionSpec
@@ -31,6 +31,7 @@ final class GeneratedHelpProjectionSpec
       val componentHelp = HelpProjection.projectModel(component, Some("domain"))
       val serviceHelp = HelpProjection.projectModel(component, Some("domain.address"))
       val operationHelp = HelpProjection.projectModel(component, Some("domain.address.lookupAddress"))
+      val operationdescribe = DescribeProjection.project(component, Some("domain.address.lookupAddress"))
       val operationschema = SchemaProjection.project(component, Some("domain.address.lookupAddress"))
 
       Then("the subsystem target resolves top-level requirement metadata")
@@ -95,6 +96,11 @@ final class GeneratedHelpProjectionSpec
       commandExecution.getRecord("commandExecutionPolicy").flatMap(_.getString("mode")) shouldBe Some("Sync")
       commandExecution.getRecord("commandExecutionPolicy").flatMap(_.getString("legacyMode")) shouldBe Some("SyncDirectNoJob")
       commandExecution.getString("effectiveCommandExecutionMode") shouldBe Some("Sync")
+      val evaluation = operationHelp.evaluation.getOrElse(fail("evaluation metadata is missing"))
+      evaluation.getRecord("corpus").flatMap(_.getString("profile")) shouldBe Some("postal-lookup")
+      evaluation.getRecord("experiment").flatMap(_.getBoolean("eligible")) shouldBe Some(true)
+      operationdescribe.getRecord("evaluation").flatMap(_.getRecord("corpus")).flatMap(_.getString("capture")) shouldBe Some("candidate")
+      operationschema.getRecord("evaluation").flatMap(_.getRecord("corpus")).flatMap(_.getString("capture")) shouldBe Some("candidate")
       operationHelp.usage shouldBe Vector("command domain.address.lookup-address")
 
       And("the CLI renderers can emit meta.help output from the same model")
@@ -115,6 +121,7 @@ final class GeneratedHelpProjectionSpec
       json should include ("\"summary\":\"Look up an address by postal code.\"")
       json should include ("\"argumentDetails\":[\"description: text 1 [min-length=1, max-length=8192]\"]")
       json should include ("\"returns\":[\"LookupAddressResult\"]")
+      json should include ("\"evaluation\"")
 
       val subsystemYaml = CliHelpYamlRenderer.render(subsystemHelp)
       subsystemYaml should include ("type: subsystem")

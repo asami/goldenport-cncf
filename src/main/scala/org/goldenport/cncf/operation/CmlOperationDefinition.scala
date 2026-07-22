@@ -2,6 +2,7 @@ package org.goldenport.cncf.operation
 
 import org.goldenport.cncf.security.OperationAuthorizationRule
 import org.goldenport.cncf.action.CommandExecutionPolicy
+import org.goldenport.cncf.operation.evaluation.CmlOperationEvaluationDeclaration
 import org.goldenport.record.Record
 import org.goldenport.schema.DataConfidentiality
 
@@ -9,7 +10,7 @@ import org.goldenport.schema.DataConfidentiality
  * @since   Mar. 22, 2026
  *  version Mar. 28, 2026
  *  version May.  8, 2026
- * @version Jul. 19, 2026
+ * @version Jul. 23, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class CmlOperationAssociationBinding(
@@ -235,7 +236,8 @@ final case class CmlOperationDefinition(
   childEntityBindings: Vector[CmlOperationChildEntityBinding] = Vector.empty,
   associationBinding: Option[CmlOperationAssociationBinding] = None,
   imageBinding: Option[CmlOperationImageBinding] = None,
-  resultFields: Vector[CmlOperationField] = Vector.empty
+  resultFields: Vector[CmlOperationField] = Vector.empty,
+  evaluation: Option[CmlOperationEvaluationDeclaration] = None
 ) {
   def effectiveCommandExecutionPolicy: CommandExecutionPolicy =
     commandExecutionPolicy

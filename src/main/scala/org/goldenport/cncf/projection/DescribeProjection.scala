@@ -7,7 +7,7 @@ import org.goldenport.cncf.naming.NamingConventions
 /*
  * @since   Mar.  5, 2026
  *  version May. 31, 2026
- * @version Jul. 19, 2026
+ * @version Jul. 23, 2026
  * @author  ASAMI, Tomoharu
  */
 object DescribeProjection {
@@ -74,6 +74,7 @@ object DescribeProjection {
             "effectiveCommandExecutionMode" -> x.effectiveCommandExecutionMode,
             "commandExecutionPolicySource" -> x.commandExecutionPolicySource,
             "jobDefinitionRef" -> x.jobDefinitionRef,
+            "evaluation" -> x.evaluation,
             "parameters" -> x.parameters,
             "childEntityBindings" -> x.childEntityBindings,
             "associationBinding" -> x.associationBinding,
@@ -124,6 +125,10 @@ object DescribeProjection {
               "effectiveCommandExecutionMode" -> x.effectiveCommandExecutionPolicy.modeLabel,
               "jobDefinitionRef" -> x.jobDefinitionRef
             )),
+          "evaluation" -> component.operationDefinitions
+            .find(x => NamingConventions.equivalentByNormalized(x.name, operation.name))
+            .flatMap(_.evaluation)
+            .map(_.toRecord),
           "childEntityBindings" -> childentitybindings,
           "associationBinding" -> associationbinding,
           "imageBinding" -> imagebinding

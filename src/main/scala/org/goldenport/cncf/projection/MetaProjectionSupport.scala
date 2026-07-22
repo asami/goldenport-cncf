@@ -14,7 +14,7 @@ import org.goldenport.cncf.operation.{AssociationBindingOperationDefinition, Chi
 /*
  * @since   Mar.  5, 2026
  *  version May. 31, 2026
- * @version Jul. 19, 2026
+ * @version Jul. 23, 2026
  * @author  ASAMI, Tomoharu
  */
 private[projection] object MetaProjectionSupport {
@@ -62,6 +62,7 @@ private[projection] object MetaProjectionSupport {
     effectiveCommandExecutionMode: String,
     commandExecutionPolicySource: String,
     jobDefinitionRef: Option[String],
+    evaluation: Option[Record],
     parameters: Vector[Record],
     childEntityBindings: Vector[Record] = Vector.empty,
     associationBinding: Option[Record] = None,
@@ -457,6 +458,7 @@ private[projection] object MetaProjectionSupport {
             .orElse(x.execution.map(_ => "legacy-execution"))
             .getOrElse("default"),
           jobDefinitionRef = x.jobDefinitionRef,
+          evaluation = x.evaluation.map(_.toRecord),
           parameters = x.parameters.map { p =>
             Record.dataAuto(
               "name" -> p.name,

@@ -2711,9 +2711,9 @@ Active CNCF development item in Phase 48.
   - OE-01 (DONE) — promoted the proposed notes contract into
     `docs/design/operation-evaluation-capture.md` and
     `docs/spec/operation-evaluation-capture.md`;
-  - OE-02 (ACTIVE) — define typed automatic and supplemental capture facts, plus
+  - OE-02 (DONE) — implemented typed automatic and supplemental capture facts, with
     optional membership/assignment declaration metadata;
-  - OE-03 — add disabled/fake Corpus and Experiment standard sink capabilities
+  - OE-03 (NEXT) — add disabled/fake Corpus and Experiment standard sink capabilities
     inherited through `ScopeContext`;
   - OE-04 — carry one immutable, operation-scoped evaluation context through
     `ExecutionContext.CncfCore`, including Job resume and retry identity;

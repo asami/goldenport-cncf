@@ -1,11 +1,12 @@
 package org.goldenport.cncf.cli.renderer
 
 import org.goldenport.cncf.projection.model.{HelpCapabilityModel, HelpConstraintModel, HelpContextMapModel, HelpContextModel, HelpModel, HelpQualityModel, HelpSystemContextModel, HelpUseCaseModel, HelpUseCaseScenarioModel, HelpVisionModel}
+import org.goldenport.record.io.RecordEncoder
 
 /*
  * @since   Mar.  5, 2026
  *  version Mar. 28, 2026
- * @version Apr.  6, 2026
+ * @version Jul. 23, 2026
  * @author  ASAMI, Tomoharu
  */
 object CliHelpJsonRenderer {
@@ -31,7 +32,8 @@ object CliHelpJsonRenderer {
       val accepted = selector.accepted.map(v => s""""${_escape(v)}"""").mkString(",")
       s"""{"canonical":"${_escape(selector.canonical)}","cli":"${_escape(selector.cli)}","rest":"${_escape(selector.rest)}","accepted":[${accepted}]}"""
     }.getOrElse("null")
-    s"""{"type":"${_escape(model.`type`)}","name":"${_escape(model.name)}","summary":"${_escape(model.summary)}","component":${component},"service":${service},"selector":${selector},"children":[${children}],"details":{${details}},"usage":[${usage}],"domainVisions":[${domainVisions}],"domainContexts":[${domainContexts}],"domainSystemContexts":[${domainSystemContexts}],"domainContextMaps":[${domainContextMaps}],"domainCapabilities":[${domainCapabilities}],"domainQualities":[${domainQualities}],"domainConstraints":[${domainConstraints}],"useCases":[${useCases}],"domainUseCases":[${domainUseCases}]}"""
+    val evaluation = model.evaluation.map(RecordEncoder.json).getOrElse("null")
+    s"""{"type":"${_escape(model.`type`)}","name":"${_escape(model.name)}","summary":"${_escape(model.summary)}","component":${component},"service":${service},"selector":${selector},"children":[${children}],"details":{${details}},"evaluation":${evaluation},"usage":[${usage}],"domainVisions":[${domainVisions}],"domainContexts":[${domainContexts}],"domainSystemContexts":[${domainSystemContexts}],"domainContextMaps":[${domainContextMaps}],"domainCapabilities":[${domainCapabilities}],"domainQualities":[${domainQualities}],"domainConstraints":[${domainConstraints}],"useCases":[${useCases}],"domainUseCases":[${domainUseCases}]}"""
   }
 
   private def _vision_json(p: HelpVisionModel): String =

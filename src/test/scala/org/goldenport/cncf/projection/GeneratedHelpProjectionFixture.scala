@@ -9,6 +9,14 @@ import org.goldenport.schema.{DataType, Multiplicity, ValueDomain, WebColumn, We
 import org.goldenport.cncf.action.{Action, ActionCall, QueryAction}
 import org.goldenport.cncf.component.*
 import org.goldenport.cncf.operation.{CmlOperationDefinition, CmlOperationField}
+import org.goldenport.cncf.operation.evaluation.{
+  CmlCorpusEvaluationDeclaration,
+  CmlExperimentEvaluationDeclaration,
+  CmlOperationEvaluationDeclaration,
+  CorpusCaptureMode,
+  OperationEvaluationName,
+  OperationEvaluationOutcome
+}
 import org.goldenport.cncf.testutil.TestComponentFactory
 import org.goldenport.value.BaseContent
 
@@ -17,7 +25,7 @@ import org.goldenport.value.BaseContent
  *  version Mar. 29, 2026
  *  version Apr.  6, 2026
  *  version Apr. 14, 2026
- * @version Jul. 16, 2026
+ * @version Jul. 23, 2026
  * @author  ASAMI, Tomoharu
  */
 private[projection] object GeneratedHelpProjectionFixture {
@@ -49,7 +57,18 @@ private[projection] object GeneratedHelpProjectionFixture {
               outputType = "LookupAddressResult",
               outputSummary = Some("Normalized address representation."),
               inputValueKind = "QUERY_VALUE",
-              parameters = Vector.empty
+              parameters = Vector.empty,
+              evaluation = Some(CmlOperationEvaluationDeclaration(
+                corpus = Some(CmlCorpusEvaluationDeclaration(
+                  CorpusCaptureMode.Candidate,
+                  OperationEvaluationName.parseC("postal-lookup").toOption.get,
+                  outcomes = Vector(OperationEvaluationOutcome.Success)
+                )),
+                experiment = Some(CmlExperimentEvaluationDeclaration(
+                  eligible = true,
+                  purpose = OperationEvaluationName.parseC("postal-lookup").toOption.get
+                ))
+              ))
             )
           )
 
