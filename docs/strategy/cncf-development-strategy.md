@@ -2644,3 +2644,102 @@ Completed in Phase 40.
   - `docs/notes/http-form-typed-update-command-implementation.md`;
   - `docs/phase/phase-40.md`; and
   - `docs/phase/phase-40-checklist.md`.
+
+### 9.36 Operation Evaluation Contract
+Future CNCF development item. This item is defined but is not the active phase.
+
+- Goal:
+  - provide a provider-neutral CNCF operation-evaluation boundary that admits
+    immutable corpus/experiment correlation before business execution and
+    emits bounded terminal evaluation facts without changing canonical
+    operation semantics.
+- Driver:
+  - Textus applications need deterministic offline comparison of operation
+    behavior over one immutable corpus revision;
+  - AI profiles, prompts, models, providers, component configurations, and
+    other implementation variants must be comparable without putting
+    application- or provider-specific types into CNCF core;
+  - corpus and experiment membership must be explicit before execution and
+    must not be reconstructed from sampled or retained observability records.
+- Dependencies:
+  - existing `CmlOperationDefinition` metadata and generated operation
+    projection;
+  - the common `Subsystem._execute_resolved_operation` and `ActionEngine`
+    execution envelope;
+  - `ScopeContext` runtime capability inheritance;
+  - immutable `ExecutionContext.CncfCore` execution state;
+  - `RuntimeContext.ExecutionMetadata`, CallTree, operation confidentiality,
+    and deterministic execution-profile foundations;
+  - downstream Textus Corpus immutable revision/case identity and Textus
+    Experiment experiment/arm/run/observation ownership.
+- Boundary:
+  - CNCF owns declaration, admission, immutable execution context, terminal
+    fact, candidate handoff, failure isolation, and safe observability
+    contracts;
+  - Textus Corpus owns candidate review/promotion and immutable corpus
+    revisions/cases;
+  - Textus Experiment owns experiment definitions, arms, runs, observations,
+    acceptance evidence, and aggregation;
+  - operation logic may read only an admitted assignment or execution-plan
+    reference and may not allocate or mutate experiment state;
+  - CNCF core has no direct dependency on `textus-corpus`,
+    `textus-experiment`, Textus AI, or a telemetry provider;
+  - the first scope is explicit offline assignment; production traffic
+    randomization and online arm allocation are deferred.
+- Stages:
+  - OE-01 — promote the proposed notes contract into normative CNCF design and
+    static specification documents;
+  - OE-02 — add optional provider-neutral evaluation declaration metadata to
+    generated operation definitions without changing undeclared operations;
+  - OE-03 — define typed admission, correlation, assignment, terminal outcome,
+    limitation, fact, candidate, and execution-report values;
+  - OE-04 — add disabled/fake `OperationEvaluationResolver` and
+    `OperationEvaluationSink` capabilities inherited through `ScopeContext`;
+  - OE-05 — carry one immutable, operation-scoped evaluation context through
+    `ExecutionContext.CncfCore`, including Job resume and retry identity;
+  - OE-06 — wrap the common resolved-operation pipeline so admission precedes
+    business execution and canonical terminal evidence follows framework
+    response bindings;
+  - OE-07 — attach bounded recording status to execution metadata and publish
+    only policy-admitted correlation through CallTree/observability;
+  - OE-08 — prove disabled, optional, required, nested, retry, cancellation,
+    timeout, idempotency, failure-isolation, and confidentiality behavior with
+    deterministic fake adapters;
+  - OE-09 — validate one offline corpus-case/arm handoff with downstream
+    Textus-owned adapters while preserving the CNCF dependency boundary.
+- Acceptance:
+  - an undeclared or disabled operation behaves exactly as before and invokes
+    no evaluation sink;
+  - authorization completes before external evaluation resolution;
+  - one admitted assignment is immutable before operation construction and is
+    preserved across Job resume and retry;
+  - an ordinary execution without assignment uses its control/default branch;
+  - an unavailable optional admission falls back to control with an
+    attributable limitation, while an unavailable required experiment
+    admission fails before business execution;
+  - an unknown admitted variant never silently contaminates an experiment by
+    using control;
+  - success, failure, timeout, and cancellation retain their original
+    operation semantics;
+  - fact/candidate/telemetry failure cannot rewrite a completed business
+    outcome;
+  - telemetry sampling or retention cannot define or erase corpus/experiment
+    membership;
+  - raw requests, responses, prompts, provider output, credentials, execution
+    plans, and unrestricted identifiers are absent from default facts and
+    observability;
+  - normal executable specifications require no Textus service, telemetry
+    backend, AI provider, network access, or credentials.
+- Deferred scope:
+  - production online allocation, exposure logging, sticky-user assignment,
+    and traffic-percentage control;
+  - automatic promotion of captured candidates into immutable corpus
+    revisions;
+  - Textus-owned experiment acceptance logic, metrics, reports, and operator
+    UI;
+  - unrestricted raw request/response capture or provider payload retention;
+  - a generic workflow, feature-flag, or experimentation product inside CNCF.
+- Planning references:
+  - `docs/notes/operation-evaluation-contract-proposed-specification.md`;
+  - `docs/journal/2026/07/2026-07-21-operation-evaluation-corpus-experiment-observability-handoff.md`;
+  - `docs/journal/2026/07/2026-07-21-operation-evaluation-contract-specification-history.md`.
