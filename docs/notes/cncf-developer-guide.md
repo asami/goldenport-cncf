@@ -192,6 +192,28 @@ Component code should not:
 - call raw `DataStoreSpace` / unrestricted `EntityStoreSpace` from business
   logic.
 
+### Component Initialization Parameters
+
+Use a factory's `initializationParameterDeclarations` when a value must be
+resolved once for one `ComponentInstanceId` before component-specific
+initialization. Declare ordinary values with `ComponentParameterKey` typed
+constructors. Declare credential locators only with
+`ComponentParameterKey.requiredSecretReference` or
+`optionalSecretReference`; initialization receives an opaque
+`SecretReference`, never credential material.
+
+Do not declare a credential locator with `requiredString` or a custom decoder.
+Do not render a returned secret reference in a response, log, CallTree
+attribute, diagnostic, or exception. `confidentialRequired` represents material
+that is intentionally unavailable through the component initialization
+boundary and therefore resolves as a structured failure. Secret material may
+be consumed only by an authorized runtime-owned provider or driver.
+
+Initialization parameters are not operation-time configuration. Request
+properties, action input, ambient environment lookup, and
+`ComponentConfigurationAccess` cannot override the immutable initialization
+snapshot.
+
 ### Declared Runtime Configuration and External-tool Inputs
 
 Use `component_configuration(key)` for component-owned runtime configuration

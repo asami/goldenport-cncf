@@ -11,7 +11,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jul. 17, 2026
- * @version Jul. 17, 2026
+ * @version Jul. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 final class SecretReferenceSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -34,10 +34,16 @@ final class SecretReferenceSpec extends AnyWordSpec with Matchers with GivenWhen
 
         Then("the component receives only an opaque reference and diagnostics do not reveal the locator")
         val reference = result.toOption.flatMap(_.value).getOrElse(fail("expected secret reference"))
+        val otherreference = SecretReference.fromConfiguration("vault://provider/other-token").toOption.get
         reference.toString should not include raw
         Record.data("reference" -> reference).show should not include raw
-        classOf[SecretReference].getMethods.map(_.getName).toSet should not contain "locator"
-        classOf[SecretReference].getMethods.map(_.getName).toSet should not contain "resolveSecret"
+        val publicmethods = (
+          classOf[SecretReference].getMethods.toVector ++
+            SecretReference.getClass.getMethods.toVector
+        ).map(_.getName.toLowerCase(java.util.Locale.ROOT)).toSet
+        publicmethods.filter(_.contains("locator")) shouldBe empty
+        publicmethods.filter(_.contains("resolvesecret")) shouldBe empty
+        reference.hashCode shouldBe otherreference.hashCode
       }
     }
 

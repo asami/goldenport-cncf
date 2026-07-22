@@ -13,6 +13,12 @@ enum ComponentParameterRequirement {
   case Optional
 }
 
+enum ComponentParameterConfidentiality {
+  case Public
+  case Confidential
+  case Secret
+}
+
 enum ComponentParameterProvenance(val token: String) {
   case PackagedDefault extends ComponentParameterProvenance("packaged-default")
   case AssemblyDefault extends ComponentParameterProvenance("assembly-default")
@@ -41,6 +47,9 @@ object ComponentParameterDecoder {
   val boolean: ComponentParameterDecoder[Boolean] =
     _delegate(ComponentConfigurationDecoder.boolean)
 
+  private[config] val _secret_reference: ComponentParameterDecoder[SecretReference] =
+    _delegate(ComponentConfigurationDecoder._secret_reference)
+
   private def _delegate[A](
     decoder: ComponentConfigurationDecoder[A]
   ): ComponentParameterDecoder[A] =
@@ -50,6 +59,7 @@ object ComponentParameterDecoder {
 final class ComponentParameterKey[A] private (
   val name: String,
   val requirement: ComponentParameterRequirement,
+  val confidentiality: ComponentParameterConfidentiality,
   decoder: ComponentParameterDecoder[A]
 ) {
   private val _decoder = decoder
@@ -65,13 +75,23 @@ object ComponentParameterKey {
     name: String,
     decoder: ComponentParameterDecoder[A]
   ): ComponentParameterKey[A] =
-    _create(name, decoder, ComponentParameterRequirement.Required)
+    _create(
+      name,
+      decoder,
+      ComponentParameterRequirement.Required,
+      ComponentParameterConfidentiality.Public
+    )
 
   def optional[A](
     name: String,
     decoder: ComponentParameterDecoder[A]
   ): ComponentParameterKey[A] =
-    _create(name, decoder, ComponentParameterRequirement.Optional)
+    _create(
+      name,
+      decoder,
+      ComponentParameterRequirement.Optional,
+      ComponentParameterConfidentiality.Public
+    )
 
   def requiredString(name: String): ComponentParameterKey[String] =
     required(name, ComponentParameterDecoder.string)
@@ -91,14 +111,43 @@ object ComponentParameterKey {
   def optionalBoolean(name: String): ComponentParameterKey[Boolean] =
     optional(name, ComponentParameterDecoder.boolean)
 
+  def requiredSecretReference(name: String): ComponentParameterKey[SecretReference] =
+    _create(
+      name,
+      ComponentParameterDecoder._secret_reference,
+      ComponentParameterRequirement.Required,
+      ComponentParameterConfidentiality.Secret
+    )
+
+  def optionalSecretReference(name: String): ComponentParameterKey[SecretReference] =
+    _create(
+      name,
+      ComponentParameterDecoder._secret_reference,
+      ComponentParameterRequirement.Optional,
+      ComponentParameterConfidentiality.Secret
+    )
+
+  def confidentialRequired(name: String): ComponentParameterKey[Nothing] =
+    _create(
+      name,
+      ComponentParameterDecoder(_ =>
+        Consequence.configurationInvalid(
+          "confidential component initialization parameter is not available through the component boundary"
+        )
+      ),
+      ComponentParameterRequirement.Required,
+      ComponentParameterConfidentiality.Confidential
+    )
+
   private def _create[A](
     name: String,
     decoder: ComponentParameterDecoder[A],
-    requirement: ComponentParameterRequirement
+    requirement: ComponentParameterRequirement,
+    confidentiality: ComponentParameterConfidentiality
   ): ComponentParameterKey[A] = {
     val normalized = Option(name).map(_.trim).getOrElse("")
     require(normalized.nonEmpty, "component initialization parameter key name is required")
-    new ComponentParameterKey(normalized, requirement, decoder)
+    new ComponentParameterKey(normalized, requirement, confidentiality, decoder)
   }
 }
 
@@ -121,21 +170,29 @@ abstract class ComponentParameterResolver private[cncf] () {
   final def resolve[A](
     key: ComponentParameterKey[A]
   ): Consequence[ComponentParameterResolution[A]] =
-    lookup_parameter(key.name).flatMap {
-      case Some(candidate) =>
-        key.decode_value(candidate.value).map { value =>
-          ComponentParameterResolution(Some(value), candidate.provenance)
-        }
-      case None =>
-        key.requirement match {
-          case ComponentParameterRequirement.Required =>
-            Consequence.configurationInvalid(
-              s"required component initialization parameter is missing: ${key.name}"
-            )
-          case ComponentParameterRequirement.Optional =>
-            Consequence.success(
-              ComponentParameterResolution(None, ComponentParameterProvenance.Absent)
-            )
+    key.confidentiality match {
+      case ComponentParameterConfidentiality.Confidential =>
+        Consequence.configurationInvalid(
+          s"confidential component initialization parameter is not available through the component boundary: ${key.name}"
+        )
+      case ComponentParameterConfidentiality.Public |
+          ComponentParameterConfidentiality.Secret =>
+        lookup_parameter(key.name).flatMap {
+          case Some(candidate) =>
+            key.decode_value(candidate.value).map { value =>
+              ComponentParameterResolution(Some(value), candidate.provenance)
+            }
+          case None =>
+            key.requirement match {
+              case ComponentParameterRequirement.Required =>
+                Consequence.configurationInvalid(
+                  s"required component initialization parameter is missing: ${key.name}"
+                )
+              case ComponentParameterRequirement.Optional =>
+                Consequence.success(
+                  ComponentParameterResolution(None, ComponentParameterProvenance.Absent)
+                )
+            }
         }
     }
 

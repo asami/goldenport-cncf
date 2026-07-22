@@ -103,9 +103,16 @@ the initialization parameter contract may be delivered.
 
 `ComponentParameterKey[A]` MUST be distinct from the operation-time
 `ComponentConfigurationKey[A]`. It MUST carry a typed decoder and
-required-or-optional semantics. `ComponentParameterResolver` MUST expose only
-typed key resolution publicly; source and context lookup MUST remain protected
-CNCF runtime behavior. Its result MUST be
+required-or-optional semantics plus an explicit `Public`, `Confidential`, or
+`Secret` classification. Public constructors MUST always create `Public`
+declarations. A secret declaration MUST be created through
+`requiredSecretReference` or `optionalSecretReference`; a caller-supplied
+decoder MUST NOT classify an ordinary value as a secret parameter. A
+`Confidential` declaration MUST be rejected before lookup or decoding and MUST
+NOT deliver embedded material through the initialization snapshot.
+`ComponentParameterResolver` MUST expose only typed key resolution publicly;
+source and context lookup MUST remain protected CNCF runtime behavior. Its
+result MUST be
 `Consequence[ComponentParameterResolution[A]]`.
 
 `ComponentParameterProvenance` MUST be a finite, non-physical vocabulary for
@@ -185,13 +192,17 @@ credential text. Only an authorized runtime-owned provider or driver may
 resolve a secret value, and that value MUST NOT be returned through the normal
 component runtime API or diagnostics.
 
-`ComponentConfigurationKey.requiredSecretReference` and
-`optionalSecretReference` are the only declared-configuration constructors for
-this category. They decode a configured locator into an opaque reference; a
-component cannot combine a secret classification with a raw-string decoder.
-`Confidential` configuration remains unavailable from the component API. The
-runtime-internal resolver and its material type are not bound into
-`ExecutionContext`, `ActionCall`, or an SPI socket for component consumption.
+`ComponentConfigurationKey.requiredSecretReference` /
+`optionalSecretReference` and
+`ComponentParameterKey.requiredSecretReference` /
+`optionalSecretReference` are the only operation-time and initialization-time
+declaration constructors for this category. They decode a configured locator
+into an opaque reference; a component cannot combine a secret classification
+with a raw-string decoder. `Confidential` configuration and initialization
+parameters remain unavailable from the component API. The runtime-internal
+resolver and its material type are not bound into `ExecutionContext`,
+`ActionCall`, a component initialization snapshot, or an SPI socket for
+component consumption.
 
 ## Admitted Read-only Resource Trees (R6)
 

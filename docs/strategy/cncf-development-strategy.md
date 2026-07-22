@@ -2621,6 +2621,9 @@ Completed in Phase 40.
 Active CNCF development item, tracked in `docs/phase/phase-47.md` and
 `docs/phase/phase-47-checklist.md`.
 
+Current implementation status: CIP-01 through CIP-06 are complete; CIP-07
+bootstrap diagnostics and observability is the next stage.
+
 - Goal:
   - provide a general CNCF mechanism that interprets configuration and other
     property values in the correct component context before component

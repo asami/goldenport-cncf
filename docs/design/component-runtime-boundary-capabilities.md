@@ -112,6 +112,13 @@ initialization does not fall back to operation-time access. The common
 principles are typed declaration, structured `Consequence` failure, safe
 provenance, component-instance isolation, and opaque secret references.
 
+Initialization keys independently classify declarations as `Public`,
+`Confidential`, or `Secret`. Public custom decoders cannot claim secret
+semantics. Dedicated required and optional secret-reference constructors admit
+only an opaque `SecretReference`; confidential declarations are rejected before
+lookup or decoding. This preserves the lifecycle separation without creating a
+second secret representation or a component-visible material resolver.
+
 The complete lifecycle and ownership contract is defined in
 `docs/design/configuration-model.md`; static requirements are defined in
 `docs/spec/component-runtime-boundary-capabilities.md`.
@@ -123,7 +130,8 @@ locator or value accessor and always renders as redacted. The declared
 configuration model separates three classifications: `Public` values are typed
 component values, `Confidential` values are denied at the component boundary,
 and `Secret` values are available only as `SecretReference` through dedicated
-key constructors.
+key constructors. Initialization parameters apply the same classification
+semantics through their own lifecycle-specific key type.
 
 `RuntimeSecretResolver` and `SecretMaterial` remain CNCF runtime internals.
 They are neither available from `ExecutionContext` nor installed into a

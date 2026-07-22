@@ -323,6 +323,15 @@ Parameter values, secret references, physical source locations, credentials,
 and unrelated configuration keys are absent from default diagnostics and
 provenance.
 
+Every initialization declaration has a `Public`, `Confidential`, or `Secret`
+classification. Ordinary typed constructors are always public. Secret locators
+use `ComponentParameterKey.requiredSecretReference` or
+`optionalSecretReference` and produce only the non-inspectable
+`SecretReference`. A confidential declaration is denied before source lookup
+or decoding, so embedded credential material cannot cross the initialization
+snapshot boundary. Secret material remains available only to an authorized
+runtime-owned provider or driver.
+
 The typed initialization vocabulary is lifecycle-specific:
 
 - `ComponentParameterKey[A]` is a stable declaration identity with a typed

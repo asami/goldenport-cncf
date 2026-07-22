@@ -98,8 +98,9 @@ Component runtime-boundary tests use explicit deterministic fixtures:
 
 - declared configuration through test descriptor component/subsystem/runtime
   configuration or `ComponentConfigurationSources` in a focused specification;
-- secret tests assert opaque `SecretReference` behavior and must not use a real
-  credential value or provider;
+- secret tests assert opaque `SecretReference` behavior for both declared
+  operation-time configuration and component initialization parameters and
+  must not use a real credential value or provider;
 - tree tests install `ResourceTreeAccess.inMemory(...)` through
   `ExecutionContext.withResourceTreeAccess` and assert limits/traversal policy;
 - Process Execution tests use `ProcessExecutionTestProfile` and admitted

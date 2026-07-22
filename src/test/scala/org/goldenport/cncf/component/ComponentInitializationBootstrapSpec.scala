@@ -18,7 +18,8 @@ import org.goldenport.cncf.config.{
   ComponentInitializationParameters,
   ComponentParameterKey,
   ComponentParameterProvenance,
-  RuntimeConfig
+  RuntimeConfig,
+  SecretReference
 }
 import org.goldenport.cncf.subsystem.{
   GenericSubsystemComponentBinding,
@@ -68,6 +69,32 @@ final class ComponentInitializationBootstrapSpec
         component.limit shouldBe Some(12)
         component.provenance shouldBe Some(ComponentParameterProvenance.PackagedDefault)
         component.initializationParameters.size shouldBe 1
+      }
+
+      "deliver only opaque secret references through component initialization" in {
+        Given("a factory secret-reference declaration and a packaged credential locator")
+        val locator = "vault://runtime/private-provider-token"
+        val subsystem = TestComponentFactory.emptySubsystem("initialization-secret-reference")
+        val descriptor = ComponentDescriptor(
+          componentName = Some("secret_parameter_probe"),
+          config = Map("provider.token-ref" -> locator)
+        )
+
+        When("the consequence-aware factory path initializes the component")
+        val result = SecretParameterProbeFactory.createPrimaryC(
+          ComponentCreate(
+            subsystem,
+            ComponentOrigin.Repository("phase-47"),
+            componentDescriptors = Vector(descriptor)
+          )
+        )
+
+        Then("component initialization receives an opaque reference without exposing its locator")
+        val component = withClue(result) {
+          result.toOption.value.asInstanceOf[SecretParameterProbeComponent]
+        }
+        component.reference.value.toString should not include locator
+        component.initializationParameters.toString should not include locator
       }
 
       "isolate named component instance settings" in {
@@ -483,6 +510,33 @@ final class ComponentInitializationBootstrapSpec
       spec_create(
         "parameter_probe_admin",
         ComponentId("parameter_probe_admin"),
+        Vector.empty[spec.ServiceDefinition]
+      )
+  }
+
+  private final class SecretParameterProbeComponent extends Component {
+    var reference: Option[SecretReference] = None
+
+    override protected def initialize_component_c(params: ComponentInit): Consequence[Unit] =
+      params.initializationParameters.resolve(SecretParameterProbeFactory.tokenKey).map { resolution =>
+        reference = resolution.value
+      }
+  }
+
+  private object SecretParameterProbeFactory extends Component.Factory {
+    val tokenKey: ComponentParameterKey[SecretReference] =
+      ComponentParameterKey.requiredSecretReference("provider.token-ref")
+
+    override def initializationParameterDeclarations: Vector[ComponentParameterKey[?]] =
+      Vector(tokenKey)
+
+    protected def create_Component(params: ComponentCreate): Component =
+      new SecretParameterProbeComponent
+
+    protected def create_Core(params: ComponentCreate, comp: Component): Component.Core =
+      spec_create(
+        "secret_parameter_probe",
+        ComponentId("secret_parameter_probe"),
         Vector.empty[spec.ServiceDefinition]
       )
   }

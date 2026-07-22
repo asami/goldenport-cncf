@@ -179,17 +179,36 @@ Verified evidence:
 ## CIP-06: Secret and Confidential Parameters
 
 Stage Status:
-- Current status: OPEN
+- Current status: DONE
 - Owner: CNCF runtime and security maintainers
 - Update rule: Mark DONE only after confidential inputs remain opaque across
   parameter APIs, failures, diagnostics, and observability.
 
-- [ ] Define opaque secret-reference parameters separately from ordinary
+Verified evidence:
+- `ComponentParameterConfidentiality` classifies public, confidential, and
+  secret declarations without allowing caller-supplied decoders to claim
+  secret metadata.
+- Dedicated required and optional secret-reference constructors deliver only
+  the opaque `SecretReference`; confidential material is rejected before
+  source lookup or decoding.
+- `ComponentInitializationParametersSpec`, `SecretReferenceSpec`, and
+  `ComponentInitializationBootstrapSpec` cover redacted resolution, malformed
+  values, confidential denial, optional absence, JVM method-surface opacity,
+  and factory bootstrap delivery.
+- Independent review found the JVM-visible locator accessor and
+  locator-derived hash; review-fix removed both, and the clean re-review found
+  no remaining actionable finding.
+- The 31-test focused confidentiality/bootstrap set, `Test/compile`, compiled
+  bytecode inspection, and `git diff --check` passed.
+- The full CNCF suite passed with 2,251 tests across 324 suites, with no failed
+  or aborted suite; 2 tests were canceled, 1 ignored, and 59 remain pending.
+
+- [x] Define opaque secret-reference parameters separately from ordinary
   decoded values.
-- [ ] Define confidential parameter metadata and redaction behavior.
-- [ ] Reject embedded secret-value exposure through initialization parameter
+- [x] Define confidential parameter metadata and redaction behavior.
+- [x] Reject embedded secret-value exposure through initialization parameter
   accessors.
-- [ ] Verify failures do not expose credential material, physical source
+- [x] Verify failures do not expose credential material, physical source
   locations, or confidential values.
 
 ## CIP-07: Diagnostics and Observability

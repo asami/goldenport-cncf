@@ -4,8 +4,10 @@ import java.lang.reflect.Modifier
 import org.goldenport.Consequence
 import org.goldenport.configuration.ConfigurationValue
 import org.goldenport.observation.Taxonomy
+import org.goldenport.record.Record
 import org.scalacheck.{Gen, Prop, Test}
 import org.scalatest.GivenWhenThen
+import org.scalatest.OptionValues.convertOptionToValuable
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
@@ -17,6 +19,8 @@ import org.scalatest.wordspec.AnyWordSpec
 final class ComponentInitializationParametersSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _r3a_metadata =
     afterWord("in spec:component-runtime-boundary-capabilities, rule:R3a, phase:47, slice:CIP-02")
+  private val _r5_metadata =
+    afterWord("in spec:component-runtime-boundary-capabilities, rules:R3a,R5, phase:47, slice:CIP-06")
 
   "Component initialization parameters" should {
     "resolve required typed declarations into an immutable snapshot" must _r3a_metadata {
@@ -155,6 +159,62 @@ final class ComponentInitializationParametersSpec extends AnyWordSpec with Match
         )
       }
     }
+
+    "keep secret-reference and confidential declarations opaque" must _r5_metadata {
+      "when initialization sources contain credential locators or confidential material" in {
+        Given("Spec: docs/spec/component-runtime-boundary-capabilities.md; Rules: R3a, R5; dedicated secret-reference and denied confidential declarations")
+        val locator = "file:///private/runtime/provider-token"
+        val confidentialvalue = "embedded-private-credential"
+        val secretkey = ComponentParameterKey.requiredSecretReference("provider.token-ref")
+        val optionalsecretkey = ComponentParameterKey.optionalSecretReference("provider.optional-token-ref")
+        val confidentialkey = ComponentParameterKey.confidentialRequired("provider.embedded-token")
+        val secretresolver = _resolver("provider.token-ref" -> _candidate(locator))
+        val confidentialresolver = _resolver(
+          "provider.embedded-token" -> _candidate(confidentialvalue)
+        )
+
+        When("CNCF resolves the secret reference, optional absence, and confidential denial")
+        val secret = secretresolver.resolve(secretkey)
+        val absent = secretresolver.resolve(optionalsecretkey)
+        val confidential = confidentialresolver.resolve(confidentialkey)
+
+        Then("only the opaque reference crosses the boundary and all public rendering is payload-safe")
+        secretkey.confidentiality shouldBe ComponentParameterConfidentiality.Secret
+        optionalsecretkey.confidentiality shouldBe ComponentParameterConfidentiality.Secret
+        confidentialkey.confidentiality shouldBe ComponentParameterConfidentiality.Confidential
+        val resolution = secret.toOption.value
+        val reference = resolution.value.value
+        reference.toString should not include locator
+        resolution.toString should not include locator
+        Record.data("reference" -> reference).show should not include locator
+        absent.toOption shouldBe Some(
+          ComponentParameterResolution(None, ComponentParameterProvenance.Absent)
+        )
+        val confidentialdisplay = _failure_display(confidential)
+        confidentialdisplay should not include confidentialvalue
+        confidentialdisplay should not include "/private/runtime"
+      }
+    }
+
+    "reject malformed secret references without echoing source values" must _r5_metadata {
+      "when a selected initialization source is not a secret-reference string" in {
+        Given("Spec: docs/spec/component-runtime-boundary-capabilities.md; Rules: R3a, R5; a malformed selected secret-reference value")
+        val key = ComponentParameterKey.requiredSecretReference("provider.token-ref")
+        val resolver = _resolver(
+          "provider.token-ref" -> ComponentParameterCandidate(
+            ConfigurationValue.NumberValue(BigDecimal(314159)),
+            ComponentParameterProvenance.RuntimeConfiguration
+          )
+        )
+
+        When("the dedicated secret-reference decoder rejects the value")
+        val result = resolver.resolve(key)
+
+        Then("the structured failure identifies the declaration contract without exposing the value")
+        _failure_taxonomy(result) shouldBe _configuration_invalid_taxonomy
+        _failure_display(result) should not include "314159"
+      }
+    }
   }
 
   private def _candidate(
@@ -173,6 +233,14 @@ final class ComponentInitializationParametersSpec extends AnyWordSpec with Match
   ): Taxonomy =
     consequence match {
       case Consequence.Failure(conclusion) => conclusion.observation.taxonomy
+      case Consequence.Success(value) => fail(s"expected structured failure, got success: $value")
+    }
+
+  private def _failure_display[A](
+    consequence: Consequence[A]
+  ): String =
+    consequence match {
+      case Consequence.Failure(conclusion) => conclusion.display
       case Consequence.Success(value) => fail(s"expected structured failure, got success: $value")
     }
 

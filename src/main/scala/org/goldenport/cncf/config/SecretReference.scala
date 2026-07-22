@@ -4,7 +4,7 @@ import org.goldenport.Consequence
 
 /*
  * @since   Jul. 17, 2026
- * @version Jul. 17, 2026
+ * @version Jul. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 final class SecretReference private (
@@ -17,20 +17,17 @@ final class SecretReference private (
     }
 
   override def hashCode(): Int =
-    _locator.hashCode
+    0
 
   override def toString: String =
     "SecretReference(<redacted>)"
 }
 
 object SecretReference {
-  def fromConfiguration(value: String): Consequence[SecretReference] =
+  private[cncf] def fromConfiguration(value: String): Consequence[SecretReference] =
     Option(value).map(_.trim).filter(_.nonEmpty).fold[Consequence[SecretReference]](
       Consequence.configurationInvalid("secret reference is required")
     )(value => Consequence.success(new SecretReference(value)))
-
-  private[cncf] def _locator(reference: SecretReference): String =
-    reference._locator
 }
 
 private[cncf] final class SecretMaterial private[config] (

@@ -67,7 +67,7 @@ raw configuration maps to component code.
 | CIP-03 | Resolution layers | All admitted initialization sources have one deterministic precedence contract. | done |
 | CIP-04 | Instance context | Resolution is isolated by component and component-instance identity. | done |
 | CIP-05 | Bootstrap integration | Component factories and special components receive typed initialization parameters without raw maps. | done |
-| CIP-06 | Confidential values | Secret references and confidential parameters remain opaque and payload-safe. | open |
+| CIP-06 | Confidential values | Secret references and confidential parameters remain opaque and payload-safe. | done |
 | CIP-07 | Diagnostics and observability | Bootstrap resolution exposes bounded identity and provenance facts only. | open |
 | CIP-08 | Executable evidence | Deterministic specifications cover success, failure, precedence, isolation, overlays, and confidentiality. | open |
 | CIP-09 | Downstream acceptance | Textus AI or CBD Support consumes the mechanism and the phase closes with validated evidence. | open |
@@ -149,4 +149,12 @@ archive failures preserve the originating factory `Conclusion` across archive
 extraction, and assembly API metadata and classloader validation failures also
 remain in their original structured `Conclusion` channel. No-declaration
 factories retain the empty-snapshot path.
-Confidential values and diagnostics remain CIP-06 and CIP-07.
+CIP-06 is complete. Initialization declarations now classify values as public,
+confidential, or secret. Dedicated required/optional secret-reference
+constructors admit only the opaque `SecretReference`, confidential material is
+rejected before lookup or decoding, and the compiled public method surface no
+longer exposes the locator or a locator-derived hash. Focused resolver and
+factory-bootstrap specifications prove redacted success and failure behavior
+without changing operation-time `ComponentConfigurationAccess`.
+
+Bootstrap diagnostics and observability remain CIP-07.
