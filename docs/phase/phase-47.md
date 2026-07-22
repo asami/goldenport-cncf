@@ -64,7 +64,7 @@ raw configuration maps to component code.
 | --- | --- | --- | --- |
 | CIP-01 | Normative contract | Design and specification define initialization parameter resolution separately from runtime component configuration. | done |
 | CIP-02 | Typed parameter model | CNCF provides the resolver, typed key/value, result, collection, and safe provenance vocabulary. | done |
-| CIP-03 | Resolution layers | All admitted initialization sources have one deterministic precedence contract. | open |
+| CIP-03 | Resolution layers | All admitted initialization sources have one deterministic precedence contract. | done |
 | CIP-04 | Instance context | Resolution is isolated by component and component-instance identity. | open |
 | CIP-05 | Bootstrap integration | Component factories and special components receive typed initialization parameters without raw maps. | open |
 | CIP-06 | Confidential values | Secret references and confidential parameters remain opaque and payload-safe. | open |
@@ -123,6 +123,11 @@ keys and decoders, required-or-optional semantics, bounded provenance,
 structured failures, a CNCF-protected resolver contract, and an immutable
 snapshot without raw-map or arbitrary-name access.
 
-Plan CIP-03 next. Define deterministic input layers and precedence without
-absorbing component-instance context enforcement, bootstrap integration,
-secret handling, or diagnostics into the same slice.
+CIP-01 through CIP-03 are complete. The fixed CNCF-private source model gives
+packaged defaults, assembly defaults, subsystem-instance settings, resolved
+runtime configuration, and explicit test overlays one deterministic precedence
+order without admitting ambient or request sources.
+
+Plan CIP-04 next. Enforce component and component-instance resolution context
+without absorbing bootstrap delivery, secret handling, or diagnostics into the
+same slice.

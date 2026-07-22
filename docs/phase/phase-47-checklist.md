@@ -65,17 +65,29 @@ Verified evidence:
 ## CIP-03: Resolution Layers
 
 Stage Status:
-- Current status: OPEN
+- Current status: DONE
 - Owner: CNCF configuration maintainers
 - Update rule: Mark DONE only after every admitted initialization source has a
   deterministic precedence position and unsupported sources cannot participate.
 
-- [ ] Define packaged component defaults.
-- [ ] Define component assembly defaults.
-- [ ] Define subsystem/SAR component-instance settings.
-- [ ] Define the projection from runtime resolved configuration.
-- [ ] Define explicit test overlays as a test-only highest-priority layer.
-- [ ] Prove that request/action properties and ambient lookups are not
+Verified evidence:
+- `ComponentParameterResolutionLayers` encodes the five admitted sources as
+  distinct CNCF-private positions and atomically separates explicit test keys
+  from runtime values without retaining runtime trace metadata.
+- `ComponentParameterResolutionLayersSpec` covers layer provenance,
+  generated overlap precedence, fallback, malformed shadowing, trace
+  exclusion, explicit test overlays, and ambient-source rejection.
+- Independent review and clean re-review found no remaining actionable issues.
+- Focused executable specifications passed with 11 tests, `Test/compile`
+  passed, and the full CNCF suite passed with 2,227 tests across 322 suites.
+- `git diff --check` passed.
+
+- [x] Define packaged component defaults.
+- [x] Define component assembly defaults.
+- [x] Define subsystem/SAR component-instance settings.
+- [x] Define the projection from runtime resolved configuration.
+- [x] Define explicit test overlays as a test-only highest-priority layer.
+- [x] Prove that request/action properties and ambient lookups are not
   resolution layers.
 
 ## CIP-04: Component-instance Context

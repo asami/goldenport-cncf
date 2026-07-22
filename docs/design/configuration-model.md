@@ -334,6 +334,31 @@ inputs are not arguments to component code. Required absence, malformed
 decoding, duplicate declaration names, and keys outside the validated snapshot
 are structured `Consequence` failures.
 
+The admitted source model uses five named slots rather than a caller-ordered
+collection. Their low-to-high order is packaged defaults, component assembly
+defaults, subsystem/SAR component-instance settings, resolved runtime
+configuration, and explicit test descriptor overlay. Lookup runs in reverse
+order and stops at the first present value. Decoding happens after selection,
+so an invalid higher-layer value is an error rather than permission to reuse a
+lower default.
+
+The runtime slot is a value-only projection from `ResolvedConfiguration`; its
+trace and physical source identity do not enter resolver state. The test slot
+is projected separately from an explicitly loaded `RuntimeTestDescriptor` and
+is empty otherwise. It is not merged into the runtime slot for initialization
+parameter provenance. The fixed-slot type has no position for request/action
+properties, operation-time configuration, system properties, environment
+lookups, arbitrary source readers, or implicit test discovery.
+
+Each assembly-side slot has a distinct CNCF-private source type; three raw
+`Configuration` arguments cannot be exchanged while retaining trusted
+provenance. Runtime and test values are projected together. Because current
+startup configuration resolution includes explicitly selected test descriptor
+configuration, the projection removes descriptor-owned keys from the runtime
+slot before constructing the separate test-overlay slot. A selected test value
+therefore has exactly one initialization provenance even before bootstrap
+integration is completed.
+
 ### Declared Component Runtime Configuration
 
 Raw configuration remains an assembly/runtime concern. Component behavior uses

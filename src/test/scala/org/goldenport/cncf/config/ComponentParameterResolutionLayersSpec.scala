@@ -1,0 +1,292 @@
+package org.goldenport.cncf.config
+
+import java.nio.file.Paths
+import org.goldenport.Consequence
+import org.goldenport.configuration.{
+  Configuration,
+  ConfigurationOrigin,
+  ConfigurationResolution,
+  ConfigurationTrace,
+  ConfigurationValue,
+  ResolvedConfiguration
+}
+import org.goldenport.observation.Taxonomy
+import org.goldenport.record.Record
+import org.scalacheck.{Gen, Prop, Test}
+import org.scalatest.GivenWhenThen
+import org.scalatest.matchers.should.Matchers
+import org.scalatest.wordspec.AnyWordSpec
+
+/*
+ * @since   Jul. 22, 2026
+ * @version Jul. 22, 2026
+ * @author  ASAMI, Tomoharu
+ */
+final class ComponentParameterResolutionLayersSpec extends AnyWordSpec with Matchers with GivenWhenThen {
+  private val _e1_metadata =
+    afterWord("in spec:component-runtime-boundary-capabilities, example:E1, rules:R3a, phase:47, slice:CIP-03")
+  private val _e2_metadata =
+    afterWord("in spec:component-runtime-boundary-capabilities, example:E2, rules:R3a, phase:47, slice:CIP-03")
+  private val _e3_metadata =
+    afterWord("in spec:component-runtime-boundary-capabilities, example:E3, rules:R3a, phase:47, slice:CIP-03")
+  private val _e4_metadata =
+    afterWord("in spec:component-runtime-boundary-capabilities, example:E4, rules:R3a, phase:47, slice:CIP-03")
+  private val _e5_metadata =
+    afterWord("in spec:component-runtime-boundary-capabilities, example:E5, rules:R3a, phase:47, slice:CIP-03")
+  private val _e6_metadata =
+    afterWord("in spec:component-runtime-boundary-capabilities, example:E6, rules:R3a, phase:47, slice:CIP-03")
+  private val _e7_metadata =
+    afterWord("in spec:component-runtime-boundary-capabilities, example:E7, rules:R3a, phase:47, slice:CIP-03")
+
+  "Component initialization parameter resolution layers" should {
+    "E1 preserve the bounded provenance of every admitted layer" must _e1_metadata {
+      "when each layer is the only source of a declared value" in {
+        Given("Spec: docs/spec/component-runtime-boundary-capabilities.md; Rule: R3a; one declared key and every admitted layer")
+        val key = ComponentParameterKey.requiredString("provider.mode")
+        val cases = Vector(
+          _layers(packageddefaults = _configuration("provider.mode" -> "packaged")) ->
+            ("packaged" -> ComponentParameterProvenance.PackagedDefault),
+          _layers(assemblydefaults = _configuration("provider.mode" -> "assembly")) ->
+            ("assembly" -> ComponentParameterProvenance.AssemblyDefault),
+          _layers(subsysteminstance = _configuration("provider.mode" -> "subsystem")) ->
+            ("subsystem" -> ComponentParameterProvenance.SubsystemInstance),
+          _layers(runtimeconfiguration = _resolved("provider.mode" -> "runtime")) ->
+            ("runtime" -> ComponentParameterProvenance.RuntimeConfiguration),
+          _layers(testdescriptor = Some(_test_descriptor("provider.mode" -> "test"))) ->
+            ("test" -> ComponentParameterProvenance.TestOverlay)
+        )
+
+        When("each fixed layer resolves the same typed key")
+        val resolutions = cases.map { case (layers, expected) =>
+          layers.resolve(key).toOption -> expected
+        }
+
+        Then("the selected value reports only its bounded logical provenance")
+        resolutions.foreach { case (resolution, (value, provenance)) =>
+          resolution shouldBe Some(ComponentParameterResolution(Some(value), provenance))
+        }
+      }
+    }
+
+    "E2 select the highest admitted layer for every generated overlap" must _e2_metadata {
+      "when every layer defines the same key" in {
+        Given("Spec: docs/spec/component-runtime-boundary-capabilities.md; Rule: R3a; generated distinct values in all five layers")
+        val property = Prop.forAll(Gen.alphaStr.suchThat(_.nonEmpty)) { base =>
+          val values = Vector.tabulate(5)(index => s"$base-$index")
+          val layers = _layers(
+            packageddefaults = _configuration("provider.mode" -> values(0)),
+            assemblydefaults = _configuration("provider.mode" -> values(1)),
+            subsysteminstance = _configuration("provider.mode" -> values(2)),
+            runtimeconfiguration = _resolved("provider.mode" -> values(3)),
+            testdescriptor = Some(_test_descriptor("provider.mode" -> values(4)))
+          )
+          layers.resolve(ComponentParameterKey.requiredString("provider.mode")).toOption.contains(
+            ComponentParameterResolution(Some(values(4)), ComponentParameterProvenance.TestOverlay)
+          )
+        }
+
+        When("the precedence property is checked")
+        val checked = Test.check(Test.Parameters.default.withMinSuccessfulTests(50), property)
+
+        Then("the explicit test overlay always wins without caller-controlled ordering")
+        checked.passed shouldBe true
+      }
+    }
+
+    "E3 fall back through the fixed precedence order" must _e3_metadata {
+      "when higher layers are removed one at a time" in {
+        Given("Spec: docs/spec/component-runtime-boundary-capabilities.md; Rule: R3a; cumulative layer prefixes")
+        val key = ComponentParameterKey.requiredString("provider.mode")
+        val cases = Vector(
+          _layers(packageddefaults = _configuration("provider.mode" -> "packaged")) -> "packaged",
+          _layers(
+            packageddefaults = _configuration("provider.mode" -> "packaged"),
+            assemblydefaults = _configuration("provider.mode" -> "assembly")
+          ) -> "assembly",
+          _layers(
+            packageddefaults = _configuration("provider.mode" -> "packaged"),
+            assemblydefaults = _configuration("provider.mode" -> "assembly"),
+            subsysteminstance = _configuration("provider.mode" -> "subsystem")
+          ) -> "subsystem",
+          _layers(
+            packageddefaults = _configuration("provider.mode" -> "packaged"),
+            assemblydefaults = _configuration("provider.mode" -> "assembly"),
+            subsysteminstance = _configuration("provider.mode" -> "subsystem"),
+            runtimeconfiguration = _resolved("provider.mode" -> "runtime")
+          ) -> "runtime"
+        )
+
+        When("each cumulative prefix resolves the declaration")
+        val values = cases.map { case (layers, expected) =>
+          layers.resolve(key).toOption.flatMap(_.value) -> expected
+        }
+
+        Then("the last present fixed layer wins deterministically")
+        values.foreach { case (actual, expected) => actual shouldBe Some(expected) }
+      }
+    }
+
+    "E4 reject a malformed or null higher layer instead of falling through" must _e4_metadata {
+      "when a valid default is shadowed by an invalid runtime value" in {
+        Given("Spec: docs/spec/component-runtime-boundary-capabilities.md; Rule: R3a; a valid packaged integer and invalid runtime values")
+        val malformedlayers = _layers(
+          packageddefaults = _configuration("provider.limit" -> "10"),
+          runtimeconfiguration = _resolved("provider.limit" -> "invalid")
+        )
+        val nulllayers = _layers(
+          packageddefaults = _configuration("provider.limit" -> "10"),
+          runtimeconfiguration = ResolvedConfiguration(
+            Configuration(Map("provider.limit" -> ConfigurationValue.NullValue)),
+            ConfigurationTrace.empty
+          )
+        )
+
+        When("the required integer declaration is resolved against malformed and explicit-null values")
+        val malformed = malformedlayers.resolve(ComponentParameterKey.requiredInt("provider.limit"))
+        val explicitnull = nulllayers.resolve(ComponentParameterKey.requiredInt("provider.limit"))
+
+        Then("both present higher-precedence values remain structured configuration failures")
+        _failure_taxonomy(malformed) shouldBe _configuration_invalid_taxonomy
+        _failure_taxonomy(explicitnull) shouldBe _configuration_invalid_taxonomy
+      }
+    }
+
+    "E5 project runtime values without retaining physical trace details" must _e5_metadata {
+      "when resolved runtime configuration carries a physical source trace" in {
+        Given("Spec: docs/spec/component-runtime-boundary-capabilities.md; Rule: R3a; runtime configuration with sensitive trace metadata")
+        val key = "provider.mode"
+        val trace = ConfigurationTrace(Map(
+          key -> ConfigurationResolution(
+            key,
+            ConfigurationValue.StringValue("trace-value"),
+            ConfigurationOrigin.Resource,
+            Nil,
+            sourceType = Some("file"),
+            sourceId = Some("/private/runtime/config.yaml")
+          )
+        ))
+        val runtime = ResolvedConfiguration(_configuration(key -> "runtime-value"), trace)
+
+        When("the runtime layer is projected and resolved")
+        val layers = _layers(runtimeconfiguration = runtime)
+        val resolution = layers.resolve(ComponentParameterKey.requiredString(key))
+        val fieldtypes = classOf[ComponentRuntimeParameterConfiguration].getDeclaredFields.map(_.getType).toSet
+
+        Then("only the resolved value and bounded runtime provenance remain")
+        resolution.toOption shouldBe Some(
+          ComponentParameterResolution(Some("runtime-value"), ComponentParameterProvenance.RuntimeConfiguration)
+        )
+        fieldtypes should not contain classOf[ResolvedConfiguration]
+        fieldtypes should not contain classOf[ConfigurationTrace]
+      }
+    }
+
+    "E6 admit a test overlay only through an explicit test descriptor" must _e6_metadata {
+      "when the same layers are resolved without and with a descriptor" in {
+        Given("Spec: docs/spec/component-runtime-boundary-capabilities.md; Rule: R3a; runtime configuration and an optional explicit test descriptor")
+        val key = ComponentParameterKey.requiredString("provider.mode")
+        val without = _layers(runtimeconfiguration = _resolved("provider.mode" -> "runtime"))
+        val descriptor = _test_descriptor("provider.mode" -> "test")
+        val mergedruntime = _resolved("provider.mode" -> "test")
+        val projection = ComponentRuntimeParameterProjection.create(mergedruntime, Some(descriptor))
+        val withdescriptor = _layers(runtimeconfiguration = mergedruntime, testdescriptor = Some(descriptor))
+
+        When("both fixed source sets resolve the declaration")
+        val runtimevalue = without.resolve(key)
+        val testvalue = withdescriptor.resolve(key)
+
+        Then("descriptor-owned values are removed from runtime and retain only test-overlay provenance")
+        runtimevalue.toOption shouldBe Some(
+          ComponentParameterResolution(Some("runtime"), ComponentParameterProvenance.RuntimeConfiguration)
+        )
+        projection.runtimeConfiguration._configuration.get("provider.mode") shouldBe None
+        projection.testOverlay._configuration.get("provider.mode") shouldBe Some(
+          ConfigurationValue.StringValue("test")
+        )
+        testvalue.toOption shouldBe Some(
+          ComponentParameterResolution(Some("test"), ComponentParameterProvenance.TestOverlay)
+        )
+      }
+    }
+
+    "E7 ignore ambient and unsupported sources" must _e7_metadata {
+      "when an optional key exists only as an ambient system property" in {
+        Given("Spec: docs/spec/component-runtime-boundary-capabilities.md; Rule: R3a; empty admitted layers and an ambient property")
+        val name = "cncf.phase47.unsupported.ambient"
+        val previous = Option(System.getProperty(name))
+        val layertypes = classOf[ComponentParameterResolutionLayers]
+          .getDeclaredConstructors
+          .flatMap(_.getParameterTypes)
+          .toVector
+
+        try {
+          System.setProperty(name, "ambient-value")
+
+          When("the fixed-layer resolver resolves the optional declaration")
+          val resolution = _layers().resolve(ComponentParameterKey.optionalString(name))
+
+          Then("ambient state does not become an initialization parameter layer")
+          resolution.toOption shouldBe Some(
+            ComponentParameterResolution(None, ComponentParameterProvenance.Absent)
+          )
+          layertypes should contain theSameElementsInOrderAs Vector(
+            classOf[ComponentPackagedParameterDefaults],
+            classOf[ComponentAssemblyParameterDefaults],
+            classOf[SubsystemComponentInstanceParameterSettings],
+            classOf[ComponentRuntimeParameterConfiguration],
+            classOf[ComponentTestParameterOverlay]
+          )
+        } finally {
+          previous.fold(System.clearProperty(name))(System.setProperty(name, _))
+        }
+      }
+    }
+  }
+
+  private val _configuration_invalid_taxonomy =
+    Taxonomy(Taxonomy.Category.Configuration, Taxonomy.Symptom.Invalid)
+
+  private def _configuration(
+    entries: (String, String)*
+  ): Configuration =
+    Configuration(entries.map { case (key, value) =>
+      key -> ConfigurationValue.StringValue(value)
+    }.toMap)
+
+  private def _resolved(
+    entries: (String, String)*
+  ): ResolvedConfiguration =
+    ResolvedConfiguration(_configuration(entries*), ConfigurationTrace.empty)
+
+  private def _test_descriptor(
+    entries: (String, String)*
+  ): RuntimeTestDescriptor =
+    RuntimeTestDescriptor(
+      Paths.get("explicit-test.yaml"),
+      Record.empty,
+      entries.toMap,
+      None
+    )
+
+  private def _layers(
+    packageddefaults: Configuration = Configuration.empty,
+    assemblydefaults: Configuration = Configuration.empty,
+    subsysteminstance: Configuration = Configuration.empty,
+    runtimeconfiguration: ResolvedConfiguration = ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty),
+    testdescriptor: Option[RuntimeTestDescriptor] = None
+  ): ComponentParameterResolutionLayers =
+    ComponentParameterResolutionLayers.create(
+      ComponentPackagedParameterDefaults.fromConfiguration(packageddefaults),
+      ComponentAssemblyParameterDefaults.fromConfiguration(assemblydefaults),
+      SubsystemComponentInstanceParameterSettings.fromConfiguration(subsysteminstance),
+      ComponentRuntimeParameterProjection.create(runtimeconfiguration, testdescriptor)
+    )
+
+  private def _failure_taxonomy[A](
+    consequence: Consequence[A]
+  ): Taxonomy =
+    consequence match {
+      case Consequence.Failure(conclusion) => conclusion.observation.taxonomy
+      case Consequence.Success(value) => fail(s"expected structured failure, got success: $value")
+    }
+}

@@ -102,6 +102,31 @@ snapshot construction. The public snapshot surface MAY expose typed resolution
 and bounded counts; it MUST NOT expose entries, raw values, a map conversion,
 arbitrary name lookup, `ConfigurationValue`, or `ResolvedConfiguration`.
 
+Initialization parameter layers have this fixed low-to-high precedence:
+
+1. packaged component defaults;
+2. component-local assembly defaults;
+3. subsystem/SAR component-instance settings;
+4. the component-context projection of resolved runtime configuration; and
+5. an explicitly selected test descriptor overlay.
+
+The resolver MUST search these fixed layers from highest to lowest. A present
+higher-precedence value MUST be decoded or rejected; malformed or explicit
+null values MUST NOT fall through to a lower layer. The runtime layer MUST
+retain resolved values only and MUST NOT deliver `ResolvedConfiguration` trace
+or physical source metadata. The test overlay MUST remain separate from the
+runtime layer and MUST exist only when an explicit test descriptor is selected.
+
+The admitted layers MUST be represented by fixed CNCF-owned positions, not a
+caller-supplied ordered collection. Packaged defaults, assembly defaults, and
+subsystem-instance settings MUST have distinct CNCF-private source types so
+their provenance cannot be exchanged positionally. Runtime and explicitly
+selected test values MUST be projected atomically; keys owned by the test
+descriptor MUST be removed from the runtime layer and retained only in the
+test-overlay layer. Request/action properties, operation-time configuration,
+system properties, ambient environment variables, arbitrary configuration
+readers, and implicit test-file discovery MUST NOT participate.
+
 ## Configuration Precedence (R4)
 
 The runtime resolves declared configuration according to explicit component,
