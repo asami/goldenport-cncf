@@ -3,13 +3,21 @@ package org.goldenport.cncf.config
 import cats.~>
 import org.goldenport.Consequence
 import org.goldenport.cncf.action.{ActionCall, CommandAction, ProcedureActionCall}
-import org.goldenport.cncf.component.Component
+import org.goldenport.cncf.component.{
+  Component,
+  ComponentCreate,
+  ComponentDescriptor,
+  ComponentId,
+  ComponentOrigin
+}
 import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, RuntimeContext}
 import org.goldenport.cncf.path.AliasResolver
+import org.goldenport.cncf.testutil.TestComponentFactory
 import org.goldenport.cncf.unitofwork.{UnitOfWork, UnitOfWorkOp}
 import org.goldenport.configuration.{Configuration, ConfigurationTrace, ConfigurationValue, ResolvedConfiguration}
 import org.goldenport.protocol.{Property, Request}
 import org.goldenport.protocol.operation.OperationResponse
+import org.goldenport.protocol.spec
 import org.scalacheck.{Gen, Prop, Test}
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
@@ -17,12 +25,14 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jul. 17, 2026
- * @version Jul. 17, 2026
+ * @version Jul. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentConfigurationAccessSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _e5_metadata =
     afterWord("in spec:component-runtime-boundary-capabilities, example:E5, rules:R1,R3,R4,R10, phase:36")
+  private val _cip08_metadata =
+    afterWord("in spec:component-runtime-boundary-capabilities, example:E13, rules:R3,R3a,R10, phase:47, slice:CIP-08")
   private val _configuration_key = ComponentConfigurationKey.requiredString("provider.mode")
 
   "Declared component configuration" should {
@@ -138,9 +148,9 @@ final class ComponentConfigurationAccessSpec extends AnyWordSpec with Matchers w
           )
 
           def createCall(core: ActionCall.Core): ActionCall =
-            _ConfigurationActionCall(core, _configuration_key)
+            ConfigurationActionCall(core, _configuration_key)
         }
-        val call = _ConfigurationActionCall(
+        val call = ConfigurationActionCall(
           ActionCall.Core(action, context, Some(component), None),
           _configuration_key
         )
@@ -156,6 +166,86 @@ final class ComponentConfigurationAccessSpec extends AnyWordSpec with Matchers w
             ComponentConfigurationProvenance.Component
           )
         )
+      }
+    }
+
+    "E13 remain separate from immutable initialization parameters" must _cip08_metadata {
+      "when both lifecycles declare the same logical key" in {
+        Given("Spec: docs/spec/component-runtime-boundary-capabilities.md; Rules: R3,R3a,R10; Example: E13; a factory-initialized component with distinct same-name initialization-time and operation-time declarations")
+        val values = Gen.zip(
+          Gen.alphaStr.suchThat(_.nonEmpty),
+          Gen.alphaStr.suchThat(_.nonEmpty)
+        ).suchThat { case (initializationvalue, operationvalue) =>
+          initializationvalue != operationvalue
+        }
+        val property = Prop.forAll(values) { case (initializationvalue, operationvalue) =>
+          val subsystem = TestComponentFactory.emptySubsystem("configuration-coexistence")
+          val descriptor = ComponentDescriptor(
+            componentName = Some("configuration_coexistence_probe"),
+            config = Map("provider.mode" -> initializationvalue)
+          )
+          InitializationCoexistenceProbeFactory.createPrimaryC(
+            ComponentCreate(
+              subsystem,
+              ComponentOrigin.Repository("phase-47"),
+              Vector(descriptor)
+            )
+          ).toOption.exists { component =>
+            val context = _runtime_context(Configuration.empty)
+            val action = ConfigurationAction(_configuration_key)
+            val snapshot = component.initializationParameters
+            val before = snapshot
+              .resolve(InitializationCoexistenceProbeFactory.modeKey)
+              .toOption
+
+            component.withApplicationConfig(
+              Component.ApplicationConfig(
+                config = Some(_configuration("provider.mode" -> operationvalue))
+              )
+            )
+            val operationcall = ConfigurationActionCall(
+              ActionCall.Core(action, context, Some(component), None),
+              _configuration_key
+            )
+            val operation = operationcall.execute()
+
+            component.withApplicationConfig(
+              Component.ApplicationConfig(config = Some(Configuration.empty))
+            )
+            val missingcall = ConfigurationActionCall(
+              ActionCall.Core(action, context, Some(component), None),
+              _configuration_key
+            )
+            val missing = missingcall.execute()
+            val after = component.initializationParameters
+              .resolve(InitializationCoexistenceProbeFactory.modeKey)
+              .toOption
+
+            before.contains(
+              ComponentParameterResolution(
+                Some(initializationvalue),
+                ComponentParameterProvenance.PackagedDefault
+              )
+            ) &&
+            operation.isSuccess &&
+            operationcall.resolution.contains(
+              ComponentConfigurationResolution(
+                Some(operationvalue),
+                ComponentConfigurationProvenance.Component
+              )
+            ) &&
+            missing.isFaillure &&
+            missingcall.resolution.isEmpty &&
+            (component.initializationParameters eq snapshot) &&
+            after == before
+          }
+        }
+
+        When("the protected ActionCall DSL resolves with and without an operation-time value")
+        val checked = Test.check(Test.Parameters.default.withMinSuccessfulTests(50), property)
+
+        Then("operation access never falls back to or mutates the immutable initialization snapshot")
+        checked.passed shouldBe true
       }
     }
   }
@@ -195,7 +285,7 @@ final class ComponentConfigurationAccessSpec extends AnyWordSpec with Matchers w
     context
   }
 
-  private final case class _ConfigurationActionCall(
+  private final case class ConfigurationActionCall(
     core: ActionCall.Core,
     key: ComponentConfigurationKey[String]
   ) extends ProcedureActionCall {
@@ -209,5 +299,35 @@ final class ComponentConfigurationAccessSpec extends AnyWordSpec with Matchers w
         _resolution = Some(value)
         OperationResponse.void
       }
+  }
+
+  private final case class ConfigurationAction(
+    key: ComponentConfigurationKey[String]
+  ) extends CommandAction {
+    val request: Request = Request.ofOperation("declared-component-configuration")
+
+    def createCall(core: ActionCall.Core): ActionCall =
+      ConfigurationActionCall(core, key)
+  }
+
+  private object InitializationCoexistenceProbeFactory extends Component.Factory {
+    val modeKey: ComponentParameterKey[String] =
+      ComponentParameterKey.requiredString("provider.mode")
+
+    override def initializationParameterDeclarations: Vector[ComponentParameterKey[?]] =
+      Vector(modeKey)
+
+    protected def create_Component(params: ComponentCreate): Component =
+      new Component {}
+
+    protected def create_Core(
+      params: ComponentCreate,
+      comp: Component
+    ): Component.Core =
+      spec_create(
+        "configuration_coexistence_probe",
+        ComponentId("configuration_coexistence_probe"),
+        Vector.empty[spec.ServiceDefinition]
+      )
   }
 }

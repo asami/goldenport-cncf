@@ -243,25 +243,66 @@ Verified review-fix evidence:
 - failures outside the component-parameter policy are reduced to a generic
   bounded bootstrap diagnostic before metric projection.
 
-The clean re-review found no actionable CIP-07 findings. Full CNCF validation
-is required by the release commit before this evidence is committed.
+The clean re-review found no actionable CIP-07 findings. The release validation
+completed with 2,254 tests across 324 suites, with no failed or aborted suite;
+2 tests were canceled, 1 ignored, and 59 remain pending. The validated evidence
+was committed as `b1f17b9e` (`Add component initialization diagnostics`).
 
 ## CIP-08: Executable Evidence
 
 Stage Status:
-- Current status: OPEN
+- Current status: DONE
 - Owner: CNCF runtime maintainers
 - Update rule: Mark DONE only after deterministic executable specifications
   cover every Phase 47 acceptance boundary.
 
-- [ ] Cover defaults and explicit override precedence.
-- [ ] Cover missing required and malformed typed values.
-- [ ] Cover separate `ComponentInstanceId` values with the same parameter key.
-- [ ] Cover deterministic test overlays and production-source exclusion.
-- [ ] Cover components with no declared initialization parameters.
-- [ ] Cover secret-reference and confidential diagnostic behavior.
-- [ ] Cover the absence of raw configuration-map access.
-- [ ] Cover compatibility with operation-time `ComponentConfigurationAccess`.
+Verified executable evidence:
+
+| Acceptance boundary | Executable evidence |
+| --- | --- |
+| Defaults and explicit override precedence | `ComponentParameterResolutionLayersSpec`: `E9 preserve the bounded provenance of every admitted layer`, `E9 select the highest admitted layer for every generated overlap`, and `E9 fall back through the fixed precedence order`. |
+| Missing required and malformed values | `ComponentInitializationParametersSpec`: `E8 represent optional absence while preserving structured required and malformed failures`; `ComponentParameterResolutionLayersSpec`: `E9 reject a malformed or null higher layer instead of falling through`; `ComponentInitializationBootstrapSpec`: `E12 preserve structured failure`. |
+| Component-instance isolation | `ComponentParameterContextSpec`: `E10 isolate identical parameter keys for every generated pair of named instances` and `E10 prevent one SAR component instance from supplying another instance's settings`; `ComponentInitializationBootstrapSpec`: `E12 deliver context-bound snapshots`. |
+| Test overlays and production exclusion | `ComponentParameterResolutionLayersSpec`: `E9 admit a test overlay only through an explicit test descriptor` and `E9 ignore ambient and unsupported sources`; `ComponentInitializationBootstrapSpec`: `E12 deliver context-bound snapshots`. |
+| No-declaration components | `ComponentInitializationBootstrapSpec`: `E12 support participant variants`. |
+| Secret and confidential behavior | `ComponentInitializationParametersSpec`: `E11 keep secret-reference and confidential declarations opaque`, `E11 reject malformed secret references without echoing source values`, and `E11 sanitize component-owned decoder failures before diagnostic projection`; `ComponentInitializationBootstrapSpec`: `E12 deliver context-bound snapshots`. |
+| No raw configuration-map access | `ComponentInitializationParametersSpec`: `E8 expose only typed lookup and bounded structural metadata`; `ComponentInitializationBootstrapSpec`: `E12 protect the public snapshot boundary`. |
+| Operation-time coexistence | `ComponentConfigurationAccessSpec`: `E13 remain separate from immutable initialization parameters`, proving through the protected ActionCall DSL that same-name sources remain independent, operation-time access does not fall back to an initialization snapshot, and operation access does not mutate the snapshot. |
+
+All listed initialization specifications carry `CIP-08` metadata bound to the
+initialization-specific normative examples E8 through E13. Bootstrap behaviors
+are grouped under E12 so their visible output retains one stable common
+lifecycle contract.
+
+Verified validation evidence:
+
+- the six-spec CIP-08 evidence set passed 41 tests;
+- the packaged CAR/SAR initialization regression passed 2 tests;
+- `Test/compile` passed;
+- the full CNCF suite passed 2,255 tests across 324 suites, with no failed or
+  aborted suite; 2 tests were canceled, 1 ignored, and 59 remain pending; and
+- `git diff --check` passed.
+
+The independent review found three evidence defects. The fixes now exercise
+operation-time coexistence through a real factory-initialized component and
+the protected ActionCall configuration DSL, bind the initialization behaviors
+to non-conflicting normative examples E8 through E13, and give every cited
+CIP-08 specification valid executable metadata. The focused review-fix run
+reconfirmed all 41 evidence tests, both packaged CAR/SAR regressions, and
+`Test/compile`.
+
+The clean re-review found no actionable findings. Release validation passed
+2,257 tests across 324 suites with no failed or aborted suite; 2 tests were
+canceled, 1 ignored, and 59 remain pending.
+
+- [x] Cover defaults and explicit override precedence.
+- [x] Cover missing required and malformed typed values.
+- [x] Cover separate `ComponentInstanceId` values with the same parameter key.
+- [x] Cover deterministic test overlays and production-source exclusion.
+- [x] Cover components with no declared initialization parameters.
+- [x] Cover secret-reference and confidential diagnostic behavior.
+- [x] Cover the absence of raw configuration-map access.
+- [x] Cover compatibility with operation-time `ComponentConfigurationAccess`.
 
 ## CIP-09: Downstream Acceptance and Closure
 

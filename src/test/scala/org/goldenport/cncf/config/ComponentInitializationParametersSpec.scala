@@ -21,21 +21,15 @@ import org.scalatest.wordspec.AnyWordSpec
  * @author  ASAMI, Tomoharu
  */
 final class ComponentInitializationParametersSpec extends AnyWordSpec with Matchers with GivenWhenThen {
-  private val _r3a_metadata =
-    afterWord("in spec:component-runtime-boundary-capabilities, rule:R3a, phase:47, slice:CIP-02")
-  private val _r5_metadata =
-    afterWord("in spec:component-runtime-boundary-capabilities, rules:R3a,R5, phase:47, slice:CIP-06")
-  private val _r3a_diagnostics_metadata =
-    afterWord("in spec:component-runtime-boundary-capabilities, rule:R3a, phase:47, slices:CIP-02,CIP-07")
-  private val _r5_diagnostics_metadata =
-    afterWord("in spec:component-runtime-boundary-capabilities, rules:R3a,R5, phase:47, slices:CIP-06,CIP-07")
-  private val _cip07_metadata =
-    afterWord("in spec:component-runtime-boundary-capabilities, rules:R3a,R5, phase:47, slice:CIP-07")
+  private val _e8_metadata =
+    afterWord("in spec:component-runtime-boundary-capabilities, example:E8, rules:R3a,R10, phase:47, slices:CIP-02,CIP-07,CIP-08")
+  private val _e11_metadata =
+    afterWord("in spec:component-runtime-boundary-capabilities, example:E11, rules:R3a,R5,R10, phase:47, slices:CIP-06,CIP-07,CIP-08")
 
   "Component initialization parameters" should {
-    "resolve required typed declarations into an immutable snapshot" must _r3a_metadata {
+    "E8 resolve required typed declarations into an immutable snapshot" must _e8_metadata {
       "when generated string integer and boolean values are admitted" in {
-        Given("Spec: docs/spec/component-runtime-boundary-capabilities.md; Rule: R3a; declared typed keys and a bounded resolver")
+        Given("Spec: docs/spec/component-runtime-boundary-capabilities.md; Rules: R3a,R10; Example: E8; declared typed keys and a bounded resolver")
         val property = Prop.forAll(
           Gen.alphaStr.suchThat(_.nonEmpty),
           Gen.choose(-100000, 100000),
@@ -83,9 +77,9 @@ final class ComponentInitializationParametersSpec extends AnyWordSpec with Match
       }
     }
 
-    "represent optional absence while preserving structured required and malformed failures" must _r3a_diagnostics_metadata {
+    "E8 represent optional absence while preserving structured required and malformed failures" must _e8_metadata {
       "when values are absent or fail their declared decoder" in {
-        Given("Spec: docs/spec/component-runtime-boundary-capabilities.md; Rule: R3a; required optional and malformed declarations")
+        Given("Spec: docs/spec/component-runtime-boundary-capabilities.md; Rules: R3a,R10; Example: E8; required optional and malformed declarations")
         val requiredkey = ComponentParameterKey.requiredString("provider.required")
         val optionalkey = ComponentParameterKey.optionalString("provider.optional")
         val malformedkey = ComponentParameterKey.requiredInt("provider.limit")
@@ -108,9 +102,9 @@ final class ComponentInitializationParametersSpec extends AnyWordSpec with Match
       }
     }
 
-    "reject duplicate declarations and keys outside the validated snapshot" must _r3a_diagnostics_metadata {
+    "E8 reject duplicate declarations and keys outside the validated snapshot" must _e8_metadata {
       "when duplicate names or a reconstructed key are supplied" in {
-        Given("Spec: docs/spec/component-runtime-boundary-capabilities.md; Rule: R3a; declaration identity and duplicate-name constraints")
+        Given("Spec: docs/spec/component-runtime-boundary-capabilities.md; Rules: R3a,R10; Example: E8; declaration identity and duplicate-name constraints")
         val declaredkey = ComponentParameterKey.requiredString("provider.mode")
         val duplicatekey = ComponentParameterKey.optionalString("provider.mode")
         val resolver = _resolver("provider.mode" -> _candidate("strict"))
@@ -140,9 +134,9 @@ final class ComponentInitializationParametersSpec extends AnyWordSpec with Match
       }
     }
 
-    "expose only typed lookup and bounded structural metadata" must _r3a_metadata {
+    "E8 expose only typed lookup and bounded structural metadata" must _e8_metadata {
       "when the public snapshot and provenance surfaces are inspected" in {
-        Given("Spec: docs/spec/component-runtime-boundary-capabilities.md; Rule: R3a; a component-visible snapshot type")
+        Given("Spec: docs/spec/component-runtime-boundary-capabilities.md; Rules: R3a,R10; Example: E8; a component-visible snapshot type")
         val disallowed = Set(
           "entries",
           "raw",
@@ -174,9 +168,9 @@ final class ComponentInitializationParametersSpec extends AnyWordSpec with Match
       }
     }
 
-    "keep secret-reference and confidential declarations opaque" must _r5_diagnostics_metadata {
+    "E11 keep secret-reference and confidential declarations opaque" must _e11_metadata {
       "when initialization sources contain credential locators or confidential material" in {
-        Given("Spec: docs/spec/component-runtime-boundary-capabilities.md; Rules: R3a, R5; dedicated secret-reference and denied confidential declarations")
+        Given("Spec: docs/spec/component-runtime-boundary-capabilities.md; Rules: R3a,R5,R10; Example: E11; dedicated secret-reference and denied confidential declarations")
         val locator = "file:///private/runtime/provider-token"
         val confidentialvalue = "embedded-private-credential"
         val secretkey = ComponentParameterKey.requiredSecretReference("provider.token-ref")
@@ -211,9 +205,9 @@ final class ComponentInitializationParametersSpec extends AnyWordSpec with Match
       }
     }
 
-    "reject malformed secret references without echoing source values" must _r5_diagnostics_metadata {
+    "E11 reject malformed secret references without echoing source values" must _e11_metadata {
       "when a selected initialization source is not a secret-reference string" in {
-        Given("Spec: docs/spec/component-runtime-boundary-capabilities.md; Rules: R3a, R5; a malformed selected secret-reference value")
+        Given("Spec: docs/spec/component-runtime-boundary-capabilities.md; Rules: R3a,R5,R10; Example: E11; a malformed selected secret-reference value")
         val key = ComponentParameterKey.requiredSecretReference("provider.token-ref")
         val resolver = _resolver(
           "provider.token-ref" -> ComponentParameterCandidate(
@@ -232,9 +226,9 @@ final class ComponentInitializationParametersSpec extends AnyWordSpec with Match
       }
     }
 
-    "sanitize component-owned decoder failures before diagnostic projection" must _cip07_metadata {
+    "E11 sanitize component-owned decoder failures before diagnostic projection" must _e11_metadata {
       "when a decoder failure message contains the selected payload and a physical source" in {
-        Given("Spec: docs/spec/component-runtime-boundary-capabilities.md; Rules: R3a,R5; an untrusted decoder failure message")
+        Given("Spec: docs/spec/component-runtime-boundary-capabilities.md; Rules: R3a,R5,R10; Example: E11; an untrusted decoder failure message")
         val payload = "credential-value-from-/private/runtime/provider.conf"
         val key = ComponentParameterKey.required(
           "provider.custom",
@@ -262,7 +256,7 @@ final class ComponentInitializationParametersSpec extends AnyWordSpec with Match
       }
 
       "when a decoder throws an exception containing the selected payload and source" in {
-        Given("Spec: docs/spec/component-runtime-boundary-capabilities.md; Rules: R3a,R5; a throwing untrusted decoder")
+        Given("Spec: docs/spec/component-runtime-boundary-capabilities.md; Rules: R3a,R5,R10; Example: E11; a throwing untrusted decoder")
         val payload = "credential-value-from-/private/runtime/provider.conf"
         val key = ComponentParameterKey.required(
           "provider.throwing",

@@ -425,3 +425,51 @@ snapshot under configured limits, and records only logical/provider metadata.
 Unknown names, unsafe traversal entries, symbolic links, and limit violations
 return normal structured failures without exposing physical paths or payload
 content.
+
+### E8: Typed Component Initialization Snapshot
+
+A component factory declares typed initialization keys before construction.
+CNCF resolves required, optional, and malformed values into one immutable
+`ComponentInitializationParameters` snapshot. The component can resolve only
+the declared typed key identities and cannot obtain an untyped configuration
+map or physical source information.
+
+### E9: Fixed Initialization Resolution Layers
+
+CNCF resolves one initialization declaration through packaged defaults,
+component assembly defaults, subsystem-instance settings, runtime
+configuration, and an explicitly selected test overlay in that fixed order.
+A present malformed higher layer fails rather than falling through. Ambient
+state and unsupported sources cannot participate, and provenance remains a
+bounded logical category.
+
+### E10: Component-instance Initialization Isolation
+
+Two named instances of one component type resolve the same declaration against
+their own validated `ComponentInstanceId` context. Descriptor ownership and
+assembly-instance metadata must identify one coherent participant; one
+instance's setting cannot become another instance's value.
+
+### E11: Initialization Confidentiality and Diagnostics
+
+Initialization may deliver an opaque `SecretReference` through its dedicated
+declaration while rejecting confidential material before lookup or decoding.
+Missing, malformed, ambiguous, and rejected outcomes remain structured and
+payload-safe even when a component-owned decoder returns or throws a message
+containing selected input.
+
+### E12: Initialization Bootstrap Delivery
+
+Normal components, componentlets, no-declaration factories, repository-loaded
+participants, and special components receive initialization snapshots through
+the common consequence-aware bootstrap path. Failed initialization prevents
+installation, and the public snapshot surface exposes neither
+`Configuration` nor `ResolvedConfiguration`.
+
+### E13: Initialization and Operation-time Coexistence
+
+One initialized component may declare the same logical key independently as a
+`ComponentParameterKey` and a `ComponentConfigurationKey`. The protected
+ActionCall configuration DSL resolves only operation-time sources, never falls
+back to the immutable initialization snapshot, and cannot mutate or replace
+that snapshot.

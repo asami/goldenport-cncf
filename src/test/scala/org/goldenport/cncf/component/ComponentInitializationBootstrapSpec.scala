@@ -47,10 +47,13 @@ final class ComponentInitializationBootstrapSpec
   extends AnyWordSpec
   with Matchers
   with GivenWhenThen {
+  private val _e12_metadata =
+    afterWord("in spec:component-runtime-boundary-capabilities, example:E12, rules:R3a,R5,R10, phase:47, slices:CIP-05,CIP-06,CIP-07,CIP-08")
+
   "Component initialization bootstrap" should {
-    "deliver context-bound snapshots" which {
+    "E12 deliver context-bound snapshots" must _e12_metadata {
       "resolve required typed parameters before component initialization" in {
-        Given("a factory declaration and packaged component parameter default")
+        Given("Spec: docs/spec/component-runtime-boundary-capabilities.md; Rules: R3a,R10; Example: E12; a factory declaration and packaged component parameter default")
         val metricsbefore = RuntimeDashboardMetrics
           .componentInitializationParameterSnapshot
           .summary
@@ -99,7 +102,7 @@ final class ComponentInitializationBootstrapSpec
       }
 
       "deliver only opaque secret references through component initialization" in {
-        Given("a factory secret-reference declaration and a packaged credential locator")
+        Given("Spec: docs/spec/component-runtime-boundary-capabilities.md; Rules: R3a,R5,R10; Example: E12; a factory secret-reference declaration and a packaged credential locator")
         val locator = "vault://runtime/private-provider-token"
         val subsystem = TestComponentFactory.emptySubsystem("initialization-secret-reference")
         val descriptor = ComponentDescriptor(
@@ -126,7 +129,7 @@ final class ComponentInitializationBootstrapSpec
       }
 
       "isolate named component instance settings" in {
-        Given("one factory and two assembly instances with different values")
+        Given("Spec: docs/spec/component-runtime-boundary-capabilities.md; Rules: R3a,R10; Example: E12; one factory and two assembly instances with different values")
         val subsystem = TestComponentFactory.emptySubsystem("initialization-instances")
         val descriptor = ComponentDescriptor(componentName = Some("parameter_probe"))
         val base = ComponentCreate(
@@ -174,7 +177,7 @@ final class ComponentInitializationBootstrapSpec
       }
 
       "connect the fixed bootstrap layers to the selected runtime context" in {
-        Given("packaged, assembly, instance, runtime, and explicit test values for one declaration")
+        Given("Spec: docs/spec/component-runtime-boundary-capabilities.md; Rules: R3a,R10; Example: E12; packaged, assembly, instance, runtime, and explicit test values for one declaration")
         val testpath = Files.createTempFile("component-initialization-bootstrap", ".json")
         Files.writeString(
           testpath,
@@ -226,7 +229,7 @@ final class ComponentInitializationBootstrapSpec
       }
 
       "use descriptor and instance values through the repository subsystem path" in {
-        Given("an isolated development repository whose factory requires one initialization parameter")
+        Given("Spec: docs/spec/component-runtime-boundary-capabilities.md; Rules: R3a,R10; Example: E12; an isolated development repository whose factory requires one initialization parameter")
         _with_parameter_repository { repositorydir =>
           val configuration = ResolvedConfiguration(
             Configuration(Map(
@@ -280,9 +283,9 @@ final class ComponentInitializationBootstrapSpec
 
     }
 
-    "preserve structured failure" which {
+    "E12 preserve structured failure" must _e12_metadata {
       "reject missing and malformed declarations before installation" in {
-        Given("a required integer declaration without a valid selected value")
+        Given("Spec: docs/spec/component-runtime-boundary-capabilities.md; Rules: R3a,R10; Example: E12; a required integer declaration without a valid selected value")
         val missingbefore = RuntimeDashboardMetrics
           .componentInitializationParameterDiagnosticCounts
           .getOrElse("missing", 0L)
@@ -328,7 +331,7 @@ final class ComponentInitializationBootstrapSpec
       }
 
       "bound unrelated bootstrap failures before metric projection" in {
-        Given("a non-parameter bootstrap Conclusion containing unrelated configuration details")
+        Given("Spec: docs/spec/component-runtime-boundary-capabilities.md; Rules: R3a,R10; Example: E12; a non-parameter bootstrap Conclusion containing unrelated configuration details")
         val privatepayload = "credential-value-from-/private/runtime/provider.conf"
         val result = Consequence.configurationInvalid[ComponentInitializationParameters](
           s"runtime test descriptor rejected $privatepayload",
@@ -359,7 +362,7 @@ final class ComponentInitializationBootstrapSpec
       }
 
       "preserve repository factory parameter failures" in {
-        Given("a development repository and a malformed required instance setting")
+        Given("Spec: docs/spec/component-runtime-boundary-capabilities.md; Rules: R3a,R10; Example: E12; a development repository and a malformed required instance setting")
         _with_parameter_repository { repositorydir =>
           val binding = GenericSubsystemComponentBinding(
             "repository_parameter_probe",
@@ -397,9 +400,9 @@ final class ComponentInitializationBootstrapSpec
 
     }
 
-    "support participant variants" which {
+    "E12 support participant variants" must _e12_metadata {
       "resolve componentlet parameters through the owning descriptor context" in {
-        Given("a componentlet declaration owned by one packaged component descriptor")
+        Given("Spec: docs/spec/component-runtime-boundary-capabilities.md; Rules: R3a,R10; Example: E12; a componentlet declaration owned by one packaged component descriptor")
         val subsystem = TestComponentFactory.emptySubsystem("initialization-componentlet")
         val descriptor = ComponentDescriptor(
           componentName = Some("parameter_probe"),
@@ -427,7 +430,7 @@ final class ComponentInitializationBootstrapSpec
       }
 
       "avoid descriptor context for factories without declarations" in {
-        Given("a factory that declares no initialization parameters")
+        Given("Spec: docs/spec/component-runtime-boundary-capabilities.md; Rules: R3a,R10; Example: E12; a factory that declares no initialization parameters")
         val metricsbefore = RuntimeDashboardMetrics
           .componentInitializationParameterSnapshot
           .summary
@@ -452,7 +455,7 @@ final class ComponentInitializationBootstrapSpec
       }
 
       "deliver the same typed snapshot to special component initialization" in {
-        Given("a collaborator component with one declared initialization parameter")
+        Given("Spec: docs/spec/component-runtime-boundary-capabilities.md; Rules: R3a,R10; Example: E12; a collaborator component with one declared initialization parameter")
         val subsystem = TestComponentFactory.emptySubsystem("initialization-special")
         val descriptor = ComponentDescriptor(
           componentName = Some("special_probe"),
@@ -495,7 +498,7 @@ final class ComponentInitializationBootstrapSpec
       }
 
       "preserve special component initialization exceptions as structured failures" in {
-        Given("a collaborator component whose special initializer fails")
+        Given("Spec: docs/spec/component-runtime-boundary-capabilities.md; Rules: R3a,R10; Example: E12; a collaborator component whose special initializer fails")
         val subsystem = TestComponentFactory.emptySubsystem("initialization-special-failure")
         val component = FailingSpecialProbeFactory.createPrimaryC(
           ComponentCreate(subsystem, ComponentOrigin.Repository("phase-47"))
@@ -523,9 +526,9 @@ final class ComponentInitializationBootstrapSpec
       }
     }
 
-    "protect the public snapshot boundary" which {
+    "E12 protect the public snapshot boundary" must _e12_metadata {
       "keep physical runtime configuration outside the public snapshot API" in {
-        Given("the public component initialization snapshot type")
+        Given("Spec: docs/spec/component-runtime-boundary-capabilities.md; Rules: R3a,R10; Example: E12; the public component initialization snapshot type")
         val forbidden: Set[Class[?]] = Set(
           classOf[org.goldenport.configuration.Configuration],
           classOf[org.goldenport.configuration.ResolvedConfiguration]

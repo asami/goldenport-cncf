@@ -23,23 +23,13 @@ import org.scalatest.wordspec.AnyWordSpec
  * @author  ASAMI, Tomoharu
  */
 final class ComponentParameterContextSpec extends AnyWordSpec with Matchers with GivenWhenThen {
-  private val _e1_metadata =
-    afterWord("in spec:component-runtime-boundary-capabilities, example:E1, rules:R3a, phase:47, slice:CIP-04")
-  private val _e2_metadata =
-    afterWord("in spec:component-runtime-boundary-capabilities, example:E2, rules:R3a, phase:47, slice:CIP-04")
-  private val _e3_metadata =
-    afterWord("in spec:component-runtime-boundary-capabilities, example:E3, rules:R3a, phase:47, slices:CIP-04,CIP-07")
-  private val _e4_metadata =
-    afterWord("in spec:component-runtime-boundary-capabilities, example:E4, rules:R3a, phase:47, slices:CIP-04,CIP-07")
-  private val _e5_metadata =
-    afterWord("in spec:component-runtime-boundary-capabilities, example:E5, rules:R3a, phase:47, slice:CIP-04")
-  private val _e6_metadata =
-    afterWord("in spec:component-runtime-boundary-capabilities, example:E6, rules:R3a, phase:47, slice:CIP-04")
+  private val _e10_metadata =
+    afterWord("in spec:component-runtime-boundary-capabilities, example:E10, rules:R3a,R10, phase:47, slices:CIP-04,CIP-07,CIP-08")
 
   "A component initialization parameter context" should {
-    "E1 select packaged descriptor ownership for primary and componentlet identities" must _e1_metadata {
+    "E10 select packaged descriptor ownership for primary and componentlet identities" must _e10_metadata {
       "when one admitted assembly instance owns both participants" in {
-        Given("Spec: docs/spec/component-runtime-boundary-capabilities.md; Rule: R3a; one descriptor with a primary and componentlet")
+        Given("Spec: docs/spec/component-runtime-boundary-capabilities.md; Rules: R3a,R10; Example: E10; one descriptor with a primary and componentlet")
         val descriptor = ComponentDescriptor(
           name = Some("provider-artifact"),
           componentName = Some("provider"),
@@ -72,9 +62,9 @@ final class ComponentParameterContextSpec extends AnyWordSpec with Matchers with
       }
     }
 
-    "E2 isolate identical parameter keys for every generated pair of named instances" must _e2_metadata {
+    "E10 isolate identical parameter keys for every generated pair of named instances" must _e10_metadata {
       "when SAR bindings carry distinct values" in {
-        Given("Spec: docs/spec/component-runtime-boundary-capabilities.md; Rule: R3a; two named SAR bindings of one component type")
+        Given("Spec: docs/spec/component-runtime-boundary-capabilities.md; Rules: R3a,R10; Example: E10; two named SAR bindings of one component type")
         val property = Prop.forAll(
           Gen.alphaStr.suchThat(_.nonEmpty),
           Gen.alphaStr.suchThat(_.nonEmpty)
@@ -107,9 +97,9 @@ final class ComponentParameterContextSpec extends AnyWordSpec with Matchers with
       }
     }
 
-    "E3 reject missing and ambiguous packaged descriptor ownership" must _e3_metadata {
+    "E10 reject missing and ambiguous packaged descriptor ownership" must _e10_metadata {
       "when no descriptor or two descriptors claim the target component" in {
-        Given("Spec: docs/spec/component-runtime-boundary-capabilities.md; Rule: R3a; missing and duplicate descriptor candidates")
+        Given("Spec: docs/spec/component-runtime-boundary-capabilities.md; Rules: R3a,R10; Example: E10; missing and duplicate descriptor candidates")
         val componentid = ComponentId("provider")
         val instanceid = ComponentInstanceId("provider", "default")
         val metadata = Vector(ComponentInstanceMetadata("provider"))
@@ -136,9 +126,9 @@ final class ComponentParameterContextSpec extends AnyWordSpec with Matchers with
       }
     }
 
-    "E4 reject missing ambiguous and mismatched component-instance metadata" must _e4_metadata {
+    "E10 reject missing ambiguous and mismatched component-instance metadata" must _e10_metadata {
       "when assembly metadata cannot identify exactly one requested instance" in {
-        Given("Spec: docs/spec/component-runtime-boundary-capabilities.md; Rule: R3a; one descriptor and invalid instance selections")
+        Given("Spec: docs/spec/component-runtime-boundary-capabilities.md; Rules: R3a,R10; Example: E10; one descriptor and invalid instance selections")
         val descriptor = Vector(_descriptor)
         val componentid = ComponentId("provider")
         val instanceid = ComponentInstanceId("provider", "first")
@@ -174,9 +164,9 @@ final class ComponentParameterContextSpec extends AnyWordSpec with Matchers with
       }
     }
 
-    "E5 prevent one SAR component instance from supplying another instance's settings" must _e5_metadata {
+    "E10 prevent one SAR component instance from supplying another instance's settings" must _e10_metadata {
       "when only the non-target instance defines the requested key" in {
-        Given("Spec: docs/spec/component-runtime-boundary-capabilities.md; Rule: R3a; isolated SAR metadata with one configured instance")
+        Given("Spec: docs/spec/component-runtime-boundary-capabilities.md; Rules: R3a,R10; Example: E10; isolated SAR metadata with one configured instance")
         val metadata = Vector(
           GenericSubsystemComponentBinding(
             "provider",
@@ -200,9 +190,9 @@ final class ComponentParameterContextSpec extends AnyWordSpec with Matchers with
       }
     }
 
-    "E6 keep CAR artifact identity separate from runtime component ownership" must _e6_metadata {
+    "E10 keep CAR artifact identity separate from runtime component ownership" must _e10_metadata {
       "when descriptor name and componentName identify different concepts" in {
-        Given("Spec: docs/spec/component-runtime-boundary-capabilities.md; Rule: R3a; a CAR artifact name distinct from its runtime component name")
+        Given("Spec: docs/spec/component-runtime-boundary-capabilities.md; Rules: R3a,R10; Example: E10; a CAR artifact name distinct from its runtime component name")
         val descriptor = ComponentDescriptor(
           name = Some("provider-artifact"),
           componentName = Some("provider")

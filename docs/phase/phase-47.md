@@ -69,7 +69,7 @@ raw configuration maps to component code.
 | CIP-05 | Bootstrap integration | Component factories and special components receive typed initialization parameters without raw maps. | done |
 | CIP-06 | Confidential values | Secret references and confidential parameters remain opaque and payload-safe. | done |
 | CIP-07 | Diagnostics and observability | Bootstrap resolution exposes bounded identity and provenance facts only. | done |
-| CIP-08 | Executable evidence | Deterministic specifications cover success, failure, precedence, isolation, overlays, and confidentiality. | open |
+| CIP-08 | Executable evidence | Deterministic specifications cover success, failure, precedence, isolation, overlays, confidentiality, and operation-time coexistence. | done |
 | CIP-09 | Downstream acceptance | Textus AI or CBD Support consumes the mechanism and the phase closes with validated evidence. | open |
 
 ## Acceptance
@@ -160,5 +160,21 @@ without changing operation-time `ComponentConfigurationAccess`.
 The CIP-07 implementation projects missing, malformed,
 ambiguous, and rejected parameter outcomes from standard Conclusion facets and
 records payload-safe bootstrap resolution metrics. Focused implementation and
-review-fix validation passed 27 executable specifications, and the clean
-re-review found no actionable findings. CIP-08 executable evidence is next.
+review-fix validation passed 27 executable specifications, the clean re-review
+found no actionable findings, and release validation passed 2,254 tests across
+324 suites before commit `b1f17b9e`.
+
+CIP-08 is complete. The evidence
+matrix in `phase-47-checklist.md` maps every Phase 47 acceptance boundary to an
+exact executable specification. A new property-based
+`ComponentConfigurationAccessSpec` behavior initializes a real component and
+proves through its protected ActionCall DSL that same-name initialization-time
+and operation-time declarations remain independent, operation-time lookup does
+not fall back to initialization state, and operation access cannot mutate the
+immutable initialization snapshot. Normative examples E8 through E13 provide
+stable identities for every initialization evidence group. Review-fix
+validation passed all 41 tests in the six-spec evidence set, both packaged
+CAR/SAR initialization regressions, and `Test/compile`. The clean re-review
+found no actionable findings, and release validation passed the full CNCF
+suite with 2,257 tests across 324 suites and no failed or aborted suite. CIP-09
+downstream acceptance is next.
