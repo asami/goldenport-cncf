@@ -12,7 +12,8 @@ import org.goldenport.record.Record
  * than message parsing or component-local error taxonomies.
  *
  * @since   Apr. 29, 2026
- * @version May. 11, 2026
+ *  version May. 11, 2026
+ * @version Jul. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 object ConclusionDiagnostics {
@@ -33,6 +34,7 @@ object ConclusionDiagnostics {
     parameter: Option[String],
     fieldPath: Option[String],
     policy: Option[String],
+    reason: Option[String],
     capability: Option[String],
     permission: Option[String],
     guard: Option[String],
@@ -56,6 +58,7 @@ object ConclusionDiagnostics {
       "parameter" -> parameter,
       "fieldPath" -> fieldPath,
       "policy" -> policy,
+      "reason" -> reason,
       "capability" -> capability,
       "permission" -> permission,
       "guard" -> guard,
@@ -81,6 +84,7 @@ object ConclusionDiagnostics {
     parameter = None,
     fieldPath = None,
     policy = None,
+    reason = None,
     capability = None,
     permission = None,
     guard = None,
@@ -93,6 +97,7 @@ object ConclusionDiagnostics {
     val parameters = facets.collect { case Descriptor.Facet.Parameter(_, name) => name }.toSet
     val fieldpaths = facets.collect { case Descriptor.Facet.FieldPath(path) => path }.toSet
     val policies = facets.collect { case Descriptor.Facet.Policy(name) => name }.toSet
+    val reasons = facets.collect { case Descriptor.Facet.Reason(name) => name }.toSet
     val capabilities = facets.collect { case Descriptor.Facet.Capability(name) => name }.toSet
     val permissions = facets.collect { case Descriptor.Facet.Permission(name) => name }.toSet
     val guards = facets.collect { case Descriptor.Facet.Guard(name) => name }.toSet
@@ -100,7 +105,7 @@ object ConclusionDiagnostics {
     val algorithms = facets.collect { case Descriptor.Facet.Algorithm(name) => name.toLowerCase(java.util.Locale.ROOT) }.toSet
     val causekind = conclusion.observation.cause.kind
     Classification(
-      diagnosticKey = _diagnostic_key(conclusion, causekind, parameters, fieldpaths, policies, capabilities, permissions, guards, relations, algorithms),
+      diagnosticKey = _diagnostic_key(conclusion, causekind, parameters, fieldpaths, policies, reasons, capabilities, permissions, guards, relations, algorithms),
       taxonomy = conclusion.observation.taxonomy.print,
       taxonomyCategory = conclusion.observation.taxonomy.category.name,
       taxonomySymptom = conclusion.observation.taxonomy.symptom.name,
@@ -116,6 +121,7 @@ object ConclusionDiagnostics {
       parameter = parameters.toVector.sorted.headOption,
       fieldPath = fieldpaths.toVector.sorted.headOption,
       policy = policies.toVector.sorted.headOption,
+      reason = reasons.toVector.sorted.headOption,
       capability = capabilities.toVector.sorted.headOption,
       permission = permissions.toVector.sorted.headOption,
       guard = guards.toVector.sorted.headOption,
@@ -137,34 +143,47 @@ object ConclusionDiagnostics {
     parameters: Set[String],
     fieldpaths: Set[String],
     policies: Set[String],
+    reasons: Set[String],
     capabilities: Set[String],
     permissions: Set[String],
     guards: Set[String],
     relations: Set[String],
     algorithms: Set[String]
   ): String = {
-    if (_is_cross_component(guards))
-      "cross_component"
-    else if (_is_abac(guards))
-      "abac"
-    else
-      causekind match {
-        case Some(Cause.Kind.Capability) => "capability"
-        case Some(Cause.Kind.Permission) => "permission"
-        case Some(Cause.Kind.Guard) => "guard"
-        case Some(Cause.Kind.Relation) => "relation"
-        case Some(Cause.Kind.Format) => _format_key(parameters)
-        case Some(Cause.Kind.Policy) => _policy_key(parameters, policies)
-        case Some(Cause.Kind.Limit) => _limit_key(parameters, fieldpaths)
-        case Some(Cause.Kind.Inconsistency) => _inconsistency_key(parameters, algorithms)
-        case Some(Cause.Kind.Conflict) => "conflict"
-        case Some(Cause.Kind.Exhaustion) => "exhaustion"
-        case Some(Cause.Kind.Timeout) => "timeout"
-        case Some(Cause.Kind.Corruption) => "corruption"
-        case Some(Cause.Kind.Unknown) => "unknown"
-        case None => _taxonomy_key(conclusion)
-      }
+    _component_initialization_parameter_key(policies, reasons).getOrElse {
+      if (_is_cross_component(guards))
+        "cross_component"
+      else if (_is_abac(guards))
+        "abac"
+      else
+        causekind match {
+          case Some(Cause.Kind.Capability) => "capability"
+          case Some(Cause.Kind.Permission) => "permission"
+          case Some(Cause.Kind.Guard) => "guard"
+          case Some(Cause.Kind.Relation) => "relation"
+          case Some(Cause.Kind.Format) => _format_key(parameters)
+          case Some(Cause.Kind.Policy) => _policy_key(parameters, policies)
+          case Some(Cause.Kind.Limit) => _limit_key(parameters, fieldpaths)
+          case Some(Cause.Kind.Inconsistency) => _inconsistency_key(parameters, algorithms)
+          case Some(Cause.Kind.Conflict) => "conflict"
+          case Some(Cause.Kind.Exhaustion) => "exhaustion"
+          case Some(Cause.Kind.Timeout) => "timeout"
+          case Some(Cause.Kind.Corruption) => "corruption"
+          case Some(Cause.Kind.Unknown) => "unknown"
+          case None => _taxonomy_key(conclusion)
+        }
+    }
   }
+
+  private def _component_initialization_parameter_key(
+    policies: Set[String],
+    reasons: Set[String]
+  ): Option[String] =
+    if (policies.contains("component-initialization-parameter"))
+      Vector("missing", "malformed", "ambiguous", "rejected")
+        .find(reasons.contains)
+    else
+      None
 
   private def _previous_chain(conclusion: Conclusion): Vector[Record] = {
     @annotation.tailrec

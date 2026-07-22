@@ -68,7 +68,7 @@ raw configuration maps to component code.
 | CIP-04 | Instance context | Resolution is isolated by component and component-instance identity. | done |
 | CIP-05 | Bootstrap integration | Component factories and special components receive typed initialization parameters without raw maps. | done |
 | CIP-06 | Confidential values | Secret references and confidential parameters remain opaque and payload-safe. | done |
-| CIP-07 | Diagnostics and observability | Bootstrap resolution exposes bounded identity and provenance facts only. | open |
+| CIP-07 | Diagnostics and observability | Bootstrap resolution exposes bounded identity and provenance facts only. | done |
 | CIP-08 | Executable evidence | Deterministic specifications cover success, failure, precedence, isolation, overlays, and confidentiality. | open |
 | CIP-09 | Downstream acceptance | Textus AI or CBD Support consumes the mechanism and the phase closes with validated evidence. | open |
 
@@ -157,4 +157,8 @@ longer exposes the locator or a locator-derived hash. Focused resolver and
 factory-bootstrap specifications prove redacted success and failure behavior
 without changing operation-time `ComponentConfigurationAccess`.
 
-Bootstrap diagnostics and observability remain CIP-07.
+The CIP-07 implementation projects missing, malformed,
+ambiguous, and rejected parameter outcomes from standard Conclusion facets and
+records payload-safe bootstrap resolution metrics. Focused implementation and
+review-fix validation passed 27 executable specifications, and the clean
+re-review found no actionable findings. CIP-08 executable evidence is next.

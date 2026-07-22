@@ -3,6 +3,10 @@ package org.goldenport.cncf.config
 import java.lang.reflect.Modifier
 import org.goldenport.Consequence
 import org.goldenport.configuration.ConfigurationValue
+import org.goldenport.cncf.component.{ComponentId, ComponentInstanceId}
+import org.goldenport.cncf.http.RuntimeDashboardMetrics
+import org.goldenport.cncf.observability.ComponentParameterBootstrapObservation
+import org.goldenport.cncf.observability.ConclusionDiagnostics
 import org.goldenport.observation.Taxonomy
 import org.goldenport.record.Record
 import org.scalacheck.{Gen, Prop, Test}
@@ -21,6 +25,12 @@ final class ComponentInitializationParametersSpec extends AnyWordSpec with Match
     afterWord("in spec:component-runtime-boundary-capabilities, rule:R3a, phase:47, slice:CIP-02")
   private val _r5_metadata =
     afterWord("in spec:component-runtime-boundary-capabilities, rules:R3a,R5, phase:47, slice:CIP-06")
+  private val _r3a_diagnostics_metadata =
+    afterWord("in spec:component-runtime-boundary-capabilities, rule:R3a, phase:47, slices:CIP-02,CIP-07")
+  private val _r5_diagnostics_metadata =
+    afterWord("in spec:component-runtime-boundary-capabilities, rules:R3a,R5, phase:47, slices:CIP-06,CIP-07")
+  private val _cip07_metadata =
+    afterWord("in spec:component-runtime-boundary-capabilities, rules:R3a,R5, phase:47, slice:CIP-07")
 
   "Component initialization parameters" should {
     "resolve required typed declarations into an immutable snapshot" must _r3a_metadata {
@@ -73,7 +83,7 @@ final class ComponentInitializationParametersSpec extends AnyWordSpec with Match
       }
     }
 
-    "represent optional absence while preserving structured required and malformed failures" must _r3a_metadata {
+    "represent optional absence while preserving structured required and malformed failures" must _r3a_diagnostics_metadata {
       "when values are absent or fail their declared decoder" in {
         Given("Spec: docs/spec/component-runtime-boundary-capabilities.md; Rule: R3a; required optional and malformed declarations")
         val requiredkey = ComponentParameterKey.requiredString("provider.required")
@@ -89,14 +99,16 @@ final class ComponentInitializationParametersSpec extends AnyWordSpec with Match
 
         Then("optional absence is typed and expected failures remain Consequence failures")
         _failure_taxonomy(required) shouldBe _configuration_invalid_taxonomy
+        _diagnostic_key(required) shouldBe "missing"
         optional.toOption shouldBe Some(
           ComponentParameterResolution(None, ComponentParameterProvenance.Absent)
         )
         _failure_taxonomy(malformed) shouldBe _configuration_invalid_taxonomy
+        _diagnostic_key(malformed) shouldBe "malformed"
       }
     }
 
-    "reject duplicate declarations and keys outside the validated snapshot" must _r3a_metadata {
+    "reject duplicate declarations and keys outside the validated snapshot" must _r3a_diagnostics_metadata {
       "when duplicate names or a reconstructed key are supplied" in {
         Given("Spec: docs/spec/component-runtime-boundary-capabilities.md; Rule: R3a; declaration identity and duplicate-name constraints")
         val declaredkey = ComponentParameterKey.requiredString("provider.mode")
@@ -116,6 +128,7 @@ final class ComponentInitializationParametersSpec extends AnyWordSpec with Match
 
         Then("duplicate declarations and undeclared identities fail without weakening declared lookup")
         _failure_taxonomy(duplicate) shouldBe _configuration_invalid_taxonomy
+        _diagnostic_key(duplicate) shouldBe "ambiguous"
         declared.toOption shouldBe Some(
           ComponentParameterResolution(
             Some("strict"),
@@ -123,6 +136,7 @@ final class ComponentInitializationParametersSpec extends AnyWordSpec with Match
           )
         )
         _failure_taxonomy(reconstructed) shouldBe _configuration_invalid_taxonomy
+        _diagnostic_key(reconstructed) shouldBe "rejected"
       }
     }
 
@@ -160,7 +174,7 @@ final class ComponentInitializationParametersSpec extends AnyWordSpec with Match
       }
     }
 
-    "keep secret-reference and confidential declarations opaque" must _r5_metadata {
+    "keep secret-reference and confidential declarations opaque" must _r5_diagnostics_metadata {
       "when initialization sources contain credential locators or confidential material" in {
         Given("Spec: docs/spec/component-runtime-boundary-capabilities.md; Rules: R3a, R5; dedicated secret-reference and denied confidential declarations")
         val locator = "file:///private/runtime/provider-token"
@@ -191,12 +205,13 @@ final class ComponentInitializationParametersSpec extends AnyWordSpec with Match
           ComponentParameterResolution(None, ComponentParameterProvenance.Absent)
         )
         val confidentialdisplay = _failure_display(confidential)
+        _diagnostic_key(confidential) shouldBe "rejected"
         confidentialdisplay should not include confidentialvalue
         confidentialdisplay should not include "/private/runtime"
       }
     }
 
-    "reject malformed secret references without echoing source values" must _r5_metadata {
+    "reject malformed secret references without echoing source values" must _r5_diagnostics_metadata {
       "when a selected initialization source is not a secret-reference string" in {
         Given("Spec: docs/spec/component-runtime-boundary-capabilities.md; Rules: R3a, R5; a malformed selected secret-reference value")
         val key = ComponentParameterKey.requiredSecretReference("provider.token-ref")
@@ -212,7 +227,79 @@ final class ComponentInitializationParametersSpec extends AnyWordSpec with Match
 
         Then("the structured failure identifies the declaration contract without exposing the value")
         _failure_taxonomy(result) shouldBe _configuration_invalid_taxonomy
+        _diagnostic_key(result) shouldBe "malformed"
         _failure_display(result) should not include "314159"
+      }
+    }
+
+    "sanitize component-owned decoder failures before diagnostic projection" must _cip07_metadata {
+      "when a decoder failure message contains the selected payload and a physical source" in {
+        Given("Spec: docs/spec/component-runtime-boundary-capabilities.md; Rules: R3a,R5; an untrusted decoder failure message")
+        val payload = "credential-value-from-/private/runtime/provider.conf"
+        val key = ComponentParameterKey.required(
+          "provider.custom",
+          ComponentParameterDecoder[String](_ =>
+            Consequence.configurationInvalid(s"custom decoder rejected $payload")
+          )
+        )
+        val resolver = _resolver("provider.custom" -> _candidate(payload))
+
+        When("the CNCF resolver converts the decoder failure at its boundary")
+        val result = resolver.resolve(key)
+        val diagnostic = _diagnostic(result)
+
+        Then("the standard Conclusion identifies a malformed declaration without retaining decoder payload text")
+        diagnostic.diagnosticKey shouldBe "malformed"
+        diagnostic.parameter shouldBe Some("provider.custom")
+        diagnostic.policy shouldBe Some(ComponentParameterDiagnostics.POLICY)
+        diagnostic.reason shouldBe Some("malformed")
+        _diagnostic_provenance(result) shouldBe Some(
+          ComponentParameterProvenance.RuntimeConfiguration
+        )
+        diagnostic.toRecord.print should not include payload
+        _failure_display(result) should not include payload
+        _failure_display(result) should not include "/private/runtime"
+      }
+
+      "when a decoder throws an exception containing the selected payload and source" in {
+        Given("Spec: docs/spec/component-runtime-boundary-capabilities.md; Rules: R3a,R5; a throwing untrusted decoder")
+        val payload = "credential-value-from-/private/runtime/provider.conf"
+        val key = ComponentParameterKey.required(
+          "provider.throwing",
+          ComponentParameterDecoder[String](_ =>
+            throw new IllegalArgumentException(s"custom decoder rejected $payload")
+          )
+        )
+        val resolver = _resolver("provider.throwing" -> _candidate(payload))
+        val metricsbefore = RuntimeDashboardMetrics
+          .componentInitializationParameterDiagnosticCounts
+          .getOrElse("malformed", 0L)
+
+        When("the CNCF resolver and bootstrap observer handle the thrown exception")
+        val result = ComponentInitializationParameters.create(Vector(key), resolver)
+        ComponentParameterBootstrapObservation.record(
+          ComponentId("throwing_decoder_probe"),
+          ComponentInstanceId("throwing_decoder_probe", "default"),
+          Vector(key),
+          result
+        )
+        val diagnosticrecord = RuntimeDashboardMetrics
+          .componentInitializationParameterDiagnosticRecords
+          .getOrElse("malformed", fail("expected malformed bootstrap diagnostic"))
+          .print
+
+        Then("the exception becomes a payload-safe malformed Conclusion with bounded provenance and metrics")
+        _diagnostic_key(result) shouldBe "malformed"
+        _diagnostic_provenance(result) shouldBe Some(
+          ComponentParameterProvenance.RuntimeConfiguration
+        )
+        RuntimeDashboardMetrics
+          .componentInitializationParameterDiagnosticCounts
+          .getOrElse("malformed", 0L) shouldBe metricsbefore + 1L
+        diagnosticrecord should include ("runtime-configuration")
+        diagnosticrecord should not include payload
+        diagnosticrecord should not include "/private/runtime"
+        _failure_display(result) should not include payload
       }
     }
   }
@@ -241,6 +328,27 @@ final class ComponentInitializationParametersSpec extends AnyWordSpec with Match
   ): String =
     consequence match {
       case Consequence.Failure(conclusion) => conclusion.display
+      case Consequence.Success(value) => fail(s"expected structured failure, got success: $value")
+    }
+
+  private def _diagnostic_key[A](
+    consequence: Consequence[A]
+  ): String =
+    _diagnostic(consequence).diagnosticKey
+
+  private def _diagnostic[A](
+    consequence: Consequence[A]
+  ): ConclusionDiagnostics.Classification =
+    consequence match {
+      case Consequence.Failure(conclusion) => ConclusionDiagnostics.classify(conclusion)
+      case Consequence.Success(value) => fail(s"expected structured failure, got success: $value")
+    }
+
+  private def _diagnostic_provenance[A](
+    consequence: Consequence[A]
+  ): Option[ComponentParameterProvenance] =
+    consequence match {
+      case Consequence.Failure(conclusion) => ComponentParameterDiagnostics.provenance(conclusion)
       case Consequence.Success(value) => fail(s"expected structured failure, got success: $value")
     }
 

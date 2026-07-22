@@ -5,7 +5,7 @@ import org.goldenport.record.Record
 
 /*
  * @since   May. 11, 2026
- * @version Jul. 21, 2026
+ * @version Jul. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class MetricScopeDefinition(
@@ -152,6 +152,12 @@ object RuntimeMetricsCatalog {
       "Service container lifecycle",
       "Managed service lifecycle counts, failures, and elapsed time without provider payloads or credentials.",
       Vector("outcome", "operation", "ownership_mode", "owner_kind", "owner_id", "service_id", "cleanup_policy", "status", "diagnostic_key")
+    ),
+    MetricScopeDefinition(
+      "component-initialization.parameter-resolution",
+      "Component initialization parameter resolution",
+      "Bootstrap parameter resolution counts and structured failures with bounded logical identity and provenance only.",
+      Vector("component", "component_instance", "parameter", "requirement", "confidentiality", "provenance", "outcome", "diagnostic_key")
     ),
     MetricScopeDefinition(
       "diagnostic-payload.externalization",

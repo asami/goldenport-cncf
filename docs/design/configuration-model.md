@@ -323,6 +323,22 @@ Parameter values, secret references, physical source locations, credentials,
 and unrelated configuration keys are absent from default diagnostics and
 provenance.
 
+Bootstrap diagnostics use the normal `Conclusion` model rather than a
+component-specific error envelope. CNCF applies the
+`component-initialization-parameter` policy facet and one bounded reason:
+`missing`, `malformed`, `ambiguous`, or `rejected`. The common
+`ConclusionDiagnostics` projection derives its diagnostic key from these
+facets. Decoder failures are replaced at the initialization boundary so an
+arbitrary component decoder cannot place the selected value or a physical
+source in the resulting diagnostic.
+
+`ComponentParameterBootstrap` is the lifecycle owner of the
+`component-initialization.parameter-resolution` runtime metric. Successful and
+absent declarations publish only logical identity, declaration metadata, and
+bounded provenance. Failure records add only the common structured diagnostic
+projection. Bootstrap has no Action-owned `ExecutionContext`, so this lifecycle
+does not create a synthetic CallTree.
+
 Every initialization declaration has a `Public`, `Confidential`, or `Secret`
 classification. Ordinary typed constructors are always public. Secret locators
 use `ComponentParameterKey.requiredSecretReference` or

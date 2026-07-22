@@ -40,7 +40,11 @@ private[cncf] object ComponentParameterContext {
   ): Consequence[ComponentParameterContext] =
     for {
       _ <- _validate_identity(componentid, componentinstanceid)
-      descriptor <- _select_descriptor(componentid, descriptors.toVector)
+      descriptor <- _select_descriptor(
+        componentid,
+        componentinstanceid,
+        descriptors.toVector
+      )
       metadata <- _select_metadata(
         componentid,
         componentinstanceid,
@@ -62,25 +66,32 @@ private[cncf] object ComponentParameterContext {
     if (expected.canonicalKey == componentinstanceid.canonicalKey)
       Consequence.unit
     else
-      Consequence.configurationInvalid(
-        s"component parameter context identity mismatch: component=${componentid.name}, instance=${componentinstanceid.instance}"
+      ComponentParameterDiagnostics.contextRejected(
+        s"component parameter context identity mismatch: component=${componentid.name}, instance=${componentinstanceid.instance}",
+        componentid,
+        componentinstanceid
       )
   }
 
   private def _select_descriptor(
     componentid: ComponentId,
+    componentinstanceid: ComponentInstanceId,
     descriptors: Vector[ComponentDescriptor]
   ): Consequence[ComponentDescriptor] = {
     val candidates = descriptors.filter(_owns_component(_, componentid))
     candidates match {
       case Vector(descriptor) => Consequence.success(descriptor)
       case Vector() =>
-        Consequence.configurationInvalid(
-          s"component parameter context descriptor is missing: component=${componentid.name}"
+        ComponentParameterDiagnostics.contextMissing(
+          s"component parameter context descriptor is missing: component=${componentid.name}",
+          componentid,
+          componentinstanceid
         )
       case _ =>
-        Consequence.configurationInvalid(
-          s"component parameter context descriptor is ambiguous: component=${componentid.name}, candidates=${candidates.size}"
+        ComponentParameterDiagnostics.contextAmbiguous(
+          s"component parameter context descriptor is ambiguous: component=${componentid.name}, candidates=${candidates.size}",
+          componentid,
+          componentinstanceid
         )
     }
   }
@@ -100,12 +111,16 @@ private[cncf] object ComponentParameterContext {
     candidates match {
       case Vector(metadata) => Consequence.success(metadata)
       case Vector() =>
-        Consequence.configurationInvalid(
-          s"component parameter context instance metadata is missing: component=${componentid.name}, instance=${componentinstanceid.instance}"
+        ComponentParameterDiagnostics.contextMissing(
+          s"component parameter context instance metadata is missing: component=${componentid.name}, instance=${componentinstanceid.instance}",
+          componentid,
+          componentinstanceid
         )
       case _ =>
-        Consequence.configurationInvalid(
-          s"component parameter context instance metadata is ambiguous: component=${componentid.name}, instance=${componentinstanceid.instance}, candidates=${candidates.size}"
+        ComponentParameterDiagnostics.contextAmbiguous(
+          s"component parameter context instance metadata is ambiguous: component=${componentid.name}, instance=${componentinstanceid.instance}, candidates=${candidates.size}",
+          componentid,
+          componentinstanceid
         )
     }
   }

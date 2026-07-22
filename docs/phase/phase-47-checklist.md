@@ -214,17 +214,37 @@ Verified evidence:
 ## CIP-07: Diagnostics and Observability
 
 Stage Status:
-- Current status: OPEN
+- Current status: DONE
 - Owner: CNCF runtime maintainers
 - Update rule: Mark DONE only after bootstrap diagnostics expose enough bounded
   facts to explain resolution without exposing payloads or physical sources.
 
-- [ ] Define safe parameter identity and provenance summaries.
-- [ ] Define structured missing, malformed, ambiguous, and rejected outcomes.
-- [ ] Add optional CallTree or runtime metadata only where bootstrap lifecycle
+- [x] Define safe parameter identity and provenance summaries.
+- [x] Define structured missing, malformed, ambiguous, and rejected outcomes.
+- [x] Add optional CallTree or runtime metadata only where bootstrap lifecycle
   ownership is explicit.
-- [ ] Verify default diagnostics omit raw values, credentials, physical paths,
+- [x] Verify default diagnostics omit raw values, credentials, physical paths,
   and unrelated configuration keys.
+
+Verified implementation evidence:
+- standard `Conclusion` facets project `missing`, `malformed`, `ambiguous`,
+  and `rejected` without message parsing or application detail codes;
+- `component-initialization.parameter-resolution` is emitted by the explicit
+  bootstrap lifecycle owner, while no synthetic pre-Action CallTree is made;
+- focused resolver, context, and bootstrap specifications passed 27 tests and
+  include a malicious decoder-message and physical-path redaction check.
+
+Verified review-fix evidence:
+
+- thrown component-owned decoders are converted to the same sanitized
+  `malformed` Conclusion as returned decoder failures;
+- malformed selected values retain only their bounded logical provenance in
+  bootstrap metrics; and
+- failures outside the component-parameter policy are reduced to a generic
+  bounded bootstrap diagnostic before metric projection.
+
+The clean re-review found no actionable CIP-07 findings. Full CNCF validation
+is required by the release commit before this evidence is committed.
 
 ## CIP-08: Executable Evidence
 

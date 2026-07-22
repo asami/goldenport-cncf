@@ -21,6 +21,9 @@ import org.goldenport.cncf.config.{
   RuntimeConfig,
   SecretReference
 }
+import org.goldenport.cncf.http.RuntimeDashboardMetrics
+import org.goldenport.cncf.metrics.EntityAccessMetricsRegistry
+import org.goldenport.cncf.observability.ComponentParameterBootstrapObservation
 import org.goldenport.cncf.subsystem.{
   GenericSubsystemComponentBinding,
   GenericSubsystemDescriptor,
@@ -28,6 +31,7 @@ import org.goldenport.cncf.subsystem.{
 }
 import org.goldenport.cncf.testutil.TestComponentFactory
 import org.goldenport.protocol.spec as spec
+import org.goldenport.observation.{Cause, Descriptor}
 import org.scalatest.GivenWhenThen
 import org.scalatest.OptionValues.convertOptionToValuable
 import org.scalatest.matchers.should.Matchers
@@ -47,6 +51,11 @@ final class ComponentInitializationBootstrapSpec
     "deliver context-bound snapshots" which {
       "resolve required typed parameters before component initialization" in {
         Given("a factory declaration and packaged component parameter default")
+        val metricsbefore = RuntimeDashboardMetrics
+          .componentInitializationParameterSnapshot
+          .summary
+          .cumulative
+          .total
         val subsystem = TestComponentFactory.emptySubsystem("initialization-bootstrap")
         val descriptor = ComponentDescriptor(
           componentName = Some("parameter_probe"),
@@ -69,6 +78,24 @@ final class ComponentInitializationBootstrapSpec
         component.limit shouldBe Some(12)
         component.provenance shouldBe Some(ComponentParameterProvenance.PackagedDefault)
         component.initializationParameters.size shouldBe 1
+        RuntimeDashboardMetrics
+          .componentInitializationParameterSnapshot
+          .summary
+          .cumulative
+          .total shouldBe metricsbefore + 1L
+        RuntimeDashboardMetrics.componentInitializationParameterRecords.last.print should include (
+          "packaged-default"
+        )
+        val metricpoint = RuntimeDashboardMetrics
+          .runtimeMetricsSnapshot(EntityAccessMetricsRegistry.shared)
+          .points
+          .find { point =>
+            point.scope == "component-initialization.parameter-resolution" &&
+              point.labels.get("component").contains("parameter_probe") &&
+              point.labels.get("parameter").contains("provider.limit") &&
+              point.labels.get("provenance").contains("packaged-default")
+          }
+        metricpoint should not be empty
       }
 
       "deliver only opaque secret references through component initialization" in {
@@ -95,6 +122,7 @@ final class ComponentInitializationBootstrapSpec
         }
         component.reference.value.toString should not include locator
         component.initializationParameters.toString should not include locator
+        RuntimeDashboardMetrics.componentInitializationParameterRecords.last.print should not include locator
       }
 
       "isolate named component instance settings" in {
@@ -255,9 +283,18 @@ final class ComponentInitializationBootstrapSpec
     "preserve structured failure" which {
       "reject missing and malformed declarations before installation" in {
         Given("a required integer declaration without a valid selected value")
+        val missingbefore = RuntimeDashboardMetrics
+          .componentInitializationParameterDiagnosticCounts
+          .getOrElse("missing", 0L)
+        val malformedbefore = RuntimeDashboardMetrics
+          .componentInitializationParameterDiagnosticCounts
+          .getOrElse("malformed", 0L)
+        val privatepayload = "credential-value-from-/private/runtime/provider.conf"
         val subsystem = TestComponentFactory.emptySubsystem("initialization-invalid")
         val missingdescriptor = ComponentDescriptor(componentName = Some("parameter_probe"))
-        val malformeddescriptor = missingdescriptor.copy(config = Map("provider.limit" -> "invalid"))
+        val malformeddescriptor = missingdescriptor.copy(
+          config = Map("provider.limit" -> privatepayload)
+        )
 
         When("the factory resolves both invalid bootstrap contexts")
         val missing = ParameterProbeFactory.createPrimaryC(
@@ -270,6 +307,55 @@ final class ComponentInitializationBootstrapSpec
         Then("both remain structured failures and no component can be admitted")
         missing.isFaillure shouldBe true
         malformed.isFaillure shouldBe true
+        RuntimeDashboardMetrics
+          .componentInitializationParameterDiagnosticCounts
+          .getOrElse("missing", 0L) shouldBe missingbefore + 1L
+        RuntimeDashboardMetrics
+          .componentInitializationParameterDiagnosticCounts
+          .getOrElse("malformed", 0L) shouldBe malformedbefore + 1L
+        val diagnostics = RuntimeDashboardMetrics
+          .componentInitializationParameterDiagnosticRecords
+          .values
+          .map(_.print)
+          .mkString(" ")
+        diagnostics should include ("provider.limit")
+        RuntimeDashboardMetrics
+          .componentInitializationParameterDiagnosticRecords
+          .getOrElse("malformed", fail("expected malformed bootstrap diagnostic"))
+          .print should include ("packaged-default")
+        diagnostics should not include privatepayload
+        diagnostics should not include "/private/runtime"
+      }
+
+      "bound unrelated bootstrap failures before metric projection" in {
+        Given("a non-parameter bootstrap Conclusion containing unrelated configuration details")
+        val privatepayload = "credential-value-from-/private/runtime/provider.conf"
+        val result = Consequence.configurationInvalid[ComponentInitializationParameters](
+          s"runtime test descriptor rejected $privatepayload",
+          Cause.Kind.Format,
+          Vector(
+            Descriptor.Facet.Parameter.argument("unrelated.secret.key"),
+            Descriptor.Facet.FieldPath("/private/runtime/provider.conf"),
+            Descriptor.Facet.Policy("runtime-test-descriptor"),
+            Descriptor.Facet.Reason("malformed")
+          )
+        )
+
+        When("the component-parameter bootstrap owner records the failure")
+        ComponentParameterBootstrapObservation.record(
+          ComponentId("bounded_bootstrap_probe"),
+          ComponentInstanceId("bounded_bootstrap_probe", "default"),
+          Vector.empty,
+          result
+        )
+        val record = RuntimeDashboardMetrics.componentInitializationParameterRecords.last.print
+
+        Then("the metric retains generic failure structure without unrelated keys paths or payloads")
+        record should include ("unknown")
+        record should not include "unrelated.secret.key"
+        record should not include "runtime-test-descriptor"
+        record should not include privatepayload
+        record should not include "/private/runtime"
       }
 
       "preserve repository factory parameter failures" in {
@@ -342,6 +428,11 @@ final class ComponentInitializationBootstrapSpec
 
       "avoid descriptor context for factories without declarations" in {
         Given("a factory that declares no initialization parameters")
+        val metricsbefore = RuntimeDashboardMetrics
+          .componentInitializationParameterSnapshot
+          .summary
+          .cumulative
+          .total
         val subsystem = TestComponentFactory.emptySubsystem("initialization-empty")
 
         When("the component is created without descriptors or instance metadata")
@@ -352,6 +443,12 @@ final class ComponentInitializationBootstrapSpec
 
         Then("the runtime supplies the canonical empty typed snapshot")
         component.initializationParameters should be theSameInstanceAs ComponentInitializationParameters.empty
+        RuntimeDashboardMetrics
+          .componentInitializationParameterSnapshot
+          .summary
+          .cumulative
+          .total shouldBe metricsbefore + 1L
+        RuntimeDashboardMetrics.componentInitializationParameterRecords.last.print should include ("empty")
       }
 
       "deliver the same typed snapshot to special component initialization" in {

@@ -8,7 +8,7 @@ import org.goldenport.record.Record
 /*
  * @since   Apr. 12, 2026
  *  version May. 11, 2026
- * @version Jul. 21, 2026
+ * @version Jul. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 object RuntimeDashboardMetrics {
@@ -113,6 +113,7 @@ object RuntimeDashboardMetrics {
   private var _resource_tree_events = Vector.empty[Event]
   private var _resource_tree_query_events = Vector.empty[Event]
   private var _service_container_events = Vector.empty[Event]
+  private var _component_initialization_parameter_events = Vector.empty[Event]
   private var _payload_externalization_events = Vector.empty[PayloadExternalizationEvent]
   private var _open_telemetry_export_events = Vector.empty[OpenTelemetryExportEvent]
   private var _recent = Vector.empty[RequestEntry]
@@ -128,7 +129,8 @@ object RuntimeDashboardMetrics {
     "process-execution" -> "Process Execution",
     "resource-tree" -> "Resource Tree",
     "resource-tree-query" -> "Resource Tree Query",
-    "service-container" -> "Service Container"
+    "service-container" -> "Service Container",
+    "component-initialization-parameter" -> "Component Initialization Parameter"
   )
 
   def recordHtmlRequest(
@@ -423,6 +425,44 @@ object RuntimeDashboardMetrics {
     )).takeRight(10000)
   }
 
+  def recordComponentInitializationParameter(
+    component: String,
+    componentinstance: String,
+    parameter: Option[String],
+    requirement: Option[String],
+    confidentiality: Option[String],
+    provenance: Option[String],
+    outcome: String,
+    error: Boolean,
+    summary: Option[Record] = None,
+    diagnostic: Option[ConclusionDiagnostics.Classification] = None
+  ): Unit = synchronized {
+    val cleandiagnostickey = if (error) diagnostic.map(_.diagnosticKey).filter(_.nonEmpty) else None
+    val record = (summary, diagnostic) match {
+      case (Some(s), Some(d)) => Some(Record.data("summary" -> s, "diagnostic" -> d.toRecord))
+      case (Some(s), None) => Some(s)
+      case (None, Some(d)) => Some(d.toRecord)
+      case (None, None) => None
+    }
+    _component_initialization_parameter_events =
+      (_component_initialization_parameter_events :+ Event(
+        observedAt = java.time.Instant.now.toEpochMilli,
+        error = error,
+        diagnosticKey = cleandiagnostickey,
+        diagnosticRecord = record,
+        labels = _clean_labels(Map(
+          "component" -> component,
+          "component_instance" -> componentinstance,
+          "parameter" -> parameter.getOrElse(""),
+          "requirement" -> requirement.getOrElse(""),
+          "confidentiality" -> confidentiality.getOrElse(""),
+          "provenance" -> provenance.getOrElse(""),
+          "outcome" -> outcome,
+          "diagnostic_key" -> cleandiagnostickey.getOrElse("")
+        ))
+      )).takeRight(10000)
+  }
+
   def recordDiagnosticPayloadExternalization(
     payloadKind: String,
     status: String,
@@ -646,6 +686,27 @@ object RuntimeDashboardMetrics {
     _diagnostic_records(_service_container_events)
   }
 
+  def componentInitializationParameterSnapshot: Snapshot = synchronized {
+    _snapshot(_component_initialization_parameter_events, Vector.empty)
+  }
+
+  def componentInitializationParameterDiagnosticCounts: Map[String, Long] = synchronized {
+    _component_initialization_parameter_events
+      .filter(_.error)
+      .groupBy(_.diagnosticKey.getOrElse("unknown"))
+      .view
+      .mapValues(_.size.toLong)
+      .toMap
+  }
+
+  def componentInitializationParameterDiagnosticRecords: Map[String, Record] = synchronized {
+    _diagnostic_records(_component_initialization_parameter_events)
+  }
+
+  def componentInitializationParameterRecords: Vector[Record] = synchronized {
+    _component_initialization_parameter_events.flatMap(_.diagnosticRecord)
+  }
+
   def diagnosticScopes: Vector[DiagnosticScope] = synchronized {
     Vector(
       _diagnostic_scope("authorization", _authorization_events),
@@ -658,7 +719,8 @@ object RuntimeDashboardMetrics {
       _diagnostic_scope("process-execution", _process_execution_events),
       _diagnostic_scope("resource-tree", _resource_tree_events),
       _diagnostic_scope("resource-tree-query", _resource_tree_query_events),
-      _diagnostic_scope("service-container", _service_container_events)
+      _diagnostic_scope("service-container", _service_container_events),
+      _diagnostic_scope("component-initialization-parameter", _component_initialization_parameter_events)
     )
   }
 
@@ -799,6 +861,7 @@ object RuntimeDashboardMetrics {
       _event_points("service-container.lifecycle", "operations", _service_container_events, event =>
         event.labels ++ _outcome_label(event)
       ),
+      _event_points("component-initialization.parameter-resolution", "resolutions", _component_initialization_parameter_events, _.labels),
       _payload_externalization_points,
       _open_telemetry_export_points,
       _entity_access_points(entityAccessMetrics),

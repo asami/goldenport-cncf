@@ -101,6 +101,22 @@ locations, or unrelated configuration keys. Secret material MUST NOT cross the
 component initialization boundary; only an opaque secret reference admitted by
 the initialization parameter contract may be delivered.
 
+Initialization resolution failures MUST use the standard
+`Consequence.Failure(Conclusion)` structure. The CNCF diagnostic projection
+MUST distinguish `missing`, `malformed`, `ambiguous`, and `rejected` outcomes
+through `Cause.Kind` plus `Descriptor.Facet.Policy` and
+`Descriptor.Facet.Reason`; it MUST NOT parse display messages or use
+application detail codes. A decoder failure MUST be sanitized at this boundary
+before it can expose a selected parameter value through its message or facets.
+
+Bootstrap runtime metrics MAY record the logical component identity,
+component-instance label, declared parameter name, requirement,
+confidentiality, bounded provenance, outcome, and structured diagnostic key.
+They MUST NOT record the selected value, an opaque secret reference, source
+trace, physical location, or unrelated configuration. Initialization precedes
+an Action-owned `ExecutionContext`; an implementation MUST NOT manufacture a
+CallTree merely to observe bootstrap resolution.
+
 `ComponentParameterKey[A]` MUST be distinct from the operation-time
 `ComponentConfigurationKey[A]`. It MUST carry a typed decoder and
 required-or-optional semantics plus an explicit `Public`, `Confidential`, or

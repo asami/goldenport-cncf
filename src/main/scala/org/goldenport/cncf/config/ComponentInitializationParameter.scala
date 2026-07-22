@@ -2,6 +2,7 @@ package org.goldenport.cncf.config
 
 import org.goldenport.Consequence
 import org.goldenport.configuration.ConfigurationValue
+import scala.util.control.NonFatal
 
 /*
  * @since   Jul. 22, 2026
@@ -172,22 +173,31 @@ abstract class ComponentParameterResolver private[cncf] () {
   ): Consequence[ComponentParameterResolution[A]] =
     key.confidentiality match {
       case ComponentParameterConfidentiality.Confidential =>
-        Consequence.configurationInvalid(
+        ComponentParameterDiagnostics.rejected(
+          key,
           s"confidential component initialization parameter is not available through the component boundary: ${key.name}"
         )
       case ComponentParameterConfidentiality.Public |
           ComponentParameterConfidentiality.Secret =>
         lookup_parameter(key.name).flatMap {
           case Some(candidate) =>
-            key.decode_value(candidate.value).map { value =>
-              ComponentParameterResolution(Some(value), candidate.provenance)
+            try {
+              key.decode_value(candidate.value) match {
+                case Consequence.Success(value) =>
+                  Consequence.success(
+                    ComponentParameterResolution(Some(value), candidate.provenance)
+                  )
+                case Consequence.Failure(_) =>
+                  ComponentParameterDiagnostics.malformed(key, candidate.provenance)
+              }
+            } catch {
+              case NonFatal(_) =>
+                ComponentParameterDiagnostics.malformed(key, candidate.provenance)
             }
           case None =>
             key.requirement match {
               case ComponentParameterRequirement.Required =>
-                Consequence.configurationInvalid(
-                  s"required component initialization parameter is missing: ${key.name}"
-                )
+                ComponentParameterDiagnostics.missing(key)
               case ComponentParameterRequirement.Optional =>
                 Consequence.success(
                   ComponentParameterResolution(None, ComponentParameterProvenance.Absent)
@@ -214,10 +224,11 @@ final class ComponentInitializationParameters private (
     _entries.iterator.flatMap(_.resolutionFor(key)).nextOption() match {
       case Some(resolution) => Consequence.success(resolution)
       case None =>
-        Consequence.configurationInvalid(
-          s"component initialization parameter was not declared in this snapshot: ${key.name}"
-        )
+        ComponentParameterDiagnostics.undeclared(key.name)
     }
+
+  private[cncf] def diagnosticSummaries: Vector[ComponentParameterDiagnosticSummary] =
+    _entries.map(_.diagnosticSummary)
 }
 
 object ComponentInitializationParameters {
@@ -237,6 +248,8 @@ object ComponentInitializationParameters {
   }
 
   private sealed abstract class Entry {
+    def diagnosticSummary: ComponentParameterDiagnosticSummary
+
     def resolutionFor[A](
       key: ComponentParameterKey[A]
     ): Option[ComponentParameterResolution[A]]
@@ -246,6 +259,9 @@ object ComponentInitializationParameters {
     storedkey: ComponentParameterKey[A],
     resolution: ComponentParameterResolution[A]
   ) extends Entry {
+    def diagnosticSummary: ComponentParameterDiagnosticSummary =
+      ComponentParameterDiagnostics.summary(storedkey, resolution)
+
     def resolutionFor[B](
       key: ComponentParameterKey[B]
     ): Option[ComponentParameterResolution[B]] =
@@ -268,9 +284,7 @@ object ComponentInitializationParameters {
       case (name, values) if values.size > 1 => name
     }
     duplicate.fold(Consequence.unit) { name =>
-      Consequence.configurationInvalid(
-        s"duplicate component initialization parameter declaration: $name"
-      )
+      ComponentParameterDiagnostics.duplicateDeclaration(name)
     }
   }
 

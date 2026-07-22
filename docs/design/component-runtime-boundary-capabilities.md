@@ -123,6 +123,14 @@ The complete lifecycle and ownership contract is defined in
 `docs/design/configuration-model.md`; static requirements are defined in
 `docs/spec/component-runtime-boundary-capabilities.md`.
 
+Initialization parameter resolution is observed at its bootstrap owner through
+the `component-initialization.parameter-resolution` runtime metric. The metric
+contains only logical component/instance identity, declared key identity,
+requirement, confidentiality, bounded provenance, outcome, and a common
+`ConclusionDiagnostics` key on failure. Missing, malformed, ambiguous, and
+policy-rejected outcomes remain ordinary structured Conclusions. No CallTree is
+created because this lifecycle precedes Action/ExecutionContext ownership.
+
 ### Opaque Secret Reference Boundary
 
 RB-04 adds `SecretReference` as a non-product opaque value: it has no public

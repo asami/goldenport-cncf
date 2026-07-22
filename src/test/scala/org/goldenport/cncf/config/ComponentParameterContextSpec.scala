@@ -10,6 +10,7 @@ import org.goldenport.cncf.component.{
   ComponentletDescriptor
 }
 import org.goldenport.cncf.subsystem.GenericSubsystemComponentBinding
+import org.goldenport.cncf.observability.ConclusionDiagnostics
 import org.goldenport.observation.Taxonomy
 import org.scalacheck.{Gen, Prop, Test}
 import org.scalatest.GivenWhenThen
@@ -27,9 +28,9 @@ final class ComponentParameterContextSpec extends AnyWordSpec with Matchers with
   private val _e2_metadata =
     afterWord("in spec:component-runtime-boundary-capabilities, example:E2, rules:R3a, phase:47, slice:CIP-04")
   private val _e3_metadata =
-    afterWord("in spec:component-runtime-boundary-capabilities, example:E3, rules:R3a, phase:47, slice:CIP-04")
+    afterWord("in spec:component-runtime-boundary-capabilities, example:E3, rules:R3a, phase:47, slices:CIP-04,CIP-07")
   private val _e4_metadata =
-    afterWord("in spec:component-runtime-boundary-capabilities, example:E4, rules:R3a, phase:47, slice:CIP-04")
+    afterWord("in spec:component-runtime-boundary-capabilities, example:E4, rules:R3a, phase:47, slices:CIP-04,CIP-07")
   private val _e5_metadata =
     afterWord("in spec:component-runtime-boundary-capabilities, example:E5, rules:R3a, phase:47, slice:CIP-04")
   private val _e6_metadata =
@@ -130,6 +131,8 @@ final class ComponentParameterContextSpec extends AnyWordSpec with Matchers with
         Then("both invalid contexts fail structurally before any layer can resolve")
         _failure_taxonomy(missing) shouldBe _configuration_invalid_taxonomy
         _failure_taxonomy(ambiguous) shouldBe _configuration_invalid_taxonomy
+        _diagnostic_key(missing) shouldBe "missing"
+        _diagnostic_key(ambiguous) shouldBe "ambiguous"
       }
     }
 
@@ -165,6 +168,9 @@ final class ComponentParameterContextSpec extends AnyWordSpec with Matchers with
         Vector(missing, ambiguous, mismatched).foreach { result =>
           _failure_taxonomy(result) shouldBe _configuration_invalid_taxonomy
         }
+        _diagnostic_key(missing) shouldBe "missing"
+        _diagnostic_key(ambiguous) shouldBe "ambiguous"
+        _diagnostic_key(mismatched) shouldBe "rejected"
       }
     }
 
@@ -264,5 +270,15 @@ final class ComponentParameterContextSpec extends AnyWordSpec with Matchers with
     consequence match {
       case Consequence.Failure(conclusion) => conclusion.observation.taxonomy
       case Consequence.Success(value) => fail(s"expected structured failure, got success: $value")
+    }
+
+  private def _diagnostic_key[A](
+    consequence: Consequence[A]
+  ): String =
+    consequence match {
+      case Consequence.Failure(conclusion) =>
+        ConclusionDiagnostics.classify(conclusion).diagnosticKey
+      case Consequence.Success(value) =>
+        fail(s"expected structured failure, got success: $value")
     }
 }
