@@ -949,7 +949,9 @@ object Component {
         }
         ComponentParameterBootstrap
           .resolve(
-            params,
+            params.withComponentDescriptors(
+              _initialization_parameter_descriptors(params, comp, sharedcore.componentId)
+            ),
             sharedcore.componentId,
             sharedcore.instanceId,
             initializationParameterDeclarations
@@ -971,6 +973,34 @@ object Component {
       } catch {
         case NonFatal(e) => Consequence.componentInvalid(e)
       }
+
+    private def _initialization_parameter_descriptors(
+      params: ComponentCreate,
+      component: Component,
+      componentid: ComponentId
+    ): Vector[ComponentDescriptor] = {
+      val supplied = params.componentDescriptors
+      if (supplied.exists(_owns_component(_, componentid))) supplied
+      else supplied ++ _bind_component_owned_descriptor(component.componentDescriptors, componentid)
+    }
+
+    private def _bind_component_owned_descriptor(
+      descriptors: Vector[ComponentDescriptor],
+      componentid: ComponentId
+    ): Vector[ComponentDescriptor] =
+      descriptors match {
+        case Vector(descriptor) if !_owns_component(descriptor, componentid) =>
+          Vector(descriptor.copy(componentName = Some(componentid.name)))
+        case values => values
+    }
+
+    private def _owns_component(
+      descriptor: ComponentDescriptor,
+      componentid: ComponentId
+    ): Boolean =
+      (descriptor.componentName.orElse(descriptor.name).toVector ++
+        descriptor.componentlets.map(_.name))
+        .exists(NamingConventions.equivalentByNormalized(_, componentid.name))
 
     private def _or_raise[A](result: Consequence[A]): A =
       result match {

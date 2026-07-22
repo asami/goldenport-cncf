@@ -307,19 +307,35 @@ canceled, 1 ignored, and 59 remain pending.
 ## CIP-09: Downstream Acceptance and Closure
 
 Stage Status:
-- Current status: OPEN
+- Current status: DONE
 - Owner: CNCF maintainers, with Textus AI or CBD Support maintainers as the
   downstream acceptance owner
 - Update rule: Mark DONE only after one real consumer uses the generic
   mechanism, validation passes, review findings are resolved, and the phase
   dashboard records closure.
 
-- [ ] Select Textus AI or CBD Support as the first downstream consumer.
-- [ ] Migrate the consumer without custom configuration-source precedence.
-- [ ] Verify user-wide defaults and component-instance-specific settings.
-- [ ] Verify reusable Textus AI code does not interpret CBD Support component
+- [x] Select Textus AI as the first downstream consumer.
+- [x] Migrate the consumer without custom configuration-source precedence.
+- [x] Verify user-wide defaults and component-instance-specific settings.
+- [x] Verify reusable Textus AI code does not interpret CBD Support component
   keys.
-- [ ] Run focused CNCF and downstream executable specifications.
-- [ ] Run the complete affected suites and record evidence.
-- [ ] Run CNCF review and resolve all actionable findings.
-- [ ] Create the validated release commit and close Phase 47.
+- [x] Run focused CNCF and downstream executable specifications.
+- [x] Run the complete affected suites and record evidence.
+- [x] Run CNCF review and resolve all actionable findings.
+- [x] Create the validated release commit and close Phase 47.
+
+Textus AI declares `textus.ai.profile` through the common typed initialization
+parameter contract and consumes only the resolved snapshot during component
+initialization. Its executable specification verifies runtime-wide selection,
+named-instance override, invalid higher-precedence rejection, and instance
+isolation through actual provider behavior rather than a mirrored state field.
+CNCF's component-owned descriptor evidence also proves that bootstrap-only
+identity binding does not alter the public generated descriptor.
+
+The clean re-review found no actionable findings. Focused validation passed 14
+CNCF bootstrap tests and 18 Textus AI component-factory tests. Release
+validation passed 2,259 CNCF tests across 324 suites and 164 Textus AI tests
+across 22 suites, with no failed or aborted suite. Normal CAR lint reported no
+failure; the missing prior ABI baseline and development `sbt-cozy` SNAPSHOT
+remain publication-readiness warnings. Textus AI consumer commit `5c01ea5` and
+the CNCF closure commit complete Phase 47.

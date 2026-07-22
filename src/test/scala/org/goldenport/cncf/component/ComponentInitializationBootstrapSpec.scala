@@ -101,6 +101,22 @@ final class ComponentInitializationBootstrapSpec
         metricpoint should not be empty
       }
 
+      "use the component-owned packaged descriptor for direct creation" in {
+        Given("Spec: docs/spec/component-runtime-boundary-capabilities.md; Rules: R3a,R10; Example: E12; a generated component descriptor and no repository-supplied descriptor")
+        val subsystem = TestComponentFactory.emptySubsystem("initialization-component-descriptor")
+
+        When("the factory creates the component directly")
+        val result = ComponentOwnedDescriptorParameterProbeFactory.createPrimaryC(
+          ComponentCreate(subsystem, ComponentOrigin.Main)
+        )
+
+        Then("bootstrap resolves the packaged default from the component-owned descriptor")
+        val component = result.toOption.value.asInstanceOf[ComponentOwnedDescriptorParameterProbeComponent]
+        component.limit shouldBe Some(17)
+        component.provenance shouldBe Some(ComponentParameterProvenance.PackagedDefault)
+        component.componentDescriptors.flatMap(_.componentName) shouldBe Vector("generated_parameter_probe")
+      }
+
       "deliver only opaque secret references through component initialization" in {
         Given("Spec: docs/spec/component-runtime-boundary-capabilities.md; Rules: R3a,R5,R10; Example: E12; a factory secret-reference declaration and a packaged credential locator")
         val locator = "vault://runtime/private-provider-token"
@@ -582,6 +598,23 @@ final class ComponentInitializationBootstrapSpec
       }
   }
 
+  private final class ComponentOwnedDescriptorParameterProbeComponent extends Component {
+    var limit: Option[Int] = None
+    var provenance: Option[ComponentParameterProvenance] = None
+
+    override def componentDescriptors: Vector[ComponentDescriptor] =
+      Vector(ComponentDescriptor(
+        componentName = Some("generated_parameter_probe"),
+        config = Map("provider.limit" -> "17")
+      ))
+
+    override protected def initialize_component_c(params: ComponentInit): Consequence[Unit] =
+      params.initializationParameters.resolve(ParameterProbeFactory.limitKey).map { resolution =>
+        limit = resolution.value
+        provenance = Some(resolution.provenance)
+      }
+  }
+
   private object ParameterProbeFactory extends Component.Factory {
     val limitKey: ComponentParameterKey[Int] = ComponentParameterKey.requiredInt("provider.limit")
 
@@ -595,6 +628,21 @@ final class ComponentInitializationBootstrapSpec
       spec_create(
         "parameter_probe",
         ComponentId("parameter_probe"),
+        Vector.empty[spec.ServiceDefinition]
+      )
+  }
+
+  private object ComponentOwnedDescriptorParameterProbeFactory extends Component.Factory {
+    override def initializationParameterDeclarations: Vector[ComponentParameterKey[?]] =
+      Vector(ParameterProbeFactory.limitKey)
+
+    protected def create_Component(params: ComponentCreate): Component =
+      new ComponentOwnedDescriptorParameterProbeComponent
+
+    protected def create_Core(params: ComponentCreate, comp: Component): Component.Core =
+      spec_create(
+        "component_owned_parameter_probe",
+        ComponentId("component_owned_parameter_probe"),
         Vector.empty[spec.ServiceDefinition]
       )
   }

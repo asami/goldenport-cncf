@@ -1,7 +1,8 @@
 # Phase 47 - Component Initialization Parameter Resolution
 
-status=active
+status=closed
 started_at=2026-07-22
+closed_at=2026-07-22
 strategy=[CNCF Development Strategy](../strategy/cncf-development-strategy.md)
 checklist=[Phase 47 Checklist](phase-47-checklist.md)
 
@@ -70,7 +71,7 @@ raw configuration maps to component code.
 | CIP-06 | Confidential values | Secret references and confidential parameters remain opaque and payload-safe. | done |
 | CIP-07 | Diagnostics and observability | Bootstrap resolution exposes bounded identity and provenance facts only. | done |
 | CIP-08 | Executable evidence | Deterministic specifications cover success, failure, precedence, isolation, overlays, confidentiality, and operation-time coexistence. | done |
-| CIP-09 | Downstream acceptance | Textus AI or CBD Support consumes the mechanism and the phase closes with validated evidence. | open |
+| CIP-09 | Downstream acceptance | Textus AI consumes the mechanism and the phase closes with validated evidence. | done |
 
 ## Acceptance
 
@@ -176,5 +177,18 @@ stable identities for every initialization evidence group. Review-fix
 validation passed all 41 tests in the six-spec evidence set, both packaged
 CAR/SAR initialization regressions, and `Test/compile`. The clean re-review
 found no actionable findings, and release validation passed the full CNCF
-suite with 2,257 tests across 324 suites and no failed or aborted suite. CIP-09
-downstream acceptance is next.
+suite with 2,257 tests across 324 suites and no failed or aborted suite.
+
+CIP-09 is complete. Textus AI now declares `textus.ai.profile` as a typed CNCF
+initialization parameter and constructs its provider bindings only after CNCF
+has resolved the immutable component-instance snapshot. Executable evidence
+proves runtime-wide selection, named-instance override, malformed override
+rejection without fallback, and isolation between independently initialized
+instances through actual provider-selection behavior. CNCF privately binds a
+single component-owned generated descriptor to the runtime component identity
+for bootstrap resolution without adding synthetic descriptors to the public
+component model. The final independent re-review found no actionable finding.
+Release validation passed 2,259 CNCF tests across 324 suites and 164 Textus AI
+tests across 22 suites, with no failed or aborted suite. Textus AI consumer
+commit `5c01ea5` and the CNCF Phase 47 closure commit complete the downstream
+acceptance boundary.
