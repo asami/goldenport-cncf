@@ -652,10 +652,10 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Notes contain execution details and results for each phase.
 
 ## Process Status Pointers
-- Active phase: `docs/phase/phase-47.md` with
-  `docs/phase/phase-47-checklist.md` (started Jul. 22, 2026).
-- Latest closed phase: `docs/phase/phase-46.md` with
-  `docs/phase/phase-46-checklist.md` (Jul. 21, 2026).
+- Active phase: `docs/phase/phase-48.md` with
+  `docs/phase/phase-48-checklist.md` (started Jul. 23, 2026).
+- Latest closed phase: `docs/phase/phase-47.md` with
+  `docs/phase/phase-47-checklist.md` (Jul. 22, 2026).
 - Status interpretation rules: `docs/rules/stage-status-and-checklist-convention.md`
 - Latest post-closure maintenance: Jul. 18, 2026 scoped concurrency admission.
   CNCF now exposes a runtime-installed, per-logical-scope, nonblocking permit
@@ -846,6 +846,7 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Phase 45: closed (`docs/phase/phase-45.md`)
 - Phase 46: closed (`docs/phase/phase-46.md`)
 - Phase 47: closed (`docs/phase/phase-47.md`)
+- Phase 48: active (`docs/phase/phase-48.md`)
 
 ## 8. Completed Development Item History
 
@@ -1531,8 +1532,9 @@ Completed work areas are recorded in section 8. When a development item closes,
 remove its completion record from this section and add or update the
 corresponding completed-history entry.
 
-No active development item is selected. The remaining 9.x items are future
-development candidates until explicitly selected.
+The active development item is 9.36 Operation Evaluation Contract, implemented
+as Phase 48. Other remaining 9.x items are future development candidates until
+explicitly selected.
 
 ### 9.1 Web Next Stage Follow-ups
 Web/platform follow-up index.
@@ -2646,13 +2648,19 @@ Completed in Phase 40.
   - `docs/phase/phase-40-checklist.md`.
 
 ### 9.36 Operation Evaluation Contract
-Future CNCF development item. This item is defined but is not the active phase.
+Active CNCF development item in Phase 48.
 
 - Goal:
   - provide a provider-neutral CNCF operation-evaluation boundary that admits
     immutable corpus/experiment correlation before business execution and
-    emits bounded terminal evaluation facts without changing canonical
-    operation semantics.
+    automatically emits bounded start and terminal evaluation facts without
+    changing canonical operation semantics;
+  - deliver automatic facts through standard Corpus and Experiment SPI
+    contracts when those components are connected, while disconnected
+    components select no-op sinks; and
+  - let applications add bounded domain-specific corpus and experiment facts
+    through the internal DSL without reimplementing automatic execution
+    capture.
 - Driver:
   - Textus applications need deterministic offline comparison of operation
     behavior over one immutable corpus revision;
@@ -2660,7 +2668,10 @@ Future CNCF development item. This item is defined but is not the active phase.
     other implementation variants must be comparable without putting
     application- or provider-specific types into CNCF core;
   - corpus and experiment membership must be explicit before execution and
-    must not be reconstructed from sampled or retained observability records.
+    must not be reconstructed from sampled or retained observability records;
+  - automatic operation facts are broader than membership: every admitted
+    operation may report bounded execution facts to installed sinks, while
+    corpus membership and experiment assignment remain explicit.
 - Dependencies:
   - existing `CmlOperationDefinition` metadata and generated operation
     projection;
@@ -2682,6 +2693,16 @@ Future CNCF development item. This item is defined but is not the active phase.
     acceptance evidence, and aggregation;
   - operation logic may read only an admitted assignment or execution-plan
     reference and may not allocate or mutate experiment state;
+  - ordinary operation logic does not need to emit framework execution facts;
+    the common operation chokepoint owns automatic capture;
+  - supplemental application facts pass through ActionCall/UnitOfWork and the
+    protected internal DSL rather than direct provider calls;
+  - sink delivery carries a bounded reentrancy context, so an operation invoked
+    by one sink cannot feed automatic or supplemental facts recursively back to
+    that same sink;
+  - sink calls have finite timeout, concurrency, queue, byte, saturation, and
+    overflow/drop policy and cannot indefinitely delay normal operation
+    execution;
   - CNCF core has no direct dependency on `textus-corpus`,
     `textus-experiment`, Textus AI, or a telemetry provider;
   - the first scope is explicit offline assignment; production traffic
@@ -2689,27 +2710,28 @@ Future CNCF development item. This item is defined but is not the active phase.
 - Stages:
   - OE-01 — promote the proposed notes contract into normative CNCF design and
     static specification documents;
-  - OE-02 — add optional provider-neutral evaluation declaration metadata to
-    generated operation definitions without changing undeclared operations;
-  - OE-03 — define typed admission, correlation, assignment, terminal outcome,
-    limitation, fact, candidate, and execution-report values;
-  - OE-04 — add disabled/fake `OperationEvaluationResolver` and
-    `OperationEvaluationSink` capabilities inherited through `ScopeContext`;
-  - OE-05 — carry one immutable, operation-scoped evaluation context through
+  - OE-02 — define typed automatic and supplemental capture facts, plus
+    optional membership/assignment declaration metadata;
+  - OE-03 — add disabled/fake Corpus and Experiment standard sink capabilities
+    inherited through `ScopeContext`;
+  - OE-04 — carry one immutable, operation-scoped evaluation context through
     `ExecutionContext.CncfCore`, including Job resume and retry identity;
-  - OE-06 — wrap the common resolved-operation pipeline so admission precedes
-    business execution and canonical terminal evidence follows framework
-    response bindings;
-  - OE-07 — attach bounded recording status to execution metadata and publish
-    only policy-admitted correlation through CallTree/observability;
+  - OE-05 — wrap the common resolved-operation pipeline so authorization and
+    admission precede business execution and automatic terminal evidence
+    follows framework response bindings;
+  - OE-06 — add protected supplemental Corpus/Experiment internal DSL helpers;
+  - OE-07 — attach bounded recording status to execution metadata and publish only
+    policy-admitted correlation through CallTree/observability;
   - OE-08 — prove disabled, optional, required, nested, retry, cancellation,
     timeout, idempotency, failure-isolation, and confidentiality behavior with
     deterministic fake adapters;
   - OE-09 — validate one offline corpus-case/arm handoff with downstream
     Textus-owned adapters while preserving the CNCF dependency boundary.
 - Acceptance:
-  - an undeclared or disabled operation behaves exactly as before and invokes
-    no evaluation sink;
+  - an operation without evaluation declarations emits bounded automatic facts
+    to installed sinks but acquires no implicit corpus membership or experiment
+    assignment;
+  - disabled/no-op sinks preserve operation behavior and invoke no provider;
   - authorization completes before external evaluation resolution;
   - one admitted assignment is immutable before operation construction and is
     preserved across Job resume and retry;
@@ -2723,6 +2745,10 @@ Future CNCF development item. This item is defined but is not the active phase.
     operation semantics;
   - fact/candidate/telemetry failure cannot rewrite a completed business
     outcome;
+  - sink-induced operation calls cannot recursively invoke the same sink, and
+    any cross-sink forwarding is explicit and bounded;
+  - stalled or saturated sinks produce bounded delivery limitations/drop
+    diagnostics rather than indefinitely stalling an operation;
   - telemetry sampling or retention cannot define or erase corpus/experiment
     membership;
   - raw requests, responses, prompts, provider output, credentials, execution
@@ -2742,4 +2768,82 @@ Future CNCF development item. This item is defined but is not the active phase.
 - Planning references:
   - `docs/notes/operation-evaluation-contract-proposed-specification.md`;
   - `docs/journal/2026/07/2026-07-21-operation-evaluation-corpus-experiment-observability-handoff.md`;
-  - `docs/journal/2026/07/2026-07-21-operation-evaluation-contract-specification-history.md`.
+  - `docs/journal/2026/07/2026-07-21-operation-evaluation-contract-specification-history.md`;
+  - `docs/phase/phase-48.md`;
+  - `docs/phase/phase-48-checklist.md`.
+
+### 9.38 CAR Skill Bundle Distribution and AI-assisted UX
+Future CNCF development item. This item is defined but is not the active phase.
+
+- Goal:
+  - allow a CAR to distribute Codex Skills that explain and assist how to use,
+    configure, operate, and develop with that CAR through one versioned,
+    transport-neutral bundle contract; and
+  - establish those Skills as a first-class AI-assisted UX surface of the CAR,
+    alongside its operation API, help/introspection, Web UI, and documentation.
+- Driver:
+  - component-specific usage knowledge belongs with the CAR rather than in a
+    launcher-specific global installer;
+  - users increasingly interact with a component through an AI agent, so the
+    CAR must be able to supply the task vocabulary, workflows, constraints,
+    diagnostics guidance, and safe operating procedures needed for that
+    interaction;
+  - an operation API describes what can be invoked, while a Skill describes
+    how and when a user should combine those operations to achieve an intent;
+  - a released CAR and the same component under development must expose the
+    same logical Skill bundle;
+  - every CAR should be able to provide domain-specific assistance without
+    requiring a CAR-specific installation mechanism.
+- Scope:
+  - define a versioned `SkillBundleManifest` with bundle identity, version,
+    descriptions, Skill identities, normalized relative paths, digests,
+    compatibility requirements, and optional logical MCP requirements;
+  - define canonical source-tree and CAR archive locations and prove their
+    manifest/content equivalence;
+  - define discoverable UX metadata so a launcher or agent can present the
+    CAR's supported tasks and select the appropriate Skill without executing
+    bundle content during discovery;
+  - let Cozy validate source bundles and project them into CAR artifacts;
+  - let Textus Launcher resolve and install Skill bundles from released CARs;
+  - let CNCF Launcher resolve and install the same bundles from admitted
+    component development directories; and
+  - provide deterministic collision, compatibility, freshness, digest, and
+    staged-install diagnostics.
+- Boundary:
+  - CNCF owns the manifest model, schema/versioning, identity, path, digest,
+    compatibility, and validation contracts;
+  - Cozy owns source validation and CAR packaging projection;
+  - launchers own artifact/source resolution and explicit local installation;
+  - each CAR owns the contents and lifecycle of its component-specific Skills;
+  - Skills may orchestrate documented component operations and tools, but the
+    underlying API, authorization, validation, and observability boundaries
+    remain authoritative;
+  - declaring or installing a bundle does not grant authority, activate MCP
+    dependencies, mutate Codex configuration, or execute bundle content.
+- First implementation direction:
+  - promote the journal direction into normative CNCF design and
+    specification;
+  - implement the manifest codec and deterministic validator in CNCF;
+  - add source/archive equivalence executable specifications;
+  - add Cozy CAR projection; and
+  - integrate development and released-CAR installation paths in CNCF Launcher
+    and Textus Launcher respectively.
+- Acceptance:
+  - one logical bundle has the same identity, manifest, Skill set, and digests
+    in a component source directory and its packaged CAR;
+  - invalid paths, digest mismatches, duplicate identities, incompatible
+    requirements, and installation collisions fail deterministically;
+  - validation and installation execute no Skill file and expose no implicit
+    authority;
+  - launcher installation is explicit, staged, and non-destructive; and
+  - the mechanism is CAR-generic and requires no component-specific installer;
+  - a user or agent can discover the CAR's principal tasks and receive
+    component-owned guidance that maps intent to supported operations without
+    bypassing CNCF runtime controls.
+- Deferred scope:
+  - automatic dependency activation or unrestricted Codex configuration merge;
+  - remote Skill marketplaces independent of CAR distribution;
+  - runtime MCP invocation through the bundle manifest; and
+  - application-specific Skill authoring UI.
+- Planning reference:
+  - `docs/journal/2026/07/2026-07-21-codex-skill-bundle-contract.md`.

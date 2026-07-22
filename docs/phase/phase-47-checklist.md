@@ -1,9 +1,14 @@
 # Phase 47 Checklist - Component Initialization Parameter Resolution
 
-status=active
+status=closed
+closed_at=2026-07-22
 phase=[Phase 47 - Component Initialization Parameter Resolution](phase-47.md)
 
 This checklist is the authoritative planned Phase 47 state ledger.
+
+Correction (2026-07-23): the top-level status was left `active` when all CIP
+items and Phase 47 were closed on 2026-07-22. The status now matches the
+attributable closure recorded in `phase-47.md` and the development strategy.
 
 ## CIP-01: Normative Contract
 

@@ -15,11 +15,12 @@ This directory does **not** contain design details or thinking processes.
 
 Current baseline:
 
-- Active phase: `phase-47.md` - Component Initialization Parameter Resolution.
-- Active checklist: `phase-47-checklist.md`.
-- Latest closed phase: `phase-46.md` - Internal Operation Tool Source and MCP
-  Server Interoperability.
-- Latest closed checklist: `phase-46-checklist.md`.
+- Active phase: `phase-48.md` - Operation Evaluation and Corpus/Experiment
+  Capture.
+- Active checklist: `phase-48-checklist.md`.
+- Latest closed phase: `phase-47.md` - Component Initialization Parameter
+  Resolution.
+- Latest closed checklist: `phase-47-checklist.md`.
 - Closed phase set currently includes:
   - `phase-4.md`
   - `phase-5.md`
@@ -63,8 +64,9 @@ Current baseline:
   - `phase-44.md`
   - `phase-45.md`
   - `phase-46.md`
-- Active phase set currently includes:
   - `phase-47.md`
+- Active phase set currently includes:
+  - `phase-48.md`
 
 ## Related Rules
 
