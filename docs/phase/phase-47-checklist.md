@@ -93,17 +93,32 @@ Verified evidence:
 ## CIP-04: Component-instance Context
 
 Stage Status:
-- Current status: OPEN
+- Current status: DONE
 - Owner: CNCF component runtime maintainers
 - Update rule: Mark DONE only after parameter resolution is bound to component
   and component-instance identity and cross-instance leakage is impossible.
 
-- [ ] Define `ComponentParameterContext` around `ComponentId`,
+Verified evidence:
+- `ComponentParameterContext` selects one coherent component identity,
+  packaged descriptor owner, and admitted assembly instance metadata record.
+- `ComponentParameterResolutionLayers` now requires that validated context and
+  derives the subsystem-instance layer only from its selected metadata.
+- `ComponentParameterContextSpec` covers primary/componentlet ownership,
+  generated named-instance isolation, missing and ambiguous contexts,
+  mismatched identities, SAR cross-instance exclusion, and CAR artifact/runtime
+  identity separation.
+- Independent review and clean re-review found no remaining actionable issues.
+- Focused executable specifications passed with 13 tests, and the full CNCF
+  suite passed with 2,234 tests across 323 suites.
+- Whole-file naming and executable-specification checks passed, and
+  `git diff --check` passed.
+
+- [x] Define `ComponentParameterContext` around `ComponentId`,
   `ComponentInstanceId`, descriptor, and admitted assembly metadata.
-- [ ] Resolve identical parameter keys independently for separate component
+- [x] Resolve identical parameter keys independently for separate component
   instances.
-- [ ] Reject ambiguous or missing component-instance contexts structurally.
-- [ ] Verify subsystem/SAR assembly cannot apply one instance's settings to
+- [x] Reject ambiguous or missing component-instance contexts structurally.
+- [x] Verify subsystem/SAR assembly cannot apply one instance's settings to
   another instance.
 
 ## CIP-05: Bootstrap Integration

@@ -10,6 +10,12 @@ import org.goldenport.configuration.{
   ConfigurationValue,
   ResolvedConfiguration
 }
+import org.goldenport.cncf.component.{
+  ComponentDescriptor,
+  ComponentId,
+  ComponentInstanceId,
+  ComponentInstanceMetadata
+}
 import org.goldenport.observation.Taxonomy
 import org.goldenport.record.Record
 import org.scalacheck.{Gen, Prop, Test}
@@ -48,7 +54,7 @@ final class ComponentParameterResolutionLayersSpec extends AnyWordSpec with Matc
             ("packaged" -> ComponentParameterProvenance.PackagedDefault),
           _layers(assemblydefaults = _configuration("provider.mode" -> "assembly")) ->
             ("assembly" -> ComponentParameterProvenance.AssemblyDefault),
-          _layers(subsysteminstance = _configuration("provider.mode" -> "subsystem")) ->
+          _layers(subsysteminstance = Map("provider.mode" -> "subsystem")) ->
             ("subsystem" -> ComponentParameterProvenance.SubsystemInstance),
           _layers(runtimeconfiguration = _resolved("provider.mode" -> "runtime")) ->
             ("runtime" -> ComponentParameterProvenance.RuntimeConfiguration),
@@ -76,7 +82,7 @@ final class ComponentParameterResolutionLayersSpec extends AnyWordSpec with Matc
           val layers = _layers(
             packageddefaults = _configuration("provider.mode" -> values(0)),
             assemblydefaults = _configuration("provider.mode" -> values(1)),
-            subsysteminstance = _configuration("provider.mode" -> values(2)),
+            subsysteminstance = Map("provider.mode" -> values(2)),
             runtimeconfiguration = _resolved("provider.mode" -> values(3)),
             testdescriptor = Some(_test_descriptor("provider.mode" -> values(4)))
           )
@@ -106,12 +112,12 @@ final class ComponentParameterResolutionLayersSpec extends AnyWordSpec with Matc
           _layers(
             packageddefaults = _configuration("provider.mode" -> "packaged"),
             assemblydefaults = _configuration("provider.mode" -> "assembly"),
-            subsysteminstance = _configuration("provider.mode" -> "subsystem")
+            subsysteminstance = Map("provider.mode" -> "subsystem")
           ) -> "subsystem",
           _layers(
             packageddefaults = _configuration("provider.mode" -> "packaged"),
             assemblydefaults = _configuration("provider.mode" -> "assembly"),
-            subsysteminstance = _configuration("provider.mode" -> "subsystem"),
+            subsysteminstance = Map("provider.mode" -> "subsystem"),
             runtimeconfiguration = _resolved("provider.mode" -> "runtime")
           ) -> "runtime"
         )
@@ -218,6 +224,11 @@ final class ComponentParameterResolutionLayersSpec extends AnyWordSpec with Matc
           .getDeclaredConstructors
           .flatMap(_.getParameterTypes)
           .toVector
+        val subsystemfactorytypes = SubsystemComponentInstanceParameterSettings
+          .getClass
+          .getDeclaredMethods
+          .flatMap(_.getParameterTypes)
+          .toVector
 
         try {
           System.setProperty(name, "ambient-value")
@@ -232,10 +243,12 @@ final class ComponentParameterResolutionLayersSpec extends AnyWordSpec with Matc
           layertypes should contain theSameElementsInOrderAs Vector(
             classOf[ComponentPackagedParameterDefaults],
             classOf[ComponentAssemblyParameterDefaults],
-            classOf[SubsystemComponentInstanceParameterSettings],
+            classOf[ComponentParameterContext],
             classOf[ComponentRuntimeParameterConfiguration],
             classOf[ComponentTestParameterOverlay]
           )
+          subsystemfactorytypes should contain (classOf[ComponentParameterContext])
+          subsystemfactorytypes should not contain classOf[Configuration]
         } finally {
           previous.fold(System.clearProperty(name))(System.setProperty(name, _))
         }
@@ -271,16 +284,26 @@ final class ComponentParameterResolutionLayersSpec extends AnyWordSpec with Matc
   private def _layers(
     packageddefaults: Configuration = Configuration.empty,
     assemblydefaults: Configuration = Configuration.empty,
-    subsysteminstance: Configuration = Configuration.empty,
+    subsysteminstance: Map[String, String] = Map.empty,
     runtimeconfiguration: ResolvedConfiguration = ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty),
     testdescriptor: Option[RuntimeTestDescriptor] = None
   ): ComponentParameterResolutionLayers =
     ComponentParameterResolutionLayers.create(
       ComponentPackagedParameterDefaults.fromConfiguration(packageddefaults),
       ComponentAssemblyParameterDefaults.fromConfiguration(assemblydefaults),
-      SubsystemComponentInstanceParameterSettings.fromConfiguration(subsysteminstance),
+      _context(subsysteminstance),
       ComponentRuntimeParameterProjection.create(runtimeconfiguration, testdescriptor)
     )
+
+  private def _context(
+    subsysteminstance: Map[String, String]
+  ): ComponentParameterContext =
+    ComponentParameterContext.select(
+      ComponentId("provider"),
+      ComponentInstanceId("provider", "default"),
+      Vector(ComponentDescriptor(name = Some("provider"), componentName = Some("provider"))),
+      Vector(ComponentInstanceMetadata("provider", config = subsysteminstance))
+    ).toOption.get
 
   private def _failure_taxonomy[A](
     consequence: Consequence[A]

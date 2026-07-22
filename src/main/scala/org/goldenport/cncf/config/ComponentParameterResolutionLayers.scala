@@ -40,10 +40,12 @@ private[cncf] final class SubsystemComponentInstanceParameterSettings private (
 ) extends ComponentParameterLayer(configuration, ComponentParameterProvenance.SubsystemInstance)
 
 private[cncf] object SubsystemComponentInstanceParameterSettings {
-  def fromConfiguration(
-    configuration: Configuration
+  private[config] def from_context(
+    context: ComponentParameterContext
   ): SubsystemComponentInstanceParameterSettings =
-    new SubsystemComponentInstanceParameterSettings(configuration)
+    new SubsystemComponentInstanceParameterSettings(
+      context.subsystem_instance_configuration
+    )
 }
 
 private[cncf] final class ComponentRuntimeParameterConfiguration private (
@@ -97,13 +99,15 @@ private[cncf] object ComponentRuntimeParameterProjection {
 private[cncf] final class ComponentParameterResolutionLayers private (
   packageddefaults: ComponentPackagedParameterDefaults,
   assemblydefaults: ComponentAssemblyParameterDefaults,
-  subsysteminstance: SubsystemComponentInstanceParameterSettings,
+  context: ComponentParameterContext,
   runtimeconfiguration: ComponentRuntimeParameterConfiguration,
   testoverlay: ComponentTestParameterOverlay
 ) extends ComponentParameterResolver() {
   private val _packaged_defaults = packageddefaults
   private val _assembly_defaults = assemblydefaults
-  private val _subsystem_instance = subsysteminstance
+  private val _context = context
+  private val _subsystem_instance =
+    SubsystemComponentInstanceParameterSettings.from_context(context)
   private val _runtime_configuration = runtimeconfiguration
   private val _test_overlay = testoverlay
 
@@ -129,13 +133,13 @@ private[cncf] object ComponentParameterResolutionLayers {
   def create(
     packageddefaults: ComponentPackagedParameterDefaults,
     assemblydefaults: ComponentAssemblyParameterDefaults,
-    subsysteminstance: SubsystemComponentInstanceParameterSettings,
+    context: ComponentParameterContext,
     runtimeprojection: ComponentRuntimeParameterProjection
   ): ComponentParameterResolutionLayers =
     new ComponentParameterResolutionLayers(
       packageddefaults,
       assemblydefaults,
-      subsysteminstance,
+      context,
       runtimeprojection.runtimeConfiguration,
       runtimeprojection.testOverlay
     )

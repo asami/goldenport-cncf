@@ -65,7 +65,7 @@ raw configuration maps to component code.
 | CIP-01 | Normative contract | Design and specification define initialization parameter resolution separately from runtime component configuration. | done |
 | CIP-02 | Typed parameter model | CNCF provides the resolver, typed key/value, result, collection, and safe provenance vocabulary. | done |
 | CIP-03 | Resolution layers | All admitted initialization sources have one deterministic precedence contract. | done |
-| CIP-04 | Instance context | Resolution is isolated by component and component-instance identity. | open |
+| CIP-04 | Instance context | Resolution is isolated by component and component-instance identity. | done |
 | CIP-05 | Bootstrap integration | Component factories and special components receive typed initialization parameters without raw maps. | open |
 | CIP-06 | Confidential values | Secret references and confidential parameters remain opaque and payload-safe. | open |
 | CIP-07 | Diagnostics and observability | Bootstrap resolution exposes bounded identity and provenance facts only. | open |
@@ -123,11 +123,15 @@ keys and decoders, required-or-optional semantics, bounded provenance,
 structured failures, a CNCF-protected resolver contract, and an immutable
 snapshot without raw-map or arbitrary-name access.
 
-CIP-01 through CIP-03 are complete. The fixed CNCF-private source model gives
+CIP-01 through CIP-04 are complete. The fixed CNCF-private source model gives
 packaged defaults, assembly defaults, subsystem-instance settings, resolved
 runtime configuration, and explicit test overlays one deterministic precedence
-order without admitting ambient or request sources.
+order without admitting ambient or request sources. A CNCF-private context
+selects exactly one packaged descriptor owner and one admitted assembly
+instance metadata record for a coherent `ComponentId` and
+`ComponentInstanceId`, including componentlet ownership, and the resolver
+derives its subsystem-instance layer only from that selected context.
 
-Plan CIP-04 next. Enforce component and component-instance resolution context
-without absorbing bootstrap delivery, secret handling, or diagnostics into the
-same slice.
+Plan CIP-05 next. Deliver the context-bound typed parameter snapshot through
+normal and special component bootstrap without exposing raw configuration;
+confidential values and diagnostics remain CIP-06 and CIP-07.

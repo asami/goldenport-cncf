@@ -127,6 +127,30 @@ test-overlay layer. Request/action properties, operation-time configuration,
 system properties, ambient environment variables, arbitrary configuration
 readers, and implicit test-file discovery MUST NOT participate.
 
+Every resolver MUST be bound to one validated `ComponentParameterContext`.
+The context MUST identify exactly one `ComponentId`, one coherent
+`ComponentInstanceId`, one packaged `ComponentDescriptor` that owns that
+runtime component, and one admitted assembly `ComponentInstanceMetadata`
+record for the requested instance. Descriptor ownership MAY include a declared
+componentlet; in that case the componentlet retains its own runtime component
+identity while using the owning assembly component's instance name and
+settings.
+
+`ComponentDescriptor.componentName` MUST be authoritative for runtime
+component ownership when present. `ComponentDescriptor.name` MAY be used as a
+fallback only when `componentName` is absent; an artifact name MUST NOT claim a
+different runtime component or its instance settings.
+
+Missing or multiple matching descriptors, missing or multiple matching
+instance metadata records, and a `ComponentId`/`ComponentInstanceId` mismatch
+MUST fail structurally before parameter lookup. Only the selected instance
+metadata MAY construct the subsystem-instance layer. That layer MUST NOT have
+an independent arbitrary-configuration constructor, and settings admitted for
+one `ComponentInstanceId` MUST NOT be visible to a resolver bound to another
+instance. `ComponentParameterContext` and its descriptor/assembly inputs MUST
+remain CNCF-owned and MUST NOT be exposed through the component-visible
+initialization snapshot.
+
 ## Configuration Precedence (R4)
 
 The runtime resolves declared configuration according to explicit component,

@@ -359,6 +359,26 @@ slot before constructing the separate test-overlay slot. A selected test value
 therefore has exactly one initialization provenance even before bootstrap
 integration is completed.
 
+`ComponentParameterContext` binds one resolution to one `ComponentId` and one
+`ComponentInstanceId`. CNCF selects exactly one packaged
+`ComponentDescriptor` that owns the runtime component identity and exactly one
+admitted `ComponentInstanceMetadata` record for that instance. Descriptor
+`componentName` is the authoritative runtime identity; descriptor `name` is a
+fallback only when `componentName` is absent and is otherwise only the CAR
+artifact identity. Descriptor ownership includes declared componentlets,
+whose runtime component identity is
+distinct while their assembly-instance name and settings remain owned by the
+same component binding. Missing, ambiguous, or inconsistent descriptor and
+instance metadata fail before a parameter layer can resolve.
+
+Only the selected instance metadata contributes the subsystem/SAR instance
+layer. The layer cannot be constructed independently from arbitrary
+configuration, and a resolver for one named component instance cannot observe
+another instance's settings. The context remains CNCF-private and does not
+expose descriptor or assembly maps through the component initialization
+snapshot. Factory/bootstrap delivery of the context-bound snapshot is a later
+lifecycle step.
+
 ### Declared Component Runtime Configuration
 
 Raw configuration remains an assembly/runtime concern. Component behavior uses
