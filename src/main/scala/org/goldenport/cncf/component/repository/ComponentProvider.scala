@@ -20,25 +20,23 @@ import scala.util.control.NonFatal
  *  version Jan. 29, 2026
  *  version Feb. 15, 2026
  *  version Mar. 26, 2026
- * @version Apr. 24, 2026
+ * @version Jul. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 object ComponentProvider {
   import ComponentSource.ClassDef
 
-  private sealed trait _ResolvedFactory {
+  private sealed trait ResolvedFactory {
     def className: String
     def createPrimary(params: ComponentCreate): Consequence[Component]
   }
 
-  private object _ResolvedFactory {
-    final case class Bundle(factory: Component.BundleFactory) extends _ResolvedFactory {
+  private object ResolvedFactory {
+    final case class Bundle(factory: Component.BundleFactory) extends ResolvedFactory {
       def className: String = factory.getClass.getName
 
       def createPrimary(params: ComponentCreate): Consequence[Component] =
-        _catch_non_fatal {
-          factory.create(params)
-        }.flatMap { bundle =>
+        factory.createC(params).flatMap { bundle =>
           bundle.participants.headOption match {
             case Some(comp) => Consequence.success(comp)
             case None => Consequence.componentInvalid(s"factory ${className} produced no components")
@@ -46,13 +44,11 @@ object ComponentProvider {
         }
     }
 
-    final case class Plain(factory: Component.Factory) extends _ResolvedFactory {
+    final case class Plain(factory: Component.Factory) extends ResolvedFactory {
       def className: String = factory.getClass.getName
 
       def createPrimary(params: ComponentCreate): Consequence[Component] =
-        _catch_non_fatal {
-          factory.createPrimary(params)
-        }
+        factory.createPrimaryC(params)
     }
   }
 
@@ -110,7 +106,7 @@ object ComponentProvider {
 
   private def _find_impl_factories(
     componentClass: Class[_ <: Component]
-  ): Vector[_ResolvedFactory] = {
+  ): Vector[ResolvedFactory] = {
     val loader = componentClass.getClassLoader
     val packageName = Option(componentClass.getPackage).map(_.getName).filter(_.nonEmpty).getOrElse("")
     val packageCandidates =
@@ -142,11 +138,11 @@ object ComponentProvider {
   private def _load_factory(
     className: String,
     loader: ClassLoader
-  ): Option[_ResolvedFactory] =
+  ): Option[ResolvedFactory] =
     _load_optional_class(className, loader).flatMap(_resolve_factory_instance)
 
   private def _instantiate_from_factory(
-    factory: _ResolvedFactory,
+    factory: ResolvedFactory,
     componentClass: Class[_ <: Component],
     params: ComponentCreate,
     log: BootstrapLog
@@ -176,7 +172,7 @@ object ComponentProvider {
 
   private def _resolve_factory_instance(
     cls: Class[_]
-  ): Option[_ResolvedFactory] = {
+  ): Option[ResolvedFactory] = {
     if (cls.getName.endsWith("$")) {
       _module_instance(cls)
     } else {
@@ -186,7 +182,7 @@ object ComponentProvider {
 
   private def _module_instance(
     cls: Class[_]
-  ): Option[_ResolvedFactory] = {
+  ): Option[ResolvedFactory] = {
     try {
       val field = cls.getField("MODULE$")
       val instance = field.get(null)
@@ -198,7 +194,7 @@ object ComponentProvider {
 
   private def _instantiate_factory_class(
     cls: Class[_]
-  ): Option[_ResolvedFactory] = {
+  ): Option[ResolvedFactory] = {
     try {
       val ctor = cls.getDeclaredConstructor()
       ctor.setAccessible(true)
@@ -210,10 +206,10 @@ object ComponentProvider {
 
   private def _resolve_factory_object(
     instance: Any
-  ): Option[_ResolvedFactory] =
+  ): Option[ResolvedFactory] =
     instance match {
-      case factory: Component.BundleFactory => Some(_ResolvedFactory.Bundle(factory))
-      case factory: Component.Factory => Some(_ResolvedFactory.Plain(factory))
+      case factory: Component.BundleFactory => Some(ResolvedFactory.Bundle(factory))
+      case factory: Component.Factory => Some(ResolvedFactory.Plain(factory))
       case _ => None
     }
 
@@ -241,9 +237,7 @@ object ComponentProvider {
     core: Core,
     origin: ComponentOrigin
   ): Consequence[Component] = {
-    _catch_non_fatal {
-      comp.initialize(ComponentInit(subsystem, core, origin))
-    }
+    comp.initializeC(ComponentInit(subsystem, core, origin))
   }
 
   private def _core_from_component(
@@ -310,7 +304,7 @@ object ComponentProvider {
 
   private def _companion_factories(
     componentClass: Class[_ <: Component]
-  ): Vector[_ResolvedFactory] = {
+  ): Vector[ResolvedFactory] = {
     val loader = componentClass.getClassLoader
     val directCandidates = Vector(
       componentClass.getName + "$Factory",
@@ -338,7 +332,7 @@ object ComponentProvider {
 
   private def _resolve_factory_class(
     cls: Class[_]
-  ): Option[_ResolvedFactory] = {
+  ): Option[ResolvedFactory] = {
     if (cls.getName.endsWith("$")) {
       _module_instance(cls)
     } else if (Modifier.isAbstract(cls.getModifiers)) {

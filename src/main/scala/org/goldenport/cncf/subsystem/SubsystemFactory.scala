@@ -1,5 +1,6 @@
 package org.goldenport.cncf.subsystem
 
+import org.goldenport.Consequence
 import org.goldenport.cncf.component.{Component, ComponentId, ComponentInit, ComponentInstanceId, ComponentOrigin}
 import org.goldenport.cncf.config.{ClientConfig, RuntimeConfig}
 import org.goldenport.cncf.component.ComponentCreate
@@ -35,7 +36,7 @@ import org.goldenport.protocol.spec as spec
  *  version Mar. 29, 2026
  *  version Apr. 26, 2026
  *  version May.  5, 2026
- * @version Jul. 21, 2026
+ * @version Jul. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 object DefaultSubsystemFactory {
@@ -47,10 +48,15 @@ object DefaultSubsystemFactory {
   def subsystemName: String = _subsystem_name
 
   def builtinComponents(
+  subsystem: Subsystem
+  ): Vector[Component] =
+    _or_raise(builtinComponentsC(subsystem))
+
+  def builtinComponentsC(
     subsystem: Subsystem
-  ): Vector[Component] = {
+  ): Consequence[Vector[Component]] = {
     val params = ComponentCreate(subsystem, ComponentOrigin.Builtin)
-    Vector(
+    _sequence(Vector(
       _admin,
       AuthComponent.Factory,
       _client,
@@ -64,8 +70,20 @@ object DefaultSubsystemFactory {
       MetricsComponent.Factory,
       MessageDeliveryStubComponent.Factory,
       _spec
-    ).flatMap(_.create(params).participants)
+    ).map(_.createC(params))).map(_.flatMap(_.participants))
   }
+
+  private def _sequence[A](values: Vector[Consequence[A]]): Consequence[Vector[A]] =
+    values.foldLeft(Consequence.success(Vector.empty[A])) { (acc, value) =>
+      acc.flatMap(xs => value.map(xs :+ _))
+    }
+
+  private def _or_raise[A](result: Consequence[A]): A =
+    result match {
+      case Consequence.Success(value) => value
+      case Consequence.Failure(conclusion) =>
+        throw conclusion.getException.getOrElse(new IllegalStateException(conclusion.display))
+    }
 
   def default(
     mode: Option[String] = None,

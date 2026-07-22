@@ -17,7 +17,7 @@ import org.goldenport.cncf.spi.SpiResolver
  *  version Apr. 23, 2026
  *  version Apr. 25, 2026
  *  version May. 18, 2026
- * @version Jul. 21, 2026
+ * @version Jul. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 object GenericSubsystemFactory {
@@ -362,23 +362,35 @@ object GenericSubsystemFactory {
         configuration = configuration,
         aliasResolver = aliasResolver,
         runMode = runmode
-      )
+      ).withDescriptor(descriptor)
+    val componentdescriptors = descriptor.toComponentDescriptors
     val params = ComponentCreate(
       subsystem,
       ComponentOrigin.Repository("subsystem-descriptor"),
-      descriptor.toComponentDescriptors
+      componentdescriptors
     )
     val repositoryspecs = _repository_specs_for_descriptor(configuration, descriptor)
     val repositories =
-      repositoryspecs.zipWithIndex.map { case (spec, index) =>
+      repositoryspecs.zipWithIndex.flatMap { case (spec, index) =>
         val activedescriptors =
-          ComponentRepository.descriptorsForSpecification(spec, repositoryspecs.take(index), descriptor.toComponentDescriptors)
-        spec.build(params.withComponentDescriptors(activedescriptors))
+          ComponentRepository.descriptorsForSpecification(spec, repositoryspecs.take(index), componentdescriptors)
+        descriptor.componentBindings.zip(componentdescriptors).collect {
+          case (binding, componentdescriptor) if activedescriptors.contains(componentdescriptor) =>
+            spec.build(
+              params
+                .withComponentDescriptors(Vector(componentdescriptor))
+                .withInstanceMetadata(binding.instanceMetadata)
+            )
+        }
       }.toVector
-    val discoveredcomponents =
-      ComponentRepository.discoverAssembly(repositories)
-        .filter(component => descriptor.componentBindings.exists(binding => _matches_descriptor_component(component, binding.componentName)))
-    val components0 = materializeComponentInstances(discoveredcomponents, descriptor, params)
+    val components0 = _or_raise(
+      ComponentRepository.discoverAssemblyC(repositories).flatMap { discovered =>
+        val selected = discovered.filter(component =>
+          descriptor.componentBindings.exists(binding => _matches_descriptor_component(component, binding.componentName))
+        )
+        materializeComponentInstancesC(selected, descriptor, params)
+      }
+    )
     val builtins = _builtin_components(subsystem, descriptor)
     given ExecutionContext = ExecutionContext.create()
     val spibindings = GenericSubsystemDescriptor.resolveAssemblySpiBindings(descriptor) match {
@@ -389,7 +401,6 @@ object GenericSubsystemFactory {
     val resolution = SpiResolver.resolveAssemblyOrRaise(_collapse_duplicate_components(builtins ++ components0), spibindings)
     subsystem.add(resolution.components)
     subsystem.withComponentApiResolver(resolution.componentApiResolver)
-    subsystem.withDescriptor(descriptor)
     _activate_tool_runtimes_or_raise(subsystem, runtimeconfig)
     subsystem
   }
@@ -549,46 +560,63 @@ object GenericSubsystemFactory {
     discovered: Seq[Component],
     descriptor: GenericSubsystemDescriptor,
     params: ComponentCreate
-  ): Vector[Component] = {
-    val counts = descriptor.componentBindings
-      .groupBy(binding => _runtime_component_name(binding.componentName))
-      .view
-      .mapValues(_.size)
-      .toMap
-    descriptor.componentBindings.flatMap { binding =>
-      val prototypes = discovered.filter(_matches_descriptor_component(_, binding.componentName))
-      prototypes.map { prototype =>
-        val requiresmaterialization =
-          counts.getOrElse(_runtime_component_name(binding.componentName), 0) > 1 ||
-            binding.hasInstanceDeclaration
-        if (requiresmaterialization) {
-          _create_component_participant(prototype, binding, params)
-        } else {
-          prototype
-        }
-      }
-    }
+  ): Vector[Component] =
+    _or_raise(materializeComponentInstancesC(discovered, descriptor, params))
+
+  private[cncf] def materializeComponentInstancesC(
+    discovered: Seq[Component],
+    descriptor: GenericSubsystemDescriptor,
+    params: ComponentCreate
+  ): Consequence[Vector[Component]] = {
+    val participants = descriptor.componentBindings.flatMap { binding =>
+      val candidates = discovered.filter(_matches_descriptor_component(_, binding.componentName)).toVector
+      val exact = candidates.filter(_.instanceMetadata.contains(binding.instanceMetadata))
+      if (exact.nonEmpty)
+        exact.map(Consequence.success)
+      else
+        candidates.map(_create_component_participant_c(_, binding, params))
+    }.toVector
+    _sequence(participants)
   }
 
-  private def _create_component_participant(
+  private def _create_component_participant_c(
     prototype: Component,
     binding: GenericSubsystemComponentBinding,
     params: ComponentCreate
-  ): Component =
+  ): Consequence[Component] =
     prototype.factoryOption match {
       case Some(factory) =>
         val instanceparams = params
           .withOrigin(prototype.origin)
+          .withComponentDescriptors(prototype.componentDescriptors)
           .withInstanceMetadata(binding.instanceMetadata)
-        val component =
-          if (prototype.isComponentletParticipant) factory.createComponentlet(instanceparams)
-          else factory.createPrimary(instanceparams)
-        prototype.artifactMetadata.foreach(component.withArtifactMetadata)
-        component.withCollaboratorClasspath(prototype.collaboratorClasspath)
+        val componentc =
+          if (prototype.isComponentletParticipant) factory.createComponentletC(instanceparams)
+          else factory.createPrimaryC(instanceparams)
+        componentc.map { component =>
+          prototype.artifactMetadata.foreach(component.withArtifactMetadata)
+          component.withCollaboratorClasspath(prototype.collaboratorClasspath)
+        }
       case None =>
-        throw new IllegalStateException(
-          s"component factory is required for named instance: ${binding.componentName}/${binding.instanceName}"
-        )
+        if (binding.hasInstanceDeclaration) {
+          Consequence.componentInvalid(
+            s"component factory is required for named instance: ${binding.componentName}/${binding.instanceName}"
+          )
+        } else {
+          Consequence.success(prototype)
+        }
+    }
+
+  private def _sequence[A](values: Vector[Consequence[A]]): Consequence[Vector[A]] =
+    values.foldLeft(Consequence.success(Vector.empty[A])) { (acc, value) =>
+      acc.flatMap(xs => value.map(xs :+ _))
+    }
+
+  private def _or_raise[A](result: Consequence[A]): A =
+    result match {
+      case Consequence.Success(value) => value
+      case Consequence.Failure(conclusion) =>
+        throw conclusion.getException.getOrElse(new IllegalStateException(conclusion.display))
     }
 
   private def _runtime_component_name(

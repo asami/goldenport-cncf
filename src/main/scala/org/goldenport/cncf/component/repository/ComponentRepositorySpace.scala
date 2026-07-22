@@ -1,6 +1,7 @@
 package org.goldenport.cncf.component.repository
 
 import java.nio.file.{Files, Path}
+import scala.util.control.NonFatal
 
 import org.goldenport.Consequence
 import org.goldenport.configuration.ResolvedConfiguration
@@ -18,16 +19,40 @@ import org.goldenport.cncf.subsystem.Subsystem
  *  version Mar. 26, 2026
  *  version Apr. 25, 2026
  *  version May. 25, 2026
- * @version Jul. 12, 2026
+ * @version Jul. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 class ComponentRepositorySpace(
   private val _entries: Vector[ComponentRepositorySpace.Slot] = Vector.empty
 ) {
-  def discover(): Vector[Component] = {
+  def discover(): Vector[Component] =
+    _or_raise(_discover_entries_c())
+
+  def discoverC(): Consequence[Vector[Component]] =
+    if (_has_discover_override) {
+      try {
+        Consequence.success(discover())
+      } catch {
+        case NonFatal(e) => Consequence.componentInvalid(e)
+      }
+    } else {
+      _discover_entries_c()
+    }
+
+  private def _discover_entries_c(): Consequence[Vector[Component]] = {
     val repositories = _entries.map(_.repository)
-    ComponentRepository.discoverAssembly(repositories)
+    ComponentRepository.discoverAssemblyC(repositories)
   }
+
+  private def _has_discover_override: Boolean =
+    getClass.getMethod("discover").getDeclaringClass != classOf[ComponentRepositorySpace]
+
+  private def _or_raise[A](result: Consequence[A]): A =
+    result match {
+      case Consequence.Success(value) => value
+      case Consequence.Failure(conclusion) =>
+        throw conclusion.getException.getOrElse(new IllegalStateException(conclusion.display))
+    }
 }
 
 object ComponentRepositorySpace {

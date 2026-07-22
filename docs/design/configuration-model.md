@@ -263,11 +263,22 @@ The lifecycle is:
 configuration source resolution
   -> ResolvedConfiguration
   -> component and component-instance context selection
+  -> neutral Component/Core allocation and final participant identity
   -> declared initialization parameter resolution
   -> component-owned typed initialization projection
-  -> component construction and initialization
+  -> component-specific initialization
   -> component installation
 ```
+
+The neutral `Component` and `Component.Core` allocation step establishes the
+final `ComponentId`, `ComponentInstanceId`, and participant role. It MUST NOT
+consume declared initialization values. Factories declare keys through
+`initializationParameterDeclarations`; `createPrimaryC` and
+`createComponentletC` resolve those declarations only after final identity is
+known and deliver the resulting snapshot in `ComponentInit`. Component-domain
+initialization uses the consequence-aware `initialize_component_c` hook.
+Legacy non-`C` methods remain source-compatibility wrappers; CNCF runtime
+admission uses the consequence-aware path.
 
 `ResolvedConfiguration` remains a raw resolved key/value store with source
 trace. It does not know component parameter declarations, decode
@@ -376,8 +387,22 @@ layer. The layer cannot be constructed independently from arbitrary
 configuration, and a resolver for one named component instance cannot observe
 another instance's settings. The context remains CNCF-private and does not
 expose descriptor or assembly maps through the component initialization
-snapshot. Factory/bootstrap delivery of the context-bound snapshot is a later
-lifecycle step.
+snapshot.
+
+`ComponentParameterBootstrap` maps the five logical slots from already
+admitted runtime state: the selected `ComponentDescriptor.config`, effective
+subsystem descriptor `config`, selected `ComponentInstanceMetadata.config`, a
+value-only projection of `Subsystem.configuration`, and an explicitly selected
+`RuntimeTestDescriptor`. A factory with no declarations receives the canonical
+empty snapshot without requiring descriptor or instance context. The same
+snapshot is retained by `Component`, passed to ordinary initialization, and
+forwarded to special-component initialization. Consequence-aware factory,
+bootstrap, and subsystem admission paths preserve failure until installation.
+Descriptor-based startup attaches the effective subsystem descriptor before
+repository construction and supplies one binding's selected instance metadata
+to each repository factory context. Consequently assembly defaults and
+instance settings are available during real repository discovery, while a
+factory failure remains a structured failure rather than an absent component.
 
 ### Declared Component Runtime Configuration
 

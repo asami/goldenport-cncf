@@ -21,6 +21,7 @@ import org.goldenport.cncf.action.{Action, ActionCall, ActionEngine, AggregateBe
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.configuration.{Configuration, ConfigurationValue, ResolvedConfiguration}
 import org.goldenport.cncf.http.{HttpDriver, WebMessageCatalog, WebPageContextProvider}
+import org.goldenport.cncf.config.{ComponentInitializationParameters, ComponentParameterBootstrap, ComponentParameterKey}
 import org.goldenport.cncf.job.{InMemoryJobEngine, JobEngine}
 import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.cncf.service.{Service, ServiceGroup}
@@ -56,7 +57,7 @@ import org.goldenport.schema.{DataType, XString}
  *  version Apr. 30, 2026
  *  version May. 20, 2026
  *  version Jun. 18, 2026
- * @version Jul. 19, 2026
+ * @version Jul. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class Component() extends Component.Core.Holder {
@@ -82,6 +83,8 @@ abstract class Component() extends Component.Core.Holder {
   private var _event_effect_record: Record = Record.empty
   private var _component_descriptors: Vector[ComponentDescriptor] = Vector.empty
   private var _instance_metadata: Option[ComponentInstanceMetadata] = None
+  private var _initialization_parameters: ComponentInitializationParameters =
+    ComponentInitializationParameters.empty
   private var _collections_bootstrapped: Boolean = false
   private var _mcp_ready_services: Set[String] = Set.empty
   private var _mcp_ready_operations: Set[String] = Set.empty
@@ -119,6 +122,9 @@ abstract class Component() extends Component.Core.Holder {
   def instanceMetadata: Option[ComponentInstanceMetadata] =
     _instance_metadata
 
+  def initializationParameters: ComponentInitializationParameters =
+    _initialization_parameters
+
   def collectionsBootstrapped: Boolean =
     _collections_bootstrapped
 
@@ -154,25 +160,31 @@ abstract class Component() extends Component.Core.Holder {
 
   lazy val logic: ComponentLogic = ComponentLogic(this)
 
-  def initialize(params: ComponentInit): Component = {
-    _core = Some(params.core)
-    _origin = Some(params.origin)
-    _participant_role = params.participantRole
-    _subsystem = Some(params.subsystem)
-    _component_descriptors = params.componentDescriptors
-    _instance_metadata = params.instanceMetadata
-    _inherit_http_driver(params)
-    _event_store = Some(params.subsystem.eventStore)
-    jobEngine match {
-      case m: InMemoryJobEngine =>
-        m.withEventStore(params.subsystem.eventStore)
-      case _ =>
-        ()
+  def initialize(params: ComponentInit): Component =
+    _or_raise(initializeC(params))
+
+  def initializeC(params: ComponentInit): Consequence[Component] =
+    try {
+      _core = Some(params.core)
+      _origin = Some(params.origin)
+      _participant_role = params.participantRole
+      _subsystem = Some(params.subsystem)
+      _component_descriptors = params.componentDescriptors
+      _instance_metadata = params.instanceMetadata
+      _initialization_parameters = params.initializationParameters
+      _inherit_http_driver(params)
+      _event_store = Some(params.subsystem.eventStore)
+      jobEngine match {
+        case m: InMemoryJobEngine =>
+          m.withEventStore(params.subsystem.eventStore)
+        case _ =>
+          ()
+      }
+      _services = Some(ServiceGroup(protocol.services.services.map(_to_service)))
+      initialize_component_c(params).map(_ => this)
+    } catch {
+      case NonFatal(e) => Consequence.componentInvalid(e)
     }
-    _services = Some(ServiceGroup(protocol.services.services.map(_to_service)))
-    initialize_Component(params)
-    this
-  }
 
   private def _to_service(p: ServiceDefinition): Service = {
     serviceFactory.setup(this)
@@ -180,6 +192,21 @@ abstract class Component() extends Component.Core.Holder {
   }
 
   protected def initialize_Component(params: ComponentInit): Unit = {}
+
+  protected def initialize_component_c(params: ComponentInit): Consequence[Unit] =
+    try {
+      initialize_Component(params)
+      Consequence.unit
+    } catch {
+      case NonFatal(e) => Consequence.componentInvalid(e)
+    }
+
+  private def _or_raise[A](result: Consequence[A]): A =
+    result match {
+      case Consequence.Success(value) => value
+      case Consequence.Failure(conclusion) =>
+        throw conclusion.getException.getOrElse(new IllegalStateException(conclusion.display))
+    }
 
   def service: Service = services.services.head // TODO
 
@@ -866,11 +893,20 @@ object Component {
       core: ActionCall.Core
     ): Vector[org.goldenport.cncf.security.EntityAccessRelation] = Vector.empty
 
+    def initializationParameterDeclarations: Vector[ComponentParameterKey[?]] =
+      Vector.empty
+
     final def createPrimary(params: ComponentCreate): Component =
-      _create_participant(params, ParticipantRole.Primary)
+      _or_raise(createPrimaryC(params))
+
+    final def createPrimaryC(params: ComponentCreate): Consequence[Component] =
+      _create_participant_c(params, ParticipantRole.Primary)
 
     final def createComponentlet(params: ComponentCreate): Component =
-      _create_participant(params, ParticipantRole.Componentlet)
+      _or_raise(createComponentletC(params))
+
+    final def createComponentletC(params: ComponentCreate): Consequence[Component] =
+      _create_participant_c(params, ParticipantRole.Componentlet)
 
     protected def create_Core(
       params: ComponentCreate,
@@ -879,42 +915,69 @@ object Component {
 
     protected def create_Component(params: ComponentCreate): Component
 
-    private def _create_participant(
+    protected def initialize_component_c(
+      component: Component,
+      params: ComponentInit
+    ): Consequence[Component] =
+      component.initializeC(params)
+
+    private def _create_participant_c(
       params: ComponentCreate,
       role: ParticipantRole
-    ): Component = {
-      val comp = create_Component(params)
-      val core = create_Core(params, comp)
-      val instanceid = params.instanceMetadata.map { metadata =>
-        role match {
-          case ParticipantRole.Primary => metadata.instanceId
-          case ParticipantRole.Componentlet => ComponentInstanceId(core.name, metadata.instance)
-        }
-      }.getOrElse(core.instanceId)
-      val sharedcore = core.copy(
-        instanceId = instanceid,
-        jobEngine = params.subsystem.jobEngine
-      )
-      params.instanceMetadata.filter(_.config.nonEmpty).foreach { metadata =>
-        val values = metadata.config.map { case (key, value) =>
-          key -> ConfigurationValue.StringValue(value)
-        }
-        val packagedvalues = comp.applicationConfig.config.map(_.values).getOrElse(Map.empty)
-        comp.withApplicationConfig(
-          comp.applicationConfig.copy(config = Some(Configuration(packagedvalues ++ values)))
+    ): Consequence[Component] =
+      try {
+        val comp = create_Component(params)
+        val core = create_Core(params, comp)
+        val instanceid = params.instanceMetadata.map { metadata =>
+          role match {
+            case ParticipantRole.Primary => metadata.instanceId
+            case ParticipantRole.Componentlet => ComponentInstanceId(core.name, metadata.instance)
+          }
+        }.getOrElse(core.instanceId)
+        val sharedcore = core.copy(
+          instanceId = instanceid,
+          jobEngine = params.subsystem.jobEngine
         )
+        params.instanceMetadata.filter(_.config.nonEmpty).foreach { metadata =>
+          val values = metadata.config.map { case (key, value) =>
+            key -> ConfigurationValue.StringValue(value)
+          }
+          val packagedvalues = comp.applicationConfig.config.map(_.values).getOrElse(Map.empty)
+          comp.withApplicationConfig(
+            comp.applicationConfig.copy(config = Some(Configuration(packagedvalues ++ values)))
+          )
+        }
+        ComponentParameterBootstrap
+          .resolve(
+            params,
+            sharedcore.componentId,
+            sharedcore.instanceId,
+            initializationParameterDeclarations
+          )
+          .flatMap { parameters =>
+            initialize_component_c(
+              comp,
+              ComponentInit(
+                subsystem = params.subsystem,
+                core = sharedcore,
+                origin = params.origin,
+                componentDescriptors = params.componentDescriptors,
+                participantRole = role,
+                instanceMetadata = params.instanceMetadata,
+                initializationParameters = parameters
+              )
+            )
+          }
+      } catch {
+        case NonFatal(e) => Consequence.componentInvalid(e)
       }
-      comp.initialize(
-        ComponentInit(
-          subsystem = params.subsystem,
-          core = sharedcore,
-          origin = params.origin,
-          componentDescriptors = params.componentDescriptors,
-          participantRole = role,
-          instanceMetadata = params.instanceMetadata
-        )
-      )
-    }
+
+    private def _or_raise[A](result: Consequence[A]): A =
+      result match {
+        case Consequence.Success(value) => value
+        case Consequence.Failure(conclusion) =>
+          throw conclusion.getException.getOrElse(new IllegalStateException(conclusion.display))
+      }
 
     // private def _resolve_core(
     //   params: ComponentInitParams,
@@ -964,10 +1027,30 @@ object Component {
     def componentletFactories: Vector[ComponentletFactory] = Vector.empty
 
     final def create(params: ComponentCreate): Bundle =
-      Bundle(
-        primary = primaryFactory.createPrimary(params),
-        componentlets = componentletFactories.map(_.createComponentlet(params))
-      ).validate()
+      _or_raise(createC(params))
+
+    final def createC(params: ComponentCreate): Consequence[Bundle] =
+      primaryFactory.createPrimaryC(params).flatMap { primary =>
+        _sequence(componentletFactories.map(_.createComponentletC(params))).flatMap { componentlets =>
+          try {
+            Consequence.success(Bundle(primary, componentlets).validate())
+          } catch {
+            case NonFatal(e) => Consequence.componentInvalid(e)
+          }
+        }
+      }
+
+    private def _sequence[A](values: Vector[Consequence[A]]): Consequence[Vector[A]] =
+      values.foldLeft(Consequence.success(Vector.empty[A])) { (acc, value) =>
+        acc.flatMap(xs => value.map(xs :+ _))
+      }
+
+    private def _or_raise[A](result: Consequence[A]): A =
+      result match {
+        case Consequence.Success(value) => value
+        case Consequence.Failure(conclusion) =>
+          throw conclusion.getException.getOrElse(new IllegalStateException(conclusion.display))
+      }
   }
 
   abstract class SinglePrimaryBundleFactory extends Factory with BundleFactory with PrimaryComponentFactory {
@@ -2096,7 +2179,8 @@ final case class ComponentInit( // TODO use config
   origin: ComponentOrigin,
   componentDescriptors: Vector[ComponentDescriptor] = Vector.empty,
   participantRole: Component.ParticipantRole = Component.ParticipantRole.Primary,
-  instanceMetadata: Option[ComponentInstanceMetadata] = None
+  instanceMetadata: Option[ComponentInstanceMetadata] = None,
+  initializationParameters: ComponentInitializationParameters = ComponentInitializationParameters.empty
 )
 
 sealed trait ComponentOrigin {

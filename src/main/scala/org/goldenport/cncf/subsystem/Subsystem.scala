@@ -57,7 +57,7 @@ import org.goldenport.cncf.observability.ServiceContainerRuntimeObservation
  *  version Jan. 31, 2026
  *  version Feb.  4, 2026
  *  version Apr. 30, 2026
- * @version Jul. 21, 2026
+ * @version Jul. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Subsystem(
@@ -279,34 +279,23 @@ final class Subsystem(
     this
   }
 
-  def setup(cf: ComponentFactory): Subsystem = {
+  def setup(cf: ComponentFactory): Subsystem =
+    _or_raise(setupC(cf))
+
+  def setupC(cf: ComponentFactory): Consequence[Subsystem] = {
     _component_factory = cf
-    val comps = cf.discover()
-    add(comps)
+    cf.discoverC().flatMap(addC)
   }
 
-  def add(comps: Seq[Component]): Subsystem = {
-    val bootstrapped = comps.map(_component_factory.bootstrap)
-    val injected = bootstrapped.map(x => _inject_context(x.name, x))
-    injected.foreach(_bind_runtime_services)
-    _mcp_client_runtime.foreach { runtime =>
-      _install_mcp_client_runtime_c(runtime, injected) match {
-        case Consequence.Success(_) => ()
-        case Consequence.Failure(conclusion) =>
-          throw conclusion.getException.getOrElse(new IllegalStateException(conclusion.display))
-      }
+  def add(comps: Seq[Component]): Subsystem =
+    _or_raise(addC(comps))
+
+  def addC(comps: Seq[Component]): Consequence[Subsystem] =
+    _prepare_components_c(comps).map { injected =>
+      _component_space = _component_space.add(injected)
+      _rebuild_resolver()
+      this
     }
-    _operation_tool_runtime.foreach { runtime =>
-      runtime.install(injected) match {
-        case Consequence.Success(_) => ()
-        case Consequence.Failure(conclusion) =>
-          throw conclusion.getException.getOrElse(new IllegalStateException(conclusion.display))
-      }
-    }
-    _component_space = _component_space.add(injected)
-    _rebuild_resolver()
-    this
-  }
 
   def add(bundle: Component.Bundle): Subsystem =
     add(bundle.participants)
@@ -314,28 +303,43 @@ final class Subsystem(
   def add(component: Component): Subsystem =
     add(Vector(component))
 
-  def upsert(comps: Seq[Component]): Subsystem = {
-    val bootstrapped = comps.map(_component_factory.bootstrap)
-    val injected = bootstrapped.map(x => _inject_context(x.name, x))
-    injected.foreach(_bind_runtime_services)
-    _mcp_client_runtime.foreach { runtime =>
-      _install_mcp_client_runtime_c(runtime, injected) match {
-        case Consequence.Success(_) => ()
-        case Consequence.Failure(conclusion) =>
-          throw conclusion.getException.getOrElse(new IllegalStateException(conclusion.display))
-      }
+  def upsert(comps: Seq[Component]): Subsystem =
+    _or_raise(upsertC(comps))
+
+  def upsertC(comps: Seq[Component]): Consequence[Subsystem] =
+    _prepare_components_c(comps).map { injected =>
+      _component_space = _component_space.upsert(injected)
+      _rebuild_resolver()
+      this
     }
-    _operation_tool_runtime.foreach { runtime =>
-      runtime.install(injected) match {
-        case Consequence.Success(_) => ()
-        case Consequence.Failure(conclusion) =>
-          throw conclusion.getException.getOrElse(new IllegalStateException(conclusion.display))
+
+  private def _prepare_components_c(
+    comps: Seq[Component]
+  ): Consequence[Vector[Component]] =
+    _sequence(comps.toVector.map(_component_factory.bootstrapC)).flatMap { bootstrapped =>
+      val injected = bootstrapped.map(x => _inject_context(x.name, x))
+      injected.foreach(_bind_runtime_services)
+      val mcpc = _mcp_client_runtime.fold(Consequence.unit) { runtime =>
+        _install_mcp_client_runtime_c(runtime, injected)
       }
+      mcpc.flatMap { _ =>
+        _operation_tool_runtime.fold(Consequence.unit) { runtime =>
+          runtime.install(injected)
+        }
+      }.map(_ => injected)
     }
-    _component_space = _component_space.upsert(injected)
-    _rebuild_resolver()
-    this
-  }
+
+  private def _sequence[A](values: Vector[Consequence[A]]): Consequence[Vector[A]] =
+    values.foldLeft(Consequence.success(Vector.empty[A])) { (acc, value) =>
+      acc.flatMap(xs => value.map(xs :+ _))
+    }
+
+  private def _or_raise[A](result: Consequence[A]): A =
+    result match {
+      case Consequence.Success(value) => value
+      case Consequence.Failure(conclusion) =>
+        throw conclusion.getException.getOrElse(new IllegalStateException(conclusion.display))
+    }
 
   def registerEventReception(componentName: String, reception: EventReception): Subsystem = {
     _event_receptions.update(componentName, reception)

@@ -42,7 +42,7 @@ import scala.util.Try
  *  version Apr. 25, 2026
  *  version Apr. 26, 2026
  *  version May.  7, 2026
- * @version Jul. 19, 2026
+ * @version Jul. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactory(
@@ -54,31 +54,64 @@ final class ComponentFactory(
 ) {
   private val _working_set_clock = workingsetclock
 
-  def discover(): Vector[Component] = {
-    val cs = _component_repository_space.discover()
+  def discover(): Vector[Component] =
+    _or_raise(discoverC())
+
+  def discoverC(): Consequence[Vector[Component]] = {
     given ExecutionContext = ExecutionContext.create()
-    SpiResolver.resolveOrRaise(cs.map(bootstrap))
+    _component_repository_space.discoverC().flatMap { cs =>
+      _sequence(cs.map(bootstrapC)).flatMap(SpiResolver.resolve(_))
+    }
   }
 
   def bootstrap(component: Component): Component =
-    if (component.collectionsBootstrapped)
-      component
-    else
-      _bootstrap_collections(_initialize_special_component(component))
+    _or_raise(bootstrapC(component))
 
-  private def _initialize_special_component(p: Component): Component =
+  def bootstrapC(component: Component): Consequence[Component] =
+    if (component.collectionsBootstrapped) {
+      Consequence.success(component)
+    } else {
+      _initialize_special_component_c(component).flatMap { initialized =>
+        try {
+          Consequence.success(_bootstrap_collections(initialized))
+        } catch {
+          case scala.util.control.NonFatal(e) => Consequence.componentInvalid(e)
+        }
+      }
+    }
+
+  private def _initialize_special_component_c(p: Component): Consequence[Component] =
     p match {
       case m: CollaboratorComponent =>
         val entryOpt = _collaborators.resolve(m.core.name).orElse(_collaborators.entries.headOption)
         entryOpt match {
           case Some(entry) =>
             val collaboratorimpl = _wrap_collaborator(entry.collaborator)
-            val init = CollaboratorComponentInit(CollaboratorComponent.Core(collaboratorimpl))
-            m.initialize(init)
+            val init = CollaboratorComponentInit(
+              CollaboratorComponent.Core(collaboratorimpl),
+              m.initializationParameters
+            )
+            try {
+              Consequence.success(m.initialize(init))
+            } catch {
+              case scala.util.control.NonFatal(e) => Consequence.componentInvalid(e)
+            }
           case None =>
-            m
+            Consequence.success(m)
         }
-      case m => m
+      case m => Consequence.success(m)
+    }
+
+  private def _sequence[A](values: Vector[Consequence[A]]): Consequence[Vector[A]] =
+    values.foldLeft(Consequence.success(Vector.empty[A])) { (acc, value) =>
+      acc.flatMap(xs => value.map(xs :+ _))
+    }
+
+  private def _or_raise[A](result: Consequence[A]): A =
+    result match {
+      case Consequence.Success(value) => value
+      case Consequence.Failure(conclusion) =>
+        throw conclusion.getException.getOrElse(new IllegalStateException(conclusion.display))
     }
 
   private def _wrap_collaborator(apicollaborator: api.Collaborator): Collaborator = new Collaborator {
@@ -455,7 +488,7 @@ final class ComponentFactory(
     storesnapshot: scala.collection.concurrent.TrieMap[EntityId, Any]
   ): EntityRealm[Any] = {
     given EntityPersistent[Any] = _entity_persistent_any
-    val state = new _IdRef[EntityRealmState[Any]](EntityRealmState(Map.empty))
+    val state = new IdRef[EntityRealmState[Any]](EntityRealmState(Map.empty))
     new EntityRealm[Any](
       entityName = name,
       loader = EntityLoader[Any](id => _load_entity_from_store(storesnapshot, id)),
@@ -493,7 +526,7 @@ final class ComponentFactory(
         Consequence.notImplemented("EntityPersistent[Any].fromRecord is not wired in bootstrap placeholder")
     }
 
-  private final class _IdRef[A](initial: A) extends Ref[cats.Id, A] {
+  private final class IdRef[A](initial: A) extends Ref[cats.Id, A] {
     private var _value: A = initial
 
     def get: A = synchronized {

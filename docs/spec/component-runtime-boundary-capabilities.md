@@ -62,6 +62,24 @@ component-instance context, policy-rejected value, or invalid domain
 projection MUST produce `Consequence.Failure(Conclusion)` and MUST prevent the
 partially initialized component from becoming visible in the subsystem.
 
+The canonical factory contract MUST declare keys through
+`initializationParameterDeclarations` and create participants through
+`createPrimaryC` or `createComponentletC`. CNCF MAY allocate a neutral
+`Component` and `Component.Core` first to establish final identity, but that
+allocation MUST NOT consume declared initialization values. Resolution MUST
+complete before `initialize_component_c` or an equivalent component-domain
+projection runs. Successful resolution MUST be delivered through
+`ComponentInit.initializationParameters` and retained as the component's
+immutable `initializationParameters` snapshot.
+
+Factories with no declarations MUST receive
+`ComponentInitializationParameters.empty` without requiring descriptor or
+instance metadata. Componentlets MUST resolve against their own runtime
+identity and the owning descriptor/assembly-instance context. Special-component
+initialization MUST receive the same snapshot. Consequence-aware factory,
+bootstrap, and subsystem admission paths MUST preserve a failed `Conclusion`
+and MUST NOT install the failed participant.
+
 One successful resolution MUST produce an immutable initialization snapshot
 bound to exactly one `ComponentInstanceId`. Component initialization code MUST
 NOT receive `ResolvedConfiguration`, a raw or untyped configuration map, a

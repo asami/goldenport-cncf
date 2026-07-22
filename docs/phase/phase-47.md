@@ -66,7 +66,7 @@ raw configuration maps to component code.
 | CIP-02 | Typed parameter model | CNCF provides the resolver, typed key/value, result, collection, and safe provenance vocabulary. | done |
 | CIP-03 | Resolution layers | All admitted initialization sources have one deterministic precedence contract. | done |
 | CIP-04 | Instance context | Resolution is isolated by component and component-instance identity. | done |
-| CIP-05 | Bootstrap integration | Component factories and special components receive typed initialization parameters without raw maps. | open |
+| CIP-05 | Bootstrap integration | Component factories and special components receive typed initialization parameters without raw maps. | done |
 | CIP-06 | Confidential values | Secret references and confidential parameters remain opaque and payload-safe. | open |
 | CIP-07 | Diagnostics and observability | Bootstrap resolution exposes bounded identity and provenance facts only. | open |
 | CIP-08 | Executable evidence | Deterministic specifications cover success, failure, precedence, isolation, overlays, and confidentiality. | open |
@@ -132,6 +132,21 @@ instance metadata record for a coherent `ComponentId` and
 `ComponentInstanceId`, including componentlet ownership, and the resolver
 derives its subsystem-instance layer only from that selected context.
 
-Plan CIP-05 next. Deliver the context-bound typed parameter snapshot through
-normal and special component bootstrap without exposing raw configuration;
-confidential values and diagnostics remain CIP-06 and CIP-07.
+CIP-05 is complete. Factory declarations are
+resolved after final participant identity through the five fixed CNCF-owned
+layers; `ComponentInit`, ordinary initialization, componentlets, and special
+collaborator initialization receive the same immutable typed snapshot.
+Consequence-aware factory/bootstrap/subsystem paths prevent failed
+initialization from entering component space. Descriptor-bound repository
+construction now receives per-binding instance metadata after the effective
+descriptor is attached, actual repository factory failures retain their
+`Conclusion`, and special-component exceptions remain in the same failure
+channel. Packaged CAR descriptors remain the packaged-default source through
+assembly matching and participant materialization. An exact repository-bound
+participant is retained after its single initialization; only unmatched
+prototypes are rematerialized for another declared instance. Requested CAR/SAR
+archive failures preserve the originating factory `Conclusion` across archive
+extraction, and assembly API metadata and classloader validation failures also
+remain in their original structured `Conclusion` channel. No-declaration
+factories retain the empty-snapshot path.
+Confidential values and diagnostics remain CIP-06 and CIP-07.

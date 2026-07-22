@@ -3,10 +3,12 @@ package org.goldenport.cncf.component
 import org.goldenport.Consequence
 import org.goldenport.Conclusion
 import org.goldenport.cncf.backend.collaborator.Collaborator
+import org.goldenport.cncf.config.ComponentInitializationParameters
 
 /*
  * @since   Feb.  1, 2026
- * @version Feb.  5, 2026
+ *  version Feb.  5, 2026
+ * @version Jul. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class CollaboratorComponent() extends Component()
@@ -46,5 +48,6 @@ object CollaboratorComponent {
 }
 
 final case class CollaboratorComponentInit(
-  core: CollaboratorComponent.Core
+  core: CollaboratorComponent.Core,
+  initializationParameters: ComponentInitializationParameters = ComponentInitializationParameters.empty
 )

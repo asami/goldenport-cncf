@@ -124,20 +124,57 @@ Verified evidence:
 ## CIP-05: Bootstrap Integration
 
 Stage Status:
-- Current status: OPEN
+- Current status: DONE
 - Owner: CNCF component runtime maintainers
 - Update rule: Mark DONE only after normal and special component
   initialization receive typed parameters through one CNCF-owned bootstrap
   route.
 
-- [ ] Integrate resolution before `ComponentFactory.bootstrap` component
+- [x] Integrate resolution before `ComponentFactory.bootstrap` component
   construction or initialization.
-- [ ] Extend the factory/bootstrap contract without exposing
+- [x] Extend the factory/bootstrap contract without exposing
   `ResolvedConfiguration` or an untyped map to components.
-- [ ] Apply the same contract to special-component initialization paths.
-- [ ] Preserve current behavior for components that declare no initialization
+- [x] Apply the same contract to special-component initialization paths.
+- [x] Preserve current behavior for components that declare no initialization
   parameters.
-- [ ] Preserve operation-time `ComponentConfigurationAccess` compatibility.
+- [x] Preserve operation-time `ComponentConfigurationAccess` compatibility.
+
+Verified evidence:
+- `ComponentParameterBootstrap` maps the five fixed layers after final
+  participant identity and creates one immutable typed snapshot.
+- Consequence-aware creation, initialization, bootstrap, and subsystem
+  admission preserve structured failures before installation.
+- `ComponentInitializationBootstrapSpec` covers typed delivery, all fixed
+  layers, named-instance isolation, failure, componentlets, no declarations,
+  special components, real repository bootstrap, repository failure
+  propagation, and raw-configuration exclusion. `ComponentRepositoryCarSpec`
+  additionally proves packaged CAR defaults and exact CAR/SAR factory
+  `Conclusion` propagation.
+- Review findings were fixed by attaching the descriptor before repository
+  construction, passing one binding's metadata into each discovery context,
+  preserving repository factory `Conclusion` values, and wrapping special
+  component initialization failures. Re-review findings were fixed by retaining
+  the packaged descriptor through repository selection and participant
+  materialization, and by preserving requested CAR/SAR discovery failures
+  through archive extraction. The latest re-review finding was fixed by making
+  assembly API metadata/classloader preparation consequence-native, so its
+  structured validation failure is not replaced by a generic component error.
+  A subsequent re-review finding was fixed by retaining an exact initialized
+  repository participant rather than invoking its factory a second time;
+  unmatched prototypes still support named-instance rematerialization.
+- The focused CIP-05 regression set passed 98 tests across
+  `ComponentInitializationBootstrapSpec`,
+  `ComponentRepositoryCarSpec`,
+  `GeneratedComponentBundleFactorySpec`,
+  `ComponentFactoryRuntimePlanActivationSpec`, and
+  `GenericSubsystemFactorySpec`; the repository archive suite and the 31-test
+  bootstrap/runtime set were executed separately because their established
+  global work-area fixtures are process-scoped. `Test/compile` and
+  `git diff --check` also passed.
+- Independent review findings and each clean re-review cycle were completed;
+  no actionable finding remains.
+- The full CNCF suite passed with 2,248 tests across 324 suites, with no failed
+  or aborted suite.
 
 ## CIP-06: Secret and Confidential Parameters
 

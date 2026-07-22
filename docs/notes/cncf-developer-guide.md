@@ -88,6 +88,27 @@ reserved for CNCF/Cozy construction and adapter concepts such as
 `Component.Factory`, generated `FooComponent.Factory`, `Component.BundleFactory`,
 and small factory adapters that connect generated metadata to logic.
 
+### Initialization Parameters
+
+Use factory-owned initialization parameters when a component needs a typed,
+stable value before it can complete initialization. Declare each key through
+`initializationParameterDeclarations`, then resolve it from
+`ComponentInit.initializationParameters` in the protected
+`initialize_component_c` hook. Return a structured `Consequence` when a
+component-domain combination is invalid.
+
+Do not read `Subsystem.configuration`, a descriptor map, environment variables,
+or request properties from component initialization code. CNCF selects the
+component instance and applies packaged, assembly, instance, runtime, and
+explicit test layers before invoking the hook. The snapshot has no raw-map or
+arbitrary-name accessor. Use `ComponentConfigurationKey` and the protected
+ActionCall DSL separately for operation-time configuration.
+
+Factories without declarations receive
+`ComponentInitializationParameters.empty`. New runtime integrations should
+call `createPrimaryC`, `createComponentletC`, or bundle `createC` so failures
+remain structured until subsystem admission.
+
 Inside an `ActionCall`, use protected CNCF helper methods before reaching for
 lower-level runtime objects. If a needed helper does not exist, add or improve
 an internal DSL helper instead of copying runtime mechanics into component

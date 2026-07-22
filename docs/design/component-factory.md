@@ -289,6 +289,43 @@ Diagnostics MUST include:
 - instantiation strategy path (singleton / ctor / failed)
 
 
+Initialization Parameter Bootstrap
+----------------------------------
+
+A factory declares initialization-time values with
+`initializationParameterDeclarations: Vector[ComponentParameterKey[?]]`.
+Declaration is factory-owned because it must be available before
+component-domain initialization. It is distinct from operation-time
+`ComponentConfigurationKey` access.
+
+The canonical construction methods are `createPrimaryC` and
+`createComponentletC`; bundle factories use `createC`. CNCF allocates the
+component and core, establishes final participant identity, resolves the five
+fixed layers, then supplies the immutable typed snapshot through
+`ComponentInit.initializationParameters`. `create_Component` and `create_Core`
+must not inspect raw subsystem configuration to consume declared
+initialization values.
+
+Component-specific projection or combination validation belongs in the
+consequence-aware `initialize_component_c` hook. A failure remains a
+`Consequence.Failure(Conclusion)` through `ComponentFactory.bootstrapC` and
+`Subsystem.addC`, preventing installation. Existing non-`C` methods are
+compatibility wrappers; new framework/runtime code uses their `C`
+counterparts. Factories with no declarations receive
+`ComponentInitializationParameters.empty`, and special components use the
+same snapshot rather than a parallel configuration route.
+
+Descriptor-based subsystem startup binds the effective subsystem descriptor
+before repository factory construction. Each repository construction context
+contains exactly one component binding's instance metadata, so a factory can
+resolve required initialization parameters during discovery without borrowing
+another instance's values. Actual assembly discovery uses the consequence-aware
+route and preserves a factory initialization `Conclusion`; exploratory
+component-name inference may omit an unconstructable candidate but cannot turn
+an actual assembly failure into component absence. The selected repository
+participant is materialized again for its binding before subsystem admission.
+
+
 Verify vs Validate Policy (AI-Human Alignment)
 ----------------------------------------------
 

@@ -15,12 +15,12 @@ import org.scalatest.BeforeAndAfterAll
 import org.goldenport.{Consequence, ConsequenceException}
 import org.goldenport.cncf.context.GlobalContext
 import org.goldenport.cncf.workarea.WorkAreaSpace
-import org.goldenport.cncf.config.RuntimeConfig
-import org.goldenport.cncf.component.{CarExtractor, Component, ComponentCreate, ComponentDependencyManifest, ComponentDependencyPool, ComponentDescriptor, ComponentDescriptorLoader, ComponentLocalFirstClassLoader, ComponentOrigin, CoursierComponentDependencyResolver}
+import org.goldenport.cncf.config.{ComponentParameterProvenance, RuntimeConfig}
+import org.goldenport.cncf.component.{AssemblyApiClassLoader, CarExtractor, Component, ComponentCreate, ComponentDependencyManifest, ComponentDependencyPool, ComponentDescriptor, ComponentDescriptorLoader, ComponentFactory, ComponentLocalFirstClassLoader, ComponentOrigin, CoursierComponentDependencyResolver, RepositoryParameterProbeComponent, RepositoryParameterProbeFactory}
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.spi.SpiResolver
 import org.goldenport.cncf.spi.ai.runner.{AiGenerateRequest, AiRunnerSocket}
-import org.goldenport.cncf.subsystem.Subsystem
+import org.goldenport.cncf.subsystem.{GenericSubsystemComponentBinding, GenericSubsystemDescriptor, GenericSubsystemFactory, Subsystem}
 import org.goldenport.cncf.testutil.TestComponentFactory
 import org.goldenport.configuration.{Configuration, ConfigurationValue, ResolvedConfiguration}
 import org.goldenport.configuration.ConfigurationTrace
@@ -29,7 +29,7 @@ import org.goldenport.configuration.ConfigurationTrace
  * @since   Feb.  4, 2026
  *  version Apr. 25, 2026
  *  version May. 25, 2026
- * @version Jul. 21, 2026
+ * @version Jul. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAndAfterAll with GivenWhenThen {
@@ -147,7 +147,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
       }
     }
 
-    "does not resolve snapshots from the standard cache repository" in {
+    "not resolve snapshots from the standard cache repository" in {
       _with_temp_dir { cache =>
         val snapshotdir = cache.resolve("car").resolve("sample-component").resolve("0.1.1-SNAPSHOT")
         Files.createDirectories(snapshotdir)
@@ -162,7 +162,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
       }
     }
 
-    "does not discover requested snapshots from the standard cache repository" in {
+    "not discover requested snapshots from the standard cache repository" in {
       val subsystem = new Subsystem(
         name = "test-standard-repo-snapshot",
         configuration = ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty)
@@ -200,7 +200,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
       }
     }
 
-    "does not let standard repository block a requested local snapshot component" in {
+    "not let the standard repository block a requested local snapshot component" in {
       val subsystem = new Subsystem(
         name = "test-local-snapshot-standard-fallback",
         configuration = ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty)
@@ -549,7 +549,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
       }
     }
 
-    "do not auto-append a packaged CAR when component development directory is explicit" in {
+    "not auto-append a packaged CAR when component development directory is explicit" in {
       _with_temp_dir { root =>
         val componentdir = root.resolve("component")
         val classdir = componentdir.resolve("target").resolve("scala-3.3.7").resolve("classes")
@@ -987,6 +987,143 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
         Then("the plain factory creates the primary component")
         components.map(_.name) should contain ("plain-factory-primary")
         components.find(_.name == "plain-factory-primary").flatMap(_.factoryOption) should not be empty
+      }
+    }
+
+    "retain packaged initialization defaults without repeated CAR materialization" in {
+      Given("a component CAR whose descriptor supplies a required initialization default")
+      _with_temp_dir { componentdir =>
+        val carpath = componentdir.resolve("repository-parameter-probe.car")
+        val componentjar = _create_class_component_jar(
+          componentdir.resolve("assets").resolve("repository-parameter-probe.jar"),
+          Seq(
+            classOf[RepositoryParameterProbeFactory],
+            classOf[RepositoryParameterProbeComponent],
+            RepositoryParameterProbeFactory.getClass
+          )
+        )
+        val cardescriptor = componentdir.resolve("component-descriptor-parameter.json")
+        Files.writeString(
+          cardescriptor,
+          """{"name":"repository_parameter_probe","version":"0.1.0","component":"repository_parameter_probe","config":{"provider.limit":"27"}}"""
+        )
+        _create_car(
+          carpath,
+          Seq(
+            "component/main.jar" -> componentjar,
+            "component-descriptor.json" -> cardescriptor
+          )
+        )
+        val configuration = ResolvedConfiguration(
+          Configuration(Map(
+            RuntimeConfig.ComponentFileKey -> ConfigurationValue.StringValue(carpath.toString)
+          )),
+          ConfigurationTrace.empty
+        )
+        val descriptor = GenericSubsystemDescriptor(
+          path = carpath,
+          subsystemName = "packaged-parameter-default",
+          componentBindings = Vector(
+            GenericSubsystemComponentBinding("repository_parameter_probe")
+          )
+        )
+
+        When("GenericSubsystemFactory discovers and materializes the packaged component")
+        RepositoryParameterProbeFactory.resetCreationCount()
+        val component = GenericSubsystemFactory
+          .default(descriptor, configuration = configuration)
+          .components
+          .find(_.name == "repository_parameter_probe")
+          .getOrElse(fail("repository parameter probe was not materialized"))
+
+        Then("the packaged descriptor remains the fixed packaged-default source")
+        val resolution = component.initializationParameters
+          .resolve(RepositoryParameterProbeFactory.limitKey)
+          .toOption
+          .getOrElse(fail("packaged initialization parameter was not resolved"))
+        resolution.value shouldBe Some(27)
+        resolution.provenance shouldBe ComponentParameterProvenance.PackagedDefault
+        RepositoryParameterProbeFactory.creationCount shouldBe 1
+      }
+    }
+
+    "preserve packaged CAR and SAR initialization failures" in {
+      Given("CAR and SAR repositories whose selected component default is malformed")
+      _with_temp_dir { root =>
+        val componentjar = _create_class_component_jar(
+          root.resolve("assets").resolve("repository-parameter-probe.jar"),
+          Seq(
+            classOf[RepositoryParameterProbeFactory],
+            classOf[RepositoryParameterProbeComponent],
+            RepositoryParameterProbeFactory.getClass
+          )
+        )
+        val cardescriptor = root.resolve("component-descriptor-invalid-parameter.json")
+        Files.writeString(
+          cardescriptor,
+          """{"name":"repository_parameter_probe","version":"0.1.0","component":"repository_parameter_probe","config":{"provider.limit":"invalid"}}"""
+        )
+        val carpath = root.resolve("repository-parameter-probe.car")
+        _create_car(
+          carpath,
+          Seq(
+            "component/main.jar" -> componentjar,
+            "component-descriptor.json" -> cardescriptor
+          )
+        )
+        val sardescriptor = root.resolve("subsystem-descriptor-parameter.json")
+        Files.writeString(
+          sardescriptor,
+          """{"name":"repository-parameter-subsystem","version":"0.1.0","subsystem":"repository-parameter-subsystem","components":[{"name":"repository_parameter_probe"}]}"""
+        )
+        val sarpath = root.resolve("repository-parameter-probe.sar")
+        _create_zip(
+          sarpath,
+          Seq(
+            "subsystem-descriptor.json" -> sardescriptor,
+            "component/repository-parameter-probe.car" -> carpath
+          )
+        )
+        val subsystem = TestComponentFactory.emptySubsystem("initialization-packaged-failure")
+        val requested = ComponentDescriptor(componentName = Some("repository_parameter_probe"))
+        val params = ComponentCreate(
+          subsystem,
+          ComponentOrigin.Repository("phase-47"),
+          Vector(requested)
+        )
+        val packageddescriptor = ComponentDescriptorLoader.loadArchive(carpath).toOption
+          .getOrElse(fail("packaged parameter descriptor was not readable"))
+        val expectedconclusion = new RepositoryParameterProbeFactory()
+          .createPrimaryC(params.withComponentDescriptors(Vector(packageddescriptor))) match {
+            case Consequence.Failure(conclusion) => conclusion
+            case Consequence.Success(component) =>
+              fail(s"expected direct initialization failure but created: ${component.name}")
+          }
+
+        When("consequence-aware discovery invokes each packaged factory")
+        val results = Vector(carpath, sarpath).map { artifactpath =>
+          val repositorydir = Files.createDirectories(root.resolve(s"repository-${artifactpath.getFileName}"))
+          Files.copy(artifactpath, repositorydir.resolve(artifactpath.getFileName))
+          val repository = ComponentRepository.ComponentDirRepository
+            .Specification(repositorydir)
+            .build(params)
+          val repositoryspace = ComponentRepositorySpace(Vector(
+            ComponentRepositorySpace.Slot(repository, ComponentOrigin.Repository("phase-47"))
+          ))
+          new ComponentFactory(repositoryspace).discoverC()
+        }
+        val failures = results.map(_.isFaillure)
+
+        Then("neither packaged failure is converted to component absence")
+        failures shouldBe Vector(true, true)
+        results.foreach {
+          case Consequence.Failure(conclusion) =>
+            withClue(s"actual=${conclusion.toJsonString} expected=${expectedconclusion.toJsonString}") {
+              conclusion.isMatch(expectedconclusion) shouldBe true
+            }
+          case Consequence.Success(components) =>
+            fail(s"expected packaged initialization failure but discovered: ${components.map(_.name).mkString(",")}")
+        }
       }
     }
 
@@ -1782,6 +1919,43 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
             conclusion.display should include ("spi/missing-api.jar")
           case Consequence.Success(value) =>
             fail(s"expected missing development API JAR failure but got $value")
+        }
+      }
+    }
+
+    "preserve assembly API validation failures through consequence-aware discovery" in {
+      _with_temp_dir { root =>
+        Given("a development component requiring an API absent from the assembly")
+        val classdir = Files.createDirectories(root.resolve("target").resolve("scala-3.3.8").resolve("classes"))
+        _write_runtime_classpath(root, classdir)
+        val apidir = ComponentRepository.ComponentDevDirRepository.devComponentApiDirectory(root)
+        Files.createDirectories(apidir)
+        Files.writeString(
+          apidir.resolve("component-api-descriptor.json"),
+          """{"schemaVersion":"cncf.component-api.v1","component":{"name":"consumer","version":"1.0.0"},"provided":[],"required":[{"apiClass":"example.api.MissingApi","required":true}]}"""
+        )
+        val subsystem = TestComponentFactory.emptySubsystem("dev-api-validation-spec")
+        val params = ComponentCreate(subsystem, ComponentOrigin.Repository("component-dev-dir"))
+        val repository = ComponentRepository.ComponentDevDirRepository.Specification(root).build(params)
+        val metadata = repository.prepareAssemblyApi().toOption
+          .getOrElse(fail("assembly API metadata was not prepared"))
+        val expectedresult = AssemblyApiClassLoader.create(getClass.getClassLoader, metadata)
+
+        When("the assembly is discovered through the consequence-aware entry point")
+        val result = ComponentRepository.discoverAssemblyC(Vector(repository))
+
+        Then("the classloader validation Conclusion is not replaced by a generic component failure")
+        (expectedresult, result) match {
+          case (Consequence.Failure(expected), Consequence.Failure(actual)) =>
+            actual.status shouldBe expected.status
+            actual.observation.taxonomy shouldBe expected.observation.taxonomy
+            actual.interpretation shouldBe expected.interpretation
+            actual.disposition shouldBe expected.disposition
+            actual.display shouldBe expected.display
+          case (_, Consequence.Success(components)) =>
+            fail(s"expected missing assembly API failure but discovered: ${components.map(_.name).mkString(",")}")
+          case _ =>
+            fail("expected assembly API validation to produce a failure")
         }
       }
     }
