@@ -51,6 +51,13 @@ lifecycle is defined in `docs/design/mcp-server-boundary.md`. Internal tool
 invocation never loops back through `/mcp`, while the server remains an adapter
 over normal Subsystem Operation execution.
 
+Provider-neutral automatic operation facts, explicit Corpus/Experiment
+admission, and application supplemental capture are defined in
+`docs/design/operation-evaluation-capture.md`. The corresponding behavioral
+contract is `docs/spec/operation-evaluation-capture.md`. Capture follows normal
+operation authorization and ActionCall/UnitOfWork execution; Corpus,
+Experiment, and observability do not become alternate operation authorities.
+
 ## Subsystem Construction
 
 Subsystem construction is performed from resolved Components.

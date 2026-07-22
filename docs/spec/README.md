@@ -13,6 +13,7 @@ Current Web/widget specs:
 Current runtime/I18N specs:
 
 - `i18n-text-normalization.md`
+- `operation-evaluation-capture.md`
 - `rule-engine-inference-runtime.md`
 - `resource-reference-dsl.md`
 - `process-execution-runtime.md`

@@ -1,0 +1,288 @@
+# Operation Evaluation and Capture
+
+Status: normative design
+
+## Purpose
+
+CNCF provides one provider-neutral boundary for recording bounded operation
+execution facts and for correlating explicitly admitted Corpus and Experiment
+work. Framework capture is automatic. Applications add domain-specific facts
+only through the protected internal DSL.
+
+The boundary preserves normal operation execution. Corpus and Experiment are
+consumers of execution facts; they are not alternate operation runtimes and do
+not own CNCF operation outcomes.
+
+## Terminology
+
+- **automatic fact**: a bounded framework-owned fact about an authorized CNCF
+  operation attempt;
+- **supplemental fact**: bounded application-owned domain evidence submitted
+  through the ActionCall/Behavior internal DSL;
+- **evaluation declaration**: optional operation metadata that permits
+  explicit corpus membership, candidate capture, experiment assignment, or
+  another evaluation policy;
+- **evaluation admission**: the immutable result of applying a declared
+  membership or assignment policy before business execution;
+- **execution correlation**: the operation, invocation, attempt, parent, Job,
+  Task, and optional admitted Corpus/Experiment identities shared by facts for
+  one execution;
+- **sink**: the provider-neutral Corpus or Experiment SPI capability installed
+  at the calling component socket;
+- **delivery context**: framework state identifying sinks currently receiving
+  facts, used to prevent recursive delivery;
+- **delivery limitation**: a bounded structured description of evidence that
+  was omitted, dropped, timed out, or otherwise not delivered.
+
+Automatic capture and evaluation admission are separate concepts. An
+operation does not need an evaluation declaration to produce automatic facts.
+An automatic fact does not create corpus membership, a corpus candidate,
+experiment assignment, an arm, or a measurement.
+
+## Ownership
+
+CNCF owns:
+
+- the automatic capture chokepoint;
+- provider-neutral correlation and fact contracts;
+- optional evaluation declaration and admission contracts;
+- Corpus and Experiment SPI contracts;
+- disabled/no-op and deterministic fake sink behavior;
+- protected supplemental capture DSL operations;
+- delivery limits, reentrancy control, failure isolation, and safe diagnostics;
+- propagation through CNCF Job, Task, retry, resume, and nested operation
+  execution.
+
+The Corpus component owns:
+
+- candidate persistence and review;
+- deduplication, labeling, confirmation, and promotion;
+- immutable corpus revisions and cases;
+- corpus retention and deletion policy.
+
+The Experiment component owns:
+
+- experiment definitions, arms, runs, and observations;
+- assignment validation and experiment lifecycle;
+- metric aggregation, acceptance evidence, and reports;
+- experiment retention and deletion policy.
+
+Applications own the meaning of their supplemental labels, measurements, and
+domain evidence. Applications do not own framework execution facts and MUST
+NOT call a Corpus or Experiment provider directly.
+
+CNCF core has no dependency on a Textus Corpus, Textus Experiment, AI,
+telemetry, or storage implementation.
+
+## Capture Surfaces
+
+### Automatic Framework Capture
+
+Every resolved and authorized operation attempt enters the framework capture
+boundary. This includes ordinary protocol, HTTP, CLI, internal component API,
+SPI operation, Job worker, and query-only execution paths.
+
+When a corresponding sink is installed, CNCF produces:
+
+- one bounded start fact after authorization and before business execution;
+- one bounded terminal fact after the canonical operation outcome and
+  framework-owned response bindings are known.
+
+The terminal fact classifies the existing operation outcome. It does not
+replace, wrap, or reinterpret the canonical `Consequence` or business
+response.
+
+When no sink is installed, CNCF selects a no-op capability. No provider is
+called, no external service is required, and operation behavior is unchanged.
+
+### Explicit Evaluation Admission
+
+Corpus membership, corpus candidate capture, experiment participation,
+assignment, arm identity, and measurements require explicit declaration or
+supplemental input. Runtime policy resolves those declarations after operation
+authorization and before any assignment-dependent business execution.
+
+An optional unavailable admission uses the normal control path and records a
+bounded limitation. A required unavailable admission fails before business
+execution. Such a failure belongs to the declared admission policy; it is not
+caused by automatic sink recording.
+
+An admitted assignment is immutable for one logical execution. Component code
+may read only its admitted logical variant or execution-plan reference. It may
+not allocate an arm, inspect global experiment state, or substitute an
+undeclared assignment.
+
+### Supplemental Application Capture
+
+Applications submit additional corpus candidates, experiment observations,
+labels, measurements, or domain context through protected ActionCall/Behavior
+internal DSL operations. The DSL routes submission through UnitOfWork and the
+installed standard sink capability.
+
+The DSL stages an immutable supplemental-delivery intent in the active
+UnitOfWork. A successful UnitOfWork commit transfers that intent to a
+framework-owned post-commit capture buffer; it does not invoke the external
+sink as a transaction participant. CNCF releases buffered intents only after
+the complete canonical operation, including framework-owned response and
+association bindings, succeeds. Abort, rollback, commit failure, cancellation,
+timeout, or a later framework-binding failure discards the intents. The
+automatic terminal fact remains the evidence for an unsuccessful operation.
+
+Once released, supplemental delivery is auxiliary and cannot reopen the
+committed transaction or change the canonical operation outcome. A later
+contract may add an explicit post-terminal application-evidence surface, but
+the ordinary in-operation DSL does not publish facts from an aborted operation.
+
+Supplemental facts:
+
+- share the admitted execution correlation;
+- identify their source as application-owned;
+- remain distinguishable from automatic framework facts;
+- obey authorization, confidentiality, count, byte, delivery, and
+  observability policies;
+- cannot bypass the normal CNCF execution chokepoints.
+
+## Execution Order
+
+The normative order is:
+
+```text
+resolve route and normalize framework input
+  -> resolve ingress security
+  -> authorize the operation
+  -> establish automatic capture correlation
+  -> resolve any explicitly declared evaluation admission
+  -> construct and execute ActionCall/Behavior through UnitOfWork
+  -> retain committed supplemental intents in the post-commit capture buffer
+  -> apply framework-owned response and association bindings
+  -> determine the canonical terminal outcome
+  -> construct bounded automatic terminal facts
+  -> release supplemental intents only for canonical success
+  -> deliver eligible facts under bounded sink policy
+  -> expose safe delivery diagnostics
+  -> return the unchanged canonical outcome
+```
+
+Authorization denial occurs before external admission or sink invocation. It
+is not an operation execution fact. Request normalization failures that occur
+before operation authorization remain ordinary request-validation diagnostics.
+
+The implementation MAY factor the chokepoint around existing runtime methods,
+but no presentation adapter or special query path may bypass the contract.
+
+## Correlation and Execution Lifecycles
+
+Correlation is operation-scoped and immutable. It distinguishes one logical
+execution from its attempts and preserves parent/child relationships without
+parsing opaque CNCF identifiers.
+
+- A retry retains logical execution and admitted assignment identity but has a
+  distinct attempt identity.
+- A resumed Job restores framework-owned correlation without storing provider
+  handles or raw payloads.
+- A nested operation receives its own automatic facts and parent correlation.
+- Corpus membership and experiment assignment do not propagate to a nested
+  operation unless an explicit policy admits that operation.
+- A logical attempt produces at most one terminal automatic fact per sink.
+- Stable fact identity permits idempotent at-least-once provider delivery.
+
+Observability trace identity may correlate records, but observability sampling
+or retention cannot create, remove, or reconstruct Corpus/Experiment
+membership.
+
+## SPI Boundary
+
+Corpus and Experiment are separate standard SPI contracts. A calling
+component receives the selected provider-neutral service through its own
+socket. Provider implementation types and provider configuration do not enter
+component code or the execution context.
+
+The disabled implementation is the default when an optional component is not
+connected. Deterministic fake implementations are the executable-specification
+surface. Production adapters live outside CNCF core.
+
+SPI invocation remains observable at the calling component boundary according
+to the standard CNCF SPI trace contract. A provider implemented by CNCF
+operations also retains normal operation tracing. Capture-specific diagnostics
+must not duplicate payloads in either trace.
+
+## Delivery and Reentrancy
+
+Automatic and supplemental delivery is auxiliary unless an explicit
+pre-execution admission policy says otherwise. Delivery failure cannot turn a
+completed business success into failure or replace an existing business
+failure.
+
+Every installed delivery policy has finite:
+
+- invocation timeout;
+- concurrency;
+- queued item count;
+- item and aggregate byte size;
+- saturation and overflow behavior.
+
+A timeout, queue rejection, overflow, provider failure, or unsupported content
+produces a bounded delivery result or limitation. It cannot wait indefinitely
+or expose the provider failure as the canonical operation outcome.
+
+The delivery context records the logical identity of each sink currently being
+invoked. Sink identity is based on the contract, calling socket, and selected
+provider component/instance; it is not object identity. If sink delivery
+invokes another CNCF operation, automatic and supplemental delivery back to
+that same sink is suppressed. Delivery to a different sink is allowed only by
+explicit cross-sink policy and remains subject to the same bounds.
+
+The context is causal rather than thread-local. CNCF propagates it through
+synchronous nested calls, context rebinding, scheduler handoff, Job/Task
+submission, retry, and any asynchronous operation invocation made with the
+sink's CNCF-provided caller capability. A provider cannot clear or replace the
+context. A later independent external ingress is a new authorized root and is
+not represented as continuation of the completed sink delivery.
+
+Asynchronous buffering, an outbox, or at-least-once retry may be selected by a
+later runtime policy, but those mechanisms do not weaken these invariants.
+
+## Confidentiality
+
+Default automatic facts contain structural metadata only:
+
+- normalized operation identity;
+- execution, attempt, parent, Job, and Task correlation where admitted;
+- source and timing classification;
+- terminal outcome and structured diagnostic classification;
+- bounded delivery status.
+
+Default facts exclude:
+
+- raw requests and responses;
+- prompts, messages, generated content, and provider output;
+- credentials, tokens, session values, and transport headers;
+- unrestricted subject, tenant, or customer identifiers;
+- filesystem paths, provider endpoints, provider configuration, and mutable
+  handles;
+- execution-plan content and application payloads.
+
+An explicit evidence policy may admit a redacted summary, digest, or bounded
+logical reference. It may only tighten the existing operation confidentiality
+model, never weaken it. Delivery diagnostics and CallTree attributes follow
+the same exclusion policy.
+
+## Relationship to Observability
+
+Operation evaluation and observability share safe correlation but have
+different authority.
+
+- `Consequence` remains the authoritative operation outcome.
+- Corpus and Experiment components remain authoritative for membership and
+  lifecycle state.
+- Observability records describe execution and delivery behavior only.
+- Metrics may aggregate delivery outcomes but cannot be replayed as missing
+  facts or used to infer membership.
+
+## Deferred Scope
+
+This contract does not define production traffic allocation, sticky-user
+assignment, feature flags, online arm randomization, experiment UI, automatic
+candidate promotion, provider-specific schemas, or a durable outbox protocol.
+Concrete value types, SPI method signatures, configuration defaults, and CML
+syntax are fixed by later Phase 48 stages under this design.

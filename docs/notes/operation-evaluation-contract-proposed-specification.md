@@ -7,6 +7,16 @@ strategy_item = 9.36 Operation Evaluation Contract
 Source handoff:
 docs/journal/2026/07/2026-07-21-operation-evaluation-corpus-experiment-observability-handoff.md
 
+Promotion annotation (2026-07-23): Phase 48 promoted the accepted direction to
+`docs/design/operation-evaluation-capture.md` and
+`docs/spec/operation-evaluation-capture.md`. Those normative documents replace
+this proposal as the current contract. In particular, an absent evaluation
+declaration no longer disables automatic framework capture and does not imply
+Corpus membership, declaration-derived candidate capture, or Experiment
+assignment. Explicit supplemental candidate submission remains possible under
+the normative DSL contract. This historical proposal otherwise remains
+unchanged.
+
 ## Position
 
 This note specifies a proposed CNCF contract for operation evaluation,

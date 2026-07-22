@@ -2708,9 +2708,10 @@ Active CNCF development item in Phase 48.
   - the first scope is explicit offline assignment; production traffic
     randomization and online arm allocation are deferred.
 - Stages:
-  - OE-01 — promote the proposed notes contract into normative CNCF design and
-    static specification documents;
-  - OE-02 — define typed automatic and supplemental capture facts, plus
+  - OE-01 (DONE) — promoted the proposed notes contract into
+    `docs/design/operation-evaluation-capture.md` and
+    `docs/spec/operation-evaluation-capture.md`;
+  - OE-02 (ACTIVE) — define typed automatic and supplemental capture facts, plus
     optional membership/assignment declaration metadata;
   - OE-03 — add disabled/fake Corpus and Experiment standard sink capabilities
     inherited through `ScopeContext`;
@@ -2726,7 +2727,9 @@ Active CNCF development item in Phase 48.
     timeout, idempotency, failure-isolation, and confidentiality behavior with
     deterministic fake adapters;
   - OE-09 — validate one offline corpus-case/arm handoff with downstream
-    Textus-owned adapters while preserving the CNCF dependency boundary.
+    Textus-owned adapters while preserving the CNCF dependency boundary;
+  - OE-10 — complete full validation, review, documentation evidence, and
+    Phase 48 closure.
 - Acceptance:
   - an operation without evaluation declarations emits bounded automatic facts
     to installed sinks but acquires no implicit corpus membership or experiment
