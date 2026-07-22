@@ -7,6 +7,7 @@ import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.http.RuntimeDashboardMetrics
 import org.goldenport.cncf.observability.ConclusionDiagnostics
 import org.goldenport.cncf.spi.ai.runner.AiRunner
+import org.goldenport.cncf.spi.evaluation.{CorpusEvaluationSink, ExperimentEvaluationSink}
 import org.goldenport.cncf.spi.geo.resolver.GeoResolver
 import org.goldenport.cncf.spi.rule.engine.{InferenceEngine, RuleEngine}
 import org.goldenport.cncf.spi.toolchain.runner.ToolchainRunner
@@ -15,7 +16,7 @@ import org.goldenport.cncf.spi.toolchain.runner.ToolchainRunner
  * Common tracing support for provider-neutral CNCF SPI calls.
  *
  * @since   Jul.  9, 2026
- * @version Jul. 16, 2026
+ * @version Jul. 23, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class SpiTraceMetadata(
@@ -60,10 +61,19 @@ final case class SpiTraceMetadata(
     values.filter(_._2.nonEmpty)
 }
 
+enum SpiTraceFailureDetail {
+  case Detailed
+  case Structural
+
+  def includesDisplay: Boolean = this == Detailed
+  def includesDiagnosticRecord: Boolean = this == Detailed
+}
+
 object SpiTraceSupport {
   def trace[A](
     metadata: SpiTraceMetadata,
-    resultAttributes: A => Map[String, String] = (_: A) => Map.empty
+    resultattributes: A => Map[String, String] = (_: A) => Map.empty,
+    failuredetail: SpiTraceFailureDetail = SpiTraceFailureDetail.Detailed
   )(body: => Consequence[A])(using ExecutionContext): Consequence[A] = {
     val calltree = summon[ExecutionContext].observability.callTreeContext
     val started = System.nanoTime()
@@ -74,23 +84,22 @@ object SpiTraceSupport {
       val elapsed = _elapsed_millis(started)
       result match {
         case Consequence.Success(value) =>
-          _record(metadata, error = false, None, elapsed)
+          _record(metadata, error = false, None, elapsed, failuredetail)
           if (calltree.isEnabled)
-            calltree.leave(resultAttributes(value) ++ Map(
+            calltree.leave(resultattributes(value) ++ Map(
               "outcome" -> "success",
               "duration_ms" -> elapsed.toString
             ))
         case Consequence.Failure(conclusion) =>
           val diagnostic = ConclusionDiagnostics.classify(conclusion)
-          _record(metadata, error = true, Some(conclusion), elapsed)
+          _record(metadata, error = true, Some(conclusion), elapsed, failuredetail)
           if (calltree.isEnabled)
             calltree.leave(Map(
               "outcome" -> "failure",
               "duration_ms" -> elapsed.toString,
               "status" -> conclusion.status.webCode.code.toString,
-              "diagnostic_key" -> diagnostic.diagnosticKey,
-              "error" -> conclusion.display
-            ))
+              "diagnostic_key" -> diagnostic.diagnosticKey
+            ) ++ _error_display(conclusion, failuredetail))
       }
       result
     } catch {
@@ -98,14 +107,13 @@ object SpiTraceSupport {
         val conclusion = Conclusion.from(e)
         val diagnostic = ConclusionDiagnostics.classify(conclusion)
         val elapsed = _elapsed_millis(started)
-        _record(metadata, error = true, Some(conclusion), elapsed)
+        _record(metadata, error = true, Some(conclusion), elapsed, failuredetail)
         if (calltree.isEnabled)
           calltree.leave(Map(
             "outcome" -> "failure",
             "duration_ms" -> elapsed.toString,
-            "diagnostic_key" -> diagnostic.diagnosticKey,
-            "error" -> conclusion.display
-          ))
+            "diagnostic_key" -> diagnostic.diagnosticKey
+          ) ++ _error_display(conclusion, failuredetail))
         throw e
     }
   }
@@ -116,6 +124,8 @@ object SpiTraceSupport {
   ): Any =
     service match {
       case m: AiRunner => AiRunner.traced(m, metadata)
+      case m: CorpusEvaluationSink => CorpusEvaluationSink.traced(m, metadata)
+      case m: ExperimentEvaluationSink => ExperimentEvaluationSink.traced(m, metadata)
       case m: GeoResolver => GeoResolver.traced(m, metadata)
       case m: RuleEngine => RuleEngine.traced(m, metadata)
       case m: InferenceEngine => InferenceEngine.traced(m, metadata)
@@ -127,7 +137,8 @@ object SpiTraceSupport {
     metadata: SpiTraceMetadata,
     error: Boolean,
     conclusion: Option[Conclusion],
-    elapsedmillis: Long
+    elapsedmillis: Long,
+    failuredetail: SpiTraceFailureDetail
   ): Unit = {
     val diagnostic = conclusion.map(ConclusionDiagnostics.classify)
     RuntimeDashboardMetrics.recordSpiInvocation(
@@ -138,10 +149,19 @@ object SpiTraceSupport {
       selectionBasis = metadata.selectionBasis,
       error = error,
       diagnosticKey = diagnostic.map(_.diagnosticKey),
-      diagnosticRecord = diagnostic.map(_.toRecord),
+      diagnosticRecord =
+        if (failuredetail.includesDiagnosticRecord) diagnostic.map(_.toRecord)
+        else None,
       elapsedMillis = Some(elapsedmillis)
     )
   }
+
+  private def _error_display(
+    conclusion: Conclusion,
+    failuredetail: SpiTraceFailureDetail
+  ): Map[String, String] =
+    if (failuredetail.includesDisplay) Map("error" -> conclusion.display)
+    else Map.empty
 
   private def _elapsed_millis(started: Long): Long =
     (System.nanoTime() - started) / 1000000L

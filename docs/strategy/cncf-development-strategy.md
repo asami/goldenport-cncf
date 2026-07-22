@@ -2713,9 +2713,10 @@ Active CNCF development item in Phase 48.
     `docs/spec/operation-evaluation-capture.md`;
   - OE-02 (DONE) — implemented typed automatic and supplemental capture facts, with
     optional membership/assignment declaration metadata;
-  - OE-03 (NEXT) — add disabled/fake Corpus and Experiment standard sink capabilities
-    inherited through `ScopeContext`;
-  - OE-04 — carry one immutable, operation-scoped evaluation context through
+  - OE-03 (DONE) — added disabled/fake Corpus and Experiment standard sink
+    capabilities and caller-side traced installation;
+  - OE-04 (NEXT) — inherit sink capabilities through `ScopeContext` and carry one
+    immutable, operation-scoped evaluation context through
     `ExecutionContext.CncfCore`, including Job resume and retry identity;
   - OE-05 — wrap the common resolved-operation pipeline so authorization and
     admission precede business execution and automatic terminal evidence

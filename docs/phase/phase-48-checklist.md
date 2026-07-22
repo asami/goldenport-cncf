@@ -58,21 +58,27 @@ Evidence:
 ## OE-03: Standard SPI
 
 Stage Status:
-- Current status: NEXT
+- Current status: DONE
 - Owner: CNCF operation runtime maintainers
 - Update rule: Mark IN_PROGRESS only after OE-02 closes; mark DONE only when
   every OE-03 checklist item is complete.
 
-- [ ] Define provider-neutral Corpus sink SPI.
-- [ ] Define provider-neutral Experiment sink SPI.
-- [ ] Provide disabled/no-op and deterministic fake implementations.
-- [ ] Install traced services at the calling component socket without exposing
+- [x] Define provider-neutral Corpus sink SPI.
+- [x] Define provider-neutral Experiment sink SPI.
+- [x] Provide disabled/no-op and deterministic fake implementations.
+- [x] Install traced services at the calling component socket without exposing
   provider implementation types.
+
+Evidence:
+- `src/main/scala/org/goldenport/cncf/spi/evaluation/OperationEvaluationSink.scala`
+- `src/test/scala/org/goldenport/cncf/spi/evaluation/OperationEvaluationSinkSpec.scala`
+- Focused OE-03 executable specifications: 35 tests passed.
+- CNCF `Test/compile` and diff validation passed.
 
 ## OE-04: Runtime Context and Correlation
 
 Stage Status:
-- Current status: OPEN
+- Current status: NEXT
 - Owner: CNCF operation runtime maintainers
 - Update rule: Mark IN_PROGRESS only after OE-03 closes; mark DONE only when
   every OE-04 checklist item is complete.

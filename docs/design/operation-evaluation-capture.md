@@ -261,14 +261,40 @@ component receives the selected provider-neutral service through its own
 socket. Provider implementation types and provider configuration do not enter
 component code or the execution context.
 
+The standard contracts are:
+
+| Contract | Operations |
+| --- | --- |
+| `corpus-evaluation-sink` | `recordStart`, `recordTerminal`, `submitCandidate` |
+| `experiment-evaluation-sink` | `recordStart`, `recordTerminal`, `submitObservation` |
+
+`recordStart` and `recordTerminal` accept only framework-owned automatic fact
+types. `submitCandidate` accepts only `CorpusCandidateFact`, and
+`submitObservation` accepts only `ExperimentObservationFact`. Each operation
+returns `Consequence[OperationEvaluationDeliveryResult]`; a provider cannot
+replace the submitted fact, correlation, or canonical operation result. The
+caller-side wrapper reconstructs the result fact identity from the submitted
+fact and the sink identity from the resolved socket/provider binding. Provider
+status, bounded limitations, and confidentiality remain provider output, but a
+provider-supplied fact or sink identity is not authoritative.
+
 The disabled implementation is the default when an optional component is not
-connected. Deterministic fake implementations are the executable-specification
-surface. Production adapters live outside CNCF core.
+connected. The socket remains observably uninstalled, but its accessor returns
+the disabled capability rather than throwing. The disabled capability invokes
+no provider and returns a bounded `discarded` result with an `unavailable`
+limitation. Deterministic fake implementations retain submitted facts in call
+order and return deterministic `delivered` results; they are the
+executable-specification surface. Production adapters live outside CNCF core.
 
 SPI invocation remains observable at the calling component boundary according
 to the standard CNCF SPI trace contract. A provider implemented by CNCF
 operations also retains normal operation tracing. Capture-specific diagnostics
-must not duplicate payloads in either trace.
+must not duplicate payloads in either trace. The caller-side wrapper may record
+contract, operation, fact kind, delivery status, and limitation count. It does
+not record fact identity, execution correlation, summary, labels,
+measurements, or provider payloads. Sink failure tracing is structural: it
+retains status and diagnostic key but omits `Conclusion.display` and diagnostic
+facets from both CallTree and dashboard metrics.
 
 ## Delivery and Reentrancy
 

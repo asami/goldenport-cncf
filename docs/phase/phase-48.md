@@ -92,7 +92,7 @@ reimplement framework execution capture.
 | --- | --- | --- | --- |
 | OE-01 | Normative contract | Design/spec fix automatic capture, SPI ownership, no-op behavior, and supplemental DSL boundaries. | done |
 | OE-02 | Capture model | Typed automatic and supplemental facts have bounded stable identities and confidentiality rules. | done |
-| OE-03 | Standard SPI | Corpus and Experiment sink contracts provide disabled, fake, and installed behavior. | pending |
+| OE-03 | Standard SPI | Corpus and Experiment sink contracts provide disabled, fake, and installed behavior. | done |
 | OE-04 | Runtime context | Scope and execution contexts carry immutable sink/correlation state across normal and Job execution. | pending |
 | OE-05 | Automatic chokepoint | The common operation path captures authorized start and terminal facts exactly once. | pending |
 | OE-06 | Internal DSL | Applications can add bounded corpus/experiment facts without calling providers directly. | pending |

@@ -117,14 +117,40 @@ That rule does not make terminal sink recording authoritative.
 Corpus and Experiment MUST be separate provider-neutral standard SPI
 contracts. Each service MUST be installed at the calling component socket.
 
+- The Corpus contract name MUST be `corpus-evaluation-sink` and MUST expose
+  `recordStart(OperationEvaluationStartFact)`,
+  `recordTerminal(OperationEvaluationTerminalFact)`, and
+  `submitCandidate(CorpusCandidateFact)`.
+- The Experiment contract name MUST be `experiment-evaluation-sink` and MUST
+  expose `recordStart(OperationEvaluationStartFact)`,
+  `recordTerminal(OperationEvaluationTerminalFact)`, and
+  `submitObservation(ExperimentObservationFact)`.
+- Every operation MUST return
+  `Consequence[OperationEvaluationDeliveryResult]` without replacing its input
+  fact or the enclosing operation outcome.
+- For an installed provider, the caller-side wrapper MUST derive the result
+  fact identity from the submitted fact and the sink identity from the resolved
+  socket/provider binding. A provider-returned fact or sink identity MUST NOT
+  override those framework-owned values.
+
 - Component code MUST depend only on the provider-neutral contract.
 - CNCF core MUST NOT depend on Textus Corpus, Textus Experiment, AI, telemetry,
   or provider storage implementations.
-- Optional missing providers MUST resolve to disabled/no-op services.
+- Optional missing providers MUST leave the socket uninstalled while its
+  accessor resolves to a disabled/no-op service.
+- A disabled service MUST call no provider and MUST return a bounded
+  `discarded` delivery result with an `unavailable` limitation.
 - Deterministic fake services MUST support executable specifications without
-  external services, network access, credentials, or provider libraries.
+  external services, network access, credentials, or provider libraries, MUST
+  preserve invocation order, and MUST return deterministic `delivered`
+  results.
 - Installed service invocation MUST follow the standard caller-side CNCF SPI
   trace contract without recording fact payloads.
+- Sink traces MAY contain contract, operation, fact kind, delivery status, and
+  limitation count. They MUST NOT contain fact identity, execution correlation,
+  summary, labels, measurements, or provider payloads.
+- A sink failure trace or metric MUST retain only structural status and
+  diagnostic key. It MUST NOT retain `Conclusion.display` or diagnostic facets.
 
 ## Delivery Contract
 
