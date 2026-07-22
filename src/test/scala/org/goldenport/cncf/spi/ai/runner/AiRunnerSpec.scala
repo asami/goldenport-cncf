@@ -6,7 +6,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jul.  9, 2026
- * @version Jul. 18, 2026
+ * @version Jul. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 final class AiRunnerSpec
@@ -43,6 +43,30 @@ final class AiRunnerSpec
       requirement.executionClass shouldBe Some(AiExecutionClass.StandardWork)
       parsed shouldBe Some(AiExecutionClass.StandardWork)
       AiExecutionClass.parse("gpt-5") shouldBe None
+    }
+
+    "publish the five-class work and thinking vocabulary without legacy aliases" in {
+      Given("the public execution-class identifiers")
+      val identifiers = AiExecutionClass.values.map(_.id).toSet
+
+      When("the caller parses each supported thinking class")
+      val parsed = Vector("simple-thinking", "advanced-thinking", "deep-thinking").map(AiExecutionClass.parse)
+
+      Then("the five approved classes parse and consideration aliases do not")
+      identifiers shouldBe Set(
+        "simple-work",
+        "standard-work",
+        "simple-thinking",
+        "advanced-thinking",
+        "deep-thinking"
+      )
+      parsed shouldBe Vector(
+        Some(AiExecutionClass.SimpleThinking),
+        Some(AiExecutionClass.AdvancedThinking),
+        Some(AiExecutionClass.DeepThinking)
+      )
+      AiExecutionClass.parse("standard-consideration") shouldBe None
+      AiExecutionClass.parse("deep-consideration") shouldBe None
     }
   }
 }

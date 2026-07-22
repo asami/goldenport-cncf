@@ -14,7 +14,7 @@ import org.goldenport.schema.DataConfidentiality
  * SPI; consumer components depend only on this CNCF-owned protocol.
  *
  * @since   Jul.  2, 2026
- * @version Jul. 18, 2026
+ * @version Jul. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 trait AiRunner {
@@ -168,16 +168,18 @@ final case class AiRunnerRequirement(
 enum AiExecutionClass(val id: String):
   case SimpleWork extends AiExecutionClass("simple-work")
   case StandardWork extends AiExecutionClass("standard-work")
-  case StandardConsideration extends AiExecutionClass("standard-consideration")
-  case DeepConsideration extends AiExecutionClass("deep-consideration")
+  case SimpleThinking extends AiExecutionClass("simple-thinking")
+  case AdvancedThinking extends AiExecutionClass("advanced-thinking")
+  case DeepThinking extends AiExecutionClass("deep-thinking")
 
 object AiExecutionClass:
   def parse(s: String): Option[AiExecutionClass] =
     Option(s).map(_.trim.toLowerCase(java.util.Locale.ROOT)).flatMap {
       case "simple-work" => Some(SimpleWork)
       case "standard-work" => Some(StandardWork)
-      case "standard-consideration" => Some(StandardConsideration)
-      case "deep-consideration" => Some(DeepConsideration)
+      case "simple-thinking" => Some(SimpleThinking)
+      case "advanced-thinking" => Some(AdvancedThinking)
+      case "deep-thinking" => Some(DeepThinking)
       case _ => None
     }
 
