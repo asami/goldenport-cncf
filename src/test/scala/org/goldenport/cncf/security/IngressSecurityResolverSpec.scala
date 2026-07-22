@@ -16,7 +16,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Mar. 20, 2026
  *  version Apr. 28, 2026
- * @version Jul. 17, 2026
+ * @version Jul. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 final class IngressSecurityResolverSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -162,6 +162,109 @@ final class IngressSecurityResolverSpec extends AnyWordSpec with Matchers with G
       resolved.executionContext.security.principal.id.value shouldBe "user-2"
       SecuritySubject.from(resolved.executionContext.security).isAuthenticated shouldBe true
       SecuritySubject.from(resolved.executionContext.security).isProviderAuthenticated shouldBe true
+    }
+
+    "normalize a federation callback through the selected provider without retaining secrets" in {
+      Given("a provider that accepts one normalized federation callback")
+      val session = org.goldenport.cncf.context.SessionContext(
+        sessionId = Some("access-session-1"),
+        refreshSessionId = Some("refresh-session-1")
+      )
+      val subsystem = _subsystem(
+        fallbackenabled = false,
+        providers = Vector(
+          _provider(
+            "federation-provider",
+            request =>
+              if (
+                request.federationProvider.contains("example") &&
+                request.federationAssertion.contains("provider-assertion") &&
+                request.federationAuthorizationCode.contains("callback-code") &&
+                request.federationCallbackState.contains("callback-state")
+              )
+                Consequence.success(Some(AuthenticationResult(
+                  PrincipalId("federated-user"),
+                  attributes = Map(
+                    "email" -> "user@example.test",
+                    "federation_provider" -> "example",
+                    "federation_assertion" -> "provider-assertion",
+                    "federation_authorization_code" -> "callback-code",
+                    "federation_state" -> "callback-state",
+                    "oauth.id_token" -> "id-token",
+                    "provider_access_token" -> "access-token",
+                    "clientSecret" -> "client-secret",
+                    "oauth.state" -> "oauth-state"
+                  ),
+                  session = Some(session)
+                )))
+              else
+                Consequence.success(None)
+          )
+        )
+      )
+      val base = subsystem.components.head.logic.executionContext()
+
+      When("the matching callback reaches ingress security")
+      val result = IngressSecurityResolver.resolve(
+        base,
+        Map(
+          "federation_provider" -> "example",
+          "federation_assertion" -> "provider-assertion",
+          "federation_authorization_code" -> "callback-code",
+          "federation_state" -> "callback-state"
+        )
+      )
+
+      Then("the normalized subject and session reach the UnitOfWork without callback secrets")
+      result shouldBe a[Consequence.Success[_]]
+      val resolved = result.toOption.get
+      val security = resolved.executionContext.security
+      security.principal.id.value shouldBe "federated-user"
+      security.principal.attributes.get("email") shouldBe Some("user@example.test")
+      security.principal.attributes.get("federation_provider") shouldBe Some("example")
+      security.principal.attributes should not contain key ("federation.assertion")
+      security.principal.attributes should not contain key ("federation_assertion")
+      security.principal.attributes should not contain key ("federation_authorization_code")
+      security.principal.attributes should not contain key ("federation.authorization_code")
+      security.principal.attributes should not contain key ("federation_state")
+      security.principal.attributes should not contain key ("federation.state")
+      security.principal.attributes should not contain key ("oauth.id_token")
+      security.principal.attributes should not contain key ("provider_access_token")
+      security.principal.attributes should not contain key ("clientSecret")
+      security.principal.attributes should not contain key ("oauth.state")
+      security.session.flatMap(_.sessionId) shouldBe Some("access-session-1")
+      security.session.flatMap(_.refreshSessionId) shouldBe Some("refresh-session-1")
+      resolved.executionContext.runtime.unitOfWork.executionContext.security.principal.id.value shouldBe "federated-user"
+      SecuritySubject.from(security).isProviderAuthenticated shouldBe true
+    }
+
+    "reject each unmatched federation callback field without privilege fallback" in {
+      Given("a subsystem whose ordinary privilege fallback is enabled")
+      val subsystem = _subsystem(fallbackenabled = true)
+      val base = subsystem.components.head.logic.executionContext()
+      val callbacks = Vector(
+        "federation.assertion",
+        "federation.authorization_code",
+        "federation.state"
+      )
+
+      When("a federation callback does not match any provider")
+      val results = callbacks.map { callback =>
+        callback -> IngressSecurityResolver.resolve(
+          base,
+          Map(
+            callback -> "unmatched-callback",
+            "privilege" -> "application_content_manager"
+          )
+        )
+      }
+
+      Then("the callback is rejected rather than converted to a privileged context")
+      results.foreach { case (callback, result) =>
+        withClue(s"callback=$callback: ") {
+          result shouldBe a[Consequence.Failure[_]]
+        }
+      }
     }
 
     "propagate provider failure instead of falling back to privilege resolution" in {

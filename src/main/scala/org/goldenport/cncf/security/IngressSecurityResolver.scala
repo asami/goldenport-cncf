@@ -21,7 +21,7 @@ import org.goldenport.protocol.Request
  * - Reception ingress
  *
  * @since   Mar. 20, 2026
- * @version Jul. 17, 2026
+ * @version Jul. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ResolvedIngressSecurity(
@@ -132,7 +132,9 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
           case Some(security) =>
             Consequence.success(security)
           case None =>
-            if (_fallback_privilege_enabled(base))
+            if (request.hasFederationCallbackMaterial)
+              Consequence.securityPermissionDenied[SecurityContext]("Unresolved federation callback.")
+            else if (_fallback_privilege_enabled(base))
               _resolve_privilege(attributes).map(_security_context(_, attributes))
             else if (_has_authentication_material(request))
               Consequence.securityPermissionDenied[SecurityContext]("Privilege fallback is disabled by resolved security wiring.")
@@ -433,7 +435,8 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
 
   private def _has_authentication_material(request: AuthenticationRequest): Boolean =
     request.accessToken.exists(_.trim.nonEmpty) ||
-      request.refreshToken.exists(_.trim.nonEmpty)
+      request.refreshToken.exists(_.trim.nonEmpty) ||
+      request.hasFederationCallbackMaterial
 
   private def _has_local_subject_override_material(request: AuthenticationRequest): Boolean =
     _has_authentication_material(request) || request.sessionId.exists(_.trim.nonEmpty)

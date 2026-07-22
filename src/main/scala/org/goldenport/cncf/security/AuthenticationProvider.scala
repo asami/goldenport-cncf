@@ -15,7 +15,7 @@ import org.goldenport.cncf.context.{Capability, ExecutionContext, Principal, Pri
  *
  * @since   Apr.  9, 2026
  *  version Jun.  5, 2026
- * @version Jul. 15, 2026
+ * @version Jul. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class AuthenticationRequest(
@@ -29,6 +29,23 @@ final case class AuthenticationRequest(
 
   def refreshToken: Option[String] =
     AuthenticationRequest.findFirst(attributes, AuthenticationRequest.REFRESH_TOKEN_KEYS)
+
+  def federationProvider: Option[String] =
+    AuthenticationRequest.findFirst(attributes, AuthenticationRequest.FEDERATION_PROVIDER_KEYS)
+
+  def federationAssertion: Option[String] =
+    AuthenticationRequest.findFirst(attributes, AuthenticationRequest.FEDERATION_ASSERTION_KEYS)
+
+  def federationAuthorizationCode: Option[String] =
+    AuthenticationRequest.findFirst(attributes, AuthenticationRequest.FEDERATION_AUTHORIZATION_CODE_KEYS)
+
+  def federationCallbackState: Option[String] =
+    AuthenticationRequest.findFirst(attributes, AuthenticationRequest.FEDERATION_CALLBACK_STATE_KEYS)
+
+  def hasFederationCallbackMaterial: Boolean =
+    federationAssertion.isDefined ||
+      federationAuthorizationCode.isDefined ||
+      federationCallbackState.isDefined
 
   def sessionId: Option[String] =
     AuthenticationRequest.findFirst(attributes, AuthenticationRequest.SESSION_ID_KEYS)
@@ -51,6 +68,26 @@ object AuthenticationRequest {
   val REFRESH_TOKEN_KEYS: Vector[String] = Vector(
     "refresh_token",
     "refreshToken"
+  )
+
+  val FEDERATION_PROVIDER_KEYS: Vector[String] = Vector(
+    "federation.provider",
+    "federation_provider"
+  )
+
+  val FEDERATION_ASSERTION_KEYS: Vector[String] = Vector(
+    "federation.assertion",
+    "federation_assertion"
+  )
+
+  val FEDERATION_AUTHORIZATION_CODE_KEYS: Vector[String] = Vector(
+    "federation.authorization_code",
+    "federation_authorization_code"
+  )
+
+  val FEDERATION_CALLBACK_STATE_KEYS: Vector[String] = Vector(
+    "federation.state",
+    "federation_state"
   )
 
   val SESSION_ID_KEYS: Vector[String] = Vector(
@@ -80,6 +117,60 @@ object AuthenticationRequest {
 
   def findCookieSession(attributes: Map[String, String]): Option[String] =
     findFirst(attributes, _cookie_header_keys).flatMap(_session_cookie_id)
+
+  def redactSensitiveAttributes(attributes: Map[String, String]): Map[String, String] =
+    Option(attributes).getOrElse(Map.empty[String, String]).filterNot { case (key, _) =>
+      _is_sensitive_attribute_key(key)
+    }
+
+  private val _sensitive_attribute_keys: Set[String] = Vector(
+    "password",
+    "credential",
+    "secret",
+    "authorization",
+    "access_token",
+    "refresh_token",
+    "bearer_token",
+    "id_token",
+    "token"
+  ).++(
+    FEDERATION_ASSERTION_KEYS
+  ).++(
+    FEDERATION_AUTHORIZATION_CODE_KEYS
+  ).++(
+    FEDERATION_CALLBACK_STATE_KEYS
+  ).map(normalizeToken).toSet
+
+  private val _sensitive_attribute_segments: Set[String] = Set(
+    "password",
+    "credential",
+    "secret",
+    "token",
+    "assertion"
+  )
+
+  private val _federation_attribute_segments: Set[String] = Set(
+    "federation",
+    "oauth",
+    "oidc"
+  )
+
+  private def _is_sensitive_attribute_key(key: String): Boolean = {
+    val normalized = normalizeToken(key)
+    val segments = _attribute_key_segments(key)
+    _sensitive_attribute_keys.contains(normalized) ||
+      segments.exists(_sensitive_attribute_segments.contains) ||
+      (segments.contains("authorization") && segments.contains("code")) ||
+      (segments.exists(_federation_attribute_segments.contains) && segments.contains("state"))
+  }
+
+  private def _attribute_key_segments(key: String): Set[String] =
+    Option(key)
+      .toVector
+      .flatMap(_.replaceAll("([a-z0-9])([A-Z])", "$1 $2").split("[^A-Za-z0-9]+"))
+      .map(_.toLowerCase(java.util.Locale.ROOT))
+      .filter(_.nonEmpty)
+      .toSet
 
   private def _session_cookie_id(value: String): Option[String] =
     Option(value)
@@ -179,7 +270,7 @@ final case class AuthenticationResult(
 
 object AuthenticationResult {
   def defaultAttributes(principalId: PrincipalId, attributes: Map[String, String]): Map[String, String] =
-    Option(attributes).getOrElse(Map.empty[String, String]) ++ Map(
+    AuthenticationRequest.redactSensitiveAttributes(attributes) ++ Map(
       "principal_id" -> principalId.value,
       "authenticated" -> "true"
     )
