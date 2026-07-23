@@ -374,6 +374,13 @@ enum OperationEvaluationFactSource(val token: String) {
   case Provider extends OperationEvaluationFactSource("provider")
 }
 
+enum OperationEvaluationFactKind(val token: String) {
+  case OperationStart extends OperationEvaluationFactKind("operation-start")
+  case OperationTerminal extends OperationEvaluationFactKind("operation-terminal")
+  case CorpusCandidate extends OperationEvaluationFactKind("corpus-candidate")
+  case ExperimentObservation extends OperationEvaluationFactKind("experiment-observation")
+}
+
 enum OperationEvaluationOutcome(val token: String) {
   case Success extends OperationEvaluationOutcome("success")
   case Failure extends OperationEvaluationOutcome("failure")
@@ -387,7 +394,7 @@ abstract class OperationEvaluationFact {
   def source: OperationEvaluationFactSource
   def confidentiality: DataConfidentiality
   def occurredAt: Instant
-  def factKind: String
+  def factKind: OperationEvaluationFactKind
   def toRecord: Record
 }
 
@@ -398,11 +405,11 @@ final case class OperationEvaluationStartFact private (
 ) extends OperationEvaluationFact {
   val source: OperationEvaluationFactSource = OperationEvaluationFactSource.Framework
   val confidentiality: DataConfidentiality = DataConfidentiality.Internal
-  val factKind: String = "operation-start"
+  val factKind: OperationEvaluationFactKind = OperationEvaluationFactKind.OperationStart
 
   def toRecord: Record = Record.data(
     "id" -> id.toString,
-    "kind" -> factKind,
+    "kind" -> factKind.token,
     "source" -> source.token,
     "confidentiality" -> confidentiality.label,
     "occurredAt" -> occurredAt.toString,
@@ -428,11 +435,11 @@ final case class OperationEvaluationTerminalFact private (
 ) extends OperationEvaluationFact {
   val source: OperationEvaluationFactSource = OperationEvaluationFactSource.Framework
   val confidentiality: DataConfidentiality = DataConfidentiality.Internal
-  val factKind: String = "operation-terminal"
+  val factKind: OperationEvaluationFactKind = OperationEvaluationFactKind.OperationTerminal
 
   def toRecord: Record = Record.dataAuto(
     "id" -> id.toString,
-    "kind" -> factKind,
+    "kind" -> factKind.token,
     "source" -> source.token,
     "confidentiality" -> confidentiality.label,
     "occurredAt" -> occurredAt.toString,
@@ -536,11 +543,11 @@ final case class CorpusCandidateFact private (
   labels: Vector[OperationEvaluationLabel],
   confidentiality: DataConfidentiality
 ) extends OperationEvaluationSupplementalFact {
-  val factKind: String = "corpus-candidate"
+  val factKind: OperationEvaluationFactKind = OperationEvaluationFactKind.CorpusCandidate
 
   def toRecord: Record = Record.dataAuto(
     "id" -> id.toString,
-    "kind" -> factKind,
+    "kind" -> factKind.token,
     "source" -> source.token,
     "confidentiality" -> confidentiality.label,
     "occurredAt" -> occurredAt.toString,
@@ -575,11 +582,11 @@ final case class ExperimentObservationFact private (
   labels: Vector[OperationEvaluationLabel],
   confidentiality: DataConfidentiality
 ) extends OperationEvaluationSupplementalFact {
-  val factKind: String = "experiment-observation"
+  val factKind: OperationEvaluationFactKind = OperationEvaluationFactKind.ExperimentObservation
 
   def toRecord: Record = Record.data(
     "id" -> id.toString,
-    "kind" -> factKind,
+    "kind" -> factKind.token,
     "source" -> source.token,
     "confidentiality" -> confidentiality.label,
     "occurredAt" -> occurredAt.toString,
@@ -730,6 +737,109 @@ object OperationEvaluationDeliveryResult {
       )
     else
       Consequence.success(OperationEvaluationDeliveryResult(factid, sink, status, limitations, confidentiality))
+}
+
+final case class OperationEvaluationDeliveryDiagnostic private (
+  operation: OperationEvaluationOperationIdentity,
+  factKind: OperationEvaluationFactKind,
+  factSource: OperationEvaluationFactSource,
+  sinkContract: OperationEvaluationName,
+  socketComponent: OperationEvaluationName,
+  providerComponent: OperationEvaluationName,
+  status: OperationEvaluationDeliveryStatus,
+  limitationKinds: Vector[OperationEvaluationLimitationKind],
+  diagnosticKeys: Vector[OperationEvaluationDiagnosticKey]
+) {
+  def toRecord: Record = Record.data(
+    "operation" -> operation.toRecord,
+    "factKind" -> factKind.token,
+    "factSource" -> factSource.token,
+    "sink" -> Record.data(
+      "contract" -> sinkContract.print,
+      "socketComponent" -> socketComponent.print,
+      "providerComponent" -> providerComponent.print
+    ),
+    "status" -> status.token,
+    "limitationKinds" -> limitationKinds.map(_.token),
+    "diagnosticKeys" -> diagnosticKeys.map(_.token)
+  )
+}
+
+final case class OperationEvaluationDiagnosticKey private (token: String)
+
+object OperationEvaluationDiagnosticKey {
+  val UNKNOWN: OperationEvaluationDiagnosticKey =
+    OperationEvaluationDiagnosticKey("unknown")
+  val MAXIMUM_LENGTH: Int = 128
+  private val _pattern = "^[a-z][a-z0-9._-]{0,127}$".r
+
+  def fromClassification(
+    classification: ConclusionDiagnostics.Classification
+  ): OperationEvaluationDiagnosticKey =
+    classification.diagnosticKey match {
+      case key if key.length <= MAXIMUM_LENGTH && _pattern.matches(key) =>
+        OperationEvaluationDiagnosticKey(key)
+      case _ =>
+        UNKNOWN
+    }
+}
+
+object OperationEvaluationDeliveryDiagnostic {
+  private[evaluation] def from(
+    fact: OperationEvaluationFact,
+    result: OperationEvaluationDeliveryResult
+  ): OperationEvaluationDeliveryDiagnostic =
+    OperationEvaluationDeliveryDiagnostic(
+      fact.correlation.operation,
+      fact.factKind,
+      fact.source,
+      result.sink.contract,
+      result.sink.socketComponent,
+      result.sink.providerComponent,
+      result.status,
+      result.limitations.map(_.kind).distinct.sortBy(_.token),
+      result.limitations
+        .flatMap(_.diagnostic.map(OperationEvaluationDiagnosticKey.fromClassification))
+        .distinct
+        .sortBy(_.token)
+    )
+}
+
+final case class OperationEvaluationExecutionReport private (
+  deliveries: Vector[OperationEvaluationDeliveryDiagnostic],
+  omittedCount: Int
+) {
+  def append(
+    diagnostic: OperationEvaluationDeliveryDiagnostic
+  ): OperationEvaluationExecutionReport =
+    if (deliveries.length < OperationEvaluationExecutionReport.MAXIMUM_DELIVERIES)
+      copy(deliveries = deliveries :+ diagnostic)
+    else
+      copy(omittedCount = omittedCount + 1)
+
+  def aggregateStatus: Option[OperationEvaluationDeliveryStatus] =
+    if (deliveries.exists(_.status == OperationEvaluationDeliveryStatus.Failed))
+      Some(OperationEvaluationDeliveryStatus.Failed)
+    else if (deliveries.exists(_.status == OperationEvaluationDeliveryStatus.Limited))
+      Some(OperationEvaluationDeliveryStatus.Limited)
+    else if (deliveries.exists(_.status == OperationEvaluationDeliveryStatus.Discarded))
+      Some(OperationEvaluationDeliveryStatus.Discarded)
+    else if (deliveries.nonEmpty)
+      Some(OperationEvaluationDeliveryStatus.Delivered)
+    else
+      None
+
+  def toRecord: Record = Record.dataAuto(
+    "status" -> aggregateStatus.map(_.token),
+    "deliveries" -> deliveries.map(_.toRecord),
+    "omittedCount" -> omittedCount
+  )
+}
+
+object OperationEvaluationExecutionReport {
+  val MAXIMUM_DELIVERIES: Int = 32
+  val empty: OperationEvaluationExecutionReport =
+    OperationEvaluationExecutionReport(Vector.empty, 0)
 }
 
 enum EvaluationAdmissionRequirement(val token: String) {

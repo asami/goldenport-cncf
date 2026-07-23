@@ -11,7 +11,11 @@ import org.goldenport.cncf.http.HttpDriver
 import org.goldenport.cncf.config.{OperationMode, ResolvedParameters, RuntimeConfig}
 import org.goldenport.cncf.entity.EntityCreateDefaultsPolicy
 import org.goldenport.cncf.naming.PropertyValueResolver
-import org.goldenport.cncf.operation.evaluation.OperationEvaluationAttemptId
+import org.goldenport.cncf.operation.evaluation.{
+  OperationEvaluationAttemptId,
+  OperationEvaluationDeliveryDiagnostic,
+  OperationEvaluationExecutionReport
+}
 import org.goldenport.cncf.unitofwork.{UnitOfWork, UnitOfWorkInterpreter, UnitOfWorkOp}
 import org.goldenport.cncf.statemachine.TransitionValidationHook
 import org.goldenport.cncf.context.{DataStoreContext, EntitySpaceContext, EntityStoreContext}
@@ -138,7 +142,7 @@ final class RuntimeContext(
       entityCreateDefaultsPolicy = entityCreateDefaultsPolicy
     )
     _resolved_parameters.foreach(runtime.setResolvedParameters)
-    runtime._execution_metadata = _execution_metadata
+    runtime._execution_metadata = executionMetadata
     runtime
   }
 
@@ -155,13 +159,15 @@ final class RuntimeContext(
   def clearResolvedParameters(): Unit =
     _resolved_parameters = None
 
-  def executionMetadata: RuntimeContext.ExecutionMetadata =
+  def executionMetadata: RuntimeContext.ExecutionMetadata = synchronized {
     _execution_metadata
+  }
 
   def updateExecutionMetadata(
     f: RuntimeContext.ExecutionMetadata => RuntimeContext.ExecutionMetadata
-  ): Unit =
+  ): Unit = synchronized {
     _execution_metadata = f(_execution_metadata)
+  }
 
   def noteResponseJobId(jobid: String): Unit =
     updateExecutionMetadata(_.copy(responseJobId = Some(jobid)))
@@ -194,8 +200,19 @@ final class RuntimeContext(
       failure = failure
     ))
 
-  def clearExecutionMetadata(): Unit =
+  def noteOperationEvaluationDelivery(
+    diagnostic: OperationEvaluationDeliveryDiagnostic
+  ): Unit =
+    updateExecutionMetadata { metadata =>
+      val report = metadata.operationEvaluation
+        .getOrElse(OperationEvaluationExecutionReport.empty)
+        .append(diagnostic)
+      metadata.copy(operationEvaluation = Some(report))
+    }
+
+  def clearExecutionMetadata(): Unit = synchronized {
     _execution_metadata = RuntimeContext.ExecutionMetadata.empty
+  }
 
   private def _operation_evaluation_attempt_id: Option[OperationEvaluationAttemptId] =
     unitOfWork.executionContext.operationEvaluation.correlation.map(_.attemptId)
@@ -211,7 +228,8 @@ object RuntimeContext {
     executionTaskId: Option[String] = None,
     traceId: Option[String] = None,
     executionId: Option[String] = None,
-    failure: Option[String] = None
+    failure: Option[String] = None,
+    operationEvaluation: Option[OperationEvaluationExecutionReport] = None
   )
 
   object ExecutionMetadata {

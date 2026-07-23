@@ -92,7 +92,7 @@ final class OperationEvaluationSupplementalDslSpec
 
         Then("the business result is unchanged and the candidate follows the terminal fact")
         result shouldBe Consequence.success(OperationResponse.Scalar("corpus-functional"))
-        fixture.sink.facts.map(_.factKind) shouldBe
+        fixture.sink.facts.map(_.factKind.token) shouldBe
           Vector("operation-start", "operation-terminal", "corpus-candidate")
         val candidate = fixture.sink.facts.last.asInstanceOf[CorpusCandidateFact]
         candidate.source shouldBe OperationEvaluationFactSource.Application
@@ -112,7 +112,7 @@ final class OperationEvaluationSupplementalDslSpec
 
         Then("the observation is application-owned and shares the automatic correlation")
         result shouldBe Consequence.success(OperationResponse.Scalar("experiment-procedure"))
-        fixture.sink.facts.map(_.factKind) shouldBe
+        fixture.sink.facts.map(_.factKind.token) shouldBe
           Vector("operation-start", "operation-terminal", "experiment-observation")
         val observation = fixture.sink.facts.last.asInstanceOf[ExperimentObservationFact]
         observation.source shouldBe OperationEvaluationFactSource.Application
@@ -141,7 +141,7 @@ final class OperationEvaluationSupplementalDslSpec
           JobResult.Success(OperationResponse.Scalar("corpus-procedure"))
         )
         _await_fact_count(fixture.sink, 6) shouldBe true
-        fixture.sink.facts.map(_.factKind) shouldBe Vector(
+        fixture.sink.facts.map(_.factKind.token) shouldBe Vector(
           "operation-start",
           "operation-start",
           "operation-terminal",
@@ -179,7 +179,7 @@ final class OperationEvaluationSupplementalDslSpec
           JobResult.Success(OperationResponse.Scalar("retry-success"))
         )
         _await_fact_count(fixture.sink, 5) shouldBe true
-        fixture.sink.facts.map(_.factKind) shouldBe Vector(
+        fixture.sink.facts.map(_.factKind.token) shouldBe Vector(
           "operation-start",
           "operation-terminal",
           "operation-start",
@@ -205,7 +205,7 @@ final class OperationEvaluationSupplementalDslSpec
 
         Then("the child and parent candidates are released by their own canonical outcomes")
         result shouldBe Consequence.success(OperationResponse.Scalar("nested-success"))
-        fixture.sink.facts.map(_.factKind) shouldBe Vector(
+        fixture.sink.facts.map(_.factKind.token) shouldBe Vector(
           "operation-start",
           "operation-start",
           "operation-terminal",
@@ -239,7 +239,7 @@ final class OperationEvaluationSupplementalDslSpec
 
         Then("only automatic failure evidence reaches the sink")
         result shouldBe a[Consequence.Failure[_]]
-        fixture.sink.facts.map(_.factKind) shouldBe Vector("operation-start", "operation-terminal")
+        fixture.sink.facts.map(_.factKind.token) shouldBe Vector("operation-start", "operation-terminal")
         fixture.sink.facts.last.asInstanceOf[OperationEvaluationTerminalFact].outcome shouldBe
           OperationEvaluationOutcome.Failure
       }
@@ -279,7 +279,7 @@ final class OperationEvaluationSupplementalDslSpec
 
           Then("the candidate remains discarded")
           outcome shouldBe a[TaskFailed]
-          fixture.sink.facts.map(_.factKind) shouldBe Vector("operation-start", "operation-terminal")
+          fixture.sink.facts.map(_.factKind.token) shouldBe Vector("operation-start", "operation-terminal")
         } finally {
           runtime.close()
         }
@@ -296,7 +296,7 @@ final class OperationEvaluationSupplementalDslSpec
 
         Then("the commit failure is canonical and no supplemental provider call occurs")
         result shouldBe a[Consequence.Failure[_]]
-        fixture.sink.facts.map(_.factKind) shouldBe Vector("operation-start", "operation-terminal")
+        fixture.sink.facts.map(_.factKind.token) shouldBe Vector("operation-start", "operation-terminal")
         fixture.sink.facts.last.asInstanceOf[OperationEvaluationTerminalFact].outcome shouldBe
           OperationEvaluationOutcome.Failure
       }
@@ -355,7 +355,7 @@ final class OperationEvaluationSupplementalDslSpec
 
         Then("only automatic timeout evidence reaches the sink")
         result shouldBe a[Consequence.Failure[_]]
-        fixture.sink.facts.map(_.factKind) shouldBe Vector("operation-start", "operation-terminal")
+        fixture.sink.facts.map(_.factKind.token) shouldBe Vector("operation-start", "operation-terminal")
         fixture.sink.facts.last.asInstanceOf[OperationEvaluationTerminalFact].outcome shouldBe
           OperationEvaluationOutcome.Timeout
       }
@@ -383,7 +383,7 @@ final class OperationEvaluationSupplementalDslSpec
 
           Then("the cancellation terminal is emitted without the staged candidate")
           _await_fact_count(fixture.sink, 2) shouldBe true
-          fixture.sink.facts.map(_.factKind) shouldBe Vector("operation-start", "operation-terminal")
+          fixture.sink.facts.map(_.factKind.token) shouldBe Vector("operation-start", "operation-terminal")
           fixture.sink.facts.last.asInstanceOf[OperationEvaluationTerminalFact].outcome shouldBe
             OperationEvaluationOutcome.Cancellation
         } finally {
@@ -404,7 +404,7 @@ final class OperationEvaluationSupplementalDslSpec
 
         Then("a structured policy failure aborts the operation without publishing the candidate")
         result shouldBe a[Consequence.Failure[_]]
-        fixture.sink.facts.map(_.factKind) shouldBe Vector("operation-start", "operation-terminal")
+        fixture.sink.facts.map(_.factKind.token) shouldBe Vector("operation-start", "operation-terminal")
       }
 
       "reject count and byte overflow without mutating committed evidence" in {

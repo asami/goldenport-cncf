@@ -184,6 +184,48 @@ final class OperationEvaluationModelSpec extends AnyWordSpec with Matchers with 
         unboundedmeasurement.isFaillure shouldBe true
         unboundeddelivery.isFaillure shouldBe true
       }
+
+      "bounds execution diagnostics without retaining fact or evaluation identities" in {
+        Given("one supplemental fact and more delivery results than execution metadata may retain")
+        val correlation = _correlation(_execution_id("diagnostic-execution"), _attempt_id("diagnostic-attempt"))
+        val secret = "private-corpus-summary"
+        val candidate = CorpusCandidateFact.createC(
+          _fact_id("diagnostic-candidate"),
+          correlation,
+          _instant,
+          summary = OperationEvaluationText.parseC(secret).toOption
+        ).toOption.get
+        val sink = OperationEvaluationSinkIdentity.createC(
+          "corpus-evaluation-sink",
+          "catalog",
+          "textus-corpus",
+          Some("tenant-private-instance")
+        ).toOption.get
+        val result = OperationEvaluationDeliveryResult.createC(
+          candidate.id,
+          sink,
+          OperationEvaluationDeliveryStatus.Limited,
+          Vector(OperationEvaluationLimitation(OperationEvaluationLimitationKind.Timeout))
+        ).toOption.get
+        val diagnostic = OperationEvaluationDeliveryDiagnostic.from(candidate, result)
+
+        When("the same safe diagnostic is appended beyond the execution report bound")
+        val report = Vector
+          .fill(OperationEvaluationExecutionReport.MAXIMUM_DELIVERIES + 3)(diagnostic)
+          .foldLeft(OperationEvaluationExecutionReport.empty)(_.append(_))
+        val rendered = report.toRecord.print
+
+        Then("the report is bounded and retains only structural delivery metadata")
+        report.deliveries.length shouldBe OperationEvaluationExecutionReport.MAXIMUM_DELIVERIES
+        report.omittedCount shouldBe 3
+        report.aggregateStatus shouldBe Some(OperationEvaluationDeliveryStatus.Limited)
+        rendered should include ("corpus-candidate")
+        rendered should include ("timeout")
+        rendered should not include candidate.id.toString
+        rendered should not include correlation.executionId.toString
+        rendered should not include secret
+        rendered should not include "tenant-private-instance"
+      }
     }
 
     "classify malformed and overflowing values through structured validation" in {

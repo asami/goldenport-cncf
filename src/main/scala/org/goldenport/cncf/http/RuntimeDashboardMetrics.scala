@@ -8,7 +8,7 @@ import org.goldenport.record.Record
 /*
  * @since   Apr. 12, 2026
  *  version May. 11, 2026
- * @version Jul. 22, 2026
+ * @version Jul. 23, 2026
  * @author  ASAMI, Tomoharu
  */
 object RuntimeDashboardMetrics {
@@ -108,6 +108,7 @@ object RuntimeDashboardMetrics {
   private var _blob_events = Vector.empty[Event]
   private var _rule_events = Vector.empty[Event]
   private var _spi_events = Vector.empty[Event]
+  private var _operation_evaluation_delivery_events = Vector.empty[Event]
   private var _mcp_client_events = Vector.empty[Event]
   private var _process_execution_events = Vector.empty[Event]
   private var _resource_tree_events = Vector.empty[Event]
@@ -125,6 +126,7 @@ object RuntimeDashboardMetrics {
     "blob" -> "Blob",
     "rule" -> "Rule",
     "spi" -> "SPI",
+    "operation-evaluation-delivery" -> "Operation Evaluation Delivery",
     "mcp-client" -> "MCP Client",
     "process-execution" -> "Process Execution",
     "resource-tree" -> "Resource Tree",
@@ -285,6 +287,46 @@ object RuntimeDashboardMetrics {
         "diagnostic_key" -> cleandiagnostickey.getOrElse("")
       ))
     )).takeRight(10000)
+  }
+
+  def recordOperationEvaluationDelivery(
+    operation: String,
+    factkind: String,
+    factsource: String,
+    sinkcontract: String,
+    socketcomponent: String,
+    providercomponent: String,
+    status: String,
+    limitationkinds: Vector[String],
+    diagnostickeys: Vector[String],
+    error: Boolean,
+    elapsedmillis: Option[Long] = None
+  ): Unit = synchronized {
+    val cleandiagnostickeys =
+      if (error) diagnostickeys.filter(_.nonEmpty).distinct.sorted
+      else Vector.empty
+    _operation_evaluation_delivery_events =
+      (_operation_evaluation_delivery_events :+ Event(
+        observedAt = java.time.Instant.now.toEpochMilli,
+        error = error,
+        diagnosticKey = cleandiagnostickeys.headOption,
+        operation = Some(operation).filter(_.nonEmpty),
+        kind = Some(status).filter(_.nonEmpty),
+        sourceMode = Some(factsource).filter(_.nonEmpty),
+        backend = Some(providercomponent).filter(_.nonEmpty),
+        elapsedMillis = elapsedmillis,
+        labels = _clean_labels(Map(
+          "operation" -> operation,
+          "fact_kind" -> factkind,
+          "fact_source" -> factsource,
+          "sink_contract" -> sinkcontract,
+          "socket_component" -> socketcomponent,
+          "provider_component" -> providercomponent,
+          "status" -> status,
+          "limitation_kinds" -> limitationkinds.distinct.sorted.mkString(","),
+          "diagnostic_keys" -> cleandiagnostickeys.mkString(",")
+        ))
+      )).takeRight(10000)
   }
 
   def recordMcpClientInvocation(
@@ -601,6 +643,20 @@ object RuntimeDashboardMetrics {
     _diagnostic_records(_spi_events)
   }
 
+  def operationEvaluationDeliverySnapshot: Snapshot = synchronized {
+    _snapshot(_operation_evaluation_delivery_events, Vector.empty)
+  }
+
+  def operationEvaluationDeliveryDiagnosticCounts: Map[String, Long] = synchronized {
+    _operation_evaluation_delivery_events
+      .filter(_.error)
+      .flatMap(_.diagnosticKey)
+      .groupBy(identity)
+      .view
+      .mapValues(_.size.toLong)
+      .toMap
+  }
+
   def mcpClientInvocationSnapshot: Snapshot = synchronized {
     _snapshot(_mcp_client_events, Vector.empty)
   }
@@ -715,6 +771,7 @@ object RuntimeDashboardMetrics {
       _diagnostic_scope("blob", _blob_events),
       _diagnostic_scope("rule", _rule_events),
       _diagnostic_scope("spi", _spi_events),
+      _diagnostic_scope("operation-evaluation-delivery", _operation_evaluation_delivery_events),
       _diagnostic_scope("mcp-client", _mcp_client_events),
       _diagnostic_scope("process-execution", _process_execution_events),
       _diagnostic_scope("resource-tree", _resource_tree_events),
@@ -845,6 +902,12 @@ object RuntimeDashboardMetrics {
       ),
       _event_points("spi.invocation", "invocations", _spi_events, event =>
         event.labels ++ _outcome_label(event)
+      ),
+      _event_points(
+        "operation-evaluation.delivery",
+        "deliveries",
+        _operation_evaluation_delivery_events,
+        event => event.labels ++ _outcome_label(event)
       ),
       _event_points("mcp-client.invocation", "invocations", _mcp_client_events, event =>
         event.labels ++ _outcome_label(event)

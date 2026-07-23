@@ -193,21 +193,41 @@ Evidence:
 ## OE-07: Diagnostics and Observability
 
 Stage Status:
-- Current status: NEXT
+- Current status: DONE
 - Owner: CNCF operation runtime maintainers
 - Update rule: Mark IN_PROGRESS only after OE-06 closes; mark DONE only when
   every OE-07 checklist item is complete.
 
-- [ ] Project delivery status and limitations through execution metadata.
-- [ ] Record bounded CallTree and metrics facts without payload duplication.
-- [ ] Keep corpus/experiment membership independent of telemetry sampling and
-  retention.
-- [ ] Preserve canonical `Consequence` diagnostics as the operation outcome.
+- [x] Project delivery status and limitations through execution metadata.
+- [x] Record bounded CallTree and metrics facts without payload duplication.
+- [x] Keep corpus/experiment provider-owned assignment state independent of
+  telemetry sampling, retention loss, and observer failure.
+- [x] Preserve canonical `Consequence` diagnostics as the operation outcome.
+
+Implementation Evidence:
+- `OperationEvaluationExecutionReport` retains at most 32 payload-safe
+  delivery diagnostics in `RuntimeContext.ExecutionMetadata` and counts
+  omitted diagnostics.
+- `OperationEvaluationDeliveryRuntime` attempts one completed
+  `operation-evaluation:delivery` CallTree mark and one
+  `operation-evaluation.delivery` runtime metric for each attempted installed
+  sink delivery.
+- Provider-worker CallTree collection is detached from the caller stack, and
+  runtime metric labels retain all bounded limitation kinds and diagnostic
+  keys.
+- Delivery diagnostics omit fact identity, execution correlation, provider
+  instance, evidence payload, `Conclusion.display`, and diagnostic facets.
+- Executable specifications cover nested report aggregation, bounded typed
+  fact/diagnostic values, timeout-safe CallTree behavior, complete limitation
+  metrics, and provider-owned assignment independence from observer loss.
+- The OE-07 focused regression set passes 69 tests across eight suites, and
+  `Test/compile` plus `git diff --check` pass.
+- Read-only review, review-fix, and clean re-review passed.
 
 ## OE-08: Executable Evidence
 
 Stage Status:
-- Current status: OPEN
+- Current status: NEXT
 - Owner: CNCF operation runtime maintainers
 - Update rule: Mark IN_PROGRESS only after OE-07 closes; mark DONE only when
   every OE-08 checklist item is complete.

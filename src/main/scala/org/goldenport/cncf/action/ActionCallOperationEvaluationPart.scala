@@ -107,7 +107,7 @@ trait BehaviorOperationEvaluationPart extends BehaviorFeaturePart { self: Behavi
   ): ExecUowM[OperationEvaluationIntentId] = {
     val stagedat = current_instant
     val intent = OperationEvaluationSupplementalIntent(
-      OperationEvaluationIntentId.create(fact.factKind, stagedat, execution_context.idGeneration),
+      OperationEvaluationIntentId.create(fact.factKind.token, stagedat, execution_context.idGeneration),
       fact,
       stagedat
     )

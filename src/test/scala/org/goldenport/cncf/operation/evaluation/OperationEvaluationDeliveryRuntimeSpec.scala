@@ -10,6 +10,9 @@ import scala.concurrent.ExecutionContext.Implicits.global
 
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.cncf.http.RuntimeDashboardMetrics
+import org.goldenport.cncf.metrics.EntityAccessMetricsRegistry
+import org.goldenport.cncf.observability.ConclusionDiagnostics
 import org.goldenport.record.Record
 import org.goldenport.schema.DataConfidentiality
 import org.scalatest.GivenWhenThen
@@ -25,6 +28,7 @@ import org.scalatest.wordspec.AnyWordSpec
  */
 final class OperationEvaluationDeliveryRuntimeSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   "OperationEvaluationDeliveryRuntime" should {
+    "enforce finite delivery bounds" which {
     "bound a stalled provider without replacing it with an unbounded wait" in {
       Given("a runtime with a finite provider timeout")
       val runtime = new OperationEvaluationDeliveryRuntime(OperationEvaluationDeliveryPolicy(
@@ -172,8 +176,8 @@ final class OperationEvaluationDeliveryRuntimeSpec extends AnyWordSpec with Matc
           val correlation = start.correlation
           val source = start.source
           val confidentiality = DataConfidentiality.Internal
-          val occurredAt = start.occurredAt
-          val factKind = "broken-serialization"
+          override val occurredAt = start.occurredAt
+          override val factKind = OperationEvaluationFactKind.OperationStart
           def toRecord: Record = throw new IllegalStateException("planned serialization failure")
         }
         val sink = _sink()
@@ -232,12 +236,257 @@ final class OperationEvaluationDeliveryRuntimeSpec extends AnyWordSpec with Matc
         runtime.close()
       }
     }
+    }
+
+    "project auxiliary diagnostics" which {
+    "project bounded delivery diagnostics without copying provider failure payloads" in {
+      Given("a calltree-enabled delivery whose provider returns a confidential failure display")
+      val runtime = new OperationEvaluationDeliveryRuntime()
+      try {
+        val fact = _start_fact()
+        val sink = _sink()
+        val secret = "private-provider-failure"
+        val context = ExecutionContext.withFrameworkCallTreeEnabled(ExecutionContext.create(), enabled = true)
+        val before = RuntimeDashboardMetrics.operationEvaluationDeliverySnapshot.summary.cumulative.total
+
+        When("the provider failure crosses the auxiliary delivery boundary")
+        val result = runtime.deliver(fact, sink, context) { _ =>
+          Consequence.operationInvalid(secret)
+        }
+
+        Then("execution metadata, CallTree, and metrics retain only safe structural diagnostics")
+        result.status shouldBe OperationEvaluationDeliveryStatus.Failed
+        val report = context.runtime.executionMetadata.operationEvaluation.getOrElse(fail("delivery report missing"))
+        report.deliveries should have length 1
+        report.deliveries.head.status shouldBe OperationEvaluationDeliveryStatus.Failed
+        report.deliveries.head.limitationKinds should contain (OperationEvaluationLimitationKind.ProviderFailure)
+        val metadata = report.toRecord.print
+        val calltree = context.observability.callTreeContext.build()
+          .map(_.toRecord.print)
+          .getOrElse(fail("delivery calltree missing"))
+        val metrics = RuntimeDashboardMetrics
+          .runtimeMetricsSnapshot(EntityAccessMetricsRegistry.shared)
+          .points
+          .filter(_.scope == "operation-evaluation.delivery")
+        metadata should not include secret
+        metadata should not include fact.id.toString
+        metadata should not include fact.correlation.executionId.toString
+        calltree should include ("operation-evaluation:delivery")
+        calltree should include ("delivery_status=failed")
+        calltree should not include secret
+        calltree should not include fact.id.toString
+        calltree should not include fact.correlation.executionId.toString
+        metrics should not be empty
+        metrics.flatMap(_.labels.values).mkString(" ") should not include secret
+        RuntimeDashboardMetrics.operationEvaluationDeliverySnapshot.summary.cumulative.total should be >= (before + 1)
+      } finally {
+        runtime.close()
+      }
+    }
+
+    "keep provider delivery independent of CallTree collection" in {
+      Given("equivalent enabled and disabled CallTree contexts")
+      val runtime = new OperationEvaluationDeliveryRuntime()
+      try {
+        val fact = _start_fact()
+        val sink = _sink()
+        val enabled = ExecutionContext.withFrameworkCallTreeEnabled(ExecutionContext.create(), enabled = true)
+        val disabled = ExecutionContext.withFrameworkCallTreeEnabled(ExecutionContext.create(), enabled = false)
+        val invocations = new AtomicReference(Vector.empty[String])
+        def _deliver_(name: String, context: ExecutionContext): OperationEvaluationDeliveryResult =
+          runtime.deliver(fact, sink, context) { _ =>
+            invocations.updateAndGet(_ :+ name)
+            OperationEvaluationDeliveryResult.createC(fact.id, sink, OperationEvaluationDeliveryStatus.Delivered)
+          }
+
+        When("the same fact is delivered with telemetry enabled and disabled")
+        val enabledresult = _deliver_("enabled", enabled)
+        val disabledresult = _deliver_("disabled", disabled)
+
+        Then("telemetry collection changes no provider invocation or delivery result")
+        enabledresult.status shouldBe OperationEvaluationDeliveryStatus.Delivered
+        disabledresult.status shouldBe OperationEvaluationDeliveryStatus.Delivered
+        invocations.get() should contain theSameElementsAs Vector("enabled", "disabled")
+        enabled.runtime.executionMetadata.operationEvaluation.map(_.deliveries.length) shouldBe Some(1)
+        disabled.runtime.executionMetadata.operationEvaluation.map(_.deliveries.length) shouldBe Some(1)
+        enabled.observability.callTreeContext.build() should not be empty
+        disabled.observability.callTreeContext.build() shouldBe empty
+      } finally {
+        runtime.close()
+      }
+    }
+
+    "retain every bounded limitation while rejecting untrusted diagnostic keys" in {
+      Given("one provider result with multiple limitations and an unsafe diagnostic key")
+      val runtime = new OperationEvaluationDeliveryRuntime()
+      try {
+        val fact = _start_fact("metric_multi_limit")
+        val sink = _sink()
+        val context = ExecutionContext.withFrameworkCallTreeEnabled(ExecutionContext.create(), enabled = true)
+        val secret = "private-diagnostic-" + ("x" * 512)
+        val safe = ConclusionDiagnostics.unknown.copy(diagnosticKey = "argument.limit")
+        val unsafe = ConclusionDiagnostics.unknown.copy(diagnosticKey = secret)
+        val metricoperation = fact.correlation.operation.print
+        def _metric_count_(): Long =
+          RuntimeDashboardMetrics
+            .runtimeMetricsSnapshot(EntityAccessMetricsRegistry.shared)
+            .points
+            .filter(_.scope == "operation-evaluation.delivery")
+            .filter(_.labels.get("operation").contains(metricoperation))
+            .map(_.count)
+            .sum
+        val before = _metric_count_()
+
+        When("the result crosses the delivery observation boundary")
+        val result = runtime.deliver(fact, sink, context) { _ =>
+          OperationEvaluationDeliveryResult.createC(
+            fact.id,
+            sink,
+            OperationEvaluationDeliveryStatus.Limited,
+            Vector(
+              OperationEvaluationLimitation(
+                OperationEvaluationLimitationKind.Timeout,
+                diagnostic = Some(safe)
+              ),
+              OperationEvaluationLimitation(
+                OperationEvaluationLimitationKind.Saturated,
+                diagnostic = Some(unsafe)
+              )
+            )
+          )
+        }
+
+        Then("metadata, CallTree, and metrics retain all safe structural values exactly once")
+        result.status shouldBe OperationEvaluationDeliveryStatus.Limited
+        val report = context.runtime.executionMetadata.operationEvaluation.getOrElse(fail("delivery report missing"))
+        report.deliveries.head.limitationKinds.map(_.token) should contain allOf ("timeout", "saturated")
+        report.deliveries.head.diagnosticKeys.map(_.token) should contain allOf ("argument.limit", "unknown")
+        report.toRecord.print should not include secret
+        val calltree = context.observability.callTreeContext.build().map(_.toRecord.print)
+          .getOrElse(fail("delivery calltree missing"))
+        calltree should include ("timeout")
+        calltree should include ("saturated")
+        calltree should not include secret
+        val metrics = RuntimeDashboardMetrics
+          .runtimeMetricsSnapshot(EntityAccessMetricsRegistry.shared)
+          .points
+          .filter(_.scope == "operation-evaluation.delivery")
+          .filter(_.labels.get("operation").contains(metricoperation))
+        metrics.exists { metric =>
+          val limitations = metric.labels.getOrElse("limitation_kinds", "")
+          val diagnostics = metric.labels.getOrElse("diagnostic_keys", "")
+          limitations.contains("timeout") &&
+          limitations.contains("saturated") &&
+          diagnostics.contains("argument.limit")
+        } shouldBe true
+        metrics.flatMap(_.labels.values).mkString(" ") should not include secret
+        _metric_count_() shouldBe before + 1
+      } finally {
+        runtime.close()
+      }
+    }
+
+    "keep timed-out provider tracing detached from the caller CallTree stack" in {
+      Given("an interrupt-resistant provider and a calltree-enabled caller")
+      val runtime = new OperationEvaluationDeliveryRuntime(OperationEvaluationDeliveryPolicy(
+        workerCount = 1,
+        queueCapacity = 1,
+        invocationTimeout = Duration.ofMillis(25)
+      ))
+      val release = new AtomicBoolean(false)
+      val completed = new CountDownLatch(1)
+      try {
+        val fact = _start_fact()
+        val sink = _sink()
+        val context = ExecutionContext.withFrameworkCallTreeEnabled(ExecutionContext.create(), enabled = true)
+        val workercalltreeenabled = new AtomicBoolean(true)
+
+        When("the provider remains alive after the caller timeout")
+        val result = runtime.deliver(fact, sink, context) { deliverycontext =>
+          try {
+            workercalltreeenabled.set(deliverycontext.observability.callTreeContext.isEnabled)
+            while (!release.get()) {
+              try Thread.sleep(5L)
+              catch {
+                case _: InterruptedException => ()
+              }
+            }
+            OperationEvaluationDeliveryResult.createC(fact.id, sink, OperationEvaluationDeliveryStatus.Delivered)
+          } finally {
+            completed.countDown()
+          }
+        }
+        val beforerelease = context.observability.callTreeContext.build().map(_.toRecord.print)
+          .getOrElse(fail("delivery calltree missing"))
+        release.set(true)
+        val providercompleted = completed.await(1L, TimeUnit.SECONDS)
+
+        Then("the caller receives one completed timeout mark and the worker cannot mutate its stack")
+        providercompleted shouldBe true
+        val afterrelease = context.observability.callTreeContext.build().map(_.toRecord.print)
+          .getOrElse(fail("delivery calltree missing"))
+        result.limitations.map(_.kind) should contain (OperationEvaluationLimitationKind.Timeout)
+        workercalltreeenabled.get() shouldBe false
+        beforerelease should include ("operation-evaluation:delivery")
+        beforerelease should include ("delivery_status=limited")
+        afterrelease shouldBe beforerelease
+      } finally {
+        release.set(true)
+        runtime.close()
+      }
+    }
+
+    "keep provider-owned assignment state independent of telemetry sampling and failure" in {
+      Given("equivalent providers observed by sampled-out and failing telemetry observers")
+      val fact = _start_fact()
+      val sink = _sink()
+      val sampledout = new OperationEvaluationDeliveryRuntime(
+        observer = OperationEvaluationDeliveryObserver.noop
+      )
+      val failing = new OperationEvaluationDeliveryRuntime(
+        observer = new OperationEvaluationDeliveryObserver {
+          def observe(
+            diagnostic: OperationEvaluationDeliveryDiagnostic,
+            elapsedmillis: Long,
+            context: ExecutionContext
+          ): Unit = throw new IllegalStateException("planned telemetry failure")
+        }
+      )
+      val assignments = new AtomicReference(Vector.empty[String])
+      def _deliver_(
+        runtime: OperationEvaluationDeliveryRuntime,
+        assignment: String
+      ): OperationEvaluationDeliveryResult =
+        runtime.deliver(fact, sink, ExecutionContext.create()) { _ =>
+          assignments.updateAndGet(_ :+ assignment)
+          OperationEvaluationDeliveryResult.createC(fact.id, sink, OperationEvaluationDeliveryStatus.Delivered)
+        }
+
+      try {
+        When("delivery succeeds while telemetry is sampled out or fails")
+        val sampledresult = _deliver_(sampledout, "sampled-out")
+        val failedresult = _deliver_(failing, "observer-failed")
+
+        Then("provider-owned assignments and canonical delivery results remain complete")
+        sampledresult.status shouldBe OperationEvaluationDeliveryStatus.Delivered
+        failedresult.status shouldBe OperationEvaluationDeliveryStatus.Delivered
+        assignments.get() should contain theSameElementsAs Vector("sampled-out", "observer-failed")
+      } finally {
+        sampledout.close()
+        failing.close()
+      }
+    }
+    }
   }
 
-  private def _start_fact(): OperationEvaluationStartFact = {
+  private def _start_fact(
+    operationname: String = "operation"
+  ): OperationEvaluationStartFact = {
     val instant = Instant.parse("2026-07-23T00:00:00Z")
     val context = ExecutionContext.create()
-    val operation = _success(OperationEvaluationOperationIdentity.createC("component", "service", "operation"))
+    val operation = _success(
+      OperationEvaluationOperationIdentity.createC("component", "service", operationname)
+    )
     val prepared = _success(ExecutionContext.prepareOperationEvaluation(context, operation))
     val attempted = _success(ExecutionContext.beginOperationEvaluationAttempt(prepared))
     OperationEvaluationStartFact.create(

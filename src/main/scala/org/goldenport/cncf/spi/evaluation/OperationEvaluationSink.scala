@@ -235,7 +235,7 @@ private def _trace[A <: OperationEvaluationFact](
   fact: A
 )(body: ExecutionContext => Consequence[OperationEvaluationDeliveryResult])(using ctx: ExecutionContext): Consequence[OperationEvaluationDeliveryResult] =
   SpiTraceSupport.trace(base.withOperation(operation), (result: OperationEvaluationDeliveryResult) => Map(
-    "fact_kind" -> fact.factKind,
+    "fact_kind" -> fact.factKind.token,
     "delivery_status" -> result.status.token,
     "limitation_count" -> result.limitations.size.toString
   ), SpiTraceFailureDetail.Structural) {

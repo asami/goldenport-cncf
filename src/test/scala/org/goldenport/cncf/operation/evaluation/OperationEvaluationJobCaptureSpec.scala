@@ -63,7 +63,7 @@ final class OperationEvaluationJobCaptureSpec extends AnyWordSpec with Matchers 
 
         Then("start and terminal share one attempt correlated to the worker Job")
         _await_fact_count(sink, 2) shouldBe true
-        sink.facts.map(_.factKind) shouldBe Vector("operation-start", "operation-terminal")
+        sink.facts.map(_.factKind.token) shouldBe Vector("operation-start", "operation-terminal")
         val correlations = sink.facts.map(_.correlation)
         correlations.map(_.executionId).distinct.size shouldBe 1
         correlations.map(_.attemptId).distinct.size shouldBe 1

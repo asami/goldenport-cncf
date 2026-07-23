@@ -335,6 +335,37 @@ A timeout, queue rejection, overflow, provider failure, or unsupported content
 produces a bounded delivery result or limitation. It cannot wait indefinitely
 or expose the provider failure as the canonical operation outcome.
 
+The runtime projects each attempted installed-sink delivery into a bounded
+`OperationEvaluationExecutionReport` attached to
+`RuntimeContext.ExecutionMetadata`. The report retains at most 32 delivery
+diagnostics and counts additional omitted diagnostics. Each retained
+diagnostic contains only:
+
+- bounded operation identity;
+- fact kind and framework/application source;
+- sink contract, socket component, and provider component;
+- delivery status;
+- bounded limitation kinds;
+- bounded structured diagnostic keys derived from provider failures.
+
+The report does not retain fact identity, execution correlation, provider
+instance, Corpus membership, Experiment assignment, evidence payload, or
+`Conclusion.display`. It is runtime metadata, not a replacement for the
+canonical response envelope or the provider-owned evaluation state.
+
+The same delivery boundary records a completed CallTree mark named
+`operation-evaluation:delivery` and runtime metrics under
+`operation-evaluation.delivery`. These projections use the same safe
+structural fields as the execution report. Metric labels retain all bounded
+`limitation_kinds` and `diagnostic_keys`. Provider work runs with caller
+CallTree collection detached, so timeout cannot corrupt a shared caller stack.
+Projection uses a best-effort delivery observer and occurs independently from
+provider delivery; sampling, retention loss, omission, or failure of execution
+metadata, CallTree, or metrics cannot suppress delivery, alter its result, or
+change provider-owned membership/assignment state.
+The observer receives the bounded delivery diagnostic, not the original fact
+or provider payload.
+
 The delivery context records the logical identity of each sink currently being
 invoked. Sink identity is based on the contract, calling socket, and selected
 provider component/instance; it is not object identity. If sink delivery

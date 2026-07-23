@@ -148,7 +148,8 @@ case class ComponentLogic(
     ctx: ExecutionContext,
     taskdecorator: ActionTask => JobTask
   ): Consequence[OperationResponse] = {
-    ctx.runtime.clearExecutionMetadata()
+    if (ctx.operationEvaluation.invocation.flatMap(_.parentExecutionId).isEmpty)
+      ctx.runtime.clearExecutionMetadata()
     val actionscope = component.scopeContext.createChildScope(ScopeKind.Action, action.name)
     val scopedctx = ctx.withScope(actionscope)
     val task = ActionTask(

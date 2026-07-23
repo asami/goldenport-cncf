@@ -62,7 +62,7 @@ final class OperationEvaluationAutomaticCaptureSpec
 
       Then("the business result is preserved and one correlated attempt is captured")
       result shouldBe Consequence.success(OperationResponse.Scalar("success"))
-      fixture.sink.facts.map(_.factKind) shouldBe Vector("operation-start", "operation-terminal")
+      fixture.sink.facts.map(_.factKind.token) shouldBe Vector("operation-start", "operation-terminal")
       val start = fixture.sink.facts.head.asInstanceOf[OperationEvaluationStartFact]
       val terminal = fixture.sink.facts.last.asInstanceOf[OperationEvaluationTerminalFact]
       terminal.outcome shouldBe OperationEvaluationOutcome.Success
@@ -94,7 +94,7 @@ final class OperationEvaluationAutomaticCaptureSpec
 
       Then("the original failure and one structural start-terminal pair are retained")
       result shouldBe a[Consequence.Failure[_]]
-      fixture.sink.facts.map(_.factKind) shouldBe Vector("operation-start", "operation-terminal")
+      fixture.sink.facts.map(_.factKind.token) shouldBe Vector("operation-start", "operation-terminal")
       val terminal = fixture.sink.facts.last.asInstanceOf[OperationEvaluationTerminalFact]
       terminal.outcome shouldBe OperationEvaluationOutcome.Failure
       terminal.diagnostic.map(_.diagnosticKey) shouldBe Some("argument")
@@ -137,7 +137,7 @@ final class OperationEvaluationAutomaticCaptureSpec
 
         Then("the Task and terminal fact both retain the binding failure")
         outcome shouldBe a[TaskFailed]
-        fixture.sink.facts.map(_.factKind) shouldBe Vector("operation-start", "operation-terminal")
+        fixture.sink.facts.map(_.factKind.token) shouldBe Vector("operation-start", "operation-terminal")
         val terminal = fixture.sink.facts.last.asInstanceOf[OperationEvaluationTerminalFact]
         terminal.outcome shouldBe OperationEvaluationOutcome.Failure
         terminal.diagnostic.map(_.diagnosticKey) shouldBe Some("argument")
@@ -159,7 +159,7 @@ final class OperationEvaluationAutomaticCaptureSpec
 
       Then("the automatic facts identify the worker Job and one logical execution")
       _await_fact_count(fixture.sink, 2) shouldBe true
-      fixture.sink.facts.map(_.factKind) shouldBe Vector("operation-start", "operation-terminal")
+      fixture.sink.facts.map(_.factKind.token) shouldBe Vector("operation-start", "operation-terminal")
       val correlations = fixture.sink.facts.map(_.correlation)
       correlations.map(_.executionId).distinct.size shouldBe 1
       correlations.map(_.attemptId).distinct.size shouldBe 1
@@ -177,7 +177,7 @@ final class OperationEvaluationAutomaticCaptureSpec
 
       Then("the rejection remains canonical and receives exactly one attempt pair")
       result shouldBe a[Consequence.Failure[_]]
-      fixture.sink.facts.map(_.factKind) shouldBe Vector("operation-start", "operation-terminal")
+      fixture.sink.facts.map(_.factKind.token) shouldBe Vector("operation-start", "operation-terminal")
       fixture.sink.facts.last.asInstanceOf[OperationEvaluationTerminalFact].outcome shouldBe
         OperationEvaluationOutcome.Failure
     }
@@ -206,7 +206,7 @@ final class OperationEvaluationAutomaticCaptureSpec
 
       Then("the submission failure receives exactly one attempt pair without business execution")
       result shouldBe a[Consequence.Failure[_]]
-      fixture.sink.facts.map(_.factKind) shouldBe Vector("operation-start", "operation-terminal")
+      fixture.sink.facts.map(_.factKind.token) shouldBe Vector("operation-start", "operation-terminal")
       fixture.sink.facts.last.asInstanceOf[OperationEvaluationTerminalFact].outcome shouldBe
         OperationEvaluationOutcome.Failure
     }
@@ -239,13 +239,18 @@ final class OperationEvaluationAutomaticCaptureSpec
       disconnectedsubsystem.add(_component(disconnectedsubsystem, None))
 
       When("both components execute the same successful operation")
-      val connectedresult = connected.subsystem.executeOperationResponse(_request("success"))
+      val connectedexecution = connected.subsystem.executeWithMetadata(_request("success"))
       val disconnectedresult = disconnectedsubsystem.executeOperationResponse(_request("success"))
 
       Then("auxiliary provider behavior never replaces the successful business result")
-      connectedresult shouldBe Consequence.success(OperationResponse.Scalar("success"))
+      connectedexecution.map(_.response) shouldBe Consequence.success(OperationResponse.Scalar("success"))
       disconnectedresult shouldBe Consequence.success(OperationResponse.Scalar("success"))
       calls.get() shouldBe 2
+      val report = connectedexecution.toOption
+        .flatMap(_.metadata.operationEvaluation)
+        .getOrElse(fail("delivery report missing"))
+      report.deliveries.map(_.status) shouldBe Vector.fill(2)(OperationEvaluationDeliveryStatus.Failed)
+      report.deliveries.flatMap(_.limitationKinds) should contain only OperationEvaluationLimitationKind.ProviderFailure
     }
 
     "emit no fact when operation authorization rejects the request" in {
@@ -282,7 +287,7 @@ final class OperationEvaluationAutomaticCaptureSpec
 
       Then("business execution succeeds and the resolved route still produces a correlated attempt")
       result shouldBe Consequence.success(OperationResponse.Scalar("success"))
-      fixture.sink.facts.map(_.factKind) shouldBe Vector("operation-start", "operation-terminal")
+      fixture.sink.facts.map(_.factKind.token) shouldBe Vector("operation-start", "operation-terminal")
       val operations = fixture.sink.facts.map(_.correlation.operation)
       operations.distinct.size shouldBe 1
       operations.head.operation.print should startWith ("legacy_operation_")
@@ -301,7 +306,53 @@ final class OperationEvaluationAutomaticCaptureSpec
 
       Then("the subsystem chokepoint authorizes and captures the operation")
       result shouldBe Consequence.success(OperationResponse.Scalar("success"))
-      fixture.sink.facts.map(_.factKind) shouldBe Vector("operation-start", "operation-terminal")
+      fixture.sink.facts.map(_.factKind.token) shouldBe Vector("operation-start", "operation-terminal")
+    }
+
+    "aggregate nested operation diagnostics without clearing the parent report" in {
+      Given("a parent evaluation report and a child operation using the same RuntimeContext")
+      val fixture = _fixture()
+      val base = fixture.component.logic.executionContext()
+      val parentidentity = _success(
+        OperationEvaluationOperationIdentity.createC("evaluation", "operation", "parent")
+      )
+      val parentprepared = _success(ExecutionContext.prepareOperationEvaluation(base, parentidentity))
+      val parentattempted = _success(ExecutionContext.beginOperationEvaluationAttempt(parentprepared))
+      val parentfact = OperationEvaluationStartFact.create(
+        OperationEvaluationFactId.create("parent", parentattempted.clock.instant(), parentattempted.idGeneration),
+        parentattempted.operationEvaluation.correlation.getOrElse(fail("parent correlation missing")),
+        parentattempted.clock.instant()
+      )
+      val sinkidentity = fixture.sink.sinkIdentityOption.getOrElse(fail("sink identity missing"))
+      val parentresult = _success(OperationEvaluationDeliveryResult.createC(
+        parentfact.id,
+        sinkidentity,
+        OperationEvaluationDeliveryStatus.Delivered
+      ))
+      base.runtime.noteOperationEvaluationDelivery(
+        OperationEvaluationDeliveryDiagnostic.from(parentfact, parentresult)
+      )
+      val childidentity = _success(
+        OperationEvaluationOperationIdentity.createC("evaluation", "operation", "success")
+      )
+      val childcontext = _success(
+        ExecutionContext.prepareOperationEvaluation(parentattempted, childidentity)
+      )
+      val action = _success(fixture.component.logic.makeOperationRequest(_request("success"))) match {
+        case value: Action => value
+        case other => fail(s"Action missing: $other")
+      }
+
+      When("the nested operation crosses ComponentLogic execution")
+      val result = fixture.component.logic.executeAction(action, childcontext)
+
+      Then("the report retains the parent diagnostic and identifies the child diagnostics")
+      result shouldBe Consequence.success(OperationResponse.Scalar("success"))
+      val report = base.runtime.executionMetadata.operationEvaluation.getOrElse(fail("evaluation report missing"))
+      report.deliveries.map(_.operation.operation.print) should contain ("parent")
+      report.deliveries.map(_.operation.operation.print) should contain ("success")
+      report.deliveries.count(_.operation.operation.print == "parent") shouldBe 1
+      report.deliveries.count(_.operation.operation.print == "success") should be >= 2
     }
 
     "preserve an already resolved ad-hoc Action outside the operation route boundary" in {
@@ -341,7 +392,7 @@ final class OperationEvaluationAutomaticCaptureSpec
 
       Then("capture completes inline and remains correlated with the inherited Job")
       result shouldBe Consequence.success(OperationResponse.Scalar("success"))
-      fixture.sink.facts.map(_.factKind) shouldBe Vector("operation-start", "operation-terminal")
+      fixture.sink.facts.map(_.factKind.token) shouldBe Vector("operation-start", "operation-terminal")
       fixture.sink.facts.flatMap(_.correlation.jobId).distinct shouldBe Vector(outerjobid)
       fixture.sink.facts.flatMap(_.correlation.taskId).distinct shouldBe Vector(outertaskid)
     }
@@ -373,7 +424,7 @@ final class OperationEvaluationAutomaticCaptureSpec
       readmodel.debug.requestSummary should not be empty
       readmodel.debug.parameters.get("sample") shouldBe Some("value")
       _await_fact_count(fixture.sink, 2) shouldBe true
-      fixture.sink.facts.map(_.factKind) shouldBe Vector("operation-start", "operation-terminal")
+      fixture.sink.facts.map(_.factKind.token) shouldBe Vector("operation-start", "operation-terminal")
       fixture.sink.facts.flatMap(_.correlation.jobId).distinct shouldBe Vector(jobid)
     }
 
@@ -428,7 +479,7 @@ final class OperationEvaluationAutomaticCaptureSpec
       (preparedcontext.security == context.security) shouldBe true
       (preparedcontext.jobContext == context.jobContext) shouldBe true
       sourcesink.facts shouldBe empty
-      targetsink.facts.map(_.factKind) shouldBe Vector("operation-start", "operation-terminal")
+      targetsink.facts.map(_.factKind.token) shouldBe Vector("operation-start", "operation-terminal")
       targetsink.facts.flatMap(_.correlation.jobId).distinct shouldBe Vector(jobid)
       targetsink.facts.flatMap(_.correlation.taskId).distinct shouldBe Vector(taskid)
     }
@@ -438,7 +489,7 @@ final class OperationEvaluationAutomaticCaptureSpec
       val startfixture = _fixture()
       val terminalfixture = _fixture()
 
-      def run(fixture: Fixture, failoncall: Int): org.goldenport.cncf.job.TaskOutcome = {
+      def _run_(fixture: Fixture, failoncall: Int): org.goldenport.cncf.job.TaskOutcome = {
         val clock = new EvaluationFailingClock(Clock.fixed(Instant.parse("2026-07-23T01:00:00Z"), ZoneOffset.UTC))
         val context = _context_with_clock(fixture, clock)
         val identity = OperationEvaluationOperationIdentity.fromResolvedRoute("evaluation", "operation", "success")
@@ -459,14 +510,14 @@ final class OperationEvaluationAutomaticCaptureSpec
       }
 
       When("bookkeeping fails before start delivery or before terminal construction")
-      val startoutcome = run(startfixture, 2)
-      val terminaloutcome = run(terminalfixture, 3)
+      val startoutcome = _run_(startfixture, 2)
+      val terminaloutcome = _run_(terminalfixture, 3)
 
       Then("the business result remains successful and only constructible facts are retained")
       startoutcome shouldBe TaskSucceeded(OperationResponse.Scalar("success"))
       terminaloutcome shouldBe TaskSucceeded(OperationResponse.Scalar("success"))
       startfixture.sink.facts shouldBe empty
-      terminalfixture.sink.facts.map(_.factKind) shouldBe Vector("operation-start")
+      terminalfixture.sink.facts.map(_.factKind.token) shouldBe Vector("operation-start")
     }
 
     "preserve interruption raised by an auxiliary canonical-outcome observer" in {
@@ -474,7 +525,7 @@ final class OperationEvaluationAutomaticCaptureSpec
       val subsystem = _track(TestComponentFactory.emptySubsystem("evaluation-observer-interruption"))
       val context = ExecutionContext.create()
       val task = new JobTask {
-        val actionId = ActionId.generate()
+        override val actionId = ActionId.generate()
         def run(context: ExecutionContext) =
           TaskSucceeded(OperationResponse.Scalar("success"))
         override def observeCanonicalOutcome(

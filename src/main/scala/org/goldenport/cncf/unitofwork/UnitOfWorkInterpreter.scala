@@ -97,7 +97,7 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
     case UnitOfWorkOp.StageOperationEvaluationSupplemental(intent) =>
       _with_calltree(
         "uow:operation-evaluation:stage",
-        Map("fact_kind" -> intent.fact.factKind)
+        Map("fact_kind" -> intent.fact.factKind.token)
       ) {
         uow.stageOperationEvaluationSupplementalC(intent)
       }

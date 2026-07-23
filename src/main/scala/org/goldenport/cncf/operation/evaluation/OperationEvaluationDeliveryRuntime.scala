@@ -8,7 +8,8 @@ import scala.util.control.NonFatal
 
 import org.goldenport.{Conclusion, Consequence}
 import org.goldenport.cncf.context.ExecutionContext
-import org.goldenport.cncf.observability.ConclusionDiagnostics
+import org.goldenport.cncf.http.RuntimeDashboardMetrics
+import org.goldenport.cncf.observability.{CallTreeContext, ConclusionDiagnostics}
 import org.goldenport.cncf.spi.evaluation.{CorpusEvaluationSink, ExperimentEvaluationSink}
 
 /*
@@ -27,8 +28,72 @@ final case class OperationEvaluationDeliveryPolicy(
   maximumQueuedBytes: Long = 4L * 1024L * 1024L
 )
 
+trait OperationEvaluationDeliveryObserver {
+  def observe(
+    diagnostic: OperationEvaluationDeliveryDiagnostic,
+    elapsedmillis: Long,
+    context: ExecutionContext
+  ): Unit
+}
+
+object OperationEvaluationDeliveryObserver {
+  val default: OperationEvaluationDeliveryObserver =
+    new OperationEvaluationDeliveryObserver {
+      def observe(
+        diagnostic: OperationEvaluationDeliveryDiagnostic,
+        elapsedmillis: Long,
+        context: ExecutionContext
+      ): Unit = {
+        context.runtime.noteOperationEvaluationDelivery(diagnostic)
+        RuntimeDashboardMetrics.recordOperationEvaluationDelivery(
+          operation = diagnostic.operation.print,
+          factkind = diagnostic.factKind.token,
+          factsource = diagnostic.factSource.token,
+          sinkcontract = diagnostic.sinkContract.print,
+          socketcomponent = diagnostic.socketComponent.print,
+          providercomponent = diagnostic.providerComponent.print,
+          status = diagnostic.status.token,
+          limitationkinds = diagnostic.limitationKinds.map(_.token),
+          diagnostickeys = diagnostic.diagnosticKeys.map(_.token),
+          error = diagnostic.status != OperationEvaluationDeliveryStatus.Delivered,
+          elapsedmillis = Some(elapsedmillis)
+        )
+        val calltree = context.observability.callTreeContext
+        if (calltree.isEnabled)
+          calltree.mark(
+            "operation-evaluation:delivery",
+            Map(
+              "calltree_kind" -> "operation-evaluation-delivery",
+              "operation" -> diagnostic.operation.print,
+              "fact_kind" -> diagnostic.factKind.token,
+              "fact_source" -> diagnostic.factSource.token,
+              "sink_contract" -> diagnostic.sinkContract.print,
+              "socket_component" -> diagnostic.socketComponent.print,
+              "provider_component" -> diagnostic.providerComponent.print,
+              "outcome" ->
+                (if (diagnostic.status == OperationEvaluationDeliveryStatus.Delivered) "success" else "failure"),
+              "delivery_status" -> diagnostic.status.token,
+              "limitation_kinds" -> diagnostic.limitationKinds.map(_.token).mkString(","),
+              "diagnostic_keys" -> diagnostic.diagnosticKeys.map(_.token).mkString(","),
+              "duration_ms" -> elapsedmillis.toString
+            ).filter(_._2.nonEmpty)
+          )
+      }
+    }
+
+  val noop: OperationEvaluationDeliveryObserver =
+    new OperationEvaluationDeliveryObserver {
+      def observe(
+        diagnostic: OperationEvaluationDeliveryDiagnostic,
+        elapsedmillis: Long,
+        context: ExecutionContext
+      ): Unit = ()
+    }
+}
+
 final class OperationEvaluationDeliveryRuntime(
-  policy: OperationEvaluationDeliveryPolicy = OperationEvaluationDeliveryPolicy()
+  policy: OperationEvaluationDeliveryPolicy = OperationEvaluationDeliveryPolicy(),
+  observer: OperationEvaluationDeliveryObserver = OperationEvaluationDeliveryObserver.default
 ) extends AutoCloseable {
   require(policy.workerCount > 0, "workerCount must be positive")
   require(policy.queueCapacity > 0, "queueCapacity must be positive")
@@ -106,6 +171,15 @@ final class OperationEvaluationDeliveryRuntime(
     sink: OperationEvaluationSinkIdentity,
     context: ExecutionContext
   )(body: ExecutionContext => Consequence[OperationEvaluationDeliveryResult]): OperationEvaluationDeliveryResult =
+    _observe_delivery(fact, sink, context) {
+      _deliver(fact, sink, context)(body)
+    }
+
+  private def _deliver(
+    fact: OperationEvaluationFact,
+    sink: OperationEvaluationSinkIdentity,
+    context: ExecutionContext
+  )(body: ExecutionContext => Consequence[OperationEvaluationDeliveryResult]): OperationEvaluationDeliveryResult =
     try {
       val bytes = fact.toRecord.print.getBytes(StandardCharsets.UTF_8).length
       if (bytes > policy.maximumItemBytes)
@@ -121,7 +195,12 @@ final class OperationEvaluationDeliveryRuntime(
         try {
           val future = _executor.submit(new Callable[Consequence[OperationEvaluationDeliveryResult]] {
             def call(): Consequence[OperationEvaluationDeliveryResult] =
-              try body(context)
+              try {
+                val observability = context.cncfCore.observability.copy(
+                  callTreeContext = CallTreeContext.Disabled
+                )
+                body(ExecutionContext.withObservabilityContext(context, observability))
+              }
               finally _release_()
           })
           try {
@@ -187,17 +266,20 @@ final class OperationEvaluationDeliveryRuntime(
     identity: OperationEvaluationSinkIdentity,
     context: ExecutionContext
   ): OperationEvaluationDeliveryResult =
-    _active_sink_limitation(fact, identity, context).getOrElse {
-      deliver(fact, identity, context) { deliverycontext =>
-        given ExecutionContext = deliverycontext
-        fact match {
-          case start: OperationEvaluationStartFact => sink.recordStart(start)
-          case terminal: OperationEvaluationTerminalFact => sink.recordTerminal(terminal)
-          case candidate: CorpusCandidateFact => sink.submitCandidate(candidate)
-          case _: ExperimentObservationFact =>
-            Consequence.success(_limited(fact, identity, OperationEvaluationLimitationKind.Unsupported))
+    _active_sink_limitation(fact, identity, context) match {
+      case Some(result) =>
+        _observe_delivery(fact, identity, context)(result)
+      case None =>
+        deliver(fact, identity, context) { deliverycontext =>
+          given ExecutionContext = deliverycontext
+          fact match {
+            case start: OperationEvaluationStartFact => sink.recordStart(start)
+            case terminal: OperationEvaluationTerminalFact => sink.recordTerminal(terminal)
+            case candidate: CorpusCandidateFact => sink.submitCandidate(candidate)
+            case _: ExperimentObservationFact =>
+              Consequence.success(_limited(fact, identity, OperationEvaluationLimitationKind.Unsupported))
+          }
         }
-      }
     }
 
   private def _deliver_experiment(
@@ -206,17 +288,20 @@ final class OperationEvaluationDeliveryRuntime(
     identity: OperationEvaluationSinkIdentity,
     context: ExecutionContext
   ): OperationEvaluationDeliveryResult =
-    _active_sink_limitation(fact, identity, context).getOrElse {
-      deliver(fact, identity, context) { deliverycontext =>
-        given ExecutionContext = deliverycontext
-        fact match {
-          case start: OperationEvaluationStartFact => sink.recordStart(start)
-          case terminal: OperationEvaluationTerminalFact => sink.recordTerminal(terminal)
-          case observation: ExperimentObservationFact => sink.submitObservation(observation)
-          case _: CorpusCandidateFact =>
-            Consequence.success(_limited(fact, identity, OperationEvaluationLimitationKind.Unsupported))
+    _active_sink_limitation(fact, identity, context) match {
+      case Some(result) =>
+        _observe_delivery(fact, identity, context)(result)
+      case None =>
+        deliver(fact, identity, context) { deliverycontext =>
+          given ExecutionContext = deliverycontext
+          fact match {
+            case start: OperationEvaluationStartFact => sink.recordStart(start)
+            case terminal: OperationEvaluationTerminalFact => sink.recordTerminal(terminal)
+            case observation: ExperimentObservationFact => sink.submitObservation(observation)
+            case _: CorpusCandidateFact =>
+              Consequence.success(_limited(fact, identity, OperationEvaluationLimitationKind.Unsupported))
+          }
         }
-      }
     }
 
   private def _active_sink_limitation(
@@ -259,6 +344,29 @@ final class OperationEvaluationDeliveryRuntime(
       )),
       fact.confidentiality
     )
+
+  private def _observe_delivery(
+    fact: OperationEvaluationFact,
+    sink: OperationEvaluationSinkIdentity,
+    context: ExecutionContext
+  )(body: => OperationEvaluationDeliveryResult): OperationEvaluationDeliveryResult = {
+    val started = System.nanoTime()
+    val result = body
+    val diagnostic = OperationEvaluationDeliveryDiagnostic.from(fact, result)
+    val elapsedmillis = (System.nanoTime() - started) / 1000000L
+    _best_effort {
+      observer.observe(diagnostic, elapsedmillis, context)
+    }
+    result
+  }
+
+  private def _best_effort(body: => Unit): Unit =
+    try body
+    catch {
+      case _: InterruptedException =>
+        Thread.currentThread.interrupt()
+      case NonFatal(_) => ()
+    }
 
   def close(): Unit = {
     _executor.shutdownNow()

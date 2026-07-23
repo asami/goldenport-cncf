@@ -174,6 +174,32 @@ bytes, aggregate queued bytes, and saturation/overflow handling.
 - Delivery retry, buffering, or at-least-once handling MUST preserve stable fact
   identity.
 - Delivery diagnostics MUST NOT become Corpus/Experiment membership evidence.
+- Every attempted installed-sink delivery MUST attempt to append one safe
+  diagnostic to `RuntimeContext.ExecutionMetadata` through the best-effort
+  delivery observer. A full report MUST increment its omitted count and MUST
+  retain at most 32 diagnostics.
+- An execution delivery diagnostic MUST contain only operation identity, typed
+  fact kind/source, sink contract/socket/provider component, delivery status,
+  limitation kinds, and bounded structured diagnostic keys.
+- An execution delivery diagnostic MUST NOT contain fact identity, execution
+  correlation, provider instance, membership, assignment, summary, labels,
+  measurements, provider payload, `Conclusion.display`, or diagnostic facets.
+- The delivery boundary MUST attempt to emit a completed payload-safe
+  `operation-evaluation:delivery` CallTree mark when CallTree is enabled and a
+  payload-safe `operation-evaluation.delivery` runtime metric point.
+- Provider execution MUST NOT keep a caller CallTree frame open across its
+  finite timeout. Provider-worker CallTree collection is detached from the
+  caller stack; the caller-side completed delivery mark is authoritative.
+- Runtime metrics MUST retain all bounded limitation kinds and diagnostic keys
+  for one delivery rather than selecting only the first value.
+- Execution metadata, CallTree, and metric recording MUST be best-effort and
+  MUST NOT gate provider delivery, replace a delivery result, or change the
+  canonical operation `Consequence`.
+- The delivery observer MUST receive only the bounded delivery diagnostic and
+  MUST NOT receive the original fact or provider payload.
+- Observer sampling, disabling, retention loss, report omission, or failure
+  MUST NOT create, remove, reconstruct, or otherwise affect provider-owned
+  Corpus membership or Experiment assignment.
 
 ## Declaration and Typed Model Contract
 

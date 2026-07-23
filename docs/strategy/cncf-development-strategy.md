@@ -2725,9 +2725,10 @@ Active CNCF development item in Phase 48.
   - OE-06 (DONE) — added protected supplemental Corpus/Experiment internal DSL
     helpers with attempt-partitioned UnitOfWork staging and post-terminal
     release;
-  - OE-07 (NEXT) — attach bounded recording status to execution metadata and publish only
-    policy-admitted correlation through CallTree/observability;
-  - OE-08 — prove disabled, optional, required, nested, retry, cancellation,
+  - OE-07 (DONE) — attached bounded delivery status to execution metadata and
+    published only payload-safe structural diagnostics through
+    CallTree/runtime metrics;
+  - OE-08 (NEXT) — prove disabled, optional, required, nested, retry, cancellation,
     timeout, idempotency, failure-isolation, and confidentiality behavior with
     deterministic fake adapters;
   - OE-09 — validate one offline corpus-case/arm handoff with downstream
