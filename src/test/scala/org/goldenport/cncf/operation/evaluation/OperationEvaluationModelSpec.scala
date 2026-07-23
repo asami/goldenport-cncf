@@ -1,6 +1,7 @@
 package org.goldenport.cncf.operation.evaluation
 
 import java.time.{Duration, Instant}
+import org.goldenport.Consequence
 import org.goldenport.cncf.observability.ConclusionDiagnostics
 import org.scalacheck.{Gen, Prop, Test}
 import org.scalatest.GivenWhenThen
@@ -208,17 +209,32 @@ final class OperationEvaluationModelSpec extends AnyWordSpec with Matchers with 
           Vector(OperationEvaluationLimitation(OperationEvaluationLimitationKind.Timeout))
         ).toOption.get
         val diagnostic = OperationEvaluationDeliveryDiagnostic.from(candidate, result)
+        val admission = _success(OperationEvaluationAdmissionDiagnostic.unavailableC(
+          correlation.operation,
+          Vector(OperationEvaluationLimitation(OperationEvaluationLimitationKind.Unavailable))
+        ))
 
-        When("the same safe diagnostic is appended beyond the execution report bound")
-        val report = Vector
+        When("safe delivery and admission diagnostics are appended beyond each report bound")
+        val deliveryreport = Vector
           .fill(OperationEvaluationExecutionReport.MAXIMUM_DELIVERIES + 3)(diagnostic)
           .foldLeft(OperationEvaluationExecutionReport.empty)(_.append(_))
+        val report = Vector
+          .fill(OperationEvaluationExecutionReport.MAXIMUM_ADMISSIONS + 2)(admission)
+          .foldLeft(deliveryreport)(_.appendAdmission(_))
         val rendered = report.toRecord.print
 
         Then("the report is bounded and retains only structural delivery metadata")
         report.deliveries.length shouldBe OperationEvaluationExecutionReport.MAXIMUM_DELIVERIES
         report.omittedCount shouldBe 3
+        report.admissions.length shouldBe OperationEvaluationExecutionReport.MAXIMUM_ADMISSIONS
+        report.omittedAdmissionCount shouldBe 2
         report.aggregateStatus shouldBe Some(OperationEvaluationDeliveryStatus.Limited)
+        OperationEvaluationAdmissionDiagnostic.unavailableC(
+          correlation.operation,
+          Vector.fill(OperationEvaluationDeliveryResult.MAXIMUM_LIMITATIONS + 1)(
+            OperationEvaluationLimitation(OperationEvaluationLimitationKind.Unavailable)
+          )
+        ) shouldBe a[Consequence.Failure[_]]
         rendered should include ("corpus-candidate")
         rendered should include ("timeout")
         rendered should not include candidate.id.toString
@@ -298,5 +314,11 @@ final class OperationEvaluationModelSpec extends AnyWordSpec with Matchers with 
       attemptid,
       OperationEvaluationOperationIdentity.createC("demo", "catalog", "price").toOption.get,
       experiment = experiment
+    )
+
+  private def _success[A](result: Consequence[A]): A =
+    result.fold(
+      conclusion => fail(conclusion.toString),
+      identity
     )
 }

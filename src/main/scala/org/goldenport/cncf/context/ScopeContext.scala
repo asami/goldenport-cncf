@@ -1,5 +1,6 @@
 package org.goldenport.cncf.context
 
+import scala.deprecatedName
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.GlobalContext
 import org.goldenport.cncf.context.DataStoreContext
@@ -13,6 +14,7 @@ import org.goldenport.cncf.datastore.DataStoreSpace
 import org.goldenport.cncf.entity.EntityStoreSpace
 import org.goldenport.cncf.entity.runtime.EntitySpace
 import org.goldenport.cncf.component.Component
+import org.goldenport.cncf.operation.evaluation.OperationEvaluationResolver
 import org.goldenport.cncf.spi.evaluation.{CorpusEvaluationSink, CorpusEvaluationSinkSocket, ExperimentEvaluationSink, ExperimentEvaluationSinkSocket}
 
 /*
@@ -66,6 +68,12 @@ abstract class ScopeContext() extends ObservationDsl with ScopeContext.Core.Hold
   /** Runtime-owned, per-logical-scope concurrency admission. */
   def scopedConcurrencyAdmissionOption: Option[ScopedConcurrencyAdmission] =
     core.scopedConcurrencyAdmissionOption orElse parent.flatMap(_.scopedConcurrencyAdmissionOption)
+
+  def operationEvaluationResolverOption: Option[OperationEvaluationResolver] =
+    core.operationEvaluationResolverOption orElse parent.flatMap(_.operationEvaluationResolverOption)
+
+  def operationEvaluationResolver: OperationEvaluationResolver =
+    operationEvaluationResolverOption.getOrElse(OperationEvaluationResolver.disabled)
 
   def corpusEvaluationSinkOption: Option[CorpusEvaluationSink] =
     _local_corpus_evaluation_sink orElse parent.flatMap(_.corpusEvaluationSinkOption)
@@ -133,7 +141,8 @@ object ScopeContext {
     aggregateInternalRead: Boolean = false,
     processExecutionDriverOption: Option[ProcessExecutionDriver] = None,
     processExecutionAdmissionOption: Option[ProcessExecutionAdmission] = None,
-    scopedConcurrencyAdmissionOption: Option[ScopedConcurrencyAdmission] = None
+    scopedConcurrencyAdmissionOption: Option[ScopedConcurrencyAdmission] = None,
+    operationEvaluationResolverOption: Option[OperationEvaluationResolver] = None
   )
   object Core {
     trait Holder {
@@ -177,22 +186,28 @@ object ScopeContext {
     kind: ScopeKind,
     name: String,
     parent: Option[ScopeContext],
-    observabilityContext: ObservabilityContext,
-    httpDriverOption: Option[HttpDriver] = None,
-    processExecutionDriverOption: Option[ProcessExecutionDriver] = None,
-    processExecutionAdmissionOption: Option[ProcessExecutionAdmission] = None,
-    scopedConcurrencyAdmissionOption: Option[ScopedConcurrencyAdmission] = None
+    @deprecatedName("observabilityContext", "0.5.1") observabilitycontext: ObservabilityContext,
+    @deprecatedName("httpDriverOption", "0.5.1") httpdriveroption: Option[HttpDriver] = None,
+    @deprecatedName("processExecutionDriverOption", "0.5.1")
+    processexecutiondriveroption: Option[ProcessExecutionDriver] = None,
+    @deprecatedName("processExecutionAdmissionOption", "0.5.1")
+    processexecutionadmissionoption: Option[ProcessExecutionAdmission] = None,
+    @deprecatedName("scopedConcurrencyAdmissionOption", "0.5.1")
+    scopedconcurrencyadmissionoption: Option[ScopedConcurrencyAdmission] = None,
+    @deprecatedName("operationEvaluationResolverOption", "0.5.1")
+    operationevaluationresolveroption: Option[OperationEvaluationResolver] = None
   ): ScopeContext = {
     Instance(
       ScopeContext.Core(
         kind = kind,
         name = name,
         parent = parent,
-        observabilityContext = observabilityContext,
-        httpDriverOption = httpDriverOption,
-        processExecutionDriverOption = processExecutionDriverOption,
-        processExecutionAdmissionOption = processExecutionAdmissionOption,
-        scopedConcurrencyAdmissionOption = scopedConcurrencyAdmissionOption
+        observabilityContext = observabilitycontext,
+        httpDriverOption = httpdriveroption,
+        processExecutionDriverOption = processexecutiondriveroption,
+        processExecutionAdmissionOption = processexecutionadmissionoption,
+        scopedConcurrencyAdmissionOption = scopedconcurrencyadmissionoption,
+        operationEvaluationResolverOption = operationevaluationresolveroption
       )
     )
   }

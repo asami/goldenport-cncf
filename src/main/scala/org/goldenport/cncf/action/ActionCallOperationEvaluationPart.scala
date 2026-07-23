@@ -11,6 +11,7 @@ import org.goldenport.cncf.operation.evaluation.{
   ExperimentObservationFact,
   OperationEvaluationFactId,
   OperationEvaluationIntentId,
+  OperationEvaluationAssignment,
   OperationEvaluationLabel,
   OperationEvaluationMeasurement,
   OperationEvaluationSupplementalFact,
@@ -28,6 +29,15 @@ import org.goldenport.schema.DataConfidentiality
  * @author  ASAMI, Tomoharu
  */
 trait BehaviorOperationEvaluationPart extends BehaviorFeaturePart { self: Behavior.Core.Holder =>
+  protected final def operation_evaluation_assignment: Option[OperationEvaluationAssignment] =
+    execution_context.operationEvaluation.invocation.flatMap(_.assignment)
+
+  protected final def operation_evaluation_variant: Option[String] =
+    operation_evaluation_assignment.map(_.variant.print)
+
+  protected final def operation_evaluation_execution_plan: Option[String] =
+    operation_evaluation_assignment.flatMap(_.executionPlanReference.map(_.print))
+
   protected final def operation_evaluation_label(
     name: String,
     value: String

@@ -18,7 +18,8 @@ final case class OperationEvaluationInvocation(
   parentExecutionId: Option[OperationEvaluationExecutionId],
   executionContextId: ExecutionContextId,
   corpus: Option[CorpusEvaluationCorrelation] = None,
-  experiment: Option[ExperimentEvaluationCorrelation] = None
+  experiment: Option[ExperimentEvaluationCorrelation] = None,
+  assignment: Option[OperationEvaluationAssignment] = None
 ) {
   def toRecord: Record = Record.dataAuto(
     "executionId" -> executionId.toString,
@@ -26,7 +27,8 @@ final case class OperationEvaluationInvocation(
     "parentExecutionId" -> parentExecutionId.map(_.toString),
     "executionContextId" -> executionContextId.toString,
     "corpus" -> corpus.map(_.toRecord),
-    "experiment" -> experiment.map(_.toRecord)
+    "experiment" -> experiment.map(_.toRecord),
+    "assignment" -> assignment.map(_.toRecord)
   )
 }
 
@@ -40,7 +42,8 @@ final case class OperationEvaluationContext(
     occurredat: Instant,
     idgeneration: IdGenerationContext,
     corpus: Option[CorpusEvaluationCorrelation] = None,
-    experiment: Option[ExperimentEvaluationCorrelation] = None
+    experiment: Option[ExperimentEvaluationCorrelation] = None,
+    assignment: Option[OperationEvaluationAssignment] = None
   ): Consequence[OperationEvaluationContext] = {
     val parentexecutionid = invocation.map(_.executionId)
     val executionid = OperationEvaluationExecutionId.create(operation.print, occurredat, idgeneration)
@@ -52,7 +55,8 @@ final case class OperationEvaluationContext(
         parentexecutionid,
         contextid,
         corpus,
-        experiment
+        experiment,
+        assignment
       )),
       correlation = None
     ))
@@ -82,6 +86,42 @@ final case class OperationEvaluationContext(
         ))))
       case None =>
         Consequence.stateInvalid("operation evaluation invocation is not prepared")
+    }
+
+  def admitC(
+    corpus: Option[CorpusEvaluationCorrelation],
+    experiment: Option[ExperimentEvaluationCorrelation],
+    assignment: Option[OperationEvaluationAssignment]
+  ): Consequence[OperationEvaluationContext] =
+    invocation match {
+      case None =>
+        Consequence.stateInvalid("operation evaluation invocation is not prepared")
+      case Some(_) if correlation.nonEmpty =>
+        Consequence.stateInvalid("operation evaluation admission cannot change after attempt start")
+      case Some(value)
+          if value.corpus.nonEmpty || value.experiment.nonEmpty || value.assignment.nonEmpty =>
+        Consequence.stateInvalid("operation evaluation invocation is already admitted")
+      case Some(_) if corpus.isEmpty && experiment.isEmpty && assignment.isEmpty =>
+        Consequence.argumentInvalid(
+          "admission",
+          "Corpus membership or complete Experiment assignment",
+          "empty"
+        )
+      case Some(_) if experiment.nonEmpty != assignment.nonEmpty =>
+        Consequence.argumentInvalid(
+          "admission",
+          "complete Experiment correlation and assignment",
+          "incomplete"
+        )
+      case Some(value) =>
+        Consequence.success(copy(
+          invocation = Some(value.copy(
+            corpus = corpus,
+            experiment = experiment,
+            assignment = assignment
+          )),
+          correlation = None
+        ))
     }
 
   def isSinkActive(sink: OperationEvaluationSinkIdentity): Boolean =

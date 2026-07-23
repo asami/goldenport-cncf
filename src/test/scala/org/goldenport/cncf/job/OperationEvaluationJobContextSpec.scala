@@ -5,7 +5,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import scala.collection.mutable.ArrayBuffer
 import org.goldenport.{Conclusion, Consequence}
 import org.goldenport.cncf.context.{ExecutionContext, IdGenerationContext}
-import org.goldenport.cncf.operation.evaluation.{CorpusCaseReference, CorpusEvaluationCorrelation, CorpusRevisionReference, ExperimentArmReference, ExperimentEvaluationCorrelation, ExperimentReference, ExperimentRunReference, OperationEvaluationCorrelation, OperationEvaluationOperationIdentity, OperationEvaluationSinkIdentity}
+import org.goldenport.cncf.operation.evaluation.{CorpusCaseReference, CorpusEvaluationCorrelation, CorpusRevisionReference, ExperimentArmReference, ExperimentEvaluationCorrelation, ExperimentReference, ExperimentRunReference, OperationEvaluationAssignment, OperationEvaluationCorrelation, OperationEvaluationName, OperationEvaluationOperationIdentity, OperationEvaluationSinkIdentity, OperationEvaluationText}
 import org.goldenport.conclusion.Disposition
 import org.goldenport.protocol.operation.OperationResponse
 import org.scalatest.GivenWhenThen
@@ -36,14 +36,25 @@ final class OperationEvaluationJobContextSpec
       val attempts = new AtomicInteger(0)
       val correlations = ArrayBuffer.empty[OperationEvaluationCorrelation]
       val activesinks = ArrayBuffer.empty[Vector[OperationEvaluationSinkIdentity]]
-      val task = CorrelationTask(attempts = attempts, correlations = correlations, activeSinks = activesinks)
+      val assignments = ArrayBuffer.empty[Option[OperationEvaluationAssignment]]
+      val task = CorrelationTask(
+        attempts = attempts,
+        correlations = correlations,
+        activesinks = activesinks,
+        assignments = assignments
+      )
       val operation = _success(OperationEvaluationOperationIdentity.createC("catalog", "pricing", "quote"))
       val (corpus, experiment) = _admitted_correlations()
+      val assignment = OperationEvaluationAssignment(
+        _success(OperationEvaluationName.parseC("variant-b")),
+        Some(_success(OperationEvaluationText.parseC("execution-plan-b")))
+      )
       val prepared0 = _success(ExecutionContext.prepareOperationEvaluation(
         _execution_context(clock.now()),
         operation,
         Some(corpus),
-        Some(experiment)
+        Some(experiment),
+        Some(assignment)
       ))
       val sink = _success(OperationEvaluationSinkIdentity.createC(
         "corpus-evaluation-sink",
@@ -78,6 +89,10 @@ final class OperationEvaluationJobContextSpec
         captured.map(_.corpus).distinct shouldBe Vector(Some(corpus))
         captured.map(_.experiment).distinct shouldBe Vector(Some(experiment))
         activesinks.synchronized(activesinks.toVector) shouldBe Vector(Vector(sink), Vector(sink))
+        assignments.synchronized(assignments.toVector) shouldBe Vector(
+          Some(assignment),
+          Some(assignment)
+        )
       } finally {
         engine2.shutdown()
       }
@@ -87,9 +102,12 @@ final class OperationEvaluationJobContextSpec
   private final case class CorrelationTask(
     attempts: AtomicInteger,
     correlations: ArrayBuffer[OperationEvaluationCorrelation],
-    activeSinks: ArrayBuffer[Vector[OperationEvaluationSinkIdentity]],
-    actionId: ActionId = ActionId.generate()
+    activesinks: ArrayBuffer[Vector[OperationEvaluationSinkIdentity]],
+    assignments: ArrayBuffer[Option[OperationEvaluationAssignment]],
+    actionid: ActionId = ActionId.generate()
   ) extends JobTask {
+    def actionId: ActionId = actionid
+
     def run(ctx: ExecutionContext): TaskOutcome = {
       val attempted = _success(ExecutionContext.beginOperationEvaluationAttempt(ctx))
       val correlation = attempted.operationEvaluation.correlation.getOrElse(
@@ -98,8 +116,11 @@ final class OperationEvaluationJobContextSpec
       correlations.synchronized {
         correlations += correlation
       }
-      activeSinks.synchronized {
-        activeSinks += attempted.operationEvaluation.activeSinks
+      activesinks.synchronized {
+        activesinks += attempted.operationEvaluation.activeSinks
+      }
+      assignments.synchronized {
+        assignments += attempted.operationEvaluation.invocation.flatMap(_.assignment)
       }
       if (attempts.incrementAndGet() == 1)
         TaskFailed(Conclusion.simple("planned operation evaluation retry").copy(

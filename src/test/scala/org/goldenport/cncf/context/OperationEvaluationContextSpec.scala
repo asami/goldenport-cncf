@@ -3,7 +3,7 @@ package org.goldenport.cncf.context
 import java.time.{Clock, Instant, ZoneOffset}
 import org.goldenport.Consequence
 import org.goldenport.cncf.component.{Component, ComponentId, ComponentInit, ComponentInstanceId, ComponentOrigin}
-import org.goldenport.cncf.operation.evaluation.{CorpusCaseReference, CorpusEvaluationCorrelation, CorpusRevisionReference, ExperimentArmReference, ExperimentEvaluationCorrelation, ExperimentReference, ExperimentRunReference, OperationEvaluationContext, OperationEvaluationOperationIdentity, OperationEvaluationSinkIdentity}
+import org.goldenport.cncf.operation.evaluation.{CorpusCaseReference, CorpusEvaluationCorrelation, CorpusRevisionReference, ExperimentArmReference, ExperimentEvaluationCorrelation, ExperimentReference, ExperimentRunReference, OperationEvaluationAssignment, OperationEvaluationContext, OperationEvaluationName, OperationEvaluationOperationIdentity, OperationEvaluationSinkIdentity, OperationEvaluationText}
 import org.goldenport.cncf.spi.evaluation.{CorpusEvaluationSinkSocket, DeterministicCorpusEvaluationSink, DeterministicExperimentEvaluationSink, ExperimentEvaluationSinkSocket}
 import org.goldenport.cncf.testutil.TestComponentFactory
 import org.goldenport.protocol.Protocol
@@ -30,11 +30,16 @@ final class OperationEvaluationContextSpec extends AnyWordSpec with Matchers wit
       val sink = _sink_identity("catalog", "textus-corpus")
       val base = _execution_context("rebind")
       val (corpus, experiment) = _admitted_correlations()
+      val assignment = OperationEvaluationAssignment(
+        _success(OperationEvaluationName.parseC("variant-b")),
+        Some(_success(OperationEvaluationText.parseC("execution-plan-b")))
+      )
       val prepared = _success(ExecutionContext.prepareOperationEvaluation(
         base,
         operation,
         Some(corpus),
-        Some(experiment)
+        Some(experiment),
+        Some(assignment)
       ))
       val attempted = _success(ExecutionContext.beginOperationEvaluationAttempt(prepared))
       val active = _success(ExecutionContext.withActiveOperationEvaluationSink(attempted, sink))
@@ -54,6 +59,7 @@ final class OperationEvaluationContextSpec extends AnyWordSpec with Matchers wit
       rebound.operationEvaluation.correlation shouldBe Some(correlation)
       correlation.corpus shouldBe Some(corpus)
       correlation.experiment shouldBe Some(experiment)
+      rebound.operationEvaluation.invocation.flatMap(_.assignment) shouldBe Some(assignment)
       rebound.operationEvaluation.activeSinks shouldBe Vector(sink)
       val nestedinvocation = nested.operationEvaluation.invocation.getOrElse(fail("nested invocation missing"))
       nestedinvocation.executionId should not be correlation.executionId
@@ -62,6 +68,7 @@ final class OperationEvaluationContextSpec extends AnyWordSpec with Matchers wit
       nested.operationEvaluation.activeSinks shouldBe Vector(sink)
       nestedinvocation.corpus shouldBe None
       nestedinvocation.experiment shouldBe None
+      nestedinvocation.assignment shouldBe None
       val projected = nested.operationEvaluation.toRecord.print
       projected should include ("catalog")
       projected should include ("textus-corpus")

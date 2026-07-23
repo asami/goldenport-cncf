@@ -4,6 +4,7 @@ import java.math.MathContext
 import java.nio.charset.Charset
 import java.time.{Clock, Instant, ZoneId}
 import java.util.Locale
+import scala.deprecatedName
 import org.goldenport.context.{EntropyContext, EnvironmentContext as CoreEnvironmentContext, ExecutionContext as CoreExecutionContext, I18nContext, RandomContext, VirtualMachineContext}
 import org.goldenport.id.{UniversalId as CoreUniversalId}
 import org.goldenport.log.Logger
@@ -18,7 +19,7 @@ import org.goldenport.cncf.entity.runtime.EntitySpace
 import org.goldenport.cncf.unitofwork.UnitOfWork
 import org.goldenport.cncf.unitofwork.UnitOfWorkOp
 import org.goldenport.cncf.observability.{CallTreeContext, DslChokepointHook, ResourceAccessObservation, ResourceTreeAccessObservation}
-import org.goldenport.cncf.operation.evaluation.{CorpusEvaluationCorrelation, ExperimentEvaluationCorrelation, OperationEvaluationContext, OperationEvaluationOperationIdentity, OperationEvaluationSinkIdentity}
+import org.goldenport.cncf.operation.evaluation.{CorpusEvaluationCorrelation, ExperimentEvaluationCorrelation, OperationEvaluationAssignment, OperationEvaluationContext, OperationEvaluationOperationIdentity, OperationEvaluationSinkIdentity}
 import org.goldenport.cncf.resource.{ResourceAccess, ResourceAccessTestProfile, ResourceTreeAccess}
 import cats.~>
 
@@ -282,11 +283,11 @@ object ExecutionContext {
 
   def withJobContext(
     ctx: ExecutionContext,
-    jobContext: org.goldenport.cncf.job.JobContext
+    @deprecatedName("jobContext", "0.5.1") jobcontext: org.goldenport.cncf.job.JobContext
   ): ExecutionContext = ctx match {
     case i: Instance =>
       i.copy(
-        cncfCore = i.cncfCore.copy(jobContext = jobContext)
+        cncfCore = i.cncfCore.copy(jobContext = jobcontext)
       )
     case _ =>
       ctx
@@ -367,12 +368,12 @@ object ExecutionContext {
 
   def withIdGenerationContext(
     ctx: ExecutionContext,
-    idGeneration: IdGenerationContext
+    @deprecatedName("idGeneration", "0.5.1") idgeneration: IdGenerationContext
   ): ExecutionContext = ctx match {
     case i: Instance =>
       i.copy(
         cncfCore = i.cncfCore.copy(
-          idGeneration = idGeneration
+          idGeneration = idgeneration
         )
       )
     case _ =>
@@ -381,12 +382,12 @@ object ExecutionContext {
 
   def withTagSpaces(
     ctx: ExecutionContext,
-    tagSpaces: TagSpaceContext
+    @deprecatedName("tagSpaces", "0.5.1") tagspaces: TagSpaceContext
   ): ExecutionContext = ctx match {
     case i: Instance =>
       i.copy(
         cncfCore = i.cncfCore.copy(
-          tagSpaces = tagSpaces
+          tagSpaces = tagspaces
         )
       )
     case _ =>
@@ -397,10 +398,11 @@ object ExecutionContext {
     ctx: ExecutionContext,
     operation: OperationEvaluationOperationIdentity,
     corpus: Option[CorpusEvaluationCorrelation] = None,
-    experiment: Option[ExperimentEvaluationCorrelation] = None
+    experiment: Option[ExperimentEvaluationCorrelation] = None,
+    assignment: Option[OperationEvaluationAssignment] = None
   ): Consequence[ExecutionContext] =
     ctx.cncfCore.operationEvaluation
-      .prepareC(operation, ctx.clock.instant(), ctx.idGeneration, corpus, experiment)
+      .prepareC(operation, ctx.clock.instant(), ctx.idGeneration, corpus, experiment, assignment)
       .map(withOperationEvaluation(ctx, _))
 
   def beginOperationEvaluationAttempt(
@@ -408,6 +410,16 @@ object ExecutionContext {
   ): Consequence[ExecutionContext] =
     ctx.cncfCore.operationEvaluation
       .beginAttemptC(ctx.clock.instant(), ctx.idGeneration, ctx)
+      .map(withOperationEvaluation(ctx, _))
+
+  def admitOperationEvaluation(
+    ctx: ExecutionContext,
+    corpus: Option[CorpusEvaluationCorrelation],
+    experiment: Option[ExperimentEvaluationCorrelation],
+    assignment: Option[OperationEvaluationAssignment]
+  ): Consequence[ExecutionContext] =
+    ctx.cncfCore.operationEvaluation
+      .admitC(corpus, experiment, assignment)
       .map(withOperationEvaluation(ctx, _))
 
   def withActiveOperationEvaluationSink(
@@ -446,11 +458,11 @@ object ExecutionContext {
 
   def withResourceTreeAccess(
     ctx: ExecutionContext,
-    resourceTrees: ResourceTreeAccess
+    @deprecatedName("resourceTrees", "0.5.1") resourcetrees: ResourceTreeAccess
   ): ExecutionContext = ctx match {
     case i: Instance =>
       i.copy(
-        cncfCore = i.cncfCore.copy(resourceTrees = resourceTrees)
+        cncfCore = i.cncfCore.copy(resourceTrees = resourcetrees)
       )
     case _ =>
       ctx

@@ -111,6 +111,35 @@ An admitted assignment is immutable for one logical execution. Component code
 may read only its admitted logical variant or execution-plan reference. It may
 not allocate an arm, inspect global experiment state, or substitute an
 undeclared assignment.
+Admission is a one-time state transition on a prepared invocation. It cannot
+be repeated and cannot occur after attempt correlation has been created.
+
+Runtime resolution uses the provider-neutral `OperationEvaluationResolver`
+capability inherited through `ScopeContext`. A declaration-free operation does
+not invoke the resolver. A declared operation supplies only its normalized
+operation identity and bounded declaration to the resolver. The disabled
+resolver returns an unavailable admission without calling an external
+provider; deterministic resolver implementations are the executable-
+specification surface.
+
+The resolver returns either an immutable admitted value or bounded
+unavailability. An admitted value may contain provider-owned Corpus and
+Experiment correlations plus one logical variant/execution-plan reference.
+An admitted value cannot be empty, and Experiment correlation and assignment
+must be present together.
+It cannot contain provider clients, credentials, raw inputs, or execution-plan
+content. The runtime rejects undeclared or incomplete membership and
+assignment values rather than broadening the declaration.
+
+Admission status and limitations are recorded as a bounded admission section
+of `OperationEvaluationExecutionReport`. They do not replace the canonical
+`Consequence`, automatic facts, or sink-delivery diagnostics.
+The report retains only finite structural limitation kinds, logical policy
+names, and normalized diagnostic keys. It never retains resolver
+`Conclusion` history, arbitrary diagnostic facets, or provider/application
+payloads. Optional unavailability is reported as limited; required
+unavailability is reported as rejected and contributes a failed aggregate
+evaluation status.
 
 ### Operation Declaration Model
 
@@ -226,6 +255,12 @@ Supplemental facts:
   observability policies;
 - cannot bypass the normal CNCF execution chokepoints.
 
+Operation code may inspect the immutable admitted result only through the
+protected `operation_evaluation_assignment`,
+`operation_evaluation_variant`, and
+`operation_evaluation_execution_plan` accessors. These accessors expose
+logical values, not the resolver or provider capability.
+
 ## Execution Order
 
 The normative order is:
@@ -250,6 +285,14 @@ resolve route and normalize framework input
 Authorization denial occurs before external admission or sink invocation. It
 is not an operation execution fact. Request normalization failures that occur
 before operation authorization remain ordinary request-validation diagnostics.
+
+Canonical `Request` dispatch resolves admission before
+`makeOperationRequest`. Framework-internal Event, Rule, Workflow, JCL, and
+direct execution paths may already hold a constructed `Action`; those paths
+resolve admission after authorization and before `ActionCall` construction or
+business execution. Such `Action` construction must remain independent of an
+evaluation assignment. Variant-dependent behavior belongs in the admitted
+`ActionCall`/Behavior boundary.
 
 The implementation MAY factor the chokepoint around existing runtime methods,
 but no presentation adapter or special query path may bypass the contract.

@@ -807,7 +807,9 @@ object OperationEvaluationDeliveryDiagnostic {
 
 final case class OperationEvaluationExecutionReport private (
   deliveries: Vector[OperationEvaluationDeliveryDiagnostic],
-  omittedCount: Int
+  omittedCount: Int,
+  admissions: Vector[OperationEvaluationAdmissionDiagnostic],
+  omittedAdmissionCount: Int
 ) {
   def append(
     diagnostic: OperationEvaluationDeliveryDiagnostic
@@ -817,10 +819,27 @@ final case class OperationEvaluationExecutionReport private (
     else
       copy(omittedCount = omittedCount + 1)
 
+  def appendAdmission(
+    diagnostic: OperationEvaluationAdmissionDiagnostic
+  ): OperationEvaluationExecutionReport =
+    if (admissions.length < OperationEvaluationExecutionReport.MAXIMUM_ADMISSIONS)
+      copy(admissions = admissions :+ diagnostic)
+    else
+      copy(omittedAdmissionCount = omittedAdmissionCount + 1)
+
   def aggregateStatus: Option[OperationEvaluationDeliveryStatus] =
-    if (deliveries.exists(_.status == OperationEvaluationDeliveryStatus.Failed))
+    if (
+      deliveries.exists(_.status == OperationEvaluationDeliveryStatus.Failed) ||
+      admissions.exists(x =>
+        x.status == OperationEvaluationAdmissionStatus.Rejected ||
+          x.status == OperationEvaluationAdmissionStatus.Failed
+      )
+    )
       Some(OperationEvaluationDeliveryStatus.Failed)
-    else if (deliveries.exists(_.status == OperationEvaluationDeliveryStatus.Limited))
+    else if (
+      deliveries.exists(_.status == OperationEvaluationDeliveryStatus.Limited) ||
+      admissions.exists(_.status == OperationEvaluationAdmissionStatus.Unavailable)
+    )
       Some(OperationEvaluationDeliveryStatus.Limited)
     else if (deliveries.exists(_.status == OperationEvaluationDeliveryStatus.Discarded))
       Some(OperationEvaluationDeliveryStatus.Discarded)
@@ -831,15 +850,18 @@ final case class OperationEvaluationExecutionReport private (
 
   def toRecord: Record = Record.dataAuto(
     "status" -> aggregateStatus.map(_.token),
+    "admissions" -> admissions.map(_.toRecord),
+    "omittedAdmissionCount" -> omittedAdmissionCount,
     "deliveries" -> deliveries.map(_.toRecord),
     "omittedCount" -> omittedCount
   )
 }
 
 object OperationEvaluationExecutionReport {
+  val MAXIMUM_ADMISSIONS: Int = 16
   val MAXIMUM_DELIVERIES: Int = 32
   val empty: OperationEvaluationExecutionReport =
-    OperationEvaluationExecutionReport(Vector.empty, 0)
+    OperationEvaluationExecutionReport(Vector.empty, 0, Vector.empty, 0)
 }
 
 enum EvaluationAdmissionRequirement(val token: String) {

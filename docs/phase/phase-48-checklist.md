@@ -227,11 +227,19 @@ Implementation Evidence:
 ## OE-08: Executable Evidence
 
 Stage Status:
-- Current status: NEXT
+- Current status: IN_PROGRESS
 - Owner: CNCF operation runtime maintainers
 - Update rule: Mark IN_PROGRESS only after OE-07 closes; mark DONE only when
   every OE-08 checklist item is complete.
 
+- [x] Resolve declared optional/required evaluation admission after
+  authorization and before canonical Request construction, or before
+  `ActionCall` business execution when a framework path already owns an
+  assignment-independent Action.
+- [x] Expose immutable admitted assignment through protected component
+  accessors without exposing the resolver/provider.
+- [x] Preserve admitted assignment through context rebinding, Job retry, and
+  resume while preventing implicit nested-operation inheritance.
 - [ ] Cover automatic capture with connected and disconnected sinks.
 - [ ] Cover supplemental DSL capture and source attribution.
 - [ ] Cover success, failure, timeout, cancellation, retry, resume, nested
@@ -245,6 +253,59 @@ Stage Status:
   framework-binding failure without leaking provider calls.
 - [ ] Verify undeclared operations emit only automatic facts and disabled
   sinks perform no provider invocation.
+
+Implementation Progress:
+- `OperationEvaluationResolver` is a provider-neutral runtime capability
+  inherited through `ScopeContext`; declaration-free operations do not invoke
+  it and its disabled implementation returns bounded unavailability.
+- Optional unavailability follows the control path and records a bounded
+  payload-safe admission diagnostic. Required unavailability is recorded as a
+  rejected admission and invalid/incomplete admission is recorded as a failed
+  admission; both fail before business execution while retaining the
+  authorized automatic attempt.
+- Admitted Corpus/Experiment correlations and logical assignment are immutable
+  operation context. Protected application access exposes only variant and
+  execution-plan references.
+- Resolver-returned failures and thrown resolver exceptions retain their
+  structured `Conclusion`, while execution reports retain only bounded
+  structural diagnostic keys rather than application-owned diagnostic
+  payloads.
+- Empty, undeclared, incomplete, repeated, and post-attempt admissions fail
+  without replacing immutable assignment or attempt-correlation state.
+- Canonical Request execution admits before operation request construction.
+  Direct/prepared Action execution admits after authorization and before
+  `ActionCall` business behavior because the Action is already constructed.
+- `OperationEvaluationAdmissionSpec`, `OperationEvaluationContextSpec`,
+  `OperationEvaluationJobContextSpec`, and
+  `OperationEvaluationAutomaticCaptureSpec`, together with the complete
+  capture/delivery/supplemental/SPI regression set, pass 83 focused tests
+  across nine suites.
+- Review-fix corrected the public direct Action path to preserve the
+  component-owned `ScopeContext` resolver/sink capabilities instead of
+  replacing them with a generic ingress context.
+- The focused suites and `Test/compile` pass after review-fix. A fresh
+  read-only re-review found no actionable behavioral, naming, or executable-
+  specification findings; OE-08A is ready for its validated release commit.
+- OE-08 remains open for the consolidated required-scenario matrix, including
+  explicit cross-sink behavior and SPI route evidence.
+
+OE-08A Modified Scala File Compliance Ledger:
+
+| File | Naming | Executable specification | Validation | Commit |
+| --- | --- | --- | --- | --- |
+| `src/main/scala/org/goldenport/cncf/action/ActionCallOperationEvaluationPart.scala` | whole-file pass | not a spec | 83 focused tests; `Test/compile` | OE-08A release commit |
+| `src/main/scala/org/goldenport/cncf/component/ComponentLogic.scala` | whole-file pass | not a spec | 83 focused tests; `Test/compile` | OE-08A release commit |
+| `src/main/scala/org/goldenport/cncf/context/ExecutionContext.scala` | whole-file pass | not a spec | 83 focused tests; `Test/compile` | OE-08A release commit |
+| `src/main/scala/org/goldenport/cncf/context/RuntimeContext.scala` | whole-file pass | not a spec | 83 focused tests; `Test/compile` | OE-08A release commit |
+| `src/main/scala/org/goldenport/cncf/context/ScopeContext.scala` | whole-file pass | not a spec | 83 focused tests; `Test/compile` | OE-08A release commit |
+| `src/main/scala/org/goldenport/cncf/operation/evaluation/OperationEvaluationAdmission.scala` | whole-file pass | not a spec | 83 focused tests; `Test/compile` | OE-08A release commit |
+| `src/main/scala/org/goldenport/cncf/operation/evaluation/OperationEvaluationContext.scala` | whole-file pass | not a spec | 83 focused tests; `Test/compile` | OE-08A release commit |
+| `src/main/scala/org/goldenport/cncf/operation/evaluation/OperationEvaluationModel.scala` | whole-file pass | not a spec | 83 focused tests; `Test/compile` | OE-08A release commit |
+| `src/main/scala/org/goldenport/cncf/subsystem/Subsystem.scala` | whole-file pass | not a spec | 83 focused tests; `Test/compile` | OE-08A release commit |
+| `src/test/scala/org/goldenport/cncf/context/OperationEvaluationContextSpec.scala` | whole-file pass | whole-file pass | 83 focused tests; `Test/compile` | OE-08A release commit |
+| `src/test/scala/org/goldenport/cncf/job/OperationEvaluationJobContextSpec.scala` | whole-file pass | whole-file pass | 83 focused tests; `Test/compile` | OE-08A release commit |
+| `src/test/scala/org/goldenport/cncf/operation/evaluation/OperationEvaluationAdmissionSpec.scala` | whole-file pass | whole-file pass | 83 focused tests; `Test/compile` | OE-08A release commit |
+| `src/test/scala/org/goldenport/cncf/operation/evaluation/OperationEvaluationModelSpec.scala` | whole-file pass | whole-file pass | 83 focused tests; `Test/compile` | OE-08A release commit |
 
 ## OE-09: Downstream Handoff
 

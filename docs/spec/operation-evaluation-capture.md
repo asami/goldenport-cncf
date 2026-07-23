@@ -36,16 +36,39 @@ Corpus membership, candidate capture, experiment participation, assignment,
 arm identity, and measurements MUST be enabled only by explicit operation,
 runtime, or invocation policy.
 
-- Admission MUST occur after authorization and before assignment-dependent
-  operation request construction or business execution.
-- One admitted assignment MUST be immutable for one logical execution.
-- A required unavailable or invalid admission MUST fail before business
+- R1: A declaration-free operation MUST NOT invoke
+  `OperationEvaluationResolver`.
+- R2: A declared operation MUST resolve through the inherited
+  `OperationEvaluationResolver` capability after authorization. Canonical
+  `Request` dispatch MUST resolve before `makeOperationRequest`. A framework
+  path that already owns a constructed `Action` MUST resolve before
+  `ActionCall` construction and business execution; its `Action` construction
+  MUST remain assignment-independent.
+- R3: The disabled resolver and an optional unavailable admission MUST use the
+  normal control path, MUST NOT invoke an external provider through the
+  disabled resolver, and MAY report a bounded limitation.
+- R4: A required unavailable or invalid admission MUST fail before business
   execution with a structured `Consequence`.
-- An optional unavailable admission MUST use the normal control path and MAY
-  report a bounded limitation.
-- An unknown admitted variant MUST NOT silently fall back to control.
-- Operation code MUST NOT allocate or mutate Corpus/Experiment lifecycle
-  state.
+- R5: An admitted result MUST NOT contain membership or assignment for a
+  declaration that did not request it. Experiment correlation and assignment
+  MUST be either both present or both absent. A required Experiment admission
+  MUST provide both, and a required Corpus admission MUST provide Corpus
+  correlation.
+- R6: One admitted assignment MUST be immutable for one logical execution.
+  Admission MUST be a one-time transition before attempt creation; a second
+  admission or admission after an attempt starts MUST fail without replacing
+  correlation or assignment state.
+  Operation code MAY read its logical value only through protected CNCF
+  accessors and MUST NOT receive the resolver or provider service. Operation
+  code MUST NOT allocate or mutate Corpus/Experiment lifecycle state.
+- R7: Resolver exceptions and invalid or unknown assignments MUST remain
+  structured `Consequence` failures and MUST NOT silently fall back to
+  control.
+- R8: Admission status, limitation, and diagnostic metadata MUST be finite and
+  payload-safe. It MUST NOT retain raw `Conclusion` history, application
+  values, credentials, or provider payloads.
+- R9: Authorization denial MUST occur before resolver or evaluation sink
+  invocation and MUST NOT produce operation-evaluation execution facts.
 
 Automatic facts remain eligible when an authorized invocation has no explicit
 admission. Conversely, an admitted membership or assignment does not permit

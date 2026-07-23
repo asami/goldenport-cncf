@@ -4,6 +4,7 @@ import java.text.NumberFormat
 import java.time.{Instant, LocalDate, LocalDateTime, LocalTime, OffsetDateTime, ZoneId, ZonedDateTime}
 import java.time.format.{DateTimeFormatter, DateTimeFormatterBuilder, FormatStyle}
 import java.util.Locale
+import scala.deprecatedName
 import scala.util.control.NonFatal
 import cats.~>
 import org.goldenport.Consequence
@@ -12,6 +13,7 @@ import org.goldenport.cncf.config.{OperationMode, ResolvedParameters, RuntimeCon
 import org.goldenport.cncf.entity.EntityCreateDefaultsPolicy
 import org.goldenport.cncf.naming.PropertyValueResolver
 import org.goldenport.cncf.operation.evaluation.{
+  OperationEvaluationAdmissionDiagnostic,
   OperationEvaluationAttemptId,
   OperationEvaluationDeliveryDiagnostic,
   OperationEvaluationExecutionReport
@@ -35,11 +37,11 @@ import org.goldenport.util.StringUtils
  */
 final class RuntimeContext(
   val core: ScopeContext.Core,
-  unitOfWorkSupplier: () => UnitOfWork,
-  unitOfWorkInterpreterFn: UnitOfWorkOp ~> Consequence,
-  commitAction: UnitOfWork => Unit,
-  abortAction: UnitOfWork => Unit,
-  disposeAction: UnitOfWork => Unit,
+  @deprecatedName("unitOfWorkSupplier", "0.5.1") unitofworksupplier: () => UnitOfWork,
+  @deprecatedName("unitOfWorkInterpreterFn", "0.5.1") unitofworkinterpreterfn: UnitOfWorkOp ~> Consequence,
+  @deprecatedName("commitAction", "0.5.1") commitaction: UnitOfWork => Unit,
+  @deprecatedName("abortAction", "0.5.1") abortaction: UnitOfWork => Unit,
+  @deprecatedName("disposeAction", "0.5.1") disposeaction: UnitOfWork => Unit,
   token: String,
   val context: RuntimeContext.Context = RuntimeContext.Context.default,
   val operationMode: OperationMode = RuntimeConfig.DefaultOperationMode,
@@ -50,9 +52,9 @@ final class RuntimeContext(
   private var _execution_metadata: RuntimeContext.ExecutionMetadata =
     RuntimeContext.ExecutionMetadata.empty
 
-  lazy val unitOfWork: UnitOfWork = unitOfWorkSupplier()
+  lazy val unitOfWork: UnitOfWork = unitofworksupplier()
 
-  def unitOfWorkInterpreter: UnitOfWorkOp ~> Consequence = unitOfWorkInterpreterFn
+  def unitOfWorkInterpreter: UnitOfWorkOp ~> Consequence = unitofworkinterpreterfn
 
   def commitC(): Consequence[UnitOfWork.CommitResult] =
     commitC(_operation_evaluation_attempt_id)
@@ -61,7 +63,7 @@ final class RuntimeContext(
     attemptid: Option[OperationEvaluationAttemptId]
   ): Consequence[UnitOfWork.CommitResult] =
     try {
-      commitAction(unitOfWork)
+      commitaction(unitOfWork)
       val result = unitOfWork.lastCommitResult.getOrElse(Consequence.unit)
       result match {
         case Consequence.Success(_) =>
@@ -83,7 +85,7 @@ final class RuntimeContext(
     attemptid: Option[OperationEvaluationAttemptId]
   ): Consequence[UnitOfWork.AbortResult] =
     try {
-      abortAction(unitOfWork)
+      abortaction(unitOfWork)
       val result = unitOfWork.lastAbortResult.getOrElse(Consequence.unit)
       attemptid.foreach(unitOfWork.discardOperationEvaluationSupplemental)
       result
@@ -94,23 +96,23 @@ final class RuntimeContext(
     }
 
   def commit(): Unit =
-    commitAction(unitOfWork)
+    commitaction(unitOfWork)
 
   def abort(): Unit =
-    abortAction(unitOfWork)
+    abortaction(unitOfWork)
 
-  def dispose(): Unit = disposeAction(unitOfWork)
+  def dispose(): Unit = disposeaction(unitOfWork)
 
   def toToken: String = token
 
   def withContext(context: RuntimeContext.Context): RuntimeContext =
     new RuntimeContext(
       core = core,
-      unitOfWorkSupplier = unitOfWorkSupplier,
-      unitOfWorkInterpreterFn = unitOfWorkInterpreterFn,
-      commitAction = commitAction,
-      abortAction = abortAction,
-      disposeAction = disposeAction,
+      unitofworksupplier = unitofworksupplier,
+      unitofworkinterpreterfn = unitofworkinterpreterfn,
+      commitaction = commitaction,
+      abortaction = abortaction,
+      disposeaction = disposeaction,
       token = token,
       context = context,
       operationMode = operationMode,
@@ -119,23 +121,23 @@ final class RuntimeContext(
     )
 
   def withUnitOfWorkContext(
-    executionContext: => ExecutionContext,
-    newToken: String = toToken
+    @deprecatedName("executionContext", "0.5.1") executioncontext: => ExecutionContext,
+    @deprecatedName("newToken", "0.5.1") newtoken: String = toToken
   ): RuntimeContext = {
     lazy val reboundunitofwork: UnitOfWork =
-      unitOfWork.withContext(executionContext)
+      unitOfWork.withContext(executioncontext)
     val interpreter = new (UnitOfWorkOp ~> Consequence) {
       def apply[A](fa: UnitOfWorkOp[A]): Consequence[A] =
         new UnitOfWorkInterpreter(reboundunitofwork).interpret(fa)
     }
     val runtime = new RuntimeContext(
       core = core,
-      unitOfWorkSupplier = () => reboundunitofwork,
-      unitOfWorkInterpreterFn = interpreter,
-      commitAction = commitAction,
-      abortAction = abortAction,
-      disposeAction = disposeAction,
-      token = newToken,
+      unitofworksupplier = () => reboundunitofwork,
+      unitofworkinterpreterfn = interpreter,
+      commitaction = commitaction,
+      abortaction = abortaction,
+      disposeaction = disposeaction,
+      token = newtoken,
       context = context,
       operationMode = operationMode,
       transitionValidationHook = transitionValidationHook,
@@ -179,24 +181,24 @@ final class RuntimeContext(
     updateExecutionMetadata(_.copy(inlineCallTree = Some(calltree)))
 
   def noteExecutionContext(
-    sagaId: Option[String],
-    jobId: Option[String],
-    taskId: Option[String]
+    @deprecatedName("sagaId", "0.5.1") sagaid: Option[String],
+    @deprecatedName("jobId", "0.5.1") jobid: Option[String],
+    @deprecatedName("taskId", "0.5.1") taskid: Option[String]
   ): Unit =
     updateExecutionMetadata(_.copy(
-      sagaId = sagaId,
-      executionJobId = jobId,
-      executionTaskId = taskId
+      sagaId = sagaid,
+      executionJobId = jobid,
+      executionTaskId = taskid
     ))
 
   def noteExecutionDiagnostics(
-    traceId: Option[String],
-    executionId: Option[String],
+    @deprecatedName("traceId", "0.5.1") traceid: Option[String],
+    @deprecatedName("executionId", "0.5.1") executionid: Option[String],
     failure: Option[String]
   ): Unit =
     updateExecutionMetadata(_.copy(
-      traceId = traceId,
-      executionId = executionId,
+      traceId = traceid,
+      executionId = executionid,
       failure = failure
     ))
 
@@ -207,6 +209,16 @@ final class RuntimeContext(
       val report = metadata.operationEvaluation
         .getOrElse(OperationEvaluationExecutionReport.empty)
         .append(diagnostic)
+      metadata.copy(operationEvaluation = Some(report))
+    }
+
+  def noteOperationEvaluationAdmission(
+    diagnostic: OperationEvaluationAdmissionDiagnostic
+  ): Unit =
+    updateExecutionMetadata { metadata =>
+      val report = metadata.operationEvaluation
+        .getOrElse(OperationEvaluationExecutionReport.empty)
+        .appendAdmission(diagnostic)
       metadata.copy(operationEvaluation = Some(report))
     }
 
@@ -272,9 +284,9 @@ object RuntimeContext {
 
     def preferredName(
       keyset: Set[String],
-      canonicalName: String
+      @deprecatedName("canonicalName", "0.5.1") canonicalname: String
     ): String =
-      aliases(canonicalName).find(keyset.contains).getOrElse(outputName(canonicalName))
+      aliases(canonicalname).find(keyset.contains).getOrElse(outputName(canonicalname))
 
     def resolver: PropertyValueResolver =
       PropertyValueResolver(this)
@@ -529,8 +541,8 @@ object RuntimeContext {
   def core(
     name: String,
     parent: Option[ScopeContext],
-    observabilityContext: ObservabilityContext,
-    httpDriverOption: Option[HttpDriver] = None,
+    @deprecatedName("observabilityContext", "0.5.1") observabilitycontext: ObservabilityContext,
+    @deprecatedName("httpDriverOption", "0.5.1") httpdriveroption: Option[HttpDriver] = None,
     datastore: Option[DataStoreContext] = None,
     entitystore: Option[EntityStoreContext] = None,
     entityspace: Option[EntitySpaceContext] = None
@@ -539,8 +551,8 @@ object RuntimeContext {
       kind = ScopeKind.Runtime,
       name = name,
       parent = parent,
-      observabilityContext = observabilityContext,
-      httpDriverOption = httpDriverOption,
+      observabilityContext = observabilitycontext,
+      httpDriverOption = httpdriveroption,
       datastore = datastore,
       entitystore = entitystore,
       entityspace = entityspace

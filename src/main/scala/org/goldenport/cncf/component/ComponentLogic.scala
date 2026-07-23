@@ -1,5 +1,6 @@
 package org.goldenport.cncf.component
 
+import scala.deprecatedName
 import org.goldenport.Consequence
 import org.goldenport.Conclusion
 import org.goldenport.datatype.PathName
@@ -148,7 +149,7 @@ case class ComponentLogic(
     ctx: ExecutionContext,
     taskdecorator: ActionTask => JobTask
   ): Consequence[OperationResponse] = {
-    if (ctx.operationEvaluation.invocation.flatMap(_.parentExecutionId).isEmpty)
+    if (ctx.operationEvaluation.invocation.isEmpty)
       ctx.runtime.clearExecutionMetadata()
     val actionscope = component.scopeContext.createChildScope(ScopeKind.Action, action.name)
     val scopedctx = ctx.withScope(actionscope)
@@ -564,26 +565,30 @@ case class ComponentLogic(
   ): Consequence[JobId] =
     component.jobEngine.submit(tasks, ctx, option)
 
-  def getJobStatus(jobId: JobId): Option[JobStatus] =
-    component.jobEngine.getStatus(jobId)
+  def getJobStatus(
+    @deprecatedName("jobId", "0.5.1") jobid: JobId
+  ): Option[JobStatus] =
+    component.jobEngine.getStatus(jobid)
 
-  def getJobResult(jobId: JobId): Option[JobResult] =
-    component.jobEngine.getResult(jobId)
+  def getJobResult(
+    @deprecatedName("jobId", "0.5.1") jobid: JobId
+  ): Option[JobResult] =
+    component.jobEngine.getResult(jobid)
 
   def controlJob(
-    jobId: JobId,
+    @deprecatedName("jobId", "0.5.1") jobid: JobId,
     request: JobControlRequest,
     policy: JobControlPolicy = JobControlPolicy.default
   )(using ExecutionContext): Consequence[JobControlResponse] =
-    component.jobEngine.control(jobId, request, policy)
+    component.jobEngine.control(jobid, request, policy)
 
   def awaitJobResult(
     jobid: JobId,
-    timeoutMillis: Long = 3000L,
-    pollMillis: Long = 10L
+    @deprecatedName("timeoutMillis", "0.5.1") timeoutmillis: Long = 3000L,
+    @deprecatedName("pollMillis", "0.5.1") pollmillis: Long = 10L
   ): Consequence[OperationResponse] = {
-    val _ = pollMillis // Retained for source compatibility; JobEngine owns await policy.
-    component.jobEngine.awaitResult(jobid, timeoutMillis).flatMap {
+    val _ = pollmillis // Retained for source compatibility; JobEngine owns await policy.
+    component.jobEngine.awaitResult(jobid, timeoutmillis).flatMap {
       case JobResult.Success(response) => Consequence.success(response)
       case JobResult.Failure(conclusion) => Consequence.Failure(conclusion)
     }
