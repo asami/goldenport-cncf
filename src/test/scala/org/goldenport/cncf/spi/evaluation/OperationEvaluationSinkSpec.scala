@@ -6,8 +6,8 @@ import org.goldenport.Consequence
 import org.goldenport.cncf.component.{Component, ComponentId, ComponentInit, ComponentInstanceId, ComponentOrigin}
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.http.RuntimeDashboardMetrics
-import org.goldenport.cncf.operation.evaluation.{CorpusCandidateFact, ExperimentObservationFact, OperationEvaluationAttemptId, OperationEvaluationCorrelation, OperationEvaluationDeliveryResult, OperationEvaluationDeliveryStatus, OperationEvaluationExecutionId, OperationEvaluationFactId, OperationEvaluationLabel, OperationEvaluationMeasurement, OperationEvaluationOperationIdentity, OperationEvaluationOutcome, OperationEvaluationStartFact, OperationEvaluationTerminalFact, OperationEvaluationText}
-import org.goldenport.cncf.spi.{SpiContract, SpiProvider, SpiProviderComponent, SpiResolver, SpiSelection}
+import org.goldenport.cncf.operation.evaluation.{CorpusCandidateFact, ExperimentObservationFact, OperationEvaluationAttemptId, OperationEvaluationCorrelation, OperationEvaluationDeliveryResult, OperationEvaluationDeliveryStatus, OperationEvaluationExecutionId, OperationEvaluationFactId, OperationEvaluationLabel, OperationEvaluationMeasurement, OperationEvaluationOperationIdentity, OperationEvaluationOutcome, OperationEvaluationSinkIdentity, OperationEvaluationStartFact, OperationEvaluationTerminalFact, OperationEvaluationText}
+import org.goldenport.cncf.spi.{SpiContract, SpiProvider, SpiProviderComponent, SpiResolver, SpiSelection, SpiTraceMetadata}
 import org.goldenport.cncf.testutil.TestComponentFactory
 import org.goldenport.protocol.Protocol
 import org.scalacheck.{Gen, Prop, Test}
@@ -140,6 +140,39 @@ final class OperationEvaluationSinkSpec extends AnyWordSpec with Matchers with G
       RuntimeDashboardMetrics.spiInvocationSnapshot.summary.cumulative.total should be >= (before + 2)
     }
 
+    "mark the active provider boundary and suppress same-sink reentry" in {
+      Given("a traced Corpus sink and a provider that observes only its execution context")
+      val delegate = _success(DeterministicCorpusEvaluationSink.createC("catalog", "textus-corpus"))
+      val recording = ContextRecordingCorpusSink(delegate)
+      val metadata = SpiTraceMetadata(
+        contract = CorpusEvaluationSink.CONTRACT_NAME,
+        operation = "",
+        socketComponent = "catalog",
+        providerComponent = "textus-corpus"
+      )
+      val traced = CorpusEvaluationSink.traced(recording, metadata)
+      val candidate = _candidate_fact("provider-boundary")
+      val context = ExecutionContext.create()
+
+      When("the caller invokes the provider and then attempts the same boundary while it is active")
+      val delivered = traced.submitCandidate(candidate)(using context)
+      val sink = _success(OperationEvaluationSinkIdentity.createC(
+        CorpusEvaluationSink.CONTRACT_NAME,
+        "catalog",
+        "textus-corpus"
+      ))
+      val active = _success(ExecutionContext.withActiveOperationEvaluationSink(context, sink))
+      val suppressed = traced.submitCandidate(candidate)(using active)
+
+      Then("the provider sees its active identity exactly once and recursive delivery is discarded")
+      delivered.toOption.map(_.status) shouldBe Some(OperationEvaluationDeliveryStatus.Delivered)
+      recording.activeSinks shouldBe Vector(Vector(sink))
+      suppressed.toOption.map(_.status) shouldBe Some(OperationEvaluationDeliveryStatus.Discarded)
+      suppressed.toOption.toVector.flatMap(_.limitations).map(_.kind.token) shouldBe Vector("reentrant-suppressed")
+      recording.activeSinks shouldBe Vector(Vector(sink))
+      delegate.facts shouldBe Vector(candidate)
+    }
+
     "preserve an installed sink failure without replacing its Conclusion" in {
       Given("a Corpus provider that rejects one delivery with a structured failure")
       given ExecutionContext = ExecutionContext.withFrameworkCallTreeEnabled(ExecutionContext.create(), enabled = true)
@@ -210,6 +243,32 @@ final class OperationEvaluationSinkSpec extends AnyWordSpec with Matchers with G
         result.limitations,
         result.confidentiality
       )
+  }
+
+  private final case class ContextRecordingCorpusSink(
+    underlying: CorpusEvaluationSink
+  ) extends CorpusEvaluationSink {
+    private var _active_sinks = Vector.empty[Vector[OperationEvaluationSinkIdentity]]
+
+    def activeSinks: Vector[Vector[OperationEvaluationSinkIdentity]] = synchronized(_active_sinks)
+
+    def recordStart(fact: OperationEvaluationStartFact)(using ctx: ExecutionContext): Consequence[OperationEvaluationDeliveryResult] =
+      _record(ctx)(underlying.recordStart(fact))
+
+    def recordTerminal(fact: OperationEvaluationTerminalFact)(using ctx: ExecutionContext): Consequence[OperationEvaluationDeliveryResult] =
+      _record(ctx)(underlying.recordTerminal(fact))
+
+    def submitCandidate(fact: CorpusCandidateFact)(using ctx: ExecutionContext): Consequence[OperationEvaluationDeliveryResult] =
+      _record(ctx)(underlying.submitCandidate(fact))
+
+    private def _record(
+      ctx: ExecutionContext
+    )(result: => Consequence[OperationEvaluationDeliveryResult]): Consequence[OperationEvaluationDeliveryResult] = {
+      synchronized {
+        _active_sinks = _active_sinks :+ ctx.operationEvaluation.activeSinks
+      }
+      result
+    }
   }
 
   private final case class CorpusProvider(sink: CorpusEvaluationSink) extends SpiProvider[CorpusEvaluationSink] {

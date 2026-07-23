@@ -18,6 +18,7 @@ import org.goldenport.cncf.entity.runtime.EntitySpace
 import org.goldenport.cncf.unitofwork.UnitOfWork
 import org.goldenport.cncf.unitofwork.UnitOfWorkOp
 import org.goldenport.cncf.observability.{CallTreeContext, DslChokepointHook, ResourceAccessObservation, ResourceTreeAccessObservation}
+import org.goldenport.cncf.operation.evaluation.{CorpusEvaluationCorrelation, ExperimentEvaluationCorrelation, OperationEvaluationContext, OperationEvaluationOperationIdentity, OperationEvaluationSinkIdentity}
 import org.goldenport.cncf.resource.{ResourceAccess, ResourceAccessTestProfile, ResourceTreeAccess}
 import cats.~>
 
@@ -45,7 +46,7 @@ import cats.~>
  *  version Feb. 25, 2026
  *  version Apr. 25, 2026
  *  version May. 31, 2026
- * @version Jul. 17, 2026
+ * @version Jul. 23, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class ExecutionContext
@@ -92,7 +93,8 @@ object ExecutionContext {
     executionControl: ExecutionControlContext = ExecutionControlContext.standard,
     tagSpaces: TagSpaceContext = TagSpaceContext.default,
     resources: ResourceAccess = ResourceAccess.unavailable,
-    resourceTrees: ResourceTreeAccess = ResourceTreeAccess.unavailable
+    resourceTrees: ResourceTreeAccess = ResourceTreeAccess.unavailable,
+    operationEvaluation: OperationEvaluationContext = OperationEvaluationContext.empty
   ) {
     def major: String = idGeneration.namespace.major
     def minor: String = idGeneration.namespace.minor
@@ -115,6 +117,7 @@ object ExecutionContext {
       def tagSpaces: TagSpaceContext = cncfCore.tagSpaces
       def resources: ResourceAccess = cncfCore.resources
       def resourceTrees: ResourceTreeAccess = cncfCore.resourceTrees
+      def operationEvaluation: OperationEvaluationContext = cncfCore.operationEvaluation
       def major = cncfCore.major
       def minor = cncfCore.minor
     }
@@ -386,6 +389,39 @@ object ExecutionContext {
           tagSpaces = tagSpaces
         )
       )
+    case _ =>
+      ctx
+  }
+
+  def prepareOperationEvaluation(
+    ctx: ExecutionContext,
+    operation: OperationEvaluationOperationIdentity,
+    corpus: Option[CorpusEvaluationCorrelation] = None,
+    experiment: Option[ExperimentEvaluationCorrelation] = None
+  ): Consequence[ExecutionContext] =
+    ctx.cncfCore.operationEvaluation
+      .prepareC(operation, ctx.clock.instant(), ctx.idGeneration, corpus, experiment)
+      .map(withOperationEvaluation(ctx, _))
+
+  def beginOperationEvaluationAttempt(
+    ctx: ExecutionContext
+  ): Consequence[ExecutionContext] =
+    ctx.cncfCore.operationEvaluation
+      .beginAttemptC(ctx.clock.instant(), ctx.idGeneration, ctx)
+      .map(withOperationEvaluation(ctx, _))
+
+  def withActiveOperationEvaluationSink(
+    ctx: ExecutionContext,
+    sink: OperationEvaluationSinkIdentity
+  ): Consequence[ExecutionContext] =
+    ctx.cncfCore.operationEvaluation.enterSinkC(sink).map(withOperationEvaluation(ctx, _))
+
+  def withOperationEvaluation(
+    ctx: ExecutionContext,
+    evaluation: OperationEvaluationContext
+  ): ExecutionContext = ctx match {
+    case i: Instance =>
+      i.copy(cncfCore = i.cncfCore.copy(operationEvaluation = evaluation))
     case _ =>
       ctx
   }

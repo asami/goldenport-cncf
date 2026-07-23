@@ -48,13 +48,13 @@ object CorpusEvaluationSink {
     base: SpiTraceMetadata
   ) extends CorpusEvaluationSink {
     def recordStart(fact: OperationEvaluationStartFact)(using ExecutionContext): Consequence[OperationEvaluationDeliveryResult] =
-      _trace(base, "recordStart", fact)(underlying.recordStart(fact))
+      _trace(base, "recordStart", fact)(ctx => underlying.recordStart(fact)(using ctx))
 
     def recordTerminal(fact: OperationEvaluationTerminalFact)(using ExecutionContext): Consequence[OperationEvaluationDeliveryResult] =
-      _trace(base, "recordTerminal", fact)(underlying.recordTerminal(fact))
+      _trace(base, "recordTerminal", fact)(ctx => underlying.recordTerminal(fact)(using ctx))
 
     def submitCandidate(fact: CorpusCandidateFact)(using ExecutionContext): Consequence[OperationEvaluationDeliveryResult] =
-      _trace(base, "submitCandidate", fact)(underlying.submitCandidate(fact))
+      _trace(base, "submitCandidate", fact)(ctx => underlying.submitCandidate(fact)(using ctx))
   }
 }
 
@@ -91,13 +91,13 @@ object ExperimentEvaluationSink {
     base: SpiTraceMetadata
   ) extends ExperimentEvaluationSink {
     def recordStart(fact: OperationEvaluationStartFact)(using ExecutionContext): Consequence[OperationEvaluationDeliveryResult] =
-      _trace(base, "recordStart", fact)(underlying.recordStart(fact))
+      _trace(base, "recordStart", fact)(ctx => underlying.recordStart(fact)(using ctx))
 
     def recordTerminal(fact: OperationEvaluationTerminalFact)(using ExecutionContext): Consequence[OperationEvaluationDeliveryResult] =
-      _trace(base, "recordTerminal", fact)(underlying.recordTerminal(fact))
+      _trace(base, "recordTerminal", fact)(ctx => underlying.recordTerminal(fact)(using ctx))
 
     def submitObservation(fact: ExperimentObservationFact)(using ExecutionContext): Consequence[OperationEvaluationDeliveryResult] =
-      _trace(base, "submitObservation", fact)(underlying.submitObservation(fact))
+      _trace(base, "submitObservation", fact)(ctx => underlying.submitObservation(fact)(using ctx))
   }
 }
 
@@ -213,7 +213,7 @@ private def _trace[A <: OperationEvaluationFact](
   base: SpiTraceMetadata,
   operation: String,
   fact: A
-)(body: => Consequence[OperationEvaluationDeliveryResult])(using ExecutionContext): Consequence[OperationEvaluationDeliveryResult] =
+)(body: ExecutionContext => Consequence[OperationEvaluationDeliveryResult])(using ctx: ExecutionContext): Consequence[OperationEvaluationDeliveryResult] =
   SpiTraceSupport.trace(base.withOperation(operation), (result: OperationEvaluationDeliveryResult) => Map(
     "fact_kind" -> fact.factKind,
     "delivery_status" -> result.status.token,
@@ -226,7 +226,16 @@ private def _trace[A <: OperationEvaluationFact](
         base.providerComponent,
         base.providerInstance
       )
-      delivered <- body
+      delivered <-
+        if (ctx.operationEvaluation.isSinkActive(sink))
+          OperationEvaluationDeliveryResult.createC(
+            fact.id,
+            sink,
+            OperationEvaluationDeliveryStatus.Discarded,
+            Vector(OperationEvaluationLimitation(OperationEvaluationLimitationKind.ReentrantSuppressed))
+          )
+        else
+          ExecutionContext.withActiveOperationEvaluationSink(ctx, sink).flatMap(body)
       normalized <- OperationEvaluationDeliveryResult.createC(
         fact.id,
         sink,

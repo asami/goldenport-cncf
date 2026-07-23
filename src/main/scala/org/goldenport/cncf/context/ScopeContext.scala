@@ -12,12 +12,14 @@ import org.goldenport.cncf.processexecution.{ProcessExecutionAdmission, ProcessE
 import org.goldenport.cncf.datastore.DataStoreSpace
 import org.goldenport.cncf.entity.EntityStoreSpace
 import org.goldenport.cncf.entity.runtime.EntitySpace
+import org.goldenport.cncf.component.Component
+import org.goldenport.cncf.spi.evaluation.{CorpusEvaluationSink, CorpusEvaluationSinkSocket, ExperimentEvaluationSink, ExperimentEvaluationSinkSocket}
 
 /*
  * @since   Jan.  7, 2026
  *  version Jan. 20, 2026
  *  version Feb. 25, 2026
- * @version Jul. 18, 2026
+ * @version Jul. 23, 2026
  * @author  ASAMI, Tomoharu
  */
 enum ScopeKind {
@@ -65,6 +67,18 @@ abstract class ScopeContext() extends ObservationDsl with ScopeContext.Core.Hold
   def scopedConcurrencyAdmissionOption: Option[ScopedConcurrencyAdmission] =
     core.scopedConcurrencyAdmissionOption orElse parent.flatMap(_.scopedConcurrencyAdmissionOption)
 
+  def corpusEvaluationSinkOption: Option[CorpusEvaluationSink] =
+    _local_corpus_evaluation_sink orElse parent.flatMap(_.corpusEvaluationSinkOption)
+
+  def corpusEvaluationSink: CorpusEvaluationSink =
+    corpusEvaluationSinkOption.getOrElse(CorpusEvaluationSink.disabled)
+
+  def experimentEvaluationSinkOption: Option[ExperimentEvaluationSink] =
+    _local_experiment_evaluation_sink orElse parent.flatMap(_.experimentEvaluationSinkOption)
+
+  def experimentEvaluationSink: ExperimentEvaluationSink =
+    experimentEvaluationSinkOption.getOrElse(ExperimentEvaluationSink.disabled)
+
   def formatPing: String =
     parent match {
       case Some(p) => p.formatPing
@@ -84,6 +98,26 @@ abstract class ScopeContext() extends ObservationDsl with ScopeContext.Core.Hold
 
   override protected def scope_context: Option[ScopeContext] =
     Some(this)
+
+  private def _local_corpus_evaluation_sink: Option[CorpusEvaluationSink] =
+    this match {
+      case context: Component.Context =>
+        context.component match {
+          case socket: CorpusEvaluationSinkSocket if socket.isSpiInstalled => Some(socket.corpusEvaluationSink)
+          case _ => None
+        }
+      case _ => None
+    }
+
+  private def _local_experiment_evaluation_sink: Option[ExperimentEvaluationSink] =
+    this match {
+      case context: Component.Context =>
+        context.component match {
+          case socket: ExperimentEvaluationSinkSocket if socket.isSpiInstalled => Some(socket.experimentEvaluationSink)
+          case _ => None
+        }
+      case _ => None
+    }
 }
 
 object ScopeContext {

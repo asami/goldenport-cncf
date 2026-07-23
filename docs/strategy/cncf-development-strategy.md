@@ -2715,10 +2715,10 @@ Active CNCF development item in Phase 48.
     optional membership/assignment declaration metadata;
   - OE-03 (DONE) — added disabled/fake Corpus and Experiment standard sink
     capabilities and caller-side traced installation;
-  - OE-04 (NEXT) — inherit sink capabilities through `ScopeContext` and carry one
+  - OE-04 (DONE) — inherited sink capabilities through `ScopeContext` and carried one
     immutable, operation-scoped evaluation context through
     `ExecutionContext.CncfCore`, including Job resume and retry identity;
-  - OE-05 — wrap the common resolved-operation pipeline so authorization and
+  - OE-05 (NEXT) — wrap the common resolved-operation pipeline so authorization and
     admission precede business execution and automatic terminal evidence
     follows framework response bindings;
   - OE-06 — add protected supplemental Corpus/Experiment internal DSL helpers;

@@ -78,23 +78,30 @@ Evidence:
 ## OE-04: Runtime Context and Correlation
 
 Stage Status:
-- Current status: NEXT
+- Current status: DONE
 - Owner: CNCF operation runtime maintainers
 - Update rule: Mark IN_PROGRESS only after OE-03 closes; mark DONE only when
   every OE-04 checklist item is complete.
 
-- [ ] Inherit sink capabilities through `ScopeContext`.
-- [ ] Carry immutable operation-scoped correlation through `ExecutionContext`.
-- [ ] Carry logical active-sink delivery context through context rebinding,
+- [x] Inherit sink capabilities through `ScopeContext`.
+- [x] Carry immutable operation-scoped correlation through `ExecutionContext`.
+- [x] Carry logical active-sink delivery context through context rebinding,
   scheduler handoff, Job/Task submission, retry, and sink-induced async calls.
-- [ ] Preserve correlation across Job execution, retry, resume, and nested
+- [x] Preserve correlation across Job execution, retry, resume, and nested
   operation boundaries.
-- [ ] Prevent unrelated component instances from sharing supplemental state.
+- [x] Prevent unrelated component instances from sharing supplemental state.
+
+Evidence:
+- `src/main/scala/org/goldenport/cncf/operation/evaluation/OperationEvaluationContext.scala`
+- `src/test/scala/org/goldenport/cncf/context/OperationEvaluationContextSpec.scala`
+- `src/test/scala/org/goldenport/cncf/job/OperationEvaluationJobContextSpec.scala`
+- Focused OE-04 executable specifications: 9 tests passed.
+- CNCF `Test/compile` and diff validation passed.
 
 ## OE-05: Automatic Operation Chokepoint
 
 Stage Status:
-- Current status: OPEN
+- Current status: NEXT
 - Owner: CNCF operation runtime maintainers
 - Update rule: Mark IN_PROGRESS only after OE-04 closes; mark DONE only when
   every OE-05 checklist item is complete.
