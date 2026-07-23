@@ -12,6 +12,7 @@ import org.goldenport.cncf.directive.*
 import org.goldenport.cncf.blob.{ContentReferenceAttachResult, ContentReferenceContent, ContentReferenceNormalizeResult, ContentRenderResult, InlineImageAttachResult, InlineImageContent, InlineImageNormalizeResult, InlineImageOccurrence}
 import org.goldenport.cncf.embedded.{EmbeddedDataStore, EmbeddedStatement, EmbeddedUpdateResult}
 import org.goldenport.cncf.processexecution.{ProcessExecutionResult, ResolvedProcessExecution}
+import org.goldenport.cncf.operation.evaluation.OperationEvaluationSupplementalIntent
 import org.goldenport.value.{ContentAttributes, ContentReferenceOccurrence}
 
 /*
@@ -28,7 +29,7 @@ import org.goldenport.value.{ContentAttributes, ContentReferenceOccurrence}
  *  version Mar. 24, 2026
  *  version Apr. 29, 2026
  *  version May.  4, 2026
- * @version Jul. 17, 2026
+ * @version Jul. 23, 2026
  * @author  ASAMI, Tomoharu
  */
 sealed trait UnitOfWorkOp[A]
@@ -40,6 +41,10 @@ object UnitOfWorkOp {
   // ------------------------------------------------------------
   final case class Authorize(
     authorization: UnitOfWorkAuthorization
+  ) extends UnitOfWorkOp[Unit]
+
+  final case class StageOperationEvaluationSupplemental(
+    intent: OperationEvaluationSupplementalIntent
   ) extends UnitOfWorkOp[Unit]
 
   // ------------------------------------------------------------

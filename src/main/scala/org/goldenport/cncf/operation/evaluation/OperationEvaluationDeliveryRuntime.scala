@@ -74,6 +74,33 @@ final class OperationEvaluationDeliveryRuntime(
         Vector.empty
     }
 
+  def deliverSupplemental(
+    intent: OperationEvaluationSupplementalIntent,
+    context: ExecutionContext
+  ): Vector[OperationEvaluationDeliveryResult] =
+    try {
+      intent.fact match {
+        case candidate: CorpusCandidateFact =>
+          context.cncfCore.scope.corpusEvaluationSinkOption
+            .flatMap(sink => sink.sinkIdentityOption.map(identity =>
+              _deliver_corpus(candidate, sink, identity, context)
+            ))
+            .toVector
+        case observation: ExperimentObservationFact =>
+          context.cncfCore.scope.experimentEvaluationSinkOption
+            .flatMap(sink => sink.sinkIdentityOption.map(identity =>
+              _deliver_experiment(observation, sink, identity, context)
+            ))
+            .toVector
+      }
+    } catch {
+      case _: InterruptedException =>
+        Thread.currentThread.interrupt()
+        Vector.empty
+      case NonFatal(_) =>
+        Vector.empty
+    }
+
   def deliver(
     fact: OperationEvaluationFact,
     sink: OperationEvaluationSinkIdentity,

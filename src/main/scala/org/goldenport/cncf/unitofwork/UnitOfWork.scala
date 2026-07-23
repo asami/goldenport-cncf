@@ -22,6 +22,11 @@ import org.goldenport.cncf.directive.Query
 import org.goldenport.cncf.directive.SearchResult
 import org.goldenport.cncf.event.{DomainEvent, EventEngine, EventRecordFactory}
 import org.goldenport.cncf.http.HttpDriver
+import org.goldenport.cncf.operation.evaluation.{
+  OperationEvaluationAttemptId,
+  OperationEvaluationSupplementalBuffer,
+  OperationEvaluationSupplementalIntent
+}
 
 /*
  * @since   Apr. 11, 2025
@@ -30,13 +35,15 @@ import org.goldenport.cncf.http.HttpDriver
  *  version Feb. 27, 2026
  *  version Mar. 24, 2026
  *  version Apr. 28, 2026
- * @version Jul. 17, 2026
+ * @version Jul. 23, 2026
  * @author  ASAMI, Tomoharu
  */
 class UnitOfWork(
   context: ExecutionContext,
   eventengine: EventEngine = EventEngine.noop(DataStore.noop()),
-  recorder: CommitRecorder = CommitRecorder.noop
+  recorder: CommitRecorder = CommitRecorder.noop,
+  operationevaluationsupplementalbuffer: OperationEvaluationSupplementalBuffer =
+    new OperationEvaluationSupplementalBuffer
 ) {
   import UnitOfWork.*
 //  private var _http_driver: Option[HttpDriver] = None
@@ -44,12 +51,15 @@ class UnitOfWork(
   private val _dirty_entities: mutable.Map[EntityId, Entity] = mutable.Map.empty
   private var _pending_events: Vector[DomainEvent] = Vector.empty
   private var _post_commit_callbacks: Vector[() => Unit] = Vector.empty
+  private val _operation_evaluation_supplemental_buffer = operationevaluationsupplementalbuffer
+  private var _last_commit_result: Option[Consequence[CommitResult]] = None
+  private var _last_abort_result: Option[Consequence[AbortResult]] = None
   private val _resource_registry = new UnitOfWorkResourceRegistry
 
   def transactionContext = context.transactionContext
 
   def withContext(ctx: ExecutionContext): UnitOfWork =
-    new UnitOfWork(ctx, eventengine, recorder)
+    new UnitOfWork(ctx, eventengine, recorder, _operation_evaluation_supplemental_buffer)
 
   def markDirty(entity: Entity): Unit =
     _dirty_entities.update(entity.id, entity)
@@ -157,7 +167,9 @@ class UnitOfWork(
       case _: Consequence.Success[CommitResult] => UnitOfWorkTermination.Committed
       case _ => UnitOfWorkTermination.Aborted
     }
-    _complete_c(result, termination)
+    val completed = _complete_c(result, termination)
+    _last_commit_result = Some(completed)
+    completed
   }
 
   def abort(): Consequence[AbortResult] = {
@@ -173,7 +185,9 @@ class UnitOfWork(
       case e: Throwable =>
         Consequence.Failure(Conclusion.from(e))
     }
-    _complete_c(result, UnitOfWorkTermination.Aborted)
+    val completed = _complete_c(result, UnitOfWorkTermination.Aborted)
+    _last_abort_result = Some(completed)
+    completed
   }
 
   def rollback(): Consequence[AbortResult] =
@@ -202,6 +216,32 @@ class UnitOfWork(
 
   def pendingEvents: Vector[DomainEvent] = _pending_events
 
+  def stageOperationEvaluationSupplementalC(
+    intent: OperationEvaluationSupplementalIntent
+  ): Consequence[Unit] =
+    _operation_evaluation_supplemental_buffer.stageC(intent)
+
+  def markOperationEvaluationSupplementalCommitted(
+    attemptid: OperationEvaluationAttemptId
+  ): Unit =
+    _operation_evaluation_supplemental_buffer.markCommitted(attemptid)
+
+  def releaseCommittedOperationEvaluationSupplemental(
+    attemptid: OperationEvaluationAttemptId
+  ): Vector[OperationEvaluationSupplementalIntent] =
+    _operation_evaluation_supplemental_buffer.releaseCommitted(attemptid)
+
+  def discardOperationEvaluationSupplemental(
+    attemptid: OperationEvaluationAttemptId
+  ): Unit =
+    _operation_evaluation_supplemental_buffer.discard(attemptid)
+
+  def lastCommitResult: Option[Consequence[CommitResult]] =
+    _last_commit_result
+
+  def lastAbortResult: Option[Consequence[AbortResult]] =
+    _last_abort_result
+
   def stagePostCommit(callback: => Unit): Unit =
     _post_commit_callbacks = _post_commit_callbacks :+ (() => callback)
 
@@ -221,6 +261,7 @@ class UnitOfWork(
         }
       case _ => result
     }
+
 }
 
 object UnitOfWork {

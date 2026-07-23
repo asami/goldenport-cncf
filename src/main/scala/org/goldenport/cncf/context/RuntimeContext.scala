@@ -4,12 +4,14 @@ import java.text.NumberFormat
 import java.time.{Instant, LocalDate, LocalDateTime, LocalTime, OffsetDateTime, ZoneId, ZonedDateTime}
 import java.time.format.{DateTimeFormatter, DateTimeFormatterBuilder, FormatStyle}
 import java.util.Locale
+import scala.util.control.NonFatal
 import cats.~>
 import org.goldenport.Consequence
 import org.goldenport.cncf.http.HttpDriver
 import org.goldenport.cncf.config.{OperationMode, ResolvedParameters, RuntimeConfig}
 import org.goldenport.cncf.entity.EntityCreateDefaultsPolicy
 import org.goldenport.cncf.naming.PropertyValueResolver
+import org.goldenport.cncf.operation.evaluation.OperationEvaluationAttemptId
 import org.goldenport.cncf.unitofwork.{UnitOfWork, UnitOfWorkInterpreter, UnitOfWorkOp}
 import org.goldenport.cncf.statemachine.TransitionValidationHook
 import org.goldenport.cncf.context.{DataStoreContext, EntitySpaceContext, EntityStoreContext}
@@ -24,7 +26,7 @@ import org.goldenport.util.StringUtils
  *  version Apr. 28, 2026
  *  version May. 10, 2026
  *  version Jun. 18, 2026
- * @version Jul. 17, 2026
+ * @version Jul. 23, 2026
  * @author  ASAMI, Tomoharu
  */
 final class RuntimeContext(
@@ -48,9 +50,50 @@ final class RuntimeContext(
 
   def unitOfWorkInterpreter: UnitOfWorkOp ~> Consequence = unitOfWorkInterpreterFn
 
-  def commit(): Unit = commitAction(unitOfWork)
+  def commitC(): Consequence[UnitOfWork.CommitResult] =
+    commitC(_operation_evaluation_attempt_id)
 
-  def abort(): Unit = abortAction(unitOfWork)
+  def commitC(
+    attemptid: Option[OperationEvaluationAttemptId]
+  ): Consequence[UnitOfWork.CommitResult] =
+    try {
+      commitAction(unitOfWork)
+      val result = unitOfWork.lastCommitResult.getOrElse(Consequence.unit)
+      result match {
+        case Consequence.Success(_) =>
+          attemptid.foreach(unitOfWork.markOperationEvaluationSupplementalCommitted)
+        case Consequence.Failure(_) =>
+          attemptid.foreach(unitOfWork.discardOperationEvaluationSupplemental)
+      }
+      result
+    } catch {
+      case NonFatal(e) =>
+        attemptid.foreach(unitOfWork.discardOperationEvaluationSupplemental)
+        Consequence.Failure(org.goldenport.Conclusion.from(e))
+    }
+
+  def abortC(): Consequence[UnitOfWork.AbortResult] =
+    abortC(_operation_evaluation_attempt_id)
+
+  def abortC(
+    attemptid: Option[OperationEvaluationAttemptId]
+  ): Consequence[UnitOfWork.AbortResult] =
+    try {
+      abortAction(unitOfWork)
+      val result = unitOfWork.lastAbortResult.getOrElse(Consequence.unit)
+      attemptid.foreach(unitOfWork.discardOperationEvaluationSupplemental)
+      result
+    } catch {
+      case NonFatal(e) =>
+        attemptid.foreach(unitOfWork.discardOperationEvaluationSupplemental)
+        Consequence.Failure(org.goldenport.Conclusion.from(e))
+    }
+
+  def commit(): Unit =
+    commitAction(unitOfWork)
+
+  def abort(): Unit =
+    abortAction(unitOfWork)
 
   def dispose(): Unit = disposeAction(unitOfWork)
 
@@ -75,15 +118,15 @@ final class RuntimeContext(
     executionContext: => ExecutionContext,
     newToken: String = toToken
   ): RuntimeContext = {
-    lazy val reboundUnitOfWork: UnitOfWork =
+    lazy val reboundunitofwork: UnitOfWork =
       unitOfWork.withContext(executionContext)
     val interpreter = new (UnitOfWorkOp ~> Consequence) {
       def apply[A](fa: UnitOfWorkOp[A]): Consequence[A] =
-        new UnitOfWorkInterpreter(reboundUnitOfWork).interpret(fa)
+        new UnitOfWorkInterpreter(reboundunitofwork).interpret(fa)
     }
     val runtime = new RuntimeContext(
       core = core,
-      unitOfWorkSupplier = () => reboundUnitOfWork,
+      unitOfWorkSupplier = () => reboundunitofwork,
       unitOfWorkInterpreterFn = interpreter,
       commitAction = commitAction,
       abortAction = abortAction,
@@ -153,6 +196,9 @@ final class RuntimeContext(
 
   def clearExecutionMetadata(): Unit =
     _execution_metadata = RuntimeContext.ExecutionMetadata.empty
+
+  private def _operation_evaluation_attempt_id: Option[OperationEvaluationAttemptId] =
+    unitOfWork.executionContext.operationEvaluation.correlation.map(_.attemptId)
 }
 
 object RuntimeContext {

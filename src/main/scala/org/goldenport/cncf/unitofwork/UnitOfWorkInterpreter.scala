@@ -37,7 +37,7 @@ import org.simplemodeling.model.directive.Update
  *  version Mar. 29, 2026
  *  version Apr. 29, 2026
  *  version May. 11, 2026
- * @version Jul. 17, 2026
+ * @version Jul. 23, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkInterpreter(uow: UnitOfWork) {
@@ -92,6 +92,14 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
     case UnitOfWorkOp.Authorize(authorization) =>
       _with_calltree("uow:authorize") {
         _authorize(Some(authorization))
+      }
+
+    case UnitOfWorkOp.StageOperationEvaluationSupplemental(intent) =>
+      _with_calltree(
+        "uow:operation-evaluation:stage",
+        Map("fact_kind" -> intent.fact.factKind)
+      ) {
+        uow.stageOperationEvaluationSupplementalC(intent)
       }
 
     case UnitOfWorkOp.HttpGet(path, headers, properties) =>

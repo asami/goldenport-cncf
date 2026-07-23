@@ -26,9 +26,9 @@ private[cncf] final class OperationEvaluationActionTask(
   responsebinding: (OperationResponse, ExecutionContext) => Consequence[OperationResponse],
   executionscope: Option[ScopeContext] = None
 ) extends JobTask {
-  import OperationEvaluationActionTask.{_CaptureStart, _PendingTerminal}
+  import OperationEvaluationActionTask.{CaptureStart, PendingTerminal}
 
-  private val _pending_terminals = new ConcurrentHashMap[TaskId, _PendingTerminal]()
+  private val _pending_terminals = new ConcurrentHashMap[TaskId, PendingTerminal]()
 
   def actionId: ActionId = underlying.actionId
   override def taskKind: String = underlying.taskKind
@@ -97,7 +97,7 @@ private[cncf] final class OperationEvaluationActionTask(
     outcome
   }
 
-  private def _start_capture(context: ExecutionContext): Option[_CaptureStart] =
+  private def _start_capture(context: ExecutionContext): Option[CaptureStart] =
     try {
       context.operationEvaluation.correlation.map { correlation =>
         val startedat = context.clock.instant()
@@ -107,7 +107,7 @@ private[cncf] final class OperationEvaluationActionTask(
           startedat
         )
         _deliver_fact(start, context)
-        _CaptureStart(startedat, correlation)
+        CaptureStart(startedat, correlation)
       }
     } catch {
       case _: InterruptedException =>
@@ -117,12 +117,12 @@ private[cncf] final class OperationEvaluationActionTask(
     }
 
   private def _stage_or_complete_terminal(
-    start: _CaptureStart,
+    start: CaptureStart,
     outcome: TaskOutcome,
     context: ExecutionContext
   ): Unit =
     try {
-      val pending = _PendingTerminal(start.startedat, context.clock.instant(), start.correlation)
+      val pending = PendingTerminal(start.startedat, context.clock.instant(), start.correlation)
       _task_id(context) match {
         case Some(taskid)
             if context.jobContext.jobId.nonEmpty &&
@@ -133,12 +133,15 @@ private[cncf] final class OperationEvaluationActionTask(
           _complete_terminal(pending, outcome, context, cancelled)
       }
     } catch {
-      case _: InterruptedException => Thread.currentThread.interrupt()
-      case NonFatal(_) => ()
+      case _: InterruptedException =>
+        _discard_supplemental(context)
+        Thread.currentThread.interrupt()
+      case NonFatal(_) =>
+        _discard_supplemental(context)
     }
 
   private def _complete_terminal(
-    pending: _PendingTerminal,
+    pending: PendingTerminal,
     outcome: TaskOutcome,
     context: ExecutionContext,
     cancelled: Boolean
@@ -153,16 +156,43 @@ private[cncf] final class OperationEvaluationActionTask(
         _non_negative_duration(pending.startedat, pending.completedat),
         diagnostic
       )
-      terminal match {
+      val terminaldelivered = terminal match {
         case Consequence.Success(fact) =>
           _deliver_fact(fact, context)
+          true
         case Consequence.Failure(_) =>
-          ()
+          false
       }
+      if (evaluationoutcome == OperationEvaluationOutcome.Success && terminaldelivered)
+        _release_supplemental(pending.correlation.attemptId, context)
+      else
+        context.runtime.unitOfWork
+          .discardOperationEvaluationSupplemental(pending.correlation.attemptId)
     } catch {
-      case _: InterruptedException => Thread.currentThread.interrupt()
-      case NonFatal(_) => ()
+      case _: InterruptedException =>
+        context.runtime.unitOfWork
+          .discardOperationEvaluationSupplemental(pending.correlation.attemptId)
+        Thread.currentThread.interrupt()
+      case NonFatal(_) =>
+        context.runtime.unitOfWork
+          .discardOperationEvaluationSupplemental(pending.correlation.attemptId)
     }
+
+  private def _release_supplemental(
+    attemptid: OperationEvaluationAttemptId,
+    context: ExecutionContext
+  ): Unit =
+    context.runtime.unitOfWork
+      .releaseCommittedOperationEvaluationSupplemental(attemptid)
+      .foreach(intent => attemptcapture.deliveryruntime.deliverSupplemental(intent, context))
+
+  private def _discard_supplemental(
+    context: ExecutionContext
+  ): Unit =
+    context.operationEvaluation.correlation.foreach(correlation =>
+      context.runtime.unitOfWork
+        .discardOperationEvaluationSupplemental(correlation.attemptId)
+    )
 
   private def _task_id(context: ExecutionContext): Option[TaskId] =
     context.jobContext.currentTask.orElse(context.jobContext.taskId)
@@ -227,12 +257,12 @@ private[cncf] final class OperationEvaluationActionTask(
 }
 
 private[cncf] object OperationEvaluationActionTask {
-  private final case class _CaptureStart(
+  private final case class CaptureStart(
     startedat: java.time.Instant,
     correlation: OperationEvaluationCorrelation
   )
 
-  private final case class _PendingTerminal(
+  private final case class PendingTerminal(
     startedat: java.time.Instant,
     completedat: java.time.Instant,
     correlation: OperationEvaluationCorrelation
@@ -252,12 +282,12 @@ private[cncf] final class OperationEvaluationAttemptCapture(
   val operationidentity: OperationEvaluationOperationIdentity,
   val deliveryruntime: OperationEvaluationDeliveryRuntime
 ) {
-  private val _admission_state = new AtomicInteger(OperationEvaluationAttemptCapture._pending)
+  private val _admission_state = new AtomicInteger(OperationEvaluationAttemptCapture.PENDING)
 
   private[evaluation] def _mark_task_execution_started(): Unit = {
     val _ = _admission_state.compareAndSet(
-      OperationEvaluationAttemptCapture._pending,
-      OperationEvaluationAttemptCapture._task_execution_started
+      OperationEvaluationAttemptCapture.PENDING,
+      OperationEvaluationAttemptCapture.TASK_EXECUTION_STARTED
     )
   }
 
@@ -266,8 +296,8 @@ private[cncf] final class OperationEvaluationAttemptCapture(
     context: ExecutionContext
   ): Unit =
     if (_admission_state.compareAndSet(
-      OperationEvaluationAttemptCapture._pending,
-      OperationEvaluationAttemptCapture._admission_failure_recorded
+      OperationEvaluationAttemptCapture.PENDING,
+      OperationEvaluationAttemptCapture.ADMISSION_FAILURE_RECORDED
     ))
       _record_failure(conclusion, context)
 
@@ -323,7 +353,7 @@ private[cncf] final class OperationEvaluationAttemptCapture(
 }
 
 private object OperationEvaluationAttemptCapture {
-  private val _pending = 0
-  private val _task_execution_started = 1
-  private val _admission_failure_recorded = 2
+  private val PENDING = 0
+  private val TASK_EXECUTION_STARTED = 1
+  private val ADMISSION_FAILURE_RECORDED = 2
 }

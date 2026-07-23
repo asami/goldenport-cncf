@@ -6,6 +6,7 @@ import org.goldenport.cncf.context.{CorrelationId, ExecutionContext, ExecutionCo
 import org.goldenport.cncf.http.FakeHttpDriver
 import org.goldenport.cncf.datastore.DataStore
 import org.goldenport.cncf.event.{ActionEvent, ActionResult, EventEngine}
+import org.goldenport.cncf.observability.CallTreeContext
 import org.goldenport.cncf.security.AuthorizationDecision
 import org.goldenport.cncf.unitofwork.{CommitRecorder, UnitOfWork, UnitOfWorkOp}
 import org.goldenport.protocol.Request
@@ -20,7 +21,7 @@ import java.time.Instant
  * @since   Jan.  7, 2026
  *  version Feb. 27, 2026
  *  version Mar. 12, 2026
- * @version Jul. 15, 2026
+ * @version Jul. 23, 2026
  * @author  ASAMI, Tomoharu
  */
 class ActionEngineObservabilitySeparationSpec
@@ -32,15 +33,15 @@ class ActionEngineObservabilitySeparationSpec
     "emit ActionEvent without observe hooks on authorization failure" in {
       Given("an action engine that denies authorization before observation hooks")
       val recorder = new InMemoryCommitRecorder
-      val dataStore = DataStore.noop(recorder)
-      val eventEngine = EventEngine.noop(dataStore, recorder)
+      val datastore = DataStore.noop(recorder)
+      val eventengine = EventEngine.noop(datastore, recorder)
       val runtime = new TestRuntimeContext
       val base = ExecutionContext.create()
       val ctx = ExecutionContext.withRuntimeContext(base, runtime.runtime)
-      val uow = new UnitOfWork(ctx, eventEngine, recorder)
+      val uow = new UnitOfWork(ctx, eventengine, recorder)
       runtime.bind(uow)
 
-      var buildCalled = false
+      var buildcalled = false
       val engine = new RecordingDenyActionEngine
       val action = new QueryAction() {
         // val name = "test-action"
@@ -51,15 +52,15 @@ class ActionEngineObservabilitySeparationSpec
 
       When("the protected action is executed")
       val result = engine.executeAuthorized("test-action", ctx) {
-        buildCalled = true
+        buildcalled = true
         action.createCall(ActionCall.Core(action, ctx, None, None))
       }
 
       Then("no observation hook runs and one denial event is committed")
-      buildCalled shouldBe false
+      buildcalled shouldBe false
       result should be_failure
       engine.events shouldBe Vector.empty
-      val deniedevents = eventEngine.eventStore.query(
+      val deniedevents = eventengine.eventStore.query(
         org.goldenport.cncf.event.EventStore.Query(
           name = Some("test-action"),
           lane = Some(org.goldenport.cncf.event.EventLane.Transactional)
@@ -73,12 +74,12 @@ class ActionEngineObservabilitySeparationSpec
     "separate observe hooks from ActionEvent on success" in {
       Given("an allowed action engine and an event-backed successful runtime")
       val recorder = new InMemoryCommitRecorder
-      val dataStore = DataStore.noop(recorder)
-      val eventEngine = EventEngine.noop(dataStore, recorder)
+      val datastore = DataStore.noop(recorder)
+      val eventengine = EventEngine.noop(datastore, recorder)
       val runtime = new SuccessRuntimeContext("test-action")
       val base = ExecutionContext.create()
       val ctx = ExecutionContext.withRuntimeContext(base, runtime.runtime)
-      val uow = new UnitOfWork(ctx, eventEngine, recorder)
+      val uow = new UnitOfWork(ctx, eventengine, recorder)
       runtime.bind(uow)
 
       val engine = new RecordingAllowActionEngine
@@ -101,7 +102,7 @@ class ActionEngineObservabilitySeparationSpec
         "execute",
         "observe_leave"
       )
-      val succeededevents = eventEngine.eventStore.query(
+      val succeededevents = eventengine.eventStore.query(
         org.goldenport.cncf.event.EventStore.Query(
           name = Some("test-action"),
           lane = Some(org.goldenport.cncf.event.EventLane.Transactional)
@@ -109,6 +110,68 @@ class ActionEngineObservabilitySeparationSpec
       ).toOption.get
       succeededevents should have size 1
       succeededevents.head.kind shouldBe ActionResult.Succeeded.toString.toLowerCase
+    }
+
+    "record Action diagnostics before rethrowing a fatal control-flow error" in {
+      Given("an allowed action engine with CallTree enabled and a fatal ActionCall")
+      val recorder = new InMemoryCommitRecorder
+      val datastore = DataStore.noop(recorder)
+      val eventengine = EventEngine.noop(datastore, recorder)
+      val runtime = new TestRuntimeContext
+      val base = ExecutionContext.create()
+      val ctx = ExecutionContext.withFrameworkInlineCallTreeEnabled(
+        ExecutionContext.withRuntimeContext(base, runtime.runtime),
+        enabled = true
+      )
+      val uow = new UnitOfWork(ctx, eventengine, recorder)
+      runtime.bind(uow)
+      val engine = new RecordingAllowActionEngine
+      val action = new QueryAction() {
+        val request = Request.ofOperation("fatal-action")
+        def createCall(actioncore: ActionCall.Core): ActionCall =
+          new ActionCall {
+            val core = actioncore
+            def execute(): Consequence[OperationResponse] = {
+              engine.record("execute")
+              throw new LinkageError("planned fatal action failure")
+            }
+          }
+      }
+
+      When("the protected action is executed")
+      val fatalerror = intercept[LinkageError] {
+        engine.executeAuthorized("fatal-action", ctx) {
+          action.createCall(ActionCall.Core(action, ctx, None, None))
+        }
+      }
+      val metadata = ctx.runtime.executionMetadata
+      val rendered = metadata.inlineCallTree
+        .map(_.print)
+        .getOrElse("")
+
+      Then("the fatal error propagates after observe, CallTree, and execution diagnostics")
+      fatalerror.getMessage shouldBe "planned fatal action failure"
+      engine.events shouldBe Vector("observe_enter", "execute", "observe_leave")
+      rendered should include ("fatal-action")
+      rendered should include ("planned fatal action failure")
+      rendered should include ("failure")
+      metadata.failure shouldBe Some("planned fatal action failure")
+    }
+
+    "preserve legacy RuntimeContext commit and abort exception propagation" in {
+      Given("a RuntimeContext whose legacy transaction callbacks throw")
+      val runtime = new FailingRuntimeContext
+      val base = ExecutionContext.create()
+      val ctx = ExecutionContext.withRuntimeContext(base, runtime.runtime)
+      runtime.bind(new UnitOfWork(ctx))
+
+      When("legacy commit and abort methods invoke their callbacks")
+      val commiterror = intercept[IllegalStateException](runtime.runtime.commit())
+      val aborterror = intercept[IllegalArgumentException](runtime.runtime.abort())
+
+      Then("both callback failures remain observable to legacy callers")
+      commiterror.getMessage shouldBe "planned legacy commit failure"
+      aborterror.getMessage shouldBe "planned legacy abort failure"
     }
   }
 
@@ -210,7 +273,7 @@ class ActionEngineObservabilitySeparationSpec
           throw new UnsupportedOperationException("unitOfWorkInterpreter is not used in observability spec")
       },
       commitAction = commit_action,
-      abortAction = _ => (),
+      abortAction = abort_action,
       disposeAction = _ => (),
       token = token
     )
@@ -219,6 +282,7 @@ class ActionEngineObservabilitySeparationSpec
       _unit_of_work = Some(uow)
 
     protected def commit_action(unitofwork: UnitOfWork): Unit
+    protected def abort_action(unitofwork: UnitOfWork): Unit = ()
     protected def token: String
   }
 
@@ -244,11 +308,22 @@ class ActionEngineObservabilitySeparationSpec
     override protected def token: String = s"test-runtime-context-${actionname}"
   }
 
+  private final class FailingRuntimeContext extends RuntimeTestSupport {
+    override protected def commit_action(unitofwork: UnitOfWork): Unit =
+      throw new IllegalStateException("planned legacy commit failure")
+
+    override protected def abort_action(unitofwork: UnitOfWork): Unit =
+      throw new IllegalArgumentException("planned legacy abort failure")
+
+    override protected def token: String = "failing-runtime-context"
+  }
+
   private def _test_observability_context(): ObservabilityContext =
     ObservabilityContext(
       traceId = TraceId("action_engine", "observability"),
       spanId = None,
-      correlationId = Some(CorrelationId("action_engine", "runtime"))
+      correlationId = Some(CorrelationId("action_engine", "runtime")),
+      callTreeContext = CallTreeContext.enabled
     )
 
   private final class InMemoryCommitRecorder extends CommitRecorder {

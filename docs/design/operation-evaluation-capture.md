@@ -183,6 +183,19 @@ labels, measurements, or domain context through protected ActionCall/Behavior
 internal DSL operations. The DSL routes submission through UnitOfWork and the
 installed standard sink capability.
 
+The canonical protected helper vocabulary is:
+
+- `operation_evaluation_label`;
+- `operation_evaluation_measurement`;
+- `corpus_candidate`;
+- `experiment_observation`.
+
+The label and measurement helpers construct bounded typed values in the
+`ExecUowM` program. Candidate and observation helpers construct an immutable
+application-owned fact and emit
+`UnitOfWorkOp.StageOperationEvaluationSupplemental`. They do not return or
+accept a provider handle, sink, post-commit callback, or mutable buffer.
+
 The DSL stages an immutable supplemental-delivery intent in the active
 UnitOfWork. A successful UnitOfWork commit transfers that intent to a
 framework-owned post-commit capture buffer; it does not invoke the external
@@ -196,6 +209,13 @@ Once released, supplemental delivery is auxiliary and cannot reopen the
 committed transaction or change the canonical operation outcome. A later
 contract may add an explicit post-terminal application-evidence surface, but
 the ordinary in-operation DSL does not publish facts from an aborted operation.
+
+The UnitOfWork buffer is retained across framework ExecutionContext rebinding
+and partitions its state by operation attempt. The current ActionCall context
+remains the authority for constructing the fact. Commit, release, and discard
+target one attempt without changing evidence for another Task, retry, or nested
+operation that shares the UnitOfWork. Rebinding does not duplicate, release, or
+discard buffered intents.
 
 Supplemental facts:
 

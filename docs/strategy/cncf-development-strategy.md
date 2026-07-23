@@ -2722,9 +2722,10 @@ Active CNCF development item in Phase 48.
     authorization precedes business execution and bounded automatic terminal
     evidence follows framework response bindings across direct, Job, Event,
     Rule, Workflow, JCL, Service, query-only, and cross-component paths;
-  - OE-06 (NEXT) — add protected supplemental Corpus/Experiment internal DSL
-    helpers;
-  - OE-07 — attach bounded recording status to execution metadata and publish only
+  - OE-06 (DONE) — added protected supplemental Corpus/Experiment internal DSL
+    helpers with attempt-partitioned UnitOfWork staging and post-terminal
+    release;
+  - OE-07 (NEXT) — attach bounded recording status to execution metadata and publish only
     policy-admitted correlation through CallTree/observability;
   - OE-08 — prove disabled, optional, required, nested, retry, cancellation,
     timeout, idempotency, failure-isolation, and confidentiality behavior with

@@ -56,11 +56,20 @@ raw payload capture.
 Applications MUST submit supplemental Corpus or Experiment information only
 through protected ActionCall/Behavior internal DSL operations.
 
+The protected operation names are
+`operation_evaluation_label`, `operation_evaluation_measurement`,
+`corpus_candidate`, and `experiment_observation`. The first two construct
+bounded typed values. The latter two MUST emit
+`UnitOfWorkOp.StageOperationEvaluationSupplemental`; they MUST NOT expose or
+invoke a provider service directly.
+
 The DSL MUST:
 
 - use the current immutable execution correlation;
 - identify the source as application-owned;
 - stage an immutable delivery intent in the active UnitOfWork;
+- partition staged, committed, released, and discarded intents by operation
+  attempt when multiple Tasks, retries, or nested operations share a UnitOfWork;
 - transfer a committed intent to a framework-owned post-commit capture buffer
   without invoking the external sink as a transaction participant;
 - release the intent to the installed standard SPI capability only after the

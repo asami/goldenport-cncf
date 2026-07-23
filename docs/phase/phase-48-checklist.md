@@ -156,26 +156,44 @@ Evidence:
 ## OE-06: Supplemental Internal DSL
 
 Stage Status:
-- Current status: NEXT
+- Current status: DONE
 - Owner: CNCF operation runtime maintainers
 - Update rule: Mark IN_PROGRESS only after OE-05 closes; mark DONE only when
   every OE-06 checklist item is complete.
 
-- [ ] Add protected ActionCall/Behavior DSL helpers for corpus candidates.
-- [ ] Add protected ActionCall/Behavior DSL helpers for experiment
+- [x] Add protected ActionCall/Behavior DSL helpers for corpus candidates.
+- [x] Add protected ActionCall/Behavior DSL helpers for experiment
   observations and bounded labels/measurements.
-- [ ] Route supplemental capture through UnitOfWork and the installed standard
+- [x] Route supplemental capture through UnitOfWork and the installed standard
   SPI rather than direct component calls.
-- [ ] Stage supplemental intents in UnitOfWork, retain them in a framework
+- [x] Stage supplemental intents in UnitOfWork, retain them in a framework
   post-commit buffer, and release them only after canonical operation success.
-- [ ] Discard supplemental intents on abort, rollback, commit failure,
+- [x] Discard supplemental intents on abort, rollback, commit failure,
   cancellation, timeout, and later framework-binding failure.
-- [ ] Enforce byte/count/confidentiality limits and structured failures.
+- [x] Enforce byte/count/confidentiality limits and structured failures.
+
+Evidence:
+- `BehaviorOperationEvaluationPart` provides typed protected helpers for
+  labels, measurements, corpus candidates, and experiment observations.
+- `StageOperationEvaluationSupplemental` routes immutable intents through the
+  UnitOfWork interpreter into an attempt-partitioned bounded buffer.
+- Commit marks only the current attempt; canonical successful terminal
+  delivery releases that attempt, while failure, timeout, cancellation,
+  commit failure, and framework-binding failure discard it.
+- Executable specifications cover Functional and Procedure ActionCalls,
+  multiple Tasks in one Job, retry, nested operations, interruption/fatal
+  propagation, cleanup failure, confidentiality, count/byte limits, and
+  generated attempt isolation.
+- The expanded focused regression set passes 55 tests across five suites.
+- Fresh post-fix review found no actionable behavior, naming,
+  executable-specification, or documentation finding.
+- The exact staged snapshot passed the full CNCF suite: 332 suites completed,
+  2,324 tests succeeded, and no test failed.
 
 ## OE-07: Diagnostics and Observability
 
 Stage Status:
-- Current status: OPEN
+- Current status: NEXT
 - Owner: CNCF operation runtime maintainers
 - Update rule: Mark IN_PROGRESS only after OE-06 closes; mark DONE only when
   every OE-07 checklist item is complete.
