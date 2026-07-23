@@ -485,8 +485,35 @@ final class Subsystem(
     executeWithMetadata(request).map(_.response)
   }
 
+  /** Executes an admitted component call without replacing the caller's execution context. */
+  def executeOperationResponseInContext(
+    request: Request,
+    executioncontext: ExecutionContext
+  ): Consequence[OperationResponse] =
+    _execute_operation_response_in_context(request, executioncontext)
+
+  /**
+   * Executes an admitted component call as a synchronous child invocation.
+   * Security, runtime configuration, and observability remain inherited, while
+   * the caller's active job task is not reused as the child command's task.
+   */
+  def executeOperationResponseInChildContext(
+    request: Request,
+    executioncontext: ExecutionContext
+  ): Consequence[OperationResponse] =
+    _execute_operation_response_in_context(
+      request,
+      ExecutionContext.withJobContext(executioncontext, org.goldenport.cncf.job.JobContext.empty)
+    )
+
   /** Executes a framework-admitted in-process call with the caller's existing context. */
   private[cncf] def executeOperationResponse(
+    request: Request,
+    executioncontext: ExecutionContext
+  ): Consequence[OperationResponse] =
+    _execute_operation_response_in_context(request, executioncontext)
+
+  private def _execute_operation_response_in_context(
     request: Request,
     executioncontext: ExecutionContext
   ): Consequence[OperationResponse] = {
