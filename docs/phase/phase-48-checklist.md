@@ -385,20 +385,69 @@ OE-08C Modified Scala File Compliance Ledger:
 ## OE-09: Downstream Handoff
 
 Stage Status:
-- Current status: IN_PROGRESS
+- Current status: DONE
 - Owner: CNCF and downstream Textus integration maintainers
 - Update rule: Mark IN_PROGRESS only after OE-08 closes; mark DONE only when
   every OE-09 checklist item is complete.
 
-- [ ] Validate one offline Textus Corpus adapter.
-- [ ] Validate one offline Textus Experiment adapter.
-- [ ] Prove CNCF has no downstream implementation dependency.
-- [ ] Record separately owned production-provider follow-up work.
+- [x] Validate one offline Textus Corpus adapter.
+- [x] Validate one offline Textus Experiment adapter.
+- [x] Prove CNCF has no downstream implementation dependency.
+- [x] Record separately owned production-provider follow-up work.
+
+Closure evidence:
+
+- `textus-corpus` owns a bounded, ordered, idempotent, non-persistent
+  `OfflineCorpusEvaluationSinkAdapter`; its actual primary CAR component
+  exposes the standard SPI provider.
+- `textus-experiment` owns the corresponding
+  `OfflineExperimentEvaluationSinkAdapter`; its actual primary CAR component
+  exposes the standard SPI provider.
+- CNCF's non-default-discovered
+  `OperationEvaluationDownstreamHandoffSpec` loads both compiled downstream
+  class directories through an isolated runtime class loader. It proves the
+  actual Textus-owned adapters preserve one execution/attempt across corpus
+  revision/case and experiment/arm/run correlation without adding either
+  downstream implementation to CNCF's compile or production dependencies.
+- Downstream README contracts state that persistent candidate promotion,
+  observation persistence, retention, and production provider activation are
+  separately owned follow-up work.
+- CNCF remains provider-neutral; the dependency check must show no
+  `org.simplemodeling.textus.corpus` or
+  `org.simplemodeling.textus.experiment` implementation import in CNCF
+  production sources before OE-09 closes.
+- REVIEW_FIX validation on 2026-07-24 covers four Corpus adapter executable
+  specifications, four Experiment adapter executable specifications,
+  resolver-level installation through each actual primary CAR component,
+  rejection of explicit non-offline selection modes, `Test/compile` in both
+  downstream repositories, and one explicit cross-repository acceptance
+  specification. No cross-repository Scala test dependency or local Corpus
+  publication is required.
+- The explicit downstream acceptance command is:
+
+  ```sh
+  sbt --batch \
+    -Dtextus.corpus.classes=/path/to/textus-corpus/target/scala-3.3.8/classes \
+    -Dtextus.experiment.classes=/path/to/textus-experiment/target/scala-3.3.8/classes \
+    "Test / runMain org.scalatest.tools.Runner -s org.goldenport.cncf.spi.evaluation.OperationEvaluationDownstreamHandoffSpec -o"
+  ```
+
+OE-09 Modified Scala File Compliance Ledger:
+
+| Repository / file | Naming | Executable specification | Validation | Commit |
+| --- | --- | --- | --- | --- |
+| `textus-corpus/src/main/scala/org/simplemodeling/textus/corpus/evaluation/OfflineCorpusEvaluationSinkAdapter.scala` | whole-file pass | not a spec | focused adapter spec; `Test/compile` | OE-09 release commit |
+| `textus-corpus/src/test/scala/org/simplemodeling/textus/corpus/evaluation/OfflineCorpusEvaluationSinkAdapterSpec.scala` | whole-file pass | Given/When/Then plus generated-capacity property pass | 4 tests; `Test/compile` | OE-09 release commit |
+| `textus-corpus/src/main/scala/org/simplemodeling/textus/corpus/impl/ComponentFactory.scala` | whole-file pass | not a spec | actual primary component provider resolution | OE-09 release commit |
+| `textus-experiment/src/main/scala/org/simplemodeling/textus/experiment/evaluation/OfflineExperimentEvaluationSinkAdapter.scala` | whole-file pass | not a spec | focused adapter spec; `Test/compile` | OE-09 release commit |
+| `textus-experiment/src/test/scala/org/simplemodeling/textus/experiment/evaluation/OfflineExperimentEvaluationSinkAdapterSpec.scala` | whole-file pass | Given/When/Then plus generated-capacity property pass | 4 tests; `Test/compile` | OE-09 release commit |
+| `textus-experiment/src/main/scala/org/simplemodeling/textus/experiment/impl/ComponentFactory.scala` | whole-file pass | not a spec | actual primary component provider resolution | OE-09 release commit |
+| `src/test/scala/org/goldenport/cncf/spi/evaluation/OperationEvaluationDownstreamHandoffSpec.scala` | whole-file pass | Given/When/Then cross-repository acceptance | 1 explicit acceptance test | OE-09 release commit |
 
 ## OE-10: Verification and Closure
 
 Stage Status:
-- Current status: OPEN
+- Current status: IN_PROGRESS
 - Owner: CNCF phase maintainers
 - Update rule: Mark IN_PROGRESS only after OE-09 closes; mark DONE only when
   every OE-10 checklist item and Phase 48 closure criterion is complete.

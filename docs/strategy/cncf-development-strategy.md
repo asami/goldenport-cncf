@@ -2731,9 +2731,9 @@ Active CNCF development item in Phase 48.
   - OE-08 (DONE) — proves disabled, optional, required, nested, retry,
     cancellation, timeout, idempotency, failure-isolation, confidentiality,
     query-only, and generic SPI behavior with deterministic fake adapters;
-  - OE-09 (IN PROGRESS) — validate one offline corpus-case/arm handoff with downstream
+  - OE-09 (DONE) — validates one offline corpus-case/arm handoff with downstream
     Textus-owned adapters while preserving the CNCF dependency boundary;
-  - OE-10 — complete full validation, review, documentation evidence, and
+  - OE-10 (IN PROGRESS) — complete full validation, review, documentation evidence, and
     Phase 48 closure.
 - Acceptance:
   - an operation without evaluation declarations emits bounded automatic facts
