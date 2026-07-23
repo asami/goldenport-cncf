@@ -29,7 +29,7 @@ import org.goldenport.value.{ContentAttributes, ContentReferenceOccurrence}
  *  version Mar. 24, 2026
  *  version Apr. 29, 2026
  *  version May.  4, 2026
- * @version Jul. 23, 2026
+ * @version Jul. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 sealed trait UnitOfWorkOp[A]
@@ -142,6 +142,15 @@ object UnitOfWorkOp {
     options: EntityCreateOptions = EntityCreateOptions.default,
     authorization: Option[UnitOfWorkAuthorization] = None
   ) extends UnitOfWorkOp[CreateResult[T]]
+
+  final case class EntityStoreClaimOrLoad[C, P](
+    entity: C,
+    create: EntityPersistentCreate[C],
+    persisted: EntityPersistent[P],
+    options: EntityCreateOptions = EntityCreateOptions.default,
+    createAuthorization: Option[UnitOfWorkAuthorization] = None,
+    loadAuthorization: Option[UnitOfWorkAuthorization] = None
+  ) extends UnitOfWorkOp[EntityStore.EntityClaimResult[C, P]]
 
   final case class EntityStoreLoad[T](
     id: EntityId,

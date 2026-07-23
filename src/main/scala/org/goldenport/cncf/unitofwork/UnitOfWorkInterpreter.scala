@@ -37,7 +37,7 @@ import org.simplemodeling.model.directive.Update
  *  version Mar. 29, 2026
  *  version Apr. 29, 2026
  *  version May. 11, 2026
- * @version Jul. 23, 2026
+ * @version Jul. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkInterpreter(uow: UnitOfWork) {
@@ -172,6 +172,22 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
             }
           }
         )
+      }
+
+    case m: (UnitOfWorkOp.EntityStoreClaimOrLoad[c, p] @unchecked) =>
+      _with_calltree("uow:entitystore:claim-or-load") {
+        _authorize(m.createAuthorization).flatMap { _ =>
+          _entity_store_space.claimOrLoad(m).flatMap {
+            case claimed: org.goldenport.cncf.entity.EntityStore.EntityClaimResult.Claimed[c] @unchecked =>
+              _entity_space_put_record(claimed.id, claimed.created.record).map { _ =>
+                _view_space_invalidate_all()
+                claimed
+              }
+            case loaded: org.goldenport.cncf.entity.EntityStore.EntityClaimResult.Loaded[p] @unchecked =>
+              val loadrecord = () => Consequence.success(Some(m.persisted.authorizationRecord(loaded.entity)))
+              _authorize(m.loadAuthorization, Some(loadrecord)).map(_ => loaded)
+          }
+        }
       }
 
     case m: (UnitOfWorkOp.EntityStoreLoad[t] @unchecked) =>

@@ -24,7 +24,7 @@ import org.simplemodeling.model.statemachine.{Aliveness, PostStatus}
  *  version Mar. 30, 2026
  *  version Apr. 26, 2026
  *  version May. 17, 2026
- * @version Jul. 15, 2026
+ * @version Jul. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class EntityStore {
@@ -37,6 +37,32 @@ abstract class EntityStore {
     entity: T,
     options: EntityCreateOptions = EntityCreateOptions.default
   )(using tc: EntityPersistentCreate[T], ctx: ExecutionContext): Consequence[CreateResult[T]]
+
+  /**
+   * Atomically creates a stable-id entity or returns the entity already stored
+   * under that id.  Components reach this only through the protected internal
+   * Entity DSL; it is not an upsert and never changes an existing record.
+   */
+  def claimOrLoad[C, P](
+    entity: C,
+    options: EntityCreateOptions = EntityCreateOptions.default
+  )(using createTc: EntityPersistentCreate[C], persisted: EntityPersistent[P], ctx: ExecutionContext): Consequence[EntityStore.EntityClaimResult[C, P]] =
+    createTc.id(entity) match {
+      case Some(id) =>
+        create(entity, options)
+          .map(EntityStore.EntityClaimResult.Claimed.apply)
+          .recoverWith { conclusion =>
+            if (conclusion.observation.taxonomy == org.goldenport.observation.Taxonomy.dataStoreDuplicate)
+              load[P](id).flatMap {
+                case Some(existing) => Consequence.success(EntityStore.EntityClaimResult.Loaded(existing))
+                case None => Consequence.Failure(conclusion)
+              }
+            else
+              Consequence.Failure(conclusion)
+          }
+      case None =>
+        Consequence.argumentInvalid("entity_claim_or_load requires a stable entity id")
+    }
 
   def upsert[T](
     entity: T,
@@ -107,6 +133,20 @@ object EntityStore {
   def noop() = NoopEntityStore()
 
   def standard(): EntityStore = StandardEntityStore()
+
+  sealed trait EntityClaimResult[+C, +P] {
+    def id: EntityId
+  }
+
+  object EntityClaimResult {
+    final case class Claimed[C](created: CreateResult[C]) extends EntityClaimResult[C, Nothing] {
+      def id: EntityId = created.id
+    }
+
+    final case class Loaded[P](entity: P)(using persisted: EntityPersistent[P]) extends EntityClaimResult[Nothing, P] {
+      def id: EntityId = persisted.id(entity)
+    }
+  }
 
   // final case class EntityId(
   //   major: String,

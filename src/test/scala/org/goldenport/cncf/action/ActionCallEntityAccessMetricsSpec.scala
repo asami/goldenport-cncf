@@ -27,7 +27,7 @@ import org.simplemodeling.model.directive.Condition
 /*
  * @since   Mar. 29, 2026
  *  version Apr. 26, 2026
- * @version Jul. 14, 2026
+ * @version Jul. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ActionCallEntityAccessMetricsSpec
@@ -37,6 +37,86 @@ final class ActionCallEntityAccessMetricsSpec
   private def _cid(name: String) = EntityCollectionId("test", "a", name)
 
   "read-side API metrics" should {
+    "claim one stable entity and load it without an upsert on a repeated claim" in {
+      Given("one stable create record and its persisted Entity type")
+      given EntityPersistentCreate[ClaimPersonCreate] = _claim_create_persistent
+      given EntityPersistent[ClaimPerson] = _claim_persistent
+      val cid = _cid("person_claim_or_load")
+      val id = EntityId("test", "claim_or_load", cid)
+      val component = TestComponentFactory.create("claim_or_load", Protocol.empty)
+      val ctx = _execution_context(DataStoreSpace.default(), new EntityStoreSpace().addEntityStore(EntityStore.standard()))
+      val probe = _probe(component, ctx)
+      val candidate = ClaimPersonCreate(id, "first-owner")
+
+      When("two internal DSL calls claim the same stable identity")
+      val first = probe.claim[ClaimPersonCreate, ClaimPerson](candidate)
+      val second = probe.claim[ClaimPersonCreate, ClaimPerson](candidate.copy(name = "must-not-overwrite"))
+
+      Then("only the first call owns creation and the stored Entity is preserved")
+      first.map(_.id) shouldBe Consequence.success(id)
+      first.map(_.isInstanceOf[EntityStore.EntityClaimResult.Claimed[?]]) shouldBe Consequence.success(true)
+      second.map(_.id) shouldBe Consequence.success(id)
+      second.map(_.isInstanceOf[EntityStore.EntityClaimResult.Loaded[?]]) shouldBe Consequence.success(true)
+      second.map {
+        case EntityStore.EntityClaimResult.Loaded(entity) => entity.name
+        case _ => "unexpected"
+      } shouldBe Consequence.success("first-owner")
+    }
+
+    "claim a server-owned entity internally without requiring user ACL fields on the loaded record" in {
+      given EntityPersistentCreate[ClaimPersonCreate] = _claim_create_persistent
+      given EntityPersistent[ClaimPerson] = _claim_persistent
+      val cid = _cid("person_claim_or_load_internal")
+      val id = EntityId("test", "claim_or_load_internal", cid)
+      val component = TestComponentFactory.create("claim_or_load_internal", Protocol.empty)
+      val ctx = _execution_context(DataStoreSpace.default(), new EntityStoreSpace().addEntityStore(EntityStore.standard()))
+      val probe = _probe(component, ctx)
+      val candidate = ClaimPersonCreate(id, "server-owner")
+
+      val first = probe.claimInternal[ClaimPersonCreate, ClaimPerson](candidate)
+      val second = probe.claimInternal[ClaimPersonCreate, ClaimPerson](candidate.copy(name = "must-not-overwrite"))
+
+      first.map(_.isInstanceOf[EntityStore.EntityClaimResult.Claimed[?]]) shouldBe Consequence.success(true)
+      second.map {
+        case EntityStore.EntityClaimResult.Loaded(entity) => entity.name
+        case _ => "unexpected"
+      } shouldBe Consequence.success("server-owner")
+    }
+
+    "save a server-owned Entity internally after its stable identity is claimed" in {
+      given EntityPersistentCreate[ClaimPersonCreate] = _claim_create_persistent
+      given EntityPersistent[ClaimPerson] = _claim_persistent
+      val cid = _cid("person_internal_save")
+      val id = EntityId("test", "internal_save", cid)
+      val component = TestComponentFactory.create("internal_save", Protocol.empty)
+      val ctx = _execution_context(DataStoreSpace.default(), new EntityStoreSpace().addEntityStore(EntityStore.standard()))
+      val probe = _probe(component, ctx)
+
+      probe.claimInternal[ClaimPersonCreate, ClaimPerson](ClaimPersonCreate(id, "first-owner")) shouldBe a[Consequence.Success[_]]
+      probe.saveInternal(ClaimPerson(id, "retained-owner")) shouldBe Consequence.unit
+      probe.claimInternal[ClaimPersonCreate, ClaimPerson](ClaimPersonCreate(id, "must-not-overwrite")).map {
+        case EntityStore.EntityClaimResult.Loaded(entity) => entity.name
+        case _ => "unexpected"
+      } shouldBe Consequence.success("retained-owner")
+    }
+
+    "upsert a server-owned stable Entity internally after its identity is claimed" in {
+      given EntityPersistentCreate[ClaimPersonCreate] = _claim_create_persistent
+      given EntityPersistent[ClaimPerson] = _claim_persistent
+      val cid = _cid("person_internal_upsert")
+      val id = EntityId("test", "internal_upsert", cid)
+      val component = TestComponentFactory.create("internal_upsert", Protocol.empty)
+      val ctx = _execution_context(DataStoreSpace.default(), new EntityStoreSpace().addEntityStore(EntityStore.standard()))
+      val probe = _probe(component, ctx)
+
+      probe.claimInternal[ClaimPersonCreate, ClaimPerson](ClaimPersonCreate(id, "first-owner")) shouldBe a[Consequence.Success[_]]
+      probe.upsertInternal(ClaimPersonCreate(id, "retained-owner")) shouldBe a[Consequence.Success[_]]
+      probe.claimInternal[ClaimPersonCreate, ClaimPerson](ClaimPersonCreate(id, "must-not-overwrite")).map {
+        case EntityStore.EntityClaimResult.Loaded(entity) => entity.name
+        case _ => "unexpected"
+      } shouldBe Consequence.success("retained-owner")
+    }
+
     "record entity-space hit for load when the cache already has the entity" in {
       EntityAccessMetricsRegistry.shared.synchronized {
         Given("a component entity space with a resident entity")
@@ -905,6 +985,24 @@ final class ActionCallEntityAccessMetricsSpec
       def collection(e: TestPersonCreate): EntityCollectionId = e.collectionId
       def toRecord(e: TestPersonCreate): Record = e.toRecord()
     }
+
+  private def _claim_create_persistent: EntityPersistentCreate[ClaimPersonCreate] =
+    new EntityPersistentCreate[ClaimPersonCreate] {
+      def id(e: ClaimPersonCreate): Option[EntityId] = Some(e.id)
+      def collection(e: ClaimPersonCreate): EntityCollectionId = e.id.collection
+      def toRecord(e: ClaimPersonCreate): Record = e.toRecord()
+    }
+
+  private def _claim_persistent: EntityPersistent[ClaimPerson] =
+    new EntityPersistent[ClaimPerson] {
+      def id(e: ClaimPerson): EntityId = e.id
+      def toRecord(e: ClaimPerson): Record = e.toRecord()
+      def fromRecord(r: Record): Consequence[ClaimPerson] =
+        for {
+          id <- Consequence.successOrRecordNotFound[EntityId]("id", r)
+          name <- Consequence.successOrRecordNotFound[String]("name", r)
+        } yield ClaimPerson(id, name)
+    }
 }
 
 private final case class TestPerson(
@@ -983,6 +1081,14 @@ private final case class TestPersonCreate(
     )
 }
 
+private final case class ClaimPersonCreate(id: EntityId, name: String) {
+  def toRecord(): Record = Record.dataAuto("id" -> id, "name" -> name)
+}
+
+private final case class ClaimPerson(id: EntityId, name: String) {
+  def toRecord(): Record = Record.dataAuto("id" -> id, "name" -> name)
+}
+
 private final case class TestPersonQuery(
   id: Condition[EntityId],
   name: Condition[String],
@@ -1000,6 +1106,18 @@ private final class _EntityAccessProbe(
 ) extends ActionCall.Core.Holder with ActionCallEntityStorePart {
   def create[T](entity: T)(using tc: EntityPersistentCreate[T]): Consequence[org.goldenport.cncf.entity.CreateResult[T]] =
     new UnitOfWorkInterpreter(new UnitOfWork(executionContext)).run(entity_create[T](entity))
+
+  def claim[C, P](entity: C)(using create: EntityPersistentCreate[C], persisted: EntityPersistent[P]): Consequence[EntityStore.EntityClaimResult[C, P]] =
+    new UnitOfWorkInterpreter(new UnitOfWork(executionContext)).run(entity_claim_or_load[C, P](entity))
+
+  def claimInternal[C, P](entity: C)(using create: EntityPersistentCreate[C], persisted: EntityPersistent[P]): Consequence[EntityStore.EntityClaimResult[C, P]] =
+    new UnitOfWorkInterpreter(new UnitOfWork(executionContext)).run(entity_claim_or_load_internal[C, P](entity))
+
+  def saveInternal[T](entity: T)(using tc: EntityPersistent[T]): Consequence[Unit] =
+    new UnitOfWorkInterpreter(new UnitOfWork(executionContext)).run(entity_save_internal(entity))
+
+  def upsertInternal[T](entity: T)(using tc: EntityPersistentCreate[T]): Consequence[org.goldenport.cncf.entity.CreateResult[T]] =
+    new UnitOfWorkInterpreter(new UnitOfWork(executionContext)).run(entity_upsert_internal(entity))
 
   def createPublic[T](entity: T)(using tc: EntityPersistentCreate[T]): Consequence[org.goldenport.cncf.entity.CreateResult[T]] =
     new UnitOfWorkInterpreter(new UnitOfWork(executionContext)).run(

@@ -20,7 +20,7 @@ import org.goldenport.cncf.unitofwork.UnitOfWorkOp.*
  *  version Apr. 13, 2026
  *  version Apr. 14, 2026
  *  version May. 11, 2026
- * @version Jul. 15, 2026
+ * @version Jul. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 class EntityStoreSpace {
@@ -53,6 +53,17 @@ class EntityStoreSpace {
         entitystore <- _by_collection(cid)
         r <- entitystore.create(op.entity, _create_options(op))
       } yield r
+    }
+  }
+
+  def claimOrLoad[C, P](
+    op: EntityStoreClaimOrLoad[C, P]
+  )(using ctx: ExecutionContext): Consequence[EntityStore.EntityClaimResult[C, P]] = {
+    given EntityPersistentCreate[C] = op.create
+    given EntityPersistent[P] = op.persisted
+    val cid = op.create.collection(op.entity)
+    _with_calltree("space:entitystore:claim-or-load", _entitystore_space_attributes("claim-or-load", cid)) {
+      _by_collection(cid).flatMap(_.claimOrLoad(op.entity, op.options))
     }
   }
 

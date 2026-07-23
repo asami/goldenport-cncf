@@ -160,6 +160,13 @@ attributes are retained on update. The datastore save is an atomic upsert.
 Components must not implement this distinction by calling a datastore directly
 or by treating `entity_save` as an unauthorised upsert.
 
+`entity_update_internal(id, patch)` is the canonical patch-update boundary for
+a server-owned Entity. It canonicalizes the target identity, verifies the
+component datastore boundary, and emits `EntityStoreUpdateById` with
+`ServiceInternal` authorization. Component code must use this helper instead of
+constructing `UnitOfWorkOp`, `UnitOfWorkAuthorization`, or collection security
+metadata itself.
+
 These helpers should emit dedicated `UnitOfWork` intents, such as uniqueness or
 identity resolution, rather than broad search operations. The dedicated intent
 lets `UnitOfWork` check `EntitySpace` / working set first, fall back to

@@ -74,7 +74,7 @@ import org.goldenport.cncf.processexecution.{ProcessExecutionAdmission, ProcessE
  *  version Mar. 30, 2026
  *  version Apr. 29, 2026
  *  version May. 25, 2026
- * @version Jul. 21, 2026
+ * @version Jul. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 trait BehaviorFeaturePart { self: Behavior.Core.Holder =>
@@ -1930,6 +1930,76 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
     ConsequenceT.liftF(Free.liftF(op))
   }
 
+  /** Creates a server-owned record through the Entity/UnitOfWork boundary. */
+  protected final def entity_create_internal[T](
+    entity: T
+  )(using tc: EntityPersistentCreate[T]): ExecUowM[CreateResult[T]] = {
+    ensure_component_application_datastore()
+    val authorization = _entity_uow_authorization(Some(tc.collection(entity).name), None, "create")
+      .map(_.copy(accessMode = EntityAccessMode.ServiceInternal))
+    val op = UnitOfWorkOp.EntityStoreCreate(
+      entity,
+      tc,
+      _entity_create_options(Some(tc.collection(entity).name)),
+      authorization
+    )
+    ConsequenceT.liftF(Free.liftF(op))
+  }
+
+  /**
+   * Claims a stable Entity identity without overwriting an existing record.
+   * The returned branch tells the caller whether it owns expensive work or
+   * must join/reuse the already persisted entity.
+   */
+  protected final def entity_claim_or_load[C, P](
+    entity: C
+  )(using create: EntityPersistentCreate[C], persisted: EntityPersistent[P]): ExecUowM[EntityStore.EntityClaimResult[C, P]] = {
+    ensure_component_application_datastore()
+    create.id(entity) match {
+      case Some(id) =>
+        val op = UnitOfWorkOp.EntityStoreClaimOrLoad(
+          entity,
+          create,
+          persisted,
+          _entity_create_options(Some(id.collection.name)),
+          _entity_uow_authorization(Some(id.collection.name), None, "create"),
+          _entity_uow_authorization(Some(id.collection.name), Some(id), "read")
+        )
+        ConsequenceT.liftF(Free.liftF(op))
+      case None =>
+        exec_from(Consequence.argumentInvalid("entity_claim_or_load requires a stable entity id"))
+    }
+  }
+
+  /**
+   * Claims or reads a server-owned stable Entity identity.  Internal component
+   * workflows use this when the identity has already been derived from trusted
+   * admitted input and must not depend on user-record ACL fields.
+   */
+  protected final def entity_claim_or_load_internal[C, P](
+    entity: C
+  )(using create: EntityPersistentCreate[C], persisted: EntityPersistent[P]): ExecUowM[EntityStore.EntityClaimResult[C, P]] = {
+    ensure_component_application_datastore()
+    create.id(entity) match {
+      case Some(id) =>
+        val createauthorization = _entity_uow_authorization(Some(id.collection.name), None, "create")
+          .map(_.copy(accessMode = EntityAccessMode.ServiceInternal))
+        val loadauthorization = _entity_uow_authorization(Some(id.collection.name), Some(id), "read")
+          .map(_.copy(accessMode = EntityAccessMode.ServiceInternal))
+        val op = UnitOfWorkOp.EntityStoreClaimOrLoad(
+          entity,
+          create,
+          persisted,
+          _entity_create_options(Some(id.collection.name)),
+          createauthorization,
+          loadauthorization
+        )
+        ConsequenceT.liftF(Free.liftF(op))
+      case None =>
+        exec_from(Consequence.argumentInvalid("entity_claim_or_load_internal requires a stable entity id"))
+    }
+  }
+
   protected final def entity_load_option[T](
     id: EntityId
   )(using tc: EntityPersistent[T]): ExecUowM[Option[T]] = {
@@ -2052,6 +2122,26 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
     ConsequenceT.liftF(Free.liftF(op))
   }
 
+  /** Saves a server-owned Entity through the authorized UnitOfWork boundary. */
+  protected final def entity_save_internal[T](
+    entity: T
+  )(using tc: EntityPersistent[T]): ExecUowM[Unit] = {
+    ensure_component_application_datastore()
+    val effectivetc = _effective_entity_persistent(tc.id(entity).collection, tc)
+    val authorization =
+      _entity_uow_authorization(
+        Some(effectivetc.id(entity).collection.name),
+        Some(effectivetc.id(entity)),
+        "update"
+      ).map(_.copy(accessMode = EntityAccessMode.ServiceInternal))
+    val op = UnitOfWorkOp.EntityStoreSave(
+      entity,
+      effectivetc,
+      authorization
+    )
+    ConsequenceT.liftF(Free.liftF(op))
+  }
+
   protected final def entity_upsert[T](
     entity: T
   )(using tc: EntityPersistentCreate[T]): ExecUowM[CreateResult[T]] = {
@@ -2070,6 +2160,38 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
         ConsequenceT.liftF(Free.liftF(op))
       case None =>
         exec_from(Consequence.argumentInvalid("entity_upsert requires a stable entity id"))
+    }
+  }
+
+  /**
+   * Upserts a server-owned Entity through the authorized UnitOfWork boundary.
+   * This remains an Entity-layer operation: component code cannot select a
+   * datastore, emit backend statements, or bypass audit/observability.
+   */
+  protected final def entity_upsert_internal[T](
+    entity: T
+  )(using tc: EntityPersistentCreate[T]): ExecUowM[CreateResult[T]] = {
+    ensure_component_application_datastore()
+    tc.id(entity) match {
+      case Some(sourceid) =>
+        val id = _canonical_entity_id(sourceid)
+        val createauthorization =
+          _entity_uow_authorization(Some(id.collection.name), None, "create")
+            .map(_.copy(accessMode = EntityAccessMode.ServiceInternal))
+        val updateauthorization =
+          _entity_uow_authorization(Some(id.collection.name), Some(id), "update")
+            .map(_.copy(accessMode = EntityAccessMode.ServiceInternal))
+        val op = UnitOfWorkOp.EntityStoreUpsert(
+          entity,
+          id,
+          tc,
+          _entity_create_options(Some(id.collection.name)),
+          createauthorization,
+          updateauthorization
+        )
+        ConsequenceT.liftF(Free.liftF(op))
+      case None =>
+        exec_from(Consequence.argumentInvalid("entity_upsert_internal requires a stable entity id"))
     }
   }
 
@@ -2118,6 +2240,34 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
       patch,
       tc,
       _entity_uow_authorization(Some(effectiveid.collection.name), Some(effectiveid), "update")
+    )
+    ConsequenceT.liftF(Free.liftF(op))
+  }
+
+  /**
+   * Applies a generated patch to a server-owned Entity.
+   *
+   * This is the ServiceInternal counterpart of `entity_update(id, patch)`.
+   * Keeping canonical ID handling and authorization construction here prevents
+   * components from assembling UnitOfWork operations or security metadata.
+   */
+  protected final def entity_update_internal[T](
+    id: EntityId,
+    patch: T
+  )(using tc: EntityPersistentUpdate[T]): ExecUowM[Unit] = {
+    ensure_component_application_datastore()
+    val effectiveid = _canonical_entity_id(id)
+    val authorization =
+      _entity_uow_authorization(
+        Some(effectiveid.collection.name),
+        Some(effectiveid),
+        "update"
+      ).map(_.copy(accessMode = EntityAccessMode.ServiceInternal))
+    val op = UnitOfWorkOp.EntityStoreUpdateById(
+      effectiveid,
+      patch,
+      tc,
+      authorization
     )
     ConsequenceT.liftF(Free.liftF(op))
   }
