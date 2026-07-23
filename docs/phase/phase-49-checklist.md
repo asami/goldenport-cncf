@@ -63,18 +63,18 @@ Stage Status:
   typed values, managed storage metadata, and migration behavior have
   executable model/storage evidence.
 
-- [ ] Add the typed concurrency-token model without exposing datastore/vendor
+- [x] Add the typed concurrency-token model without exposing datastore/vendor
   details.
-- [ ] Add managed revision metadata to the canonical Entity storage shape.
-- [ ] Prevent application patches and records from writing managed revision
+- [x] Add managed revision metadata to the canonical Entity storage shape.
+- [x] Prevent application patches and records from writing managed revision
   metadata directly.
-- [ ] Define and implement the canonical initial token.
-- [ ] Define and implement loading/migration behavior for records without a
+- [x] Define and implement the canonical initial token.
+- [x] Define and implement loading/migration behavior for records without a
   token.
 - [ ] Advance the token exactly once for each admitted successful mutation.
-- [ ] Preserve existing Entity id, lifecycle, audit, and content-body storage
+- [x] Preserve existing Entity id, lifecycle, audit, and content-body storage
   behavior.
-- [ ] Add property-based token and storage-shape specifications.
+- [x] Add property-based token and storage-shape specifications.
 
 Evidence:
 - EC-02A implemented, cleanly re-reviewed, and release-validated:
@@ -98,9 +98,42 @@ Evidence:
   - whole-file naming and executable-specification review completed;
   - public JVM API and classfile compatibility reviewed;
   - clean re-review completed with no actionable findings.
-- EC-02 remains open. Canonical create/load integration, managed-field
-  composition, mutation advancement, and regression evidence belong to the
-  remaining EC-02 work.
+- EC-02 remained open after EC-02A because canonical create/load integration,
+  managed-field composition, mutation advancement, and regression evidence
+  belonged to later slices.
+- EC-02B implementation release-validated after initial review findings were
+  fixed and the fresh re-review found no remaining actionable issue:
+  - canonical create/upsert-create/save-create/import initialize token `1`;
+  - existing save/update/upsert/soft-delete/update-by-id/import preserve the
+    authoritative token and discard caller revision aliases;
+  - `SimpleEntityStorageShapePolicy` owns the logical/physical revision mapping
+    and managed-field classification;
+  - plain load/search/identity decoding validates and removes concurrency
+    metadata before invoking domain codecs;
+  - UnitOfWork create/upsert strips storage metadata before admitting a
+    persisted Entity to EntitySpace;
+  - `EntityStore.loadSnapshot` and `EntityStoreSpace.loadSnapshot` return the
+    typed Entity together with its admitted token;
+  - legacy records, including records carrying only the reserved logical alias,
+    load with virtual token `0` without storage backfill;
+  - `EntityConcurrencyTokenSpec` now contains nine executable behaviors,
+    including generated canonical create/load evidence, UnitOfWork/EntitySpace
+    isolation, and mutation/import protection;
+  - `UnitOfWorkTargetAuthorizationSpec` is organized into five navigable
+    authorization feature areas.
+- EC-02B focused validation:
+  - `sbt -J-Xmx4G --batch "testOnly
+    org.goldenport.cncf.entity.EntityConcurrencyTokenSpec
+    org.goldenport.cncf.entity.EntityStoreQueryRouteSpec
+    org.goldenport.cncf.entity.EntityStoreImportSeedSpec
+    org.goldenport.cncf.unitofwork.UnitOfWorkTargetAuthorizationSpec"`:
+    73 tests passed across four suites;
+  - `sbt -J-Xmx4G --batch Test/compile`: passed;
+  - clean `Test/compile`: passed across 507 main and 351 test sources;
+  - `sbt -J-Xmx4G --batch test`: 2367 tests passed across 334 suites;
+  - `git diff --check`: passed.
+- EC-02B does not compare or advance a caller token. Atomic comparison and
+  exactly-once advancement remain EC-03.
 
 Modified Scala File Compliance Ledger:
 
@@ -108,6 +141,14 @@ Modified Scala File Compliance Ledger:
 | --- | --- | --- | --- | --- |
 | `src/main/scala/org/goldenport/cncf/entity/EntityConcurrency.scala` | Whole file passed | Not a spec | Focused 5-test spec, `Test/compile`, and full 2363-test suite passed | EC-02A release commit |
 | `src/test/scala/org/goldenport/cncf/entity/EntityConcurrencyTokenSpec.scala` | Whole file passed | Whole file passed; Given/When/Then behavior and two ScalaCheck properties | Focused 5-test spec, `Test/compile`, and full 2363-test suite passed | EC-02A release commit |
+| `src/main/scala/org/goldenport/cncf/entity/EntityConcurrency.scala` | Whole file implementation check passed | Not a spec | Focused 73-test matrix, clean `Test/compile`, and full 2367-test suite passed | EC-02B release commit |
+| `src/main/scala/org/goldenport/cncf/entity/EntityStore.scala` | Whole file naming cleanup and implementation check passed | Not a spec | Focused 73-test matrix, clean `Test/compile`, and full 2367-test suite passed | EC-02B release commit |
+| `src/main/scala/org/goldenport/cncf/entity/EntityStoreSpace.scala` | Whole file naming cleanup and implementation check passed | Not a spec | Focused 73-test matrix, clean `Test/compile`, and full 2367-test suite passed | EC-02B release commit |
+| `src/main/scala/org/goldenport/cncf/entity/SimpleEntityStorageShapePolicy.scala` | Whole file naming cleanup passed | Not a spec | Focused 73-test matrix, clean `Test/compile`, and full 2367-test suite passed | EC-02B release commit |
+| `src/main/scala/org/goldenport/cncf/projection/MetaProjectionSupport.scala` | Whole file naming check passed | Not a spec | Focused 73-test matrix, clean `Test/compile`, and full 2367-test suite passed | EC-02B release commit |
+| `src/main/scala/org/goldenport/cncf/unitofwork/UnitOfWorkInterpreter.scala` | Whole file implementation check passed | Not a spec | Focused 73-test matrix, clean `Test/compile`, and full 2367-test suite passed | EC-02B release commit |
+| `src/test/scala/org/goldenport/cncf/entity/EntityConcurrencyTokenSpec.scala` | Whole file implementation check passed | Nine Given/When/Then behaviors and three ScalaCheck properties cover generated token/storage behavior | Focused 73-test matrix, clean `Test/compile`, and full 2367-test suite passed | EC-02B release commit |
+| `src/test/scala/org/goldenport/cncf/unitofwork/UnitOfWorkTargetAuthorizationSpec.scala` | Whole file naming cleanup passed | All 37 behaviors have aligned Given/When/Then boundaries under five `which` feature groups | Focused 73-test matrix, clean `Test/compile`, and full 2367-test suite passed | EC-02B release commit |
 
 ## EC-03: Version-aware Mutation
 

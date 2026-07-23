@@ -2,6 +2,7 @@ package org.goldenport.cncf.entity
 
 import cats._
 import cats.syntax.all.*
+import scala.deprecatedName
 import org.goldenport.Consequence
 import org.goldenport.id.UniversalId
 import org.goldenport.record.Record
@@ -79,12 +80,17 @@ abstract class EntityStore {
     options: EntityCreateOptions
   )(
     authorize: Option[Record] => Consequence[Unit],
-    onSaved: CreateResult[T] => Consequence[Unit]
+    @deprecatedName("onSaved", "0.5.1")
+    onsaved: CreateResult[T] => Consequence[Unit]
   )(using tc: EntityPersistentCreate[T], ctx: ExecutionContext): Consequence[CreateResult[T]]
 
   def load[T](
     id: EntityId
   )(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[Option[T]]
+
+  def loadSnapshot[T](
+    id: EntityId
+  )(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[Option[EntitySnapshot[T]]]
   def save[T](
     entity: T
   )(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[Unit]
@@ -111,18 +117,23 @@ abstract class EntityStore {
 
   def uniqueValueExists[T](
     collection: EntityCollectionId,
-    fieldName: String,
+    @deprecatedName("fieldName", "0.5.1")
+    fieldname: String,
     value: String,
-    excludeId: Option[EntityId],
+    @deprecatedName("excludeId", "0.5.1")
+    excludeid: Option[EntityId],
     scope: EntityIdentityScope,
-    includeEntityIdEntropy: Boolean
+    @deprecatedName("includeEntityIdEntropy", "0.5.1")
+    includeentityidentropy: Boolean
   )(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[Boolean]
 
   def resolveIdentity[T](
     collection: EntityCollectionId,
     value: String,
-    fieldNames: Vector[String],
-    includeEntityIdEntropy: Boolean,
+    @deprecatedName("fieldNames", "0.5.1")
+    fieldnames: Vector[String],
+    @deprecatedName("includeEntityIdEntropy", "0.5.1")
+    includeentityidentropy: Boolean,
     scope: EntityIdentityScope
   )(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[Option[EntityId]]
 }
@@ -209,16 +220,17 @@ case class DeleteResult[T]()
 class NoopEntityStore() extends EntityStore {
   def name: String = "noop"
   def create[T](entity: T, options: EntityCreateOptions = EntityCreateOptions.default)(using tc: EntityPersistentCreate[T], ctx: ExecutionContext): Consequence[CreateResult[T]] = ???
-  def upsert[T](entity: T, id: EntityId, options: EntityCreateOptions)(authorize: Option[Record] => Consequence[Unit], onSaved: CreateResult[T] => Consequence[Unit])(using tc: EntityPersistentCreate[T], ctx: ExecutionContext): Consequence[CreateResult[T]] = ???
+  def upsert[T](entity: T, id: EntityId, options: EntityCreateOptions)(authorize: Option[Record] => Consequence[Unit], @deprecatedName("onSaved", "0.5.1") onsaved: CreateResult[T] => Consequence[Unit])(using tc: EntityPersistentCreate[T], ctx: ExecutionContext): Consequence[CreateResult[T]] = ???
   def load[T](id: EntityId)(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[Option[T]] = ???
+  def loadSnapshot[T](id: EntityId)(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[Option[EntitySnapshot[T]]] = ???
   def save[T](entity: T)(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[Unit] = ???
   def update[T](changes: T)(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[Unit] = ???
   def delete(id: EntityId)(using ctx: ExecutionContext): Consequence[Unit] = ???
   def deleteHard(id: EntityId)(using ctx: ExecutionContext): Consequence[Unit] = ???
   def search[T](query: EntityQuery[T])(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[SearchResult[T]] = ???
   def searchInternal[T](query: EntityQuery[T])(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[SearchResult[T]] = ???
-  def uniqueValueExists[T](collection: EntityCollectionId, fieldName: String, value: String, excludeId: Option[EntityId], scope: EntityIdentityScope, includeEntityIdEntropy: Boolean)(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[Boolean] = ???
-  def resolveIdentity[T](collection: EntityCollectionId, value: String, fieldNames: Vector[String], includeEntityIdEntropy: Boolean, scope: EntityIdentityScope)(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[Option[EntityId]] = ???
+  def uniqueValueExists[T](collection: EntityCollectionId, @deprecatedName("fieldName", "0.5.1") fieldname: String, value: String, @deprecatedName("excludeId", "0.5.1") excludeid: Option[EntityId], scope: EntityIdentityScope, @deprecatedName("includeEntityIdEntropy", "0.5.1") includeentityidentropy: Boolean)(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[Boolean] = ???
+  def resolveIdentity[T](collection: EntityCollectionId, value: String, @deprecatedName("fieldNames", "0.5.1") fieldnames: Vector[String], @deprecatedName("includeEntityIdEntropy", "0.5.1") includeentityidentropy: Boolean, scope: EntityIdentityScope)(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[Option[EntityId]] = ???
 }
 
 class StandardEntityStore(
@@ -244,7 +256,10 @@ class StandardEntityStore(
       cid <- ctx.entityStoreSpace.dataStoreCollection(id)
       dsid <- ctx.entityStoreSpace.dataStoreEntryId(id)
       ds <- ctx.dataStoreSpace.dataStore(cid)
-      rec <- ContentBodyStoragePolicy.prepareForSave(id, _complement_create_record(tc.toStoreRecord(entity), id, options))
+      initialized = EntityConcurrencyMetadata.initializeForCreate(
+        _complement_create_record(tc.toStoreRecord(entity), id, options)
+      )
+      rec <- ContentBodyStoragePolicy.prepareForSave(id, initialized)
       _ <- _with_datastore_calltree("create", cid, Some(dsid)) {
         ds.create(cid, dsid, rec)
       }
@@ -257,7 +272,8 @@ class StandardEntityStore(
     options: EntityCreateOptions
   )(
     authorize: Option[Record] => Consequence[Unit],
-    onSaved: CreateResult[T] => Consequence[Unit]
+    @deprecatedName("onSaved", "0.5.1")
+    onsaved: CreateResult[T] => Consequence[Unit]
   )(using tc: EntityPersistentCreate[T], ctx: ExecutionContext): Consequence[CreateResult[T]] =
     _with_upsert_lock(id) {
       for {
@@ -270,12 +286,22 @@ class StandardEntityStore(
         _ <- authorize(existing)
         _ <- _reject_logically_deleted_existing(id, existing)
         source = tc.toStoreRecord(entity)
-        rec0 = existing match {
+        rec0 <- existing match {
           case Some(current) =>
-            val changes = SimpleEntityStorageShapePolicy.withoutManagedFields(source)
-            _merge_update_record(current, _complement_update_record(changes, id))
+            val changes =
+              SimpleEntityStorageShapePolicy.withoutManagedFields(
+                EntityConcurrencyMetadata.withoutManagedField(source)
+              )
+            _merge_update_record(
+              current,
+              _complement_update_record(changes, id)
+            )
           case None =>
-            _complement_create_record(source, id, options)
+            Consequence.success(
+              EntityConcurrencyMetadata.initializeForCreate(
+                _complement_create_record(source, id, options)
+              )
+            )
         }
         rec <- ContentBodyStoragePolicy.prepareForSave(
           id,
@@ -286,13 +312,27 @@ class StandardEntityStore(
           ds.save(cid, dsid, rec)
         }
         result = CreateResult[T](id, Some(rec))
-        _ <- onSaved(result)
+        _ <- onsaved(result)
       } yield result
     }
 
   def load[T](
     id: EntityId
-  )(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[Option[T]] = {
+  )(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[Option[T]] =
+    _load_record(id).flatMap(
+      _.traverse(EntityConcurrencyMetadata.decodeEntity(_)(tc.fromStoreRecord))
+    )
+
+  def loadSnapshot[T](
+    id: EntityId
+  )(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[Option[EntitySnapshot[T]]] =
+    _load_record(id).flatMap(
+      _.traverse(EntityConcurrencyMetadata.snapshot(_)(tc.fromStoreRecord))
+    )
+
+  private def _load_record(
+    id: EntityId
+  )(using ctx: ExecutionContext): Consequence[Option[Record]] = {
     for {
       cid <- ctx.entityStoreSpace.dataStoreCollection(id)
       dsid <- ctx.entityStoreSpace.dataStoreEntryId(id)
@@ -315,8 +355,7 @@ class StandardEntityStore(
         )
       )
       hydrated <- visible.traverse(ContentBodyStoragePolicy.hydrate(id, _))
-      r <- hydrated.traverse(tc.fromStoreRecord)
-    } yield r
+    } yield hydrated
   }
 
   def save[T](
@@ -331,7 +370,15 @@ class StandardEntityStore(
         ds.load(cid, dsid)
       }
       _ <- _reject_logically_deleted_existing(id, existing)
-      rec0 = _complement_save_record(tc.toStoreRecord(entity), id, existing)
+      candidate = _complement_save_record(tc.toStoreRecord(entity), id, existing)
+      rec0 <- existing match {
+        case Some(current) =>
+          EntityConcurrencyMetadata.preserveForMutation(candidate, current)
+        case None =>
+          Consequence.success(
+            EntityConcurrencyMetadata.initializeForCreate(candidate)
+          )
+      }
       rec <- ContentBodyStoragePolicy.prepareForSave(id, rec0)
       r <- _with_datastore_calltree("save", cid, Some(dsid)) {
         ds.save(cid, dsid, rec)
@@ -355,7 +402,10 @@ class StandardEntityStore(
         case None => Consequence.DataStoreNotFound(dsid.print)
       }
       _ <- _reject_logically_deleted_existing(id, Some(base))
-      rec0 = _merge_update_record(base, _complement_update_record(tc.toStoreRecord(changes), id))
+      rec0 <- _merge_update_record(
+        base,
+        _complement_update_record(tc.toStoreRecord(changes), id)
+      )
       rec <- ContentBodyStoragePolicy.prepareForSave(
         id,
         rec0,
@@ -380,8 +430,11 @@ class StandardEntityStore(
       r <- current match {
         case Some(rec) =>
           if (_is_soft_delete_target(rec))
-            _with_datastore_calltree("save", cid, Some(dsid)) {
-              ds.save(cid, dsid, _merge_update_record(rec, _soft_delete_record(rec)))
+            _merge_update_record(rec, _soft_delete_record(rec)).flatMap {
+              updated =>
+                _with_datastore_calltree("save", cid, Some(dsid)) {
+                  ds.save(cid, dsid, updated)
+                }
             }
           else
             ContentBodyStoragePolicy.deleteOverflow(id).flatMap { _ =>
@@ -469,7 +522,9 @@ class StandardEntityStore(
       // SQL stores consistent without imposing entity-value equality quirks.
       recordmatched = visible.filter(record => EntityDirectiveQuery.matches(storequery, record))
       hydrated <- ContentBodyStoragePolicy.hydrateAll(query.collection, recordmatched)
-      decoded <- hydrated.traverse(tc.fromStoreRecord)
+      decoded <- hydrated.traverse(
+        EntityConcurrencyMetadata.decodeEntity(_)(tc.fromStoreRecord)
+      )
       sorted = EntityDirectiveQuery.sortValues(decoded, query.query.sort)
       values = EntityDirectiveQuery.sliceValues(sorted, query.query.offset, query.query.limit)
       count = if (query.query.includeTotal) Some(recordmatched.size) else None
@@ -495,7 +550,11 @@ class StandardEntityStore(
       scoped = EntityAccessScopePolicy.filterNormalRecords(query.collection, raw.records.toVector)
       hydrated <- ContentBodyStoragePolicy.hydrateAll(query.collection, scoped)
       decoded <- hydrated.foldLeft(Consequence.success(Vector.empty[T])) { (z, record) =>
-        z.flatMap(xs => tc.fromStoreRecord(record).map(xs :+ _))
+        z.flatMap(xs =>
+          EntityConcurrencyMetadata
+            .decodeEntity(record)(tc.fromStoreRecord)
+            .map(xs :+ _)
+        )
       }
       matched = decoded.filter(value => EntityDirectiveQuery.matches(query.query, value))
       sorted = EntityDirectiveQuery.sortValues(matched, query.query.sort)
@@ -511,19 +570,22 @@ class StandardEntityStore(
 
   def uniqueValueExists[T](
     collection: EntityCollectionId,
-    fieldName: String,
+    @deprecatedName("fieldName", "0.5.1")
+    fieldname: String,
     value: String,
-    excludeId: Option[EntityId],
+    @deprecatedName("excludeId", "0.5.1")
+    excludeid: Option[EntityId],
     scope: EntityIdentityScope,
-    includeEntityIdEntropy: Boolean
+    @deprecatedName("includeEntityIdEntropy", "0.5.1")
+    includeentityidentropy: Boolean
   )(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[Boolean] =
     _identity_records(collection).map { candidates =>
       candidates.exists { case (record, id) =>
-        !excludeId.exists(_.value == id.value) &&
+        !excludeid.exists(_.value == id.value) &&
           scope.matches(record) &&
           (
-            SimpleEntityStorageShapePolicy.stringValue(record, fieldName).contains(value) ||
-              (includeEntityIdEntropy && id.parts.entropy == value)
+            SimpleEntityStorageShapePolicy.stringValue(record, fieldname).contains(value) ||
+              (includeentityidentropy && id.parts.entropy == value)
           )
       }
     }
@@ -531,13 +593,15 @@ class StandardEntityStore(
   def resolveIdentity[T](
     collection: EntityCollectionId,
     value: String,
-    fieldNames: Vector[String],
-    includeEntityIdEntropy: Boolean,
+    @deprecatedName("fieldNames", "0.5.1")
+    fieldnames: Vector[String],
+    @deprecatedName("includeEntityIdEntropy", "0.5.1")
+    includeentityidentropy: Boolean,
     scope: EntityIdentityScope
   )(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[Option[EntityId]] =
     _identity_records(collection).map { candidates =>
       candidates.collectFirst {
-        case (record, id) if scope.matches(record) && _identity_matches(id, record, value, fieldNames, includeEntityIdEntropy) =>
+        case (record, id) if scope.matches(record) && _identity_matches(id, record, value, fieldnames, includeentityidentropy) =>
           id
     }
   }
@@ -554,7 +618,7 @@ class StandardEntityStore(
       notdeleted = EntityLifecycleRecordPolicy.filterNotLogicallyDeleted(raw.records.toVector)
       decoded <- notdeleted.foldLeft(Consequence.success(Vector.empty[(Record, EntityId)])) { (z, record) =>
         z.flatMap { xs =>
-          tc.fromStoreRecord(record).map { entity =>
+          EntityConcurrencyMetadata.decodeEntity(record)(tc.fromStoreRecord).map { entity =>
             xs :+ (record -> tc.id(entity))
           }
         }
@@ -565,21 +629,21 @@ class StandardEntityStore(
     id: EntityId,
     record: Record,
     value: String,
-    fieldNames: Vector[String],
-    includeEntityIdEntropy: Boolean
+    fieldnames: Vector[String],
+    includeentityidentropy: Boolean
   ): Boolean =
     id.value == value ||
       id.print == value ||
-      fieldNames.exists(name => SimpleEntityStorageShapePolicy.stringValue(record, name).contains(value)) ||
-      (includeEntityIdEntropy && id.parts.entropy == value)
+      fieldnames.exists(name => SimpleEntityStorageShapePolicy.stringValue(record, name).contains(value)) ||
+      (includeentityidentropy && id.parts.entropy == value)
 
   private def _to_datastore_limit(
     query: EntityDirectiveQuery[?]
   ): QueryLimit =
     query.limit.map(QueryLimit.Limit.apply).getOrElse(QueryLimit.Unbounded)
 
-  private final case class _VisibilityPolicy(
-    postStatuses: Option[Set[String]],
+  private final case class VisibilityPolicy(
+    poststatuses: Option[Set[String]],
     alivenesses: Option[Set[String]]
   )
 
@@ -593,10 +657,10 @@ class StandardEntityStore(
 
   private def _visibility_policy(
     query: EntityDirectiveQuery[?]
-  )(using ctx: ExecutionContext): _VisibilityPolicy = {
+  )(using ctx: ExecutionContext): VisibilityPolicy = {
     val lifecycle = _lifecycle_constraint(query)
     val ismanager = _is_content_manager()
-    val poststatuses = if (lifecycle.postStatusExplicit) {
+    val poststatuses = if (lifecycle.poststatusexplicit) {
       None
     } else if (ismanager) {
       val p = _post_statuses_for_manager()
@@ -604,7 +668,7 @@ class StandardEntityStore(
     } else {
       Some(Set("published"))
     }
-    val alivenesses = if (lifecycle.alivenessExplicit) {
+    val alivenesses = if (lifecycle.alivenessexplicit) {
       None
     } else if (ismanager) {
       val p = _alivenesses_for_manager(poststatuses.getOrElse(Set.empty))
@@ -612,25 +676,25 @@ class StandardEntityStore(
     } else {
       Some(Set("alive"))
     }
-    _VisibilityPolicy(
-      postStatuses = poststatuses,
+    VisibilityPolicy(
+      poststatuses = poststatuses,
       alivenesses = alivenesses
     )
   }
 
-  private final case class _LifecycleConstraint(
-    postStatusExplicit: Boolean,
-    alivenessExplicit: Boolean
+  private final case class LifecycleConstraint(
+    poststatusexplicit: Boolean,
+    alivenessexplicit: Boolean
   )
 
   private def _lifecycle_constraint(
     query: EntityDirectiveQuery[?]
-  ): _LifecycleConstraint = {
+  ): LifecycleConstraint = {
     val expr = EntityDirectiveQuery.whereOf(query)
     val raw = _query_condition(query)
-    _LifecycleConstraint(
-      postStatusExplicit = _mentions_path(expr, Set("poststatus")) || _mentions_condition_key(raw, Set("poststatus")),
-      alivenessExplicit = _mentions_path(expr, Set("aliveness")) || _mentions_condition_key(raw, Set("aliveness"))
+    LifecycleConstraint(
+      poststatusexplicit = _mentions_path(expr, Set("poststatus")) || _mentions_condition_key(raw, Set("poststatus")),
+      alivenessexplicit = _mentions_path(expr, Set("aliveness")) || _mentions_condition_key(raw, Set("aliveness"))
     )
   }
 
@@ -691,9 +755,9 @@ class StandardEntityStore(
 
   private def _is_visible(
     record: Record,
-    policy: _VisibilityPolicy
+    policy: VisibilityPolicy
   ): Boolean = {
-    val postok = policy.postStatuses match {
+    val postok = policy.poststatuses match {
       case Some(allowed) =>
         _record_value(record, Vector("postStatus"))
           .flatMap(EntityLifecycleRecordPolicy.postStatusToken)
@@ -826,9 +890,9 @@ class StandardEntityStore(
       record = record,
       id = id,
       existing = existing,
-      includesCreationDefaults = true,
-      includesStateDefaults = true,
-      createOptions = EntityCreateOptions.default
+      includescreationdefaults = true,
+      includesstatedefaults = true,
+      createoptions = EntityCreateOptions.default
     )
 
   private def _complement_update_record(
@@ -839,19 +903,23 @@ class StandardEntityStore(
       record = record,
       id = id,
       existing = None,
-      includesCreationDefaults = false,
-      includesStateDefaults = false,
-      createOptions = EntityCreateOptions.default
+      includescreationdefaults = false,
+      includesstatedefaults = false,
+      createoptions = EntityCreateOptions.default
     )
 
   private def _merge_update_record(
     existing: Record,
     changes: Record
-  ): Record = {
-    val changedkeys = changes.keySet
+  ): Consequence[Record] = {
+    val sanitized = EntityConcurrencyMetadata.withoutManagedField(changes)
+    val changedkeys = sanitized.keySet
     val retained = Record(_retained_existing_managed_record(existing).fields.filterNot(f => changedkeys.contains(f.key)))
     val domain = Record(SimpleEntityStorageShapePolicy.withoutManagedFields(existing).fields.filterNot(f => changedkeys.contains(f.key)))
-    changes ++ retained ++ domain
+    EntityConcurrencyMetadata.preserveForMutation(
+      sanitized ++ retained ++ domain,
+      existing
+    )
   }
 
   private def _retained_existing_managed_record(
@@ -905,9 +973,9 @@ class StandardEntityStore(
     record: Record,
     id: EntityId,
     existing: Option[Record],
-    includesCreationDefaults: Boolean,
-    includesStateDefaults: Boolean,
-    createOptions: EntityCreateOptions
+    includescreationdefaults: Boolean,
+    includesstatedefaults: Boolean,
+    createoptions: EntityCreateOptions
   )(using ctx: ExecutionContext): Record = {
     val now = java.time.Instant.now(ctx.clock)
     val zonednow = java.time.ZonedDateTime.now(ctx.clock.withZone(ctx.timezone))
@@ -916,7 +984,7 @@ class StandardEntityStore(
     val defaults = Vector.newBuilder[(String, Any)]
     val existingmap = existing.map(_.asMap).getOrElse(Map.empty)
 
-    def add_if_missing(canonical: String, value: => Option[Any]): Unit =
+    def _add_if_missing_(canonical: String, value: => Option[Any]): Unit =
       SimpleEntityStorageShapePolicy.value(record, canonical) match {
         case Some(current) =>
           defaults += (SimpleEntityStorageShapePolicy.targetName(canonical) -> current)
@@ -924,47 +992,50 @@ class StandardEntityStore(
           value.foreach(v => defaults += (SimpleEntityStorageShapePolicy.targetName(canonical) -> v))
       }
 
-    def add_or_replace(canonical: String, value: => Option[Any]): Unit =
+    def _add_or_replace_(canonical: String, value: => Option[Any]): Unit =
       value.foreach(v => defaults += (SimpleEntityStorageShapePolicy.targetName(canonical) -> v))
 
-    def existing_value(canonical: String): Option[Any] =
+    def _existing_value_(canonical: String): Option[Any] =
       existing.flatMap(SimpleEntityStorageShapePolicy.value(_, canonical))
 
-    if (includesCreationDefaults) {
-      add_if_missing("id", existing_value("id").orElse(Some(id.value)))
-      add_if_missing("shortid", existing_value("shortid").orElse(Some(id.parts.entropy)))
-      add_if_missing("name", existing_value("name").orElse(Some(principalid)))
-      add_if_missing("createdAt", existing_value("createdAt").orElse(Some(now)))
-      add_if_missing("createdBy", existing_value("createdBy").orElse(Some(principal)))
+    if (includescreationdefaults) {
+      _add_if_missing_("id", _existing_value_("id").orElse(Some(id.value)))
+      _add_if_missing_("shortid", _existing_value_("shortid").orElse(Some(id.parts.entropy)))
+      _add_if_missing_("name", _existing_value_("name").orElse(Some(principalid)))
+      _add_if_missing_("createdAt", _existing_value_("createdAt").orElse(Some(now)))
+      _add_if_missing_("createdBy", _existing_value_("createdBy").orElse(Some(principal)))
     }
 
-    add_or_replace("updatedAt", Some(now))
-    add_or_replace("updatedBy", Some(principal))
-    if (includesStateDefaults) {
-      add_if_missing("postStatus", existing_value("postStatus").orElse(Some(_default_post_status(createOptions))))
-      add_if_missing("aliveness", existing_value("aliveness").orElse(Some(Aliveness.default)))
+    _add_or_replace_("updatedAt", Some(now))
+    _add_or_replace_("updatedBy", Some(principal))
+    if (includesstatedefaults) {
+      _add_if_missing_("postStatus", _existing_value_("postStatus").orElse(Some(_default_post_status(createoptions))))
+      _add_if_missing_("aliveness", _existing_value_("aliveness").orElse(Some(Aliveness.default)))
     }
-    if (includesCreationDefaults) {
+    if (includescreationdefaults) {
       val security =
-        if (createOptions.hasDefaultProfile("publication"))
+        if (createoptions.hasDefaultProfile("publication"))
           org.simplemodeling.model.value.SecurityAttributes.publicOwnedBy(principal)
         else
           org.simplemodeling.model.value.SecurityAttributes.privateOwnedBy(principal)
-      add_if_missing("ownerId", existing_value("ownerId").orElse(Some(security.ownerId.id.value)))
-      add_if_missing("groupId", existing_value("groupId").orElse(Some(security.groupId.id.value)))
-      add_if_missing("privilegeId", existing_value("privilegeId").orElse(Some(security.privilegeId.id.value)))
-      add_if_missing("permission", Some(SimpleEntityStorageShapePolicy.permissionJson(security.rights)))
+      _add_if_missing_("ownerId", _existing_value_("ownerId").orElse(Some(security.ownerId.id.value)))
+      _add_if_missing_("groupId", _existing_value_("groupId").orElse(Some(security.groupId.id.value)))
+      _add_if_missing_("privilegeId", _existing_value_("privilegeId").orElse(Some(security.privilegeId.id.value)))
+      _add_if_missing_("permission", Some(SimpleEntityStorageShapePolicy.permissionJson(security.rights)))
     }
-    if (includesCreationDefaults && createOptions.hasDefaultProfile("publication")) {
-      add_if_missing("publishAt", existing_value("publishAt").orElse(Some(zonednow)))
-      add_if_missing("publicAt", existing_value("publicAt").orElse(Some(zonednow)))
-      add_if_missing("publishedBy", existing_value("publishedBy").orElse(Some(principal)))
+    if (includescreationdefaults && createoptions.hasDefaultProfile("publication")) {
+      _add_if_missing_("publishAt", _existing_value_("publishAt").orElse(Some(zonednow)))
+      _add_if_missing_("publicAt", _existing_value_("publicAt").orElse(Some(zonednow)))
+      _add_if_missing_("publishedBy", _existing_value_("publishedBy").orElse(Some(principal)))
     }
-    add_if_missing("traceId", Some(ctx.observability.traceId.value))
-    add_if_missing("correlationId", ctx.observability.correlationId.map(_.value))
+    _add_if_missing_("traceId", Some(ctx.observability.traceId.value))
+    _add_if_missing_("correlationId", ctx.observability.correlationId.map(_.value))
 
     val complement = Record.dataAuto(defaults.result()*)
-    complement ++ SimpleEntityStorageShapePolicy.withoutManagedFields(record)
+    complement ++
+      SimpleEntityStorageShapePolicy.withoutManagedFields(
+        EntityConcurrencyMetadata.withoutManagedField(record)
+      )
   }
 
   private def _default_post_status(
@@ -1008,7 +1079,7 @@ class StandardEntityStore(
   private def _with_datastore_calltree[A](
     operation: String,
     cid: DataStore.CollectionId,
-    entryId: Option[DataStore.EntryId] = None
+    entryid: Option[DataStore.EntryId] = None
   )(
     body: => A
   )(using ctx: ExecutionContext): A = {
@@ -1016,7 +1087,7 @@ class StandardEntityStore(
     if (calltree.isEnabled) {
       calltree.enter(
         s"io:datastore:$operation",
-        _datastore_calltree_attributes(operation, cid, entryId) ++ Map("calltree_kind" -> "io")
+        _datastore_calltree_attributes(operation, cid, entryid) ++ Map("calltree_kind" -> "io")
       )
       try {
         val result = body
@@ -1046,14 +1117,14 @@ class StandardEntityStore(
   private def _datastore_calltree_attributes(
     operation: String,
     cid: DataStore.CollectionId,
-    entryId: Option[DataStore.EntryId]
+    entryid: Option[DataStore.EntryId]
   ): Map[String, String] =
     Map(
       "space" -> "datastore",
       "operation" -> operation,
       "collection" -> cid.print,
       "real_io" -> "true"
-    ) ++ entryId.map(x => Map("entry_id" -> x.print)).getOrElse(Map.empty)
+    ) ++ entryid.map(x => Map("entry_id" -> x.print)).getOrElse(Map.empty)
 
   private def _emit_entity_access(
     name: String,
@@ -1100,21 +1171,21 @@ class StandardEntityStore(
 
   private def _emit_visibility_filtered(
     entity: String,
-    rawCount: Int,
-    notdeletedCount: Int,
-    visibleCount: Int
+    rawcount: Int,
+    notdeletedcount: Int,
+    visiblecount: Int
   )(using ctx: ExecutionContext): Unit = {
-    val filteredCount = notdeletedCount - visibleCount
-    if (filteredCount > 0) {
+    val filteredcount = notdeletedcount - visiblecount
+    if (filteredcount > 0) {
       val _ = _emit_entity_access(
         "entity.search.filtered.visibility",
         Record.dataAuto(
           "entity" -> entity,
           "source" -> "data-store",
-          "raw-count" -> rawCount,
-          "notdeleted-count" -> notdeletedCount,
-          "visible-count" -> visibleCount,
-          "filtered-count" -> filteredCount
+          "raw-count" -> rawcount,
+          "notdeleted-count" -> notdeletedcount,
+          "visible-count" -> visiblecount,
+          "filtered-count" -> filteredcount
         )
       )
     }

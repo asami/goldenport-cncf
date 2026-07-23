@@ -1,5 +1,6 @@
 package org.goldenport.cncf.entity
 
+import scala.deprecatedName
 import io.circe.Json
 import io.circe.parser.parse
 import org.goldenport.datatype.{Identifier, ObjectId}
@@ -8,13 +9,15 @@ import org.simplemodeling.model.value.SecurityAttributes
 
 /*
  * @since   Apr. 26, 2026
- * @version Jul. 14, 2026
+ * @version Jul. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 object SimpleEntityStorageShapePolicy {
-  final val PermissionField = "permission"
-  final val PolicyName = "simple_entity_default"
-  val ManagementLogicalFields: Vector[String] =
+  final val PERMISSION_FIELD = "permission"
+  final val POLICY_NAME = "simple_entity_default"
+  final val CONCURRENCY_REVISION_LOGICAL_FIELD = "cncfRevision"
+  final val CONCURRENCY_REVISION_STORAGE_FIELD = "cncf_revision"
+  val managementLogicalFields: Vector[String] =
     Vector(
       "id",
       "shortId",
@@ -32,9 +35,10 @@ object SimpleEntityStorageShapePolicy {
       "publicAt",
       "publishedBy",
       "traceId",
-      "correlationId"
+      "correlationId",
+      CONCURRENCY_REVISION_LOGICAL_FIELD
     )
-  val SecurityIdentityLogicalFields: Vector[String] =
+  val securityIdentityLogicalFields: Vector[String] =
     Vector("ownerId", "groupId", "privilegeId")
 
   private val _target_names: Map[String, String] = Map(
@@ -57,7 +61,8 @@ object SimpleEntityStorageShapePolicy {
     "publicat" -> "public_at",
     "publishedby" -> "published_by",
     "traceid" -> "trace_id",
-    "correlationid" -> "correlation_id"
+    "correlationid" -> "correlation_id",
+    "cncfrevision" -> CONCURRENCY_REVISION_STORAGE_FIELD
   )
 
   private val _managed_keys: Set[String] =
@@ -68,20 +73,43 @@ object SimpleEntityStorageShapePolicy {
       "permission"
     ).map(_normalize)
 
-  def targetName(logicalName: String): String =
-    _target_names.getOrElse(_normalize(logicalName), logicalName)
+  def targetName(
+    @deprecatedName("logicalName", "0.5.1") logicalname: String
+  ): String =
+    _target_names.getOrElse(_normalize(logicalname), logicalname)
 
-  def value(record: Record, logicalName: String): Option[Any] = {
-    val normalized = _normalize(logicalName)
-    val names = Vector(targetName(logicalName), logicalName) ++ _legacy_names(normalized)
+  def value(
+    record: Record,
+    @deprecatedName("logicalName", "0.5.1") logicalname: String
+  ): Option[Any] = {
+    val normalized = _normalize(logicalname)
+    val names =
+      Vector(targetName(logicalname), logicalname) ++
+        _legacy_names(normalized)
     names.distinct.iterator.flatMap(record.getAny).map(_single_value).toVector.headOption
   }
 
-  def stringValue(record: Record, logicalName: String): Option[String] =
-    value(record, logicalName).map(_.toString).map(_.trim).filter(_.nonEmpty)
+  def stringValue(
+    record: Record,
+    @deprecatedName("logicalName", "0.5.1") logicalname: String
+  ): Option[String] =
+    value(record, logicalname).map(_.toString).map(_.trim).filter(_.nonEmpty)
 
   def withoutManagedFields(record: Record): Record =
     Record(record.fields.filterNot(field => _managed_keys.contains(_normalize(field.key))))
+
+  def withoutConcurrencyRevisionField(record: Record): Record =
+    Record(
+      record.fields.filterNot(field =>
+        isConcurrencyRevisionField(field.key)
+      )
+    )
+
+  def isConcurrencyRevisionField(name: String): Boolean =
+    _normalize(name) == _normalize(CONCURRENCY_REVISION_LOGICAL_FIELD)
+
+  def isConcurrencyRevisionStorageField(name: String): Boolean =
+    name == CONCURRENCY_REVISION_STORAGE_FIELD
 
   def withoutSecurityFields(record: Record): Record =
     Record(record.fields.filterNot { field =>
@@ -134,7 +162,7 @@ object SimpleEntityStorageShapePolicy {
     }
 
   private def _permission_rights(record: Record): Option[SecurityAttributes.Rights] =
-    record.getAny(PermissionField).flatMap {
+    record.getAny(PERMISSION_FIELD).flatMap {
       case value: String => permissionRightsFromJson(value)
       case value: Record => _permission_rights_from_record(value)
       case _ => None

@@ -24,7 +24,8 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Apr.  7, 2026
  *  version Apr. 26, 2026
- * @version Jul. 15, 2026
+ *  version Jul. 15, 2026
+ * @version Jul. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkTargetAuthorizationSpec
@@ -35,667 +36,650 @@ final class UnitOfWorkTargetAuthorizationSpec
   private val _cid = EntityCollectionId("test", "authz", "person")
 
   "UnitOfWork target authorization" should {
-    "allow create by default for domain resources in phase 1" in {
-      given ExecutionContext = _execution_context(
-        principalId = "creator-user"
-      )
-      given org.goldenport.cncf.entity.EntityPersistentCreate[PersonCreate] = _person_create_persistent
-
-      val entity = PersonCreate("saburo", "owner-z", groupId = Some("team-z"))
-      val uow = new UnitOfWork(summon[ExecutionContext])
-
-      val result = new UnitOfWorkInterpreter(uow).run(
-        org.goldenport.ConsequenceT.liftF(
-          cats.free.Free.liftF[UnitOfWorkOp, org.goldenport.cncf.entity.CreateResult[PersonCreate]](
-            UnitOfWorkOp.EntityStoreCreate(
-              entity = entity,
-              tc = summon[org.goldenport.cncf.entity.EntityPersistentCreate[PersonCreate]],
-              authorization = Some(
-                UnitOfWorkAuthorization(
-                  resourceFamily = "domain",
-                  resourceType = Some("Person"),
-                  accessKind = "create"
-                )
-              )
-            )
-          )
-        )
-      )
-
-      result shouldBe a[Consequence.Success[_]]
-    }
-
-    "run explicit authorization preflight through the UnitOfWork interpreter" in {
-      given ExecutionContext = _execution_context(
-        principalId = "preflight-owner"
-      )
-
-      val id = EntityId("test", "preflight_authorize", _cid)
-      _seed(PersonEntity(id, "preflight", "preflight-owner"))
-      val uow = new UnitOfWork(summon[ExecutionContext])
-
-      val result = new UnitOfWorkInterpreter(uow).run(
-        org.goldenport.ConsequenceT.liftF(
-          cats.free.Free.liftF[UnitOfWorkOp, Unit](
-            UnitOfWorkOp.Authorize(
-              UnitOfWorkAuthorization(
-                resourceFamily = "domain",
-                resourceType = Some("Person"),
-                collectionName = Some(_cid.name),
-                targetId = Some(id),
-                accessKind = "update"
-              )
-            )
-          )
-        )
-      )
-
-      result shouldBe Consequence.unit
-    }
-
-    "reject explicit authorization preflight before a side effect can run" in {
-      given ExecutionContext = _execution_context(
-        principalId = "preflight-non-owner"
-      )
-
-      val id = EntityId("test", "preflight_authorize_denied", _cid)
-      _seed(PersonEntity(id, "preflight-denied", "preflight-owner"))
-      val uow = new UnitOfWork(summon[ExecutionContext])
-
-      val result = new UnitOfWorkInterpreter(uow).run(
-        org.goldenport.ConsequenceT.liftF(
-          cats.free.Free.liftF[UnitOfWorkOp, Unit](
-            UnitOfWorkOp.Authorize(
-              UnitOfWorkAuthorization(
-                resourceFamily = "domain",
-                resourceType = Some("Person"),
-                collectionName = Some(_cid.name),
-                targetId = Some(id),
-                accessKind = "update"
-              )
-            )
-          )
-        )
-      )
-
-      result shouldBe a[Consequence.Failure[_]]
-    }
-
-    "allow aggregate type create command authorization before an instance exists" in {
-      given ExecutionContext = _execution_context(
-        principalId = "aggregate-creator"
-      )
-
-      val result = AggregateAuthorization.authorizeCommand(
-        aggregateName = "notice",
-        targetId = None,
-        commandName = "createNotice",
-        loadRecord = _ => Consequence.success(None)
-      )
-
-      result shouldBe Consequence.unit
-    }
-
-    "reject aggregate instance command authorization when target permission denies update" in {
-      given ExecutionContext = _execution_context(
-        principalId = "aggregate-non-owner"
-      )
-
-      val id = EntityId("test", "aggregate_update_denied", _cid)
-      val record = PersonEntity(id, "notice", "notice-owner", groupId = Some("notice-team")).toRecord()
-
-      val result = AggregateAuthorization.authorizeCommand(
-        aggregateName = "notice",
-        targetId = Some(id),
-        commandName = "updateNotice",
-        loadRecord = _ => Consequence.success(Some(record))
-      )
-
-      result shouldBe a[Consequence.Failure[_]]
-      result match
-        case Consequence.Failure(conclusion) =>
-          conclusion.show should include("Permission is insufficient for update")
-        case _ =>
-          fail("expected aggregate command authorization failure")
-    }
-
-    "allow an authenticated aggregate command declared for authenticated users" in {
-      given ExecutionContext = _execution_context(
-        principalId = "aggregate-reviewer",
-        principalAttributes = Map("access_token" -> "reviewer-token")
-      )
-
-      val id = EntityId("test", "aggregate_review", _cid)
-      val record = PersonEntity(id, "shared-exhibition", "source-manager").toRecord()
-
-      val result = AggregateAuthorization.authorizeCommand(
-        aggregateName = "exhibition",
-        targetId = Some(id),
-        commandName = "reviewExhibition",
-        loadRecord = _ => Consequence.success(Some(record)),
-        access = Some(CmlOperationAccess("authenticated_only"))
-      )
-
-      result shouldBe Consequence.unit
-    }
-
-    "reject an anonymous aggregate command declared for authenticated users" in {
-      given ExecutionContext = _execution_context(
-        principalId = "anonymous",
-        principalAttributes = Map("anonymous" -> "true")
-      )
-
-      val id = EntityId("test", "aggregate_anonymous_review", _cid)
-      val record = PersonEntity(id, "shared-exhibition", "source-manager").toRecord()
-
-      val result = AggregateAuthorization.authorizeCommand(
-        aggregateName = "exhibition",
-        targetId = Some(id),
-        commandName = "reviewExhibition",
-        loadRecord = _ => Consequence.success(Some(record)),
-        access = Some(CmlOperationAccess("authenticated_only"))
-      )
-
-      result shouldBe a[Consequence.Failure[_]]
-      result match
-        case Consequence.Failure(conclusion) =>
-          conclusion.show should include("Authenticated user is required")
-        case _ =>
-          fail("expected aggregate command authentication failure")
-    }
-
-    "allow load for a group-visible entity" in {
-      given ExecutionContext = _execution_context(
-        principalId = "group-user",
-        principalAttributes = Map("group_id" -> "team-a")
-      )
-      given EntityPersistent[PersonEntity] = _person_persistent
-
-      val id = EntityId("test", "load_group", _cid)
-      _seed(PersonEntity(id, "taro", "owner-x", groupId = Some("team-a")))
-      val uow = new UnitOfWork(summon[ExecutionContext])
-
-      val result = new UnitOfWorkInterpreter(uow).run(
-        org.goldenport.ConsequenceT.liftF(
-          cats.free.Free.liftF[UnitOfWorkOp, Option[PersonEntity]](
-            UnitOfWorkOp.EntityStoreLoad(
-              id,
-              summon[EntityPersistent[PersonEntity]],
-              authorization = Some(
-                UnitOfWorkAuthorization(
-                  resourceFamily = "domain",
-                  resourceType = Some("Person"),
-                  targetId = Some(id),
-                  accessKind = "read"
-                )
-              )
-            )
-          )
-        )
-      )
-
-      result.map(_.map(_.id)) shouldBe Consequence.success(Some(id))
-    }
-
-    "allow save for a group-visible entity" in {
-      given ExecutionContext = _execution_context(
-        principalId = "group-user",
-        principalAttributes = Map("group_id" -> "team-a")
-      )
-      given EntityPersistent[PersonEntity] = _person_persistent
-
-      val id = EntityId("test", "save_group", _cid)
-      _seed(PersonEntity(id, "taro", "owner-x", groupId = Some("team-a")))
-      val uow = new UnitOfWork(summon[ExecutionContext])
-
-      val result = new UnitOfWorkInterpreter(uow).run(
-        org.goldenport.ConsequenceT.liftF(
-          cats.free.Free.liftF[UnitOfWorkOp, Unit](
-            UnitOfWorkOp.EntityStoreSave(
-              entity = PersonEntity(id, "taro-2", "owner-x", groupId = Some("team-a")),
-              tc = summon[EntityPersistent[PersonEntity]],
-              authorization = Some(
-                UnitOfWorkAuthorization(
-                  resourceFamily = "domain",
-                  resourceType = Some("Person"),
-                  targetId = Some(id),
-                  accessKind = "update"
-                )
-              )
-            )
-          )
-        )
-      )
-
-      result shouldBe Consequence.unit
-      _load_name(id) shouldBe Consequence.success(Some("taro-2"))
-    }
-
-    "apply create authorization when an upsert identity is new" in {
-      Given("an authenticated creator and a stable identity that is not stored")
-      given ExecutionContext = _execution_context(principalId = "upsert-creator")
-      given EntityPersistent[PersonEntity] = _person_persistent
-      val id = EntityId("test", "upsert_create", _cid)
-      val uow = new UnitOfWork(summon[ExecutionContext])
-
-      When("the entity is upserted with distinct create and update authorizations")
-      val result = new UnitOfWorkInterpreter(uow).run(
-        org.goldenport.ConsequenceT.liftF(
-          cats.free.Free.liftF[UnitOfWorkOp, org.goldenport.cncf.entity.CreateResult[PersonCreate]](
-            UnitOfWorkOp.EntityStoreUpsert(
-              entity = PersonCreate("new-person", "upsert-creator", id = Some(id)),
-              id = id,
-              tc = _person_create_persistent,
-              createAuthorization = Some(UnitOfWorkAuthorization(
-                resourceFamily = "domain",
-                resourceType = Some("Person"),
-                accessKind = "create"
-              )),
-              updateAuthorization = Some(UnitOfWorkAuthorization(
-                resourceFamily = "domain",
-                resourceType = Some("Person"),
-                targetId = Some(id),
-                accessKind = "update"
-              ))
-            )
-          )
-        )
-      )
-
-      Then("create authorization is selected and the entity is stored")
-      result.toOption.map(_.id) shouldBe Some(id)
-      _load_name(id) shouldBe Consequence.success(Some("new-person"))
-    }
-
-    "apply update authorization when an upsert identity already exists" in {
-      Given("an existing entity owned by another principal")
-      given ExecutionContext = _execution_context(principalId = "upsert-other")
-      given EntityPersistent[PersonEntity] = _person_persistent
-      val id = EntityId("test", "upsert_update", _cid)
-      _seed(PersonEntity(id, "before", "upsert-owner"))
-      val uow = new UnitOfWork(summon[ExecutionContext])
-
-      When("the other principal tries to upsert that stable identity")
-      val result = new UnitOfWorkInterpreter(uow).run(
-        org.goldenport.ConsequenceT.liftF(
-          cats.free.Free.liftF[UnitOfWorkOp, org.goldenport.cncf.entity.CreateResult[PersonCreate]](
-            UnitOfWorkOp.EntityStoreUpsert(
-              entity = PersonCreate("after", "upsert-owner", id = Some(id)),
-              id = id,
-              tc = _person_create_persistent,
-              createAuthorization = Some(UnitOfWorkAuthorization(
-                resourceFamily = "domain",
-                resourceType = Some("Person"),
-                accessKind = "create"
-              )),
-              updateAuthorization = Some(UnitOfWorkAuthorization(
-                resourceFamily = "domain",
-                resourceType = Some("Person"),
-                targetId = Some(id),
-                accessKind = "update"
-              ))
-            )
-          )
-        )
-      )
-
-      Then("update authorization is selected and rejects the write")
-      result shouldBe a[Consequence.Failure[_]]
-      _load_name(id) shouldBe Consequence.success(Some("before"))
-    }
-
-    "authorize a competing upsert against the row created inside the same identity lock" in {
-      Given("one stable identity and a first writer held inside its authorization callback")
-      given ExecutionContext = _execution_context(principalId = "upsert-race")
-      val context = summon[ExecutionContext]
-      val id = EntityId("test", "upsert_authorization_race", _cid)
-      val firstauthorized = new CountDownLatch(1)
-      val releasefirst = new CountDownLatch(1)
-      val firstsaved = new CountDownLatch(1)
-      val releasefirstcache = new CountDownLatch(1)
-      val secondstarted = new CountDownLatch(1)
-      val secondauthorized = new CountDownLatch(1)
-      def _operation_(name: String) = UnitOfWorkOp.EntityStoreUpsert(
-        entity = PersonCreate(name, "upsert-race", id = Some(id)),
-        id = id,
-        tc = _person_create_persistent
-      )
-
-      When("a second writer starts before the first writer saves")
-      val first = Future {
-        context.entityStoreSpace.upsert(_operation_("first"))(
-          authorize = { existing =>
-            existing shouldBe None
-            firstauthorized.countDown()
-            releasefirst.await(5, TimeUnit.SECONDS) shouldBe true
-            Consequence.unit
-          },
-          onSaved = { _ =>
-            firstsaved.countDown()
-            releasefirstcache.await(5, TimeUnit.SECONDS) shouldBe true
-            Consequence.unit
-          }
-        )(using context)
-      }
-      firstauthorized.await(5, TimeUnit.SECONDS) shouldBe true
-      val second = Future {
-        secondstarted.countDown()
-        context.entityStoreSpace.upsert(_operation_("second")) { existing =>
-          secondauthorized.countDown()
-          if (existing.isDefined)
-            Consequence.securityPermissionDenied("update denied")
-          else
-            Consequence.unit
-        }(using context)
-      }
-      secondstarted.await(5, TimeUnit.SECONDS) shouldBe true
-      releasefirst.countDown()
-      firstsaved.await(5, TimeUnit.SECONDS) shouldBe true
-      secondauthorized.await(100, TimeUnit.MILLISECONDS) shouldBe false
-      releasefirstcache.countDown()
-      val firstresult = Await.result(first, 5.seconds)
-      val secondresult = Await.result(second, 5.seconds)
-
-      Then("the first save callback completes before the competing writer is authorized as an update")
-      firstresult shouldBe a[Consequence.Success[_]]
-      secondresult shouldBe a[Consequence.Failure[_]]
-      _load_name(id) shouldBe Consequence.success(Some("first"))
-    }
-
-    "allow save from typed security access when entity record omits security attributes" in {
-      given ExecutionContext = _execution_context(
-        principalId = "typed-owner"
-      )
-      given EntityPersistent[TypedSecurityTargetEntity] = _typed_security_target_persistent
-
-      val id = EntityId("test", "save_typed_security", _cid)
-      val uow = new UnitOfWork(summon[ExecutionContext])
-
-      val result = new UnitOfWorkInterpreter(uow).run(
-        org.goldenport.ConsequenceT.liftF(
-          cats.free.Free.liftF[UnitOfWorkOp, Unit](
-            UnitOfWorkOp.EntityStoreSave(
-              entity = TypedSecurityTargetEntity(id, "typed-after", "typed-owner"),
-              tc = summon[EntityPersistent[TypedSecurityTargetEntity]],
-              authorization = Some(
-                UnitOfWorkAuthorization(
-                  resourceFamily = "domain",
-                  resourceType = Some("TypedSecurityTarget"),
-                  targetId = Some(id),
-                  accessKind = "update"
-                )
-              )
-            )
-          )
-        )
-      )
-
-      result shouldBe Consequence.unit
-      _load_name(id) shouldBe Consequence.success(Some("typed-after"))
-    }
-
-    "build authorization record with typed security overriding stale target and legacy security" in {
-      given EntityPersistent[TypedSecurityTargetEntity] = _typed_security_target_persistent
-      val id = EntityId("test", "save_typed_security_overlay", _cid)
-      val entity = TypedSecurityTargetEntity(id, "typed-overlay", "typed-owner", staleSecurity = true)
-
-      val record = summon[EntityPersistent[TypedSecurityTargetEntity]].authorizationRecord(entity)
-
-      record.getString("owner_id") shouldBe Some("typed_owner")
-      record.getString("ownerId") shouldBe None
-      record.getRecord("securityAttributes") shouldBe None
-      record.getRecord("security_attributes") shouldBe None
-      val rights = record.getString("permission")
-        .flatMap(SimpleEntityStorageShapePolicy.permissionRightsFromJson)
-        .getOrElse(fail("permission should be compact JSON"))
-      rights.other.read shouldBe false
-    }
-
-    "reject stale target owner when typed security access grants a different owner" in {
-      given ExecutionContext = _execution_context(
-        principalId = "stale-owner"
-      )
-      given EntityPersistent[TypedSecurityTargetEntity] = _typed_security_target_persistent
-
-      val id = EntityId("test", "save_typed_security_stale_owner_denied", _cid)
-      val uow = new UnitOfWork(summon[ExecutionContext])
-
-      val result = new UnitOfWorkInterpreter(uow).run(
-        org.goldenport.ConsequenceT.liftF(
-          cats.free.Free.liftF[UnitOfWorkOp, Unit](
-            UnitOfWorkOp.EntityStoreSave(
-              entity = TypedSecurityTargetEntity(id, "typed-stale-denied", "typed-owner", staleSecurity = true),
-              tc = summon[EntityPersistent[TypedSecurityTargetEntity]],
-              authorization = Some(
-                UnitOfWorkAuthorization(
-                  resourceFamily = "domain",
-                  resourceType = Some("TypedSecurityTarget"),
-                  targetId = Some(id),
-                  accessKind = "update"
-                )
-              )
-            )
-          )
-        )
-      )
-
-      result shouldBe a[Consequence.Failure[_]]
-      _load_name(id) shouldBe Consequence.success(None)
-    }
-
-    "reject save from typed security access for a non-owner entity record without security attributes" in {
-      given ExecutionContext = _execution_context(
-        principalId = "typed-other"
-      )
-      given EntityPersistent[TypedSecurityTargetEntity] = _typed_security_target_persistent
-
-      val id = EntityId("test", "save_typed_security_denied", _cid)
-      val uow = new UnitOfWork(summon[ExecutionContext])
-
-      val result = new UnitOfWorkInterpreter(uow).run(
-        org.goldenport.ConsequenceT.liftF(
-          cats.free.Free.liftF[UnitOfWorkOp, Unit](
-            UnitOfWorkOp.EntityStoreSave(
-              entity = TypedSecurityTargetEntity(id, "typed-denied", "typed-owner"),
-              tc = summon[EntityPersistent[TypedSecurityTargetEntity]],
-              authorization = Some(
-                UnitOfWorkAuthorization(
-                  resourceFamily = "domain",
-                  resourceType = Some("TypedSecurityTarget"),
-                  targetId = Some(id),
-                  accessKind = "update"
-                )
-              )
-            )
-          )
-        )
-      )
-
-      result shouldBe a[Consequence.Failure[_]]
-      _load_name(id) shouldBe Consequence.success(None)
-    }
-
-    "reject update for a non-owner non-group non-privileged user" in {
-      given ExecutionContext = _execution_context(
-        principalId = "other-user"
-      )
-      given EntityPersistent[PersonEntity] = _person_persistent
-
-      val id = EntityId("test", "update_denied", _cid)
-      _seed(PersonEntity(id, "shiro", "owner-x"))
-      val uow = new UnitOfWork(summon[ExecutionContext])
-
-      val result = new UnitOfWorkInterpreter(uow).run(
-        org.goldenport.ConsequenceT.liftF(
-          cats.free.Free.liftF[UnitOfWorkOp, Unit](
-            UnitOfWorkOp.EntityStoreUpdate(
-              entity = PersonEntity(id, "shiro-2", "owner-x"),
-              tc = summon[EntityPersistent[PersonEntity]],
-              authorization = Some(
-                UnitOfWorkAuthorization(
-                  resourceFamily = "domain",
-                  resourceType = Some("Person"),
-                  targetId = Some(id),
-                  accessKind = "update"
-                )
-              )
-            )
-          )
-        )
-      )
-
-      result shouldBe a[Consequence.Failure[_]]
-      _load_name(id) shouldBe Consequence.success(Some("shiro"))
-    }
-
-    "allow update-by-id for a privilege-visible entity" in {
-      given ExecutionContext = _execution_context(
-        principalId = "priv-user",
-        principalAttributes = Map("privilege" -> "vip-access")
-      )
-      given EntityPersistent[PersonEntity] = _person_persistent
-      given EntityPersistentUpdate[PersonPatch] = _person_patch_persistent
-
-      val id = EntityId("test", "update_priv", _cid)
-      _seed(PersonEntity(id, "hanako", "owner-x", privilegeId = Some("vip-access")))
-      val uow = new UnitOfWork(summon[ExecutionContext])
-
-      val result = new UnitOfWorkInterpreter(uow).run(
-        org.goldenport.ConsequenceT.liftF(
-          cats.free.Free.liftF[UnitOfWorkOp, Unit](
-            UnitOfWorkOp.EntityStoreUpdateById(
-              id = id,
-              patch = PersonPatch(name = Some("hanako-2")),
-              tc = summon[EntityPersistentUpdate[PersonPatch]],
-              authorization = Some(
-                UnitOfWorkAuthorization(
-                  resourceFamily = "domain",
-                  resourceType = Some("Person"),
-                  targetId = Some(id),
-                  accessKind = "update"
-                )
-              )
-            )
-          )
-        )
-      )
-
-      result shouldBe Consequence.unit
-      _load_name(id) shouldBe Consequence.success(Some("hanako-2"))
-    }
-
-    "reject delete when rights deny access for non-owner non-group non-privileged user" in {
-      given ExecutionContext = _execution_context(
-        principalId = "other-user"
-      )
-      val id = EntityId("test", "delete_denied", _cid)
-      _seed(PersonEntity(id, "jiro", "owner-x"))
-      val uow = new UnitOfWork(summon[ExecutionContext])
-
-      val result = new UnitOfWorkInterpreter(uow).run(
-        org.goldenport.ConsequenceT.liftF(
-          cats.free.Free.liftF[UnitOfWorkOp, Unit](
-            UnitOfWorkOp.EntityStoreDelete(
-              id = id,
-              authorization = Some(
-                UnitOfWorkAuthorization(
-                  resourceFamily = "domain",
-                  resourceType = Some("Person"),
-                  targetId = Some(id),
-                  accessKind = "delete"
-                )
-              )
-            )
-          )
-        )
-      )
-
-      result shouldBe a[Consequence.Failure[_]]
-      _load_name(id) shouldBe Consequence.success(Some("jiro"))
-    }
-
-    "allow service-internal update without entity permission" in {
-      given ExecutionContext = _execution_context(
-        principalId = "service-principal"
-      )
-      given EntityPersistent[PersonEntity] = _person_persistent
-
-      val id = EntityId("test", "update_service_internal", _cid)
-      _seed(PersonEntity(id, "order-1", "sales-org"))
-      val uow = new UnitOfWork(summon[ExecutionContext])
-
-      val result = new UnitOfWorkInterpreter(uow).run(
-        org.goldenport.ConsequenceT.liftF(
-          cats.free.Free.liftF[UnitOfWorkOp, Unit](
-            UnitOfWorkOp.EntityStoreUpdate(
-              entity = PersonEntity(id, "order-2", "sales-org"),
-              tc = summon[EntityPersistent[PersonEntity]],
-              authorization = Some(
-                UnitOfWorkAuthorization(
-                  resourceFamily = "domain",
-                  resourceType = Some("SalesOrder"),
-                  targetId = Some(id),
-                  accessKind = "update",
-                  accessMode = EntityAccessMode.ServiceInternal
-                )
-              )
-            )
-          )
-        )
-      )
-
-      result shouldBe Consequence.unit
-      _load_name(id) shouldBe Consequence.success(Some("order-2"))
-    }
-
-    "allow system update without entity permission" in {
-      given ExecutionContext = _execution_context(
-        principalId = "system-principal"
-      )
-      given EntityPersistent[PersonEntity] = _person_persistent
-
-      val id = EntityId("test", "update_system", _cid)
-      _seed(PersonEntity(id, "projection-1", "business-owner"))
-      val uow = new UnitOfWork(summon[ExecutionContext])
-
-      val result = new UnitOfWorkInterpreter(uow).run(
-        org.goldenport.ConsequenceT.liftF(
-          cats.free.Free.liftF[UnitOfWorkOp, Unit](
-            UnitOfWorkOp.EntityStoreUpdate(
-              entity = PersonEntity(id, "projection-2", "business-owner"),
-              tc = summon[EntityPersistent[PersonEntity]],
-              authorization = Some(
-                UnitOfWorkAuthorization(
-                  resourceFamily = "domain",
-                  resourceType = Some("Projection"),
-                  targetId = Some(id),
-                  accessKind = "update",
-                  accessMode = EntityAccessMode.System
-                )
-              )
-            )
-          )
-        )
-      )
-
-      result shouldBe Consequence.unit
-      _load_name(id) shouldBe Consequence.success(Some("projection-2"))
-    }
-
-    "emit audit event when service-internal permission bypass is used" in {
-      val backend = new MemoryBackend
-      LogBackendHolder.reset()
-      LogBackendHolder.install(backend)
-      try {
+    "authorize operation preflight and aggregate command admission" which {
+      "allow create by default for domain resources in phase 1" in {
+        Given("an authenticated creator and a domain Entity create operation")
         given ExecutionContext = _execution_context(
-          principalId = "service-principal"
+          principalid = "creator-user"
+        )
+        given org.goldenport.cncf.entity.EntityPersistentCreate[PersonCreate] = _person_create_persistent
+
+        val entity = PersonCreate("saburo", "owner-z", groupid = Some("team-z"))
+        val uow = new UnitOfWork(summon[ExecutionContext])
+
+        When("the UnitOfWork interpreter authorizes and executes the create")
+        val result = new UnitOfWorkInterpreter(uow).run(
+          org.goldenport.ConsequenceT.liftF(
+            cats.free.Free.liftF[UnitOfWorkOp, org.goldenport.cncf.entity.CreateResult[PersonCreate]](
+              UnitOfWorkOp.EntityStoreCreate(
+                entity = entity,
+                tc = summon[org.goldenport.cncf.entity.EntityPersistentCreate[PersonCreate]],
+                authorization = Some(
+                  UnitOfWorkAuthorization(
+                    resourceFamily = "domain",
+                    resourceType = Some("Person"),
+                    accessKind = "create"
+                  )
+                )
+              )
+            )
+          )
+        )
+
+        Then("the default domain create policy allows the operation")
+        result shouldBe a[Consequence.Success[_]]
+      }
+
+      "run explicit authorization preflight through the UnitOfWork interpreter" in {
+        Given("an owner and an existing Entity targeted for update")
+        given ExecutionContext = _execution_context(
+          principalid = "preflight-owner"
+        )
+
+        val id = EntityId("test", "preflight_authorize", _cid)
+        _seed(PersonEntity(id, "preflight", "preflight-owner"))
+        val uow = new UnitOfWork(summon[ExecutionContext])
+
+        When("an explicit update authorization preflight is interpreted")
+        val result = new UnitOfWorkInterpreter(uow).run(
+          org.goldenport.ConsequenceT.liftF(
+            cats.free.Free.liftF[UnitOfWorkOp, Unit](
+              UnitOfWorkOp.Authorize(
+                UnitOfWorkAuthorization(
+                  resourceFamily = "domain",
+                  resourceType = Some("Person"),
+                  collectionName = Some(_cid.name),
+                  targetId = Some(id),
+                  accessKind = "update"
+                )
+              )
+            )
+          )
+        )
+
+        Then("the owner passes the preflight")
+        result shouldBe Consequence.unit
+      }
+
+      "reject explicit authorization preflight before a side effect can run" in {
+        Given("a non-owner and an existing Entity owned by another principal")
+        given ExecutionContext = _execution_context(
+          principalid = "preflight-non-owner"
+        )
+
+        val id = EntityId("test", "preflight_authorize_denied", _cid)
+        _seed(PersonEntity(id, "preflight-denied", "preflight-owner"))
+        val uow = new UnitOfWork(summon[ExecutionContext])
+
+        When("an explicit update authorization preflight is interpreted")
+        val result = new UnitOfWorkInterpreter(uow).run(
+          org.goldenport.ConsequenceT.liftF(
+            cats.free.Free.liftF[UnitOfWorkOp, Unit](
+              UnitOfWorkOp.Authorize(
+                UnitOfWorkAuthorization(
+                  resourceFamily = "domain",
+                  resourceType = Some("Person"),
+                  collectionName = Some(_cid.name),
+                  targetId = Some(id),
+                  accessKind = "update"
+                )
+              )
+            )
+          )
+        )
+
+        Then("the preflight rejects the operation before its side effect")
+        result shouldBe a[Consequence.Failure[_]]
+      }
+
+      "allow aggregate type create command authorization before an instance exists" in {
+        Given("an authenticated principal and an Aggregate type-level create command")
+        given ExecutionContext = _execution_context(
+          principalid = "aggregate-creator"
+        )
+
+        When("the command is authorized without a target instance")
+        val result = AggregateAuthorization.authorizeCommand(
+          aggregateName = "notice",
+          targetId = None,
+          commandName = "createNotice",
+          loadRecord = _ => Consequence.success(None)
+        )
+
+        Then("type-level create authorization succeeds")
+        result shouldBe Consequence.unit
+      }
+
+      "reject aggregate instance command authorization when target permission denies update" in {
+        Given("a non-owner and an Aggregate instance owned by another principal")
+        given ExecutionContext = _execution_context(
+          principalid = "aggregate-non-owner"
+        )
+
+        val id = EntityId("test", "aggregate_update_denied", _cid)
+        val record = PersonEntity(id, "notice", "notice-owner", groupid = Some("notice-team")).toRecord()
+
+        When("the principal requests an instance update command")
+        val result = AggregateAuthorization.authorizeCommand(
+          aggregateName = "notice",
+          targetId = Some(id),
+          commandName = "updateNotice",
+          loadRecord = _ => Consequence.success(Some(record))
+        )
+
+        Then("Entity permission rejects the Aggregate command")
+        result shouldBe a[Consequence.Failure[_]]
+        result match
+          case Consequence.Failure(conclusion) =>
+            conclusion.show should include("Permission is insufficient for update")
+          case _ =>
+            fail("expected aggregate command authorization failure")
+      }
+
+      "allow an authenticated aggregate command declared for authenticated users" in {
+        Given("an authenticated principal and an authenticated-only Aggregate command")
+        given ExecutionContext = _execution_context(
+          principalid = "aggregate-reviewer",
+          principalattributes = Map("access_token" -> "reviewer-token")
+        )
+
+        val id = EntityId("test", "aggregate_review", _cid)
+        val record = PersonEntity(id, "shared-exhibition", "source-manager").toRecord()
+
+        When("the principal requests the command")
+        val result = AggregateAuthorization.authorizeCommand(
+          aggregateName = "exhibition",
+          targetId = Some(id),
+          commandName = "reviewExhibition",
+          loadRecord = _ => Consequence.success(Some(record)),
+          access = Some(CmlOperationAccess("authenticated_only"))
+        )
+
+        Then("the authentication access rule allows the command")
+        result shouldBe Consequence.unit
+      }
+
+      "reject an anonymous aggregate command declared for authenticated users" in {
+        Given("an anonymous principal and an authenticated-only Aggregate command")
+        given ExecutionContext = _execution_context(
+          principalid = "anonymous",
+          principalattributes = Map("anonymous" -> "true")
+        )
+
+        val id = EntityId("test", "aggregate_anonymous_review", _cid)
+        val record = PersonEntity(id, "shared-exhibition", "source-manager").toRecord()
+
+        When("the anonymous principal requests the command")
+        val result = AggregateAuthorization.authorizeCommand(
+          aggregateName = "exhibition",
+          targetId = Some(id),
+          commandName = "reviewExhibition",
+          loadRecord = _ => Consequence.success(Some(record)),
+          access = Some(CmlOperationAccess("authenticated_only"))
+        )
+
+        Then("the authentication access rule rejects the command")
+        result shouldBe a[Consequence.Failure[_]]
+        result match
+          case Consequence.Failure(conclusion) =>
+            conclusion.show should include("Authenticated user is required")
+          case _ =>
+            fail("expected aggregate command authentication failure")
+      }
+    }
+
+    "enforce Entity CRUD permissions and identity locking" which {
+      "allow load for a group-visible entity" in {
+        Given("a principal sharing the target Entity group")
+        given ExecutionContext = _execution_context(
+          principalid = "group-user",
+          principalattributes = Map("group_id" -> "team-a")
         )
         given EntityPersistent[PersonEntity] = _person_persistent
 
-        val id = EntityId("test", "update_service_internal_audit", _cid)
+        val id = EntityId("test", "load_group", _cid)
+        _seed(PersonEntity(id, "taro", "owner-x", groupid = Some("team-a")))
+        val uow = new UnitOfWork(summon[ExecutionContext])
+
+        When("the Entity is loaded through an authorized UnitOfWork operation")
+        val result = new UnitOfWorkInterpreter(uow).run(
+          org.goldenport.ConsequenceT.liftF(
+            cats.free.Free.liftF[UnitOfWorkOp, Option[PersonEntity]](
+              UnitOfWorkOp.EntityStoreLoad(
+                id,
+                summon[EntityPersistent[PersonEntity]],
+                authorization = Some(
+                  UnitOfWorkAuthorization(
+                    resourceFamily = "domain",
+                    resourceType = Some("Person"),
+                    targetId = Some(id),
+                    accessKind = "read"
+                  )
+                )
+              )
+            )
+          )
+        )
+
+        Then("group read permission exposes the Entity")
+        result.map(_.map(_.id)) shouldBe Consequence.success(Some(id))
+      }
+
+      "allow save for a group-visible entity" in {
+        Given("a principal sharing a writable target Entity group")
+        given ExecutionContext = _execution_context(
+          principalid = "group-user",
+          principalattributes = Map("group_id" -> "team-a")
+        )
+        given EntityPersistent[PersonEntity] = _person_persistent
+
+        val id = EntityId("test", "save_group", _cid)
+        _seed(PersonEntity(id, "taro", "owner-x", groupid = Some("team-a")))
+        val uow = new UnitOfWork(summon[ExecutionContext])
+
+        When("the Entity is saved through an authorized UnitOfWork operation")
+        val result = new UnitOfWorkInterpreter(uow).run(
+          org.goldenport.ConsequenceT.liftF(
+            cats.free.Free.liftF[UnitOfWorkOp, Unit](
+              UnitOfWorkOp.EntityStoreSave(
+                entity = PersonEntity(id, "taro-2", "owner-x", groupid = Some("team-a")),
+                tc = summon[EntityPersistent[PersonEntity]],
+                authorization = Some(
+                  UnitOfWorkAuthorization(
+                    resourceFamily = "domain",
+                    resourceType = Some("Person"),
+                    targetId = Some(id),
+                    accessKind = "update"
+                  )
+                )
+              )
+            )
+          )
+        )
+
+        Then("group update permission persists the change")
+        result shouldBe Consequence.unit
+        _load_name(id) shouldBe Consequence.success(Some("taro-2"))
+      }
+
+      "apply create authorization when an upsert identity is new" in {
+        Given("an authenticated creator and a stable identity that is not stored")
+        given ExecutionContext = _execution_context(principalid = "upsert-creator")
+        given EntityPersistent[PersonEntity] = _person_persistent
+        val id = EntityId("test", "upsert_create", _cid)
+        val uow = new UnitOfWork(summon[ExecutionContext])
+
+        When("the entity is upserted with distinct create and update authorizations")
+        val result = new UnitOfWorkInterpreter(uow).run(
+          org.goldenport.ConsequenceT.liftF(
+            cats.free.Free.liftF[UnitOfWorkOp, org.goldenport.cncf.entity.CreateResult[PersonCreate]](
+              UnitOfWorkOp.EntityStoreUpsert(
+                entity = PersonCreate("new-person", "upsert-creator", id = Some(id)),
+                id = id,
+                tc = _person_create_persistent,
+                createAuthorization = Some(UnitOfWorkAuthorization(
+                  resourceFamily = "domain",
+                  resourceType = Some("Person"),
+                  accessKind = "create"
+                )),
+                updateAuthorization = Some(UnitOfWorkAuthorization(
+                  resourceFamily = "domain",
+                  resourceType = Some("Person"),
+                  targetId = Some(id),
+                  accessKind = "update"
+                ))
+              )
+            )
+          )
+        )
+
+        Then("create authorization is selected and the entity is stored")
+        result.toOption.map(_.id) shouldBe Some(id)
+        _load_name(id) shouldBe Consequence.success(Some("new-person"))
+      }
+
+      "apply update authorization when an upsert identity already exists" in {
+        Given("an existing entity owned by another principal")
+        given ExecutionContext = _execution_context(principalid = "upsert-other")
+        given EntityPersistent[PersonEntity] = _person_persistent
+        val id = EntityId("test", "upsert_update", _cid)
+        _seed(PersonEntity(id, "before", "upsert-owner"))
+        val uow = new UnitOfWork(summon[ExecutionContext])
+
+        When("the other principal tries to upsert that stable identity")
+        val result = new UnitOfWorkInterpreter(uow).run(
+          org.goldenport.ConsequenceT.liftF(
+            cats.free.Free.liftF[UnitOfWorkOp, org.goldenport.cncf.entity.CreateResult[PersonCreate]](
+              UnitOfWorkOp.EntityStoreUpsert(
+                entity = PersonCreate("after", "upsert-owner", id = Some(id)),
+                id = id,
+                tc = _person_create_persistent,
+                createAuthorization = Some(UnitOfWorkAuthorization(
+                  resourceFamily = "domain",
+                  resourceType = Some("Person"),
+                  accessKind = "create"
+                )),
+                updateAuthorization = Some(UnitOfWorkAuthorization(
+                  resourceFamily = "domain",
+                  resourceType = Some("Person"),
+                  targetId = Some(id),
+                  accessKind = "update"
+                ))
+              )
+            )
+          )
+        )
+
+        Then("update authorization is selected and rejects the write")
+        result shouldBe a[Consequence.Failure[_]]
+        _load_name(id) shouldBe Consequence.success(Some("before"))
+      }
+
+      "authorize a competing upsert against the row created inside the same identity lock" in {
+        Given("one stable identity and a first writer held inside its authorization callback")
+        given ExecutionContext = _execution_context(principalid = "upsert-race")
+        val context = summon[ExecutionContext]
+        val id = EntityId("test", "upsert_authorization_race", _cid)
+        val firstauthorized = new CountDownLatch(1)
+        val releasefirst = new CountDownLatch(1)
+        val firstsaved = new CountDownLatch(1)
+        val releasefirstcache = new CountDownLatch(1)
+        val secondstarted = new CountDownLatch(1)
+        val secondauthorized = new CountDownLatch(1)
+        def _operation_(name: String) = UnitOfWorkOp.EntityStoreUpsert(
+          entity = PersonCreate(name, "upsert-race", id = Some(id)),
+          id = id,
+          tc = _person_create_persistent
+        )
+
+        When("a second writer starts before the first writer saves")
+        val first = Future {
+          context.entityStoreSpace.upsert(_operation_("first"))(
+            authorize = { existing =>
+              existing shouldBe None
+              firstauthorized.countDown()
+              releasefirst.await(5, TimeUnit.SECONDS) shouldBe true
+              Consequence.unit
+            },
+            onsaved = { _ =>
+              firstsaved.countDown()
+              releasefirstcache.await(5, TimeUnit.SECONDS) shouldBe true
+              Consequence.unit
+            }
+          )(using context)
+        }
+        firstauthorized.await(5, TimeUnit.SECONDS) shouldBe true
+        val second = Future {
+          secondstarted.countDown()
+          context.entityStoreSpace.upsert(_operation_("second")) { existing =>
+            secondauthorized.countDown()
+            if (existing.isDefined)
+              Consequence.securityPermissionDenied("update denied")
+            else
+              Consequence.unit
+          }(using context)
+        }
+        secondstarted.await(5, TimeUnit.SECONDS) shouldBe true
+        releasefirst.countDown()
+        firstsaved.await(5, TimeUnit.SECONDS) shouldBe true
+        secondauthorized.await(100, TimeUnit.MILLISECONDS) shouldBe false
+        releasefirstcache.countDown()
+        val firstresult = Await.result(first, 5.seconds)
+        val secondresult = Await.result(second, 5.seconds)
+
+        Then("the first save callback completes before the competing writer is authorized as an update")
+        firstresult shouldBe a[Consequence.Success[_]]
+        secondresult shouldBe a[Consequence.Failure[_]]
+        _load_name(id) shouldBe Consequence.success(Some("first"))
+      }
+
+      "allow save from typed security access when entity record omits security attributes" in {
+        Given("an owner represented by typed security access and no security fields in the Entity record")
+        given ExecutionContext = _execution_context(
+          principalid = "typed-owner"
+        )
+        given EntityPersistent[TypedSecurityTargetEntity] = _typed_security_target_persistent
+
+        val id = EntityId("test", "save_typed_security", _cid)
+        val uow = new UnitOfWork(summon[ExecutionContext])
+
+        When("the typed Entity is saved through an authorized UnitOfWork operation")
+        val result = new UnitOfWorkInterpreter(uow).run(
+          org.goldenport.ConsequenceT.liftF(
+            cats.free.Free.liftF[UnitOfWorkOp, Unit](
+              UnitOfWorkOp.EntityStoreSave(
+                entity = TypedSecurityTargetEntity(id, "typed-after", "typed-owner"),
+                tc = summon[EntityPersistent[TypedSecurityTargetEntity]],
+                authorization = Some(
+                  UnitOfWorkAuthorization(
+                    resourceFamily = "domain",
+                    resourceType = Some("TypedSecurityTarget"),
+                    targetId = Some(id),
+                    accessKind = "update"
+                  )
+                )
+              )
+            )
+          )
+        )
+
+        Then("typed security grants the save and the Entity is persisted")
+        result shouldBe Consequence.unit
+        _load_name(id) shouldBe Consequence.success(Some("typed-after"))
+      }
+
+      "build authorization record with typed security overriding stale target and legacy security" in {
+        Given("typed security metadata together with stale target and legacy security fields")
+        given EntityPersistent[TypedSecurityTargetEntity] = _typed_security_target_persistent
+        val id = EntityId("test", "save_typed_security_overlay", _cid)
+        val entity = TypedSecurityTargetEntity(id, "typed-overlay", "typed-owner", stalesecurity = true)
+
+        When("the persistence codec builds its authorization record")
+        val record = summon[EntityPersistent[TypedSecurityTargetEntity]].authorizationRecord(entity)
+
+        Then("typed security is canonical and stale representations are removed")
+        record.getString("owner_id") shouldBe Some("typed_owner")
+        record.getString("ownerId") shouldBe None
+        record.getRecord("securityAttributes") shouldBe None
+        record.getRecord("security_attributes") shouldBe None
+        val rights = record.getString("permission")
+          .flatMap(SimpleEntityStorageShapePolicy.permissionRightsFromJson)
+          .getOrElse(fail("permission should be compact JSON"))
+        rights.other.read shouldBe false
+      }
+
+      "reject stale target owner when typed security access grants a different owner" in {
+        Given("a stale target owner that differs from authoritative typed security")
+        given ExecutionContext = _execution_context(
+          principalid = "stale-owner"
+        )
+        given EntityPersistent[TypedSecurityTargetEntity] = _typed_security_target_persistent
+
+        val id = EntityId("test", "save_typed_security_stale_owner_denied", _cid)
+        val uow = new UnitOfWork(summon[ExecutionContext])
+
+        When("the stale owner attempts to save the typed Entity")
+        val result = new UnitOfWorkInterpreter(uow).run(
+          org.goldenport.ConsequenceT.liftF(
+            cats.free.Free.liftF[UnitOfWorkOp, Unit](
+              UnitOfWorkOp.EntityStoreSave(
+                entity = TypedSecurityTargetEntity(id, "typed-stale-denied", "typed-owner", stalesecurity = true),
+                tc = summon[EntityPersistent[TypedSecurityTargetEntity]],
+                authorization = Some(
+                  UnitOfWorkAuthorization(
+                    resourceFamily = "domain",
+                    resourceType = Some("TypedSecurityTarget"),
+                    targetId = Some(id),
+                    accessKind = "update"
+                  )
+                )
+              )
+            )
+          )
+        )
+
+        Then("authorization follows typed security and rejects the stale owner")
+        result shouldBe a[Consequence.Failure[_]]
+        _load_name(id) shouldBe Consequence.success(None)
+      }
+
+      "reject save from typed security access for a non-owner entity record without security attributes" in {
+        Given("a non-owner and an Entity whose authority exists only in typed security")
+        given ExecutionContext = _execution_context(
+          principalid = "typed-other"
+        )
+        given EntityPersistent[TypedSecurityTargetEntity] = _typed_security_target_persistent
+
+        val id = EntityId("test", "save_typed_security_denied", _cid)
+        val uow = new UnitOfWork(summon[ExecutionContext])
+
+        When("the non-owner attempts to save the Entity")
+        val result = new UnitOfWorkInterpreter(uow).run(
+          org.goldenport.ConsequenceT.liftF(
+            cats.free.Free.liftF[UnitOfWorkOp, Unit](
+              UnitOfWorkOp.EntityStoreSave(
+                entity = TypedSecurityTargetEntity(id, "typed-denied", "typed-owner"),
+                tc = summon[EntityPersistent[TypedSecurityTargetEntity]],
+                authorization = Some(
+                  UnitOfWorkAuthorization(
+                    resourceFamily = "domain",
+                    resourceType = Some("TypedSecurityTarget"),
+                    targetId = Some(id),
+                    accessKind = "update"
+                  )
+                )
+              )
+            )
+          )
+        )
+
+        Then("typed security rejects the save")
+        result shouldBe a[Consequence.Failure[_]]
+        _load_name(id) shouldBe Consequence.success(None)
+      }
+
+      "reject update for a non-owner non-group non-privileged user" in {
+        Given("an Entity and a principal with no owner group or privilege relation")
+        given ExecutionContext = _execution_context(
+          principalid = "other-user"
+        )
+        given EntityPersistent[PersonEntity] = _person_persistent
+
+        val id = EntityId("test", "update_denied", _cid)
+        _seed(PersonEntity(id, "shiro", "owner-x"))
+        val uow = new UnitOfWork(summon[ExecutionContext])
+
+        When("the principal attempts an authorized update")
+        val result = new UnitOfWorkInterpreter(uow).run(
+          org.goldenport.ConsequenceT.liftF(
+            cats.free.Free.liftF[UnitOfWorkOp, Unit](
+              UnitOfWorkOp.EntityStoreUpdate(
+                entity = PersonEntity(id, "shiro-2", "owner-x"),
+                tc = summon[EntityPersistent[PersonEntity]],
+                authorization = Some(
+                  UnitOfWorkAuthorization(
+                    resourceFamily = "domain",
+                    resourceType = Some("Person"),
+                    targetId = Some(id),
+                    accessKind = "update"
+                  )
+                )
+              )
+            )
+          )
+        )
+
+        Then("authorization rejects the update and preserves storage")
+        result shouldBe a[Consequence.Failure[_]]
+        _load_name(id) shouldBe Consequence.success(Some("shiro"))
+      }
+
+      "allow update-by-id for a privilege-visible entity" in {
+        Given("a principal carrying the privilege required by the target Entity")
+        given ExecutionContext = _execution_context(
+          principalid = "priv-user",
+          principalattributes = Map("privilege" -> "vip-access")
+        )
+        given EntityPersistent[PersonEntity] = _person_persistent
+        given EntityPersistentUpdate[PersonPatch] = _person_patch_persistent
+
+        val id = EntityId("test", "update_priv", _cid)
+        _seed(PersonEntity(id, "hanako", "owner-x", privilegeid = Some("vip-access")))
+        val uow = new UnitOfWork(summon[ExecutionContext])
+
+        When("the principal applies a patch update by Entity id")
+        val result = new UnitOfWorkInterpreter(uow).run(
+          org.goldenport.ConsequenceT.liftF(
+            cats.free.Free.liftF[UnitOfWorkOp, Unit](
+              UnitOfWorkOp.EntityStoreUpdateById(
+                id = id,
+                patch = PersonPatch(name = Some("hanako-2")),
+                tc = summon[EntityPersistentUpdate[PersonPatch]],
+                authorization = Some(
+                  UnitOfWorkAuthorization(
+                    resourceFamily = "domain",
+                    resourceType = Some("Person"),
+                    targetId = Some(id),
+                    accessKind = "update"
+                  )
+                )
+              )
+            )
+          )
+        )
+
+        Then("privilege visibility allows the patch")
+        result shouldBe Consequence.unit
+        _load_name(id) shouldBe Consequence.success(Some("hanako-2"))
+      }
+
+      "reject delete when rights deny access for non-owner non-group non-privileged user" in {
+        Given("an Entity and a principal without delete permission")
+        given ExecutionContext = _execution_context(
+          principalid = "other-user"
+        )
+        val id = EntityId("test", "delete_denied", _cid)
+        _seed(PersonEntity(id, "jiro", "owner-x"))
+        val uow = new UnitOfWork(summon[ExecutionContext])
+
+        When("the principal attempts an authorized delete")
+        val result = new UnitOfWorkInterpreter(uow).run(
+          org.goldenport.ConsequenceT.liftF(
+            cats.free.Free.liftF[UnitOfWorkOp, Unit](
+              UnitOfWorkOp.EntityStoreDelete(
+                id = id,
+                authorization = Some(
+                  UnitOfWorkAuthorization(
+                    resourceFamily = "domain",
+                    resourceType = Some("Person"),
+                    targetId = Some(id),
+                    accessKind = "delete"
+                  )
+                )
+              )
+            )
+          )
+        )
+
+        Then("authorization rejects deletion and preserves the Entity")
+        result shouldBe a[Consequence.Failure[_]]
+        _load_name(id) shouldBe Consequence.success(Some("jiro"))
+      }
+    }
+
+    "control internal and system permission bypasses" which {
+      "allow service-internal update without entity permission" in {
+        Given("a service principal and a service-internal Entity update")
+        given ExecutionContext = _execution_context(
+          principalid = "service-principal"
+        )
+        given EntityPersistent[PersonEntity] = _person_persistent
+
+        val id = EntityId("test", "update_service_internal", _cid)
         _seed(PersonEntity(id, "order-1", "sales-org"))
         val uow = new UnitOfWork(summon[ExecutionContext])
 
+        When("the UnitOfWork executes the service-internal update")
         val result = new UnitOfWorkInterpreter(uow).run(
           org.goldenport.ConsequenceT.liftF(
             cats.free.Free.liftF[UnitOfWorkOp, Unit](
@@ -716,28 +700,23 @@ final class UnitOfWorkTargetAuthorizationSpec
           )
         )
 
+        Then("service-internal access bypasses Entity permission")
         result shouldBe Consequence.unit
-        backend.lines.exists(_.contains("authorization.permission.bypass")) shouldBe true
-        backend.lines.exists(_.contains("authorization.decision")) shouldBe true
-      } finally {
-        LogBackendHolder.reset()
+        _load_name(id) shouldBe Consequence.success(Some("order-2"))
       }
-    }
 
-    "emit audit event when system permission bypass is used" in {
-      val backend = new MemoryBackend
-      LogBackendHolder.reset()
-      LogBackendHolder.install(backend)
-      try {
+      "allow system update without entity permission" in {
+        Given("a system principal and a system-mode Entity update")
         given ExecutionContext = _execution_context(
-          principalId = "system-principal"
+          principalid = "system-principal"
         )
         given EntityPersistent[PersonEntity] = _person_persistent
 
-        val id = EntityId("test", "update_system_audit", _cid)
+        val id = EntityId("test", "update_system", _cid)
         _seed(PersonEntity(id, "projection-1", "business-owner"))
         val uow = new UnitOfWork(summon[ExecutionContext])
 
+        When("the UnitOfWork executes the system update")
         val result = new UnitOfWorkInterpreter(uow).run(
           org.goldenport.ConsequenceT.liftF(
             cats.free.Free.liftF[UnitOfWorkOp, Unit](
@@ -758,63 +737,199 @@ final class UnitOfWorkTargetAuthorizationSpec
           )
         )
 
+        Then("system access bypasses Entity permission")
         result shouldBe Consequence.unit
-        backend.lines.exists(_.contains("authorization.permission.bypass")) shouldBe true
-      } finally {
-        LogBackendHolder.reset()
+        _load_name(id) shouldBe Consequence.success(Some("projection-2"))
       }
-    }
 
-    "allow same-component service-internal update without service grant" in {
-      given ExecutionContext = _execution_context(
-        principalId = "service-principal"
-      )
-      given EntityPersistent[PersonEntity] = _person_persistent
+      "emit audit event when service-internal permission bypass is used" in {
+        Given("an installed audit backend and a service-internal update")
+        val backend = new MemoryBackend
+        LogBackendHolder.reset()
+        LogBackendHolder.install(backend)
+        try {
+          given ExecutionContext = _execution_context(
+            principalid = "service-principal"
+          )
+          given EntityPersistent[PersonEntity] = _person_persistent
 
-      val id = EntityId("test", "update_same_component_internal", _cid)
-      _seed(PersonEntity(id, "order-1", "sales-org"))
-      val uow = new UnitOfWork(summon[ExecutionContext])
+          val id = EntityId("test", "update_service_internal_audit", _cid)
+          _seed(PersonEntity(id, "order-1", "sales-org"))
+          val uow = new UnitOfWork(summon[ExecutionContext])
 
-      val result = new UnitOfWorkInterpreter(uow).run(
-        org.goldenport.ConsequenceT.liftF(
-          cats.free.Free.liftF[UnitOfWorkOp, Unit](
-            UnitOfWorkOp.EntityStoreUpdate(
-              entity = PersonEntity(id, "order-2", "sales-org"),
-              tc = summon[EntityPersistent[PersonEntity]],
-              authorization = Some(
-                UnitOfWorkAuthorization(
-                  resourceFamily = "domain",
-                  resourceType = Some("SalesOrder"),
-                  targetId = Some(id),
-                  accessKind = "update",
-                  accessMode = EntityAccessMode.ServiceInternal,
-                  sourceComponentName = Some("sales"),
-                  targetComponentName = Some("sales")
+          When("service-internal access bypasses Entity permission")
+          val result = new UnitOfWorkInterpreter(uow).run(
+            org.goldenport.ConsequenceT.liftF(
+              cats.free.Free.liftF[UnitOfWorkOp, Unit](
+                UnitOfWorkOp.EntityStoreUpdate(
+                  entity = PersonEntity(id, "order-2", "sales-org"),
+                  tc = summon[EntityPersistent[PersonEntity]],
+                  authorization = Some(
+                    UnitOfWorkAuthorization(
+                      resourceFamily = "domain",
+                      resourceType = Some("SalesOrder"),
+                      targetId = Some(id),
+                      accessKind = "update",
+                      accessMode = EntityAccessMode.ServiceInternal
+                    )
+                  )
+                )
+              )
+            )
+          )
+
+          Then("the operation succeeds and emits bypass and decision audit events")
+          result shouldBe Consequence.unit
+          backend.lines.exists(_.contains("authorization.permission.bypass")) shouldBe true
+          backend.lines.exists(_.contains("authorization.decision")) shouldBe true
+        } finally {
+          LogBackendHolder.reset()
+        }
+      }
+
+      "emit audit event when system permission bypass is used" in {
+        Given("an installed audit backend and a system-mode update")
+        val backend = new MemoryBackend
+        LogBackendHolder.reset()
+        LogBackendHolder.install(backend)
+        try {
+          given ExecutionContext = _execution_context(
+            principalid = "system-principal"
+          )
+          given EntityPersistent[PersonEntity] = _person_persistent
+
+          val id = EntityId("test", "update_system_audit", _cid)
+          _seed(PersonEntity(id, "projection-1", "business-owner"))
+          val uow = new UnitOfWork(summon[ExecutionContext])
+
+          When("system access bypasses Entity permission")
+          val result = new UnitOfWorkInterpreter(uow).run(
+            org.goldenport.ConsequenceT.liftF(
+              cats.free.Free.liftF[UnitOfWorkOp, Unit](
+                UnitOfWorkOp.EntityStoreUpdate(
+                  entity = PersonEntity(id, "projection-2", "business-owner"),
+                  tc = summon[EntityPersistent[PersonEntity]],
+                  authorization = Some(
+                    UnitOfWorkAuthorization(
+                      resourceFamily = "domain",
+                      resourceType = Some("Projection"),
+                      targetId = Some(id),
+                      accessKind = "update",
+                      accessMode = EntityAccessMode.System
+                    )
+                  )
+                )
+              )
+            )
+          )
+
+          Then("the operation succeeds and emits a bypass audit event")
+          result shouldBe Consequence.unit
+          backend.lines.exists(_.contains("authorization.permission.bypass")) shouldBe true
+        } finally {
+          LogBackendHolder.reset()
+        }
+      }
+
+      "allow same-component service-internal update without service grant" in {
+        Given("a service-internal update whose source and target are the same component")
+        given ExecutionContext = _execution_context(
+          principalid = "service-principal"
+        )
+        given EntityPersistent[PersonEntity] = _person_persistent
+
+        val id = EntityId("test", "update_same_component_internal", _cid)
+        _seed(PersonEntity(id, "order-1", "sales-org"))
+        val uow = new UnitOfWork(summon[ExecutionContext])
+
+        When("the UnitOfWork executes the same-component update")
+        val result = new UnitOfWorkInterpreter(uow).run(
+          org.goldenport.ConsequenceT.liftF(
+            cats.free.Free.liftF[UnitOfWorkOp, Unit](
+              UnitOfWorkOp.EntityStoreUpdate(
+                entity = PersonEntity(id, "order-2", "sales-org"),
+                tc = summon[EntityPersistent[PersonEntity]],
+                authorization = Some(
+                  UnitOfWorkAuthorization(
+                    resourceFamily = "domain",
+                    resourceType = Some("SalesOrder"),
+                    targetId = Some(id),
+                    accessKind = "update",
+                    accessMode = EntityAccessMode.ServiceInternal,
+                    sourceComponentName = Some("sales"),
+                    targetComponentName = Some("sales")
+                  )
                 )
               )
             )
           )
         )
-      )
 
-      result shouldBe Consequence.unit
-      _load_name(id) shouldBe Consequence.success(Some("order-2"))
-    }
+        Then("same-component access does not require a cross-component service grant")
+        result shouldBe Consequence.unit
+        _load_name(id) shouldBe Consequence.success(Some("order-2"))
+      }
 
-    "reject cross-component service-internal update without service grant" in {
-      val backend = new MemoryBackend
-      LogBackendHolder.reset()
-      LogBackendHolder.install(backend)
-      try {
+      "reject cross-component service-internal update without service grant" in {
+        Given("an audited cross-component update without a service grant")
+        val backend = new MemoryBackend
+        LogBackendHolder.reset()
+        LogBackendHolder.install(backend)
+        try {
+          given ExecutionContext = _execution_context(
+            principalid = "service-principal"
+          )
+          given EntityPersistent[PersonEntity] = _person_persistent
+
+          val id = EntityId("test", "update_cross_component_internal_denied", _cid)
+          _seed(PersonEntity(id, "stock-1", "inventory-org"))
+          val uow = new UnitOfWork(summon[ExecutionContext])
+
+          When("the service principal attempts the cross-component update")
+          val result = new UnitOfWorkInterpreter(uow).run(
+            org.goldenport.ConsequenceT.liftF(
+              cats.free.Free.liftF[UnitOfWorkOp, Unit](
+                UnitOfWorkOp.EntityStoreUpdate(
+                  entity = PersonEntity(id, "stock-2", "inventory-org"),
+                  tc = summon[EntityPersistent[PersonEntity]],
+                  authorization = Some(
+                    UnitOfWorkAuthorization(
+                      resourceFamily = "domain",
+                      resourceType = Some("Inventory"),
+                      targetId = Some(id),
+                      accessKind = "update",
+                      accessMode = EntityAccessMode.ServiceInternal,
+                      sourceComponentName = Some("sales"),
+                      targetComponentName = Some("inventory")
+                    )
+                  )
+                )
+              )
+            )
+          )
+
+          Then("authorization rejects the update and emits a decision event")
+          result shouldBe a[Consequence.Failure[_]]
+          _load_name(id) shouldBe Consequence.success(Some("stock-1"))
+          backend.lines.exists(_.contains("authorization.decision")) shouldBe true
+        } finally {
+          LogBackendHolder.reset()
+        }
+      }
+
+      "allow cross-component service-internal update with service grant" in {
+        Given("a service principal carrying the source-to-target service grant")
         given ExecutionContext = _execution_context(
-          principalId = "service-principal"
+          principalid = "service-principal",
+          capabilities = Vector(Capability("service-grant:sales:inventory"))
         )
         given EntityPersistent[PersonEntity] = _person_persistent
 
-        val id = EntityId("test", "update_cross_component_internal_denied", _cid)
+        val id = EntityId("test", "update_cross_component_internal_allowed", _cid)
         _seed(PersonEntity(id, "stock-1", "inventory-org"))
         val uow = new UnitOfWork(summon[ExecutionContext])
 
+        When("the principal attempts the cross-component update")
         val result = new UnitOfWorkInterpreter(uow).run(
           org.goldenport.ConsequenceT.liftF(
             cats.free.Free.liftF[UnitOfWorkOp, Unit](
@@ -837,79 +952,84 @@ final class UnitOfWorkTargetAuthorizationSpec
           )
         )
 
-        result shouldBe a[Consequence.Failure[_]]
-        _load_name(id) shouldBe Consequence.success(Some("stock-1"))
-        backend.lines.exists(_.contains("authorization.decision")) shouldBe true
-      } finally {
-        LogBackendHolder.reset()
+        Then("the service grant allows the update")
+        result shouldBe Consequence.unit
+        _load_name(id) shouldBe Consequence.success(Some("stock-2"))
       }
     }
 
-    "allow cross-component service-internal update with service grant" in {
-      given ExecutionContext = _execution_context(
-        principalId = "service-principal",
-        capabilities = Vector(Capability("service-grant:sales:inventory"))
-      )
-      given EntityPersistent[PersonEntity] = _person_persistent
+    "evaluate relation-based authorization" which {
+      "allow relation-based read without granting other read permission" in {
+        Given("an audited principal-to-Entity customer relation")
+        val backend = new MemoryBackend
+        LogBackendHolder.reset()
+        LogBackendHolder.install(backend)
+        try {
+          given ExecutionContext = _execution_context(
+            principalid = "customer-user",
+            principalattributes = Map("customer_id" -> "customer-123")
+          )
+          given EntityPersistent[PersonEntity] = _person_persistent
 
-      val id = EntityId("test", "update_cross_component_internal_allowed", _cid)
-      _seed(PersonEntity(id, "stock-1", "inventory-org"))
-      val uow = new UnitOfWork(summon[ExecutionContext])
+          val id = EntityId("test", "read_relation", _cid)
+          _seed(PersonEntity(id, "order-3", "sales-org", customerid = Some("customer-123")))
+          val uow = new UnitOfWork(summon[ExecutionContext])
 
-      val result = new UnitOfWorkInterpreter(uow).run(
-        org.goldenport.ConsequenceT.liftF(
-          cats.free.Free.liftF[UnitOfWorkOp, Unit](
-            UnitOfWorkOp.EntityStoreUpdate(
-              entity = PersonEntity(id, "stock-2", "inventory-org"),
-              tc = summon[EntityPersistent[PersonEntity]],
-              authorization = Some(
-                UnitOfWorkAuthorization(
-                  resourceFamily = "domain",
-                  resourceType = Some("Inventory"),
-                  targetId = Some(id),
-                  accessKind = "update",
-                  accessMode = EntityAccessMode.ServiceInternal,
-                  sourceComponentName = Some("sales"),
-                  targetComponentName = Some("inventory")
+          When("the related principal loads the Entity")
+          val result = new UnitOfWorkInterpreter(uow).run(
+            org.goldenport.ConsequenceT.liftF(
+              cats.free.Free.liftF[UnitOfWorkOp, Option[PersonEntity]](
+                UnitOfWorkOp.EntityStoreLoad(
+                  id,
+                  summon[EntityPersistent[PersonEntity]],
+                  authorization = Some(
+                    UnitOfWorkAuthorization(
+                      resourceFamily = "domain",
+                      resourceType = Some("SalesOrder"),
+                      targetId = Some(id),
+                      accessKind = "read",
+                      relationRules = Vector(EntityAccessRelation("customerId", "customerId"))
+                    )
+                  )
                 )
               )
             )
           )
-        )
-      )
 
-      result shouldBe Consequence.unit
-      _load_name(id) shouldBe Consequence.success(Some("stock-2"))
-    }
+          Then("the relation grants read and emits relation diagnostics")
+          result.map(_.map(_.id)) shouldBe Consequence.success(Some(id))
+          backend.lines.exists(_.contains("authorization.relation.diagnostics")) shouldBe true
+        } finally {
+          LogBackendHolder.reset()
+        }
+      }
 
-    "allow relation-based read without granting other read permission" in {
-      val backend = new MemoryBackend
-      LogBackendHolder.reset()
-      LogBackendHolder.install(backend)
-      try {
+      "reject relation-based update unless update access is explicitly allowed" in {
+        Given("a matching relation whose allowed accesses exclude update")
         given ExecutionContext = _execution_context(
-          principalId = "customer-user",
-          principalAttributes = Map("customer_id" -> "customer-123")
+          principalid = "customer-user",
+          principalattributes = Map("customer_id" -> "customer-123")
         )
         given EntityPersistent[PersonEntity] = _person_persistent
 
-        val id = EntityId("test", "read_relation", _cid)
-        _seed(PersonEntity(id, "order-3", "sales-org", customerId = Some("customer-123")))
+        val id = EntityId("test", "update_relation_denied", _cid)
+        _seed(PersonEntity(id, "order-4", "sales-org", customerid = Some("customer-123")))
         val uow = new UnitOfWork(summon[ExecutionContext])
 
+        When("the related principal attempts an update")
         val result = new UnitOfWorkInterpreter(uow).run(
           org.goldenport.ConsequenceT.liftF(
-            cats.free.Free.liftF[UnitOfWorkOp, Option[PersonEntity]](
-              UnitOfWorkOp.EntityStoreLoad(
-                id,
-                summon[EntityPersistent[PersonEntity]],
+            cats.free.Free.liftF[UnitOfWorkOp, Unit](
+              UnitOfWorkOp.EntityStoreUpdate(
+                entity = PersonEntity(id, "order-4-updated", "sales-org", customerid = Some("customer-123")),
+                tc = summon[EntityPersistent[PersonEntity]],
                 authorization = Some(
                   UnitOfWorkAuthorization(
                     resourceFamily = "domain",
                     resourceType = Some("SalesOrder"),
                     targetId = Some(id),
-                    accessKind = "read",
-                    relationRules = Vector(EntityAccessRelation("customerId", "customerId"))
+                    accessKind = "update",
+                    relationRules = Vector(EntityAccessRelation("customerId", "customerId", Set("read", "search/list")))
                   )
                 )
               )
@@ -917,166 +1037,64 @@ final class UnitOfWorkTargetAuthorizationSpec
           )
         )
 
-        result.map(_.map(_.id)) shouldBe Consequence.success(Some(id))
-        backend.lines.exists(_.contains("authorization.relation.diagnostics")) shouldBe true
-      } finally {
-        LogBackendHolder.reset()
+        Then("relation authorization rejects the update and preserves storage")
+        result shouldBe a[Consequence.Failure[_]]
+        _load_name(id) shouldBe Consequence.success(Some("order-4"))
       }
-    }
 
-    "reject relation-based update unless update access is explicitly allowed" in {
-      given ExecutionContext = _execution_context(
-        principalId = "customer-user",
-        principalAttributes = Map("customer_id" -> "customer-123")
-      )
-      given EntityPersistent[PersonEntity] = _person_persistent
-
-      val id = EntityId("test", "update_relation_denied", _cid)
-      _seed(PersonEntity(id, "order-4", "sales-org", customerId = Some("customer-123")))
-      val uow = new UnitOfWork(summon[ExecutionContext])
-
-      val result = new UnitOfWorkInterpreter(uow).run(
-        org.goldenport.ConsequenceT.liftF(
-          cats.free.Free.liftF[UnitOfWorkOp, Unit](
-            UnitOfWorkOp.EntityStoreUpdate(
-              entity = PersonEntity(id, "order-4-updated", "sales-org", customerId = Some("customer-123")),
-              tc = summon[EntityPersistent[PersonEntity]],
-              authorization = Some(
-                UnitOfWorkAuthorization(
-                  resourceFamily = "domain",
-                  resourceType = Some("SalesOrder"),
-                  targetId = Some(id),
-                  accessKind = "update",
-                  relationRules = Vector(EntityAccessRelation("customerId", "customerId", Set("read", "search/list")))
-                )
-              )
-            )
-          )
-        )
-      )
-
-      result shouldBe a[Consequence.Failure[_]]
-      _load_name(id) shouldBe Consequence.success(Some("order-4"))
-    }
-
-    "allow relation-based update when update access is explicitly allowed" in {
-      given ExecutionContext = _execution_context(
-        principalId = "customer-user",
-        principalAttributes = Map("customer_id" -> "customer-123")
-      )
-      given EntityPersistent[PersonEntity] = _person_persistent
-
-      val id = EntityId("test", "update_relation_allowed", _cid)
-      _seed(PersonEntity(id, "order-5", "sales-org", customerId = Some("customer-123")))
-      val uow = new UnitOfWork(summon[ExecutionContext])
-
-      val result = new UnitOfWorkInterpreter(uow).run(
-        org.goldenport.ConsequenceT.liftF(
-          cats.free.Free.liftF[UnitOfWorkOp, Unit](
-            UnitOfWorkOp.EntityStoreUpdate(
-              entity = PersonEntity(id, "order-5-updated", "sales-org", customerId = Some("customer-123")),
-              tc = summon[EntityPersistent[PersonEntity]],
-              authorization = Some(
-                UnitOfWorkAuthorization(
-                  resourceFamily = "domain",
-                  resourceType = Some("SalesOrder"),
-                  targetId = Some(id),
-                  accessKind = "update",
-                  relationRules = Vector(EntityAccessRelation("customerId", "customerId", Set("update")))
-                )
-              )
-            )
-          )
-        )
-      )
-
-      result shouldBe Consequence.unit
-      _load_name(id) shouldBe Consequence.success(Some("order-5-updated"))
-    }
-
-    "reject read when explicit ABAC tenant condition does not match" in {
-      given ExecutionContext = _execution_context(
-        principalId = "tenant-user",
-        principalAttributes = Map("tenant_id" -> "tenant-a")
-      )
-      given EntityPersistent[PersonEntity] = _person_persistent
-
-      val id = EntityId("test", "read_abac_tenant_denied", _cid)
-      _seed(PersonEntity(id, "tenant-record", "tenant-owner", tenantId = Some("tenant-b")))
-      val uow = new UnitOfWork(summon[ExecutionContext])
-
-      val result = new UnitOfWorkInterpreter(uow).run(
-        org.goldenport.ConsequenceT.liftF(
-          cats.free.Free.liftF[UnitOfWorkOp, Option[PersonEntity]](
-            UnitOfWorkOp.EntityStoreLoad(
-              id,
-              summon[EntityPersistent[PersonEntity]],
-              authorization = Some(
-                UnitOfWorkAuthorization(
-                  resourceFamily = "domain",
-                  resourceType = Some("Person"),
-                  targetId = Some(id),
-                  accessKind = "read",
-                  naturalConditions = Vector(EntityAbacCondition("tenantId", EntityAbacCondition.Value.SubjectAttribute("tenantId")))
-                )
-              )
-            )
-          )
-        )
-      )
-
-      result shouldBe a[Consequence.Failure[_]]
-    }
-
-    "allow read when explicit ABAC tenant condition matches and permission allows" in {
-      given ExecutionContext = _execution_context(
-        principalId = "tenant-owner",
-        principalAttributes = Map("tenant_id" -> "tenant-a", "group_id" -> "team-a")
-      )
-      given EntityPersistent[PersonEntity] = _person_persistent
-
-      val id = EntityId("test", "read_abac_tenant_allowed", _cid)
-      _seed(PersonEntity(id, "tenant-record", "tenant-owner", groupId = Some("team-a"), tenantId = Some("tenant-a")))
-      val uow = new UnitOfWork(summon[ExecutionContext])
-
-      val result = new UnitOfWorkInterpreter(uow).run(
-        org.goldenport.ConsequenceT.liftF(
-          cats.free.Free.liftF[UnitOfWorkOp, Option[PersonEntity]](
-            UnitOfWorkOp.EntityStoreLoad(
-              id,
-              summon[EntityPersistent[PersonEntity]],
-              authorization = Some(
-                UnitOfWorkAuthorization(
-                  resourceFamily = "domain",
-                  resourceType = Some("Person"),
-                  targetId = Some(id),
-                  accessKind = "read",
-                  naturalConditions = Vector(EntityAbacCondition("tenantId", EntityAbacCondition.Value.SubjectAttribute("tenantId")))
-                )
-              )
-            )
-          )
-        )
-      )
-
-      result.map(_.map(_.id)) shouldBe Consequence.success(Some(id))
-    }
-
-    "emit diagnostics for matched ABAC natural conditions" in {
-      val backend = new MemoryBackend
-      LogBackendHolder.reset()
-      LogBackendHolder.install(backend)
-      try {
+      "allow relation-based update when update access is explicitly allowed" in {
+        Given("a matching relation whose allowed accesses include update")
         given ExecutionContext = _execution_context(
-          principalId = "tenant-owner",
-          principalAttributes = Map("tenant_id" -> "tenant-a")
+          principalid = "customer-user",
+          principalattributes = Map("customer_id" -> "customer-123")
         )
         given EntityPersistent[PersonEntity] = _person_persistent
 
-        val id = EntityId("test", "read_abac_diagnostics", _cid)
-        _seed(PersonEntity(id, "tenant-record", "tenant-owner", tenantId = Some("tenant-a")))
+        val id = EntityId("test", "update_relation_allowed", _cid)
+        _seed(PersonEntity(id, "order-5", "sales-org", customerid = Some("customer-123")))
         val uow = new UnitOfWork(summon[ExecutionContext])
 
+        When("the related principal updates the Entity")
+        val result = new UnitOfWorkInterpreter(uow).run(
+          org.goldenport.ConsequenceT.liftF(
+            cats.free.Free.liftF[UnitOfWorkOp, Unit](
+              UnitOfWorkOp.EntityStoreUpdate(
+                entity = PersonEntity(id, "order-5-updated", "sales-org", customerid = Some("customer-123")),
+                tc = summon[EntityPersistent[PersonEntity]],
+                authorization = Some(
+                  UnitOfWorkAuthorization(
+                    resourceFamily = "domain",
+                    resourceType = Some("SalesOrder"),
+                    targetId = Some(id),
+                    accessKind = "update",
+                    relationRules = Vector(EntityAccessRelation("customerId", "customerId", Set("update")))
+                  )
+                )
+              )
+            )
+          )
+        )
+
+        Then("relation authorization allows and persists the update")
+        result shouldBe Consequence.unit
+        _load_name(id) shouldBe Consequence.success(Some("order-5-updated"))
+      }
+    }
+
+    "evaluate ABAC natural conditions" which {
+      "reject read when explicit ABAC tenant condition does not match" in {
+        Given("a principal and Entity with different tenant attributes")
+        given ExecutionContext = _execution_context(
+          principalid = "tenant-user",
+          principalattributes = Map("tenant_id" -> "tenant-a")
+        )
+        given EntityPersistent[PersonEntity] = _person_persistent
+
+        val id = EntityId("test", "read_abac_tenant_denied", _cid)
+        _seed(PersonEntity(id, "tenant-record", "tenant-owner", tenantid = Some("tenant-b")))
+        val uow = new UnitOfWork(summon[ExecutionContext])
+
+        When("the principal loads the Entity under a tenant equality condition")
         val result = new UnitOfWorkInterpreter(uow).run(
           org.goldenport.ConsequenceT.liftF(
             cats.free.Free.liftF[UnitOfWorkOp, Option[PersonEntity]](
@@ -1097,217 +1115,312 @@ final class UnitOfWorkTargetAuthorizationSpec
           )
         )
 
-        result.map(_.map(_.id)) shouldBe Consequence.success(Some(id))
-        backend.lines.exists(_.contains("authorization.abac.diagnostics")) shouldBe true
-      } finally {
-        LogBackendHolder.reset()
+        Then("ABAC rejects the tenant mismatch")
+        result shouldBe a[Consequence.Failure[_]]
       }
-    }
 
-    "allow read when explicit ABAC publication window matches" in {
-      given ExecutionContext = _execution_context(
-        principalId = "reader"
-      )
-      given EntityPersistent[PersonEntity] = _person_persistent
-
-      val id = EntityId("test", "read_abac_publication_allowed", _cid)
-      _seed(PersonEntity(id, "published-record", "reader", publishAt = Some("2000-01-01T00:00:00Z"), closeAt = Some("2999-01-01T00:00:00Z")))
-      val uow = new UnitOfWork(summon[ExecutionContext])
-
-      val result = new UnitOfWorkInterpreter(uow).run(
-        org.goldenport.ConsequenceT.liftF(
-          cats.free.Free.liftF[UnitOfWorkOp, Option[PersonEntity]](
-            UnitOfWorkOp.EntityStoreLoad(
-              id,
-              summon[EntityPersistent[PersonEntity]],
-              authorization = Some(
-                UnitOfWorkAuthorization(
-                  resourceFamily = "domain",
-                  resourceType = Some("Person"),
-                  targetId = Some(id),
-                  accessKind = "read",
-                  naturalConditions = EntityAbacCondition.parseList("publishAt<=now:read;closeAt>now:read")
-                )
-              )
-            )
-          )
+      "allow read when explicit ABAC tenant condition matches and permission allows" in {
+        Given("a principal whose tenant and group attributes match the Entity")
+        given ExecutionContext = _execution_context(
+          principalid = "tenant-owner",
+          principalattributes = Map("tenant_id" -> "tenant-a", "group_id" -> "team-a")
         )
-      )
+        given EntityPersistent[PersonEntity] = _person_persistent
 
-      result.map(_.map(_.id)) shouldBe Consequence.success(Some(id))
-    }
+        val id = EntityId("test", "read_abac_tenant_allowed", _cid)
+        _seed(PersonEntity(id, "tenant-record", "tenant-owner", groupid = Some("team-a"), tenantid = Some("tenant-a")))
+        val uow = new UnitOfWork(summon[ExecutionContext])
 
-    "reject read when explicit ABAC publication window does not match" in {
-      given ExecutionContext = _execution_context(
-        principalId = "reader"
-      )
-      given EntityPersistent[PersonEntity] = _person_persistent
-
-      val id = EntityId("test", "read_abac_publication_denied", _cid)
-      _seed(PersonEntity(id, "future-record", "reader", publishAt = Some("2999-01-01T00:00:00Z")))
-      val uow = new UnitOfWork(summon[ExecutionContext])
-
-      val result = new UnitOfWorkInterpreter(uow).run(
-        org.goldenport.ConsequenceT.liftF(
-          cats.free.Free.liftF[UnitOfWorkOp, Option[PersonEntity]](
-            UnitOfWorkOp.EntityStoreLoad(
-              id,
-              summon[EntityPersistent[PersonEntity]],
-              authorization = Some(
-                UnitOfWorkAuthorization(
-                  resourceFamily = "domain",
-                  resourceType = Some("Person"),
-                  targetId = Some(id),
-                  accessKind = "read",
-                  naturalConditions = EntityAbacCondition.parseList("publishAt<=now:read")
-                )
-              )
-            )
-          )
-        )
-      )
-
-      result shouldBe a[Consequence.Failure[_]]
-      result match
-        case Consequence.Failure(conclusion) =>
-          conclusion.show should include("publishAt<=now")
-          conclusion.show should include("2999-01-01T00:00:00Z")
-        case _ =>
-          fail("expected authorization failure")
-    }
-
-    "allow read when operation and application natural ABAC conditions match" in {
-      given ExecutionContext = _execution_context(
-        principalId = "reader"
-      )
-      given EntityPersistent[PersonEntity] = _person_persistent
-
-      val id = EntityId("test", "read_abac_operation_application_allowed", _cid)
-      _seed(PersonEntity(id, "operation-application-record", "reader"))
-      val uow = new UnitOfWork(summon[ExecutionContext])
-
-      val result = new UnitOfWorkInterpreter(uow).run(
-        org.goldenport.ConsequenceT.liftF(
-          cats.free.Free.liftF[UnitOfWorkOp, Option[PersonEntity]](
-            UnitOfWorkOp.EntityStoreLoad(
-              id,
-              summon[EntityPersistent[PersonEntity]],
-              authorization = Some(
-                UnitOfWorkAuthorization(
-                  resourceFamily = "domain",
-                  resourceType = Some("Person"),
-                  targetId = Some(id),
-                  accessKind = "read",
-                  operationModel = Some(ServiceOperationModel.BusinessService),
-                  entityOperationKind = Some(EntityOperationKind.Resource),
-                  entityApplicationDomain = Some(EntityApplicationDomain.Business),
-                  naturalConditions = EntityAbacCondition.parseList(
-                    "operation.operationModel=business-service:read;application.entityOperationKind=resource:read;application.entityApplicationDomain=business:read"
+        When("the principal loads the Entity under a tenant equality condition")
+        val result = new UnitOfWorkInterpreter(uow).run(
+          org.goldenport.ConsequenceT.liftF(
+            cats.free.Free.liftF[UnitOfWorkOp, Option[PersonEntity]](
+              UnitOfWorkOp.EntityStoreLoad(
+                id,
+                summon[EntityPersistent[PersonEntity]],
+                authorization = Some(
+                  UnitOfWorkAuthorization(
+                    resourceFamily = "domain",
+                    resourceType = Some("Person"),
+                    targetId = Some(id),
+                    accessKind = "read",
+                    naturalConditions = Vector(EntityAbacCondition("tenantId", EntityAbacCondition.Value.SubjectAttribute("tenantId")))
                   )
                 )
               )
             )
           )
         )
-      )
 
-      result.map(_.map(_.id)) shouldBe Consequence.success(Some(id))
-    }
+        Then("ABAC and Entity permission allow the read")
+        result.map(_.map(_.id)) shouldBe Consequence.success(Some(id))
+      }
 
-    "allow read when explicit CMS publication visibility conditions match" in {
-      given ExecutionContext = _execution_context(
-        principalId = "reader"
-      )
-      given EntityPersistent[PersonEntity] = _person_persistent
+      "emit diagnostics for matched ABAC natural conditions" in {
+        Given("an audit backend and a matching tenant ABAC condition")
+        val backend = new MemoryBackend
+        LogBackendHolder.reset()
+        LogBackendHolder.install(backend)
+        try {
+          given ExecutionContext = _execution_context(
+            principalid = "tenant-owner",
+            principalattributes = Map("tenant_id" -> "tenant-a")
+          )
+          given EntityPersistent[PersonEntity] = _person_persistent
 
-      val id = EntityId("test", "read_abac_visibility_allowed", _cid)
-      _seed(PersonEntity(
-        id,
-        "public-record",
-        "reader",
-        visibility = Some("Public"),
-        publicAt = Some("2000-01-01T00:00:00Z"),
-        startAt = Some("2000-01-01T00:00:00Z"),
-        endAt = Some("2999-01-01T00:00:00Z"),
-        unpublishAt = Some("2999-01-01T00:00:00Z")
-      ))
-      val uow = new UnitOfWork(summon[ExecutionContext])
+          val id = EntityId("test", "read_abac_diagnostics", _cid)
+          _seed(PersonEntity(id, "tenant-record", "tenant-owner", tenantid = Some("tenant-a")))
+          val uow = new UnitOfWork(summon[ExecutionContext])
 
-      val result = new UnitOfWorkInterpreter(uow).run(
-        org.goldenport.ConsequenceT.liftF(
-          cats.free.Free.liftF[UnitOfWorkOp, Option[PersonEntity]](
-            UnitOfWorkOp.EntityStoreLoad(
-              id,
-              summon[EntityPersistent[PersonEntity]],
-              authorization = Some(
-                UnitOfWorkAuthorization(
-                  resourceFamily = "domain",
-                  resourceType = Some("Person"),
-                  targetId = Some(id),
-                  accessKind = "read",
-                  naturalConditions = EntityAbacCondition.parseList(
-                    "visibility=Public:read;publicAt<=now:read;startAt<=now:read;endAt>now:read;unpublishAt>now:read"
+          When("the matching ABAC read is authorized")
+          val result = new UnitOfWorkInterpreter(uow).run(
+            org.goldenport.ConsequenceT.liftF(
+              cats.free.Free.liftF[UnitOfWorkOp, Option[PersonEntity]](
+                UnitOfWorkOp.EntityStoreLoad(
+                  id,
+                  summon[EntityPersistent[PersonEntity]],
+                  authorization = Some(
+                    UnitOfWorkAuthorization(
+                      resourceFamily = "domain",
+                      resourceType = Some("Person"),
+                      targetId = Some(id),
+                      accessKind = "read",
+                      naturalConditions = Vector(EntityAbacCondition("tenantId", EntityAbacCondition.Value.SubjectAttribute("tenantId")))
+                    )
+                  )
+                )
+              )
+            )
+          )
+
+          Then("the read succeeds and emits ABAC diagnostics")
+          result.map(_.map(_.id)) shouldBe Consequence.success(Some(id))
+          backend.lines.exists(_.contains("authorization.abac.diagnostics")) shouldBe true
+        } finally {
+          LogBackendHolder.reset()
+        }
+      }
+
+      "allow read when explicit ABAC publication window matches" in {
+        Given("an Entity whose publication interval contains the current time")
+        given ExecutionContext = _execution_context(
+          principalid = "reader"
+        )
+        given EntityPersistent[PersonEntity] = _person_persistent
+
+        val id = EntityId("test", "read_abac_publication_allowed", _cid)
+        _seed(PersonEntity(id, "published-record", "reader", publishat = Some("2000-01-01T00:00:00Z"), closeat = Some("2999-01-01T00:00:00Z")))
+        val uow = new UnitOfWork(summon[ExecutionContext])
+
+        When("the Entity is loaded under publication-window conditions")
+        val result = new UnitOfWorkInterpreter(uow).run(
+          org.goldenport.ConsequenceT.liftF(
+            cats.free.Free.liftF[UnitOfWorkOp, Option[PersonEntity]](
+              UnitOfWorkOp.EntityStoreLoad(
+                id,
+                summon[EntityPersistent[PersonEntity]],
+                authorization = Some(
+                  UnitOfWorkAuthorization(
+                    resourceFamily = "domain",
+                    resourceType = Some("Person"),
+                    targetId = Some(id),
+                    accessKind = "read",
+                    naturalConditions = EntityAbacCondition.parseList("publishAt<=now:read;closeAt>now:read")
                   )
                 )
               )
             )
           )
         )
-      )
 
-      result.map(_.map(_.id)) shouldBe Consequence.success(Some(id))
-    }
+        Then("ABAC allows the read")
+        result.map(_.map(_.id)) shouldBe Consequence.success(Some(id))
+      }
 
-    "reject read when explicit CMS publication visibility condition misses" in {
-      given ExecutionContext = _execution_context(
-        principalId = "reader"
-      )
-      given EntityPersistent[PersonEntity] = _person_persistent
+      "reject read when explicit ABAC publication window does not match" in {
+        Given("an Entity whose publication time is in the future")
+        given ExecutionContext = _execution_context(
+          principalid = "reader"
+        )
+        given EntityPersistent[PersonEntity] = _person_persistent
 
-      val id = EntityId("test", "read_abac_visibility_denied", _cid)
-      _seed(PersonEntity(
-        id,
-        "private-record",
-        "reader",
-        visibility = Some("Private"),
-        publicAt = Some("2000-01-01T00:00:00Z")
-      ))
-      val uow = new UnitOfWork(summon[ExecutionContext])
+        val id = EntityId("test", "read_abac_publication_denied", _cid)
+        _seed(PersonEntity(id, "future-record", "reader", publishat = Some("2999-01-01T00:00:00Z")))
+        val uow = new UnitOfWork(summon[ExecutionContext])
 
-      val result = new UnitOfWorkInterpreter(uow).run(
-        org.goldenport.ConsequenceT.liftF(
-          cats.free.Free.liftF[UnitOfWorkOp, Option[PersonEntity]](
-            UnitOfWorkOp.EntityStoreLoad(
-              id,
-              summon[EntityPersistent[PersonEntity]],
-              authorization = Some(
-                UnitOfWorkAuthorization(
-                  resourceFamily = "domain",
-                  resourceType = Some("Person"),
-                  targetId = Some(id),
-                  accessKind = "read",
-                  naturalConditions = EntityAbacCondition.parseList("visibility=Public:read;publicAt<=now:read")
+        When("the Entity is loaded under a current-publication condition")
+        val result = new UnitOfWorkInterpreter(uow).run(
+          org.goldenport.ConsequenceT.liftF(
+            cats.free.Free.liftF[UnitOfWorkOp, Option[PersonEntity]](
+              UnitOfWorkOp.EntityStoreLoad(
+                id,
+                summon[EntityPersistent[PersonEntity]],
+                authorization = Some(
+                  UnitOfWorkAuthorization(
+                    resourceFamily = "domain",
+                    resourceType = Some("Person"),
+                    targetId = Some(id),
+                    accessKind = "read",
+                    naturalConditions = EntityAbacCondition.parseList("publishAt<=now:read")
+                  )
                 )
               )
             )
           )
         )
-      )
 
-      result shouldBe a[Consequence.Failure[_]]
-      result match
-        case Consequence.Failure(conclusion) =>
-          conclusion.show should include("visibility=Public")
-          conclusion.show should include("Private")
-        case _ =>
-          fail("expected authorization failure")
+        Then("ABAC rejects the read with condition evidence")
+        result shouldBe a[Consequence.Failure[_]]
+        result match
+          case Consequence.Failure(conclusion) =>
+            conclusion.show should include("publishAt<=now")
+            conclusion.show should include("2999-01-01T00:00:00Z")
+          case _ =>
+            fail("expected authorization failure")
+      }
+
+      "allow read when operation and application natural ABAC conditions match" in {
+        Given("operation and application metadata matching all natural conditions")
+        given ExecutionContext = _execution_context(
+          principalid = "reader"
+        )
+        given EntityPersistent[PersonEntity] = _person_persistent
+
+        val id = EntityId("test", "read_abac_operation_application_allowed", _cid)
+        _seed(PersonEntity(id, "operation-application-record", "reader"))
+        val uow = new UnitOfWork(summon[ExecutionContext])
+
+        When("the Entity is loaded under operation and application ABAC conditions")
+        val result = new UnitOfWorkInterpreter(uow).run(
+          org.goldenport.ConsequenceT.liftF(
+            cats.free.Free.liftF[UnitOfWorkOp, Option[PersonEntity]](
+              UnitOfWorkOp.EntityStoreLoad(
+                id,
+                summon[EntityPersistent[PersonEntity]],
+                authorization = Some(
+                  UnitOfWorkAuthorization(
+                    resourceFamily = "domain",
+                    resourceType = Some("Person"),
+                    targetId = Some(id),
+                    accessKind = "read",
+                    operationModel = Some(ServiceOperationModel.BusinessService),
+                    entityOperationKind = Some(EntityOperationKind.Resource),
+                    entityApplicationDomain = Some(EntityApplicationDomain.Business),
+                    naturalConditions = EntityAbacCondition.parseList(
+                      "operation.operationModel=business-service:read;application.entityOperationKind=resource:read;application.entityApplicationDomain=business:read"
+                    )
+                  )
+                )
+              )
+            )
+          )
+        )
+
+        Then("the matching operational context allows the read")
+        result.map(_.map(_.id)) shouldBe Consequence.success(Some(id))
+      }
+
+      "allow read when explicit CMS publication visibility conditions match" in {
+        Given("a public CMS Entity inside all publication visibility windows")
+        given ExecutionContext = _execution_context(
+          principalid = "reader"
+        )
+        given EntityPersistent[PersonEntity] = _person_persistent
+
+        val id = EntityId("test", "read_abac_visibility_allowed", _cid)
+        _seed(PersonEntity(
+          id,
+          "public-record",
+          "reader",
+          visibility = Some("Public"),
+          publicat = Some("2000-01-01T00:00:00Z"),
+          startat = Some("2000-01-01T00:00:00Z"),
+          endat = Some("2999-01-01T00:00:00Z"),
+          unpublishat = Some("2999-01-01T00:00:00Z")
+        ))
+        val uow = new UnitOfWork(summon[ExecutionContext])
+
+        When("the Entity is loaded under CMS visibility conditions")
+        val result = new UnitOfWorkInterpreter(uow).run(
+          org.goldenport.ConsequenceT.liftF(
+            cats.free.Free.liftF[UnitOfWorkOp, Option[PersonEntity]](
+              UnitOfWorkOp.EntityStoreLoad(
+                id,
+                summon[EntityPersistent[PersonEntity]],
+                authorization = Some(
+                  UnitOfWorkAuthorization(
+                    resourceFamily = "domain",
+                    resourceType = Some("Person"),
+                    targetId = Some(id),
+                    accessKind = "read",
+                    naturalConditions = EntityAbacCondition.parseList(
+                      "visibility=Public:read;publicAt<=now:read;startAt<=now:read;endAt>now:read;unpublishAt>now:read"
+                    )
+                  )
+                )
+              )
+            )
+          )
+        )
+
+        Then("all matching conditions allow the read")
+        result.map(_.map(_.id)) shouldBe Consequence.success(Some(id))
+      }
+
+      "reject read when explicit CMS publication visibility condition misses" in {
+        Given("a private CMS Entity that does not satisfy public visibility")
+        given ExecutionContext = _execution_context(
+          principalid = "reader"
+        )
+        given EntityPersistent[PersonEntity] = _person_persistent
+
+        val id = EntityId("test", "read_abac_visibility_denied", _cid)
+        _seed(PersonEntity(
+          id,
+          "private-record",
+          "reader",
+          visibility = Some("Private"),
+          publicat = Some("2000-01-01T00:00:00Z")
+        ))
+        val uow = new UnitOfWork(summon[ExecutionContext])
+
+        When("the Entity is loaded under public CMS visibility conditions")
+        val result = new UnitOfWorkInterpreter(uow).run(
+          org.goldenport.ConsequenceT.liftF(
+            cats.free.Free.liftF[UnitOfWorkOp, Option[PersonEntity]](
+              UnitOfWorkOp.EntityStoreLoad(
+                id,
+                summon[EntityPersistent[PersonEntity]],
+                authorization = Some(
+                  UnitOfWorkAuthorization(
+                    resourceFamily = "domain",
+                    resourceType = Some("Person"),
+                    targetId = Some(id),
+                    accessKind = "read",
+                    naturalConditions = EntityAbacCondition.parseList("visibility=Public:read;publicAt<=now:read")
+                  )
+                )
+              )
+            )
+          )
+        )
+
+        Then("ABAC rejects the read with the failed visibility evidence")
+        result shouldBe a[Consequence.Failure[_]]
+        result match
+          case Consequence.Failure(conclusion) =>
+            conclusion.show should include("visibility=Public")
+            conclusion.show should include("Private")
+          case _ =>
+            fail("expected authorization failure")
+      }
     }
   }
 
   private def _execution_context(
-    principalId: String,
+    principalid: String,
     capabilities: Vector[Capability] = Vector.empty,
-    principalAttributes: Map[String, String] = Map.empty
+    principalattributes: Map[String, String] = Map.empty
   ): ExecutionContext = {
     val datastorespace = DataStoreSpace.default()
     val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
@@ -1341,8 +1454,8 @@ final class UnitOfWorkTargetAuthorizationSpec
     context match {
       case i: ExecutionContext.Instance =>
         val principal = new Principal {
-          def id: PrincipalId = PrincipalId(principalId)
-          def attributes: Map[String, String] = principalAttributes
+          def id: PrincipalId = PrincipalId(principalid)
+          def attributes: Map[String, String] = principalattributes
         }
         i.copy(
           cncfCore = i.cncfCore.copy(
@@ -1382,36 +1495,36 @@ final class UnitOfWorkTargetAuthorizationSpec
   private final case class PersonEntity(
     id: EntityId,
     name: String,
-    ownerId: String,
-    groupId: Option[String] = None,
-    privilegeId: Option[String] = None,
-    customerId: Option[String] = None,
-    tenantId: Option[String] = None,
-    publishAt: Option[String] = None,
-    closeAt: Option[String] = None,
+    ownerid: String,
+    groupid: Option[String] = None,
+    privilegeid: Option[String] = None,
+    customerid: Option[String] = None,
+    tenantid: Option[String] = None,
+    publishat: Option[String] = None,
+    closeat: Option[String] = None,
     visibility: Option[String] = None,
-    publicAt: Option[String] = None,
-    startAt: Option[String] = None,
-    endAt: Option[String] = None,
-    unpublishAt: Option[String] = None
+    publicat: Option[String] = None,
+    startat: Option[String] = None,
+    endat: Option[String] = None,
+    unpublishat: Option[String] = None
   ) {
     def toRecord(): Record =
       Record.dataAuto(
         "id" -> id,
         "name" -> name,
-        "customerId" -> customerId,
-        "tenantId" -> tenantId,
-        "publishAt" -> publishAt,
-        "closeAt" -> closeAt,
+        "customerId" -> customerid,
+        "tenantId" -> tenantid,
+        "publishAt" -> publishat,
+        "closeAt" -> closeat,
         "visibility" -> visibility,
-        "publicAt" -> publicAt,
-        "startAt" -> startAt,
-        "endAt" -> endAt,
-        "unpublishAt" -> unpublishAt,
+        "publicAt" -> publicat,
+        "startAt" -> startat,
+        "endAt" -> endat,
+        "unpublishAt" -> unpublishat,
         "security_attributes" -> Record.dataAuto(
-          "owner_id" -> ownerId,
-          "group_id" -> groupId,
-          "privilege_id" -> privilegeId,
+          "owner_id" -> ownerid,
+          "group_id" -> groupid,
+          "privilege_id" -> privilegeid,
           "rights" -> Record.dataAuto(
             "owner" -> Record.dataAuto("read" -> true, "write" -> true, "execute" -> true),
             "group" -> Record.dataAuto("read" -> true, "write" -> true, "execute" -> false),
@@ -1423,18 +1536,18 @@ final class UnitOfWorkTargetAuthorizationSpec
 
   private final case class PersonCreate(
     name: String,
-    ownerId: String,
-    groupId: Option[String] = None,
-    privilegeId: Option[String] = None,
+    ownerid: String,
+    groupid: Option[String] = None,
+    privilegeid: Option[String] = None,
     id: Option[EntityId] = None
   ) {
     def toRecord(): Record =
       Record.dataAuto(
         "name" -> name,
         "security_attributes" -> Record.dataAuto(
-          "owner_id" -> ownerId,
-          "group_id" -> groupId,
-          "privilege_id" -> privilegeId,
+          "owner_id" -> ownerid,
+          "group_id" -> groupid,
+          "privilege_id" -> privilegeid,
           "rights" -> Record.dataAuto(
             "owner" -> Record.dataAuto("read" -> true, "write" -> true, "execute" -> true),
             "group" -> Record.dataAuto("read" -> true, "write" -> true, "execute" -> false),
@@ -1473,8 +1586,8 @@ final class UnitOfWorkTargetAuthorizationSpec
         r.getString("endAt").orElse(r.getString("end_at")),
         r.getString("unpublishAt").orElse(r.getString("unpublish_at"))
       ) match
-        case (Some(entityId), Some(entityName), Some(entityOwnerId), entityGroupId, entityPrivilegeId, customerId, tenantId, publishAt, closeAt, visibility, publicAt, startAt, endAt, unpublishAt) =>
-          Consequence.success(PersonEntity(entityId, entityName, entityOwnerId, entityGroupId, entityPrivilegeId, customerId, tenantId, publishAt, closeAt, visibility, publicAt, startAt, endAt, unpublishAt))
+        case (Some(entityid), Some(entityname), Some(entityownerid), entitygroupid, entityprivilegeid, customerid, tenantid, publishat, closeat, visibility, publicat, startat, endat, unpublishat) =>
+          Consequence.success(PersonEntity(entityid, entityname, entityownerid, entitygroupid, entityprivilegeid, customerid, tenantid, publishat, closeat, visibility, publicat, startat, endat, unpublishat))
         case _ =>
           Consequence.argumentInvalid("invalid person record")
   }
@@ -1482,15 +1595,15 @@ final class UnitOfWorkTargetAuthorizationSpec
   private final case class TypedSecurityTargetEntity(
     id: EntityId,
     name: String,
-    ownerId: String,
-    staleSecurity: Boolean = false
+    ownerid: String,
+    stalesecurity: Boolean = false
   ) {
     def toRecord(): Record = {
       val base = Record.dataAuto(
         "id" -> id,
         "name" -> name
       )
-      if (staleSecurity)
+      if (stalesecurity)
         base ++ Record.dataAuto(
           "owner_id" -> "stale-owner",
           "group_id" -> "stale-owner",
@@ -1512,16 +1625,16 @@ final class UnitOfWorkTargetAuthorizationSpec
           r.getAs[EntityId]("id"),
           r.getString("name")
         ) match
-          case (Some(entityId), Some(entityName)) =>
-            Consequence.success(TypedSecurityTargetEntity(entityId, entityName, "typed-owner"))
+          case (Some(entityid), Some(entityname)) =>
+            Consequence.success(TypedSecurityTargetEntity(entityid, entityname, "typed-owner"))
           case _ =>
             Consequence.argumentInvalid("invalid typed security target record")
       override def securityAttributes(e: TypedSecurityTargetEntity): Option[SecurityAttributes] =
-        Some(SecurityAttributes.ownedBy(e.ownerId))
+        Some(SecurityAttributes.ownedBy(e.ownerid))
     }
 
-  private def _security_record(ownerId: String): Record =
-    SecurityAttributes.ownedBy(ownerId).toRecord
+  private def _security_record(ownerid: String): Record =
+    SecurityAttributes.ownedBy(ownerid).toRecord
 
   private val _person_patch_persistent: EntityPersistentUpdate[PersonPatch] = new EntityPersistentUpdate[PersonPatch] {
     def collection(e: PersonPatch): EntityCollectionId = _cid

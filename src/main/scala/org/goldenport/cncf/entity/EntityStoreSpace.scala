@@ -1,5 +1,6 @@
 package org.goldenport.cncf.entity
 
+import scala.deprecatedName
 import org.goldenport.Consequence
 import org.goldenport.observation.Observation
 import org.goldenport.configuration.ResolvedConfiguration
@@ -83,13 +84,14 @@ class EntityStoreSpace {
     op: EntityStoreUpsert[T]
   )(
     authorize: Option[Record] => Consequence[Unit],
-    onSaved: CreateResult[T] => Consequence[Unit]
+    @deprecatedName("onSaved", "0.5.1")
+    onsaved: CreateResult[T] => Consequence[Unit]
   )(using ctx: ExecutionContext): Consequence[CreateResult[T]] = {
     given EntityPersistentCreate[T] = op.tc
     _with_calltree("space:entitystore:upsert", _entitystore_space_attributes("upsert", op.id.collection) + ("entity_id" -> op.id.print)) {
       for {
         entitystore <- _by_collection(op.id.collection)
-        result <- entitystore.upsert(op.entity, op.id, op.options)(authorize, onSaved)
+        result <- entitystore.upsert(op.entity, op.id, op.options)(authorize, onsaved)
       } yield result
     }
   }
@@ -100,13 +102,13 @@ class EntityStoreSpace {
     _with_calltree("space:entitystore:import-seed", Map("space" -> "entitystore", "operation" -> "import-seed", "entry_count" -> seed.entries.size.toString)) {
       seed.entries.foldLeft(Consequence.unit) { (z, entry) =>
         z.flatMap { _ =>
-          val createTc = new EntityPersistentCreate[T] {
+          val createtc = new EntityPersistentCreate[T] {
             def id(e: T): Option[EntityId] = Some(tc.id(e))
             def toRecord(e: T): org.goldenport.record.Record = tc.toRecord(e)
             override def toStoreRecord(e: T): org.goldenport.record.Record = tc.toStoreRecord(e)
             def collection(e: T): EntityCollectionId = tc.id(e).collection
           }
-          given EntityPersistentCreate[T] = createTc
+          given EntityPersistentCreate[T] = createtc
           val id = tc.id(entry.entity)
           val cid = id.collection
           for {
@@ -114,12 +116,26 @@ class EntityStoreSpace {
             dscid <- dataStoreCollection(cid)
             dsid <- dataStoreEntryId(id)
             ds <- ctx.dataStoreSpace.dataStore(dscid)
-            record = tc.toStoreRecord(entry.entity)
+            source = tc.toStoreRecord(entry.entity)
+            record = EntityConcurrencyMetadata.initializeForCreate(source)
             _ <- _with_calltree("space:datastore:create", Map("space" -> "datastore", "operation" -> "create", "collection" -> dscid.print, "entry_id" -> dsid.print)) {
               ds.create(dscid, dsid, record)
             }.recoverWith { case _ =>
-              _with_calltree("space:datastore:save", Map("space" -> "datastore", "operation" -> "save", "collection" -> dscid.print, "entry_id" -> dsid.print)) {
-                ds.save(dscid, dsid, record)
+              ds.load(dscid, dsid).flatMap { existing =>
+                val preserved = existing match {
+                  case Some(value) =>
+                    EntityConcurrencyMetadata.preserveForMutation(
+                      record,
+                      value
+                    )
+                  case None =>
+                    Consequence.success(record)
+                }
+                preserved.flatMap { value =>
+                  _with_calltree("space:datastore:save", Map("space" -> "datastore", "operation" -> "save", "collection" -> dscid.print, "entry_id" -> dsid.print)) {
+                    ds.save(dscid, dsid, value)
+                  }
+                }
               }
             }
           } yield ()
@@ -134,6 +150,23 @@ class EntityStoreSpace {
         entitystore <- _by_collection(op.id.collection)
         r <- entitystore.load(op.id)
       } yield r
+    }
+  }
+
+  def loadSnapshot[T](
+    id: EntityId,
+    tc: EntityPersistent[T]
+  )(using ctx: ExecutionContext): Consequence[Option[EntitySnapshot[T]]] = {
+    given EntityPersistent[T] = tc
+    _with_calltree(
+      "space:entitystore:load-snapshot",
+      _entitystore_space_attributes("load-snapshot", id.collection) +
+        ("entity_id" -> id.print)
+    ) {
+      for {
+        entitystore <- _by_collection(id.collection)
+        snapshot <- entitystore.loadSnapshot(id)
+      } yield snapshot
     }
   }
 
@@ -161,7 +194,9 @@ class EntityStoreSpace {
 
   def updateById[T](op: EntityStoreUpdateById[T])(using ctx: ExecutionContext): Consequence[Unit] = {
     _with_calltree("space:entitystore:update-by-id", _entitystore_space_attributes("update-by-id", op.id.collection) + ("entity_id" -> op.id.print)) {
-      val changes = Update.toChangesRecord(op.tc.toStoreRecord(op.patch))
+      val changes = EntityConcurrencyMetadata.withoutManagedField(
+        Update.toChangesRecord(op.tc.toStoreRecord(op.patch))
+      )
       if (changes.isEmpty)
         Consequence.unit
       else

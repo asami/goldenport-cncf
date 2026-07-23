@@ -14,7 +14,7 @@ import org.goldenport.cncf.operation.{AssociationBindingOperationDefinition, Chi
 /*
  * @since   Mar.  5, 2026
  *  version May. 31, 2026
- * @version Jul. 23, 2026
+ * @version Jul. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 private[projection] object MetaProjectionSupport {
@@ -510,7 +510,7 @@ private[projection] object MetaProjectionSupport {
     descriptor: EntityRuntimeDescriptor
   ): Record =
     Record.data(
-      "policy" -> SimpleEntityStorageShapePolicy.PolicyName,
+      "policy" -> SimpleEntityStorageShapePolicy.POLICY_NAME,
       "fields" -> storage_shape_field_records(component, descriptor)
     )
 
@@ -582,7 +582,7 @@ private[projection] object MetaProjectionSupport {
     }
 
   private def _management_storage_fields: Vector[Record] =
-    SimpleEntityStorageShapePolicy.ManagementLogicalFields.map { logical =>
+    SimpleEntityStorageShapePolicy.managementLogicalFields.map { logical =>
       _field_record(
         logicalname = logical,
         storagename = SimpleEntityStorageShapePolicy.targetName(logical),
@@ -592,7 +592,7 @@ private[projection] object MetaProjectionSupport {
     }
 
   private def _security_storage_fields: Vector[Record] =
-    SimpleEntityStorageShapePolicy.SecurityIdentityLogicalFields.map { logical =>
+    SimpleEntityStorageShapePolicy.securityIdentityLogicalFields.map { logical =>
       _field_record(
         logicalname = logical,
         storagename = SimpleEntityStorageShapePolicy.targetName(logical),
@@ -604,7 +604,7 @@ private[projection] object MetaProjectionSupport {
   private def _permission_storage_field: Record =
     _field_record(
       logicalname = "permission",
-      storagename = SimpleEntityStorageShapePolicy.PermissionField,
+      storagename = SimpleEntityStorageShapePolicy.PERMISSION_FIELD,
       classification = "permission",
       storagekind = "compact_json_text"
     )

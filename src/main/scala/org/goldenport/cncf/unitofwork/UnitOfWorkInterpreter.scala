@@ -239,7 +239,7 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
             val loadrecord = existing.map(_ => () => Consequence.success(existing))
             _authorize(authorization, loadrecord)
           },
-          onSaved = { result =>
+          onsaved = { result =>
             _entity_space_put_record(result.id, result.record).map { _ =>
               _view_space_invalidate_all()
               ()
@@ -719,10 +719,15 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
         )
       }
       if collection.storage.memoryRealm.isDefined
-    } yield collection.putRecordScoped(r)(using uow.executionContext).recoverWith {
-      case c if _is_not_implemented(c) => Consequence.unit
-      case c => Consequence.Failure[Unit](c)
-    }).getOrElse(Consequence.unit)
+    } yield EntityConcurrencyMetadata
+      .decodeEntity(r)(
+        collection.descriptor.persistent.fromStoreRecord
+      )
+      .map(collection.putScoped(_)(using uow.executionContext))
+      .recoverWith {
+        case c if _is_not_implemented(c) => Consequence.unit
+        case c => Consequence.Failure[Unit](c)
+      }).getOrElse(Consequence.unit)
   }
 
   private def _view_space_invalidate_all(): Unit =

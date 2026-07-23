@@ -45,15 +45,16 @@ final case class EntitySnapshot[A](
 )
 
 object EntityConcurrencyMetadata {
-  val LOGICAL_FIELD_NAME = "cncfRevision"
-  val STORAGE_FIELD_NAME = "cncf_revision"
-
-  private val _normalized_field_name =
-    _normalize(LOGICAL_FIELD_NAME)
+  val LOGICAL_FIELD_NAME =
+    SimpleEntityStorageShapePolicy.CONCURRENCY_REVISION_LOGICAL_FIELD
+  val STORAGE_FIELD_NAME =
+    SimpleEntityStorageShapePolicy.CONCURRENCY_REVISION_STORAGE_FIELD
 
   def token(record: Record): Consequence[EntityConcurrencyToken] = {
     val values = record.fields.collect {
-      case field if _normalize(field.key) == _normalized_field_name =>
+      case field
+          if SimpleEntityStorageShapePolicy
+            .isConcurrencyRevisionStorageField(field.key) =>
         _single_value(field.value.single)
     }
     values match {
@@ -72,18 +73,52 @@ object EntityConcurrencyMetadata {
 
   def initializeForCreate(record: Record): Record =
     withoutManagedField(record) ++
-      Record.dataAuto(
-        STORAGE_FIELD_NAME ->
-          EntityConcurrencyTokenSupport._storage_value(
-            EntityConcurrencyToken.INITIAL
-          )
-      )
+      _storage_record(EntityConcurrencyToken.INITIAL)
+
+  def preserveForMutation(
+    record: Record,
+    existing: Record
+  ): Consequence[Record] =
+    token(existing).map { token =>
+      val sanitized = withoutManagedField(record)
+      if (_has_managed_field(existing))
+        sanitized ++ _storage_record(token)
+      else
+        sanitized
+    }
+
+  def decodeEntity[A](
+    record: Record
+  )(
+    decode: Record => Consequence[A]
+  ): Consequence[A] =
+    snapshot(record)(decode).map(_.entity)
+
+  def snapshot[A](
+    record: Record
+  )(
+    decode: Record => Consequence[A]
+  ): Consequence[EntitySnapshot[A]] =
+    for {
+      token <- token(record)
+      entity <- decode(withoutManagedField(record))
+    } yield EntitySnapshot(entity, token)
 
   def withoutManagedField(record: Record): Record =
-    Record(
-      record.fields.filterNot(field =>
-        _normalize(field.key) == _normalized_field_name
-      )
+    SimpleEntityStorageShapePolicy.withoutConcurrencyRevisionField(record)
+
+  private def _has_managed_field(record: Record): Boolean =
+    record.fields.exists(field =>
+      SimpleEntityStorageShapePolicy
+        .isConcurrencyRevisionStorageField(field.key)
+    )
+
+  private def _storage_record(
+    token: EntityConcurrencyToken
+  ): Record =
+    Record.dataAuto(
+      STORAGE_FIELD_NAME ->
+        EntityConcurrencyTokenSupport._storage_value(token)
     )
 
   private def _token_value(value: Any): Consequence[EntityConcurrencyToken] =

@@ -194,5 +194,22 @@ specification.
 EC-01 is complete. EC-02A completed the typed concurrency token, snapshot
 carrier, and isolated framework metadata codec with property-based evidence.
 The slice passed focused validation, clean read-only re-review, and the full
-CNCF suite. EC-02 remains active. EC-02B next integrates the codec into
-canonical Entity create/load and managed storage-shape paths.
+CNCF suite.
+
+EC-02B integrates that codec into canonical Entity persistence. Create,
+upsert-create, save-create, and new seed import initialize token `1`; existing
+save, update, upsert, soft-delete, patch-by-id, and seed-import paths preserve
+the authoritative stored token while removing caller-owned aliases. Plain
+Entity decoding excludes framework metadata, concurrency-aware load returns an
+`EntitySnapshot`, and legacy records expose virtual token `0` without physical
+backfill. The initial review findings were fixed by making
+`SimpleEntityStorageShapePolicy` the canonical revision-field authority,
+requiring the physical field for persisted token admission, isolating
+EntitySpace domain codecs from storage metadata, and grouping the authorization
+executable specification by feature area. Focused executable evidence and
+clean `Test/compile` pass. A fresh read-only re-review found no remaining
+actionable issue, and the full 2367-test CNCF suite passed.
+
+EC-02 remains active because atomic token comparison and exactly-once
+advancement are EC-03 work. Phase 50 documents a later simplification toward
+`SimpleEntity.revision`; it does not replace or reopen this Phase 49 slice.
