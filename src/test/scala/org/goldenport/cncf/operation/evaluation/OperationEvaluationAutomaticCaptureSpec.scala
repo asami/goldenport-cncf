@@ -167,6 +167,22 @@ final class OperationEvaluationAutomaticCaptureSpec
       fixture.sink.facts.last.asInstanceOf[OperationEvaluationTerminalFact].outcome shouldBe OperationEvaluationOutcome.Success
     }
 
+    "capture a successful Query through the query-only public surface" in {
+      Given("an authorized Query operation and a connected deterministic sink")
+      val fixture = _fixture()
+      given ExecutionContext = fixture.component.logic.executionContext()
+
+      When("the Query executes through the query-only subsystem boundary")
+      val result = fixture.subsystem.executeQueryOnlyWithMetadata(_request("success"))
+
+      Then("the canonical result and exactly one automatic attempt pair are retained")
+      result.map(_.response) shouldBe Consequence.success(OperationResponse.Scalar("success"))
+      fixture.sink.facts.map(_.factKind.token) shouldBe
+        Vector("operation-start", "operation-terminal")
+      fixture.sink.facts.map(_.id).distinct should have size 2
+      fixture.sink.facts.map(_.correlation.attemptId).distinct should have size 1
+    }
+
     "capture a query-only rejection after authorized Action construction" in {
       Given("an authorized Command operation invoked through the query-only surface")
       val fixture = _fixture()

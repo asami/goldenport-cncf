@@ -1,7 +1,7 @@
 package org.goldenport.cncf.operation.evaluation
 
 import java.util.concurrent.{CountDownLatch, TimeUnit}
-import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 import scala.collection.mutable.ArrayBuffer
 import cats.data.NonEmptyVector
 import cats.syntax.flatMap.*
@@ -99,6 +99,7 @@ final class OperationEvaluationSupplementalDslSpec
         candidate.summary.map(_.print) shouldBe Some("accepted training example")
         candidate.labels.map(_.toRecord.getString("name")) shouldBe Vector(Some("quality"))
         candidate.correlation.attemptId shouldBe fixture.sink.facts.head.correlation.attemptId
+        fixture.commitstates.get() shouldBe Vector(true)
       }
 
       "release a ProcedureActionCall experiment observation with bounded measurements" in {
@@ -192,6 +193,18 @@ final class OperationEvaluationSupplementalDslSpec
           OperationEvaluationOutcome.Failure,
           OperationEvaluationOutcome.Success
         )
+        fixture.sink.facts.map(_.id).distinct should have size 5
+        val automatic = fixture.sink.facts.collect {
+          case fact: OperationEvaluationStartFact => fact.correlation.attemptId -> fact.factKind.token
+          case fact: OperationEvaluationTerminalFact => fact.correlation.attemptId -> fact.factKind.token
+        }
+        automatic.groupMap(_._1)(_._2).values.toVector should contain only (
+          Vector("operation-start", "operation-terminal")
+        )
+        automatic.map(_._1).distinct should have size 2
+        fixture.sink.facts.collect {
+          case candidate: CorpusCandidateFact => candidate.correlation.attemptId
+        } shouldBe Vector(automatic.last._1)
       }
 
       "keep nested same-context operation evidence separate from its caller" in {
@@ -482,7 +495,8 @@ final class OperationEvaluationSupplementalDslSpec
   private final case class CorpusFixture(
     subsystem: Subsystem,
     sink: DeterministicCorpusEvaluationSink,
-    component: SupplementalCorpusComponent
+    component: SupplementalCorpusComponent,
+    commitstates: AtomicReference[Vector[Boolean]]
   )
 
   private final case class ExperimentFixture(
@@ -496,6 +510,8 @@ final class OperationEvaluationSupplementalDslSpec
   ): CorpusFixture = {
     val subsystem = _track(TestComponentFactory.emptySubsystem("evaluation-supplemental-corpus"))
     val sink = _success(DeterministicCorpusEvaluationSink.createC("evaluation_corpus", "test-corpus"))
+    val commitstates = new AtomicReference(Vector.empty[Boolean])
+    val observingsink = CommitObservingCorpusEvaluationSink(sink, commitstates)
     val component = _initialize_component(
       subsystem,
       new SupplementalCorpusComponent,
@@ -513,9 +529,9 @@ final class OperationEvaluationSupplementalDslSpec
         SupplementalOperation("corpusFatal", SupplementalMode.CorpusFatal)
       ) ++ additionaloperations
     )
-    component.installSpi(sink)
+    component.installSpi(observingsink)
     subsystem.add(component)
-    CorpusFixture(subsystem, sink, component)
+    CorpusFixture(subsystem, sink, component, commitstates)
   }
 
   private def _experiment_fixture(): ExperimentFixture = {
@@ -665,6 +681,31 @@ private final class SupplementalCorpusComponent
 private final class SupplementalExperimentComponent
     extends Component
     with ExperimentEvaluationSinkSocket
+
+private final case class CommitObservingCorpusEvaluationSink(
+  underlying: CorpusEvaluationSink,
+  commitstates: AtomicReference[Vector[Boolean]]
+) extends CorpusEvaluationSink {
+  override val sinkIdentityOption = underlying.sinkIdentityOption
+
+  def recordStart(
+    fact: OperationEvaluationStartFact
+  )(using context: ExecutionContext): Consequence[OperationEvaluationDeliveryResult] =
+    underlying.recordStart(fact)
+
+  def recordTerminal(
+    fact: OperationEvaluationTerminalFact
+  )(using context: ExecutionContext): Consequence[OperationEvaluationDeliveryResult] =
+    underlying.recordTerminal(fact)
+
+  def submitCandidate(
+    fact: CorpusCandidateFact
+  )(using context: ExecutionContext): Consequence[OperationEvaluationDeliveryResult] = {
+    val committed = context.runtime.unitOfWork.lastCommitResult.exists(_.isSuccess)
+    commitstates.updateAndGet(_ :+ committed)
+    underlying.submitCandidate(fact)
+  }
+}
 
 private final case class SupplementalOperation(
   operationname: String,

@@ -227,7 +227,7 @@ Implementation Evidence:
 ## OE-08: Executable Evidence
 
 Stage Status:
-- Current status: IN_PROGRESS
+- Current status: DONE
 - Owner: CNCF operation runtime maintainers
 - Update rule: Mark IN_PROGRESS only after OE-07 closes; mark DONE only when
   every OE-08 checklist item is complete.
@@ -240,18 +240,18 @@ Stage Status:
   accessors without exposing the resolver/provider.
 - [x] Preserve admitted assignment through context rebinding, Job retry, and
   resume while preventing implicit nested-operation inheritance.
-- [ ] Cover automatic capture with connected and disconnected sinks.
-- [ ] Cover supplemental DSL capture and source attribution.
-- [ ] Cover success, failure, timeout, cancellation, retry, resume, nested
+- [x] Cover automatic capture with connected and disconnected sinks.
+- [x] Cover supplemental DSL capture and source attribution.
+- [x] Cover success, failure, timeout, cancellation, retry, resume, nested
   calls, and exactly-once terminal emission.
-- [ ] Cover payload safety, sink failure isolation, and component-instance
+- [x] Cover payload safety, sink failure isolation, and component-instance
   isolation.
 - [x] Cover same-sink recursion suppression, explicit cross-sink behavior,
   causal context propagation, timeout, queue saturation, overflow, and bounded
   drop diagnostics.
-- [ ] Cover supplemental commit release, operation abort, and post-commit
+- [x] Cover supplemental commit release, operation abort, and post-commit
   framework-binding failure without leaking provider calls.
-- [ ] Verify undeclared operations emit only automatic facts and disabled
+- [x] Verify undeclared operations emit only automatic facts and disabled
   sinks perform no provider invocation.
 
 Implementation Progress:
@@ -300,8 +300,43 @@ Implementation Progress:
 - Release validation passed the full CNCF suite: 333 suites completed, 2,354
   tests succeeded, no test failed, 2 were canceled, 1 was ignored, and 59
   remained pending.
-- OE-08 remains open for the consolidated required-scenario matrix and any
-  gaps it exposes.
+- OE-08C closes the consolidated required-scenario matrix. Successful
+  query-only dispatch and generic `SpiInvoker` dispatch now prove the same
+  automatic start/terminal semantics as ordinary operation execution.
+- Retry evidence proves one start/terminal pair per attempt, distinct attempt
+  and fact identities, stable logical execution/Job correlation, and
+  supplemental release from only the successful attempt.
+- A persistent delayed-retry Job now crosses the canonical automatic-capture
+  wrapper before and after `JobEngine` rehydration, proving one distinct
+  start/terminal pair for each resumed attempt.
+- Repeated provider delivery of the same immutable fact returns the same fact
+  identity, providing the stable deduplication key required for idempotent
+  at-least-once handling.
+- Canonical supplemental success is observed on the already committed
+  UnitOfWork after response binding and terminal capture; no replacement
+  transaction is opened for provider release.
+- The consolidated OE-08C matrix passes 91 tests across seven suites; CNCF
+  `Test/compile` and diff validation pass.
+- The isolated OE-08C staged snapshot passes the full CNCF suite: 333 suites
+  completed, 2,353 tests succeeded, no test failed, 2 were canceled, 1 was
+  ignored, and 59 remained pending.
+
+OE-08 Required Scenario Evidence Matrix:
+
+| Required scenario | Executable evidence |
+| --- | --- |
+| No sinks connected | `OperationEvaluationAutomaticCaptureSpec`: disconnected optional sink preserves the result; `OperationEvaluationSinkSpec`: disabled sockets invoke no provider. |
+| Sinks connected, no declaration | `OperationEvaluationAdmissionSpec` E1: resolver remains unused, automatic facts are emitted, and membership/assignment remain absent. |
+| Authorization denied | `OperationEvaluationAdmissionSpec` E6 and `OperationEvaluationAutomaticCaptureSpec`: no resolver or sink invocation. |
+| Optional/required admission | `OperationEvaluationAdmissionSpec` E2, E3, and E14 cover bounded optional control and required pre-business rejection. |
+| Success/failure/timeout/cancellation | `OperationEvaluationAutomaticCaptureSpec` preserves each canonical outcome and one terminal per attempt. |
+| Sink failure/timeout and saturation | `OperationEvaluationAutomaticCaptureSpec` and `OperationEvaluationDeliveryRuntimeSpec` preserve business outcome with bounded diagnostics. |
+| Retry and Job resume | `OperationEvaluationJobContextSpec` runs canonical automatic capture across `JobEngine` rehydration; `OperationEvaluationSupplementalDslSpec` preserves logical correlation with distinct attempt, Task, and fact identities. |
+| Nested operation | `OperationEvaluationAutomaticCaptureSpec` and `OperationEvaluationSupplementalDslSpec` preserve parent correlation without implicit membership inheritance. |
+| Same-sink and cross-sink delivery | `OperationEvaluationAutomaticCaptureSpec`, `OperationEvaluationContextSpec`, and `OperationEvaluationSinkSpec` prove suppression, directional allowlisting, and finite depth. |
+| Supplemental DSL lifecycle | `OperationEvaluationSupplementalDslSpec` proves application source, UnitOfWork staging, post-terminal committed release, abort/binding-failure discard, and attempt isolation. |
+| Confidential payload | `OperationEvaluationModelSpec`, `OperationEvaluationDeliveryRuntimeSpec`, `OperationEvaluationAdmissionSpec`, and `OperationEvaluationSinkSpec` exclude payloads from facts, reports, traces, metrics, and diagnostics. |
+| Query-only and generic SPI routes | `OperationEvaluationAutomaticCaptureSpec` and `SpiInvokerSpec` prove canonical capture parity and authorization ordering. |
 
 OE-08A Modified Scala File Compliance Ledger:
 
@@ -337,10 +372,20 @@ OE-08B Modified Scala File Compliance Ledger:
 | `src/test/scala/org/goldenport/cncf/operation/evaluation/OperationEvaluationAutomaticCaptureSpec.scala` | whole-file pass | whole-file pass | 49 focused tests; `Test/compile` | OE-08B release commit |
 | `src/test/scala/org/goldenport/cncf/spi/evaluation/OperationEvaluationSinkSpec.scala` | whole-file pass | whole-file pass after semantic subsection review-fix | 49 focused tests; `Test/compile` | OE-08B release commit |
 
+OE-08C Modified Scala File Compliance Ledger:
+
+| File | Naming | Executable specification | Validation | Commit |
+| --- | --- | --- | --- | --- |
+| `src/test/scala/org/goldenport/cncf/job/OperationEvaluationJobContextSpec.scala` | whole-file pass | whole-file pass | 91 focused tests; full suite; `Test/compile` | OE-08C release commit |
+| `src/test/scala/org/goldenport/cncf/operation/evaluation/OperationEvaluationAutomaticCaptureSpec.scala` | whole-file pass | whole-file pass | 91 focused tests; full suite; `Test/compile` | OE-08C release commit |
+| `src/test/scala/org/goldenport/cncf/operation/evaluation/OperationEvaluationSupplementalDslSpec.scala` | whole-file pass | whole-file pass | 91 focused tests; full suite; `Test/compile` | OE-08C release commit |
+| `src/test/scala/org/goldenport/cncf/spi/evaluation/OperationEvaluationSinkSpec.scala` | whole-file pass | whole-file pass | 91 focused tests; full suite; `Test/compile` | OE-08C release commit |
+| `src/test/scala/org/goldenport/cncf/spi/SpiInvokerSpec.scala` | whole-file pass | whole-file pass | 91 focused tests; full suite; `Test/compile` | OE-08C release commit |
+
 ## OE-09: Downstream Handoff
 
 Stage Status:
-- Current status: OPEN
+- Current status: IN_PROGRESS
 - Owner: CNCF and downstream Textus integration maintainers
 - Update rule: Mark IN_PROGRESS only after OE-08 closes; mark DONE only when
   every OE-09 checklist item is complete.

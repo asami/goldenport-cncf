@@ -14,7 +14,9 @@ import org.goldenport.cncf.component.{Component, ComponentId, ComponentInit, Com
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.event.DomainEvent
 import org.goldenport.cncf.http.RuntimeDashboardMetrics
+import org.goldenport.cncf.operation.evaluation.{OperationEvaluationStartFact, OperationEvaluationTerminalFact}
 import org.goldenport.cncf.security.OperationAuthorizationRule
+import org.goldenport.cncf.spi.evaluation.{CorpusEvaluationSinkSocket, DeterministicCorpusEvaluationSink}
 import org.goldenport.cncf.subsystem.{GenericSubsystemDescriptor, Subsystem}
 import org.goldenport.cncf.testutil.TestComponentFactory
 import org.scalatest.GivenWhenThen
@@ -23,7 +25,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jul. 11, 2026
- * @version Jul. 13, 2026
+ * @version Jul. 23, 2026
  * @author  ASAMI, Tomoharu
  */
 final class SpiInvokerSpec
@@ -284,6 +286,30 @@ final class SpiInvokerSpec
   }
 
   "SpiInvoker canonical dispatch" should {
+    "capture the provider operation through the canonical operation chokepoint" in {
+      Given("an undeclared provider operation with a provider-owned deterministic evaluation sink")
+      val fixture = InvocationFixture.create("spi_invoker_evaluation_capture")
+      given ExecutionContext = ExecutionContext.create()
+
+      When("the operation is invoked through the generic SPI route")
+      val result = fixture.subsystem.spiInvoker.invoke(
+        InvocationContract.contract,
+        SpiOperationSelector("echo", Some("api")),
+        Record.dataAuto("message" -> "captured"),
+        ComponentSelector(component = Some("test_provider"), instance = Some("primary"))
+      )
+
+      Then("the business result and exactly one provider-scoped automatic attempt are retained")
+      result.toOption.flatMap(_.getString("message")) shouldBe Some("captured")
+      fixture.evaluationsink.facts.map(_.factKind.token) shouldBe
+        Vector("operation-start", "operation-terminal")
+      fixture.evaluationsink.facts.map(_.id).distinct should have size 2
+      fixture.evaluationsink.facts.collect {
+        case fact: OperationEvaluationStartFact => fact.correlation.operation.component.print
+        case fact: OperationEvaluationTerminalFact => fact.correlation.operation.component.print
+      } should contain only "test_provider"
+    }
+
     "produce the same business result as ordinary subsystem dispatch" in {
       Given("one provider operation and one repeated-field request")
       val fixture = InvocationFixture.create()
@@ -368,6 +394,7 @@ final class SpiInvokerSpec
 
       Then("the canonical authorization failure is returned")
       result shouldBe a[Consequence.Failure[_]]
+      fixture.evaluationsink.facts shouldBe empty
     }
 
     "preserve managed command job UnitOfWork and event semantics" in {
@@ -438,7 +465,7 @@ private object BoundInvocationContract {
 
 private final class InvocationProviderComponent(
   instance: String
-) extends Component with SpiProviderComponent {
+) extends Component with SpiProviderComponent with CorpusEvaluationSinkSocket {
   var observedExecutionContext: Option[ExecutionContext] = None
   var typedProviderMaterializationCount: Int = 0
   var boundProviderMaterializationCount: Int = 0
@@ -521,12 +548,18 @@ private object InvocationFixture {
     subsystem: Subsystem,
     provider: InvocationProviderComponent,
     socket: InvocationSocket,
+    evaluationsink: DeterministicCorpusEvaluationSink,
     materializationsAfterAssembly: Int
   )
 
   def create(name: String = "spi_invoker"): Fixture = {
     val subsystem = TestComponentFactory.emptySubsystem(name)
     val provider = addProvider(subsystem, "primary", Vector("official-site"))
+    val evaluationsink = DeterministicCorpusEvaluationSink
+      .createC("test_provider", "evaluation_capture")
+      .toOption
+      .get
+    provider.installSpi(evaluationsink)
     val (consumer, socket) = addConsumer(subsystem, "consumer", "catalog")
     val binding = SpiRuntimeBinding(
       SpiSocketSelector(
@@ -537,7 +570,13 @@ private object InvocationFixture {
       SpiProviderSelector(component = Some("test_provider"), instance = Some("primary"))
     )
     installResolver(subsystem, Vector(provider, consumer), Vector(binding))
-    Fixture(subsystem, provider, socket, provider.typedProviderMaterializationCount)
+    Fixture(
+      subsystem,
+      provider,
+      socket,
+      evaluationsink,
+      provider.typedProviderMaterializationCount
+    )
   }
 
   def addProvider(

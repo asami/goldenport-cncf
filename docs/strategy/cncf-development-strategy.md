@@ -2728,10 +2728,10 @@ Active CNCF development item in Phase 48.
   - OE-07 (DONE) — attached bounded delivery status to execution metadata and
     published only payload-safe structural diagnostics through
     CallTree/runtime metrics;
-  - OE-08 (IN PROGRESS) — prove disabled, optional, required, nested, retry, cancellation,
-    timeout, idempotency, failure-isolation, and confidentiality behavior with
-    deterministic fake adapters;
-  - OE-09 — validate one offline corpus-case/arm handoff with downstream
+  - OE-08 (DONE) — proves disabled, optional, required, nested, retry,
+    cancellation, timeout, idempotency, failure-isolation, confidentiality,
+    query-only, and generic SPI behavior with deterministic fake adapters;
+  - OE-09 (IN PROGRESS) — validate one offline corpus-case/arm handoff with downstream
     Textus-owned adapters while preserving the CNCF dependency boundary;
   - OE-10 — complete full validation, review, documentation evidence, and
     Phase 48 closure.

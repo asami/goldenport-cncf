@@ -91,6 +91,24 @@ final class OperationEvaluationSinkSpec extends AnyWordSpec with Matchers with G
       experiment.facts shouldBe Vector(start, terminal, observation)
       checked.passed shouldBe true
     }
+
+    "preserve the submitted fact identity across repeated provider delivery" in {
+      Given("one immutable automatic fact and a deterministic Corpus provider")
+      given ExecutionContext = ExecutionContext.create()
+      val corpus = _success(DeterministicCorpusEvaluationSink.createC(
+        "catalog",
+        "idempotent-corpus"
+      ))
+      val start = _start_fact("repeated-start")
+
+      When("the caller repeats delivery of the same fact")
+      val results = Vector(corpus.recordStart(start), corpus.recordStart(start))
+
+      Then("both calls retain one stable fact identity for provider-side deduplication")
+      results.flatMap(_.toOption).map(_.factId) shouldBe Vector.fill(2)(start.id)
+      corpus.facts.map(_.id) shouldBe Vector.fill(2)(start.id)
+      corpus.facts.distinct shouldBe Vector(start)
+    }
     }
 
     "trace and bound installed provider invocation" which {

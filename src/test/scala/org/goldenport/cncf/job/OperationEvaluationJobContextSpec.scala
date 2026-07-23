@@ -4,9 +4,14 @@ import java.time.{Clock, Duration, Instant, ZoneOffset}
 import java.util.concurrent.atomic.AtomicInteger
 import scala.collection.mutable.ArrayBuffer
 import org.goldenport.{Conclusion, Consequence}
+import org.goldenport.cncf.action.{ActionCall, ActionEngine, QueryAction}
+import org.goldenport.cncf.component.{Component, ComponentId, ComponentInit, ComponentInstanceId, ComponentOrigin}
 import org.goldenport.cncf.context.{ExecutionContext, IdGenerationContext, ScopeContext}
-import org.goldenport.cncf.operation.evaluation.{CorpusCaseReference, CorpusEvaluationCorrelation, CorpusRevisionReference, ExperimentArmReference, ExperimentEvaluationCorrelation, ExperimentReference, ExperimentRunReference, OperationEvaluationAssignment, OperationEvaluationCorrelation, OperationEvaluationCrossSinkPolicy, OperationEvaluationCrossSinkRoute, OperationEvaluationName, OperationEvaluationOperationIdentity, OperationEvaluationSinkIdentity, OperationEvaluationText}
+import org.goldenport.cncf.operation.evaluation.{CorpusCaseReference, CorpusEvaluationCorrelation, CorpusRevisionReference, ExperimentArmReference, ExperimentEvaluationCorrelation, ExperimentReference, ExperimentRunReference, OperationEvaluationActionTask, OperationEvaluationAssignment, OperationEvaluationAttemptCapture, OperationEvaluationCorrelation, OperationEvaluationCrossSinkPolicy, OperationEvaluationCrossSinkRoute, OperationEvaluationDeliveryRuntime, OperationEvaluationName, OperationEvaluationOperationIdentity, OperationEvaluationSinkIdentity, OperationEvaluationStartFact, OperationEvaluationTerminalFact, OperationEvaluationText}
+import org.goldenport.cncf.spi.evaluation.{CorpusEvaluationSinkSocket, DeterministicCorpusEvaluationSink}
+import org.goldenport.cncf.testutil.TestComponentFactory
 import org.goldenport.conclusion.Disposition
+import org.goldenport.protocol.{Protocol, Request}
 import org.goldenport.protocol.operation.OperationResponse
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
@@ -101,6 +106,89 @@ final class OperationEvaluationJobContextSpec
         engine2.shutdown()
       }
     }
+
+    "emit one automatic attempt pair before and after JobEngine rehydration" in {
+      Given("a captured provider operation whose first Job attempt requests delayed retry")
+      val state = InMemoryJobEngine.State()
+      val schedule = InMemoryJobEngine.RetrySchedule(Vector(Duration.ofMillis(60L)))
+      val clock = new ManualJobTimeSource(_instant)
+      val timer1 = new InMemoryJobEngine.ManualJobTimer(clock)
+      val attempts = new AtomicInteger(0)
+      val subsystem = TestComponentFactory.emptySubsystem("evaluation-job-resume-capture")
+      val sink = _success(DeterministicCorpusEvaluationSink.createC(
+        "evaluation_job_resume",
+        "test-corpus"
+      ))
+      val component = _capture_component(subsystem, sink)
+      val operation = _success(OperationEvaluationOperationIdentity.createC(
+        component.name,
+        "operation",
+        "retry"
+      ))
+      val prepared = _success(ExecutionContext.prepareOperationEvaluation(
+        component.logic.executionContext(),
+        operation
+      ))
+      val action = ResumeCaptureAction(
+        Request.of(component = component.name, service = "operation", operation = "retry"),
+        attempts
+      )
+      val rawtask = ActionTask(
+        ActionId.generate(),
+        action,
+        ActionEngine.create(),
+        Some(component)
+      )
+      val deliveryruntime = new OperationEvaluationDeliveryRuntime()
+      val task = new OperationEvaluationActionTask(
+        rawtask,
+        new OperationEvaluationAttemptCapture(operation, deliveryruntime),
+        (response, _) => Consequence.success(response)
+      )
+      val engine1 = createManualInMemoryJobEngine(state, schedule, clock, timer1)
+      val jobid = _success(engine1.submit(
+        List(task),
+        prepared,
+        JobSubmitOption(persistence = JobPersistencePolicy.Persistent)
+      ))
+
+      When("the first attempt settles and a new JobEngine resumes the delayed retry")
+      try {
+        engine1.drainOne() shouldBe true
+        engine1.query(jobid).flatMap(_.retry.nextRetryDueAt) should not be empty
+        engine1.shutdown()
+        val timer2 = new InMemoryJobEngine.ManualJobTimer(clock)
+        val engine2 = createManualInMemoryJobEngine(state, schedule, clock, timer2)
+        timer2.pendingCount shouldBe 1
+        timer2.advanceBy(Duration.ofMillis(60L)) shouldBe 1
+        engine2.drainAll()
+
+        Then("both attempts emit one distinct start-terminal pair under one logical Job execution")
+        engine2.query(jobid).map(_.status) shouldBe Some(JobStatus.Succeeded)
+        sink.facts.map(_.factKind.token) shouldBe Vector(
+          "operation-start",
+          "operation-terminal",
+          "operation-start",
+          "operation-terminal"
+        )
+        sink.facts.map(_.id).distinct should have size 4
+        val correlations = sink.facts.map(_.correlation)
+        correlations.map(_.executionId).distinct should have size 1
+        correlations.map(_.attemptId).distinct should have size 2
+        correlations.flatMap(_.jobId).distinct shouldBe Vector(jobid)
+        correlations.flatMap(_.taskId).distinct should have size 2
+        sink.facts.collect {
+          case fact: OperationEvaluationTerminalFact => fact.outcome
+        }.map(_.token) shouldBe Vector("failure", "success")
+        sink.facts.collect {
+          case fact: OperationEvaluationStartFact => fact.correlation.attemptId
+          case fact: OperationEvaluationTerminalFact => fact.correlation.attemptId
+        }.groupBy(identity).values.map(_.size).toVector should contain only 2
+      } finally {
+        deliveryruntime.close()
+        subsystem.shutdown()
+      }
+    }
   }
 
   private final case class CorrelationTask(
@@ -181,4 +269,50 @@ final class OperationEvaluationJobContextSpec
 
   private def _success[A](result: Consequence[A]): A =
     result.toOption.getOrElse(fail(result.toString))
+
+  private def _capture_component(
+    subsystem: org.goldenport.cncf.subsystem.Subsystem,
+    sink: DeterministicCorpusEvaluationSink
+  ): ResumeCaptureComponent = {
+    val component = new ResumeCaptureComponent
+    val componentid = ComponentId("evaluation_job_resume")
+    component.installSpi(sink)
+    component.initialize(ComponentInit(
+      subsystem,
+      Component.Core.create(
+        "evaluation_job_resume",
+        componentid,
+        ComponentInstanceId.default(componentid),
+        Protocol.empty
+      ),
+      ComponentOrigin.Main
+    )).asInstanceOf[ResumeCaptureComponent]
+    subsystem.add(component)
+    component
+  }
+}
+
+private final class ResumeCaptureComponent
+    extends Component
+    with CorpusEvaluationSinkSocket
+
+private final case class ResumeCaptureAction(
+  request: Request,
+  attempts: AtomicInteger
+) extends QueryAction {
+  def createCall(core: ActionCall.Core): ActionCall =
+    ResumeCaptureActionCall(core, attempts)
+}
+
+private final case class ResumeCaptureActionCall(
+  core: ActionCall.Core,
+  attempts: AtomicInteger
+) extends ActionCall {
+  def execute(): Consequence[OperationResponse] =
+    if (attempts.incrementAndGet() == 1)
+      Consequence.Failure(Conclusion.simple("planned captured retry").copy(
+        disposition = Disposition(Disposition.UserAction.RetryLater)
+      ))
+    else
+      Consequence.success(OperationResponse.Scalar("ok"))
 }
