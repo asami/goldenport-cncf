@@ -103,7 +103,7 @@ They are recorded together in strategy completed history rather than leaving
 | ID | Stage | Outcome | Status |
 | --- | --- | --- | --- |
 | EC-01 | Normative contract | Design/spec fix token, conflict, transition, atomicity, provider, and result semantics. | done |
-| EC-02 | Concurrency model and storage shape | Managed revision metadata and typed concurrency values have deterministic persistence and migration behavior. | planned |
+| EC-02 | Concurrency model and storage shape | Managed revision metadata and typed concurrency values have deterministic persistence and migration behavior. | active |
 | EC-03 | Version-aware mutation | Required Entity/Aggregate mutation paths compare the caller token atomically and return structured stale conflicts. | planned |
 | EC-04 | Atomic datastore capability | A closed provider-neutral plan executes guard, successor, root update, and token advance in one transaction without fallback. | planned |
 | EC-05 | EntityStore, UnitOfWork, and DSL | Protected typed conditional transition preserves authorization, lifecycle, transaction, and normal effect boundaries. | planned |
@@ -191,6 +191,8 @@ specification.
 
 ## Current Resume Point
 
-EC-01 is complete. Begin EC-02 planning for the concurrency-token model,
-managed Entity storage shape, legacy-record admission, and executable
-model/storage evidence.
+EC-01 is complete. EC-02A completed the typed concurrency token, snapshot
+carrier, and isolated framework metadata codec with property-based evidence.
+The slice passed focused validation, clean read-only re-review, and the full
+CNCF suite. EC-02 remains active. EC-02B next integrates the codec into
+canonical Entity create/load and managed storage-shape paths.

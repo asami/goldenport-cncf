@@ -57,7 +57,7 @@ Evidence:
 ## EC-02: Concurrency Model and Storage Shape
 
 Stage Status:
-- Current status: PLANNED
+- Current status: IN_PROGRESS
 - Owner: CNCF Entity model maintainers
 - Update rule: Mark IN_PROGRESS only after EC-01 closes. Mark DONE only when
   typed values, managed storage metadata, and migration behavior have
@@ -77,7 +77,37 @@ Stage Status:
 - [ ] Add property-based token and storage-shape specifications.
 
 Evidence:
-- Pending.
+- EC-02A implemented, cleanly re-reviewed, and release-validated:
+  - `build.sbt` keeps production Java sources on the existing JVM 8
+    classfile baseline and admits the existing Java test probe at its minimum
+    Java 14 language baseline;
+  - `src/main/java/org/goldenport/cncf/entity/EntityConcurrencyToken.java`;
+  - `src/main/scala/org/goldenport/cncf/entity/EntityConcurrency.scala`;
+  - `src/test/scala/org/goldenport/cncf/entity/EntityConcurrencyTokenSpec.scala`.
+- EC-02A focused validation:
+  - `sbt --batch "testOnly org.goldenport.cncf.entity.EntityConcurrencyTokenSpec"`:
+    5 tests passed.
+  - `sbt -J-Xmx4G --batch Test/compile`: passed.
+  - clean compilation produced classfile major version 52 for both the
+    production Scala metadata codec and Java token boundary, and major version
+    58 for the existing Java test probe.
+  - `sbt -J-Xmx4G --batch test`: 2363 tests succeeded, 0 failed, 2 canceled,
+    1 ignored, and 59 pending across 334 completed suites.
+  - `git diff --check`: passed.
+- EC-02A review:
+  - whole-file naming and executable-specification review completed;
+  - public JVM API and classfile compatibility reviewed;
+  - clean re-review completed with no actionable findings.
+- EC-02 remains open. Canonical create/load integration, managed-field
+  composition, mutation advancement, and regression evidence belong to the
+  remaining EC-02 work.
+
+Modified Scala File Compliance Ledger:
+
+| File | Naming review | Executable-spec review | Validation | Disposition |
+| --- | --- | --- | --- | --- |
+| `src/main/scala/org/goldenport/cncf/entity/EntityConcurrency.scala` | Whole file passed | Not a spec | Focused 5-test spec, `Test/compile`, and full 2363-test suite passed | EC-02A release commit |
+| `src/test/scala/org/goldenport/cncf/entity/EntityConcurrencyTokenSpec.scala` | Whole file passed | Whole file passed; Given/When/Then behavior and two ScalaCheck properties | Focused 5-test spec, `Test/compile`, and full 2363-test suite passed | EC-02A release commit |
 
 ## EC-03: Version-aware Mutation
 

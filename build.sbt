@@ -3,6 +3,9 @@ import sbt.Tests
 
 val scala3version = "3.3.8"
 
+Compile / javacOptions ++= Seq("--release", "8")
+Test / javacOptions := Seq("--release", "14")
+
 lazy val generateTextusRuntimeCatalog = taskKey[File]("Generate Textus runtime catalog metadata for the warehouse repository.")
 lazy val exportTextusRuntimeCatalog = taskKey[File]("Export Textus runtime catalog metadata for local development consumers.")
 lazy val generateCncfRuntimeDescriptor = taskKey[File]("Generate CNCF runtime self descriptor for the runtime jar.")
