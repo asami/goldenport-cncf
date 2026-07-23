@@ -1,7 +1,8 @@
 # Phase 48 - Operation Evaluation and Corpus/Experiment Capture
 
-status=active
+status=closed
 started_at=2026-07-23
+closed_at=2026-07-24
 strategy=[CNCF Development Strategy](../strategy/cncf-development-strategy.md)
 checklist=[Phase 48 Checklist](phase-48-checklist.md)
 
@@ -99,7 +100,7 @@ reimplement framework execution capture.
 | OE-07 | Diagnostics | Delivery status, limitation, CallTree, and metrics remain bounded, payload-safe, timeout-safe, and non-authoritative. | done |
 | OE-08 | Executable evidence | Specs cover admission, no-op, installed, success, failure, timeout, cancellation, retry, nested execution, and confidentiality. | done |
 | OE-09 | Downstream handoff | Textus-owned fake/development adapters prove the standard SPI without reversing dependencies. | done |
-| OE-10 | Verification and closure | Full validation, review, documentation, and closure evidence are complete. | in progress |
+| OE-10 | Verification and closure | Full validation, review, documentation, and closure evidence are complete. | done |
 
 ## Acceptance
 

@@ -846,7 +846,7 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Phase 45: closed (`docs/phase/phase-45.md`)
 - Phase 46: closed (`docs/phase/phase-46.md`)
 - Phase 47: closed (`docs/phase/phase-47.md`)
-- Phase 48: active (`docs/phase/phase-48.md`)
+- Phase 48: closed (`docs/phase/phase-48.md`)
 
 ## 8. Completed Development Item History
 
@@ -1525,6 +1525,32 @@ Completed in Phase 47.
   mutation, per-request initialization overrides, secret-value access, broad
   component migration, and parameter-policy editing UI.
 
+### 8.27 Operation Evaluation and Corpus/Experiment Capture
+Completed in Phase 48.
+
+- Closed dashboard: `docs/phase/phase-48.md`
+- Closed checklist: `docs/phase/phase-48-checklist.md`
+- Decided designs:
+  - `docs/design/operation-evaluation-capture.md`
+  - `docs/spec/operation-evaluation-capture.md`
+- Completed scope:
+  - provider-neutral automatic operation start/terminal capture at the
+    authorized canonical execution chokepoint;
+  - immutable Corpus/Experiment admission and correlation across direct,
+    nested, Job, retry, Event, Rule, Workflow, JCL, Service, and query-only
+    execution;
+  - separate standard Corpus and Experiment sink SPI contracts with optional
+    no-provider behavior, finite delivery limits, recursion protection, and
+    payload-safe diagnostics;
+  - bounded supplemental candidate, observation, label, and measurement
+    internal DSL operations staged through ActionCall/UnitOfWork;
+  - full CNCF executable evidence plus offline Textus Corpus and Experiment
+    adapters and cross-repository handoff acceptance without downstream
+    implementation dependencies in CNCF.
+- Deferred scope remains production traffic allocation, automatic candidate
+  promotion, downstream persistence/retention, experiment acceptance/reporting
+  and operator UI, and production provider activation.
+
 ## 9. Development Item Status
 
 This final section lists planned active and future development areas only.
@@ -1532,9 +1558,8 @@ Completed work areas are recorded in section 8. When a development item closes,
 remove its completion record from this section and add or update the
 corresponding completed-history entry.
 
-The active development item is 9.36 Operation Evaluation Contract, implemented
-as Phase 48. Other remaining 9.x items are future development candidates until
-explicitly selected.
+No development item is currently selected as the active phase. Remaining 9.x
+items are future development candidates until explicitly selected.
 
 ### 9.1 Web Next Stage Follow-ups
 Web/platform follow-up index.
@@ -2647,138 +2672,6 @@ Completed in Phase 40.
   - `docs/phase/phase-40.md`; and
   - `docs/phase/phase-40-checklist.md`.
 
-### 9.36 Operation Evaluation Contract
-Active CNCF development item in Phase 48.
-
-- Goal:
-  - provide a provider-neutral CNCF operation-evaluation boundary that admits
-    immutable corpus/experiment correlation before business execution and
-    automatically emits bounded start and terminal evaluation facts without
-    changing canonical operation semantics;
-  - deliver automatic facts through standard Corpus and Experiment SPI
-    contracts when those components are connected, while disconnected
-    components select no-op sinks; and
-  - let applications add bounded domain-specific corpus and experiment facts
-    through the internal DSL without reimplementing automatic execution
-    capture.
-- Driver:
-  - Textus applications need deterministic offline comparison of operation
-    behavior over one immutable corpus revision;
-  - AI profiles, prompts, models, providers, component configurations, and
-    other implementation variants must be comparable without putting
-    application- or provider-specific types into CNCF core;
-  - corpus and experiment membership must be explicit before execution and
-    must not be reconstructed from sampled or retained observability records;
-  - automatic operation facts are broader than membership: every admitted
-    operation may report bounded execution facts to installed sinks, while
-    corpus membership and experiment assignment remain explicit.
-- Dependencies:
-  - existing `CmlOperationDefinition` metadata and generated operation
-    projection;
-  - the common `Subsystem._execute_resolved_operation` and `ActionEngine`
-    execution envelope;
-  - `ScopeContext` runtime capability inheritance;
-  - immutable `ExecutionContext.CncfCore` execution state;
-  - `RuntimeContext.ExecutionMetadata`, CallTree, operation confidentiality,
-    and deterministic execution-profile foundations;
-  - downstream Textus Corpus immutable revision/case identity and Textus
-    Experiment experiment/arm/run/observation ownership.
-- Boundary:
-  - CNCF owns declaration, admission, immutable execution context, terminal
-    fact, candidate handoff, failure isolation, and safe observability
-    contracts;
-  - Textus Corpus owns candidate review/promotion and immutable corpus
-    revisions/cases;
-  - Textus Experiment owns experiment definitions, arms, runs, observations,
-    acceptance evidence, and aggregation;
-  - operation logic may read only an admitted assignment or execution-plan
-    reference and may not allocate or mutate experiment state;
-  - ordinary operation logic does not need to emit framework execution facts;
-    the common operation chokepoint owns automatic capture;
-  - supplemental application facts pass through ActionCall/UnitOfWork and the
-    protected internal DSL rather than direct provider calls;
-  - sink delivery carries a bounded reentrancy context, so an operation invoked
-    by one sink cannot feed automatic or supplemental facts recursively back to
-    that same sink;
-  - sink calls have finite timeout, concurrency, queue, byte, saturation, and
-    overflow/drop policy and cannot indefinitely delay normal operation
-    execution;
-  - CNCF core has no direct dependency on `textus-corpus`,
-    `textus-experiment`, Textus AI, or a telemetry provider;
-  - the first scope is explicit offline assignment; production traffic
-    randomization and online arm allocation are deferred.
-- Stages:
-  - OE-01 (DONE) — promoted the proposed notes contract into
-    `docs/design/operation-evaluation-capture.md` and
-    `docs/spec/operation-evaluation-capture.md`;
-  - OE-02 (DONE) — implemented typed automatic and supplemental capture facts, with
-    optional membership/assignment declaration metadata;
-  - OE-03 (DONE) — added disabled/fake Corpus and Experiment standard sink
-    capabilities and caller-side traced installation;
-  - OE-04 (DONE) — inherited sink capabilities through `ScopeContext` and carried one
-    immutable, operation-scoped evaluation context through
-    `ExecutionContext.CncfCore`, including Job resume and retry identity;
-  - OE-05 (DONE) — wrapped the common resolved-operation pipeline so
-    authorization precedes business execution and bounded automatic terminal
-    evidence follows framework response bindings across direct, Job, Event,
-    Rule, Workflow, JCL, Service, query-only, and cross-component paths;
-  - OE-06 (DONE) — added protected supplemental Corpus/Experiment internal DSL
-    helpers with attempt-partitioned UnitOfWork staging and post-terminal
-    release;
-  - OE-07 (DONE) — attached bounded delivery status to execution metadata and
-    published only payload-safe structural diagnostics through
-    CallTree/runtime metrics;
-  - OE-08 (DONE) — proves disabled, optional, required, nested, retry,
-    cancellation, timeout, idempotency, failure-isolation, confidentiality,
-    query-only, and generic SPI behavior with deterministic fake adapters;
-  - OE-09 (DONE) — validates one offline corpus-case/arm handoff with downstream
-    Textus-owned adapters while preserving the CNCF dependency boundary;
-  - OE-10 (IN PROGRESS) — complete full validation, review, documentation evidence, and
-    Phase 48 closure.
-- Acceptance:
-  - an operation without evaluation declarations emits bounded automatic facts
-    to installed sinks but acquires no implicit corpus membership or experiment
-    assignment;
-  - disabled/no-op sinks preserve operation behavior and invoke no provider;
-  - authorization completes before external evaluation resolution;
-  - one admitted assignment is immutable before operation construction and is
-    preserved across Job resume and retry;
-  - an ordinary execution without assignment uses its control/default branch;
-  - an unavailable optional admission falls back to control with an
-    attributable limitation, while an unavailable required experiment
-    admission fails before business execution;
-  - an unknown admitted variant never silently contaminates an experiment by
-    using control;
-  - success, failure, timeout, and cancellation retain their original
-    operation semantics;
-  - fact/candidate/telemetry failure cannot rewrite a completed business
-    outcome;
-  - sink-induced operation calls cannot recursively invoke the same sink, and
-    any cross-sink forwarding is explicit and bounded;
-  - stalled or saturated sinks produce bounded delivery limitations/drop
-    diagnostics rather than indefinitely stalling an operation;
-  - telemetry sampling or retention cannot define or erase corpus/experiment
-    membership;
-  - raw requests, responses, prompts, provider output, credentials, execution
-    plans, and unrestricted identifiers are absent from default facts and
-    observability;
-  - normal executable specifications require no Textus service, telemetry
-    backend, AI provider, network access, or credentials.
-- Deferred scope:
-  - production online allocation, exposure logging, sticky-user assignment,
-    and traffic-percentage control;
-  - automatic promotion of captured candidates into immutable corpus
-    revisions;
-  - Textus-owned experiment acceptance logic, metrics, reports, and operator
-    UI;
-  - unrestricted raw request/response capture or provider payload retention;
-  - a generic workflow, feature-flag, or experimentation product inside CNCF.
-- Planning references:
-  - `docs/notes/operation-evaluation-contract-proposed-specification.md`;
-  - `docs/journal/2026/07/2026-07-21-operation-evaluation-corpus-experiment-observability-handoff.md`;
-  - `docs/journal/2026/07/2026-07-21-operation-evaluation-contract-specification-history.md`;
-  - `docs/phase/phase-48.md`;
-  - `docs/phase/phase-48-checklist.md`.
 
 ### 9.38 CAR Skill Bundle Distribution and AI-assisted UX
 Future CNCF development item. This item is defined but is not the active phase.

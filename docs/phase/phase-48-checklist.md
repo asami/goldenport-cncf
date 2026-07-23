@@ -1,6 +1,6 @@
 # Phase 48 Checklist - Operation Evaluation and Corpus/Experiment Capture
 
-status=active
+status=closed
 phase=[Phase 48 - Operation Evaluation and Corpus/Experiment Capture](phase-48.md)
 
 This checklist is the authoritative Phase 48 state ledger. Only one stage may
@@ -447,14 +447,38 @@ OE-09 Modified Scala File Compliance Ledger:
 ## OE-10: Verification and Closure
 
 Stage Status:
-- Current status: IN_PROGRESS
+- Current status: DONE
 - Owner: CNCF phase maintainers
 - Update rule: Mark IN_PROGRESS only after OE-09 closes; mark DONE only when
   every OE-10 checklist item and Phase 48 closure criterion is complete.
 
-- [ ] Run focused operation, context, SPI, Job, and observability specs.
-- [ ] Run `Test/compile` and the full CNCF test suite.
-- [ ] Complete review and review-fix cycles with no actionable finding.
-- [ ] Update strategy, design, specification, developer guidance, and phase
+- [x] Run focused operation, context, SPI, Job, and observability specs.
+- [x] Run `Test/compile` and the full CNCF test suite.
+- [x] Complete review and review-fix cycles with no actionable finding.
+- [x] Update strategy, design, specification, developer guidance, and phase
   evidence.
-- [ ] Close Phase 48 only after implementation and downstream acceptance pass.
+- [x] Close Phase 48 only after implementation and downstream acceptance pass.
+
+Closure evidence:
+
+- Focused operation-evaluation, context, SPI, Job, observability, and
+  downstream adapter executable specifications passed throughout OE-02 through
+  OE-09; the OE-08 compliance ledger records the focused 91-test evidence.
+- `sbt --batch test` passed on 2026-07-24 in CNCF with 2,358 successful tests,
+  zero failures, two canceled tests, one ignored test, and 59 pending tests.
+- `sbt --batch test` passed on 2026-07-24 in `textus-corpus` with seven
+  successful tests and in `textus-experiment` with ten successful tests.
+- The explicitly invoked, non-default-discovered
+  `OperationEvaluationDownstreamHandoffSpec` passed with both downstream
+  compiled class directories and actual Textus-owned providers.
+- The final OE-09 review-fix and fresh read-only re-review completed with no
+  actionable findings before the three validated release commits:
+  `68389bf` (`textus-corpus`), `6c4f827` (`textus-experiment`), and
+  `47901c1c` (CNCF).
+- Normative and developer-facing contracts are recorded in
+  `docs/design/operation-evaluation-capture.md`,
+  `docs/spec/operation-evaluation-capture.md`, and
+  `docs/notes/operation-evaluation-contract-proposed-specification.md`.
+- Phase 48 closes with persistent provider operation, candidate promotion,
+  experiment acceptance/reporting, and production provider activation still
+  owned by downstream Textus components.
