@@ -16,6 +16,7 @@ import org.goldenport.cncf.spi.{SpiContract, SpiSelection, SpiSocket, SpiTraceFa
  * @author  ASAMI, Tomoharu
  */
 trait CorpusEvaluationSink {
+  def sinkIdentityOption: Option[OperationEvaluationSinkIdentity] = None
   def recordStart(fact: OperationEvaluationStartFact)(using ExecutionContext): Consequence[OperationEvaluationDeliveryResult]
   def recordTerminal(fact: OperationEvaluationTerminalFact)(using ExecutionContext): Consequence[OperationEvaluationDeliveryResult]
   def submitCandidate(fact: CorpusCandidateFact)(using ExecutionContext): Consequence[OperationEvaluationDeliveryResult]
@@ -47,6 +48,14 @@ object CorpusEvaluationSink {
     underlying: CorpusEvaluationSink,
     base: SpiTraceMetadata
   ) extends CorpusEvaluationSink {
+    override val sinkIdentityOption: Option[OperationEvaluationSinkIdentity] =
+      OperationEvaluationSinkIdentity.createC(
+        base.contract,
+        base.socketComponent,
+        base.providerComponent,
+        base.providerInstance
+      ).toOption
+
     def recordStart(fact: OperationEvaluationStartFact)(using ExecutionContext): Consequence[OperationEvaluationDeliveryResult] =
       _trace(base, "recordStart", fact)(ctx => underlying.recordStart(fact)(using ctx))
 
@@ -59,6 +68,7 @@ object CorpusEvaluationSink {
 }
 
 trait ExperimentEvaluationSink {
+  def sinkIdentityOption: Option[OperationEvaluationSinkIdentity] = None
   def recordStart(fact: OperationEvaluationStartFact)(using ExecutionContext): Consequence[OperationEvaluationDeliveryResult]
   def recordTerminal(fact: OperationEvaluationTerminalFact)(using ExecutionContext): Consequence[OperationEvaluationDeliveryResult]
   def submitObservation(fact: ExperimentObservationFact)(using ExecutionContext): Consequence[OperationEvaluationDeliveryResult]
@@ -90,6 +100,14 @@ object ExperimentEvaluationSink {
     underlying: ExperimentEvaluationSink,
     base: SpiTraceMetadata
   ) extends ExperimentEvaluationSink {
+    override val sinkIdentityOption: Option[OperationEvaluationSinkIdentity] =
+      OperationEvaluationSinkIdentity.createC(
+        base.contract,
+        base.socketComponent,
+        base.providerComponent,
+        base.providerInstance
+      ).toOption
+
     def recordStart(fact: OperationEvaluationStartFact)(using ExecutionContext): Consequence[OperationEvaluationDeliveryResult] =
       _trace(base, "recordStart", fact)(ctx => underlying.recordStart(fact)(using ctx))
 
@@ -138,6 +156,7 @@ trait ExperimentEvaluationSinkSocket extends SpiSocket[ExperimentEvaluationSink]
 final class DeterministicCorpusEvaluationSink private (
   val sinkIdentity: OperationEvaluationSinkIdentity
 ) extends CorpusEvaluationSink {
+  override val sinkIdentityOption: Option[OperationEvaluationSinkIdentity] = Some(sinkIdentity)
   private val _facts = new ConcurrentLinkedQueue[OperationEvaluationFact]()
 
   def facts: Vector[OperationEvaluationFact] = _facts.iterator.asScala.toVector
@@ -175,6 +194,7 @@ object DeterministicCorpusEvaluationSink {
 final class DeterministicExperimentEvaluationSink private (
   val sinkIdentity: OperationEvaluationSinkIdentity
 ) extends ExperimentEvaluationSink {
+  override val sinkIdentityOption: Option[OperationEvaluationSinkIdentity] = Some(sinkIdentity)
   private val _facts = new ConcurrentLinkedQueue[OperationEvaluationFact]()
 
   def facts: Vector[OperationEvaluationFact] = _facts.iterator.asScala.toVector

@@ -33,7 +33,7 @@ import org.goldenport.cncf.operation.CmlOperationDefinition
  *  version Mar. 31, 2026
  *  version Apr. 24, 2026
  *  version Jun.  9, 2026
- * @version Jul. 19, 2026
+ * @version Jul. 23, 2026
  * @author  ASAMI, Tomoharu
  */
 /**
@@ -137,6 +137,16 @@ case class ComponentLogic(
   def executeAction(
     action: Action,
     ctx: ExecutionContext
+  ): Consequence[OperationResponse] =
+    component.subsystem match {
+      case Some(subsystem) => subsystem._execute_component_action_c(component, action, ctx)
+      case None => Consequence.serviceUnavailable("component subsystem is not available")
+    }
+
+  private[cncf] def _execute_action(
+    action: Action,
+    ctx: ExecutionContext,
+    taskdecorator: ActionTask => JobTask
   ): Consequence[OperationResponse] = {
     ctx.runtime.clearExecutionMetadata()
     val actionscope = component.scopeContext.createChildScope(ScopeKind.Action, action.name)
@@ -149,17 +159,17 @@ case class ComponentLogic(
     )
     _resolve_operation_kind(action) match {
       case Some(ComponentLogic.OperationKind.Query) =>
-        _execute_query_action(task, scopedctx)
+        _execute_query_action(taskdecorator(task), scopedctx)
       case Some(ComponentLogic.OperationKind.Command) =>
-        _execute_command_action(task, action, scopedctx)
+        _execute_command_action(task, action, scopedctx, taskdecorator)
       case None =>
         action match {
           case _: QueryAction =>
-            _execute_query_action(task, scopedctx)
+            _execute_query_action(taskdecorator(task), scopedctx)
           case _: CommandAction =>
-            _execute_command_action(task, action, scopedctx)
+            _execute_command_action(task, action, scopedctx, taskdecorator)
           case _ =>
-            submitJob(List(task), scopedctx).map(jobid => OperationResponse.Scalar(jobid.value))
+            submitJob(List(taskdecorator(task)), scopedctx).map(jobid => OperationResponse.Scalar(jobid.value))
       }
     }
   }
@@ -167,11 +177,25 @@ case class ComponentLogic(
   def executeEventContinuationAction(
     action: Action,
     ctx: ExecutionContext
-  ): Consequence[OperationResponse] =
-    component.actionEngine.execute(createActionCall(action, ctx))
+  ): Consequence[OperationResponse] = {
+    val task = ActionTask(
+      ActionId.create("event.continuation", ctx.clock.instant(), ctx.idGeneration),
+      action,
+      component.actionEngine,
+      Some(component)
+    )
+    component.subsystem match {
+      case Some(subsystem) =>
+        subsystem._prepare_component_operation_task(action, task, ctx).flatMap { case (preparedtask, preparedcontext) =>
+          preparedtask.run(preparedcontext).result
+        }
+      case None =>
+        Consequence.serviceUnavailable("component subsystem is not available")
+    }
+  }
 
   private def _execute_query_action(
-    task: ActionTask,
+    task: JobTask,
     ctx: ExecutionContext
   ): Consequence[OperationResponse] =
     if (ctx.framework.traceJob) {
@@ -191,7 +215,8 @@ case class ComponentLogic(
   private def _execute_command_action(
     task: ActionTask,
     action: Action,
-    ctx: ExecutionContext
+    ctx: ExecutionContext,
+    taskdecorator: ActionTask => JobTask
   ): Consequence[OperationResponse] = {
     val policy = action match {
       case command: CommandAction =>
@@ -204,7 +229,7 @@ case class ComponentLogic(
     }
     val policyctx = ExecutionContext.withFrameworkCommandExecutionPolicy(ctx, policy)
     if (!policy.managedByJob) {
-      execute(createActionCall(action, policyctx))
+      taskdecorator(task).run(policyctx).result
     } else {
       val runmode = policy.jobRunMode match {
         case CommandJobRunMode.Sync => JobRunMode.Sync
@@ -219,7 +244,7 @@ case class ComponentLogic(
       )
       _job_definition_submit_binding(action, option0, policyctx).flatMap { binding =>
         _task_with_compensation(task, binding.compensation, action, policyctx).flatMap { task1 =>
-          submitJob(List(task1), policyctx, binding.option).flatMap { jobid =>
+          submitJob(List(taskdecorator(task1)), policyctx, binding.option).flatMap { jobid =>
             _note_job_response(policyctx, jobid)
             policy.interfaceMode match {
               case CommandInterfaceMode.Async =>
@@ -382,16 +407,23 @@ case class ComponentLogic(
     compensation match {
       case None => Consequence.success(task)
       case Some(hook) =>
-        _resolve_action(hook.action, _action_parameters(action) ++ hook.parameters, ctx).map { case (target, compensationAction) =>
-          task.copy(
-            compensationActionRef = Some(hook.action),
-            compensationTask = Some(ActionTask(
-              ActionId.create("component.compensation", ctx.clock.instant(), ctx.idGeneration),
-              compensationAction,
-              target.actionEngine,
-              Some(target)
-            ))
+        _resolve_action(hook.action, _action_parameters(action) ++ hook.parameters, ctx).flatMap { case (target, compensationAction) =>
+          val compensationtask = ActionTask(
+            ActionId.create("component.compensation", ctx.clock.instant(), ctx.idGeneration),
+            compensationAction,
+            target.actionEngine,
+            Some(target)
           )
+          component.subsystem match {
+            case Some(subsystem) =>
+              subsystem._prepare_component_operation_task(compensationAction, compensationtask, ctx).map { case (preparedtask, _) =>
+                task.copy(
+                  compensationActionRef = Some(hook.action),
+                  compensationTask = Some(preparedtask)
+                )
+              }
+            case None => Consequence.serviceUnavailable("component subsystem is not available")
+          }
         }
     }
 
@@ -595,12 +627,11 @@ case class ComponentLogic(
   }
 
   private def _default_submit_option(tasks: List[JobTask]): JobSubmitOption =
-    tasks.headOption match {
-      case Some(ActionTask(_, _: QueryAction, _, _, _, _)) =>
-        JobSubmitOption(persistence = JobPersistencePolicy.Ephemeral)
-      case _ =>
-        JobSubmitOption(persistence = JobPersistencePolicy.Persistent)
-    }
+    JobSubmitOption(
+      persistence = tasks.headOption
+        .map(_.defaultPersistence)
+        .getOrElse(JobPersistencePolicy.Persistent)
+    )
 
   // private def _ping_action(
   //   request: Request

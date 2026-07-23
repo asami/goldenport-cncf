@@ -94,8 +94,8 @@ reimplement framework execution capture.
 | OE-02 | Capture model | Typed automatic and supplemental facts have bounded stable identities and confidentiality rules. | done |
 | OE-03 | Standard SPI | Corpus and Experiment sink contracts provide disabled, fake, and installed behavior. | done |
 | OE-04 | Runtime context | Scope and execution contexts carry immutable sink/correlation state across normal and Job execution. | done |
-| OE-05 | Automatic chokepoint | The common operation path captures authorized start and terminal facts exactly once. | pending |
-| OE-06 | Internal DSL | Applications can add bounded corpus/experiment facts without calling providers directly. | pending |
+| OE-05 | Automatic chokepoint | The common operation path captures authorized start and terminal facts exactly once. | done |
+| OE-06 | Internal DSL | Applications can add bounded corpus/experiment facts without calling providers directly. | next |
 | OE-07 | Diagnostics | Delivery status, limitation, CallTree, and metrics remain payload-safe and non-authoritative. | pending |
 | OE-08 | Executable evidence | Specs cover no-op, installed, success, failure, timeout, cancellation, retry, nested execution, and confidentiality. | pending |
 | OE-09 | Downstream handoff | Textus-owned fake/development adapters prove the standard SPI without reversing dependencies. | pending |

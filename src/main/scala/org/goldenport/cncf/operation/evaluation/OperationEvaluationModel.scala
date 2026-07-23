@@ -2,6 +2,7 @@ package org.goldenport.cncf.operation.evaluation
 
 import java.time.{Duration, Instant}
 import java.nio.charset.StandardCharsets
+import java.security.MessageDigest
 import java.util.Locale
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.{CorrelationId, ExecutionContext, ExecutionContextId, IdGenerationContext, TraceId}
@@ -148,6 +149,32 @@ object OperationEvaluationName {
       .map(Consequence.success)
       .getOrElse(Consequence.argumentFormatError("name", "bounded operation-evaluation name", value))
 
+  private[evaluation] def fromResolvedRoute(value: String): OperationEvaluationName =
+    option(value).getOrElse {
+      val text = Option(value).getOrElse("")
+      val digest = MessageDigest
+        .getInstance("SHA-256")
+        .digest(text.getBytes(StandardCharsets.UTF_8))
+        .iterator
+        .map(byte => f"${byte & 0xff}%02x")
+        .mkString
+        .take(16)
+      val normalized = text.toLowerCase(Locale.ROOT)
+        .map {
+          case c if (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '.' || c == '_' || c == '-' => c
+          case _ => '_'
+        }
+        .mkString
+        .replaceAll("_+", "_")
+        .stripPrefix("_")
+        .stripSuffix("_")
+      val prefixed = normalized.headOption match {
+        case Some(c) if c >= 'a' && c <= 'z' => normalized
+        case _ => s"route_$normalized"
+      }
+      OperationEvaluationName(s"${prefixed.take(110)}_$digest")
+    }
+
   // Generated metadata has already passed the CML decoder's validation boundary.
   def unsafe(value: String): OperationEvaluationName =
     option(value).getOrElse(throw new IllegalArgumentException("Invalid operation-evaluation name"))
@@ -242,6 +269,17 @@ final case class OperationEvaluationOperationIdentity private (
 }
 
 object OperationEvaluationOperationIdentity {
+  def fromResolvedRoute(
+    component: String,
+    service: String,
+    operation: String
+  ): OperationEvaluationOperationIdentity =
+    OperationEvaluationOperationIdentity(
+      OperationEvaluationName.fromResolvedRoute(component),
+      OperationEvaluationName.fromResolvedRoute(service),
+      OperationEvaluationName.fromResolvedRoute(operation)
+    )
+
   def createC(
     component: String,
     service: String,
@@ -601,6 +639,7 @@ enum OperationEvaluationLimitationKind(val token: String) {
   case Unsupported extends OperationEvaluationLimitationKind("unsupported")
   case ConfidentialityRestricted extends OperationEvaluationLimitationKind("confidentiality-restricted")
   case Discarded extends OperationEvaluationLimitationKind("discarded")
+  case ProviderFailure extends OperationEvaluationLimitationKind("provider-failure")
 }
 
 final case class OperationEvaluationLimitation(
@@ -653,7 +692,7 @@ enum OperationEvaluationDeliveryStatus(val token: String) {
   case Failed extends OperationEvaluationDeliveryStatus("failed")
 }
 
-final case class OperationEvaluationDeliveryResult private (
+final case class OperationEvaluationDeliveryResult private[evaluation] (
   factId: OperationEvaluationFactId,
   sink: OperationEvaluationSinkIdentity,
   status: OperationEvaluationDeliveryStatus,

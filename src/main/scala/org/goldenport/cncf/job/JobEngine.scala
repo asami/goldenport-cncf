@@ -6,6 +6,7 @@ import java.util.Base64
 import java.util.concurrent.{ConcurrentHashMap, Executors, PriorityBlockingQueue, ScheduledExecutorService, TimeUnit, ExecutorService}
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong}
 import scala.concurrent.ExecutionContext as ScalaExecutionContext
+import scala.util.control.NonFatal
 import org.goldenport.{Conclusion, Consequence}
 import org.goldenport.consequence.Failures
 import org.goldenport.id.UniversalId
@@ -34,7 +35,7 @@ import org.goldenport.cncf.observability.{DiagnosticPayloadExternalizer, Observa
  * @since   Jan.  4, 2026
  *  version Mar. 30, 2026
  *  version May. 31, 2026
- * @version Jul. 19, 2026
+ * @version Jul. 23, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class JobId(
@@ -262,7 +263,19 @@ trait JobTask {
   def componentName: Option[String] = None
   def serviceName: Option[String] = None
   def operationName: Option[String] = None
+  def requestSummary: Option[String] = None
+  def requestParameters: Map[String, String] = Map.empty
+  def defaultPersistence: JobPersistencePolicy = JobPersistencePolicy.Persistent
   def run(ctx: ExecutionContext): TaskOutcome
+  def observeCanonicalOutcome(
+    outcome: TaskOutcome,
+    ctx: ExecutionContext,
+    cancelled: Boolean
+  ): Unit = ()
+  def observeAdmissionFailure(
+    conclusion: Conclusion,
+    ctx: ExecutionContext
+  ): Unit = ()
 }
 
 final case class ActionTask(
@@ -293,6 +306,23 @@ final case class ActionTask(
 
   override def operationName: Option[String] =
     Some(action.name)
+
+  override def requestSummary: Option[String] =
+    Some(action.show)
+
+  override def requestParameters: Map[String, String] = {
+    val req = action.request
+    val args = req.arguments.map(a => a.name -> a.value.toString).toMap
+    val switches = req.switches.map(s => s.name -> s.value.toString).toMap
+    val props = req.properties.map(p => p.name -> p.value.toString).toMap
+    args ++ switches ++ props
+  }
+
+  override def defaultPersistence: JobPersistencePolicy =
+    action match {
+      case _: QueryAction => JobPersistencePolicy.Ephemeral
+      case _ => JobPersistencePolicy.Persistent
+    }
 
   def run(ctx: ExecutionContext): TaskOutcome = {
     val call = component.map(ComponentLogic(_).createActionCall(action, ctx)).getOrElse {
@@ -949,7 +979,10 @@ final class InMemoryJobEngine(
     ctx: ExecutionContext,
     option: JobSubmitOption
   ): Consequence[JobId] =
-    _validate_submit_option(option).map { _ =>
+    _validate_submit_option(option).recoverWith { conclusion =>
+      tasks.foreach(_observe_task_admission_failure(_, conclusion, ctx))
+      Consequence.Failure(conclusion)
+    }.map { _ =>
     val jobid = JobId.create("submit", ctx.clock.instant(), ctx.idGeneration)
     _cancellation_scopes.put(jobid, new JobCancellationScope)
     val now = _now()
@@ -1337,6 +1370,7 @@ final class InMemoryJobEngine(
         var failedtaskid: Option[TaskId] = None
         var committedtasks = Vector.empty[(TaskId, JobTask)]
         var successresponse: Option[OperationResponse] = None
+        var completedtasks = Vector.empty[(JobTask, TaskOutcome, ExecutionContext, Boolean)]
         tasks.foreach { task =>
           if (failure.isEmpty && _can_run_next_task(jobid)) {
             if (_await_if_suspended(jobid)) {
@@ -1358,7 +1392,10 @@ final class InMemoryJobEngine(
               )
               val executioncontext = _job_execution_context(jobid, ctx, jobcontext)
               _append_task_running(jobid, taskid, previous, startedat, task)
-              task.run(executioncontext) match {
+              val taskoutcome = task.run(executioncontext)
+              val taskcancelled = executioncontext.jobContext.cancellationScope.exists(_.isCancelled)
+              completedtasks = completedtasks :+ ((task, taskoutcome, executioncontext, taskcancelled))
+              taskoutcome match {
                 case TaskSucceeded(res) =>
                   _capture_calltree_if_needed(jobid, executioncontext, failed = false, startednanos)
                   successresponse = Some(res)
@@ -1402,6 +1439,9 @@ final class InMemoryJobEngine(
             failure.map(JobResult.Failure.apply).orElse(successresponse.map(JobResult.Success.apply))
         }
         _mark_base_completion(jobid, deferred)
+        completedtasks.foreach { case (task, outcome, executioncontext, taskcancelled) =>
+          _observe_task_canonical_outcome(task, outcome, executioncontext, taskcancelled)
+        }
     }
   }
 
@@ -1439,6 +1479,7 @@ final class InMemoryJobEngine(
       admittedFromQueue = forcedTaskId.isDefined
     )
     val outcome = task.run(executioncontext)
+    val taskcancelled = executioncontext.jobContext.cancellationScope.exists(_.isCancelled)
     outcome match {
       case TaskSucceeded(res) =>
         _capture_calltree_if_needed(jobid, executioncontext, failed = false, startednanos)
@@ -1466,8 +1507,36 @@ final class InMemoryJobEngine(
         _update_deferred_result(jobid, Some(JobResult.Failure(c)))
     }
     _settle_if_ready(jobid)
+    _observe_task_canonical_outcome(task, outcome, executioncontext, taskcancelled)
     outcome
   }
+
+  private def _observe_task_canonical_outcome(
+    task: JobTask,
+    outcome: TaskOutcome,
+    executioncontext: ExecutionContext,
+    cancelled: Boolean
+  ): Unit =
+    try {
+      task.observeCanonicalOutcome(outcome, executioncontext, cancelled)
+    } catch {
+      case _: InterruptedException =>
+        Thread.currentThread.interrupt()
+      case NonFatal(_) => ()
+    }
+
+  private def _observe_task_admission_failure(
+    task: JobTask,
+    conclusion: Conclusion,
+    executioncontext: ExecutionContext
+  ): Unit =
+    try {
+      task.observeAdmissionFailure(conclusion, executioncontext)
+    } catch {
+      case _: InterruptedException =>
+        Thread.currentThread.interrupt()
+      case NonFatal(_) => ()
+    }
 
   private def _job_execution_context(
     jobid: JobId,
@@ -2073,7 +2142,9 @@ final class InMemoryJobEngine(
               cancellationScope = Some(_cancellation_scope(jobid))
             )
             val executioncontext = _job_execution_context(jobid, ctx, jobcontext)
-            compensation.run(executioncontext) match {
+            val compensationoutcome = compensation.run(executioncontext)
+            val compensationcancelled = executioncontext.jobContext.cancellationScope.exists(_.isCancelled)
+            compensationoutcome match {
               case TaskSucceeded(_) =>
                 _capture_calltree_if_needed(jobid, executioncontext, failed = false, startednanos)
                 _append_task_finished(
@@ -2107,6 +2178,12 @@ final class InMemoryJobEngine(
                 _mark_recovery_required(jobid, s"compensation failed for task ${originalTaskId.value}: ${message.getOrElse(c.show)}")
                 _append_timeline(jobid, "task.compensation.failed", Some(originalTaskId), parent, message)
             }
+            _observe_task_canonical_outcome(
+              compensation,
+              compensationoutcome,
+              executioncontext,
+              compensationcancelled
+            )
           case None =>
             val message = s"no compensation action for task ${originalTaskId.value}"
             _mark_task_compensation(jobid, originalTaskId, Some("missing"), Some(message), recoveryRequired = true)
@@ -2558,10 +2635,7 @@ final class InMemoryJobEngine(
     Option(_durable_jobs.get(jobid)).orElse(Option(_runtime_jobs.get(jobid)))
 
   private def _request_summary(tasks: List[JobTask]): Option[String] =
-    tasks.headOption.flatMap {
-      case m: ActionTask => Some(m.action.show)
-      case _ => None
-    }
+    tasks.headOption.flatMap(_.requestSummary)
 
   private def _validate_submit_option(option: JobSubmitOption): Consequence[Unit] =
     option.scheduledStartAt match {
@@ -2576,22 +2650,14 @@ final class InMemoryJobEngine(
     }
 
   private def _request_parameters(tasks: List[JobTask]): Map[String, String] =
-    tasks.headOption.collect {
-      case m: ActionTask =>
-        val req = m.action.request
-        val args = req.arguments.map(a => a.name -> a.value.toString).toMap
-        val switches = req.switches.map(s => s.name -> s.value.toString).toMap
-        val props = req.properties.map(p => p.name -> p.value.toString).toMap
-        args ++ switches ++ props
-    }.getOrElse(Map.empty)
+    tasks.headOption.map(_.requestParameters).getOrElse(Map.empty)
 
   private def _default_submit_option(tasks: List[JobTask]): JobSubmitOption =
-    tasks.headOption match {
-      case Some(ActionTask(_, _: QueryAction, _, _, _, _)) =>
-        JobSubmitOption(persistence = JobPersistencePolicy.Ephemeral)
-      case _ =>
-        JobSubmitOption(persistence = JobPersistencePolicy.Persistent)
-    }
+    JobSubmitOption(
+      persistence = tasks.headOption
+        .map(_.defaultPersistence)
+        .getOrElse(JobPersistencePolicy.Persistent)
+    )
 
   private def _append_event(
     jobid: JobId,

@@ -7,16 +7,17 @@ import org.goldenport.protocol.operation.OperationRequest
 import org.goldenport.protocol.spec as spec
 import org.goldenport.cncf.http.RuntimeDashboardMetrics
 import org.goldenport.cncf.testutil.TestComponentFactory
+import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Dec. 23, 2025
- *  version Dec. 23, 2025
- * @version Apr. 29, 2026
+ *  version Apr. 29, 2026
+ * @version Jul. 23, 2026
  * @author  ASAMI, Tomoharu
  */
-class ServiceSpec extends AnyWordSpec with Matchers {
+class ServiceSpec extends AnyWordSpec with Matchers with GivenWhenThen {
 
   "Service" should {
 
@@ -29,24 +30,33 @@ class ServiceSpec extends AnyWordSpec with Matchers {
     }
 
     "observe direct request construction failures through common diagnostics" in {
+      Given("a directly invoked Service installed in its owning subsystem")
       val operation = _InvalidRequestOperation()
       val service = spec.ServiceDefinition(
         name = "media",
         operations = spec.OperationDefinitionGroup(NonEmptyVector.of(operation))
       )
       val protocol = Protocol(services = spec.ServiceDefinitionGroup(Vector(service)))
-      val component = TestComponentFactory.create("direct_service_validation", protocol)
-      val target = component.services.services.head
-      val before = RuntimeDashboardMetrics.operationRequestValidationDiagnosticCounts.getOrElse("content_type", 0L)
+      val subsystem = TestComponentFactory.emptySubsystem("direct-service-validation")
+      val component = TestComponentFactory.create("direct_service_validation", protocol, subsystem = subsystem)
+      subsystem.add(component)
+      try {
+        val target = component.services.services.head
+        val before = RuntimeDashboardMetrics.operationRequestValidationDiagnosticCounts.getOrElse("content_type", 0L)
 
-      val result = target.invokeRequest(Request.of(
-        component = "direct_service_validation",
-        service = "media",
-        operation = "upload"
-      ))
+        When("request construction fails before ActionCall creation")
+        val result = target.invokeRequest(Request.of(
+          component = "direct_service_validation",
+          service = "media",
+          operation = "upload"
+        ))
 
-      result shouldBe a[Consequence.Failure[_]]
-      RuntimeDashboardMetrics.operationRequestValidationDiagnosticCounts.getOrElse("content_type", 0L) should be > before
+        Then("the common operation-request validation observer records the structured diagnostic")
+        result shouldBe a[Consequence.Failure[_]]
+        RuntimeDashboardMetrics.operationRequestValidationDiagnosticCounts.getOrElse("content_type", 0L) should be > before
+      } finally {
+        subsystem.shutdown()
+      }
     }
   }
 }

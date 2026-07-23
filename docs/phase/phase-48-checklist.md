@@ -101,27 +101,62 @@ Evidence:
 ## OE-05: Automatic Operation Chokepoint
 
 Stage Status:
-- Current status: NEXT
+- Current status: DONE
 - Owner: CNCF operation runtime maintainers
 - Update rule: Mark IN_PROGRESS only after OE-04 closes; mark DONE only when
   every OE-05 checklist item is complete.
 
-- [ ] Capture only after operation resolution and authorization.
-- [ ] Capture the bounded framework fact without requiring operation-local
+- [x] Capture only after operation resolution and authorization.
+- [x] Capture the bounded framework fact without requiring operation-local
   evaluation declaration metadata.
-- [ ] Record framework-owned structural start facts before business execution.
-- [ ] Record one terminal success/failure/timeout/cancellation fact after
+- [x] Record framework-owned structural start facts before business execution.
+- [x] Record one terminal success/failure/timeout/cancellation fact after
   canonical response bindings are known.
-- [ ] Prove no-op sinks perform no provider invocation.
-- [ ] Prove sink failure cannot change the business outcome.
-- [ ] Suppress delivery back to the same sink when sink handling invokes a CNCF
+- [x] Prove no-op sinks perform no provider invocation.
+- [x] Prove sink failure cannot change the business outcome.
+- [x] Suppress delivery back to the same sink when sink handling invokes a CNCF
   operation.
-- [ ] Bound stalled and saturated sinks without indefinite operation delay.
+- [x] Bound stalled and saturated sinks without indefinite operation delay.
+
+Evidence:
+- `src/main/scala/org/goldenport/cncf/operation/evaluation/OperationEvaluationActionTask.scala`
+- `src/main/scala/org/goldenport/cncf/operation/evaluation/OperationEvaluationDeliveryRuntime.scala`
+- `src/test/scala/org/goldenport/cncf/operation/evaluation/OperationEvaluationAutomaticCaptureSpec.scala`
+- `src/test/scala/org/goldenport/cncf/operation/evaluation/OperationEvaluationDeliveryRuntimeSpec.scala`
+- Focused OE-05 implementation specs: 31 tests passed.
+- Internal dispatch and Job settlement regression set: 40 tests passed across
+  operation capture, delivery bounds, runtime context, Job correlation,
+  Service validation, Rule admission, and Workflow execution, with two
+  pre-existing pending Service property placeholders.
+- Event reception regression set: 36 tests passed, including same-transaction,
+  same-Job, asynchronous continuation, rollback, and controlled scheduling.
+- Review fixes cover mandatory resolved-route identity, internal
+  ComponentLogic/Rule/Workflow/JCL task preparation, settlement-safe terminal
+  classification, capture-bookkeeping isolation, decorated Job metadata,
+  compensation terminal completion, per-Task cancellation classification,
+  post-authorization request-construction failure, Event continuation capture,
+  pre-Task query-only and Job admission rejection, and interruption-safe
+  auxiliary observation. Prepared cross-component tasks now bind capture to the
+  target component Action scope, preserving inherited security and Job context
+  while preventing delivery to the caller component sink.
+- The full-suite regression fix preserves already resolved ad-hoc
+  `ComponentLogic` Actions outside the operation-route boundary while keeping
+  resolvable internal component API calls on the authorization and capture
+  chokepoint. The focused command/query/capture regression set passes 48 tests.
+- Prepared tasks retain their target component scope across detached
+  compensation execution, so ComponentLogic and JCL compensation facts cannot
+  leak into the primary caller sink. The expanded OE-05, JCL, command,
+  operation-semantics, Service, Rule, Workflow, and Event regression set passes
+  103 tests with two pre-existing Service placeholders pending.
+- Fresh post-fix re-review found no actionable behavior, naming,
+  executable-specification, or documentation finding. The exact staged
+  snapshot passed the full CNCF suite: 331 suites completed, 2,307 tests
+  succeeded, and no test failed.
 
 ## OE-06: Supplemental Internal DSL
 
 Stage Status:
-- Current status: OPEN
+- Current status: NEXT
 - Owner: CNCF operation runtime maintainers
 - Update rule: Mark IN_PROGRESS only after OE-05 closes; mark DONE only when
   every OE-06 checklist item is complete.

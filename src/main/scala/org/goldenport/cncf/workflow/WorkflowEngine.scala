@@ -17,7 +17,7 @@ import org.simplemodeling.model.datatype.EntityId
 
 /*
  * @since   Apr. 22, 2026
- * @version Jul. 16, 2026
+ * @version Jul. 23, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class WorkflowDefinitionId(
@@ -408,7 +408,10 @@ object WorkflowEngine {
             s"workflow action: $resolvedselector"
           )
         )
-        subsystem().jobEngine.submit(List(task), ctx, option).map(jobid => (jobid, resolvedselector))
+        subsystem()._prepare_operation_task(action, task, ctx).flatMap { case (preparedtask, preparedcontext) =>
+          subsystem().jobEngine.submit(List(preparedtask), preparedcontext, option)
+            .map(jobid => (jobid, resolvedselector))
+        }
       }
 
     private def _resolve_target_action(

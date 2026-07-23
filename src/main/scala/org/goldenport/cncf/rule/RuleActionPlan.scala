@@ -17,7 +17,7 @@ import org.goldenport.cncf.subsystem.resolver.OperationResolver
  * contains no repository, ActionCall, provider, or thread handle.
  *
  * @since   Jul. 16, 2026
- * @version Jul. 16, 2026
+ * @version Jul. 23, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class RuleActionPlanId(value: String) {
@@ -156,7 +156,10 @@ final class RuleActionAdmission(
             requestSummary = Some(s"rule:${job.ruleId.value}:${job.selector}"),
             executionNotes = Vector(s"rule action plan: ${job.id.value}")
           )
-          component.logic.submitJob(List(task), ctx, option).map(RuleActionOutcome.JobSubmitted(job, _))
+          subsystem._prepare_operation_task(action, task, ctx).flatMap { case (preparedtask, preparedcontext) =>
+            component.logic.submitJob(List(preparedtask), preparedcontext, option)
+              .map(RuleActionOutcome.JobSubmitted(job, _))
+          }
         }
       case recommendation: RuleActionPlan.Recommendation =>
         Consequence.success(RuleActionOutcome.RecommendationRecorded(recommendation))

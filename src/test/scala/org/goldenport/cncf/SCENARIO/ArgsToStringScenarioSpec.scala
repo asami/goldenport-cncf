@@ -40,7 +40,8 @@ import org.scalatest.matchers.should.Matchers
 /*
  * @since   Jan.  1, 2026
  *  version Apr. 11, 2026
- * @version May. 11, 2026
+ *  version May. 11, 2026
+ * @version Jul. 23, 2026
  * @author  ASAMI, Tomoharu
  */
 class ArgsToStringScenarioSpec extends AnyWordSpec with GivenWhenThen
@@ -65,7 +66,7 @@ class ArgsToStringScenarioSpec extends AnyWordSpec with GivenWhenThen
       val args = Array("query", "hello")
 
       When("executing the primary scenario")
-      val result = TestComponentUsingComponent().service.invokeCli(args)
+      val result = _with_test_component(None)(_.service.invokeCli(args))
 
       Then("execution succeeds and returns an OperationRequest string")
       result should be_success("Query(hello)")
@@ -76,7 +77,9 @@ class ArgsToStringScenarioSpec extends AnyWordSpec with GivenWhenThen
       val args = Array("query", "hello")
 
       When("executing the primary scenario")
-      val result = TestComponentUsingComponentWithCustomService().service.invokeCli(args)
+      val result = _with_test_component(Some(CustomTestService.Factory()))(
+        _.service.invokeCli(args)
+      )
 
       Then("execution succeeds and returns an OperationRequest string")
       result should be_success("Query(hello)")
@@ -189,40 +192,51 @@ final case class ScenarioResult(
 
 object TestComponent {
   def runCli(args: Array[String]): ScenarioResult = {
-    val component = TestComponentUsingComponent()
-    component.logic.makeOperationRequest(args) match {
-      case org.goldenport.Consequence.Success(opreq) =>
-        opreq match {
-          case action: Action =>
-            val executioncontext = ExecutionContext.test()
-            val correlationid = executioncontext.observability.correlationId
-            val core = ActionCall.Core(action, executioncontext, None, correlationid)
-            val ac = action.createCall(core)
-            val response = for {
-              res <- component.logic.execute(ac)
-              text <- component.logic.makeStringOperationResponse(res)
-            } yield text
-            ScenarioResult(isSuccess = true, value = response.toOption.get)
-        }
-      case org.goldenport.Consequence.Failure(err) =>
-        // println("MESSAGE      : " + err.message)
-        // println("STATUS       : " + err.status)
-        // println("OBSERVATION  : " + err.observation)
-        // println("DESCRIPTOR   : " + err.observation.descriptor)
-        ScenarioResult(isSuccess = false, value = err.toString)
+    _with_test_component(None) { component =>
+      component.logic.makeOperationRequest(args) match {
+        case org.goldenport.Consequence.Success(opreq) =>
+          opreq match {
+            case action: Action =>
+              val executioncontext = ExecutionContext.test()
+              val correlationid = executioncontext.observability.correlationId
+              val core = ActionCall.Core(action, executioncontext, None, correlationid)
+              val ac = action.createCall(core)
+              val response = for {
+                res <- component.logic.execute(ac)
+                text <- component.logic.makeStringOperationResponse(res)
+              } yield text
+              ScenarioResult(isSuccess = true, value = response.toOption.get)
+          }
+        case org.goldenport.Consequence.Failure(err) =>
+          // println("MESSAGE      : " + err.message)
+          // println("STATUS       : " + err.status)
+          // println("OBSERVATION  : " + err.observation)
+          // println("DESCRIPTOR   : " + err.observation.descriptor)
+          ScenarioResult(isSuccess = false, value = err.toString)
+      }
     }
   }
 }
 
-def TestComponentUsingComponent(): Component =
-  TestComponentFactory.create("test", TestProtocol.protocol)
-
-def TestComponentUsingComponentWithCustomService(): Component = {
-  TestComponentFactory.create(
-    "test",
-    TestProtocol.protocol,
-    Some(CustomTestService.Factory())
-  )
+private def _with_test_component[A](
+  servicefactory: Option[Component.ServiceFactory]
+)(
+  body: Component => A
+): A = {
+  val subsystem = TestComponentFactory.emptySubsystem("test")
+  val component =
+    TestComponentFactory.create(
+      "test",
+      TestProtocol.protocol,
+      servicefactory,
+      subsystem
+    )
+  subsystem.add(component)
+  try {
+    body(component)
+  } finally {
+    subsystem.shutdown()
+  }
 }
 
 case class CustomTestService(

@@ -2718,10 +2718,12 @@ Active CNCF development item in Phase 48.
   - OE-04 (DONE) — inherited sink capabilities through `ScopeContext` and carried one
     immutable, operation-scoped evaluation context through
     `ExecutionContext.CncfCore`, including Job resume and retry identity;
-  - OE-05 (NEXT) — wrap the common resolved-operation pipeline so authorization and
-    admission precede business execution and automatic terminal evidence
-    follows framework response bindings;
-  - OE-06 — add protected supplemental Corpus/Experiment internal DSL helpers;
+  - OE-05 (DONE) — wrapped the common resolved-operation pipeline so
+    authorization precedes business execution and bounded automatic terminal
+    evidence follows framework response bindings across direct, Job, Event,
+    Rule, Workflow, JCL, Service, query-only, and cross-component paths;
+  - OE-06 (NEXT) — add protected supplemental Corpus/Experiment internal DSL
+    helpers;
   - OE-07 — attach bounded recording status to execution metadata and publish only
     policy-admitted correlation through CallTree/observability;
   - OE-08 — prove disabled, optional, required, nested, retry, cancellation,

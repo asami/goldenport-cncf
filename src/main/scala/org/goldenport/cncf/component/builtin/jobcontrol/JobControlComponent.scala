@@ -8,7 +8,7 @@ import org.goldenport.cncf.action.{Action, ActionCall, ActionEngine, CommandActi
 import org.goldenport.cncf.component.{Component, ComponentCreate, ComponentDescriptor, ComponentId, ComponentInstanceId}
 import org.goldenport.cncf.entity.EntityStore
 import org.goldenport.cncf.entity.runtime.{EntityKind, EntityMemoryPolicy, EntityRuntimeDescriptor, PartitionStrategy, WorkingSetPolicy, WorkingSetPolicyEvaluator, WorkingSetPolicySource}
-import org.goldenport.cncf.job.{ActionId, ActionTask, JobBatchDefinition, JobBatchSubmissionResult, JobControlCommand, JobControlRequest, JobDefinition, JobDefinitionEntity, JobDefinitionSnapshot, JobDefinitionStatus, JobFailureHook, JobId, JobPersistencePolicy, JobProfileComparison, JobProfileReconstructor, JobResult, JobSubmitOption, JobTaskDetail, JobTraceTree, TaskId}
+import org.goldenport.cncf.job.{ActionId, ActionTask, JobBatchDefinition, JobBatchSubmissionResult, JobControlCommand, JobControlRequest, JobDefinition, JobDefinitionEntity, JobDefinitionSnapshot, JobDefinitionStatus, JobFailureHook, JobId, JobPersistencePolicy, JobProfileComparison, JobProfileReconstructor, JobResult, JobSubmitOption, JobTask, JobTaskDetail, JobTraceTree, TaskId}
 import org.goldenport.cncf.job.{JobEntityCollections, JobQueryReadModel, JobTimelinePage}
 import org.goldenport.cncf.event.ReceptionDomainEvent
 import org.goldenport.cncf.subsystem.resolver.OperationResolver
@@ -29,7 +29,7 @@ import org.goldenport.value.BaseContent
  *  version Mar. 29, 2026
  *  version Apr. 22, 2026
  *  version May. 31, 2026
- * @version Jul. 16, 2026
+ * @version Jul. 23, 2026
  * @author  ASAMI, Tomoharu
  */
 final class JobControlComponent() extends Component {
@@ -520,26 +520,39 @@ object JobControlComponent {
             declaredProfile = declaredProfile,
             jobDefinitionSnapshot = definitionSnapshot
           )
-          component.jobEngine.submit(List(task), ctx, option).map { jobid =>
-            (jobid, component.logic.awaitJobResult(jobid))
+          _prepare_operation_task(action, task, ctx).flatMap { case (preparedtask, preparedcontext) =>
+            component.jobEngine.submit(List(preparedtask), preparedcontext, option).map { jobid =>
+              (jobid, component.logic.awaitJobResult(jobid))
+            }
           }
         }
+      }
+
+    private def _prepare_operation_task(
+      action: Action,
+      task: ActionTask,
+      context: org.goldenport.cncf.context.ExecutionContext
+    ): Consequence[(JobTask, org.goldenport.cncf.context.ExecutionContext)] =
+      component.subsystem match {
+        case Some(subsystem) => subsystem._prepare_operation_task(action, task, context)
+        case None => Consequence.serviceUnavailable("component subsystem is not available")
       }
 
     private def _resolve_compensation_task(
       compensation: Option[JobFailureHook],
       parameters: Map[String, String]
-    )(using ctx: org.goldenport.cncf.context.ExecutionContext): Consequence[Option[ActionTask]] =
+    )(using ctx: org.goldenport.cncf.context.ExecutionContext): Consequence[Option[JobTask]] =
       compensation match {
         case None => Consequence.success(None)
         case Some(hook) =>
-          _resolve_target_action(hook.action, parameters ++ hook.parameters).map { case (target, action) =>
-            Some(ActionTask(
+          _resolve_target_action(hook.action, parameters ++ hook.parameters).flatMap { case (target, action) =>
+            val task = ActionTask(
               ActionId.create("jcl.compensation", ctx.clock.instant(), ctx.idGeneration),
               action,
               target.actionEngine,
               Some(target)
-            ))
+            )
+            _prepare_operation_task(action, task, ctx).map(x => Some(x._1))
           }
       }
 

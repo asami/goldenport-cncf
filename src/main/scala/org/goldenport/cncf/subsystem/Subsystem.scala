@@ -42,6 +42,7 @@ import org.goldenport.cncf.protocol.OperationResponseFormatter
 import org.goldenport.cncf.protocol.OperationRequestValidationObserver
 import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.cncf.operation.{AssociationBindingOperationDefinition, ChildEntityBindingOperationDefinition, CmlOperationAssociationBinding, CmlOperationChildEntityBinding, CmlOperationImageBinding, ImageBindingOperationDefinition}
+import org.goldenport.cncf.operation.evaluation.{OperationEvaluationActionTask, OperationEvaluationAttemptCapture, OperationEvaluationDeliveryRuntime, OperationEvaluationOperationIdentity}
 import org.goldenport.cncf.security.{AdminAuthorizationPolicy, IngressSecurityResolver, OperationAuthorization, OperationAuthorizationProvider}
 import org.goldenport.cncf.config.{ResolvedParameter, ResolvedParameters}
 import org.goldenport.cncf.config.RuntimeConfig
@@ -57,7 +58,7 @@ import org.goldenport.cncf.observability.ServiceContainerRuntimeObservation
  *  version Jan. 31, 2026
  *  version Feb.  4, 2026
  *  version Apr. 30, 2026
- * @version Jul. 22, 2026
+ * @version Jul. 23, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Subsystem(
@@ -98,6 +99,7 @@ final class Subsystem(
   private val _event_receptions = mutable.LinkedHashMap.empty[String, EventReception]
   private val _entity_access_metrics: EntityAccessMetricsRegistry = EntityAccessMetricsRegistry.shared
   private val _component_metrics: ComponentMetricsRegistry = ComponentMetricsRegistry.shared
+  private val _operation_evaluation_delivery_runtime = new OperationEvaluationDeliveryRuntime()
   private val _site_base_url_keys = Vector(
     RuntimeConfig.SiteBaseUrlKey,
     RuntimeConfig.RuntimeSiteBaseUrlKey,
@@ -248,7 +250,14 @@ final class Subsystem(
         }
       case None => Consequence.unit
     }
-    val failures = Vector(jobresult, mcpresult, serviceresult).collect {
+    val evaluationresult =
+      try {
+        _operation_evaluation_delivery_runtime.close()
+        Consequence.unit
+      } catch {
+        case e: Throwable => Consequence.Failure(org.goldenport.Conclusion.from(e))
+      }
+    val failures = Vector(jobresult, mcpresult, evaluationresult, serviceresult).collect {
       case Consequence.Failure(conclusion) => conclusion
     }
     failures.reduceOption(_ ++ _) match {
@@ -558,30 +567,131 @@ final class Subsystem(
   private def _execute_resolved_operation(
     route: (Component, ServiceDefinition, OperationDefinition),
     request: Request,
-    executioncontext: ExecutionContext
+    executioncontext: ExecutionContext,
+    queryonly: Boolean = false
   ): Consequence[OperationResponse] = {
     val (component, _, _) = route
     val domainrequest = _domain_request(request)
     given ExecutionContext = executioncontext
     _authorize_operation(route, executioncontext).flatMap { _ =>
+      val preparedcontext = _prepare_operation_evaluation_context(route, executioncontext)
+      val attemptcapture = _operation_evaluation_attempt_capture(route)
       val operationdomainrequest = _operation_business_request(route, domainrequest)
-      val oprequest = component.logic.makeOperationRequest(operationdomainrequest)
+      val operationrequest = component.logic.makeOperationRequest(operationdomainrequest)
       _observe_operation_request_validation_failure(
         route,
         operationdomainrequest,
-        oprequest,
-        executioncontext
+        operationrequest,
+        preparedcontext
       )
-      oprequest.flatMap {
+      val result = operationrequest.flatMap {
+        case action: QueryAction =>
+          component.logic._execute_action(
+            action,
+            preparedcontext,
+            _operation_evaluation_task_decorator(route, domainrequest, attemptcapture)
+          )
+        case action: Action if !queryonly =>
+          component.logic._execute_action(
+            action,
+            preparedcontext,
+            _operation_evaluation_task_decorator(route, domainrequest, attemptcapture)
+          )
         case action: Action =>
-          component.logic.executeAction(action, executioncontext).flatMap { response =>
-            _apply_operation_association_bindings(route, domainrequest, response, executioncontext)
-          }
+          Consequence.operationInvalid(s"CompositeQuery accepts only Query operations: ${action.request.name}")
         case _ =>
           Consequence.argumentInvalid("OperationRequest must be Action")
       }
+      result match {
+        case Consequence.Failure(conclusion) =>
+          attemptcapture._record_admission_failure(conclusion, preparedcontext)
+        case Consequence.Success(_) =>
+          ()
+      }
+      result
     }
   }
+
+  private def _prepare_operation_evaluation_context(
+    route: (Component, ServiceDefinition, OperationDefinition),
+    context: ExecutionContext
+  ): ExecutionContext = {
+    ExecutionContext
+      .prepareOperationEvaluation(context, _operation_evaluation_identity(route))
+      .toOption
+      .getOrElse(context)
+  }
+
+  private def _operation_evaluation_identity(
+    route: (Component, ServiceDefinition, OperationDefinition)
+  ): OperationEvaluationOperationIdentity = {
+    val (component, service, operation) = route
+    OperationEvaluationOperationIdentity.fromResolvedRoute(component.name, service.name, operation.name)
+  }
+
+  private def _operation_evaluation_task_decorator(
+    route: (Component, ServiceDefinition, OperationDefinition),
+    request: Request,
+    attemptcapture: OperationEvaluationAttemptCapture,
+    executionscope: Option[ScopeContext] = None
+  ): org.goldenport.cncf.job.ActionTask => org.goldenport.cncf.job.JobTask =
+    task => new OperationEvaluationActionTask(
+      task,
+      attemptcapture,
+      (response, context) => _apply_operation_association_bindings(route, request, response, context),
+      executionscope
+    )
+
+  private def _operation_evaluation_attempt_capture(
+    route: (Component, ServiceDefinition, OperationDefinition)
+  ): OperationEvaluationAttemptCapture =
+    new OperationEvaluationAttemptCapture(
+      _operation_evaluation_identity(route),
+      _operation_evaluation_delivery_runtime
+    )
+
+  private[cncf] def _prepare_operation_task(
+    action: Action,
+    task: org.goldenport.cncf.job.ActionTask,
+    context: ExecutionContext
+  ): Consequence[(org.goldenport.cncf.job.JobTask, ExecutionContext)] =
+    _resolve_route(action.request) match {
+      case Some(route) =>
+        _prepare_operation_task(route, action, task, context)
+      case None =>
+        Consequence.operationNotFound("operation route")
+    }
+
+  private[cncf] def _prepare_component_operation_task(
+    action: Action,
+    task: org.goldenport.cncf.job.ActionTask,
+    context: ExecutionContext
+  ): Consequence[(org.goldenport.cncf.job.JobTask, ExecutionContext)] =
+    _resolve_route(action.request) match {
+      case Some(route) =>
+        _prepare_operation_task(route, action, task, context)
+      case None =>
+        Consequence.success(task -> context)
+    }
+
+  private def _prepare_operation_task(
+    route: (Component, ServiceDefinition, OperationDefinition),
+    action: Action,
+    task: org.goldenport.cncf.job.ActionTask,
+    context: ExecutionContext
+  ): Consequence[(org.goldenport.cncf.job.JobTask, ExecutionContext)] =
+    _authorize_operation(route, context).map { _ =>
+      val targetscope = route._1.scopeContext.createChildScope(ScopeKind.Action, action.name)
+      val preparedcontext = _prepare_operation_evaluation_context(route, context.withScope(targetscope))
+      val domainrequest = _domain_request(action.request)
+      val attemptcapture = _operation_evaluation_attempt_capture(route)
+      _operation_evaluation_task_decorator(
+        route,
+        domainrequest,
+        attemptcapture,
+        Some(targetscope)
+      )(task) -> preparedcontext
+    }
 
   private[cncf] def _invoke_spi(
     binding: ResolvedSpiBinding,
@@ -665,8 +775,6 @@ final class Subsystem(
       }
       normalizedrequest <- _prepare_filebundle_parameters(route._3, request)
       response <- {
-        val (component, _, _) = route
-        val domainrequest = _domain_request(normalizedrequest)
         val resolvedexecutioncontext =
           _with_http_runtime_parameters(executioncontext, httprequest)
         given ExecutionContext = resolvedexecutioncontext
@@ -675,26 +783,10 @@ final class Subsystem(
           _query_only_trace_job_requested(normalizedrequest)
         ) {
           Consequence.operationInvalid("CompositeQuery accepts only direct Query execution; trace-job is not allowed")
-        } else _authorize_operation(route, resolvedexecutioncontext).flatMap { _ =>
-            val operationdomainrequest = _operation_business_request(route, domainrequest)
-            val oprequest = component.logic.makeOperationRequest(operationdomainrequest)
-            _observe_operation_request_validation_failure(
-              route,
-              operationdomainrequest,
-              oprequest,
-              resolvedexecutioncontext
-            )
-            oprequest.flatMap {
-              case action: QueryAction =>
-                component.logic.executeAction(action, resolvedexecutioncontext).map { response =>
-                  ExecutionResult(response, resolvedexecutioncontext.runtime.executionMetadata)
-                }
-              case action: Action =>
-                Consequence.operationInvalid(s"CompositeQuery accepts only Query operations: ${action.request.name}")
-              case _ =>
-                Consequence.argumentInvalid("OperationRequest must be Action")
-            }
-        }
+        } else
+          _execute_resolved_operation(route, normalizedrequest, resolvedexecutioncontext, queryonly = true).map { response =>
+            ExecutionResult(response, resolvedexecutioncontext.runtime.executionMetadata)
+          }
       }
     } yield response
     _observe_execute_failure(request, r)
@@ -1016,15 +1108,58 @@ final class Subsystem(
 
   def executeAction(action: Action): Consequence[OperationResponse] =
     _resolve_route(action.request) match {
-      case Some((component, service, operation)) =>
+      case Some(_) =>
         IngressSecurityResolver.resolve(action.request).flatMap { security =>
-          given ExecutionContext = security.executionContext
-          _authorize_operation((component, service, operation), security.executionContext).flatMap { _ =>
-          component.logic.executeAction(action, security.executionContext)
-          }
+          _execute_action_c(action, security.executionContext)
         }
       case None =>
         Consequence.operationNotFound("operation route")
+    }
+
+  private[cncf] def _execute_action_c(
+    action: Action,
+    context: ExecutionContext
+  ): Consequence[OperationResponse] =
+    _resolve_route(action.request) match {
+      case Some(route) =>
+        _execute_action_c(route, action, context)
+      case None =>
+        Consequence.operationNotFound("operation route")
+    }
+
+  private[cncf] def _execute_component_action_c(
+    component: Component,
+    action: Action,
+    context: ExecutionContext
+  ): Consequence[OperationResponse] =
+    _resolve_route(action.request) match {
+      case Some(route) =>
+        _execute_action_c(route, action, context)
+      case None =>
+        component.logic._execute_action(action, context, identity)
+    }
+
+  private def _execute_action_c(
+    route: (Component, ServiceDefinition, OperationDefinition),
+    action: Action,
+    context: ExecutionContext
+  ): Consequence[OperationResponse] =
+    _authorize_operation(route, context).flatMap { _ =>
+      val domainrequest = _domain_request(action.request)
+      val preparedcontext = _prepare_operation_evaluation_context(route, context)
+      val attemptcapture = _operation_evaluation_attempt_capture(route)
+      val result = route._1.logic._execute_action(
+        action,
+        preparedcontext,
+        _operation_evaluation_task_decorator(route, domainrequest, attemptcapture)
+      )
+      result match {
+        case Consequence.Failure(conclusion) =>
+          attemptcapture._record_admission_failure(conclusion, preparedcontext)
+        case Consequence.Success(_) =>
+          ()
+      }
+      result
     }
 
   private def _authorize_operation(

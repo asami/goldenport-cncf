@@ -7,14 +7,12 @@ import org.goldenport.datatype.{ContentType, MimeType}
 import org.goldenport.http.{HttpRequest, HttpResponse, HttpStatus}
 import org.goldenport.protocol.{Request, Response}
 import org.goldenport.protocol.service.{Service as ProtocolService}
-import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
-import org.goldenport.cncf.action.{Action, CommandAction, QueryAction}
-import org.goldenport.cncf.component.{Component, ComponentLogic}
-import org.goldenport.cncf.context.{CorrelationId, ExecutionContext, ScopeKind}
+import org.goldenport.protocol.operation.OperationResponse
+import org.goldenport.cncf.component.ComponentLogic
+import org.goldenport.cncf.context.{ExecutionContext, ScopeKind}
 import org.goldenport.cncf.context.GlobalRuntimeContext
 import org.goldenport.cncf.cli.RunMode
 import org.goldenport.cncf.protocol.OperationResponseFormatter
-import org.goldenport.cncf.protocol.OperationRequestValidationObserver
 
 /*
  * @since   Apr. 11, 2025
@@ -23,40 +21,26 @@ import org.goldenport.cncf.protocol.OperationRequestValidationObserver
  *  version Jan. 21, 2026
  *  version Feb. 19, 2026
  *  version Mar. 28, 2026
- * @version Apr. 30, 2026
+ *  version Apr. 30, 2026
+ * @version Jul. 23, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class Service extends ProtocolService with Service.CCore.Holder {
-  private def invoke(
+  private def _invoke(
     name: String,
     request: Request,
-    executionContext: ExecutionContext,
-    correlationId: Option[CorrelationId]
+    executioncontext: ExecutionContext
   ): Consequence[OperationResponse] = {
-    val oprequest = logic.makeOperationRequest(request)
-    OperationRequestValidationObserver.observeFailure(
-      componentName = logic.component.name,
-      serviceName = serviceDefinition.name,
-      operationName = name,
-      operation = _operation_definition(name),
-      request = request,
-      result = oprequest,
-      context = executionContext
+    val routed = request.copy(
+      component = Some(logic.component.name),
+      service = Some(serviceDefinition.name),
+      operation = name
     )
-    oprequest.flatMap {
-      case action: CommandAction =>
-        logic.executeAction(action, executionContext)
-      case action: QueryAction =>
-        logic.executeAction(action, executionContext)
-      case action: Action =>
-        logic.executeAction(action, executionContext)
-      case _ =>
-        Consequence.operationInvalid("OperationRequest must be Action")
+    logic.component.subsystem match {
+      case Some(subsystem) => subsystem.executeOperationResponse(routed, executioncontext)
+      case None => Consequence.serviceUnavailable("Service invocation requires an installed subsystem")
     }
   }
-
-  private def _operation_definition(name: String) =
-    serviceDefinition.operations.operations.toVector.find(_.name == name)
 
   def invokeCli(args: Array[String]): Consequence[String] =
     for {
@@ -82,9 +66,8 @@ abstract class Service extends ProtocolService with Service.CCore.Holder {
       )
     val _ = servicescope
     val ctx = _execution_context_from_request(request)
-    val cid = ctx.observability.correlationId
     for {
-      opres <- invoke(request.operation, request, ctx, cid)
+      opres <- _invoke(request.operation, request, ctx)
       res <- Consequence.success(_to_response(request, opres))
     } yield res
   }
@@ -97,12 +80,6 @@ abstract class Service extends ProtocolService with Service.CCore.Holder {
 
   private def _run_mode: RunMode =
     GlobalRuntimeContext.current.map(_.runtimeMode).getOrElse(RunMode.Command)
-
-  private def _execute(p: OperationRequest) = p match {
-    case action: Action =>
-      logic.executeAction(action)
-    case m => ???
-  }
 
   private def _execution_context_from_request(
     request: Request
