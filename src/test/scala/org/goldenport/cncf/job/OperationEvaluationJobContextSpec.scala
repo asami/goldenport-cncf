@@ -4,8 +4,8 @@ import java.time.{Clock, Duration, Instant, ZoneOffset}
 import java.util.concurrent.atomic.AtomicInteger
 import scala.collection.mutable.ArrayBuffer
 import org.goldenport.{Conclusion, Consequence}
-import org.goldenport.cncf.context.{ExecutionContext, IdGenerationContext}
-import org.goldenport.cncf.operation.evaluation.{CorpusCaseReference, CorpusEvaluationCorrelation, CorpusRevisionReference, ExperimentArmReference, ExperimentEvaluationCorrelation, ExperimentReference, ExperimentRunReference, OperationEvaluationAssignment, OperationEvaluationCorrelation, OperationEvaluationName, OperationEvaluationOperationIdentity, OperationEvaluationSinkIdentity, OperationEvaluationText}
+import org.goldenport.cncf.context.{ExecutionContext, IdGenerationContext, ScopeContext}
+import org.goldenport.cncf.operation.evaluation.{CorpusCaseReference, CorpusEvaluationCorrelation, CorpusRevisionReference, ExperimentArmReference, ExperimentEvaluationCorrelation, ExperimentReference, ExperimentRunReference, OperationEvaluationAssignment, OperationEvaluationCorrelation, OperationEvaluationCrossSinkPolicy, OperationEvaluationCrossSinkRoute, OperationEvaluationName, OperationEvaluationOperationIdentity, OperationEvaluationSinkIdentity, OperationEvaluationText}
 import org.goldenport.conclusion.Disposition
 import org.goldenport.protocol.operation.OperationResponse
 import org.scalatest.GivenWhenThen
@@ -37,11 +37,13 @@ final class OperationEvaluationJobContextSpec
       val correlations = ArrayBuffer.empty[OperationEvaluationCorrelation]
       val activesinks = ArrayBuffer.empty[Vector[OperationEvaluationSinkIdentity]]
       val assignments = ArrayBuffer.empty[Option[OperationEvaluationAssignment]]
+      val policies = ArrayBuffer.empty[OperationEvaluationCrossSinkPolicy]
       val task = CorrelationTask(
         attempts = attempts,
         correlations = correlations,
         activesinks = activesinks,
-        assignments = assignments
+        assignments = assignments,
+        policies = policies
       )
       val operation = _success(OperationEvaluationOperationIdentity.createC("catalog", "pricing", "quote"))
       val (corpus, experiment) = _admitted_correlations()
@@ -49,8 +51,9 @@ final class OperationEvaluationJobContextSpec
         _success(OperationEvaluationName.parseC("variant-b")),
         Some(_success(OperationEvaluationText.parseC("execution-plan-b")))
       )
+      val policy = _cross_sink_policy()
       val prepared0 = _success(ExecutionContext.prepareOperationEvaluation(
-        _execution_context(clock.now()),
+        _execution_context(clock.now(), policy),
         operation,
         Some(corpus),
         Some(experiment),
@@ -93,6 +96,7 @@ final class OperationEvaluationJobContextSpec
           Some(assignment),
           Some(assignment)
         )
+        policies.synchronized(policies.toVector) shouldBe Vector(policy, policy)
       } finally {
         engine2.shutdown()
       }
@@ -104,6 +108,7 @@ final class OperationEvaluationJobContextSpec
     correlations: ArrayBuffer[OperationEvaluationCorrelation],
     activesinks: ArrayBuffer[Vector[OperationEvaluationSinkIdentity]],
     assignments: ArrayBuffer[Option[OperationEvaluationAssignment]],
+    policies: ArrayBuffer[OperationEvaluationCrossSinkPolicy],
     actionid: ActionId = ActionId.generate()
   ) extends JobTask {
     def actionId: ActionId = actionid
@@ -122,6 +127,9 @@ final class OperationEvaluationJobContextSpec
       assignments.synchronized {
         assignments += attempted.operationEvaluation.invocation.flatMap(_.assignment)
       }
+      policies.synchronized {
+        policies += attempted.cncfCore.scope.operationEvaluationCrossSinkPolicy
+      }
       if (attempts.incrementAndGet() == 1)
         TaskFailed(Conclusion.simple("planned operation evaluation retry").copy(
           disposition = Disposition(Disposition.UserAction.RetryLater)
@@ -131,14 +139,29 @@ final class OperationEvaluationJobContextSpec
     }
   }
 
-  private def _execution_context(instant: Instant): ExecutionContext = {
+  private def _execution_context(
+    instant: Instant,
+    policy: OperationEvaluationCrossSinkPolicy
+  ): ExecutionContext = {
     val clock = Clock.fixed(instant, ZoneOffset.UTC)
     val ids = IdGenerationContext.deterministic(
       IdGenerationContext.IdNamespace("operation_evaluation", "job"),
       clock,
       "retry-resume"
     )
-    ExecutionContext.withIdGenerationContext(ExecutionContext.create(clock), ids)
+    val context = ExecutionContext.withIdGenerationContext(ExecutionContext.create(clock), ids)
+    context.withScope(ScopeContext.withOperationEvaluationCrossSinkPolicy(
+      context.cncfCore.scope,
+      policy
+    ))
+  }
+
+  private def _cross_sink_policy(): OperationEvaluationCrossSinkPolicy = {
+    val route = _success(OperationEvaluationCrossSinkRoute.createC(
+      "experiment-evaluation-sink",
+      "corpus-evaluation-sink"
+    ))
+    _success(OperationEvaluationCrossSinkPolicy.createC(Vector(route), 3))
   }
 
   private def _admitted_correlations(): (CorpusEvaluationCorrelation, ExperimentEvaluationCorrelation) = {

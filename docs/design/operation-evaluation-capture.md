@@ -416,6 +416,15 @@ invokes another CNCF operation, automatic and supplemental delivery back to
 that same sink is suppressed. Delivery to a different sink is allowed only by
 explicit cross-sink policy and remains subject to the same bounds.
 
+Cross-sink policy is subsystem-owned immutable scope policy. Its default has
+no allowed routes. An allowed route identifies the source and target SPI
+contract independently, so permitting Experiment-to-Corpus forwarding does
+not permit the reverse direction. The policy also sets a finite maximum active
+sink depth. Same-sink recursion remains forbidden regardless of an allowed
+route, and exceeding the depth bound is rejected before provider invocation.
+Automatic delivery and direct caller-side standard SPI invocation consult the
+same policy and produce the same bounded structural limitation kinds.
+
 The context is causal rather than thread-local. CNCF propagates it through
 synchronous nested calls, context rebinding, scheduler handoff, Job/Task
 submission, retry, and any asynchronous operation invocation made with the

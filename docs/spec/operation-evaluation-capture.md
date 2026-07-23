@@ -282,7 +282,17 @@ component/instance and MUST NOT depend on service object identity.
 - A provider MUST NOT clear, replace, or forge the delivery context.
 - Same-sink suppression MUST preserve normal execution of the induced
   operation.
-- Cross-sink forwarding MUST be disabled unless an explicit policy permits it.
+- Cross-sink forwarding MUST be disabled unless an immutable subsystem-owned
+  policy allowlists the source-contract to target-contract route.
+- Cross-sink route permission MUST be directional. Permission for one
+  direction MUST NOT imply permission for the reverse route.
+- Cross-sink policy MUST define a finite maximum active-sink depth, and the
+  runtime MUST reject a route before provider invocation when adding the
+  target would exceed that depth.
+- Same-sink recursion MUST remain suppressed even when a cross-sink route is
+  configured.
+- Automatic delivery and direct caller-side standard SPI invocation MUST use
+  the same effective cross-sink policy and limitation classification.
 - Permitted cross-sink forwarding MUST remain bounded by depth, timeout,
   concurrency, queue, and byte policies.
 - Suppression or rejection MUST produce safe structural diagnostics without
@@ -332,6 +342,7 @@ Later Phase 48 executable specifications MUST prove the following matrix:
 | Retry and Job resume | Logical correlation is retained; attempt/fact identity is distinct and idempotent. |
 | Nested operation | Child automatic facts have parent correlation but no implicit membership inheritance. |
 | Same-sink recursion | Recursive delivery is suppressed while the induced operation keeps its normal semantics. |
+| Cross-sink forwarding | Default and reverse routes are suppressed; an explicit directional allowlist admits only its target within the finite depth bound, consistently for automatic and direct SPI delivery. |
 | Queue/byte saturation | Delivery is bounded and reports rejection/drop without indefinite waiting. |
 | Supplemental DSL | Application facts share correlation, carry application source, and pass through UnitOfWork/SPI. |
 | Supplemental operation abort | Staged intents are discarded and no supplemental provider call occurs. |

@@ -43,7 +43,7 @@ import org.goldenport.cncf.protocol.OperationResponseFormatter
 import org.goldenport.cncf.protocol.OperationRequestValidationObserver
 import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.cncf.operation.{AssociationBindingOperationDefinition, ChildEntityBindingOperationDefinition, CmlOperationAssociationBinding, CmlOperationChildEntityBinding, CmlOperationDefinition, CmlOperationImageBinding, ImageBindingOperationDefinition}
-import org.goldenport.cncf.operation.evaluation.{CmlOperationEvaluationDeclaration, EvaluationAdmissionRequirement, OperationEvaluationActionTask, OperationEvaluationAdmission, OperationEvaluationAdmissionDiagnostic, OperationEvaluationAdmissionRequest, OperationEvaluationAttemptCapture, OperationEvaluationDeliveryRuntime, OperationEvaluationLimitation, OperationEvaluationLimitationKind, OperationEvaluationOperationIdentity}
+import org.goldenport.cncf.operation.evaluation.{CmlOperationEvaluationDeclaration, EvaluationAdmissionRequirement, OperationEvaluationActionTask, OperationEvaluationAdmission, OperationEvaluationAdmissionDiagnostic, OperationEvaluationAdmissionRequest, OperationEvaluationAttemptCapture, OperationEvaluationCrossSinkPolicy, OperationEvaluationDeliveryRuntime, OperationEvaluationLimitation, OperationEvaluationLimitationKind, OperationEvaluationOperationIdentity}
 import org.goldenport.cncf.security.{AdminAuthorizationPolicy, IngressSecurityResolver, OperationAuthorization, OperationAuthorizationProvider}
 import org.goldenport.cncf.config.{ResolvedParameter, ResolvedParameters}
 import org.goldenport.cncf.config.RuntimeConfig
@@ -70,7 +70,9 @@ final class Subsystem(
   val configuration: ResolvedConfiguration,
   val aliasResolver: AliasResolver = GlobalRuntimeContext.current.map(_.aliasResolver).getOrElse(AliasResolver.empty),
   @deprecatedName("runMode", "0.5.1")
-  runmode: RunMode = GlobalRuntimeContext.current.map(_.runtimeMode).getOrElse(RunMode.Server)
+  runmode: RunMode = GlobalRuntimeContext.current.map(_.runtimeMode).getOrElse(RunMode.Server),
+  @deprecatedName("operationEvaluationCrossSinkPolicyOption", "0.5.1")
+  operationevaluationcrosssinkpolicyoption: Option[OperationEvaluationCrossSinkPolicy] = None
 ) {
   final case class ExecutionResult(
     response: OperationResponse,
@@ -116,6 +118,10 @@ final class Subsystem(
   private var _service_container_runtime: Option[ServiceContainerRuntime] = None
   private var _mcp_client_runtime: Option[CodexMcpRuntimeAssembly] = None
   private var _operation_tool_runtime: Option[OperationToolRuntimeRegistry] = None
+  private val _operation_evaluation_cross_sink_policy =
+    operationevaluationcrosssinkpolicyoption
+      .orElse(scopecontext.flatMap(_.operationEvaluationCrossSinkPolicyOption))
+      .getOrElse(OperationEvaluationCrossSinkPolicy.disabled)
 
   def globalRuntimeContext: GlobalRuntimeContext = {
     val a = _find_global_runtime_context(scopecontext)
@@ -368,14 +374,21 @@ final class Subsystem(
 
   // TODO SubsystemContext extends ScopeContext
   private val _subsystem_scope_context: ScopeContext =
-    scopecontext.getOrElse {
-      ScopeContext(
-        kind = ScopeKind.Subsystem,
-        name = name,
-        parent = None,
-        observabilityContext = ExecutionContext.create().observability
-      )
-    }
+    scopecontext
+      .map(ScopeContext.withOperationEvaluationCrossSinkPolicy(
+        _,
+        _operation_evaluation_cross_sink_policy
+      ))
+      .getOrElse {
+        ScopeContext(
+          kind = ScopeKind.Subsystem,
+          name = name,
+          parent = None,
+          observabilityContext = ExecutionContext.create().observability,
+          operationEvaluationCrossSinkPolicyOption =
+            Some(_operation_evaluation_cross_sink_policy)
+        )
+      }
 
   private def _inject_context(name: String, comp: Component): Component = {
     val sc = Component.Context(

@@ -642,6 +642,8 @@ enum OperationEvaluationLimitationKind(val token: String) {
   case Saturated extends OperationEvaluationLimitationKind("saturated")
   case Overflow extends OperationEvaluationLimitationKind("overflow")
   case ReentrantSuppressed extends OperationEvaluationLimitationKind("reentrant-suppressed")
+  case CrossSinkSuppressed extends OperationEvaluationLimitationKind("cross-sink-suppressed")
+  case CrossSinkDepthExceeded extends OperationEvaluationLimitationKind("cross-sink-depth-exceeded")
   case Unavailable extends OperationEvaluationLimitationKind("unavailable")
   case Unsupported extends OperationEvaluationLimitationKind("unsupported")
   case ConfidentialityRestricted extends OperationEvaluationLimitationKind("confidentiality-restricted")

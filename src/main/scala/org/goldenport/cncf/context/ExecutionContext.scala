@@ -302,10 +302,11 @@ object ExecutionContext {
       val idgeneration = binding.map(_.idGeneration).getOrElse(_id_generation_context_for_rebound(i.cncfCore.idGeneration, runtime))
       val core = binding.map(_core_with_profile(i.core, _)).getOrElse(_core_for_rebound(i.core, runtime))
       val executioncontrol = binding.map(_.control).getOrElse(i.cncfCore.executionControl)
+      val scope = _operation_evaluation_scope_for_rebound(i.cncfCore.scope, runtime)
       i.copy(
         core = core,
         cncfCore = i.cncfCore.copy(
-          scope = runtime,
+          scope = scope,
           runtime = runtime,
           idGeneration = idgeneration,
           executionControl = executioncontrol
@@ -320,15 +321,24 @@ object ExecutionContext {
     runtime: RuntimeContext
   ): ExecutionContext = ctx match {
     case i: Instance =>
+      val scope = _operation_evaluation_scope_for_rebound(i.cncfCore.scope, runtime)
       i.copy(
         cncfCore = i.cncfCore.copy(
-          scope = runtime,
+          scope = scope,
           runtime = runtime
         )
       )
     case _ =>
       ctx
   }
+
+  private def _operation_evaluation_scope_for_rebound(
+    source: ScopeContext,
+    runtime: RuntimeContext
+  ): ScopeContext =
+    source.operationEvaluationCrossSinkPolicyOption
+      .map(ScopeContext.withOperationEvaluationCrossSinkPolicy(runtime, _))
+      .getOrElse(runtime)
 
   def withExecutionInvocation(
     ctx: ExecutionContext,

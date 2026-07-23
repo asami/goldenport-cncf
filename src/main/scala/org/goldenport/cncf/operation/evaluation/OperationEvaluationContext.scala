@@ -151,3 +151,83 @@ object OperationEvaluationContext {
   val MAXIMUM_ACTIVE_SINKS: Int = 16
   val empty: OperationEvaluationContext = OperationEvaluationContext()
 }
+
+final case class OperationEvaluationCrossSinkRoute private (
+  sourceContract: OperationEvaluationName,
+  targetContract: OperationEvaluationName
+) {
+  def permits(
+    source: OperationEvaluationSinkIdentity,
+    target: OperationEvaluationSinkIdentity
+  ): Boolean =
+    source.contract == sourceContract && target.contract == targetContract
+
+  def toRecord: Record = Record.data(
+    "sourceContract" -> sourceContract.print,
+    "targetContract" -> targetContract.print
+  )
+}
+
+object OperationEvaluationCrossSinkRoute {
+  def createC(
+    sourcecontract: String,
+    targetcontract: String
+  ): Consequence[OperationEvaluationCrossSinkRoute] =
+    for {
+      source <- OperationEvaluationName.parseC(sourcecontract)
+      target <- OperationEvaluationName.parseC(targetcontract)
+    } yield OperationEvaluationCrossSinkRoute(source, target)
+}
+
+final case class OperationEvaluationCrossSinkPolicy private (
+  allowedRoutes: Vector[OperationEvaluationCrossSinkRoute],
+  maximumDepth: Int
+) {
+  def limitation(
+    activesinks: Vector[OperationEvaluationSinkIdentity],
+    target: OperationEvaluationSinkIdentity
+  ): Option[OperationEvaluationLimitationKind] =
+    activesinks.lastOption.flatMap { source =>
+      if (activesinks.contains(target))
+        Some(OperationEvaluationLimitationKind.ReentrantSuppressed)
+      else if (!allowedRoutes.exists(_.permits(source, target)))
+        Some(OperationEvaluationLimitationKind.CrossSinkSuppressed)
+      else if (activesinks.size >= maximumDepth)
+        Some(OperationEvaluationLimitationKind.CrossSinkDepthExceeded)
+      else
+        None
+    }
+
+  def toRecord: Record = Record.data(
+    "allowedRoutes" -> allowedRoutes.map(_.toRecord),
+    "maximumDepth" -> maximumDepth
+  )
+}
+
+object OperationEvaluationCrossSinkPolicy {
+  val MAXIMUM_DEPTH: Int = OperationEvaluationContext.MAXIMUM_ACTIVE_SINKS
+  val disabled: OperationEvaluationCrossSinkPolicy =
+    OperationEvaluationCrossSinkPolicy(Vector.empty, 1)
+
+  def createC(
+    allowedroutes: Vector[OperationEvaluationCrossSinkRoute],
+    maximumdepth: Int
+  ): Consequence[OperationEvaluationCrossSinkPolicy] =
+    if (maximumdepth < 1)
+      Consequence.argumentInvalid("maximumDepth", "positive integer", maximumdepth)
+    else if (maximumdepth > MAXIMUM_DEPTH)
+      Consequence.argumentLimitExceeded(
+        "maximumDepth",
+        MAXIMUM_DEPTH,
+        maximumdepth,
+        "operation-evaluation.cross-sink"
+      )
+    else if (allowedroutes.nonEmpty && maximumdepth < 2)
+      Consequence.argumentInvalid(
+        "maximumDepth",
+        "at least 2 when cross-sink routes are allowed",
+        maximumdepth
+      )
+    else
+      Consequence.success(OperationEvaluationCrossSinkPolicy(allowedroutes.distinct, maximumdepth))
+}

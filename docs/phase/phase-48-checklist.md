@@ -246,7 +246,7 @@ Stage Status:
   calls, and exactly-once terminal emission.
 - [ ] Cover payload safety, sink failure isolation, and component-instance
   isolation.
-- [ ] Cover same-sink recursion suppression, explicit cross-sink behavior,
+- [x] Cover same-sink recursion suppression, explicit cross-sink behavior,
   causal context propagation, timeout, queue saturation, overflow, and bounded
   drop diagnostics.
 - [ ] Cover supplemental commit release, operation abort, and post-commit
@@ -285,9 +285,23 @@ Implementation Progress:
   replacing them with a generic ingress context.
 - The focused suites and `Test/compile` pass after review-fix. A fresh
   read-only re-review found no actionable behavioral, naming, or executable-
-  specification findings; OE-08A is ready for its validated release commit.
-- OE-08 remains open for the consolidated required-scenario matrix, including
-  explicit cross-sink behavior and SPI route evidence.
+  specification findings; OE-08A closed in release commit `c7bec615`.
+- OE-08B adds immutable subsystem-owned directional cross-sink routes with
+  default deny and a finite active-sink depth. Same-sink recursion remains
+  forbidden regardless of route configuration.
+- Automatic delivery and caller-side standard SPI wrappers use the same policy
+  decision. Context rebinding and Job retry/resume retain the policy and active
+  sink ancestry.
+- OE-08B focused validation passes 49 tests across context, Job, automatic
+  capture, bounded delivery, and standard SPI suites; `Test/compile` passes.
+- Review-fix organized the two modified large specifications into semantic
+  subsections. Fresh read-only re-review found no actionable behavioral,
+  naming, executable-specification, or documentation finding.
+- Release validation passed the full CNCF suite: 333 suites completed, 2,354
+  tests succeeded, no test failed, 2 were canceled, 1 was ignored, and 59
+  remained pending.
+- OE-08 remains open for the consolidated required-scenario matrix and any
+  gaps it exposes.
 
 OE-08A Modified Scala File Compliance Ledger:
 
@@ -306,6 +320,22 @@ OE-08A Modified Scala File Compliance Ledger:
 | `src/test/scala/org/goldenport/cncf/job/OperationEvaluationJobContextSpec.scala` | whole-file pass | whole-file pass | 83 focused tests; `Test/compile` | OE-08A release commit |
 | `src/test/scala/org/goldenport/cncf/operation/evaluation/OperationEvaluationAdmissionSpec.scala` | whole-file pass | whole-file pass | 83 focused tests; `Test/compile` | OE-08A release commit |
 | `src/test/scala/org/goldenport/cncf/operation/evaluation/OperationEvaluationModelSpec.scala` | whole-file pass | whole-file pass | 83 focused tests; `Test/compile` | OE-08A release commit |
+
+OE-08B Modified Scala File Compliance Ledger:
+
+| File | Naming | Executable specification | Validation | Commit |
+| --- | --- | --- | --- | --- |
+| `src/main/scala/org/goldenport/cncf/context/ExecutionContext.scala` | whole-file pass | not a spec | 49 focused tests; `Test/compile` | OE-08B release commit |
+| `src/main/scala/org/goldenport/cncf/context/ScopeContext.scala` | whole-file pass; inherited `observability_Context` is a required parent API override | not a spec | 49 focused tests; `Test/compile` | OE-08B release commit |
+| `src/main/scala/org/goldenport/cncf/operation/evaluation/OperationEvaluationContext.scala` | whole-file pass | not a spec | 49 focused tests; `Test/compile` | OE-08B release commit |
+| `src/main/scala/org/goldenport/cncf/operation/evaluation/OperationEvaluationDeliveryRuntime.scala` | whole-file pass | not a spec | 49 focused tests; `Test/compile` | OE-08B release commit |
+| `src/main/scala/org/goldenport/cncf/operation/evaluation/OperationEvaluationModel.scala` | whole-file pass | not a spec | 49 focused tests; `Test/compile` | OE-08B release commit |
+| `src/main/scala/org/goldenport/cncf/spi/evaluation/OperationEvaluationSink.scala` | whole-file pass | not a spec | 49 focused tests; `Test/compile` | OE-08B release commit |
+| `src/main/scala/org/goldenport/cncf/subsystem/Subsystem.scala` | whole-file pass | not a spec | 49 focused tests; `Test/compile` | OE-08B release commit |
+| `src/test/scala/org/goldenport/cncf/context/OperationEvaluationContextSpec.scala` | whole-file pass | whole-file pass after semantic subsection review-fix | 49 focused tests; `Test/compile` | OE-08B release commit |
+| `src/test/scala/org/goldenport/cncf/job/OperationEvaluationJobContextSpec.scala` | whole-file pass | whole-file pass | 49 focused tests; `Test/compile` | OE-08B release commit |
+| `src/test/scala/org/goldenport/cncf/operation/evaluation/OperationEvaluationAutomaticCaptureSpec.scala` | whole-file pass | whole-file pass | 49 focused tests; `Test/compile` | OE-08B release commit |
+| `src/test/scala/org/goldenport/cncf/spi/evaluation/OperationEvaluationSinkSpec.scala` | whole-file pass | whole-file pass after semantic subsection review-fix | 49 focused tests; `Test/compile` | OE-08B release commit |
 
 ## OE-09: Downstream Handoff
 

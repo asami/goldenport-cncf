@@ -309,12 +309,9 @@ final class OperationEvaluationDeliveryRuntime(
     identity: OperationEvaluationSinkIdentity,
     context: ExecutionContext
   ): Option[OperationEvaluationDeliveryResult] =
-    context.operationEvaluation.activeSinks.headOption.map { _ =>
-      val kind =
-        if (context.operationEvaluation.activeSinks.contains(identity)) OperationEvaluationLimitationKind.ReentrantSuppressed
-        else OperationEvaluationLimitationKind.Unsupported
-      _limited(fact, identity, kind)
-    }
+    context.cncfCore.scope.operationEvaluationCrossSinkPolicy
+      .limitation(context.operationEvaluation.activeSinks, identity)
+      .map(_limited(fact, identity, _))
 
   private def _limited(
     fact: OperationEvaluationFact,

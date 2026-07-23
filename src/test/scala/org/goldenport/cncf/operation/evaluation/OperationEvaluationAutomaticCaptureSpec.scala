@@ -11,7 +11,7 @@ import org.goldenport.Consequence
 import org.goldenport.cncf.action.{Action, ActionCall, ActionEngine, CommandAction, CommandExecutionMode, ProcedureActionCall, QueryAction}
 import org.goldenport.cncf.component.{Component, ComponentId, ComponentInit, ComponentInstanceId, ComponentOrigin}
 import org.goldenport.cncf.config.{OperationMode, RuntimeConfig}
-import org.goldenport.cncf.context.{ExecutionContext, SecurityContext}
+import org.goldenport.cncf.context.{ExecutionContext, ScopeContext, SecurityContext}
 import org.goldenport.cncf.job.{ActionId, ActionTask, JobCommandMode, JobContext, JobControlCommand, JobControlOption, JobControlRequest, JobId, JobPersistencePolicy, JobResult, JobRunMode, JobSubmitOption, JobTask, TaskFailed, TaskId, TaskSucceeded}
 import org.goldenport.cncf.security.OperationAuthorizationRule
 import org.goldenport.cncf.spi.evaluation.{CorpusEvaluationSink, CorpusEvaluationSinkSocket, DeterministicCorpusEvaluationSink}
@@ -860,6 +860,82 @@ final class OperationEvaluationAutomaticCaptureSpec
       results.map(_.status) shouldBe Vector(OperationEvaluationDeliveryStatus.Limited)
       results.flatMap(_.limitations).map(_.kind) shouldBe Vector(OperationEvaluationLimitationKind.ReentrantSuppressed)
       fixture.sink.facts shouldBe empty
+    }
+
+    "apply the explicit cross-sink policy before automatic provider invocation" in {
+      Given("two equivalent Corpus targets reached from an active Experiment sink")
+      val deniedfixture = _fixture()
+      val allowedfixture = _fixture()
+      val deniedruntime = new OperationEvaluationDeliveryRuntime()
+      val allowedruntime = new OperationEvaluationDeliveryRuntime()
+      val operation = _success(OperationEvaluationOperationIdentity.createC(
+        "evaluation",
+        "operation",
+        "success"
+      ))
+      val experiment = _success(OperationEvaluationSinkIdentity.createC(
+        "experiment-evaluation-sink",
+        "evaluation",
+        "textus-experiment"
+      ))
+      val route = _success(OperationEvaluationCrossSinkRoute.createC(
+        "experiment-evaluation-sink",
+        "corpus-evaluation-sink"
+      ))
+      val policy = _success(OperationEvaluationCrossSinkPolicy.createC(Vector(route), 2))
+
+      def _active_context_(fixture: Fixture): ExecutionContext = {
+        val prepared = _success(ExecutionContext.prepareOperationEvaluation(
+          fixture.component.logic.executionContext(),
+          operation
+        ))
+        val attempted = _success(ExecutionContext.beginOperationEvaluationAttempt(prepared))
+        _success(ExecutionContext.withActiveOperationEvaluationSink(attempted, experiment))
+      }
+
+      val deniedcontext = _active_context_(deniedfixture)
+      val activeallowed = _active_context_(allowedfixture)
+      val allowedcontext = activeallowed.withScope(
+        ScopeContext.withOperationEvaluationCrossSinkPolicy(
+          activeallowed.cncfCore.scope,
+          policy
+        )
+      )
+      val deniedfact = OperationEvaluationStartFact.create(
+        OperationEvaluationFactId.create(
+          "cross-sink-denied",
+          deniedcontext.clock.instant(),
+          deniedcontext.idGeneration
+        ),
+        deniedcontext.operationEvaluation.correlation.getOrElse(fail("denied correlation missing")),
+        deniedcontext.clock.instant()
+      )
+      val allowedfact = OperationEvaluationStartFact.create(
+        OperationEvaluationFactId.create(
+          "cross-sink-allowed",
+          allowedcontext.clock.instant(),
+          allowedcontext.idGeneration
+        ),
+        allowedcontext.operationEvaluation.correlation.getOrElse(fail("allowed correlation missing")),
+        allowedcontext.clock.instant()
+      )
+
+      try {
+        When("automatic delivery runs under default-deny and allowlisted policies")
+        val denied = deniedruntime.deliverAutomatic(deniedfact, deniedcontext)
+        val allowed = allowedruntime.deliverAutomatic(allowedfact, allowedcontext)
+
+        Then("only the explicitly allowlisted route invokes its provider")
+        denied.map(_.status) shouldBe Vector(OperationEvaluationDeliveryStatus.Limited)
+        denied.flatMap(_.limitations).map(_.kind) shouldBe
+          Vector(OperationEvaluationLimitationKind.CrossSinkSuppressed)
+        deniedfixture.sink.facts shouldBe empty
+        allowed.map(_.status) shouldBe Vector(OperationEvaluationDeliveryStatus.Delivered)
+        allowedfixture.sink.facts shouldBe Vector(allowedfact)
+      } finally {
+        deniedruntime.close()
+        allowedruntime.close()
+      }
     }
     }
   }

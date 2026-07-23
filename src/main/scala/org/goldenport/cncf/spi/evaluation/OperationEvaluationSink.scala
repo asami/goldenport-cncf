@@ -247,15 +247,18 @@ private def _trace[A <: OperationEvaluationFact](
         base.providerInstance
       )
       delivered <-
-        if (ctx.operationEvaluation.isSinkActive(sink))
+        ctx.cncfCore.scope.operationEvaluationCrossSinkPolicy
+          .limitation(ctx.operationEvaluation.activeSinks, sink) match {
+        case Some(kind) =>
           OperationEvaluationDeliveryResult.createC(
             fact.id,
             sink,
             OperationEvaluationDeliveryStatus.Discarded,
-            Vector(OperationEvaluationLimitation(OperationEvaluationLimitationKind.ReentrantSuppressed))
+            Vector(OperationEvaluationLimitation(kind))
           )
-        else
+        case None =>
           ExecutionContext.withActiveOperationEvaluationSink(ctx, sink).flatMap(body)
+        }
       normalized <- OperationEvaluationDeliveryResult.createC(
         fact.id,
         sink,

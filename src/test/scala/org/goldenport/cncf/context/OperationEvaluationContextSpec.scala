@@ -2,9 +2,13 @@ package org.goldenport.cncf.context
 
 import java.time.{Clock, Instant, ZoneOffset}
 import org.goldenport.Consequence
+import org.goldenport.configuration.{Configuration, ConfigurationTrace, ResolvedConfiguration}
 import org.goldenport.cncf.component.{Component, ComponentId, ComponentInit, ComponentInstanceId, ComponentOrigin}
-import org.goldenport.cncf.operation.evaluation.{CorpusCaseReference, CorpusEvaluationCorrelation, CorpusRevisionReference, ExperimentArmReference, ExperimentEvaluationCorrelation, ExperimentReference, ExperimentRunReference, OperationEvaluationAssignment, OperationEvaluationContext, OperationEvaluationName, OperationEvaluationOperationIdentity, OperationEvaluationSinkIdentity, OperationEvaluationText}
+import org.goldenport.cncf.operation.evaluation.{CorpusCaseReference, CorpusEvaluationCorrelation, CorpusRevisionReference, ExperimentArmReference, ExperimentEvaluationCorrelation, ExperimentReference, ExperimentRunReference, OperationEvaluationAssignment, OperationEvaluationContext, OperationEvaluationCrossSinkPolicy, OperationEvaluationCrossSinkRoute, OperationEvaluationLimitationKind, OperationEvaluationName, OperationEvaluationOperationIdentity, OperationEvaluationSinkIdentity, OperationEvaluationText}
+import org.goldenport.cncf.path.AliasResolver
+import org.goldenport.cncf.cli.RunMode
 import org.goldenport.cncf.spi.evaluation.{CorpusEvaluationSinkSocket, DeterministicCorpusEvaluationSink, DeterministicExperimentEvaluationSink, ExperimentEvaluationSinkSocket}
+import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.cncf.testutil.TestComponentFactory
 import org.goldenport.protocol.Protocol
 import org.scalacheck.{Gen, Prop, Test}
@@ -24,11 +28,19 @@ final class OperationEvaluationContextSpec extends AnyWordSpec with Matchers wit
   private val _clock = Clock.fixed(_instant, ZoneOffset.UTC)
 
   "OperationEvaluationContext" should {
+    "preserve causal runtime state" which {
     "preserve immutable invocation and attempt correlation through context rebinding" in {
       Given("a prepared logical operation invocation with an active provider sink")
       val operation = _success(OperationEvaluationOperationIdentity.createC("catalog", "pricing", "quote"))
       val sink = _sink_identity("catalog", "textus-corpus")
-      val base = _execution_context("rebind")
+      val policy = _cross_sink_policy(maximumdepth = 3)
+      val rawbase = _execution_context("rebind")
+      val base = rawbase.withScope(
+        ScopeContext.withOperationEvaluationCrossSinkPolicy(
+          rawbase.cncfCore.scope,
+          policy
+        )
+      )
       val (corpus, experiment) = _admitted_correlations()
       val assignment = OperationEvaluationAssignment(
         _success(OperationEvaluationName.parseC("variant-b")),
@@ -61,6 +73,7 @@ final class OperationEvaluationContextSpec extends AnyWordSpec with Matchers wit
       correlation.experiment shouldBe Some(experiment)
       rebound.operationEvaluation.invocation.flatMap(_.assignment) shouldBe Some(assignment)
       rebound.operationEvaluation.activeSinks shouldBe Vector(sink)
+      rebound.cncfCore.scope.operationEvaluationCrossSinkPolicy shouldBe policy
       val nestedinvocation = nested.operationEvaluation.invocation.getOrElse(fail("nested invocation missing"))
       nestedinvocation.executionId should not be correlation.executionId
       nestedinvocation.parentExecutionId shouldBe Some(correlation.executionId)
@@ -75,7 +88,9 @@ final class OperationEvaluationContextSpec extends AnyWordSpec with Matchers wit
       projected should not include "DeterministicCorpusEvaluationSink"
       projected should not include "provider-payload"
     }
+    }
 
+    "resolve scope-owned evaluation capabilities" which {
     "inherit component-owned evaluation sinks only into descendant scopes" in {
       Given("separate components with installed Corpus and Experiment sinks plus an unrelated sibling")
       val subsystem = TestComponentFactory.emptySubsystem("operation_evaluation_scope")
@@ -102,6 +117,70 @@ final class OperationEvaluationContextSpec extends AnyWordSpec with Matchers wit
       sibling.scopeContext.experimentEvaluationSinkOption shouldBe None
     }
 
+    "inherit subsystem-owned cross-sink policy into component and Action scopes" in {
+      Given("a subsystem assembled with one explicit Experiment-to-Corpus route")
+      val policy = _cross_sink_policy(maximumdepth = 3)
+      val subsystem = Subsystem(
+        name = "operation_evaluation_policy_scope",
+        configuration = ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty),
+        aliasResolver = AliasResolver.empty,
+        runMode = RunMode.Command,
+        operationEvaluationCrossSinkPolicyOption = Some(policy)
+      )
+      val component = _initialized_component(subsystem, "catalog", CorpusComponent())
+      subsystem.add(component)
+
+      When("the component creates a descendant Action scope")
+      val action = component.scopeContext.createChildScope(ScopeKind.Action, "quote")
+
+      Then("both scopes resolve the immutable subsystem policy")
+      component.scopeContext.operationEvaluationCrossSinkPolicy shouldBe policy
+      action.operationEvaluationCrossSinkPolicy shouldBe policy
+    }
+    }
+
+    "bound cross-sink execution" which {
+    "resolve cross-sink routes by current source, target, and finite depth" in {
+      Given("one allowlisted Experiment-to-Corpus route and distinct logical sink identities")
+      val policy = _cross_sink_policy(maximumdepth = 2)
+      val experiment = _sink_identity(
+        "pricing",
+        "textus-experiment",
+        "experiment-evaluation-sink"
+      )
+      val corpus = _sink_identity("catalog", "textus-corpus")
+      val reverse = _sink_identity(
+        "pricing",
+        "textus-experiment-2",
+        "experiment-evaluation-sink"
+      )
+
+      When("same-sink, allowed, reverse, and depth-exhausted routes are evaluated")
+      val same = policy.limitation(Vector(experiment), experiment)
+      val allowed = policy.limitation(Vector(experiment), corpus)
+      val denied = policy.limitation(Vector(corpus), reverse)
+      val exhausted = policy.limitation(Vector(experiment, reverse), corpus)
+      val invalidshallow = OperationEvaluationCrossSinkPolicy.createC(
+        policy.allowedRoutes,
+        1
+      )
+      val invalidoverflow = OperationEvaluationCrossSinkPolicy.createC(
+        Vector.empty,
+        OperationEvaluationCrossSinkPolicy.MAXIMUM_DEPTH + 1
+      )
+
+      Then("same-sink remains forbidden and only the bounded allowlisted direction proceeds")
+      same shouldBe Some(OperationEvaluationLimitationKind.ReentrantSuppressed)
+      allowed shouldBe None
+      denied shouldBe Some(OperationEvaluationLimitationKind.CrossSinkSuppressed)
+      exhausted shouldBe Some(OperationEvaluationLimitationKind.CrossSinkDepthExceeded)
+      invalidshallow shouldBe a[Consequence.Failure[_]]
+      invalidoverflow shouldBe a[Consequence.Failure[_]]
+      OperationEvaluationCrossSinkPolicy.disabled
+        .limitation(Vector(experiment), corpus) shouldBe
+        Some(OperationEvaluationLimitationKind.CrossSinkSuppressed)
+    }
+
     "bound active sink ancestry deterministically" in {
       Given("generated distinct sink identities within and beyond the nesting limit")
       val counts = Gen.choose(1, OperationEvaluationContext.MAXIMUM_ACTIVE_SINKS)
@@ -123,6 +202,7 @@ final class OperationEvaluationContextSpec extends AnyWordSpec with Matchers wit
       Then("all legal ancestries are preserved and the first overflow is rejected")
       checked.passed shouldBe true
       overflow shouldBe a[Consequence.Failure[_]]
+    }
     }
   }
 
@@ -154,12 +234,24 @@ final class OperationEvaluationContextSpec extends AnyWordSpec with Matchers wit
     ExecutionContext.withIdGenerationContext(ExecutionContext.create(_clock), ids)
   }
 
-  private def _sink_identity(socketcomponent: String, providercomponent: String): OperationEvaluationSinkIdentity =
+  private def _sink_identity(
+    socketcomponent: String,
+    providercomponent: String,
+    contract: String = "corpus-evaluation-sink"
+  ): OperationEvaluationSinkIdentity =
     _success(OperationEvaluationSinkIdentity.createC(
-      "corpus-evaluation-sink",
+      contract,
       socketcomponent,
       providercomponent
     ))
+
+  private def _cross_sink_policy(maximumdepth: Int): OperationEvaluationCrossSinkPolicy = {
+    val route = _success(OperationEvaluationCrossSinkRoute.createC(
+      "experiment-evaluation-sink",
+      "corpus-evaluation-sink"
+    ))
+    _success(OperationEvaluationCrossSinkPolicy.createC(Vector(route), maximumdepth))
+  }
 
   private def _initialized_component[A <: Component](
     subsystem: org.goldenport.cncf.subsystem.Subsystem,

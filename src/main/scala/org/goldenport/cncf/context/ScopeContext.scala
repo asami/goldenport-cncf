@@ -14,7 +14,7 @@ import org.goldenport.cncf.datastore.DataStoreSpace
 import org.goldenport.cncf.entity.EntityStoreSpace
 import org.goldenport.cncf.entity.runtime.EntitySpace
 import org.goldenport.cncf.component.Component
-import org.goldenport.cncf.operation.evaluation.OperationEvaluationResolver
+import org.goldenport.cncf.operation.evaluation.{OperationEvaluationCrossSinkPolicy, OperationEvaluationResolver}
 import org.goldenport.cncf.spi.evaluation.{CorpusEvaluationSink, CorpusEvaluationSinkSocket, ExperimentEvaluationSink, ExperimentEvaluationSinkSocket}
 
 /*
@@ -74,6 +74,13 @@ abstract class ScopeContext() extends ObservationDsl with ScopeContext.Core.Hold
 
   def operationEvaluationResolver: OperationEvaluationResolver =
     operationEvaluationResolverOption.getOrElse(OperationEvaluationResolver.disabled)
+
+  def operationEvaluationCrossSinkPolicyOption: Option[OperationEvaluationCrossSinkPolicy] =
+    core.operationEvaluationCrossSinkPolicyOption orElse
+      parent.flatMap(_.operationEvaluationCrossSinkPolicyOption)
+
+  def operationEvaluationCrossSinkPolicy: OperationEvaluationCrossSinkPolicy =
+    operationEvaluationCrossSinkPolicyOption.getOrElse(OperationEvaluationCrossSinkPolicy.disabled)
 
   def corpusEvaluationSinkOption: Option[CorpusEvaluationSink] =
     _local_corpus_evaluation_sink orElse parent.flatMap(_.corpusEvaluationSinkOption)
@@ -142,7 +149,8 @@ object ScopeContext {
     processExecutionDriverOption: Option[ProcessExecutionDriver] = None,
     processExecutionAdmissionOption: Option[ProcessExecutionAdmission] = None,
     scopedConcurrencyAdmissionOption: Option[ScopedConcurrencyAdmission] = None,
-    operationEvaluationResolverOption: Option[OperationEvaluationResolver] = None
+    operationEvaluationResolverOption: Option[OperationEvaluationResolver] = None,
+    operationEvaluationCrossSinkPolicyOption: Option[OperationEvaluationCrossSinkPolicy] = None
   )
   object Core {
     trait Holder {
@@ -182,6 +190,27 @@ object ScopeContext {
       case other => Instance(other.core.copy(aggregateInternalRead = enabled))
     }
 
+  def withOperationEvaluationCrossSinkPolicy(
+    scope: ScopeContext,
+    policy: OperationEvaluationCrossSinkPolicy
+  ): ScopeContext =
+    scope match {
+      case Instance(core) =>
+        Instance(core.copy(operationEvaluationCrossSinkPolicyOption = Some(policy)))
+      case other =>
+        ScopeContext(
+          kind = other.kind,
+          name = other.name,
+          parent = Some(other),
+          observabilityContext = other.observabilityContext.createChild(
+            other,
+            other.kind,
+            other.name
+          ),
+          operationEvaluationCrossSinkPolicyOption = Some(policy)
+        )
+    }
+
   def apply(
     kind: ScopeKind,
     name: String,
@@ -195,7 +224,9 @@ object ScopeContext {
     @deprecatedName("scopedConcurrencyAdmissionOption", "0.5.1")
     scopedconcurrencyadmissionoption: Option[ScopedConcurrencyAdmission] = None,
     @deprecatedName("operationEvaluationResolverOption", "0.5.1")
-    operationevaluationresolveroption: Option[OperationEvaluationResolver] = None
+    operationevaluationresolveroption: Option[OperationEvaluationResolver] = None,
+    @deprecatedName("operationEvaluationCrossSinkPolicyOption", "0.5.1")
+    operationevaluationcrosssinkpolicyoption: Option[OperationEvaluationCrossSinkPolicy] = None
   ): ScopeContext = {
     Instance(
       ScopeContext.Core(
@@ -207,7 +238,8 @@ object ScopeContext {
         processExecutionDriverOption = processexecutiondriveroption,
         processExecutionAdmissionOption = processexecutionadmissionoption,
         scopedConcurrencyAdmissionOption = scopedconcurrencyadmissionoption,
-        operationEvaluationResolverOption = operationevaluationresolveroption
+        operationEvaluationResolverOption = operationevaluationresolveroption,
+        operationEvaluationCrossSinkPolicyOption = operationevaluationcrosssinkpolicyoption
       )
     )
   }

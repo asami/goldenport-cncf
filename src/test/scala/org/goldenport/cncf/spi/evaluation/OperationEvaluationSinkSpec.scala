@@ -4,9 +4,9 @@ import java.time.{Duration, Instant}
 
 import org.goldenport.Consequence
 import org.goldenport.cncf.component.{Component, ComponentId, ComponentInit, ComponentInstanceId, ComponentOrigin}
-import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.cncf.context.{ExecutionContext, ScopeContext}
 import org.goldenport.cncf.http.RuntimeDashboardMetrics
-import org.goldenport.cncf.operation.evaluation.{CorpusCandidateFact, ExperimentObservationFact, OperationEvaluationAttemptId, OperationEvaluationCorrelation, OperationEvaluationDeliveryResult, OperationEvaluationDeliveryStatus, OperationEvaluationExecutionId, OperationEvaluationFactId, OperationEvaluationLabel, OperationEvaluationMeasurement, OperationEvaluationOperationIdentity, OperationEvaluationOutcome, OperationEvaluationSinkIdentity, OperationEvaluationStartFact, OperationEvaluationTerminalFact, OperationEvaluationText}
+import org.goldenport.cncf.operation.evaluation.{CorpusCandidateFact, ExperimentObservationFact, OperationEvaluationAttemptId, OperationEvaluationCorrelation, OperationEvaluationCrossSinkPolicy, OperationEvaluationCrossSinkRoute, OperationEvaluationDeliveryResult, OperationEvaluationDeliveryStatus, OperationEvaluationExecutionId, OperationEvaluationFactId, OperationEvaluationLabel, OperationEvaluationMeasurement, OperationEvaluationOperationIdentity, OperationEvaluationOutcome, OperationEvaluationSinkIdentity, OperationEvaluationStartFact, OperationEvaluationTerminalFact, OperationEvaluationText}
 import org.goldenport.cncf.spi.{SpiContract, SpiProvider, SpiProviderComponent, SpiResolver, SpiSelection, SpiTraceMetadata}
 import org.goldenport.cncf.testutil.TestComponentFactory
 import org.goldenport.protocol.Protocol
@@ -26,6 +26,7 @@ final class OperationEvaluationSinkSpec extends AnyWordSpec with Matchers with G
   private val _instant = Instant.parse("2026-07-23T12:00:00Z")
 
   "Operation Evaluation standard sink SPI" should {
+    "resolve provider capabilities" which {
     "provide independent disabled Corpus and Experiment capabilities when no provider is connected" in {
       Given("optional Corpus and Experiment consumer sockets without provider components")
       given ExecutionContext = ExecutionContext.create()
@@ -90,7 +91,9 @@ final class OperationEvaluationSinkSpec extends AnyWordSpec with Matchers with G
       experiment.facts shouldBe Vector(start, terminal, observation)
       checked.passed shouldBe true
     }
+    }
 
+    "trace and bound installed provider invocation" which {
     "install and trace Corpus and Experiment providers at their calling component sockets" in {
       Given("initialized providers, consumers, and payload-bearing supplemental facts")
       val subsystem = TestComponentFactory.emptySubsystem("evaluation_sink_trace")
@@ -173,6 +176,62 @@ final class OperationEvaluationSinkSpec extends AnyWordSpec with Matchers with G
       delegate.facts shouldBe Vector(candidate)
     }
 
+    "apply the same explicit cross-sink policy at the direct SPI boundary" in {
+      Given("a traced Corpus provider reached from an active Experiment provider")
+      val delegate = _success(DeterministicCorpusEvaluationSink.createC("catalog", "textus-corpus"))
+      val recording = ContextRecordingCorpusSink(delegate)
+      val metadata = SpiTraceMetadata(
+        contract = CorpusEvaluationSink.CONTRACT_NAME,
+        operation = "",
+        socketComponent = "catalog",
+        providerComponent = "textus-corpus"
+      )
+      val traced = CorpusEvaluationSink.traced(recording, metadata)
+      val candidate = _candidate_fact("cross-sink-provider-boundary")
+      val experiment = _success(OperationEvaluationSinkIdentity.createC(
+        ExperimentEvaluationSink.CONTRACT_NAME,
+        "pricing",
+        "textus-experiment"
+      ))
+      val route = _success(OperationEvaluationCrossSinkRoute.createC(
+        ExperimentEvaluationSink.CONTRACT_NAME,
+        CorpusEvaluationSink.CONTRACT_NAME
+      ))
+      val policy = _success(OperationEvaluationCrossSinkPolicy.createC(Vector(route), 2))
+      val deniedbase = ExecutionContext.create()
+      val deniedcontext = _success(
+        ExecutionContext.withActiveOperationEvaluationSink(deniedbase, experiment)
+      )
+      val allowedbase = ExecutionContext.create()
+      val policyscope = ScopeContext.withOperationEvaluationCrossSinkPolicy(
+        allowedbase.cncfCore.scope,
+        policy
+      )
+      val allowedcontext = _success(
+        ExecutionContext.withActiveOperationEvaluationSink(
+          allowedbase.withScope(policyscope),
+          experiment
+        )
+      )
+      val corpus = _success(OperationEvaluationSinkIdentity.createC(
+        CorpusEvaluationSink.CONTRACT_NAME,
+        "catalog",
+        "textus-corpus"
+      ))
+
+      When("the direct SPI call runs first under default deny and then under the allowlist")
+      val denied = traced.submitCandidate(candidate)(using deniedcontext)
+      val allowed = traced.submitCandidate(candidate)(using allowedcontext)
+
+      Then("the default route is discarded and the admitted call preserves both causal sinks")
+      denied.toOption.map(_.status) shouldBe Some(OperationEvaluationDeliveryStatus.Discarded)
+      denied.toOption.toVector.flatMap(_.limitations).map(_.kind.token) shouldBe
+        Vector("cross-sink-suppressed")
+      allowed.toOption.map(_.status) shouldBe Some(OperationEvaluationDeliveryStatus.Delivered)
+      recording.activeSinks shouldBe Vector(Vector(experiment, corpus))
+      delegate.facts shouldBe Vector(candidate)
+    }
+
     "preserve an installed sink failure without replacing its Conclusion" in {
       Given("a Corpus provider that rejects one delivery with a structured failure")
       given ExecutionContext = ExecutionContext.withFrameworkCallTreeEnabled(ExecutionContext.create(), enabled = true)
@@ -196,6 +255,7 @@ final class OperationEvaluationSinkSpec extends AnyWordSpec with Matchers with G
       calltree should include ("outcome=failure")
       calltree should not include "rejected evidence"
       RuntimeDashboardMetrics.spiDiagnosticRecords shouldBe recordsbefore
+    }
     }
   }
 
