@@ -14,6 +14,13 @@ import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.context.GlobalContext
 import org.goldenport.cncf.context.{ExecutionContext, ScopeContext, ScopeKind}
 import org.goldenport.cncf.component.{Component, ComponentCreate, ComponentId, ComponentInstanceId, ComponentOrigin}
+import org.goldenport.cncf.component.repository.fixture.spi.{
+  ArtSceneComponent,
+  ArtSceneComponentFactory,
+  ComponentFactory as PlainAiRunnerComponentFactory,
+  PlainAiRunner,
+  PlainAiRunnerProviderComponent
+}
 import org.goldenport.cncf.subsystem.resolver.OperationResolver.ResolutionResult
 import org.goldenport.cncf.testutil.TestComponentFactory
 import org.goldenport.cncf.workarea.WorkAreaSpace
@@ -28,7 +35,7 @@ import org.scalatest.wordspec.AnyWordSpec
  *  version Apr. 10, 2026
  *  version Apr. 24, 2026
  *  version May. 25, 2026
- * @version Jul. 15, 2026
+ * @version Jul. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with BeforeAndAfterAll with GivenWhenThen {
@@ -189,6 +196,84 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
         subsystem.version shouldBe Some("0.1.0-SNAPSHOT")
         names should contain ("spec")
         metadata.map(_.component) should contain (Some("textus-mcp-rag"))
+      }
+    }
+
+    "isolate assembly descriptors across explicit component CARs" in {
+      Given("two explicit CARs and one assembly descriptor binding each component")
+      _with_temp_dir { root =>
+        val appjar = _create_class_component_jar(
+          root.resolve("assets").resolve("component-file-app.jar"),
+          Seq(classOf[ArtSceneComponentFactory], classOf[ArtSceneComponent])
+        )
+        val providerjar = _create_class_component_jar(
+          root.resolve("assets").resolve("plain-ai-runner-provider.jar"),
+          Seq(
+            classOf[PlainAiRunnerComponentFactory],
+            classOf[PlainAiRunnerProviderComponent],
+            classOf[PlainAiRunner]
+          )
+        )
+        val appdescriptor = root.resolve("component-file-app-descriptor.json")
+        val providerdescriptor = root.resolve("plain-ai-runner-provider-descriptor.json")
+        Files.writeString(
+          appdescriptor,
+          """{"name":"component-file-app","version":"0.1.0","component":"component-file-app"}"""
+        )
+        Files.writeString(
+          providerdescriptor,
+          """{"name":"plain-ai-runner-provider","version":"0.1.0","component":"plain-ai-runner-provider"}"""
+        )
+        val appcar = root.resolve("component-file-app.car")
+        val providercar = root.resolve("plain-ai-runner-provider.car")
+        _create_car(
+          appcar,
+          Seq(
+            "component/main.jar" -> appjar,
+            "component-descriptor.json" -> appdescriptor
+          )
+        )
+        _create_car(
+          providercar,
+          Seq(
+            "component/main.jar" -> providerjar,
+            "component-descriptor.json" -> providerdescriptor
+          )
+        )
+        val descriptor = GenericSubsystemDescriptor(
+          path = root.resolve("assembly-descriptor.yaml"),
+          subsystemName = "explicit-component-files",
+          componentBindings = Vector(
+            GenericSubsystemComponentBinding("component-file-app", version = Some("0.1.0")),
+            GenericSubsystemComponentBinding("plain-ai-runner-provider", version = Some("0.1.0"))
+          )
+        )
+        val configuration = ResolvedConfiguration(
+          Configuration(Map(
+            RuntimeConfig.RepositoryDirKey ->
+              ConfigurationValue.StringValue(
+                s"component-file:${appcar},component-file:${providercar}"
+              )
+          )),
+          ConfigurationTrace.empty
+        )
+
+        When("the subsystem factory assembles both explicit CAR repositories")
+        val subsystem = GenericSubsystemFactory.default(descriptor, configuration = configuration)
+
+        Then("each factory receives only the descriptor owned by its CAR")
+        val expectednames = Set("component-file-app", "plain-ai-runner-provider")
+        val explicitcomponents = subsystem.components.filter(component =>
+          expectednames.contains(component.name)
+        )
+        explicitcomponents.map(_.name).sorted shouldBe Vector(
+          "component-file-app",
+          "plain-ai-runner-provider"
+        )
+        explicitcomponents.flatMap(_.artifactMetadata.flatMap(_.component)).sorted shouldBe Vector(
+          "component-file-app",
+          "plain-ai-runner-provider"
+        )
       }
     }
 
@@ -463,6 +548,26 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
     Using.resource(new ZipOutputStream(Files.newOutputStream(target))) { zos =>
       zos.putNextEntry(new ZipEntry(factoryclassentry))
       zos.closeEntry()
+    }
+    target
+  }
+
+  private def _create_class_component_jar(
+    target: Path,
+    classes: Seq[Class[?]]
+  ): Path = {
+    Option(target.getParent).foreach(Files.createDirectories(_))
+    Using.resource(new ZipOutputStream(Files.newOutputStream(target))) { zos =>
+      classes.foreach { cls =>
+        val entry = s"${cls.getName.replace('.', '/')}.class"
+        val resource = Option(getClass.getClassLoader.getResource(entry))
+          .getOrElse(fail(s"missing test class resource: $entry"))
+        zos.putNextEntry(new ZipEntry(entry))
+        Using.resource(resource.openStream()) { in =>
+          in.transferTo(zos)
+        }
+        zos.closeEntry()
+      }
     }
     target
   }

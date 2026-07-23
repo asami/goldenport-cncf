@@ -22,6 +22,7 @@ driver validation before they are promoted, deferred, or closed.
 | ID | Status | Topic | Note | Phase / Driver | Next Step |
 | --- | --- | --- | --- | --- | --- |
 | OI-2026-05-02-001 | CLOSED | `ExecutionContext`-owned ID generation and `major` / `minor` runtime namespace policy | `id-major-minor-operation-note.md` | Phase 19 / Blog Web app | Policy promoted to `docs/design/id.md`: `major` / `minor` are operational partition keys, default namespace is `single/global`, and remaining descriptor-default work is deferred to Runtime Namespace Descriptor Defaults. |
+| OI-2026-07-23-001 | OPEN | Protected Entity DSL atomic `claim-or-load` / create-if-absent | `journal/2026/07/entity-internal-dsl-claim-or-load-handoff-2026-07-23.md` | Future Entity DSL slice / CBD Support Phase 8 P8-42 driver | Define typed claim result and immutable-identity predicate; implement datastore-native atomic admission through UnitOfWork; prove concurrent SQLite and shared-datastore profiles preserve authorization, CallTree/audit, and View invalidation without component SQL/JDBC. |
 
 ## Intake Rule
 

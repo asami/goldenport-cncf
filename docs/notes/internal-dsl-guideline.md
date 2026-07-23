@@ -117,29 +117,33 @@ may capture that `ExecutionContext` and use it later to execute HTTP
 `UnitOfWork` operations. It should not keep a global HTTP client outside the
 CNCF runtime path.
 
-For component-local user data, component logic should use the embedded
-datastore helper family instead of opening files or embedded databases directly:
+For durable component data, application and domain logic should request a
+purpose-specific persistence operation through its internal DSL or a
+component-owned persistence port. The framework-owned adapter uses the CNCF
+`DataStoreSpace` and component datastore abstraction. Application/domain code
+must not open files or embedded databases, create database connections, choose
+a backend, construct SQL, or use vendor-specific types.
 
-- `component_local_data_dir`;
-- `component_local_data_dir(componentName)`;
-- `embedded_datastore(name)`;
-- `embedded_datastore(componentName, name)`;
-- `embedded_datastore_migrate(store, statements)`;
-- `embedded_datastore_read(store, statement, params)`;
-- `embedded_datastore_update(store, statement, params)`.
+The runtime binds a `ComponentDataStore` through declared configuration. The
+development profile may select SQLite and the production profile may select a
+shared external backend, but this is configuration/infrastructure work, not
+component behavior. A component may use only its admitted component datastore
+and its own named collections; it must not enumerate, query, or migrate another
+component's data merely because both are hosted by one shared datastore.
 
-The default location is `~/.cncf/<component-name>/<store-name>.db`. Runtime
-configuration may override either the component directory or an individual
-store path:
+This boundary also carries security and observability. It centralizes secret
+handling, component/tenant scope, authorization, collection admission,
+redaction, and audit; it also gives datastore effects one CallTree, metric, and
+failure-attribution route. A direct backend escape may be technically possible
+in infrastructure, but it loses those controls and must never become ordinary
+component behavior.
 
-- `cncf.local-data.root`;
-- `cncf.local-data.<component-name>.dir`;
-- `cncf.local-data.<component-name>.<store-name>.path`.
-
-The helper exposes an embedded datastore abstraction. The current backend is
-SQLite, but application/component logic should not depend on SQLite classes,
-JDBC connections, or file naming beyond the documented component-local
-datastore contract.
+Framework-owned embedded-datastore helpers remain an infrastructure adapter
+for legacy/local provisioning. They are not an application-facing way to pass
+SQL statements. New component persistence should first model the required
+operation and record shape, then expose it through an internal DSL or
+persistence port backed by `DataStoreSpace`. The default local provisioning
+location and all backend-specific settings remain launcher/runtime concerns.
 
 For identity and uniqueness work, prefer purpose-specific DSL helpers over
 generic internal search. Examples include:
@@ -211,8 +215,11 @@ When reviewing an internal DSL helper, check:
 - Does structured input parsing flow through `parse_dsl_document`?
 - Does outbound HTTP flow through `http_*` helpers or `UnitOfWorkOp.Http*`
   using the current `ExecutionContext`?
-- Does component-local durable user data flow through
-  `embedded_datastore_*` helpers?
+- Does durable component data flow through a purpose-specific internal DSL or
+  persistence port backed by the component datastore, rather than raw files,
+  SQL, JDBC, or a vendor API?
+- Does the component access only its own admitted datastore collections when a
+  shared `DataStoreSpace` is configured?
 - Is raw access explicit, named, and limited to repair/diagnostic/seed/import
   style purposes?
 

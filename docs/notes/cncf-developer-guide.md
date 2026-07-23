@@ -165,9 +165,8 @@ Examples of preferred helper routes:
 - structured DSL/config parsing: `parse_dsl_document`;
 - component application datastore selection:
   `use_component_application_datastore`, `component_datastore`;
-- component-local user data: `component_local_data_dir`,
-  `embedded_datastore`, `embedded_datastore_read`,
-  `embedded_datastore_update`, `embedded_datastore_migrate`;
+- durable component state: a purpose-specific internal DSL or component-owned
+  persistence port backed by the admitted component datastore;
 - entity, blob, association, child binding, job, event, HTTP, locale,
   timezone, formatting, and shell behavior through existing
   `ActionCallFeaturePart` helper families;
@@ -185,8 +184,10 @@ Component code should not:
   behavior;
 - depend on JVM default locale, timezone, character encoding, date/time
   formatting, number formatting, or currency formatting;
-- open component-local embedded databases or user data files directly when a
-  CNCF internal DSL helper exists;
+- normally avoid opening a database, using JDBC/SQLite/vendor APIs,
+  constructing SQL, or discovering a datastore path/credential from component
+  application or domain logic; see `Durable Component Persistence` for the
+  narrow exception rule;
 - hand-roll tenant filters, lifecycle checks, logical delete filtering, or
   entity identity searches;
 - call raw `DataStoreSpace` / unrestricted `EntityStoreSpace` from business
@@ -309,6 +310,109 @@ provider requirement visible in `assembly-descriptor.yaml` so development
 startup, packaged startup, tests, and deployment review use the same wiring
 model.
 
+## Durable Component Persistence
+
+Use this decision flow before adding persistence to a component:
+
+1. Keep state in memory only when it is explicitly transient and safely
+   rebuildable.
+2. For ordinary domain records, model generated entities and use the generated
+   EntityStore/internal-DSL route.
+3. For durable state that is not an EntityStore collection (for example,
+   immutable review reports, provider cursors, or bounded application audit
+   records), define a component-owned persistence port and purpose-specific
+   internal DSL operations. Its framework adapter uses the admitted component
+   datastore.
+
+### Entity, Aggregate, and View
+
+Ordinary component persistence starts with the Entity layer. Model the durable
+domain records as Entities, let CNCF own their datastore mapping and lifecycle,
+and keep the durable identity and record contract there. Do not replace that
+layer with an application-specific database schema merely because one current
+backend makes it convenient.
+
+Use an Aggregate for a state-changing business operation that spans one or more
+Entities, needs invariant enforcement, or requires an explicit consistency
+boundary. The Aggregate receives the command through the internal DSL/
+`UnitOfWork` path and coordinates Entity changes; it does not issue its own
+database reads or writes.
+
+Use a View for read-side queries, task-oriented projections, and derived
+presentation state. A View projects admitted Entity/Aggregate state through the
+runtime query boundary; it is not an independently maintained shadow database
+or a reason to bypass Entity lifecycle, authorization, or datastore
+observability.
+
+This is also CNCF's CQRS responsiveness route. An Aggregate command establishes
+the required durable Entity consistency boundary, then emits the admitted
+change/projection work that updates reactive Views. A caller can receive an
+immediate command outcome without waiting for unrelated read-model rendering or
+downstream presentation work. Each View must state its freshness, ordering, and
+failure semantics; an asynchronous projection must never pretend that a stale
+View is a read-your-writes result.
+
+CNCF may retain admitted Entity/working-set state in memory and serve eligible
+Views from that managed state. This improves response latency and sustainable
+throughput by avoiding unnecessary datastore round trips and by separating
+write consistency from read projection. It is a runtime-managed persistence
+optimization, not permission for a component to create an unbounded private
+cache or a second source of truth. Memory limits, invalidation, recovery,
+authorization, observability, and fallback-to-datastore behavior remain CNCF
+responsibilities and require executable evidence for the selected profile.
+
+This separation keeps command invariants, durable Entity identity, and read
+projection explicit while preserving replacement of the underlying datastore.
+Use a separate typed persistence port only for state that is genuinely outside
+the Entity/Aggregate/View model, and document why it cannot be represented by
+an Entity or derived View.
+
+The strong default is not to make SQLite, JDBC, SQL, a database connection, a
+database URL, a file path, or a vendor-specific migration part of component
+behavior. The component's domain/application layer should depend on its typed
+persistence port; the framework/infrastructure adapter normally uses
+`DataStoreSpace` and datastore record/query operations.
+
+This is a strong architectural recommendation, not mere API tidiness. Direct
+backend dependence erodes the advantages gained by adopting component
+technology: a component can no longer move unchanged between local and shared
+storage, be independently assembled/deployed, remain isolated while sharing
+infrastructure, or have its runtime backend substituted and tested through one
+framework boundary. The immediate shortcut therefore becomes a component
+lifecycle, portability, and operational-cost liability.
+
+It is also a major security and observability concern. A direct connection can
+bypass CNCF-owned credential handling, component/tenant authorization,
+collection admission, secret redaction, audit policy, and the bounded failure
+vocabulary. It likewise bypasses the `DataStoreSpace` CallTree/metrics/error
+chokepoint, leaving storage latency, failures, retries, record scope, and the
+causal relationship to an operation unobservable or inconsistently recorded.
+For persistence with security, audit, or operational significance, the
+datastore route is therefore the expected design, not an interchangeable
+coding preference.
+
+A common physical database is supported through one configured
+`DataStoreSpace`. It is still not a shared application namespace: a component
+may read and write only its own admitted component datastore and named
+collections. It must not inspect, join, enumerate, modify, or migrate another
+component's records. Record-model changes remain component-owned and use
+supported datastore operations rather than backend DDL.
+
+Tests should exercise the same internal-DSL/persistence-port route using a
+configured datastore fixture. A local SQLite profile is valid integration
+evidence, but component tests should not import SQLite/JDBC classes or open the
+database directly.
+
+An exception is possible only when a framework/infrastructure adapter cannot
+express a required capability through the datastore abstraction. Keep it out of
+domain/application code, document why the datastore route is insufficient,
+bound it to one adapter, and add provider-specific integration evidence. Treat
+the exception as a CNCF capability-gap candidate rather than a new default.
+
+See `docs/notes/internal-dsl-guideline.md` and
+`docs/journal/2026/07/2026-07-23-datastore-boundary-and-shared-database-decision.md`
+for the framework-wide rule and rationale.
+
 ## Component Application Datastore Selection
 
 When a component owns durable application records through generated entity
@@ -396,12 +500,17 @@ textus.local-data.<component>.dir=/path/to/component-dir
 textus.local-data.<component>.application.path=/path/to/application.db
 ```
 
-Handwritten component code can request side-car stores through the internal
-DSL by passing a store name:
+Framework-owned persistence adapters can request a named side-car datastore
+through the internal DSL by passing a store name:
 
 ```scala
 component_datastore("crawler-cache")
 ```
+
+Avoid exposing this handle to domain/application algorithms. Prefer typed
+component persistence operations instead; the adapter maps them to the
+component-owned datastore collection(s). An exceptional direct adapter must
+follow the documented exception rule above.
 
 Use `cncf.*` keys only as compatibility aliases. New component code and
 documentation should prefer `textus.*`.
@@ -666,35 +775,17 @@ place. See `docs/spec/static-web-application.md` for the full contract.
 
 ## Component-Local Embedded Datastore
 
-Use the embedded datastore internal DSL when a component needs durable
-user-local data that is not a CNCF EntityStore collection. A typical example is
-a GeoResolver local Gazetteer.
+The legacy embedded-datastore helper family is framework-owned local
+provisioning infrastructure. Strongly avoid introducing new component
+application logic that sends SQL statements through it. New durable non-entity
+state should follow the `Durable Component Persistence` flow above: define a
+typed persistence port and internal DSL operation, then implement the adapter
+with the component datastore abstraction.
 
-Preferred route:
-
-```scala
-for {
-  store <- embedded_datastore("gazetteer")
-  _ <- embedded_datastore_migrate(store, schemaStatements)
-  rows <- embedded_datastore_read(
-    store,
-    "SELECT * FROM location_entry WHERE normalized_name = ?",
-    Vector(name)
-  )
-} yield rows
-```
-
-By default CNCF stores the database under:
-
-```text
-~/.cncf/<component-name>/<store-name>.db
-```
-
-Configuration can override the root, component directory, or store path with
-`cncf.local-data.root`, `cncf.local-data.<component-name>.dir`, or
-`cncf.local-data.<component-name>.<store-name>.path`. Component code should not
-open SQLite/JDBC directly; SQLite is the first backend behind the embedded
-datastore abstraction, not the component-facing API.
+The launcher/runtime may still provision a local component datastore under a
+user-local location for development. That path and its SQLite implementation
+are not a component contract. The same persistence port must work unchanged
+when the runtime instead binds an external or common datastore.
 
 ## Delegated Operations
 
@@ -923,9 +1014,22 @@ Before accepting component implementation code, check:
   `component_configuration` keys, with `config_*` limited to operation input
   or explicit compatibility behavior?
 - Is structured DSL parsing done through `parse_dsl_document`?
-- Is component-local durable user data accessed through
-  `embedded_datastore_*` helpers?
-- Are raw stores absent from ordinary business logic?
+- Does every durable non-entity state use a purpose-specific internal DSL or
+  persistence port backed by the admitted component datastore?
+- Are SQLite/JDBC/SQL, connections, backend paths, and raw stores strongly
+  avoided in ordinary business logic and component tests? If an exception
+  exists, is it infrastructure-only, documented, bounded, and covered by
+  provider-specific integration evidence?
+- Does the persistence design preserve the component benefits of backend
+  substitution, independent assembly/deployment, component-data isolation, and
+  common-infrastructure coexistence?
+- Does it retain the CNCF security boundary for credentials, authorization,
+  tenant/component scope, redaction, and audit rather than creating a direct
+  backend bypass?
+- Does it retain the datastore observability boundary so CallTree, metrics,
+  failure classification, and operation-to-storage causality remain visible?
+- When a common datastore is configured, does the component remain confined to
+  its own component datastore and named collections?
 - Are tenant, lifecycle, authorization, and logical delete concerns delegated
   to CNCF internal DSL / `UnitOfWork`?
 - Are provider integrations exposed through SPI or component operations rather

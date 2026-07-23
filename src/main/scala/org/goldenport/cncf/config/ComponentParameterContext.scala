@@ -12,7 +12,7 @@ import org.goldenport.cncf.naming.NamingConventions
 
 /*
  * @since   Jul. 22, 2026
- * @version Jul. 22, 2026
+ * @version Jul. 23, 2026
  * @author  ASAMI, Tomoharu
  */
 private[cncf] final class ComponentParameterContext private (
@@ -67,7 +67,7 @@ private[cncf] object ComponentParameterContext {
       Consequence.unit
     else
       ComponentParameterDiagnostics.contextRejected(
-        s"component parameter context identity mismatch: component=${componentid.name}, instance=${componentinstanceid.instance}",
+        s"component parameter context identity mismatch: component=${componentid.name}, instance=${componentinstanceid.instance}, expected=${expected.canonicalKey}, actual=${componentinstanceid.canonicalKey}",
         componentid,
         componentinstanceid
       )

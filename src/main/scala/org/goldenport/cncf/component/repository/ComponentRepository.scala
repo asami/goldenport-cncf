@@ -31,7 +31,7 @@ import org.goldenport.configuration.{Configuration, ConfigurationTrace, Resolved
  *  version Mar. 22, 2026
  *  version Apr. 25, 2026
  *  version May. 25, 2026
- * @version Jul. 22, 2026
+ * @version Jul. 23, 2026
  * @author  ASAMI, Tomoharu
  */
 sealed abstract class ComponentRepository {
@@ -209,37 +209,37 @@ object ComponentRepository extends GlobalObservable {
 
   private def _parse_spec(
     spec: String,
-    baseDir: Path
+    basedir: Path
   ): Either[String, Specification] =
     _parse_standard_url_spec(spec).getOrElse {
-    val (kind, dirOpt) = _split_spec(spec)
+    val (kind, diropt) = _split_spec(spec)
     kind match {
       case `_scala_cli_type` =>
-        val dir = _resolve_dir(dirOpt, _scala_cli_default_dir, baseDir)
+        val dir = _resolve_dir(diropt, _scala_cli_default_dir, basedir)
         Right(ScalaCliRepository.Specification(dir))
       case `_component_dir_type` =>
-        val dir = _resolve_dir(dirOpt, _component_dir_default_dir, baseDir)
+        val dir = _resolve_dir(diropt, _component_dir_default_dir, basedir)
         Right(ComponentDirRepository.Specification(dir))
       case `_component_file_type` =>
-        dirOpt match {
+        diropt match {
           case Some(_) =>
-            val file = _resolve_dir(dirOpt, "", baseDir)
+            val file = _resolve_dir(diropt, "", basedir)
             Right(ComponentFileRepository.Specification(file))
           case None =>
             Left("component-file repository requires a CAR path")
         }
       case `_component_dev_dir_type` =>
-        val dir = _resolve_dir(dirOpt, ".", baseDir)
+        val dir = _resolve_dir(diropt, ".", basedir)
         ComponentDevDirRepository.validate(dir).map(_ =>
           ComponentDevDirRepository.Specification(dir)
         )
       case `_invalid_component_dev_dir_type` =>
         Left("component development directory configuration must be a plain path or component-dev-dir:path; use component-dir/component-file settings for packaged CARs")
       case `_subsystem_dev_dir_type` =>
-        val dir = _resolve_dir(dirOpt, ".", baseDir)
+        val dir = _resolve_dir(diropt, ".", basedir)
         Right(SubsystemDevDirRepository.Specification(dir))
       case `_standard_repository_type` =>
-        dirOpt match {
+        diropt match {
           case Some(value) =>
             _parse_standard_url_spec(value).map(_.left.map(_.replace("unsupported standard component repository URL", "unsupported standard repository URL")))
               .getOrElse(Left(s"standard-repository requires a URL"))
@@ -288,16 +288,16 @@ object ComponentRepository extends GlobalObservable {
   }
 
   private def _resolve_dir(
-    dirOpt: Option[String],
-    defaultDir: String,
-    baseDir: Path
+    diropt: Option[String],
+    defaultdir: String,
+    basedir: Path
   ): Path = {
-    val dir = dirOpt.getOrElse(defaultDir)
+    val dir = diropt.getOrElse(defaultdir)
     val path = Paths.get(dir)
     if (path.isAbsolute) {
       path
     } else {
-      baseDir.resolve(path).normalize
+      basedir.resolve(path).normalize
     }
   }
 
@@ -940,8 +940,15 @@ object ComponentRepository extends GlobalObservable {
     spec: Specification,
     previousspecs: Seq[Specification],
     descriptors: Vector[ComponentDescriptor]
-  ): Vector[ComponentDescriptor] =
-    descriptors.filterNot(d => _is_descriptor_satisfied_by_specs(d, previousspecs))
+  ): Vector[ComponentDescriptor] = {
+    val unresolved = descriptors.filterNot(_is_descriptor_satisfied_by_specs(_, previousspecs))
+    spec match {
+      case _: ComponentFileRepository.Specification =>
+        unresolved.filter(_is_descriptor_satisfied_by_specs(_, Seq(spec)))
+      case _ =>
+        unresolved
+    }
+  }
 
   private[cncf] def unresolvedDescriptorsForSearch(
     previousspecs: Seq[Specification],
@@ -1028,9 +1035,9 @@ object ComponentRepository extends GlobalObservable {
 
   private def _matches_subsystem_descriptor(
     descriptor: GenericSubsystemDescriptor,
-    subsystemName: String
+    subsystemname: String
   ): Boolean = {
-    val requested = subsystemName.trim
+    val requested = subsystemname.trim
     val versionedname =
       descriptor.version.map(v => s"${descriptor.subsystemName}-${v}")
     descriptor.subsystemName == requested ||
@@ -1213,9 +1220,9 @@ object ComponentRepository extends GlobalObservable {
 
   private def _satisfied_by_active_development_component(
     params: ComponentCreate,
-    componentName: String
+    componentname: String
   ): Boolean = {
-    val target = NamingConventions.toComparisonKey(componentName)
+    val target = NamingConventions.toComparisonKey(componentname)
     params.subsystem.components.exists { component =>
       component.origin match {
         case ComponentOrigin.Repository("component-dev-dir") =>
@@ -1228,16 +1235,16 @@ object ComponentRepository extends GlobalObservable {
 
   private def _resolve_requested_component_artifact(
     basedir: Path,
-    componentName: String,
+    componentname: String,
     version: Option[String],
     releaseonly: Boolean = false
   ): Vector[Artifact] = {
-    val flat = _list_matching_artifacts(basedir, componentName, version)
+    val flat = _list_matching_artifacts(basedir, componentname, version)
     val artifacts =
       if (flat.nonEmpty)
         flat
       else
-        _resolve_standard_component_artifact(basedir, componentName, version, releaseonly).toVector
+        _resolve_standard_component_artifact(basedir, componentname, version, releaseonly).toVector
     if (releaseonly)
       artifacts.filterNot(_is_snapshot_artifact)
     else
@@ -1246,20 +1253,20 @@ object ComponentRepository extends GlobalObservable {
 
   private def _list_matching_artifacts(
     basedir: Path,
-    componentName: String,
+    componentname: String,
     version: Option[String]
   ): Vector[Artifact] = {
-    val prefix = version.map(v => s"${componentName}-${v}").getOrElse(componentName)
+    val prefix = version.map(v => s"${componentname}-${v}").getOrElse(componentname)
     _list_artifacts(basedir).filter { artifact =>
       val filename = artifact.path.getFileName.toString
       artifact.kind match {
         case ArtifactKind.Car | ArtifactKind.CarDir =>
-          filename == s"${componentName}.car" ||
-          filename == s"${componentName}.zip" ||
+          filename == s"${componentname}.car" ||
+          filename == s"${componentname}.zip" ||
           filename.startsWith(prefix) ||
-          _artifact_matches_component_descriptor(artifact, componentName, version)
+          _artifact_matches_component_descriptor(artifact, componentname, version)
         case ArtifactKind.Sar | ArtifactKind.SarDir =>
-          _artifact_matches_subsystem_component(artifact, componentName, version)
+          _artifact_matches_subsystem_component(artifact, componentname, version)
         case ArtifactKind.Jar => false
       }
     }
@@ -1302,10 +1309,10 @@ object ComponentRepository extends GlobalObservable {
 
   private def _resolve_standard_component_descriptor(
     basedir: Path,
-    componentName: String,
+    componentname: String,
     releaseonly: Boolean = false
   ): Option[ComponentDescriptor] =
-    _resolve_standard_component_artifact(basedir, componentName, None, releaseonly).iterator.flatMap {
+    _resolve_standard_component_artifact(basedir, componentname, None, releaseonly).iterator.flatMap {
       case Artifact(path, ArtifactKind.Car) =>
         ComponentDescriptorLoader.loadArchive(path).toOption
       case Artifact(path, ArtifactKind.CarDir) =>
@@ -1316,20 +1323,20 @@ object ComponentRepository extends GlobalObservable {
 
   private def _resolve_standard_component_artifact(
     basedir: Path,
-    componentName: String,
+    componentname: String,
     version: Option[String],
     releaseonly: Boolean = false
   ): Option[Artifact] =
     _standard_component_repository_roots(basedir).iterator.flatMap { root =>
-      _resolve_standard_artifact(root, componentName, version, ".car", ArtifactKind.Car, releaseonly)
+      _resolve_standard_artifact(root, componentname, version, ".car", ArtifactKind.Car, releaseonly)
     }.toSeq.headOption
 
   private def _resolve_standard_subsystem_descriptor(
     basedir: Path,
-    subsystemName: String,
+    subsystemname: String,
     releaseonly: Boolean = false
   ): Option[GenericSubsystemDescriptor] =
-    _resolve_standard_subsystem_artifact(basedir, subsystemName, releaseonly).flatMap {
+    _resolve_standard_subsystem_artifact(basedir, subsystemname, releaseonly).flatMap {
       case Artifact(path, ArtifactKind.Sar) => GenericSubsystemDescriptor.load(path).toOption
       case Artifact(path, ArtifactKind.SarDir) => GenericSubsystemDescriptor.load(path).toOption
       case _ => None
@@ -1337,11 +1344,11 @@ object ComponentRepository extends GlobalObservable {
 
   private def _resolve_standard_subsystem_artifact(
     basedir: Path,
-    subsystemName: String,
+    subsystemname: String,
     releaseonly: Boolean = false
   ): Option[Artifact] =
     _standard_subsystem_repository_roots(basedir).iterator.flatMap { root =>
-      _resolve_standard_artifact(root, subsystemName, None, ".sar", ArtifactKind.Sar, releaseonly)
+      _resolve_standard_artifact(root, subsystemname, None, ".sar", ArtifactKind.Sar, releaseonly)
     }.toSeq.headOption
 
   private def _standard_component_repository_roots(
@@ -2211,20 +2218,20 @@ object ComponentRepository extends GlobalObservable {
     loader: URLClassLoader,
     params: ComponentCreate,
     classdirs: Seq[Path],
-    packagePrefixes: Seq[String],
+    packageprefixes: Seq[String],
     log: BootstrapLog
   ): Consequence[Vector[Component]] = {
-    _discover_components(loader, params, classdirs, packagePrefixes, ComponentOrigin.Repository("component-dir"), log)
+    _discover_components(loader, params, classdirs, packageprefixes, ComponentOrigin.Repository("component-dir"), log)
   }
 
   private def _discover_by_scan_ordered(
     loader: URLClassLoader,
     params: ComponentCreate,
     classdirs: Seq[Path],
-    packagePrefixes: Seq[String],
+    packageprefixes: Seq[String],
     log: BootstrapLog
   ): Consequence[Vector[Component]] = {
-    val names = _discover_class_names(classdirs, packagePrefixes)
+    val names = _discover_class_names(classdirs, packageprefixes)
     val normalized = _normalize_class_names(names)
     log.info(s"normalizedCandidatesCount=${normalized.size}")
     log.info(s"normalizedCandidates=${normalized.mkString(",")}")
@@ -2246,12 +2253,12 @@ object ComponentRepository extends GlobalObservable {
     loader: URLClassLoader,
     params: ComponentCreate,
     classdirs: Seq[Path],
-    packagePrefixes: Seq[String],
+    packageprefixes: Seq[String],
     origin: ComponentOrigin,
     log: BootstrapLog,
     tolerant: Boolean = false
   ): Consequence[Vector[Component]] = {
-    val names = _discover_class_names(classdirs, packagePrefixes)
+    val names = _discover_class_names(classdirs, packageprefixes)
     _discover_components_with_names(
       loader,
       params,
@@ -2279,7 +2286,7 @@ object ComponentRepository extends GlobalObservable {
 
   private def _discover_class_names(
     classdirs: Seq[Path],
-    packagePrefixes: Seq[String]
+    packageprefixes: Seq[String]
   ): Vector[String] = {
     val seen = mutable.Set.empty[String]
     classdirs.foreach { root =>
@@ -2288,7 +2295,7 @@ object ComponentRepository extends GlobalObservable {
         val basename = _base_class_name(classname)
         if (
           _is_discoverable_component_class(classname) &&
-          _accept_class(basename, packagePrefixes) &&
+          _accept_class(basename, packageprefixes) &&
           !seen.contains(basename)
         ) {
           seen += basename
@@ -2384,12 +2391,12 @@ object ComponentRepository extends GlobalObservable {
 
   private def _accept_class(
     name: String,
-    packagePrefixes: Seq[String]
+    packageprefixes: Seq[String]
   ): Boolean = {
-    if (packagePrefixes.isEmpty) {
+    if (packageprefixes.isEmpty) {
       true
     } else {
-      packagePrefixes.exists(prefix => name.startsWith(prefix))
+      packageprefixes.exists(prefix => name.startsWith(prefix))
     }
   }
 
