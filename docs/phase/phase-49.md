@@ -102,7 +102,7 @@ They are recorded together in strategy completed history rather than leaving
 
 | ID | Stage | Outcome | Status |
 | --- | --- | --- | --- |
-| EC-01 | Normative contract | Design/spec fix token, conflict, transition, atomicity, provider, and result semantics. | active |
+| EC-01 | Normative contract | Design/spec fix token, conflict, transition, atomicity, provider, and result semantics. | done |
 | EC-02 | Concurrency model and storage shape | Managed revision metadata and typed concurrency values have deterministic persistence and migration behavior. | planned |
 | EC-03 | Version-aware mutation | Required Entity/Aggregate mutation paths compare the caller token atomically and return structured stale conflicts. | planned |
 | EC-04 | Atomic datastore capability | A closed provider-neutral plan executes guard, successor, root update, and token advance in one transaction without fallback. | planned |
@@ -179,10 +179,18 @@ Phase 49 closure requires:
 - `docs/journal/2026/07/2026-07-23-datastore-boundary-and-shared-database-decision.md`
 - `docs/notes/unitofwork-guideline.md`
 
+## Normative Contract
+
+- `docs/design/entity-conflict-and-conditional-transition.md`
+- `docs/spec/entity-conflict-and-conditional-transition.md`
+
+These documents complete the EC-01 normative contract. Independent review,
+review-fix, and clean re-review found no remaining actionable issue. Later
+stages must provide the executable evidence assigned by the static
+specification.
+
 ## Current Resume Point
 
-EC-01 is active. Promote the accepted planning direction into one normative
-Entity conflict/conditional-transition design document and one static
-specification. Resolve the concurrency-token storage field, migration of
-records without a token, admitted immutable-field model, unsupported-provider
-activation policy, and shared-datastore acceptance profile before EC-02 starts.
+EC-01 is complete. Begin EC-02 planning for the concurrency-token model,
+managed Entity storage shape, legacy-record admission, and executable
+model/storage evidence.

@@ -552,6 +552,11 @@ On `Transitioned`:
 - invalidate affected rebuildable Views after the datastore commit; and
 - never publish an in-memory value before commit.
 
+The first implementation uses component-local `ViewSpace.invalidateAll()`
+because the runtime does not yet carry a complete Entity-to-View dependency
+map. Exact dependency targeting can replace this conservative operation after
+that map becomes a runtime contract.
+
 On `NotMatched`:
 
 - do not invalidate Views as if this caller mutated data;

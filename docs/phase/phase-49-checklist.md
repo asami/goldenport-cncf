@@ -9,40 +9,50 @@ be `IN_PROGRESS` at a time.
 ## EC-01: Normative Contract
 
 Stage Status:
-- Current status: IN_PROGRESS
+- Current status: DONE
 - Owner: CNCF Entity/UnitOfWork/datastore maintainers
 - Update rule: Mark DONE only when design and static specification resolve
   every EC-01 decision and contain stable references to executable evidence
   planned by later stages.
 
-- [ ] Define the framework-owned concurrency token and its equality,
+- [x] Define the framework-owned concurrency token and its equality,
   advancement, visibility, and persistence semantics.
-- [ ] Select the reserved managed storage field and define behavior for records
+- [x] Select the reserved managed storage field and define behavior for records
   created before that field exists.
-- [ ] Define expected-token behavior for ordinary Entity/Aggregate mutation.
-- [ ] Define stale ordinary mutation as a structured conflict failure.
-- [ ] Define a closed exact-match expectation model for conditional transition.
-- [ ] Define successor `Create` and `Bind` semantics.
-- [ ] Define `Transitioned` and `NotMatched(existing)` as normal typed results.
-- [ ] Define not-found, authorization, malformed policy, unsupported
+- [x] Define expected-token behavior for ordinary Entity/Aggregate mutation.
+- [x] Define stale ordinary mutation as a structured conflict failure.
+- [x] Define a closed exact-match expectation model for conditional transition.
+- [x] Define successor `Create` and `Bind` semantics.
+- [x] Define `Transitioned` and `NotMatched(existing)` as normal typed results.
+- [x] Define not-found, authorization, malformed policy, unsupported
   capability, provider, transaction, and conversion failures.
-- [ ] Define one-provider/one-transaction-domain atomicity and rollback
+- [x] Define one-provider/one-transaction-domain atomicity and rollback
   requirements.
-- [ ] Define provider capability declaration and deterministic rejection.
-- [ ] Define authorization order and information-disclosure boundaries.
-- [ ] Define lifecycle hook, audit, CallTree, metrics, EntitySpace, Working Set,
+- [x] Define provider capability declaration and deterministic rejection.
+- [x] Define authorization order and information-disclosure boundaries.
+- [x] Define lifecycle hook, audit, CallTree, metrics, EntitySpace, Working Set,
   and View behavior.
-- [ ] Define the Phase 49 contract as completion of the 9.12 version-conflict
+- [x] Define the Phase 49 contract as completion of the 9.12 version-conflict
   baseline and 9.39 conditional-transition capability.
-- [ ] Keep force/repair commands, merge workflows, and conflict-resolution UI
+- [x] Keep force/repair commands, merge workflows, and conflict-resolution UI
   outside 9.12 baseline completion and tracked by strategy item 9.40.
-- [ ] Select the SQLite and shared-datastore acceptance profiles.
-- [ ] Promote the contract to:
+- [x] Select the SQLite and shared-datastore acceptance profiles.
+- [x] Promote the contract to:
   - `docs/design/entity-conflict-and-conditional-transition.md`;
   - `docs/spec/entity-conflict-and-conditional-transition.md`.
 
 Evidence:
-- Pending.
+- Normative contract:
+  - `docs/design/entity-conflict-and-conditional-transition.md`;
+  - `docs/spec/entity-conflict-and-conditional-transition.md`.
+- Independent review completed.
+- Review findings for authorization, atomicity, evidence wording, rollback
+  coverage, status, and design rationale were resolved.
+- Clean re-review completed with no actionable findings.
+- Document validation:
+  - 25 contiguous normative rules;
+  - 18 contiguous executable examples;
+  - `git diff --check`.
 
 ## EC-02: Concurrency Model and Storage Shape
 
