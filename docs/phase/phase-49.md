@@ -107,8 +107,8 @@ They are recorded together in strategy completed history rather than leaving
 | EC-03 | Version-aware mutation | Required Entity/Aggregate mutation paths compare the caller token atomically and return structured stale conflicts. | done |
 | EC-04 | Atomic datastore capability | A closed provider-neutral plan executes guard, successor, root update, and token advance in one transaction without fallback. | done |
 | EC-05 | EntityStore, UnitOfWork, and DSL | Protected typed conditional transition preserves authorization, lifecycle, transaction, and normal effect boundaries. | done |
-| EC-06 | Coherence and diagnostics | EntitySpace, Working Set, View, audit, CallTree, metrics, and structured failures reflect only authoritative outcomes. | planned |
-| EC-07 | Provider and concurrency evidence | In-memory, SQLite, and one shared profile prove one winner, rollback safety, restart visibility, and provider parity. | planned |
+| EC-06 | Coherence and diagnostics | EntitySpace, Working Set, View, audit, CallTree, metrics, and structured failures reflect only authoritative outcomes. | done |
+| EC-07 | Provider and concurrency evidence | In-memory, SQLite, and one shared profile prove one winner, rollback safety, restart visibility, and provider parity. | in progress |
 | EC-08 | CBD Support acceptance | Terminal predecessor retention and exactly-one successor ownership use the generic CNCF DSL without storage bypass. | planned |
 | EC-09 | Verification and closure | Focused/full validation, review, documentation promotion, downstream evidence, and closure records are complete. | planned |
 
@@ -286,5 +286,25 @@ no automatic public CRUD surface. Fresh re-review found no actionable finding.
 Focused conditional-transition validation passed 33 tests across five suites,
 versioned-mutation regression validation passed 14 tests across four suites,
 and the full CNCF suite passed all 2415 executed tests across 344 suites.
-EC-05 is complete; EC-06 coherence, authorization completion, audit, and
-diagnostics remain next.
+At the EC-05 checkpoint, EC-06 coherence, authorization completion, audit, and
+diagnostics remained next.
+
+EC-06 is complete. Authoritative transition outcomes now drive EntitySpace and
+Working Set reconciliation, View invalidation, structured audit, CallTree,
+metrics, and provider-failure diagnostics. The final clean re-review found no
+actionable issue, and release validation passed all 2427 executed CNCF tests
+across 346 suites.
+
+EC-07A adds native SQLite conditional-transition execution. `SqlDataStore`
+validates and executes the guard, successor intent, root update, revision
+advance, side records, authoritative reload, and commit through one JDBC
+connection and one explicit transaction. Independent providers and connections
+against one database admit exactly one winner for generated caller counts from
+two through twelve. The SQLite evidence also covers create and bind parity,
+`NotMatched`, successor collision/missing/stale failures, restart visibility,
+all pre-commit checkpoints, deterministic commit rejection, generic JDBC
+SQLite configuration, and claim-or-load regression. Review-fix also prepares
+MySQL schema outside the domain transaction and locks the admitted root inside
+it, avoiding implicit-DDL commits and unlocked shared-provider guards. EC-07
+remains in progress until EC-07B proves the complete matrix against the
+selected shared MySQL profile.

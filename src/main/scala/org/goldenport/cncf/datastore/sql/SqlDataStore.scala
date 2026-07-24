@@ -6,7 +6,7 @@ import javax.sql.DataSource
 import com.zaxxer.hikari.{HikariConfig, HikariDataSource}
 import io.circe.Json
 import io.circe.parser.parse
-import org.goldenport.Consequence
+import org.goldenport.{Conclusion, Consequence}
 import org.goldenport.convert.StringEncodable
 import org.goldenport.text.Presentable
 import org.goldenport.record.Record
@@ -16,6 +16,16 @@ import org.goldenport.record.io.RecordDecoder
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.datastore.{
   DataStore,
+  DataStoreConditionalRoot,
+  DataStoreConditionalSuccessor,
+  DataStoreConditionalTransitionCheckpoint,
+  DataStoreConditionalTransitionFailure,
+  DataStoreConditionalTransitionPlan,
+  DataStoreConditionalTransitionResult,
+  EntityConditionalTransitionDataStore,
+  EntityConditionalTransitionSupport,
+  EntityVersionedMutationSupport,
+  EntityVersionedSideEffect,
   OrderDirection,
   Query,
   QueryDirective,
@@ -29,6 +39,7 @@ import org.goldenport.cncf.datastore.{
 }
 import org.goldenport.cncf.unitofwork.{CommitRecorder, PrepareResult, TransactionContext}
 import org.goldenport.cncf.directive.{Query as EntityQuery}
+import org.goldenport.observation.Descriptor
 
 /*
  * @since   Mar. 12, 2026
@@ -36,7 +47,7 @@ import org.goldenport.cncf.directive.{Query as EntityQuery}
  *  version Mar. 31, 2026
  *  version May.  8, 2026
  *  version May. 26, 2026
- * @version Jul. 15, 2026
+ * @version Jul. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 class SqlDataStore(
@@ -44,7 +55,9 @@ class SqlDataStore(
   datasource: DataSource,
   recorder: CommitRecorder = CommitRecorder.noop,
   config: SqlDataStore.Config = SqlDataStore.Config()
-) extends DataStore with SearchableDataStore {
+) extends DataStore
+    with SearchableDataStore
+    with EntityConditionalTransitionDataStore {
   import DataStore.*
   private val _record_decoder = new RecordDecoder()
 
@@ -149,6 +162,25 @@ class SqlDataStore(
   override def totalCountCapability(collection: CollectionId): TotalCountCapability =
     TotalCountCapability.Supported
 
+  def conditionalTransition(
+    plan: DataStoreConditionalTransitionPlan
+  )(using
+    ctx: ExecutionContext
+  ): Consequence[DataStoreConditionalTransitionResult] =
+    EntityConditionalTransitionSupport
+      .validate(plan)
+      .flatMap { admitted =>
+        (for {
+          _ <- _prepare_conditional_transition_schema(admitted)
+          result <-
+            _with_conditional_transition { conn =>
+              _conditional_transition(conn, admitted)
+            }
+        } yield result).recoverWith(
+          DataStoreConditionalTransitionFailure.normalizeProvider
+        )
+      }
+
   def debugSearchSql(
     collection: CollectionId,
     directive: QueryDirective
@@ -169,6 +201,388 @@ class SqlDataStore(
 
   def abort(tx: TransactionContext): Unit =
     record_abort(recorder)
+
+  protected def conditional_transition_Checkpoint(
+    checkpoint: DataStoreConditionalTransitionCheckpoint
+  ): Consequence[Unit] =
+    Consequence.unit
+
+  protected def conditional_transition_Commit(
+    connection: Connection
+  ): Consequence[Unit] =
+    try {
+      connection.commit()
+      Consequence.unit
+    } catch {
+      case e: Throwable =>
+        DataStoreConditionalTransitionFailure.transactionIndeterminate(
+          s"Conditional transition commit outcome is indeterminate: ${e.getClass.getName}"
+        )
+    }
+
+  private def _with_conditional_transition[A](
+    body: Connection => Consequence[A]
+  ): Consequence[A] =
+    try {
+      val connection = datasource.getConnection()
+      try {
+        val autocommit = connection.getAutoCommit
+        try {
+          connection.setAutoCommit(false)
+          val result =
+            try body(connection)
+            catch {
+              case e: Throwable =>
+                DataStoreConditionalTransitionFailure.providerFailure(
+                  s"Conditional transition provider failed: ${e.getClass.getName}"
+                )
+            }
+          result match {
+            case success: Consequence.Success[A] =>
+              conditional_transition_Commit(connection) match {
+                case _: Consequence.Success[?] =>
+                  success
+                case Consequence.Failure(conclusion) =>
+                  _rollback_conditional_transition(connection, conclusion)
+              }
+            case Consequence.Failure(conclusion) =>
+              val normalized =
+                DataStoreConditionalTransitionFailure
+                  .normalizeProvider[A](conclusion)
+              _rollback_conditional_transition(
+                connection,
+                normalized.conclusion
+              )
+          }
+        } finally {
+          _restore_conditional_connection(connection, autocommit)
+        }
+      } finally {
+        _close_conditional_connection(connection)
+      }
+    } catch {
+      case e: Throwable =>
+        DataStoreConditionalTransitionFailure.providerFailure(
+          s"Conditional transition transaction could not start: ${e.getClass.getName}"
+        )
+    }
+
+  private def _rollback_conditional_transition[A](
+    connection: Connection,
+    conclusion: Conclusion
+  ): Consequence[A] =
+    try {
+      connection.rollback()
+      Consequence.Failure(conclusion)
+    } catch {
+      case e: Throwable =>
+        DataStoreConditionalTransitionFailure.transactionIndeterminate(
+          s"Conditional transition rollback outcome is indeterminate: ${e.getClass.getName}"
+        )
+    }
+
+  private def _restore_conditional_connection(
+    connection: Connection,
+    autocommit: Boolean
+  ): Unit =
+    try connection.setAutoCommit(autocommit)
+    catch {
+      case _: Throwable => ()
+    }
+
+  private def _close_conditional_connection(
+    connection: Connection
+  ): Unit =
+    try connection.close()
+    catch {
+      case _: Throwable => ()
+    }
+
+  private def _prepare_conditional_transition_schema(
+    plan: DataStoreConditionalTransitionPlan
+  ): Consequence[Unit] =
+    if (_requires_conditional_schema_preparation)
+      _with_connection { connection =>
+        for {
+          _ <- _ensure_existing_table_columns(
+            connection,
+            plan.root.collection,
+            _conditional_root_columns(plan.root)
+          )
+          _ <- plan.successor match {
+            case create: DataStoreConditionalSuccessor.Create =>
+              _ensure_table(
+                connection,
+                create.collection,
+                _record_columns(create.record)
+              )
+            case _: DataStoreConditionalSuccessor.Bind =>
+              Consequence.unit
+          }
+          _ <- plan.sideEffects.foldLeft(Consequence.unit) {
+            case (
+                  result,
+                  EntityVersionedSideEffect.Save(
+                    collection,
+                    _,
+                    record
+                  )
+                ) =>
+              result.flatMap(_ =>
+                _ensure_table(
+                  connection,
+                  collection,
+                  _record_columns(record)
+                )
+              )
+            case (result, _: EntityVersionedSideEffect.Delete) =>
+              result
+          }
+        } yield ()
+      }
+    else
+      Consequence.unit
+
+  private def _requires_conditional_schema_preparation: Boolean =
+    dialect.name == MySqlDialectDriver.name
+
+  private def _ensure_existing_table_columns(
+    connection: Connection,
+    collection: CollectionId,
+    columns: Vector[(String, Any)]
+  ): Consequence[Unit] =
+    _table_exists(connection, collection).flatMap { exists =>
+      if (exists)
+        _ensure_columns(connection, collection, columns)
+      else
+        Consequence.unit
+    }
+
+  private def _conditional_root_columns(
+    root: DataStoreConditionalRoot
+  ): Vector[(String, Any)] =
+    _record_columns(
+      root.changes ++
+        Record.dataAuto(root.revisionField -> root.nextRevision)
+    )
+
+  private def _conditional_transition(
+    connection: Connection,
+    plan: DataStoreConditionalTransitionPlan
+  ): Consequence[DataStoreConditionalTransitionResult] =
+    for {
+      existingoption <-
+        _select_conditional_root(
+          connection,
+          plan.root.collection,
+          plan.root.entryId
+        )
+      existing <-
+        existingoption
+          .map(Consequence.success)
+          .getOrElse(
+            Consequence.DataStoreNotFound(plan.root.entryId.print)
+          )
+      matches <-
+        EntityConditionalTransitionSupport.rootMatches(
+          existing,
+          plan.root
+        )
+      result <-
+        if (matches)
+          _apply_conditional_transition(connection, plan)
+        else
+          Consequence.success(
+            DataStoreConditionalTransitionResult.NotMatched(existing)
+          )
+    } yield result
+
+  private def _apply_conditional_transition(
+    connection: Connection,
+    plan: DataStoreConditionalTransitionPlan
+  ): Consequence[DataStoreConditionalTransitionResult] =
+    for {
+      _ <- conditional_transition_Checkpoint(
+        DataStoreConditionalTransitionCheckpoint.GuardAdmitted
+      )
+      _ <- _prepare_conditional_successor(connection, plan.successor)
+      _ <- conditional_transition_Checkpoint(
+        DataStoreConditionalTransitionCheckpoint.SuccessorPrepared
+      )
+      _ <- _update_root_record(
+        connection,
+        plan.root
+      )
+      _ <- conditional_transition_Checkpoint(
+        DataStoreConditionalTransitionCheckpoint.RootPrepared
+      )
+      _ <- _apply_conditional_side_effects(connection, plan.sideEffects)
+      _ <- conditional_transition_Checkpoint(
+        DataStoreConditionalTransitionCheckpoint.BeforePublish
+      )
+      authoritativeroot <-
+        _required_record(
+          connection,
+          plan.root.collection,
+          plan.root.entryId
+        )
+      authoritativesuccessor <-
+        _required_record(
+          connection,
+          plan.successor.collection,
+          plan.successor.entryId
+        )
+    } yield DataStoreConditionalTransitionResult.Transitioned(
+      authoritativeroot,
+      authoritativesuccessor
+    )
+
+  private def _prepare_conditional_successor(
+    connection: Connection,
+    successor: DataStoreConditionalSuccessor
+  ): Consequence[Unit] =
+    successor match {
+      case create: DataStoreConditionalSuccessor.Create =>
+        val columns = _record_columns(create.record)
+        for {
+          _ <- _ensure_table(connection, create.collection, columns)
+          exists <- _exists(connection, create.collection, create.entryId)
+          _ <-
+            if (exists)
+              Consequence.operationConflict(
+                "entity-conditional-transition",
+                Vector(
+                  Descriptor.Facet.Reason("successor-collision"),
+                  Descriptor.Facet.Policy(
+                    "entity.conditional-transition.successor-create"
+                  )
+                )
+              )
+            else
+              _insert(
+                connection,
+                create.collection,
+                create.entryId,
+                columns
+              )
+        } yield ()
+      case bind: DataStoreConditionalSuccessor.Bind =>
+        _select_if_table_exists(
+          connection,
+          bind.collection,
+          bind.entryId
+        ).flatMap {
+          case None =>
+            Consequence.DataStoreNotFound(bind.entryId.print)
+          case Some(record) =>
+            EntityVersionedMutationSupport
+              .revisionState(record, bind.revisionField)
+              .flatMap { actual =>
+                if (actual == bind.expectedRevision)
+                  Consequence.unit
+                else
+                  Consequence.operationConflict(
+                    "entity-conditional-transition",
+                    Vector(
+                      Descriptor.Facet.Reason(
+                        "bound-successor-revision-conflict"
+                      ),
+                      Descriptor.Facet.Policy(
+                        "entity.conditional-transition.successor-bind"
+                      )
+                    )
+                  )
+              }
+        }
+    }
+
+  private def _update_root_record(
+    connection: Connection,
+    root: DataStoreConditionalRoot
+  ): Consequence[Unit] = {
+    val columns = _conditional_root_columns(root)
+    for {
+      _ <- _ensure_table(connection, root.collection, columns)
+      updated <-
+        _update_count(
+          connection,
+          root.collection,
+          root.entryId,
+          columns
+        )
+      _ <-
+        if (updated == 1)
+          Consequence.unit
+        else
+          Consequence.DataStoreNotFound(root.entryId.print)
+    } yield ()
+  }
+
+  private def _apply_conditional_side_effects(
+    connection: Connection,
+    effects: Vector[EntityVersionedSideEffect]
+  ): Consequence[Unit] =
+    effects.foldLeft(Consequence.unit) {
+      case (result, EntityVersionedSideEffect.Save(collection, entryid, record)) =>
+        result.flatMap { _ =>
+          val columns = _record_columns(record)
+          for {
+            _ <- _ensure_table(connection, collection, columns)
+            _ <- _upsert(connection, collection, entryid, columns)
+          } yield ()
+        }
+      case (result, EntityVersionedSideEffect.Delete(collection, entryid)) =>
+        result.flatMap(_ =>
+          _table_exists(connection, collection).flatMap { exists =>
+            if (exists)
+              _delete(connection, collection, entryid)
+            else
+              Consequence.unit
+          }
+        )
+    }
+
+  private def _required_record(
+    connection: Connection,
+    collection: CollectionId,
+    entryid: EntryId
+  ): Consequence[Record] =
+    _select_if_table_exists(connection, collection, entryid).flatMap {
+      case Some(record) => Consequence.success(record)
+      case None => Consequence.DataStoreNotFound(entryid.print)
+    }
+
+  private def _select_if_table_exists(
+    connection: Connection,
+    collection: CollectionId,
+    entryid: EntryId
+  ): Consequence[Option[Record]] =
+    _table_exists(connection, collection).flatMap { exists =>
+      if (exists)
+        _select(connection, collection, entryid)
+      else
+        Consequence.success(None)
+    }
+
+  private def _select_conditional_root(
+    connection: Connection,
+    collection: CollectionId,
+    entryid: EntryId
+  ): Consequence[Option[Record]] =
+    _table_exists(connection, collection).flatMap { exists =>
+      if (exists) {
+        val basesql =
+          dialect.select_by_id_sql(_table_name(collection))
+        val sql =
+          if (dialect.name == MySqlDialectDriver.name)
+            s"$basesql FOR UPDATE"
+          else
+            basesql
+        _select_with_sql(connection, collection, entryid, sql)
+      } else {
+        Consequence.success(None)
+      }
+    }
 
   private def _with_connection[A](
     f: Connection => Consequence[A]
@@ -461,6 +875,33 @@ class SqlDataStore(
         }
       }
 
+  private def _update_count(
+    conn: Connection,
+    collection: CollectionId,
+    id: EntryId,
+    columns: Vector[(String, Any)]
+  ): Consequence[Int] =
+    if (columns.isEmpty)
+      Consequence.success(0)
+    else
+      Consequence {
+        val sql =
+          dialect.update_sql(
+            _table_name(collection),
+            columns.map(_._1)
+          )
+        val stmt = conn.prepareStatement(sql)
+        try {
+          columns.zipWithIndex.foreach { case ((_, value), index) =>
+            stmt.setObject(index + 1, value)
+          }
+          stmt.setString(columns.length + 1, id.print)
+          stmt.executeUpdate()
+        } finally {
+          stmt.close()
+        }
+      }
+
   private def _delete(
     conn: Connection,
     collection: CollectionId,
@@ -481,9 +922,18 @@ class SqlDataStore(
     conn: Connection,
     collection: CollectionId,
     id: EntryId
+  ): Consequence[Option[Record]] = {
+    val sql = dialect.select_by_id_sql(_table_name(collection))
+    _select_with_sql(conn, collection, id, sql)
+  }
+
+  private def _select_with_sql(
+    conn: Connection,
+    collection: CollectionId,
+    id: EntryId,
+    sql: String
   ): Consequence[Option[Record]] =
     Consequence {
-      val sql = dialect.select_by_id_sql(_table_name(collection))
       val stmt = conn.prepareStatement(sql)
       try {
         stmt.setString(1, id.print)
@@ -702,14 +1152,14 @@ class SqlDataStore(
         _binary(path, "<", value)
       case EntityQuery.Lte(path, value) =>
         _binary(path, "<=", value)
-      case EntityQuery.Contains(path, value, caseInsensitive) =>
-        _like(path, s"%$value%", caseInsensitive)
-      case EntityQuery.StartsWith(path, value, caseInsensitive) =>
-        _like(path, s"$value%", caseInsensitive)
-      case EntityQuery.EndsWith(path, value, caseInsensitive) =>
-        _like(path, s"%$value", caseInsensitive)
-      case EntityQuery.Like(path, pattern, caseInsensitive) =>
-        _like(path, pattern, caseInsensitive)
+      case EntityQuery.Contains(path, value, caseinsensitive) =>
+        _like(path, s"%$value%", caseinsensitive)
+      case EntityQuery.StartsWith(path, value, caseinsensitive) =>
+        _like(path, s"$value%", caseinsensitive)
+      case EntityQuery.EndsWith(path, value, caseinsensitive) =>
+        _like(path, s"%$value", caseinsensitive)
+      case EntityQuery.Like(path, pattern, caseinsensitive) =>
+        _like(path, pattern, caseinsensitive)
       case EntityQuery.IsNull(path) =>
         SqlDataStore.SqlStatement(s"${_column_ref(path)} IS NULL")
       case EntityQuery.IsNotNull(path) =>
@@ -735,8 +1185,8 @@ class SqlDataStore(
   private def _binary(path: String, op: String, value: Any): SqlDataStore.SqlStatement =
     SqlDataStore.SqlStatement(s"${_column_ref(path)} $op ?", Vector(_column_value(value)))
 
-  private def _like(path: String, pattern: String, caseInsensitive: Boolean): SqlDataStore.SqlStatement =
-    if (caseInsensitive)
+  private def _like(path: String, pattern: String, caseinsensitive: Boolean): SqlDataStore.SqlStatement =
+    if (caseinsensitive)
       SqlDataStore.SqlStatement(s"LOWER(${_column_ref(path)}) LIKE LOWER(?)", Vector(pattern))
     else
       SqlDataStore.SqlStatement(s"${_column_ref(path)} LIKE ?", Vector(pattern))
@@ -826,14 +1276,16 @@ object SqlDataStore {
     recorder: CommitRecorder = CommitRecorder.noop,
     config: Config = Config()
   ): SqlDataStore = {
+    val resolveddialect = dialect.resolve(jdbcUrl)
     val hikariconfig = new HikariConfig()
     hikariconfig.setJdbcUrl(jdbcUrl)
     username.foreach(hikariconfig.setUsername)
     password.foreach(hikariconfig.setPassword)
     driverClassName.foreach(hikariconfig.setDriverClassName)
+    _configure_sqlite_transactions(hikariconfig, resolveddialect)
     hikariconfig.setMaximumPoolSize(4)
     val datasource = new HikariDataSource(hikariconfig)
-    new SqlDataStore(dialect.resolve(jdbcUrl), datasource, recorder, config)
+    new SqlDataStore(resolveddialect, datasource, recorder, config)
   }
 
   def sqlite(
@@ -849,8 +1301,21 @@ object SqlDataStore {
         s"jdbc:sqlite:$path"
     hikariconfig.setJdbcUrl(jdbcurl)
     hikariconfig.setDriverClassName("org.sqlite.JDBC")
+    _configure_sqlite_transactions(
+      hikariconfig,
+      SqliteDialectDriver
+    )
     hikariconfig.setMaximumPoolSize(4)
     val datasource = new HikariDataSource(hikariconfig)
     new SqlDataStore(SqliteDialectDriver, datasource, recorder, config)
   }
+
+  private def _configure_sqlite_transactions(
+    hikariconfig: HikariConfig,
+    resolveddialect: SqlDialectDriver
+  ): Unit =
+    if (resolveddialect.name == SqliteDialectDriver.name) {
+      hikariconfig.addDataSourceProperty("busy_timeout", "10000")
+      hikariconfig.addDataSourceProperty("transaction_mode", "IMMEDIATE")
+    }
 }

@@ -624,28 +624,63 @@ EC-06 Modified Scala File Compliance Ledger:
 ## EC-07: Provider and Concurrency Evidence
 
 Stage Status:
-- Current status: PLANNED
+- Current status: IN_PROGRESS
 - Owner: CNCF datastore/provider maintainers
 - Update rule: Mark IN_PROGRESS only after EC-06 closes. Mark DONE only when
   in-memory, SQLite, and the selected shared profile pass the same semantic
   matrix with independent callers.
 
-- [ ] Run bounded-caller property evidence against in-memory reference
+- [x] Run bounded-caller property evidence against in-memory reference
   behavior.
-- [ ] Implement SQLite conditional transition with one explicit native
+- [x] Implement SQLite conditional transition with one explicit native
   transaction.
-- [ ] Exercise SQLite with independent callers and independent connections.
-- [ ] Prove SQLite restart visibility.
-- [ ] Inject failure after guard match, during successor work, during root
+- [x] Exercise SQLite with independent callers and independent connections.
+- [x] Prove SQLite restart visibility.
+- [x] Inject failure after guard match, during successor work, during root
   update, and during commit.
-- [ ] Verify every injected failure leaves no orphan successor or partial root.
+- [x] Verify every injected failure leaves no orphan successor or partial root.
 - [ ] Implement or activate the selected shared-datastore profile.
 - [ ] Exercise the shared profile with independently executing callers.
 - [ ] Prove exactly one winner and provider-neutral result parity.
-- [ ] Preserve claim-or-load behavior as a regression boundary.
+- [x] Preserve claim-or-load behavior as a regression boundary.
 
 Evidence:
-- Pending.
+- EC-07A implements `EntityConditionalTransitionDataStore` in `SqlDataStore`.
+  Each transition uses one connection and one explicit native transaction for
+  guard admission, create/bind successor work, root revision/update, side
+  records, authoritative reload, and commit.
+- `SqliteConditionalTransitionSpec` passes create and bind transitions,
+  authoritative `NotMatched`, create collision, missing/stale bind, restart
+  visibility, all four pre-commit checkpoints, and deterministic commit
+  rejection.
+- Its ScalaCheck evidence executes generated caller counts from two through
+  twelve. Every caller constructs an independent SQLite provider and obtains
+  an independent connection against one physical database; exactly one
+  transition wins, all admitted losers return `NotMatched`, and only the
+  winning successor and side record exist.
+- The same one-winner result passes through both `SqlDataStore.sqlite` and a
+  SQLite URL resolved by the generic `SqlDataStore.jdbc` factory.
+- Review-fix keeps the shared SQL capability safe before EC-07B acceptance:
+  MySQL schema preparation runs before the domain transaction so MySQL DDL
+  cannot implicitly commit a partially applied transition, and root admission
+  uses a locking `FOR UPDATE` read inside the transaction. Live shared-provider
+  proof remains mandatory before EC-07 closes.
+- The focused EC-07A review-fix matrix passed 51 tests across
+  `SqliteConditionalTransitionSpec`,
+  `InMemoryConditionalTransitionSpec`,
+  `DataStoreConditionalTransitionSpec`, `SqliteDataStoreSpec`, and
+  `ActionCallEntityAccessMetricsSpec`.
+- Release validation passed all 2434 executed CNCF tests across 347 suites.
+- EC-07 remains IN_PROGRESS. Shared MySQL provider activation, independently
+  executing shared callers, and complete in-memory/SQLite/MySQL parity remain
+  EC-07B.
+
+EC-07A Modified Scala File Compliance Ledger:
+
+| File | Naming | Executable specification | Validation | Scope |
+| --- | --- | --- | --- | --- |
+| `src/main/scala/org/goldenport/cncf/datastore/sql/SqlDataStore.scala` | Whole-file private/protected naming review passed | Covered by the SQLite provider matrix and existing datastore regressions | Focused 51-test matrix, `Test/compile`, and full 2434-test suite passed | EC-07A release commit |
+| `src/test/scala/org/goldenport/cncf/datastore/SqliteConditionalTransitionSpec.scala` | Whole-file naming review passed | Seven Given/When/Then behaviors, including generated bounded concurrency and the generic JDBC factory | Focused 51-test matrix, `Test/compile`, and full 2434-test suite passed | EC-07A release commit |
 
 ## EC-08: CBD Support Acceptance
 
