@@ -1,0 +1,271 @@
+# Phase 50 - SimpleEntity Revision and OCC Simplification
+
+status=planned
+planned_at=2026-07-24
+depends_on=[Phase 49](phase-49.md)
+strategy=[CNCF Development Strategy](../strategy/cncf-development-strategy.md)
+checklist=[Phase 50 Checklist](phase-50-checklist.md)
+
+## Purpose
+
+Make revision management a standard `SimpleEntity` facility and simplify CNCF
+optimistic concurrency control around that single authoritative value.
+
+Every persisted `SimpleEntity` receives a framework-managed revision whether
+or not the application enables ordinary OCC. Applications select ordinary OCC
+declaratively at Entity or collection scope. Atomic Conditional Transition
+always compares the authoritative revision.
+
+For Entity models that do not extend `SimpleEntity`, Phase 50 retains the
+useful Phase 49 separation capability as an explicit detached-revision
+extension. The extension uses the same `EntityRevision` and provider-native
+atomic mutation kernel. It is not a compatibility layer and is never an
+alternative representation for an ordinary `SimpleEntity`.
+
+## Dependency
+
+Phase 50 begins after Phase 49 closes.
+
+Phase 49 owns the provider-native atomic Conditional Transition and
+exactly-one-winner behavior. Phase 50 retains those semantics while replacing
+the concurrency representation and ordinary mutation API with
+`SimpleEntity.revision` on the standard path and one explicit detached
+representation for non-`SimpleEntity` models.
+
+Phase 49's provisional token names and public API are not compatibility
+commitments. Its revision-field-independent datastore operation, atomic
+compare-and-advance behavior, and domain-codec separation are retained as
+implementation assets.
+
+## Selected Direction
+
+- `revision` is the only new standard `SimpleEntity` attribute.
+- The model-layer datatype is validated rather than represented as an
+  application-owned raw number.
+- CNCF assigns the initial revision and advances it exactly once with every
+  successful persistent mutation.
+- CNCF maintains revision when ordinary OCC is disabled.
+- Application code can read revision but cannot create, patch, reset,
+  decrement, or increment it.
+- Ordinary OCC is selected by a declarative Entity or collection concurrency
+  policy.
+- An optimistic policy requires `expectedRevision` on every admitted ordinary
+  mutation and cannot be bypassed per request.
+- Conditional Transition requires `expectedRevision` under every ordinary
+  concurrency policy.
+- `createdAt` and `updatedAt` retain their current lifecycle roles.
+- No OCC-specific timestamp is added and `updatedAt` is not used as the OCC
+  token.
+- The canonical API does not contain a separate
+  `EntityConcurrencyToken`, `EntityMutationExpectation(token)`, or
+  `EntitySnapshot[A](entity, token)` on the `SimpleEntity` path.
+- Entity models that do not extend `SimpleEntity` may explicitly select a
+  detached revision representation that carries the same `EntityRevision`
+  beside the domain value.
+- Revision representation is fixed at Entity or collection registration. It
+  cannot be selected per request.
+- One Entity has exactly one authoritative revision representation:
+  `Embedded` for `SimpleEntity`, or explicit `Detached` for a
+  non-`SimpleEntity` model.
+- Compatibility aliases, adapters, duplicate storage fields, and implicit
+  legacy revision synthesis are not implemented.
+
+## Scope
+
+- Add `EntityRevision` and the standard `SimpleEntity.revision` attribute to
+  `simplemodeling-model`.
+- Reuse `simplemodeling-lib` generic datatype, schema, `ValueReader`,
+  `Consequence`, and record facilities; extend core only if a genuinely
+  reusable primitive is proven missing.
+- Define one CNCF revision kernel shared by embedded and detached
+  representations.
+- Define the explicit revision-representation binding:
+  `SimpleEntity` uses embedded revision, while only a non-`SimpleEntity` model
+  may opt into detached revision.
+- Fix the canonical initial revision and successful-mutation advancement
+  rules.
+- Add managed revision behavior to Entity creation, loading, mutation, soft
+  deletion, restoration, and returned values.
+- Reject application attempts to write the managed revision.
+- Define the ordinary Entity/collection concurrency-policy model, declaration,
+  precedence, and deterministic default.
+- Add expected-revision forms to admitted Entity and Aggregate mutation paths.
+- Compare and advance revision atomically in the authoritative datastore
+  mutation.
+- Ensure EntitySpace and Working Set values cannot bypass the datastore
+  comparison.
+- Replace Phase 49's separate token type throughout EntityStore, UnitOfWork,
+  protected DSL, Conditional Transition, result models, and diagnostics with
+  the common `EntityRevision`.
+- Refactor the Phase 49 snapshot behavior into an explicitly named detached
+  revision carrier available only through the non-`SimpleEntity` extension.
+- Project revision and transport expected revision through the REST, Form, Web,
+  View, Aggregate, and generated-client surfaces that support later mutation.
+- Add in-memory, SQLite, and one shared-provider profile with equivalent
+  concurrency, rollback, restart, and admission behavior for both admitted
+  representations.
+- Define explicit schema/data admission or migration behavior for persisted
+  records without revision.
+- Update downstream users of the provisional Phase 49 API.
+- After implementation and acceptance evidence pass, replace the provisional
+  OCC contract in canonical design and specification documents with the
+  verified `SimpleEntity.revision` contract.
+
+## Boundaries
+
+- Phase 50 does not add another OCC timestamp.
+- Revision is framework-managed metadata, not application business data.
+- Embedded revision is the canonical `SimpleEntity` representation.
+- Detached revision is an opt-in extension for an Entity model that does not
+  extend `SimpleEntity`; generated and ordinary `SimpleEntity` models cannot
+  select it.
+- Embedded and detached revision cannot coexist, mirror, dual-write, or fall
+  back to one another for one Entity.
+- Policy `None` means no expected-revision comparison for ordinary mutation;
+  it does not stop revision maintenance.
+- Policy `Optimistic` has no request-level opt-out.
+- Conditional Transition is never weakened by ordinary policy `None`.
+- Missing revision is not silently interpreted as zero and is not derived from
+  timestamps or resident state.
+- No best-effort load-check-save fallback may emulate an atomic datastore
+  comparison.
+- Force overwrite, merge, repair, and conflict-resolution UI remain in
+  strategy item 9.40.
+- Distributed consensus, leases, fencing tokens, multi-region ownership, and
+  cross-provider transactions remain outside this phase.
+- Phase 50 does not reopen application-specific successor or conflict policy.
+
+## Work Stack
+
+| ID | Stage | Outcome | Status |
+| --- | --- | --- | --- |
+| SE-01 | Contract decisions and executable acceptance | Datatype ownership, embedded/detached representation matrix, policy declaration/default, initial revision, no-op behavior, migration/admission, projection, and API replacement decisions are fixed as executable expectations before implementation. | planned |
+| SE-02 | SimpleEntity revision model | `simplemodeling-model` provides `EntityRevision` and one standard revision attribute; `simplemodeling-lib` changes only for independently reusable missing primitives. | planned |
+| SE-03 | Common revision kernel and binding | Phase 49's atomic provider kernel is generalized around `EntityRevision`, and one deterministic embedded/detached binding is selected per Entity model. | planned |
+| SE-04 | Embedded SimpleEntity lifecycle and OCC | CNCF initializes, loads, advances, returns, and protects embedded revision; declarative policy controls ordinary expected-revision enforcement. | planned |
+| SE-05 | Detached non-SimpleEntity extension | Explicitly admitted non-`SimpleEntity` models can use a detached revision carrier without token compatibility, dual representation, or implicit fallback. | planned |
+| SE-06 | Conditional Transition integration | Both admitted representations use the common revision kernel and retain Phase 49 exactly-one-winner semantics. | planned |
+| SE-07 | Projection and transport | Standard surfaces expose embedded `SimpleEntity.revision`; detached revision appears only on explicitly revision-aware extension surfaces. | planned |
+| SE-08 | Provider, migration, downstream, and regression acceptance | In-memory, SQLite, one shared provider, migration rules, and downstream consumers prove both representations and the standard-path simplification. | planned |
+| SE-09 | Confirmed design/specification contract | Verified behavior is reflected in canonical design/spec; provisional token/snapshot rules are replaced by the embedded standard and detached extension, and executable evidence references are exact. | planned |
+| SE-10 | Verification and closure | Full validation, clean review, strategy/history alignment, and closure evidence complete Phase 50. | planned |
+
+## Acceptance
+
+- `SimpleEntity` gains only one new standard attribute: `revision`.
+- Every newly persisted `SimpleEntity` receives the canonical initial
+  revision.
+- Every successful persistent mutation advances revision exactly once in the
+  same atomic operation as the state change.
+- Failed, rejected, conflicted, and rolled-back mutations do not advance
+  revision.
+- Reads do not advance revision.
+- Application input cannot write the managed revision.
+- Existing `createdAt` and `updatedAt` behavior remains unchanged.
+- No code uses timestamps as the authoritative OCC token.
+- Ordinary policy `None` records revisions without requiring
+  `expectedRevision`.
+- Ordinary policy `Optimistic` rejects missing or stale expected revisions
+  with structured `Consequence`/`Conclusion` failures.
+- Two or more simultaneous optimistic mutations using one expected revision
+  produce at most one winner.
+- Working Set or EntitySpace state cannot bypass the authoritative datastore
+  comparison.
+- Conditional Transition requires expected revision under every ordinary
+  concurrency policy and retains exactly-one-winner semantics.
+- Returned `SimpleEntity` values contain the authoritative resulting revision;
+  detached extension results carry it in their explicit revision carrier.
+- A `SimpleEntity` always uses embedded revision and never requires a detached
+  carrier.
+- A non-`SimpleEntity` Entity uses detached revision only after explicit
+  Entity/collection admission.
+- Embedded and detached revision cannot both be present for one Entity.
+- Detached revision uses `EntityRevision`, the same atomic datastore kernel,
+  and the same authorization, UnitOfWork, diagnostics, and observability
+  boundaries as embedded revision.
+- Required generated and transport surfaces round-trip expected revision
+  without admitting direct revision mutation.
+- The runtime contains no separate concurrency-token type, implicit snapshot
+  compatibility API, or duplicate managed revision field.
+- Persisted data without revision follows one explicit verified migration or
+  deterministic admission-failure rule.
+- In-memory, SQLite, and one shared-provider profile produce equivalent
+  externally observable results.
+- Final design and static specification describe the implemented
+  embedded `SimpleEntity.revision` contract and detached non-`SimpleEntity`
+  extension, and no longer prescribe the provisional token/snapshot model.
+
+## Verification
+
+Phase 50 closure requires:
+
+- failing-first Executable Specifications for each SE-01 acceptance rule;
+- property-based revision lifecycle and concurrent-attempt evidence;
+- focused model, EntityStore, UnitOfWork, datastore, authorization,
+  observability, Working Set, View, projection, Form, and REST specifications;
+- SQLite transaction/restart evidence;
+- one shared-provider concurrency profile;
+- downstream Conditional Transition acceptance;
+- model-library and CNCF full test suites;
+- relevant downstream test suites;
+- `sbt --batch Test/compile`;
+- `git diff --check`;
+- read-only review, review-fix where required, and clean re-review;
+- final reconciliation of implementation, Executable Specifications,
+  `docs/design`, and `docs/spec`; and
+- strategy and phase closure records aligned with the verified result.
+
+## Final Documentation Gate
+
+SE-09 is mandatory and occurs only after the implementation and provider
+evidence are stable.
+
+It must:
+
+- update `docs/design/entity-conflict-and-conditional-transition.md`;
+- update `docs/spec/entity-conflict-and-conditional-transition.md`;
+- update `docs/design/simpleentity-storage-shape-policy.md`;
+- update other canonical Entity persistence or API documents discovered by
+  the implementation;
+- replace the separate-token requirement with `EntityRevision`;
+- define embedded `SimpleEntity.revision` as the standard and detached revision
+  as the explicit non-`SimpleEntity` extension;
+- record the verified concurrency-policy declaration and transport contract;
+- link every normative behavior to exact Executable Specification evidence;
+  and
+- leave no contradictory current OCC contract.
+
+Phase 50 cannot close with the accepted behavior present only in notes,
+journal, phase documents, or source code.
+
+## Repository Responsibility
+
+Phase 50 spans these repositories:
+
+| Repository | Phase 50 responsibility |
+| --- | --- |
+| `/Users/asami/src/dev2025/simplemodeling-lib` | Generic reusable datatype/schema/decoding support only when existing core facilities are insufficient |
+| `/Users/asami/src/dev2026/simplemodeling-model` | `EntityRevision`, `SimpleEntity.revision`, model shape, and model serialization |
+| `/Users/asami/src/dev2025/cloud-native-component-framework` | Revision lifecycle, OCC policy, atomic persistence, DSL, projection, transport, and provider evidence |
+
+`simplemodeling-lib` must remain independent of `SimpleEntity`, CNCF, and OCC.
+An Entity-specific datatype belongs to `simplemodeling-model`.
+
+## Planning References
+
+- `docs/notes/simpleentity-revision-occ-simplification-proposal.md`
+- `docs/journal/2026/07/2026-07-24-simpleentity-revision-occ-consideration.md`
+- `docs/phase/phase-49.md`
+- `docs/notes/entity-conflict-conditional-transition-implementation.md`
+- `docs/design/entity-conflict-and-conditional-transition.md`
+- `docs/spec/entity-conflict-and-conditional-transition.md`
+- `docs/design/simpleentity-storage-shape-policy.md`
+
+## Current Resume Point
+
+Phase 50 is planned and Phase 49 is closed. Begin SE-01 by resolving the
+remaining decisions listed in
+the consideration record and expressing them as Executable Specification
+expectations. Preserve the Phase 49 atomic kernel and detached-domain
+capability, but do not preserve its provisional token names or expose the
+detached representation on the standard `SimpleEntity` path.
