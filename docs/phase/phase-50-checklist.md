@@ -104,36 +104,47 @@ Paths are repository-relative to the repository named in the second column.
 | ER-08 | `cloud-native-component-framework` | `src/test/scala/org/goldenport/cncf/entity/EntityRevisionMigrationSpec.scala` | Reject missing schema/record revision deterministically until explicit migration or recreation. |
 | ER-09 | `cloud-native-component-framework` | `src/test/scala/org/goldenport/cncf/projection/EntityRevisionProjectionSpec.scala` | Expose read-only revision on admitted Entity, search, View, and Aggregate surfaces without making it writable. |
 | ER-10 | `cloud-native-component-framework` | `src/test/scala/org/goldenport/cncf/http/StaticFormEntityRevisionSpec.scala` | Use `WriteIfChanged + ObservedRequired`, retain observed revision as hidden framework metadata, and preserve strict stale-edit conflict without domain parameters. |
-| ER-11 | `cloud-native-component-framework` | `src/test/scala/org/goldenport/cncf/http/RestEntityRevisionSpec.scala` | Apply `WriteIfChanged + Managed` to idempotent routes, select `ObservedRequired` for strict validators, and leave general request replay/idempotency-key semantics to REST. |
+| ER-11 | `cloud-native-component-framework` | `src/test/scala/org/goldenport/cncf/http/RestEntityRevisionSpec.scala` | Apply `WriteIfChanged + Managed` to idempotent routes, select `ObservedRequired` for strict validators, and leave general REST request replay and Web Form submission-token semantics to strategy item 9.43. |
 | ER-12 | `cloud-native-component-framework` | `src/test/scala/org/goldenport/cncf/datastore/EntityRevisionProviderParitySpec.scala` | Prove equivalent atomic, concurrent no-op, rollback, restart, exhaustion, and admission results for in-memory, SQLite, and the selected shared provider. |
 | ER-13 | `cloud-native-component-framework` | `src/test/scala/org/goldenport/cncf/entity/EntityConditionalTransitionRevisionSpec.scala` | Require authoritative expected revision under every ordinary policy and retain exactly-one-winner behavior for both revision representations. |
 
 ## SE-02: SimpleEntity Revision Model
 
 Stage Status:
-- Current status: PLANNED
+- Current status: IN_PROGRESS
 - Owner: `simplemodeling-model` maintainers, with `simplemodeling-lib`
   maintainers only for proven generic gaps
 - Entry rule: SE-01 is DONE.
 - Completion rule: The model surface contains one validated managed revision
   attribute and existing lifecycle timestamp semantics remain unchanged.
 
-- [ ] Add `EntityRevision` under the appropriate
+- [x] Add `EntityRevision` under the appropriate
   `org.simplemodeling.model` datatype boundary.
-- [ ] Add `revision` as the only new standard `SimpleEntity` attribute.
-- [ ] Preserve `createdAt` and `updatedAt` without adding an OCC timestamp.
-- [ ] Define read-only/framework-managed metadata classification.
-- [ ] Reuse existing `simplemodeling-lib` generic datatype, schema,
+- [x] Add `revision` as the only new standard `SimpleEntity` attribute.
+- [x] Preserve `createdAt` and `updatedAt` without adding an OCC timestamp.
+- [x] Define read-only/framework-managed metadata classification.
+- [x] Reuse existing `simplemodeling-lib` generic datatype, schema,
   `ValueReader`, `Consequence`, and record facilities.
-- [ ] Add a `simplemodeling-lib` primitive only when it is independently
+- [x] Add a `simplemodeling-lib` primitive only when it is independently
   reusable and cannot be expressed correctly with existing core APIs.
-- [ ] Keep `simplemodeling-lib` independent of `SimpleEntity`, CNCF, and OCC.
-- [ ] Add property-based datatype and model-shape specifications.
-- [ ] Publish the required `simplemodeling-lib` snapshot first when changed.
-- [ ] Publish the `simplemodeling-model` snapshot and consume it from CNCF.
+- [x] Keep `simplemodeling-lib` independent of `SimpleEntity`, CNCF, and OCC.
+- [x] Add property-based datatype and model-shape specifications.
+- [x] Publish the required `simplemodeling-lib` snapshot first when changed.
+  No core change was required, so publication was not applicable.
+- [x] Publish the `simplemodeling-model` snapshot for downstream integration.
+- [ ] Consume the updated model from generated Entities and CNCF.
 
 Evidence:
-- Pending.
+- `simplemodeling-model/src/main/scala/org/simplemodeling/model/datatype/EntityRevision.scala`
+- `simplemodeling-model/src/main/scala/org/simplemodeling/model/SimpleEntity.scala`
+- `simplemodeling-model/src/test/scala/org/simplemodeling/model/datatype/EntityRevisionSpec.scala`
+- `simplemodeling-model/src/test/scala/org/simplemodeling/model/SimpleEntityRevisionSpec.scala`
+- Focused model specifications: 10 passed.
+- Full `simplemodeling-model` suite: 56 passed, with 27 pre-existing pending
+  specifications.
+- `simplemodeling-model` commit: `fc6d618` (`Add SimpleEntity revision model`).
+- Local development artifact:
+  `org.simplemodeling:simplemodeling-model_3:0.2.0-SNAPSHOT`.
 
 ## SE-03: Common Revision Kernel and Binding
 

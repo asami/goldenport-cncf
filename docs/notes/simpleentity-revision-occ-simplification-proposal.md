@@ -79,8 +79,14 @@ The accepted Scala-level type is a validated value type rather than a raw
 numeric value:
 
 ```scala
-final case class EntityRevision(value: Long)
+final class EntityRevision private (val value: Long) extends NominalScalar
 ```
+
+Construction is companion-validated. `EntityRevision` is deliberately not a
+case class because generated `copy` / product construction would provide an
+unchecked path around the positive-`Long` invariant. The companion exposes the
+canonical initial value, structured construction and decoding, and
+overflow-safe advancement.
 
 Conceptually, every persisted `SimpleEntity` provides:
 

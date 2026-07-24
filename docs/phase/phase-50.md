@@ -172,7 +172,9 @@ implementation assets.
   adapter selection.
 - `WriteIfChanged` is state deduplication for one Entity mutation. General REST
   request replay, idempotency keys, external side effects, and multi-resource
-  idempotency are not part of Phase 50.
+  idempotency are not part of Phase 50. REST request idempotency and generated
+  Web Form resubmission protection are tracked independently by strategy item
+  `9.43 REST and Web Form Transport Idempotency`.
 - `WriteIfChanged` equality and write admission are decided inside the
   authoritative provider mutation boundary. A preloaded in-memory comparison
   alone is insufficient.
@@ -195,7 +197,7 @@ implementation assets.
 | ID | Stage | Outcome | Status |
 | --- | --- | --- | --- |
 | SE-01 | Contract decisions and executable acceptance | Datatype ownership, embedded/detached representation matrix, policy declaration/default, initial revision, no-op behavior, migration/admission, projection, and API replacement decisions are fixed as executable expectations before implementation. | done |
-| SE-02 | SimpleEntity revision model | `simplemodeling-model` provides `EntityRevision` and one standard revision attribute; `simplemodeling-lib` changes only for independently reusable missing primitives. | planned |
+| SE-02 | SimpleEntity revision model | `simplemodeling-model` provides `EntityRevision` and one standard revision attribute; `simplemodeling-lib` changes only for independently reusable missing primitives. | in progress |
 | SE-03 | Common revision kernel and binding | Phase 49's atomic provider kernel is generalized around `EntityRevision`, and one deterministic embedded/detached binding is selected per Entity model. | planned |
 | SE-04 | Embedded SimpleEntity lifecycle and OCC | CNCF initializes, loads, advances, returns, and protects embedded revision; declarative policy controls ordinary expected-revision enforcement. | planned |
 | SE-05 | Detached non-SimpleEntity extension | Explicitly admitted non-`SimpleEntity` models can use a detached revision carrier without token compatibility, dual representation, or implicit fallback. | planned |
@@ -335,9 +337,15 @@ An Entity-specific datatype belongs to `simplemodeling-model`.
 
 ## Current Resume Point
 
-Phase 50 is active and Phase 49 is closed. SE-01 is done after independent
-review, review-fix, and clean re-review. Begin SE-02 with failing-first
-`EntityRevision` and `SimpleEntity` model specifications in
-`simplemodeling-model`. Preserve the Phase 49 atomic kernel and detached-domain
-capability, but do not preserve its provisional token names or expose the
-detached representation on the standard `SimpleEntity` path.
+Phase 50 is active and Phase 49 is closed. SE-01 is done. The SE-02A model
+slice is complete after independent review, review-fix, clean re-review,
+property-based model/datatype specifications, full `simplemodeling-model`
+validation, and local publication of `simplemodeling-model_3:0.2.0-SNAPSHOT`.
+No `simplemodeling-lib` extension was required.
+
+Continue SE-02 with the SE-02B generator/downstream-consumption slice:
+generated `SimpleEntity` implementations must carry the validated embedded
+revision and CNCF must consume the updated model without introducing revision
+as an application mutation parameter. Preserve the Phase 49 atomic kernel and
+detached-domain capability, but do not preserve its provisional token names or
+expose the detached representation on the standard `SimpleEntity` path.

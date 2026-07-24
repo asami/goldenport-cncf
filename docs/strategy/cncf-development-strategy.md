@@ -2899,3 +2899,72 @@ Active in Phase 50 after Phase 49 closure.
   - `docs/journal/2026/07/2026-07-24-simpleentity-revision-occ-consideration.md`;
     and
   - `docs/notes/simpleentity-revision-occ-simplification-proposal.md`.
+
+### 9.43 REST and Web Form Transport Idempotency
+Future development item after Phase 50 establishes the Entity revision and
+OCC foundation.
+
+- Goal:
+  - prevent duplicate execution caused by REST request replay and Web Form
+    resubmission at their respective transport boundaries;
+  - keep ordinary application operations independent from transport
+    idempotency metadata; and
+  - make duplicate handling deterministic without treating Entity revision or
+    state equality as a request identity.
+- Selected direction:
+  - REST mutation routes accept a standard idempotency key through framework
+    metadata, scoped by authenticated principal, route/operation, and
+    deployment policy;
+  - the REST adapter records a normalized request fingerprint, execution
+    state, and replayable response reference, returns the prior result for an
+    identical completed request, and rejects reuse of one key with different
+    input;
+  - generated Web Forms issue a one-time submission token scoped by
+    authenticated user/session, form, and intended operation;
+  - the Web Form adapter consumes the token once, uses Post/Redirect/Get where
+    applicable, returns the recorded result or redirect for an identical
+    resubmission, and rejects token reuse with different form input;
+  - authentication, authorization, route resolution, and tenant/security
+    context remain effective for every request; an idempotency record never
+    exposes another principal's result;
+  - idempotency metadata remains framework/transport metadata and is not
+    decoded as an application operation parameter;
+  - `Conclusion` provides structured invalid-key, conflicting-reuse,
+    in-progress, expired-token, and unavailable-store failures; and
+  - observability records first execution, duplicate replay, conflicting
+    reuse, expiry, and storage failure without recording confidential request
+    content.
+- Initial scope:
+  - common idempotency record/store SPI and retention policy;
+  - REST `Idempotency-Key` admission, request fingerprinting, in-progress
+    coordination, completed-result replay, and deterministic conflict;
+  - generated Web Form submission-token generation, hidden framework field,
+    one-time consumption, result/redirect replay, and Post/Redirect/Get
+    integration;
+  - bounded payload/result persistence and explicit handling when a response
+    cannot be replayed;
+  - runtime configuration, diagnostics, metrics, cleanup, and restart-safe
+    provider evidence; and
+  - executable specifications covering concurrent duplicates, retries after
+    ambiguous transport failure, token expiry, authorization isolation, and
+    application operations with external side effects.
+- Boundary:
+  - Entity revision remains the optimistic-concurrency mechanism and is not an
+    idempotency key;
+  - Phase 50 `WriteIfChanged` remains authoritative single-Entity state
+    deduplication and does not replace transport request deduplication;
+  - the core Entity mutation default remains `AlwaysWrite`;
+  - REST and Web Form use different transport bindings over a common
+    idempotency runtime rather than sharing one wire token contract;
+  - ordinary CLI, internal DSL, Event, and Job execution do not become
+    idempotent implicitly; and
+  - cross-service exactly-once delivery is not claimed without an explicit
+    transactional outbox/inbox or provider-level guarantee.
+- First implementation direction:
+  - implement the common record/store semantics and REST route integration
+    first;
+  - add generated Web Form token and Post/Redirect/Get integration on the same
+    runtime;
+  - promote verified behavior to design/specification before declaring either
+    transport binding complete; and
+  - schedule this item as an independent phase rather than expanding Phase 50.
