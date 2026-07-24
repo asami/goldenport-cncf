@@ -400,6 +400,107 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
       }
       _reconcile_versioned_failure(id, result)
 
+    case m: (UnitOfWorkOp.EntityStoreConditionalTransition[r, p, s] @unchecked) =>
+      val rootid = _canonical_entity_id(m.request.rootId)
+      val successorintent = m.request.successor match {
+        case create: EntitySuccessorIntent.Create[c, s] @unchecked =>
+          create
+        case bind: EntitySuccessorIntent.Bind[s] @unchecked =>
+          new EntitySuccessorIntent.Bind(
+            _canonical_entity_id(bind.id),
+            bind.persisted
+          )
+      }
+      val result = _with_calltree(
+        "uow:entitystore:conditional-transition",
+        _entity_calltree_attributes(
+          rootid,
+          "entity-store",
+          realio = true
+        )
+      ) {
+        for {
+          request <- EntityConditionalTransition.create(
+            rootid,
+            m.request.expectation,
+            m.request.rootPatch,
+            successorintent
+          )(using m.request.patchPersistent)
+          currentoption <- _load_record(rootid)
+          current <- Consequence.successOrEntityNotFound(currentoption)(rootid)
+          _ <- _authorize(
+            m.rootReadAuthorization,
+            Some(() => Consequence.success(Some(current)))
+          )
+          _ <- _authorize(
+            m.rootUpdateAuthorization,
+            Some(() => Consequence.success(Some(current)))
+          )
+          bound <- _conditional_successor_evidence(
+            successorintent,
+            m.successorAuthorization
+          )
+          changes =
+            Update.toChangesRecord(
+              request.patchPersistent.toStoreRecord(request.rootPatch)
+            )
+          proposed = _overlay_record(current, changes)
+          _ <- _transition_validation_hook.beforeUpdateById[p](
+            rootid,
+            request.rootPatch,
+            request.patchPersistent,
+            current,
+            proposed
+          )
+          execution <- _entity_store_space.conditionalTransition(
+            EntityConditionalTransitionCommand(
+              request,
+              m.componentOwner,
+              current,
+              bound
+            )
+          )
+          response <- execution match {
+            case transitioned:
+                EntityConditionalTransitionExecutionResult.Transitioned[r, s] @unchecked =>
+              _entity_space_evict(rootid)
+              _entity_space_evict(
+                successorintent.persisted.id(
+                  transitioned.result.successor.entity
+                )
+              )
+              _entity_space_put(
+                transitioned.result.root.entity,
+                request.rootPersistent
+              )
+              _entity_space_put(
+                transitioned.result.successor.entity,
+                successorintent.persisted
+              )
+              _view_space_invalidate_all()
+              Consequence.success(transitioned.result)
+            case notmatched:
+                EntityConditionalTransitionExecutionResult.NotMatched[r] @unchecked =>
+              _entity_space_evict(rootid)
+              _authorize(
+                m.rootReadAuthorization,
+                Some(() => Consequence.success(Some(notmatched.rootRecord)))
+              ).map { _ =>
+                _entity_space_put(
+                  notmatched.result.existing.entity,
+                  request.rootPersistent
+                )
+                notmatched.result
+              }
+          }
+        } yield response
+      }
+      _reconcile_conditional_transition_failure(
+        rootid,
+        successorintent,
+        result
+      )
+
     case m: (UnitOfWorkOp.EntityStoreUpdateUnversioned[t] @unchecked) =>
       _with_calltree("uow:entitystore:update-unversioned") {
         _authorize_unversioned(m.authorization, m.purpose).flatMap { _ =>
@@ -934,6 +1035,54 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
       _ <- _authorize_unversioned(createauthorization, purpose)
       _ <- _authorize_unversioned(updateauthorization, purpose)
     } yield ()
+
+  private def _conditional_successor_evidence[S](
+    successor: EntitySuccessorIntent[S],
+    authorization: Option[UnitOfWorkAuthorization]
+  ): Consequence[Option[EntityBoundSuccessorEvidence]] =
+    successor match {
+      case _: EntitySuccessorIntent.Create[?, S] =>
+        _authorize(authorization).map(_ => None)
+      case bind: EntitySuccessorIntent.Bind[S] =>
+        for {
+          recordoption <- _load_record(bind.id)
+          record <-
+            Consequence.successOrEntityNotFound(recordoption)(bind.id)
+          _ <- _authorize(
+            authorization,
+            Some(() => Consequence.success(Some(record)))
+          )
+          token <- EntityConcurrencyMetadata.token(record)
+        } yield Some(EntityBoundSuccessorEvidence(bind.id, token))
+    }
+
+  private def _reconcile_conditional_transition_failure[R, P, S](
+    rootid: EntityId,
+    successor: EntitySuccessorIntent[S],
+    result: Consequence[EntityConditionalTransitionResult[R, S]]
+  ): Consequence[EntityConditionalTransitionResult[R, S]] = {
+    result match {
+      case failure: Consequence.Failure[
+            EntityConditionalTransitionResult[R, S]
+          ] =>
+        ConclusionDiagnostics.classify(failure.conclusion).reason match {
+          case Some("committed-entity-projection-failure") =>
+            _entity_space_evict(rootid)
+            successor match {
+              case bind: EntitySuccessorIntent.Bind[S] =>
+                _entity_space_evict(bind.id)
+              case _ =>
+                ()
+            }
+            _view_space_invalidate_all()
+          case _ =>
+            ()
+        }
+      case _ =>
+        ()
+    }
+    result
+  }
 
   private def _reconcile_versioned_failure[A](
       id: EntityId,

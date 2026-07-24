@@ -106,7 +106,7 @@ They are recorded together in strategy completed history rather than leaving
 | EC-02 | Concurrency model and storage shape | Managed revision metadata and typed concurrency values have deterministic persistence and migration behavior. | done |
 | EC-03 | Version-aware mutation | Required Entity/Aggregate mutation paths compare the caller token atomically and return structured stale conflicts. | done |
 | EC-04 | Atomic datastore capability | A closed provider-neutral plan executes guard, successor, root update, and token advance in one transaction without fallback. | done |
-| EC-05 | EntityStore, UnitOfWork, and DSL | Protected typed conditional transition preserves authorization, lifecycle, transaction, and normal effect boundaries. | planned |
+| EC-05 | EntityStore, UnitOfWork, and DSL | Protected typed conditional transition preserves authorization, lifecycle, transaction, and normal effect boundaries. | done |
 | EC-06 | Coherence and diagnostics | EntitySpace, Working Set, View, audit, CallTree, metrics, and structured failures reflect only authoritative outcomes. | planned |
 | EC-07 | Provider and concurrency evidence | In-memory, SQLite, and one shared profile prove one winner, rollback safety, restart visibility, and provider parity. | planned |
 | EC-08 | CBD Support acceptance | Terminal predecessor retention and exactly-one successor ownership use the generic CNCF DSL without storage bypass. | planned |
@@ -275,3 +275,16 @@ then passed a clean read-only re-review with no actionable findings. The full
 CNCF suite completed 341 suites with all 2397 executed tests successful,
 followed by a clean `git diff --check`. EC-04 is complete; EC-05 is the next
 Phase 49 slice.
+
+EC-05 adds the typed Entity conditional-transition model, a private UnitOfWork
+operation, canonical EntityStore/EntityStoreSpace normalization, and protected
+user and `ServiceInternal` ActionCall helpers. The final implementation admits
+root and successor collections against the executing component, retains one
+create-successor collection/id identity, submits only normalized provider
+deltas, preserves transition validation and structured failures, and exposes
+no automatic public CRUD surface. Fresh re-review found no actionable finding.
+Focused conditional-transition validation passed 33 tests across five suites,
+versioned-mutation regression validation passed 14 tests across four suites,
+and the full CNCF suite passed all 2415 executed tests across 344 suites.
+EC-05 is complete; EC-06 coherence, authorization completion, audit, and
+diagnostics remain next.

@@ -137,6 +137,12 @@ A conditional transition MUST use exactly one closed successor intent:
 root mutation. A duplicate successor MUST be a structured conflict and MUST
 NOT overwrite an existing Entity.
 
+`Create` admission MUST evaluate and retain one successor collection and one
+optional candidate Entity id. When the candidate supplies an id, that id MUST
+belong to the retained collection or construction MUST fail. Provider
+preparation MUST NOT reevaluate either identity. When no candidate id exists,
+the framework MUST generate it in the retained collection.
+
 `Bind(id)` MUST remain a component-facing intent. Before provider-plan
 submission, the framework MUST load and authorize an `EntitySnapshot` for the
 bound successor and normalize the bind into successor id plus expected
@@ -585,6 +591,17 @@ Given concurrent terminal Review Run successor attempts, when CBD Support uses
 the protected DSL, then one successor owns continuation work and the terminal
 predecessor remains retained.
 
+### E19: Cross-component successor rejection
+
+Given a root or successor collection that is not registered to the executing
+component, when either protected conditional-transition helper admits the
+request, then it returns a structured component-scope denial before
+constructing a UnitOfWork operation.
+
+Given a create codec that declares one successor collection but supplies a
+candidate Entity id from another collection, when the successor intent is
+constructed, then construction fails before ActionCall or provider admission.
+
 ## Executable Specification Evidence Matrix
 
 | Rules | Examples | Executable specification |
@@ -592,6 +609,7 @@ predecessor remains retained.
 | R1-R4 | E1-E2 | `EntityConcurrencyTokenSpec` |
 | R5, R19 | E3-E4 | `EntityVersionedMutationSpec`, `ContentBodyVersionedMutationSpec` |
 | R6-R10 | E5-E6, E13-E14 | `EntityConditionalTransitionModelSpec` |
+| R8, R14-R15 | E19 | `EntityConditionalTransitionModelSpec`, `UnitOfWorkConditionalTransitionSpec`, `ActionCallConditionalTransitionDslSpec` |
 | R11-R13 | E3-E4, E8-E11, E13, E15 | `EntityVersionedMutationDataStoreSpec`, `ContentBodyVersionedMutationSpec`, `DataStoreConditionalTransitionSpec` |
 | R14-R16 | E5, E7, E13-E14 | `UnitOfWorkConditionalTransitionSpec` |
 | R17-R18 | E6, E12, E14, E16 | `EntityConditionalTransitionCoherenceSpec` |
@@ -601,3 +619,48 @@ predecessor remains retained.
 | R23 | E5-E6, E8-E11, E17 | `MysqlConditionalTransitionAcceptanceSpec` |
 | R24 | E18 | CBD Support conditional-transition acceptance spec |
 | R25 | E4 | Entity conflict API-surface regression specification |
+
+## EC-05 Framework Binding
+
+The protected typed transition MUST traverse:
+
+```text
+ActionCall protected DSL
+  -> EntityStoreConditionalTransition UnitOfWork operation
+  -> UnitOfWorkInterpreter
+  -> EntityStoreSpace
+  -> EntityStore
+  -> DataStoreSpace.conditionalTransition
+```
+
+`EntityTransitionField` MUST derive its physical field from
+`EntityPersistent.storeFieldName`. A transition expectation MUST reject a
+field that is not owned by its `EntityTransitionDefinition`, duplicate fields,
+framework-managed revision fields, unsupported exact values, and over-limit
+input before provider execution.
+
+The UnitOfWork interpreter MUST authorize root read and update plus successor
+create or bind/read before provider execution. A bound successor MUST carry
+the authoritative revision observed during that admitted read. A
+`NotMatched(existing)` result MUST undergo read authorization against the
+returned authoritative record before it is returned or installed.
+
+The EntityStore binding MUST submit a normalized root delta rather than the
+full candidate record. It MUST reject empty and ineffective patches,
+framework-managed patch fields, and logically deleted roots before provider
+execution. Post-result `NotMatched` handling MUST evict stale resident root
+state before authorization of the returned authoritative record.
+
+The `ServiceInternal` helper MUST NOT use System access and MUST NOT bypass
+authorization, transition validation, UnitOfWork, EntityStore, or datastore
+capability resolution.
+
+After Entity-id canonicalization, the ActionCall boundary MUST resolve both
+root and successor collections against the executing component's registered
+`EntitySpace`. An unregistered collection MUST produce a structured
+component-scope denial before a UnitOfWork operation is constructed. This
+admission MUST be identical for the user and `ServiceInternal` helpers and
+MUST NOT infer ownership by parsing an Entity identifier.
+
+No conditional-transition operation is automatically exposed through
+REST, Form, CLI, MCP, or generic CRUD projection.

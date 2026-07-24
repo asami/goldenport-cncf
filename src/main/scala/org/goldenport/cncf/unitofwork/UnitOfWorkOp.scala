@@ -220,6 +220,14 @@ object UnitOfWorkOp {
     authorization: Option[UnitOfWorkAuthorization] = None
   ) extends UnitOfWorkOp[EntityRecordSnapshot]
 
+  private[cncf] final case class EntityStoreConditionalTransition[R, P, S](
+    request: EntityConditionalTransition[R, P, S],
+    componentOwner: org.goldenport.cncf.datastore.DataStoreComponentOwner,
+    rootReadAuthorization: Option[UnitOfWorkAuthorization],
+    rootUpdateAuthorization: Option[UnitOfWorkAuthorization],
+    successorAuthorization: Option[UnitOfWorkAuthorization]
+  ) extends UnitOfWorkOp[EntityConditionalTransitionResult[R, S]]
+
   final case class EntityStoreUpdateUnversioned[T](
       entity: T,
       purpose: EntityUnversionedMutationPurpose,

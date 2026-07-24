@@ -9,6 +9,7 @@ import cats.syntax.functor.*
 import io.circe.Json
 import org.goldenport.Consequence
 import org.goldenport.ConsequenceT
+import org.goldenport.observation.Cause
 import org.goldenport.observation.Descriptor
 import org.goldenport.id.UniversalId
 import org.goldenport.record.Record
@@ -50,7 +51,16 @@ import org.goldenport.cncf.security.{
 import org.goldenport.cncf.Program
 import org.simplemodeling.model.datatype.EntityId
 import org.simplemodeling.model.datatype.EntityCollectionId
-import org.goldenport.cncf.datastore.{ComponentDataStore, DataStore}
+import org.goldenport.cncf.datastore.{
+  ComponentDataStore,
+  DataStore,
+  DataStoreComponentOwner
+}
+import org.goldenport.cncf.entity.{
+  EntityConditionalTransition,
+  EntityConditionalTransitionResult,
+  EntitySuccessorIntent
+}
 import org.goldenport.cncf.entity.EntityPersistent
 import org.goldenport.cncf.entity.EntityPersistentCreate
 import org.goldenport.cncf.entity.EntityPersistentUpdate
@@ -2658,6 +2668,135 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
       authorization
     )
     ConsequenceT.liftF(Free.liftF(op))
+  }
+
+  protected final def entity_conditional_transition[R, P, S](
+    request: EntityConditionalTransition[R, P, S]
+  ): ExecUowM[EntityConditionalTransitionResult[R, S]] =
+    _entity_conditional_transition(request, serviceinternal = false)
+
+  protected final def entity_conditional_transition_internal[R, P, S](
+    request: EntityConditionalTransition[R, P, S]
+  ): ExecUowM[EntityConditionalTransitionResult[R, S]] =
+    _entity_conditional_transition(request, serviceinternal = true)
+
+  private def _entity_conditional_transition[R, P, S](
+    request: EntityConditionalTransition[R, P, S],
+    serviceinternal: Boolean
+  ): ExecUowM[EntityConditionalTransitionResult[R, S]] = {
+    ensure_component_application_datastore()
+    val rootid = _canonical_entity_id(request.rootId)
+    val successorintent = request.successor match {
+      case create: EntitySuccessorIntent.Create[c, S] @unchecked =>
+        create
+      case bind: EntitySuccessorIntent.Bind[S] @unchecked =>
+        new EntitySuccessorIntent.Bind(
+          _canonical_entity_id(bind.id),
+          bind.persisted
+        )
+    }
+    val successorcollection = successorintent match {
+      case create: EntitySuccessorIntent.Create[?, S] =>
+        create.collection
+      case bind: EntitySuccessorIntent.Bind[S] =>
+        bind.id.collection
+    }
+    val admittedrequest =
+      EntityConditionalTransition.create(
+        rootid,
+        request.expectation,
+        request.rootPatch,
+        successorintent
+      )(using request.patchPersistent)
+    exec_from(admittedrequest).flatMap { effectiverequest =>
+      val owner =
+        _conditional_transition_component_owner(
+          rootid.collection,
+          successorcollection
+        )
+      exec_from(owner).flatMap { componentowner =>
+        val rootread =
+          _conditional_transition_authorization(
+            Some(rootid.collection.name),
+            Some(rootid),
+            "read",
+            serviceinternal
+          )
+        val rootupdate =
+          _conditional_transition_authorization(
+            Some(rootid.collection.name),
+            Some(rootid),
+            "update",
+            serviceinternal
+          )
+        val successor = successorintent match {
+          case create: EntitySuccessorIntent.Create[?, S] =>
+            _conditional_transition_authorization(
+              Some(create.collection.name),
+              None,
+              "create",
+              serviceinternal
+            )
+          case bind: EntitySuccessorIntent.Bind[S] =>
+            _conditional_transition_authorization(
+              Some(bind.id.collection.name),
+              Some(bind.id),
+              "read",
+              serviceinternal
+            )
+        }
+        val op = UnitOfWorkOp.EntityStoreConditionalTransition(
+          effectiverequest,
+          componentowner,
+          rootread,
+          rootupdate,
+          successor
+        )
+        ConsequenceT.liftF(Free.liftF(op))
+      }
+    }
+  }
+
+  private def _conditional_transition_component_owner(
+    rootcollection: EntityCollectionId,
+    successorcollection: EntityCollectionId
+  ): Consequence[DataStoreComponentOwner] =
+    component match {
+      case Some(c)
+          if c.entitySpace.entityOption(rootcollection).isDefined &&
+            c.entitySpace.entityOption(successorcollection).isDefined =>
+        component_name_option
+          .map(DataStoreComponentOwner.create)
+          .getOrElse(Consequence.argumentMissing("componentName"))
+      case Some(_) =>
+        Consequence.securityPermissionDenied(
+          "Conditional transition collections must belong to the executing component.",
+          Cause.Kind.Guard,
+          Seq(
+            Descriptor.Facet.Reason(
+              "conditional-transition-component-scope"
+            ),
+            Descriptor.Facet.Guard(
+              "cross-component"
+            )
+          )
+        )
+      case None =>
+        Consequence.argumentMissing("component")
+    }
+
+  private def _conditional_transition_authorization(
+    resourcetype: Option[String],
+    targetid: Option[EntityId],
+    accesskind: String,
+    serviceinternal: Boolean
+  ): Option[UnitOfWorkAuthorization] = {
+    val authorization =
+      _entity_uow_authorization(resourcetype, targetid, accesskind)
+    if (serviceinternal)
+      authorization.map(_.copy(accessMode = EntityAccessMode.ServiceInternal))
+    else
+      authorization
   }
 
   protected final def entity_delete(id: EntityId): ExecUowM[Unit] = {

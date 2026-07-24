@@ -1,0 +1,542 @@
+package org.goldenport.cncf.action
+
+import cats.~>
+import cats.Id
+import cats.data.State
+import cats.effect.Ref
+import cats.syntax.all.*
+import org.goldenport.Consequence
+import org.goldenport.observation.Cause
+import org.goldenport.cncf.component.{
+  Component,
+  ComponentId,
+  ComponentInstanceId
+}
+import org.goldenport.cncf.context.{
+  DataStoreContext,
+  EntityStoreContext,
+  ExecutionContext,
+  ObservabilityContext,
+  RuntimeContext,
+  ScopeContext,
+  ScopeKind,
+  TraceId
+}
+import org.goldenport.cncf.datastore.{
+  DataStoreComponentOwner,
+  DataStoreSpace
+}
+import org.goldenport.cncf.entity.*
+import org.goldenport.cncf.entity.runtime.{
+  EntityCollection,
+  EntityDescriptor,
+  EntityLoader,
+  EntityMemoryPolicy,
+  EntityRealm,
+  EntityRealmState,
+  EntityRuntimePlan,
+  EntityStorage,
+  PartitionStrategy
+}
+import org.goldenport.cncf.observability.ConclusionDiagnostics
+import org.goldenport.cncf.security.EntityAccessMode
+import org.goldenport.cncf.unitofwork.{
+  ExecUowM,
+  UnitOfWork,
+  UnitOfWorkOp
+}
+import org.goldenport.protocol.{Protocol, Request}
+import org.goldenport.protocol.operation.OperationResponse
+import org.goldenport.record.Record
+import org.scalatest.GivenWhenThen
+import org.scalatest.matchers.should.Matchers
+import org.scalatest.wordspec.AnyWordSpec
+import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
+
+/*
+ * @since   Jul. 24, 2026
+ * @version Jul. 24, 2026
+ * @author  ASAMI, Tomoharu
+ */
+final class ActionCallConditionalTransitionDslSpec
+    extends AnyWordSpec
+    with Matchers
+    with GivenWhenThen {
+  private val _rootcollection =
+    EntityCollectionId("test", "phase49", "dsl_root")
+  private val _successorcollection =
+    EntityCollectionId("test", "phase49", "dsl_successor")
+  private val _metadata =
+    afterWord(
+      "in spec:entity-conflict-and-conditional-transition, example:E5, rules:R14-R15, phase:49"
+    )
+  private val _component_scope_metadata =
+    afterWord(
+      "in spec:entity-conflict-and-conditional-transition, example:E19, rules:R8,R14-R15, phase:49"
+    )
+
+  "ActionCall conditional-transition DSL" should {
+    "construct one protected UnitOfWork operation" must _metadata {
+      "when user and ServiceInternal helpers are executed" in {
+        Given(
+          "Spec: docs/spec/entity-conflict-and-conditional-transition.md; Rules: R14-R15; Example: E5; one component-owned typed request"
+        )
+        val standardcapture = new OperationCapture
+        val internalcapture = new OperationCapture
+        val component = new TestComponent
+        val request = _request()
+
+        When("the two protected helpers build and interpret their programs")
+        val _ =
+          new ConditionalTransitionCall(
+            _core(component, standardcapture),
+            request,
+            serviceinternal = false
+          ).execute()
+        val _ =
+          new ConditionalTransitionCall(
+            _core(component, internalcapture),
+            request,
+            serviceinternal = true
+          ).execute()
+
+        Then("both helpers use the executing component as provider owner")
+        standardcapture.transition.map(_.componentOwner) shouldBe
+          Some(DataStoreComponentOwner.create("phase49-dsl").TAKE)
+        internalcapture.transition.map(_.componentOwner) shouldBe
+          Some(DataStoreComponentOwner.create("phase49-dsl").TAKE)
+
+        And("ServiceInternal changes only the admitted authorization mode")
+        _authorization_shape(standardcapture.transition) shouldBe
+          Vector.fill(3)(EntityAccessMode.UserPermission)
+        _authorization_shape(internalcapture.transition) shouldBe
+          Vector.fill(3)(EntityAccessMode.ServiceInternal)
+        standardcapture.transition.map(_.request.rootId) shouldBe
+          internalcapture.transition.map(_.request.rootId)
+        _authorization_without_mode(standardcapture.transition) shouldBe
+          _authorization_without_mode(internalcapture.transition)
+      }
+    }
+
+    "enforce executing-component collection ownership" must
+      _component_scope_metadata {
+      "when either helper receives a root from another component" in {
+        Given(
+          "Spec: docs/spec/entity-conflict-and-conditional-transition.md; Rules: R8,R14-R15; Example: E19; one unregistered root and one local successor collection"
+        )
+        val standardcapture = new OperationCapture
+        val internalcapture = new OperationCapture
+        val component = new TestComponent
+        val foreigncollection =
+          EntityCollectionId("test", "foreign", "foreign_root")
+        val request =
+          _request(rootcollection = foreigncollection)
+
+        When("user and ServiceInternal helpers admit the typed request")
+        val standardresult =
+          new ConditionalTransitionCall(
+            _core(component, standardcapture),
+            request,
+            serviceinternal = false
+          ).execute()
+        val internalresult =
+          new ConditionalTransitionCall(
+            _core(component, internalcapture),
+            request,
+            serviceinternal = true
+          ).execute()
+
+        Then("both helpers reject the request before constructing a UnitOfWork operation")
+        _assert_component_scope_denial(standardresult)
+        _assert_component_scope_denial(internalresult)
+        standardcapture.transition shouldBe None
+        internalcapture.transition shouldBe None
+      }
+
+      "when either helper receives a successor from another component" in {
+        Given(
+          "Spec: docs/spec/entity-conflict-and-conditional-transition.md; Rules: R8,R14-R15; Example: E19; one local root and one unregistered successor collection"
+        )
+        val standardcapture = new OperationCapture
+        val internalcapture = new OperationCapture
+        val component = new TestComponent
+        val foreigncollection =
+          EntityCollectionId("test", "foreign", "foreign_successor")
+        val request =
+          _request(successorcollection = foreigncollection)
+
+        When("user and ServiceInternal helpers admit the typed request")
+        val standardresult =
+          new ConditionalTransitionCall(
+            _core(component, standardcapture),
+            request,
+            serviceinternal = false
+          ).execute()
+        val internalresult =
+          new ConditionalTransitionCall(
+            _core(component, internalcapture),
+            request,
+            serviceinternal = true
+          ).execute()
+
+        Then("both helpers reject the request before constructing a UnitOfWork operation")
+        _assert_component_scope_denial(standardresult)
+        _assert_component_scope_denial(internalresult)
+        standardcapture.transition shouldBe None
+        internalcapture.transition shouldBe None
+      }
+    }
+  }
+
+  private final class OperationCapture {
+    private var _transition:
+        Option[UnitOfWorkOp.EntityStoreConditionalTransition[?, ?, ?]] =
+      None
+
+    def transition:
+        Option[UnitOfWorkOp.EntityStoreConditionalTransition[?, ?, ?]] =
+      _transition
+
+    def interpreter(
+      context: => ExecutionContext
+    ): UnitOfWorkOp ~> Consequence =
+      new (UnitOfWorkOp ~> Consequence) {
+        def apply[A](operation: UnitOfWorkOp[A]): Consequence[A] = {
+          operation match {
+            case transition:
+                UnitOfWorkOp.EntityStoreConditionalTransition[?, ?, ?] =>
+              _transition = Some(transition)
+            case _ =>
+              ()
+          }
+          new org.goldenport.cncf.unitofwork.UnitOfWorkInterpreter(
+            new UnitOfWork(context)
+          ).interpret(operation)
+        }
+      }
+  }
+
+  private final class ConditionalTransitionCall(
+    val core: ActionCall.Core,
+    request: EntityConditionalTransition[Root, RootPatch, Successor],
+    serviceinternal: Boolean
+  ) extends FunctionalActionCall
+      with ActionCall.Core.Holder {
+    protected def build_Program: ExecUowM[OperationResponse] = {
+      val transition =
+        if (serviceinternal)
+          entity_conditional_transition_internal(request)
+        else
+          entity_conditional_transition(request)
+      transition.map(_ => OperationResponse.Void())
+    }
+  }
+
+  private final class TestComponent extends Component {
+    override val core: Component.Core = Component.Core.create(
+      "phase49-dsl",
+      ComponentId("phase49_dsl"),
+      ComponentInstanceId.default(ComponentId("phase49_dsl")),
+      Protocol.empty
+    )
+
+    override def coreOption: Option[Component.Core] =
+      Some(core)
+
+    entitySpace.registerEntity(
+      _rootcollection.name,
+      _empty_collection(_rootcollection, _root_persistent)
+    )
+    entitySpace.registerEntity(
+      _successorcollection.name,
+      _empty_collection(_successorcollection, _successor_persistent)
+    )
+  }
+
+  private def _core(
+    component: Component,
+    capture: OperationCapture
+  ): ActionCall.Core = {
+    val datastorespace = DataStoreSpace.default()
+    val entitystorespace =
+      new EntityStoreSpace().addEntityStore(EntityStore.standard())
+    val observability = ObservabilityContext(
+      traceId = TraceId("test", "action_call_conditional_transition"),
+      spanId = None,
+      correlationId = None
+    )
+    lazy val context: ExecutionContext = ExecutionContext.create(runtime)
+    lazy val runtime: RuntimeContext = new RuntimeContext(
+      core = ScopeContext.Core(
+        kind = ScopeKind.Runtime,
+        name = "action-call-conditional-transition-runtime",
+        parent = None,
+        observabilityContext = observability,
+        httpDriverOption = None,
+        datastore = Some(DataStoreContext(datastorespace)),
+        entitystore = Some(EntityStoreContext(entitystorespace))
+      ),
+      unitOfWorkSupplier = () => new UnitOfWork(context),
+      unitOfWorkInterpreterFn = capture.interpreter(context),
+      commitAction = _ => (),
+      abortAction = _ => (),
+      disposeAction = _ => (),
+      token = "action-call-conditional-transition-runtime"
+    )
+    val action = new CommandAction {
+      override def createCall(core: ActionCall.Core): ActionCall =
+        throw new UnsupportedOperationException("not used")
+
+      override def request: Request =
+        Request(
+          component = Some("phase49-dsl"),
+          service = None,
+          operation = "conditional_transition",
+          arguments = Nil,
+          switches = Nil,
+          properties = Nil
+        )
+    }
+    ActionCall.Core(action, context, Some(component), None)
+  }
+
+  private def _authorization_shape(
+    operation:
+      Option[UnitOfWorkOp.EntityStoreConditionalTransition[?, ?, ?]]
+  ): Vector[EntityAccessMode] =
+    operation.toVector.flatMap { transition =>
+      Vector(
+        transition.rootReadAuthorization,
+        transition.rootUpdateAuthorization,
+        transition.successorAuthorization
+      ).flatten.map(_.accessMode)
+    }
+
+  private def _authorization_without_mode(
+    operation:
+      Option[UnitOfWorkOp.EntityStoreConditionalTransition[?, ?, ?]]
+  ) =
+    operation.toVector.flatMap { transition =>
+      Vector(
+        transition.rootReadAuthorization,
+        transition.rootUpdateAuthorization,
+        transition.successorAuthorization
+      ).flatten.map(_.copy(accessMode = EntityAccessMode.UserPermission))
+    }
+
+  private def _assert_component_scope_denial(
+    result: Consequence[OperationResponse]
+  ): Unit =
+    result match {
+      case Consequence.Failure(conclusion) =>
+        val diagnostic = ConclusionDiagnostics.classify(conclusion)
+        diagnostic.webStatus shouldBe 403
+        diagnostic.causeKind shouldBe Some(Cause.Kind.Guard.name)
+        diagnostic.diagnosticKey shouldBe "cross_component"
+        diagnostic.reason shouldBe
+          Some("conditional-transition-component-scope")
+        diagnostic.guard shouldBe Some("cross-component")
+      case _ =>
+        fail("expected structured component-scope denial")
+    }
+
+  private def _request(
+    rootcollection: EntityCollectionId = _rootcollection,
+    successorcollection: EntityCollectionId = _successorcollection
+  ):
+      EntityConditionalTransition[Root, RootPatch, Successor] = {
+    val rootid = EntityId("test", "dsl_root", rootcollection)
+    val successorid =
+      EntityId("test", "dsl_successor", successorcollection)
+    val field =
+      EntityTransitionField
+        .exact[Root, String]("status", _root_persistent)
+        .TAKE
+    val expectation =
+      EntityTransitionDefinition
+        .create(_root_persistent, Vector(field))
+        .flatMap(_.expectation(
+          EntityConcurrencyToken.INITIAL,
+          field.expected("open").TAKE
+        ))
+        .TAKE
+    val successor =
+      EntitySuccessorIntent
+        .create[Successor, Successor](
+          Successor(successorid, "created")
+        )(using _successor_create, _successor_persistent)
+        .TAKE
+    EntityConditionalTransition
+      .create(
+        rootid,
+        expectation,
+        RootPatch("claimed"),
+        successor
+      )(using _root_patch_for(rootcollection))
+      .TAKE
+  }
+
+  private def _empty_collection[E](
+    collectionid: EntityCollectionId,
+    persistent: EntityPersistent[E]
+  ): EntityCollection[E] = {
+    given EntityPersistent[E] = persistent
+    val storerealm = new EntityRealm[E](
+      entityName = collectionid.name,
+      loader = EntityLoader[E](_ => None),
+      state = new IdRef(EntityRealmState(Map.empty))
+    )
+    val descriptor = EntityDescriptor(
+      collectionId = collectionid,
+      plan = EntityRuntimePlan(
+        entityName = collectionid.name,
+        memoryPolicy = EntityMemoryPolicy.StoreOnly,
+        workingSet = None,
+        partitionStrategy = PartitionStrategy.byEntityId,
+        maxPartitions = 1,
+        maxEntitiesPerPartition = 1
+      ),
+      persistent = persistent
+    )
+    new EntityCollection(
+      descriptor,
+      EntityStorage(storerealm)
+    )
+  }
+
+  private final case class Root(
+    id: EntityId,
+    status: String
+  )
+
+  private final case class RootPatch(
+    status: String
+  )
+
+  private final case class Successor(
+    id: EntityId,
+    label: String
+  )
+
+  private val _root_persistent: EntityPersistent[Root] =
+    new EntityPersistent[Root] {
+      def id(entity: Root): EntityId = entity.id
+      def toRecord(entity: Root): Record =
+        Record.dataAuto("id" -> entity.id, "status" -> entity.status)
+      def fromRecord(record: Record): Consequence[Root] =
+        (record.getAs[EntityId]("id"), record.getString("status")) match {
+          case (Some(id), Some(status)) =>
+            Consequence.success(Root(id, status))
+          case _ =>
+            Consequence.argumentInvalid("root", "id and status", record)
+        }
+    }
+
+  private def _root_patch_for(
+    collectionid: EntityCollectionId
+  ): EntityPersistentUpdate[RootPatch] =
+    new EntityPersistentUpdate[RootPatch] {
+      def collection(entity: RootPatch): EntityCollectionId = {
+        val _ = entity
+        collectionid
+      }
+      def toRecord(entity: RootPatch): Record =
+        Record.dataAuto("status" -> entity.status)
+      def fromRecord(record: Record): Consequence[RootPatch] =
+        record.getString("status")
+          .map(status => Consequence.success(RootPatch(status)))
+          .getOrElse(
+            Consequence.argumentInvalid("rootPatch", "status", record)
+          )
+    }
+
+  private val _successor_persistent: EntityPersistent[Successor] =
+    new EntityPersistent[Successor] {
+      def id(entity: Successor): EntityId = entity.id
+      def toRecord(entity: Successor): Record =
+        Record.dataAuto("id" -> entity.id, "label" -> entity.label)
+      def fromRecord(record: Record): Consequence[Successor] =
+        (record.getAs[EntityId]("id"), record.getString("label")) match {
+          case (Some(id), Some(label)) =>
+            Consequence.success(Successor(id, label))
+          case _ =>
+            Consequence.argumentInvalid("successor", "id and label", record)
+        }
+    }
+
+  private val _successor_create: EntityPersistentCreate[Successor] =
+    EntityPersistentCreate.fromPersistent(_successor_persistent)
+
+  private final class IdRef[A](initial: A) extends Ref[Id, A] {
+    private var _value: A = initial
+
+    def get: A =
+      synchronized(_value)
+
+    def set(value: A): Unit =
+      synchronized {
+        _value = value
+      }
+
+    override def getAndSet(value: A): A =
+      synchronized {
+        val previous = _value
+        _value = value
+        previous
+      }
+
+    def access: (A, A => Boolean) =
+      synchronized {
+        val snapshot = _value
+        val setter: A => Boolean = next =>
+          synchronized {
+            if (_value == snapshot) {
+              _value = next
+              true
+            } else {
+              false
+            }
+          }
+        snapshot -> setter
+      }
+
+    override def tryUpdate(f: A => A): Boolean =
+      synchronized {
+        _value = f(_value)
+        true
+      }
+
+    override def tryModify[B](f: A => (A, B)): Option[B] =
+      synchronized {
+        val (next, result) = f(_value)
+        _value = next
+        Some(result)
+      }
+
+    def update(f: A => A): Unit =
+      synchronized {
+        _value = f(_value)
+      }
+
+    def modify[B](f: A => (A, B)): B =
+      synchronized {
+        val (next, result) = f(_value)
+        _value = next
+        result
+      }
+
+    override def modifyState[B](state: State[A, B]): B =
+      synchronized {
+        val (next, result) = state.run(_value).value
+        _value = next
+        result
+      }
+
+    override def tryModifyState[B](state: State[A, B]): Option[B] =
+      synchronized {
+        val (next, result) = state.run(_value).value
+        _value = next
+        Some(result)
+      }
+  }
+}

@@ -600,3 +600,52 @@ through the same boundary and downstream acceptance.
 
 Force/repair commands, merge workflows, overwrite policy, and
 conflict-resolution UI remain a separate future capability.
+
+## EC-05 Runtime Binding
+
+The typed framework binding is implemented through:
+
+- `EntityTransitionField` and `EntityTransitionDefinition`, which admit
+  logical fields and derive their canonical storage names only through
+  `EntityPersistent.storeFieldName`;
+- `EntityConditionalTransition`, which carries one root expectation, one
+  generated update patch, and one typed `Create` or `Bind` successor intent;
+- one private CNCF `EntityStoreConditionalTransition` UnitOfWork operation;
+- `EntityStoreSpace` and `EntityStore`, which normalize the typed request into
+  the closed provider plan and never fall back to ordinary CRUD; and
+- protected `entity_conditional_transition` and
+  `entity_conditional_transition_internal` ActionCall helpers.
+
+The component owner is the executing ActionCall component. It is never
+inferred from an Entity id. The internal helper changes the Entity access mode
+to `ServiceInternal` but preserves root and successor authorization,
+UnitOfWork, transition-validation hook, EntityStore, and datastore capability
+boundaries.
+
+The executing component becomes trusted ownership evidence only after both
+canonical root and successor collections resolve in that component's
+registered `EntitySpace`. An unregistered collection is rejected at the
+ActionCall boundary before UnitOfWork construction. This prevents a caller
+from labeling an arbitrary collection with the executing component owner and
+keeps the same admission rule for user and `ServiceInternal` execution.
+
+A create successor intent closes its target identity at construction. It
+retains the codec-declared collection and optional candidate Entity id,
+rejects an id whose collection differs, and never reevaluates either value
+during ActionCall or provider-plan preparation. Missing ids are generated
+inside the retained collection.
+
+Provider-plan records are closed at the EntityStore boundary. Entity ids,
+identifiers, generated nominal scalar values, and framework state-machine
+values are converted to datastore scalars before the plan crosses into
+`DataStoreSpace`.
+
+The root provider mutation is a normalized delta, not a replacement record.
+Empty patches, ineffective patches, logically deleted roots, and attempts to
+write any framework-managed field are rejected before provider invocation.
+Framework-owned lifecycle/audit changes may be added to the delta, but
+unchanged domain and storage fields are not resubmitted.
+
+The UnitOfWork interpreter evicts a stale resident root before authorizing an
+authoritative `NotMatched` record. A denial therefore cannot leave the stale
+resident root installed and cannot expose the authoritative payload.

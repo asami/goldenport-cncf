@@ -1,6 +1,6 @@
 # Entity Conflict and Conditional Transition Implementation Proposal
 
-status = proposed, non-normative
+status = EC-05 implemented and release-validated, non-normative
 date = 2026-07-24
 phase = 49
 strategy_items = 9.12, 9.39
@@ -886,6 +886,75 @@ re-review found no actionable findings, and the full CNCF suite completed 341
 suites with all 2397 executed tests successful. EC-05 is the next implementation
 slice. Later work must use the dashboard/checklist numbering and must not revive
 the provisional mapping.
+
+EC-05 implementation now provides the typed transition model, the private
+UnitOfWork algebra operation, EntityStore/EntityStoreSpace normalization, and
+the protected ActionCall helpers. The implementation:
+
+- derives expected storage fields only through `EntityPersistent`;
+- maps root patches through generated `EntityPersistentUpdate` and
+  `Update.toChangesRecord`;
+- uses only the supplementary atomic datastore capability;
+- applies normal successor create storage/content policy;
+- loads bind revision evidence before provider execution;
+- reuses `TransitionValidationHook.beforeUpdateById`;
+- preserves structured failures and committed-projection handling; and
+- does not add an automatic public operation surface.
+
+The focused executable evidence covers typed field admission, exact-value
+limits, successful create, normal `NotMatched`, and bound-successor execution.
+EC-05 remains in progress until a separate review validates the implementation
+and its whole-file naming/specification compliance.
+
+The EC-05 REVIEW found that the initial binding submitted a full root
+candidate, re-authorized `NotMatched` before evicting stale resident state,
+admitted raw identity objects at the provider boundary, and overclaimed
+authorization/coherence evidence. REVIEW_FIX changed the implementation and
+evidence as follows:
+
+- provider root changes are now a normalized delta containing changed domain
+  fields plus framework-generated lifecycle/audit fields;
+- empty, no-op, managed-field, and logically-deleted root patches fail before
+  provider mutation;
+- `NotMatched` evicts stale resident state before post-result authorization;
+- provider-bound records again accept only the closed normalized scalar
+  algebra;
+- transition-hook rejection and a bound-successor revision race have direct
+  executable evidence;
+- the protected ActionCall and `ServiceInternal` helpers have direct evidence
+  that they construct the same private UnitOfWork operation and differ only in
+  admitted access mode; and
+- EC-05 metadata no longer claims EC-06 View/coherence completion.
+
+The first clean re-review then found that both helpers stamped every supplied
+collection with the executing component owner without first proving collection
+ownership. REVIEW_FIX now resolves the canonical root and successor
+collections in the executing component's registered `EntitySpace`. A foreign
+or otherwise unregistered collection returns a structured component-scope
+denial before UnitOfWork construction, including for `ServiceInternal`.
+Executable evidence also separates create from bind behavior and gives each
+root-patch rejection condition its own semantic test case.
+
+The final follow-up focused runs completed 33 conditional-transition tests
+across five suites and 14 versioned-mutation regression tests across four
+suites. The added evidence rejects a candidate id from another collection,
+proves an admitted candidate id is not reevaluated, and proves an absent id is
+generated in the retained admitted collection.
+`Test/compile`, tracked and untracked whitespace checks, and whole-file
+naming/specification scans also completed successfully.
+
+The second clean re-review found a narrower create-successor identity gap:
+ActionCall admitted `EntityPersistentCreate.collection(candidate)`, while
+provider preparation preferred `EntityPersistentCreate.id(candidate)` without
+requiring both collections to match. REVIEW_FIX closes the intent at
+construction by retaining the admitted collection and optional candidate id,
+rejecting a mismatched id collection, and generating missing ids only from the
+retained collection. Model and UnitOfWork evidence cover mismatch rejection
+and prove provider preparation does not reevaluate either identity.
+
+The final clean RE_REVIEW_COMMIT found no actionable finding. Full CNCF release
+validation passed all 2415 executed tests across 344 suites, with 0 failed and
+0 aborted. EC-05 is complete; EC-06 remains the next Phase 49 slice.
 
 ## Resolved and Remaining Decisions
 

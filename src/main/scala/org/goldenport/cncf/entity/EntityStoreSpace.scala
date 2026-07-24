@@ -350,6 +350,22 @@ class EntityStoreSpace {
     }
   }
 
+  private[cncf] def conditionalTransition[R, P, S](
+    command: EntityConditionalTransitionCommand[R, P, S]
+  )(using
+    ctx: ExecutionContext
+  ): Consequence[EntityConditionalTransitionExecutionResult[R, S]] =
+    _with_calltree(
+      "space:entitystore:conditional-transition",
+      _entitystore_space_attributes(
+        "conditional-transition",
+        command.request.rootId.collection
+      ) + ("entity_id" -> command.request.rootId.print)
+    ) {
+      _by_collection(command.request.rootId.collection)
+        .flatMap(_.conditionalTransition(command))
+    }
+
   def delete(op: EntityStoreDelete)(using ctx: ExecutionContext): Consequence[Unit] =
     _with_calltree(
       "space:entitystore:delete",

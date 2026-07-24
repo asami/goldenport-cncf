@@ -5,6 +5,7 @@ import cats.syntax.all.*
 import scala.deprecatedName
 import org.goldenport.Consequence
 import org.goldenport.id.UniversalId
+import org.goldenport.datatype.Identifier
 import org.goldenport.record.Record
 import org.goldenport.cncf.*
 import org.goldenport.cncf.context.ExecutionContext
@@ -13,9 +14,15 @@ import org.simplemodeling.model.datatype.EntityCollectionId
 import org.goldenport.cncf.directive.{Query as EntityDirectiveQuery, SearchResult}
 import org.goldenport.cncf.datastore.{
   DataStore,
+  DataStoreConditionalExpectedField,
+  DataStoreConditionalRoot,
+  DataStoreConditionalSuccessor,
+  DataStoreConditionalTransitionPlan,
+  DataStoreConditionalTransitionResult,
   EntityVersionedMutationPlan,
   EntityVersionedMutationResult,
   EntityVersionedRootMutation,
+  EntityVersionedSideEffect,
   Query as DataStoreQuery,
   QueryDirective,
   QueryLimit,
@@ -27,6 +34,7 @@ import org.goldenport.cncf.metrics.EntityAccessMetricsRegistry
 import org.goldenport.cncf.observability.CallTreeValueSummary
 import org.simplemodeling.model.directive.Update
 import org.simplemodeling.model.statemachine.{Aliveness, PostStatus}
+import org.simplemodeling.model.value.NominalScalar
 
 /*
  * @since   Apr. 11, 2025
@@ -140,6 +148,23 @@ abstract class EntityStore {
     tc: EntityPersistentUpdate[P],
     ctx: ExecutionContext
   ): Consequence[EntityRecordSnapshot]
+
+  private[cncf] def conditionalTransition[R, P, S](
+    command: EntityConditionalTransitionCommand[R, P, S]
+  )(using
+    ctx: ExecutionContext
+  ): Consequence[EntityConditionalTransitionExecutionResult[R, S]] =
+    Consequence.operationInvalid(
+      "entity-conditional-transition",
+      Vector(
+        org.goldenport.observation.Descriptor.Facet.Reason(
+          "unsupported-capability"
+        ),
+        org.goldenport.observation.Descriptor.Facet.Capability(
+          "entitystore.conditional-transition"
+        )
+      )
+    )
 
   def delete(
     id: EntityId
@@ -613,6 +638,96 @@ class StandardEntityStore(
       )
       snapshot <- _record_snapshot(id, result, expectation)
     } yield snapshot
+
+  private[cncf] override def conditionalTransition[R, P, S](
+    command: EntityConditionalTransitionCommand[R, P, S]
+  )(using
+    ctx: ExecutionContext
+  ): Consequence[EntityConditionalTransitionExecutionResult[R, S]] = {
+    val request = command.request
+    val rootid = request.rootId
+    for {
+      rootcollection <- ctx.entityStoreSpace.dataStoreCollection(rootid)
+      rootentry <- ctx.entityStoreSpace.dataStoreEntryId(rootid)
+      revision <- EntityConcurrencyMetadata.mutationRevision(
+        EntityMutationExpectation(request.expectation.token)
+      )
+      _ <- _reject_logically_deleted_existing(
+        rootid,
+        Some(command.currentRootRecord)
+      )
+      rootchanges <- _admit_conditional_root_changes(
+        Update.toChangesRecord(
+          request.patchPersistent.toStoreRecord(request.rootPatch)
+        )
+      )
+      rootcandidate <- _merge_update_record(
+        command.currentRootRecord,
+        _complement_update_record(rootchanges, rootid)
+      )
+      _ <- _require_conditional_domain_change(
+        command.currentRootRecord,
+        rootcandidate
+      )
+      rootpreparation <- ContentBodyStoragePolicy.planForVersionedSave(
+        rootid,
+        EntityConcurrencyMetadata.withoutManagedField(rootcandidate),
+        preserveExistingOverflowOnMissingContent = true
+      )
+      providerchanges =
+        _conditional_record_delta(
+          _conditional_storage_record(
+            EntityConcurrencyMetadata.withoutManagedField(
+              command.currentRootRecord
+            )
+          ),
+          _conditional_storage_record(
+            EntityConcurrencyMetadata.withoutManagedField(
+              rootpreparation.record
+            )
+          )
+        )
+      root <- DataStoreConditionalRoot.create(
+        componentOwner = command.componentOwner,
+        collection = rootcollection,
+        entryId = rootentry,
+        revisionField = EntityConcurrencyMetadata.STORAGE_FIELD_NAME,
+        expectedRevision = Some(revision._1),
+        expectedFields = request.expectation.values.map { expected =>
+          DataStoreConditionalExpectedField(
+            expected.field.storageField,
+            expected.providerValue
+          )
+        },
+        changes = providerchanges,
+        nextRevision = revision._2
+      )
+      preparedsuccessor <- _prepare_conditional_successor(
+        request.successor,
+        command.componentOwner,
+        command.boundSuccessor
+      )
+      plan <- DataStoreConditionalTransitionPlan.create(
+        root,
+        preparedsuccessor._1,
+        _conditional_storage_side_effects(
+          rootpreparation.sideEffects ++ preparedsuccessor._2
+        )
+      )
+      providerresult <- _with_datastore_calltree(
+        "entity-conditional-transition",
+        rootcollection,
+        Some(rootentry)
+      ) {
+        ctx.dataStoreSpace.conditionalTransition(plan)
+      }
+      result <- _conditional_transition_result(
+        request,
+        preparedsuccessor._3,
+        providerresult
+      )
+    } yield result
+  }
 
   def delete(
     id: EntityId
@@ -1322,6 +1437,232 @@ class StandardEntityStore(
     val keyset = existing.keySet
     keyset.contains("aliveness")
   }
+
+  private def _prepare_conditional_successor[S](
+    successor: EntitySuccessorIntent[S],
+    owner: org.goldenport.cncf.datastore.DataStoreComponentOwner,
+    boundevidence: Option[EntityBoundSuccessorEvidence]
+  )(using
+    ctx: ExecutionContext
+  ): Consequence[
+    (
+      DataStoreConditionalSuccessor,
+      Vector[EntityVersionedSideEffect],
+      EntityId
+    )
+  ] =
+    successor match {
+      case createintent: EntitySuccessorIntent.Create[c, S] @unchecked =>
+        given EntityPersistentCreate[c] = createintent.create
+        val id =
+          createintent.candidateId
+            .getOrElse(ctx.idGeneration.entityId(createintent.collection))
+        for {
+          collection <- ctx.entityStoreSpace.dataStoreCollection(id)
+          entry <- ctx.entityStoreSpace.dataStoreEntryId(id)
+          initialized =
+            EntityConcurrencyMetadata.initializeForCreate(
+              _complement_create_record(
+                createintent.create.toStoreRecord(createintent.candidate),
+                id,
+                EntityCreateOptions.default
+              )
+            )
+          preparation <- ContentBodyStoragePolicy.planForVersionedSave(
+            id,
+            initialized
+          )
+        } yield (
+          DataStoreConditionalSuccessor.Create(
+            owner,
+            collection,
+            entry,
+            EntityConcurrencyMetadata.STORAGE_FIELD_NAME,
+            _conditional_storage_record(preparation.record)
+          ),
+          preparation.sideEffects,
+          id
+        )
+      case bindintent: EntitySuccessorIntent.Bind[S] @unchecked =>
+        boundevidence match {
+          case Some(evidence) if evidence.id == bindintent.id =>
+            for {
+              collection <-
+                ctx.entityStoreSpace.dataStoreCollection(bindintent.id)
+              entry <-
+                ctx.entityStoreSpace.dataStoreEntryId(bindintent.id)
+              revision <- EntityConcurrencyMetadata
+                .mutationRevision(EntityMutationExpectation(evidence.token))
+                .map(_._1)
+            } yield (
+              DataStoreConditionalSuccessor.Bind(
+                owner,
+                collection,
+                entry,
+                EntityConcurrencyMetadata.STORAGE_FIELD_NAME,
+                revision
+              ),
+              Vector.empty,
+              bindintent.id
+            )
+          case Some(evidence) =>
+            Consequence.argumentExpectedActualMismatch(
+              "boundSuccessor.id",
+              bindintent.id,
+              evidence.id
+            )
+          case None =>
+            Consequence.argumentMissing("boundSuccessor")
+        }
+    }
+
+  private def _admit_conditional_root_changes(
+    changes: Record
+  ): Consequence[Record] = {
+    val domainchanges =
+      SimpleEntityStorageShapePolicy.withoutManagedFields(changes)
+    val managedfields = changes.keySet -- domainchanges.keySet
+    if (managedfields.nonEmpty)
+      Consequence.argumentPolicyViolation(
+        "rootPatch",
+        "entity-conditional-transition.framework-managed-field",
+        "domain fields only",
+        managedfields.toVector.sorted.mkString(",")
+      )
+    else if (domainchanges.isEmpty)
+      Consequence.argumentInvalid(
+        "rootPatch",
+        "one or more domain changes",
+        "empty patch"
+      )
+    else
+      Consequence.success(domainchanges)
+  }
+
+  private def _require_conditional_domain_change(
+    current: Record,
+    candidate: Record
+  ): Consequence[Unit] = {
+    val currentdomain =
+      _conditional_storage_record(
+        SimpleEntityStorageShapePolicy.withoutManagedFields(current)
+      )
+    val candidatedomain =
+      _conditional_storage_record(
+        SimpleEntityStorageShapePolicy.withoutManagedFields(candidate)
+      )
+    if (_conditional_record_delta(currentdomain, candidatedomain).isEmpty)
+      Consequence.argumentInvalid(
+        "rootPatch",
+        "one or more effective domain changes",
+        "no-op patch"
+      )
+    else
+      Consequence.unit
+  }
+
+  private def _conditional_transition_result[R, P, S](
+    request: EntityConditionalTransition[R, P, S],
+    successorid: EntityId,
+    providerresult: DataStoreConditionalTransitionResult
+  )(using
+    ctx: ExecutionContext
+  ): Consequence[EntityConditionalTransitionExecutionResult[R, S]] =
+    providerresult match {
+      case DataStoreConditionalTransitionResult.Transitioned(
+            rootrecord,
+            successorrecord
+          ) =>
+        (for {
+          hydratedroot <-
+            ContentBodyStoragePolicy.hydrate(request.rootId, rootrecord)
+          rootsnapshot <- EntityConcurrencyMetadata.snapshot(hydratedroot)(
+            request.rootPersistent.fromStoreRecord
+          )
+          hydratedsuccessor <-
+            ContentBodyStoragePolicy.hydrate(successorid, successorrecord)
+          successorsnapshot <- EntityConcurrencyMetadata.snapshot(
+            hydratedsuccessor
+          )(request.successor.persisted.fromStoreRecord)
+        } yield EntityConditionalTransitionExecutionResult.Transitioned(
+          EntityConditionalTransitionResult.Transitioned(
+            rootsnapshot,
+            successorsnapshot
+          ),
+          hydratedroot,
+          hydratedsuccessor
+        )).recoverWith(EntityConcurrencyMetadata.committedProjectionFailure)
+      case DataStoreConditionalTransitionResult.NotMatched(existingroot) =>
+        for {
+          hydratedroot <-
+            ContentBodyStoragePolicy.hydrate(request.rootId, existingroot)
+          rootsnapshot <- EntityConcurrencyMetadata.snapshot(hydratedroot)(
+            request.rootPersistent.fromStoreRecord
+          )
+        } yield EntityConditionalTransitionExecutionResult.NotMatched(
+          EntityConditionalTransitionResult.NotMatched(rootsnapshot),
+          hydratedroot
+        )
+    }
+
+  private def _conditional_storage_side_effects(
+    effects: Vector[EntityVersionedSideEffect]
+  ): Vector[EntityVersionedSideEffect] =
+    effects.map {
+      case save: EntityVersionedSideEffect.Save =>
+        save.copy(record = _conditional_storage_record(save.record))
+      case delete: EntityVersionedSideEffect.Delete =>
+        delete
+    }
+
+  private def _conditional_storage_record(
+    record: Record
+  ): Record =
+    Record.dataAuto(
+      record.fields.map(field =>
+        field.key -> _conditional_storage_value(field.value.single)
+      )*
+    )
+
+  private def _conditional_record_delta(
+    current: Record,
+    candidate: Record
+  ): Record = {
+    val currentvalues = current.asMap
+    val candidatevalues = candidate.asMap
+    val changed = candidate.fields.collect {
+      case field
+          if currentvalues.get(field.key) !=
+            Some(field.value.single) =>
+        field.key -> field.value.single
+    }
+    val removed = current.fields.collect {
+      case field if !candidatevalues.contains(field.key) =>
+        field.key -> Update.SetNull
+    }
+    Record.dataAuto((changed ++ removed)*)
+  }
+
+  private def _conditional_storage_value(
+    value: Any
+  ): Any =
+    value match {
+      case id: EntityId => id.print
+      case identifier: Identifier => identifier.value
+      case scalar: NominalScalar =>
+        _conditional_storage_value(scalar.value)
+      case aliveness: Aliveness => aliveness.dbValue
+      case status: PostStatus => status.dbValue
+      case record: Record => _conditional_storage_record(record)
+      case values: Seq[?] =>
+        values.map(_conditional_storage_value)
+      case Some(content) =>
+        _conditional_storage_value(content)
+      case None =>
+        None
+      case other =>
+        other
+    }
 
   private def _is_logically_deleted_record(
     record: Record

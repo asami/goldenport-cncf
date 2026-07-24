@@ -388,30 +388,75 @@ Evidence:
 ## EC-05: EntityStore, UnitOfWork, and Protected DSL
 
 Stage Status:
-- Current status: PLANNED
+- Current status: DONE
 - Owner: CNCF Entity and action-runtime maintainers
 - Update rule: Mark IN_PROGRESS only after EC-04 closes. Mark DONE only when
   the typed operation traverses the canonical ActionCall/UnitOfWork/EntityStore
   path and no public CRUD or raw storage escape is introduced.
 
-- [ ] Add typed transition expectation, successor, mutation, request, and
+- [x] Add typed transition expectation, successor, mutation, request, and
   result models.
-- [ ] Add `EntityStore` and `EntityStoreSpace` conditional-transition
+- [x] Add `EntityStore` and `EntityStoreSpace` conditional-transition
   operations.
-- [ ] Add one explicit `UnitOfWorkOp` and interpreter branch.
-- [ ] Add protected ActionCall/Behavior DSL helpers.
-- [ ] Add an explicitly bounded `ServiceInternal` variant without bypassing
+- [x] Add one explicit `UnitOfWorkOp` and interpreter branch.
+- [x] Add protected ActionCall/Behavior DSL helpers.
+- [x] Add an explicitly bounded `ServiceInternal` variant without bypassing
   Entity or component authorization.
-- [ ] Normalize typed values into the closed datastore plan inside the
+- [x] Normalize typed values into the closed datastore plan inside the
   framework.
-- [ ] Apply successor storage-shape and content-body policies.
-- [ ] Preserve normal transition-validation hooks.
-- [ ] Keep the operation absent from automatic REST/Form/CLI/MCP CRUD
+- [x] Apply successor storage-shape and content-body policies.
+- [x] Preserve normal transition-validation hooks.
+- [x] Keep the operation absent from automatic REST/Form/CLI/MCP CRUD
   projection.
-- [ ] Preserve all structured `Consequence` failures unchanged.
+- [x] Preserve all structured `Consequence` failures unchanged.
 
 Evidence:
-- Pending.
+- IMPLEMENT added `EntityConditionalTransitionModelSpec` and
+  `UnitOfWorkConditionalTransitionSpec`.
+- The initial focused run passes typed field admission, successor create,
+  normal `NotMatched`, and bound-successor execution.
+- REVIEW identified full-record root submission, stale-resident ordering,
+  raw provider identity admission, lifecycle rejection, and overstated
+  executable evidence.
+- REVIEW_FIX adds provider-delta, empty/no-op/managed/deleted-patch,
+  transition-hook rejection, bound-successor race, post-result
+  reauthorization, and protected DSL/`ServiceInternal` executable evidence.
+- The first RE_REVIEW_COMMIT found an executing-component owner spoofing gap
+  and multi-contract executable-spec cases. The follow-up REVIEW_FIX resolves
+  both canonical collections in the executing component `EntitySpace`, rejects
+  foreign collections before UnitOfWork construction, and splits create,
+  bind, and root-patch rejection contracts into separate cases.
+- Final follow-up REVIEW_FIX validation passes 33 conditional-transition
+  tests across five suites and 14 versioned-mutation regression tests across
+  four suites. The additional evidence covers candidate-id collection
+  mismatch, one-time admitted identity evaluation, and missing-id generation
+  in the retained collection. `Test/compile`, `git diff --check`, untracked
+  whitespace checks, and whole-file naming/specification scans also pass.
+- The second RE_REVIEW_COMMIT found that create-successor collection
+  admission and candidate-id targeting could disagree. The second follow-up
+  REVIEW_FIX retains one admitted collection/id pair, rejects mismatched
+  candidate-id collections, and prevents provider preparation from
+  reevaluating the target identity.
+- The final clean RE_REVIEW_COMMIT found no actionable behavioral,
+  documentation, naming, or executable-specification finding.
+- Release validation passed all 2415 executed tests across 344 suites, with
+  0 failed and 0 aborted. The existing suite retained 2 canceled, 1 ignored,
+  and 59 pending specifications.
+- EC-05 is complete. EC-06 is the next Phase 49 implementation slice.
+
+EC-05 Modified Scala File Compliance Ledger:
+
+| File | Naming review | Executable-spec review | Validation | Disposition |
+| --- | --- | --- | --- | --- |
+| `src/main/scala/org/goldenport/cncf/action/ActionCallFeaturePart.scala` | Whole-file naming review passed | Not a spec | Focused 33-test matrix, 14-test regression matrix, `Test/compile`, and full 2415-test suite passed | EC-05 release commit |
+| `src/main/scala/org/goldenport/cncf/entity/EntityConditionalTransition.scala` | Whole-file naming review passed | Not a spec | Focused 33-test matrix, `Test/compile`, and full 2415-test suite passed | EC-05 release commit |
+| `src/main/scala/org/goldenport/cncf/entity/EntityStore.scala` | Whole-file naming review passed | Not a spec | Focused 33-test matrix, 14-test regression matrix, `Test/compile`, and full 2415-test suite passed | EC-05 release commit |
+| `src/main/scala/org/goldenport/cncf/entity/EntityStoreSpace.scala` | Whole-file naming review passed | Not a spec | Focused 33-test matrix, `Test/compile`, and full 2415-test suite passed | EC-05 release commit |
+| `src/main/scala/org/goldenport/cncf/unitofwork/UnitOfWorkInterpreter.scala` | Whole-file naming review passed | Not a spec | Focused 33-test matrix, 14-test regression matrix, `Test/compile`, and full 2415-test suite passed | EC-05 release commit |
+| `src/main/scala/org/goldenport/cncf/unitofwork/UnitOfWorkOp.scala` | Whole-file naming review passed | Not a spec | Focused 33-test matrix, `Test/compile`, and full 2415-test suite passed | EC-05 release commit |
+| `src/test/scala/org/goldenport/cncf/action/ActionCallConditionalTransitionDslSpec.scala` | Whole-file naming review passed | Three grouped Given/When/Then behaviors prove protected user/internal construction and component-scope denial | Focused 33-test matrix, `Test/compile`, and full 2415-test suite passed | EC-05 release commit |
+| `src/test/scala/org/goldenport/cncf/entity/EntityConditionalTransitionModelSpec.scala` | Whole-file naming review passed | Two grouped Given/When/Then behaviors plus bounded ScalaCheck evidence prove model and successor-identity admission | Focused 33-test matrix, `Test/compile`, and full 2415-test suite passed | EC-05 release commit |
+| `src/test/scala/org/goldenport/cncf/unitofwork/UnitOfWorkConditionalTransitionSpec.scala` | Whole-file naming review passed | Thirteen grouped Given/When/Then behaviors prove authoritative outcomes, admission, races, and retained identity | Focused 33-test matrix, 14-test regression matrix, `Test/compile`, and full 2415-test suite passed | EC-05 release commit |
 
 ## EC-06: Coherence, Authorization, Audit, and Diagnostics
 
