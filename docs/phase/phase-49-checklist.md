@@ -624,7 +624,7 @@ EC-06 Modified Scala File Compliance Ledger:
 ## EC-07: Provider and Concurrency Evidence
 
 Stage Status:
-- Current status: IN_PROGRESS
+- Current status: DONE
 - Owner: CNCF datastore/provider maintainers
 - Update rule: Mark IN_PROGRESS only after EC-06 closes. Mark DONE only when
   in-memory, SQLite, and the selected shared profile pass the same semantic
@@ -639,9 +639,9 @@ Stage Status:
 - [x] Inject failure after guard match, during successor work, during root
   update, and during commit.
 - [x] Verify every injected failure leaves no orphan successor or partial root.
-- [ ] Implement or activate the selected shared-datastore profile.
-- [ ] Exercise the shared profile with independently executing callers.
-- [ ] Prove exactly one winner and provider-neutral result parity.
+- [x] Implement or activate the selected shared-datastore profile.
+- [x] Exercise the shared profile with independently executing callers.
+- [x] Prove exactly one winner and provider-neutral result parity.
 - [x] Preserve claim-or-load behavior as a regression boundary.
 
 Evidence:
@@ -663,17 +663,48 @@ Evidence:
 - Review-fix keeps the shared SQL capability safe before EC-07B acceptance:
   MySQL schema preparation runs before the domain transaction so MySQL DDL
   cannot implicitly commit a partially applied transition, and root admission
-  uses a locking `FOR UPDATE` read inside the transaction. Live shared-provider
-  proof remains mandatory before EC-07 closes.
+  uses a locking `FOR UPDATE` read inside the transaction.
 - The focused EC-07A review-fix matrix passed 51 tests across
   `SqliteConditionalTransitionSpec`,
   `InMemoryConditionalTransitionSpec`,
   `DataStoreConditionalTransitionSpec`, `SqliteDataStoreSpec`, and
   `ActionCallEntityAccessMetricsSpec`.
 - Release validation passed all 2434 executed CNCF tests across 347 suites.
-- EC-07 remains IN_PROGRESS. Shared MySQL provider activation, independently
-  executing shared callers, and complete in-memory/SQLite/MySQL parity remain
-  EC-07B.
+- EC-07B adds an opt-in live shared-provider specification using
+  Testcontainers 2.0.5 and pinned `mysql:8.4`. Normal test runs cancel the
+  five live behaviors before Docker unless `CNCF_LIVE_MYSQL_TEST=true`.
+- The live MySQL matrix uses one physical database and independent
+  `SqlDataStore` instances/connections. It proves provider-neutral JDBC
+  create/bind/mismatch behavior, successor collision/missing/stale isolation,
+  rollback after all four pre-commit checkpoints, deterministic commit
+  rejection, restart visibility, and generated two-to-twelve-caller
+  one-winner behavior.
+- Concurrent first-use schema preparation recovers only when another caller
+  installed the requested column after the failed add attempt. Other schema
+  failures preserve the original structured provider failure.
+- Live validation passed all five MySQL behaviors. Combined provider parity
+  passed all 19 behaviors across `InMemoryConditionalTransitionSpec`,
+  `SqliteConditionalTransitionSpec`, and
+  `MysqlConditionalTransitionAcceptanceSpec`.
+- The final clean `Test/compile` passed. A normal non-live execution canceled
+  all five MySQL behaviors without contacting Docker.
+- EC-07B read-only review found that successor failures asserted only the
+  presence of a `Consequence.Failure`, and that a failed post-DDL metadata
+  check could replace the original add-column failure.
+- Review-fix now asserts the portable conflict/not-found symptom, stable
+  conflict reason facets, and byte-for-byte root/successor/side preservation
+  for all three successor failure modes. Add-column race recovery succeeds
+  only after positively observing the requested column; every other path
+  preserves the original DDL conclusion.
+- Review-fix validation passed all five live MySQL behaviors and all 19
+  combined in-memory/SQLite/MySQL provider behaviors. `Test/compile` passed
+  before the live acceptance rerun.
+- Clean read-only re-review found no remaining implementation, naming,
+  executable-specification, dependency, or documentation finding.
+- Release validation passed all 2434 executed CNCF tests across 348 suites,
+  with the five opt-in MySQL behaviors canceled before Docker in the normal
+  suite.
+- EC-07 is DONE. EC-08 CBD Support acceptance is the next Phase 49 slice.
 
 EC-07A Modified Scala File Compliance Ledger:
 
@@ -681,6 +712,13 @@ EC-07A Modified Scala File Compliance Ledger:
 | --- | --- | --- | --- | --- |
 | `src/main/scala/org/goldenport/cncf/datastore/sql/SqlDataStore.scala` | Whole-file private/protected naming review passed | Covered by the SQLite provider matrix and existing datastore regressions | Focused 51-test matrix, `Test/compile`, and full 2434-test suite passed | EC-07A release commit |
 | `src/test/scala/org/goldenport/cncf/datastore/SqliteConditionalTransitionSpec.scala` | Whole-file naming review passed | Seven Given/When/Then behaviors, including generated bounded concurrency and the generic JDBC factory | Focused 51-test matrix, `Test/compile`, and full 2434-test suite passed | EC-07A release commit |
+
+EC-07B Modified Scala File Compliance Ledger:
+
+| File | Naming | Executable specification | Validation | Scope |
+| --- | --- | --- | --- | --- |
+| `src/main/scala/org/goldenport/cncf/datastore/sql/SqlDataStore.scala` | Whole-file private/protected naming review passed | Covered by live MySQL and combined provider acceptance, including concurrent schema preparation | Five live MySQL behaviors, combined 19-behavior provider matrix, `Test/compile`, and full 2434-test suite passed after review-fix | EC-07B release commit |
+| `src/test/scala/org/goldenport/cncf/datastore/MysqlConditionalTransitionAcceptanceSpec.scala` | Whole-file naming review passed | Five Given/When/Then behaviors, including structured successor diagnostics, complete state isolation, and generated bounded independent-caller concurrency | Five live MySQL behaviors, combined 19-behavior provider matrix, normal opt-in cancellation, `Test/compile`, and full 2434-test suite passed | EC-07B release commit |
 
 ## EC-08: CBD Support Acceptance
 

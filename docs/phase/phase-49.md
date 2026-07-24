@@ -108,7 +108,7 @@ They are recorded together in strategy completed history rather than leaving
 | EC-04 | Atomic datastore capability | A closed provider-neutral plan executes guard, successor, root update, and token advance in one transaction without fallback. | done |
 | EC-05 | EntityStore, UnitOfWork, and DSL | Protected typed conditional transition preserves authorization, lifecycle, transaction, and normal effect boundaries. | done |
 | EC-06 | Coherence and diagnostics | EntitySpace, Working Set, View, audit, CallTree, metrics, and structured failures reflect only authoritative outcomes. | done |
-| EC-07 | Provider and concurrency evidence | In-memory, SQLite, and one shared profile prove one winner, rollback safety, restart visibility, and provider parity. | in progress |
+| EC-07 | Provider and concurrency evidence | In-memory, SQLite, and one shared profile prove one winner, rollback safety, restart visibility, and provider parity. | done |
 | EC-08 | CBD Support acceptance | Terminal predecessor retention and exactly-one successor ownership use the generic CNCF DSL without storage bypass. | planned |
 | EC-09 | Verification and closure | Focused/full validation, review, documentation promotion, downstream evidence, and closure records are complete. | planned |
 
@@ -305,6 +305,16 @@ two through twelve. The SQLite evidence also covers create and bind parity,
 all pre-commit checkpoints, deterministic commit rejection, generic JDBC
 SQLite configuration, and claim-or-load regression. Review-fix also prepares
 MySQL schema outside the domain transaction and locks the admitted root inside
-it, avoiding implicit-DDL commits and unlocked shared-provider guards. EC-07
-remains in progress until EC-07B proves the complete matrix against the
-selected shared MySQL profile.
+it, avoiding implicit-DDL commits and unlocked shared-provider guards.
+
+EC-07B completes the provider matrix with an opt-in Testcontainers acceptance
+suite against pinned MySQL 8.4. The live suite exercises the generic JDBC
+factory and native MySQL provider with independent stores and connections
+against one physical database. It proves create/bind/mismatch parity,
+successor-failure isolation, every rollback checkpoint plus commit rejection,
+restart visibility, and generated two-to-twelve-caller one-winner behavior.
+Concurrent first-use schema preparation now treats a column installed by
+another caller as successful idempotent preparation rather than a provider
+failure. The five live MySQL behaviors pass, and the combined in-memory,
+SQLite, and MySQL provider matrix passes all 19 behaviors. EC-07 is complete;
+EC-08 CBD Support acceptance is the next Phase 49 slice.

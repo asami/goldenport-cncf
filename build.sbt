@@ -372,7 +372,9 @@ lazy val root = project
 
       // Testing
       "org.scalatest" %% "scalatest" % "3.2.18" % Test,
-      "org.scalacheck" %% "scalacheck" % "1.17.1" % Test
+      "org.scalacheck" %% "scalacheck" % "1.17.1" % Test,
+      "com.mysql" % "mysql-connector-j" % "8.4.0" % Test,
+      "org.testcontainers" % "testcontainers-mysql" % "2.0.5" % Test
     ),
 
     publishTo := {

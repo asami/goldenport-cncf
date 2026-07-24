@@ -788,9 +788,19 @@ class SqlDataStore(
       val stmt = conn.createStatement()
       try {
         stmt.execute(sql)
+        ()
       } finally {
         stmt.close()
       }
+    }.recoverWith { conclusion =>
+      val installed =
+        _existing_columns(conn, collection).toOption.exists(
+          _.contains(column._1)
+        )
+      if (installed)
+        Consequence.unit
+      else
+        Consequence.Failure(conclusion)
     }
 
   private def _exists(
