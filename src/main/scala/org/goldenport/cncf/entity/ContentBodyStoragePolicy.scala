@@ -4,7 +4,10 @@ import java.nio.charset.{Charset, StandardCharsets}
 import java.security.MessageDigest
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.ExecutionContext
-import org.goldenport.cncf.datastore.DataStore
+import org.goldenport.cncf.datastore.{
+  DataStore,
+  EntityVersionedSideEffect
+}
 import org.goldenport.record.Record
 import org.simplemodeling.model.directive.Update
 import org.simplemodeling.model.datatype.EntityId
@@ -22,7 +25,7 @@ import org.simplemodeling.model.datatype.EntityId
  * and multibyte text do not leak into application models.
  *
  * @since   May.  4, 2026
- * @version May.  4, 2026
+ * @version Jul. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 object ContentBodyStoragePolicy {
@@ -30,17 +33,45 @@ object ContentBodyStoragePolicy {
     inlineByteThreshold: Int = 4096
   )
 
-  private val DefaultConfig = Config()
-  private val OverflowCollection = DataStore.CollectionId("cncf_content_body_overflow")
+  final case class VersionedPreparation(
+    record: Record,
+    sideEffects: Vector[EntityVersionedSideEffect]
+  )
+
+  private val _default_config = Config()
+  private val _overflow_collection =
+    DataStore.CollectionId("cncf_content_body_overflow")
 
   def prepareForSave(
     id: EntityId,
     record: Record,
-    config: Config = DefaultConfig,
+    config: Config = _default_config,
     preserveExistingOverflowOnMissingContent: Boolean = false
   )(using ctx: ExecutionContext): Consequence[Record] =
+    planForVersionedSave(
+      id,
+      record,
+      config,
+      preserveExistingOverflowOnMissingContent
+    ).flatMap { preparation =>
+      _execute_side_effects(preparation.sideEffects).map(_ =>
+        preparation.record
+      )
+    }
+
+  def planForVersionedSave(
+    id: EntityId,
+    record: Record,
+    config: Config = _default_config,
+    preserveExistingOverflowOnMissingContent: Boolean = false
+  ): Consequence[VersionedPreparation] =
     if (_is_set_null(record, "content"))
-      deleteOverflow(id).map(_ => _without_content(_without_overflow_fields(record)))
+      Consequence.success(
+        VersionedPreparation(
+          _without_content(_without_overflow_fields(record)),
+          Vector(_delete_effect(id))
+        )
+      )
     else _content(record) match {
       case Some(text) =>
         val charset = _charset(record)
@@ -52,9 +83,12 @@ object ContentBodyStoragePolicy {
           "content_charset" -> charset.name()
         )
         if (bytes.length <= config.inlineByteThreshold)
-          _delete_overflow(id).map(_ =>
-            _without_overflow_fields(record) ++ metadata ++ Record.dataAuto(
-              "content_storage" -> "inline"
+          Consequence.success(
+            VersionedPreparation(
+              _without_overflow_fields(record) ++ metadata ++ Record.dataAuto(
+                "content_storage" -> "inline"
+              ),
+              Vector(_delete_effect(id))
             )
           )
         else {
@@ -68,18 +102,31 @@ object ContentBodyStoragePolicy {
             "content_digest" -> digest,
             "content_charset" -> charset.name()
           )
-          for {
-            ds <- ctx.dataStoreSpace.dataStore(OverflowCollection)
-            _ <- ds.save(OverflowCollection, DataStore.StringEntryId(ref), overflow)
-          } yield _without_content(record) ++ metadata ++ Record.dataAuto(
-            "content_storage" -> "overflow",
-            "content_ref" -> ref
+          Consequence.success(
+            VersionedPreparation(
+              _without_content(record) ++ metadata ++ Record.dataAuto(
+                "content_storage" -> "overflow",
+                "content_ref" -> ref
+              ),
+              Vector(
+                EntityVersionedSideEffect.Save(
+                  _overflow_collection,
+                  DataStore.StringEntryId(ref),
+                  overflow
+                )
+              )
+            )
           )
         }
       case None if preserveExistingOverflowOnMissingContent && _has_overflow_reference(record) =>
-        Consequence.success(record)
+        Consequence.success(VersionedPreparation(record, Vector.empty))
       case None =>
-        deleteOverflow(id).map(_ => _without_overflow_fields(record))
+        Consequence.success(
+          VersionedPreparation(
+            _without_overflow_fields(record),
+            Vector(_delete_effect(id))
+          )
+        )
     }
 
   def deleteOverflow(
@@ -95,8 +142,11 @@ object ContentBodyStoragePolicy {
       case Some("overflow") =>
         val ref = _string(record, "content_ref").getOrElse(_overflow_ref(id))
         for {
-          ds <- ctx.dataStoreSpace.dataStore(OverflowCollection)
-          loaded <- ds.load(OverflowCollection, DataStore.StringEntryId(ref))
+          ds <- ctx.dataStoreSpace.dataStore(_overflow_collection)
+          loaded <- ds.load(
+            _overflow_collection,
+            DataStore.StringEntryId(ref)
+          )
         } yield loaded.flatMap(_content) match {
           case Some(text) => record ++ Record.dataAuto("content" -> text)
           case None => record
@@ -121,8 +171,46 @@ object ContentBodyStoragePolicy {
   private def _delete_overflow(
     id: EntityId
   )(using ctx: ExecutionContext): Consequence[Unit] =
-    ctx.dataStoreSpace.dataStore(OverflowCollection).flatMap { ds =>
-      ds.delete(OverflowCollection, DataStore.StringEntryId(_overflow_ref(id))).recoverWith(_ => Consequence.unit)
+    ctx.dataStoreSpace.dataStore(_overflow_collection).flatMap { ds =>
+      ds.delete(
+        _overflow_collection,
+        DataStore.StringEntryId(_overflow_ref(id))
+      ).recoverWith(_ => Consequence.unit)
+    }
+
+  private def _delete_effect(
+    id: EntityId
+  ): EntityVersionedSideEffect =
+    EntityVersionedSideEffect.Delete(
+      _overflow_collection,
+      DataStore.StringEntryId(_overflow_ref(id))
+    )
+
+  private def _execute_side_effects(
+    effects: Vector[EntityVersionedSideEffect]
+  )(using
+    ctx: ExecutionContext
+  ): Consequence[Unit] =
+    effects.foldLeft(Consequence.unit) { (z, effect) =>
+      z.flatMap { _ =>
+        ctx.dataStoreSpace.dataStore(effect.collection).flatMap { datastore =>
+          effect match {
+            case EntityVersionedSideEffect.Save(
+                  collection,
+                  entryid,
+                  record
+                ) =>
+              datastore.save(collection, entryid, record)
+            case EntityVersionedSideEffect.Delete(
+                  collection,
+                  entryid
+                ) =>
+              datastore.delete(collection, entryid).recoverWith(_ =>
+                Consequence.unit
+              )
+          }
+        }
+      }
     }
 
   private def _content(record: Record): Option[String] =

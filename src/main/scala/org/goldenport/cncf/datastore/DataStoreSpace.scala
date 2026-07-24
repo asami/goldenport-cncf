@@ -17,7 +17,8 @@ import org.goldenport.record.io.RecordEncoder
  * @since   Feb. 25, 2026
  *  version Apr. 15, 2026
  *  version May. 11, 2026
- * @version Jul. 12, 2026
+ *  version Jul. 12, 2026
+ * @version Jul. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 class DataStoreSpace {
@@ -122,6 +123,39 @@ class DataStoreSpace {
         TotalCountCapability.Unsupported
     }
 
+  def mutateVersionedEntity(
+    plan: EntityVersionedMutationPlan
+  )(using
+    ctx: ExecutionContext
+  ): Consequence[EntityVersionedMutationResult] =
+    _with_calltree_c(
+      "space:datastore:entity-versioned-mutation",
+      _datastore_space_attributes(
+        "entity-versioned-mutation",
+        plan.collection
+      ),
+      "space"
+    ) {
+      for {
+        datastore <- dataStore(plan.collection)
+        _ <- _ensure_same_provider(datastore, plan.sideEffects)
+        result <- datastore match {
+          case provider: EntityVersionedMutationDataStore =>
+            provider.mutateVersionedEntity(plan)
+          case _ =>
+            Consequence.operationInvalid(
+              "entity-versioned-mutation",
+              Vector(
+                Descriptor.Facet.Reason("unsupported-capability"),
+                Descriptor.Facet.Capability(
+                  "datastore.entity-versioned-mutation"
+                )
+              )
+            )
+        }
+      } yield result
+    }
+
   def inject(
     cid: DataStore.CollectionId,
     record: Record
@@ -168,9 +202,9 @@ class DataStoreSpace {
       try {
         val result = body
         result match {
-          case success: Consequence.Success[A] =>
+          case success: Consequence.Success[?] =>
             calltree.leave(Map("outcome" -> "success") ++ CallTreeValueSummary.resultAttributes(success.result))
-          case failure: Consequence.Failure[A] =>
+          case failure: Consequence.Failure[?] =>
             calltree.leave(Map(
               "outcome" -> "failure",
               "status" -> failure.conclusion.status.webCode.code.toString,
@@ -233,6 +267,32 @@ class DataStoreSpace {
       "operation" -> operation,
       "collection" -> cid.print
     )
+
+  private def _ensure_same_provider(
+    rootprovider: DataStore,
+    effects: Vector[EntityVersionedSideEffect]
+  ): Consequence[Unit] =
+    effects
+      .map(_.collection)
+      .distinct
+      .foldLeft(Consequence.unit) { (z, collection) =>
+        z.flatMap { _ =>
+          dataStore(collection).flatMap { provider =>
+            if (provider eq rootprovider)
+              Consequence.unit
+            else
+              Consequence.operationInvalid(
+                "entity-versioned-mutation",
+                Vector(
+                  Descriptor.Facet.Reason("provider-domain-mismatch"),
+                  Descriptor.Facet.Capability(
+                    "datastore.entity-versioned-mutation"
+                  )
+                )
+              )
+          }
+        }
+      }
 
   private def _entry_id(
     record: Record,

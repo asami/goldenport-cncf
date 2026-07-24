@@ -2,6 +2,8 @@ package org.goldenport.cncf.entity
 
 import scala.util.Try
 import org.goldenport.Consequence
+import org.goldenport.observation.Descriptor
+import org.goldenport.cncf.datastore.DataStoreRevisionState
 import org.goldenport.record.Record
 
 /*
@@ -41,6 +43,15 @@ private[cncf] object EntityConcurrencyTokenSupport {
 
 final case class EntitySnapshot[A](
   entity: A,
+  token: EntityConcurrencyToken
+)
+
+final case class EntityMutationExpectation(
+  token: EntityConcurrencyToken
+)
+
+final case class EntityRecordSnapshot(
+  record: Record,
   token: EntityConcurrencyToken
 )
 
@@ -103,6 +114,47 @@ object EntityConcurrencyMetadata {
       token <- token(record)
       entity <- decode(withoutManagedField(record))
     } yield EntitySnapshot(entity, token)
+
+  def recordSnapshot(
+    record: Record
+  ): Consequence[EntityRecordSnapshot] =
+    token(record).map(value =>
+      EntityRecordSnapshot(withoutManagedField(record), value)
+    )
+
+  def mutationRevision(
+    expectation: EntityMutationExpectation
+  ): Consequence[(DataStoreRevisionState, Long)] =
+    EntityConcurrencyTokenSupport
+      ._advance(expectation.token)
+      .map { next =>
+        val expected =
+          if (expectation.token == EntityConcurrencyToken.LEGACY)
+            DataStoreRevisionState.Absent
+          else
+            DataStoreRevisionState.Present(
+              EntityConcurrencyTokenSupport._storage_value(expectation.token)
+            )
+        expected ->
+          EntityConcurrencyTokenSupport._storage_value(next)
+      }
+
+  def staleMutation[A](
+    expectation: EntityMutationExpectation,
+    actual: DataStoreRevisionState
+  ): Consequence.Failure[A] =
+    Consequence.operationConflict(
+      "entity-versioned-mutation",
+      Vector(
+        Descriptor.Facet.Reason("stale-entity-revision"),
+        Descriptor.Facet.Policy("entity.optimistic-concurrency"),
+        Descriptor.Facet.FieldPath(STORAGE_FIELD_NAME),
+        Descriptor.Facet.Expected(
+          EntityConcurrencyTokenSupport._storage_value(expectation.token)
+        ),
+        Descriptor.Facet.Actual(_revision_value(actual))
+      )
+    )
 
   def withoutManagedField(record: Record): Record =
     SimpleEntityStorageShapePolicy.withoutConcurrencyRevisionField(record)
@@ -173,6 +225,11 @@ object EntityConcurrencyMetadata {
         content
     }
 
-  private def _normalize(name: String): String =
-    name.filter(_.isLetterOrDigit).toLowerCase(java.util.Locale.ROOT)
+  private def _revision_value(
+    revision: DataStoreRevisionState
+  ): Any =
+    revision match {
+      case DataStoreRevisionState.Absent => "absent"
+      case DataStoreRevisionState.Present(value) => value
+    }
 }

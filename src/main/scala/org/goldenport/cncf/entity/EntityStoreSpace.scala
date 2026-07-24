@@ -181,6 +181,27 @@ class EntityStoreSpace {
     }
   }
 
+  def saveVersioned[T](
+    entity: T,
+    persistent: EntityPersistent[T],
+    expectation: EntityMutationExpectation
+  )(using
+    ctx: ExecutionContext
+  ): Consequence[EntitySnapshot[T]] = {
+    given EntityPersistent[T] = persistent
+    val id = persistent.id(entity)
+    _with_calltree(
+      "space:entitystore:save-versioned",
+      _entitystore_space_attributes("save-versioned", id.collection) +
+        ("entity_id" -> id.print)
+    ) {
+      for {
+        entitystore <- _by_collection(id.collection)
+        snapshot <- entitystore.save(entity, expectation)
+      } yield snapshot
+    }
+  }
+
   def update[T](op: EntityStoreUpdate[T])(using ctx: ExecutionContext): Consequence[Unit] = {
     given EntityPersistent[T] = op.tc
     val id = op.tc.id(op.entity)
@@ -189,6 +210,27 @@ class EntityStoreSpace {
         entitystore <- _by_collection(id.collection)
         r <- entitystore.update(op.entity)
       } yield r
+    }
+  }
+
+  def updateVersioned[T](
+    entity: T,
+    persistent: EntityPersistent[T],
+    expectation: EntityMutationExpectation
+  )(using
+    ctx: ExecutionContext
+  ): Consequence[EntitySnapshot[T]] = {
+    given EntityPersistent[T] = persistent
+    val id = persistent.id(entity)
+    _with_calltree(
+      "space:entitystore:update-versioned",
+      _entitystore_space_attributes("update-versioned", id.collection) +
+        ("entity_id" -> id.print)
+    ) {
+      for {
+        entitystore <- _by_collection(id.collection)
+        snapshot <- entitystore.update(entity, expectation)
+      } yield snapshot
     }
   }
 
@@ -208,6 +250,29 @@ class EntityStoreSpace {
             ds.update(cid, dsid, changes)
           }
         } yield r
+    }
+  }
+
+  def updateByIdVersioned[P](
+    id: EntityId,
+    patch: P,
+    persistent: EntityPersistentUpdate[P],
+    expectation: EntityMutationExpectation
+  )(using
+    ctx: ExecutionContext
+  ): Consequence[EntityRecordSnapshot] = {
+    given EntityPersistentUpdate[P] = persistent
+    _with_calltree(
+      "space:entitystore:update-by-id-versioned",
+      _entitystore_space_attributes(
+        "update-by-id-versioned",
+        id.collection
+      ) + ("entity_id" -> id.print)
+    ) {
+      for {
+        entitystore <- _by_collection(id.collection)
+        snapshot <- entitystore.updateById(id, patch, expectation)
+      } yield snapshot
     }
   }
 
@@ -296,9 +361,9 @@ class EntityStoreSpace {
       try {
         val result = body
         result match {
-          case success: Consequence.Success[A] =>
+          case success: Consequence.Success[?] =>
             calltree.leave(Map("outcome" -> "success") ++ CallTreeValueSummary.resultAttributes(success.result))
-          case failure: Consequence.Failure[A] =>
+          case failure: Consequence.Failure[?] =>
             calltree.leave(Map(
               "outcome" -> "failure",
               "status" -> failure.conclusion.status.webCode.code.toString,

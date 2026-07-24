@@ -103,8 +103,8 @@ They are recorded together in strategy completed history rather than leaving
 | ID | Stage | Outcome | Status |
 | --- | --- | --- | --- |
 | EC-01 | Normative contract | Design/spec fix token, conflict, transition, atomicity, provider, and result semantics. | done |
-| EC-02 | Concurrency model and storage shape | Managed revision metadata and typed concurrency values have deterministic persistence and migration behavior. | active |
-| EC-03 | Version-aware mutation | Required Entity/Aggregate mutation paths compare the caller token atomically and return structured stale conflicts. | planned |
+| EC-02 | Concurrency model and storage shape | Managed revision metadata and typed concurrency values have deterministic persistence and migration behavior. | done |
+| EC-03 | Version-aware mutation | Required Entity/Aggregate mutation paths compare the caller token atomically and return structured stale conflicts. | active |
 | EC-04 | Atomic datastore capability | A closed provider-neutral plan executes guard, successor, root update, and token advance in one transaction without fallback. | planned |
 | EC-05 | EntityStore, UnitOfWork, and DSL | Protected typed conditional transition preserves authorization, lifecycle, transaction, and normal effect boundaries. | planned |
 | EC-06 | Coherence and diagnostics | EntitySpace, Working Set, View, audit, CallTree, metrics, and structured failures reflect only authoritative outcomes. | planned |
@@ -210,6 +210,20 @@ executable specification by feature area. Focused executable evidence and
 clean `Test/compile` pass. A fresh read-only re-review found no remaining
 actionable issue, and the full 2367-test CNCF suite passed.
 
-EC-02 remains active because atomic token comparison and exactly-once
-advancement are EC-03 work. Phase 50 documents a later simplification toward
-`SimpleEntity.revision`; it does not replace or reopen this Phase 49 slice.
+EC-03A adds the provider-owned single-record atomic mutation foundation.
+Expectation-required Entity full save, typed update, and patch-by-id compare
+the physical revision and advance it exactly once inside the supplementary
+datastore capability. The in-memory reference provider atomically publishes
+the guarded root together with bounded framework-owned storage-shape side
+records. ContentBody overflow planning is pure until provider admission, so a
+stale mutation changes neither the root nor overflow payload. Focused evidence
+passes 19 tests across the datastore, EntityStore, ContentBody, and token
+suites, including generated 2-to-12-caller legacy-record races. Clean
+re-review found no actionable finding, and the full CNCF suite passed 2377
+tests across 337 suites.
+
+EC-02 is therefore complete and EC-03 is active. EC-03B still has to migrate
+normal UnitOfWork/ActionCall/Aggregate mutation routes onto the required
+expectation API and close temporary unversioned-mutation policy. Phase 50
+documents a later simplification toward `SimpleEntity.revision`; it does not
+replace or reopen this Phase 49 slice.

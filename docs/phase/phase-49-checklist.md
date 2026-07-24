@@ -57,7 +57,7 @@ Evidence:
 ## EC-02: Concurrency Model and Storage Shape
 
 Stage Status:
-- Current status: IN_PROGRESS
+- Current status: DONE
 - Owner: CNCF Entity model maintainers
 - Update rule: Mark IN_PROGRESS only after EC-01 closes. Mark DONE only when
   typed values, managed storage metadata, and migration behavior have
@@ -71,7 +71,7 @@ Stage Status:
 - [x] Define and implement the canonical initial token.
 - [x] Define and implement loading/migration behavior for records without a
   token.
-- [ ] Advance the token exactly once for each admitted successful mutation.
+- [x] Advance the token exactly once for each admitted successful mutation.
 - [x] Preserve existing Entity id, lifecycle, audit, and content-body storage
   behavior.
 - [x] Add property-based token and storage-shape specifications.
@@ -133,7 +133,15 @@ Evidence:
   - `sbt -J-Xmx4G --batch test`: 2367 tests passed across 334 suites;
   - `git diff --check`: passed.
 - EC-02B does not compare or advance a caller token. Atomic comparison and
-  exactly-once advancement remain EC-03.
+  exactly-once advancement were completed by the EC-03A provider-owned
+  single-record atomic mutation foundation.
+- EC-03A completion evidence for the remaining EC-02 requirement:
+  - expectation-required Entity full save, typed update, and patch-by-id
+    compare the physical revision inside the provider capability;
+  - successful admitted mutations advance exactly once;
+  - generated 2-to-12-caller legacy-record races admit exactly one
+    absence-to-one winner;
+  - focused validation passed 19 tests across four suites.
 
 Modified Scala File Compliance Ledger:
 
@@ -153,28 +161,64 @@ Modified Scala File Compliance Ledger:
 ## EC-03: Version-aware Mutation
 
 Stage Status:
-- Current status: PLANNED
+- Current status: IN_PROGRESS
 - Owner: CNCF Entity/Aggregate maintainers
 - Update rule: Mark IN_PROGRESS only after EC-02 closes. Mark DONE only when
   every admitted path compares its expected token in the native mutation and
   stale updates cannot change storage or resident state.
 
-- [ ] Add expected-token forms for Entity save.
-- [ ] Add expected-token forms for typed Entity update.
-- [ ] Add expected-token forms for patch update by id.
+- [x] Add expected-token forms for Entity save.
+- [x] Add expected-token forms for typed Entity update.
+- [x] Add expected-token forms for patch update by id.
 - [ ] Integrate the minimum Aggregate-root and framework state-transition paths
   required by the generic conflict foundation.
-- [ ] Ensure the datastore comparison and mutation are one atomic operation.
-- [ ] Return structured conflict diagnostics with expected/actual metadata
+- [x] Ensure the datastore comparison and mutation are one atomic operation.
+- [x] Return structured conflict diagnostics with expected/actual metadata
   according to the accepted redaction contract.
 - [ ] Ensure Working Set values cannot supply or bypass the authoritative
   token check.
 - [ ] Define the temporary policy for unversioned mutation paths without
   treating them as implicit force/repair.
-- [ ] Add concurrent stale-update executable specifications.
+- [x] Add concurrent stale-update executable specifications.
 
 Evidence:
-- Pending.
+- EC-03A implementation validation:
+  - `EntityVersionedMutationDataStore` is a supplementary provider capability;
+  - `DataStoreSpace` rejects unsupported and cross-provider side-record plans
+    before mutation;
+  - the in-memory provider serializes ordinary CRUD/search with versioned
+    mutation, prepares root and side-record states, and publishes all affected
+    collections through one immutable top-level state swap only after the
+    complete plan succeeds;
+  - `ContentBodyStoragePolicy.planForVersionedSave` returns pure bounded
+    side-record save/delete effects;
+  - stale ContentBody overflow mutation changes neither root nor side record;
+  - focused validation passed 19 tests:
+    `EntityVersionedMutationDataStoreSpec`,
+    `EntityVersionedMutationSpec`,
+    `ContentBodyVersionedMutationSpec`, and
+    `EntityConcurrencyTokenSpec`.
+  - `sbt -J-Xmx4G --batch test`: 2377 tests passed across 337 suites.
+- EC-03 remains active. EC-03B owns UnitOfWork/ActionCall/Aggregate migration,
+  Working Set protection, and temporary unversioned-mutation policy.
+
+EC-03A Modified Scala File Compliance Ledger:
+
+| File | Naming review | Executable-spec review | Validation | Disposition |
+| --- | --- | --- | --- | --- |
+| `src/main/scala/org/goldenport/cncf/datastore/EntityVersionedMutation.scala` | Whole-file naming review passed | Not a spec | Focused 19-test matrix and full 2377-test suite passed | EC-03A release commit |
+| `src/main/scala/org/goldenport/cncf/datastore/DataStore.scala` | Whole-file naming debt fixed; clean re-review passed | Not a spec | Focused 19-test matrix and full 2377-test suite passed | EC-03A release commit |
+| `src/main/scala/org/goldenport/cncf/datastore/DataStoreSpace.scala` | Whole-file naming review passed | Not a spec | Focused 19-test matrix and full 2377-test suite passed | EC-03A release commit |
+| `src/main/scala/org/goldenport/cncf/entity/ContentBodyStoragePolicy.scala` | Whole-file naming review passed | Not a spec | Focused 19-test matrix and full 2377-test suite passed | EC-03A release commit |
+| `src/main/scala/org/goldenport/cncf/entity/EntityConcurrency.scala` | Whole-file naming review passed | Not a spec | Focused 19-test matrix and full 2377-test suite passed | EC-03A release commit |
+| `src/main/scala/org/goldenport/cncf/entity/EntityStore.scala` | Whole-file naming review passed | Not a spec | Focused 19-test matrix and full 2377-test suite passed | EC-03A release commit |
+| `src/main/scala/org/goldenport/cncf/entity/EntityStoreSpace.scala` | Whole-file naming review passed | Not a spec | Focused 19-test matrix and full 2377-test suite passed | EC-03A release commit |
+| `src/test/scala/org/goldenport/cncf/datastore/EntityVersionedMutationDataStoreSpec.scala` | Whole-file naming review passed | Five Given/When/Then behaviors with one ScalaCheck concurrency property | Focused 19-test matrix and full 2377-test suite passed | EC-03A release commit |
+| `src/test/scala/org/goldenport/cncf/entity/EntityVersionedMutationSpec.scala` | Whole-file naming review passed | Three Given/When/Then EntityStore behaviors | Focused 19-test matrix and full 2377-test suite passed | EC-03A release commit |
+| `src/test/scala/org/goldenport/cncf/entity/ContentBodyVersionedMutationSpec.scala` | Whole-file naming review passed | Two Given/When/Then ContentBody side-record behaviors | Focused 19-test matrix and full 2377-test suite passed | EC-03A release commit |
+
+Clean re-review found no actionable implementation, naming, or executable-spec
+finding in the EC-03A scope.
 
 ## EC-04: Atomic Datastore Capability
 

@@ -150,6 +150,7 @@ operation:
 ```text
 verify stored token
   -> apply admitted changes
+  -> apply framework-owned storage-shape side records
   -> persist next token
   -> return authoritative record and token
 ```
@@ -164,6 +165,12 @@ The interpreter must not:
 A token mismatch for ordinary mutation is a structured
 `Consequence.Failure(Conclusion)` with conflict taxonomy. It is not a normal
 `NotMatched` result.
+
+Storage-shape preparation is pure until the provider admits the mutation.
+Framework-owned side records, such as ContentBody overflow save/delete
+effects, are closed values in the provider plan and commit in the same native
+transaction as the root. A stale comparison therefore publishes neither a
+root candidate nor a side-record candidate.
 
 The failure may carry safe expected and actual token facets. It must not use
 application-owned `Status.detailCodes`, parse display text, or include Entity
@@ -326,7 +333,9 @@ The provider plan contains only bounded record-level values:
 - normalized root changes;
 - next revision;
 - successor create record or bound successor id plus expected successor
-  revision state; and
+  revision state;
+- bounded framework-owned side-record save/delete effects required by the
+  canonical Entity storage shape; and
 - bounded logical correlation metadata.
 
 The provider plan does not contain:
@@ -340,6 +349,8 @@ The provider plan does not contain:
 
 The plan is rejected before provider mutation when collections resolve to
 different components, providers, or transaction domains.
+The guarded root and every framework-owned side record must resolve to the
+same datastore provider instance and native transaction domain.
 
 ### Provider transaction
 
@@ -352,17 +363,19 @@ begin
   -> compare admitted exact values
   -> create successor, or verify bound successor identity and revision
   -> mutate root and persist next revision
+  -> apply framework-owned storage-shape side records
   -> read authoritative result records
 commit
 ```
 
 Failure before the commit attempt causes rollback and leaves neither successor
-nor root mutation externally visible. A provider-reported commit rejection has
-the same result. A transport or provider failure that makes commit outcome
-indeterminate returns a structured transaction-indeterminate failure; the
-caller must not retry automatically and must resolve the authoritative root
-through a new read. Native atomicity still requires root and successor to be
-both committed or both absent.
+nor side-record/root mutation externally visible. A provider-reported commit
+rejection has the same result. A transport or provider failure that makes
+commit outcome indeterminate returns a structured transaction-indeterminate
+failure; the caller must not retry automatically and must resolve the
+authoritative root through a new read. Native atomicity still requires root,
+successor, and framework-owned side records to share one committed or rolled
+back outcome.
 
 The provider reports `Transitioned` only after commit success is acknowledged.
 

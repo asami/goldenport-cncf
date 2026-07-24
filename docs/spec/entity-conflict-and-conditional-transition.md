@@ -74,6 +74,12 @@ Aggregate-root mutation, and framework state-transition mutation MUST carry an
 The datastore provider MUST compare the expected token and persist the change
 plus next token in one native atomic operation.
 
+Framework-owned side records required by the Entity storage shape, including
+ContentBody overflow records, MUST be prepared without an early datastore
+effect and included in the same provider atomic operation as the guarded root.
+A stale or failed mutation MUST change neither the root nor any such side
+record.
+
 A stale expected token MUST return a structured conflict
 `Consequence.Failure(Conclusion)`. It MUST change no stored Entity, token,
 EntitySpace value, Working Set value, or View.
@@ -183,7 +189,14 @@ operation time when protected DSL usage is dynamic.
 
 The normalized provider plan MAY contain only bounded record-level mutation
 data, safe logical correlation metadata, provider-neutral collection and entry
-identities, and the expected token for a bound successor.
+identities, the expected token for a bound successor, and bounded
+framework-owned side-record save/delete effects required by the canonical
+Entity storage shape.
+
+Every side-record effect MUST resolve to the same datastore provider instance
+and native transaction domain as the guarded root. Side-record effects MUST be
+closed provider-neutral values; the plan MUST NOT contain effect callbacks or
+pre-executed datastore results.
 
 It MUST NOT contain domain objects, persistence typeclasses, authorization
 policy, EntitySpace values, Working Set values, SQL, provider expressions,
@@ -195,14 +208,15 @@ resident record MUST NOT be accepted as comparison authority.
 ## Atomicity and Rollback (R13)
 
 The provider MUST execute root verification, successor create or verification,
-root mutation, token advancement, and authoritative result loading in one
-native atomic transaction.
+root mutation, framework-owned side-record effects, token advancement, and
+authoritative result loading in one native atomic transaction.
 
-If verification does not match, no successor or root change may be made.
+If verification does not match, no successor, side-record, or root change may
+be made.
 
 Failure before commit during successor work, root mutation, or provider-level
 record conversion MUST roll back and leave no externally visible successor,
-root change, or token advance.
+side-record change, root change, or token advance.
 
 A provider-reported commit rejection MUST leave no committed change. An
 indeterminate commit acknowledgment MUST return a structured
@@ -525,13 +539,13 @@ predecessor remains retained.
 | Rules | Examples | Executable specification |
 | --- | --- | --- |
 | R1-R4 | E1-E2 | `EntityConcurrencyTokenSpec` |
-| R5, R19 | E3-E4 | `EntityVersionedMutationSpec` |
+| R5, R19 | E3-E4 | `EntityVersionedMutationSpec`, `ContentBodyVersionedMutationSpec` |
 | R6-R10 | E5-E6, E13-E14 | `EntityConditionalTransitionModelSpec` |
-| R11-R13 | E8-E11, E13, E15 | `DataStoreConditionalTransitionSpec` |
+| R11-R13 | E3-E4, E8-E11, E13, E15 | `EntityVersionedMutationDataStoreSpec`, `ContentBodyVersionedMutationSpec`, `DataStoreConditionalTransitionSpec` |
 | R14-R16 | E5, E7, E13-E14 | `UnitOfWorkConditionalTransitionSpec` |
 | R17-R18 | E6, E12, E14, E16 | `EntityConditionalTransitionCoherenceSpec` |
 | R19-R20 | E4, E7-E15 | `EntityConditionalTransitionDiagnosticsSpec` |
-| R21 | E2, E5-E6, E8-E11 | `InMemoryConditionalTransitionSpec` |
+| R21 | E2-E6, E8-E11 | `EntityVersionedMutationDataStoreSpec`, `ContentBodyVersionedMutationSpec`, `InMemoryConditionalTransitionSpec` |
 | R22 | E5-E6, E8-E11, E17 | `SqliteConditionalTransitionSpec` |
 | R23 | E5-E6, E8-E11, E17 | `MysqlConditionalTransitionAcceptanceSpec` |
 | R24 | E18 | CBD Support conditional-transition acceptance spec |

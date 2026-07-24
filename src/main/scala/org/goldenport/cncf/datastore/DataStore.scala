@@ -15,7 +15,8 @@ import scala.util.control.NonFatal
  * @since   Jan.  6, 2026
  *  version Jan. 10, 2026
  *  version Feb. 25, 2026
- * @version May.  2, 2026
+ *  version May.  2, 2026
+ * @version Jul. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 trait DataStore extends CommitParticipant {
@@ -201,12 +202,12 @@ object DataStore {
 
   class InMemoryDataStore(
     recorder: CommitRecorder
-  ) extends DataStore {
+  ) extends DataStore with EntityVersionedMutationDataStore {
     def isAccept(cid: CollectionId): Boolean = true
 
     private var _collections: VectorMap[String, InMemoryDataStore.Collection] = VectorMap.empty
 
-    protected final def collectionKey(collection: CollectionId): String =
+    protected final def collection_key(collection: CollectionId): String =
       collection match {
         case CollectionId.Instance(name) =>
           s"instance:$name"
@@ -214,18 +215,18 @@ object DataStore {
           s"entity:${id.major}:${id.minor}:${id.name}"
       }
 
-    protected def _ensure_collection(collection: CollectionId): Consequence[InMemoryDataStore.Collection] =
-      _collections.get(collectionKey(collection)) match {
+    protected def ensure_collection(collection: CollectionId): Consequence[InMemoryDataStore.Collection] =
+      _collections.get(collection_key(collection)) match {
         case Some(c) =>
           Consequence.success(c)
         case None =>
           val c = new InMemoryDataStore.Collection(collection)
-          _collections = _collections.updated(collectionKey(collection), c)
+          _collections = _collections.updated(collection_key(collection), c)
           Consequence.success(c)
       }
 
     protected def take_collection(collection: CollectionId): Consequence[InMemoryDataStore.Collection] =
-      _collections.get(collectionKey(collection)) match {
+      _collections.get(collection_key(collection)) match {
         case Some(c) =>
           Consequence.success(c)
         case None =>
@@ -237,15 +238,19 @@ object DataStore {
       id: EntryId,
       record: Record
     )(using ctx: ExecutionContext): Consequence[Unit] =
-      _ensure_collection(collection).flatMap(_.create(id, record))
+      synchronized {
+        ensure_collection(collection).flatMap(_.create(id, record))
+      }
 
     def load(
       collection: CollectionId,
       id: EntryId
     )(using ctx: ExecutionContext): Consequence[Option[Record]] =
-      _collections.get(collectionKey(collection)) match {
-        case Some(c) => c.load(id)
-        case None => Consequence.success(None)
+      synchronized {
+        _collections.get(collection_key(collection)) match {
+          case Some(c) => c.load(id)
+          case None => Consequence.success(None)
+        }
       }
 
     def save(
@@ -253,20 +258,60 @@ object DataStore {
       id: EntryId,
       record: Record
     )(using ctx: ExecutionContext): Consequence[Unit] =
-      _ensure_collection(collection).flatMap(_.save(id, record))
+      synchronized {
+        ensure_collection(collection).flatMap(_.save(id, record))
+      }
 
     def update(
       collection: CollectionId,
       id: EntryId,
       changes: Record
     )(using ctx: ExecutionContext): Consequence[Unit] =
-      take_collection(collection).flatMap(_.update(id, changes))
+      synchronized {
+        take_collection(collection).flatMap(_.update(id, changes))
+      }
 
     def delete(
       collection: CollectionId,
       id: EntryId
     )(using ctx: ExecutionContext): Consequence[Unit] =
-      take_collection(collection).flatMap(_.delete(id))
+      synchronized {
+        take_collection(collection).flatMap(_.delete(id))
+      }
+
+    def mutateVersionedEntity(
+      plan: EntityVersionedMutationPlan
+    )(using
+      ctx: ExecutionContext
+    ): Consequence[EntityVersionedMutationResult] =
+      synchronized {
+        for {
+          _ <- EntityVersionedMutationSupport.validate(plan)
+          rootcollection <- take_collection(plan.collection)
+          rootkey <- rootcollection._entry_key(plan.entryId)
+          existing <- rootcollection
+            ._entries_snapshot
+            .get(rootkey)
+            .map(Consequence.success)
+            .getOrElse(Consequence.DataStoreNotFound(plan.entryId.print))
+          actual <-
+            EntityVersionedMutationSupport.revisionState(
+              existing,
+              plan.revisionField
+            )
+          result <-
+            if (actual != plan.expectedRevision)
+              Consequence.success(
+                EntityVersionedMutationResult.Stale(actual)
+              )
+            else
+              _apply_versioned_mutation(
+                plan,
+                rootkey,
+                existing
+              )
+        } yield result
+      }
 
     def prepare(tx: TransactionContext): PrepareResult =
       record_prepare(recorder)
@@ -276,12 +321,102 @@ object DataStore {
 
     def abort(tx: TransactionContext): Unit =
       record_abort(recorder)
+
+    private def _apply_versioned_mutation(
+      plan: EntityVersionedMutationPlan,
+      rootkey: String,
+      existing: Record
+    ): Consequence[EntityVersionedMutationResult] = {
+      val rootcollectionkey = collection_key(plan.collection)
+      val initialstates =
+        plan.sideEffects
+          .map(_.collection)
+          .prepended(plan.collection)
+          .distinct
+          .map { collection =>
+            val collectionkey = collection_key(collection)
+            val entries =
+              _collections
+                .get(collectionkey)
+                .map(_._entries_snapshot)
+                .getOrElse(VectorMap.empty)
+            collectionkey -> entries
+          }
+          .toMap
+      val rootrecord =
+        EntityVersionedMutationSupport.applyRootMutation(existing, plan)
+      val rooted =
+        initialstates.updated(
+          rootcollectionkey,
+          initialstates(rootcollectionkey).updated(rootkey, rootrecord)
+        )
+      _apply_side_effects(plan.sideEffects, rooted).map { prepared =>
+        val collectionids =
+          plan.sideEffects
+            .map(_.collection)
+            .prepended(plan.collection)
+            .map(collection => collection_key(collection) -> collection)
+            .toMap
+        val nextcollections =
+          prepared.foldLeft(_collections) {
+            case (z, (collectionkey, entries)) =>
+              val collection =
+                new InMemoryDataStore.Collection(
+                  collectionids(collectionkey)
+                )
+              collection._replace_entries(entries)
+              z.updated(collectionkey, collection)
+          }
+        _collections = nextcollections
+        EntityVersionedMutationResult.Applied(rootrecord)
+      }
+    }
+
+    private def _apply_side_effects(
+      effects: Vector[EntityVersionedSideEffect],
+      initial: Map[String, VectorMap[String, Record]]
+    ): Consequence[Map[String, VectorMap[String, Record]]] =
+      effects.foldLeft(Consequence.success(initial)) { (z, effect) =>
+        z.flatMap { states =>
+          val collectionkey = collection_key(effect.collection)
+          val entries = states.getOrElse(collectionkey, VectorMap.empty)
+          effect match {
+            case EntityVersionedSideEffect.Save(_, entryid, record) =>
+              Consequence.success(
+                states.updated(
+                  collectionkey,
+                  entries.updated(entryid.print, record)
+                )
+              )
+            case EntityVersionedSideEffect.Delete(_, entryid) =>
+              Consequence.success(
+                states.updated(
+                  collectionkey,
+                  entries.removed(entryid.print)
+                )
+              )
+          }
+        }
+      }
   }
   object InMemoryDataStore {
     class Collection(val id: CollectionId) {
       def collectionName = id.collectionName
 
       private var _entries: VectorMap[String, Record] = VectorMap.empty
+
+      private[datastore] def _entries_snapshot: VectorMap[String, Record] =
+        _entries
+
+      private[datastore] def _replace_entries(
+        entries: VectorMap[String, Record]
+      ): Unit =
+        _entries = entries
+
+      private[datastore] def _entry_key(
+        id: EntryId
+      ): Consequence[String] =
+        to_entry_key(id)
 
       protected def to_entry_key(p: EntryId): Consequence[String] =
         Consequence.success(p.print)
@@ -415,8 +550,10 @@ object DataStore {
     def search(
       collection: CollectionId,
       directive: QueryDirective
-    ): Consequence[SearchResult] = 
-      _ensure_collection(collection).flatMap(_.search(directive))
+    ): Consequence[SearchResult] =
+      synchronized {
+        ensure_collection(collection).flatMap(_.search(directive))
+      }
 
     override def totalCountCapability(collection: CollectionId): TotalCountCapability =
       TotalCountCapability.Supported

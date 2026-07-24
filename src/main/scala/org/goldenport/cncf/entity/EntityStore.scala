@@ -11,10 +11,21 @@ import org.goldenport.cncf.context.ExecutionContext
 import org.simplemodeling.model.datatype.EntityId
 import org.simplemodeling.model.datatype.EntityCollectionId
 import org.goldenport.cncf.directive.{Query as EntityDirectiveQuery, SearchResult}
-import org.goldenport.cncf.datastore.{DataStore, Query as DataStoreQuery, QueryDirective, QueryLimit, QueryOrder, OrderDirection}
+import org.goldenport.cncf.datastore.{
+  DataStore,
+  EntityVersionedMutationPlan,
+  EntityVersionedMutationResult,
+  EntityVersionedRootMutation,
+  Query as DataStoreQuery,
+  QueryDirective,
+  QueryLimit,
+  QueryOrder,
+  OrderDirection
+}
 import org.goldenport.cncf.datastore.DataStore.EntryId
 import org.goldenport.cncf.metrics.EntityAccessMetricsRegistry
 import org.goldenport.cncf.observability.CallTreeValueSummary
+import org.simplemodeling.model.directive.Update
 import org.simplemodeling.model.statemachine.{Aliveness, PostStatus}
 
 /*
@@ -95,9 +106,34 @@ abstract class EntityStore {
     entity: T
   )(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[Unit]
 
+  def save[T](
+    entity: T,
+    expectation: EntityMutationExpectation
+  )(using
+    tc: EntityPersistent[T],
+    ctx: ExecutionContext
+  ): Consequence[EntitySnapshot[T]]
+
   def update[T](
     changes: T
   )(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[Unit]
+
+  def update[T](
+    changes: T,
+    expectation: EntityMutationExpectation
+  )(using
+    tc: EntityPersistent[T],
+    ctx: ExecutionContext
+  ): Consequence[EntitySnapshot[T]]
+
+  def updateById[P](
+    id: EntityId,
+    patch: P,
+    expectation: EntityMutationExpectation
+  )(using
+    tc: EntityPersistentUpdate[P],
+    ctx: ExecutionContext
+  ): Consequence[EntityRecordSnapshot]
 
   def delete(
     id: EntityId
@@ -224,7 +260,10 @@ class NoopEntityStore() extends EntityStore {
   def load[T](id: EntityId)(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[Option[T]] = ???
   def loadSnapshot[T](id: EntityId)(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[Option[EntitySnapshot[T]]] = ???
   def save[T](entity: T)(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[Unit] = ???
+  def save[T](entity: T, expectation: EntityMutationExpectation)(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[EntitySnapshot[T]] = ???
   def update[T](changes: T)(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[Unit] = ???
+  def update[T](changes: T, expectation: EntityMutationExpectation)(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[EntitySnapshot[T]] = ???
+  def updateById[P](id: EntityId, patch: P, expectation: EntityMutationExpectation)(using tc: EntityPersistentUpdate[P], ctx: ExecutionContext): Consequence[EntityRecordSnapshot] = ???
   def delete(id: EntityId)(using ctx: ExecutionContext): Consequence[Unit] = ???
   def deleteHard(id: EntityId)(using ctx: ExecutionContext): Consequence[Unit] = ???
   def search[T](query: EntityQuery[T])(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[SearchResult[T]] = ???
@@ -386,6 +425,36 @@ class StandardEntityStore(
     } yield r
   }
 
+  def save[T](
+    entity: T,
+    expectation: EntityMutationExpectation
+  )(using
+    tc: EntityPersistent[T],
+    ctx: ExecutionContext
+  ): Consequence[EntitySnapshot[T]] = {
+    val id = tc.id(entity)
+    for {
+      cid <- ctx.entityStoreSpace.dataStoreCollection(id)
+      dsid <- ctx.entityStoreSpace.dataStoreEntryId(id)
+      existing <- _raw_record(cid, dsid)
+      base <- _required_record(dsid, existing)
+      _ <- _reject_logically_deleted_existing(id, Some(base))
+      candidate =
+        EntityConcurrencyMetadata.withoutManagedField(
+          _complement_save_record(tc.toStoreRecord(entity), id, Some(base))
+        )
+      preparation <-
+        ContentBodyStoragePolicy.planForVersionedSave(id, candidate)
+      result <- _mutate_versioned(
+        cid,
+        dsid,
+        preparation,
+        expectation
+      )
+      snapshot <- _typed_snapshot(id, result, expectation, tc)
+    } yield snapshot
+  }
+
   def update[T](
     changes: T
   )(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[Unit] = {
@@ -415,6 +484,81 @@ class StandardEntityStore(
         ds.save(cid, dsid, rec)
       }
     } yield r
+  }
+
+  def update[T](
+    changes: T,
+    expectation: EntityMutationExpectation
+  )(using
+    tc: EntityPersistent[T],
+    ctx: ExecutionContext
+  ): Consequence[EntitySnapshot[T]] = {
+    val id = tc.id(changes)
+    for {
+      cid <- ctx.entityStoreSpace.dataStoreCollection(id)
+      dsid <- ctx.entityStoreSpace.dataStoreEntryId(id)
+      existing <- _raw_record(cid, dsid)
+      base <- _required_record(dsid, existing)
+      _ <- _reject_logically_deleted_existing(id, Some(base))
+      candidate <- _merge_update_record(
+        base,
+        _complement_update_record(
+          EntityConcurrencyMetadata.withoutManagedField(
+            tc.toStoreRecord(changes)
+          ),
+          id
+        )
+      )
+      preparation <- ContentBodyStoragePolicy.planForVersionedSave(
+        id,
+        EntityConcurrencyMetadata.withoutManagedField(candidate),
+        preserveExistingOverflowOnMissingContent = true
+      )
+      result <- _mutate_versioned(
+        cid,
+        dsid,
+        preparation,
+        expectation
+      )
+      snapshot <- _typed_snapshot(id, result, expectation, tc)
+    } yield snapshot
+  }
+
+  def updateById[P](
+    id: EntityId,
+    patch: P,
+    expectation: EntityMutationExpectation
+  )(using
+    tc: EntityPersistentUpdate[P],
+    ctx: ExecutionContext
+  ): Consequence[EntityRecordSnapshot] = {
+    for {
+      cid <- ctx.entityStoreSpace.dataStoreCollection(id)
+      dsid <- ctx.entityStoreSpace.dataStoreEntryId(id)
+      existing <- _raw_record(cid, dsid)
+      base <- _required_record(dsid, existing)
+      _ <- _reject_logically_deleted_existing(id, Some(base))
+      changes =
+        EntityConcurrencyMetadata.withoutManagedField(
+          Update.toChangesRecord(tc.toStoreRecord(patch))
+        )
+      candidate <- _merge_update_record(
+        base,
+        _complement_update_record(changes, id)
+      )
+      preparation <- ContentBodyStoragePolicy.planForVersionedSave(
+        id,
+        EntityConcurrencyMetadata.withoutManagedField(candidate),
+        preserveExistingOverflowOnMissingContent = true
+      )
+      result <- _mutate_versioned(
+        cid,
+        dsid,
+        preparation,
+        expectation
+      )
+      snapshot <- _record_snapshot(id, result, expectation)
+    } yield snapshot
   }
 
   def delete(
@@ -1076,6 +1220,94 @@ class StandardEntityStore(
   ): Boolean =
     EntityLifecycleRecordPolicy.isLogicallyDeleted(record)
 
+  private def _raw_record(
+    collection: DataStore.CollectionId,
+    entryid: DataStore.EntryId
+  )(using
+    ctx: ExecutionContext
+  ): Consequence[Option[Record]] =
+    for {
+      datastore <- ctx.dataStoreSpace.dataStore(collection)
+      record <- _with_datastore_calltree(
+        "load",
+        collection,
+        Some(entryid)
+      ) {
+        datastore.load(collection, entryid)
+      }
+    } yield record
+
+  private def _required_record(
+    entryid: DataStore.EntryId,
+    record: Option[Record]
+  ): Consequence[Record] =
+    record
+      .map(Consequence.success)
+      .getOrElse(Consequence.DataStoreNotFound(entryid.print))
+
+  private def _mutate_versioned(
+    collection: DataStore.CollectionId,
+    entryid: DataStore.EntryId,
+    preparation: ContentBodyStoragePolicy.VersionedPreparation,
+    expectation: EntityMutationExpectation
+  )(using
+    ctx: ExecutionContext
+  ): Consequence[EntityVersionedMutationResult] =
+    for {
+      revision <- EntityConcurrencyMetadata.mutationRevision(expectation)
+      plan = EntityVersionedMutationPlan(
+        collection = collection,
+        entryId = entryid,
+        revisionField = EntityConcurrencyMetadata.STORAGE_FIELD_NAME,
+        expectedRevision = revision._1,
+        nextRevision = revision._2,
+        rootMutation = EntityVersionedRootMutation.Replace(
+          EntityConcurrencyMetadata.withoutManagedField(preparation.record)
+        ),
+        sideEffects = preparation.sideEffects
+      )
+      result <- _with_datastore_calltree(
+        "entity-versioned-mutation",
+        collection,
+        Some(entryid)
+      ) {
+        ctx.dataStoreSpace.mutateVersionedEntity(plan)
+      }
+    } yield result
+
+  private def _typed_snapshot[T](
+    id: EntityId,
+    result: EntityVersionedMutationResult,
+    expectation: EntityMutationExpectation,
+    persistent: EntityPersistent[T]
+  )(using
+    ctx: ExecutionContext
+  ): Consequence[EntitySnapshot[T]] =
+    result match {
+      case EntityVersionedMutationResult.Applied(record) =>
+        ContentBodyStoragePolicy
+          .hydrate(id, record)
+          .flatMap(EntityConcurrencyMetadata.snapshot(_)(persistent.fromStoreRecord))
+      case EntityVersionedMutationResult.Stale(actual) =>
+        EntityConcurrencyMetadata.staleMutation(expectation, actual)
+    }
+
+  private def _record_snapshot(
+    id: EntityId,
+    result: EntityVersionedMutationResult,
+    expectation: EntityMutationExpectation
+  )(using
+    ctx: ExecutionContext
+  ): Consequence[EntityRecordSnapshot] =
+    result match {
+      case EntityVersionedMutationResult.Applied(record) =>
+        ContentBodyStoragePolicy
+          .hydrate(id, record)
+          .flatMap(EntityConcurrencyMetadata.recordSnapshot)
+      case EntityVersionedMutationResult.Stale(actual) =>
+        EntityConcurrencyMetadata.staleMutation(expectation, actual)
+    }
+
   private def _with_datastore_calltree[A](
     operation: String,
     cid: DataStore.CollectionId,
@@ -1092,9 +1324,9 @@ class StandardEntityStore(
       try {
         val result = body
         result match {
-          case success: Consequence.Success[A] =>
+          case success: Consequence.Success[?] =>
             calltree.leave(Map("outcome" -> "success") ++ CallTreeValueSummary.resultAttributes(success.result))
-          case failure: Consequence.Failure[A] =>
+          case failure: Consequence.Failure[?] =>
             calltree.leave(Map(
               "outcome" -> "failure",
               "status" -> failure.conclusion.status.webCode.code.toString,
