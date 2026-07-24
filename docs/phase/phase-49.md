@@ -1,7 +1,8 @@
 # Phase 49 - Entity Conflict and Conditional Transition
 
-status=open
+status=closed
 started_at=2026-07-24
+closed_at=2026-07-25
 strategy=[CNCF Development Strategy](../strategy/cncf-development-strategy.md)
 checklist=[Phase 49 Checklist](phase-49-checklist.md)
 
@@ -110,7 +111,7 @@ They are recorded together in strategy completed history rather than leaving
 | EC-06 | Coherence and diagnostics | EntitySpace, Working Set, View, audit, CallTree, metrics, and structured failures reflect only authoritative outcomes. | done |
 | EC-07 | Provider and concurrency evidence | In-memory, SQLite, and one shared profile prove one winner, rollback safety, restart visibility, and provider parity. | done |
 | EC-08 | CBD Support acceptance | Terminal predecessor retention and exactly-one successor ownership use the generic CNCF DSL without storage bypass. | done |
-| EC-09 | Verification and closure | Focused/full validation, review, documentation promotion, downstream evidence, and closure records are complete. | planned |
+| EC-09 | Verification and closure | Focused/full validation, review, documentation promotion, downstream evidence, and closure records are complete. | done |
 
 ## Acceptance
 
@@ -340,5 +341,18 @@ static specification binds R24/E18 to the downstream executable specification.
 Read-only review found and review-fix removed Phase-specific verification
 evidence from those canonical documents while retaining the normative contract
 and executable-specification mapping. Clean re-review found no remaining
-finding. The EC-09A commit remains before the final EC-09B strategy/status
-closure slice.
+finding. EC-09B strategy/status closure is the final Phase 49 slice.
+
+EC-09A was committed as `1a10f423` (`Record Phase 49 verification evidence`).
+The EC-09B closure candidate moves the completed 9.12 baseline and 9.39
+capability into strategy completed history as `8.28 Entity Conflict and
+Conditional Transition`, removes both active/future entries, and retains 9.40
+as the explicit force/repair, merge, overwrite-policy, and conflict-resolution
+UI follow-up. Phase status remained open until this closure candidate passed
+independent review and clean re-review.
+
+The closure-only strategy target and Phase 49 status documents passed fresh
+independent re-review with no actionable finding. EC-09 is complete, the 9.12
+baseline and 9.39 capability are recorded in completed history, 9.40 remains
+the explicit deferred conflict-resolution/repair item, and Phase 49 closes on
+2026-07-25.

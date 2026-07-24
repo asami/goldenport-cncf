@@ -859,7 +859,7 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Phase 46: closed (`docs/phase/phase-46.md`)
 - Phase 47: closed (`docs/phase/phase-47.md`)
 - Phase 48: closed (`docs/phase/phase-48.md`)
-- Phase 49: active (`docs/phase/phase-49.md`)
+- Phase 49: closed (`docs/phase/phase-49.md`)
 
 ## 8. Completed Development Item History
 
@@ -1564,23 +1564,40 @@ Completed in Phase 48.
   promotion, downstream persistence/retention, experiment acceptance/reporting
   and operator UI, and production provider activation.
 
+### 8.28 Entity Conflict and Conditional Transition
+Completed in Phase 49.
+
+- Closed dashboard: `docs/phase/phase-49.md`
+- Closed checklist: `docs/phase/phase-49-checklist.md`
+- Decided designs:
+  - `docs/design/entity-conflict-and-conditional-transition.md`
+  - `docs/spec/entity-conflict-and-conditional-transition.md`
+- Completed scope:
+  - framework-owned store-backed concurrency metadata and explicit
+    expected-token mutation for ordinary Entity/Aggregate updates;
+  - deterministic structured stale-conflict failure without resident
+    Working Set bypass;
+  - one protected typed conditional-transition DSL through ActionCall,
+    UnitOfWork, EntityStore, and a provider-neutral atomic datastore
+    capability;
+  - typed `Transitioned` and `NotMatched(existing)` outcomes with
+    authorization-safe reconciliation, View invalidation, audit, CallTree,
+    metrics, and structured diagnostics;
+  - equivalent bounded concurrency and rollback behavior across deterministic
+    in-memory, SQLite, and the selected live MySQL profile; and
+  - CBD Support downstream acceptance for immutable predecessor retention,
+    exactly-one successor ownership, authoritative loser joining, and
+    exactly-once successor work admission.
+- Deferred force/repair commands, merge workflows, overwrite policy, and
+  conflict-resolution UI remain future item
+  `9.40 Entity Conflict Resolution and Repair`.
+
 ## 9. Development Item Status
 
 This final section lists planned active and future development areas only.
 Completed work areas are recorded in section 8. When a development item closes,
 remove its completion record from this section and add or update the
 corresponding completed-history entry.
-
-Phase 49, `Entity Conflict and Conditional Transition`, is the active phase.
-It combines the bounded concurrency-token and stale-conflict foundation from
-9.12 with the protected atomic successor transition from 9.39.
-
-- Active dashboard: `docs/phase/phase-49.md`
-- Active checklist: `docs/phase/phase-49-checklist.md`
-- Planning record:
-  - `docs/journal/2026/07/2026-07-24-phase-49-entity-conflict-conditional-transition-consideration.md`
-- Implementation proposal:
-  - `docs/notes/entity-conflict-conditional-transition-implementation.md`
 
 Other 9.x items remain future development candidates until explicitly
 selected.
@@ -1987,34 +2004,6 @@ Future platform development item.
   policy is explicitly configured by an application.
 - Completed, cancelled, archived, or otherwise inactive workflow records should
   be evicted from the Working Set when their state changes.
-
-### 9.12 Entity and Aggregate Version Conflict Policy
-Active in Phase 49 for the store-backed concurrency token, expected-token
-mutation, and deterministic stale-conflict foundation required by 9.39.
-Phase 49 is intended to complete this baseline, not leave 9.12 partially open.
-
-- Phase 49 planning references:
-  - `docs/phase/phase-49.md`
-  - `docs/phase/phase-49-checklist.md`
-  - `docs/journal/2026/07/2026-07-24-phase-49-entity-conflict-conditional-transition-consideration.md`
-  - `docs/notes/entity-conflict-conditional-transition-implementation.md`
-- Add a first-class optimistic locking / version conflict policy for Entity and
-  Aggregate updates.
-- Define a canonical concurrency token such as revision, version, or equivalent
-  store-backed metadata, and allow update paths to carry an expected token.
-- `entity_save`, `entity_update`, Aggregate update, and state transition paths
-  should reject stale updates deterministically when the stored token no longer
-  matches the expected token.
-- Resident Working Set values must not bypass the store-backed version check.
-- Intentional overwrite or repair should require an explicit force/repair API
-  rather than ordinary save/update behavior.
-- Phase 49 closure disposition:
-  - complete the 9.12 version-conflict baseline together with 9.39;
-  - move the combined result to section 8 as
-    `Entity Conflict and Conditional Transition`;
-  - remove 9.12 and 9.39 from section 9; and
-  - preserve 9.40 for force/repair implementation, merge workflows, and
-    conflict-resolution UI.
 
 ### 9.13 Distributed Component Runtime
 Future distributed-system development item.
@@ -2787,82 +2776,14 @@ Future CNCF development item. This item is defined but is not the active phase.
 - Planning reference:
   - `docs/journal/2026/07/2026-07-21-codex-skill-bundle-contract.md`.
 
-### 9.39 Entity Conditional Transition Internal DSL
-Active Entity/UnitOfWork/datastore consistency development item in Phase 49.
-Phase 49 closure completes this item together with the 9.12 baseline.
-
-- Handoff:
-  - `docs/journal/2026/07/entity-internal-dsl-conditional-transition-handoff-2026-07-23.md`
-- Phase 49 planning references:
-  - `docs/phase/phase-49.md`
-  - `docs/phase/phase-49-checklist.md`
-  - `docs/journal/2026/07/2026-07-24-phase-49-entity-conflict-conditional-transition-consideration.md`
-  - `docs/notes/entity-conflict-conditional-transition-implementation.md`
-- Goal:
-  - provide a protected typed Entity internal-DSL primitive that atomically
-    verifies an immutable expected predicate, creates or binds one successor,
-    and updates the active/root Entity state;
-  - guarantee that concurrent attempts for one stable reuse identity produce
-    exactly one successor owner; and
-  - preserve Entity authorization, UnitOfWork transaction semantics, audit,
-    CallTree/metrics, View invalidation, and component datastore isolation.
-- Relationship to existing work:
-  - `9.12 Entity and Aggregate Version Conflict Policy` provides the general
-    stale-write/concurrency-token foundation;
-  - 9.39 adds predicate-based transition and successor ownership semantics
-    that cannot be represented by an ordinary versioned save alone; and
-  - CBD Support terminal Review Run replacement is the first driver, but the
-    framework contract must remain domain-neutral.
-- Initial scope:
-  - define typed expected-predicate, transition mutation, successor binding,
-    and result models;
-  - return `Transitioned` or `NotMatched(existing)` without overwriting a
-    nonmatching Entity;
-  - add one protected ActionCall/Behavior internal DSL operation and one
-    corresponding UnitOfWork algebra operation;
-  - add a datastore capability for atomic conditional transition rather than
-    emulating atomicity with load-then-save in component code;
-  - keep resident Entity/working-set state and View caches coherent only after
-    the datastore transition succeeds; and
-  - prove simultaneous attempts admit exactly one successor with SQLite and
-    at least one shared datastore provider profile.
-- First implementation direction:
-  - establish normative design/specification and datastore atomicity contract;
-  - implement the in-memory deterministic reference behavior and SQLite
-    provider behavior;
-  - integrate authorization, transaction ownership, observability, audit, and
-    invalidation at the existing ActionCall/UnitOfWork chokepoint; and
-  - add CBD Support downstream acceptance only after the generic CNCF
-    executable specifications pass.
-- Boundary:
-  - this is not a public CRUD operation and does not expose a generic
-    caller-authored predicate language;
-  - component code receives no raw `DataStore`, SQL/JDBC handle, backend
-    transaction, or process-local lock;
-  - a nonmatching predicate is a typed normal outcome, while malformed policy,
-    authorization denial, datastore failure, and transaction failure remain
-    structured `Consequence` failures;
-  - the primitive does not invent cross-component or distributed transaction
-    guarantees; providers that cannot satisfy the declared atomic capability
-    must reject activation deterministically; and
-  - CBD-specific Review state names, reuse keys, retention policy, and
-    successor payload construction remain in CBD Support.
-- Deferred scope:
-  - arbitrary compare-and-swap expressions;
-  - distributed consensus, leases, fencing tokens, and multi-region ownership;
-  - generalized workflow/state-machine replacement;
-  - public conditional mutation APIs; and
-  - fallback to process-local locking or best-effort non-atomic updates.
-
 ### 9.40 Entity Conflict Resolution and Repair
 Future Entity/operator-UX development item. This item is defined now so the
 scope deferred from the Phase 49 version-conflict baseline remains visible
 after 9.12 and 9.39 move to completed history.
 
 - Dependency:
-  - Phase 49 must first provide the canonical store-backed concurrency token,
-    structured stale-conflict result, and protected conditional-transition
-    primitive.
+  - Phase 49 provides the store-backed version-conflict baseline and protected
+    atomic conditional-transition primitive.
 - Goal:
   - provide explicit, authorized, and auditable ways to inspect and resolve an
     Entity/Aggregate conflict without weakening ordinary optimistic locking.
@@ -2888,49 +2809,8 @@ after 9.12 and 9.39 move to completed history.
   - application-specific business reconciliation remains application policy
     executed through the CNCF conflict/repair boundary.
 - First implementation direction:
-  - begin only after Phase 49 closes and real application conflicts justify
-    the exact resolution vocabulary;
-  - promote the accepted force/repair and merge contract to design/spec before
-    exposing any mutation route; and
-  - use one operator-facing application as the first driver rather than
-    inventing a generic merge UI without evidence.
-
-### 9.40 Entity Conflict Resolution and Repair
-Future Entity/operator-UX development item. This item is defined now so the
-scope deferred from the Phase 49 version-conflict baseline remains visible
-after 9.12 and 9.39 move to completed history.
-
-- Dependency:
-  - Phase 49 must first provide the canonical store-backed concurrency token,
-    structured stale-conflict result, and protected conditional-transition
-    primitive.
-- Goal:
-  - provide explicit, authorized, and auditable ways to inspect and resolve an
-    Entity/Aggregate conflict without weakening ordinary optimistic locking.
-- Initial scope:
-  - explicit force/repair command semantics separated from ordinary
-    save/update;
-  - bounded conflict inspection and comparison projection;
-  - application-declared merge policy and operator-selected resolution;
-  - preview/dry-run before a destructive repair;
-  - structured Web/API conflict presentation and operator workflow;
-  - dedicated capabilities for inspect, merge, force, and repair;
-  - complete audit, provenance, reason, actor, before/after revision, and
-    observability evidence; and
-  - repair-safe Working Set/View reconciliation after authoritative commit.
-- Boundary:
-  - ordinary Entity save/update never silently becomes force or last-write-wins;
-  - no raw DataStore, SQL/JDBC, provider transaction, or direct cache mutation
-    is exposed to application/operator code;
-  - no universal automatic field merge is inferred by CNCF;
-  - repair remains explicit and more privileged than ordinary update;
-  - this item does not own distributed consensus, leases, fencing, or
-    multi-region conflict resolution; and
-  - application-specific business reconciliation remains application policy
-    executed through the CNCF conflict/repair boundary.
-- First implementation direction:
-  - begin only after Phase 49 closes and real application conflicts justify
-    the exact resolution vocabulary;
+  - begin only when real application conflicts justify the exact resolution
+    vocabulary;
   - promote the accepted force/repair and merge contract to design/spec before
     exposing any mutation route; and
   - use one operator-facing application as the first driver rather than

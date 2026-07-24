@@ -1,6 +1,6 @@
 # Phase 49 Checklist - Entity Conflict and Conditional Transition
 
-status=open
+status=closed
 phase=[Phase 49 - Entity Conflict and Conditional Transition](phase-49.md)
 
 This checklist is the authoritative Phase 49 state ledger. Only one stage may
@@ -798,7 +798,7 @@ EC-08 Modified Scala File Compliance Ledger:
 ## EC-09: Verification and Closure
 
 Stage Status:
-- Current status: IN_PROGRESS
+- Current status: DONE
 - Owner: CNCF release maintainers
 - Update rule: Mark IN_PROGRESS only after EC-08 closes. Mark DONE only after
   all validation, review, documentation, downstream, and closure evidence is
@@ -814,14 +814,14 @@ Stage Status:
 - [x] Fix every actionable finding.
 - [x] Run clean re-review.
 - [x] Update design/spec with the canonical implementation contract.
-- [ ] Add one strategy section 8 completed-history item,
+- [x] Add one strategy section 8 completed-history item,
   `Entity Conflict and Conditional Transition`.
-- [ ] Record both the 9.12 baseline and 9.39 as completed.
-- [ ] Remove 9.12 and 9.39 from active/future strategy section 9.
-- [ ] Preserve 9.40 as the future conflict-resolution/repair item.
-- [ ] Preserve closed historical phase documents while updating current
+- [x] Record both the 9.12 baseline and 9.39 as completed.
+- [x] Remove 9.12 and 9.39 from active/future strategy section 9.
+- [x] Preserve 9.40 as the future conflict-resolution/repair item.
+- [x] Preserve closed historical phase documents while updating current
   strategy status.
-- [ ] Close Phase 49 only after exact commit and test evidence is recorded.
+- [x] Close Phase 49 only after exact commit and test evidence is recorded.
 
 Evidence:
 - EC-09A validates CNCF commit `961756a0` from a clean temporary checkout.
@@ -851,5 +851,20 @@ Evidence:
   evidence in this active Phase checklist.
 - Clean re-review found no remaining documentation-boundary, contract,
   source-of-truth, or status-consistency finding.
-- The EC-09A release commit, strategy promotion, and final Phase 49 closure
-  remain pending.
+- EC-09A was committed as `1a10f423`
+  (`Record Phase 49 verification evidence`).
+- The EC-09B closure candidate adds strategy completed-history item 8.28,
+  removes active/future items 9.12 and 9.39, and preserves 9.40 for force,
+  repair, merge, overwrite-policy, and conflict-resolution UI work.
+- The Phase 49 closure-only strategy target is Git blob
+  `60ab7cbe94dd421585bb1462e4a629a28eadae69`, derived from commit
+  `1a10f423`. It excludes the parallel Phase 50/9.41 worktree changes,
+  removes the duplicate historical 9.40 block, and retains one fulfilled
+  Phase 49 dependency for the deferred conflict-resolution item.
+- EC-09B independent review and clean re-review found no actionable
+  contract, evidence, document-boundary, commit-boundary, or status finding.
+- The fixed closure-only strategy blob, this checklist, and the Phase 49
+  dashboard form the final closure changeset. Prior implementation and
+  verification commits are recorded throughout this checklist, ending with
+  EC-09A commit `1a10f423`.
+- EC-09 is DONE and Phase 49 is closed on 2026-07-25.
