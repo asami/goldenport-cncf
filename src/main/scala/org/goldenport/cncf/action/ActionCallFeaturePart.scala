@@ -142,7 +142,7 @@ import org.goldenport.cncf.processexecution.{
  *  version Mar. 30, 2026
  *  version Apr. 29, 2026
  *  version May. 25, 2026
- * @version Jul. 24, 2026
+ * @version Jul. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 trait BehaviorFeaturePart { self: Behavior.Core.Holder =>
@@ -2521,6 +2521,43 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
     }
   }
 
+  /** Loads an authoritative server-owned Entity snapshot through the UnitOfWork boundary.
+   *
+   * This is the ServiceInternal counterpart of `entity_load_snapshot`. Component workflows use
+   * the returned concurrency token to construct protected conditional transitions without
+   * imposing caller-owned Entity permissions or bypassing EntityStore authorization.
+   */
+  protected final def entity_load_snapshot_internal[T](
+    id: EntityId
+  )(using tc: EntityPersistent[T]): ExecUowM[EntitySnapshot[T]] = {
+    ensure_component_application_datastore()
+    val effectiveid = _canonical_entity_id(id)
+    exec_from(
+      _component_entity_owner(Vector(effectiveid.collection)).map(_ => ())
+    ).flatMap { _ =>
+      val effectivetc =
+        _effective_entity_persistent(effectiveid.collection, tc)
+      val authorization =
+        _entity_uow_authorization(
+          Some(effectiveid.collection.name),
+          Some(effectiveid),
+          "read"
+        ).map(_.copy(accessMode = EntityAccessMode.ServiceInternal))
+      val operation = UnitOfWorkOp.EntityStoreLoadSnapshot(
+        effectiveid,
+        effectivetc,
+        authorization
+      )
+      val loaded: ExecUowM[Option[EntitySnapshot[T]]] =
+        ConsequenceT.liftF(
+          Free.liftF[UnitOfWorkOp, Option[EntitySnapshot[T]]](operation)
+        )
+      loaded.flatMap { snapshot =>
+        exec_from(Consequence.successOrEntityNotFound(snapshot)(effectiveid))
+      }
+    }
+  }
+
   protected final def entity_load_internal[T](
     id: EntityId
   )(using tc: EntityPersistent[T]): ExecUowM[T] =
@@ -2759,10 +2796,14 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
     rootcollection: EntityCollectionId,
     successorcollection: EntityCollectionId
   ): Consequence[DataStoreComponentOwner] =
+    _component_entity_owner(Vector(rootcollection, successorcollection))
+
+  private def _component_entity_owner(
+    collections: Vector[EntityCollectionId]
+  ): Consequence[DataStoreComponentOwner] =
     component match {
       case Some(c)
-          if c.entitySpace.entityOption(rootcollection).isDefined &&
-            c.entitySpace.entityOption(successorcollection).isDefined =>
+          if collections.forall(c.entitySpace.entityOption(_).isDefined) =>
         component_name_option
           .map(DataStoreComponentOwner.create)
           .getOrElse(Consequence.argumentMissing("componentName"))

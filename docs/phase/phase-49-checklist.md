@@ -723,24 +723,77 @@ EC-07B Modified Scala File Compliance Ledger:
 ## EC-08: CBD Support Acceptance
 
 Stage Status:
-- Current status: PLANNED
+- Current status: DONE
 - Owner: CNCF and CBD Support maintainers
 - Update rule: Mark IN_PROGRESS only after EC-07 closes. Mark DONE only when
   CBD Support uses the generic protected capability and its concurrent
   successor workflow passes without a persistence escape hatch.
 
-- [ ] Replace CBD Support application-side terminal successor ownership logic
+- [x] Replace CBD Support application-side terminal successor ownership logic
   with the protected conditional-transition DSL.
-- [ ] Retain the complete terminal predecessor snapshot.
-- [ ] Prove simultaneous eligible requests install exactly one successor.
-- [ ] Prove losing requests observe the authoritative successor ownership.
-- [ ] Prove expensive successor work starts once.
-- [ ] Verify no CBD Support SQL, JDBC, raw DataStore, provider transaction, or
+- [x] Retain the complete terminal predecessor snapshot.
+- [x] Prove simultaneous eligible requests install exactly one successor.
+- [x] Prove losing requests observe the authoritative successor ownership.
+- [x] Prove expensive successor work starts once.
+- [x] Verify no CBD Support SQL, JDBC, raw DataStore, provider transaction, or
   process-local lock is introduced.
-- [ ] Record downstream executable-specification and commit evidence.
+- [x] Record downstream executable-specification and commit evidence.
 
 Evidence:
-- Pending.
+- Review-fix implementation routes the CBD Support successor workflow through
+  `entity_conditional_transition_and_start`, and uses the protected
+  ServiceInternal snapshot loader for authoritative revision tokens.
+- The bounded generated concurrency behavior in
+  `ReviewDiagnosisPersistenceSpec` proves one owner, authoritative joining by
+  every loser, one continuation start, and retention of both predecessor and
+  successor snapshots for generated caller counts from two through eight.
+- SimpleModeler review-fix composes the Entity-update special projection with
+  additional operation parameters and preserves the explicit operation result.
+  Cozy's generated versioned mutation specification covers the resulting
+  request schema, command decoder, and `Record` response contract.
+- Review-fix validation passed:
+  - SimpleModeler `EntityUpdateOperationContractProjectionSpec`,
+    `Test/compile`, and `publishLocal`;
+  - Cozy `ModelerEntityVersionedMutationGenerationSpec`, `Test/compile`, and
+    `publishLocal`;
+  - CNCF `ActionCallConditionalTransitionDslSpec` with all six behaviors and
+    `Test/compile`;
+  - CBD Support `ReviewDiagnosisPersistenceSpec` with all six Phase 49
+    behaviors and
+    `Test/compile`.
+- Full release validation passed:
+  - SimpleModeler: 38 tests;
+  - Cozy: 660 tests;
+  - CBD Support: 285 tests;
+  - CNCF: 2436 tests across 348 suites, with 7 canceled, 1 ignored, and 59
+    pending.
+- CBD Support CAR lint completed with no failure. Its three existing warnings
+  remain: no generated CAR under `target`, no ABI baseline, and the intentional
+  development `sbt-cozy` snapshot.
+- All four repository `git diff --check` validations passed.
+- Fresh read-only re-review found no actionable implementation, naming, or
+  executable-specification finding.
+- Downstream release commits:
+  - SimpleModeler `80ccb13` (`Preserve entity update operation contracts`);
+  - Cozy `612ef93` (`Generate version-aware entity mutations`);
+  - CBD Support `85b4074` (`Adopt conditional transition successor workflow`).
+- CBD Support's Phase 49 staged-only executable specification passed all six
+  behaviors after clean generation. A pre-existing committed-HEAD
+  `namedViews` projection mismatch was isolated with a temporary test shim and
+  was not mixed into the Phase 49 commit.
+
+EC-08 Modified Scala File Compliance Ledger:
+
+| Repository / file | Naming | Executable specification | Validation | Scope |
+| --- | --- | --- | --- | --- |
+| CNCF `ActionCallFeaturePart.scala` | Whole-file private/protected naming scan passed | Covered by `ActionCallConditionalTransitionDslSpec` | Six focused behaviors and `Test/compile` passed | Protected internal snapshot ownership |
+| CNCF `ActionCallConditionalTransitionDslSpec.scala` | Whole-file naming scan passed | Given/When/Then component-owned and foreign-collection snapshot behaviors | Six focused behaviors and `Test/compile` passed | Internal snapshot authorization |
+| SimpleModeler `ComponentPart.scala` | Whole-file private/protected naming scan passed after existing debt cleanup | Covered by `EntityUpdateOperationContractProjectionSpec` | Focused behavior, `Test/compile`, and `publishLocal` passed | Special projection composition |
+| SimpleModeler `EntityUpdateOperationContractProjectionSpec.scala` | Whole-file naming scan passed | Generated request/command/decoder/response contract, including unrelated declared-result preservation | Focused behavior and `Test/compile` passed | Generator regression |
+| Cozy `Modeler.scala` | Whole-file private/protected naming scan passed after existing debt cleanup | Covered by `ModelerEntityVersionedMutationGenerationSpec` | Focused behavior, `Test/compile`, and `publishLocal` passed | Generated versioned mutation adaptation |
+| Cozy `ModelerEntityVersionedMutationGenerationSpec.scala` | Whole-file naming scan passed | Generated load/save/update revision contract | Focused behavior and `Test/compile` passed | Downstream generator acceptance |
+| CBD Support `ComponentFactory.scala` | Whole-file private/protected naming scan passed after existing debt cleanup | Covered by `ReviewDiagnosisPersistenceSpec` | Six focused Phase 49 behaviors, full 285-test suite, `Test/compile`, and CAR lint passed | Terminal-successor application adoption |
+| CBD Support `ReviewDiagnosisPersistenceSpec.scala` | Whole-file naming scan passed | Generated bounded simultaneous successor behavior | Six focused Phase 49 behaviors and full 285-test suite passed | Downstream concurrency acceptance |
 
 ## EC-09: Verification and Closure
 

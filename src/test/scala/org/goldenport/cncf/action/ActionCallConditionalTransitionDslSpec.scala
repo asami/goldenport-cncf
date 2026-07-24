@@ -60,7 +60,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 
 /*
  * @since   Jul. 24, 2026
- * @version Jul. 24, 2026
+ * @version Jul. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ActionCallConditionalTransitionDslSpec
@@ -78,6 +78,10 @@ final class ActionCallConditionalTransitionDslSpec
   private val _component_scope_metadata =
     afterWord(
       "in spec:entity-conflict-and-conditional-transition, example:E19, rules:R8,R14-R15, phase:49"
+    )
+  private val _internal_snapshot_metadata =
+    afterWord(
+      "in spec:entity-conflict-and-conditional-transition, rules:R14-R15, phase:49"
     )
 
   "ActionCall conditional-transition DSL" should {
@@ -120,6 +124,68 @@ final class ActionCallConditionalTransitionDslSpec
           internalcapture.transition.map(_.request.rootId)
         _authorization_without_mode(standardcapture.transition) shouldBe
           _authorization_without_mode(internalcapture.transition)
+      }
+    }
+
+    "load an authoritative ServiceInternal transition snapshot" must
+      _internal_snapshot_metadata {
+      "when a server-owned workflow needs the persisted concurrency token" in {
+        Given(
+          "Spec: docs/spec/entity-conflict-and-conditional-transition.md; Rules: R14-R15; one persisted component-owned root"
+        )
+        val capture = new OperationCapture
+        val component = new TestComponent
+        val core = _core(component, capture)
+        given ExecutionContext = core.executionContext
+        val rootid = EntityId("test", "internal_snapshot_root", _rootcollection)
+        val record =
+          EntityConcurrencyMetadata.initializeForCreate(
+            _root_persistent.toStoreRecord(Root(rootid, "terminal"))
+          )
+        core.executionContext.dataStoreSpace
+          .inject(DataStore.CollectionId.EntityStore(_rootcollection), record)
+          .TAKE
+        val call = new InternalSnapshotLoadCall(core, rootid)
+
+        When("the protected internal snapshot helper executes")
+        val result = call.execute()
+
+        Then("the helper returns the datastore token through an authorized UnitOfWork read")
+        result shouldBe a[Consequence.Success[?]]
+        call.loadedToken shouldBe Some(EntityConcurrencyToken.INITIAL)
+        capture.snapshotLoad
+          .flatMap(_.authorization)
+          .map(_.accessMode) shouldBe
+          Some(EntityAccessMode.ServiceInternal)
+        capture.snapshotLoad.map(_.id) shouldBe Some(rootid)
+      }
+
+      "when a server-owned workflow requests a foreign collection" in {
+        Given(
+          "Spec: docs/spec/entity-conflict-and-conditional-transition.md; Rules: R14-R15; one root outside the executing component"
+        )
+        val capture = new OperationCapture
+        val component = new TestComponent
+        val foreigncollection =
+          EntityCollectionId("test", "phase49", "foreign_snapshot_root")
+        val foreignid =
+          EntityId(
+            foreigncollection.major,
+            foreigncollection.minor,
+            foreigncollection
+          )
+        val call =
+          new InternalSnapshotLoadCall(
+            _core(component, capture),
+            foreignid
+          )
+
+        When("the protected internal snapshot helper admits the request")
+        val result = call.execute()
+
+        Then("component scope is denied before a UnitOfWork load is built")
+        _assert_component_scope_denial(result)
+        capture.snapshotLoad shouldBe None
       }
     }
 
@@ -248,10 +314,17 @@ final class ActionCallConditionalTransitionDslSpec
     private var _transition:
         Option[UnitOfWorkOp.EntityStoreConditionalTransition[?, ?, ?]] =
       None
+    private var _snapshotload:
+        Option[UnitOfWorkOp.EntityStoreLoadSnapshot[?]] =
+      None
 
     def transition:
         Option[UnitOfWorkOp.EntityStoreConditionalTransition[?, ?, ?]] =
       _transition
+
+    def snapshotLoad:
+        Option[UnitOfWorkOp.EntityStoreLoadSnapshot[?]] =
+      _snapshotload
 
     def interpreter(
       context: => ExecutionContext
@@ -262,6 +335,8 @@ final class ActionCallConditionalTransitionDslSpec
             case transition:
                 UnitOfWorkOp.EntityStoreConditionalTransition[?, ?, ?] =>
               _transition = Some(transition)
+            case snapshotload: UnitOfWorkOp.EntityStoreLoadSnapshot[?] =>
+              _snapshotload = Some(snapshotload)
             case _ =>
               ()
           }
@@ -286,6 +361,24 @@ final class ActionCallConditionalTransitionDslSpec
           entity_conditional_transition(request)
       transition.map(_ => OperationResponse.Void())
     }
+  }
+
+  private final class InternalSnapshotLoadCall(
+    val core: ActionCall.Core,
+    id: EntityId
+  ) extends FunctionalActionCall
+      with ActionCall.Core.Holder {
+    private var _loadedtoken: Option[EntityConcurrencyToken] =
+      None
+
+    def loadedToken: Option[EntityConcurrencyToken] =
+      _loadedtoken
+
+    protected def build_Program: ExecUowM[OperationResponse] =
+      entity_load_snapshot_internal[Root](id)(using _root_persistent).map { snapshot =>
+        _loadedtoken = Some(snapshot.token)
+        OperationResponse.Void()
+      }
   }
 
   private final class TestComponent extends Component {

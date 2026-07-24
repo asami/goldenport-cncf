@@ -109,7 +109,7 @@ They are recorded together in strategy completed history rather than leaving
 | EC-05 | EntityStore, UnitOfWork, and DSL | Protected typed conditional transition preserves authorization, lifecycle, transaction, and normal effect boundaries. | done |
 | EC-06 | Coherence and diagnostics | EntitySpace, Working Set, View, audit, CallTree, metrics, and structured failures reflect only authoritative outcomes. | done |
 | EC-07 | Provider and concurrency evidence | In-memory, SQLite, and one shared profile prove one winner, rollback safety, restart visibility, and provider parity. | done |
-| EC-08 | CBD Support acceptance | Terminal predecessor retention and exactly-one successor ownership use the generic CNCF DSL without storage bypass. | planned |
+| EC-08 | CBD Support acceptance | Terminal predecessor retention and exactly-one successor ownership use the generic CNCF DSL without storage bypass. | done |
 | EC-09 | Verification and closure | Focused/full validation, review, documentation promotion, downstream evidence, and closure records are complete. | planned |
 
 ## Acceptance
@@ -316,5 +316,15 @@ restart visibility, and generated two-to-twelve-caller one-winner behavior.
 Concurrent first-use schema preparation now treats a column installed by
 another caller as successful idempotent preparation rather than a provider
 failure. The five live MySQL behaviors pass, and the combined in-memory,
-SQLite, and MySQL provider matrix passes all 19 behaviors. EC-07 is complete;
-EC-08 CBD Support acceptance is the next Phase 49 slice.
+SQLite, and MySQL provider matrix passes all 19 behaviors. EC-07 is complete.
+EC-08 CBD Support acceptance is complete. The application routes
+terminal-successor ownership through the generic protected
+conditional-transition DSL, retains the terminal predecessor, admits exactly
+one successor under generated concurrent callers, and starts successor work
+once. SimpleModeler and Cozy now preserve one generated versioned-mutation
+contract across flattened update attributes, `cncfRevision`, the command
+decoder, and the explicit `Record` response. Fresh read-only re-review found no
+actionable implementation, naming, or executable-specification finding. Full
+validation passed 38 SimpleModeler tests, 660 Cozy tests, 285 CBD Support tests,
+and 2436 CNCF tests. EC-09 verification, strategy promotion, and Phase 49
+closure are next.
