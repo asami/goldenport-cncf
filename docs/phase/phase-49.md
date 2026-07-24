@@ -328,3 +328,17 @@ actionable implementation, naming, or executable-specification finding. Full
 validation passed 38 SimpleModeler tests, 660 Cozy tests, 285 CBD Support tests,
 and 2436 CNCF tests. EC-09 verification, strategy promotion, and Phase 49
 closure are next.
+
+EC-09A verification is in progress. A clean checkout of CNCF commit
+`961756a0` passed the 67-test focused Phase 49 matrix, `Test/compile`, and all
+2434 executed full-suite tests across 347 suites. The ordinary offline run
+canceled the five explicitly opt-in MySQL behaviors; their live acceptance
+remains the verified EC-07 evidence. The integrated CBD Support worktree
+passed its 8-behavior diagnosis-persistence specification and all 285 tests.
+Design now records the phase-independent authoritative runtime path, and the
+static specification binds R24/E18 to the downstream executable specification.
+Read-only review found and review-fix removed Phase-specific verification
+evidence from those canonical documents while retaining the normative contract
+and executable-specification mapping. Clean re-review found no remaining
+finding. The EC-09A commit remains before the final EC-09B strategy/status
+closure slice.

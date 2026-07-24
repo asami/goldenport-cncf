@@ -617,7 +617,7 @@ constructed, then construction fails before ActionCall or provider admission.
 | R21 | E2-E6, E8-E11 | `EntityVersionedMutationDataStoreSpec`, `ContentBodyVersionedMutationSpec`, `InMemoryConditionalTransitionSpec` |
 | R22 | E5-E6, E8-E11, E17 | `SqliteConditionalTransitionSpec` |
 | R23 | E5-E6, E8-E11, E17 | `MysqlConditionalTransitionAcceptanceSpec` |
-| R24 | E18 | CBD Support conditional-transition acceptance spec |
+| R24 | E18 | CBD Support `ReviewDiagnosisPersistenceSpec` |
 | R25 | E4 | Entity conflict API-surface regression specification |
 
 ## EC-05 Framework Binding

@@ -798,22 +798,22 @@ EC-08 Modified Scala File Compliance Ledger:
 ## EC-09: Verification and Closure
 
 Stage Status:
-- Current status: PLANNED
+- Current status: IN_PROGRESS
 - Owner: CNCF release maintainers
 - Update rule: Mark IN_PROGRESS only after EC-08 closes. Mark DONE only after
   all validation, review, documentation, downstream, and closure evidence is
   recorded.
 
-- [ ] Run focused Entity, UnitOfWork, datastore, provider, security,
+- [x] Run focused Entity, UnitOfWork, datastore, provider, security,
   observability, cache, and View specifications.
-- [ ] Run `sbt --batch Test/compile`.
-- [ ] Run the full CNCF test suite.
-- [ ] Run the relevant downstream CBD Support suite.
-- [ ] Run `git diff --check`.
-- [ ] Run read-only CNCF review.
-- [ ] Fix every actionable finding.
-- [ ] Run clean re-review.
-- [ ] Update design/spec with verified implementation details.
+- [x] Run `sbt --batch Test/compile`.
+- [x] Run the full CNCF test suite.
+- [x] Run the relevant downstream CBD Support suite.
+- [x] Run `git diff --check`.
+- [x] Run read-only CNCF review.
+- [x] Fix every actionable finding.
+- [x] Run clean re-review.
+- [x] Update design/spec with the canonical implementation contract.
 - [ ] Add one strategy section 8 completed-history item,
   `Entity Conflict and Conditional Transition`.
 - [ ] Record both the 9.12 baseline and 9.39 as completed.
@@ -824,4 +824,32 @@ Stage Status:
 - [ ] Close Phase 49 only after exact commit and test evidence is recorded.
 
 Evidence:
-- Pending.
+- EC-09A validates CNCF commit `961756a0` from a clean temporary checkout.
+- The focused Phase 49 matrix passed 67 tests across 12 suites. The five live
+  MySQL acceptance behaviors were canceled by their explicit opt-in gate; the
+  successful live EC-07 evidence remains authoritative for that profile.
+- `sbt -J-Xmx4G --batch Test/compile` passed after clean compilation of 511
+  main Scala sources, one main Java source, 364 test Scala sources, and one
+  test Java source.
+- The clean full CNCF suite passed 2434 tests across 347 completed suites,
+  with 7 canceled, 1 ignored, and 59 pending.
+- CBD Support's integrated worktree passed all 8
+  `ReviewDiagnosisPersistenceSpec` behaviors and its full 285-test suite
+  across 72 suites. The committed Phase 49 subset remains the six successor
+  and persistence behaviors recorded under EC-08.
+- `docs/design/entity-conflict-and-conditional-transition.md` now records the
+  phase-independent authoritative path for ordinary mutation, protected DSL,
+  coherence, and diagnostics.
+- `docs/spec/entity-conflict-and-conditional-transition.md` now binds R24/E18
+  to `ReviewDiagnosisPersistenceSpec` in the existing executable-specification
+  evidence matrix.
+- `git diff --check` passed after the EC-09A documentation update.
+- Read-only review found two document-boundary violations: Phase-specific
+  verification evidence had been placed in canonical design and static
+  specification documents. Review-fix retained the phase-independent runtime
+  contract and executable-specification mapping there while keeping execution
+  evidence in this active Phase checklist.
+- Clean re-review found no remaining documentation-boundary, contract,
+  source-of-truth, or status-consistency finding.
+- The EC-09A release commit, strategy promotion, and final Phase 49 closure
+  remain pending.

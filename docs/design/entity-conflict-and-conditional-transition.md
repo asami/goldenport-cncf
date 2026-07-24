@@ -649,3 +649,42 @@ unchanged domain and storage fields are not resubmitted.
 The UnitOfWork interpreter evicts a stale resident root before authorizing an
 authoritative `NotMatched` record. A denial therefore cannot leave the stale
 resident root installed and cannot expose the authoritative payload.
+
+## Authoritative Runtime Path
+
+The version-conflict baseline and conditional-transition capability share one
+authoritative runtime path:
+
+```text
+ActionCall protected DSL
+  -> UnitOfWork
+  -> EntityStoreSpace
+  -> EntityStore
+  -> DataStoreSpace
+  -> provider atomic capability
+```
+
+Ordinary version-aware save, typed update, patch-by-id, Aggregate update, and
+framework-owned state transitions carry an explicit mutation expectation.
+The provider compares the expected revision against persisted metadata inside
+its atomic boundary. A stale candidate changes neither the root nor framework
+side records, and resident state cannot substitute for that provider check.
+
+The protected conditional-transition DSL admits only collections registered
+to the executing component. Server-owned workflows obtain the authoritative
+root token through the protected `ServiceInternal` snapshot loader rather than
+through System access or direct storage. The same authorization,
+transition-validation, UnitOfWork, EntityStore, and datastore-capability
+boundaries therefore remain active.
+
+Authoritative outcomes drive coherence and diagnostics:
+
+- `Transitioned` installs the committed root and successor and invalidates
+  affected Views only after provider success;
+- `NotMatched` reconciles or evicts stale resident state before returning an
+  authorized authoritative snapshot;
+- stale conflict, authorization denial, unsupported capability, provider
+  failure, and transaction failure remain structured
+  `Consequence.Failure(Conclusion)` values; and
+- CallTree, runtime metrics, and audit use typed outcomes and structured
+  diagnostics without recording payload or parsing display text.
