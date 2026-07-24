@@ -115,17 +115,27 @@ private val _reservation_count: Int
 
 ## General Rule for Parameters and Local Variables
 
-All **method parameters** and **method-local variables** must use **lowercase flatcase only**.
+Parameter naming follows the visibility of the declaring method:
 
-- Only lowercase letters (`a–z`) are allowed
-- **camelCase, snake_case, and SCREAMING_SNAKE_CASE are forbidden** in these scopes
-- This rule applies regardless of visibility or context
+- Parameters of public and protected methods use camelCase.
+- Parameters of private methods use lowercase flatcase.
+- Method-local variables use lowercase flatcase.
+- snake_case and SCREAMING_SNAKE_CASE are forbidden for parameters and local variables.
+- Named-argument labels follow the parameter names declared by the callee.
+- Do not preserve a non-canonical parameter label through a compatibility
+  overload, forwarding alias, deprecated label, or `@deprecatedName` merely to
+  avoid migrating callers.
 
 ### Allowed
 
 ```
-def foo(bar: Int): Int = {
-  val result = bar + 1
+def foo(barValue: Int): Int = {
+  val result = barValue + 1
+  result
+}
+
+private def _foo(barvalue: Int): Int = {
+  val result = barvalue + 1
   result
 }
 ```
@@ -133,9 +143,9 @@ def foo(bar: Int): Int = {
 ### Forbidden
 
 ```
-def foo(barValue: Int): Int = {   // camelCase: forbidden
-  val result_value = barValue + 1 // snake_case: forbidden
-  val RESULT = barValue + 1       // SCREAMING_SNAKE_CASE: forbidden
+def foo(bar_value: Int): Int = {   // snake_case: forbidden
+  val result_value = bar_value + 1 // snake_case: forbidden
+  val RESULT = bar_value + 1       // SCREAMING_SNAKE_CASE: forbidden
 }
 ```
 
@@ -149,13 +159,16 @@ Lowercase flatcase minimizes cognitive load, improves scanability, and avoids ac
 
 ## Method Parameters
 
-- Start with a lowercase letter
-- Use flatcase (all lowercase, no separators)
+- Public and protected method parameters use camelCase.
+- Private method parameters use flatcase (all lowercase, no separators).
+- Named arguments use the parameter labels declared by the callee.
 
 ### Example
 
 ```
-def x(reservationcount: Int)
+def reserve(reservationCount: Int)
+protected def validate(reservationCount: Int)
+private def _reserve(reservationcount: Int)
 ```
 
 ## Method‑Local Variables
