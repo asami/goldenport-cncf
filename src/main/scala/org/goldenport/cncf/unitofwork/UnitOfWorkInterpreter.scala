@@ -22,7 +22,8 @@ import org.goldenport.cncf.directive.SearchResult
 import org.goldenport.cncf.observability.{
   CallTreeContext,
   CallTreeValueSummary,
-  ConclusionDiagnostics
+  ConclusionDiagnostics,
+  EntityConditionalTransitionObservation
 }
 import org.goldenport.process.ShellCommandExecutor
 import org.goldenport.cncf.statemachine.TransitionValidationHook
@@ -495,11 +496,20 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
           }
         } yield response
       }
-      _reconcile_conditional_transition_failure(
+      val reconciled = _reconcile_conditional_transition_failure(
         rootid,
         successorintent,
         result
       )
+      EntityConditionalTransitionObservation.observe(
+        EntityConditionalTransitionObservation.context(
+          _component_option.flatMap(_.coreOption.map(_.name)),
+          rootid,
+          successorintent,
+          reconciled
+        ),
+        reconciled
+      )(using uow.executionContext)
 
     case m: (UnitOfWorkOp.EntityStoreUpdateUnversioned[t] @unchecked) =>
       _with_calltree("uow:entitystore:update-unversioned") {
@@ -1007,7 +1017,7 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
         }
       OperationAccessPolicy.authorizeUnitOfWorkDefault(a, loader).flatMap { _ =>
         _component_option
-          .flatMap(_.factory)
+          .flatMap(_.factoryOption)
           .flatMap(_.authorize_unit_of_work(a, uow))
           .getOrElse(Consequence.unit)
       }
@@ -1128,11 +1138,8 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
 
   private def _is_not_found(conclusion: Conclusion): Boolean = {
     val symptom = conclusion.observation.taxonomy.symptom
-    val message = conclusion.show.toLowerCase(java.util.Locale.ROOT)
     symptom == org.goldenport.observation.Taxonomy.Symptom.NotFound ||
-      message.contains("not found") ||
-      message.contains("not-found") ||
-      message.contains("notfound")
+      conclusion.status.webCode.code == 404
   }
 
   private def _filter_search_result[T](
@@ -1168,11 +1175,8 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
     conclusion: org.goldenport.Conclusion
   ): Boolean = {
     val symptom = conclusion.observation.taxonomy.symptom
-    val message = conclusion.show.toLowerCase
     symptom == org.goldenport.observation.Taxonomy.Symptom.NotFound ||
-      message.contains("not found") ||
-      message.contains("not-found") ||
-      message.contains("notfound")
+      conclusion.status.webCode.code == 404
   }
 
   private def _is_not_implemented(
@@ -1255,16 +1259,18 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
             )
             success
           case failure: Consequence.Failure[A] =>
-            ctx.leave(Map(
-              "outcome" -> "failure",
-              "status" -> failure.conclusion.status.webCode.code.toString,
-              "error" -> failure.conclusion.display
-            ))
+            ctx.leave(
+              Map("outcome" -> "failure") ++
+                CallTreeValueSummary.failureAttributes(failure.conclusion)
+            )
             failure
         }
       } catch {
         case e: Throwable =>
-          ctx.leave()
+          ctx.leave(Map(
+            "outcome" -> "exception",
+            "exception_type" -> e.getClass.getName
+          ))
           throw e
       }
     } else {

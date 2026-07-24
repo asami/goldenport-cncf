@@ -11,7 +11,7 @@ import org.goldenport.cncf.security.AuthorizationDecision
 import org.goldenport.cncf.security.AuthorizationEngine
 import org.goldenport.cncf.security.{Action as SecurityAction, SecuredResource}
 import org.goldenport.cncf.log.LogBackendHolder
-import org.goldenport.cncf.observability.{CallTreeContext, CallTreeValueSummary, DiagnosticPayloadExternalizer, DiagnosticPayloadSummary, ObservabilityEngine, OpenTelemetryExporter, OperationContext}
+import org.goldenport.cncf.observability.{CallTreeContext, CallTreeValueSummary, ConclusionDiagnostics, DiagnosticPayloadExternalizer, DiagnosticPayloadSummary, ObservabilityEngine, OpenTelemetryExporter, OperationContext}
 import org.goldenport.cncf.context.{ScopeContext, ScopeKind}
 import org.goldenport.cncf.context.GlobalRuntimeContext
 import org.goldenport.cncf.config.ResolvedParameters
@@ -33,7 +33,7 @@ import org.goldenport.schema.DataConfidentiality
  *  version Apr. 25, 2026
  *  version May. 17, 2026
  *  version Jun. 18, 2026
- * @version Jul. 23, 2026
+ * @version Jul. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 class ActionEngine(
@@ -104,7 +104,7 @@ class ActionEngine(
           leaveattributes = _calltree_error_attributes(conclusion) + ("outcome" -> "failure")
           calltree.failure(
             "io:error",
-            conclusion.display,
+            ConclusionDiagnostics.classify(conclusion).diagnosticKey,
             _calltree_error_attributes(conclusion) + ("calltree_kind" -> "io-error")
           )
           executionoutcome = Some(Left(conclusion))
@@ -146,7 +146,12 @@ class ActionEngine(
                   executionoutcome = Some(Right(response))
                 case Consequence.Failure(conclusion) =>
                   leaveattributes = _calltree_error_attributes(conclusion) + ("outcome" -> "failure")
-                  calltree.failure("io:error", conclusion.display, _calltree_error_attributes(conclusion) + ("calltree_kind" -> "io-error"))
+                  calltree.failure(
+                    "io:error",
+                    ConclusionDiagnostics.classify(conclusion).diagnosticKey,
+                    _calltree_error_attributes(conclusion) +
+                      ("calltree_kind" -> "io-error")
+                  )
                   executionoutcome = Some(Left(conclusion))
               }
               observe_leave(call, r)
@@ -177,62 +182,104 @@ class ActionEngine(
                 throw e
             }
           } finally {
+            var builtcalltree: Option[
+              org.goldenport.observation.calltree.CallTree
+            ] = None
+            var finalizationfailure: Option[org.goldenport.Conclusion] = None
+            def _record_finalization_failure_(e: Throwable): Unit = {
+              finalizationfailure = Some(org.goldenport.Conclusion.from(e))
+              e match {
+                case _: InterruptedException => Thread.currentThread.interrupt()
+                case _ => ()
+              }
+            }
             try {
-              ec.runtime.dispose()
-            } finally {
               calltree.leave(leaveattributes)
-              val builtcalltree = calltree.build()
-              ec.runtime.noteExecutionContext(
-                ec.observability.sagaId,
-                ec.jobContext.jobId.map(_.value),
-                ec.jobContext.currentTask.orElse(ec.jobContext.taskId).map(_.value)
-              )
-              ec.runtime.noteExecutionDiagnostics(
-                traceId = Some(ec.observability.traceId.value),
-                executionId = ec.observability.correlationId.map(_.value),
-                failure = executionoutcome.flatMap {
-                  case Left(conclusion) => Some(conclusion.display)
-                  case Right(_) => None
+              builtcalltree = calltree.build()
+            } catch {
+              case e: Throwable =>
+                _record_finalization_failure_(e)
+                throw e
+            } finally {
+              try {
+                try {
+                  ec.runtime.dispose()
+                } catch {
+                  case e: Throwable =>
+                    _record_finalization_failure_(e)
+                    throw e
                 }
-              )
-              if (ec.framework.inlineCallTree) {
-                builtcalltree.foreach { tree =>
-                  ec.runtime.noteInlineCallTree(
-                    ObservabilityEngine.callTreeRecord(tree, ec.jobContext.jobId.map(_.value))
+              } finally {
+                val effectiveoutcome =
+                  finalizationfailure.map(Left(_)).orElse(executionoutcome)
+                ec.runtime.noteExecutionContext(
+                  ec.observability.sagaId,
+                  ec.jobContext.jobId.map(_.value),
+                  ec.jobContext.currentTask
+                    .orElse(ec.jobContext.taskId)
+                    .map(_.value)
+                )
+                ec.runtime.noteExecutionDiagnostics(
+                  traceId = Some(ec.observability.traceId.value),
+                  executionId = ec.observability.correlationId.map(_.value),
+                  failure = effectiveoutcome.flatMap {
+                    case Left(conclusion) => Some(conclusion.display)
+                    case Right(_) => None
+                  }
+                )
+                if (ec.framework.inlineCallTree) {
+                  builtcalltree.foreach { tree =>
+                    ec.runtime.noteInlineCallTree(
+                      ObservabilityEngine.callTreeRecord(
+                        tree,
+                        ec.jobContext.jobId.map(_.value)
+                      )
+                    )
+                  }
+                }
+                effectiveoutcome.foreach { outcome =>
+                  val actionendedatnanos = System.nanoTime()
+                  RuntimeDashboardMetrics.recordActionCall(
+                    outcome.isLeft,
+                    Some(
+                      (actionendedatnanos - actionstartedatnanos) / 1000000L
+                    )
+                  )
+                  OpenTelemetryExporter.fromGlobal.exportActionTrace(
+                    operation = call.action.name,
+                    calltree = builtcalltree,
+                    jobId = ec.jobContext.jobId.map(_.value),
+                    taskId =
+                      ec.jobContext.currentTask
+                        .orElse(ec.jobContext.taskId)
+                        .map(_.value),
+                    sagaId = ec.observability.sagaId,
+                    outcome = outcome.fold(_ => "failure", _ => "success"),
+                    startedAtNanos = actionstartedatnanos,
+                    endedAtNanos = actionendedatnanos
+                  )
+                  ObservabilityEngine.recordActionExecution(
+                    operation = call.action.name,
+                    parameters = _sanitize_calltree_record(
+                      call.request.toRecord,
+                      call.fieldConfidentiality
+                    ),
+                    parametersText = _calltree_resolved_parameters_text(
+                      params,
+                      call.fieldConfidentiality
+                    ),
+                    outcome = outcome,
+                    resultConfidentiality = call.resultFieldConfidentiality,
+                    jobId = ec.jobContext.jobId.map(_.value),
+                    traceId = Some(ec.observability.traceId.value),
+                    executionId = ec.observability.correlationId.map(_.value),
+                    originSlot = _operation_origin_slot(call),
+                    calltree = builtcalltree
                   )
                 }
               }
-              executionoutcome.foreach { outcome =>
-                val actionendedatnanos = System.nanoTime()
-                RuntimeDashboardMetrics.recordActionCall(
-                  outcome.isLeft,
-                  Some((actionendedatnanos - actionstartedatnanos) / 1000000L)
-                )
-                OpenTelemetryExporter.fromGlobal.exportActionTrace(
-                  operation = call.action.name,
-                  calltree = builtcalltree,
-                  jobId = ec.jobContext.jobId.map(_.value),
-                  taskId = ec.jobContext.currentTask.orElse(ec.jobContext.taskId).map(_.value),
-                  sagaId = ec.observability.sagaId,
-                  outcome = outcome.fold(_ => "failure", _ => "success"),
-                  startedAtNanos = actionstartedatnanos,
-                  endedAtNanos = actionendedatnanos
-                )
-                ObservabilityEngine.recordActionExecution(
-                  operation = call.action.name,
-                  parameters = _sanitize_calltree_record(call.request.toRecord, call.fieldConfidentiality),
-                  parametersText = _calltree_resolved_parameters_text(params, call.fieldConfidentiality),
-                  outcome = outcome,
-                  resultConfidentiality = call.resultFieldConfidentiality,
-                  jobId = ec.jobContext.jobId.map(_.value),
-                  traceId = Some(ec.observability.traceId.value),
-                  executionId = ec.observability.correlationId.map(_.value),
-                  originSlot = _operation_origin_slot(call),
-                  calltree = builtcalltree
-                )
-      }
-      }
-      }
+            }
+          }
         } finally {
           runtime.clearResolvedParameters()
         }
@@ -476,7 +523,12 @@ class ActionEngine(
       params.markAllLocalUsed()
       calltree.enter(label, _calltree_input_attributes(call, params))
       try {
-        calltree.failure("io:error", conclusion.display, _calltree_error_attributes(conclusion) + ("calltree_kind" -> "io-error"))
+        calltree.failure(
+          "io:error",
+          ConclusionDiagnostics.classify(conclusion).diagnosticKey,
+          _calltree_error_attributes(conclusion) +
+            ("calltree_kind" -> "io-error")
+        )
       } finally {
         calltree.leave(_calltree_error_attributes(conclusion) + ("outcome" -> "failure"))
         ec.runtime.noteExecutionContext(
@@ -525,10 +577,7 @@ class ActionEngine(
   private def _calltree_error_attributes(
     conclusion: org.goldenport.Conclusion
   ): Map[String, String] =
-    Map(
-      "status" -> conclusion.status.webCode.code.toString,
-      "error" -> _truncate_calltree_text(conclusion.display, 4000)
-    )
+    CallTreeValueSummary.failureAttributes(conclusion)
 
   private def _calltree_record_text(
     record: Record

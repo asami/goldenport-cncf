@@ -5,7 +5,7 @@ import org.goldenport.record.Record
 
 /*
  * @since   May. 11, 2026
- * @version Jul. 23, 2026
+ * @version Jul. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class MetricScopeDefinition(
@@ -175,6 +175,12 @@ object RuntimeMetricsCatalog {
       "Component initialization parameter resolution",
       "Bootstrap parameter resolution counts and structured failures with bounded logical identity and provenance only.",
       Vector("component", "component_instance", "parameter", "requirement", "confidentiality", "provenance", "outcome", "diagnostic_key")
+    ),
+    MetricScopeDefinition(
+      "entity.conditional-transition",
+      "Entity conditional transition",
+      "Conditional transition outcomes and structured diagnostics without Entity payload or expected values.",
+      Vector("outcome", "diagnostic_key")
     ),
     MetricScopeDefinition(
       "diagnostic-payload.externalization",

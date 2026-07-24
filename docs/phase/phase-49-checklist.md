@@ -461,30 +461,165 @@ EC-05 Modified Scala File Compliance Ledger:
 ## EC-06: Coherence, Authorization, Audit, and Diagnostics
 
 Stage Status:
-- Current status: PLANNED
+- Current status: DONE
 - Owner: CNCF Entity runtime, security, and observability maintainers
 - Update rule: Mark IN_PROGRESS only after EC-05 closes. Mark DONE only when
   authoritative outcomes drive cache, View, security, audit, and diagnostic
   behavior with no payload leakage.
 
-- [ ] Authorize root read/update and successor create or bind/read as required.
-- [ ] Ensure `NotMatched(existing)` returns no unauthorized root data.
-- [ ] Change no EntitySpace/Working Set/View state before provider success.
-- [ ] Reconcile root and successor resident state after `Transitioned`.
-- [ ] Reconcile a stale local root after `NotMatched`.
-- [ ] Invalidate affected Views only for committed mutations.
-- [ ] Emit bounded audit evidence with accepted redaction.
-- [ ] Add ActionCall, UnitOfWork, EntityStoreSpace, and DataStore CallTree
+- [x] Authorize root read/update and successor create or bind/read as required.
+- [x] Ensure `NotMatched(existing)` returns no unauthorized root data.
+- [x] Change no EntitySpace/Working Set/View state before provider success.
+- [x] Reconcile root and successor resident state after `Transitioned`.
+- [x] Reconcile a stale local root after `NotMatched`.
+- [x] Invalidate affected Views only for committed mutations.
+- [x] Emit bounded audit evidence with accepted redaction.
+- [x] Add ActionCall, UnitOfWork, EntityStoreSpace, and DataStore CallTree
   layers.
-- [ ] Add metrics for transition, mismatch, stale conflict, unsupported
+- [x] Add metrics for transition, mismatch, stale conflict, unsupported
   capability, authorization denial, provider failure, and transaction failure.
-- [ ] Classify failures from typed results and structured `Conclusion`, never
+- [x] Classify failures from typed results and structured `Conclusion`, never
   display-message parsing.
-- [ ] Prove expected values and Entity payloads are absent from default
+- [x] Prove expected values and Entity payloads are absent from default
   observability.
 
 Evidence:
-- Pending.
+- EC-06 implementation completed its first independent review and review-fix
+  pass. It remains `IN_PROGRESS` until a clean re-review closes the stage.
+- Independent review findings resolved:
+  - raw provider failures are normalized at the real `DataStoreSpace`
+    boundary without replacing the original `Conclusion`;
+  - execution metadata retains the human-readable `Conclusion.display`, while
+    CallTree and metrics use structured diagnostics;
+  - audit records include the logical operation, trace/correlation/saga
+    context, principal identity, and authoritative generated successor id;
+  - the ActionCall CallTree is captured before runtime disposal;
+  - transition observation support is package-internal;
+  - touched private models and specs satisfy naming and executable-spec
+    organization rules.
+- The first clean re-review found three additional issues, now resolved in a
+  separate review-fix:
+  - Action CallTree is finalized before runtime disposal, while execution
+    metadata, metrics, trace export, and execution history still run when
+    CallTree finalization or runtime disposal fails;
+  - authoritative successor identity extraction preserves the successor type
+    parameter and no longer casts `EntityPersistent` through `Any`;
+  - the ActionCall CallTree executable spec restores global execution-history
+    state after verification.
+- `ActionEngineObservabilitySeparationSpec` additionally proves runtime
+  disposal failure is returned only after inline CallTree and execution
+  history are retained, and that fatal error display text remains in execution
+  metadata rather than leaking into CallTree.
+- The second clean re-review found that a runtime disposal failure was retained
+  but still projected as the preceding successful Action outcome. The third
+  review-fix now promotes CallTree-finalization or runtime-disposal failure to
+  the effective diagnostic outcome while preserving the original throwable
+  propagation.
+- `ActionEngineObservabilitySeparationSpec` proves a runtime disposal failure
+  is recorded as execution metadata failure, execution-history
+  `failure`/`Conclusion`, and a dashboard Action error.
+- `ActionCallConditionalTransitionDslSpec` executes the real `ActionEngine`
+  path and proves ActionCall, UnitOfWork, EntityStoreSpace, and DataStore
+  CallTree layers contain no Entity payload.
+- `EntityConditionalTransitionCoherenceSpec` proves:
+  - authoritative root/successor resident reconciliation after `Transitioned`;
+  - stale root refresh without View invalidation after authorized
+    `NotMatched`;
+  - no datastore, EntitySpace, successor, or View mutation before provider
+    success;
+  - post-result authorization denial exposes no root, evicts stale resident
+    state, and leaves non-mutating View state intact;
+  - UnitOfWork, EntityStoreSpace, and DataStore CallTree layers contain no
+    Entity payload;
+  - actual provider and transaction failures crossing `DataStoreSpace` and
+    UnitOfWork receive stable structured outcome classification.
+- `EntityConditionalTransitionDiagnosticsSpec` proves:
+  - typed success/mismatch and structured `Conclusion` failure
+    classification;
+  - transition, mismatch, conflict, authorization, unsupported capability,
+    provider, and transaction metric outcomes;
+  - bounded audit identity/revision evidence;
+  - absence of Entity payload, expected values, and display messages from
+    transition audit and CallTree failure attributes.
+- `UnitOfWorkConditionalTransitionSpec` proves root relation-rule admission,
+  bound-successor read authorization, bound revision conflict, and
+  post-result root reauthorization, including authoritative generated
+  successor identity in observation context.
+- Focused review-fix validation:
+  - `sbt --batch "testOnly
+    org.goldenport.cncf.action.ActionCallConditionalTransitionDslSpec
+    org.goldenport.cncf.datastore.DataStoreConditionalTransitionSpec
+    org.goldenport.cncf.datastore.InMemoryConditionalTransitionSpec
+    org.goldenport.cncf.entity.EntityConditionalTransitionCoherenceSpec
+    org.goldenport.cncf.entity.EntityConditionalTransitionDiagnosticsSpec
+    org.goldenport.cncf.unitofwork.UnitOfWorkConditionalTransitionSpec"`:
+    42 tests passed across six suites;
+  - `sbt --batch Test/compile`: passed;
+  - `git diff --check`: passed.
+- Second review-fix validation:
+  - `sbt --batch "testOnly
+    org.goldenport.cncf.action.ActionEngineObservabilitySeparationSpec
+    org.goldenport.cncf.action.ActionCallConditionalTransitionDslSpec
+    org.goldenport.cncf.datastore.DataStoreConditionalTransitionSpec
+    org.goldenport.cncf.datastore.InMemoryConditionalTransitionSpec
+    org.goldenport.cncf.entity.EntityConditionalTransitionCoherenceSpec
+    org.goldenport.cncf.entity.EntityConditionalTransitionDiagnosticsSpec
+    org.goldenport.cncf.unitofwork.UnitOfWorkConditionalTransitionSpec"`:
+    47 tests passed across seven suites;
+  - `sbt --batch Test/compile`: passed;
+  - touched-file naming and raw-assert scan: passed;
+  - `git diff --check`: passed.
+- Third review-fix validation:
+  - the seven-suite EC-06 focused matrix passed all 47 tests;
+  - `sbt --batch Test/compile`: passed;
+  - touched-file naming and raw-assert scan: passed;
+  - `git diff --check`: passed.
+- The following clean re-review found no actionable implementation, naming,
+  or executable-specification issue, but release validation exposed one stale
+  cross-suite observability assertion:
+  `ComponentLogicOperationDefinitionSemanticsSpec` still required
+  `Conclusion.display` in CallTree output although EC-06 deliberately projects
+  only structured diagnostics there.
+- The fourth review-fix replaces that stale expectation with
+  `diagnostic_key`, taxonomy category/symptom, and explicit display-message
+  redaction assertions. It also removes the touched spec's historical
+  underscore-prefixed helper-type naming debt.
+- Fourth review-fix validation:
+  - `ComponentLogicOperationDefinitionSemanticsSpec`: 12 tests passed;
+  - the EC-06 conditional-transition matrix: 49 tests passed across eight
+    suites;
+  - `sbt --batch Test/compile`: passed;
+  - touched-spec naming and raw-assert scan: passed;
+  - `git diff --check`: passed.
+- The final clean re-review found no actionable implementation,
+  documentation, naming, or executable-specification finding.
+- Release validation passed all 2427 executed tests across 346 suites, with
+  0 failed and 0 aborted. The existing suite retained 2 canceled, 1 ignored,
+  and 59 pending specifications.
+- EC-06 is complete. EC-07 is the next Phase 49 implementation slice.
+
+EC-06 Modified Scala File Compliance Ledger:
+
+| File | Naming review | Executable-spec review | Validation | Disposition |
+| --- | --- | --- | --- | --- |
+| `src/main/scala/org/goldenport/cncf/action/ActionCallFeaturePart.scala` | Whole-file naming review passed | Not a spec | Focused 49-test matrix, `Test/compile`, and full 2427-test suite passed | EC-06 release commit |
+| `src/main/scala/org/goldenport/cncf/action/ActionEngine.scala` | Whole-file naming review passed | Not a spec | Focused 49-test matrix, `Test/compile`, and full 2427-test suite passed | EC-06 release commit |
+| `src/main/scala/org/goldenport/cncf/datastore/DataStoreSpace.scala` | Whole-file naming review passed | Not a spec | Focused 49-test matrix, `Test/compile`, and full 2427-test suite passed | EC-06 release commit |
+| `src/main/scala/org/goldenport/cncf/datastore/EntityConditionalTransition.scala` | Whole-file naming review passed | Not a spec | Focused 49-test matrix, `Test/compile`, and full 2427-test suite passed | EC-06 release commit |
+| `src/main/scala/org/goldenport/cncf/entity/EntityStore.scala` | Whole-file naming review passed | Not a spec | Focused 49-test matrix, `Test/compile`, and full 2427-test suite passed | EC-06 release commit |
+| `src/main/scala/org/goldenport/cncf/entity/EntityStoreSpace.scala` | Whole-file naming review passed | Not a spec | Focused 49-test matrix, `Test/compile`, and full 2427-test suite passed | EC-06 release commit |
+| `src/main/scala/org/goldenport/cncf/http/RuntimeDashboardMetrics.scala` | Whole-file naming review passed | Not a spec | Focused 49-test matrix, `Test/compile`, and full 2427-test suite passed | EC-06 release commit |
+| `src/main/scala/org/goldenport/cncf/metrics/RuntimeMetrics.scala` | Whole-file naming review passed | Not a spec | Focused 49-test matrix, `Test/compile`, and full 2427-test suite passed | EC-06 release commit |
+| `src/main/scala/org/goldenport/cncf/observability/CallTreeValueSummary.scala` | Whole-file naming review passed | Not a spec | Focused 49-test matrix, `Test/compile`, and full 2427-test suite passed | EC-06 release commit |
+| `src/main/scala/org/goldenport/cncf/observability/ConclusionDiagnostics.scala` | Whole-file naming review passed | Not a spec | Focused 49-test matrix, `Test/compile`, and full 2427-test suite passed | EC-06 release commit |
+| `src/main/scala/org/goldenport/cncf/observability/EntityConditionalTransitionObservation.scala` | Whole-file naming review passed | Not a spec | Focused 49-test matrix, `Test/compile`, and full 2427-test suite passed | EC-06 release commit |
+| `src/main/scala/org/goldenport/cncf/unitofwork/UnitOfWorkInterpreter.scala` | Whole-file naming review passed | Not a spec | Focused 49-test matrix, `Test/compile`, and full 2427-test suite passed | EC-06 release commit |
+| `src/test/scala/org/goldenport/cncf/action/ActionCallConditionalTransitionDslSpec.scala` | Whole-file naming review passed | Four grouped Given/When/Then DSL, ownership, and real CallTree behaviors | Focused 49-test matrix, `Test/compile`, and full 2427-test suite passed | EC-06 release commit |
+| `src/test/scala/org/goldenport/cncf/action/ActionEngineObservabilitySeparationSpec.scala` | Whole-file naming review passed | Five Given/When/Then authorization, success, fatal-error, disposal-failure, and legacy callback behaviors | Focused 49-test matrix, `Test/compile`, and full 2427-test suite passed | EC-06 release commit |
+| `src/test/scala/org/goldenport/cncf/component/ComponentLogicOperationDefinitionSemanticsSpec.scala` | Historical helper-type naming debt removed; whole-file naming review passed | Twelve Given/When/Then operation-definition behaviors, including structured failed-CallTree diagnostics and display redaction | Focused 12-test regression, EC-06 49-test matrix, `Test/compile`, and full 2427-test suite passed | EC-06 release commit |
+| `src/test/scala/org/goldenport/cncf/entity/EntityConditionalTransitionCoherenceSpec.scala` | Whole-file naming review passed | Five Given/When/Then coherence, authorization, and provider-boundary behaviors | Focused 49-test matrix, `Test/compile`, and full 2427-test suite passed | EC-06 release commit |
+| `src/test/scala/org/goldenport/cncf/entity/EntityConditionalTransitionDiagnosticsSpec.scala` | Whole-file naming review passed | Four Given/When/Then diagnostic and redaction behaviors | Focused 49-test matrix, `Test/compile`, and full 2427-test suite passed | EC-06 release commit |
+| `src/test/scala/org/goldenport/cncf/unitofwork/UnitOfWorkConditionalTransitionSpec.scala` | Whole-file naming review passed | Grouped transition matrix plus relation-aware Bind authorization | Focused 49-test matrix, `Test/compile`, and full 2427-test suite passed | EC-06 release commit |
 
 ## EC-07: Provider and Concurrency Evidence
 

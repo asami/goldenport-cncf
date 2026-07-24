@@ -13,7 +13,8 @@ import org.goldenport.record.Record
  *
  * @since   Apr. 29, 2026
  *  version May. 11, 2026
- * @version Jul. 22, 2026
+ *  version Jul. 22, 2026
+ * @version Jul. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 object ConclusionDiagnostics {
@@ -64,6 +65,24 @@ object ConclusionDiagnostics {
       "guard" -> guard,
       "relation" -> relation,
       "previous" -> previous
+    )
+
+    def toBoundedRecord: Record = Record.dataAuto(
+      "diagnosticKey" -> diagnosticKey,
+      "taxonomy" -> taxonomy,
+      "taxonomyCategory" -> taxonomyCategory,
+      "taxonomySymptom" -> taxonomySymptom,
+      "causeKind" -> causeKind,
+      "webStatus" -> webStatus,
+      "statusText" -> statusText,
+      "parameter" -> parameter,
+      "fieldPath" -> fieldPath,
+      "policy" -> policy,
+      "reason" -> reason,
+      "capability" -> capability,
+      "permission" -> permission,
+      "guard" -> guard,
+      "relation" -> relation
     )
   }
 

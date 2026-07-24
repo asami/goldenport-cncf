@@ -1780,11 +1780,10 @@ class StandardEntityStore(
               Map("outcome" -> "success") ++ CallTreeValueSummary.resultAttributes(success.result)
             )
           case failure: Consequence.Failure[?] =>
-            calltree.leave(Map(
-              "outcome" -> "failure",
-              "status" -> failure.conclusion.status.webCode.code.toString,
-              "error" -> failure.conclusion.display
-            ))
+            calltree.leave(
+              Map("outcome" -> "failure") ++
+                CallTreeValueSummary.failureAttributes(failure.conclusion)
+            )
           case other =>
             calltree.leave(
               Map("outcome" -> "success") ++ CallTreeValueSummary.resultAttributes(other)
@@ -1793,7 +1792,10 @@ class StandardEntityStore(
         result
       } catch {
         case e: Throwable =>
-          calltree.leave()
+          calltree.leave(Map(
+            "outcome" -> "exception",
+            "exception_type" -> e.getClass.getName
+          ))
           throw e
       }
     } else {

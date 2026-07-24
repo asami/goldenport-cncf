@@ -23,6 +23,7 @@ import org.goldenport.cncf.context.{
   TraceId
 }
 import org.goldenport.cncf.datastore.{
+  DataStore,
   DataStoreComponentOwner,
   DataStoreSpace
 }
@@ -38,7 +39,11 @@ import org.goldenport.cncf.entity.runtime.{
   EntityStorage,
   PartitionStrategy
 }
-import org.goldenport.cncf.observability.ConclusionDiagnostics
+import org.goldenport.cncf.observability.{
+  CallTreeContext,
+  ConclusionDiagnostics,
+  ObservabilityEngine
+}
 import org.goldenport.cncf.security.EntityAccessMode
 import org.goldenport.cncf.unitofwork.{
   ExecUowM,
@@ -186,6 +191,57 @@ final class ActionCallConditionalTransitionDslSpec
         internalcapture.transition shouldBe None
       }
     }
+
+    "preserve the actual ActionCall to provider CallTree" in {
+      Given(
+        "Spec: docs/spec/entity-conflict-and-conditional-transition.md; Rule: R20; one seeded root and an enabled ActionCall CallTree"
+      )
+      val capture = new OperationCapture
+      val component = new TestComponent
+      val core = _core(component, capture)
+      given ExecutionContext = core.executionContext
+      core.executionContext.observability.callTreeContext.isEnabled shouldBe true
+      val request = _request()
+      val root = Root(request.rootId, "open")
+      val record =
+        EntityConcurrencyMetadata.initializeForCreate(
+          _root_persistent.toStoreRecord(root)
+        )
+      core.executionContext.dataStoreSpace
+        .inject(DataStore.CollectionId.EntityStore(_rootcollection), record)
+        .TAKE
+      ObservabilityEngine.clearExecutionHistory()
+
+      try {
+        When("ActionEngine executes the FunctionalActionCall")
+        val result =
+          component.core.actionEngine.execute(
+            new ConditionalTransitionCall(
+              core,
+              request,
+              serviceinternal = true
+            )
+          )
+
+        Then("the real CallTree contains every execution boundary")
+        result shouldBe a[Consequence.Success[?]]
+        val rendered =
+          ObservabilityEngine
+            .executionHistory
+            .lastOption
+            .flatMap(_.calltree)
+            .map(_.toRecord.print)
+            .getOrElse(fail("conditional-transition CallTree missing"))
+        rendered should include("action:phase49-dsl.conditional_transition")
+        rendered should include("uow:entitystore:conditional-transition")
+        rendered should include("space:entitystore:conditional-transition")
+        rendered should include(
+          "space:datastore:entity-conditional-transition"
+        )
+        rendered should not include "created"
+      } finally
+        ObservabilityEngine.clearExecutionHistory()
+    }
   }
 
   private final class OperationCapture {
@@ -263,9 +319,22 @@ final class ActionCallConditionalTransitionDslSpec
     val observability = ObservabilityContext(
       traceId = TraceId("test", "action_call_conditional_transition"),
       spanId = None,
-      correlationId = None
+      correlationId = None,
+      callTreeContext = CallTreeContext.enabled
     )
-    lazy val context: ExecutionContext = ExecutionContext.create(runtime)
+    lazy val context: ExecutionContext =
+      ExecutionContext.create(runtime) match {
+        case instance: ExecutionContext.Instance =>
+          instance.copy(
+            cncfCore = instance.cncfCore.copy(
+              observability = instance.observability.copy(
+                callTreeContext = CallTreeContext.enabled
+              )
+            )
+          )
+        case value =>
+          value
+      }
     lazy val runtime: RuntimeContext = new RuntimeContext(
       core = ScopeContext.Core(
         kind = ScopeKind.Runtime,

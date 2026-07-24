@@ -26,7 +26,12 @@ import org.goldenport.cncf.datastore.{
   DataStoreSpace
 }
 import org.goldenport.cncf.entity.*
+import org.goldenport.cncf.observability.{
+  ConclusionDiagnostics,
+  EntityConditionalTransitionObservation
+}
 import org.goldenport.record.Record
+import org.goldenport.cncf.security.EntityAccessRelation
 import org.goldenport.cncf.statemachine.TransitionValidationHook
 import org.goldenport.cncf.unitofwork.CommitRecorder
 import org.scalatest.GivenWhenThen
@@ -71,6 +76,10 @@ final class UnitOfWorkConditionalTransitionSpec
   private val _successor_identity_metadata =
     afterWord(
       "in spec:entity-conflict-and-conditional-transition, example:E19, rules:R8,R14, phase:49"
+    )
+  private val _relation_authorization_metadata =
+    afterWord(
+      "in spec:entity-conflict-and-conditional-transition, rules:R14-R15, phase:49"
     )
 
   "UnitOfWork Entity conditional transition" should {
@@ -212,6 +221,23 @@ final class UnitOfWorkConditionalTransitionSpec
           Some(DataStore.CollectionId.EntityStore(_successorcollection))
         create.collectionCount shouldBe 1
         create.idCount shouldBe 1
+        val generatedid = result.map {
+          case transitioned:
+              EntityConditionalTransitionResult.Transitioned[?, ?] =>
+            _successor_persistent.id(
+              transitioned.successor.entity.asInstanceOf[Successor]
+            )
+          case _ =>
+            fail("expected transitioned result")
+        }
+        val observationcontext =
+          EntityConditionalTransitionObservation.context(
+            Some("phase49-test"),
+            rootid,
+            successor,
+            result
+          )
+        observationcontext.successorid shouldBe generatedid.toOption
       }
     }
 
@@ -541,6 +567,86 @@ final class UnitOfWorkConditionalTransitionSpec
         }
       }
 
+    "authorize a Bind through root relationship rules and successor read" must
+      _relation_authorization_metadata {
+      "when the root relation and successor read are both admitted" in {
+      Given(
+        "Spec: docs/spec/entity-conflict-and-conditional-transition.md; Rules: R14-R15; one relation-authorized root and owner-readable bound successor"
+      )
+      val rootid =
+        EntityId("test", "conditional_relation_root", _rootcollection)
+      val successorid =
+        EntityId(
+          "test",
+          "conditional_relation_successor",
+          _successorcollection
+        )
+      val fixture = _fixture(principalid = Some("transition-owner"))
+      given ExecutionContext = fixture.context
+      _seed_root(
+        fixture,
+        Root(rootid, "open", None),
+        Record.dataAuto("assignee" -> "transition-owner")
+      )
+      _seed_successor(
+        fixture,
+        Successor(successorid, "existing"),
+        Record.dataAuto(
+          "security_attributes" ->
+            SecurityAttributes.ownedBy("transition-owner").toRecord
+        )
+      )
+      val request =
+        _request(
+          rootid,
+          "open",
+          RootPatch("bound", Some(successorid)),
+          EntitySuccessorIntent
+            .bind(successorid)(using _successor_persistent)
+            .TAKE
+        )
+      val relationship =
+        EntityAccessRelation(
+          "assignee",
+          "subjectId",
+          Set("read", "update")
+        )
+      val rootauthorization =
+        UnitOfWorkAuthorization(
+          resourceFamily = "domain",
+          resourceType = Some(_rootcollection.name),
+          collectionName = Some(_rootcollection.name),
+          targetId = Some(rootid),
+          accessKind = "read",
+          relationRules = Vector(relationship)
+        )
+      val successorauthorization =
+        UnitOfWorkAuthorization(
+          resourceFamily = "domain",
+          resourceType = Some(_successorcollection.name),
+          collectionName = Some(_successorcollection.name),
+          targetId = Some(successorid),
+          accessKind = "read"
+        )
+
+      When("the Bind crosses the UnitOfWork authorization chokepoint")
+      val result =
+        _interpret(
+          fixture,
+          request,
+          Some(rootauthorization),
+          Some(rootauthorization.copy(accessKind = "update")),
+          Some(successorauthorization)
+        )
+
+      Then("both relationship and successor read admission precede mutation")
+        result shouldBe a[Consequence.Success[_]]
+        _raw_root(fixture, rootid)
+          .map(_.flatMap(_.getString("status"))) shouldBe
+          Consequence.success(Some("bound"))
+      }
+    }
+
     "guard an authorized bound successor at provider commit" must
       _bound_race_metadata {
         "when its revision changes after authorization" in {
@@ -573,7 +679,8 @@ final class UnitOfWorkConditionalTransitionSpec
           result shouldBe a[Consequence.Failure[_]]
           result match {
             case Consequence.Failure(conclusion) =>
-              conclusion.show should include("bound-successor-revision-conflict")
+              ConclusionDiagnostics.classify(conclusion).reason shouldBe
+                Some("bound-successor-revision-conflict")
             case _ =>
               fail("expected bound-successor conflict")
           }
@@ -641,7 +748,9 @@ final class UnitOfWorkConditionalTransitionSpec
           result shouldBe a[Consequence.Failure[_]]
           result match {
             case Consequence.Failure(conclusion) =>
-              conclusion.show should include("Permission is insufficient for read")
+              ConclusionDiagnostics
+                .classify(conclusion)
+                .diagnosticKey shouldBe "permission"
             case _ =>
               fail("expected post-result read authorization failure")
           }
@@ -738,13 +847,14 @@ final class UnitOfWorkConditionalTransitionSpec
 
   private def _seed_successor(
     fixture: Fixture,
-    successor: Successor
+    successor: Successor,
+    supplemental: Record = Record.empty
   ): Unit = {
     given ExecutionContext = fixture.context
     val _ = fixture.datastorespace.inject(
       DataStore.CollectionId.EntityStore(_successorcollection),
       EntityConcurrencyMetadata.initializeForCreate(
-        _successor_persistent.toStoreRecord(successor)
+        _successor_persistent.toStoreRecord(successor) ++ supplemental
       )
     )
   }
@@ -818,7 +928,8 @@ final class UnitOfWorkConditionalTransitionSpec
     fixture: Fixture,
     request: EntityConditionalTransition[Root, P, Successor],
     rootreadauthorization: Option[UnitOfWorkAuthorization] = None,
-    rootupdateauthorization: Option[UnitOfWorkAuthorization] = None
+    rootupdateauthorization: Option[UnitOfWorkAuthorization] = None,
+    successorauthorization: Option[UnitOfWorkAuthorization] = None
   ): Consequence[EntityConditionalTransitionResult[Root, Successor]] =
     new UnitOfWorkInterpreter(new UnitOfWork(fixture.context))
       .interpret(
@@ -827,7 +938,7 @@ final class UnitOfWorkConditionalTransitionSpec
           DataStoreComponentOwner.create("phase49-test").TAKE,
           rootreadauthorization,
           rootupdateauthorization,
-          None
+          successorauthorization
         )
       )
 
@@ -847,12 +958,12 @@ final class UnitOfWorkConditionalTransitionSpec
   private final case class Root(
     id: EntityId,
     status: String,
-    successorId: Option[EntityId]
+    successorid: Option[EntityId]
   )
 
   private final case class RootPatch(
     status: String,
-    successorId: Option[EntityId]
+    successorid: Option[EntityId]
   )
 
   private final case class RawPatch(
@@ -875,7 +986,7 @@ final class UnitOfWorkConditionalTransitionSpec
         Record.dataAuto(
           "id" -> entity.id,
           "status" -> entity.status,
-          "successor_id" -> entity.successorId
+          "successor_id" -> entity.successorid
         )
       def fromRecord(record: Record): Consequence[Root] =
         (record.getAs[EntityId]("id"), record.getString("status")) match {
@@ -901,7 +1012,7 @@ final class UnitOfWorkConditionalTransitionSpec
       def toRecord(entity: RootPatch): Record =
         Record.dataAuto(
           "status" -> entity.status,
-          "successor_id" -> entity.successorId
+          "successor_id" -> entity.successorid
         )
       def fromRecord(record: Record): Consequence[RootPatch] =
         record.getString("status") match {

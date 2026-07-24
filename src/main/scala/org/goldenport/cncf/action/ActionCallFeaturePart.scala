@@ -326,18 +326,17 @@ trait BehaviorFeaturePart { self: Behavior.Core.Holder =>
               Map("outcome" -> "success") ++ CallTreeValueSummary.resultAttributes(success.result)
             )
           case failure: Consequence.Failure[A] =>
-            calltree.leave(Map(
-              "outcome" -> "failure",
-              "status" -> failure.conclusion.status.webCode.code.toString,
-              "error" -> failure.conclusion.display
-            ))
+            calltree.leave(
+              Map("outcome" -> "failure") ++
+                CallTreeValueSummary.failureAttributes(failure.conclusion)
+            )
         }
         result
       } catch {
         case e: Throwable =>
           calltree.leave(Map(
-            "outcome" -> "failure",
-            "error" -> Option(e.getMessage).getOrElse(e.getClass.getName)
+            "outcome" -> "exception",
+            "exception_type" -> e.getClass.getName
           ))
           throw e
       }
@@ -2101,18 +2100,17 @@ trait ProviderBehaviorFeaturePart extends BehaviorFeaturePart { self: Behavior.C
               Map("outcome" -> "success") ++ CallTreeValueSummary.resultAttributes(success.result)
             )
           case failure: Consequence.Failure[A] =>
-            calltree.leave(Map(
-              "outcome" -> "failure",
-              "status" -> failure.conclusion.status.webCode.code.toString,
-              "error" -> failure.conclusion.display
-            ))
+            calltree.leave(
+              Map("outcome" -> "failure") ++
+                CallTreeValueSummary.failureAttributes(failure.conclusion)
+            )
         }
         result
       } catch {
         case e: Throwable =>
           calltree.leave(Map(
-            "outcome" -> "failure",
-            "error" -> Option(e.getMessage).getOrElse(e.getClass.getName)
+            "outcome" -> "exception",
+            "exception_type" -> e.getClass.getName
           ))
           throw e
       }

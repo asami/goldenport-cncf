@@ -1,5 +1,6 @@
 package org.goldenport.cncf.observability
 
+import org.goldenport.Conclusion
 import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.record.Record
 import org.goldenport.record.io.RecordEncoder
@@ -7,22 +8,35 @@ import org.goldenport.schema.DataConfidentiality
 
 /*
  * @since   May. 10, 2026
- * @version May. 11, 2026
+ *  version May. 11, 2026
+ * @version Jul. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 object CallTreeValueSummary {
+  def failureAttributes(
+    conclusion: Conclusion
+  ): Map[String, String] = {
+    val diagnostic = ConclusionDiagnostics.classify(conclusion)
+    Map(
+      "status" -> diagnostic.webStatus.toString,
+      "diagnostic_key" -> diagnostic.diagnosticKey,
+      "taxonomy_category" -> diagnostic.taxonomyCategory,
+      "taxonomy_symptom" -> diagnostic.taxonomySymptom
+    ) ++ diagnostic.causeKind.map("cause_kind" -> _)
+  }
+
   def resultAttributes(
     value: Any,
     key: String = "result"
   ): Map[String, String] =
-    Map(key -> json(summary(value, includeInline = false, payloadKind = key)))
+    Map(key -> _json(summary(value, includeInline = false, payloadKind = key)))
 
   def responseAttributes(
     response: OperationResponse
   ): Map[String, String] =
     Map(
       "response_type" -> response.getClass.getSimpleName.stripSuffix("$"),
-      "response" -> json(operationResponseSummary(response))
+      "response" -> _json(operationResponseSummary(response))
     )
 
   def operationResponseSummary(
@@ -140,6 +154,6 @@ object CallTreeValueSummary {
     DiagnosticPayloadSummary.textSummary(kind, text, includeInline).toRecord
   }
 
-  private def json(record: Record): String =
+  private def _json(record: Record): String =
     RecordEncoder.json(record)
 }

@@ -3,10 +3,16 @@ package org.goldenport.cncf.action
 import cats.{Id, ~>}
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.{CorrelationId, ExecutionContext, ExecutionContextId, ObservabilityContext, RuntimeContext, TraceId}
-import org.goldenport.cncf.http.FakeHttpDriver
+import org.goldenport.cncf.http.{
+  FakeHttpDriver,
+  RuntimeDashboardMetrics
+}
 import org.goldenport.cncf.datastore.DataStore
 import org.goldenport.cncf.event.{ActionEvent, ActionResult, EventEngine}
-import org.goldenport.cncf.observability.CallTreeContext
+import org.goldenport.cncf.observability.{
+  CallTreeContext,
+  ObservabilityEngine
+}
 import org.goldenport.cncf.security.AuthorizationDecision
 import org.goldenport.cncf.unitofwork.{CommitRecorder, UnitOfWork, UnitOfWorkOp}
 import org.goldenport.protocol.Request
@@ -21,7 +27,7 @@ import java.time.Instant
  * @since   Jan.  7, 2026
  *  version Feb. 27, 2026
  *  version Mar. 12, 2026
- * @version Jul. 23, 2026
+ * @version Jul. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 class ActionEngineObservabilitySeparationSpec
@@ -153,9 +159,70 @@ class ActionEngineObservabilitySeparationSpec
       fatalerror.getMessage shouldBe "planned fatal action failure"
       engine.events shouldBe Vector("observe_enter", "execute", "observe_leave")
       rendered should include ("fatal-action")
-      rendered should include ("planned fatal action failure")
       rendered should include ("failure")
+      rendered should not include "planned fatal action failure"
       metadata.failure shouldBe Some("planned fatal action failure")
+    }
+
+    "retain Action diagnostics when runtime disposal fails" in {
+      Given(
+        "a successful ActionCall whose RuntimeContext disposal callback fails"
+      )
+      val recorder = new InMemoryCommitRecorder
+      val datastore = DataStore.noop(recorder)
+      val eventengine = EventEngine.noop(datastore, recorder)
+      val runtime = new DisposalFailingRuntimeContext
+      val base = ExecutionContext.create()
+      val ctx = ExecutionContext.withFrameworkInlineCallTreeEnabled(
+        ExecutionContext.withRuntimeContext(base, runtime.runtime),
+        enabled = true
+      )
+      val uow = new UnitOfWork(ctx, eventengine, recorder)
+      runtime.bind(uow)
+      val engine = new RecordingAllowActionEngine
+      val action = new QueryAction() {
+        val request = Request.ofOperation("disposal-failure-action")
+        def createCall(actioncore: ActionCall.Core): ActionCall =
+          new TestActionCall(actioncore, engine)
+      }
+      ObservabilityEngine.clearExecutionHistory()
+      val actionerrorsbefore =
+        RuntimeDashboardMetrics.actionCallSnapshot.summary.cumulative.errors
+
+      try {
+        When("the Action succeeds and runtime disposal then fails")
+        val result =
+          engine.executeAuthorized("disposal-failure-action", ctx) {
+            action.createCall(ActionCall.Core(action, ctx, None, None))
+          }
+
+        Then("the disposal failure returns after Action diagnostics are retained")
+        result shouldBe a[Consequence.Failure[?]]
+        result match {
+          case Consequence.Failure(conclusion) =>
+            conclusion.display shouldBe "planned runtime disposal failure"
+          case _ =>
+            fail("expected runtime disposal failure")
+        }
+        ctx.runtime.executionMetadata.inlineCallTree
+          .map(_.print)
+          .getOrElse(fail("inline CallTree missing")) should include(
+          "disposal-failure-action"
+        )
+        ctx.runtime.executionMetadata.failure shouldBe
+          Some("planned runtime disposal failure")
+        val history = ObservabilityEngine.executionHistory
+          .find(_.operation == "disposal-failure-action")
+          .getOrElse(fail("disposal-failure execution history missing"))
+        history.outcome shouldBe "failure"
+        history.resultType shouldBe "Conclusion"
+        RuntimeDashboardMetrics
+          .actionCallSnapshot
+          .summary
+          .cumulative
+          .errors shouldBe actionerrorsbefore + 1L
+      } finally
+        ObservabilityEngine.clearExecutionHistory()
     }
 
     "preserve legacy RuntimeContext commit and abort exception propagation" in {
@@ -274,7 +341,7 @@ class ActionEngineObservabilitySeparationSpec
       },
       commitAction = commit_action,
       abortAction = abort_action,
-      disposeAction = _ => (),
+      disposeAction = dispose_action,
       token = token
     )
 
@@ -283,6 +350,7 @@ class ActionEngineObservabilitySeparationSpec
 
     protected def commit_action(unitofwork: UnitOfWork): Unit
     protected def abort_action(unitofwork: UnitOfWork): Unit = ()
+    protected def dispose_action(unitofwork: UnitOfWork): Unit = ()
     protected def token: String
   }
 
@@ -316,6 +384,15 @@ class ActionEngineObservabilitySeparationSpec
       throw new IllegalArgumentException("planned legacy abort failure")
 
     override protected def token: String = "failing-runtime-context"
+  }
+
+  private final class DisposalFailingRuntimeContext extends RuntimeTestSupport {
+    override protected def commit_action(unitofwork: UnitOfWork): Unit = ()
+
+    override protected def dispose_action(unitofwork: UnitOfWork): Unit =
+      throw new IllegalStateException("planned runtime disposal failure")
+
+    override protected def token: String = "disposal-failing-runtime-context"
   }
 
   private def _test_observability_context(): ObservabilityContext =

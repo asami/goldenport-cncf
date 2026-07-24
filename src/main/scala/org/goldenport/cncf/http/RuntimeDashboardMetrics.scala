@@ -8,7 +8,7 @@ import org.goldenport.record.Record
 /*
  * @since   Apr. 12, 2026
  *  version May. 11, 2026
- * @version Jul. 23, 2026
+ * @version Jul. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 object RuntimeDashboardMetrics {
@@ -74,27 +74,27 @@ object RuntimeDashboardMetrics {
   }
 
   private final case class Event(
-    observedAt: Long,
+    observedat: Long,
     error: Boolean,
-    diagnosticKey: Option[String] = None,
-    diagnosticRecord: Option[Record] = None,
+    diagnostickey: Option[String] = None,
+    diagnosticrecord: Option[Record] = None,
     operation: Option[String] = None,
     kind: Option[String] = None,
-    sourceMode: Option[String] = None,
+    sourcemode: Option[String] = None,
     backend: Option[String] = None,
-    elapsedMillis: Option[Long] = None,
+    elapsedmillis: Option[Long] = None,
     labels: Map[String, String] = Map.empty
   )
 
   private final case class PayloadExternalizationEvent(
-    observedAt: Long,
+    observedat: Long,
     status: String,
-    payloadKind: String,
+    payloadkind: String,
     destination: String
   )
 
   private final case class OpenTelemetryExportEvent(
-    observedAt: Long,
+    observedat: Long,
     signal: String,
     status: String
   )
@@ -115,6 +115,7 @@ object RuntimeDashboardMetrics {
   private var _resource_tree_query_events = Vector.empty[Event]
   private var _service_container_events = Vector.empty[Event]
   private var _component_initialization_parameter_events = Vector.empty[Event]
+  private var _entity_conditional_transition_events = Vector.empty[Event]
   private var _payload_externalization_events = Vector.empty[PayloadExternalizationEvent]
   private var _open_telemetry_export_events = Vector.empty[OpenTelemetryExportEvent]
   private var _recent = Vector.empty[RequestEntry]
@@ -132,7 +133,8 @@ object RuntimeDashboardMetrics {
     "resource-tree" -> "Resource Tree",
     "resource-tree-query" -> "Resource Tree Query",
     "service-container" -> "Service Container",
-    "component-initialization-parameter" -> "Component Initialization Parameter"
+    "component-initialization-parameter" -> "Component Initialization Parameter",
+    "entity-conditional-transition" -> "Entity Conditional Transition"
   )
 
   def recordHtmlRequest(
@@ -143,9 +145,9 @@ object RuntimeDashboardMetrics {
   ): Unit = synchronized {
     val now = java.time.Instant.now.toEpochMilli
     _html_events = (_html_events :+ Event(
-      observedAt = now,
+      observedat = now,
       error = status >= 400,
-      elapsedMillis = Some(elapsedMillis),
+      elapsedmillis = Some(elapsedMillis),
       labels = Map("status" -> _status_class(status))
     )).takeRight(10000)
     _recent = (_recent :+ RequestEntry(now, method, path, status, elapsedMillis)).takeRight(12)
@@ -156,9 +158,9 @@ object RuntimeDashboardMetrics {
     elapsedMillis: Option[Long] = None
   ): Unit = synchronized {
     _action_events = (_action_events :+ Event(
-      observedAt = java.time.Instant.now.toEpochMilli,
+      observedat = java.time.Instant.now.toEpochMilli,
       error = error,
-      elapsedMillis = elapsedMillis
+      elapsedmillis = elapsedMillis
     )).takeRight(10000)
   }
 
@@ -185,10 +187,10 @@ object RuntimeDashboardMetrics {
     diagnosticRecord: Option[Record] = None
   ): Unit = synchronized {
     _validation_events = (_validation_events :+ Event(
-      observedAt = java.time.Instant.now.toEpochMilli,
+      observedat = java.time.Instant.now.toEpochMilli,
       error = true,
-      diagnosticKey = diagnosticKey.filter(_.nonEmpty),
-      diagnosticRecord = diagnosticRecord,
+      diagnostickey = diagnosticKey.filter(_.nonEmpty),
+      diagnosticrecord = diagnosticRecord,
       operation = Some(operation).filter(_.nonEmpty)
     )).takeRight(10000)
   }
@@ -199,10 +201,10 @@ object RuntimeDashboardMetrics {
     diagnosticRecord: Option[Record] = None
   ): Unit = synchronized {
     _operation_request_validation_events = (_operation_request_validation_events :+ Event(
-      observedAt = java.time.Instant.now.toEpochMilli,
+      observedat = java.time.Instant.now.toEpochMilli,
       error = true,
-      diagnosticKey = diagnosticKey.filter(_.nonEmpty),
-      diagnosticRecord = diagnosticRecord,
+      diagnostickey = diagnosticKey.filter(_.nonEmpty),
+      diagnosticrecord = diagnosticRecord,
       operation = Some(operation).filter(_.nonEmpty)
     )).takeRight(10000)
   }
@@ -218,13 +220,13 @@ object RuntimeDashboardMetrics {
   ): Unit = synchronized {
     val cleandiagnostickey = if (error) diagnosticKey.filter(_.nonEmpty) else None
     _blob_events = (_blob_events :+ Event(
-      observedAt = java.time.Instant.now.toEpochMilli,
+      observedat = java.time.Instant.now.toEpochMilli,
       error = error,
-      diagnosticKey = cleandiagnostickey,
-      diagnosticRecord = if (error) diagnosticRecord else None,
+      diagnostickey = cleandiagnostickey,
+      diagnosticrecord = if (error) diagnosticRecord else None,
       operation = Some(operation).filter(_.nonEmpty),
       kind = kind.filter(_.nonEmpty),
-      sourceMode = sourceMode.filter(_.nonEmpty),
+      sourcemode = sourceMode.filter(_.nonEmpty),
       backend = backend.filter(_.nonEmpty),
       labels = _clean_labels(Map(
         "kind" -> kind.getOrElse(""),
@@ -245,12 +247,12 @@ object RuntimeDashboardMetrics {
   ): Unit = synchronized {
     val cleandiagnostickey = if (error) diagnostickey.filter(_.nonEmpty) else None
     _rule_events = (_rule_events :+ Event(
-      observedAt = java.time.Instant.now.toEpochMilli,
+      observedat = java.time.Instant.now.toEpochMilli,
       error = error,
-      diagnosticKey = cleandiagnostickey,
-      diagnosticRecord = if (error) diagnosticrecord else None,
+      diagnostickey = cleandiagnostickey,
+      diagnosticrecord = if (error) diagnosticrecord else None,
       operation = Some(operation).filter(_.nonEmpty),
-      elapsedMillis = elapsedmillis,
+      elapsedmillis = elapsedmillis,
       labels = _clean_labels(Map(
         "operation" -> operation,
         "rule_set" -> ruleset,
@@ -272,12 +274,12 @@ object RuntimeDashboardMetrics {
   ): Unit = synchronized {
     val cleandiagnostickey = if (error) diagnosticKey.filter(_.nonEmpty) else None
     _spi_events = (_spi_events :+ Event(
-      observedAt = java.time.Instant.now.toEpochMilli,
+      observedat = java.time.Instant.now.toEpochMilli,
       error = error,
-      diagnosticKey = cleandiagnostickey,
-      diagnosticRecord = if (error) diagnosticRecord else None,
+      diagnostickey = cleandiagnostickey,
+      diagnosticrecord = if (error) diagnosticRecord else None,
       operation = Some(operation).filter(_.nonEmpty),
-      elapsedMillis = elapsedMillis,
+      elapsedmillis = elapsedMillis,
       labels = _clean_labels(Map(
         "contract" -> contract,
         "operation" -> operation,
@@ -307,14 +309,14 @@ object RuntimeDashboardMetrics {
       else Vector.empty
     _operation_evaluation_delivery_events =
       (_operation_evaluation_delivery_events :+ Event(
-        observedAt = java.time.Instant.now.toEpochMilli,
+        observedat = java.time.Instant.now.toEpochMilli,
         error = error,
-        diagnosticKey = cleandiagnostickeys.headOption,
+        diagnostickey = cleandiagnostickeys.headOption,
         operation = Some(operation).filter(_.nonEmpty),
         kind = Some(status).filter(_.nonEmpty),
-        sourceMode = Some(factsource).filter(_.nonEmpty),
+        sourcemode = Some(factsource).filter(_.nonEmpty),
         backend = Some(providercomponent).filter(_.nonEmpty),
-        elapsedMillis = elapsedmillis,
+        elapsedmillis = elapsedmillis,
         labels = _clean_labels(Map(
           "operation" -> operation,
           "fact_kind" -> factkind,
@@ -341,12 +343,12 @@ object RuntimeDashboardMetrics {
   ): Unit = synchronized {
     val cleandiagnostickey = if (error) diagnosticKey.filter(_.nonEmpty) else None
     _mcp_client_events = (_mcp_client_events :+ Event(
-      observedAt = java.time.Instant.now.toEpochMilli,
+      observedat = java.time.Instant.now.toEpochMilli,
       error = error,
-      diagnosticKey = cleandiagnostickey,
-      diagnosticRecord = if (error) diagnosticRecord else None,
+      diagnostickey = cleandiagnostickey,
+      diagnosticrecord = if (error) diagnosticRecord else None,
       operation = Some(operation).filter(_.nonEmpty),
-      elapsedMillis = elapsedMillis,
+      elapsedmillis = elapsedMillis,
       labels = _clean_labels(Map(
         "operation" -> operation,
         "server_set" -> serverSet,
@@ -368,11 +370,11 @@ object RuntimeDashboardMetrics {
   ): Unit = synchronized {
     val cleandiagnostickey = if (error) diagnosticKey.filter(_.nonEmpty) else None
     _process_execution_events = (_process_execution_events :+ Event(
-      observedAt = java.time.Instant.now.toEpochMilli,
+      observedat = java.time.Instant.now.toEpochMilli,
       error = error,
-      diagnosticKey = cleandiagnostickey,
-      diagnosticRecord = if (error) diagnosticRecord else None,
-      elapsedMillis = elapsedMillis,
+      diagnostickey = cleandiagnostickey,
+      diagnosticrecord = if (error) diagnosticRecord else None,
+      elapsedmillis = elapsedMillis,
       labels = _clean_labels(Map(
         "capability" -> capability,
         "driver" -> driver,
@@ -390,10 +392,10 @@ object RuntimeDashboardMetrics {
   ): Unit = synchronized {
     val cleandiagnostickey = if (error) diagnostic.map(_.diagnosticKey).filter(_.nonEmpty) else None
     _resource_tree_events = (_resource_tree_events :+ Event(
-      observedAt = java.time.Instant.now.toEpochMilli,
+      observedat = java.time.Instant.now.toEpochMilli,
       error = error,
-      diagnosticKey = cleandiagnostickey,
-      diagnosticRecord = if (error) diagnostic.map(_.toRecord) else None,
+      diagnostickey = cleandiagnostickey,
+      diagnosticrecord = if (error) diagnostic.map(_.toRecord) else None,
       labels = _clean_labels(Map(
         "tree" -> tree,
         "provider" -> provider,
@@ -414,10 +416,10 @@ object RuntimeDashboardMetrics {
   ): Unit = synchronized {
     val cleandiagnostickey = if (error) diagnostic.map(_.diagnosticKey).filter(_.nonEmpty) else None
     _resource_tree_query_events = (_resource_tree_query_events :+ Event(
-      observedAt = java.time.Instant.now.toEpochMilli,
+      observedat = java.time.Instant.now.toEpochMilli,
       error = error,
-      diagnosticKey = cleandiagnostickey,
-      diagnosticRecord = if (error) diagnostic.map(_.toRecord) else None,
+      diagnostickey = cleandiagnostickey,
+      diagnosticrecord = if (error) diagnostic.map(_.toRecord) else None,
       labels = _clean_labels(Map(
         "tree" -> tree,
         "provider" -> provider,
@@ -448,12 +450,12 @@ object RuntimeDashboardMetrics {
   ): Unit = synchronized {
     val cleandiagnostickey = if (error) diagnostic.map(_.diagnosticKey).filter(_.nonEmpty) else None
     _service_container_events = (_service_container_events :+ Event(
-      observedAt = java.time.Instant.now.toEpochMilli,
+      observedat = java.time.Instant.now.toEpochMilli,
       error = error,
-      diagnosticKey = cleandiagnostickey,
-      diagnosticRecord = if (error) diagnostic.map(_service_container_diagnostic_record) else None,
+      diagnostickey = cleandiagnostickey,
+      diagnosticrecord = if (error) diagnostic.map(_service_container_diagnostic_record) else None,
       operation = Some(operation).filter(_.nonEmpty),
-      elapsedMillis = elapsedmillis,
+      elapsedmillis = elapsedmillis,
       labels = _clean_labels(Map(
         "operation" -> operation,
         "ownership_mode" -> ownershipmode.getOrElse(""),
@@ -488,10 +490,10 @@ object RuntimeDashboardMetrics {
     }
     _component_initialization_parameter_events =
       (_component_initialization_parameter_events :+ Event(
-        observedAt = java.time.Instant.now.toEpochMilli,
+        observedat = java.time.Instant.now.toEpochMilli,
         error = error,
-        diagnosticKey = cleandiagnostickey,
-        diagnosticRecord = record,
+        diagnostickey = cleandiagnostickey,
+        diagnosticrecord = record,
         labels = _clean_labels(Map(
           "component" -> component,
           "component_instance" -> componentinstance,
@@ -511,9 +513,9 @@ object RuntimeDashboardMetrics {
     destination: String
   ): Unit = synchronized {
     _payload_externalization_events = (_payload_externalization_events :+ PayloadExternalizationEvent(
-      observedAt = java.time.Instant.now.toEpochMilli,
+      observedat = java.time.Instant.now.toEpochMilli,
       status = _normalize_label(status),
-      payloadKind = _normalize_label(payloadKind),
+      payloadkind = _normalize_label(payloadKind),
       destination = _normalize_label(destination)
     )).takeRight(10000)
   }
@@ -523,10 +525,30 @@ object RuntimeDashboardMetrics {
     status: String
   ): Unit = synchronized {
     _open_telemetry_export_events = (_open_telemetry_export_events :+ OpenTelemetryExportEvent(
-      observedAt = java.time.Instant.now.toEpochMilli,
+      observedat = java.time.Instant.now.toEpochMilli,
       signal = _normalize_label(signal),
       status = _normalize_label(status)
     )).takeRight(10000)
+  }
+
+  def recordEntityConditionalTransition(
+    outcome: String,
+    error: Boolean,
+    diagnostic: Option[ConclusionDiagnostics.Classification]
+  ): Unit = synchronized {
+    val cleandiagnostic = if (error) diagnostic else None
+    _entity_conditional_transition_events =
+      (_entity_conditional_transition_events :+ Event(
+        observedat = java.time.Instant.now.toEpochMilli,
+        error = error,
+        diagnostickey = cleandiagnostic.map(_.diagnosticKey),
+        diagnosticrecord = cleandiagnostic.map(_.toBoundedRecord),
+        labels = _clean_labels(Map(
+          "outcome" -> outcome,
+          "diagnostic_key" ->
+            cleandiagnostic.map(_.diagnosticKey).getOrElse("")
+        ))
+      )).takeRight(10000)
   }
 
   def htmlSnapshot: Snapshot = synchronized {
@@ -544,7 +566,7 @@ object RuntimeDashboardMetrics {
   def authorizationDiagnosticCounts: Map[String, Long] = synchronized {
     _authorization_events
       .filter(_.error)
-      .groupBy(_.diagnosticKey.getOrElse("unknown"))
+      .groupBy(_.diagnostickey.getOrElse("unknown"))
       .view
       .mapValues(_.size.toLong)
       .toMap
@@ -565,7 +587,7 @@ object RuntimeDashboardMetrics {
   def validationDiagnosticCounts: Map[String, Long] = synchronized {
     _validation_events
       .filter(_.error)
-      .groupBy(_.diagnosticKey.getOrElse("unknown"))
+      .groupBy(_.diagnostickey.getOrElse("unknown"))
       .view
       .mapValues(_.size.toLong)
       .toMap
@@ -582,7 +604,7 @@ object RuntimeDashboardMetrics {
   def operationRequestValidationDiagnosticCounts: Map[String, Long] = synchronized {
     _operation_request_validation_events
       .filter(_.error)
-      .groupBy(_.diagnosticKey.getOrElse("unknown"))
+      .groupBy(_.diagnostickey.getOrElse("unknown"))
       .view
       .mapValues(_.size.toLong)
       .toMap
@@ -599,7 +621,7 @@ object RuntimeDashboardMetrics {
   def blobDiagnosticCounts: Map[String, Long] = synchronized {
     _blob_events
       .filter(_.error)
-      .groupBy(_.diagnosticKey.getOrElse("unknown"))
+      .groupBy(_.diagnostickey.getOrElse("unknown"))
       .view
       .mapValues(_.size.toLong)
       .toMap
@@ -616,7 +638,7 @@ object RuntimeDashboardMetrics {
   def ruleDiagnosticCounts: Map[String, Long] = synchronized {
     _rule_events
       .filter(_.error)
-      .groupBy(_.diagnosticKey.getOrElse("unknown"))
+      .groupBy(_.diagnostickey.getOrElse("unknown"))
       .view
       .mapValues(_.size.toLong)
       .toMap
@@ -633,7 +655,7 @@ object RuntimeDashboardMetrics {
   def spiDiagnosticCounts: Map[String, Long] = synchronized {
     _spi_events
       .filter(_.error)
-      .groupBy(_.diagnosticKey.getOrElse("unknown"))
+      .groupBy(_.diagnostickey.getOrElse("unknown"))
       .view
       .mapValues(_.size.toLong)
       .toMap
@@ -650,7 +672,7 @@ object RuntimeDashboardMetrics {
   def operationEvaluationDeliveryDiagnosticCounts: Map[String, Long] = synchronized {
     _operation_evaluation_delivery_events
       .filter(_.error)
-      .flatMap(_.diagnosticKey)
+      .flatMap(_.diagnostickey)
       .groupBy(identity)
       .view
       .mapValues(_.size.toLong)
@@ -664,7 +686,7 @@ object RuntimeDashboardMetrics {
   def mcpClientDiagnosticCounts: Map[String, Long] = synchronized {
     _mcp_client_events
       .filter(_.error)
-      .groupBy(_.diagnosticKey.getOrElse("unknown"))
+      .groupBy(_.diagnostickey.getOrElse("unknown"))
       .view
       .mapValues(_.size.toLong)
       .toMap
@@ -681,7 +703,7 @@ object RuntimeDashboardMetrics {
   def processExecutionDiagnosticCounts: Map[String, Long] = synchronized {
     _process_execution_events
       .filter(_.error)
-      .groupBy(_.diagnosticKey.getOrElse("unknown"))
+      .groupBy(_.diagnostickey.getOrElse("unknown"))
       .view
       .mapValues(_.size.toLong)
       .toMap
@@ -698,7 +720,7 @@ object RuntimeDashboardMetrics {
   def resourceTreeDiagnosticCounts: Map[String, Long] = synchronized {
     _resource_tree_events
       .filter(_.error)
-      .groupBy(_.diagnosticKey.getOrElse("unknown"))
+      .groupBy(_.diagnostickey.getOrElse("unknown"))
       .view
       .mapValues(_.size.toLong)
       .toMap
@@ -715,7 +737,7 @@ object RuntimeDashboardMetrics {
   def resourceTreeQueryDiagnosticCounts: Map[String, Long] = synchronized {
     _resource_tree_query_events
       .filter(_.error)
-      .groupBy(_.diagnosticKey.getOrElse("unknown"))
+      .groupBy(_.diagnostickey.getOrElse("unknown"))
       .view
       .mapValues(_.size.toLong)
       .toMap
@@ -732,7 +754,7 @@ object RuntimeDashboardMetrics {
   def serviceContainerDiagnosticCounts: Map[String, Long] = synchronized {
     _service_container_events
       .filter(_.error)
-      .groupBy(_.diagnosticKey.getOrElse("unknown"))
+      .groupBy(_.diagnostickey.getOrElse("unknown"))
       .view
       .mapValues(_.size.toLong)
       .toMap
@@ -746,10 +768,24 @@ object RuntimeDashboardMetrics {
     _snapshot(_component_initialization_parameter_events, Vector.empty)
   }
 
+  def entityConditionalTransitionSnapshot: Snapshot = synchronized {
+    _snapshot(_entity_conditional_transition_events, Vector.empty)
+  }
+
+  def entityConditionalTransitionDiagnosticCounts: Map[String, Long] =
+    synchronized {
+      _entity_conditional_transition_events
+        .filter(_.error)
+        .groupBy(_.diagnostickey.getOrElse("unknown"))
+        .view
+        .mapValues(_.size.toLong)
+        .toMap
+    }
+
   def componentInitializationParameterDiagnosticCounts: Map[String, Long] = synchronized {
     _component_initialization_parameter_events
       .filter(_.error)
-      .groupBy(_.diagnosticKey.getOrElse("unknown"))
+      .groupBy(_.diagnostickey.getOrElse("unknown"))
       .view
       .mapValues(_.size.toLong)
       .toMap
@@ -760,7 +796,7 @@ object RuntimeDashboardMetrics {
   }
 
   def componentInitializationParameterRecords: Vector[Record] = synchronized {
-    _component_initialization_parameter_events.flatMap(_.diagnosticRecord)
+    _component_initialization_parameter_events.flatMap(_.diagnosticrecord)
   }
 
   def diagnosticScopes: Vector[DiagnosticScope] = synchronized {
@@ -777,7 +813,14 @@ object RuntimeDashboardMetrics {
       _diagnostic_scope("resource-tree", _resource_tree_events),
       _diagnostic_scope("resource-tree-query", _resource_tree_query_events),
       _diagnostic_scope("service-container", _service_container_events),
-      _diagnostic_scope("component-initialization-parameter", _component_initialization_parameter_events)
+      _diagnostic_scope(
+        "component-initialization-parameter",
+        _component_initialization_parameter_events
+      ),
+      _diagnostic_scope(
+        "entity-conditional-transition",
+        _entity_conditional_transition_events
+      )
     )
   }
 
@@ -815,7 +858,7 @@ object RuntimeDashboardMetrics {
   private def _diagnostic_records(events: Vector[Event]): Map[String, Record] =
     events
       .filter(_.error)
-      .flatMap(e => e.diagnosticKey.map(_ -> e.diagnosticRecord))
+      .flatMap(e => e.diagnostickey.map(_ -> e.diagnosticrecord))
       .groupBy(_._1)
       .flatMap { case (key, values) => values.reverse.collectFirst { case (_, Some(record)) => key -> record } }
 
@@ -839,12 +882,12 @@ object RuntimeDashboardMetrics {
     val label = _diagnostic_scope_labels.getOrElse(scope, scope)
     val groups = events
       .filter(_.error)
-      .groupBy(_.diagnosticKey.getOrElse("unknown"))
+      .groupBy(_.diagnostickey.getOrElse("unknown"))
       .toVector
       .sortBy(_._1)
       .map {
         case (key, xs) =>
-          val latest = xs.reverse.collectFirst { case event if event.diagnosticRecord.nonEmpty => event.diagnosticRecord.get }
+          val latest = xs.reverse.collectFirst { case event if event.diagnosticrecord.nonEmpty => event.diagnosticrecord.get }
           DiagnosticGroup(
             scope = scope,
             label = label,
@@ -862,13 +905,13 @@ object RuntimeDashboardMetrics {
     event: Event
   ): DiagnosticExample =
     DiagnosticExample(
-      observedAt = event.observedAt,
+      observedAt = event.observedat,
       diagnosticKey = diagnosticKey,
       operation = event.operation,
       kind = event.kind,
-      sourceMode = event.sourceMode,
+      sourceMode = event.sourcemode,
       backend = event.backend,
-      diagnosticRecord = event.diagnosticRecord
+      diagnosticRecord = event.diagnosticrecord
     )
 
   private def _normalize_scope(scope: String): String =
@@ -885,14 +928,14 @@ object RuntimeDashboardMetrics {
       _event_points("action.execution", "executions", _action_events, _outcome_label),
       _event_points("authorization.decision", "decisions", _authorization_events, event =>
         Map("outcome" -> (if (event.error) "denied" else "allowed")) ++
-          event.diagnosticKey.map("diagnostic_key" -> _).toMap
+          event.diagnostickey.map("diagnostic_key" -> _).toMap
       ),
       _event_points("dsl.chokepoint", "chokepoints", _dsl_events, _outcome_label),
       _event_points("validation", "failures", _validation_events, event =>
-        event.diagnosticKey.map("diagnostic_key" -> _).toMap
+        event.diagnostickey.map("diagnostic_key" -> _).toMap
       ),
       _event_points("operation-request-validation", "failures", _operation_request_validation_events, event =>
-        event.diagnosticKey.map("diagnostic_key" -> _).toMap
+        event.diagnostickey.map("diagnostic_key" -> _).toMap
       ),
       _event_points("blob.operation", "operations", _blob_events, event =>
         event.labels ++ _outcome_label(event)
@@ -925,6 +968,12 @@ object RuntimeDashboardMetrics {
         event.labels ++ _outcome_label(event)
       ),
       _event_points("component-initialization.parameter-resolution", "resolutions", _component_initialization_parameter_events, _.labels),
+      _event_points(
+        "entity.conditional-transition",
+        "transitions",
+        _entity_conditional_transition_events,
+        _.labels
+      ),
       _payload_externalization_points,
       _open_telemetry_export_points,
       _entity_access_points(entityAccessMetrics),
@@ -943,7 +992,7 @@ object RuntimeDashboardMetrics {
       .sortBy(_._1.toVector.sortBy(_._1).mkString("|"))
       .map {
         case (labelset, xs) =>
-          val durations = xs.flatMap(_.elapsedMillis)
+          val durations = xs.flatMap(_.elapsedmillis)
           RuntimeMetricPoint(
             scope = scope,
             name = name,
@@ -959,7 +1008,7 @@ object RuntimeDashboardMetrics {
 
   private def _payload_externalization_points: Vector[RuntimeMetricPoint] =
     _payload_externalization_events
-      .groupBy(x => Map("status" -> x.status, "payload_kind" -> x.payloadKind, "destination" -> x.destination))
+      .groupBy(x => Map("status" -> x.status, "payload_kind" -> x.payloadkind, "destination" -> x.destination))
       .toVector
       .sortBy(_._1.toVector.sortBy(_._1).mkString("|"))
       .map {
@@ -1054,7 +1103,7 @@ object RuntimeDashboardMetrics {
     events: Vector[Event],
     since: Long
   ): CountWindow = {
-    val xs = events.filter(_.observedAt >= since)
+    val xs = events.filter(_.observedat >= since)
     CountWindow(xs.size.toLong, xs.count(_.error).toLong)
   }
 
@@ -1065,7 +1114,7 @@ object RuntimeDashboardMetrics {
     size: Int
   ): Vector[RequestBucket] = {
     val current = now / widthMillis
-    val byperiod = events.groupBy(_.observedAt / widthMillis).map {
+    val byperiod = events.groupBy(_.observedat / widthMillis).map {
       case (period, xs) => period -> RequestBucket(period, xs.size.toLong, xs.count(_.error).toLong)
     }
     val start = current - (size - 1)

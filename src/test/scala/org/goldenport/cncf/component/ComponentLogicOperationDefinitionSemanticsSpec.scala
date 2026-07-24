@@ -22,7 +22,8 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Mar. 22, 2026
  *  version Apr. 25, 2026
- * @version May. 11, 2026
+ *  version May. 11, 2026
+ * @version Jul. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentLogicOperationDefinitionSemanticsSpec
@@ -190,7 +191,10 @@ final class ComponentLogicOperationDefinitionSemanticsSpec
       val calltree = job.calltree.map(_.show).getOrElse("")
       calltree should include ("io:error")
       calltree should include ("outcome=failure")
-      calltree should include ("debug trace query failure")
+      calltree should include ("diagnostic_key=argument")
+      calltree should include ("taxonomy_category=operation")
+      calltree should include ("taxonomy_symptom=invalid")
+      calltree should not include ("debug trace query failure")
       calltree should include ("kind=action")
     }
 
@@ -355,16 +359,16 @@ final class ComponentLogicOperationDefinitionSemanticsSpec
             name = "entity",
             operations = spec.OperationDefinitionGroup(
               operations = NonEmptyVector.of(
-                _ActionOperation("fetchPerson", "fetch-ok"),
-                _FunctionalUowOperation("fetchWithUow"),
-                _FailingOperation("fetchFailure"),
-                _RecordOperation("fetchAddress"),
-                _ValidatedRecordOperation("fetchAddressValidated"),
-                _ActionOperation("savePerson", "save-ok"),
-                _ActionOperation("savePersonAsync", "save-async-ok"),
-                _ActionOperation("savePersonTypedPolicy", "save-typed-ok"),
-                _ActionOperation("savePersonInvalidTypedPolicy", "save-invalid-policy-ok"),
-                _ValidatedCommandOperation("saveAddressValidated")
+                SemanticsActionOperation("fetchPerson", "fetch-ok"),
+                SemanticsFunctionalUowOperation("fetchWithUow"),
+                SemanticsFailingOperation("fetchFailure"),
+                SemanticsRecordOperation("fetchAddress"),
+                SemanticsValidatedRecordOperation("fetchAddressValidated"),
+                SemanticsActionOperation("savePerson", "save-ok"),
+                SemanticsActionOperation("savePersonAsync", "save-async-ok"),
+                SemanticsActionOperation("savePersonTypedPolicy", "save-typed-ok"),
+                SemanticsActionOperation("savePersonInvalidTypedPolicy", "save-invalid-policy-ok"),
+                SemanticsValidatedCommandOperation("saveAddressValidated")
               )
             )
           )
@@ -467,7 +471,7 @@ final class ComponentLogicOperationDefinitionSemanticsSpec
   }
 }
 
-private final case class _ActionOperation(
+private final case class SemanticsActionOperation(
   opname: String,
   result: String
 ) extends spec.OperationDefinition {
@@ -479,18 +483,18 @@ private final case class _ActionOperation(
     )
 
   override def createOperationRequest(req: Request): Consequence[OperationRequest] =
-    Consequence.success(_PlainAction(req, result))
+    Consequence.success(SemanticsPlainAction(req, result))
 }
 
-private final case class _PlainAction(
+private final case class SemanticsPlainAction(
   request: Request,
   value: String
 ) extends Action {
   override def createCall(core: ActionCall.Core): ActionCall =
-    _PlainActionCall(core, value)
+    SemanticsPlainActionCall(core, value)
 }
 
-private final case class _PlainActionCall(
+private final case class SemanticsPlainActionCall(
   core: ActionCall.Core,
   value: String
 ) extends ProcedureActionCall {
@@ -498,7 +502,7 @@ private final case class _PlainActionCall(
     Consequence.success(OperationResponse.Scalar(value))
 }
 
-private final case class _FunctionalUowOperation(
+private final case class SemanticsFunctionalUowOperation(
   opname: String
 ) extends spec.OperationDefinition {
   override val specification: spec.OperationDefinition.Specification =
@@ -509,17 +513,17 @@ private final case class _FunctionalUowOperation(
     )
 
   override def createOperationRequest(req: Request): Consequence[OperationRequest] =
-    Consequence.success(_FunctionalUowAction(req))
+    Consequence.success(SemanticsFunctionalUowAction(req))
 }
 
-private final case class _FunctionalUowAction(
+private final case class SemanticsFunctionalUowAction(
   request: Request
 ) extends Action {
   override def createCall(core: ActionCall.Core): ActionCall =
-    _FunctionalUowActionCall(core)
+    SemanticsFunctionalUowActionCall(core)
 }
 
-private final case class _FunctionalUowActionCall(
+private final case class SemanticsFunctionalUowActionCall(
   core: ActionCall.Core
 ) extends org.goldenport.cncf.action.FunctionalActionCall {
   protected def build_Program: ExecUowM[OperationResponse] =
@@ -528,7 +532,7 @@ private final case class _FunctionalUowActionCall(
     } yield OperationResponse.Scalar("uow-ok")
 }
 
-private final case class _FailingOperation(
+private final case class SemanticsFailingOperation(
   opname: String
 ) extends spec.OperationDefinition {
   override val specification: spec.OperationDefinition.Specification =
@@ -539,24 +543,24 @@ private final case class _FailingOperation(
     )
 
   override def createOperationRequest(req: Request): Consequence[OperationRequest] =
-    Consequence.success(_FailingAction(req))
+    Consequence.success(SemanticsFailingAction(req))
 }
 
-private final case class _FailingAction(
+private final case class SemanticsFailingAction(
   request: Request
 ) extends Action {
   override def createCall(core: ActionCall.Core): ActionCall =
-    _FailingActionCall(core)
+    SemanticsFailingActionCall(core)
 }
 
-private final case class _FailingActionCall(
+private final case class SemanticsFailingActionCall(
   core: ActionCall.Core
 ) extends ProcedureActionCall {
   override def execute(): Consequence[OperationResponse] =
     Consequence.operationInvalid("debug trace query failure")
 }
 
-private final case class _RecordOperation(
+private final case class SemanticsRecordOperation(
   opname: String
 ) extends spec.OperationDefinition {
   override val specification: spec.OperationDefinition.Specification =
@@ -567,17 +571,17 @@ private final case class _RecordOperation(
     )
 
   override def createOperationRequest(req: Request): Consequence[OperationRequest] =
-    Consequence.success(_RecordAction(req))
+    Consequence.success(SemanticsRecordAction(req))
 }
 
-private final case class _RecordAction(
+private final case class SemanticsRecordAction(
   request: Request
 ) extends Action {
   override def createCall(core: ActionCall.Core): ActionCall =
-    _RecordActionCall(core)
+    SemanticsRecordActionCall(core)
 }
 
-private final case class _RecordActionCall(
+private final case class SemanticsRecordActionCall(
   core: ActionCall.Core
 ) extends ProcedureActionCall {
   override def execute(): Consequence[OperationResponse] =
@@ -592,7 +596,7 @@ private final case class _RecordActionCall(
     )
 }
 
-private final case class _ValidatedRecordOperation(
+private final case class SemanticsValidatedRecordOperation(
   opname: String
 ) extends spec.OperationDefinition {
   override val specification: spec.OperationDefinition.Specification =
@@ -604,19 +608,19 @@ private final case class _ValidatedRecordOperation(
 
   override def createOperationRequest(req: Request): Consequence[OperationRequest] =
     if (req.properties.exists(p => p.name == "addressCountry" && p.value.toString == "JP"))
-      Consequence.success(_ValidatedRecordAction(req))
+      Consequence.success(SemanticsValidatedRecordAction(req))
     else
       Consequence.argumentInvalid("addressCountry must be JP")
 }
 
-private final case class _ValidatedRecordAction(
+private final case class SemanticsValidatedRecordAction(
   request: Request
 ) extends Action {
   override def createCall(core: ActionCall.Core): ActionCall =
-    _ValidatedRecordActionCall(core)
+    SemanticsValidatedRecordActionCall(core)
 }
 
-private final case class _ValidatedRecordActionCall(
+private final case class SemanticsValidatedRecordActionCall(
   core: ActionCall.Core
 ) extends ProcedureActionCall {
   override def execute(): Consequence[OperationResponse] =
@@ -631,7 +635,7 @@ private final case class _ValidatedRecordActionCall(
     )
 }
 
-private final case class _ValidatedCommandOperation(
+private final case class SemanticsValidatedCommandOperation(
   opname: String
 ) extends spec.OperationDefinition {
   override val specification: spec.OperationDefinition.Specification =
@@ -643,19 +647,19 @@ private final case class _ValidatedCommandOperation(
 
   override def createOperationRequest(req: Request): Consequence[OperationRequest] =
     if (req.properties.exists(p => p.name == "addressCountry" && p.value.toString == "JP"))
-      Consequence.success(_ValidatedCommandAction(req))
+      Consequence.success(SemanticsValidatedCommandAction(req))
     else
       Consequence.argumentInvalid("addressCountry must be JP")
 }
 
-private final case class _ValidatedCommandAction(
+private final case class SemanticsValidatedCommandAction(
   request: Request
 ) extends Action {
   override def createCall(core: ActionCall.Core): ActionCall =
-    _ValidatedCommandActionCall(core)
+    SemanticsValidatedCommandActionCall(core)
 }
 
-private final case class _ValidatedCommandActionCall(
+private final case class SemanticsValidatedCommandActionCall(
   core: ActionCall.Core
 ) extends ProcedureActionCall {
   override def execute(): Consequence[OperationResponse] =

@@ -1,9 +1,10 @@
 package org.goldenport.cncf.datastore
 
 import java.time.Instant
-import org.goldenport.Consequence
+import org.goldenport.{Conclusion, Consequence}
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.datatype.Identifier
+import org.goldenport.observation.{Cause, Descriptor, Taxonomy}
 import org.goldenport.record.Record
 import org.simplemodeling.model.datatype.EntityId
 import org.simplemodeling.model.directive.Update
@@ -388,6 +389,89 @@ trait EntityConditionalTransitionDataStore { self: DataStore =>
   )(using
     ctx: ExecutionContext
   ): Consequence[DataStoreConditionalTransitionResult]
+}
+
+object DataStoreConditionalTransitionFailure {
+  val POLICY = "entity.conditional-transition.provider"
+
+  def providerFailure[A](
+    message: String
+  ): Consequence.Failure[A] =
+    _service_unavailable(message, "provider-failure", Cause.Kind.Unknown)
+
+  def transactionFailure[A](
+    message: String
+  ): Consequence.Failure[A] =
+    _service_unavailable(
+      message,
+      "transaction-failure",
+      Cause.Kind.Inconsistency
+    )
+
+  def transactionIndeterminate[A](
+    message: String
+  ): Consequence.Failure[A] =
+    _service_unavailable(
+      message,
+      "transaction-indeterminate",
+      Cause.Kind.Inconsistency
+    )
+
+  private[cncf] def normalizeProvider[A](
+    conclusion: Conclusion
+  ): Consequence.Failure[A] = {
+    val reasons = conclusion.observation.cause.descriptor.facets.collect {
+      case Descriptor.Facet.Reason(name) => name
+    }.toSet
+    val symptom = conclusion.observation.taxonomy.symptom
+    if (
+      reasons.exists(_recognized_reasons.contains) ||
+      symptom == Taxonomy.Symptom.NotFound ||
+      symptom == Taxonomy.Symptom.Conflict ||
+      symptom == Taxonomy.Symptom.Unsupported ||
+      symptom == Taxonomy.Symptom.PermissionDenied
+    )
+      Consequence.Failure(conclusion)
+    else
+      Consequence.Failure(_annotate(conclusion, "provider-failure"))
+  }
+
+  private val _recognized_reasons = Set(
+    "unsupported-capability",
+    "successor-collision",
+    "bound-successor-revision-conflict",
+    "provider-failure",
+    "datastore-failure",
+    "transaction-failure",
+    "transaction-indeterminate",
+    "transaction-rollback"
+  )
+
+  private def _service_unavailable[A](
+    message: String,
+    reason: String,
+    kind: Cause.Kind
+  ): Consequence.Failure[A] =
+    Consequence.serviceUnavailable(
+      message,
+      kind,
+      Vector(
+        Descriptor.Facet.Reason(reason),
+        Descriptor.Facet.Policy(POLICY)
+      )
+    )
+
+  private def _annotate(
+    conclusion: Conclusion,
+    reason: String
+  ): Conclusion = {
+    val cause = conclusion.observation.cause
+      .addFacet(Descriptor.Facet.Reason(reason))
+      .addFacet(Descriptor.Facet.Policy(POLICY))
+    conclusion.copy(
+      observation = conclusion.observation.copy(cause = cause)
+    )
+  }
 }
 
 sealed abstract class DataStoreConditionalTransitionCheckpoint

@@ -188,7 +188,11 @@ class DataStoreSpace {
           _ <- _ensure_conditional_provider_domain(rootprovider, providers)
           result <- rootprovider match {
             case provider: EntityConditionalTransitionDataStore =>
-              provider.conditionalTransition(admitted)
+              provider
+                .conditionalTransition(admitted)
+                .recoverWith(
+                  DataStoreConditionalTransitionFailure.normalizeProvider
+                )
             case _ =>
               Consequence.operationInvalid(
                 "entity-conditional-transition",
@@ -253,18 +257,20 @@ class DataStoreSpace {
           case success: Consequence.Success[?] =>
             calltree.leave(Map("outcome" -> "success") ++ CallTreeValueSummary.resultAttributes(success.result))
           case failure: Consequence.Failure[?] =>
-            calltree.leave(Map(
-              "outcome" -> "failure",
-              "status" -> failure.conclusion.status.webCode.code.toString,
-              "error" -> failure.conclusion.display
-            ))
+            calltree.leave(
+              Map("outcome" -> "failure") ++
+                CallTreeValueSummary.failureAttributes(failure.conclusion)
+            )
           case other =>
             calltree.leave(Map("outcome" -> "success") ++ CallTreeValueSummary.resultAttributes(other))
         }
         result
       } catch {
         case e: Throwable =>
-          calltree.leave()
+          calltree.leave(Map(
+            "outcome" -> "exception",
+            "exception_type" -> e.getClass.getName
+          ))
           throw e
       }
     } else {
@@ -289,16 +295,18 @@ class DataStoreSpace {
             calltree.leave(Map("outcome" -> "success") ++ CallTreeValueSummary.resultAttributes(success.result))
             success
           case failure: Consequence.Failure[A] =>
-            calltree.leave(Map(
-              "outcome" -> "failure",
-              "status" -> failure.conclusion.status.webCode.code.toString,
-              "error" -> failure.conclusion.display
-            ))
+            calltree.leave(
+              Map("outcome" -> "failure") ++
+                CallTreeValueSummary.failureAttributes(failure.conclusion)
+            )
             failure
         }
       } catch {
         case e: Throwable =>
-          calltree.leave()
+          calltree.leave(Map(
+            "outcome" -> "exception",
+            "exception_type" -> e.getClass.getName
+          ))
           throw e
       }
     } else {
