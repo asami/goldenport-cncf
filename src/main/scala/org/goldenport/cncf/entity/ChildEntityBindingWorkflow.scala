@@ -5,7 +5,10 @@ import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.entity.runtime.EntityCollection
 import org.goldenport.cncf.naming.NamingConventions
-import org.goldenport.cncf.operation.{CmlOperationAssociationBinding, CmlOperationChildEntityBinding}
+import org.goldenport.cncf.operation.{
+  CmlOperationAssociationBinding,
+  CmlOperationChildEntityBinding
+}
 import org.goldenport.cncf.unitofwork.UnitOfWorkOp
 import org.goldenport.protocol.Request
 import org.goldenport.protocol.operation.OperationResponse
@@ -17,8 +20,7 @@ import org.simplemodeling.model.datatype.EntityId
  * operation returns or supplies the parent Entity id.
  *
  * @since   Apr. 30, 2026
- *  version Apr. 30, 2026
- * @version Jul. 15, 2026
+ * @version Jul. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ChildEntityBindingSummary(
@@ -71,7 +73,8 @@ final class ChildEntityBindingWorkflow(
     else
       for {
         collection <- _entity_collection(summary.entityName)
-        ids <- summary.createdIds.foldLeft(Consequence.success(Vector.empty[EntityId])) { (z, value) =>
+        ids <-
+          summary.createdIds.foldLeft(Consequence.success(Vector.empty[EntityId])) { (z, value) =>
           z.flatMap(xs => EntityId.parse(value).map(xs :+ _))
         }
         _ <- _cleanup_children(collection, ids)
@@ -85,19 +88,21 @@ final class ChildEntityBindingWorkflow(
   private def _create_children(
     collection: EntityCollection[?],
     binding: CmlOperationChildEntityBinding,
-    sourceEntityId: String,
+    sourceentityid: String,
     rows: Vector[Record]
   )(using ExecutionContext): Consequence[Vector[EntityId]] =
     rows.zipWithIndex.foldLeft(Consequence.success(Vector.empty[EntityId])) {
       case (z, (row, index)) =>
         z.flatMap { created =>
-          _prepare_child_record(collection, binding, sourceEntityId, row, index).flatMap { case (record, id) =>
-            _ensure_child_absent(collection, id).flatMap { _ =>
-              collection.putRecordSynced(record).map(_ => created :+ id).recoverWith { conclusion =>
-                _cleanup_children(collection, created)
-                  .flatMap(_ => Consequence.Failure[Vector[EntityId]](conclusion))
+          _prepare_child_record(collection, binding, sourceentityid, row, index).flatMap {
+            case (record, id) =>
+              _ensure_child_absent(collection, id).flatMap { _ =>
+                collection.createRecordSynced(record).map(_ => created :+ id).recoverWith {
+                  conclusion =>
+                    _cleanup_children(collection, created)
+                      .flatMap(_ => Consequence.Failure[Vector[EntityId]](conclusion))
+                }
               }
-            }
           }.recoverWith { conclusion =>
             _cleanup_children(collection, created)
               .flatMap(_ => Consequence.Failure[Vector[EntityId]](conclusion))
@@ -119,31 +124,33 @@ final class ChildEntityBindingWorkflow(
   private def _prepare_child_record(
     collection: EntityCollection[?],
     binding: CmlOperationChildEntityBinding,
-    sourceEntityId: String,
+      sourceentityid: String,
     row: Record,
     index: Int
   )(using ExecutionContext): Consequence[(Record, EntityId)] =
-    _validate_parent_field(binding, sourceEntityId, row).flatMap { _ =>
-      val withParent = row ++ Record.dataAuto(binding.parentIdField -> sourceEntityId)
-      val withSort = binding.sortOrderField match {
-        case Some(field) if withParent.getAny(field).isEmpty =>
-          withParent ++ Record.dataAuto(field -> index)
+    _validate_parent_field(binding, sourceentityid, row).flatMap { _ =>
+      val withparent = row ++ Record.dataAuto(binding.parentIdField -> sourceentityid)
+      val withsort = binding.sortOrderField match {
+        case Some(field) if withparent.getAny(field).isEmpty =>
+          withparent ++ Record.dataAuto(field -> index)
         case _ =>
-          withParent
+          withparent
       }
-      _child_id(collection, binding, withSort).map { case (record, id) =>
+      _child_id(collection, binding, withsort).map { case (record, id) =>
         record -> id
       }
     }
 
   private def _validate_parent_field(
     binding: CmlOperationChildEntityBinding,
-    sourceEntityId: String,
+      sourceentityid: String,
     row: Record
   ): Consequence[Unit] =
     row.getAny(binding.parentIdField).map(_.toString.trim).filter(_.nonEmpty) match {
-      case Some(value) if value != sourceEntityId =>
-        Consequence.argumentInvalid(s"${binding.inputParameter}.${binding.parentIdField} must match parent Entity id")
+      case Some(value) if value != sourceentityid =>
+        Consequence.argumentInvalid(
+          s"${binding.inputParameter}.${binding.parentIdField} must match parent Entity id"
+        )
       case _ =>
         Consequence.unit
     }
@@ -169,19 +176,19 @@ final class ChildEntityBindingWorkflow(
   }
 
   private def _entity_collection(
-    entityName: String
+      entityname: String
   ): Consequence[EntityCollection[?]] =
-    component.entitySpace.entityOption[Any](entityName).orElse {
+    component.entitySpace.entityOption[Any](entityname).orElse {
       component.componentDescriptors
         .flatMap(_.entityRuntimeDescriptors)
         .find(x =>
-          NamingConventions.equivalentByNormalized(x.entityName, entityName) ||
-            NamingConventions.equivalentByNormalized(x.collectionId.name, entityName)
+          NamingConventions.equivalentByNormalized(x.entityName, entityname) ||
+            NamingConventions.equivalentByNormalized(x.collectionId.name, entityname)
         )
         .flatMap(x => component.entitySpace.entityOption(x.collectionId))
     } match {
       case Some(collection) => Consequence.success(collection)
-      case None => Consequence.operationNotFound(s"child entity collection:${entityName}")
+      case None => Consequence.operationNotFound(s"child entity collection:${entityname}")
     }
 
   private def _cleanup_children(
@@ -197,10 +204,10 @@ final class ChildEntityBindingWorkflow(
 
   private def _compensate_parent(
     binding: CmlOperationChildEntityBinding,
-    sourceEntityId: String
+      sourceentityid: String
   )(using ExecutionContext): Consequence[Unit] =
     if (_should_compensate_parent(binding))
-      EntityId.parse(sourceEntityId).flatMap { id =>
+      EntityId.parse(sourceentityid).flatMap { id =>
         summon[ExecutionContext].entityStoreSpace.delete(UnitOfWorkOp.EntityStoreDelete(id))
           .map { _ =>
             component.entitySpace.entityOption(id.collection).foreach(_.evict(id))
@@ -244,13 +251,18 @@ object ChildEntityBindingWorkflow {
         _response_record(response).flatMap { record =>
           _first_string(record, binding.sourceEntityIdResultFields)
             .map(Consequence.success)
-            .getOrElse(Consequence.argumentMissing(binding.sourceEntityIdResultFields.headOption.getOrElse("entity_id")))
+            .getOrElse(Consequence.argumentMissing(
+              binding.sourceEntityIdResultFields.headOption.getOrElse("entity_id")
+            ))
         }
       case CmlOperationAssociationBinding.SourceEntityIdModeParameter =>
         val values = _values(request)
-        binding.sourceEntityIdParameters.iterator.flatMap(name => _string_value(values, name)).nextOption() match {
+        binding.sourceEntityIdParameters.iterator.flatMap(name => _string_value(values, name))
+          .nextOption() match {
           case Some(value) => Consequence.success(value)
-          case None => Consequence.argumentMissing(binding.sourceEntityIdParameters.headOption.getOrElse("sourceEntityId"))
+          case None => Consequence.argumentMissing(
+              binding.sourceEntityIdParameters.headOption.getOrElse("sourceEntityId")
+            )
         }
       case _ =>
         Consequence.argumentInvalid("child entity binding sourceEntityIdMode is not automatic")
@@ -284,15 +296,21 @@ object ChildEntityBindingWorkflow {
       case (z, (record: Record, _)) =>
         z.map(_ :+ record)
       case (z, (other, index)) =>
-        z.flatMap(_ => Consequence.argumentInvalid(s"child entity row[${index}] must be Record: ${other}"))
+        z.flatMap(_ =>
+          Consequence.argumentInvalid(s"child entity row[${index}] must be Record: ${other}")
+        )
     }
 
   private def _values(request: Request): Vector[(String, Any)] =
-    (request.arguments.map(x => x.name -> x.value) ++ request.properties.map(x => x.name -> x.value)).toVector
+    (request.arguments.map(x => x.name -> x.value) ++ request.properties.map(x =>
+      x.name -> x.value
+    )).toVector
 
   private def _first_string(record: Record, names: Vector[String]): Option[String] =
     names.iterator.flatMap(name => record.getAny(name)).map(_.toString.trim).find(_.nonEmpty)
 
   private def _string_value(values: Vector[(String, Any)], name: String): Option[String] =
-    values.collectFirst { case (key, value) if key == name => value.toString.trim }.filter(_.nonEmpty)
+    values.collectFirst { case (key, value) if key == name => value.toString.trim }.filter(
+      _.nonEmpty
+    )
 }

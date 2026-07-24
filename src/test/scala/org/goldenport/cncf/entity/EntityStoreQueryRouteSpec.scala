@@ -4,7 +4,23 @@ import java.nio.file.Files
 import java.time.Instant
 import cats.~>
 import org.goldenport.Consequence
-import org.goldenport.cncf.context.{Capability, CorrelationId, DataStoreContext, EntityStoreContext, ExecutionContext, IdGenerationContext, ObservabilityContext, Principal, PrincipalId, RuntimeContext, ScopeContext, ScopeKind, SecurityContext, SecurityLevel, TraceId}
+import org.goldenport.cncf.context.{
+  Capability,
+  CorrelationId,
+  DataStoreContext,
+  EntityStoreContext,
+  ExecutionContext,
+  IdGenerationContext,
+  ObservabilityContext,
+  Principal,
+  PrincipalId,
+  RuntimeContext,
+  ScopeContext,
+  ScopeKind,
+  SecurityContext,
+  SecurityLevel,
+  TraceId
+}
 import org.goldenport.cncf.datastore.{DataStore, DataStoreSpace}
 import org.goldenport.cncf.datastore.sql.SqlDataStore
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
@@ -21,58 +37,60 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Mar. 16, 2026
  *  version Apr. 26, 2026
  *  version May.  5, 2026
- * @version Jul. 15, 2026
+ * @version Jul. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EntityStoreQueryRouteSpec
-  extends AnyWordSpec
-  with Matchers
-  with GivenWhenThen {
+    extends AnyWordSpec
+    with Matchers
+    with GivenWhenThen {
 
   private val _cid = EntityCollectionId("test", "a", "person")
+  private val _legacyexpectation =
+    EntityMutationExpectation(EntityConcurrencyToken.LEGACY)
 
   "EntityPersistent store record contract" should {
     "delegate default store APIs to RecordCodex compatibility methods" in {
       Given("an old-style EntityPersistent implementation with only toRecord/fromRecord")
-      val id = EntityId("test", "old_style", _cid)
-      val entity = PersonEntity(id, "taro", 20)
+      val id         = EntityId("test", "old_style", _cid)
+      val entity     = PersonEntity(id, "taro", 20)
       val persistent = _person_persistent
 
       When("calling the formal store APIs")
-      val storeRecord = persistent.toStoreRecord(entity)
-      val decoded = persistent.fromStoreRecord(storeRecord)
+      val storerecord = persistent.toStoreRecord(entity)
+      val decoded     = persistent.fromStoreRecord(storerecord)
 
       Then("the compatibility bridge preserves existing behavior")
-      storeRecord shouldBe entity.toRecord()
+      storerecord shouldBe entity.toRecord()
       decoded shouldBe Consequence.success(entity)
     }
 
     "produce view records through the explicit view boundary API" in {
       Given("an entity whose DB record differs from its view record")
-      val id = EntityId("test", "view_1", EntityCollectionId("test", "a", "store_decode"))
-      val entity = StoreDecodeEntity(id, "view-name")
+      val id         = EntityId("test", "view_1", EntityCollectionId("test", "a", "store_decode"))
+      val entity     = StoreDecodeEntity(id, "view-name")
       val persistent = _store_decode_persistent
 
       When("requesting a view record")
-      val viewRecord = persistent.toViewRecord(entity, "admin", Vector("presentationName"))
-      val storeRecord = persistent.toStoreRecord(entity)
+      val viewrecord  = persistent.toViewRecord(entity, "admin", Vector("presentationName"))
+      val storerecord = persistent.toStoreRecord(entity)
 
       Then("the view boundary does not expose the DB field shape")
-      viewRecord.getString("presentationName") shouldBe Some("view-name")
-      viewRecord.getString("store_name") shouldBe None
-      storeRecord.getString("store_name") shouldBe Some("view-name")
+      viewrecord.getString("presentationName") shouldBe Some("view-name")
+      viewrecord.getString("store_name") shouldBe None
+      storerecord.getString("store_name") shouldBe Some("view-name")
     }
   }
 
   "EntityStoreSpace.search" should {
     "apply Query where/sort/offset/limit on entity-store route" in {
       Given("a searchable datastore + standard entity store route")
-      val datastorespace = DataStoreSpace.default()
-      val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+      val datastorespace     = DataStoreSpace.default()
+      val entitystorespace   = new EntityStoreSpace().addEntityStore(EntityStore.standard())
       given ExecutionContext = _execution_context(datastorespace, entitystorespace)
 
       given EntityPersistent[PersonEntity] = new EntityPersistent[PersonEntity] {
-        def id(e: PersonEntity): EntityId = e.id
+        def id(e: PersonEntity): EntityId     = e.id
         def toRecord(e: PersonEntity): Record = e.toRecord()
         def fromRecord(r: Record): Consequence[PersonEntity] = {
           val m = r.asMap
@@ -122,14 +140,18 @@ final class EntityStoreQueryRouteSpec
       Then("paged result is returned from store route")
       result.map(_.data.map(_.id)) shouldBe Consequence.success(Vector(p2.id))
       result.map(_.totalCount) shouldBe Consequence.success(Some(3))
-      result.map(r => (r.offset, r.limit, r.fetchedCount)) shouldBe Consequence.success((Some(1), Some(1), 1))
+      result.map(r => (r.offset, r.limit, r.fetchedCount)) shouldBe Consequence.success((
+        Some(1),
+        Some(1),
+        1
+      ))
     }
 
     "route logical query paths to physical store fields through EntityPersistent mapping" in {
       Given("records stored under physical column names")
-      val collectionid = EntityCollectionId("test", "a", "post")
-      val datastorespace = DataStoreSpace.default()
-      val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+      val collectionid       = EntityCollectionId("test", "a", "post")
+      val datastorespace     = DataStoreSpace.default()
+      val entitystorespace   = new EntityStoreSpace().addEntityStore(EntityStore.standard())
       given ExecutionContext = _execution_context(datastorespace, entitystorespace)
       given EntityPersistent[PostedEntity] = _posted_persistent
 
@@ -138,8 +160,14 @@ final class EntityStoreQueryRouteSpec
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
           Vector(
-            DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(collectionid), p1.toStoreRecord),
-            DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(collectionid), p2.toStoreRecord)
+            DataStoreSpace.SeedEntry(
+              DataStore.CollectionId.EntityStore(collectionid),
+              p1.toStoreRecord
+            ),
+            DataStoreSpace.SeedEntry(
+              DataStore.CollectionId.EntityStore(collectionid),
+              p2.toStoreRecord
+            )
           )
         )
       )
@@ -168,8 +196,8 @@ final class EntityStoreQueryRouteSpec
 
     "persist create payloads through EntityPersistentCreate.toStoreRecord" in {
       Given("a create model whose presentation record differs from its store record")
-      val datastorespace = DataStoreSpace.default()
-      val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+      val datastorespace     = DataStoreSpace.default()
+      val entitystorespace   = new EntityStoreSpace().addEntityStore(EntityStore.standard())
       given ExecutionContext = _execution_context(datastorespace, entitystorespace)
       given EntityPersistentCreate[StoreCreateCandidate] = _store_create_candidate_persistent
 
@@ -182,22 +210,24 @@ final class EntityStoreQueryRouteSpec
       )
       val loaded = for {
         result <- created
-        cid <- summon[ExecutionContext].entityStoreSpace.dataStoreCollection(result.id)
-        dsid <- summon[ExecutionContext].entityStoreSpace.dataStoreEntryId(result.id)
-        ds <- summon[ExecutionContext].dataStoreSpace.dataStore(cid)
-        rec <- ds.load(cid, dsid)
+        cid    <- summon[ExecutionContext].entityStoreSpace.dataStoreCollection(result.id)
+        dsid   <- summon[ExecutionContext].entityStoreSpace.dataStoreEntryId(result.id)
+        ds     <- summon[ExecutionContext].dataStoreSpace.dataStore(cid)
+        rec    <- ds.load(cid, dsid)
       } yield rec
 
       Then("the stored DB record uses the store shape, not the presentation shape")
-      loaded.map(_.flatMap(_.getString("store_name"))) shouldBe Consequence.success(Some("store-value"))
+      loaded.map(_.flatMap(_.getString("store_name"))) shouldBe Consequence.success(
+        Some("store-value")
+      )
       loaded.map(_.flatMap(_.getString("presentationName"))) shouldBe Consequence.success(None)
     }
 
     "decode load and search results through EntityPersistent.fromStoreRecord" in {
       Given("store records whose physical field names cannot be decoded by fromRecord")
-      val collectionid = EntityCollectionId("test", "a", "store_decode")
-      val datastorespace = DataStoreSpace.default()
-      val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+      val collectionid       = EntityCollectionId("test", "a", "store_decode")
+      val datastorespace     = DataStoreSpace.default()
+      val entitystorespace   = new EntityStoreSpace().addEntityStore(EntityStore.standard())
       given ExecutionContext = _execution_context(datastorespace, entitystorespace)
       given EntityPersistent[StoreDecodeEntity] = _store_decode_persistent
 
@@ -208,7 +238,7 @@ final class EntityStoreQueryRouteSpec
             DataStoreSpace.SeedEntry(
               DataStore.CollectionId.EntityStore(collectionid),
               Record.dataAuto(
-                "id" -> id,
+                "id"         -> id,
                 "store_name" -> "decoded-from-store"
               )
             )
@@ -243,10 +273,10 @@ final class EntityStoreQueryRouteSpec
 
     "preserve parent-owned value objects through toStoreRecord and fromStoreRecord" in {
       Given("an entity whose store record contains owned single and repeated value objects")
-      val collectionid = EntityCollectionId("test", "a", "owned_value_entity")
-      val path = Files.createTempFile("cncf-owned-value-entity", ".db").toString
-      val datastorespace = new DataStoreSpace().addDataStore(SqlDataStore.sqlite(path))
-      val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+      val collectionid       = EntityCollectionId("test", "a", "owned_value_entity")
+      val path               = Files.createTempFile("cncf-owned-value-entity", ".db").toString
+      val datastorespace     = new DataStoreSpace().addDataStore(SqlDataStore.sqlite(path))
+      val entitystorespace   = new EntityStoreSpace().addEntityStore(EntityStore.standard())
       given ExecutionContext = _execution_context(datastorespace, entitystorespace)
       given EntityPersistent[OwnedValueEntity] = _owned_value_persistent
 
@@ -258,22 +288,37 @@ final class EntityStoreQueryRouteSpec
         lines = Vector(OwnedLine("sku-1", 2), OwnedLine("sku-2", 1))
       )
 
-      When("saving and loading through the entity-store route")
-      val saved = entitystorespace.save(UnitOfWorkOp.EntityStoreSave(entity, summon[EntityPersistent[OwnedValueEntity]]))
+      val create = new EntityPersistentCreate[OwnedValueEntity] {
+        def id(value: OwnedValueEntity): Option[EntityId] = Some(value.id)
+        def collection(value: OwnedValueEntity): EntityCollectionId =
+          value.id.collection
+        def toRecord(value: OwnedValueEntity): Record =
+          summon[EntityPersistent[OwnedValueEntity]].toRecord(value)
+        override def toStoreRecord(value: OwnedValueEntity): Record =
+          summon[EntityPersistent[OwnedValueEntity]].toStoreRecord(value)
+      }
+
+      When("creating and loading through the entity-store route")
+      val saved = entitystorespace.create(
+        UnitOfWorkOp.EntityStoreCreate(entity, create)
+      )
       val loaded = for {
         _ <- saved
-        x <- entitystorespace.load(UnitOfWorkOp.EntityStoreLoad(id, summon[EntityPersistent[OwnedValueEntity]]))
+        x <- entitystorespace.load(UnitOfWorkOp.EntityStoreLoad(
+          id,
+          summon[EntityPersistent[OwnedValueEntity]]
+        ))
       } yield x
 
       Then("the persistent adapter explicitly owns value object storage decoding")
-      saved shouldBe Consequence.unit
+      saved shouldBe a[Consequence.Success[_]]
       loaded shouldBe Consequence.success(Some(entity))
     }
 
     "return empty result when collection has not been created yet" in {
       Given("a searchable datastore with no entries for the collection")
-      val datastorespace = DataStoreSpace.default()
-      val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+      val datastorespace     = DataStoreSpace.default()
+      val entitystorespace   = new EntityStoreSpace().addEntityStore(EntityStore.standard())
       given ExecutionContext = _execution_context(datastorespace, entitystorespace)
       given EntityPersistent[PersonEntity] = _person_persistent
 
@@ -299,8 +344,8 @@ final class EntityStoreQueryRouteSpec
 
     "apply default visibility for general user (published + alive)" in {
       Given("records with mixed postStatus/aliveness")
-      val datastorespace = DataStoreSpace.default()
-      val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+      val datastorespace     = DataStoreSpace.default()
+      val entitystorespace   = new EntityStoreSpace().addEntityStore(EntityStore.standard())
       given ExecutionContext = _execution_context(datastorespace, entitystorespace)
       given EntityPersistent[PersonEntity] = _person_persistent
 
@@ -348,12 +393,12 @@ final class EntityStoreQueryRouteSpec
 
     "apply default visibility for content manager (published + draft)" in {
       Given("content manager principal")
-      val datastorespace = DataStoreSpace.default()
+      val datastorespace   = DataStoreSpace.default()
       val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
       given ExecutionContext = _execution_context(
         datastorespace,
         entitystorespace,
-        principalAttributes = Map("role" -> "content_manager")
+        principalattributes = Map("role" -> "content_manager")
       )
       given EntityPersistent[PersonEntity] = _person_persistent
 
@@ -401,13 +446,13 @@ final class EntityStoreQueryRouteSpec
 
     "exclude deletedAt records even for content manager default filters" in {
       Given("content manager with configured lifecycle scope")
-      val datastorespace = DataStoreSpace.default()
+      val datastorespace   = DataStoreSpace.default()
       val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
       given ExecutionContext = _execution_context(
         datastorespace,
         entitystorespace,
-        principalAttributes = Map(
-          "role" -> "content_manager",
+        principalattributes = Map(
+          "role"              -> "content_manager",
           "search_poststatus" -> "published,draft,archived"
         )
       )
@@ -434,7 +479,11 @@ final class EntityStoreQueryRouteSpec
             ),
             DataStoreSpace.SeedEntry(
               DataStore.CollectionId.EntityStore(_cid),
-              p4.toRecord() ++ Record.dataAuto("postStatus" -> "Published", "aliveness" -> "Alive", "deletedAt" -> Instant.now())
+              p4.toRecord() ++ Record.dataAuto(
+                "postStatus" -> "Published",
+                "aliveness"  -> "Alive",
+                "deletedAt"  -> Instant.now()
+              )
             )
           )
         )
@@ -462,13 +511,13 @@ final class EntityStoreQueryRouteSpec
 
     "apply patch update by id on entity-store route" in {
       Given("a seeded entity")
-      val datastorespace = DataStoreSpace.default()
-      val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+      val datastorespace     = DataStoreSpace.default()
+      val entitystorespace   = new EntityStoreSpace().addEntityStore(EntityStore.standard())
       given ExecutionContext = _execution_context(datastorespace, entitystorespace)
-      given EntityPersistent[PersonEntity] = _person_persistent
+      given EntityPersistent[PersonEntity]      = _person_persistent
       given EntityPersistentUpdate[PersonPatch] = _person_patch_persistent
 
-      val id = EntityId("test", "ka", _cid)
+      val id     = EntityId("test", "ka", _cid)
       val entity = PersonEntity(id, "taro", 20)
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
@@ -485,12 +534,13 @@ final class EntityStoreQueryRouteSpec
           name = Update.set("hanako"),
           age = Update.noop[Int]
         ),
+        expectation = _legacyexpectation,
         tc = summon[EntityPersistentUpdate[PersonPatch]]
       )
       val updated = entitystorespace.updateById(op)
 
       Then("only set fields are reflected")
-      updated shouldBe Consequence.unit
+      updated shouldBe a[Consequence.Success[_]]
       val loaded = entitystorespace.load(
         UnitOfWorkOp.EntityStoreLoad(id, summon[EntityPersistent[PersonEntity]])
       )
@@ -500,20 +550,20 @@ final class EntityStoreQueryRouteSpec
 
     "apply patch update by id through EntityPersistentUpdate.toStoreRecord" in {
       Given("a seeded store-shaped entity and a patch with a different view shape")
-      val datastorespace = DataStoreSpace.default()
-      val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+      val datastorespace     = DataStoreSpace.default()
+      val entitystorespace   = new EntityStoreSpace().addEntityStore(EntityStore.standard())
       given ExecutionContext = _execution_context(datastorespace, entitystorespace)
       given EntityPersistentUpdate[StorePatchCandidate] = _store_patch_candidate_persistent
 
       val collectionid = EntityCollectionId("test", "a", "store_patch_candidate")
-      val id = EntityId("test", "sp1", collectionid)
+      val id           = EntityId("test", "sp1", collectionid)
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
           Vector(
             DataStoreSpace.SeedEntry(
               DataStore.CollectionId.EntityStore(collectionid),
               Record.dataAuto(
-                "id" -> id,
+                "id"         -> id,
                 "store_name" -> "before"
               )
             )
@@ -526,27 +576,28 @@ final class EntityStoreQueryRouteSpec
         UnitOfWorkOp.EntityStoreUpdateById(
           id = id,
           patch = StorePatchCandidate(Update.set("after")),
+          expectation = _legacyexpectation,
           tc = summon[EntityPersistentUpdate[StorePatchCandidate]]
         )
       )
       val loaded = for {
-        _ <- updated
-        cid <- summon[ExecutionContext].entityStoreSpace.dataStoreCollection(id)
+        _    <- updated
+        cid  <- summon[ExecutionContext].entityStoreSpace.dataStoreCollection(id)
         dsid <- summon[ExecutionContext].entityStoreSpace.dataStoreEntryId(id)
-        ds <- summon[ExecutionContext].dataStoreSpace.dataStore(cid)
-        rec <- ds.load(cid, dsid)
+        ds   <- summon[ExecutionContext].dataStoreSpace.dataStore(cid)
+        rec  <- ds.load(cid, dsid)
       } yield rec
 
       Then("the datastore update uses the store field name, not the view field name")
-      updated shouldBe Consequence.unit
+      updated shouldBe a[Consequence.Success[_]]
       loaded.map(_.flatMap(_.getString("store_name"))) shouldBe Consequence.success(Some("after"))
       loaded.map(_.flatMap(_.getString("displayName"))) shouldBe Consequence.success(None)
     }
 
     "auto-complement create defaults from ExecutionContext on entity-store route" in {
       Given("a create request with missing id/name metadata")
-      val datastorespace = DataStoreSpace.default()
-      val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+      val datastorespace     = DataStoreSpace.default()
+      val entitystorespace   = new EntityStoreSpace().addEntityStore(EntityStore.standard())
       given ExecutionContext = _execution_context(datastorespace, entitystorespace)
       given EntityPersistentCreate[CreateCandidate] = _create_candidate_persistent
 
@@ -563,10 +614,10 @@ final class EntityStoreQueryRouteSpec
       val created = entitystorespace.create(createop)
       val loaded = for {
         result <- created
-        cid <- summon[ExecutionContext].entityStoreSpace.dataStoreCollection(result.id)
-        dsid <- summon[ExecutionContext].entityStoreSpace.dataStoreEntryId(result.id)
-        ds <- summon[ExecutionContext].dataStoreSpace.dataStore(cid)
-        rec <- ds.load(cid, dsid)
+        cid    <- summon[ExecutionContext].entityStoreSpace.dataStoreCollection(result.id)
+        dsid   <- summon[ExecutionContext].entityStoreSpace.dataStoreEntryId(result.id)
+        ds     <- summon[ExecutionContext].dataStoreSpace.dataStore(cid)
+        rec    <- ds.load(cid, dsid)
       } yield rec
 
       Then("id/name and context-derived metadata are complemented")
@@ -574,39 +625,58 @@ final class EntityStoreQueryRouteSpec
       created.map(_.id.major) shouldBe Consequence.success("single")
       created.map(_.id.minor) shouldBe Consequence.success("global")
       created.map(_.id.parts.entropy.matches("[0-9a-f]{32}")) shouldBe Consequence.success(true)
-      loaded.map(_.flatMap(_.getString("id"))) shouldBe Consequence.success(Some(created.TAKE.id.print))
-      loaded.map(_.flatMap(_.getString("short_id"))) shouldBe created.map(result => Some(result.id.parts.entropy))
-      loaded.map(_.flatMap(_.getString("name"))) shouldBe Consequence.success(Some("test-principal"))
+      loaded.map(_.flatMap(_.getString("id"))) shouldBe Consequence.success(
+        Some(created.TAKE.id.print)
+      )
+      loaded.map(_.flatMap(_.getString("short_id"))) shouldBe created.map(result =>
+        Some(result.id.parts.entropy)
+      )
+      loaded.map(_.flatMap(_.getString("name"))) shouldBe Consequence.success(
+        Some("test-principal")
+      )
       loaded.map(_.flatMap(_.getAny("age"))) shouldBe Consequence.success(Some(18))
-      loaded.map(_.flatMap(_.getString("created_by"))) shouldBe Consequence.success(Some("test_principal"))
-      loaded.map(_.flatMap(_.getAny("created_at")).exists(_.isInstanceOf[Instant])) shouldBe Consequence.success(true)
-      loaded.map(_.flatMap(_.getAny("updated_at")).exists(_.isInstanceOf[Instant])) shouldBe Consequence.success(true)
-      loaded.map(_.flatMap(_.getString("post_status")).exists(_.toLowerCase.contains("published"))) shouldBe Consequence.success(true)
-      loaded.map(_.flatMap(_.getString("aliveness")).exists(_.toLowerCase.contains("alive"))) shouldBe Consequence.success(true)
-      loaded.map(_.flatMap(_.getString("trace_id")).exists(_.nonEmpty)) shouldBe Consequence.success(true)
-      loaded.map(_.flatMap(_.getString("correlation_id")).exists(_.nonEmpty)) shouldBe Consequence.success(true)
+      loaded.map(_.flatMap(_.getString("created_by"))) shouldBe Consequence.success(
+        Some("test_principal")
+      )
+      loaded.map(
+        _.flatMap(_.getAny("created_at")).exists(_.isInstanceOf[Instant])
+      ) shouldBe Consequence.success(true)
+      loaded.map(
+        _.flatMap(_.getAny("updated_at")).exists(_.isInstanceOf[Instant])
+      ) shouldBe Consequence.success(true)
+      loaded.map(
+        _.flatMap(_.getString("post_status")).exists(_.toLowerCase.contains("published"))
+      ) shouldBe Consequence.success(true)
+      loaded.map(
+        _.flatMap(_.getString("aliveness")).exists(_.toLowerCase.contains("alive"))
+      ) shouldBe Consequence.success(true)
+      loaded.map(_.flatMap(_.getString("trace_id")).exists(_.nonEmpty)) shouldBe Consequence.success(
+        true
+      )
+      loaded.map(_.flatMap(_.getString("correlation_id")).exists(_.nonEmpty)) shouldBe Consequence
+        .success(true)
       loaded.map(_.exists(_record_has_decodable_permission)) shouldBe Consequence.success(true)
       loaded.map(_.exists(_has_no_legacy_runtime_shape)) shouldBe Consequence.success(true)
     }
 
     "auto-complement save defaults from ExecutionContext on entity-store route" in {
       Given("an existing record and save payload with missing required defaults")
-      val datastorespace = DataStoreSpace.default()
-      val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+      val datastorespace     = DataStoreSpace.default()
+      val entitystorespace   = new EntityStoreSpace().addEntityStore(EntityStore.standard())
       given ExecutionContext = _execution_context(datastorespace, entitystorespace)
       given EntityPersistent[SaveCandidate] = _save_candidate_persistent
 
       val collectionid = EntityCollectionId("test", "a", "save_candidate")
-      val id = EntityId("test", "ma", collectionid)
+      val id           = EntityId("test", "ma", collectionid)
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
           Vector(
             DataStoreSpace.SeedEntry(
               DataStore.CollectionId.EntityStore(collectionid),
               Record.dataAuto(
-                "id" -> id.print,
-                "name" -> "jiro",
-                "age" -> 20,
+                "id"        -> id.print,
+                "name"      -> "jiro",
+                "age"       -> 20,
                 "createdBy" -> "owner-x"
               )
             )
@@ -622,49 +692,61 @@ final class EntityStoreQueryRouteSpec
             name = None,
             age = Some(21)
           ),
+          expectation = _legacyexpectation,
           tc = summon[EntityPersistent[SaveCandidate]]
         )
       )
       val loaded = for {
-        _ <- saved
-        cid <- summon[ExecutionContext].entityStoreSpace.dataStoreCollection(id)
+        _    <- saved
+        cid  <- summon[ExecutionContext].entityStoreSpace.dataStoreCollection(id)
         dsid <- summon[ExecutionContext].entityStoreSpace.dataStoreEntryId(id)
-        ds <- summon[ExecutionContext].dataStoreSpace.dataStore(cid)
-        rec <- ds.load(cid, dsid)
+        ds   <- summon[ExecutionContext].dataStoreSpace.dataStore(cid)
+        rec  <- ds.load(cid, dsid)
       } yield rec
 
       Then("missing fields are complemented while existing name/createdBy are preserved")
-      saved shouldBe Consequence.unit
+      saved shouldBe a[Consequence.Success[_]]
       loaded.map(_.flatMap(_.getString("name"))) shouldBe Consequence.success(Some("jiro"))
       loaded.map(_.flatMap(_.getString("created_by"))) shouldBe Consequence.success(Some("owner-x"))
-      loaded.map(_.flatMap(_.getString("updated_by"))) shouldBe Consequence.success(Some("test-principal"))
+      loaded.map(_.flatMap(_.getString("updated_by"))) shouldBe Consequence.success(
+        Some("test-principal")
+      )
       loaded.map(_.flatMap(_.getString("updatedBy"))) shouldBe Consequence.success(None)
-      loaded.map(_.flatMap(_.getAny("updated_at")).exists(_.isInstanceOf[Instant])) shouldBe Consequence.success(true)
+      loaded.map(
+        _.flatMap(_.getAny("updated_at")).exists(_.isInstanceOf[Instant])
+      ) shouldBe Consequence.success(true)
       loaded.map(_.flatMap(_.getAny("updatedAt"))) shouldBe Consequence.success(None)
-      loaded.map(_.flatMap(_.getString("post_status")).exists(_.toLowerCase.contains("draft"))) shouldBe Consequence.success(true)
-      loaded.map(_.flatMap(_.getString("aliveness")).exists(_.toLowerCase.contains("alive"))) shouldBe Consequence.success(true)
-      loaded.map(_.flatMap(_.getString("trace_id")).exists(_.nonEmpty)) shouldBe Consequence.success(true)
-      loaded.map(_.flatMap(_.getString("correlation_id")).exists(_.nonEmpty)) shouldBe Consequence.success(true)
+      loaded.map(
+        _.flatMap(_.getString("post_status")).exists(_.toLowerCase.contains("draft"))
+      ) shouldBe Consequence.success(true)
+      loaded.map(
+        _.flatMap(_.getString("aliveness")).exists(_.toLowerCase.contains("alive"))
+      ) shouldBe Consequence.success(true)
+      loaded.map(_.flatMap(_.getString("trace_id")).exists(_.nonEmpty)) shouldBe Consequence.success(
+        true
+      )
+      loaded.map(_.flatMap(_.getString("correlation_id")).exists(_.nonEmpty)) shouldBe Consequence
+        .success(true)
     }
 
     "reject normal save on logically deleted existing records" in {
       Given("an existing record with deletedAt")
-      val datastorespace = DataStoreSpace.default()
-      val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+      val datastorespace     = DataStoreSpace.default()
+      val entitystorespace   = new EntityStoreSpace().addEntityStore(EntityStore.standard())
       given ExecutionContext = _execution_context(datastorespace, entitystorespace)
       given EntityPersistent[SaveCandidate] = _save_candidate_persistent
 
       val collectionid = EntityCollectionId("test", "a", "save_candidate")
-      val id = EntityId("test", "deleted_save", collectionid)
+      val id           = EntityId("test", "deleted_save", collectionid)
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
           Vector(
             DataStoreSpace.SeedEntry(
               DataStore.CollectionId.EntityStore(collectionid),
               Record.dataAuto(
-                "id" -> id.print,
-                "name" -> "deleted",
-                "age" -> 20,
+                "id"        -> id.print,
+                "name"      -> "deleted",
+                "age"       -> 20,
                 "deletedAt" -> Instant.now()
               )
             )
@@ -680,10 +762,14 @@ final class EntityStoreQueryRouteSpec
             name = Some("resurrected"),
             age = Some(21)
           ),
+          expectation = _legacyexpectation,
           tc = summon[EntityPersistent[SaveCandidate]]
         )
       )
-      val loaded = entitystorespace.load(UnitOfWorkOp.EntityStoreLoad(id, summon[EntityPersistent[SaveCandidate]]))
+      val loaded = entitystorespace.load(UnitOfWorkOp.EntityStoreLoad(
+        id,
+        summon[EntityPersistent[SaveCandidate]]
+      ))
 
       Then("the save fails and the record remains hidden")
       saved shouldBe a[Consequence.Failure[_]]
@@ -692,20 +778,20 @@ final class EntityStoreQueryRouteSpec
 
     "clear overflow content when a full save omits content" in {
       Given("an existing record with overflow content")
-      val datastorespace = DataStoreSpace.default()
-      val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+      val datastorespace     = DataStoreSpace.default()
+      val entitystorespace   = new EntityStoreSpace().addEntityStore(EntityStore.standard())
       given ExecutionContext = _execution_context(datastorespace, entitystorespace)
       given EntityPersistent[SaveCandidate] = _save_candidate_persistent
 
       val collectionid = EntityCollectionId("test", "a", "save_candidate")
-      val id = EntityId("test", "overflow_save", collectionid)
+      val id           = EntityId("test", "overflow_save", collectionid)
       val stored = _success(ContentBodyStoragePolicy.prepareForSave(
         id,
         Record.dataAuto(
-          "id" -> id.print,
-          "name" -> "old",
-          "age" -> 20,
-          "content" -> "日本語",
+          "id"              -> id.print,
+          "name"            -> "old",
+          "age"             -> 20,
+          "content"         -> "日本語",
           "content_charset" -> "UTF-8"
         ),
         ContentBodyStoragePolicy.Config(inlineByteThreshold = 5)
@@ -729,20 +815,23 @@ final class EntityStoreQueryRouteSpec
             name = Some("saved"),
             age = Some(21)
           ),
+          expectation = _legacyexpectation,
           tc = summon[EntityPersistent[SaveCandidate]]
         )
       )
       val hydrated = for {
-        _ <- saved
-        cid <- summon[ExecutionContext].entityStoreSpace.dataStoreCollection(id)
+        _    <- saved
+        cid  <- summon[ExecutionContext].entityStoreSpace.dataStoreCollection(id)
         dsid <- summon[ExecutionContext].entityStoreSpace.dataStoreEntryId(id)
-        ds <- summon[ExecutionContext].dataStoreSpace.dataStore(cid)
-        rec <- ds.load(cid, dsid)
-        hydrated <- rec.map(ContentBodyStoragePolicy.hydrate(id, _)).getOrElse(Consequence.success(Record.empty))
+        ds   <- summon[ExecutionContext].dataStoreSpace.dataStore(cid)
+        rec  <- ds.load(cid, dsid)
+        hydrated <- rec.map(ContentBodyStoragePolicy.hydrate(id, _)).getOrElse(
+          Consequence.success(Record.empty)
+        )
       } yield hydrated
 
       Then("the omitted content is cleared instead of preserved")
-      saved shouldBe Consequence.unit
+      saved shouldBe a[Consequence.Success[_]]
       hydrated.map(_.getString("name")) shouldBe Consequence.success(Some("saved"))
       hydrated.map(_.getString("content")) shouldBe Consequence.success(None)
       hydrated.map(_.getString("content_storage")) shouldBe Consequence.success(None)
@@ -750,8 +839,8 @@ final class EntityStoreQueryRouteSpec
 
     "generate deterministic but unique ids from ExecutionContext in tests" in {
       Given("two independent execution contexts with the same deterministic ID configuration")
-      val datastorespace = DataStoreSpace.default()
-      val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+      val datastorespace     = DataStoreSpace.default()
+      val entitystorespace   = new EntityStoreSpace().addEntityStore(EntityStore.standard())
       given ExecutionContext = _execution_context(datastorespace, entitystorespace)
       given EntityPersistentCreate[CreateCandidate] = _create_candidate_persistent
 
@@ -769,9 +858,9 @@ final class EntityStoreQueryRouteSpec
         )
       )
 
-      val replaydatastorespace = DataStoreSpace.default()
+      val replaydatastorespace   = DataStoreSpace.default()
       val replayentitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
-      val replaycontext = _execution_context(replaydatastorespace, replayentitystorespace)
+      val replaycontext          = _execution_context(replaydatastorespace, replayentitystorespace)
       val replayfirst = replayentitystorespace.create(
         UnitOfWorkOp.EntityStoreCreate(
           entity = CreateCandidate(None, Some("first"), Some(1)),
@@ -794,23 +883,23 @@ final class EntityStoreQueryRouteSpec
 
     "auto-complement update defaults from ExecutionContext on entity-store route" in {
       Given("an existing record and update payload")
-      val datastorespace = DataStoreSpace.default()
-      val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+      val datastorespace     = DataStoreSpace.default()
+      val entitystorespace   = new EntityStoreSpace().addEntityStore(EntityStore.standard())
       given ExecutionContext = _execution_context(datastorespace, entitystorespace)
       given EntityPersistent[UpdateCandidate] = _update_candidate_persistent
 
       val collectionid = EntityCollectionId("test", "a", "update_candidate")
-      val id = EntityId("test", "na", collectionid)
+      val id           = EntityId("test", "na", collectionid)
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
           Vector(
             DataStoreSpace.SeedEntry(
               DataStore.CollectionId.EntityStore(collectionid),
               Record.dataAuto(
-                "id" -> id.print,
-                "name" -> "hanako",
-                "age" -> 30,
-                "createdBy" -> "owner-y",
+                "id"         -> id.print,
+                "name"       -> "hanako",
+                "age"        -> 30,
+                "createdBy"  -> "owner-y",
                 "postStatus" -> "Published"
               )
             )
@@ -825,50 +914,60 @@ final class EntityStoreQueryRouteSpec
             id = id,
             age = Some(31)
           ),
+          expectation = _legacyexpectation,
           tc = summon[EntityPersistent[UpdateCandidate]]
         )
       )
       val loaded = for {
-        _ <- updated
-        cid <- summon[ExecutionContext].entityStoreSpace.dataStoreCollection(id)
+        _    <- updated
+        cid  <- summon[ExecutionContext].entityStoreSpace.dataStoreCollection(id)
         dsid <- summon[ExecutionContext].entityStoreSpace.dataStoreEntryId(id)
-        ds <- summon[ExecutionContext].dataStoreSpace.dataStore(cid)
-        rec <- ds.load(cid, dsid)
+        ds   <- summon[ExecutionContext].dataStoreSpace.dataStore(cid)
+        rec  <- ds.load(cid, dsid)
       } yield rec
 
       Then("update metadata is complemented and existing domain fields are preserved")
-      updated shouldBe Consequence.unit
+      updated shouldBe a[Consequence.Success[_]]
       loaded.map(_.flatMap(_.getString("name"))) shouldBe Consequence.success(Some("hanako"))
       loaded.map(_.flatMap(_.getString("created_by"))) shouldBe Consequence.success(Some("owner-y"))
       loaded.map(_.flatMap(_.getString("createdBy"))) shouldBe Consequence.success(None)
-      loaded.map(_.flatMap(_.getString("post_status"))) shouldBe Consequence.success(Some("Published"))
+      loaded.map(_.flatMap(_.getString("post_status"))) shouldBe Consequence.success(
+        Some("Published")
+      )
       loaded.map(_.flatMap(_.getString("postStatus"))) shouldBe Consequence.success(None)
-      loaded.map(_.flatMap(_.getString("updated_by"))) shouldBe Consequence.success(Some("test-principal"))
+      loaded.map(_.flatMap(_.getString("updated_by"))) shouldBe Consequence.success(
+        Some("test-principal")
+      )
       loaded.map(_.flatMap(_.getString("updatedBy"))) shouldBe Consequence.success(None)
-      loaded.map(_.flatMap(_.getAny("updated_at")).exists(_.isInstanceOf[Instant])) shouldBe Consequence.success(true)
+      loaded.map(
+        _.flatMap(_.getAny("updated_at")).exists(_.isInstanceOf[Instant])
+      ) shouldBe Consequence.success(true)
       loaded.map(_.flatMap(_.getAny("updatedAt"))) shouldBe Consequence.success(None)
-      loaded.map(_.flatMap(_.getString("trace_id")).exists(_.nonEmpty)) shouldBe Consequence.success(true)
-      loaded.map(_.flatMap(_.getString("correlation_id")).exists(_.nonEmpty)) shouldBe Consequence.success(true)
+      loaded.map(_.flatMap(_.getString("trace_id")).exists(_.nonEmpty)) shouldBe Consequence.success(
+        true
+      )
+      loaded.map(_.flatMap(_.getString("correlation_id")).exists(_.nonEmpty)) shouldBe Consequence
+        .success(true)
     }
 
     "reject normal update on logically deleted existing records" in {
       Given("an existing record with deletedAt")
-      val datastorespace = DataStoreSpace.default()
-      val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+      val datastorespace     = DataStoreSpace.default()
+      val entitystorespace   = new EntityStoreSpace().addEntityStore(EntityStore.standard())
       given ExecutionContext = _execution_context(datastorespace, entitystorespace)
       given EntityPersistent[UpdateCandidate] = _update_candidate_persistent
 
       val collectionid = EntityCollectionId("test", "a", "update_candidate")
-      val id = EntityId("test", "deleted_update", collectionid)
+      val id           = EntityId("test", "deleted_update", collectionid)
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
           Vector(
             DataStoreSpace.SeedEntry(
               DataStore.CollectionId.EntityStore(collectionid),
               Record.dataAuto(
-                "id" -> id.print,
-                "name" -> "deleted",
-                "age" -> 30,
+                "id"        -> id.print,
+                "name"      -> "deleted",
+                "age"       -> 30,
                 "deletedAt" -> Instant.now()
               )
             )
@@ -883,10 +982,14 @@ final class EntityStoreQueryRouteSpec
             id = id,
             age = Some(31)
           ),
+          expectation = _legacyexpectation,
           tc = summon[EntityPersistent[UpdateCandidate]]
         )
       )
-      val loaded = entitystorespace.load(UnitOfWorkOp.EntityStoreLoad(id, summon[EntityPersistent[UpdateCandidate]]))
+      val loaded = entitystorespace.load(UnitOfWorkOp.EntityStoreLoad(
+        id,
+        summon[EntityPersistent[UpdateCandidate]]
+      ))
 
       Then("the update fails and the record remains hidden")
       updated shouldBe a[Consequence.Failure[_]]
@@ -895,20 +998,20 @@ final class EntityStoreQueryRouteSpec
 
     "preserve overflow content when a partial update omits content" in {
       Given("an existing record with overflow content")
-      val datastorespace = DataStoreSpace.default()
-      val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+      val datastorespace     = DataStoreSpace.default()
+      val entitystorespace   = new EntityStoreSpace().addEntityStore(EntityStore.standard())
       given ExecutionContext = _execution_context(datastorespace, entitystorespace)
       given EntityPersistent[UpdateCandidate] = _update_candidate_persistent
 
       val collectionid = EntityCollectionId("test", "a", "update_candidate")
-      val id = EntityId("test", "overflow_update", collectionid)
+      val id           = EntityId("test", "overflow_update", collectionid)
       val stored = _success(ContentBodyStoragePolicy.prepareForSave(
         id,
         Record.dataAuto(
-          "id" -> id.print,
-          "name" -> "hanako",
-          "age" -> 30,
-          "content" -> "日本語",
+          "id"              -> id.print,
+          "name"            -> "hanako",
+          "age"             -> 30,
+          "content"         -> "日本語",
           "content_charset" -> "UTF-8"
         ),
         ContentBodyStoragePolicy.Config(inlineByteThreshold = 5)
@@ -931,20 +1034,23 @@ final class EntityStoreQueryRouteSpec
             id = id,
             age = Some(31)
           ),
+          expectation = _legacyexpectation,
           tc = summon[EntityPersistent[UpdateCandidate]]
         )
       )
       val hydrated = for {
-        _ <- updated
-        cid <- summon[ExecutionContext].entityStoreSpace.dataStoreCollection(id)
+        _    <- updated
+        cid  <- summon[ExecutionContext].entityStoreSpace.dataStoreCollection(id)
         dsid <- summon[ExecutionContext].entityStoreSpace.dataStoreEntryId(id)
-        ds <- summon[ExecutionContext].dataStoreSpace.dataStore(cid)
-        rec <- ds.load(cid, dsid)
-        hydrated <- rec.map(ContentBodyStoragePolicy.hydrate(id, _)).getOrElse(Consequence.success(Record.empty))
+        ds   <- summon[ExecutionContext].dataStoreSpace.dataStore(cid)
+        rec  <- ds.load(cid, dsid)
+        hydrated <- rec.map(ContentBodyStoragePolicy.hydrate(id, _)).getOrElse(
+          Consequence.success(Record.empty)
+        )
       } yield hydrated
 
       Then("the existing overflow content remains attached to the entity")
-      updated shouldBe Consequence.unit
+      updated shouldBe a[Consequence.Success[_]]
       hydrated.map(_.getString("content")) shouldBe Consequence.success(Some("日本語"))
       hydrated.map(_.getString("content_storage")) shouldBe Consequence.success(Some("overflow"))
       hydrated.map(_.getInt("age")) shouldBe Consequence.success(Some(31))
@@ -952,21 +1058,21 @@ final class EntityStoreQueryRouteSpec
 
     "overwrite caller-supplied update audit fields on entity-store route" in {
       Given("an existing record and an update payload containing spoofed audit fields")
-      val datastorespace = DataStoreSpace.default()
-      val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+      val datastorespace     = DataStoreSpace.default()
+      val entitystorespace   = new EntityStoreSpace().addEntityStore(EntityStore.standard())
       given ExecutionContext = _execution_context(datastorespace, entitystorespace)
       given EntityPersistent[AuditSpoofUpdateCandidate] = _audit_spoof_update_candidate_persistent
 
       val collectionid = EntityCollectionId("test", "a", "audit_spoof_update_candidate")
-      val id = EntityId("test", "qa", collectionid)
+      val id           = EntityId("test", "qa", collectionid)
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
           Vector(
             DataStoreSpace.SeedEntry(
               DataStore.CollectionId.EntityStore(collectionid),
               Record.dataAuto(
-                "id" -> id.print,
-                "name" -> "audit-target",
+                "id"        -> id.print,
+                "name"      -> "audit-target",
                 "updatedBy" -> "original"
               )
             )
@@ -982,29 +1088,34 @@ final class EntityStoreQueryRouteSpec
             updatedAt = Instant.EPOCH,
             updatedBy = "attacker"
           ),
+          expectation = _legacyexpectation,
           tc = summon[EntityPersistent[AuditSpoofUpdateCandidate]]
         )
       )
       val loaded = for {
-        _ <- updated
-        cid <- summon[ExecutionContext].entityStoreSpace.dataStoreCollection(id)
+        _    <- updated
+        cid  <- summon[ExecutionContext].entityStoreSpace.dataStoreCollection(id)
         dsid <- summon[ExecutionContext].entityStoreSpace.dataStoreEntryId(id)
-        ds <- summon[ExecutionContext].dataStoreSpace.dataStore(cid)
-        rec <- ds.load(cid, dsid)
+        ds   <- summon[ExecutionContext].dataStoreSpace.dataStore(cid)
+        rec  <- ds.load(cid, dsid)
       } yield rec
 
       Then("runtime audit fields win over caller-supplied values")
-      updated shouldBe Consequence.unit
-      loaded.map(_.flatMap(_.getString("updated_by"))) shouldBe Consequence.success(Some("test-principal"))
+      updated shouldBe a[Consequence.Success[_]]
+      loaded.map(_.flatMap(_.getString("updated_by"))) shouldBe Consequence.success(
+        Some("test-principal")
+      )
       loaded.map(_.flatMap(_.getString("updatedBy"))) shouldBe Consequence.success(None)
-      loaded.map(_.flatMap(_.getAny("updated_at"))) should not be Consequence.success(Some(Instant.EPOCH))
+      loaded.map(_.flatMap(_.getAny("updated_at"))) should not be Consequence.success(
+        Some(Instant.EPOCH)
+      )
       loaded.map(_.flatMap(_.getAny("updatedAt"))) shouldBe Consequence.success(None)
     }
 
     "perform soft delete on entity-store route and keep record with lifecycle updates" in {
       Given("a seeded entity")
-      val datastorespace = DataStoreSpace.default()
-      val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+      val datastorespace     = DataStoreSpace.default()
+      val entitystorespace   = new EntityStoreSpace().addEntityStore(EntityStore.standard())
       given ExecutionContext = _execution_context(datastorespace, entitystorespace)
 
       val id = EntityId("test", "oa", _cid)
@@ -1014,11 +1125,11 @@ final class EntityStoreQueryRouteSpec
             DataStoreSpace.SeedEntry(
               DataStore.CollectionId.EntityStore(_cid),
               Record.dataAuto(
-                "id" -> id.print,
-                "name" -> "taro",
+                "id"         -> id.print,
+                "name"       -> "taro",
                 "postStatus" -> "Published",
-                "aliveness" -> "Alive",
-                "updatedBy" -> "owner-z"
+                "aliveness"  -> "Alive",
+                "updatedBy"  -> "owner-z"
               )
             )
           )
@@ -1028,27 +1139,34 @@ final class EntityStoreQueryRouteSpec
       When("deleting through EntityStoreSpace")
       val deleted = entitystorespace.delete(UnitOfWorkOp.EntityStoreDelete(id))
       val loaded = for {
-        _ <- deleted
-        cid <- summon[ExecutionContext].entityStoreSpace.dataStoreCollection(id)
+        _    <- deleted
+        cid  <- summon[ExecutionContext].entityStoreSpace.dataStoreCollection(id)
         dsid <- summon[ExecutionContext].entityStoreSpace.dataStoreEntryId(id)
-        ds <- summon[ExecutionContext].dataStoreSpace.dataStore(cid)
-        rec <- ds.load(cid, dsid)
+        ds   <- summon[ExecutionContext].dataStoreSpace.dataStore(cid)
+        rec  <- ds.load(cid, dsid)
       } yield rec
 
       Then("record remains and lifecycle/audit fields are updated")
       deleted shouldBe Consequence.unit
       loaded.map(_.flatMap(_.getString("id"))) shouldBe Consequence.success(Some(id.print))
-      loaded.map(_.flatMap(r => r.getAny("aliveness").orElse(r.getAny("alive"))).exists(_.toString.toLowerCase.contains("dead"))) shouldBe Consequence.success(true)
-      loaded.map(_.flatMap(_.getString("updated_by"))) shouldBe Consequence.success(Some("test-principal"))
+      loaded.map(_.flatMap(r => r.getAny("aliveness").orElse(r.getAny("alive"))).exists(
+        _.toString.toLowerCase.contains("dead")
+      )) shouldBe Consequence.success(true)
+      loaded.map(_.flatMap(_.getString("updated_by"))) shouldBe Consequence.success(
+        Some("test-principal")
+      )
       loaded.map(_.flatMap(_.getString("updatedBy"))) shouldBe Consequence.success(None)
-      loaded.map(_.flatMap(_.getString("trace_id")).exists(_.nonEmpty)) shouldBe Consequence.success(true)
-      loaded.map(_.flatMap(_.getString("correlation_id")).exists(_.nonEmpty)) shouldBe Consequence.success(true)
+      loaded.map(_.flatMap(_.getString("trace_id")).exists(_.nonEmpty)) shouldBe Consequence.success(
+        true
+      )
+      loaded.map(_.flatMap(_.getString("correlation_id")).exists(_.nonEmpty)) shouldBe Consequence
+        .success(true)
     }
 
     "perform hard delete on entity-store route and remove record physically" in {
       Given("a seeded entity")
-      val datastorespace = DataStoreSpace.default()
-      val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+      val datastorespace     = DataStoreSpace.default()
+      val entitystorespace   = new EntityStoreSpace().addEntityStore(EntityStore.standard())
       given ExecutionContext = _execution_context(datastorespace, entitystorespace)
 
       val id = EntityId("test", "ob", _cid)
@@ -1058,10 +1176,10 @@ final class EntityStoreQueryRouteSpec
             DataStoreSpace.SeedEntry(
               DataStore.CollectionId.EntityStore(_cid),
               Record.dataAuto(
-                "id" -> id.print,
-                "name" -> "hanako",
+                "id"         -> id.print,
+                "name"       -> "hanako",
                 "postStatus" -> "Published",
-                "aliveness" -> "Alive"
+                "aliveness"  -> "Alive"
               )
             )
           )
@@ -1071,11 +1189,11 @@ final class EntityStoreQueryRouteSpec
       When("hard deleting through EntityStoreSpace")
       val deleted = entitystorespace.deleteHard(UnitOfWorkOp.EntityStoreDeleteHard(id))
       val loaded = for {
-        _ <- deleted
-        cid <- summon[ExecutionContext].entityStoreSpace.dataStoreCollection(id)
+        _    <- deleted
+        cid  <- summon[ExecutionContext].entityStoreSpace.dataStoreCollection(id)
         dsid <- summon[ExecutionContext].entityStoreSpace.dataStoreEntryId(id)
-        ds <- summon[ExecutionContext].dataStoreSpace.dataStore(cid)
-        rec <- ds.load(cid, dsid)
+        ds   <- summon[ExecutionContext].dataStoreSpace.dataStore(cid)
+        rec  <- ds.load(cid, dsid)
       } yield rec
 
       Then("record is removed")
@@ -1085,8 +1203,8 @@ final class EntityStoreQueryRouteSpec
 
     "perform physical delete on delete route when aliveness is absent" in {
       Given("a seeded entity without aliveness")
-      val datastorespace = DataStoreSpace.default()
-      val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+      val datastorespace     = DataStoreSpace.default()
+      val entitystorespace   = new EntityStoreSpace().addEntityStore(EntityStore.standard())
       given ExecutionContext = _execution_context(datastorespace, entitystorespace)
 
       val id = EntityId("test", "oc", _cid)
@@ -1096,7 +1214,7 @@ final class EntityStoreQueryRouteSpec
             DataStoreSpace.SeedEntry(
               DataStore.CollectionId.EntityStore(_cid),
               Record.dataAuto(
-                "id" -> id.print,
+                "id"   -> id.print,
                 "name" -> "jiro"
               )
             )
@@ -1107,11 +1225,11 @@ final class EntityStoreQueryRouteSpec
       When("deleting through standard delete route")
       val deleted = entitystorespace.delete(UnitOfWorkOp.EntityStoreDelete(id))
       val loaded = for {
-        _ <- deleted
-        cid <- summon[ExecutionContext].entityStoreSpace.dataStoreCollection(id)
+        _    <- deleted
+        cid  <- summon[ExecutionContext].entityStoreSpace.dataStoreCollection(id)
         dsid <- summon[ExecutionContext].entityStoreSpace.dataStoreEntryId(id)
-        ds <- summon[ExecutionContext].dataStoreSpace.dataStore(cid)
-        rec <- ds.load(cid, dsid)
+        ds   <- summon[ExecutionContext].dataStoreSpace.dataStore(cid)
+        rec  <- ds.load(cid, dsid)
       } yield rec
 
       Then("record is physically removed")
@@ -1121,17 +1239,17 @@ final class EntityStoreQueryRouteSpec
   }
 
   private def _execution_context(
-    datastorespace: DataStoreSpace,
-    entitystorespace: EntityStoreSpace,
-    principalAttributes: Map[String, String] = Map.empty,
-    capabilities: Set[Capability] = Set.empty
+      datastorespace: DataStoreSpace,
+      entitystorespace: EntityStoreSpace,
+      principalattributes: Map[String, String] = Map.empty,
+      capabilities: Set[Capability] = Set.empty
   ): ExecutionContext = {
     val observability = ObservabilityContext(
       traceId = TraceId("test", "entity_store_query_route"),
       spanId = None,
       correlationId = Some(CorrelationId("test", "entity_store_query_route"))
     )
-    val driver = FakeHttpDriver.okText("nop")
+    val driver                         = FakeHttpDriver.okText("nop")
     lazy val context: ExecutionContext = ExecutionContext.create(runtime)
     lazy val runtime: RuntimeContext = new RuntimeContext(
       core = ScopeContext.Core(
@@ -1164,8 +1282,8 @@ final class EntityStoreQueryRouteSpec
     context match {
       case i: ExecutionContext.Instance =>
         val principal = new Principal {
-          def id: PrincipalId = PrincipalId("test-principal")
-          def attributes: Map[String, String] = principalAttributes
+          def id: PrincipalId                 = PrincipalId("test-principal")
+          def attributes: Map[String, String] = principalattributes
         }
         i.copy(
           cncfCore = i.cncfCore.copy(
@@ -1203,32 +1321,32 @@ final class EntityStoreQueryRouteSpec
 }
 
 private final case class PersonEntity(
-  id: EntityId,
-  name: String,
-  age: Int
+    id: EntityId,
+    name: String,
+    age: Int
 ) extends EntityPersistable {
   def toRecord(): Record =
     Record.dataAuto(
-      "id" -> id,
+      "id"   -> id,
       "name" -> name,
-      "age" -> age
+      "age"  -> age
     )
 }
 
 private final case class PersonPatch(
-  name: Update[String],
-  age: Update[Int]
+    name: Update[String],
+    age: Update[Int]
 ) extends EntityPersistableUpdate {
   def toRecord(): Record =
     Record.dataAuto(
       "name" -> name,
-      "age" -> age
+      "age"  -> age
     )
 }
 
 private def _person_persistent: EntityPersistent[PersonEntity] =
   new EntityPersistent[PersonEntity] {
-    def id(e: PersonEntity): EntityId = e.id
+    def id(e: PersonEntity): EntityId     = e.id
     def toRecord(e: PersonEntity): Record = e.toRecord()
     def fromRecord(r: Record): Consequence[PersonEntity] = {
       val m = r.asMap
@@ -1248,11 +1366,11 @@ private object PersonPatch {
   def createC(record: Record): Consequence[PersonPatch] = {
     val name = record.getAsC[String]("name").map {
       case Some(s) => Update.set(s)
-      case None => Update.noop[String]
+      case None    => Update.noop[String]
     }
     val age = record.getAsC[Int]("age").map {
       case Some(s) => Update.set(s)
-      case None => Update.noop[Int]
+      case None    => Update.noop[Int]
     }
     for {
       n <- name
@@ -1262,7 +1380,7 @@ private object PersonPatch {
 }
 
 private final case class StorePatchCandidate(
-  name: Update[String]
+    name: Update[String]
 ) extends EntityPersistableUpdate {
   def toRecord(): Record =
     Record.dataAuto(
@@ -1287,21 +1405,21 @@ private def _store_patch_candidate_persistent: EntityPersistentUpdate[StorePatch
   }
 
 private final case class PersonQuery(
-  id: Condition[EntityId],
-  name: Condition[String],
-  age: Condition[Int]
+    id: Condition[EntityId],
+    name: Condition[String],
+    age: Condition[Int]
 ) extends Query.ConditionShape
 
 private final case class CreateCandidate(
-  id: Option[EntityId],
-  name: Option[String],
-  age: Option[Int]
+    id: Option[EntityId],
+    name: Option[String],
+    age: Option[Int]
 ) extends EntityPersistableCreate {
   def toRecord(): Record =
     Record.dataAuto(
-      "id" -> id.map(_.print),
+      "id"   -> id.map(_.print),
       "name" -> name,
-      "age" -> age
+      "age"  -> age
     )
 }
 
@@ -1309,18 +1427,18 @@ private def _create_candidate_persistent: EntityPersistentCreate[CreateCandidate
   new EntityPersistentCreate[CreateCandidate] {
     private val _collectionid = EntityCollectionId("test", "a", "create_candidate")
 
-    def id(e: CreateCandidate): Option[EntityId] = e.id
-    def toRecord(e: CreateCandidate): Record = e.toRecord()
+    def id(e: CreateCandidate): Option[EntityId]           = e.id
+    def toRecord(e: CreateCandidate): Record               = e.toRecord()
     def collection(e: CreateCandidate): EntityCollectionId = _collectionid
   }
 
 private final case class StoreCreateCandidate(
-  id: Option[EntityId],
-  name: String
+    id: Option[EntityId],
+    name: String
 ) extends EntityPersistableCreate {
   def toRecord(): Record =
     Record.dataAuto(
-      "id" -> id.map(_.print),
+      "id"               -> id.map(_.print),
       "presentationName" -> name
     )
 }
@@ -1330,40 +1448,40 @@ private def _store_create_candidate_persistent: EntityPersistentCreate[StoreCrea
     private val _collectionid = EntityCollectionId("test", "a", "store_create_candidate")
 
     def id(e: StoreCreateCandidate): Option[EntityId] = e.id
-    def toRecord(e: StoreCreateCandidate): Record = e.toRecord()
+    def toRecord(e: StoreCreateCandidate): Record     = e.toRecord()
     override def toStoreRecord(e: StoreCreateCandidate): Record =
       Record.dataAuto(
-        "id" -> e.id.map(_.print),
+        "id"         -> e.id.map(_.print),
         "store_name" -> e.name
       )
     def collection(e: StoreCreateCandidate): EntityCollectionId = _collectionid
   }
 
 private final case class StoreDecodeEntity(
-  id: EntityId,
-  name: String
+    id: EntityId,
+    name: String
 ) extends EntityPersistable {
   def toRecord(): Record =
     Record.dataAuto(
-      "id" -> id,
+      "id"               -> id,
       "presentationName" -> name
     )
 }
 
 private final case class StoreDecodeQuery(
-  id: Condition[EntityId],
-  name: Condition[String]
+    id: Condition[EntityId],
+    name: Condition[String]
 ) extends Query.ConditionShape
 
 private def _store_decode_persistent: EntityPersistent[StoreDecodeEntity] =
   new EntityPersistent[StoreDecodeEntity] {
-    def id(e: StoreDecodeEntity): EntityId = e.id
+    def id(e: StoreDecodeEntity): EntityId     = e.id
     def toRecord(e: StoreDecodeEntity): Record = e.toRecord()
     def fromRecord(r: Record): Consequence[StoreDecodeEntity] =
       Consequence.argumentInvalid("presentation record decoder must not be used for store records")
     override def toStoreRecord(e: StoreDecodeEntity): Record =
       Record.dataAuto(
-        "id" -> e.id,
+        "id"         -> e.id,
         "store_name" -> e.name
       )
     override def fromStoreRecord(r: Record): Consequence[StoreDecodeEntity] = {
@@ -1378,117 +1496,132 @@ private def _store_decode_persistent: EntityPersistent[StoreDecodeEntity] =
     override def storeFieldName(logicalName: String): String =
       logicalName match {
         case "name" => "store_name"
-        case other => other
+        case other  => other
       }
   }
 
 private final case class OwnedAddress(
-  city: String,
-  postalCode: String
+    city: String,
+    postalcode: String
 ) extends RecordPresentable {
   def toRecord(): Record =
     Record.dataAuto(
-      "city" -> city,
-      "postal_code" -> postalCode
+      "city"        -> city,
+      "postal_code" -> postalcode
     )
 }
 
 private final case class OwnedLine(
-  sku: String,
-  quantity: Int
+    sku: String,
+    quantity: Int
 ) extends RecordPresentable {
   def toRecord(): Record =
     Record.dataAuto(
-      "sku" -> sku,
+      "sku"      -> sku,
       "quantity" -> quantity
     )
 }
 
 private final case class OwnedValueEntity(
-  id: EntityId,
-  name: String,
-  address: OwnedAddress,
-  lines: Vector[OwnedLine]
+    id: EntityId,
+    name: String,
+    address: OwnedAddress,
+    lines: Vector[OwnedLine]
 ) extends EntityPersistable {
   def toRecord(): Record =
     Record.dataAuto(
-      "id" -> id,
-      "name" -> name,
+      "id"      -> id,
+      "name"    -> name,
       "address" -> address,
-      "lines" -> lines
+      "lines"   -> lines
     )
 }
 
 private def _owned_value_persistent: EntityPersistent[OwnedValueEntity] =
   new EntityPersistent[OwnedValueEntity] {
-    def id(e: OwnedValueEntity): EntityId = e.id
+    def id(e: OwnedValueEntity): EntityId     = e.id
     def toRecord(e: OwnedValueEntity): Record = e.toRecord()
     def fromRecord(r: Record): Consequence[OwnedValueEntity] =
-      Consequence.argumentInvalid("presentation record decoder must not be used for owned value storage")
+      Consequence.argumentInvalid(
+        "presentation record decoder must not be used for owned value storage"
+      )
     override def toStoreRecord(e: OwnedValueEntity): Record =
       Record.dataAuto(
-        "id" -> e.id,
-        "name" -> e.name,
+        "id"      -> e.id,
+        "name"    -> e.name,
         "address" -> e.address,
-        "lines" -> e.lines
+        "lines"   -> e.lines
       )
     override def fromStoreRecord(r: Record): Consequence[OwnedValueEntity] = {
       val decoded = for {
-        id <- r.getAs[EntityId]("id")
-        name <- r.getString("name")
+        id      <- r.getAs[EntityId]("id")
+        name    <- r.getString("name")
         address <- r.getRecord("address").flatMap(_owned_address)
-        lines <- r.getVector("lines").map(_.collect { case rec: Record => rec }).map(_.flatMap(_owned_line))
+        lines <- r.getVector("lines").map(_.collect { case rec: Record => rec }).map(_.flatMap(
+          _owned_line
+        ))
       } yield OwnedValueEntity(id, name, address, lines)
       decoded match {
         case Some(entity) => Consequence.success(entity)
-        case None => Consequence.argumentInvalid("invalid owned value storage record")
+        case None         => Consequence.argumentInvalid("invalid owned value storage record")
       }
     }
   }
 
 private def _owned_address(record: Record): Option[OwnedAddress] =
   for {
-    city <- record.getString("city")
-    postalCode <- record.getString("postal_code")
-  } yield OwnedAddress(city, postalCode)
+    city       <- record.getString("city")
+    postalcode <- record.getString("postal_code")
+  } yield OwnedAddress(city, postalcode)
 
 private def _owned_line(record: Record): Option[OwnedLine] =
   for {
-    sku <- record.getString("sku")
+    sku      <- record.getString("sku")
     quantity <- _int_value(record, "quantity")
   } yield OwnedLine(sku, quantity)
 
 private def _int_value(record: Record, key: String): Option[Int] =
   record.getAny(key).flatMap {
     case n: java.lang.Number => Some(n.intValue)
-    case s: String => scala.util.Try(s.toDouble.toInt).toOption
-    case other => scala.util.Try(other.toString.toDouble.toInt).toOption
+    case s: String           => scala.util.Try(s.toDouble.toInt).toOption
+    case other               => scala.util.Try(other.toString.toDouble.toInt).toOption
   }
 
 private final case class SaveCandidate(
-  id: EntityId,
-  name: Option[String],
-  age: Option[Int]
+    id: EntityId,
+    name: Option[String],
+    age: Option[Int]
 ) extends EntityPersistable {
   def toRecord(): Record =
     Record.dataAuto(
-      "id" -> id.print,
+      "id"   -> id.print,
       "name" -> name,
-      "age" -> age
+      "age"  -> age
     )
 }
 
 private def _save_candidate_persistent: EntityPersistent[SaveCandidate] =
   new EntityPersistent[SaveCandidate] {
-    def id(e: SaveCandidate): EntityId = e.id
+    def id(e: SaveCandidate): EntityId     = e.id
     def toRecord(e: SaveCandidate): Record = e.toRecord()
     def fromRecord(r: Record): Consequence[SaveCandidate] =
-      Consequence.notImplemented("not used in this spec")
+      r.getAsC[EntityId]("id").flatMap {
+        case Some(entityid) =>
+          Consequence.success(
+            SaveCandidate(
+              entityid,
+              r.getString("name"),
+              r.getInt("age")
+            )
+          )
+        case None =>
+          Consequence.argumentInvalid("id", "EntityId", "missing")
+      }
   }
 
 private final case class UpdateCandidate(
-  id: EntityId,
-  age: Option[Int]
+    id: EntityId,
+    age: Option[Int]
 ) extends EntityPersistable {
   def toRecord(): Record =
     Record.dataAuto(
@@ -1498,16 +1631,21 @@ private final case class UpdateCandidate(
 
 private def _update_candidate_persistent: EntityPersistent[UpdateCandidate] =
   new EntityPersistent[UpdateCandidate] {
-    def id(e: UpdateCandidate): EntityId = e.id
+    def id(e: UpdateCandidate): EntityId     = e.id
     def toRecord(e: UpdateCandidate): Record = e.toRecord()
     def fromRecord(r: Record): Consequence[UpdateCandidate] =
-      Consequence.notImplemented("not used in this spec")
+      r.getAsC[EntityId]("id").flatMap {
+        case Some(entityid) =>
+          Consequence.success(UpdateCandidate(entityid, r.getInt("age")))
+        case None =>
+          Consequence.argumentInvalid("id", "EntityId", "missing")
+      }
   }
 
 private final case class AuditSpoofUpdateCandidate(
-  id: EntityId,
-  updatedAt: Instant,
-  updatedBy: String
+    id: EntityId,
+    updatedAt: Instant,
+    updatedBy: String
 ) extends EntityPersistable {
   def toRecord(): Record =
     Record.dataAuto(
@@ -1518,29 +1656,44 @@ private final case class AuditSpoofUpdateCandidate(
 
 private def _audit_spoof_update_candidate_persistent: EntityPersistent[AuditSpoofUpdateCandidate] =
   new EntityPersistent[AuditSpoofUpdateCandidate] {
-    def id(e: AuditSpoofUpdateCandidate): EntityId = e.id
+    def id(e: AuditSpoofUpdateCandidate): EntityId     = e.id
     def toRecord(e: AuditSpoofUpdateCandidate): Record = e.toRecord()
     def fromRecord(r: Record): Consequence[AuditSpoofUpdateCandidate] =
-      Consequence.notImplemented("not used in this spec")
+      (
+        r.getAs[EntityId]("id"),
+        r.getAny("updated_at").collect { case value: Instant => value },
+        r.getString("updated_by")
+      ) match {
+        case (Some(entityid), Some(updatedat), Some(updatedby)) =>
+          Consequence.success(
+            AuditSpoofUpdateCandidate(entityid, updatedat, updatedby)
+          )
+        case _ =>
+          Consequence.argumentInvalid(
+            "auditSpoofUpdateCandidate",
+            "id, updated_at and updated_by",
+            r
+          )
+      }
   }
 
 private final case class PostedEntity(
-  id: EntityId,
-  body: String,
-  postedAt: String
+    id: EntityId,
+    body: String,
+    postedAt: String
 ) {
   def toStoreRecord: Record =
     Record.dataAuto(
-      "id" -> id,
-      "body" -> body,
+      "id"        -> id,
+      "body"      -> body,
       "posted_at" -> postedAt
     )
 }
 
 private final case class PostedQuery(
-  id: Condition[EntityId],
-  body: Condition[String],
-  postedAt: Condition[String]
+    id: Condition[EntityId],
+    body: Condition[String],
+    postedAt: Condition[String]
 ) extends Query.ConditionShape
 
 private def _posted_persistent: EntityPersistent[PostedEntity] =
@@ -1548,8 +1701,8 @@ private def _posted_persistent: EntityPersistent[PostedEntity] =
     def id(e: PostedEntity): EntityId = e.id
     def toRecord(e: PostedEntity): Record =
       Record.dataAuto(
-        "id" -> e.id,
-        "body" -> e.body,
+        "id"       -> e.id,
+        "body"     -> e.body,
         "postedAt" -> e.postedAt
       )
     override def toStoreRecord(e: PostedEntity): Record =
@@ -1561,11 +1714,11 @@ private def _posted_persistent: EntityPersistent[PostedEntity] =
     override def storeFieldName(logicalName: String): String =
       logicalName match {
         case "postedAt" => "posted_at"
-        case other => other
+        case other      => other
       }
 
     private def _record_to_posted(
-      r: Record
+        r: Record
     ): Consequence[PostedEntity] = {
       val m = r.asMap
       (m.get("id"), m.get("body"), m.get("postedAt").orElse(m.get("posted_at"))) match {
@@ -1580,5 +1733,5 @@ private def _posted_persistent: EntityPersistent[PostedEntity] =
 private def _success[A](result: Consequence[A]): A =
   result match {
     case Consequence.Success(value) => value
-    case Consequence.Failure(c) => throw new AssertionError(c.toString)
+    case Consequence.Failure(c)     => throw new AssertionError(c.toString)
   }

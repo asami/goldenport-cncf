@@ -9,19 +9,44 @@ import cats.syntax.functor.*
 import io.circe.Json
 import org.goldenport.Consequence
 import org.goldenport.ConsequenceT
+import org.goldenport.observation.Descriptor
 import org.goldenport.id.UniversalId
 import org.goldenport.record.Record
 import org.goldenport.protocol.Property
 import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.http.HttpResponse
 import org.goldenport.process.{ShellCommand, ShellCommandResult}
-import org.goldenport.cncf.context.{ExecutionContext, ExecutionSchedulerMode, GlobalRuntimeContext, ScopeContext}
-import org.goldenport.cncf.resource.{ResourceContent, ResourceReference, ResourceTreeLimits, ResourceTreeQuery, ResourceTreeQueryResult, ResourceTreeReference, ResourceTreeSnapshot}
+import org.goldenport.cncf.context.{
+  ExecutionContext,
+  ExecutionSchedulerMode,
+  GlobalRuntimeContext,
+  ScopeContext
+}
+import org.goldenport.cncf.resource.{
+  ResourceContent,
+  ResourceReference,
+  ResourceTreeLimits,
+  ResourceTreeQuery,
+  ResourceTreeQueryResult,
+  ResourceTreeReference,
+  ResourceTreeSnapshot
+}
 import org.goldenport.cncf.unitofwork.{ExecUowM, UnitOfWork, UnitOfWorkAuthorization}
 import org.goldenport.cncf.unitofwork.UnitOfWorkInterpreter
 import org.goldenport.cncf.unitofwork.UnitOfWorkOp
 import org.goldenport.cncf.embedded.{EmbeddedDataStore, EmbeddedStatement, EmbeddedUpdateResult}
-import org.goldenport.cncf.security.{AggregateAuthorization, EntityAbacCondition, EntityAccessMode, EntityAccessRelation, EntityApplicationDomain, EntityAuthorizationProfile, EntityOperationKind, EntityUsageKind, OperationAccessPolicy, ServiceOperationModel}
+import org.goldenport.cncf.security.{
+  AggregateAuthorization,
+  EntityAbacCondition,
+  EntityAccessMode,
+  EntityAccessRelation,
+  EntityApplicationDomain,
+  EntityAuthorizationProfile,
+  EntityOperationKind,
+  EntityUsageKind,
+  OperationAccessPolicy,
+  ServiceOperationModel
+}
 import org.goldenport.cncf.Program
 import org.simplemodeling.model.datatype.EntityId
 import org.simplemodeling.model.datatype.EntityCollectionId
@@ -29,6 +54,9 @@ import org.goldenport.cncf.datastore.{ComponentDataStore, DataStore}
 import org.goldenport.cncf.entity.EntityPersistent
 import org.goldenport.cncf.entity.EntityPersistentCreate
 import org.goldenport.cncf.entity.EntityPersistentUpdate
+import org.goldenport.cncf.entity.EntityMutationExpectation
+import org.goldenport.cncf.entity.EntityRecordSnapshot
+import org.goldenport.cncf.entity.EntitySnapshot
 import org.goldenport.cncf.entity.EntityQuery
 import org.goldenport.cncf.entity.EntitySearchScope
 import org.goldenport.cncf.entity.EntityIdentityScope
@@ -36,11 +64,25 @@ import org.goldenport.cncf.entity.EntityVisibilityScope
 import org.goldenport.cncf.entity.EntityCreateOptions
 import org.goldenport.cncf.entity.CreateResult
 import org.goldenport.cncf.entity.EntityStore
-import org.goldenport.cncf.blob.{ContentReferenceAttachResult, ContentReferenceContent, ContentReferenceNormalizeResult, ContentRenderResult, InlineImageAttachResult, InlineImageContent, InlineImageNormalizeResult, InlineImageOccurrence}
+import org.goldenport.cncf.entity.SimpleEntityStorageShapePolicy
+import org.goldenport.cncf.blob.{
+  ContentReferenceAttachResult,
+  ContentReferenceContent,
+  ContentReferenceNormalizeResult,
+  ContentRenderResult,
+  InlineImageAttachResult,
+  InlineImageContent,
+  InlineImageNormalizeResult,
+  InlineImageOccurrence
+}
 import org.goldenport.value.{ContentAttributes, ContentReferenceOccurrence}
 import org.goldenport.cncf.directive.Query
 import org.goldenport.cncf.directive.SearchResult
-import org.goldenport.cncf.entity.aggregate.{AggregateEditContext, AggregateEditLockScope, AggregateEditOwner}
+import org.goldenport.cncf.entity.aggregate.{
+  AggregateEditContext,
+  AggregateEditLockScope,
+  AggregateEditOwner
+}
 import org.goldenport.cncf.metrics.EntityAccessMetricsRegistry
 import org.goldenport.cncf.cli.RunMode
 import org.goldenport.cncf.action.AggregateBehavior
@@ -57,15 +99,31 @@ import org.goldenport.cncf.information.{
   InformationValidationIssue
 }
 import org.goldenport.cncf.knowledge.{KnowledgeFrameId, KnowledgeWorkingSetSnapshot}
-import org.goldenport.cncf.observability.{CallTreeValueSummary, DslChokepointContext, DslChokepointPhase, DslChokepointRunner}
+import org.goldenport.cncf.observability.{
+  CallTreeValueSummary,
+  ConclusionDiagnostics,
+  DslChokepointContext,
+  DslChokepointPhase,
+  DslChokepointRunner
+}
 import org.goldenport.configuration.ConfigurationValue
 import org.goldenport.configuration.Configuration
 import org.goldenport.configuration.ConfigurationTrace
 import org.goldenport.configuration.ResolvedConfiguration
 import org.goldenport.configuration.source.file.ConfigTextDecoder
 import org.goldenport.cncf.config.RuntimeFileConfigLoader
-import org.goldenport.cncf.config.{ComponentConfigurationAccess, ComponentConfigurationKey, ComponentConfigurationResolution, ComponentConfigurationSources}
-import org.goldenport.cncf.processexecution.{ProcessExecutionAdmission, ProcessExecutionRequest, ProcessExecutionResult, ResolvedProcessExecution}
+import org.goldenport.cncf.config.{
+  ComponentConfigurationAccess,
+  ComponentConfigurationKey,
+  ComponentConfigurationResolution,
+  ComponentConfigurationSources
+}
+import org.goldenport.cncf.processexecution.{
+  ProcessExecutionAdmission,
+  ProcessExecutionRequest,
+  ProcessExecutionResult,
+  ResolvedProcessExecution
+}
 
 /*
  * @since   Jan.  6, 2026
@@ -119,7 +177,7 @@ trait BehaviorFeaturePart { self: Behavior.Core.Holder =>
     if (duration.isNegative)
       Consequence.argumentInvalid("Execution delay must not be negative")
     else
-      try {
+      try
         _execution_capability(
           "time.await-delay",
           Map("duration_ms" -> duration.toMillis.toString)
@@ -137,7 +195,7 @@ trait BehaviorFeaturePart { self: Behavior.Core.Holder =>
           }
           Consequence.unit
         }
-      } catch {
+      catch {
         case e: InterruptedException =>
           Thread.currentThread.interrupt()
           Consequence.serviceUnavailable("Execution delay interrupted")
@@ -254,7 +312,9 @@ trait BehaviorFeaturePart { self: Behavior.Core.Holder =>
         val result = body
         result match {
           case success: Consequence.Success[A] =>
-            calltree.leave(Map("outcome" -> "success") ++ CallTreeValueSummary.resultAttributes(success.result))
+            calltree.leave(
+              Map("outcome" -> "success") ++ CallTreeValueSummary.resultAttributes(success.result)
+            )
           case failure: Consequence.Failure[A] =>
             calltree.leave(Map(
               "outcome" -> "failure",
@@ -360,10 +420,18 @@ trait ActionCallFeaturePart extends BehaviorFeaturePart { self: ActionCall.Core.
     ComponentConfigurationAccess(_component_configuration_sources).resolve(key)
 
   private def _component_configuration_sources: ComponentConfigurationSources = {
-    val componentconfiguration = component.flatMap(_.applicationConfig.config).getOrElse(Configuration.empty)
-    val subsystemconfiguration = component.flatMap(_.subsystem).map(_.configuration.configuration).getOrElse(Configuration.empty)
+    val componentconfiguration =
+      component.flatMap(_.applicationConfig.config).getOrElse(Configuration.empty)
+    val subsystemconfiguration =
+      component.flatMap(_.subsystem).map(_.configuration.configuration).getOrElse(
+        Configuration.empty
+      )
     val runtimeconfiguration = _runtime_configuration(executionContext.runtime)
-    ComponentConfigurationSources(componentconfiguration, subsystemconfiguration, runtimeconfiguration)
+    ComponentConfigurationSources(
+      componentconfiguration,
+      subsystemconfiguration,
+      runtimeconfiguration
+    )
   }
 
   @annotation.tailrec
@@ -378,7 +446,8 @@ trait ActionCallFeaturePart extends BehaviorFeaturePart { self: ActionCall.Core.
 
   private def _component_configuration: Option[ResolvedConfiguration] = {
     val subsystemconfiguration = component.flatMap(_.subsystem).map(_.configuration)
-    val artifactconfig = component.flatMap(_.artifactMetadata).map(_.effectiveConfig).getOrElse(Map.empty)
+    val artifactconfig =
+      component.flatMap(_.artifactMetadata).map(_.effectiveConfig).getOrElse(Map.empty)
     if (artifactconfig.isEmpty)
       subsystemconfiguration
     else {
@@ -390,7 +459,9 @@ trait ActionCallFeaturePart extends BehaviorFeaturePart { self: ActionCall.Core.
         subsystemconfiguration
           .map(configuration =>
             ResolvedConfiguration(
-              Configuration(configuration.configuration.values ++ artifactconfiguration.configuration.values),
+              Configuration(
+                configuration.configuration.values ++ artifactconfiguration.configuration.values
+              ),
               configuration.trace
             )
           )
@@ -521,14 +592,16 @@ trait ActionCallFeaturePart extends BehaviorFeaturePart { self: ActionCall.Core.
 }
 
 trait BehaviorProcessExecutionPart extends BehaviorFeaturePart { self: Behavior.Core.Holder =>
-  /**
-   * Resolves a provider's logical request through the runtime-owned admission
-   * service before creating the resolved-only UnitOfWork operation.
+
+  /** Resolves a provider's logical request through the runtime-owned admission service before
+    * creating the resolved-only UnitOfWork operation.
    */
   protected final def process_exec(
     request: ProcessExecutionRequest
   ): ExecUowM[ProcessExecutionResult] =
-    exec_from(ProcessExecutionAdmission.resolveC(execution_context.cncfCore.scope, request)).flatMap(process_exec)
+    exec_from(ProcessExecutionAdmission.resolveC(execution_context.cncfCore.scope, request)).flatMap(
+      process_exec
+    )
 
   protected final def process_exec_c(
     request: ProcessExecutionRequest
@@ -542,10 +615,8 @@ trait BehaviorProcessExecutionPart extends BehaviorFeaturePart { self: Behavior.
   )(using uow: UnitOfWork): ProcessExecutionResult =
     process_exec_c(request).TAKE
 
-  /**
-   * Creates a Process Execution intent in the canonical UnitOfWork algebra.
-   * The input is already capability-admitted; components never select a host
-   * executable or invoke a driver directly.
+  /** Creates a Process Execution intent in the canonical UnitOfWork algebra. The input is already
+    * capability-admitted; components never select a host executable or invoke a driver directly.
    */
   protected final def process_exec(
     execution: ResolvedProcessExecution
@@ -573,7 +644,10 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
     component.map(_.aggregateSpace).getOrElse(Consequence.uninitializedState.RAISE)
 
   protected final def aggregate_load[A](id: EntityId): ExecUowM[A] =
-    exec_from_calltree("uow:aggregate:load", _aggregate_calltree_attributes("load", id.collection.name) + ("entity_id" -> id.print)) {
+    exec_from_calltree(
+      "uow:aggregate:load",
+      _aggregate_calltree_attributes("load", id.collection.name) + ("entity_id" -> id.print)
+    ) {
       aggregate_load_c[A](id)
     }
 
@@ -582,8 +656,8 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
   protected final def aggregate_load_c[A](id: EntityId): Consequence[A] =
     _aggregate_chokepoint[A](
       operation = "load",
-      aggregateName = id.collection.name,
-      targetId = Some(id)
+      aggregatename = id.collection.name,
+      targetid = Some(id)
     ) { ctx =>
       for {
         _ <- _aggregate_phase(ctx, DslChokepointPhase.Authorization) {
@@ -663,10 +737,14 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
   }
 
   private def _aggregate_relation_rules: Vector[EntityAccessRelation] =
-    _aggregate_declared_access.flatMap(_.relation).map(EntityAccessRelation.parseList).getOrElse(Vector.empty)
+    _aggregate_declared_access.flatMap(_.relation).map(EntityAccessRelation.parseList).getOrElse(
+      Vector.empty
+    )
 
   private def _aggregate_natural_conditions: Vector[EntityAbacCondition] =
-    _aggregate_declared_access.flatMap(_.condition).map(EntityAbacCondition.parseList).getOrElse(Vector.empty)
+    _aggregate_declared_access.flatMap(_.condition).map(EntityAbacCondition.parseList).getOrElse(
+      Vector.empty
+    )
 
   private def _aggregate_declared_operation_definition =
     component.flatMap { c =>
@@ -686,61 +764,70 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
   protected final def aggregate_load_or_throw[A](id: EntityId): A =
     aggregate_load_c[A](id).TAKE
 
-  protected final def aggregate_load_option[A](targetid: EntityId): ExecUowM[Option[A]] =
-    exec_from_calltree("uow:aggregate:load-option", _aggregate_calltree_attributes("load-option", targetid.collection.name) + ("entity_id" -> targetid.print)) {
-      aggregate_load_option_c[A](targetid)
+  protected final def aggregate_load_option[A](targetId: EntityId): ExecUowM[Option[A]] =
+    exec_from_calltree(
+      "uow:aggregate:load-option",
+      _aggregate_calltree_attributes(
+        "load-option",
+        targetId.collection.name
+      ) + ("entity_id" -> targetId.print)
+    ) {
+      aggregate_load_option_c[A](targetId)
     }
 
   // Preserve transport/storage failures (e.g. I/O) as Failure.
   // Only "not found" is converted to Success(None).
   protected final def aggregate_load_option_c[A](
-    targetid: EntityId
+      targetId: EntityId
   ): Consequence[Option[A]] =
     _aggregate_chokepoint[Option[A]](
       operation = "load",
-      aggregateName = targetid.collection.name,
-      targetId = Some(targetid)
+      aggregatename = targetId.collection.name,
+      targetid = Some(targetId)
     ) { ctx =>
       for {
         _ <- _aggregate_phase(ctx, DslChokepointPhase.Authorization) {
-          _aggregate_authorize_load(targetid.collection.name, targetid)
+          _aggregate_authorize_load(targetId.collection.name, targetId)
         }
         r <- _aggregate_phase(ctx, DslChokepointPhase.Resolve) {
           component
             .map(_.aggregateSpace)
             .getOrElse(Consequence.uninitializedState.RAISE)
-            .resolveOption[A](targetid)(using execution_context)
+            .resolveOption[A](targetId)(using execution_context)
         }
       } yield r
     }
 
-  protected final def aggregate_load_option_or_throw[A](targetid: EntityId): Option[A] =
-    aggregate_load_option_c[A](targetid).TAKE
+  protected final def aggregate_load_option_or_throw[A](targetId: EntityId): Option[A] =
+    aggregate_load_option_c[A](targetId).TAKE
 
   protected final def aggregate_load[A](
-    collectionname: String,
+      collectionName: String,
     id: EntityId
   ): ExecUowM[A] =
-    exec_from_calltree("uow:aggregate:load", _aggregate_calltree_attributes("load", collectionname) + ("entity_id" -> id.print)) {
-      aggregate_load_c[A](collectionname, id)
+    exec_from_calltree(
+      "uow:aggregate:load",
+      _aggregate_calltree_attributes("load", collectionName) + ("entity_id" -> id.print)
+    ) {
+      aggregate_load_c[A](collectionName, id)
     }
 
   protected final def aggregate_load_c[A](
-    collectionname: String,
+      collectionName: String,
     id: EntityId
   ): Consequence[A] =
     _aggregate_chokepoint[A](
       operation = "load",
-      aggregateName = collectionname,
-      targetId = Some(id)
+      aggregatename = collectionName,
+      targetid = Some(id)
     ) { ctx =>
       for {
         _ <- _aggregate_phase(ctx, DslChokepointPhase.Authorization) {
-          _aggregate_authorize_load(collectionname, id)
+          _aggregate_authorize_load(collectionName, id)
         }
         r <- _aggregate_phase(ctx, DslChokepointPhase.Resolve) {
           component
-            .map(_.aggregate[A](collectionname))
+            .map(_.aggregate[A](collectionName))
             .getOrElse(Consequence.uninitializedState.RAISE)
             .resolve_with_context(id)(using execution_context)
         }
@@ -748,31 +835,34 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
     }
 
   protected final def begin_aggregate_edit[A](
-    aggregatename: String,
+      aggregateName: String,
     id: EntityId,
     basetoken: String,
     lockscope: AggregateEditLockScope = AggregateEditLockScope.Principal,
     metadata: Record = Record.empty
   ): ExecUowM[AggregateEditContext[A]] =
-    exec_from_calltree("uow:aggregate-edit:begin", _aggregate_edit_calltree_attributes("begin", aggregatename, Some(id))) {
-      begin_aggregate_edit_c[A](aggregatename, id, basetoken, lockscope, metadata)
+    exec_from_calltree(
+      "uow:aggregate-edit:begin",
+      _aggregate_edit_calltree_attributes("begin", aggregateName, Some(id))
+    ) {
+      begin_aggregate_edit_c[A](aggregateName, id, basetoken, lockscope, metadata)
     }
 
   protected final def begin_aggregate_edit_c[A](
-    aggregatename: String,
+      aggregateName: String,
     id: EntityId,
     basetoken: String,
     lockscope: AggregateEditLockScope = AggregateEditLockScope.Principal,
     metadata: Record = Record.empty
   ): Consequence[AggregateEditContext[A]] =
-    aggregate_load_c[A](aggregatename, id).flatMap { aggregate =>
+    aggregate_load_c[A](aggregateName, id).flatMap { aggregate =>
       component
         .map(_.aggregateEditContextSpace)
         .getOrElse(Consequence.uninitializedState.RAISE)
         .begin(
           current_instant,
           opaque_id("aggregate-edit.context"),
-          aggregatename,
+          aggregateName,
           id,
           basetoken,
           aggregate,
@@ -785,7 +875,10 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
   protected final def get_aggregate_edit[A](
     contextid: String
   ): ExecUowM[AggregateEditContext[A]] =
-    exec_from_calltree("uow:aggregate-edit:get", _aggregate_edit_calltree_attributes("get", contextid = Some(contextid))) {
+    exec_from_calltree(
+      "uow:aggregate-edit:get",
+      _aggregate_edit_calltree_attributes("get", contextid = Some(contextid))
+    ) {
       get_aggregate_edit_c[A](contextid)
     }
 
@@ -802,7 +895,10 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
   )(
     action: A => Consequence[A]
   ): ExecUowM[AggregateEditContext[A]] =
-    exec_from_calltree("uow:aggregate-edit:update", _aggregate_edit_calltree_attributes("update", contextid = Some(contextid))) {
+    exec_from_calltree(
+      "uow:aggregate-edit:update",
+      _aggregate_edit_calltree_attributes("update", contextid = Some(contextid))
+    ) {
       update_aggregate_edit_c[A](contextid)(action)
     }
 
@@ -814,14 +910,19 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
     component
       .map(_.aggregateEditContextSpace)
       .getOrElse(Consequence.uninitializedState.RAISE)
-      .update[A](current_instant, contextid, AggregateEditOwner.current(using execution_context))(action)
+      .update[A](current_instant, contextid, AggregateEditOwner.current(using execution_context))(
+        action
+      )
 
   protected final def get_aggregate_edit_view[A, B](
     contextid: String
   )(
     action: AggregateEditContext[A] => Consequence[B]
   ): ExecUowM[B] =
-    exec_from_calltree("uow:aggregate-edit:view", _aggregate_edit_calltree_attributes("view", contextid = Some(contextid))) {
+    exec_from_calltree(
+      "uow:aggregate-edit:view",
+      _aggregate_edit_calltree_attributes("view", contextid = Some(contextid))
+    ) {
       get_aggregate_edit_view_c[A, B](contextid)(action)
     }
 
@@ -833,7 +934,9 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
     component
       .map(_.aggregateEditContextSpace)
       .getOrElse(Consequence.uninitializedState.RAISE)
-      .view[A, B](current_instant, contextid, AggregateEditOwner.current(using execution_context))(action)
+      .view[A, B](current_instant, contextid, AggregateEditOwner.current(using execution_context))(
+        action
+      )
 
   protected final def save_aggregate_edit[A, B](
     contextid: String,
@@ -841,7 +944,10 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
   )(
     action: A => Consequence[B]
   ): ExecUowM[B] =
-    exec_from_calltree("uow:aggregate-edit:save", _aggregate_edit_calltree_attributes("save", contextid = Some(contextid))) {
+    exec_from_calltree(
+      "uow:aggregate-edit:save",
+      _aggregate_edit_calltree_attributes("save", contextid = Some(contextid))
+    ) {
       save_aggregate_edit_c[A, B](contextid, currentbasetoken)(action)
     }
 
@@ -854,12 +960,20 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
     component
       .map(_.aggregateEditContextSpace)
       .getOrElse(Consequence.uninitializedState.RAISE)
-      .save[A, B](current_instant, contextid, currentbasetoken, AggregateEditOwner.current(using execution_context))(action)
+      .save[A, B](
+        current_instant,
+        contextid,
+        currentbasetoken,
+        AggregateEditOwner.current(using execution_context)
+      )(action)
 
   protected final def discard_aggregate_edit(
     contextid: String
   ): ExecUowM[Boolean] =
-    exec_from_calltree("uow:aggregate-edit:discard", _aggregate_edit_calltree_attributes("discard", contextid = Some(contextid))) {
+    exec_from_calltree(
+      "uow:aggregate-edit:discard",
+      _aggregate_edit_calltree_attributes("discard", contextid = Some(contextid))
+    ) {
       discard_aggregate_edit_c(contextid)
     }
 
@@ -872,15 +986,15 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
       .discard(current_instant, contextid, AggregateEditOwner.current(using execution_context))
 
   private def _aggregate_authorize_load(
-    aggregateName: String,
+      aggregatename: String,
     id: EntityId
   ): Consequence[Unit] =
-    if (_aggregate_has_entity_collection(aggregateName))
+    if (_aggregate_has_entity_collection(aggregatename))
       AggregateAuthorization.authorizeInstance(
-        aggregateName = aggregateName,
+        aggregateName = aggregatename,
         targetId = id,
         accessKind = "read",
-        loadRecord = _aggregate_load_record(aggregateName),
+        loadRecord = _aggregate_load_record(aggregatename),
         access = _aggregate_declared_access,
         sourceComponentName = component_name_option,
         targetComponentName = component_name_option,
@@ -892,10 +1006,11 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
       Consequence.unit
 
   private def _aggregate_load_record(
-    aggregateName: String
+      aggregatename: String
   )(id: EntityId): Consequence[Option[Record]] =
-    component.flatMap(_aggregate_entity_collection_name(_, aggregateName)).
-      flatMap(name => component.flatMap(_.entitySpace.entityOption[Any](name))) match {
+    component.flatMap(_aggregate_entity_collection_name(_, aggregatename)).flatMap(name =>
+      component.flatMap(_.entitySpace.entityOption[Any](name))
+    ) match {
         case Some(collection) => _aggregate_load_record_from_collection(collection, id)
         case None => Consequence.success(None)
       }
@@ -921,7 +1036,10 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
       case conclusion if _is_aggregate_record_not_found(conclusion) =>
         given EntityPersistent[Any] =
           collection.descriptor.persistent.asInstanceOf[EntityPersistent[Any]]
-        EntityStore.standard().load[Any](effectiveid)(using summon[EntityPersistent[Any]], execution_context).flatMap {
+        EntityStore.standard().load[Any](effectiveid)(using
+          summon[EntityPersistent[Any]],
+          execution_context
+        ).flatMap {
           case Some(entity) => _to_record_(entity).map(Some(_))
           case None => Consequence.success(None)
         }
@@ -964,49 +1082,55 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
 
   private def _aggregate_entity_collection_name(
     component: org.goldenport.cncf.component.Component,
-    aggregateName: String
+      aggregatename: String
   ): Option[String] =
-    component.aggregateDefinitions.find(_.name == aggregateName).map(_.entityName).orElse(Some(aggregateName))
+    component.aggregateDefinitions.find(_.name == aggregatename).map(_.entityName).orElse(Some(
+      aggregatename
+    ))
 
   private def _aggregate_has_entity_collection(
-    aggregateName: String
+      aggregatename: String
   ): Boolean =
-    component.flatMap(c => _aggregate_entity_collection_name(c, aggregateName).flatMap(c.entitySpace.entityOption[Any])).isDefined
+    component.flatMap(c =>
+      _aggregate_entity_collection_name(c, aggregatename).flatMap(c.entitySpace.entityOption[Any])
+    ).isDefined
 
   protected final def aggregate_load_or_throw[A](
-    collectionname: String,
+      collectionName: String,
     id: EntityId
   ): A =
-    aggregate_load_c[A](collectionname, id).TAKE
+    aggregate_load_c[A](collectionName, id).TAKE
 
   protected final def aggregate_search[A](
-    collectionname: String,
+      collectionName: String,
     q: Query[?]
   ): ExecUowM[SearchResult[A]] =
-    exec_from_calltree("uow:aggregate:search", _aggregate_calltree_attributes("search", collectionname)) {
-      aggregate_search_c[A](collectionname, q)
+    exec_from_calltree(
+      "uow:aggregate:search",
+      _aggregate_calltree_attributes("search", collectionName)
+    ) {
+      aggregate_search_c[A](collectionName, q)
     }
 
   protected final def aggregate_search_c[A](
-    collectionname: String,
+      collectionName: String,
     q: Query[?]
   ): Consequence[SearchResult[A]] =
     _aggregate_chokepoint[SearchResult[A]](
       operation = "search",
-      aggregateName = collectionname
+      aggregatename = collectionName
     ) { ctx =>
       for {
         _ <- _aggregate_phase(ctx, DslChokepointPhase.Authorization) {
-          _aggregate_authorize_search(collectionname)
+          _aggregate_authorize_search(collectionName)
         }
         xs <- _aggregate_phase(ctx, DslChokepointPhase.Query) {
           component
             .map(_.aggregateSpace)
             .getOrElse(Consequence.uninitializedState.RAISE)
-            .query_with_context[A](collectionname, q)(using execution_context)
+            .query_with_context[A](collectionName, q)(using execution_context)
         }
-      } yield {
-          SearchResult(
+      } yield SearchResult(
             query = q,
             data = xs,
             totalCount = Some(xs.size),
@@ -1015,13 +1139,12 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
             fetchedCount = xs.size
           )
         }
-    }
 
   private def _aggregate_authorize_search(
-    aggregateName: String
+      aggregatename: String
   ): Consequence[Unit] =
     AggregateAuthorization.authorizeType(
-      aggregateName = aggregateName,
+      aggregateName = aggregatename,
       accessKind = "search",
       access = _aggregate_declared_access,
       sourceComponentName = component_name_option,
@@ -1032,23 +1155,133 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
     )(using execution_context)
 
   protected final def aggregate_search_or_throw[A](
-    collectionname: String,
+      collectionName: String,
     q: Query[?]
   ): SearchResult[A] =
-    aggregate_search_c[A](collectionname, q).TAKE
+    aggregate_search_c[A](collectionName, q).TAKE
 
-  private def _aggregate_put_record_authorized_c(
-    entityName: String,
+  private def _aggregate_create_record_authorized_c(
+      entityname: String,
     record: Record
   ): Consequence[Unit] =
-    component.flatMap(_.entitySpace.entityOption[Any](entityName)) match {
+    component.flatMap(_.entitySpace.entityOption[Any](entityname)) match {
       case Some(collection) =>
-        collection.putRecordSynced(
+        collection.createRecordSynced(
           _aggregate_canonical_root_record(collection, record)
         )(using execution_context).map { _ =>
-          component.foreach(_.viewSpace.invalidate(entityName))
+          component.foreach(_.viewSpace.invalidate(entityname))
         }
-      case None => Consequence.argumentInvalid(s"$entityName entity collection is not available")
+      case None => Consequence.argumentInvalid(s"$entityname entity collection is not available")
+    }
+
+  private def _aggregate_save_record_authorized_c(
+      entityname: String,
+      record: Record,
+      expectation: EntityMutationExpectation
+  ): Consequence[EntityRecordSnapshot] =
+    component.flatMap(_.entitySpace.entityOption[Any](entityname)) match {
+      case Some(collection) =>
+        collection.saveRecordVersioned(
+          _aggregate_canonical_root_record(collection, record),
+          expectation
+        )(using execution_context).map { snapshot =>
+          component.foreach(_.viewSpace.invalidate(entityname))
+          snapshot
+        }.recoverWith { conclusion =>
+          if (
+            ConclusionDiagnostics.classify(conclusion).reason
+              .contains("committed-entity-projection-failure")
+          )
+            component.foreach(_.viewSpace.invalidate(entityname))
+          Consequence.Failure(conclusion)
+        }
+      case None =>
+        Consequence.argumentInvalid(
+          s"$entityname entity collection is not available"
+        )
+    }
+
+  private def _aggregate_root_snapshot_c(
+      entityname: String,
+      targetid: EntityId
+  ): Consequence[EntitySnapshot[Any]] =
+    component.flatMap(_.entitySpace.entityOption[Any](entityname)) match {
+      case Some(collection) =>
+        execution_context.entityStoreSpace
+          .loadSnapshot(
+            _canonical_aggregate_entity_id(collection, targetid),
+            collection.descriptor.persistent
+          )(using execution_context)
+          .flatMap(snapshot =>
+            Consequence.successOrEntityNotFound(snapshot)(targetid)
+          )
+      case None =>
+        Consequence.argumentInvalid(
+          s"$entityname entity collection is not available"
+        )
+    }
+
+  private def _aggregate_command_target_c[
+      A <: org.goldenport.record.RecordPresentable
+  ](
+      entityname: String,
+      targetid: EntityId
+  ): Consequence[(A, EntitySnapshot[Any])] =
+    for {
+      snapshot <- _aggregate_root_snapshot_c(entityname, targetid)
+      aggregate <- component
+        .map(_.aggregateSpace)
+        .getOrElse(Consequence.uninitializedState.RAISE)
+        .resolve_with_context[A](targetid)(using execution_context)
+      _ <- _validate_aggregate_root_snapshot(
+        entityname,
+        targetid,
+        aggregate,
+        snapshot
+      )
+    } yield aggregate -> snapshot
+
+  private def _validate_aggregate_root_snapshot[
+      A <: org.goldenport.record.RecordPresentable
+  ](
+      entityname: String,
+      targetid: EntityId,
+      aggregate: A,
+      snapshot: EntitySnapshot[Any]
+  ): Consequence[Unit] =
+    component.flatMap(_.entitySpace.entityOption[Any](entityname)) match {
+      case Some(collection) =>
+        val rootrecord =
+          SimpleEntityStorageShapePolicy.withoutManagedFields(
+            _aggregate_canonical_root_record(
+              collection,
+              collection.descriptor.persistent.toRecord(snapshot.entity)
+            )
+          )
+        val aggregaterecord =
+          SimpleEntityStorageShapePolicy.withoutManagedFields(
+            _aggregate_canonical_root_record(collection, aggregate.toRecord())
+          )
+        val aggregatemap = aggregaterecord.asMap
+        if (
+          rootrecord.asMap.forall { case (key, value) =>
+            aggregatemap.get(key).contains(value)
+        }
+        )
+          Consequence.unit
+        else
+          Consequence.operationConflict(
+            "aggregate-command",
+            Vector(
+              Descriptor.Facet.Reason("aggregate-root-snapshot-mismatch"),
+              Descriptor.Facet.Policy("entity.optimistic-concurrency"),
+              Descriptor.Facet.Actual(targetid.print)
+            )
+          )
+      case None =>
+        Consequence.argumentInvalid(
+          s"$entityname entity collection is not available"
+        )
     }
 
   private def _aggregate_canonical_root_record(
@@ -1068,7 +1301,10 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
     commandName: String,
     action: => Consequence[A]
   ): ExecUowM[A] =
-    exec_from_calltree("uow:aggregate:create", _aggregate_calltree_attributes("create", entityName) + ("command" -> commandName)) {
+    exec_from_calltree(
+      "uow:aggregate:create",
+      _aggregate_calltree_attributes("create", entityName) + ("command" -> commandName)
+    ) {
       aggregate_create_c(entityName, commandName, action)
     }
 
@@ -1079,8 +1315,8 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
   ): Consequence[A] =
     _aggregate_chokepoint[A](
       operation = "create",
-      aggregateName = entityName,
-      commandName = Some(commandName)
+      aggregatename = entityName,
+      commandname = Some(commandName)
     ) { ctx =>
       for {
         _ <- _aggregate_phase(ctx, DslChokepointPhase.Authorization) {
@@ -1090,7 +1326,7 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
           action
         }
         _ <- _aggregate_phase(ctx, DslChokepointPhase.Persistence) {
-          _aggregate_put_record_authorized_c(entityName, aggregate.toRecord())
+          _aggregate_create_record_authorized_c(entityName, aggregate.toRecord())
         }
       } yield aggregate
     }
@@ -1099,23 +1335,31 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
     entityName: String,
     targetId: EntityId,
     commandName: String,
+      expectation: EntityMutationExpectation,
     action: => Consequence[A]
   ): ExecUowM[A] =
-    exec_from_calltree("uow:aggregate:update", _aggregate_calltree_attributes("update", entityName) + ("command" -> commandName, "entity_id" -> targetId.print)) {
-      aggregate_update_c(entityName, targetId, commandName, action)
+    exec_from_calltree(
+      "uow:aggregate:update",
+      _aggregate_calltree_attributes("update", entityName) + (
+        "command"   -> commandName,
+        "entity_id" -> targetId.print
+      )
+    ) {
+      aggregate_update_c(entityName, targetId, commandName, expectation, action)
     }
 
   protected final def aggregate_update_c[A <: org.goldenport.record.RecordPresentable](
     entityName: String,
     targetId: EntityId,
     commandName: String,
+      expectation: EntityMutationExpectation,
     action: => Consequence[A]
   ): Consequence[A] =
     _aggregate_chokepoint[A](
       operation = "update",
-      aggregateName = entityName,
-      targetId = Some(targetId),
-      commandName = Some(commandName)
+      aggregatename = entityName,
+      targetid = Some(targetId),
+      commandname = Some(commandName)
     ) { ctx =>
       for {
         _ <- _aggregate_phase(ctx, DslChokepointPhase.Authorization) {
@@ -1125,7 +1369,11 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
           action
         }
         _ <- _aggregate_phase(ctx, DslChokepointPhase.Persistence) {
-          _aggregate_put_record_authorized_c(entityName, aggregate.toRecord())
+          _aggregate_save_record_authorized_c(
+            entityName,
+            aggregate.toRecord(),
+            expectation
+          )
         }
       } yield aggregate
     }
@@ -1137,7 +1385,13 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
   )(
     command: A => Consequence[A]
   ): ExecUowM[A] =
-    exec_from_calltree("uow:aggregate:command", _aggregate_calltree_attributes("command", aggregateName) + ("command" -> commandName, "entity_id" -> targetId.print)) {
+    exec_from_calltree(
+      "uow:aggregate:command",
+      _aggregate_calltree_attributes("command", aggregateName) + (
+        "command"   -> commandName,
+        "entity_id" -> targetId.print
+      )
+    ) {
       aggregate_command_c(aggregateName, targetId, commandName)(command)
     }
 
@@ -1150,20 +1404,18 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
   ): Consequence[A] =
     _aggregate_chokepoint[A](
       operation = "command",
-      aggregateName = aggregateName,
-      targetId = Some(targetId),
-      commandName = Some(commandName)
+      aggregatename = aggregateName,
+      targetid = Some(targetId),
+      commandname = Some(commandName)
     ) { ctx =>
       for {
         _ <- _aggregate_phase(ctx, DslChokepointPhase.Authorization) {
           _aggregate_authorize_update(aggregateName, targetId, commandName)
         }
-        aggregate <- _aggregate_phase(ctx, DslChokepointPhase.Resolve) {
-          component
-            .map(_.aggregateSpace)
-            .getOrElse(Consequence.uninitializedState.RAISE)
-            .resolve_with_context[A](targetId)(using execution_context)
+        resolved <- _aggregate_phase(ctx, DslChokepointPhase.Resolve) {
+          _aggregate_command_target_c[A](aggregateName, targetId)
         }
+        (aggregate, snapshot) = resolved
         updated <- _aggregate_phase(ctx, DslChokepointPhase.Method) {
           command(aggregate)
         }
@@ -1171,16 +1423,20 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
           if (aggregate.toRecord() == updated.toRecord())
             Consequence.unit
           else
-            _aggregate_put_record_authorized_c(aggregateName, updated.toRecord())
+            _aggregate_save_record_authorized_c(
+              aggregateName,
+              updated.toRecord(),
+              EntityMutationExpectation(snapshot.token)
+            ).map(_ => ())
         }
       } yield updated
     }
 
   private def _aggregate_chokepoint[A](
     operation: String,
-    aggregateName: String,
-    targetId: Option[EntityId] = None,
-    commandName: Option[String] = None
+      aggregatename: String,
+      targetid: Option[EntityId] = None,
+      commandname: Option[String] = None
   )(
     body: DslChokepointContext => Consequence[A]
   ): Consequence[A] = {
@@ -1189,9 +1445,9 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
       domain = "aggregate",
       operation = operation,
       componentName = component_name_option,
-      resourceName = Some(aggregateName),
-      targetId = targetId.map(_.toString),
-      commandName = commandName
+      resourceName = Some(aggregatename),
+      targetId = targetid.map(_.toString),
+      commandName = commandname
     )
     DslChokepointRunner.run(ctx)(body(ctx))
   }
@@ -1208,12 +1464,12 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
 
   private def _aggregate_calltree_attributes(
     operation: String,
-    aggregateName: String
+      aggregatename: String
   ): Map[String, String] =
     Map(
       "dsl" -> "uow",
       "operation" -> operation,
-      "aggregate" -> aggregateName
+      "aggregate" -> aggregatename
     )
 
   private def _aggregate_edit_calltree_attributes(
@@ -1230,12 +1486,12 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
     ) ++ targetid.map(id => "entity_id" -> id.print).toMap
 
   private def _aggregate_authorize_create(
-    aggregateName: String,
-    commandName: String
+      aggregatename: String,
+      commandname: String
   ): Consequence[Unit] =
     AggregateAuthorization.authorizeType(
-      aggregateName = aggregateName,
-      accessKind = s"create:$commandName",
+      aggregateName = aggregatename,
+      accessKind = s"create:$commandname",
       access = _aggregate_declared_access,
       sourceComponentName = component_name_option,
       targetComponentName = component_name_option,
@@ -1245,15 +1501,15 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
     )(using execution_context)
 
   private def _aggregate_authorize_update(
-    aggregateName: String,
-    targetId: EntityId,
-    commandName: String
+      aggregatename: String,
+      targetid: EntityId,
+      commandname: String
   ): Consequence[Unit] =
     AggregateAuthorization.authorizeInstance(
-      aggregateName = aggregateName,
-      targetId = targetId,
-      accessKind = s"command:$commandName",
-      loadRecord = _aggregate_load_record(aggregateName),
+      aggregateName = aggregatename,
+      targetId = targetid,
+      accessKind = s"command:$commandname",
+      loadRecord = _aggregate_load_record(aggregatename),
       access = _aggregate_declared_access,
       sourceComponentName = component_name_option,
       targetComponentName = component_name_option,
@@ -1268,90 +1524,105 @@ trait ActionCallBrowserPart extends ActionCallFeaturePart { self: ActionCall.Cor
     component.map(_.viewSpace).getOrElse(Consequence.uninitializedState.RAISE)
 
   protected final def view_load[A](
-    collectionname: String,
+      collectionName: String,
     id: EntityId
   ): ExecUowM[A] =
-    exec_from(view_load_c[A](collectionname, id))
+    exec_from(view_load_c[A](collectionName, id))
 
   protected final def view_load_c[A](
-    collectionname: String,
+      collectionName: String,
     id: EntityId
   ): Consequence[A] =
-    consequence_with_calltree("uow:view:load", _view_calltree_attributes("load", collectionname) + ("entity_id" -> id.print)) {
-      browser.browser[A](collectionname).find_with_context(id)(using execution_context)
+    consequence_with_calltree(
+      "uow:view:load",
+      _view_calltree_attributes("load", collectionName) + ("entity_id" -> id.print)
+    ) {
+      browser.browser[A](collectionName).find_with_context(id)(using execution_context)
     }
 
   protected final def view_load_or_throw[A](
-    collectionname: String,
+      collectionName: String,
     id: EntityId
   ): A =
-    view_load_c[A](collectionname, id).TAKE
+    view_load_c[A](collectionName, id).TAKE
 
   protected final def view_load[A](
-    collectionname: String,
-    viewname: String,
+      collectionName: String,
+      viewName: String,
     id: EntityId
   ): ExecUowM[A] =
-    exec_from(view_load_c[A](collectionname, viewname, id))
+    exec_from(view_load_c[A](collectionName, viewName, id))
 
   protected final def view_load_c[A](
-    collectionname: String,
-    viewname: String,
+      collectionName: String,
+      viewName: String,
     id: EntityId
   ): Consequence[A] =
-    consequence_with_calltree("uow:view:load", _view_calltree_attributes("load", collectionname, Some(viewname)) + ("entity_id" -> id.print)) {
-      browser.browser[A](collectionname, viewname).find_with_context(id)(using execution_context)
+    consequence_with_calltree(
+      "uow:view:load",
+      _view_calltree_attributes("load", collectionName, Some(viewName)) + ("entity_id" -> id.print)
+    ) {
+      browser.browser[A](collectionName, viewName).find_with_context(id)(using execution_context)
     }
 
   protected final def view_load_or_throw[A](
-    collectionname: String,
-    viewname: String,
+      collectionName: String,
+      viewName: String,
     id: EntityId
   ): A =
-    view_load_c[A](collectionname, viewname, id).TAKE
+    view_load_c[A](collectionName, viewName, id).TAKE
 
   protected final def view_search[A](
-    collectionname: String,
+      collectionName: String,
     q: Query[?]
   ): ExecUowM[SearchResult[A]] =
-    exec_from(view_search_c[A](collectionname, q))
+    exec_from(view_search_c[A](collectionName, q))
 
   protected final def view_search_c[A](
-    collectionname: String,
+      collectionName: String,
     q: Query[?]
   ): Consequence[SearchResult[A]] =
-    consequence_with_calltree("uow:view:search", _view_calltree_attributes("search", collectionname)) {
-      browser.browser[A](collectionname).query_with_context(q)(using execution_context).map(_to_search_result(q, _))
+    consequence_with_calltree(
+      "uow:view:search",
+      _view_calltree_attributes("search", collectionName)
+    ) {
+      browser.browser[A](collectionName).query_with_context(q)(using execution_context).map(
+        _to_search_result(q, _)
+      )
     }
 
   protected final def view_search_or_throw[A](
-    collectionname: String,
+      collectionName: String,
     q: Query[?]
   ): SearchResult[A] =
-    view_search_c[A](collectionname, q).TAKE
+    view_search_c[A](collectionName, q).TAKE
 
   protected final def view_search[A](
-    collectionname: String,
-    viewname: String,
+      collectionName: String,
+      viewName: String,
     q: Query[?]
   ): ExecUowM[SearchResult[A]] =
-    exec_from(view_search_c[A](collectionname, viewname, q))
+    exec_from(view_search_c[A](collectionName, viewName, q))
 
   protected final def view_search_c[A](
-    collectionname: String,
-    viewname: String,
+      collectionName: String,
+      viewName: String,
     q: Query[?]
   ): Consequence[SearchResult[A]] =
-    consequence_with_calltree("uow:view:search", _view_calltree_attributes("search", collectionname, Some(viewname))) {
-      browser.browser[A](collectionname, viewname).query_with_context(q)(using execution_context).map(_to_search_result(q, _))
+    consequence_with_calltree(
+      "uow:view:search",
+      _view_calltree_attributes("search", collectionName, Some(viewName))
+    ) {
+      browser.browser[A](collectionName, viewName).query_with_context(q)(using execution_context)
+        .map(_to_search_result(q, _))
     }
 
   protected final def view_search_or_throw[A](
-    collectionname: String,
-    viewname: String,
+      collectionName: String,
+      viewName: String,
     q: Query[?]
   ): SearchResult[A] =
-    view_search_c[A](collectionname, viewname, q).TAKE
+    view_search_c[A](collectionName, viewName, q).TAKE
 
   private def _to_search_result[A](
     q: Query[?],
@@ -1519,7 +1790,10 @@ trait BehaviorInformationPart extends BehaviorFeaturePart { self: Behavior.Core.
     domain: String,
     records: Vector[Record]
   ): ExecUowM[Vector[Information]] =
-    exec_from_calltree("uow:information:register", _information_attributes("register", domain) + ("record_count" -> records.size.toString)) {
+    exec_from_calltree(
+      "uow:information:register",
+      _information_attributes("register", domain) + ("record_count" -> records.size.toString)
+    ) {
       _information_space.flatMap(_.registerInformation(domain, records)(using execution_context))
     }
 
@@ -1528,14 +1802,19 @@ trait BehaviorInformationPart extends BehaviorFeaturePart { self: Behavior.Core.
     workingdata: Record
   ): ExecUowM[Information] =
     exec_from_calltree("uow:information:update", _information_attributes("update", informationid)) {
-      _information_space.flatMap(_.updateInformation(informationid, workingdata)(using execution_context))
+      _information_space.flatMap(_.updateInformation(informationid, workingdata)(using
+      execution_context))
     }
 
   protected final def information_append_field_event(
     informationid: InformationId,
     event: InformationFieldEvent
   ): ExecUowM[Information] =
-    exec_from_calltree("uow:information:field-event:append", _information_attributes("field-event-append", informationid) + ("field_path" -> event.fieldPath) + ("state" -> event.state.value) + ("source" -> event.source)) {
+    exec_from_calltree(
+      "uow:information:field-event:append",
+      _information_attributes("field-event-append", informationid) + ("field_path" -> event
+        .fieldPath) + ("state" -> event.state.value) + ("source" -> event.source)
+    ) {
       _information_space.flatMap(_.appendFieldEvent(informationid, event)(using execution_context))
     }
 
@@ -1552,14 +1831,20 @@ trait BehaviorInformationPart extends BehaviorFeaturePart { self: Behavior.Core.
   protected final def information_validate(
     informationid: InformationId
   ): ExecUowM[Information] =
-    exec_from_calltree("uow:information:validate", _information_attributes("validate", informationid)) {
+    exec_from_calltree(
+      "uow:information:validate",
+      _information_attributes("validate", informationid)
+    ) {
       _information_space.flatMap(_.validateInformation(informationid)(using execution_context))
     }
 
   protected final def information_confirm(
     informationid: InformationId
   ): ExecUowM[Information] =
-    exec_from_calltree("uow:information:confirm", _information_attributes("confirm", informationid)) {
+    exec_from_calltree(
+      "uow:information:confirm",
+      _information_attributes("confirm", informationid)
+    ) {
       _information_space.flatMap(_.confirmInformation(informationid)(using execution_context))
     }
 
@@ -1568,7 +1853,8 @@ trait BehaviorInformationPart extends BehaviorFeaturePart { self: Behavior.Core.
     reason: String
   ): ExecUowM[Information] =
     exec_from_calltree("uow:information:reject", _information_attributes("reject", informationid)) {
-      _information_space.flatMap(_.rejectInformation(informationid, reason)(using execution_context))
+      _information_space.flatMap(_.rejectInformation(informationid, reason)(using
+      execution_context))
     }
 
   protected final def information_reopen(
@@ -1584,8 +1870,16 @@ trait BehaviorInformationPart extends BehaviorFeaturePart { self: Behavior.Core.
     message: Option[String] = None,
     knowledgeframeid: Option[KnowledgeFrameId] = None
   ): ExecUowM[InformationPublicationStatus] =
-    exec_from_calltree("uow:information:publish", _information_attributes("publish", informationid) + ("target" -> target)) {
-      _information_space.flatMap(_.publishInformation(informationid, target, message, knowledgeframeid)(using execution_context))
+    exec_from_calltree(
+      "uow:information:publish",
+      _information_attributes("publish", informationid) + ("target" -> target)
+    ) {
+      _information_space.flatMap(_.publishInformation(
+        informationid,
+        target,
+        message,
+        knowledgeframeid
+      )(using execution_context))
     }
 
   protected final def information_fail_publication(
@@ -1594,8 +1888,16 @@ trait BehaviorInformationPart extends BehaviorFeaturePart { self: Behavior.Core.
     message: Option[String] = None,
     knowledgeframeid: Option[KnowledgeFrameId] = None
   ): ExecUowM[InformationPublicationStatus] =
-    exec_from_calltree("uow:information:publish-failure", _information_attributes("publish-failure", informationid) + ("target" -> target)) {
-      _information_space.flatMap(_.failInformationPublication(informationid, target, message, knowledgeframeid)(using execution_context))
+    exec_from_calltree(
+      "uow:information:publish-failure",
+      _information_attributes("publish-failure", informationid) + ("target" -> target)
+    ) {
+      _information_space.flatMap(_.failInformationPublication(
+        informationid,
+        target,
+        message,
+        knowledgeframeid
+      )(using execution_context))
     }
 
   protected final def information_add_resolution_candidate(
@@ -1606,31 +1908,53 @@ trait BehaviorInformationPart extends BehaviorFeaturePart { self: Behavior.Core.
     confidence: Option[Double] = None,
     evidence: Option[String] = None
   ): ExecUowM[InformationResolutionCandidate] =
-    exec_from_calltree("uow:information:candidate:add", _information_attributes("candidate-add", informationid) + ("field_path" -> fieldpath)) {
-      _information_space.flatMap(_.addResolutionCandidate(informationid, fieldpath, candidatelabel, binding, confidence, evidence)(using execution_context))
+    exec_from_calltree(
+      "uow:information:candidate:add",
+      _information_attributes("candidate-add", informationid) + ("field_path" -> fieldpath)
+    ) {
+      _information_space.flatMap(_.addResolutionCandidate(
+        informationid,
+        fieldpath,
+        candidatelabel,
+        binding,
+        confidence,
+        evidence
+      )(using execution_context))
     }
 
   protected final def information_select_resolution_candidate(
     informationid: InformationId,
     candidatekey: String
   ): ExecUowM[InformationResolutionCandidate] =
-    exec_from_calltree("uow:information:candidate:select", _information_candidate_attributes("candidate-select", informationid, candidatekey)) {
-      _information_space.flatMap(_.selectResolutionCandidate(informationid, candidatekey)(using execution_context))
+    exec_from_calltree(
+      "uow:information:candidate:select",
+      _information_candidate_attributes("candidate-select", informationid, candidatekey)
+    ) {
+      _information_space.flatMap(_.selectResolutionCandidate(informationid, candidatekey)(using
+      execution_context))
     }
 
   protected final def information_clear_resolution_candidate(
     informationid: InformationId,
     candidatekey: String
   ): ExecUowM[InformationResolutionCandidate] =
-    exec_from_calltree("uow:information:candidate:clear", _information_candidate_attributes("candidate-clear", informationid, candidatekey)) {
-      _information_space.flatMap(_.clearResolutionCandidate(informationid, candidatekey)(using execution_context))
+    exec_from_calltree(
+      "uow:information:candidate:clear",
+      _information_candidate_attributes("candidate-clear", informationid, candidatekey)
+    ) {
+      _information_space.flatMap(_.clearResolutionCandidate(informationid, candidatekey)(using
+      execution_context))
     }
 
   protected final def information_materialize(
     information: Information
   ): ExecUowM[KnowledgeWorkingSetSnapshot] =
-    exec_from_calltree("uow:information:materialize", _information_attributes("materialize", information.id)) {
-      Consequence.success(InformationSpace.materializeInformation(information)(using execution_context))
+    exec_from_calltree(
+      "uow:information:materialize",
+      _information_attributes("materialize", information.id)
+    ) {
+      Consequence.success(InformationSpace.materializeInformation(information)(using
+      execution_context))
     }
 
   protected final def information_option(
@@ -1643,7 +1967,10 @@ trait BehaviorInformationPart extends BehaviorFeaturePart { self: Behavior.Core.
   protected final def information_validation_issues(
     informationid: InformationId
   ): ExecUowM[Vector[InformationValidationIssue]] =
-    exec_from_calltree("uow:information:validation-issues", _information_attributes("validation-issues", informationid)) {
+    exec_from_calltree(
+      "uow:information:validation-issues",
+      _information_attributes("validation-issues", informationid)
+    ) {
       _information_space.map(_.validationIssues(informationid))
     }
 
@@ -1654,8 +1981,17 @@ trait BehaviorInformationPart extends BehaviorFeaturePart { self: Behavior.Core.
     rdfvalue: String,
     severity: String = "warning"
   ): ExecUowM[InformationConflict] =
-    exec_from_calltree("uow:information:conflict:record", _information_attributes("conflict-record", informationid) + ("field_path" -> fieldpath)) {
-      _information_space.flatMap(_.recordConflict(informationid, fieldpath, informationvalue, rdfvalue, severity)(using execution_context))
+    exec_from_calltree(
+      "uow:information:conflict:record",
+      _information_attributes("conflict-record", informationid) + ("field_path" -> fieldpath)
+    ) {
+      _information_space.flatMap(_.recordConflict(
+        informationid,
+        fieldpath,
+        informationvalue,
+        rdfvalue,
+        severity
+      )(using execution_context))
     }
 
   protected final def information_resolve_conflict(
@@ -1663,14 +1999,23 @@ trait BehaviorInformationPart extends BehaviorFeaturePart { self: Behavior.Core.
     conflictkey: String,
     decision: String
   ): ExecUowM[InformationConflict] =
-    exec_from_calltree("uow:information:conflict:resolve", Map("operation" -> "conflict-resolve", "information_id" -> informationid.print, "conflict_key" -> conflictkey)) {
-      _information_space.flatMap(_.resolveConflict(informationid, conflictkey, decision)(using execution_context))
+    exec_from_calltree(
+      "uow:information:conflict:resolve",
+      Map(
+        "operation"      -> "conflict-resolve",
+        "information_id" -> informationid.print,
+        "conflict_key"   -> conflictkey
+      )
+    ) {
+      _information_space.flatMap(_.resolveConflict(informationid, conflictkey, decision)(using
+      execution_context))
     }
 
   private def _information_space: Consequence[InformationSpace] =
     component match {
       case Some(component) => Consequence.success(component.informationSpace)
-      case None => Consequence.serviceUnavailable("InformationSpace is unavailable: component is not bound.")
+      case None =>
+        Consequence.serviceUnavailable("InformationSpace is unavailable: component is not bound.")
     }
 
   private def _information_attributes(
@@ -1690,10 +2035,15 @@ trait BehaviorInformationPart extends BehaviorFeaturePart { self: Behavior.Core.
     informationid: InformationId,
     candidatekey: String
   ): Map[String, String] =
-    Map("operation" -> operation, "information_id" -> informationid.print, "candidate_key" -> candidatekey)
+    Map(
+      "operation"      -> operation,
+      "information_id" -> informationid.print,
+      "candidate_key"  -> candidatekey
+    )
 }
 
-trait ActionCallHttpPart extends BehaviorHttpPart with ActionCallFeaturePart { self: ActionCall.Core.Holder =>
+trait ActionCallHttpPart extends BehaviorHttpPart with ActionCallFeaturePart {
+  self: ActionCall.Core.Holder =>
 }
 
 trait ProviderBehaviorFeaturePart extends BehaviorFeaturePart { self: Behavior.Core.Holder =>
@@ -1737,7 +2087,9 @@ trait ProviderBehaviorFeaturePart extends BehaviorFeaturePart { self: Behavior.C
         val result = body
         result match {
           case success: Consequence.Success[A] =>
-            calltree.leave(Map("outcome" -> "success") ++ CallTreeValueSummary.resultAttributes(success.result))
+            calltree.leave(
+              Map("outcome" -> "success") ++ CallTreeValueSummary.resultAttributes(success.result)
+            )
           case failure: Consequence.Failure[A] =>
             calltree.leave(Map(
               "outcome" -> "failure",
@@ -1802,7 +2154,10 @@ trait ActionCallBlobPart extends ActionCallFeaturePart { self: ActionCall.Core.H
     sourceEntityId: String,
     references: Vector[ContentReferenceOccurrence]
   ): ExecUowM[ContentReferenceAttachResult] =
-    ConsequenceT.liftF(Free.liftF(UnitOfWorkOp.ContentSyncInlineReferences(sourceEntityId, references)))
+    ConsequenceT.liftF(Free.liftF(UnitOfWorkOp.ContentSyncInlineReferences(
+      sourceEntityId,
+      references
+    )))
 
   protected final def content_render_html(
     content: ContentAttributes
@@ -1815,7 +2170,9 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
     name: String,
     attributes: Record
   ): Unit = {
-    component.flatMap(_.subsystem).map(_.entityAccessMetrics).getOrElse(EntityAccessMetricsRegistry.shared).record(name, attributes)
+    component.flatMap(_.subsystem).map(_.entityAccessMetrics).getOrElse(
+      EntityAccessMetricsRegistry.shared
+    ).record(name, attributes)
     val _ = execution_context.observability.emitDebug(
       execution_context.cncfCore.scope,
       name,
@@ -1831,7 +2188,10 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
       attributes.asMap.toVector
         .sortBy(_._1)
         .map { case (key, value) =>
-          key -> _truncate_calltree_metric_text(_sanitize_calltree_metric_value(key, value).toString, 1000)
+          key -> _truncate_calltree_metric_text(
+            _sanitize_calltree_metric_value(key, value).toString,
+            1000
+          )
         }).toMap
 
   private def _sanitize_calltree_metric_value(
@@ -1946,14 +2306,16 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
     ConsequenceT.liftF(Free.liftF(op))
   }
 
-  /**
-   * Claims a stable Entity identity without overwriting an existing record.
-   * The returned branch tells the caller whether it owns expensive work or
-   * must join/reuse the already persisted entity.
+  /** Claims a stable Entity identity without overwriting an existing record. The returned branch
+    * tells the caller whether it owns expensive work or must join/reuse the already persisted
+    * entity.
    */
   protected final def entity_claim_or_load[C, P](
     entity: C
-  )(using create: EntityPersistentCreate[C], persisted: EntityPersistent[P]): ExecUowM[EntityStore.EntityClaimResult[C, P]] = {
+  )(using
+      create: EntityPersistentCreate[C],
+      persisted: EntityPersistent[P]
+  ): ExecUowM[EntityStore.EntityClaimResult[C, P]] = {
     ensure_component_application_datastore()
     create.id(entity) match {
       case Some(id) =>
@@ -1971,20 +2333,24 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
     }
   }
 
-  /**
-   * Claims or reads a server-owned stable Entity identity.  Internal component
-   * workflows use this when the identity has already been derived from trusted
-   * admitted input and must not depend on user-record ACL fields.
+  /** Claims or reads a server-owned stable Entity identity. Internal component workflows use this
+    * when the identity has already been derived from trusted admitted input and must not depend on
+    * user-record ACL fields.
    */
   protected final def entity_claim_or_load_internal[C, P](
     entity: C
-  )(using create: EntityPersistentCreate[C], persisted: EntityPersistent[P]): ExecUowM[EntityStore.EntityClaimResult[C, P]] = {
+  )(using
+      create: EntityPersistentCreate[C],
+      persisted: EntityPersistent[P]
+  ): ExecUowM[EntityStore.EntityClaimResult[C, P]] = {
     ensure_component_application_datastore()
     create.id(entity) match {
       case Some(id) =>
-        val createauthorization = _entity_uow_authorization(Some(id.collection.name), None, "create")
+        val createauthorization =
+          _entity_uow_authorization(Some(id.collection.name), None, "create")
           .map(_.copy(accessMode = EntityAccessMode.ServiceInternal))
-        val loadauthorization = _entity_uow_authorization(Some(id.collection.name), Some(id), "read")
+        val loadauthorization =
+          _entity_uow_authorization(Some(id.collection.name), Some(id), "read")
           .map(_.copy(accessMode = EntityAccessMode.ServiceInternal))
         val op = UnitOfWorkOp.EntityStoreClaimOrLoad(
           entity,
@@ -1996,7 +2362,9 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
         )
         ConsequenceT.liftF(Free.liftF(op))
       case None =>
-        exec_from(Consequence.argumentInvalid("entity_claim_or_load_internal requires a stable entity id"))
+        exec_from(
+          Consequence.argumentInvalid("entity_claim_or_load_internal requires a stable entity id")
+        )
     }
   }
 
@@ -2005,10 +2373,16 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
   )(using tc: EntityPersistent[T]): ExecUowM[Option[T]] = {
     ensure_component_application_datastore()
     val effectiveid = _canonical_entity_id(id)
-    _emit_entity_access("entity.load.start", _entity_load_attributes(effectiveid, "unknown", "start"))
+    _emit_entity_access(
+      "entity.load.start",
+      _entity_load_attributes(effectiveid, "unknown", "start")
+    )
     val effectivetc = _effective_entity_persistent(effectiveid.collection, tc)
     if (!_working_set_enabled) {
-      _emit_entity_access("entity.load.bypass.entity-space", _entity_load_attributes(effectiveid, "entity-space", "bypass"))
+      _emit_entity_access(
+        "entity.load.bypass.entity-space",
+        _entity_load_attributes(effectiveid, "entity-space", "bypass")
+      )
       val op = UnitOfWorkOp.EntityStoreLoad(
         effectiveid,
         effectivetc,
@@ -2017,19 +2391,34 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
       )
       return ConsequenceT.liftF(Free.liftF(op))
     }
-    component.flatMap(_.entitySpace.entityOption(effectiveid.collection).map(_.asInstanceOf[org.goldenport.cncf.entity.runtime.EntityCollection[T]])) match {
+    component.flatMap(_.entitySpace.entityOption(effectiveid.collection).map(
+      _.asInstanceOf[org.goldenport.cncf.entity.runtime.EntityCollection[T]]
+    )) match {
       case Some(collection) =>
-        _emit_entity_access("entity.load.try.entity-space", _entity_load_attributes(effectiveid, "entity-space", "try"))
+        _emit_entity_access(
+          "entity.load.try.entity-space",
+          _entity_load_attributes(effectiveid, "entity-space", "try")
+        )
         collection.resolve(effectiveid) match {
           case Consequence.Success(entity) =>
-            _emit_entity_access("entity.load.hit.entity-space", _entity_load_attributes(effectiveid, "entity-space", "hit"))
+            _emit_entity_access(
+              "entity.load.hit.entity-space",
+              _entity_load_attributes(effectiveid, "entity-space", "hit")
+            )
             exec_from(_authorize_entity_load_hit(effectiveid, entity, effectivetc))
           case Consequence.Failure(conclusion) if _is_entity_not_found(conclusion) =>
-            _emit_entity_access("entity.load.fallback.entity-store", _entity_load_attributes(effectiveid, "entity-store", "fallback"))
+            _emit_entity_access(
+              "entity.load.fallback.entity-store",
+              _entity_load_attributes(effectiveid, "entity-store", "fallback")
+            )
             val op = UnitOfWorkOp.EntityStoreLoad(
               effectiveid,
               effectivetc,
-              _entity_uow_authorization(Some(effectiveid.collection.name), Some(effectiveid), "read"),
+              _entity_uow_authorization(
+                Some(effectiveid.collection.name),
+                Some(effectiveid),
+                "read"
+              ),
               _declared_visibility_scope
             )
             ConsequenceT.liftF(Free.liftF(op))
@@ -2037,7 +2426,10 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
             exec_from(Consequence.Failure(conclusion))
         }
       case None =>
-        _emit_entity_access("entity.load.fallback.entity-store", _entity_load_attributes(effectiveid, "entity-store", "fallback"))
+        _emit_entity_access(
+          "entity.load.fallback.entity-store",
+          _entity_load_attributes(effectiveid, "entity-store", "fallback")
+        )
         val op = UnitOfWorkOp.EntityStoreLoad(
           effectiveid,
           effectivetc,
@@ -2054,13 +2446,20 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
     tc: EntityPersistent[T]
   ): Consequence[Option[T]] = {
     given ExecutionContext = execution_context
-    if (!org.goldenport.cncf.entity.EntityAccessScopePolicy.visibilityRecordVisible(id.collection, tc.toRecord(entity), _declared_visibility_scope))
+    if (
+      !org.goldenport.cncf.entity.EntityAccessScopePolicy.visibilityRecordVisible(
+        id.collection,
+        tc.toRecord(entity),
+        _declared_visibility_scope
+      )
+    )
       return Consequence.success(None)
     _entity_uow_authorization(Some(id.collection.name), Some(id), "read") match {
       case Some(authorization) =>
         OperationAccessPolicy.authorizeUnitOfWorkDefault(
           authorization,
-          _ => _entity_store_record(id).map {
+          _ =>
+            _entity_store_record(id).map {
             case Some(record) => Some(tc.authorizationRecord(entity, record))
             case None => Some(tc.authorizationRecord(entity))
           }
@@ -2084,10 +2483,33 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
 
   protected final def entity_load[T](
     id: EntityId
-  )(using tc: EntityPersistent[T]): ExecUowM[T] = {
+  )(using tc: EntityPersistent[T]): ExecUowM[T] =
     entity_load_option(id).flatMap { x =>
       val r = Consequence.successOrEntityNotFound(x)(id)
       exec_from(r)
+    }
+
+  protected final def entity_load_snapshot[T](
+      id: EntityId
+  )(using tc: EntityPersistent[T]): ExecUowM[EntitySnapshot[T]] = {
+    ensure_component_application_datastore()
+    val effectiveid = _canonical_entity_id(id)
+    val effectivetc = _effective_entity_persistent(effectiveid.collection, tc)
+    val op = UnitOfWorkOp.EntityStoreLoadSnapshot(
+      effectiveid,
+      effectivetc,
+      _entity_uow_authorization(
+        Some(effectiveid.collection.name),
+        Some(effectiveid),
+        "read"
+      )
+    )
+    val loaded: ExecUowM[Option[EntitySnapshot[T]]] =
+      ConsequenceT.liftF(
+        Free.liftF[UnitOfWorkOp, Option[EntitySnapshot[T]]](op)
+      )
+    loaded.flatMap { snapshot =>
+      exec_from(Consequence.successOrEntityNotFound(snapshot)(effectiveid))
     }
   }
 
@@ -2110,22 +2532,29 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
   }
 
   protected final def entity_save[T](
-    entity: T
-  )(using tc: EntityPersistent[T]): ExecUowM[Unit] = {
+      entity: T,
+      expectation: EntityMutationExpectation
+  )(using tc: EntityPersistent[T]): ExecUowM[EntitySnapshot[T]] = {
     ensure_component_application_datastore()
     val effectivetc = _effective_entity_persistent(tc.id(entity).collection, tc)
     val op = UnitOfWorkOp.EntityStoreSave(
       entity,
+      expectation,
       effectivetc,
-      _entity_uow_authorization(Some(effectivetc.id(entity).collection.name), Some(effectivetc.id(entity)), "update")
+      _entity_uow_authorization(
+        Some(effectivetc.id(entity).collection.name),
+        Some(effectivetc.id(entity)),
+        "update"
+      )
     )
     ConsequenceT.liftF(Free.liftF(op))
   }
 
   /** Saves a server-owned Entity through the authorized UnitOfWork boundary. */
   protected final def entity_save_internal[T](
-    entity: T
-  )(using tc: EntityPersistent[T]): ExecUowM[Unit] = {
+      entity: T,
+      expectation: EntityMutationExpectation
+  )(using tc: EntityPersistent[T]): ExecUowM[EntitySnapshot[T]] = {
     ensure_component_application_datastore()
     val effectivetc = _effective_entity_persistent(tc.id(entity).collection, tc)
     val authorization =
@@ -2136,81 +2565,36 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
       ).map(_.copy(accessMode = EntityAccessMode.ServiceInternal))
     val op = UnitOfWorkOp.EntityStoreSave(
       entity,
+      expectation,
       effectivetc,
       authorization
     )
     ConsequenceT.liftF(Free.liftF(op))
   }
 
-  protected final def entity_upsert[T](
-    entity: T
-  )(using tc: EntityPersistentCreate[T]): ExecUowM[CreateResult[T]] = {
-    ensure_component_application_datastore()
-    tc.id(entity) match {
-      case Some(sourceid) =>
-        val id = _canonical_entity_id(sourceid)
-        val op = UnitOfWorkOp.EntityStoreUpsert(
-          entity,
-          id,
-          tc,
-          _entity_create_options(Some(id.collection.name)),
-          _entity_uow_authorization(Some(id.collection.name), None, "create"),
-          _entity_uow_authorization(Some(id.collection.name), Some(id), "update")
-        )
-        ConsequenceT.liftF(Free.liftF(op))
-      case None =>
-        exec_from(Consequence.argumentInvalid("entity_upsert requires a stable entity id"))
-    }
-  }
-
-  /**
-   * Upserts a server-owned Entity through the authorized UnitOfWork boundary.
-   * This remains an Entity-layer operation: component code cannot select a
-   * datastore, emit backend statements, or bypass audit/observability.
-   */
-  protected final def entity_upsert_internal[T](
-    entity: T
-  )(using tc: EntityPersistentCreate[T]): ExecUowM[CreateResult[T]] = {
-    ensure_component_application_datastore()
-    tc.id(entity) match {
-      case Some(sourceid) =>
-        val id = _canonical_entity_id(sourceid)
-        val createauthorization =
-          _entity_uow_authorization(Some(id.collection.name), None, "create")
-            .map(_.copy(accessMode = EntityAccessMode.ServiceInternal))
-        val updateauthorization =
-          _entity_uow_authorization(Some(id.collection.name), Some(id), "update")
-            .map(_.copy(accessMode = EntityAccessMode.ServiceInternal))
-        val op = UnitOfWorkOp.EntityStoreUpsert(
-          entity,
-          id,
-          tc,
-          _entity_create_options(Some(id.collection.name)),
-          createauthorization,
-          updateauthorization
-        )
-        ConsequenceT.liftF(Free.liftF(op))
-      case None =>
-        exec_from(Consequence.argumentInvalid("entity_upsert_internal requires a stable entity id"))
-    }
-  }
-
   protected final def entity_update[T](
-    changes: T
-  )(using tc: EntityPersistent[T]): ExecUowM[Unit] = {
+      changes: T,
+      expectation: EntityMutationExpectation
+  )(using tc: EntityPersistent[T]): ExecUowM[EntitySnapshot[T]] = {
     ensure_component_application_datastore()
     val effectivetc = _effective_entity_persistent(tc.id(changes).collection, tc)
     val op = UnitOfWorkOp.EntityStoreUpdate(
       changes,
+      expectation,
       effectivetc,
-      _entity_uow_authorization(Some(effectivetc.id(changes).collection.name), Some(effectivetc.id(changes)), "update")
+      _entity_uow_authorization(
+        Some(effectivetc.id(changes).collection.name),
+        Some(effectivetc.id(changes)),
+        "update"
+      )
     )
     ConsequenceT.liftF(Free.liftF(op))
   }
 
   protected final def entity_update_internal[T](
-    changes: T
-  )(using tc: EntityPersistent[T]): ExecUowM[Unit] = {
+      changes: T,
+      expectation: EntityMutationExpectation
+  )(using tc: EntityPersistent[T]): ExecUowM[EntitySnapshot[T]] = {
     ensure_component_application_datastore()
     val effectivetc = _effective_entity_persistent(tc.id(changes).collection, tc)
     val authorization =
@@ -2221,6 +2605,7 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
       ).map(_.copy(accessMode = EntityAccessMode.ServiceInternal))
     val op = UnitOfWorkOp.EntityStoreUpdate(
       changes,
+      expectation,
       effectivetc,
       authorization
     )
@@ -2231,30 +2616,32 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
   // This is intended for Update.PatchShape where id is excluded from patch object.
   protected final def entity_update[T](
     id: EntityId,
-    patch: T
-  )(using tc: EntityPersistentUpdate[T]): ExecUowM[Unit] = {
+      patch: T,
+      expectation: EntityMutationExpectation
+  )(using tc: EntityPersistentUpdate[T]): ExecUowM[EntityRecordSnapshot] = {
     ensure_component_application_datastore()
     val effectiveid = _canonical_entity_id(id)
     val op = UnitOfWorkOp.EntityStoreUpdateById(
       effectiveid,
       patch,
+      expectation,
       tc,
       _entity_uow_authorization(Some(effectiveid.collection.name), Some(effectiveid), "update")
     )
     ConsequenceT.liftF(Free.liftF(op))
   }
 
-  /**
-   * Applies a generated patch to a server-owned Entity.
+  /** Applies a generated patch to a server-owned Entity.
    *
-   * This is the ServiceInternal counterpart of `entity_update(id, patch)`.
-   * Keeping canonical ID handling and authorization construction here prevents
-   * components from assembling UnitOfWork operations or security metadata.
+    * This is the ServiceInternal counterpart of `entity_update(id, patch)`. Keeping canonical ID
+    * handling and authorization construction here prevents components from assembling UnitOfWork
+    * operations or security metadata.
    */
   protected final def entity_update_internal[T](
     id: EntityId,
-    patch: T
-  )(using tc: EntityPersistentUpdate[T]): ExecUowM[Unit] = {
+      patch: T,
+      expectation: EntityMutationExpectation
+  )(using tc: EntityPersistentUpdate[T]): ExecUowM[EntityRecordSnapshot] = {
     ensure_component_application_datastore()
     val effectiveid = _canonical_entity_id(id)
     val authorization =
@@ -2266,6 +2653,7 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
     val op = UnitOfWorkOp.EntityStoreUpdateById(
       effectiveid,
       patch,
+      expectation,
       tc,
       authorization
     )
@@ -2293,31 +2681,52 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
   )(using tc: EntityPersistent[T]): ExecUowM[SearchResult[T]] = {
     ensure_component_application_datastore()
     val effectivequery = _with_declared_visibility(query)
-    _emit_entity_access("entity.search.start", _entity_search_attributes(effectivequery, "unknown", "start"))
+    _emit_entity_access(
+      "entity.search.start",
+      _entity_search_attributes(effectivequery, "unknown", "start")
+    )
     val effectivetc = _effective_entity_persistent(effectivequery.collection, tc)
     if (effectivequery.scope == EntitySearchScope.Store)
       return _entity_store_search_direct(effectivequery, effectivetc)
     if (!_working_set_enabled) {
-      _emit_entity_access("entity.search.bypass.entity-space", _entity_search_attributes(effectivequery, "entity-space", "bypass"))
+      _emit_entity_access(
+        "entity.search.bypass.entity-space",
+        _entity_search_attributes(effectivequery, "entity-space", "bypass")
+      )
       return _entity_store_search_direct(effectivequery, effectivetc)
     }
-    component.flatMap(_.entitySpace.entityOption(effectivequery.collection).map(_.asInstanceOf[org.goldenport.cncf.entity.runtime.EntityCollection[T]])) match {
+    component.flatMap(_.entitySpace.entityOption(effectivequery.collection).map(
+      _.asInstanceOf[org.goldenport.cncf.entity.runtime.EntityCollection[T]]
+    )) match {
       case Some(collection) =>
         if (_bypass_entity_space_resident_search) {
-          _emit_entity_access("entity.search.bypass.entity-space", _entity_search_attributes(effectivequery, "entity-space", "bypass"))
+          _emit_entity_access(
+            "entity.search.bypass.entity-space",
+            _entity_search_attributes(effectivequery, "entity-space", "bypass")
+          )
           _entity_store_search_direct(effectivequery, tc)
         } else {
-          _emit_entity_access("entity.search.try.entity-space", _entity_search_attributes(effectivequery, "entity-space", "try"))
+          _emit_entity_access(
+            "entity.search.try.entity-space",
+            _entity_search_attributes(effectivequery, "entity-space", "try")
+          )
           if (collection.shouldFallbackToStoreForWorkingSet(effectivequery)) {
             val state = collection.workingSetStatus.state
-            _emit_entity_access("entity.search.fallback.entity-store", _entity_search_attributes(effectivequery, "entity-store", "fallback"))
+            _emit_entity_access(
+              "entity.search.fallback.entity-store",
+              _entity_search_attributes(effectivequery, "entity-store", "fallback")
+            )
             if (collection.workingSetStatus.isInitializing)
-              _emit_entity_access("entity.search.fallback.working-set-loading", _entity_search_working_set_loading_attributes(effectivequery, state))
+              _emit_entity_access(
+                "entity.search.fallback.working-set-loading",
+                _entity_search_working_set_loading_attributes(effectivequery, state)
+              )
             return _entity_store_search_direct(effectivequery, effectivetc)
           }
           val hasworkingsetpolicy =
             collection.descriptor.plan.workingSetPolicy match {
-              case Some(org.goldenport.cncf.entity.runtime.WorkingSetPolicy.Disabled) | None => false
+              case Some(org.goldenport.cncf.entity.runtime.WorkingSetPolicy.Disabled) | None =>
+                false
               case Some(_) => true
             }
           val hasresident =
@@ -2329,22 +2738,33 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
                   collection.storage.memoryRealm.exists(_.values.nonEmpty)
             }
           if (hasresident) {
-            _emit_entity_access("entity.search.hit.entity-space", _entity_search_attributes(effectivequery, "entity-space", "hit"))
-            val authorization = _entity_uow_authorization(Some(effectivequery.collection.name), None, "search/list")
+            _emit_entity_access(
+              "entity.search.hit.entity-space",
+              _entity_search_attributes(effectivequery, "entity-space", "hit")
+            )
+            val authorization =
+              _entity_uow_authorization(Some(effectivequery.collection.name), None, "search/list")
             exec_from(
               collection.search(effectivequery)(using execution_context).flatMap { result =>
                 authorization
-                  .map(OperationAccessPolicy.filterVisibleSearchResult(_, result, tc)(using execution_context))
+                  .map(OperationAccessPolicy.filterVisibleSearchResult(_, result, tc)(using
+                  execution_context))
                   .getOrElse(Consequence.success(result))
               }
             )
           } else {
-            _emit_entity_access("entity.search.fallback.entity-store", _entity_search_attributes(effectivequery, "entity-store", "fallback"))
+            _emit_entity_access(
+              "entity.search.fallback.entity-store",
+              _entity_search_attributes(effectivequery, "entity-store", "fallback")
+            )
             _entity_store_search_direct(effectivequery, effectivetc)
           }
         }
       case None =>
-        _emit_entity_access("entity.search.fallback.entity-store", _entity_search_attributes(effectivequery, "entity-store", "fallback"))
+        _emit_entity_access(
+          "entity.search.fallback.entity-store",
+          _entity_search_attributes(effectivequery, "entity-store", "fallback")
+        )
         _entity_store_search_direct(effectivequery, effectivetc)
     }
   }
@@ -2421,7 +2841,10 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
     tc: EntityPersistent[T]
   ): ExecUowM[Option[T]] = {
     ensure_component_application_datastore()
-    _emit_entity_access("entity.load.bypass.entity-space", _entity_load_attributes(id, "entity-space", "bypass"))
+    _emit_entity_access(
+      "entity.load.bypass.entity-space",
+      _entity_load_attributes(id, "entity-space", "bypass")
+    )
     val op = UnitOfWorkOp.EntityStoreLoadDirect(id, tc)
     ConsequenceT.liftF(Free.liftF(op))
   }
@@ -2502,11 +2925,11 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
   }
 
   private def _effective_entity_persistent[T](
-    collectionId: EntityCollectionId,
+      collectionid: EntityCollectionId,
     fallback: EntityPersistent[T]
   ): EntityPersistent[T] =
     component
-      .flatMap(_.entitySpace.entityOption(collectionId))
+      .flatMap(_.entitySpace.entityOption(collectionid))
       .map(_.descriptor.persistent.asInstanceOf[EntityPersistent[T]])
       .getOrElse(fallback)
 
@@ -2517,15 +2940,16 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
 
   protected final def entity_load_or_throw[T](
     id: EntityId
-  )(using uow: UnitOfWork, tc: EntityPersistent[T]): T = {
+  )(using uow: UnitOfWork, tc: EntityPersistent[T]): T =
     entity_load_c(id).TAKE
-  }
 
   protected final def entity_save_c[T](
-    entity: T
-  )(using uow: UnitOfWork, tc: EntityPersistent[T]): Consequence[Unit] = {
+      entity: T,
+      expectation: EntityMutationExpectation
+  )(using uow: UnitOfWork, tc: EntityPersistent[T]): Consequence[EntitySnapshot[T]] = {
     val op = UnitOfWorkOp.EntityStoreSave(
       entity,
+      expectation,
       tc,
       _entity_uow_authorization(Some(tc.id(entity).collection.name), Some(tc.id(entity)), "update")
     )
@@ -2533,10 +2957,12 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
   }
 
   protected final def entity_save_or_throw[T](
-    entity: T
-  )(using uow: UnitOfWork, tc: EntityPersistent[T]): Unit = {
+      entity: T,
+      expectation: EntityMutationExpectation
+  )(using uow: UnitOfWork, tc: EntityPersistent[T]): EntitySnapshot[T] = {
     val op = UnitOfWorkOp.EntityStoreSave(
       entity,
+      expectation,
       tc,
       _entity_uow_authorization(Some(tc.id(entity).collection.name), Some(tc.id(entity)), "update")
     )
@@ -2544,34 +2970,48 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
   }
 
   protected final def entity_update_c[T](
-    changes: T
-  )(using uow: UnitOfWork, tc: EntityPersistent[T]): Consequence[Unit] = {
+      changes: T,
+      expectation: EntityMutationExpectation
+  )(using uow: UnitOfWork, tc: EntityPersistent[T]): Consequence[EntitySnapshot[T]] = {
     val op = UnitOfWorkOp.EntityStoreUpdate(
       changes,
+      expectation,
       tc,
-      _entity_uow_authorization(Some(tc.id(changes).collection.name), Some(tc.id(changes)), "update")
+      _entity_uow_authorization(
+        Some(tc.id(changes).collection.name),
+        Some(tc.id(changes)),
+        "update"
+      )
     )
     exec_c(op)
   }
 
   protected final def entity_update_or_throw[T](
-    changes: T
-  )(using uow: UnitOfWork, tc: EntityPersistent[T]): Unit = {
+      changes: T,
+      expectation: EntityMutationExpectation
+  )(using uow: UnitOfWork, tc: EntityPersistent[T]): EntitySnapshot[T] = {
     val op = UnitOfWorkOp.EntityStoreUpdate(
       changes,
+      expectation,
       tc,
-      _entity_uow_authorization(Some(tc.id(changes).collection.name), Some(tc.id(changes)), "update")
+      _entity_uow_authorization(
+        Some(tc.id(changes).collection.name),
+        Some(tc.id(changes)),
+        "update"
+      )
     )
     exec_or_throw(op)
   }
 
   protected final def entity_update_c[T](
     id: EntityId,
-    patch: T
-  )(using uow: UnitOfWork, tc: EntityPersistentUpdate[T]): Consequence[Unit] = {
+      patch: T,
+      expectation: EntityMutationExpectation
+  )(using uow: UnitOfWork, tc: EntityPersistentUpdate[T]): Consequence[EntityRecordSnapshot] = {
     val op = UnitOfWorkOp.EntityStoreUpdateById(
       id,
       patch,
+      expectation,
       tc,
       _entity_uow_authorization(Some(id.collection.name), Some(id), "update")
     )
@@ -2580,11 +3020,13 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
 
   protected final def entity_update_or_throw[T](
     id: EntityId,
-    patch: T
-  )(using uow: UnitOfWork, tc: EntityPersistentUpdate[T]): Unit = {
+      patch: T,
+      expectation: EntityMutationExpectation
+  )(using uow: UnitOfWork, tc: EntityPersistentUpdate[T]): EntityRecordSnapshot = {
     val op = UnitOfWorkOp.EntityStoreUpdateById(
       id,
       patch,
+      expectation,
       tc,
       _entity_uow_authorization(Some(id.collection.name), Some(id), "update")
     )
@@ -2679,13 +3121,13 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
     }.getOrElse(Vector.empty)
 
   private def _entity_uow_authorization(
-    resourceType: Option[String],
-    targetId: Option[EntityId],
-    accessKind: String
+      resourcetype: Option[String],
+      targetid: Option[EntityId],
+      accesskind: String
   ): Option[UnitOfWorkAuthorization] = {
     val access = _declared_access
     val entitynames = _declared_entities
-    val entityname = entitynames.headOption.orElse(resourceType).getOrElse("")
+    val entityname  = entitynames.headOption.orElse(resourcetype).getOrElse("")
     val factory = getFactory[org.goldenport.cncf.component.Component.Factory]
     val runtimeentitydescriptor =
       component.flatMap(_.entityRuntimeDescriptor(entityname))
@@ -2722,7 +3164,7 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
         .getOrElse(ServiceOperationModel.default)
     val explicitrelations =
       factory
-        .map(_.entity_access_relations(action, entityname, accessKind, core))
+        .map(_.entity_access_relations(action, entityname, accesskind, core))
         .getOrElse(Vector.empty) ++
       access.flatMap(_.relation).map(EntityAccessRelation.parseList).getOrElse(Vector.empty)
     val naturalconditions =
@@ -2735,16 +3177,16 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
     )
     val accessmode =
       factory
-        .flatMap(_.entity_access_mode(action, entityname, accessKind, core))
+        .flatMap(_.entity_access_mode(action, entityname, accesskind, core))
         .orElse(access.flatMap(_.mode).map(EntityAccessMode.parse))
         .getOrElse(derivedprofile.accessMode)
     Some(
       UnitOfWorkAuthorization(
         resourceFamily = "domain",
-        resourceType = entitynames.headOption.orElse(resourceType),
-        collectionName = targetId.map(_.collection.name).orElse(resourceType),
-        targetId = targetId,
-        accessKind = accessKind,
+        resourceType = entitynames.headOption.orElse(resourcetype),
+        collectionName = targetid.map(_.collection.name).orElse(resourcetype),
+        targetId = targetid,
+        accessKind = accesskind,
         access = access,
         sourceComponentName = component_name_option,
         targetComponentName = component_name_option,
@@ -2761,11 +3203,11 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
   }
 
   private def _entity_create_options(
-    resourceType: Option[String]
+      resourcetype: Option[String]
   ): EntityCreateOptions = {
     val access = _declared_access
     val entitynames = _declared_entities
-    val entityname = entitynames.headOption.orElse(resourceType).getOrElse("")
+    val entityname  = entitynames.headOption.orElse(resourcetype).getOrElse("")
     val factory = getFactory[org.goldenport.cncf.component.Component.Factory]
     val runtimeentitydescriptor =
       component.flatMap(_.entityRuntimeDescriptor(entityname))
@@ -2843,7 +3285,10 @@ trait ActionCallDataStorePart extends ActionCallFeaturePart { self: ActionCall.C
 
   protected final def store_load_c(
     id: UniversalId
-  )(using uow: UnitOfWork, http: org.goldenport.cncf.http.HttpDriver): Consequence[Option[Record]] = {
+  )(using
+      uow: UnitOfWork,
+      http: org.goldenport.cncf.http.HttpDriver
+  ): Consequence[Option[Record]] = {
     val op = _op_store_load(id)
     exec_c(op)
   }
@@ -2949,14 +3394,20 @@ trait ActionCallEmbeddedDataStorePart extends ActionCallFeaturePart { self: Acti
     statement: String,
     params: Vector[Any] = Vector.empty
   ): ExecUowM[Vector[Record]] =
-    ConsequenceT.liftF(Free.liftF(UnitOfWorkOp.EmbeddedDataStoreRead(store, EmbeddedStatement(statement, params))))
+    ConsequenceT.liftF(Free.liftF(UnitOfWorkOp.EmbeddedDataStoreRead(
+      store,
+      EmbeddedStatement(statement, params)
+    )))
 
   protected final def embedded_datastore_update(
     store: EmbeddedDataStore,
     statement: String,
     params: Vector[Any] = Vector.empty
   ): ExecUowM[EmbeddedUpdateResult] =
-    ConsequenceT.liftF(Free.liftF(UnitOfWorkOp.EmbeddedDataStoreUpdate(store, EmbeddedStatement(statement, params))))
+    ConsequenceT.liftF(Free.liftF(UnitOfWorkOp.EmbeddedDataStoreUpdate(
+      store,
+      EmbeddedStatement(statement, params)
+    )))
 
   protected final def embedded_datastore_migrate(
     store: EmbeddedDataStore,

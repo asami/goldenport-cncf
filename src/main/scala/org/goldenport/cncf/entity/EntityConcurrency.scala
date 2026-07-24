@@ -2,7 +2,8 @@ package org.goldenport.cncf.entity
 
 import scala.util.Try
 import org.goldenport.Consequence
-import org.goldenport.observation.Descriptor
+import org.goldenport.Conclusion
+import org.goldenport.observation.{Cause, Descriptor}
 import org.goldenport.cncf.datastore.DataStoreRevisionState
 import org.goldenport.record.Record
 
@@ -50,10 +51,21 @@ final case class EntityMutationExpectation(
   token: EntityConcurrencyToken
 )
 
+object EntityMutationExpectation {
+  def parse(value: Any): Consequence[EntityMutationExpectation] =
+    EntityConcurrencyMetadata
+      .transportToken(value)
+      .map(EntityMutationExpectation(_))
+}
+
 final case class EntityRecordSnapshot(
   record: Record,
   token: EntityConcurrencyToken
 )
+
+enum EntityUnversionedMutationPurpose {
+  case SeedImport, PhysicalMigration, FrameworkBootstrap
+}
 
 object EntityConcurrencyMetadata {
   val LOGICAL_FIELD_NAME =
@@ -81,6 +93,9 @@ object EntityConcurrencyMetadata {
         )
     }
   }
+
+  def transportToken(value: Any): Consequence[EntityConcurrencyToken] =
+    _token_value(value, "version")
 
   def initializeForCreate(record: Record): Record =
     withoutManagedField(record) ++
@@ -156,6 +171,19 @@ object EntityConcurrencyMetadata {
       )
     )
 
+  def committedProjectionFailure[A](
+      previous: Conclusion
+  ): Consequence.Failure[A] =
+    Consequence.operationInvalid(
+      "entity-versioned-mutation",
+      Cause.Kind.Inconsistency,
+      Vector(
+        Descriptor.Facet.Reason("committed-entity-projection-failure"),
+        Descriptor.Facet.Policy("entity.optimistic-concurrency")
+      ),
+      Some(previous)
+    )
+
   def withoutManagedField(record: Record): Record =
     SimpleEntityStorageShapePolicy.withoutConcurrencyRevisionField(record)
 
@@ -173,13 +201,16 @@ object EntityConcurrencyMetadata {
         EntityConcurrencyTokenSupport._storage_value(token)
     )
 
-  private def _token_value(value: Any): Consequence[EntityConcurrencyToken] =
+  private def _token_value(
+      value: Any,
+      fieldname: String = STORAGE_FIELD_NAME
+  ): Consequence[EntityConcurrencyToken] =
     _exact_long(value) match {
       case Some(number) =>
         EntityConcurrencyTokenSupport._create(number)
       case None =>
         Consequence.argumentFormatError(
-          STORAGE_FIELD_NAME,
+          fieldname,
           "non-negative integral Long",
           value
         )
@@ -211,6 +242,8 @@ object EntityConcurrencyMetadata {
         Try(number.longValueExact).toOption
       case number: java.math.BigDecimal =>
         Try(number.toBigIntegerExact.longValueExact).toOption
+      case text: String =>
+        text.trim.toLongOption
       case _ =>
         None
     }

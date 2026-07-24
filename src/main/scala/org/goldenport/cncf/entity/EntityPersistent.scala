@@ -15,7 +15,8 @@ import org.simplemodeling.model.value.SecurityAttributes
  * @since   Feb. 22, 2026
  *  version Feb. 27, 2026
  *  version Mar. 24, 2026
- * @version Apr. 26, 2026
+ *  version Apr. 26, 2026
+ * @version Jul. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 trait EntityPersistent[E] extends RecordCodex[E]
@@ -103,11 +104,25 @@ trait EntityPersistentCreate[E] extends RecordEncoder[E]
 
 object EntityPersistentCreate {
   def derived[E <: EntityPersistableCreate](
-    collectionid: EntityCollectionId
+      collectionId: EntityCollectionId
   ): EntityPersistentCreate[E] = new EntityPersistentCreate[E] {
     def id(e: E): Option[EntityId] = e.id
     def toRecord(e: E) = e.toRecord()
-    def collection(e: E): EntityCollectionId = collectionid
+    def collection(e: E): EntityCollectionId = collectionId
+  }
+
+  def fromPersistent[E](
+      persistent: EntityPersistent[E]
+  ): EntityPersistentCreate[E] =
+    new EntityPersistentCreate[E] {
+      def id(entity: E): Option[EntityId] =
+        Some(persistent.id(entity))
+      def collection(entity: E): EntityCollectionId =
+        persistent.id(entity).collection
+      def toRecord(entity: E): Record =
+        persistent.toRecord(entity)
+      override def toStoreRecord(entity: E): Record =
+        persistent.toStoreRecord(entity)
   }
 }
 
@@ -127,11 +142,11 @@ trait EntityPersistentQuery[E] extends RecordCodex[E] {
 object EntityPersistentQuery {
   def derived[E <: EntityPersistableQuery](
     from: Record => Consequence[E],
-    collectionid: EntityCollectionId
+      collectionId: EntityCollectionId
   ): EntityPersistentQuery[E] = new EntityPersistentQuery[E] {
     def toRecord(e: E) = e.toRecord()
     def fromRecord(r: Record) = from(r)
-    def collection(e: E): EntityCollectionId = collectionid
+    def collection(e: E): EntityCollectionId = collectionId
   }
 }
 
@@ -172,11 +187,11 @@ trait EntityPersistentUpdate[E] extends RecordCodex[E] {
 object EntityPersistentUpdate {
   def derived[E <: EntityPersistableUpdate](
     from: Record => Consequence[E],
-    collectionid: EntityCollectionId
+      collectionId: EntityCollectionId
   ): EntityPersistentUpdate[E] = new EntityPersistentUpdate[E] {
     def toRecord(e: E) = e.toRecord()
     def fromRecord(r: Record) = from(r)
-    def collection(e: E): EntityCollectionId = collectionid
+    def collection(e: E): EntityCollectionId = collectionId
   }
 }
 

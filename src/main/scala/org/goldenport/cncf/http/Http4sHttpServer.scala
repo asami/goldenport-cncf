@@ -4,7 +4,7 @@ package org.goldenport.cncf.http
  * @since   May. 18, 2026
  *  version May. 30, 2026
  *  version Jun. 19, 2026
- * @version Jul. 21, 2026
+ * @version Jul. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 import cats.effect.IO
@@ -64,7 +64,7 @@ import org.goldenport.observation.{Cause, Descriptor}
  *  version Apr. 30, 2026
  *  version May. 25, 2026
  *  version Jun. 19, 2026
- * @version Jul. 21, 2026
+ * @version Jul. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Http4sHttpServer(
@@ -3077,7 +3077,8 @@ final class Http4sHttpServer(
           recordId,
           values,
           engine.webDescriptor,
-          Some(validation)
+          Some(validation),
+          values.get("version")
         )
       case None =>
         _static_form_app_renderer.renderComponentAdminEntityNew(
@@ -3142,7 +3143,8 @@ final class Http4sHttpServer(
             collection,
             id,
             values,
-            engine.webDescriptor
+            engine.webDescriptor,
+            submittedVersion = values.get("version")
           )
         case ("entities", "create", _) =>
           _static_form_app_renderer.renderComponentAdminEntityNew(

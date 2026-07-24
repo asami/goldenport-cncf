@@ -3,11 +3,23 @@ package org.goldenport.cncf.entity
 import cats.data.NonEmptyVector
 import org.goldenport.Consequence
 import org.goldenport.cncf.action.{Action, ActionCall, ProcedureActionCall}
-import org.goldenport.cncf.component.{Component, ComponentId, ComponentInit, ComponentInstanceId, ComponentOrigin}
+import org.goldenport.cncf.component.{
+  Component,
+  ComponentId,
+  ComponentInit,
+  ComponentInstanceId,
+  ComponentOrigin
+}
 import org.goldenport.cncf.component.entity.{Order as OrderEntity, OrderLine as OrderLineEntity}
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.directive.Query
-import org.goldenport.cncf.operation.{ChildEntityBindingOperationDefinition, CmlEntityRelationshipDefinition, CmlOperationAssociationBinding, CmlOperationChildEntityBinding, CmlOperationDefinition}
+import org.goldenport.cncf.operation.{
+  ChildEntityBindingOperationDefinition,
+  CmlEntityRelationshipDefinition,
+  CmlOperationAssociationBinding,
+  CmlOperationChildEntityBinding,
+  CmlOperationDefinition
+}
 import org.goldenport.cncf.projection.{DescribeProjection, HelpProjection}
 import org.goldenport.cncf.http.StaticFormAppRenderer
 import org.goldenport.cncf.testutil.TestComponentFactory
@@ -24,25 +36,34 @@ import org.simplemodeling.model.datatype.EntityId
  * Executable specification for BI-04 operation child Entity binding.
  *
  * @since   Apr. 30, 2026
- * @version May. 18, 2026
+ *  version May. 18, 2026
+ * @version Jul. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ChildEntityBindingWorkflowSpec
-  extends AnyWordSpec
-  with Matchers
-  with GivenWhenThen {
+    extends AnyWordSpec
+    with Matchers
+    with GivenWhenThen {
   "Subsystem operation child Entity binding adapter" should {
     "create child records using entity_id from an Entity create result" in {
       Given("a parent create operation with child Entity binding metadata")
       val (component, context) = _runtime_component()
-      given ExecutionContext = context
-      val orderId = _order_id("order_child_binding_create")
-      val request = _create_order_request(component, orderId, Vector(
-        Record.dataAuto("name" -> "Widget", "quantity" -> 2),
-        Record.dataAuto("name" -> "Cable", "quantity" -> 4)
-      ))
-      val binding = component.operationDefinitions.find(_.name == "createOrder").flatMap(_.childEntityBindings.headOption).getOrElse(fail("binding missing"))
-      ChildEntityBindingWorkflow.extract(binding, request).map(_.size) shouldBe Consequence.success(2)
+      given ExecutionContext   = context
+      val orderid              = _order_id("order_child_binding_create")
+      val request = _create_order_request(
+        component,
+        orderid,
+        Vector(
+          Record.dataAuto("name" -> "Widget", "quantity" -> 2),
+          Record.dataAuto("name" -> "Cable", "quantity"  -> 4)
+        )
+      )
+      val binding = component.operationDefinitions.find(_.name == "createOrder").flatMap(
+        _.childEntityBindings.headOption
+      ).getOrElse(fail("binding missing"))
+      ChildEntityBindingWorkflow.extract(binding, request).map(_.size) shouldBe Consequence.success(
+        2
+      )
 
       When("the operation is executed")
       val response = _success(component.subsystem.get.executeOperationResponse(request))
@@ -50,72 +71,84 @@ final class ChildEntityBindingWorkflowSpec
       Then("the response is preserved and child lines are created with parent id and sort order")
       response match {
         case OperationResponse.RecordResponse(record) =>
-          record.getString("entity_id") shouldBe Some(orderId.value)
+          record.getString("entity_id") shouldBe Some(orderid.value)
         case other =>
           fail(s"unexpected response: $other")
       }
-      val lines = _order_lines(component, orderId)
-      lines.map(_.orderId) shouldBe Vector(orderId, orderId)
+      val lines = _order_lines(component, orderid)
+      lines.map(_.orderId) shouldBe Vector(orderid, orderid)
       lines.map(_.sortOrder) shouldBe Vector(Some(0), Some(1))
     }
 
     "accept a matching parent id already present in child input" in {
       Given("a child row that already carries the same parent Entity id")
       val (component, context) = _runtime_component()
-      given ExecutionContext = context
-      val orderId = _order_id("order_child_binding_matching_parent")
-      val request = _create_order_request(component, orderId, Vector(
-        Record.dataAuto("orderId" -> orderId.value, "name" -> "Widget", "quantity" -> 2)
-      ))
+      given ExecutionContext   = context
+      val orderid              = _order_id("order_child_binding_matching_parent")
+      val request = _create_order_request(
+        component,
+        orderid,
+        Vector(
+          Record.dataAuto("orderId" -> orderid.value, "name" -> "Widget", "quantity" -> 2)
+        )
+      )
 
       When("the operation is executed")
       val _ = _success(component.subsystem.get.executeOperationResponse(request))
 
       Then("the child row is accepted")
-      _order_lines(component, orderId).map(_.name) shouldBe Vector("Widget")
+      _order_lines(component, orderid).map(_.name) shouldBe Vector("Widget")
     }
 
     "reject mismatched child parent ids and compensate parent create" in {
       Given("a create operation where the second child row points at another parent")
       val (component, context) = _runtime_component()
-      given ExecutionContext = context
-      val orderId = _order_id("order_child_binding_compensate_parent")
-      val otherId = _order_id("order_child_binding_other_parent")
-      val request = _create_order_request(component, orderId, Vector(
-        Record.dataAuto("name" -> "Widget", "quantity" -> 2),
-        Record.dataAuto("orderId" -> otherId.value, "name" -> "Bad", "quantity" -> 1)
-      ))
+      given ExecutionContext   = context
+      val orderid              = _order_id("order_child_binding_compensate_parent")
+      val otherid              = _order_id("order_child_binding_other_parent")
+      val request = _create_order_request(
+        component,
+        orderid,
+        Vector(
+          Record.dataAuto("name"    -> "Widget", "quantity"  -> 2),
+          Record.dataAuto("orderId" -> otherid.value, "name" -> "Bad", "quantity" -> 1)
+        )
+      )
 
       When("the operation is executed")
       val result = component.subsystem.get.executeOperationResponse(request)
 
       Then("the operation fails and both parent and created children are compensated")
       result shouldBe a[Consequence.Failure[_]]
-      _resolve_order(component, orderId) shouldBe a[Consequence.Failure[_]]
-      _order_lines(component, orderId) shouldBe Vector.empty
+      _resolve_order(component, orderid) shouldBe a[Consequence.Failure[_]]
+      _order_lines(component, orderid) shouldBe Vector.empty
     }
 
     "reject existing child ids without overwriting or deleting them" in {
       Given("an existing child row and a create request that reuses its id")
       val (component, context) = _runtime_component()
-      given ExecutionContext = context
-      val existingOrderId = _order_id("order_child_binding_existing_parent")
-      val orderId = _order_id("order_child_binding_existing_reuse")
-      val lineId = _order_line_id("order_child_binding_existing_line")
-      _success(_put_order(component, existingOrderId))
-      _success(_put_order_line(component, lineId, existingOrderId, "Original", 9))
-      val request = _create_order_request(component, orderId, Vector(
-        Record.dataAuto("id" -> lineId.value, "name" -> "Overwrite", "quantity" -> 1)
-      ))
+      given ExecutionContext   = context
+      val existingorderid      = _order_id("order_child_binding_existing_parent")
+      val orderid              = _order_id("order_child_binding_existing_reuse")
+      val lineid               = _order_line_id("order_child_binding_existing_line")
+      _success(_put_order(component, existingorderid))
+      _success(_put_order_line(component, lineid, existingorderid, "Original", 9))
+      val request = _create_order_request(
+        component,
+        orderid,
+        Vector(
+          Record.dataAuto("id" -> lineid.value, "name" -> "Overwrite", "quantity" -> 1)
+        )
+      )
 
       When("the operation is executed")
       val result = component.subsystem.get.executeOperationResponse(request)
 
       Then("the operation fails, the parent is compensated, and the existing child remains intact")
       result shouldBe a[Consequence.Failure[_]]
-      _resolve_order(component, orderId) shouldBe a[Consequence.Failure[_]]
-      val line = _success(_resolve_order_line(component, lineId))
-      line.orderId shouldBe existingOrderId
+      _resolve_order(component, orderid) shouldBe a[Consequence.Failure[_]]
+      val line = _success(_resolve_order_line(component, lineid))
+      line.orderId shouldBe existingorderid
       line.name shouldBe "Original"
       line.quantity shouldBe 9
     }
@@ -123,40 +156,50 @@ final class ChildEntityBindingWorkflowSpec
     "compensate child and parent records when a later association binding fails" in {
       Given("a create operation whose child binding succeeds before association binding fails")
       val (component, context) = _runtime_component()
-      given ExecutionContext = context
-      val orderId = _order_id("order_child_binding_later_failure")
-      val request = _create_order_request(component, orderId, Vector(
-        Record.dataAuto("name" -> "Widget", "quantity" -> 2)
-      ), operation = "createOrderWithBadAssociation", extraProperties = List(
-        Property("relatedOrderId", "not-an-entity-id", None)
-      ))
+      given ExecutionContext   = context
+      val orderid              = _order_id("order_child_binding_later_failure")
+      val request = _create_order_request(
+        component,
+        orderid,
+        Vector(
+          Record.dataAuto("name" -> "Widget", "quantity" -> 2)
+        ),
+        operation = "createOrderWithBadAssociation",
+        extraproperties = List(
+          Property("relatedOrderId", "not-an-entity-id", None)
+        )
+      )
 
       When("the operation is executed")
       val result = component.subsystem.get.executeOperationResponse(request)
 
       Then("the overall failure compensates the already-created child and parent")
       result shouldBe a[Consequence.Failure[_]]
-      _resolve_order(component, orderId) shouldBe a[Consequence.Failure[_]]
-      _order_lines(component, orderId) shouldBe Vector.empty
+      _resolve_order(component, orderid) shouldBe a[Consequence.Failure[_]]
+      _order_lines(component, orderid) shouldBe Vector.empty
     }
 
     "keep the parent for parameter-source child binding failures" in {
       Given("an existing parent and a parameter-source child binding operation")
       val (component, context) = _runtime_component()
-      given ExecutionContext = context
-      val orderId = _order_id("order_child_binding_parameter_parent")
-      _success(_put_order(component, orderId))
-      val otherId = _order_id("order_child_binding_parameter_other")
+      given ExecutionContext   = context
+      val orderid              = _order_id("order_child_binding_parameter_parent")
+      _success(_put_order(component, orderid))
+      val otherid = _order_id("order_child_binding_parameter_other")
       val request = Request.of(
         component = component.name,
         service = "order",
         operation = "appendLines",
         properties = List(
-          Property("orderId", orderId.value, None),
-          Property("lines", Vector(
-            Record.dataAuto("name" -> "Widget", "quantity" -> 2),
-            Record.dataAuto("orderId" -> otherId.value, "name" -> "Bad", "quantity" -> 1)
-          ), None)
+          Property("orderId", orderid.value, None),
+          Property(
+            "lines",
+            Vector(
+              Record.dataAuto("name"    -> "Widget", "quantity"  -> 2),
+              Record.dataAuto("orderId" -> otherid.value, "name" -> "Bad", "quantity" -> 1)
+            ),
+            None
+          )
         )
       )
 
@@ -165,8 +208,8 @@ final class ChildEntityBindingWorkflowSpec
 
       Then("only child creation is compensated")
       result shouldBe a[Consequence.Failure[_]]
-      _success(_resolve_order(component, orderId)).id shouldBe orderId
-      _order_lines(component, orderId) shouldBe Vector.empty
+      _success(_resolve_order(component, orderid)).id shouldBe orderid
+      _order_lines(component, orderid) shouldBe Vector.empty
     }
 
     "project child Entity binding metadata through help and describe" in {
@@ -175,27 +218,44 @@ final class ChildEntityBindingWorkflowSpec
 
       When("projecting operation metadata")
       val help = HelpProjection.project(component, Some(s"${component.name}.order.createOrder"))
-      val describe = DescribeProjection.project(component, Some(s"${component.name}.order.createOrder"))
-      val componentHelp = HelpProjection.project(component, Some(component.name))
-      val componentDescribe = DescribeProjection.project(component, Some(component.name))
+      val describe =
+        DescribeProjection.project(component, Some(s"${component.name}.order.createOrder"))
+      val componenthelp     = HelpProjection.project(component, Some(component.name))
+      val componentdescribe = DescribeProjection.project(component, Some(component.name))
       val componentmanual = StaticFormAppRenderer()
         .renderComponentManual(component.subsystem.get, component.name)
         .map(_.body)
         .getOrElse(fail("component manual missing"))
 
       Then("both help and describe expose childEntityBindings")
-      _records(help, "childEntityBindings").map(_.getString("entityName")) shouldBe Vector(Some("order_line"))
-      _records(help, "childEntityBindings").map(_.getString("relationshipName")) shouldBe Vector(Some("SalesOrder.lines"))
-      _records(describe, "childEntityBindings").map(_.getString("inputParameter")) shouldBe Vector(Some("lines"))
-      _records(componentHelp, "relationshipDefinitions").map(_.getString("name")) should contain (Some("SalesOrder.lines"))
-      _records(componentDescribe, "relationshipDefinitions").map(_.getString("storageMode")) should contain (Some("child-parent-id-field"))
-      _records(componentDescribe, "relationshipDefinitions").map(_.getString("storageMode")) should contain (Some("embedded-value-object"))
-      _records(componentDescribe, "relationshipDefinitions").map(_.getString("targetModelKind")) should contain (Some("value"))
-      _records(componentDescribe, "relationshipDefinitions").map(_.getString("valueField")) should contain (Some("shippingAddress"))
-      componentmanual should include ("Relationships")
-      componentmanual should include ("SalesOrder.lines")
-      componentmanual should include ("embedded-value-object")
-      componentmanual should include ("shippingAddress")
+      _records(help, "childEntityBindings").map(_.getString("entityName")) shouldBe Vector(
+        Some("order_line")
+      )
+      _records(help, "childEntityBindings").map(_.getString("relationshipName")) shouldBe Vector(
+        Some("SalesOrder.lines")
+      )
+      _records(describe, "childEntityBindings").map(_.getString("inputParameter")) shouldBe Vector(
+        Some("lines")
+      )
+      _records(componenthelp, "relationshipDefinitions").map(_.getString("name")) should contain(
+        Some("SalesOrder.lines")
+      )
+      _records(componentdescribe, "relationshipDefinitions").map(
+        _.getString("storageMode")
+      ) should contain(Some("child-parent-id-field"))
+      _records(componentdescribe, "relationshipDefinitions").map(
+        _.getString("storageMode")
+      ) should contain(Some("embedded-value-object"))
+      _records(componentdescribe, "relationshipDefinitions").map(
+        _.getString("targetModelKind")
+      ) should contain(Some("value"))
+      _records(componentdescribe, "relationshipDefinitions").map(
+        _.getString("valueField")
+      ) should contain(Some("shippingAddress"))
+      componentmanual should include("Relationships")
+      componentmanual should include("SalesOrder.lines")
+      componentmanual should include("embedded-value-object")
+      componentmanual should include("shippingAddress")
     }
   }
 
@@ -245,7 +305,8 @@ final class ChildEntityBindingWorkflowSpec
               inputParameter = "lines",
               parentIdField = "orderId",
               relationshipName = Some("SalesOrder.lines"),
-              sourceEntityIdMode = CmlOperationAssociationBinding.SourceEntityIdModeEntityCreateResult,
+              sourceEntityIdMode =
+                CmlOperationAssociationBinding.SourceEntityIdModeEntityCreateResult,
               sortOrderField = Some("sortOrder"),
               createsEntity = true
             ))
@@ -280,7 +341,8 @@ final class ChildEntityBindingWorkflowSpec
               inputParameter = "lines",
               parentIdField = "orderId",
               relationshipName = Some("SalesOrder.lines"),
-              sourceEntityIdMode = CmlOperationAssociationBinding.SourceEntityIdModeEntityCreateResult,
+              sourceEntityIdMode =
+                CmlOperationAssociationBinding.SourceEntityIdModeEntityCreateResult,
               sortOrderField = Some("sortOrder"),
               createsEntity = true
             )),
@@ -289,7 +351,8 @@ final class ChildEntityBindingWorkflowSpec
               targetKind = "order",
               createsAssociation = true,
               roles = Vector("related"),
-              sourceEntityIdMode = CmlOperationAssociationBinding.SourceEntityIdModeEntityCreateResult,
+              sourceEntityIdMode =
+                CmlOperationAssociationBinding.SourceEntityIdModeEntityCreateResult,
               targetIdParameters = Vector("relatedOrderId")
             ))
           )
@@ -330,11 +393,11 @@ final class ChildEntityBindingWorkflowSpec
   }
 
   private def _create_order_request(
-    component: Component,
-    id: EntityId,
-    lines: Vector[Record],
-    operation: String = "createOrder",
-    extraProperties: List[Property] = Nil
+      component: Component,
+      id: EntityId,
+      lines: Vector[Record],
+      operation: String = "createOrder",
+      extraproperties: List[Property] = Nil
   ): Request =
     Request.of(
       component = component.name,
@@ -345,44 +408,44 @@ final class ChildEntityBindingWorkflowSpec
         Property("name", "Order", None),
         Property("status", "draft", None),
         Property("lines", lines, None)
-      ) ++ extraProperties
+      ) ++ extraproperties
     )
 
   private def _put_order(
-    component: Component,
-    id: EntityId
+      component: Component,
+      id: EntityId
   )(using ExecutionContext): Consequence[Unit] =
-    component.entitySpace.entity[Any]("order").putRecordSynced(_order_record(id))
+    component.entitySpace.entity[Any]("order").createRecordSynced(_order_record(id))
 
   private def _put_order_line(
-    component: Component,
-    id: EntityId,
-    orderId: EntityId,
-    name: String,
-    quantity: Int
+      component: Component,
+      id: EntityId,
+      orderid: EntityId,
+      name: String,
+      quantity: Int
   )(using ExecutionContext): Consequence[Unit] =
-    component.entitySpace.entity[Any]("order_line").putRecordSynced(Record.dataAuto(
-      "id" -> id.value,
-      "orderId" -> orderId.value,
-      "name" -> name,
+    component.entitySpace.entity[Any]("order_line").createRecordSynced(Record.dataAuto(
+      "id"       -> id.value,
+      "orderId"  -> orderid.value,
+      "name"     -> name,
       "quantity" -> quantity
     ))
 
   private def _resolve_order(
-    component: Component,
-    id: EntityId
+      component: Component,
+      id: EntityId
   )(using ExecutionContext): Consequence[OrderEntity] =
     component.entitySpace.entity[Any]("order").resolve(id).map(_.asInstanceOf[OrderEntity])
 
   private def _resolve_order_line(
-    component: Component,
-    id: EntityId
+      component: Component,
+      id: EntityId
   )(using ExecutionContext): Consequence[OrderLineEntity] =
     component.entitySpace.entity[Any]("order_line").resolve(id).map(_.asInstanceOf[OrderLineEntity])
 
   private def _order_lines(
-    component: Component,
-    id: EntityId
+      component: Component,
+      id: EntityId
   )(using ExecutionContext): Vector[OrderLineEntity] = {
     val internal = ExecutionContext.withAggregateInternalRead(summon[ExecutionContext], true)
     val result = _success(component.entitySpace.entity[Any]("order_line").search(
@@ -395,8 +458,8 @@ final class ChildEntityBindingWorkflowSpec
 
   private def _order_record(id: EntityId): Record =
     Record.dataAuto(
-      "id" -> id.value,
-      "name" -> "Order",
+      "id"     -> id.value,
+      "name"   -> "Order",
       "status" -> "draft"
     )
 
@@ -413,14 +476,14 @@ final class ChildEntityBindingWorkflowSpec
 
   private def _success[A](result: Consequence[A]): A =
     result match {
-      case Consequence.Success(value) => value
+      case Consequence.Success(value)      => value
       case Consequence.Failure(conclusion) => fail(conclusion.show)
     }
 }
 
 private final case class _OrderOperation(
-  opname: String,
-  createsParent: Boolean
+    opname: String,
+    createsParent: Boolean
 ) extends spec.OperationDefinition with ChildEntityBindingOperationDefinition {
   override val specification: spec.OperationDefinition.Specification =
     spec.OperationDefinition.Specification(
@@ -461,40 +524,42 @@ private final case class _OrderOperation(
 }
 
 private final case class _OrderAction(
-  request: Request,
-  createsParent: Boolean
+    request: Request,
+    createsParent: Boolean
 ) extends Action {
   override def createCall(core: ActionCall.Core): ActionCall =
     _OrderActionCall(core, request, createsParent)
 }
 
 private final case class _OrderActionCall(
-  core: ActionCall.Core,
-  oprequest: Request,
-  createsParent: Boolean
+    core: ActionCall.Core,
+    oprequest: Request,
+    createsParent: Boolean
 ) extends ProcedureActionCall {
   override def execute(): Consequence[OperationResponse] = {
     given ExecutionContext = core.executionContext
     val id = EntityId.parse(_string("id").getOrElse(_string("orderId").getOrElse("")))
-    id.flatMap { orderId =>
+    id.flatMap { orderid =>
       val created =
         if (createsParent)
           core.component
             .flatMap(_.entitySpace.entityOption[Any]("order"))
-            .map(_.putRecordSynced(Record.dataAuto(
-              "id" -> orderId.value,
-              "name" -> _string("name").getOrElse("Order"),
+            .map(_.createRecordSynced(Record.dataAuto(
+              "id"     -> orderid.value,
+              "name"   -> _string("name").getOrElse("Order"),
               "status" -> _string("status").getOrElse("draft")
             )))
             .getOrElse(Consequence.operationNotFound("order entity collection"))
         else
           Consequence.unit
       created.map { _ =>
-        OperationResponse.RecordResponse(Record.dataAuto("entity_id" -> orderId.value))
+        OperationResponse.RecordResponse(Record.dataAuto("entity_id" -> orderid.value))
       }
     }
   }
 
   private def _string(name: String): Option[String] =
-    oprequest.properties.collectFirst { case p if p.name == name => p.value.toString.trim }.filter(_.nonEmpty)
+    oprequest.properties.collectFirst { case p if p.name == name => p.value.toString.trim }.filter(
+      _.nonEmpty
+    )
 }

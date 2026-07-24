@@ -9,7 +9,16 @@ import org.goldenport.record.Record
 import org.simplemodeling.model.datatype.*
 import org.goldenport.cncf.entity.*
 import org.goldenport.cncf.directive.*
-import org.goldenport.cncf.blob.{ContentReferenceAttachResult, ContentReferenceContent, ContentReferenceNormalizeResult, ContentRenderResult, InlineImageAttachResult, InlineImageContent, InlineImageNormalizeResult, InlineImageOccurrence}
+import org.goldenport.cncf.blob.{
+  ContentReferenceAttachResult,
+  ContentReferenceContent,
+  ContentReferenceNormalizeResult,
+  ContentRenderResult,
+  InlineImageAttachResult,
+  InlineImageContent,
+  InlineImageNormalizeResult,
+  InlineImageOccurrence
+}
 import org.goldenport.cncf.embedded.{EmbeddedDataStore, EmbeddedStatement, EmbeddedUpdateResult}
 import org.goldenport.cncf.processexecution.{ProcessExecutionResult, ResolvedProcessExecution}
 import org.goldenport.cncf.operation.evaluation.OperationEvaluationSupplementalIntent
@@ -159,6 +168,12 @@ object UnitOfWorkOp {
     visibilityScope: Option[EntityVisibilityScope] = None
   ) extends UnitOfWorkOp[Option[T]]
 
+  final case class EntityStoreLoadSnapshot[T](
+      id: EntityId,
+      tc: EntityPersistent[T],
+      authorization: Option[UnitOfWorkAuthorization] = None
+  ) extends UnitOfWorkOp[Option[EntitySnapshot[T]]]
+
   // Special-use direct path to EntityStoreSpace (bypasses EntitySpace/MemoryRealm).
   final case class EntityStoreLoadDirect[T](
     id: EntityId,
@@ -167,13 +182,22 @@ object UnitOfWorkOp {
 
   final case class EntityStoreSave[T](
     entity: T,
+      expectation: EntityMutationExpectation,
     tc: EntityPersistent[T],
     authorization: Option[UnitOfWorkAuthorization] = None
+  ) extends UnitOfWorkOp[EntitySnapshot[T]]
+
+  final case class EntityStoreSaveUnversioned[T](
+      entity: T,
+      purpose: EntityUnversionedMutationPurpose,
+      tc: EntityPersistent[T],
+      authorization: Option[UnitOfWorkAuthorization]
   ) extends UnitOfWorkOp[Unit]
 
-  final case class EntityStoreUpsert[T](
+  final case class EntityStoreUpsertUnversioned[T](
     entity: T,
     id: EntityId,
+      purpose: EntityUnversionedMutationPurpose,
     tc: EntityPersistentCreate[T],
     options: EntityCreateOptions = EntityCreateOptions.default,
     createAuthorization: Option[UnitOfWorkAuthorization] = None,
@@ -182,16 +206,33 @@ object UnitOfWorkOp {
 
   final case class EntityStoreUpdate[T](
     entity: T,
+      expectation: EntityMutationExpectation,
     tc: EntityPersistent[T],
     authorization: Option[UnitOfWorkAuthorization] = None
-  ) extends UnitOfWorkOp[Unit]
+  ) extends UnitOfWorkOp[EntitySnapshot[T]]
 
   // Patch-oriented update route for cozy-generated update shapes (no id field in patch).
   final case class EntityStoreUpdateById[P](
     id: EntityId,
     patch: P,
+      expectation: EntityMutationExpectation,
     tc: EntityPersistentUpdate[P],
     authorization: Option[UnitOfWorkAuthorization] = None
+  ) extends UnitOfWorkOp[EntityRecordSnapshot]
+
+  final case class EntityStoreUpdateUnversioned[T](
+      entity: T,
+      purpose: EntityUnversionedMutationPurpose,
+      tc: EntityPersistent[T],
+      authorization: Option[UnitOfWorkAuthorization]
+  ) extends UnitOfWorkOp[Unit]
+
+  final case class EntityStoreUpdateByIdUnversioned[P](
+      id: EntityId,
+      patch: P,
+      purpose: EntityUnversionedMutationPurpose,
+      tc: EntityPersistentUpdate[P],
+      authorization: Option[UnitOfWorkAuthorization]
   ) extends UnitOfWorkOp[Unit]
 
   final case class EntityStoreDelete(

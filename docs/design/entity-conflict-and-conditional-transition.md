@@ -142,6 +142,12 @@ are separate operations. A future force or repair operation must have an
 explicit authorization and audit contract and must not be implemented by
 omitting the token from an ordinary mutation.
 
+Framework bootstrap, physical migration, and seed-import support may use
+explicitly named unversioned operations. Those operations carry a closed
+purpose value, require System admission at the UnitOfWork interpreter, and
+are not exposed by the protected application Entity DSL. Stable identity
+coordination uses claim-or-load rather than overwrite-style upsert.
+
 ## Ordinary Version-Aware Mutation
 
 An ordinary version-aware mutation is one provider-owned compare-and-mutate

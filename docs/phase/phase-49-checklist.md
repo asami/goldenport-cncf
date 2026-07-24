@@ -161,7 +161,7 @@ Modified Scala File Compliance Ledger:
 ## EC-03: Version-aware Mutation
 
 Stage Status:
-- Current status: IN_PROGRESS
+- Current status: DONE
 - Owner: CNCF Entity/Aggregate maintainers
 - Update rule: Mark IN_PROGRESS only after EC-02 closes. Mark DONE only when
   every admitted path compares its expected token in the native mutation and
@@ -170,14 +170,14 @@ Stage Status:
 - [x] Add expected-token forms for Entity save.
 - [x] Add expected-token forms for typed Entity update.
 - [x] Add expected-token forms for patch update by id.
-- [ ] Integrate the minimum Aggregate-root and framework state-transition paths
+- [x] Integrate the minimum Aggregate-root and framework state-transition paths
   required by the generic conflict foundation.
 - [x] Ensure the datastore comparison and mutation are one atomic operation.
 - [x] Return structured conflict diagnostics with expected/actual metadata
   according to the accepted redaction contract.
-- [ ] Ensure Working Set values cannot supply or bypass the authoritative
+- [x] Ensure Working Set values cannot supply or bypass the authoritative
   token check.
-- [ ] Define the temporary policy for unversioned mutation paths without
+- [x] Define the temporary policy for unversioned mutation paths without
   treating them as implicit force/repair.
 - [x] Add concurrent stale-update executable specifications.
 
@@ -199,8 +199,65 @@ Evidence:
     `ContentBodyVersionedMutationSpec`, and
     `EntityConcurrencyTokenSpec`.
   - `sbt -J-Xmx4G --batch test`: 2377 tests passed across 337 suites.
-- EC-03 remains active. EC-03B owns UnitOfWork/ActionCall/Aggregate migration,
-  Working Set protection, and temporary unversioned-mutation policy.
+- EC-03B implementation adds snapshot load plus expectation-required
+  save/update/patch operations to the UnitOfWork algebra. Provider success
+  installs the returned authoritative Entity and invalidates views once;
+  stale conflict evicts the resident value without invalidating views.
+- The normal protected Entity DSL no longer exposes upsert overwrite.
+  Stable-identity ownership remains `entity_claim_or_load`; create-only
+  collection writes are separate from versioned saves.
+- Aggregate create is create-only, Aggregate update requires an explicit
+  expectation, and Aggregate command persists with the root snapshot admitted
+  during its resolve phase.
+- Explicit unversioned save/update/upsert operations require both a closed
+  `EntityUnversionedMutationPurpose` and System admission. No protected
+  application DSL exposes these operations.
+- `UnitOfWorkVersionedMutationSpec` covers authoritative snapshot
+  reconciliation, stale resident eviction, unchanged authoritative storage,
+  and rejection of non-System unversioned mutation.
+- EC-03B implementation validation:
+  - the focused UnitOfWork, authorization, Aggregate, EntityStore, child
+    binding, Tag, JobControl, and Static Form matrix passed 458 tests across
+    11 suites;
+  - `StaticFormAppRendererSpec` passed all 319 tests, including authoritative
+    hidden-version projection, rejection of a stale browser update form, and
+    canonical EntityId projection through `sourceEntityId`;
+  - `sbt -J-Xmx4G --batch Test/compile` passed;
+  - `sbt -J-Xmx4G --batch test`: 2380 tests passed across 338 suites, with
+    2 canceled, 1 ignored, and 59 pending;
+  - `git diff --check` passed.
+- Clean re-review found no actionable implementation, naming, or
+  executable-specification finding.
+- EC-03 is complete. The next implementation slice is EC-04.
+
+EC-03B Modified Scala File Compliance Ledger:
+
+| File | Naming review | Executable-spec review | Validation | Disposition |
+| --- | --- | --- | --- | --- |
+| `src/main/scala/org/goldenport/cncf/action/ActionCallFeaturePart.scala` | Whole-file naming review passed | Not a spec | Focused 458-test matrix, `Test/compile`, and full 2380-test suite passed | EC-03B release commit |
+| `src/main/scala/org/goldenport/cncf/component/builtin/admin/AdminComponent.scala` | Whole-file naming review passed | Not a spec | Focused 458-test matrix, `Test/compile`, and full 2380-test suite passed | EC-03B release commit |
+| `src/main/scala/org/goldenport/cncf/component/builtin/jobcontrol/JobControlComponent.scala` | Whole-file naming review passed | Not a spec | Focused 458-test matrix, `Test/compile`, and full 2380-test suite passed | EC-03B release commit |
+| `src/main/scala/org/goldenport/cncf/entity/ChildEntityBindingWorkflow.scala` | Whole-file naming review passed | Not a spec | Focused 458-test matrix, `Test/compile`, and full 2380-test suite passed | EC-03B release commit |
+| `src/main/scala/org/goldenport/cncf/entity/EntityConcurrency.scala` | Whole-file naming review passed | Not a spec | Focused 458-test matrix, `Test/compile`, and full 2380-test suite passed | EC-03B release commit |
+| `src/main/scala/org/goldenport/cncf/entity/EntityPersistent.scala` | Whole-file naming review passed | Not a spec | Focused 458-test matrix, `Test/compile`, and full 2380-test suite passed | EC-03B release commit |
+| `src/main/scala/org/goldenport/cncf/entity/EntityStore.scala` | Whole-file naming review passed | Not a spec | Focused 458-test matrix, `Test/compile`, and full 2380-test suite passed | EC-03B release commit |
+| `src/main/scala/org/goldenport/cncf/entity/EntityStoreSpace.scala` | Whole-file naming review passed | Not a spec | Focused 458-test matrix, `Test/compile`, and full 2380-test suite passed | EC-03B release commit |
+| `src/main/scala/org/goldenport/cncf/entity/runtime/Collection.scala` | Whole-file naming review passed | Not a spec | Focused 458-test matrix, `Test/compile`, and full 2380-test suite passed | EC-03B release commit |
+| `src/main/scala/org/goldenport/cncf/http/Http4sHttpServer.scala` | Whole-file naming review passed | Not a spec | Focused 458-test matrix, `Test/compile`, and full 2380-test suite passed | EC-03B release commit |
+| `src/main/scala/org/goldenport/cncf/http/StaticFormAppRendererComponentAdminPart.scala` | Whole-file naming review passed | Not a spec | Focused 458-test matrix, `Test/compile`, and full 2380-test suite passed | EC-03B release commit |
+| `src/main/scala/org/goldenport/cncf/job/JobEngine.scala` | Whole-file naming review passed | Not a spec | Focused 458-test matrix, `Test/compile`, and full 2380-test suite passed | EC-03B release commit |
+| `src/main/scala/org/goldenport/cncf/tag/TagModel.scala` | Whole-file naming review passed | Not a spec | Focused 458-test matrix, `Test/compile`, and full 2380-test suite passed | EC-03B release commit |
+| `src/main/scala/org/goldenport/cncf/unitofwork/UnitOfWorkInterpreter.scala` | Whole-file naming review passed | Not a spec | Focused 458-test matrix, `Test/compile`, and full 2380-test suite passed | EC-03B release commit |
+| `src/main/scala/org/goldenport/cncf/unitofwork/UnitOfWorkOp.scala` | Whole-file naming review passed | Not a spec | Focused 458-test matrix, `Test/compile`, and full 2380-test suite passed | EC-03B release commit |
+| `src/test/scala/org/goldenport/cncf/action/ActionCallAggregateResolveSpec.scala` | Whole-file naming review passed | Given/When/Then Aggregate resolve and mutation behaviors passed | Focused 458-test matrix, `Test/compile`, and full 2380-test suite passed | EC-03B release commit |
+| `src/test/scala/org/goldenport/cncf/action/ActionCallEntityAccessMetricsSpec.scala` | Whole-file naming review passed | Grouped Given/When/Then Entity access and metrics behaviors passed | Focused 458-test matrix, `Test/compile`, and full 2380-test suite passed | EC-03B release commit |
+| `src/test/scala/org/goldenport/cncf/entity/ChildEntityBindingWorkflowSpec.scala` | Whole-file naming review passed | Given/When/Then child binding and compensation behaviors passed | Focused 458-test matrix, `Test/compile`, and full 2380-test suite passed | EC-03B release commit |
+| `src/test/scala/org/goldenport/cncf/entity/EntityConcurrencyTokenSpec.scala` | Whole-file naming review passed | Nine Given/When/Then behaviors with ScalaCheck properties passed | Focused 458-test matrix, `Test/compile`, and full 2380-test suite passed | EC-03B release commit |
+| `src/test/scala/org/goldenport/cncf/entity/EntityStoreQueryRouteSpec.scala` | Whole-file naming review passed | Given/When/Then EntityStore route behaviors passed | Focused 458-test matrix, `Test/compile`, and full 2380-test suite passed | EC-03B release commit |
+| `src/test/scala/org/goldenport/cncf/http/StaticFormAppRendererSpec.scala` | Whole-file naming review passed | All 319 Given/When/Then renderer behaviors passed, including stale-form rejection | Focused 458-test matrix, `Test/compile`, and full 2380-test suite passed | EC-03B release commit |
+| `src/test/scala/org/goldenport/cncf/unitofwork/UnitOfWorkStateMachineHookSpec.scala` | Whole-file naming review passed | Given/When/Then transition-hook behaviors passed | Focused 458-test matrix, `Test/compile`, and full 2380-test suite passed | EC-03B release commit |
+| `src/test/scala/org/goldenport/cncf/unitofwork/UnitOfWorkTargetAuthorizationSpec.scala` | Whole-file naming review passed | Five grouped Given/When/Then authorization feature areas passed | Focused 458-test matrix, `Test/compile`, and full 2380-test suite passed | EC-03B release commit |
+| `src/test/scala/org/goldenport/cncf/unitofwork/UnitOfWorkVersionedMutationSpec.scala` | Whole-file naming review passed | Four Given/When/Then authoritative mutation behaviors passed | Focused 458-test matrix, `Test/compile`, and full 2380-test suite passed | EC-03B release commit |
 
 EC-03A Modified Scala File Compliance Ledger:
 

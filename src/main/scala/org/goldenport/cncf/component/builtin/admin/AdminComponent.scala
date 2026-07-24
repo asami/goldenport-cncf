@@ -8,9 +8,32 @@ import java.nio.file.Paths
 import scala.jdk.CollectionConverters.*
 import scala.util.Using
 import org.goldenport.Consequence
-import org.goldenport.cncf.action.{Action, ActionCall, CommandAction, CommandExecutionMode, ProcedureActionCall, QueryAction, ResourceAccess}
-import org.goldenport.cncf.association.{Association, AssociationBindingWorkflow, AssociationDomain, AssociationFilter, AssociationRecordCodec, AssociationRepository, AssociationStoragePolicy, AssociationTargetValidator}
-import org.goldenport.cncf.blob.{Blob, BlobAttachmentWorkflow, BlobPayloadSupport, BlobProjection, BlobRepository}
+import org.goldenport.cncf.action.{
+  Action,
+  ActionCall,
+  CommandAction,
+  CommandExecutionMode,
+  ProcedureActionCall,
+  QueryAction,
+  ResourceAccess
+}
+import org.goldenport.cncf.association.{
+  Association,
+  AssociationBindingWorkflow,
+  AssociationDomain,
+  AssociationFilter,
+  AssociationRecordCodec,
+  AssociationRepository,
+  AssociationStoragePolicy,
+  AssociationTargetValidator
+}
+import org.goldenport.cncf.blob.{
+  Blob,
+  BlobAttachmentWorkflow,
+  BlobPayloadSupport,
+  BlobProjection,
+  BlobRepository
+}
 import org.goldenport.cncf.component.{Component, ComponentInit, ComponentOrigin}
 import org.goldenport.cncf.component.ComponentOriginLabel
 import org.goldenport.cncf.component.ComponentCreate
@@ -22,18 +45,41 @@ import org.goldenport.configuration.ConfigurationResolver
 import org.goldenport.configuration.ConfigurationValue
 import org.goldenport.configuration.ConfigurationSources
 import org.goldenport.configuration.ConfigurationOrigin
-import org.goldenport.cncf.context.GlobalRuntimeContext
+import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext}
 import org.goldenport.cncf.config.RuntimeConfig
-import org.goldenport.cncf.datastore.{DataStore, Query as DataStoreQuery, QueryDirective, QueryLimit, TotalCountCapability}
-import org.goldenport.cncf.directive.{Query as EntityQuery}
-import org.goldenport.cncf.entity.{EntityPersistable, EntityPersistent, EntityQuery as StoreEntityQuery, EntitySearchScope}
+import org.goldenport.cncf.datastore.{
+  DataStore,
+  Query as DataStoreQuery,
+  QueryDirective,
+  QueryLimit,
+  TotalCountCapability
+}
+import org.goldenport.cncf.directive.Query as EntityQuery
+import org.goldenport.cncf.entity.{
+  EntityMutationExpectation,
+  EntityPersistable,
+  EntityPersistent,
+  EntityQuery as StoreEntityQuery,
+  EntitySearchScope
+}
 import org.goldenport.cncf.entity.runtime.{EntityCollection, EntityQueryFieldResolver}
 import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.cncf.observability.ObservabilityEngine
-import org.goldenport.cncf.operation.{AssociationBindingOperationDefinition, CmlOperationAssociationBinding}
-import org.goldenport.cncf.projection.{SecurityDeploymentMarkdownProjection, SecurityDeploymentProjection}
+import org.goldenport.cncf.operation.{
+  AssociationBindingOperationDefinition,
+  CmlOperationAssociationBinding
+}
+import org.goldenport.cncf.projection.{
+  SecurityDeploymentMarkdownProjection,
+  SecurityDeploymentProjection
+}
 import org.goldenport.cncf.search.{SearchPlanningProfile, WebSearchQueryPlanner}
-import org.goldenport.cncf.security.{AdminAuthorizationPolicy, EntityAccessMode, OperationAuthorizationProvider, OperationAuthorizationRule}
+import org.goldenport.cncf.security.{
+  AdminAuthorizationPolicy,
+  EntityAccessMode,
+  OperationAuthorizationProvider,
+  OperationAuthorizationRule
+}
 import org.goldenport.cncf.spi.SpiSocket
 import org.goldenport.cncf.subsystem.{GenericSubsystemAssemblyDescriptorSource, Subsystem}
 import org.goldenport.cncf.unitofwork.{UnitOfWorkAuthorization, UnitOfWorkOp}
@@ -56,11 +102,10 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
  *  version Feb. 19, 2026
  *  version May. 31, 2026
  *  version Jun. 18, 2026
- * @version Jul. 10, 2026
+ * @version Jul. 24, 2026
  * @author  ASAMI, Tomoharu
  */
-class AdminComponent() extends Component {
-}
+class AdminComponent() extends Component {}
 
 object AdminComponent {
   val name: String = "admin"
@@ -82,260 +127,261 @@ object AdminComponent {
       comp: Component
     ): Component.Core = {
       val request = spec.RequestDefinition()
-      val opPing = new PingOperationDefinition(request, spec.ResponseDefinition(result = List(XString)))
-      val opComponentList = new ComponentListOperationDefinition(
+      val opping =
+        new PingOperationDefinition(request, spec.ResponseDefinition(result = List(XString)))
+      val opcomponentlist = new ComponentListOperationDefinition(
         request,
         spec.ResponseDefinition(result = List(DataType.Named("Record"))),
         params.subsystem
       )
-      val opConfigShow = new ConfigShowOperationDefinition(
+      val opconfigshow = new ConfigShowOperationDefinition(
         request,
         spec.ResponseDefinition(result = List(DataType.Named("Record"))),
         params.subsystem
       )
-      val opVariationList = new VariationListOperationDefinition(
+      val opvariationlist = new VariationListOperationDefinition(
         request,
         spec.ResponseDefinition(result = List(DataType.Named("Record"))),
         params.subsystem
       )
-      val opVariationDescribe = new VariationDescribeOperationDefinition(
+      val opvariationdescribe = new VariationDescribeOperationDefinition(
         request,
         spec.ResponseDefinition(result = List(DataType.Named("Record")))
       )
-      val opExtensionList = new ExtensionListOperationDefinition(
+      val opextensionlist = new ExtensionListOperationDefinition(
         request,
         spec.ResponseDefinition(result = List(DataType.Named("Record"))),
         params.subsystem
       )
-      val opDeploymentSecurityMermaid = new DeploymentSecurityMermaidOperationDefinition(
+      val opdeploymentsecuritymermaid = new DeploymentSecurityMermaidOperationDefinition(
         request,
         spec.ResponseDefinition(result = List(XString)),
         params.subsystem
       )
-      val opDeploymentSecurityMarkdown = new DeploymentSecurityMarkdownOperationDefinition(
+      val opdeploymentsecuritymarkdown = new DeploymentSecurityMarkdownOperationDefinition(
         request,
         spec.ResponseDefinition(result = List(XString)),
         params.subsystem
       )
-      val opAssemblyWarnings = new AssemblyWarningsOperationDefinition(
+      val opassemblywarnings = new AssemblyWarningsOperationDefinition(
         request,
         spec.ResponseDefinition(result = List(DataType.Named("Record"))),
         params.subsystem
       )
-      val opAssemblyReport = new AssemblyReportOperationDefinition(
+      val opassemblyreport = new AssemblyReportOperationDefinition(
         request,
         spec.ResponseDefinition(result = List(DataType.Named("Record"))),
         params.subsystem
       )
-      val opAssemblyDescriptor = new AssemblyDescriptorOperationDefinition(
+      val opassemblydescriptor = new AssemblyDescriptorOperationDefinition(
         request,
         spec.ResponseDefinition(result = List(DataType.Named("Record"))),
         params.subsystem
       )
-      val opAssemblyDiagram = new AssemblyDiagramOperationDefinition(
+      val opassemblydiagram = new AssemblyDiagramOperationDefinition(
         request,
         spec.ResponseDefinition(result = List(XString)),
         params.subsystem
       )
-      val opExecutionCalltree = new ExecutionCalltreeOperationDefinition(
+      val opexecutioncalltree = new ExecutionCalltreeOperationDefinition(
         request,
         spec.ResponseDefinition(result = List(DataType.Named("Record")))
       )
-      val opExecutionHistory = new ExecutionHistoryOperationDefinition(
+      val opexecutionhistory = new ExecutionHistoryOperationDefinition(
         request,
         spec.ResponseDefinition(result = List(DataType.Named("Record")))
       )
-      val opExecutionDiagnostics = new ExecutionDiagnosticsOperationDefinition(
+      val opexecutiondiagnostics = new ExecutionDiagnosticsOperationDefinition(
         request,
         spec.ResponseDefinition(result = List(DataType.Named("Record")))
       )
-      val opEntityCreate = new EntityCreateOperationDefinition(
+      val opentitycreate = new EntityCreateOperationDefinition(
         request,
         spec.ResponseDefinition(result = List(XString)),
         params.subsystem
       )
-      val opEntityUpdate = new EntityUpdateOperationDefinition(
+      val opentityupdate = new EntityUpdateOperationDefinition(
         request,
         spec.ResponseDefinition(result = List(XString)),
         params.subsystem
       )
-      val opEntityList = new EntityListOperationDefinition(
+      val opentitylist = new EntityListOperationDefinition(
         request,
         spec.ResponseDefinition(result = List(XString)),
         params.subsystem
       )
-      val opEntityRead = new EntityReadOperationDefinition(
+      val opentityread = new EntityReadOperationDefinition(
         request,
         spec.ResponseDefinition(result = List(XString)),
         params.subsystem
       )
-      val opDataCreate = new DataCreateOperationDefinition(
+      val opdatacreate = new DataCreateOperationDefinition(
         request,
         spec.ResponseDefinition(result = List(XString)),
         params.subsystem
       )
-      val opDataUpdate = new DataUpdateOperationDefinition(
+      val opdataupdate = new DataUpdateOperationDefinition(
         request,
         spec.ResponseDefinition(result = List(XString)),
         params.subsystem
       )
-      val opDataList = new DataListOperationDefinition(
+      val opdatalist = new DataListOperationDefinition(
         request,
         spec.ResponseDefinition(result = List(XString)),
         params.subsystem
       )
-      val opDataRead = new DataReadOperationDefinition(
+      val opdataread = new DataReadOperationDefinition(
         request,
         spec.ResponseDefinition(result = List(XString)),
         params.subsystem
       )
-      val opViewRead = new ViewReadOperationDefinition(
+      val opviewread = new ViewReadOperationDefinition(
         request,
         spec.ResponseDefinition(result = List(DataType.Named("Record"))),
         params.subsystem
       )
-      val opAggregateRead = new AggregateReadOperationDefinition(
+      val opaggregateread = new AggregateReadOperationDefinition(
         request,
         spec.ResponseDefinition(result = List(DataType.Named("Record"))),
         params.subsystem
       )
-      val opAssociationList = new AssociationListOperationDefinition(
+      val opassociationlist = new AssociationListOperationDefinition(
         request,
         spec.ResponseDefinition(result = List(DataType.Named("Record"))),
         params.subsystem
       )
-      val opAssociationAttach = new AssociationAttachOperationDefinition(
+      val opassociationattach = new AssociationAttachOperationDefinition(
         request,
         spec.ResponseDefinition(result = List(DataType.Named("Record"))),
         params.subsystem
       )
-      val opAssociationDetach = new AssociationDetachOperationDefinition(
+      val opassociationdetach = new AssociationDetachOperationDefinition(
         request,
         spec.ResponseDefinition(result = List(DataType.Named("Record"))),
         params.subsystem
       )
-      val serviceSystem = spec.ServiceDefinition(
+      val servicesystem = spec.ServiceDefinition(
         name = "system",
         operations = spec.OperationDefinitionGroup(
-          operations = NonEmptyVector.of(opPing)
+          operations = NonEmptyVector.of(opping)
         )
       )
-      val serviceComponent = spec.ServiceDefinition(
+      val servicecomponent = spec.ServiceDefinition(
         name = "component",
         operations = spec.OperationDefinitionGroup(
-          operations = NonEmptyVector.of(opComponentList)
+          operations = NonEmptyVector.of(opcomponentlist)
         )
       )
-      val serviceConfig = spec.ServiceDefinition(
+      val serviceconfig = spec.ServiceDefinition(
         name = "config",
         operations = spec.OperationDefinitionGroup(
-          operations = NonEmptyVector.of(opConfigShow)
+          operations = NonEmptyVector.of(opconfigshow)
         )
       )
-      val serviceVariation = spec.ServiceDefinition(
+      val servicevariation = spec.ServiceDefinition(
         name = "variation",
         operations = spec.OperationDefinitionGroup(
           operations = NonEmptyVector.of(
-            opVariationList,
-            opVariationDescribe
+            opvariationlist,
+            opvariationdescribe
           )
         )
       )
-      val serviceExtension = spec.ServiceDefinition(
+      val serviceextension = spec.ServiceDefinition(
         name = "extension",
         operations = spec.OperationDefinitionGroup(
-          operations = NonEmptyVector.of(opExtensionList)
+          operations = NonEmptyVector.of(opextensionlist)
         )
       )
-      val serviceDeployment = spec.ServiceDefinition(
+      val servicedeployment = spec.ServiceDefinition(
         name = "deployment",
         operations = spec.OperationDefinitionGroup(
           operations = NonEmptyVector.of(
-            opDeploymentSecurityMermaid,
-            opDeploymentSecurityMarkdown
+            opdeploymentsecuritymermaid,
+            opdeploymentsecuritymarkdown
           )
         )
       )
-      val serviceAssembly = spec.ServiceDefinition(
+      val serviceassembly = spec.ServiceDefinition(
         name = "assembly",
         operations = spec.OperationDefinitionGroup(
           operations = NonEmptyVector.of(
-            opAssemblyWarnings,
-            opAssemblyReport,
-            opAssemblyDescriptor,
-            opAssemblyDiagram
+            opassemblywarnings,
+            opassemblyreport,
+            opassemblydescriptor,
+            opassemblydiagram
           )
         )
       )
-      val serviceExecution = spec.ServiceDefinition(
+      val serviceexecution = spec.ServiceDefinition(
         name = "execution",
         operations = spec.OperationDefinitionGroup(
           operations = NonEmptyVector.of(
-            opExecutionDiagnostics,
-            opExecutionHistory,
-            opExecutionCalltree
+            opexecutiondiagnostics,
+            opexecutionhistory,
+            opexecutioncalltree
           )
         )
       )
-      val serviceEntity = spec.ServiceDefinition(
+      val serviceentity = spec.ServiceDefinition(
         name = "entity",
         operations = spec.OperationDefinitionGroup(
           operations = NonEmptyVector.of(
-            opEntityList,
-            opEntityRead,
-            opEntityCreate,
-            opEntityUpdate
+            opentitylist,
+            opentityread,
+            opentitycreate,
+            opentityupdate
           )
         )
       )
-      val serviceData = spec.ServiceDefinition(
+      val servicedata = spec.ServiceDefinition(
         name = "data",
         operations = spec.OperationDefinitionGroup(
           operations = NonEmptyVector.of(
-            opDataList,
-            opDataRead,
-            opDataCreate,
-            opDataUpdate
+            opdatalist,
+            opdataread,
+            opdatacreate,
+            opdataupdate
           )
         )
       )
-      val serviceView = spec.ServiceDefinition(
+      val serviceview = spec.ServiceDefinition(
         name = "view",
         operations = spec.OperationDefinitionGroup(
-          operations = NonEmptyVector.of(opViewRead)
+          operations = NonEmptyVector.of(opviewread)
         )
       )
-      val serviceAggregate = spec.ServiceDefinition(
+      val serviceaggregate = spec.ServiceDefinition(
         name = "aggregate",
         operations = spec.OperationDefinitionGroup(
-          operations = NonEmptyVector.of(opAggregateRead)
+          operations = NonEmptyVector.of(opaggregateread)
         )
       )
-      val serviceAssociation = spec.ServiceDefinition(
+      val serviceassociation = spec.ServiceDefinition(
         name = "association",
         operations = spec.OperationDefinitionGroup(
           operations = NonEmptyVector.of(
-            opAssociationList,
-            opAssociationAttach,
-            opAssociationDetach
+            opassociationlist,
+            opassociationattach,
+            opassociationdetach
           )
         )
       )
       val services = spec.ServiceDefinitionGroup(
         services = Vector(
-          serviceSystem,
-          serviceComponent,
-          serviceConfig,
-          serviceVariation,
-          serviceExtension,
-          serviceDeployment,
-          serviceAssembly,
-          serviceExecution,
-          serviceEntity,
-          serviceData,
-          serviceView,
-          serviceAggregate,
-          serviceAssociation
+          servicesystem,
+          servicecomponent,
+          serviceconfig,
+          servicevariation,
+          serviceextension,
+          servicedeployment,
+          serviceassembly,
+          serviceexecution,
+          serviceentity,
+          servicedata,
+          serviceview,
+          serviceaggregate,
+          serviceassociation
         )
       )
       val protocol = Protocol(
@@ -385,10 +431,9 @@ object AdminComponent {
 
     def createOperationRequest(
       req: Request
-    ): Consequence[OperationRequest] = {
+    ): Consequence[OperationRequest] =
       Consequence.success(ComponentListAction(req, subsystem))
     }
-  }
 
   private final class VariationListOperationDefinition(
     request: spec.RequestDefinition,
@@ -444,10 +489,9 @@ object AdminComponent {
 
     def createOperationRequest(
       req: Request
-    ): Consequence[OperationRequest] = {
+    ): Consequence[OperationRequest] =
       Consequence.success(ExtensionListAction(req, subsystem))
     }
-  }
 
   private final class ConfigShowOperationDefinition(
     request: spec.RequestDefinition,
@@ -463,10 +507,9 @@ object AdminComponent {
 
     def createOperationRequest(
       req: Request
-    ): Consequence[OperationRequest] = {
+    ): Consequence[OperationRequest] =
       Consequence.success(ConfigShowAction(req, subsystem))
     }
-  }
 
   private final class DeploymentSecurityMermaidOperationDefinition(
     request: spec.RequestDefinition,
@@ -477,7 +520,9 @@ object AdminComponent {
       spec.OperationDefinition.Specification(
         content = BaseContent.Builder("securityMermaid")
           .summary("Render the subsystem security deployment diagram as Mermaid.")
-          .description("Project the resolved security wiring into a minimal Mermaid deployment diagram with ingress, providers, SecurityContext, ActionCall, and UnitOfWork.")
+          .description(
+            "Project the resolved security wiring into a minimal Mermaid deployment diagram with ingress, providers, SecurityContext, ActionCall, and UnitOfWork."
+          )
           .build(),
         request = request,
         response = response
@@ -498,7 +543,9 @@ object AdminComponent {
       spec.OperationDefinition.Specification(
         content = BaseContent.Builder("securityMarkdown")
           .summary("Render the subsystem security deployment specification as Markdown.")
-          .description("Project the resolved security wiring into an editable Markdown specification draft including Mermaid, provider metadata, and framework chokepoints.")
+          .description(
+            "Project the resolved security wiring into an editable Markdown specification draft including Mermaid, provider metadata, and framework chokepoints."
+          )
           .build(),
         request = request,
         response = response
@@ -519,7 +566,9 @@ object AdminComponent {
       spec.OperationDefinition.Specification(
         content = BaseContent.Builder("warnings")
           .summary("Show assembly warnings detected during component and subsystem loading.")
-          .description("Return duplicate-component and related assembly warnings captured during runtime assembly.")
+          .description(
+            "Return duplicate-component and related assembly warnings captured during runtime assembly."
+          )
           .build(),
         request = request,
         response = response
@@ -540,7 +589,9 @@ object AdminComponent {
       spec.OperationDefinition.Specification(
         content = BaseContent.Builder("report")
           .summary("Show the resolved assembly report for the selected subsystem.")
-          .description("Return subsystem descriptor wiring, loaded component origins, and assembly warnings captured during runtime assembly.")
+          .description(
+            "Return subsystem descriptor wiring, loaded component origins, and assembly warnings captured during runtime assembly."
+          )
           .build(),
         request = request,
         response = response
@@ -561,7 +612,9 @@ object AdminComponent {
       spec.OperationDefinition.Specification(
         content = BaseContent.Builder("descriptor")
           .summary("Export the resolved assembly descriptor for the selected subsystem.")
-          .description("Return a descriptor-oriented document for the runtime-resolved assembly, suitable for review and later descriptor export.")
+          .description(
+            "Return a descriptor-oriented document for the runtime-resolved assembly, suitable for review and later descriptor export."
+          )
           .build(),
         request = request,
         response = response
@@ -582,7 +635,9 @@ object AdminComponent {
       spec.OperationDefinition.Specification(
         content = BaseContent.Builder("diagram")
           .summary("Export the resolved assembly wiring diagram.")
-          .description("Return a web-renderable Mermaid projection of the runtime-resolved assembly wiring.")
+          .description(
+            "Return a web-renderable Mermaid projection of the runtime-resolved assembly wiring."
+          )
           .build(),
         request = request,
         response = response
@@ -602,7 +657,9 @@ object AdminComponent {
       spec.OperationDefinition.Specification(
         content = BaseContent.Builder("calltree")
           .summary("Show the latest retained execution calltree.")
-          .description("Return the latest finalized operation calltree retained by the runtime for admin inspection.")
+          .description(
+            "Return the latest finalized operation calltree retained by the runtime for admin inspection."
+          )
           .build(),
         request = request,
         response = response
@@ -622,7 +679,9 @@ object AdminComponent {
       spec.OperationDefinition.Specification(
         content = BaseContent.Builder("history")
           .summary("Show retained action execution history.")
-          .description("Return retained action execution records including parameters, result summaries, and calltree projections when captured.")
+          .description(
+            "Return retained action execution records including parameters, result summaries, and calltree projections when captured."
+          )
           .build(),
         request = request,
         response = response
@@ -642,7 +701,9 @@ object AdminComponent {
       spec.OperationDefinition.Specification(
         content = BaseContent.Builder("diagnostics")
           .summary("Show the canonical event/job diagnostics entry points for operators.")
-          .description("Return authoritative selectors, runtime field contracts, and short guidance for Phase 13 event/job inspection without duplicating the underlying event and job surfaces.")
+          .description(
+            "Return authoritative selectors, runtime field contracts, and short guidance for Phase 13 event/job inspection without duplicating the underlying event and job surfaces."
+          )
           .build(),
         request = request,
         response = response
@@ -809,7 +870,8 @@ object AdminComponent {
     request: spec.RequestDefinition,
     response: spec.ResponseDefinition,
     subsystem: Subsystem
-  ) extends spec.OperationDefinition with AdminAssociationOperationAuthorization with AssociationBindingOperationDefinition {
+  ) extends spec.OperationDefinition with AdminAssociationOperationAuthorization
+      with AssociationBindingOperationDefinition {
     val associationBinding: CmlOperationAssociationBinding =
       CmlOperationAssociationBinding(
         domain = "association",
@@ -818,7 +880,11 @@ object AdminComponent {
       )
 
     val specification: spec.OperationDefinition.Specification =
-      spec.OperationDefinition.Specification(name = "admin_list_associations", request = request, response = response)
+      spec.OperationDefinition.Specification(
+        name = "admin_list_associations",
+        request = request,
+        response = response
+      )
 
     def createOperationRequest(req: Request): Consequence[OperationRequest] =
       Consequence.success(AssociationListAction(req, subsystem))
@@ -828,21 +894,27 @@ object AdminComponent {
     request: spec.RequestDefinition,
     response: spec.ResponseDefinition,
     subsystem: Subsystem
-  ) extends spec.OperationDefinition with AdminAssociationOperationAuthorization with AssociationBindingOperationDefinition {
+  ) extends spec.OperationDefinition with AdminAssociationOperationAuthorization
+      with AssociationBindingOperationDefinition {
     val associationBinding: CmlOperationAssociationBinding =
       CmlOperationAssociationBinding(
         domain = "association",
         targetKind = "entity",
         createsAssociation = true,
         roles = Vector("related"),
-        parameters = Vector("domain", "sourceEntityId", "targetEntityId", "targetKind", "role", "sortOrder"),
+        parameters =
+          Vector("domain", "sourceEntityId", "targetEntityId", "targetKind", "role", "sortOrder"),
         sourceEntityIdParameters = Vector("sourceEntityId"),
         targetIdParameters = Vector("targetEntityId"),
         sortOrderParameters = Vector("sortOrder")
       )
 
     val specification: spec.OperationDefinition.Specification =
-      spec.OperationDefinition.Specification(name = "admin_attach_association", request = request, response = response)
+      spec.OperationDefinition.Specification(
+        name = "admin_attach_association",
+        request = request,
+        response = response
+      )
 
     def createOperationRequest(req: Request): Consequence[OperationRequest] =
       Consequence.success(AssociationAttachAction(req, subsystem))
@@ -852,7 +924,8 @@ object AdminComponent {
     request: spec.RequestDefinition,
     response: spec.ResponseDefinition,
     subsystem: Subsystem
-  ) extends spec.OperationDefinition with AdminAssociationOperationAuthorization with AssociationBindingOperationDefinition {
+  ) extends spec.OperationDefinition with AdminAssociationOperationAuthorization
+      with AssociationBindingOperationDefinition {
     val associationBinding: CmlOperationAssociationBinding =
       CmlOperationAssociationBinding(
         domain = "association",
@@ -865,7 +938,11 @@ object AdminComponent {
       )
 
     val specification: spec.OperationDefinition.Specification =
-      spec.OperationDefinition.Specification(name = "admin_detach_association", request = request, response = response)
+      spec.OperationDefinition.Specification(
+        name = "admin_detach_association",
+        request = request,
+        response = response
+      )
 
     def createOperationRequest(req: Request): Consequence[OperationRequest] =
       Consequence.success(AssociationDetachAction(req, subsystem))
@@ -906,12 +983,11 @@ object AdminComponent {
     core: ActionCall.Core,
     subsystem: Subsystem
   ) extends ProcedureActionCall {
-    def execute(): Consequence[OperationResponse] = {
+    def execute(): Consequence[OperationResponse] =
       _config_snapshot().map { text =>
         OperationResponse.Scalar(text)
       }
     }
-  }
 
   private final case class EntityCreateAction(
     request: Request,
@@ -1152,7 +1228,9 @@ object AdminComponent {
     subsystem: Subsystem
   ) extends ProcedureActionCall {
     def execute(): Consequence[OperationResponse] =
-      Consequence.success(OperationResponse.Scalar(SecurityDeploymentProjection.projectMermaid(subsystem)))
+      Consequence.success(
+        OperationResponse.Scalar(SecurityDeploymentProjection.projectMermaid(subsystem))
+      )
   }
 
   private final case class DeploymentSecurityMarkdownAction(
@@ -1221,7 +1299,9 @@ object AdminComponent {
     subsystem: Subsystem
   ) extends ProcedureActionCall {
     def execute(): Consequence[OperationResponse] =
-      Consequence.success(OperationResponse.Scalar(SecurityDeploymentMarkdownProjection.project(subsystem)))
+      Consequence.success(
+        OperationResponse.Scalar(SecurityDeploymentMarkdownProjection.project(subsystem))
+      )
   }
 
   private final case class AssemblyWarningsActionCall(
@@ -1248,7 +1328,8 @@ object AdminComponent {
           .getOrElse(subsystem.globalRuntimeContext.assemblyReport.toRecord)
       val wiring = _subsystem_wiring(subsystem)
       val ports = subsystem.descriptor.map(_.declaredPorts).getOrElse(Vector.empty)
-      val wiringBindings = subsystem.descriptor.map(_.resolvedWiringBindings).getOrElse(Vector.empty)
+      val wiringbindings =
+        subsystem.descriptor.map(_.resolvedWiringBindings).getOrElse(Vector.empty)
       val spisockets = _spi_socket_records(subsystem)
       val components = org.goldenport.record.Record.data(
         "loaded" -> subsystem.components.toVector.map { comp =>
@@ -1262,7 +1343,7 @@ object AdminComponent {
         "subsystem" -> subsystem.name,
         "ports" -> ports,
         "wiring" -> wiring,
-        "wiring_bindings" -> wiringBindings,
+        "wiring_bindings" -> wiringbindings,
         "spi_sockets" -> spisockets,
         "components" -> components,
         "warnings" -> warnings
@@ -1281,23 +1362,26 @@ object AdminComponent {
           .map(_.assemblyReport.toRecord)
           .getOrElse(subsystem.globalRuntimeContext.assemblyReport.toRecord)
       val components = subsystem.components.toVector
-      val descriptorComponents = components.filterNot(_.origin == ComponentOrigin.Builtin)
-      val builtinComponents = components.filter(_.origin == ComponentOrigin.Builtin)
+      val descriptorcomponents = components.filterNot(_.origin == ComponentOrigin.Builtin)
+      val builtincomponents    = components.filter(_.origin == ComponentOrigin.Builtin)
       val sourcewiring = _subsystem_wiring(subsystem)
-      val resolvedwiring = subsystem.descriptor.map(_.resolvedWiringBindings).getOrElse(Vector.empty)
+      val resolvedwiring =
+        subsystem.descriptor.map(_.resolvedWiringBindings).getOrElse(Vector.empty)
       val descriptor = org.goldenport.record.Record.data(
         "kind" -> "assembly-descriptor",
         "subsystem" -> subsystem.name,
         "version" -> subsystem.version.getOrElse(""),
-        "components" -> descriptorComponents.map(_assembly_component_record),
+        "components" -> descriptorcomponents.map(_assembly_component_record),
         "ports" -> subsystem.descriptor.map(_.declaredPorts).getOrElse(Vector.empty),
         "wiring" -> resolvedwiring,
         "source" -> org.goldenport.record.Record.data(
           "wiring" -> sourcewiring,
-          "assembly_descriptor" -> subsystem.descriptor.flatMap(_.assemblyDescriptor).map(_assembly_descriptor_source_record).getOrElse(Record.empty)
+          "assembly_descriptor" -> subsystem.descriptor.flatMap(_.assemblyDescriptor).map(
+            _assembly_descriptor_source_record
+          ).getOrElse(Record.empty)
         ),
         "runtime" -> org.goldenport.record.Record.data(
-          "builtin_components" -> builtinComponents.map(_assembly_component_record)
+          "builtin_components" -> builtincomponents.map(_assembly_component_record)
         ),
         "diagnostics" -> org.goldenport.record.Record.data(
           "warnings" -> warnings
@@ -1574,18 +1658,18 @@ object AdminComponent {
 
   private def _assembly_mermaid(subsystem: Subsystem): String = {
     val components = subsystem.components.toVector
-    val appComponents = components.filterNot(_.origin == ComponentOrigin.Builtin)
-    val builtinComponents = components.filter(_.origin == ComponentOrigin.Builtin)
+    val appcomponents     = components.filterNot(_.origin == ComponentOrigin.Builtin)
+    val builtincomponents = components.filter(_.origin == ComponentOrigin.Builtin)
     val bindings = subsystem.descriptor.map(_.resolvedWiring).getOrElse(Vector.empty)
     val lines = scala.collection.mutable.ArrayBuffer[String]()
     lines += "flowchart LR"
     lines += s"  subgraph ${_mermaid_id(subsystem.name)}[\"${_mermaid_label(subsystem.name)}\"]"
-    appComponents.foreach { comp =>
+    appcomponents.foreach { comp =>
       lines += s"    ${_mermaid_id(comp.name)}[\"${_mermaid_label(comp.name)}\"]"
     }
-    if (builtinComponents.nonEmpty) {
+    if (builtincomponents.nonEmpty) {
       lines += "    subgraph runtime_builtins[\"runtime builtins\"]"
-      builtinComponents.foreach { comp =>
+      builtincomponents.foreach { comp =>
         lines += s"      ${_mermaid_id(s"builtin_${comp.name}")}[[\"${_mermaid_label(comp.name)}\"]]"
       }
       lines += "    end"
@@ -1715,12 +1799,11 @@ object AdminComponent {
     core: ActionCall.Core,
     subsystem: Subsystem
   ) extends ProcedureActionCall {
-    def execute(): Consequence[OperationResponse] = {
+    def execute(): Consequence[OperationResponse] =
       _config_snapshot().map { text =>
         OperationResponse.Scalar(_variation_lines(text))
       }
     }
-  }
 
   private final case class VariationDescribeActionCall(
     core: ActionCall.Core,
@@ -1770,9 +1853,8 @@ object AdminComponent {
     }
   }
 
-  private def _component_origin(comp: Component): String = {
+  private def _component_origin(comp: Component): String =
     ComponentOriginLabel.userLabel(comp.origin.label)
-  }
 
   private def _component_lines(
     comps: Seq[Component],
@@ -1816,12 +1898,12 @@ object AdminComponent {
   }
 
   private def _variation_lines(
-    configSnapshot: String
+      configsnapshot: String
   ): String = {
     val lines = Vector.newBuilder[String]
     lines += "Variation Points"
     lines += ""
-    configSnapshot.split("\n").foreach { line =>
+    configsnapshot.split("\n").foreach { line =>
       if (line.trim.nonEmpty && !line.startsWith("Config Snapshot")) {
         if (!line.startsWith("  ")) {
           val parts = line.split("=", 2)
@@ -1857,19 +1939,22 @@ object AdminComponent {
         key = RuntimeConfig.ExecutionHistoryRecentLimitKey,
         value = defaults.recentLimit.toString,
         brief = "Recent execution history size.",
-        detail = "Number of most recent action execution records retained unconditionally for admin inspection."
+        detail =
+          "Number of most recent action execution records retained unconditionally for admin inspection."
       ),
       _DeclaredVariationPoint(
         key = RuntimeConfig.ExecutionHistoryFilteredLimitKey,
         value = defaults.filteredLimit.toString,
         brief = "Filtered execution history size.",
-        detail = "Number of additional action execution records retained when they match configured debug filters."
+        detail =
+          "Number of additional action execution records retained when they match configured debug filters."
       ),
       _DeclaredVariationPoint(
         key = RuntimeConfig.ExecutionHistoryFilterOperationContainsKey,
         value = "",
         brief = "Operation-name debug filter.",
-        detail = "Comma-separated operation-name substrings. Matching executions are retained in the filtered history buffer."
+        detail =
+          "Comma-separated operation-name substrings. Matching executions are retained in the filtered history buffer."
       )
     )
   }
@@ -1912,49 +1997,127 @@ object AdminComponent {
   ): Consequence[OperationResponse] = {
     val args = _action_values(core)
     for {
-      componentName <- _required_string(args, "component")
-      entityName <- _required_string(args, "entity")
-      collection <- Consequence.fromOption(
-        _component_by_name(subsystem, componentName).flatMap(_entity_collection(_, entityName)),
-        s"Entity collection not found: ${entityName}"
+      componentname <- _required_string(args, "component")
+      entityname    <- _required_string(args, "entity")
+      component <- Consequence.fromOption(
+        _component_by_name(subsystem, componentname),
+        s"Component not found: ${componentname}"
       )
-      attachmentRequest <- BlobAttachmentWorkflow.extract(_admin_entity_blob_attachment_request(operation, componentName, entityName, core))
-      inputRecord = _admin_entity_record(collection, _action_record(core))
-      record <- _canonical_admin_entity_record(collection, inputRecord)
-      entityId <- Consequence.fromOption(record.getString("id"), "entity id is required")
+      collection <- Consequence.fromOption(
+        _entity_collection(component, entityname),
+        s"Entity collection not found: ${entityname}"
+      )
+      entityexecutioncontext = core.executionContext
+      attachmentrequest <- BlobAttachmentWorkflow.extract(_admin_entity_blob_attachment_request(
+        operation,
+        componentname,
+        entityname,
+        core
+      ))
+      expectation <- _admin_entity_mutation_expectation(operation, args)
+      inputrecord = _admin_entity_record(collection, _action_record(core))
+      record   <- _canonical_admin_entity_record(collection, inputrecord)
+      entityid <- Consequence.fromOption(record.getString("id"), "entity id is required")
       _ <-
-        if (attachmentRequest.isEmpty)
-          collection.putRecordSynced(record)(using core.executionContext)
+        if (attachmentrequest.isEmpty)
+          _write_admin_entity_record(
+            operation,
+            entityexecutioncontext,
+            collection,
+            record,
+            expectation
+          )
         else
-          _admin_entity_put_with_blob_attachments(operation, core, collection, record, entityId)
+          _admin_entity_put_with_blob_attachments(
+            operation,
+            core,
+            entityexecutioncontext,
+            collection,
+            record,
+            entityid,
+            expectation
+          )
     } yield OperationResponse.Scalar("Entity record was applied.")
   }
 
   private def _admin_entity_put_with_blob_attachments(
     operation: String,
     core: ActionCall.Core,
+      entityexecutioncontext: ExecutionContext,
     collection: EntityCollection[?],
     record: Record,
-    entityId: String
+      entityid: String,
+      expectation: Option[EntityMutationExpectation]
   ): Consequence[Unit] =
     for {
       workflow <- _blob_attachment_workflow(core)
       _ <- operation match {
         case "create" =>
-          workflow.createEntityWithBlobAttachments(_admin_entity_blob_attachment_request(operation, "", "", core))(
-            create = collection.putRecordSynced(record)(using core.executionContext).map(_ => record),
-            entityId = _ => entityId,
-            compensateEntity = _ => _delete_admin_entity_record(collection, entityId)(using core.executionContext)
+          workflow.createEntityWithBlobAttachments(_admin_entity_blob_attachment_request(
+            operation,
+            "",
+            "",
+            core
+          ))(
+            create =
+              collection.createRecordSynced(record)(using entityexecutioncontext).map(_ => record),
+            entityId = _ => entityid,
+            compensateEntity =
+              _ => _delete_admin_entity_record(collection, entityid)(using entityexecutioncontext)
           )(using core.executionContext).map(_ => ())
         case _ =>
-          collection.putRecordSynced(record)(using core.executionContext) match {
+          _write_admin_entity_record(
+            operation,
+            entityexecutioncontext,
+            collection,
+            record,
+            expectation
+          ) match {
             case Consequence.Success(_) =>
-              workflow.attachToEntity(entityId, _admin_entity_blob_attachment_request(operation, "", "", core))(using core.executionContext).map(_ => ())
+              workflow.attachToEntity(
+                entityid,
+                _admin_entity_blob_attachment_request(operation, "", "", core)
+              )(using core.executionContext).map(_ => ())
             case Consequence.Failure(conclusion) =>
               Consequence.Failure(conclusion)
           }
       }
     } yield ()
+
+  private def _write_admin_entity_record(
+      operation: String,
+      executioncontext: ExecutionContext,
+      collection: EntityCollection[?],
+      record: Record,
+      expectation: Option[EntityMutationExpectation]
+  ): Consequence[Unit] =
+    if (operation == "create")
+      collection.createRecordSynced(record)(using executioncontext)
+    else
+      for {
+        expected <- Consequence.fromOption(
+          expectation,
+          "Entity mutation version is required"
+        )
+        _ <- collection.saveRecordVersioned(
+          record,
+          expected
+        )(using executioncontext)
+      } yield ()
+
+  private def _admin_entity_mutation_expectation(
+      operation: String,
+      args: Map[String, Any]
+  ): Consequence[Option[EntityMutationExpectation]] =
+    if (operation == "create")
+      Consequence.success(None)
+    else
+      args.get("version") match {
+        case Some(value) =>
+          EntityMutationExpectation.parse(value).map(Some(_))
+        case None =>
+          Consequence.argumentMissing("version")
+      }
 
   private def _blob_attachment_workflow(
     core: ActionCall.Core
@@ -1970,13 +2133,13 @@ object AdminComponent {
 
   private def _admin_entity_blob_attachment_request(
     operation: String,
-    componentName: String,
-    entityName: String,
+      componentname: String,
+      entityname: String,
     core: ActionCall.Core
   ): Request =
     Request.of(
-      component = if (componentName.isEmpty) "admin" else componentName,
-      service = if (entityName.isEmpty) "entity" else entityName,
+      component = if (componentname.isEmpty) "admin" else componentname,
+      service = if (entityname.isEmpty) "entity" else entityname,
       operation = operation,
       arguments = core.action.arguments,
       properties = core.action.properties
@@ -1994,10 +2157,10 @@ object AdminComponent {
 
   private def _delete_admin_entity_record(
     collection: EntityCollection[?],
-    entityId: String
+      entityid: String
   )(using ctx: org.goldenport.cncf.context.ExecutionContext): Consequence[Unit] =
     for {
-      id <- EntityId.parse(entityId)
+      id <- EntityId.parse(entityid)
       _ <- ctx.entityStoreSpace.delete(UnitOfWorkOp.EntityStoreDelete(id))
       _ = collection.evict(id)
     } yield ()
@@ -2008,29 +2171,31 @@ object AdminComponent {
   ): Consequence[OperationResponse] = {
     val args = _action_values(core)
     for {
-      componentName <- _required_string(args, "component")
-      entityName <- _required_string(args, "entity")
+      componentname <- _required_string(args, "component")
+      entityname    <- _required_string(args, "entity")
       paging <- _paging(args)
-      pagingDecision <- _paging_with_capability(paging, TotalCountCapability.Supported, s"entity.${entityName}")
-      effectivePaging = pagingDecision.paging
+      pagingdecision <-
+        _paging_with_capability(paging, TotalCountCapability.Supported, s"entity.${entityname}")
+      effectivepaging = pagingdecision.paging
       component <- Consequence.fromOption(
-        _component_by_name(subsystem, componentName),
-        s"Component not found: ${componentName}"
+        _component_by_name(subsystem, componentname),
+        s"Component not found: ${componentname}"
       )
       collection <- Consequence.fromOption(
-        _entity_collection(component, entityName),
-        s"Entity collection not found: ${entityName}"
+        _entity_collection(component, entityname),
+        s"Entity collection not found: ${entityname}"
       )
       view = args.get("view").map(_.toString).getOrElse("summary")
-      fields = _entity_view_fields(component, entityName, view)
-      result <- _admin_entity_search(core, collection, component, entityName, view, effectivePaging, args)
+      fields = _entity_view_fields(component, entityname, view)
+      result <-
+        _admin_entity_search(core, collection, component, entityname, view, effectivepaging, args)
     } yield OperationResponse.RecordResponse(
       _list_response_record(
         "entity",
-        componentName,
-        entityName,
-        _admin_entity_page(collection, result, effectivePaging, pagingDecision, fields),
-        effectivePaging
+        componentname,
+        entityname,
+        _admin_entity_page(collection, result, effectivepaging, pagingdecision, fields),
+        effectivepaging
       )
     )
   }
@@ -2039,14 +2204,14 @@ object AdminComponent {
     core: ActionCall.Core,
     collection: EntityCollection[A],
     component: Component,
-    entityName: String,
+      entityname: String,
     view: String,
     paging: _Paging,
     args: Map[String, Any]
   ): Consequence[org.goldenport.cncf.directive.SearchResult[A]] = {
     given org.goldenport.cncf.context.ExecutionContext = core.executionContext
-    val resolver = EntityQueryFieldResolver(component, entityName)
-    val searchInput = Record.create(
+    val resolver = EntityQueryFieldResolver(component, entityname)
+    val searchinput = Record.create(
       args.toVector.map { case (key, value) => key -> value } ++
         Vector(
           "limit" -> paging.fetchPageSize,
@@ -2059,10 +2224,13 @@ object AdminComponent {
       filterFields = resolver.filterFields(view),
       sortableFields = resolver.sortableFields(view)
     )
-    WebSearchQueryPlanner.plan(searchInput, profile).flatMap { planned =>
+    WebSearchQueryPlanner.plan(searchinput, profile).flatMap { planned =>
       core.executionContext.entityStoreSpace.search(
         org.goldenport.cncf.unitofwork.UnitOfWorkOp.EntityStoreSearch(
-          query = org.goldenport.cncf.entity.EntityQuery(collection.descriptor.collectionId, planned.query),
+          query = org.goldenport.cncf.entity.EntityQuery(
+            collection.descriptor.collectionId,
+            planned.query
+          ),
           tc = collection.descriptor.persistent
         )
       )
@@ -2073,36 +2241,52 @@ object AdminComponent {
     core: ActionCall.Core,
     subsystem: Subsystem
   ): Consequence[OperationResponse] = {
+    given org.goldenport.cncf.context.ExecutionContext = core.executionContext
     val args = _action_values(core)
     for {
-      componentName <- _required_string(args, "component")
-      entityName <- _required_string(args, "entity")
+      componentname <- _required_string(args, "component")
+      entityname    <- _required_string(args, "entity")
       id <- _required_string(args, "id")
       component <- Consequence.fromOption(
-        _component_by_name(subsystem, componentName),
-        s"Component not found: ${componentName}"
+        _component_by_name(subsystem, componentname),
+        s"Component not found: ${componentname}"
       )
       collection <- Consequence.fromOption(
-        _entity_collection(component, entityName),
-        s"Entity collection not found: ${entityName}"
+        _entity_collection(component, entityname),
+        s"Entity collection not found: ${entityname}"
       )
       view = args.get("view").map(_.toString).getOrElse("detail")
-      fields = _entity_view_fields(component, entityName, view)
-      record <- Consequence.fromOption(_entity_record(collection, id, fields), s"Entity record not found: ${id}")
-      sourceEntityId = record.getString("id").filter(_.nonEmpty).getOrElse(id)
+      fields = _entity_view_fields(component, entityname, view)
+      entityid <- Consequence.fromOption(
+        collection.resolveEntityId(id),
+        s"Entity record not found: ${id}"
+      )
+      snapshot <- core.executionContext.entityStoreSpace
+        .loadSnapshot(
+          entityid,
+          collection.descriptor.persistent
+        )(using core.executionContext)
+        .flatMap(value =>
+          Consequence.successOrEntityNotFound(value)(entityid)
+        )
+      record = collection.descriptor.persistent.toViewRecord(
+        snapshot.entity,
+        view,
+        fields
+      )
+      sourceentityid = record.getAny("id").map(_id_text).filter(_.nonEmpty).getOrElse(id)
       base = _read_response_record(
         "entity",
-        componentName,
-        entityName,
+        componentname,
+        entityname,
         id,
         record
-      )
+      ).upsertSingle("version", snapshot.token.print)
       projection <- {
-        given org.goldenport.cncf.context.ExecutionContext = core.executionContext
-        _blob_projection_record(core, sourceEntityId)
+        _blob_projection_record(core, sourceentityid)
       }
     } yield OperationResponse.RecordResponse(
-      _with_blob_projection(base, projection, sourceEntityId)
+      _with_blob_projection(base, projection, sourceentityid)
     )
   }
 
@@ -2164,28 +2348,30 @@ object AdminComponent {
       domain <- _required_string(args, "domain")
       source <- _required_string(args, "sourceEntityId")
       target <- _required_string(args, "targetEntityId")
-      targetKind <- _required_string(args, "targetKind")
+      targetkind <- _required_string(args, "targetKind")
       role <- _required_string(args, "role")
-      sourceId <- EntityId.parse(source)
-      targetId <- EntityId.parse(target)
-      _ <- _validate_admin_association_entity(subsystem, None, sourceId)
-      sortOrder <- _optional_int_arg(args, "sortOrder")
-      storagePolicy = _admin_association_storage_policy(domain)
+      sourceid   <- EntityId.parse(source)
+      targetid   <- EntityId.parse(target)
+      _          <- _validate_admin_association_entity(subsystem, None, sourceid)
+      sortorder  <- _optional_int_arg(args, "sortOrder")
+      storagepolicy = _admin_association_storage_policy(domain)
       workflow = AssociationBindingWorkflow(
-        AssociationRepository.entityStore(storagePolicy),
-        storagePolicy,
+        AssociationRepository.entityStore(storagepolicy),
+        storagepolicy,
         _admin_association_target_validator(subsystem)
       )
       result <- workflow.attachExistingTargetResult(
         sourceEntityId = source,
         domain = AssociationDomain(domain),
-        targetKind = Some(targetKind),
-        targetEntityId = targetId,
+        targetKind = Some(targetkind),
+        targetEntityId = targetid,
         role = role,
-        sortOrder = sortOrder
+        sortOrder = sortorder
       )
     } yield OperationResponse.RecordResponse(
-      Record.create((AssociationRecordCodec.toRecord(result.association).asMap + ("created" -> result.created)).toVector)
+      Record.create(
+        (AssociationRecordCodec.toRecord(result.association).asMap + ("created" -> result.created)).toVector
+      )
     )
   }
 
@@ -2200,19 +2386,22 @@ object AdminComponent {
       domain <- _required_string(args, "domain")
       source <- _required_string(args, "sourceEntityId")
       target <- _required_string(args, "targetEntityId")
-      targetKind <- _required_string(args, "targetKind")
+      targetkind <- _required_string(args, "targetKind")
       role <- _required_string(args, "role")
       repository = AssociationRepository.entityStore(_admin_association_storage_policy(domain))
       values <- repository.list(AssociationFilter(
         domain = AssociationDomain(domain),
         sourceEntityId = Some(source),
         targetEntityId = Some(target),
-        targetKind = Some(targetKind),
+        targetKind = Some(targetkind),
         role = Some(role)
       ))
       _ <- values match {
-        case Vector() => Consequence.operationNotFound(s"association:${domain}:${source}:${target}:${role}")
-        case xs => xs.foldLeft(Consequence.unit)((z, association) => z.flatMap(_ => repository.delete(association)))
+        case Vector() =>
+          Consequence.operationNotFound(s"association:${domain}:${source}:${target}:${role}")
+        case xs => xs.foldLeft(Consequence.unit)((z, association) =>
+            z.flatMap(_ => repository.delete(association))
+          )
       }
     } yield OperationResponse.RecordResponse(Record.dataAuto("detachedCount" -> values.size))
   }
@@ -2234,11 +2423,12 @@ object AdminComponent {
     given org.goldenport.cncf.context.ExecutionContext = core.executionContext
     val args = _action_values(core)
     for {
-      dataName <- _required_string(args, "data")
+      dataname <- _required_string(args, "data")
       id <- _required_string(args, "id")
       entry <- DataStore.EntryId.parse(id)
-      ds <- subsystem.globalRuntimeContext.dataStoreSpace.dataStore(DataStore.CollectionId(dataName))
-      _ <- ds.save(DataStore.CollectionId(dataName), entry, _admin_data_record(args))
+      ds <-
+        subsystem.globalRuntimeContext.dataStoreSpace.dataStore(DataStore.CollectionId(dataname))
+      _ <- ds.save(DataStore.CollectionId(dataname), entry, _admin_data_record(args))
     } yield OperationResponse.Scalar("Data record was applied.")
   }
 
@@ -2249,30 +2439,40 @@ object AdminComponent {
     given org.goldenport.cncf.context.ExecutionContext = core.executionContext
     val args = _action_values(core)
     for {
-      dataName <- _required_string(args, "data")
+      dataname <- _required_string(args, "data")
       paging <- _paging(args)
-      capability <- subsystem.globalRuntimeContext.dataStoreSpace.totalCountCapability(DataStore.CollectionId(dataName))
-      pagingDecision <- _paging_with_capability(paging, capability, s"data.${dataName}")
-      effectivePaging = pagingDecision.paging
+      capability <- subsystem.globalRuntimeContext.dataStoreSpace.totalCountCapability(
+        DataStore.CollectionId(dataname)
+      )
+      pagingdecision <- _paging_with_capability(paging, capability, s"data.${dataname}")
+      effectivepaging = pagingdecision.paging
       result <- subsystem.globalRuntimeContext.dataStoreSpace.search(
-        DataStore.CollectionId(dataName),
+        DataStore.CollectionId(dataname),
         QueryDirective(
           DataStoreQuery.Empty,
-          limit = QueryLimit.Limit(effectivePaging.fetchPageSize),
-          offset = effectivePaging.offset
+          limit = QueryLimit.Limit(effectivepaging.fetchPageSize),
+          offset = effectivepaging.offset
         )
       )
-      total <- if (effectivePaging.wantsTotal)
-        subsystem.globalRuntimeContext.dataStoreSpace.count(DataStore.CollectionId(dataName), QueryDirective(DataStoreQuery.Empty)).map(Some(_))
+      total <- if (effectivepaging.wantsTotal)
+        subsystem.globalRuntimeContext.dataStoreSpace.count(
+          DataStore.CollectionId(dataname),
+          QueryDirective(DataStoreQuery.Empty)
+        ).map(Some(_))
       else
         Consequence.success(None)
     } yield OperationResponse.RecordResponse(
       _list_response_record(
         "data",
         "",
-        dataName,
-        _prefetched_page_values(_record_items(result.records), effectivePaging, pagingDecision, total),
-        effectivePaging
+        dataname,
+        _prefetched_page_values(
+          _record_items(result.records),
+          effectivepaging,
+          pagingdecision,
+          total
+        ),
+        effectivepaging
       )
     )
   }
@@ -2284,11 +2484,12 @@ object AdminComponent {
     given org.goldenport.cncf.context.ExecutionContext = core.executionContext
     val args = _action_values(core)
     for {
-      dataName <- _required_string(args, "data")
+      dataname <- _required_string(args, "data")
       id <- _required_string(args, "id")
       entry <- DataStore.EntryId.parse(id)
-      ds <- subsystem.globalRuntimeContext.dataStoreSpace.dataStore(DataStore.CollectionId(dataName))
-      record <- ds.load(DataStore.CollectionId(dataName), entry).flatMap {
+      ds <-
+        subsystem.globalRuntimeContext.dataStoreSpace.dataStore(DataStore.CollectionId(dataname))
+      record <- ds.load(DataStore.CollectionId(dataname), entry).flatMap {
         case Some(value) => Consequence.success(value)
         case None => Consequence.fromOption(None, s"Data record not found: ${id}")
       }
@@ -2296,7 +2497,7 @@ object AdminComponent {
       _read_response_record(
         "data",
         "",
-        dataName,
+        dataname,
         id,
         record
       )
@@ -2309,54 +2510,66 @@ object AdminComponent {
   ): Consequence[OperationResponse] = {
     val args = _action_values(core)
     for {
-      componentName <- _required_string(args, "component")
-      viewName <- _required_string(args, "view")
+      componentname <- _required_string(args, "component")
+      viewname      <- _required_string(args, "view")
       paging <- _paging(args)
-      component <- Consequence.fromOption(_component_by_name(subsystem, componentName), s"Component not found: ${componentName}")
-      browser <- Consequence.fromOption(_view_browser(component, viewName), s"View browser not found: ${viewName}")
-      idOption <- _optional_entity_id(args, "id", componentName, "view", viewName)
-      response <- idOption match {
+      component <- Consequence.fromOption(
+        _component_by_name(subsystem, componentname),
+        s"Component not found: ${componentname}"
+      )
+      browser <- Consequence.fromOption(
+        _view_browser(component, viewname),
+        s"View browser not found: ${viewname}"
+      )
+      idoption <- _optional_entity_id(args, "id", componentname, "view", viewname)
+      response <- idoption match {
         case Some((idText, id)) =>
           browser.find_with_context(id)(using core.executionContext).flatMap { value =>
             _read_value_response_record_with_blobs(
               core,
               "view",
-              componentName,
-              viewName,
+              componentname,
+              viewname,
               idText,
               value
             )(using core.executionContext).map(OperationResponse.RecordResponse(_))
           }
         case None =>
-          _admin_view_page_response(core, componentName, viewName, browser, paging)
+          _admin_view_page_response(core, componentname, viewname, browser, paging)
       }
     } yield response
   }
 
   private def _admin_view_page_response(
     core: ActionCall.Core,
-    componentName: String,
-    viewName: String,
+      componentname: String,
+      viewname: String,
     browser: org.goldenport.cncf.entity.view.Browser[Any],
     paging: _Paging
   ): Consequence[OperationResponse] =
     for {
       capability <- browser.totalCountCapabilityWithContext(using core.executionContext)
-      pagingDecision <- _paging_with_capability(paging, capability, s"view.${viewName}")
-      effectivePaging = pagingDecision.paging
-      values <- browser.query_with_context(EntityQuery.plan(Record.empty, limit = Some(effectivePaging.fetchPageSize), offset = Some(effectivePaging.offset)))(using core.executionContext)
-      total <- if (effectivePaging.wantsTotal)
-        browser.count_with_context(EntityQuery.plan(Record.empty))(using core.executionContext).map(Some(_))
+      pagingdecision <- _paging_with_capability(paging, capability, s"view.${viewname}")
+      effectivepaging = pagingdecision.paging
+      values <- browser.query_with_context(EntityQuery.plan(
+        Record.empty,
+        limit = Some(effectivepaging.fetchPageSize),
+        offset = Some(effectivepaging.offset)
+      ))(using core.executionContext)
+      total <- if (effectivepaging.wantsTotal)
+        browser.count_with_context(EntityQuery.plan(Record.empty))(using core.executionContext).map(
+          Some(_)
+        )
       else
         Consequence.success(None)
       items <- _read_items_with_blobs(core, values)(using core.executionContext)
     } yield OperationResponse.RecordResponse(
       _read_values_response_record(
         "view",
-        componentName,
-        viewName,
-        _prefetched_page_values(items, effectivePaging, pagingDecision, total),
-        effectivePaging
+        componentname,
+        viewname,
+        _prefetched_page_values(items, effectivepaging, pagingdecision, total),
+        effectivepaging
       )
     )
 
@@ -2366,32 +2579,46 @@ object AdminComponent {
   ): Consequence[OperationResponse] = {
     val args = _action_values(core)
     for {
-      componentName <- _required_string(args, "component")
-      aggregateName <- _required_string(args, "aggregate")
+      componentname <- _required_string(args, "component")
+      aggregatename <- _required_string(args, "aggregate")
       paging <- _paging(args)
-      component <- Consequence.fromOption(_component_by_name(subsystem, componentName), s"Component not found: ${componentName}")
-      collection <- Consequence.fromOption(_aggregate_collection(component, aggregateName), s"Aggregate collection not found: ${aggregateName}")
-      idOption <- _optional_entity_id(args, "id", componentName, "aggregate", aggregateName)
-      response <- idOption match {
+      component <- Consequence.fromOption(
+        _component_by_name(subsystem, componentname),
+        s"Component not found: ${componentname}"
+      )
+      collection <- Consequence.fromOption(
+        _aggregate_collection(component, aggregatename),
+        s"Aggregate collection not found: ${aggregatename}"
+      )
+      idoption <- _optional_entity_id(args, "id", componentname, "aggregate", aggregatename)
+      response <- idoption match {
         case Some((idText, id)) =>
           collection.resolve_with_context(id)(using core.executionContext).recoverWith {
             case c if _is_not_implemented(c) =>
-              _admin_aggregate_entity_read(component, aggregateName, idText)
+              _admin_aggregate_entity_read(component, aggregatename, idText)
             case c =>
               Consequence.Failure(c)
           }.flatMap { value =>
-            val displayValue = _admin_aggregate_display_value(component, aggregateName, idText, value)
+            val displayvalue =
+              _admin_aggregate_display_value(component, aggregatename, idText, value)
             _read_value_response_record_with_blobs(
               core,
               "aggregate",
-              componentName,
-              aggregateName,
+              componentname,
+              aggregatename,
               idText,
-              displayValue
+              displayvalue
             )(using core.executionContext).map(OperationResponse.RecordResponse(_))
           }
         case None =>
-          _admin_aggregate_page_response(core, component, componentName, aggregateName, collection, paging)
+          _admin_aggregate_page_response(
+            core,
+            component,
+            componentname,
+            aggregatename,
+            collection,
+            paging
+          )
       }
     } yield response
   }
@@ -2399,56 +2626,70 @@ object AdminComponent {
   private def _admin_aggregate_page_response(
     core: ActionCall.Core,
     component: Component,
-    componentName: String,
-    aggregateName: String,
+      componentname: String,
+      aggregatename: String,
     collection: org.goldenport.cncf.entity.aggregate.AggregateCollection[Any],
     paging: _Paging
   ): Consequence[OperationResponse] =
     for {
       capability <- collection.totalCountCapabilityWithContext(using core.executionContext)
-      pagingDecision <- _paging_with_capability(paging, capability, s"aggregate.${aggregateName}")
-      effectivePaging = pagingDecision.paging
-      values <- collection.query_with_context(EntityQuery.plan(Record.empty, limit = Some(effectivePaging.fetchPageSize), offset = Some(effectivePaging.offset)))(using core.executionContext)
+      pagingdecision <- _paging_with_capability(paging, capability, s"aggregate.${aggregatename}")
+      effectivepaging = pagingdecision.paging
+      values <- collection.query_with_context(EntityQuery.plan(
+        Record.empty,
+        limit = Some(effectivepaging.fetchPageSize),
+        offset = Some(effectivepaging.offset)
+      ))(using core.executionContext)
         .flatMap {
           case xs if xs.nonEmpty => Consequence.success(xs)
-          case _ => _admin_aggregate_entity_list(core, component, aggregateName, effectivePaging)
+          case _ => _admin_aggregate_entity_list(core, component, aggregatename, effectivepaging)
         }
         .recoverWith {
           case c if _is_not_implemented(c) =>
-            _admin_aggregate_entity_list(core, component, aggregateName, effectivePaging)
+            _admin_aggregate_entity_list(core, component, aggregatename, effectivepaging)
           case c =>
             Consequence.Failure(c)
         }
-      total <- if (effectivePaging.wantsTotal)
-        collection.count_with_context(EntityQuery.plan(Record.empty))(using core.executionContext).map(Some(_))
+      total <- if (effectivepaging.wantsTotal)
+        collection.count_with_context(EntityQuery.plan(Record.empty))(using core.executionContext)
+          .map(Some(_))
       else
         Consequence.success(None)
       items <- _read_items_with_blobs(core, values)(using core.executionContext)
     } yield OperationResponse.RecordResponse(
       _read_values_response_record(
         "aggregate",
-        componentName,
-        aggregateName,
-        _prefetched_page_values(items, effectivePaging, pagingDecision, total),
-        effectivePaging
+        componentname,
+        aggregatename,
+        _prefetched_page_values(items, effectivepaging, pagingdecision, total),
+        effectivepaging
       )
     )
 
   private def _admin_aggregate_entity_list(
     core: ActionCall.Core,
     component: Component,
-    aggregateName: String,
+      aggregatename: String,
     paging: _Paging
   ): Consequence[Vector[Any]] =
-    _aggregate_entity_collection(component, aggregateName) match {
+    _aggregate_entity_collection(component, aggregatename) match {
       case Some((_, collection)) =>
-        _admin_entity_search(core, collection, component, aggregateName, "summary", paging, _action_values(core)).map { result =>
+        _admin_entity_search(
+          core,
+          collection,
+          component,
+          aggregatename,
+          "summary",
+          paging,
+          _action_values(core)
+        ).map { result =>
           val values =
             if (result.data.nonEmpty)
               result.data
             else
               _entity_values(collection).drop(paging.offset).take(paging.fetchPageSize)
-          values.map(x => collection.descriptor.persistent.toViewRecord(x, "admin", Vector.empty)).asInstanceOf[Vector[Any]]
+          values.map(x => collection.descriptor.persistent.toViewRecord(x, "admin", Vector.empty))
+            .asInstanceOf[Vector[Any]]
         }
       case None =>
         Consequence.success(Vector.empty)
@@ -2456,28 +2697,31 @@ object AdminComponent {
 
   private def _admin_aggregate_entity_read(
     component: Component,
-    aggregateName: String,
-    idText: String
+      aggregatename: String,
+      idtext: String
   ): Consequence[Any] =
     for {
       entity <- Consequence.fromOption(
-        _aggregate_entity_collection(component, aggregateName),
-        s"Aggregate entity collection not found: ${aggregateName}"
+        _aggregate_entity_collection(component, aggregatename),
+        s"Aggregate entity collection not found: ${aggregatename}"
       )
       (_, collection) = entity
-      record <- Consequence.fromOption(_entity_record(collection, idText), s"Aggregate entity record not found: ${idText}")
+      record <- Consequence.fromOption(
+        _entity_record(collection, idtext),
+        s"Aggregate entity record not found: ${idtext}"
+      )
     } yield record
 
   private def _admin_aggregate_display_value(
     component: Component,
-    aggregateName: String,
-    idText: String,
+      aggregatename: String,
+      idtext: String,
     value: Any
   ): Any =
-    _aggregate_entity_collection(component, aggregateName)
+    _aggregate_entity_collection(component, aggregatename)
       .flatMap { case (entityName, collection) =>
         val fields = _entity_view_fields(component, entityName, "detail")
-        _entity_record(collection, idText, fields)
+        _entity_record(collection, idtext, fields)
       }
       .getOrElse(value)
 
@@ -2488,11 +2732,12 @@ object AdminComponent {
     given org.goldenport.cncf.context.ExecutionContext = core.executionContext
     val args = _action_values(core)
     for {
-      dataName <- _required_string(args, "data")
+      dataname <- _required_string(args, "data")
       id <- _required_string(args, "id")
       entry <- DataStore.EntryId.parse(id)
-      ds <- subsystem.globalRuntimeContext.dataStoreSpace.dataStore(DataStore.CollectionId(dataName))
-      _ <- ds.create(DataStore.CollectionId(dataName), entry, _admin_data_record(args))
+      ds <-
+        subsystem.globalRuntimeContext.dataStoreSpace.dataStore(DataStore.CollectionId(dataname))
+      _ <- ds.create(DataStore.CollectionId(dataname), entry, _admin_data_record(args))
     } yield OperationResponse.Scalar("Data record was applied.")
   }
 
@@ -2528,17 +2773,23 @@ object AdminComponent {
   private def _optional_entity_id(
     args: Map[String, Any],
     key: String,
-    componentName: String,
+      componentname: String,
     namespace: String,
-    collectionName: String
+      collectionname: String
   ): Consequence[Option[(String, EntityId)]] =
     args.get(key).map(_.toString).filter(_.nonEmpty) match {
       case Some(value) =>
         EntityId.parse(value)
           .orElse {
-            val componentPart = NamingConventions.toNormalizedSegment(componentName).replace('-', '_')
-            val collectionPart = NamingConventions.toNormalizedSegment(collectionName).replace('-', '_')
-            Consequence.success(EntityId(namespace, value, EntityCollectionId(componentPart, namespace, collectionPart)))
+            val componentpart =
+              NamingConventions.toNormalizedSegment(componentname).replace('-', '_')
+            val collectionpart =
+              NamingConventions.toNormalizedSegment(collectionname).replace('-', '_')
+            Consequence.success(EntityId(
+              namespace,
+              value,
+              EntityCollectionId(componentpart, namespace, collectionpart)
+            ))
           }
           .map(id => Some(value -> id))
       case None => Consequence.success(None)
@@ -2561,9 +2812,9 @@ object AdminComponent {
   ): Consequence[_Paging] =
     for {
       page <- _positive_int_arg(args, "page", 1)
-      pageSize <- _positive_int_arg(args, "pageSize", 20)
+      pagesize <- _positive_int_arg(args, "pageSize", 20)
       policy <- _total_count_policy(args)
-    } yield _Paging(page, pageSize, _boolean_arg(args, "includeTotal", false), policy)
+    } yield _Paging(page, pagesize, _boolean_arg(args, "includeTotal", false), policy)
 
   private enum _TotalCountPolicy {
     case Disabled
@@ -2588,7 +2839,7 @@ object AdminComponent {
   private def _paging_with_capability(
     paging: _Paging,
     capability: TotalCountCapability,
-    surfaceName: String
+      surfacename: String
   ): Consequence[_PagingCapabilityDecision] =
     if (!paging.wantsTotal)
       Consequence.success(_PagingCapabilityDecision(paging, None, None))
@@ -2597,12 +2848,14 @@ object AdminComponent {
     else
       paging.totalCountPolicy match {
         case _TotalCountPolicy.Required =>
-          Consequence.argumentInvalid(s"total count is required but not supported for ${surfaceName}: ${capability}")
+          Consequence.argumentInvalid(
+            s"total count is required but not supported for ${surfacename}: ${capability}"
+          )
         case _ =>
           val reason = capability.toString.toLowerCase
           Consequence.success(_PagingCapabilityDecision(
             paging.copy(includeTotal = false),
-            Some(s"total count is not available for ${surfaceName}: ${reason}"),
+            Some(s"total count is not available for ${surfacename}: ${reason}"),
             Some(reason)
           ))
       }
@@ -2618,7 +2871,9 @@ object AdminComponent {
       case Some("required" | "require") =>
         Consequence.success(_TotalCountPolicy.Required)
       case Some(value) =>
-        Consequence.argumentInvalid(s"totalCountPolicy must be disabled, optional, or required: ${value}")
+        Consequence.argumentInvalid(
+          s"totalCountPolicy must be disabled, optional, or required: ${value}"
+        )
       case None =>
         Consequence.success(_TotalCountPolicy.Disabled)
     }
@@ -2667,26 +2922,30 @@ object AdminComponent {
 
   private def _validate_admin_association_entity(
     subsystem: Subsystem,
-    targetKind: Option[String],
+    targetkind: Option[String],
     id: EntityId
   )(using org.goldenport.cncf.context.ExecutionContext): Consequence[Unit] =
-    AssociationTargetValidator.entityStoreRecordExists.validate(targetKind, id).recoverWith { conclusion =>
-      if (_admin_association_entity_exists(subsystem, targetKind, id))
-        Consequence.unit
-      else
-        Consequence.Failure(conclusion)
+    AssociationTargetValidator.entityStoreRecordExists.validate(targetkind, id).recoverWith {
+      conclusion =>
+        if (_admin_association_entity_exists(subsystem, targetkind, id))
+          Consequence.unit
+        else
+          Consequence.Failure(conclusion)
     }
 
   private def _admin_association_entity_exists(
     subsystem: Subsystem,
-    targetKind: Option[String],
+    targetkind: Option[String],
     id: EntityId
   ): Boolean = {
     val idvalue = id.value
     subsystem.components.exists { component =>
-      val names = targetKind match {
+      val names = targetkind match {
         case Some(kind) =>
-          component.entitySpace.entityNames.filter(NamingConventions.equivalentByNormalized(_, kind))
+          component.entitySpace.entityNames.filter(NamingConventions.equivalentByNormalized(
+            _,
+            kind
+          ))
         case None =>
           component.entitySpace.entityNames
       }
@@ -2722,7 +2981,7 @@ object AdminComponent {
         field.key != "entity" &&
         !_is_blob_attachment_form_key(field.key)
     }
-    val withId =
+    val withid =
       data.getString("id").filter(_.nonEmpty) match {
         case Some(idOrShortid) =>
           collection.resolveEntityId(idOrShortid)
@@ -2732,7 +2991,7 @@ object AdminComponent {
           val cid = collection.descriptor.collectionId
           data.appendField("id", EntityId(cid.major, cid.minor, cid).value)
       }
-    withId
+    withid
   }
 
   private def _is_blob_attachment_form_key(key: String): Boolean =
@@ -2759,21 +3018,21 @@ object AdminComponent {
     id: String,
     fields: Vector[String] = Vector.empty
   ): Option[Record] =
-    collection.resolveEntityId(id).flatMap { canonicalId =>
+    collection.resolveEntityId(id).flatMap { canonicalid =>
       _entity_values(collection)
-        .find(x => collection.descriptor.persistent.id(x) == canonicalId)
+        .find(x => collection.descriptor.persistent.id(x) == canonicalid)
     }
       .map(x => collection.descriptor.persistent.toViewRecord(x, "admin", fields))
 
   private def _entity_view_fields(
     component: Component,
-    entityName: String,
+      entityname: String,
     view: String
   ): Vector[String] =
     component.viewDefinitions
       .find(d =>
-        NamingConventions.equivalentByNormalized(d.entityName, entityName) ||
-          NamingConventions.equivalentByNormalized(d.name, entityName)
+        NamingConventions.equivalentByNormalized(d.entityName, entityname) ||
+          NamingConventions.equivalentByNormalized(d.name, entityname)
       )
       .flatMap(_.fieldsFor(view))
       .getOrElse(Vector.empty)
@@ -2786,7 +3045,9 @@ object AdminComponent {
   private def _record_ids(
     records: Vector[Record]
   ): Vector[String] =
-    records.map(x => x.getString("id").getOrElse(x.getAny("id").map(_.toString).getOrElse("unknown")))
+    records.map(x =>
+      x.getString("id").getOrElse(x.getAny("id").map(_.toString).getOrElse("unknown"))
+    )
 
   private def _record_items(
     records: Vector[Record]
@@ -2833,11 +3094,16 @@ object AdminComponent {
     fields: Vector[String] = Vector.empty
   ): _Page[_AdminReadItem] = {
     val items = result.data.map { x =>
-      val entityId = collection.descriptor.persistent.id(x)
-      val id = entityId.value
+      val entityid = collection.descriptor.persistent.id(x)
+      val id       = entityid.value
       val record = collection.descriptor.persistent.toViewRecord(x, "admin", fields)
       val label = _record_label(record).getOrElse(id)
-      _AdminReadItem(id, label, _record_text(record), record.getString("shortid").orElse(Some(entityId.parts.entropy)))
+      _AdminReadItem(
+        id,
+        label,
+        _record_text(record),
+        record.getString("shortid").orElse(Some(entityid.parts.entropy))
+      )
     }
     _Page(
       items.take(paging.pageSize),
@@ -2858,12 +3124,21 @@ object AdminComponent {
     if (result.nonEmpty || _entity_values(collection).isEmpty)
       _search_result_page(collection, result, paging, decision, fields)
     else
-      _page_values(_entity_values(collection).map { x =>
-        val entityId = collection.descriptor.persistent.id(x)
-        val id = entityId.value
-        val record = collection.descriptor.persistent.toViewRecord(x, "admin", fields)
-        _AdminReadItem(id, _record_label(record).getOrElse(id), _record_text(record), record.getString("shortid").orElse(Some(entityId.parts.entropy)))
-      }, paging, decision)
+      _page_values(
+        _entity_values(collection).map { x =>
+          val entityid = collection.descriptor.persistent.id(x)
+          val id       = entityid.value
+          val record = collection.descriptor.persistent.toViewRecord(x, "admin", fields)
+          _AdminReadItem(
+            id,
+            _record_label(record).getOrElse(id),
+            _record_text(record),
+            record.getString("shortid").orElse(Some(entityid.parts.entropy))
+          )
+        },
+        paging,
+        decision
+      )
 
   private def _prefetched_page_values[A](
     values: Vector[A],
@@ -2895,14 +3170,18 @@ object AdminComponent {
     page: _Page[?]
   ): Vector[(String, Any)] =
     base ++
-      page.total.map(total => Vector("total" -> total, "totalAvailable" -> true)).getOrElse(Vector("totalAvailable" -> false)) ++
-      page.unavailableReason.map(reason => Vector("totalUnavailableReason" -> reason)).getOrElse(Vector.empty) ++
+      page.total.map(total => Vector("total" -> total, "totalAvailable" -> true)).getOrElse(Vector(
+        "totalAvailable" -> false
+      )) ++
+      page.unavailableReason.map(reason => Vector("totalUnavailableReason" -> reason)).getOrElse(
+        Vector.empty
+      ) ++
       page.warning.map(warning => Vector("warnings" -> Vector(warning))).getOrElse(Vector.empty)
 
   private def _list_response_record(
     kind: String,
-    componentName: String,
-    collectionName: String,
+      componentname: String,
+      collectionname: String,
     page: _Page[_AdminReadItem],
     paging: _Paging
   ): Record =
@@ -2910,8 +3189,8 @@ object AdminComponent {
       _with_optional_total(
         Vector(
           "kind" -> s"${kind}.list",
-          "component" -> componentName,
-          "collection" -> collectionName,
+          "component"  -> componentname,
+          "collection" -> collectionname,
           "ids" -> page.values.map(_.id),
           "items" -> page.values.map(_.toRecord),
           "page" -> paging.page,
@@ -2924,8 +3203,8 @@ object AdminComponent {
 
   private def _read_response_record(
     kind: String,
-    componentName: String,
-    collectionName: String,
+      componentname: String,
+      collectionname: String,
     id: String,
     record: Record
   ): Record = {
@@ -2934,8 +3213,8 @@ object AdminComponent {
     val item = _AdminReadItem(id, label, text)
     Record.dataAuto(
       "kind" -> s"${kind}.read",
-      "component" -> componentName,
-      "collection" -> collectionName,
+      "component"  -> componentname,
+      "collection" -> collectionname,
       "id" -> id,
       "label" -> label,
       "value" -> text,
@@ -2947,8 +3226,8 @@ object AdminComponent {
 
   private def _read_values_response_record(
     kind: String,
-    componentName: String,
-    collectionName: String,
+      componentname: String,
+      collectionname: String,
     page: _Page[_AdminReadItem],
     paging: _Paging
   ): Record =
@@ -2956,8 +3235,8 @@ object AdminComponent {
       _with_optional_total(
         Vector(
           "kind" -> s"${kind}.read",
-          "component" -> componentName,
-          "collection" -> collectionName,
+          "component"  -> componentname,
+          "collection" -> collectionname,
           "items" -> page.values.map(_.toRecord),
           "values" -> page.values.map(_.value),
           "fields" -> page.values.map(_.label).mkString("\n"),
@@ -2971,19 +3250,19 @@ object AdminComponent {
 
   private def _read_value_response_record(
     kind: String,
-    componentName: String,
-    collectionName: String,
+      componentname: String,
+      collectionname: String,
     id: String,
     value: Any
   ): Record = value match {
     case record: Record =>
-      _read_response_record(kind, componentName, collectionName, id, record)
+      _read_response_record(kind, componentname, collectionname, id, record)
     case _ =>
     val item = _read_item(value, 0).copy(id = id)
     Record.dataAuto(
       "kind" -> s"${kind}.read",
-      "component" -> componentName,
-      "collection" -> collectionName,
+        "component"  -> componentname,
+        "collection" -> collectionname,
       "id" -> id,
       "label" -> item.label,
       "value" -> item.value,
@@ -2995,24 +3274,24 @@ object AdminComponent {
   private def _read_value_response_record_with_blobs(
     core: ActionCall.Core,
     kind: String,
-    componentName: String,
-    collectionName: String,
+      componentname: String,
+      collectionname: String,
     id: String,
     value: Any
   )(using org.goldenport.cncf.context.ExecutionContext): Consequence[Record] = {
-    val base = _read_value_response_record(kind, componentName, collectionName, id, value)
-    val sourceEntityId = _source_entity_id(id, value, base)
-    _blob_projection_record(core, sourceEntityId).map { projection =>
+    val base           = _read_value_response_record(kind, componentname, collectionname, id, value)
+    val sourceentityid = _source_entity_id(id, value, base)
+    _blob_projection_record(core, sourceentityid).map { projection =>
       _with_blob_projection(
         base,
         projection,
-        sourceEntityId
+        sourceentityid
       )
     }
   }
 
   private def _source_entity_id(
-    routeId: String,
+      routeid: String,
     value: Any,
     record: Record
   ): String =
@@ -3022,13 +3301,13 @@ object AdminComponent {
     })
       .orElse(record.getString("sourceEntityId").filter(_.nonEmpty))
       .orElse(record.getString("id").filter(_.nonEmpty))
-      .getOrElse(routeId)
+      .getOrElse(routeid)
 
   private def _blob_projection_record(
     core: ActionCall.Core,
-    sourceEntityId: String
+      sourceentityid: String
   )(using org.goldenport.cncf.context.ExecutionContext): Consequence[Record] =
-    BlobProjection.entityImageProjectionRecord(sourceEntityId)(_blob_projection_loaders(core))
+    BlobProjection.entityImageProjectionRecord(sourceentityid)(_blob_projection_loaders(core))
 
   private def _blob_projection_loaders(core: ActionCall.Core): BlobProjection.Loaders =
     BlobProjection.Loaders(
@@ -3042,10 +3321,14 @@ object AdminComponent {
   ): Consequence[Vector[Association]] = {
     given org.goldenport.cncf.context.ExecutionContext = core.executionContext
     import org.goldenport.cncf.association.AssociationRepository.given
-    val repository = AssociationRepository.entityStore(AssociationStoragePolicy.blobAttachmentDefault)
+    val repository =
+      AssociationRepository.entityStore(AssociationStoragePolicy.blobAttachmentDefault)
     val collection = AssociationStoragePolicy.blobAttachmentDefault.collection(filter.domain)
-    _exec_uow(core, UnitOfWorkOp.Authorize(_blob_projection_authorization(core, collection, None))).flatMap { _ =>
-      repository.list(filter).map(_.sortBy(x => (x.sortOrder.getOrElse(Int.MaxValue), x.associationId)))
+    _exec_uow(core, UnitOfWorkOp.Authorize(_blob_projection_authorization(core, collection, None))).flatMap {
+      _ =>
+        repository.list(filter).map(_.sortBy(x =>
+          (x.sortOrder.getOrElse(Int.MaxValue), x.associationId)
+        ))
     }
   }
 
@@ -3055,7 +3338,8 @@ object AdminComponent {
   ): Consequence[Blob] = {
     given org.goldenport.cncf.context.ExecutionContext = core.executionContext
     import BlobRepository.given
-    _exec_uow(core,
+    _exec_uow(
+      core,
       UnitOfWorkOp.EntityStoreLoad[Blob](
         id,
         summon[EntityPersistent[Blob]],
@@ -3070,13 +3354,13 @@ object AdminComponent {
   private def _blob_projection_authorization(
     core: ActionCall.Core,
     collection: EntityCollectionId,
-    targetId: Option[EntityId]
+      targetid: Option[EntityId]
   ): UnitOfWorkAuthorization =
     UnitOfWorkAuthorization(
       resourceFamily = "domain",
       resourceType = Some(collection.name),
       collectionName = Some(collection.name),
-      targetId = targetId,
+      targetId = targetid,
       accessKind = "read",
       sourceComponentName = core.component.map(_.name),
       targetComponentName = Some("blob"),
@@ -3094,7 +3378,7 @@ object AdminComponent {
   private def _with_blob_projection(
     record: Record,
     projection: Record,
-    sourceEntityId: String
+      sourceentityid: String
   ): Record = {
     val images = _record_seq(projection.getAny("images"))
     val representative = projection.getAny("representativeImage").collect { case r: Record => r }
@@ -3105,7 +3389,7 @@ object AdminComponent {
           key.equalsIgnoreCase("representativeImage") ||
           key.equalsIgnoreCase("blobs")
       } ++ Vector(
-        "sourceEntityId" -> sourceEntityId,
+        "sourceEntityId"      -> sourceentityid,
         "images" -> images,
         "representativeImage" -> representative
       )
@@ -3139,7 +3423,8 @@ object AdminComponent {
           "value" -> value
         ) ++
           shortid.map("shortid" -> _).toVector ++
-          (if (images.isEmpty) Vector.empty else Vector(
+          (if (images.isEmpty) Vector.empty
+           else Vector(
             "images" -> images,
             "representativeImage" -> representativeImage
           )))*
@@ -3157,7 +3442,9 @@ object AdminComponent {
       z.flatMap { acc =>
         _blob_projection_record(core, item.id).map { projection =>
           val images = _record_seq(projection.getAny("images"))
-          val representative = projection.getAny("representativeImage").collect { case r: Record => r }
+          val representative = projection.getAny("representativeImage").collect { case r: Record =>
+            r
+          }
           acc :+ item.copy(images = images, representativeImage = representative)
         }
       }
@@ -3262,9 +3549,9 @@ object AdminComponent {
 
   private def _view_browser(
     component: Component,
-    viewName: String
+      viewname: String
   ) = {
-    val candidates = _surface_name_candidates(viewName, "view")
+    val candidates = _surface_name_candidates(viewname, "view")
     candidates
       .iterator
       .flatMap(name => component.viewSpace.browserOption[Any](name))
@@ -3272,16 +3559,20 @@ object AdminComponent {
       .headOption
       .orElse {
         component.viewDefinitions
-          .find(x => candidates.exists(candidate => NamingConventions.equivalentByNormalized(x.name, candidate)))
+          .find(x =>
+            candidates.exists(candidate =>
+              NamingConventions.equivalentByNormalized(x.name, candidate)
+            )
+          )
           .flatMap(x => component.viewSpace.browserOption[Any](x.name))
       }
   }
 
   private def _aggregate_collection(
     component: Component,
-    aggregateName: String
+      aggregatename: String
   ) = {
-    val candidates = _surface_name_candidates(aggregateName, "aggregate")
+    val candidates = _surface_name_candidates(aggregatename, "aggregate")
     candidates
       .iterator
       .flatMap(name => component.aggregateSpace.collectionOption[Any](name))
@@ -3289,28 +3580,34 @@ object AdminComponent {
       .headOption
       .orElse {
         component.aggregateDefinitions
-          .find(x => candidates.exists(candidate => NamingConventions.equivalentByNormalized(x.name, candidate)))
+          .find(x =>
+            candidates.exists(candidate =>
+              NamingConventions.equivalentByNormalized(x.name, candidate)
+            )
+          )
           .flatMap(x => component.aggregateSpace.collectionOption[Any](x.name))
       }
   }
 
   private def _aggregate_entity_name(
     component: Component,
-    aggregateName: String
+      aggregatename: String
   ): Option[String] = {
-    val candidates = _surface_name_candidates(aggregateName, "aggregate")
+    val candidates = _surface_name_candidates(aggregatename, "aggregate")
     component.aggregateDefinitions
-      .find(x => candidates.exists(candidate => NamingConventions.equivalentByNormalized(x.name, candidate)))
+      .find(x =>
+        candidates.exists(candidate => NamingConventions.equivalentByNormalized(x.name, candidate))
+      )
       .map(_.entityName)
   }
 
   private def _aggregate_entity_collection(
     component: Component,
-    aggregateName: String
+      aggregatename: String
   ): Option[(String, EntityCollection[?])] = {
     val names = (
-      _aggregate_entity_name(component, aggregateName).toVector ++
-        _surface_name_candidates(aggregateName, "aggregate")
+      _aggregate_entity_name(component, aggregatename).toVector ++
+        _surface_name_candidates(aggregatename, "aggregate")
     ).distinct
     names.iterator
       .flatMap(name => _entity_collection(component, name).map(name -> _))
@@ -3337,7 +3634,7 @@ object AdminComponent {
   ): Boolean =
     conclusion.observation.taxonomy.symptom == org.goldenport.observation.Taxonomy.Symptom.NotImplemented
 
-  private def _value(value: ConfigurationValue): String = {
+  private def _value(value: ConfigurationValue): String =
     value match {
       case ConfigurationValue.StringValue(v) => v
       case ConfigurationValue.NumberValue(v) => v.toString
@@ -3347,9 +3644,8 @@ object AdminComponent {
         vs.map { case (k, v) => s"${k}=${_value(v)}" }.mkString("{", ", ", "}")
       case ConfigurationValue.NullValue => "null"
     }
-  }
 
-  private def _origin(origin: ConfigurationOrigin): String = {
+  private def _origin(origin: ConfigurationOrigin): String =
     origin match {
       case ConfigurationOrigin.Arguments => "cli"
       case ConfigurationOrigin.Environment => "env"
@@ -3360,4 +3656,3 @@ object AdminComponent {
       case ConfigurationOrigin.Resource => "resource"
     }
   }
-}

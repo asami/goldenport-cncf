@@ -6,16 +6,27 @@ import org.goldenport.datatype.Identifier
 import org.goldenport.record.Record
 import org.goldenport.cncf.context.ExecutionContext
 import org.simplemodeling.model.datatype.EntityId
-import org.goldenport.cncf.entity.{EntityAccessScopePolicy, EntityIdentityScope, EntityLifecycleRecordPolicy, EntityQuery, EntitySearchScope, EntityVisibilityScope, SimpleEntityStorageShapePolicy}
+import org.goldenport.cncf.entity.{
+  EntityAccessScopePolicy,
+  EntityIdentityScope,
+  EntityLifecycleRecordPolicy,
+  EntityMutationExpectation,
+  EntityPersistentCreate,
+  EntityQuery,
+  EntityRecordSnapshot,
+  EntitySearchScope,
+  EntityVisibilityScope,
+  SimpleEntityStorageShapePolicy
+}
 import org.goldenport.cncf.directive.{Query, SearchResult}
-import org.goldenport.cncf.observability.CallTreeValueSummary
+import org.goldenport.cncf.observability.{CallTreeValueSummary, ConclusionDiagnostics}
 import org.goldenport.cncf.unitofwork.UnitOfWorkOp
 
 /*
  * @since   Mar. 14, 2026
  *  version Mar. 30, 2026
  *  version May. 10, 2026
- * @version Jul. 16, 2026
+ * @version Jul. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 trait Collection[A] {
@@ -44,7 +55,8 @@ final class EntityCollection[E](
   def shouldFallbackToStoreForWorkingSet(
     query: EntityQuery[?]
   ): Boolean =
-    query.scope == EntitySearchScope.WorkingSet && _has_effective_working_set_policy && !workingSetStatus.isReady
+    query.scope == EntitySearchScope
+      .WorkingSet && _has_effective_working_set_policy && !workingSetStatus.isReady
 
   def put(entity: E): Unit =
     _residency(entity, None) match {
@@ -103,17 +115,56 @@ final class EntityCollection[E](
     }
   }
 
-  def putRecordSynced(
+  def createRecordSynced(
     record: Record
   )(using ctx: ExecutionContext): Consequence[Unit] = {
     val evaluationinstant = ctx.clock.instant()
     for {
       entity <- descriptor.persistent.fromRecord(record)
-      _ <- ctx.entityStoreSpace.save(
-        UnitOfWorkOp.EntityStoreSave(entity, descriptor.persistent)
+      create = new EntityPersistentCreate[E] {
+        def id(value: E): Option[EntityId] =
+          Some(descriptor.persistent.id(value))
+        def toRecord(value: E): Record =
+          descriptor.persistent.toRecord(value)
+        override def toStoreRecord(value: E): Record =
+          descriptor.persistent.toStoreRecord(value)
+        def collection(value: E) =
+          descriptor.persistent.id(value).collection
+      }
+      _ <- ctx.entityStoreSpace.create(
+        UnitOfWorkOp.EntityStoreCreate(entity, create)
       )
       _ = _put(entity, evaluationinstant)
     } yield ()
+  }
+
+  def saveRecordVersioned(
+      record: Record,
+      expectation: EntityMutationExpectation
+  )(using ctx: ExecutionContext): Consequence[EntityRecordSnapshot] = {
+    val evaluationinstant = ctx.clock.instant()
+    descriptor.persistent.fromRecord(record).flatMap { entity =>
+      val entityid = descriptor.persistent.id(entity)
+      ctx.entityStoreSpace.saveVersioned(
+        entity,
+        descriptor.persistent,
+        expectation
+      ).map { snapshot =>
+        _put(snapshot.entity, evaluationinstant)
+        EntityRecordSnapshot(
+          descriptor.persistent.toRecord(snapshot.entity),
+          snapshot.token
+        )
+      }.recoverWith { conclusion =>
+        val reason = ConclusionDiagnostics.classify(conclusion).reason
+        if (
+          reason.contains("stale-entity-revision") ||
+          reason.contains("committed-entity-projection-failure")
+        )
+          evict(entityid)
+        Consequence.Failure(conclusion)
+      }
+    }
   }
 
   // Load-through resolution:
@@ -126,7 +177,10 @@ final class EntityCollection[E](
   override def resolveScoped(
     id: EntityId
   )(using ctx: ExecutionContext): Consequence[E] =
-    _with_calltree("space:entity:resolve", _entity_collection_attributes("resolve") + ("entity_id" -> id.print)) {
+    _with_calltree(
+      "space:entity:resolve",
+      _entity_collection_attributes("resolve") + ("entity_id" -> id.print)
+    ) {
       _resolve(id, _is_normal_access_visible, Some(ctx.clock.instant()))
     }
 
@@ -168,13 +222,13 @@ final class EntityCollection[E](
     storage.memoryRealm.foreach(_.remove(id))
   }
 
-  def resolveEntityId(idorshortid: String): Option[EntityId] =
-    _canonical_entity_id(idorshortid).orElse(_entity_id_by_shortid(idorshortid))
+  def resolveEntityId(idOrShortid: String): Option[EntityId] =
+    _canonical_entity_id(idOrShortid).orElse(_entity_id_by_shortid(idOrShortid))
 
-  def resolveByReference(idorshortid: String): Consequence[E] =
-    resolveEntityId(idorshortid) match {
+  def resolveByReference(idOrShortid: String): Consequence[E] =
+    resolveEntityId(idOrShortid) match {
       case Some(id) => resolve(id)
-      case None => Consequence.successOrEntityNotFound(Option.empty[E])(Identifier(idorshortid))
+      case None     => Consequence.successOrEntityNotFound(Option.empty[E])(Identifier(idOrShortid))
     }
 
   def uniqueValueExists(
@@ -184,7 +238,10 @@ final class EntityCollection[E](
     scope: EntityIdentityScope,
     includeEntityIdEntropy: Boolean
   )(using ctx: ExecutionContext): Boolean =
-    _with_calltree("space:entity:unique-value-exists", _entity_collection_attributes("unique-value-exists") + ("field" -> fieldName)) {
+    _with_calltree(
+      "space:entity:unique-value-exists",
+      _entity_collection_attributes("unique-value-exists") + ("field" -> fieldName)
+    ) {
       _identity_candidates(scope).exists { case (_, id, record) =>
         !excludeId.exists(_.value == id.value) &&
           (
@@ -200,17 +257,21 @@ final class EntityCollection[E](
     includeEntityIdEntropy: Boolean,
     scope: EntityIdentityScope
   )(using ctx: ExecutionContext): Option[EntityId] =
-    _with_calltree("space:entity:resolve-identity", _entity_collection_attributes("resolve-identity")) {
+    _with_calltree(
+      "space:entity:resolve-identity",
+      _entity_collection_attributes("resolve-identity")
+    ) {
       _identity_candidates(scope).collectFirst {
-        case (_, id, record) if _identity_matches(id, record, value, fieldNames, includeEntityIdEntropy) =>
+        case (_, id, record)
+            if _identity_matches(id, record, value, fieldNames, includeEntityIdEntropy) =>
           id
       }
     }
 
   private def _canonical_entity_id(
-    idOrShortid: String
+      idorshortid: String
   ): Option[EntityId] =
-    EntityId.parse(idOrShortid).toOption.filter { id =>
+    EntityId.parse(idorshortid).toOption.filter { id =>
       id.collection.major == descriptor.collectionId.major &&
         id.collection.name == descriptor.collectionId.name
     }
@@ -244,13 +305,15 @@ final class EntityCollection[E](
     id: EntityId,
     record: Record,
     value: String,
-    fieldNames: Vector[String],
-    includeEntityIdEntropy: Boolean
+      fieldnames: Vector[String],
+      includeentityidentropy: Boolean
   ): Boolean =
     id.value == value ||
       id.print == value ||
-      fieldNames.exists(name => SimpleEntityStorageShapePolicy.stringValue(record, name).contains(value)) ||
-      (includeEntityIdEntropy && id.parts.entropy == value)
+      fieldnames.exists(name =>
+        SimpleEntityStorageShapePolicy.stringValue(record, name).contains(value)
+      ) ||
+      (includeentityidentropy && id.parts.entropy == value)
 
   // Current phase search API:
   // route is available through EntitySpace/EntityCollection.
@@ -259,7 +322,13 @@ final class EntityCollection[E](
     query: EntityQuery[?]
   )(using ctx: ExecutionContext): Consequence[SearchResult[E]] = {
     val evaluationinstant = ctx.clock.instant()
-    _with_calltree("space:entity:search", _entity_collection_attributes("search") ++ Map("scope" -> query.scope.toString, "working_set_ready" -> workingSetStatus.isReady.toString)) {
+    _with_calltree(
+      "space:entity:search",
+      _entity_collection_attributes("search") ++ Map(
+        "scope"             -> query.scope.toString,
+        "working_set_ready" -> workingSetStatus.isReady.toString
+      )
+    ) {
       val visibilitypolicy = _visibility_policy(query)
       val source = query.scope match {
         case EntitySearchScope.WorkingSet =>
@@ -267,13 +336,16 @@ final class EntityCollection[E](
         case EntitySearchScope.Store => _search_source
       }
       val notdeleted = source.filterNot(_is_logically_deleted)
-      val scoped = notdeleted.filter(entity => _is_access_scope_visible(entity, query.visibilityScope))
+      val scoped =
+        notdeleted.filter(entity => _is_access_scope_visible(entity, query.visibilityScope))
       val resident = query.scope match {
         case EntitySearchScope.WorkingSet =>
-          if (workingSetSearchAvailable) scoped.filter(_is_resident(_, evaluationinstant)) else scoped
+          if (workingSetSearchAvailable) scoped.filter(_is_resident(_, evaluationinstant))
+          else scoped
         case EntitySearchScope.Store => scoped
       }
-      val visible = resident.filter(v => _is_visible(descriptor.persistent.toRecord(v), visibilitypolicy))
+      val visible =
+        resident.filter(v => _is_visible(descriptor.persistent.toRecord(v), visibilitypolicy))
       val filtered = visible.filter(v => Query.matches(query.query, v))
       val sorted = Query.sortValues(filtered, query.query.sort)
       val values = Query.sliceValues(sorted, query.query.offset, query.query.limit)
@@ -303,7 +375,9 @@ final class EntityCollection[E](
         val result = body
         result match {
           case success: Consequence.Success[?] =>
-            calltree.leave(Map("outcome" -> "success") ++ CallTreeValueSummary.resultAttributes(success.result))
+            calltree.leave(
+              Map("outcome" -> "success") ++ CallTreeValueSummary.resultAttributes(success.result)
+            )
           case failure: Consequence.Failure[?] =>
             calltree.leave(Map(
               "outcome" -> "failure",
@@ -311,7 +385,9 @@ final class EntityCollection[E](
               "error" -> failure.conclusion.display
             ))
           case other =>
-            calltree.leave(Map("outcome" -> "success") ++ CallTreeValueSummary.resultAttributes(other))
+            calltree.leave(
+              Map("outcome" -> "success") ++ CallTreeValueSummary.resultAttributes(other)
+            )
         }
         result
       } catch {
@@ -339,7 +415,9 @@ final class EntityCollection[E](
       storage.storeRealm.values
     } else {
       val ids = memory.iterator.map(descriptor.persistent.id).toSet
-      memory ++ storage.storeRealm.values.filterNot(entity => ids.contains(descriptor.persistent.id(entity)))
+      memory ++ storage.storeRealm.values.filterNot(entity =>
+        ids.contains(descriptor.persistent.id(entity))
+      )
     }
   }
 
@@ -402,9 +480,9 @@ final class EntityCollection[E](
   )
 
   private def _visibility_policy(
-    entityQuery: EntityQuery[?]
+      entityquery: EntityQuery[?]
   )(using ctx: ExecutionContext): _VisibilityPolicy = {
-    entityQuery.visibilityScope match {
+    entityquery.visibilityScope match {
       case Some(EntityVisibilityScope.Public) =>
         return _VisibilityPolicy(Some(Set("published")), Some(Set("alive")))
       case Some(EntityVisibilityScope.Owner) | Some(EntityVisibilityScope.Admin) =>
@@ -412,7 +490,7 @@ final class EntityCollection[E](
       case None =>
         ()
     }
-    val query = entityQuery.query
+    val query     = entityquery.query
     val lifecycle = _lifecycle_constraint(query)
     val ismanager = _is_content_manager()
     val poststatuses = if (lifecycle.poststatusexplicit) {
@@ -443,8 +521,10 @@ final class EntityCollection[E](
     val expr = Query.whereOf(query)
     val raw = _query_condition(query)
     _LifecycleConstraint(
-      poststatusexplicit = _mentions_path(expr, Set("poststatus")) || _mentions_condition_key(raw, Set("poststatus")),
-      alivenessexplicit = _mentions_path(expr, Set("aliveness")) || _mentions_condition_key(raw, Set("aliveness"))
+      poststatusexplicit =
+        _mentions_path(expr, Set("poststatus")) || _mentions_condition_key(raw, Set("poststatus")),
+      alivenessexplicit =
+        _mentions_path(expr, Set("aliveness")) || _mentions_condition_key(raw, Set("aliveness"))
     )
   }
 
@@ -491,7 +571,9 @@ final class EntityCollection[E](
       case r: Record =>
         r.asMap.keys.exists(k => names.contains(_normalize_path(k)))
       case m: Map[?, ?] =>
-        m.keysIterator.collect { case k: String => k }.exists(k => names.contains(_normalize_path(k)))
+        m.keysIterator.collect { case k: String => k }.exists(k =>
+          names.contains(_normalize_path(k))
+        )
       case p: Product =>
         p.productElementNames.exists(k => names.contains(_normalize_path(k)))
       case _ =>
@@ -553,12 +635,14 @@ final class EntityCollection[E](
   }
 
   private def _post_statuses_for_manager()(using ctx: ExecutionContext): Set[String] = {
-    val configured = _attribute_tokens("search_poststatus", "search.poststatus", "poststatus", "post_status")
+    val configured =
+      _attribute_tokens("search_poststatus", "search.poststatus", "poststatus", "post_status")
       .flatMap(EntityLifecycleRecordPolicy.postStatusToken)
     if (configured.nonEmpty)
       configured
     else {
-      val frompurpose = _attribute_tokens("purpose").flatMap(EntityLifecycleRecordPolicy.postStatusToken)
+      val frompurpose =
+        _attribute_tokens("purpose").flatMap(EntityLifecycleRecordPolicy.postStatusToken)
       if (frompurpose.nonEmpty)
         frompurpose
       else
@@ -574,7 +658,8 @@ final class EntityCollection[E](
     if (configured.nonEmpty)
       configured
     else {
-      val frompurpose = _attribute_tokens("purpose").flatMap(EntityLifecycleRecordPolicy.alivenessToken)
+      val frompurpose =
+        _attribute_tokens("purpose").flatMap(EntityLifecycleRecordPolicy.alivenessToken)
       if (frompurpose.nonEmpty)
         frompurpose
       else if (poststatuses.contains("archived"))

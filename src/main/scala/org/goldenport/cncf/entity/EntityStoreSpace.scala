@@ -46,7 +46,9 @@ class EntityStoreSpace {
       _entity_stores.find(_.isAccept(cid))
     )("entitystore", cid.print)
 
-  def create[T](op: EntityStoreCreate[T])(using ctx: ExecutionContext): Consequence[CreateResult[T]] = {
+  def create[T](op: EntityStoreCreate[T])(using
+      ctx: ExecutionContext
+  ): Consequence[CreateResult[T]] = {
     given EntityPersistentCreate[T] = op.tc
     val cid = op.tc.collection(op.entity)
     _with_calltree("space:entitystore:create", _entitystore_space_attributes("create", cid)) {
@@ -63,7 +65,10 @@ class EntityStoreSpace {
     given EntityPersistentCreate[C] = op.create
     given EntityPersistent[P] = op.persisted
     val cid = op.create.collection(op.entity)
-    _with_calltree("space:entitystore:claim-or-load", _entitystore_space_attributes("claim-or-load", cid)) {
+    _with_calltree(
+      "space:entitystore:claim-or-load",
+      _entitystore_space_attributes("claim-or-load", cid)
+    ) {
       _by_collection(cid).flatMap(_.claimOrLoad(op.entity, op.options))
     }
   }
@@ -73,22 +78,25 @@ class EntityStoreSpace {
   ): EntityCreateOptions =
     op.options
 
-  def upsert[T](
-    op: EntityStoreUpsert[T]
+  private[cncf] def upsert[T](
+      op: EntityStoreUpsertUnversioned[T]
   )(
     authorize: Option[Record] => Consequence[Unit]
   )(using ctx: ExecutionContext): Consequence[CreateResult[T]] =
     upsert(op)(authorize, (_: CreateResult[T]) => Consequence.unit)
 
-  def upsert[T](
-    op: EntityStoreUpsert[T]
+  private[cncf] def upsert[T](
+      op: EntityStoreUpsertUnversioned[T]
   )(
     authorize: Option[Record] => Consequence[Unit],
     @deprecatedName("onSaved", "0.5.1")
     onsaved: CreateResult[T] => Consequence[Unit]
   )(using ctx: ExecutionContext): Consequence[CreateResult[T]] = {
     given EntityPersistentCreate[T] = op.tc
-    _with_calltree("space:entitystore:upsert", _entitystore_space_attributes("upsert", op.id.collection) + ("entity_id" -> op.id.print)) {
+    _with_calltree(
+      "space:entitystore:upsert",
+      _entitystore_space_attributes("upsert", op.id.collection) + ("entity_id" -> op.id.print)
+    ) {
       for {
         entitystore <- _by_collection(op.id.collection)
         result <- entitystore.upsert(op.entity, op.id, op.options)(authorize, onsaved)
@@ -96,10 +104,17 @@ class EntityStoreSpace {
     }
   }
 
-  def importSeed[T](
+  private[cncf] def importSeed[T](
     seed: EntityStoreSeed[T]
   )(using ctx: ExecutionContext, tc: EntityPersistent[T]): Consequence[Unit] =
-    _with_calltree("space:entitystore:import-seed", Map("space" -> "entitystore", "operation" -> "import-seed", "entry_count" -> seed.entries.size.toString)) {
+    _with_calltree(
+      "space:entitystore:import-seed",
+      Map(
+        "space"       -> "entitystore",
+        "operation"   -> "import-seed",
+        "entry_count" -> seed.entries.size.toString
+      )
+    ) {
       seed.entries.foldLeft(Consequence.unit) { (z, entry) =>
         z.flatMap { _ =>
           val createtc = new EntityPersistentCreate[T] {
@@ -118,7 +133,15 @@ class EntityStoreSpace {
             ds <- ctx.dataStoreSpace.dataStore(dscid)
             source = tc.toStoreRecord(entry.entity)
             record = EntityConcurrencyMetadata.initializeForCreate(source)
-            _ <- _with_calltree("space:datastore:create", Map("space" -> "datastore", "operation" -> "create", "collection" -> dscid.print, "entry_id" -> dsid.print)) {
+            _ <- _with_calltree(
+              "space:datastore:create",
+              Map(
+                "space"      -> "datastore",
+                "operation"  -> "create",
+                "collection" -> dscid.print,
+                "entry_id"   -> dsid.print
+              )
+            ) {
               ds.create(dscid, dsid, record)
             }.recoverWith { case _ =>
               ds.load(dscid, dsid).flatMap { existing =>
@@ -132,7 +155,15 @@ class EntityStoreSpace {
                     Consequence.success(record)
                 }
                 preserved.flatMap { value =>
-                  _with_calltree("space:datastore:save", Map("space" -> "datastore", "operation" -> "save", "collection" -> dscid.print, "entry_id" -> dsid.print)) {
+                  _with_calltree(
+                    "space:datastore:save",
+                    Map(
+                      "space"      -> "datastore",
+                      "operation"  -> "save",
+                      "collection" -> dscid.print,
+                      "entry_id"   -> dsid.print
+                    )
+                  ) {
                     ds.save(dscid, dsid, value)
                   }
                 }
@@ -145,7 +176,10 @@ class EntityStoreSpace {
 
   def load[T](op: EntityStoreLoad[T])(using ctx: ExecutionContext): Consequence[Option[T]] = {
     given EntityPersistent[T] = op.tc
-    _with_calltree("space:entitystore:load", _entitystore_space_attributes("load", op.id.collection) + ("entity_id" -> op.id.print)) {
+    _with_calltree(
+      "space:entitystore:load",
+      _entitystore_space_attributes("load", op.id.collection) + ("entity_id" -> op.id.print)
+    ) {
       for {
         entitystore <- _by_collection(op.id.collection)
         r <- entitystore.load(op.id)
@@ -170,10 +204,20 @@ class EntityStoreSpace {
     }
   }
 
-  def save[T](op: EntityStoreSave[T])(using ctx: ExecutionContext): Consequence[Unit] = {
+  def save[T](
+      op: EntityStoreSave[T]
+  )(using ctx: ExecutionContext): Consequence[EntitySnapshot[T]] =
+    saveVersioned(op.entity, op.tc, op.expectation)
+
+  private[cncf] def saveUnversioned[T](
+      op: EntityStoreSaveUnversioned[T]
+  )(using ctx: ExecutionContext): Consequence[Unit] = {
     given EntityPersistent[T] = op.tc
     val id = op.tc.id(op.entity)
-    _with_calltree("space:entitystore:save", _entitystore_space_attributes("save", id.collection) + ("entity_id" -> id.print)) {
+    _with_calltree(
+      "space:entitystore:save-unversioned",
+      _entitystore_space_attributes("save-unversioned", id.collection) + ("entity_id" -> id.print)
+    ) {
       for {
         entitystore <- _by_collection(id.collection)
         r <- entitystore.save(op.entity)
@@ -202,10 +246,20 @@ class EntityStoreSpace {
     }
   }
 
-  def update[T](op: EntityStoreUpdate[T])(using ctx: ExecutionContext): Consequence[Unit] = {
+  def update[T](
+      op: EntityStoreUpdate[T]
+  )(using ctx: ExecutionContext): Consequence[EntitySnapshot[T]] =
+    updateVersioned(op.entity, op.tc, op.expectation)
+
+  private[cncf] def updateUnversioned[T](
+      op: EntityStoreUpdateUnversioned[T]
+  )(using ctx: ExecutionContext): Consequence[Unit] = {
     given EntityPersistent[T] = op.tc
     val id = op.tc.id(op.entity)
-    _with_calltree("space:entitystore:update", _entitystore_space_attributes("update", id.collection) + ("entity_id" -> id.print)) {
+    _with_calltree(
+      "space:entitystore:update-unversioned",
+      _entitystore_space_attributes("update-unversioned", id.collection) + ("entity_id" -> id.print)
+    ) {
       for {
         entitystore <- _by_collection(id.collection)
         r <- entitystore.update(op.entity)
@@ -234,8 +288,21 @@ class EntityStoreSpace {
     }
   }
 
-  def updateById[T](op: EntityStoreUpdateById[T])(using ctx: ExecutionContext): Consequence[Unit] = {
-    _with_calltree("space:entitystore:update-by-id", _entitystore_space_attributes("update-by-id", op.id.collection) + ("entity_id" -> op.id.print)) {
+  def updateById[P](
+      op: EntityStoreUpdateById[P]
+  )(using ctx: ExecutionContext): Consequence[EntityRecordSnapshot] =
+    updateByIdVersioned(op.id, op.patch, op.tc, op.expectation)
+
+  private[cncf] def updateByIdUnversioned[P](
+      op: EntityStoreUpdateByIdUnversioned[P]
+  )(using ctx: ExecutionContext): Consequence[Unit] =
+    _with_calltree(
+      "space:entitystore:update-by-id-unversioned",
+      _entitystore_space_attributes(
+        "update-by-id-unversioned",
+        op.id.collection
+      ) + ("entity_id" -> op.id.print)
+    ) {
       val changes = EntityConcurrencyMetadata.withoutManagedField(
         Update.toChangesRecord(op.tc.toStoreRecord(op.patch))
       )
@@ -246,12 +313,19 @@ class EntityStoreSpace {
           cid <- dataStoreCollection(op.id)
           dsid <- dataStoreEntryId(op.id)
           ds <- ctx.dataStoreSpace.dataStore(cid)
-          r <- _with_calltree("space:datastore:update", Map("space" -> "datastore", "operation" -> "update", "collection" -> cid.print, "entry_id" -> dsid.print)) {
+          r <- _with_calltree(
+            "space:datastore:update",
+            Map(
+              "space"      -> "datastore",
+              "operation"  -> "update",
+              "collection" -> cid.print,
+              "entry_id"   -> dsid.print
+            )
+          ) {
             ds.update(cid, dsid, changes)
           }
         } yield r
     }
-  }
 
   def updateByIdVersioned[P](
     id: EntityId,
@@ -277,7 +351,10 @@ class EntityStoreSpace {
   }
 
   def delete(op: EntityStoreDelete)(using ctx: ExecutionContext): Consequence[Unit] =
-    _with_calltree("space:entitystore:delete", _entitystore_space_attributes("delete", op.id.collection) + ("entity_id" -> op.id.print)) {
+    _with_calltree(
+      "space:entitystore:delete",
+      _entitystore_space_attributes("delete", op.id.collection) + ("entity_id" -> op.id.print)
+    ) {
       for {
         entitystore <- _by_collection(op.id.collection)
         r <- entitystore.delete(op.id)
@@ -285,16 +362,24 @@ class EntityStoreSpace {
     }
 
   def deleteHard(op: EntityStoreDeleteHard)(using ctx: ExecutionContext): Consequence[Unit] =
-    _with_calltree("space:entitystore:delete-hard", _entitystore_space_attributes("delete-hard", op.id.collection) + ("entity_id" -> op.id.print)) {
+    _with_calltree(
+      "space:entitystore:delete-hard",
+      _entitystore_space_attributes("delete-hard", op.id.collection) + ("entity_id" -> op.id.print)
+    ) {
       for {
         entitystore <- _by_collection(op.id.collection)
         r <- entitystore.deleteHard(op.id)
       } yield r
     }
 
-  def search[T](op: EntityStoreSearch[T])(using ctx: ExecutionContext): Consequence[SearchResult[T]] = {
+  def search[T](op: EntityStoreSearch[T])(using
+      ctx: ExecutionContext
+  ): Consequence[SearchResult[T]] = {
     given EntityPersistent[T] = op.tc
-    _with_calltree_c("space:entitystore:search", _entitystore_space_attributes("search", op.query.collection)) {
+    _with_calltree_c(
+      "space:entitystore:search",
+      _entitystore_space_attributes("search", op.query.collection)
+    ) {
       for {
         entitystore <- _by_collection(op.query.collection)
         r <- entitystore.search(op.query)
@@ -302,9 +387,14 @@ class EntityStoreSpace {
     }
   }
 
-  def searchInternal[T](op: EntityStoreSearchInternal[T])(using ctx: ExecutionContext): Consequence[SearchResult[T]] = {
+  def searchInternal[T](op: EntityStoreSearchInternal[T])(using
+      ctx: ExecutionContext
+  ): Consequence[SearchResult[T]] = {
     given EntityPersistent[T] = op.tc
-    _with_calltree_c("space:entitystore:search-internal", _entitystore_space_attributes("search-internal", op.query.collection)) {
+    _with_calltree_c(
+      "space:entitystore:search-internal",
+      _entitystore_space_attributes("search-internal", op.query.collection)
+    ) {
       for {
         entitystore <- _by_collection(op.query.collection)
         r <- entitystore.searchInternal(op.query)
@@ -316,7 +406,10 @@ class EntityStoreSpace {
     op: EntityStoreUniqueValueExists[T]
   )(using ctx: ExecutionContext): Consequence[Boolean] = {
     given EntityPersistent[T] = op.tc
-    _with_calltree("space:entitystore:unique-value-exists", _entitystore_space_attributes("unique-value-exists", op.collection) + ("field" -> op.fieldName)) {
+    _with_calltree(
+      "space:entitystore:unique-value-exists",
+      _entitystore_space_attributes("unique-value-exists", op.collection) + ("field" -> op.fieldName)
+    ) {
       for {
         entitystore <- _by_collection(op.collection)
         r <- entitystore.uniqueValueExists(
@@ -335,7 +428,10 @@ class EntityStoreSpace {
     op: EntityStoreResolveIdentity[T]
   )(using ctx: ExecutionContext): Consequence[Option[EntityId]] = {
     given EntityPersistent[T] = op.tc
-    _with_calltree("space:entitystore:resolve-identity", _entitystore_space_attributes("resolve-identity", op.collection)) {
+    _with_calltree(
+      "space:entitystore:resolve-identity",
+      _entitystore_space_attributes("resolve-identity", op.collection)
+    ) {
       for {
         entitystore <- _by_collection(op.collection)
         r <- entitystore.resolveIdentity(
@@ -362,7 +458,9 @@ class EntityStoreSpace {
         val result = body
         result match {
           case success: Consequence.Success[?] =>
-            calltree.leave(Map("outcome" -> "success") ++ CallTreeValueSummary.resultAttributes(success.result))
+            calltree.leave(
+              Map("outcome" -> "success") ++ CallTreeValueSummary.resultAttributes(success.result)
+            )
           case failure: Consequence.Failure[?] =>
             calltree.leave(Map(
               "outcome" -> "failure",
@@ -370,7 +468,9 @@ class EntityStoreSpace {
               "error" -> failure.conclusion.display
             ))
           case other =>
-            calltree.leave(Map("outcome" -> "success") ++ CallTreeValueSummary.resultAttributes(other))
+            calltree.leave(
+              Map("outcome" -> "success") ++ CallTreeValueSummary.resultAttributes(other)
+            )
         }
         result
       } catch {
@@ -396,7 +496,9 @@ class EntityStoreSpace {
         val result = body
         result match {
           case success: Consequence.Success[A] =>
-            calltree.leave(Map("outcome" -> "success") ++ CallTreeValueSummary.resultAttributes(success.result))
+            calltree.leave(
+              Map("outcome" -> "success") ++ CallTreeValueSummary.resultAttributes(success.result)
+            )
             success
           case failure: Consequence.Failure[A] =>
             calltree.leave(Map(

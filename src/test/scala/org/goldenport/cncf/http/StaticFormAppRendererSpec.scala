@@ -4,7 +4,7 @@ package org.goldenport.cncf.http
  * @since   May. 18, 2026
  *  version May. 27, 2026
  *  version Jun. 19, 2026
- * @version Jul. 20, 2026
+ * @version Jul. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 import scala.collection.mutable.ListBuffer
@@ -48,7 +48,11 @@ import org.goldenport.cncf.config.{OperationMode, RuntimeConfig}
 import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, RuntimeContext}
 import org.goldenport.cncf.security.AuthenticationRequest
 import org.goldenport.cncf.datastore.{DataStore, DataStoreSpace, QueryDirective, SearchResult, SearchableDataStore, TotalCountCapability}
-import org.goldenport.cncf.entity.{EntityPersistent, EntityStoreSpace}
+import org.goldenport.cncf.entity.{
+  EntityConcurrencyMetadata,
+  EntityPersistent,
+  EntityStoreSpace
+}
 import org.goldenport.cncf.entity.aggregate.{AggregateBuilder, AggregateCollection, AggregateCommandDefinition, AggregateCreateDefinition, AggregateDefinition, AggregateMemberDefinition}
 import org.goldenport.cncf.entity.runtime.*
 import org.goldenport.cncf.entity.view.{Browser, ViewBuilder, ViewCollection, ViewDefinition, ViewQueryDefinition}
@@ -70,7 +74,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Apr. 12, 2026
  *  version May. 27, 2026
  *  version Jun. 19, 2026
- * @version Jul. 20, 2026
+ * @version Jul. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -78,11 +82,14 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
   private val _test_csrf_token = WebCsrf.issue(None)
   "StaticFormAppRenderer" should {
     "render subsystem dashboard state contract" in {
+      Given("the prerequisites for render subsystem dashboard state contract")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
 
       val json = _dashboard_state_json(subsystem, None)
+      When("render subsystem dashboard state contract is exercised")
       val c = json.hcursor
 
+      Then("the observable contract for render subsystem dashboard state contract holds")
       c.get[String]("scope") shouldBe Right("subsystem")
       c.downField("cncf").get[String]("version").isRight shouldBe true
       c.downField("subsystem").get[String]("name") shouldBe Right(subsystem.name)
@@ -114,12 +121,15 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render component dashboard state contract" in {
+      Given("the prerequisites for render component dashboard state contract")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       val componentname = subsystem.components.headOption.map(_.name).getOrElse(fail("component is missing"))
 
       val json = _dashboard_state_json(subsystem, Some(componentname))
+      When("render component dashboard state contract is exercised")
       val c = json.hcursor
 
+      Then("the observable contract for render component dashboard state contract holds")
       c.get[String]("scope") shouldBe Right("component")
       c.get[String]("name") shouldBe Right(componentname)
       c.downField("components").focus.flatMap(_.asArray).map(_.size) shouldBe Some(1)
@@ -133,17 +143,25 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "preserve fallback HTTP status in non-Conclusion diagnostic records" in {
+      Given("the prerequisites for preserve fallback HTTP status in non-Conclusion diagnostic records")
       val record = Http4sHttpServer.fallbackHttpDiagnosticRecord(404)
 
-      record.getInt("webStatus") shouldBe Some(404)
-      record.getString("statusText") shouldBe Some("Not Found")
+      When("the observable result for preserve fallback HTTP status in non-Conclusion diagnostic records is inspected")
+      locally {
+        Then("the observable contract for preserve fallback HTTP status in non-Conclusion diagnostic records holds")
+        record.getInt("webStatus") shouldBe Some(404)
+        record.getString("statusText") shouldBe Some("Not Found")
+      }
     }
 
     "render dashboard pages with Bootstrap health hierarchy without changing links" in {
+      Given("the prerequisites for render dashboard pages with Bootstrap health hierarchy without changing links")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
 
+      When("render dashboard pages with Bootstrap health hierarchy without changing links is exercised")
       val html = _renderer.renderSubsystemDashboard(subsystem).body
 
+      Then("the observable contract for render dashboard pages with Bootstrap health hierarchy without changing links holds")
       html should include ("CNCF Health")
       html should include ("class=\"card h-100 shadow-sm border-success\"")
       html should include ("class=\"badge text-bg-success\"")
@@ -167,10 +185,13 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render system admin configuration detail page" in {
+      Given("the prerequisites for render system admin configuration detail page")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
 
+      When("render system admin configuration detail page is exercised")
       val html = _renderer.renderSystemAdmin(subsystem).body
 
+      Then("the observable contract for render system admin configuration detail page holds")
       html should include ("System Admin Configuration")
       html should include ("/web/assets/bootstrap.min.css")
       html should not include ("cdn.jsdelivr")
@@ -212,6 +233,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render component development directory diagnostics on system admin page" in {
+      Given("the prerequisites for render component development directory diagnostics on system admin page")
       val devroot = Files.createTempDirectory("cncf-component-dev-root-")
       Files.createDirectories(devroot.resolve("target").resolve("cncf.d"))
       Files.createDirectories(devroot.resolve("src").resolve("main").resolve("web"))
@@ -227,8 +249,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         )
       )
 
+      When("render component development directory diagnostics on system admin page is exercised")
       val html = _renderer.renderSystemAdmin(subsystem).body
 
+      Then("the observable contract for render component development directory diagnostics on system admin page holds")
       html should include ("Component Development Directories")
       html should include ("dev_component")
       html should include (devroot.resolve("target").resolve("cncf.d").resolve("runtime-classpath.txt").toString)
@@ -236,6 +260,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render system admin jobs list and detail pages" in {
+      Given("the prerequisites for render system admin jobs list and detail pages")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       val action = _RendererJobAction(GRequest.of(
         component = "renderer",
@@ -255,8 +280,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val model = subsystem.jobEngine.query(jobid).getOrElse(fail("job read model missing"))
 
       val list = _renderer.renderSystemAdminJobs(subsystem).body
+      When("render system admin jobs list and detail pages is exercised")
       val detail = _renderer.renderSystemAdminJob(subsystem, model).body
 
+      Then("the observable contract for render system admin jobs list and detail pages holds")
       list should include ("System Admin Jobs")
       list should include (jobid.value)
       list should include (s"/web/system/admin/jobs/${jobid.value}")
@@ -273,6 +300,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render system admin knowledge pages" in {
+      Given("the prerequisites for render system admin knowledge pages")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       subsystem.add(TestComponentFactory.create("knowledge_component", Protocol.empty))
       val component = subsystem.findComponent("knowledge_component").getOrElse(fail("knowledge component missing"))
@@ -351,8 +379,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
 
       val index = _renderer.renderSystemAdminKnowledge(subsystem).body
       val detail = _renderer.renderSystemAdminKnowledgeComponent(subsystem, "knowledge-component").map(_.body).getOrElse(fail("knowledge component page missing"))
+      When("render system admin knowledge pages is exercised")
       val node = _renderer.renderSystemAdminKnowledgeNode(subsystem, "knowledge_component", "node-customer").map(_.body).getOrElse(fail("knowledge node page missing"))
 
+      Then("the observable contract for render system admin knowledge pages holds")
       index should include ("System Knowledge")
       index should include ("knowledge_component")
       index should include ("/web/system/admin/knowledge/knowledge_component")
@@ -423,6 +453,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render Blob admin read-only pages" in {
+      Given("the prerequisites for render Blob admin read-only pages")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       val blob = _blob_record(_success(subsystem.executeOperationResponse(_blob_request(
         "register_blob",
@@ -445,8 +476,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val detail = _success(_renderer.renderBlobAdminBlobDetail(subsystem, id)).body
       val delete = _success(_renderer.renderBlobAdminBlobDelete(subsystem, id)).body
       val associations = _success(_renderer.renderBlobAdminAssociations(subsystem, Map("sourceEntityId" -> "article-1"))).body
+      When("render Blob admin read-only pages is exercised")
       val store = _success(_renderer.renderBlobAdminStore(subsystem)).body
 
+      Then("the observable contract for render Blob admin read-only pages holds")
       home should include ("Blob Admin")
       home should include ("/web/blob/admin/blobs")
       home should include ("class=\"card admin-card")
@@ -482,11 +515,14 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render unsafe external Blob URLs as text on admin pages" in {
+      Given("the prerequisites for render unsafe external Blob URLs as text on admin pages")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       val id = _create_legacy_external_blob(subsystem, "unsafe.png", "javascript:alert(1)")
 
+      When("render unsafe external Blob URLs as text on admin pages is exercised")
       val list = _success(_renderer.renderBlobAdminBlobs(subsystem)).body
 
+      Then("the observable contract for render unsafe external Blob URLs as text on admin pages holds")
       list should include (id)
       list should include ("javascript:alert(1)")
       list should not include ("href=\"javascript:alert(1)\"")
@@ -494,6 +530,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "serve Blob admin read-only pages from Web routes" in {
+      Given("the prerequisites for serve Blob admin read-only pages from Web routes")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       val blob = _blob_record(_success(subsystem.executeOperationResponse(_blob_request(
         "register_blob",
@@ -511,8 +548,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val detail = server.routes(null).orNotFound.run(_get_request(s"/web/blob/admin/blobs/${java.net.URLEncoder.encode(id, StandardCharsets.UTF_8)}")).unsafeRunSync()
       val delete = server.routes(null).orNotFound.run(_get_request(s"/web/blob/admin/blobs/${java.net.URLEncoder.encode(id, StandardCharsets.UTF_8)}/delete")).unsafeRunSync()
       val associations = server.routes(null).orNotFound.run(_get_request("/web/blob/admin/associations")).unsafeRunSync()
+      When("serve Blob admin read-only pages from Web routes is exercised")
       val store = server.routes(null).orNotFound.run(_get_request("/web/blob/admin/store")).unsafeRunSync()
 
+      Then("the observable contract for serve Blob admin read-only pages from Web routes holds")
       home.status.code shouldBe 200
       list.status.code shouldBe 200
       detail.status.code shouldBe 200
@@ -526,6 +565,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "serve managed Blob payloads and GET-backed HEAD through the CNCF content route" in {
+      Given("the prerequisites for serve managed Blob payloads and GET-backed HEAD through the CNCF content route")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       val bytes = "route image".getBytes(StandardCharsets.UTF_8)
       val blob = _blob_record(_success(subsystem.executeOperationResponse(_blob_request(
@@ -544,9 +584,11 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
 
       val inline = server.routes(null).orNotFound.run(_get_request(displayurl)).unsafeRunSync()
       val download = server.routes(null).orNotFound.run(_get_request(s"$displayurl?download=true")).unsafeRunSync()
+      When("serve managed Blob payloads and GET-backed HEAD through the CNCF content route is exercised")
       def header(response: org.http4s.Response[IO], name: String): Option[String] =
         response.headers.get(org.typelevel.ci.CIString(name)).map(_.head.value)
 
+      Then("the observable contract for serve managed Blob payloads and GET-backed HEAD through the CNCF content route holds")
       inline.status.code shouldBe 200
       header(inline, "Content-Disposition") shouldBe Some("""inline; filename="route.png"""")
       header(inline, "ETag").getOrElse(fail("ETag is missing")) should startWith ("\"")
@@ -638,6 +680,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "serve structured Blob content errors when managed payload is missing" in {
+      Given("the prerequisites for serve structured Blob content errors when managed payload is missing")
       val root = Files.createTempDirectory("cncf-blob-content-missing-payload-spec")
       val subsystem = DefaultSubsystemFactory.default(
         Some("server"),
@@ -667,8 +710,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
 
       val response = server.routes(null).orNotFound.run(_get_request(displaypath)).unsafeRunSync()
+      When("serve structured Blob content errors when managed payload is missing is exercised")
       val body = response.as[String].unsafeRunSync()
 
+      Then("the observable contract for serve structured Blob content errors when managed payload is missing holds")
       response.status.code shouldBe 500
       body should include ("Request failed")
       body should include ("<strong>Status:</strong>")
@@ -680,6 +725,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "serve Blob admin mutation routes" in {
+      Given("the prerequisites for serve Blob admin mutation routes")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       val first = _blob_record(_success(subsystem.executeOperationResponse(_blob_request(
         "register_blob",
@@ -705,12 +751,14 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         "/web/blob/admin/associations/attach",
         s"sourceEntityId=product-1&id=${java.net.URLEncoder.encode(secondid, StandardCharsets.UTF_8)}&role=manual&sortOrder=7"
       )).unsafeRunSync()
+      When("serve Blob admin mutation routes is exercised")
       val attached = _blob_record(_success(subsystem.executeOperationResponse(_blob_request(
         "admin_list_blob_associations",
         Property("sourceEntityId", "product-1", None),
         Property("id", secondid, None)
       ))))
 
+      Then("the observable contract for serve Blob admin mutation routes holds")
       attach.status.code shouldBe 200
       val attachbody = attach.as[String].unsafeRunSync()
       attachbody should include ("Blob Association Attached")
@@ -746,6 +794,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render structured Blob admin delete failure and allow forced delete" in {
+      Given("the prerequisites for render structured Blob admin delete failure and allow forced delete")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       val blob = _blob_record(_success(subsystem.executeOperationResponse(_blob_request(
         "register_blob",
@@ -768,11 +817,13 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         s"/web/blob/admin/blobs/${java.net.URLEncoder.encode(id, StandardCharsets.UTF_8)}/delete",
         "force=false"
       )).unsafeRunSync()
+      When("render structured Blob admin delete failure and allow forced delete is exercised")
       val forced = server.routes(null).orNotFound.run(_post_form_request(
         s"/web/blob/admin/blobs/${java.net.URLEncoder.encode(id, StandardCharsets.UTF_8)}/delete",
         "force=true"
       )).unsafeRunSync()
 
+      Then("the observable contract for render structured Blob admin delete failure and allow forced delete holds")
       rejected.status.code shouldBe 400
       rejected.as[String].unsafeRunSync() should include ("<strong>Status:</strong>")
       forced.status.code shouldBe 200
@@ -781,12 +832,15 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "serve structured Blob admin errors instead of missing-page fallbacks" in {
+      Given("the prerequisites for serve structured Blob admin errors instead of missing-page fallbacks")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
 
       val response = server.routes(null).orNotFound.run(_get_request("/web/blob/admin/blobs/missing-blob")).unsafeRunSync()
+      When("serve structured Blob admin errors instead of missing-page fallbacks is exercised")
       val body = response.as[String].unsafeRunSync()
 
+      Then("the observable contract for serve structured Blob admin errors instead of missing-page fallbacks holds")
       response.status.code shouldBe 400
       body should include ("<strong>Status:</strong>")
       body should include ("missing-blob")
@@ -794,6 +848,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "deny anonymous Blob admin subroutes in production operation mode" in {
+      Given("the prerequisites for deny anonymous Blob admin subroutes in production operation mode")
       val subsystem = DefaultSubsystemFactory.default(
         Some("server"),
         ResolvedConfiguration(
@@ -805,8 +860,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
 
       val response = server.routes(null).orNotFound.run(_get_request("/web/blob/admin/blobs")).unsafeRunSync()
       val mutation = server.routes(null).orNotFound.run(_post_form_request("/web/blob/admin/associations/attach", "sourceEntityId=x&id=y&role=z")).unsafeRunSync()
+      When("deny anonymous Blob admin subroutes in production operation mode is exercised")
       val body = response.as[String].unsafeRunSync()
 
+      Then("the observable contract for deny anonymous Blob admin subroutes in production operation mode holds")
       response.status.code shouldBe 403
       mutation.status.code shouldBe 403
       body should include ("Request failed")
@@ -815,6 +872,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render resolved runtime configuration with masking rules on system admin page" in {
+      Given("the prerequisites for render resolved runtime configuration with masking rules on system admin page")
       val subsystem = new Subsystem(
         name = "masked-system",
         version = Some("1.0.0"),
@@ -830,8 +888,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         )
       )
 
+      When("render resolved runtime configuration with masking rules on system admin page is exercised")
       val html = _renderer.renderSystemAdmin(subsystem).body
 
+      Then("the observable contract for render resolved runtime configuration with masking rules on system admin page holds")
       html should include ("Runtime Configuration")
       html should include ("Effective Runtime Policy")
       html should include ("textus.operation-mode")
@@ -846,6 +906,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render resolved Web Descriptor summary on system admin page" in {
+      Given("the prerequisites for render resolved Web Descriptor summary on system admin page")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       val descriptor = WebDescriptor(
         assets = WebDescriptor.Assets(
@@ -885,8 +946,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         admin = Map("entity.notice" -> WebDescriptor.AdminSurface(WebDescriptor.TotalCountPolicy.Optional))
       )
 
+      When("render resolved Web Descriptor summary on system admin page is exercised")
       val html = _renderer.renderSystemAdmin(subsystem, descriptor).body
 
+      Then("the observable contract for render resolved Web Descriptor summary on system admin page holds")
       html should include ("Web Descriptor")
       html should include ("configured")
       html should include ("notice-board.notice.search-notices")
@@ -904,6 +967,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render resolved Web Descriptor drill-down page" in {
+      Given("the prerequisites for render resolved Web Descriptor drill-down page")
       val descriptor = WebDescriptor(
         assets = WebDescriptor.Assets(
           autoComplete = false,
@@ -942,8 +1006,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         admin = Map("entity.notice" -> WebDescriptor.AdminSurface(WebDescriptor.TotalCountPolicy.Optional))
       )
 
+      When("render resolved Web Descriptor drill-down page is exercised")
       val html = _renderer.renderSystemAdminDescriptor(descriptor).body
 
+      Then("the observable contract for render resolved Web Descriptor drill-down page holds")
       html should include ("System Web Descriptor")
       html should include ("Descriptor Sections")
       html should include ("card admin-card")
@@ -1005,6 +1071,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render component admin configuration detail page" in {
+      Given("the prerequisites for render component admin configuration detail page")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
       val componentlets = Vector(
@@ -1034,8 +1101,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           ))
       )
 
+      When("render component admin configuration detail page is exercised")
       val html = _renderer.renderComponentAdmin(subsystem, component.name).map(_.body).getOrElse(fail("component admin is missing"))
 
+      Then("the observable contract for render component admin configuration detail page holds")
       html should include (s"${component.name} Admin Configuration")
       html should not include ("article { background")
       html should include ("class=\"card admin-card")
@@ -1073,6 +1142,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render component-scoped Web Descriptor drill-down page" in {
+      Given("the prerequisites for render component-scoped Web Descriptor drill-down page")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
       val componentpath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)
@@ -1092,8 +1162,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         )
       )
 
+      When("render component-scoped Web Descriptor drill-down page is exercised")
       val html = _renderer.renderComponentAdminDescriptor(subsystem, component.name, descriptor).map(_.body).getOrElse(fail("component descriptor admin is missing"))
 
+      Then("the observable contract for render component-scoped Web Descriptor drill-down page holds")
       html should include (s"${component.name} Web Descriptor")
       html should include ("Component Management Console descriptor view")
       html should include (s"/web/${componentpath}/admin")
@@ -1130,6 +1202,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render read-only system and component manual pages" in {
+      Given("the prerequisites for render read-only system and component manual pages")
       val subsystem = _aggregate_http_fixture_subsystem()
       subsystem.components.find(_.name == "notice_board").foreach { component =>
         val componentlets = Vector(
@@ -1174,8 +1247,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val componentdocumenthtml = _renderer.renderComponentDocument(subsystem, "notice-board").map(_.body).getOrElse(fail("component document is missing"))
       val componenthtml = _renderer.renderComponentManual(subsystem, "notice-board").map(_.body).getOrElse(fail("component specification is missing"))
       val servicehtml = _renderer.renderComponentManualService(subsystem, "notice-board", "notice-aggregate").map(_.body).getOrElse(fail("service specification is missing"))
+      When("render read-only system and component manual pages is exercised")
       val operationhtml = _renderer.renderComponentManualOperation(subsystem, "notice-board", "notice-aggregate", "approve-notice-aggregate").map(_.body).getOrElse(fail("operation specification is missing"))
 
+      Then("the observable contract for render read-only system and component manual pages holds")
       systemdocumenthtml should include ("System Documents")
       systemdocumenthtml should include ("Generated Help")
       systemdocumenthtml should include ("/help/system")
@@ -1245,12 +1320,15 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "preserve real componentlet path in rendered specification admin and form links" in {
+      Given("the prerequisites for preserve real componentlet path in rendered specification admin and form links")
       val subsystem = _aggregate_http_fixture_subsystem_with_componentlets()
 
       val manualhtml = _renderer.renderComponentManual(subsystem, "notice-admin").map(_.body).getOrElse(fail("component specification is missing"))
       val adminhtml = _renderer.renderComponentAdmin(subsystem, "notice-admin").map(_.body).getOrElse(fail("component admin is missing"))
+      When("preserve real componentlet path in rendered specification admin and form links is exercised")
       val formhtml = _renderer.renderFormIndex(subsystem, "notice-admin").map(_.body).getOrElse(fail("form index is missing"))
 
+      Then("the observable contract for preserve real componentlet path in rendered specification admin and form links holds")
       manualhtml should include ("/help/notice-admin/notice-aggregate")
       adminhtml should include ("/web/notice-admin/dashboard")
       adminhtml should include ("/form/notice-admin")
@@ -1260,11 +1338,16 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "not resolve componentlet metadata alone as runtime component in rendered pages" in {
+      Given("the prerequisites for not resolve componentlet metadata alone as runtime component in rendered pages")
       val subsystem = _aggregate_http_fixture_subsystem_with_componentlet_metadata_only()
 
-      _renderer.renderComponentManual(subsystem, "notice-admin") shouldBe None
-      _renderer.renderComponentAdmin(subsystem, "notice-admin") shouldBe None
-      _renderer.renderFormIndex(subsystem, "notice-admin") shouldBe None
+      When("the observable result for not resolve componentlet metadata alone as runtime component in rendered pages is inspected")
+      locally {
+        Then("the observable contract for not resolve componentlet metadata alone as runtime component in rendered pages holds")
+        _renderer.renderComponentManual(subsystem, "notice-admin") shouldBe None
+        _renderer.renderComponentAdmin(subsystem, "notice-admin") shouldBe None
+        _renderer.renderFormIndex(subsystem, "notice-admin") shouldBe None
+      }
     }
 
     "serve generated help and packaged manual routes through standard and compatibility paths" in {
@@ -1427,12 +1510,15 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render component entity administration page" in {
+      Given("the prerequisites for render component entity administration page")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
       val componentpath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)
 
+      When("render component entity administration page is exercised")
       val html = _renderer.renderComponentAdminEntities(subsystem, component.name).map(_.body).getOrElse(fail("component entity admin is missing"))
 
+      Then("the observable contract for render component entity administration page holds")
       html should include (s"${component.name} Entity Administration")
       html should include ("Entity CRUD")
       html should include ("class=\"card admin-card")
@@ -1452,12 +1538,15 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render component entity type list page contract" in {
+      Given("the prerequisites for render component entity type list page contract")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
       val componentpath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)
 
+      When("render component entity type list page contract is exercised")
       val html = _renderer.renderComponentAdminEntityType(subsystem, component.name, "sales-order").map(_.body).getOrElse(fail("component entity type admin is missing"))
 
+      Then("the observable contract for render component entity type list page contract holds")
       html should include (s"${component.name} Sales Order Administration")
       html should include ("Sales Order records")
       html should include ("List with paging")
@@ -1474,12 +1563,15 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render component entity detail page contract" in {
+      Given("the prerequisites for render component entity detail page contract")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
       val componentpath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)
 
+      When("render component entity detail page contract is exercised")
       val html = _renderer.renderComponentAdminEntityDetail(subsystem, component.name, "sales-order", "missing-id").map(_.body).getOrElse(fail("component entity detail admin is missing"))
 
+      Then("the observable contract for render component entity detail page contract holds")
       html should include (s"${component.name} Sales Order Detail")
       html should include ("Sales Order detail")
       html should include ("class=\"card admin-card")
@@ -1492,6 +1584,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render component entity pages from a live EntityCollection fixture" in {
+      Given("the prerequisites for render component entity pages from a live EntityCollection fixture")
       val subsystem = _management_console_fixture_subsystem()
       val componentname = "notice_board"
       val componentpath = "notice-board"
@@ -1522,8 +1615,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       ).map(_.body).getOrElse(fail("component entity total page admin is missing"))
       val detail = _renderer.renderComponentAdminEntityDetail(subsystem, componentname, entitypath, recordid).map(_.body).getOrElse(fail("component entity detail admin is missing"))
       val detailbyshortid = _renderer.renderComponentAdminEntityDetail(subsystem, componentname, entitypath, recordshortid).map(_.body).getOrElse(fail("component entity detail admin by shortid is missing"))
+      When("render component entity pages from a live EntityCollection fixture is exercised")
       val edit = _renderer.renderComponentAdminEntityEdit(subsystem, componentname, entitypath, recordid).map(_.body).getOrElse(fail("component entity edit admin is missing"))
 
+      Then("the observable contract for render component entity pages from a live EntityCollection fixture holds")
       list should include ("Storage shape")
       list should include ("admin-search-card")
       list should include ("name=\"q\"")
@@ -1543,7 +1638,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       list should include ("compact_json_text")
       list should include ("title")
       list should include ("scalar_attribute")
-      list should include ("notice_1")
+      list should include (recordid)
       list should include ("<th>id</th><th>shortid</th><th>title</th><th>author</th><th>Actions</th>")
       list should include ("class=\"btn-group btn-group-sm\"")
       list should include ("board update")
@@ -1572,10 +1667,13 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       detailbyshortid should include ("board update")
       detailbyshortid should include ("alice")
       val shortdetailsourceid = """name="sourceEntityId" value="([^"]+)"""".r.findFirstMatchIn(detailbyshortid).map(_.group(1)).getOrElse(fail("short-id detail sourceEntityId is missing"))
-      shortdetailsourceid should include ("notice_1")
+      shortdetailsourceid shouldBe recordid
       shortdetailsourceid should not be recordshortid
       edit should include ("name=\"title\"")
       edit should include ("value=\"board update\"")
+      edit should include (
+        s"""type="hidden" name="version" value="${_notice_entity_version(subsystem, recordid)}""""
+      )
       edit should include (s"/form/${componentpath}/admin/entities/${entitypath}/${recordshortid}/update")
 
       val searched = _renderer.renderComponentAdminEntityType(
@@ -1609,6 +1707,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render generic non-image Associations on entity detail pages" in {
+      Given("the prerequisites for render generic non-image Associations on entity detail pages")
       val relationships = Vector(
         CmlEntityRelationshipDefinition(
           name = "Notice.related",
@@ -1675,8 +1774,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
 
       val detail = _renderer.renderComponentAdminEntityDetail(subsystem, "notice_board", "notice", source.value).map(_.body).getOrElse(fail("component entity detail admin is missing"))
       val manual = _renderer.renderComponentManual(subsystem, "notice_board").map(_.body).getOrElse(fail("component manual is missing"))
+      When("render generic non-image Associations on entity detail pages is exercised")
       val associationpage = _renderer.renderAdminAssociations(subsystem, Map("domain" -> "related_entity", "sourceEntityId" -> source.value, "pageSize" -> "1")).map(_.body).getOrElse(fail("association admin page is missing"))
 
+      Then("the observable contract for render generic non-image Associations on entity detail pages holds")
       detail should include ("Associations")
       detail should include ("Notice.related")
       detail should include ("Notice.readOnly")
@@ -1704,6 +1805,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render generic Tag admin and entity TagAttachment surfaces" in {
+      Given("the prerequisites for render generic Tag admin and entity TagAttachment surfaces")
       val subsystem = _management_console_fixture_subsystem()
       val component = _notice_fixture_component(subsystem)
       val notice = component.entitySpace.entity[_NoticeEntity]("notice").storage.storeRealm.values.head
@@ -1797,6 +1899,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         "tagRef" -> rootpath,
         "role" -> "missing-role"
       )), "empty Tag search page")
+      When("render generic Tag admin and entity TagAttachment surfaces is exercised")
       val detail = _renderer.renderComponentAdminEntityDetail(
         subsystem,
         "tag",
@@ -1805,6 +1908,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         values = Map("tagSpace" -> "admin-tag-space")
       ).map(_.body).getOrElse(fail("component entity detail admin is missing"))
 
+      Then("the observable contract for render generic Tag admin and entity TagAttachment surfaces holds")
       tagpage should include ("Tag Administration")
       tagpage should include ("TagSpace selector")
       tagpage should include ("Current TagSpace <span class=\"badge text-bg-secondary\">admin-tag-space</span>")
@@ -1867,9 +1971,12 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render component admin storage shape from projection metadata without legacy containers" in {
+      Given("the prerequisites for render component admin storage shape from projection metadata without legacy containers")
       val subsystem = _management_console_fixture_subsystem(schema = _schema("id", "title", "securityAttributes"))
+      When("render component admin storage shape from projection metadata without legacy containers is exercised")
       val html = _renderer.renderComponentAdminEntityType(subsystem, "notice_board", "notice").map(_.body).getOrElse(fail("component entity type admin is missing"))
 
+      Then("the observable contract for render component admin storage shape from projection metadata without legacy containers holds")
       html should include ("Storage shape")
       html should include ("simple_entity_default")
       html should include ("permission")
@@ -1878,6 +1985,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render delegated collection storage shape in component admin entity type page" in {
+      Given("the prerequisites for render delegated collection storage shape in component admin entity type page")
       val subsystem = _aggregate_http_fixture_subsystem()
       subsystem.components.find(_.name == "notice_board").foreach { component =>
         component.withComponentDescriptors(Vector(ComponentDescriptor(
@@ -1895,14 +2003,17 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         )))
       }
 
+      When("render delegated collection storage shape in component admin entity type page is exercised")
       val html = _renderer.renderComponentAdminEntityType(subsystem, "notice-board", "notice").map(_.body).getOrElse(fail("component entity type admin is missing"))
 
+      Then("the observable contract for render delegated collection storage shape in component admin entity type page holds")
       html should include ("Storage shape")
       html should include ("delegated_collection")
       html should include ("aggregate")
     }
 
     "preserve list paging and search context through entity detail and edit links" in {
+      Given("the prerequisites for preserve list paging and search context through entity detail and edit links")
       val subsystem = _management_console_fixture_subsystem()
       val componentname = "notice_board"
       val componentpath = "notice-board"
@@ -1931,6 +2042,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         recordid,
         values = context
       ).map(_.body).getOrElse(fail("component entity detail admin is missing"))
+      When("preserve list paging and search context through entity detail and edit links is exercised")
       val edit = _renderer.renderComponentAdminEntityEdit(
         subsystem,
         componentname,
@@ -1939,6 +2051,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         values = context
       ).map(_.body).getOrElse(fail("component entity edit admin is missing"))
 
+      Then("the observable contract for preserve list paging and search context through entity detail and edit links holds")
       list should include (s"/web/${componentpath}/admin/entities/${entitypath}/")
       list should include ("?crud.origin.href=")
       list should include ("paging.page=2")
@@ -1954,6 +2067,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "apply component entity update form POST through EntityCollection into EntityStoreSpace" in {
+      Given("the prerequisites for apply component entity update form POST through EntityCollection into EntityStoreSpace")
       val subsystem = _management_console_fixture_subsystem()
       val engine = new HttpExecutionEngine(subsystem)
       val dispatcher = new RecordingWebOperationDispatcher(WebOperationDispatcher.Local(engine))
@@ -1964,14 +2078,16 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val recordshortid = recordentityid.parts.entropy
       val req = _post_form_request(
         s"/form/notice-board/admin/entities/notice/${recordshortid}/update",
-        "title=board+updated&author=bob"
+        s"title=board+updated&author=bob&version=${_notice_entity_version(subsystem, recordid)}"
       )
 
+      When("apply component entity update form POST through EntityCollection into EntityStoreSpace is exercised")
       val html = server
         ._submit_component_admin_entity_update(req, "notice-board", "notice", recordshortid)
         .flatMap(_.as[String])
         .unsafeRunSync()
 
+      Then("the observable contract for apply component entity update form POST through EntityCollection into EntityStoreSpace holds")
       html should include ("Entity record was applied")
       html should include ("Applied</th><td>true")
       val updated = collection.storage.storeRealm.values.find(_.id.value == recordid).getOrElse(fail("updated entity is missing"))
@@ -1983,7 +2099,58 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       dispatcher.paths should contain ("/admin/entity/update")
     }
 
+    "reject a stale component entity update form without replacing the committed Entity" in {
+      Given("two admin forms rendered from the same authoritative Entity version")
+      val subsystem = _management_console_fixture_subsystem()
+      val engine = new HttpExecutionEngine(subsystem)
+      val dispatcher =
+        new RecordingWebOperationDispatcher(WebOperationDispatcher.Local(engine))
+      val server =
+        new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
+      val collection =
+        _notice_fixture_component(subsystem).entitySpace.entity[_NoticeEntity]("notice")
+      val entityid = collection.storage.storeRealm.values.head.id
+      val version = _notice_entity_version(subsystem, entityid.value)
+
+      When("the first form commits and the second form submits the stale version")
+      val first = server
+        ._submit_component_admin_entity_update(
+          _post_form_request(
+            s"/form/notice-board/admin/entities/notice/${entityid.value}/update",
+            s"title=first+writer&author=alice&version=${version}"
+          ),
+          "notice-board",
+          "notice",
+          entityid.value
+        )
+        .unsafeRunSync()
+      val stale = server
+        ._submit_component_admin_entity_update(
+          _post_form_request(
+            s"/form/notice-board/admin/entities/notice/${entityid.value}/update",
+            s"title=stale+writer&author=bob&version=${version}"
+          ),
+          "notice-board",
+          "notice",
+          entityid.value
+        )
+        .unsafeRunSync()
+      val firsthtml = first.as[String].unsafeRunSync()
+      val stalehtml = stale.as[String].unsafeRunSync()
+
+      Then("the stale form reports conflict and cannot replace the first commit")
+      firsthtml should include ("Applied</th><td>true")
+      stalehtml should include ("Applied</th><td>false")
+      stalehtml should include ("result.status</th><td>400")
+      stalehtml should include ("operation.conflict")
+      val stored = _load_notice_store_record(subsystem, entityid)
+      stored.getString("title") shouldBe Some("first writer")
+      stored.getString("author") shouldBe Some("alice")
+      _notice_entity_version(subsystem, entityid.value) should not be version
+    }
+
     "redirect component entity update by admin form descriptor transition" in {
+      Given("the prerequisites for redirect component entity update by admin form descriptor transition")
       val subsystem = _management_console_fixture_subsystem()
       val descriptor = WebDescriptor(
         form = Map(
@@ -1999,13 +2166,15 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val recordid = collection.storage.storeRealm.values.head.id.value
       val req = _post_form_request(
         s"/form/notice-board/admin/entities/notice/${recordid}/update",
-        "title=board+redirected&author=bob"
+        s"title=board+redirected&author=bob&version=${_notice_entity_version(subsystem, recordid)}"
       )
 
+      When("redirect component entity update by admin form descriptor transition is exercised")
       val response = server
         ._submit_component_admin_entity_update(req, "notice-board", "notice", recordid)
         .unsafeRunSync()
 
+      Then("the observable contract for redirect component entity update by admin form descriptor transition holds")
       response.status.code shouldBe 303
       response.headers.get[org.http4s.headers.Location].map(_.uri.renderString) shouldBe
         Some(s"/web/notice-board/admin/entities/notice/${recordid}")
@@ -2014,6 +2183,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "redisplay component entity update form with submitted values when admin stayOnError is enabled" in {
+      Given("the prerequisites for redisplay component entity update form with submitted values when admin stayOnError is enabled")
       val subsystem = _management_console_fixture_subsystem()
       val descriptor = WebDescriptor(
         form = Map(
@@ -2033,14 +2203,16 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val recordid = collection.storage.storeRealm.values.head.id.value
       val req = _post_form_request(
         s"/form/notice-board/admin/entities/notice/${recordid}/update",
-        "title=bad+title&author=bob"
+        s"title=bad+title&author=bob&version=${_notice_entity_version(subsystem, recordid)}"
       )
 
+      When("redisplay component entity update form with submitted values when admin stayOnError is enabled is exercised")
       val html = server
         ._submit_component_admin_entity_update(req, "notice-board", "notice", recordid)
         .flatMap(_.as[String])
         .unsafeRunSync()
 
+      Then("the observable contract for redisplay component entity update form with submitted values when admin stayOnError is enabled holds")
       html should include ("Edit Notice")
       html should include ("error.status")
       html should include ("400")
@@ -2050,6 +2222,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "redisplay component entity update form with field validation errors before dispatch" in {
+      Given("the prerequisites for redisplay component entity update form with field validation errors before dispatch")
       val subsystem = _management_console_fixture_subsystem()
       val engine = new HttpExecutionEngine(subsystem)
       val dispatcher = new RecordingWebOperationDispatcher(WebOperationDispatcher.Local(engine))
@@ -2058,14 +2231,16 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val recordid = collection.storage.storeRealm.values.head.id.value
       val req = _post_form_request(
         s"/form/notice-board/admin/entities/notice/${recordid}/update",
-        "title=&author=bob&crud.origin.href=%2Fweb%2Fnotice-board%2Fadmin%2Fentities%2Fnotice%3Fpage%3D2&paging.page=2&search.author=bob"
+        s"title=&author=bob&version=${_notice_entity_version(subsystem, recordid)}&crud.origin.href=%2Fweb%2Fnotice-board%2Fadmin%2Fentities%2Fnotice%3Fpage%3D2&paging.page=2&search.author=bob"
       )
 
       val response = server
         ._submit_component_admin_entity_update(req, "notice-board", "notice", recordid)
         .unsafeRunSync()
+      When("redisplay component entity update form with field validation errors before dispatch is exercised")
       val html = response.as[String].unsafeRunSync()
 
+      Then("the observable contract for redisplay component entity update form with field validation errors before dispatch holds")
       response.status.code shouldBe 400
       html should include ("Edit Notice")
       html should include ("Validation failed.")
@@ -2086,6 +2261,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "validate component entity update forms by detail view fields before full schema fields" in {
+      Given("the prerequisites for validate component entity update forms by detail view fields before full schema fields")
       val subsystem = _management_console_fixture_subsystem(
         schema = _schema("id", "title", "author"),
         viewfields = Map(
@@ -2105,14 +2281,16 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         .getOrElse(fail("component entity edit admin is missing"))
       val req = _post_form_request(
         s"/form/notice-board/admin/entities/notice/${recordid}/update",
-        "title=detail+only"
+        s"title=detail+only&version=${_notice_entity_version(subsystem, recordid)}"
       )
 
+      When("validate component entity update forms by detail view fields before full schema fields is exercised")
       val html = server
         ._submit_component_admin_entity_update(req, "notice-board", "notice", recordid)
         .flatMap(_.as[String])
         .unsafeRunSync()
 
+      Then("the observable contract for validate component entity update forms by detail view fields before full schema fields holds")
       edit should include ("name=\"title\"")
       edit should not include ("name=\"author\"")
       html should include ("Entity record was applied")
@@ -2122,6 +2300,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "reject component entity update forms when a required detail view field is empty" in {
+      Given("the prerequisites for reject component entity update forms when a required detail view field is empty")
       val subsystem = _management_console_fixture_subsystem(
         schema = _schema("id", "title", "author"),
         viewfields = Map(
@@ -2137,14 +2316,16 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val recordid = collection.storage.storeRealm.values.head.id.value
       val req = _post_form_request(
         s"/form/notice-board/admin/entities/notice/${recordid}/update",
-        "title=&author=ignored"
+        s"title=&author=ignored&version=${_notice_entity_version(subsystem, recordid)}"
       )
 
       val response = server
         ._submit_component_admin_entity_update(req, "notice-board", "notice", recordid)
         .unsafeRunSync()
+      When("reject component entity update forms when a required detail view field is empty is exercised")
       val html = response.as[String].unsafeRunSync()
 
+      Then("the observable contract for reject component entity update forms when a required detail view field is empty holds")
       response.status.code shouldBe 400
       html should include ("Edit Notice")
       html should include ("Validation failed.")
@@ -2156,6 +2337,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "apply component entity create form POST through EntityCollection into EntityStoreSpace" in {
+      Given("the prerequisites for apply component entity create form POST through EntityCollection into EntityStoreSpace")
       val subsystem = _management_console_fixture_subsystem()
       val engine = new HttpExecutionEngine(subsystem)
       val dispatcher = new RecordingWebOperationDispatcher(WebOperationDispatcher.Local(engine))
@@ -2167,11 +2349,13 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         "fields=id%3Dnotice_2%0Atitle%3Dnew+notice%0Aauthor%3Dbob"
       )
 
+      When("apply component entity create form POST through EntityCollection into EntityStoreSpace is exercised")
       val html = server
         ._submit_component_admin_entity_create(req, "notice-board", "notice")
         .flatMap(_.as[String])
         .unsafeRunSync()
 
+      Then("the observable contract for apply component entity create form POST through EntityCollection into EntityStoreSpace holds")
       html should include ("Entity record was applied")
       html should include ("Applied</th><td>true")
       collection.storage.storeRealm.values.size shouldBe before + 1
@@ -2185,12 +2369,14 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "attach uploaded and existing Blob images during admin entity create" in {
+      Given("the prerequisites for attach uploaded and existing Blob images during admin entity create")
       val subsystem = _management_console_fixture_subsystem()
       val collection = _notice_fixture_component(subsystem).entitySpace.entity[_NoticeEntity]("notice")
       val existingblobid = _register_external_blob(subsystem, "existing-admin.png", "https://example.com/existing-admin.png")
       val localid = s"notice_admin_image_${java.util.UUID.randomUUID().toString.replace("-", "")}"
       val filename = s"${localid}.png"
 
+      When("attach uploaded and existing Blob images during admin entity create is exercised")
       val response = _success(subsystem.executeOperationResponse(GRequest.of(
         component = "admin",
         service = "entity",
@@ -2207,6 +2393,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         )
       )))
 
+      Then("the observable contract for attach uploaded and existing Blob images during admin entity create holds")
       response shouldBe OperationResponse.Scalar("Entity record was applied.")
       val created = collection.storage.storeRealm.values.find(_.title == "image create").getOrElse(fail("created entity is missing"))
       val stored = created.toRecord()
@@ -2229,6 +2416,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "submit multipart admin entity create with image attachment through Web handler" in {
+      Given("the prerequisites for submit multipart admin entity create with image attachment through Web handler")
       val subsystem = _management_console_fixture_subsystem()
       val engine = new HttpExecutionEngine(subsystem)
       val dispatcher = new RecordingWebOperationDispatcher(WebOperationDispatcher.Local(engine))
@@ -2248,11 +2436,13 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         )
       )
 
+      When("submit multipart admin entity create with image attachment through Web handler is exercised")
       val html = server
         ._submit_component_admin_entity_create(req, "notice-board", "notice")
         .flatMap(_.as[String])
         .unsafeRunSync()
 
+      Then("the observable contract for submit multipart admin entity create with image attachment through Web handler holds")
       html should include ("Entity record was applied")
       val created = collection.storage.storeRealm.values.find(_.title == "multipart image create").getOrElse(fail("created entity is missing"))
       created.author shouldBe "web"
@@ -2269,11 +2459,13 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "compensate admin entity create when image attachment fails" in {
+      Given("the prerequisites for compensate admin entity create when image attachment fails")
       val subsystem = _management_console_fixture_subsystem()
       val collection = _notice_fixture_component(subsystem).entitySpace.entity[_NoticeEntity]("notice")
       val localid = s"notice_admin_compensate_${java.util.UUID.randomUUID().toString.replace("-", "")}"
       val missingblobid = EntityId(BlobRepository.CollectionId.major, s"missing_${localid}", BlobRepository.CollectionId).value
 
+      When("compensate admin entity create when image attachment fails is exercised")
       val result = subsystem.executeOperationResponse(GRequest.of(
         component = "admin",
         service = "entity",
@@ -2290,6 +2482,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         )
       ))
 
+      Then("the observable contract for compensate admin entity create when image attachment fails holds")
       result shouldBe a[Consequence.Failure[_]]
       collection.storage.storeRealm.values.exists(_.title == "compensated image create") shouldBe false
       given ExecutionContext = subsystem.findComponent("blob").getOrElse(fail("Blob component is missing")).logic.executionContext()
@@ -2297,11 +2490,13 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "keep admin entity update when image attachment fails" in {
+      Given("the prerequisites for keep admin entity update when image attachment fails")
       val subsystem = _management_console_fixture_subsystem()
       val collection = _notice_fixture_component(subsystem).entitySpace.entity[_NoticeEntity]("notice")
       val recordid = collection.storage.storeRealm.values.head.id
       val missingblobid = EntityId(BlobRepository.CollectionId.major, s"missing_update_${java.util.UUID.randomUUID().toString.replace("-", "")}", BlobRepository.CollectionId).value
 
+      When("keep admin entity update when image attachment fails is exercised")
       val result = subsystem.executeOperationResponse(GRequest.of(
         component = "admin",
         service = "entity",
@@ -2310,6 +2505,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           Argument("component", "notice-board", None),
           Argument("entity", "notice", None),
           Argument("id", recordid.value, None),
+          Argument("version", _notice_entity_version(subsystem, recordid.value), None),
           Argument("title", "updated despite image failure", None),
           Argument("author", "frank", None),
           Argument("imageAttachments.0.role", "primary", None),
@@ -2317,6 +2513,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         )
       ))
 
+      Then("the observable contract for keep admin entity update when image attachment fails holds")
       result shouldBe a[Consequence.Failure[_]]
       val stored = collection.storage.storeRealm.values.find(_.id == recordid).map(_.toRecord()).getOrElse(fail("updated notice is missing"))
       stored.getString("title") shouldBe Some("updated despite image failure")
@@ -2324,6 +2521,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render admin entity create and update forms from derived alias schema fields" in {
+      Given("the prerequisites for render admin entity create and update forms from derived alias schema fields")
       val subsystem = _management_console_fixture_subsystem(schema = _schema("id", "senderName", "recipientName", "subject", "body"))
       val componentname = "notice_board"
       val componentpath = "notice-board"
@@ -2336,11 +2534,13 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         .renderComponentAdminEntityNew(subsystem, componentname, entitypath)
         .map(_.body)
         .getOrElse(fail("component entity new admin is missing"))
+      When("render admin entity create and update forms from derived alias schema fields is exercised")
       val edithtml = _renderer
         .renderComponentAdminEntityEdit(subsystem, componentname, entitypath, recordid)
         .map(_.body)
         .getOrElse(fail("component entity edit admin is missing"))
 
+      Then("the observable contract for render admin entity create and update forms from derived alias schema fields holds")
       newhtml should include (s"/form/${componentpath}/admin/entities/${entitypath}/create")
       newhtml should include ("enctype=\"multipart/form-data\"")
       newhtml should include ("name=\"subject\"")
@@ -2359,6 +2559,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "honor SimpleEntity platform fields when admin schema includes them" in {
+      Given("the prerequisites for honor SimpleEntity platform fields when admin schema includes them")
       val subsystem = _management_console_fixture_subsystem(schema = _schema(
         "id",
         "nameAttributes",
@@ -2382,11 +2583,13 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         .renderComponentAdminEntityNew(subsystem, componentname, entitypath)
         .map(_.body)
         .getOrElse(fail("component entity new admin is missing"))
+      When("honor SimpleEntity platform fields when admin schema includes them is exercised")
       val edithtml = _renderer
         .renderComponentAdminEntityEdit(subsystem, componentname, entitypath, recordid)
         .map(_.body)
         .getOrElse(fail("component entity edit admin is missing"))
 
+      Then("the observable contract for honor SimpleEntity platform fields when admin schema includes them holds")
       newhtml should include ("name=\"id\"")
       newhtml should include ("name=\"nameAttributes\"")
       newhtml should include ("name=\"lifecycleAttributes\"")
@@ -2400,6 +2603,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render admin entity list and detail with derived alias fields" in {
+      Given("the prerequisites for render admin entity list and detail with derived alias fields")
       val subsystem = _management_console_fixture_subsystem(schema = _schema("id", "senderName", "recipientName", "subject", "body"))
       val componentname = "notice_board"
       val componentpath = "notice-board"
@@ -2410,11 +2614,13 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         .renderComponentAdminEntityType(subsystem, componentname, entitypath)
         .map(_.body)
         .getOrElse(fail("component entity type admin is missing"))
+      When("render admin entity list and detail with derived alias fields is exercised")
       val detail = _renderer
         .renderComponentAdminEntityDetail(subsystem, componentname, entitypath, recordid)
         .map(_.body)
         .getOrElse(fail("component entity detail admin is missing"))
 
+      Then("the observable contract for render admin entity list and detail with derived alias fields holds")
       list should include ("<th>id</th><th>shortid</th><th>senderName</th><th>recipientName</th><th>subject</th><th>body</th><th>Actions</th>")
       list should include ("board update")
       list should not include ("<th>title</th>")
@@ -2425,6 +2631,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render admin entity list detail edit and new from view fields before full schema fields" in {
+      Given("the prerequisites for render admin entity list detail edit and new from view fields before full schema fields")
       val subsystem = _management_console_fixture_subsystem(
         schema = _schema(
           "id",
@@ -2467,8 +2674,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         .map(_.body)
         .getOrElse(fail("component entity form definition is missing")))
         .getOrElse(fail("component entity form definition JSON is invalid"))
+      When("render admin entity list detail edit and new from view fields before full schema fields is exercised")
       val formdefinitionfields = formdefinition.hcursor.downField("fields")
 
+      Then("the observable contract for render admin entity list detail edit and new from view fields before full schema fields holds")
       list should include ("<th>id</th><th>subject</th><th>Actions</th>")
       list should not include ("nameAttributes")
       list should not include ("lifecycleAttributes")
@@ -2495,6 +2704,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "create admin entity records without exposing id when create view fields omit it" in {
+      Given("the prerequisites for create admin entity records without exposing id when create view fields omit it")
       val subsystem = _management_console_fixture_subsystem(
         schema = _schema("id", "title", "author"),
         viewfields = Map(
@@ -2525,11 +2735,13 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         "title=idless+notice&author=carol"
       )
 
+      When("create admin entity records without exposing id when create view fields omit it is exercised")
       val html = server
         ._submit_component_admin_entity_create(req, componentpath, entitypath)
         .flatMap(_.as[String])
         .unsafeRunSync()
 
+      Then("the observable contract for create admin entity records without exposing id when create view fields omit it holds")
       newhtml should include ("name=\"title\"")
       newhtml should include ("name=\"author\"")
       newhtml should not include ("name=\"id\"")
@@ -2547,6 +2759,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "pass derived alias admin entity create fields through to the dispatcher" in {
+      Given("the prerequisites for pass derived alias admin entity create fields through to the dispatcher")
       val subsystem = _management_console_fixture_subsystem(schema = _schema("id", "senderName", "recipientName", "subject", "body"))
       val engine = new HttpExecutionEngine(subsystem)
       val dispatcher = new RecordingWebOperationDispatcher(WebOperationDispatcher.Local(engine))
@@ -2556,11 +2769,13 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         "id=notice_alias&senderName=alice&recipientName=bob&subject=Phase+12&body=Alias+body"
       )
 
+      When("pass derived alias admin entity create fields through to the dispatcher is exercised")
       val html = server
         ._submit_component_admin_entity_create(req, "notice-board", "notice")
         .flatMap(_.as[String])
         .unsafeRunSync()
 
+      Then("the observable contract for pass derived alias admin entity create fields through to the dispatcher holds")
       html should include ("Entity record was applied")
       dispatcher.paths should contain ("/admin/entity/create")
       val submitted = dispatcher.forms.lastOption.getOrElse(fail("admin entity create form was not dispatched"))
@@ -2571,6 +2786,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "keep static result page convention out of built-in admin entity create flow" in {
+      Given("the prerequisites for keep static result page convention out of built-in admin entity create flow")
       val subsystem = _management_console_fixture_subsystem(
         Configuration(Map(
           RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(_web_template_fixture_root(
@@ -2587,11 +2803,13 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         "fields=id%3Dnotice_static%0Atitle%3Dstatic+guard%0Aauthor%3Dbob"
       )
 
+      When("keep static result page convention out of built-in admin entity create flow is exercised")
       val html = server
         ._submit_component_admin_entity_create(req, "notice-board", "notice")
         .flatMap(_.as[String])
         .unsafeRunSync()
 
+      Then("the observable contract for keep static result page convention out of built-in admin entity create flow holds")
       html should include ("Entity record was applied")
       html should include ("Create submitted")
       html should not include ("Static Operation Result")
@@ -2599,9 +2817,12 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "define Static Form Web App template lookup precedence as route-local before common templates" in {
+      Given("the prerequisites for define Static Form Web App template lookup precedence as route-local before common templates")
       val subsystem = _management_console_fixture_subsystem()
+      When("define Static Form Web App template lookup precedence as route-local before common templates is exercised")
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
 
+      Then("the observable contract for define Static Form Web App template lookup precedence as route-local before common templates holds")
       server._form_result_template_candidates("notice-board", "notice", "post-notice", 200) shouldBe Vector(
         java.nio.file.Paths.get("notice-board", "notice", "post-notice__200.html"),
         java.nio.file.Paths.get("notice-board", "post-notice__200.html"),
@@ -2619,6 +2840,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "load Static Form Web App result templates from the descriptor root with route-local precedence" in {
+      Given("the prerequisites for load Static Form Web App result templates from the descriptor root with route-local precedence")
       val root = Files.createTempDirectory("cncf-web-template-root-")
       Files.writeString(root.resolve("web-descriptor.yaml"), "web:\n  apps:\n    - name: notice-board\n", StandardCharsets.UTF_8)
       Files.createDirectories(root.resolve("notice-board").resolve("notice"))
@@ -2631,13 +2853,16 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web-descriptor.yaml").toString)
         ))
       )
+      When("load Static Form Web App result templates from the descriptor root with route-local precedence is exercised")
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
 
+      Then("the observable contract for load Static Form Web App result templates from the descriptor root with route-local precedence holds")
       server._web_resource_roots().map(_.name) shouldBe Vector(root.toString)
       server._form_result_static_template("notice-board", "notice", "post-notice", 200) shouldBe Some("SERVICE OPERATION")
     }
 
     "compose Static Form Web App result templates with WEB-INF layouts" in {
+      Given("the prerequisites for compose Static Form Web App result templates with WEB-INF layouts")
       val root = Files.createTempDirectory("cncf-web-result-layout-root-")
       Files.writeString(
         root.resolve("web-descriptor.yaml"),
@@ -2664,13 +2889,16 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       )
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
 
+      When("compose Static Form Web App result templates with WEB-INF layouts is exercised")
       val template = server._form_result_static_template("notice-board", "notice", "post-notice", 200).getOrElse(fail("template is missing"))
 
+      Then("the observable contract for compose Static Form Web App result templates with WEB-INF layouts holds")
       template should include ("Result Header")
       template should include ("<main><section>${operation}</section></main>")
     }
 
     "serve app-local assets from the canonical component Web app route" in {
+      Given("the prerequisites for serve app-local assets from the canonical component Web app route")
       val root = Files.createTempDirectory("cncf-web-asset-root-")
       Files.writeString(root.resolve("web-descriptor.yaml"), "web:\n  apps:\n    - name: notice-board\n", StandardCharsets.UTF_8)
       Files.createDirectories(root.resolve("notice-board").resolve("assets"))
@@ -2685,8 +2913,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val response = server
         ._web_app_asset("notice-board", "notice-board", "app.css")
         .unsafeRunSync()
+      When("serve app-local assets from the canonical component Web app route is exercised")
       val body = response.as[String].unsafeRunSync()
 
+      Then("the observable contract for serve app-local assets from the canonical component Web app route holds")
       response.status.code shouldBe 200
       body should include (".notice-board")
       response.contentType.map(_.mediaType) shouldBe Some(MediaType.text.css)
@@ -2694,6 +2924,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "serve static Web app HTML from the canonical component Web app route" in {
+      Given("the prerequisites for serve static Web app HTML from the canonical component Web app route")
       val root = Files.createTempDirectory("cncf-web-html-root-")
       Files.writeString(root.resolve("web-descriptor.yaml"), "web:\n  apps:\n    - name: notice-board\n", StandardCharsets.UTF_8)
       Files.createDirectories(root.resolve("notice-board"))
@@ -2708,8 +2939,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
 
       val index = server._component_web_app("notice-board", "notice-board", Vector.empty).unsafeRunSync()
       val about = server._component_web_app("notice-board", "notice-board", Vector("about")).unsafeRunSync()
+      When("serve static Web app HTML from the canonical component Web app route is exercised")
       val missingcomponent = server._component_web_app("missing", "notice-board", Vector.empty).unsafeRunSync()
 
+      Then("the observable contract for serve static Web app HTML from the canonical component Web app route holds")
       index.status.code shouldBe 200
       index.as[String].unsafeRunSync() should include ("Notice Board")
       about.status.code shouldBe 200
@@ -2719,6 +2952,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
 
     "keep component Web app routes separate from component form indexes" in {
       // Given
+      Given("the prerequisites for keep component Web app routes separate from component form indexes")
       val root = Files.createTempDirectory("cncf-web-form-separation-root-")
       Files.writeString(
         root.resolve("web-descriptor.yaml"),
@@ -2743,9 +2977,11 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val canonical = app.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/art-scene/textus-art-scene"))).unsafeRunSync()
       val toplevel = app.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/textus-art-scene"))).unsafeRunSync()
       val componentroot = app.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/art-scene"))).unsafeRunSync()
+      When("keep component Web app routes separate from component form indexes is exercised")
       val formindex = app.run(Request[IO](Method.GET, Uri.unsafeFromString("/form/art-scene"))).unsafeRunSync()
 
       // Then
+      Then("the observable contract for keep component Web app routes separate from component form indexes holds")
       canonical.status.code shouldBe 200
       canonical.as[String].unsafeRunSync() should include ("ArtScene")
       toplevel.status.code shouldBe 404
@@ -2758,6 +2994,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
 
     "serve explicit component Web entry app from the component root" in {
       // Given
+      Given("the prerequisites for serve explicit component Web entry app from the component root")
       val root = Files.createTempDirectory("cncf-web-component-entry-root-")
       Files.writeString(
         root.resolve("web-descriptor.yaml"),
@@ -2786,9 +3023,11 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val componentindexhtml = app.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/art-scene/index.html"))).unsafeRunSync()
       val canonical = app.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/art-scene/textus-art-scene"))).unsafeRunSync()
       val admin = app.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/art-scene/admin"))).unsafeRunSync()
+      When("serve explicit component Web entry app from the component root is exercised")
       val formindex = app.run(Request[IO](Method.GET, Uri.unsafeFromString("/form/art-scene"))).unsafeRunSync()
 
       // Then
+      Then("the observable contract for serve explicit component Web entry app from the component root holds")
       Vector(componentroot, componentslash, componentindex, componentindexhtml, canonical).foreach { response =>
         response.status.code shouldBe 200
         response.as[String].unsafeRunSync() should include ("Entry ArtScene")
@@ -2800,6 +3039,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
 
     "prefer explicit Web route aliases over component Web entry shortcuts" in {
       // Given
+      Given("the prerequisites for prefer explicit Web route aliases over component Web entry shortcuts")
       val root = Files.createTempDirectory("cncf-web-component-entry-alias-root-")
       Files.writeString(
         root.resolve("web-descriptor.yaml"),
@@ -2833,9 +3073,11 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       // When
       val aliasroot = app.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/art-scene"))).unsafeRunSync()
       val aliasslash = app.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/art-scene/"))).unsafeRunSync()
+      When("prefer explicit Web route aliases over component Web entry shortcuts is exercised")
       val aliasindex = app.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/art-scene/index"))).unsafeRunSync()
 
       // Then
+      Then("the observable contract for prefer explicit Web route aliases over component Web entry shortcuts holds")
       Vector(aliasroot, aliasslash, aliasindex).foreach { response =>
         response.status.code shouldBe 200
         val body = response.as[String].unsafeRunSync()
@@ -2846,6 +3088,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
 
     "reject ambiguous component Web entry apps deterministically" in {
       // Given
+      Given("the prerequisites for reject ambiguous component Web entry apps deterministically")
       val root = Files.createTempDirectory("cncf-web-component-entry-ambiguous-root-")
       Files.writeString(
         root.resolve("web-descriptor.yaml"),
@@ -2872,15 +3115,18 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val app = server.routes(null).orNotFound
 
       // When
+      When("reject ambiguous component Web entry apps deterministically is exercised")
       val response = app.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/art-scene"))).unsafeRunSync()
 
       // Then
+      Then("the observable contract for reject ambiguous component Web entry apps deterministically holds")
       response.status.code shouldBe 500
       response.as[String].unsafeRunSync() should include ("Multiple component Web entry apps")
     }
 
     "serve top-level component Web app aliases only when the descriptor declares them" in {
       // Given
+      Given("the prerequisites for serve top-level component Web app aliases only when the descriptor declares them")
       val root = Files.createTempDirectory("cncf-web-explicit-alias-root-")
       Files.writeString(
         root.resolve("web-descriptor.yaml"),
@@ -2910,9 +3156,11 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       // When
       val alias = app.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/art"))).unsafeRunSync()
       val canonical = app.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/art-scene/textus-art-scene"))).unsafeRunSync()
+      When("serve top-level component Web app aliases only when the descriptor declares them is exercised")
       val componentroot = app.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/art-scene"))).unsafeRunSync()
 
       // Then
+      Then("the observable contract for serve top-level component Web app aliases only when the descriptor declares them holds")
       alias.status.code shouldBe 200
       alias.as[String].unsafeRunSync() should include ("Aliased ArtScene")
       canonical.status.code shouldBe 200
@@ -2922,6 +3170,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
 
     "resolve component Web app routes from apps route declarations without aliases" in {
       // Given
+      Given("the prerequisites for resolve component Web app routes from apps route declarations without aliases")
       val root = Files.createTempDirectory("cncf-web-app-route-root-")
       Files.writeString(
         root.resolve("web-descriptor.yaml"),
@@ -2948,9 +3197,11 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       // When
       val routed = app.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/art-scene/gallery"))).unsafeRunSync()
       val routedasset = app.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/art-scene/gallery/assets/app.css"))).unsafeRunSync()
+      When("resolve component Web app routes from apps route declarations without aliases is exercised")
       val undeclared = app.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/gallery"))).unsafeRunSync()
 
       // Then
+      Then("the observable contract for resolve component Web app routes from apps route declarations without aliases holds")
       routed.status.code shouldBe 200
       routed.as[String].unsafeRunSync() should include ("Routed ArtScene")
       routedasset.status.code shouldBe 200
@@ -2959,6 +3210,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "serve explicit Web route alias pages from the Web root" in {
+      Given("the prerequisites for serve explicit Web route alias pages from the Web root")
       val root = Files.createTempDirectory("cncf-web-flat-root-")
       Files.writeString(
         root.resolve("web-descriptor.yaml"),
@@ -2992,8 +3244,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val page = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/board/publicblogs"))).unsafeRunSync()
       val pagehtml = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/board/publicblogs.html"))).unsafeRunSync()
       val status = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/board/status"))).unsafeRunSync()
+      When("serve explicit Web route alias pages from the Web root is exercised")
       val asset = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/board/assets/app.css"))).unsafeRunSync()
 
+      Then("the observable contract for serve explicit Web route alias pages from the Web root holds")
       index.status.code shouldBe 200
       index.as[String].unsafeRunSync() should include ("Flat Notice Board")
       page.status.code shouldBe 200
@@ -3007,6 +3261,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "compose Static Form Web App pages with WEB-INF layouts and partials" in {
+      Given("the prerequisites for compose Static Form Web App pages with WEB-INF layouts and partials")
       val root = Files.createTempDirectory("cncf-web-layout-root-")
       Files.writeString(
         root.resolve("web-descriptor.yaml"),
@@ -3063,8 +3318,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val response = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/board/publicblogs?noticeKind=import"))).unsafeRunSync()
       val html = response.as[String].unsafeRunSync()
       val webinf = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/board/WEB-INF/layouts/default.html"))).unsafeRunSync()
+      When("compose Static Form Web App pages with WEB-INF layouts and partials is exercised")
       val lowerwebinf = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/board/web-inf/layouts/lower-private.html"))).unsafeRunSync()
 
+      Then("the observable contract for compose Static Form Web App pages with WEB-INF layouts and partials holds")
       withClue(html) {
         response.status.code shouldBe 200
       }
@@ -3084,6 +3341,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render page context in a partial included by a full HTML Static Form page" in {
+      Given("the prerequisites for render page context in a partial included by a full HTML Static Form page")
       val root = Files.createTempDirectory("cncf-web-full-html-partial-root-")
       Files.writeString(
         root.resolve("web-descriptor.yaml"),
@@ -3118,8 +3376,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
 
       val response = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/board"))).unsafeRunSync()
+      When("render page context in a partial included by a full HTML Static Form page is exercised")
       val html = response.as[String].unsafeRunSync()
 
+      Then("the observable contract for render page context in a partial included by a full HTML Static Form page holds")
       response.status.code shouldBe 200
       html should include ("data-notification-indicator hidden")
       html should include ("data-notification-badge hidden>0</span>")
@@ -3128,6 +3388,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "prefer the route target component layout for standalone app pages" in {
+      Given("the prerequisites for prefer the route target component layout for standalone app pages")
       val descriptorroot = Files.createTempDirectory("cncf-app-layout-descriptor-")
       val editorroot = Files.createTempDirectory("cncf-app-layout-editor-")
       val notificationroot = Files.createTempDirectory("cncf-app-layout-notification-")
@@ -3205,8 +3466,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
 
       val response = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/textus-knowledge-editor/dashboard"))).unsafeRunSync()
+      When("prefer the route target component layout for standalone app pages is exercised")
       val html = response.as[String].unsafeRunSync()
 
+      Then("the observable contract for prefer the route target component layout for standalone app pages holds")
       response.status.code shouldBe 200
       html should include ("<title>TKE</title>")
       html should include ("Textus Knowledge Editor")
@@ -3216,6 +3479,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "compose component Web pages into a subsystem shell only when explicitly enabled" in {
+      Given("the prerequisites for compose component Web pages into a subsystem shell only when explicitly enabled")
       val root = Files.createTempDirectory("cncf-web-composition-root-")
       Files.writeString(
         root.resolve("web-descriptor.yaml"),
@@ -3276,8 +3540,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val screenresponse = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/board/login"))).unsafeRunSync()
       val screenhtml = screenresponse.as[String].unsafeRunSync()
       val standaloneresponse = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/board/standalone"))).unsafeRunSync()
+      When("compose component Web pages into a subsystem shell only when explicitly enabled is exercised")
       val standalonehtml = standaloneresponse.as[String].unsafeRunSync()
 
+      Then("the observable contract for compose component Web pages into a subsystem shell only when explicitly enabled holds")
       articleresponse.status.code shouldBe 200
       articlehtml should include ("Subsystem Header")
       articlehtml should include ("Subsystem Navigation")
@@ -3299,6 +3565,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render article-capable component pages standalone when no subsystem shell is available" in {
+      Given("the prerequisites for render article-capable component pages standalone when no subsystem shell is available")
       val descriptorroot = Files.createTempDirectory("cncf-article-no-shell-descriptor-")
       val notificationroot = Files.createTempDirectory("cncf-article-no-shell-notification-")
       val editorroot = Files.createTempDirectory("cncf-article-no-shell-editor-")
@@ -3365,8 +3632,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
 
       val response = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/notifications"))).unsafeRunSync()
+      When("render article-capable component pages standalone when no subsystem shell is available is exercised")
       val html = response.as[String].unsafeRunSync()
 
+      Then("the observable contract for render article-capable component pages standalone when no subsystem shell is available holds")
       response.status.code shouldBe 200
       html should include ("<title>Notifications</title>")
       html should include ("Notification Header")
@@ -3375,6 +3644,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "merge subsystem Web app composition override without dropping component app assets" in {
+      Given("the prerequisites for merge subsystem Web app composition override without dropping component app assets")
       val componentdescriptor = WebDescriptor(
         apps = Vector(WebDescriptor.App(
           name = "blog",
@@ -3393,8 +3663,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         ))
       )
 
+      When("merge subsystem Web app composition override without dropping component app assets is exercised")
       val app = componentdescriptor.mergeOverride(subsystemdescriptor).apps.headOption.getOrElse(fail("merged app is missing"))
 
+      Then("the observable contract for merge subsystem Web app composition override without dropping component app assets holds")
       app.path shouldBe "/web/blog"
       app.root shouldBe Some("/web/blog")
       app.route shouldBe Some("/web/blog")
@@ -3405,6 +3677,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "limit deemed-subsystem shell fallback to a single component Web root" in {
+      Given("the prerequisites for limit deemed-subsystem shell fallback to a single component Web root")
       val singleroot = Files.createTempDirectory("cncf-single-component-shell-")
       val firstroot = Files.createTempDirectory("cncf-first-component-shell-")
       val secondroot = Files.createTempDirectory("cncf-second-component-shell-")
@@ -3429,8 +3702,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       )
 
       val singleserver = new Http4sHttpServer(new HttpExecutionEngine(singlesubsystem))
+      When("limit deemed-subsystem shell fallback to a single component Web root is exercised")
       val multiserver = new Http4sHttpServer(new HttpExecutionEngine(multisubsystem))
 
+      Then("the observable contract for limit deemed-subsystem shell fallback to a single component Web root holds")
       singleserver._subsystem_shell_web_roots().map(_.name) should contain (singleroot.resolve("src").resolve("main").resolve("web").toString)
       multiserver._subsystem_shell_web_roots().map(_.name) should not contain firstroot.resolve("src").resolve("main").resolve("web").toString
       multiserver._subsystem_shell_web_roots().map(_.name) should not contain secondroot.resolve("src").resolve("main").resolve("web").toString
@@ -3481,6 +3756,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "compose child component article pages with an explicit subsystem shell owner" in {
+      Given("the prerequisites for compose child component article pages with an explicit subsystem shell owner")
       val descriptorroot = Files.createTempDirectory("cncf-explicit-shell-descriptor-")
       val shellroot = Files.createTempDirectory("cncf-explicit-shell-owner-")
       val childroot = Files.createTempDirectory("cncf-explicit-shell-child-")
@@ -3546,8 +3822,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
 
       val response = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/notifications"))).unsafeRunSync()
+      When("compose child component article pages with an explicit subsystem shell owner is exercised")
       val html = response.as[String].unsafeRunSync()
 
+      Then("the observable contract for compose child component article pages with an explicit subsystem shell owner holds")
       response.status.code shouldBe 200
       html should include ("Blog Shell Header")
       html should include ("Blog Shell Footer")
@@ -3556,6 +3834,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "compose child component form result templates through the route Web app shell" in {
+      Given("the prerequisites for compose child component form result templates through the route Web app shell")
       val descriptorroot = Files.createTempDirectory("cncf-explicit-shell-form-descriptor-")
       val shellroot = Files.createTempDirectory("cncf-explicit-shell-form-owner-")
       val childroot = Files.createTempDirectory("cncf-explicit-shell-form-child-")
@@ -3624,6 +3903,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       )
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
 
+      When("compose child component form result templates through the route Web app shell is exercised")
       val html = server._prepared_form_result_template(
         "textus-user-notification",
         "notification",
@@ -3632,12 +3912,14 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         Map("textus.form.page" -> "notifications")
       ).toOption.flatten.getOrElse(fail("notification result is missing"))
 
+      Then("the observable contract for compose child component form result templates through the route Web app shell holds")
       html should include ("Blog Shell Header")
       html should include ("Notification Result")
       html should include ("blog-shell")
     }
 
     "fail when explicit subsystem shell owner has no component Web root" in {
+      Given("the prerequisites for fail when explicit subsystem shell owner has no component Web root")
       val descriptorroot = Files.createTempDirectory("cncf-missing-explicit-shell-owner-")
       val childroot = Files.createTempDirectory("cncf-missing-explicit-shell-child-")
       Files.createDirectories(descriptorroot.resolve("WEB-INF").resolve("layouts"))
@@ -3681,13 +3963,16 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
 
       val response = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/notifications"))).unsafeRunSync()
+      When("fail when explicit subsystem shell owner has no component Web root is exercised")
       val html = response.as[String].unsafeRunSync()
 
+      Then("the observable contract for fail when explicit subsystem shell owner has no component Web root holds")
       response.status.code shouldBe 500
       html should include ("Static Form subsystem shell component Web root not found: missing-shell")
     }
 
     "compose form result templates into a subsystem shell when app composition is article" in {
+      Given("the prerequisites for compose form result templates into a subsystem shell when app composition is article")
       val root = Files.createTempDirectory("cncf-web-form-composition-root-")
       Files.writeString(
         root.resolve("web-descriptor.yaml"),
@@ -3730,6 +4015,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
 
       val articlehtml = server._prepared_form_result_template("notice-board", "notice", "post-notice", 200).toOption.flatten.getOrElse(fail("article result is missing"))
+      When("compose form result templates into a subsystem shell when app composition is article is exercised")
       val screenhtml = server._prepared_form_result_template(
         "notice-board",
         "notice",
@@ -3738,6 +4024,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         Map("textus.form.page" -> "login")
       ).toOption.flatten.getOrElse(fail("screen result is missing"))
 
+      Then("the observable contract for compose form result templates into a subsystem shell when app composition is article holds")
       articlehtml should include ("Subsystem Header")
       articlehtml should include ("<article><section>Posted</section></article>")
       articlehtml should include ("Subsystem Footer")
@@ -3748,6 +4035,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "reject invalid Web app composition and page mode values" in {
+      Given("the prerequisites for reject invalid Web app composition and page mode values")
       val invalidcomposition = Files.createTempDirectory("cncf-web-invalid-composition-")
       Files.writeString(
         invalidcomposition.resolve("web-descriptor.yaml"),
@@ -3759,6 +4047,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         StandardCharsets.UTF_8
       )
       val invalidmode = Files.createTempDirectory("cncf-web-invalid-page-mode-")
+      When("reject invalid Web app composition and page mode values is exercised")
       Files.writeString(
         invalidmode.resolve("web-descriptor.yaml"),
         """web:
@@ -3771,6 +4060,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         StandardCharsets.UTF_8
       )
 
+      Then("the observable contract for reject invalid Web app composition and page mode values holds")
       WebDescriptor.load(invalidcomposition.resolve("web-descriptor.yaml")) match {
         case Consequence.Success(_) => fail("invalid app composition should fail")
         case Consequence.Failure(conclusion) =>
@@ -3784,6 +4074,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "fail deterministically when an explicit Static Form layout is missing" in {
+      Given("the prerequisites for fail deterministically when an explicit Static Form layout is missing")
       val root = Files.createTempDirectory("cncf-web-missing-layout-root-")
       Files.writeString(
         root.resolve("web-descriptor.yaml"),
@@ -3811,13 +4102,16 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
 
       val response = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/board/publicblogs"))).unsafeRunSync()
+      When("fail deterministically when an explicit Static Form layout is missing is exercised")
       val html = response.as[String].unsafeRunSync()
 
+      Then("the observable contract for fail deterministically when an explicit Static Form layout is missing holds")
       response.status.code shouldBe 500
       html should include ("Static Form layout not found: missing")
     }
 
     "fail form result layout composition as a Consequence failure" in {
+      Given("the prerequisites for fail form result layout composition as a Consequence failure")
       val root = Files.createTempDirectory("cncf-web-form-missing-layout-root-")
       Files.writeString(
         root.resolve("web-descriptor.yaml"),
@@ -3836,8 +4130,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web-descriptor.yaml").toString)
         ))
       )
+      When("fail form result layout composition as a Consequence failure is exercised")
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
 
+      Then("the observable contract for fail form result layout composition as a Consequence failure holds")
       server._prepared_form_result_template("notice-board", "notice", "post-notice", 200) match {
         case Consequence.Success(_) => fail("missing explicit layout should fail")
         case Consequence.Failure(conclusion) =>
@@ -3849,6 +4145,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "prefer app-named pages when multiple static-form apps are declared" in {
+      Given("the prerequisites for prefer app-named pages when multiple static-form apps are declared")
       val root = Files.createTempDirectory("cncf-web-multi-app-root-")
       Files.writeString(
         root.resolve("web-descriptor.yaml"),
@@ -3887,8 +4184,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val appb = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/b"))).unsafeRunSync()
       val assetb = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/b/assets/app.css"))).unsafeRunSync()
       val appbhtml = appb.as[String].unsafeRunSync()
+      When("prefer app-named pages when multiple static-form apps are declared is exercised")
       val assetbcss = assetb.as[String].unsafeRunSync()
 
+      Then("the observable contract for prefer app-named pages when multiple static-form apps are declared holds")
       appb.status.code shouldBe 200
       appbhtml should include ("App B")
       appbhtml should not include "Flat Root"
@@ -3898,6 +4197,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "serve static Web app HTML and assets through descriptor route aliases" in {
+      Given("the prerequisites for serve static Web app HTML and assets through descriptor route aliases")
       val root = Files.createTempDirectory("cncf-web-alias-root-")
       Files.writeString(
         root.resolve("web-descriptor.yaml"),
@@ -3933,8 +4233,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val indexslash = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/board/"))).unsafeRunSync()
       val about = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/board/about"))).unsafeRunSync()
       val asset = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/board/assets/app.css"))).unsafeRunSync()
+      When("serve static Web app HTML and assets through descriptor route aliases is exercised")
       val default = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web"))).unsafeRunSync()
 
+      Then("the observable contract for serve static Web app HTML and assets through descriptor route aliases holds")
       index.status.code shouldBe 200
       index.as[String].unsafeRunSync() should include ("Aliased Notice Board")
       indexslash.status.code shouldBe 200
@@ -3948,6 +4250,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "redirect / to /web and render onboarding help on /web in non-production when no default web route is configured" in {
+      Given("the prerequisites for redirect / to /web and render onboarding help on /web in non-production when no default web route is configured")
       val subsystem = _management_console_fixture_subsystem(
         Configuration(Map(
           RuntimeConfig.OperationModeKey -> ConfigurationValue.StringValue("develop")
@@ -3958,8 +4261,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val root = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/"))).unsafeRunSync()
       val web = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web"))).unsafeRunSync()
       val webslash = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/"))).unsafeRunSync()
+      When("redirect / to /web and render onboarding help on /web in non-production when no default web route is configured is exercised")
       val webhtml = web.as[String].unsafeRunSync()
 
+      Then("the observable contract for redirect / to /web and render onboarding help on /web in non-production when no default web route is configured holds")
       root.status.code shouldBe 307
       root.headers.get[org.http4s.headers.Location].map(_.uri.renderString) shouldBe Some("/web")
       webslash.status.code shouldBe 307
@@ -3972,6 +4277,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render runtime landing app links from WebDescriptor routes without implicit component aliases" in {
+      Given("the prerequisites for render runtime landing app links from WebDescriptor routes without implicit component aliases")
       val root = Files.createTempDirectory("cncf-runtime-landing-routes-")
       Files.writeString(
         root.resolve("web-descriptor.yaml"),
@@ -3997,8 +4303,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
 
       val web = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web"))).unsafeRunSync()
       val componentalias = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/notice-board"))).unsafeRunSync()
+      When("render runtime landing app links from WebDescriptor routes without implicit component aliases is exercised")
       val webhtml = web.as[String].unsafeRunSync()
 
+      Then("the observable contract for render runtime landing app links from WebDescriptor routes without implicit component aliases holds")
       web.status.code shouldBe 200
       webhtml should include ("""href="/web/board"""")
       webhtml should not include ("""href="/web/notice-board"""")
@@ -4006,6 +4314,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "redirect / to /web and keep /web strict in production when no default web route is configured" in {
+      Given("the prerequisites for redirect / to /web and keep /web strict in production when no default web route is configured")
       val subsystem = _management_console_fixture_subsystem(
         Configuration(Map(
           RuntimeConfig.OperationModeKey -> ConfigurationValue.StringValue("production")
@@ -4014,64 +4323,82 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
 
       val root = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/"))).unsafeRunSync()
+      When("redirect / to /web and keep /web strict in production when no default web route is configured is exercised")
       val web = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web"))).unsafeRunSync()
 
+      Then("the observable contract for redirect / to /web and keep /web strict in production when no default web route is configured holds")
       root.status.code shouldBe 307
       root.headers.get[org.http4s.headers.Location].map(_.uri.renderString) shouldBe Some("/web")
       web.status.code shouldBe 404
     }
 
     "redirect /rest to the latest stable REST namespace" in {
+      Given("the prerequisites for redirect /rest to the latest stable REST namespace")
       val subsystem = _management_console_fixture_subsystem()
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
 
+      When("redirect /rest to the latest stable REST namespace is exercised")
       val response = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/rest?mode=test"))).unsafeRunSync()
 
+      Then("the observable contract for redirect /rest to the latest stable REST namespace holds")
       response.status.code shouldBe 307
       response.headers.get[org.http4s.headers.Location].map(_.uri.renderString) shouldBe Some("/rest/v1?mode=test")
     }
 
     "redirect versionless REST requests to /rest/v1 with method-preserving redirects" in {
+      Given("the prerequisites for redirect versionless REST requests to /rest/v1 with method-preserving redirects")
       val subsystem = _management_console_fixture_subsystem()
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
 
+      When("redirect versionless REST requests to /rest/v1 with method-preserving redirects is exercised")
       val response = server.routes(null).orNotFound.run(Request[IO](Method.POST, Uri.unsafeFromString("/rest/admin/system/ping?mode=test"))).unsafeRunSync()
 
+      Then("the observable contract for redirect versionless REST requests to /rest/v1 with method-preserving redirects holds")
       response.status.code shouldBe 307
       response.headers.get[org.http4s.headers.Location].map(_.uri.renderString) shouldBe Some("/rest/v1/admin/system/ping?mode=test")
     }
 
     "dispatch canonical REST requests through /rest/v1" in {
+      Given("the prerequisites for dispatch canonical REST requests through /rest/v1")
       val subsystem = _management_console_fixture_subsystem()
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
 
       val response = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/rest/v1/admin/system/ping"))).unsafeRunSync()
+      When("dispatch canonical REST requests through /rest/v1 is exercised")
       val body = response.as[String].unsafeRunSync()
 
+      Then("the observable contract for dispatch canonical REST requests through /rest/v1 holds")
       response.status.code shouldBe 200
       body should include ("runtime: goldenport-cncf")
     }
 
     "return not found for implicit top-level REST routes once /rest/v1 is canonical" in {
+      Given("the prerequisites for return not found for implicit top-level REST routes once /rest/v1 is canonical")
       val subsystem = _management_console_fixture_subsystem()
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
 
+      When("return not found for implicit top-level REST routes once /rest/v1 is canonical is exercised")
       val response = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/admin/system/ping"))).unsafeRunSync()
 
+      Then("the observable contract for return not found for implicit top-level REST routes once /rest/v1 is canonical holds")
       response.status.code shouldBe 404
     }
 
     "leave /api unsupported" in {
+      Given("the prerequisites for leave /api unsupported")
       val subsystem = _management_console_fixture_subsystem()
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
 
+      When("leave /api unsupported is exercised")
       val response = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/api/v1/admin/system/ping"))).unsafeRunSync()
 
+      Then("the observable contract for leave /api unsupported holds")
       response.status.code shouldBe 404
     }
 
     "not infer public routes for a single component Web app" in {
       // Given
+      Given("the prerequisites for not infer public routes for a single component Web app")
       val root = Files.createTempDirectory("cncf-web-implicit-alias-root-")
       Files.writeString(root.resolve("web-descriptor.yaml"), "web:\n  apps:\n    - name: notice-board\n", StandardCharsets.UTF_8)
       Files.createDirectories(root.resolve("notice-board").resolve("assets"))
@@ -4089,9 +4416,11 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         configuration = configuration
       ).add(Vector(component))
       val engine = new HttpExecutionEngine(subsystem)
+      When("not infer public routes for a single component Web app is exercised")
       val server = new Http4sHttpServer(engine)
 
       // When
+      Then("the observable contract for not infer public routes for a single component Web app holds")
       engine.webDescriptor.routes shouldBe Vector.empty
       val alias = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/notice-board"))).unsafeRunSync()
       val default = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web"))).unsafeRunSync()
@@ -4108,6 +4437,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "load Static Form Web App descriptor, templates, and assets from a CAR archive Web root" in {
+      Given("the prerequisites for load Static Form Web App descriptor, templates, and assets from a CAR archive Web root")
       val path = _web_archive_fixture(
         "sample.car",
         Vector(
@@ -4123,8 +4453,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         ))
       )
       val engine = new HttpExecutionEngine(subsystem)
+      When("load Static Form Web App descriptor, templates, and assets from a CAR archive Web root is exercised")
       val server = new Http4sHttpServer(engine)
 
+      Then("the observable contract for load Static Form Web App descriptor, templates, and assets from a CAR archive Web root holds")
       engine.webDescriptor.apps.map(_.name) should contain ("notice-board")
       server._web_resource_roots().map(_.name) shouldBe Vector(path.toString)
       server._component_web_app("notice-board", "notice-board", Vector.empty).unsafeRunSync().as[String].unsafeRunSync() should include ("Archive Notice Board")
@@ -4134,12 +4466,15 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render component entity edit page contract" in {
+      Given("the prerequisites for render component entity edit page contract")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
       val componentpath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)
 
+      When("render component entity edit page contract is exercised")
       val html = _renderer.renderComponentAdminEntityEdit(subsystem, component.name, "sales-order", "missing-id").map(_.body).getOrElse(fail("component entity edit admin is missing"))
 
+      Then("the observable contract for render component entity edit page contract holds")
       html should include (s"${component.name} Sales Order Edit")
       html should include ("Edit Sales Order")
       html should include ("<form method=\"post\"")
@@ -4154,10 +4489,12 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render component entity edit page with hidden form context" in {
+      Given("the prerequisites for render component entity edit page with hidden form context")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
       val componentpath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)
 
+      When("render component entity edit page with hidden form context is exercised")
       val html = _renderer.renderComponentAdminEntityEdit(
         subsystem,
         component.name,
@@ -4173,6 +4510,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         )
       ).map(_.body).getOrElse(fail("component entity edit admin is missing"))
 
+      Then("the observable contract for render component entity edit page with hidden form context holds")
       html should include ("type=\"hidden\" name=\"crud.origin.href\"")
       html should include ("type=\"hidden\" name=\"crud.success.href\"")
       html should include ("type=\"hidden\" name=\"paging.page\" value=\"2\"")
@@ -4184,12 +4522,15 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render component entity new page contract" in {
+      Given("the prerequisites for render component entity new page contract")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
       val componentpath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)
 
+      When("render component entity new page contract is exercised")
       val html = _renderer.renderComponentAdminEntityNew(subsystem, component.name, "sales-order").map(_.body).getOrElse(fail("component entity new admin is missing"))
 
+      Then("the observable contract for render component entity new page contract holds")
       html should include (s"${component.name} Sales Order New")
       html should include ("New Sales Order")
       html should include ("<form method=\"post\"")
@@ -4204,6 +4545,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render component entity new page from CML schema descriptor without WebDescriptor" in {
+      Given("the prerequisites for render component entity new page from CML schema descriptor without WebDescriptor")
       val descriptor = ComponentDescriptor(
         componentName = Some("notice_board"),
         entityRuntimeDescriptors = Vector(
@@ -4245,8 +4587,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         .withComponentDescriptors(Vector(descriptor))
       val subsystem = DefaultSubsystemFactory.default(Some("server")).add(Vector(component))
 
+      When("render component entity new page from CML schema descriptor without WebDescriptor is exercised")
       val html = _renderer.renderComponentAdminEntityNew(subsystem, "notice_board", "notice").map(_.body).getOrElse(fail("component entity new admin is missing"))
 
+      Then("the observable contract for render component entity new page from CML schema descriptor without WebDescriptor holds")
       html should include ("name=\"id\"")
       html should include ("name=\"title\"")
       html should include ("name=\"body\"")
@@ -4264,6 +4608,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render component entity new page from generated companion schema" in {
+      Given("the prerequisites for render component entity new page from generated companion schema")
       val component = TestComponentFactory
         .create("generated_schema_component", Protocol.empty)
         .withComponentDescriptors(Vector(ComponentDescriptor(
@@ -4280,8 +4625,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val bootstrapped = new ComponentFactory().bootstrap(component)
       val subsystem = DefaultSubsystemFactory.default(Some("server")).add(Vector(bootstrapped))
 
+      When("render component entity new page from generated companion schema is exercised")
       val html = _renderer.renderComponentAdminEntityNew(subsystem, "generated_schema_component", "order").map(_.body).getOrElse(fail("component entity new admin is missing"))
 
+      Then("the observable contract for render component entity new page from generated companion schema holds")
       html should include ("name=\"id\"")
       html should include ("name=\"name\"")
       html should include ("name=\"status\"")
@@ -4293,8 +4640,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render component entity new page from merged Schema and WebDescriptor controls" in {
+      Given("the prerequisites for render component entity new page from merged Schema and WebDescriptor controls")
       val (subsystem, descriptor) = _entity_schema_web_descriptor_fixture()
 
+      When("render component entity new page from merged Schema and WebDescriptor controls is exercised")
       val html = _renderer.renderComponentAdminEntityNew(
         subsystem,
         "notice_board",
@@ -4302,6 +4651,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         webDescriptor = descriptor
       ).map(_.body).getOrElse(fail("component entity new admin is missing"))
 
+      Then("the observable contract for render component entity new page from merged Schema and WebDescriptor controls holds")
       html should include ("name=\"id\"")
       html should include ("name=\"body\"")
       html should include ("name=\"status\"")
@@ -4314,6 +4664,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "expose Schema labels in admin entity Form API and HTML" in {
+      Given("the prerequisites for expose Schema labels in admin entity Form API and HTML")
       val schema = Schema(Vector(
         Column(
           BaseContent.Builder("senderName").label("Sender").build(),
@@ -4342,7 +4693,9 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         .map(_.body)
         .getOrElse(fail("component entity form definition is missing")))
         .getOrElse(fail("component entity form definition JSON is invalid"))
+      When("expose Schema labels in admin entity Form API and HTML is exercised")
       val fields = definition.hcursor.downField("fields")
+      Then("the observable contract for expose Schema labels in admin entity Form API and HTML holds")
       fields.downN(0).downField("label").as[String].toOption shouldBe Some("Sender")
       fields.downN(0).downField("placeholder").as[String].toOption shouldBe Some("Your name")
       fields.downN(0).downField("validation").downField("minLength").as[Int].toOption shouldBe Some(1)
@@ -4360,6 +4713,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "redisplay admin entity create validation errors before dispatching" in {
+      Given("the prerequisites for redisplay admin entity create validation errors before dispatching")
       val descriptor = ComponentDescriptor(
         componentName = Some("notice_board"),
         entityRuntimeDescriptors = Vector(
@@ -4399,8 +4753,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           "notice"
         )
         .unsafeRunSync()
+      When("redisplay admin entity create validation errors before dispatching is exercised")
       val html = response.as[String].unsafeRunSync()
 
+      Then("the observable contract for redisplay admin entity create validation errors before dispatching holds")
       response.status.code shouldBe 400
       html should include ("New Notice")
       html should include ("Validation failed.")
@@ -4411,6 +4767,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "validate admin entity create and update POST values against Schema hints" in {
+      Given("the prerequisites for validate admin entity create and update POST values against Schema hints")
       val schema = Schema(Vector(
         Column(BaseContent.simple("id"), ValueDomain(datatype = XString, multiplicity = Multiplicity.One)),
         Column(
@@ -4434,8 +4791,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           "notice"
         )
         .unsafeRunSync()
+      When("validate admin entity create and update POST values against Schema hints is exercised")
       val createhtml = createresponse.as[String].unsafeRunSync()
 
+      Then("the observable contract for validate admin entity create and update POST values against Schema hints holds")
       createresponse.status.code shouldBe 400
       createhtml should include ("Validation failed.")
       createhtml should include ("admin-feedback")
@@ -4462,6 +4821,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render component entity update submission result contract" in {
+      Given("the prerequisites for render component entity update submission result contract")
       val html = _renderer.renderComponentAdminEntityUpdateResult(
         "admin",
         "sales-order",
@@ -4469,44 +4829,54 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         Map("status" -> "confirmed")
       ).body
 
-      html should include ("admin Sales Order Update Result")
-      html should include ("Update submitted")
-      html should include ("nav nav-pills")
-      html should include ("class=\"card admin-card")
-      html should include ("table table-sm table-hover align-middle mb-0")
-      html should include ("Entity update execution is not enabled in this baseline")
-      html should include ("result.status")
-      html should include ("result.ok")
-      html should include ("result.body")
-      html should include ("status")
-      html should include ("confirmed")
-      html should include ("/web/admin/admin/entities/sales-order/sales-order-1")
-      html should include ("/web/admin/admin/entities/sales-order/sales-order-1/edit")
+      When("the observable result for render component entity update submission result contract is inspected")
+      locally {
+        Then("the observable contract for render component entity update submission result contract holds")
+        html should include ("admin Sales Order Update Result")
+        html should include ("Update submitted")
+        html should include ("nav nav-pills")
+        html should include ("class=\"card admin-card")
+        html should include ("table table-sm table-hover align-middle mb-0")
+        html should include ("Entity update execution is not enabled in this baseline")
+        html should include ("result.status")
+        html should include ("result.ok")
+        html should include ("result.body")
+        html should include ("status")
+        html should include ("confirmed")
+        html should include ("/web/admin/admin/entities/sales-order/sales-order-1")
+        html should include ("/web/admin/admin/entities/sales-order/sales-order-1/edit")
+      }
     }
 
     "render component entity create submission result contract" in {
+      Given("the prerequisites for render component entity create submission result contract")
       val html = _renderer.renderComponentAdminEntityCreateResult(
         "admin",
         "sales-order",
         Map("status" -> "draft")
       ).body
 
-      html should include ("admin Sales Order Create Result")
-      html should include ("Create submitted")
-      html should include ("nav nav-pills")
-      html should include ("class=\"card admin-card")
-      html should include ("table table-sm table-hover align-middle mb-0")
-      html should include ("Entity create execution is not enabled in this baseline")
-      html should include ("result.status")
-      html should include ("result.ok")
-      html should include ("result.body")
-      html should include ("status")
-      html should include ("draft")
-      html should include ("/web/admin/admin/entities/sales-order")
-      html should include ("/web/admin/admin/entities/sales-order/new")
+      When("the observable result for render component entity create submission result contract is inspected")
+      locally {
+        Then("the observable contract for render component entity create submission result contract holds")
+        html should include ("admin Sales Order Create Result")
+        html should include ("Create submitted")
+        html should include ("nav nav-pills")
+        html should include ("class=\"card admin-card")
+        html should include ("table table-sm table-hover align-middle mb-0")
+        html should include ("Entity create execution is not enabled in this baseline")
+        html should include ("result.status")
+        html should include ("result.ok")
+        html should include ("result.body")
+        html should include ("status")
+        html should include ("draft")
+        html should include ("/web/admin/admin/entities/sales-order")
+        html should include ("/web/admin/admin/entities/sales-order/new")
+      }
     }
 
     "render component entity edit page from merged Schema and WebDescriptor controls" in {
+      Given("the prerequisites for render component entity edit page from merged Schema and WebDescriptor controls")
       val subsystem = _management_console_fixture_subsystem()
       val recordid = _notice_fixture_component(subsystem).
         entitySpace.
@@ -4531,6 +4901,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         ))
       ))
 
+      When("render component entity edit page from merged Schema and WebDescriptor controls is exercised")
       val html = _renderer.renderComponentAdminEntityEdit(
         subsystem,
         "notice_board",
@@ -4539,6 +4910,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         webDescriptor = descriptor
       ).map(_.body).getOrElse(fail("component entity edit admin is missing"))
 
+      Then("the observable contract for render component entity edit page from merged Schema and WebDescriptor controls holds")
       html should include ("id=\"field-id\"")
       html should include ("readonly")
       html should include ("value=\"board update\"")
@@ -4548,11 +4920,14 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render component data administration page" in {
+      Given("the prerequisites for render component data administration page")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
 
+      When("render component data administration page is exercised")
       val html = _renderer.renderComponentAdminData(subsystem, component.name).map(_.body).getOrElse(fail("component data admin is missing"))
 
+      Then("the observable contract for render component data administration page holds")
       html should include (s"${component.name} Data Administration")
       html should include ("Data record management")
       html should include ("class=\"card admin-card")
@@ -4565,8 +4940,12 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render component data pages from a live DataStore fixture" in {
+      Given("the prerequisites for render component data pages from a live DataStore fixture")
       val fixture = _data_fixture()
-      _with_global_runtime(fixture.runtime) {
+      When("the observable result for render component data pages from a live DataStore fixture is inspected")
+      locally {
+        Then("the observable contract for render component data pages from a live DataStore fixture holds")
+        _with_global_runtime(fixture.runtime) {
         val html = _renderer.renderComponentAdminDataType(fixture.subsystem, "notice_board", "audit").map(_.body).getOrElse(fail("component data type admin is missing"))
         val firstpage = _renderer.renderComponentAdminDataType(
           fixture.subsystem,
@@ -4634,11 +5013,15 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         newly should include ("/web/notice-board/admin/data/audit")
         newly should include ("/web/notice-board/admin/data")
       }
+      }
     }
 
     "render admin CRUD forms from WebDescriptor field controls" in {
+      Given("the prerequisites for render admin CRUD forms from WebDescriptor field controls")
       val fixture = _data_fixture()
+      When("render admin CRUD forms from WebDescriptor field controls is exercised")
       val descriptor = _data_schema_web_descriptor()
+      Then("the observable contract for render admin CRUD forms from WebDescriptor field controls holds")
       _with_global_runtime(fixture.runtime) {
         val edit = _renderer.renderComponentAdminDataEdit(
           fixture.subsystem,
@@ -4669,8 +5052,12 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "apply component data update/create form POST into the DataStore fixture" in {
+      Given("the prerequisites for apply component data update/create form POST into the DataStore fixture")
       val fixture = _data_fixture()
-      _with_global_runtime(fixture.runtime) {
+      When("the observable result for apply component data update/create form POST into the DataStore fixture is inspected")
+      locally {
+        Then("the observable contract for apply component data update/create form POST into the DataStore fixture holds")
+        _with_global_runtime(fixture.runtime) {
         val engine = new HttpExecutionEngine(fixture.subsystem)
         val dispatcher = new RecordingWebOperationDispatcher(WebOperationDispatcher.Local(engine))
         val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
@@ -4704,11 +5091,16 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         _load_data_record(fixture.datastorespace, "audit", "audit_2").getString("actor") shouldBe Some("bob")
         dispatcher.paths should contain ("/admin/data/create")
       }
+      }
     }
 
     "redirect component data create by admin form descriptor transition" in {
+      Given("the prerequisites for redirect component data create by admin form descriptor transition")
       val fixture = _data_fixture()
-      _with_global_runtime(fixture.runtime) {
+      When("the observable result for redirect component data create by admin form descriptor transition is inspected")
+      locally {
+        Then("the observable contract for redirect component data create by admin form descriptor transition holds")
+        _with_global_runtime(fixture.runtime) {
         val descriptor = WebDescriptor(
           form = Map(
             "notice-board.admin.data.audit.create" -> WebDescriptor.Form(
@@ -4734,11 +5126,16 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         _load_data_record(fixture.datastorespace, "audit", "audit_3").getString("action") shouldBe Some("created")
         dispatcher.paths should contain ("/admin/data/create")
       }
+      }
     }
 
     "redisplay component data create form with submitted fields when admin stayOnError is enabled" in {
+      Given("the prerequisites for redisplay component data create form with submitted fields when admin stayOnError is enabled")
       val fixture = _data_fixture()
-      _with_global_runtime(fixture.runtime) {
+      When("the observable result for redisplay component data create form with submitted fields when admin stayOnError is enabled is inspected")
+      locally {
+        Then("the observable contract for redisplay component data create form with submitted fields when admin stayOnError is enabled holds")
+        _with_global_runtime(fixture.runtime) {
         val descriptor = WebDescriptor(
           form = Map(
             "notice-board.admin.data.audit.create" -> WebDescriptor.Form(stayOnError = true)
@@ -4774,11 +5171,16 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         html should include ("name=\"actor\"")
         html should include ("value=\"bob\"")
       }
+      }
     }
 
     "redisplay component data create form with descriptor validation errors before dispatch" in {
+      Given("the prerequisites for redisplay component data create form with descriptor validation errors before dispatch")
       val fixture = _data_fixture()
-      _with_global_runtime(fixture.runtime) {
+      When("the observable result for redisplay component data create form with descriptor validation errors before dispatch is inspected")
+      locally {
+        Then("the observable contract for redisplay component data create form with descriptor validation errors before dispatch holds")
+        _with_global_runtime(fixture.runtime) {
         val descriptor = _data_schema_web_descriptor()
         val engine = new HttpExecutionEngine(fixture.subsystem, Some(descriptor))
         val dispatcher = new RecordingWebOperationDispatcher(WebOperationDispatcher.Local(engine))
@@ -4803,10 +5205,19 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         html should include ("audit_invalid")
         dispatcher.paths should not contain ("/admin/data/create")
       }
+      }
     }
 
     "extract structured result metadata for form redirect templates" in {
-      FormResultMetadata.fromBody("""{"id":"notice_1"}""").toTemplateValues shouldBe Map("result.id" -> "notice_1")
+      Given("supported structured and scalar result body representations")
+      val structuredidbody = """{"id":"notice_1"}"""
+
+      When("template metadata is extracted from the result body")
+      val structuredidvalues =
+        FormResultMetadata.fromBody(structuredidbody).toTemplateValues
+
+      Then("the supported representations produce canonical template values")
+      structuredidvalues shouldBe Map("result.id" -> "notice_1")
       FormResultMetadata.fromBody("""{"id":"urn:textus:image:abc"}""").toTemplateValues shouldBe Map("result.id" -> "urn:textus:image:abc")
       FormResultMetadata.fromBody("""{"result":{"id":"notice_2"}}""").toTemplateValues shouldBe Map("result.id" -> "notice_2")
       FormResultMetadata.fromBody("""{"item":{"id":"notice_3"}}""").toTemplateValues shouldBe Map("result.id" -> "notice_3")
@@ -4860,11 +5271,14 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render component view administration page" in {
+      Given("the prerequisites for render component view administration page")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
 
+      When("render component view administration page is exercised")
       val html = _renderer.renderComponentAdminViews(subsystem, component.name).map(_.body).getOrElse(fail("component view admin is missing"))
 
+      Then("the observable contract for render component view administration page holds")
       html should include (s"${component.name} View Administration")
       html should include ("View read")
       html should include ("class=\"card admin-card")
@@ -4874,10 +5288,13 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render component view read page from a live ViewSpace fixture" in {
+      Given("the prerequisites for render component view read page from a live ViewSpace fixture")
       val subsystem = _view_fixture_subsystem()
 
+      When("render component view read page from a live ViewSpace fixture is exercised")
       val html = _renderer.renderComponentAdminViewDetail(subsystem, "notice_board", "notice_view").map(_.body).getOrElse(fail("component view detail admin is missing"))
 
+      Then("the observable contract for render component view read page from a live ViewSpace fixture holds")
       html should include ("notice_board Notice View View")
       html should include ("Notice View metadata")
       html should include ("class=\"card admin-card")
@@ -4896,10 +5313,13 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render component view instance detail page through context-aware read" in {
+      Given("the prerequisites for render component view instance detail page through context-aware read")
       val subsystem = _view_fixture_subsystem()
 
+      When("render component view instance detail page through context-aware read is exercised")
       val html = _renderer.renderComponentAdminViewInstanceDetail(subsystem, "notice_board", "notice_view", "notice_1").map(_.body).getOrElse(fail("component view instance detail admin is missing"))
 
+      Then("the observable contract for render component view instance detail page through context-aware read holds")
       html should include ("notice_board Notice View View Detail")
       html should include ("class=\"card admin-card")
       html should include ("notice_1")
@@ -4912,6 +5332,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render component view instance detail with descriptor field schema" in {
+      Given("the prerequisites for render component view instance detail with descriptor field schema")
       val subsystem = _view_fixture_subsystem()
       val descriptor = WebDescriptor(
         admin = Map(
@@ -4926,8 +5347,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         )
       )
 
+      When("render component view instance detail with descriptor field schema is exercised")
       val html = _renderer.renderComponentAdminViewInstanceDetail(subsystem, "notice_board", "notice_view", "notice_1", descriptor).map(_.body).getOrElse(fail("component view instance detail admin is missing"))
 
+      Then("the observable contract for render component view instance detail with descriptor field schema holds")
       html should include ("<th>id</th>")
       html should include ("<th>label</th>")
       html should include ("<th>value</th>")
@@ -4938,11 +5361,14 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render component aggregate administration page" in {
+      Given("the prerequisites for render component aggregate administration page")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
 
+      When("render component aggregate administration page is exercised")
       val html = _renderer.renderComponentAdminAggregates(subsystem, component.name).map(_.body).getOrElse(fail("component aggregate admin is missing"))
 
+      Then("the observable contract for render component aggregate administration page holds")
       html should include (s"${component.name} Aggregate Administration")
       html should include ("Aggregate CRUD")
       html should include ("class=\"card admin-card")
@@ -4952,10 +5378,13 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render component aggregate read page from a live AggregateSpace fixture" in {
+      Given("the prerequisites for render component aggregate read page from a live AggregateSpace fixture")
       val subsystem = _aggregate_fixture_subsystem()
 
+      When("render component aggregate read page from a live AggregateSpace fixture is exercised")
       val html = _renderer.renderComponentAdminAggregateDetail(subsystem, "notice_board", "notice_aggregate").map(_.body).getOrElse(fail("component aggregate detail admin is missing"))
 
+      Then("the observable contract for render component aggregate read page from a live AggregateSpace fixture holds")
       html should include ("notice_board Notice Aggregate Aggregate")
       html should include ("Notice Aggregate metadata")
       html should include ("class=\"card admin-card")
@@ -4985,6 +5414,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render component aggregate list with descriptor field columns" in {
+      Given("the prerequisites for render component aggregate list with descriptor field columns")
       val subsystem = _aggregate_fixture_subsystem()
       val descriptor = WebDescriptor(
         admin = Map(
@@ -4998,8 +5428,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         )
       )
 
+      When("render component aggregate list with descriptor field columns is exercised")
       val html = _renderer.renderComponentAdminAggregateDetail(subsystem, "notice_board", "notice_aggregate", webDescriptor = descriptor).map(_.body).getOrElse(fail("component aggregate detail admin is missing"))
 
+      Then("the observable contract for render component aggregate list with descriptor field columns holds")
       html should include ("<th>id</th>")
       html should include ("<th>label</th>")
       html should include ("<th>note</th>")
@@ -5009,10 +5441,13 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render component aggregate instance detail page through context-aware read" in {
+      Given("the prerequisites for render component aggregate instance detail page through context-aware read")
       val subsystem = _aggregate_fixture_subsystem()
 
+      When("render component aggregate instance detail page through context-aware read is exercised")
       val html = _renderer.renderComponentAdminAggregateInstanceDetail(subsystem, "notice_board", "notice_aggregate", "notice_1").map(_.body).getOrElse(fail("component aggregate instance detail admin is missing"))
 
+      Then("the observable contract for render component aggregate instance detail page through context-aware read holds")
       html should include ("notice_board Notice Aggregate Aggregate Detail")
       html should include ("class=\"card admin-card")
       html should include ("notice_1")
@@ -5033,6 +5468,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render component aggregate instance detail with descriptor field schema" in {
+      Given("the prerequisites for render component aggregate instance detail with descriptor field schema")
       val subsystem = _aggregate_fixture_subsystem()
       val descriptor = WebDescriptor(
         admin = Map(
@@ -5047,8 +5483,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         )
       )
 
+      When("render component aggregate instance detail with descriptor field schema is exercised")
       val html = _renderer.renderComponentAdminAggregateInstanceDetail(subsystem, "notice_board", "notice_aggregate", "notice_1", descriptor).map(_.body).getOrElse(fail("component aggregate instance detail admin is missing"))
 
+      Then("the observable contract for render component aggregate instance detail with descriptor field schema holds")
       html should include ("<th>id</th>")
       html should include ("<th>label</th>")
       html should include ("<th>value</th>")
@@ -5059,14 +5497,17 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "execute admin read/list operations for entity data view and aggregate surfaces" in {
+      Given("the prerequisites for execute admin read/list operations for entity data view and aggregate surfaces")
       val entitysubsystem = _management_console_fixture_subsystem()
       val entityengine = new HttpExecutionEngine(entitysubsystem)
       val entitycollection = _notice_fixture_component(entitysubsystem).entitySpace.entity[_NoticeEntity]("notice")
       val entityid = entitycollection.storage.storeRealm.values.head.id.value
 
       val entitylist = entityengine.execute(HttpRequest.fromPath(HttpRequest.POST, "/admin/entity/list", form = Record.data("component" -> "notice-board", "entity" -> "notice")))
+      When("execute admin read/list operations for entity data view and aggregate surfaces is exercised")
       val entityread = entityengine.execute(HttpRequest.fromPath(HttpRequest.POST, "/admin/entity/read", form = Record.data("component" -> "notice-board", "entity" -> "notice", "id" -> entityid)))
 
+      Then("the observable contract for execute admin read/list operations for entity data view and aggregate surfaces holds")
       entitylist.code shouldBe 200
       entitylist.getString.getOrElse("") should include (entityid)
       entityread.code shouldBe 200
@@ -5322,6 +5763,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "submit aggregate create/update actions through the discovered operation form route" in {
+      Given("the prerequisites for submit aggregate create/update actions through the discovered operation form route")
       val subsystem = _aggregate_fixture_subsystem()
       val engine = new HttpExecutionEngine(subsystem)
       val dispatcher = new RecordingWebOperationDispatcher(WebOperationDispatcher.Local(engine))
@@ -5337,6 +5779,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         )
         .flatMap(_.as[String])
         .unsafeRunSync()
+      When("submit aggregate create/update actions through the discovered operation form route is exercised")
       val updatehtml = server
         ._submit_operation_form(
           _post_form_request("/form/notice-board/notice-aggregate/approve-notice-aggregate", "id=notice_1&approved=true"),
@@ -5347,6 +5790,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         .flatMap(_.as[String])
         .unsafeRunSync()
 
+      Then("the observable contract for submit aggregate create/update actions through the discovered operation form route holds")
       createhtml should include ("notice-board.notice-aggregate.create-notice-aggregate")
       createhtml should include ("result.status")
       updatehtml should include ("notice-board.notice-aggregate.approve-notice-aggregate")
@@ -5357,6 +5801,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "keep form control and security values out of operation arguments" in {
+      Given("the prerequisites for keep form control and security values out of operation arguments")
       val subsystem = _aggregate_fixture_subsystem()
       val engine = new HttpExecutionEngine(subsystem)
       val dispatcher = new RecordingWebOperationDispatcher(WebOperationDispatcher.Local(engine))
@@ -5375,7 +5820,9 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         .flatMap(_.as[String])
         .unsafeRunSync()
 
+      When("keep form control and security values out of operation arguments is exercised")
       val submitted = dispatcher.forms.lastOption.getOrElse(fail("operation form was not dispatched"))
+      Then("the observable contract for keep form control and security values out of operation arguments holds")
       submitted.getString("id") shouldBe Some("notice_1")
       submitted.getString("approved") shouldBe Some("true")
       submitted.getString("crud.success.href") shouldBe None
@@ -5384,6 +5831,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "stage pasted fileContent as managed job input before operation dispatch" in {
+      Given("the prerequisites for stage pasted fileContent as managed job input before operation dispatch")
       val subsystem = _aggregate_fixture_subsystem()
       val engine = new HttpExecutionEngine(subsystem)
       val dispatcher = new RecordingWebOperationDispatcher(WebOperationDispatcher.Local(engine))
@@ -5402,7 +5850,9 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         .flatMap(_.as[String])
         .unsafeRunSync()
 
+      When("stage pasted fileContent as managed job input before operation dispatch is exercised")
       val submitted = dispatcher.forms.lastOption.getOrElse(fail("operation form was not dispatched"))
+      Then("the observable contract for stage pasted fileContent as managed job input before operation dispatch holds")
       submitted.getString("id") shouldBe Some("notice_1")
       submitted.getString("fileContent") shouldBe None
       submitted.getString("cncf.job.input.fieldName") shouldBe Some("fileContent")
@@ -5412,6 +5862,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "preserve hidden form context for result templates without dispatching it as operation arguments" in {
+      Given("the prerequisites for preserve hidden form context for result templates without dispatching it as operation arguments")
       val subsystem = _aggregate_http_fixture_subsystem()
       val selector = "notice-board.notice-aggregate.approve-notice-aggregate"
       val descriptor = WebDescriptor(
@@ -5441,6 +5892,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val dispatcher = new RecordingWebOperationDispatcher(WebOperationDispatcher.Local(engine))
       val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
 
+      When("preserve hidden form context for result templates without dispatching it as operation arguments is exercised")
       val html = server
         ._submit_operation_form(
           _post_form_request(
@@ -5454,6 +5906,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         .flatMap(_.as[String])
         .unsafeRunSync()
 
+      Then("the observable contract for preserve hidden form context for result templates without dispatching it as operation arguments holds")
       html should include ("Context Result")
       html should include ("/web/notice-board/admin/aggregates/notice-aggregate")
       html should include ("/web/notice-board/admin/aggregates/notice-aggregate/notice_1")
@@ -5482,6 +5935,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "await asynchronous command job result through the form job route" in {
+      Given("the prerequisites for await asynchronous command job result through the form job route")
       val subsystem = _aggregate_http_fixture_subsystem()
       val engine = new HttpExecutionEngine(subsystem)
       val dispatcher = new RecordingWebOperationDispatcher(new StaticWebOperationDispatcher(
@@ -5493,6 +5947,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       ))
       val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
 
+      When("await asynchronous command job result through the form job route is exercised")
       val html = server
         ._await_operation_form_job(
           _post_form_request("/form/notice-board/notice/post-notice/jobs/cncf-job-job-1/await", ""),
@@ -5504,6 +5959,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         .flatMap(_.as[String])
         .unsafeRunSync()
 
+      Then("the observable contract for await asynchronous command job result through the form job route holds")
       dispatcher.paths.lastOption shouldBe Some("/job_control/job/await_job_result")
       dispatcher.forms.lastOption.flatMap(_.getString("id")) shouldBe Some("cncf-job-job-1")
       html should include ("created:notice_1")
@@ -5512,6 +5968,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "preserve componentlet alias when awaiting asynchronous command job result through the form job route" in {
+      Given("the prerequisites for preserve componentlet alias when awaiting asynchronous command job result through the form job route")
       val subsystem = _aggregate_http_fixture_subsystem_with_componentlets()
       val engine = new HttpExecutionEngine(subsystem)
       val dispatcher = new RecordingWebOperationDispatcher(new StaticWebOperationDispatcher(
@@ -5523,6 +5980,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       ))
       val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
 
+      When("preserve componentlet alias when awaiting asynchronous command job result through the form job route is exercised")
       val html = server
         ._await_operation_form_job(
           _post_form_request("/form/notice-admin/notice/post-notice/jobs/cncf-job-job-1/await", ""),
@@ -5534,6 +5992,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         .flatMap(_.as[String])
         .unsafeRunSync()
 
+      Then("the observable contract for preserve componentlet alias when awaiting asynchronous command job result through the form job route holds")
       dispatcher.paths.lastOption shouldBe Some("/job_control/job/await_job_result")
       dispatcher.forms.lastOption.flatMap(_.getString("id")) shouldBe Some("cncf-job-job-1")
       html should include ("created:notice_1")
@@ -5543,6 +6002,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render awaited job result through descriptor result template when static template is absent" in {
+      Given("the prerequisites for render awaited job result through descriptor result template when static template is absent")
       val subsystem = _aggregate_http_fixture_subsystem()
       val descriptor = WebDescriptor(
         expose = Map(
@@ -5571,6 +6031,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       ))
       val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
 
+      When("render awaited job result through descriptor result template when static template is absent is exercised")
       val html = server
         ._await_operation_form_job(
           _post_form_request("/form/notice-board/notice/post-notice/jobs/cncf-job-job-1/await", ""),
@@ -5582,6 +6043,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         .flatMap(_.as[String])
         .unsafeRunSync()
 
+      Then("the observable contract for render awaited job result through descriptor result template when static template is absent holds")
       html should include ("Descriptor Await Result")
       html should include ("cncf-job-job-1")
       html should include ("notice_1")
@@ -5592,6 +6054,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "execute aggregate create/update actions through an HTTP ingress-capable component" in {
+      Given("the prerequisites for execute aggregate create/update actions through an HTTP ingress-capable component")
       val subsystem = _aggregate_http_fixture_subsystem()
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
 
@@ -5604,6 +6067,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         )
         .flatMap(_.as[String])
         .unsafeRunSync()
+      When("execute aggregate create/update actions through an HTTP ingress-capable component is exercised")
       val updatehtml = server
         ._submit_operation_form(
           _post_form_request("/form/notice-board/notice-aggregate/approve-notice-aggregate", "id=notice_1&approved=true"),
@@ -5614,6 +6078,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         .flatMap(_.as[String])
         .unsafeRunSync()
 
+      Then("the observable contract for execute aggregate create/update actions through an HTTP ingress-capable component holds")
       createhtml should include ("result.status")
       createhtml should include ("200")
       createhtml should include ("aggregate-created:hello")
@@ -5625,6 +6090,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "build REST operation dispatch requests without executing local operation logic" in {
+      Given("the prerequisites for build REST operation dispatch requests without executing local operation logic")
       val driver = new RecordingRestDriver
       val dispatcher = WebOperationDispatcher.Rest("http://app.example/base", driver)
       val request = HttpRequest.fromPath(
@@ -5635,8 +6101,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         form = Record.data("title" -> "hello world")
       )
 
+      When("build REST operation dispatch requests without executing local operation logic is exercised")
       val response = dispatcher.dispatch(request)
 
+      Then("the observable contract for build REST operation dispatch requests without executing local operation logic holds")
       response.code shouldBe 200
       driver.calls should contain (
         RecordingRestDriver.Call(
@@ -5649,6 +6117,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "specify selector to Web HTML, Form API, and REST operation path mapping" in {
+      Given("the prerequisites for specify selector to Web HTML, Form API, and REST operation path mapping")
       val subsystem = _form_type_fixture_subsystem()
 
       val definition = _renderer.renderOperationFormDefinition(
@@ -5657,8 +6126,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         "notice",
         "post_secret_notice"
       ).map(_.body).getOrElse(fail("operation form definition is missing"))
+      When("specify selector to Web HTML, Form API, and REST operation path mapping is exercised")
       val json = parse(definition).getOrElse(fail("form definition JSON is invalid"))
 
+      Then("the observable contract for specify selector to Web HTML, Form API, and REST operation path mapping holds")
       json.hcursor.downField("selector").as[String].toOption shouldBe Some("notice-board.notice.post-secret-notice")
       json.hcursor.downField("submitPath").as[String].toOption shouldBe Some("/form-api/notice-board/notice/post-secret-notice")
       json.hcursor.downField("htmlPath").as[String].toOption shouldBe Some("/form/notice-board/notice/post-secret-notice")
@@ -5672,6 +6143,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "dispatch Form API POST to the canonical REST operation request" in {
+      Given("the prerequisites for dispatch Form API POST to the canonical REST operation request")
       val subsystem = _form_type_fixture_subsystem()
       val selector = "notice-board.notice.post-secret-notice"
       val descriptor = WebDescriptor(expose = Map(selector -> WebDescriptor.Exposure.Protected))
@@ -5689,6 +6161,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         operationDispatcherOption = Some(dispatcher)
       )
 
+      When("dispatch Form API POST to the canonical REST operation request is exercised")
       val response = server
         ._submit_operation_form_api(
           _post_form_request(
@@ -5701,6 +6174,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         )
         .unsafeRunSync()
 
+      Then("the observable contract for dispatch Form API POST to the canonical REST operation request holds")
       response.status.code shouldBe 200
       dispatcher.paths should contain ("/notice-board/notice/post-secret-notice")
       dispatcher.forms.last.getString("body") shouldBe Some("hello")
@@ -5709,6 +6183,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "reject duplicate canonical aliases before Form API operation dispatch" in {
+      Given("the prerequisites for reject duplicate canonical aliases before Form API operation dispatch")
       val subsystem = _form_type_fixture_subsystem()
       val selector = "notice-board.notice.post-secret-notice"
       val descriptor = WebDescriptor(expose = Map(selector -> WebDescriptor.Exposure.Protected))
@@ -5737,8 +6212,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           "post-secret-notice"
         )
         .unsafeRunSync()
+      When("reject duplicate canonical aliases before Form API operation dispatch is exercised")
       val body = response.as[String].unsafeRunSync()
 
+      Then("the observable contract for reject duplicate canonical aliases before Form API operation dispatch holds")
       response.status.code shouldBe 400
       body should include ("Duplicate property aliases after canonical naming")
       body should include ("accessToken")
@@ -5746,6 +6223,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "promote x-textus-session from form payload into Form API auth headers" in {
+      Given("the prerequisites for promote x-textus-session from form payload into Form API auth headers")
       val subsystem = _form_type_fixture_subsystem()
       val selector = "notice-board.notice.post-secret-notice"
       val descriptor = WebDescriptor(expose = Map(selector -> WebDescriptor.Exposure.Protected))
@@ -5763,6 +6241,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         operationDispatcherOption = Some(dispatcher)
       )
 
+      When("promote x-textus-session from form payload into Form API auth headers is exercised")
       val response = server
         ._submit_operation_form_api(
           _post_form_request(
@@ -5775,11 +6254,13 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         )
         .unsafeRunSync()
 
+      Then("the observable contract for promote x-textus-session from form payload into Form API auth headers holds")
       response.status.code shouldBe 200
       dispatcher.headers.last.getString("x-textus-session") shouldBe Some("form-session")
     }
 
     "keep internal operations invisible from HTML and Form API surfaces" in {
+      Given("the prerequisites for keep internal operations invisible from HTML and Form API surfaces")
       val subsystem = _form_type_fixture_subsystem()
       val selector = "notice-board.notice.post-secret-notice"
       val descriptor = WebDescriptor(expose = Map(selector -> WebDescriptor.Exposure.Internal))
@@ -5792,6 +6273,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         "post-secret-notice",
         descriptor
       )
+      When("keep internal operations invisible from HTML and Form API surfaces is exercised")
       val apiresponse = server
         ._operation_form_api_definition(
           _get_request("/form-api/notice-board/notice/post-secret-notice"),
@@ -5801,12 +6283,14 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         )
         .unsafeRunSync()
 
+      Then("the observable contract for keep internal operations invisible from HTML and Form API surfaces holds")
       descriptor.isFormEnabled(selector) shouldBe false
       htmlform shouldBe None
       apiresponse.status.code shouldBe 404
     }
 
     "return structured JSON error envelope from Form API failures" in {
+      Given("the prerequisites for return structured JSON error envelope from Form API failures")
       val subsystem = _form_type_fixture_subsystem()
       val selector = "notice-board.notice.post-secret-notice"
       val descriptor = WebDescriptor(expose = Map(selector -> WebDescriptor.Exposure.Protected))
@@ -5831,8 +6315,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         )
         .unsafeRunSync()
       val body = response.as[String].unsafeRunSync()
+      When("return structured JSON error envelope from Form API failures is exercised")
       val json = parse(body).getOrElse(fail(body)).hcursor
 
+      Then("the observable contract for return structured JSON error envelope from Form API failures holds")
       response.status.code shouldBe 400
       response.contentType.map(_.mediaType) shouldBe Some(MediaType.application.json)
       json.downField("error").get[String]("message") shouldBe Right("bad request from operation")
@@ -5844,6 +6330,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "return structured YAML error envelope from Form API failures when requested" in {
+      Given("the prerequisites for return structured YAML error envelope from Form API failures when requested")
       val subsystem = _form_type_fixture_subsystem()
       val selector = "notice-board.notice.post-secret-notice"
       val descriptor = WebDescriptor(expose = Map(selector -> WebDescriptor.Exposure.Protected))
@@ -5871,8 +6358,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           "post-secret-notice"
         )
         .unsafeRunSync()
+      When("return structured YAML error envelope from Form API failures when requested is exercised")
       val body = response.as[String].unsafeRunSync()
 
+      Then("the observable contract for return structured YAML error envelope from Form API failures when requested holds")
       response.status.code shouldBe 400
       response.contentType.map(_.mediaType.toString).getOrElse("") should include ("application/yaml")
       body should include ("error:")
@@ -5882,6 +6371,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "record minimal runtime hooks when Web dispatch crosses the operation adapter" in {
+      Given("the prerequisites for record minimal runtime hooks when Web dispatch crosses the operation adapter")
       val subsystem = _form_type_fixture_subsystem()
       val selector = "notice-board.notice.post-secret-notice"
       val descriptor = WebDescriptor(expose = Map(selector -> WebDescriptor.Exposure.Protected))
@@ -5902,6 +6392,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val beforedsl = RuntimeDashboardMetrics.dslChokepointSnapshot.summary.cumulative.total
       val beforeauthorization = RuntimeDashboardMetrics.authorizationDecisionSnapshot.summary.cumulative.total
 
+      When("record minimal runtime hooks when Web dispatch crosses the operation adapter is exercised")
       val response = server
         ._submit_operation_form_api(
           _post_form_request("/form-api/notice-board/notice/post-secret-notice", "body=hello"),
@@ -5911,6 +6402,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         )
         .unsafeRunSync()
 
+      Then("the observable contract for record minimal runtime hooks when Web dispatch crosses the operation adapter holds")
       response.status.code shouldBe 200
       RuntimeDashboardMetrics.htmlSnapshot.summary.cumulative.total shouldBe (beforehtml + 1)
       RuntimeDashboardMetrics.dslChokepointSnapshot.summary.cumulative.total shouldBe (beforedsl + 1)
@@ -5918,6 +6410,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render resolved Web Descriptor summary on component admin page" in {
+      Given("the prerequisites for render resolved Web Descriptor summary on component admin page")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
       val componentpath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)
@@ -5926,8 +6419,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         apps = Vector(WebDescriptor.App("component-dashboard", s"/web/${componentpath}/dashboard", "dashboard"))
       )
 
+      When("render resolved Web Descriptor summary on component admin page is exercised")
       val html = _renderer.renderComponentAdmin(subsystem, component.name, descriptor).map(_.body).getOrElse(fail("component admin is missing"))
 
+      Then("the observable contract for render resolved Web Descriptor summary on component admin page holds")
       html should include ("Web Descriptor")
       html should include ("configured")
       html should include (s"${componentpath}.service.operation")
@@ -5936,13 +6431,16 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render system performance detail page" in {
+      Given("the prerequisites for render system performance detail page")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       RuntimeDashboardMetrics.recordHtmlRequest("GET", "/web/system/dashboard", 200, 12L)
       RuntimeDashboardMetrics.recordHtmlRequest("GET", "/missing", 404, 34L)
       RuntimeDashboardMetrics.recordAuthorizationDecision(denied = true, Some("capability"))
 
+      When("render system performance detail page is exercised")
       val html = _renderer.renderSystemPerformance(subsystem).body
 
+      Then("the observable contract for render system performance detail page holds")
       html should include ("System Performance")
       html should include ("/web/assets/bootstrap.min.css")
       html should not include ("cdn.jsdelivr")
@@ -5984,6 +6482,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render structured observability metrics page" in {
+      Given("the prerequisites for render structured observability metrics page")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       RuntimeDashboardMetrics.recordHtmlRequest("GET", "/web/test", 200, 15L)
       RuntimeDashboardMetrics.recordHtmlRequest("GET", "/web/missing", 404, 25L)
@@ -6008,8 +6507,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
 
       val html = _renderer.renderSystemAdminObservabilityMetrics(subsystem).body
       val home = _renderer.renderSystemAdminObservability(subsystem).body
+      When("render structured observability metrics page is exercised")
       val performance = _renderer.renderSystemPerformance(subsystem).body
 
+      Then("the observable contract for render structured observability metrics page holds")
       html should include ("Observability Metrics")
       html should include ("web.request")
       html should include ("action.execution")
@@ -6025,6 +6526,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render structured observability drill-down pages" in {
+      Given("the prerequisites for render structured observability drill-down pages")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       val previous = Record.dataAuto(
         "diagnosticKey" -> "storage_missing",
@@ -6070,11 +6572,13 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val performance = _renderer.renderSystemPerformance(subsystem).body
       val home = _renderer.renderSystemAdminObservability(subsystem).body
       val diagnostics = _renderer.renderSystemAdminObservabilityDiagnostics().body
+      When("render structured observability drill-down pages is exercised")
       val detail = _renderer
         .renderSystemAdminObservabilityDiagnostic("blob", "ob04_payload_missing")
         .map(_.body)
         .getOrElse(fail("diagnostic detail is missing"))
 
+      Then("the observable contract for render structured observability drill-down pages holds")
       performance should include ("/web/system/admin/observability/diagnostics/blob/ob04_payload_missing")
       home should include ("System Observability")
       home should include ("Diagnostic Payload Externalization")
@@ -6094,11 +6598,14 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render document and console entry pages without inline operation execution" in {
+      Given("the prerequisites for render document and console entry pages without inline operation execution")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
 
       val manual = _renderer.render(subsystem, "document").map(_.body).getOrElse(fail("documents page is missing"))
+      When("render document and console entry pages without inline operation execution is exercised")
       val console = _renderer.render(subsystem, "console").map(_.body).getOrElse(fail("console is missing"))
 
+      Then("the observable contract for render document and console entry pages without inline operation execution holds")
       manual should include ("System Documents")
       manual should include ("/web/system/dashboard")
       manual should include ("/web/console")
@@ -6114,6 +6621,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "keep system documents and console available while filtering component app entries by WebDescriptor apps" in {
+      Given("the prerequisites for keep system documents and console available while filtering component app entries by WebDescriptor apps")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       val descriptor = WebDescriptor(
         apps = Vector(WebDescriptor.App("document", "/web/document", "document"))
@@ -6123,14 +6631,17 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val console = _renderer.render(subsystem, "console", webDescriptor = descriptor)
       val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
       val componentpath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)
+      When("keep system documents and console available while filtering component app entries by WebDescriptor apps is exercised")
       val componentforms = _renderer.render(subsystem, componentpath, webDescriptor = descriptor)
 
+      Then("the observable contract for keep system documents and console available while filtering component app entries by WebDescriptor apps holds")
       manual.map(_.body).getOrElse(fail("documents page is missing")) should include ("System Documents")
       console.map(_.body).getOrElse(fail("console is missing")) should include ("System Console")
       componentforms shouldBe None
     }
 
     "allow component dashboard app entries by descriptor path" in {
+      Given("the prerequisites for allow component dashboard app entries by descriptor path")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
       val componentpath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)
@@ -6138,17 +6649,22 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         apps = Vector(WebDescriptor.App("component-dashboard", s"/web/${componentpath}/dashboard", "dashboard"))
       )
 
+      When("allow component dashboard app entries by descriptor path is exercised")
       val page = _renderer.render(subsystem, componentpath, Vector("dashboard"), descriptor)
 
+      Then("the observable contract for allow component dashboard app entries by descriptor path holds")
       page.map(_.body).getOrElse(fail("dashboard is missing")) should include (s"${component.name} Dashboard")
     }
 
     "render component HTML form operation index" in {
+      Given("the prerequisites for render component HTML form operation index")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
 
+      When("render component HTML form operation index is exercised")
       val html = _renderer.renderFormIndex(subsystem, component.name).map(_.body).getOrElse(fail("form index is missing"))
 
+      Then("the observable contract for render component HTML form operation index holds")
       html should include (s"${component.name} Forms")
       html should include ("/web/assets/bootstrap.min.css")
       html should include ("card admin-card")
@@ -6160,6 +6676,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render component HTML operation form" in {
+      Given("the prerequisites for render component HTML operation form")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
       val service = component.protocol.services.services.headOption.getOrElse(fail("service is missing"))
@@ -6168,8 +6685,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val servicepath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(service.name)
       val operationpath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(operation.name)
 
+      When("render component HTML operation form is exercised")
       val html = _renderer.renderOperationForm(subsystem, component.name, service.name, operation.name).map(_.body).getOrElse(fail("operation form is missing"))
 
+      Then("the observable contract for render component HTML operation form holds")
       html should include ("<form method=\"post\"")
       html should include ("data-textus-page=\"static-form-operation\"")
       html should include ("data-textus-section=\"operation-form\"")
@@ -6191,6 +6710,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render operation form UX profile metadata" in {
+      Given("the prerequisites for render operation form UX profile metadata")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
       val service = component.protocol.services.services.headOption.getOrElse(fail("service is missing"))
@@ -6213,19 +6733,23 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
 
       val globalhtml = _renderer.renderOperationForm(subsystem, component.name, service.name, operation.name, webdescriptor = globaldescriptor).map(_.body).getOrElse(fail("operation form is missing"))
       val apphtml = _renderer.renderOperationForm(subsystem, component.name, service.name, operation.name, webdescriptor = appdescriptor).map(_.body).getOrElse(fail("operation form is missing"))
+      When("render operation form UX profile metadata is exercised")
       val formhtml = _renderer.renderOperationForm(subsystem, component.name, service.name, operation.name, webdescriptor = formdescriptor).map(_.body).getOrElse(fail("operation form is missing"))
 
+      Then("the observable contract for render operation form UX profile metadata holds")
       globalhtml should include ("data-textus-ux-profile=\"compact\"")
       apphtml should include ("data-textus-ux-profile=\"material\"")
       formhtml should include ("data-textus-ux-profile=\"admin\"")
     }
 
     "append development debug panel to operation form error redisplay" in {
+      Given("the prerequisites for append development debug panel to operation form error redisplay")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
       val service = component.protocol.services.services.headOption.getOrElse(fail("service is missing"))
       val operation = service.operations.operations.toVector.headOption.getOrElse(fail("operation is missing"))
 
+      When("append development debug panel to operation form error redisplay is exercised")
       val html = _renderer.renderOperationForm(
         subsystem,
         component.name,
@@ -6260,6 +6784,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         showExecutionDebugPanel = true
       ).map(_.body).getOrElse(fail("operation form is missing"))
 
+      Then("the observable contract for append development debug panel to operation form error redisplay holds")
       html should include ("Form submission failed.")
       html should include ("textus-execution-debug-panel")
       html should not include ("error.diagnostic.trace.id")
@@ -6274,11 +6799,13 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "ignore external debug panel flags on operation form input pages" in {
+      Given("the prerequisites for ignore external debug panel flags on operation form input pages")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
       val service = component.protocol.services.services.headOption.getOrElse(fail("service is missing"))
       val operation = service.operations.operations.toVector.headOption.getOrElse(fail("operation is missing"))
 
+      When("ignore external debug panel flags on operation form input pages is exercised")
       val html = _renderer.renderOperationForm(
         subsystem,
         component.name,
@@ -6288,10 +6815,12 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         operationMode = OperationMode.Develop
       ).map(_.body).getOrElse(fail("operation form is missing"))
 
+      Then("the observable contract for ignore external debug panel flags on operation form input pages holds")
       html should not include ("textus-execution-debug-panel")
     }
 
     "apply app-scoped assets to the component HTML form index" in {
+      Given("the prerequisites for apply app-scoped assets to the component HTML form index")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
       val componentpath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)
@@ -6313,8 +6842,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         )
       )
 
+      When("apply app-scoped assets to the component HTML form index is exercised")
       val html = _renderer.renderFormIndex(subsystem, component.name, descriptor).map(_.body).getOrElse(fail("form index is missing"))
 
+      Then("the observable contract for apply app-scoped assets to the component HTML form index holds")
       html should include ("/web/component/assets/forms.css")
       html should include ("/web/component/assets/forms.js")
       html should not include ("/web/component/assets/operation.css")
@@ -6322,6 +6853,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "apply app and form scoped assets to operation input forms" in {
+      Given("the prerequisites for apply app and form scoped assets to operation input forms")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
       val service = component.protocol.services.services.headOption.getOrElse(fail("service is missing"))
@@ -6355,8 +6887,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         )
       )
 
+      When("apply app and form scoped assets to operation input forms is exercised")
       val html = _renderer.renderOperationForm(subsystem, component.name, service.name, operation.name, descriptor).map(_.body).getOrElse(fail("operation form is missing"))
 
+      Then("the observable contract for apply app and form scoped assets to operation input forms holds")
       html should include ("/web/component/assets/forms.css")
       html should include ("/web/component/assets/forms.js")
       html should include ("/web/component/assets/operation.css")
@@ -6366,6 +6900,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "filter HTML form operations by WebDescriptor form controls" in {
+      Given("the prerequisites for filter HTML form operations by WebDescriptor form controls")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
       val service = component.protocol.services.services.headOption.getOrElse(fail("service is missing"))
@@ -6381,13 +6916,16 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       )
 
       val index = _renderer.renderFormIndex(subsystem, component.name, descriptor).map(_.body).getOrElse(fail("form index is missing"))
+      When("filter HTML form operations by WebDescriptor form controls is exercised")
       val form = _renderer.renderOperationForm(subsystem, component.name, service.name, operation.name, descriptor)
 
+      Then("the observable contract for filter HTML form operations by WebDescriptor form controls holds")
       index should not include (path)
       form shouldBe None
     }
 
     "allow exposed HTML form operations when no explicit form control exists" in {
+      Given("the prerequisites for allow exposed HTML form operations when no explicit form control exists")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
       val service = component.protocol.services.services.headOption.getOrElse(fail("service is missing"))
@@ -6400,14 +6938,18 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         expose = Map(selector -> WebDescriptor.Exposure.Protected)
       )
 
+      When("allow exposed HTML form operations when no explicit form control exists is exercised")
       val form = _renderer.renderOperationForm(subsystem, component.name, service.name, operation.name, descriptor)
 
+      Then("the observable contract for allow exposed HTML form operations when no explicit form control exists holds")
       form.map(_.body).getOrElse(fail("operation form is missing")) should include (s"/form/${componentpath}/${servicepath}/${operationpath}")
     }
 
     "render HTML operation form with query-provided initial fields" in {
+      Given("the prerequisites for render HTML operation form with query-provided initial fields")
       val subsystem = _aggregate_fixture_subsystem()
 
+      When("render HTML operation form with query-provided initial fields is exercised")
       val html = _renderer.renderOperationForm(
         subsystem,
         "notice_board",
@@ -6421,6 +6963,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         )
       ).map(_.body).getOrElse(fail("operation form is missing"))
 
+      Then("the observable contract for render HTML operation form with query-provided initial fields holds")
       html should include ("name=\"id\"")
       html should include ("type=\"text\"")
       html should include ("required")
@@ -6434,6 +6977,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render descriptor-defined select and hidden controls for operation parameters" in {
+      Given("the prerequisites for render descriptor-defined select and hidden controls for operation parameters")
       val subsystem = _form_type_fixture_subsystem()
       val selector = "notice-board.notice.post-secret-notice"
       val descriptor = WebDescriptor(
@@ -6451,6 +6995,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         ))
       )
 
+      When("render descriptor-defined select and hidden controls for operation parameters is exercised")
       val html = _renderer.renderOperationForm(
         subsystem,
         "notice_board",
@@ -6460,6 +7005,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         values = Map("body" -> "hello", "accessToken" -> "abc")
       ).map(_.body).getOrElse(fail("operation form is missing"))
 
+      Then("the observable contract for render descriptor-defined select and hidden controls for operation parameters holds")
       html should include ("<select")
       html should include ("<option value=\"hello\" selected>")
       html should include ("Notice body")
@@ -6470,6 +7016,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "serve operation form definition API from the same resolved Web schema" in {
+      Given("the prerequisites for serve operation form definition API from the same resolved Web schema")
       val subsystem = _form_type_fixture_subsystem()
       val selector = "notice-board.notice.post-secret-notice"
       val descriptor = WebDescriptor(
@@ -6497,8 +7044,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         )
         .unsafeRunSync()
       val json = parse(response.as[String].unsafeRunSync()).getOrElse(fail("form definition JSON is invalid"))
+      When("serve operation form definition API from the same resolved Web schema is exercised")
       val fields = json.hcursor.downField("fields")
 
+      Then("the observable contract for serve operation form definition API from the same resolved Web schema holds")
       response.status.code shouldBe 200
       response.contentType.map(_.mediaType) shouldBe Some(org.http4s.MediaType.application.json)
       json.hcursor.downField("selector").as[String].toOption shouldBe Some(selector)
@@ -6520,6 +7069,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
 
     "typed update carriers" which {
       "project typed update commands into form definitions and generated controls" in {
+      Given("the prerequisites for project typed update commands into form definitions and generated controls")
       val component = new org.goldenport.cncf.component.Component() {
         override def operationDefinitions: Vector[CmlOperationDefinition] =
           Vector(CmlOperationDefinition(
@@ -6559,6 +7109,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         .unsafeRunSync()
       val json = parse(response.as[String].unsafeRunSync()).getOrElse(fail("form definition JSON is invalid"))
       val fields = json.hcursor.downField("fields")
+      When("project typed update commands into form definitions and generated controls is exercised")
       val html = _renderer.renderOperationForm(
         subsystem,
         "notice-board",
@@ -6566,6 +7117,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         "update-notice"
       ).map(_.body).getOrElse(fail("operation form is missing"))
 
+      Then("the observable contract for project typed update commands into form definitions and generated controls holds")
       response.status.code shouldBe 200
       json.hcursor.downField("source").as[String].toOption shouldBe Some("Schema")
       fields.downN(0).downField("name").as[String].toOption shouldBe Some("tags")
@@ -6799,6 +7351,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render operation image binding controls and Form API metadata" in {
+      Given("the prerequisites for render operation image binding controls and Form API metadata")
       val component = new org.goldenport.cncf.component.Component() {
         override def operationDefinitions: Vector[CmlOperationDefinition] =
           Vector(CmlOperationDefinition(
@@ -6843,9 +7396,11 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         "register-notice"
       ).map(_.body).getOrElse(fail("operation form definition is missing"))
       val json = parse(definition).getOrElse(fail("form definition JSON is invalid"))
+      When("render operation image binding controls and Form API metadata is exercised")
       val fieldnames = json.hcursor.downField("fields").as[Vector[Json]].toOption.getOrElse(Vector.empty)
         .flatMap(_.hcursor.downField("name").as[String].toOption)
 
+      Then("the observable contract for render operation image binding controls and Form API metadata holds")
       html should include ("enctype=\"multipart/form-data\"")
       html should include ("Image Attachments")
       html should include ("name=\"imageAttachments.0.role\"")
@@ -6861,6 +7416,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "hide disallowed image binding input modes from operation forms" in {
+      Given("the prerequisites for hide disallowed image binding input modes from operation forms")
       val component = new org.goldenport.cncf.component.Component() {
         override def operationDefinitions: Vector[CmlOperationDefinition] =
           Vector(CmlOperationDefinition(
@@ -6891,6 +7447,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       _initialize_component("notice_board", component, protocol)
       val subsystem = DefaultSubsystemFactory.default(Some("server")).add(Vector(component))
 
+      When("hide disallowed image binding input modes from operation forms is exercised")
       val html = _renderer.renderOperationForm(
         subsystem,
         "notice-board",
@@ -6898,6 +7455,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         "attach-notice-image"
       ).map(_.body).getOrElse(fail("operation form is missing"))
 
+      Then("the observable contract for hide disallowed image binding input modes from operation forms holds")
       html should include ("Image Attachments")
       html should include ("name=\"imageAttachments.0.blobId\"")
       html should not include ("name=\"imageAttachments.0.file\"")
@@ -6905,6 +7463,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render operation association binding controls and metadata" in {
+      Given("the prerequisites for render operation association binding controls and metadata")
       val component = new org.goldenport.cncf.component.Component() {
         override def operationDefinitions: Vector[CmlOperationDefinition] =
           Vector(CmlOperationDefinition(
@@ -6950,9 +7509,11 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         "register-notice-tag"
       ).map(_.body).getOrElse(fail("operation form definition is missing"))
       val json = parse(definition).getOrElse(fail("form definition JSON is invalid"))
+      When("render operation association binding controls and metadata is exercised")
       val fieldnames = json.hcursor.downField("fields").as[Vector[Json]].toOption.getOrElse(Vector.empty)
         .flatMap(_.hcursor.downField("name").as[String].toOption)
 
+      Then("the observable contract for render operation association binding controls and metadata holds")
       html should include ("Associations")
       html should include ("name=\"tagId\"")
       html should include ("name=\"tagSortOrder\"")
@@ -6963,6 +7524,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "preserve declared binding parameters during operation form validation" in {
+      Given("the prerequisites for preserve declared binding parameters during operation form validation")
       val component = new org.goldenport.cncf.component.Component() {
         override def operationDefinitions: Vector[CmlOperationDefinition] =
           Vector(CmlOperationDefinition(
@@ -7002,6 +7564,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         "register-notice-tag",
         Map("tagId" -> "tag-1")
       ).getOrElse(fail("operation validation is missing"))
+      When("preserve declared binding parameters during operation form validation is exercised")
       val missing = _renderer.validateOperationForm(
         subsystem,
         "notice-board",
@@ -7010,12 +7573,14 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         Map.empty
       ).getOrElse(fail("operation validation is missing"))
 
+      Then("the observable contract for preserve declared binding parameters during operation form validation holds")
       valid.valid shouldBe true
       missing.valid shouldBe false
       missing.errors.flatMap(_.field) should contain ("tagId")
     }
 
     "avoid duplicate binding virtual fields for declared operation parameters" in {
+      Given("the prerequisites for avoid duplicate binding virtual fields for declared operation parameters")
       val component = new org.goldenport.cncf.component.Component() {
         override def operationDefinitions: Vector[CmlOperationDefinition] =
           Vector(CmlOperationDefinition(
@@ -7061,15 +7626,18 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         "register-notice-tag"
       ).map(_.body).getOrElse(fail("operation form definition is missing"))
       val json = parse(definition).getOrElse(fail("form definition JSON is invalid"))
+      When("avoid duplicate binding virtual fields for declared operation parameters is exercised")
       val fieldnames = json.hcursor.downField("fields").as[Vector[Json]].toOption.getOrElse(Vector.empty)
         .flatMap(_.hcursor.downField("name").as[String].toOption)
 
+      Then("the observable contract for avoid duplicate binding virtual fields for declared operation parameters holds")
       fieldnames.count(_ == "tagId") shouldBe 1
       "name=\"tagId\"".r.findAllIn(html).size shouldBe 1
       html should not include ("Tag Id Target id")
     }
 
     "skip image attachment controls for non-attachment image operations" in {
+      Given("the prerequisites for skip image attachment controls for non-attachment image operations")
       val component = new org.goldenport.cncf.component.Component() {
         override def operationDefinitions: Vector[CmlOperationDefinition] =
           Vector(CmlOperationDefinition(
@@ -7112,9 +7680,11 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         "register-blob-like"
       ).map(_.body).getOrElse(fail("operation form definition is missing"))
       val json = parse(definition).getOrElse(fail("form definition JSON is invalid"))
+      When("skip image attachment controls for non-attachment image operations is exercised")
       val fieldnames = json.hcursor.downField("fields").as[Vector[Json]].toOption.getOrElse(Vector.empty)
         .flatMap(_.hcursor.downField("name").as[String].toOption)
 
+      Then("the observable contract for skip image attachment controls for non-attachment image operations holds")
       html should not include ("Image Attachments")
       html should not include ("imageAttachments.0.file")
       fieldnames should contain ("payload")
@@ -7123,6 +7693,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "serve admin entity form definition API from EntityRuntimeDescriptor schema" in {
+      Given("the prerequisites for serve admin entity form definition API from EntityRuntimeDescriptor schema")
       val descriptor = ComponentDescriptor(
         componentName = Some("notice_board"),
         entityRuntimeDescriptors = Vector(
@@ -7158,8 +7729,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         )
         .unsafeRunSync()
       val json = parse(response.as[String].unsafeRunSync()).getOrElse(fail("entity form definition JSON is invalid"))
+      When("serve admin entity form definition API from EntityRuntimeDescriptor schema is exercised")
       val fields = json.hcursor.downField("fields")
 
+      Then("the observable contract for serve admin entity form definition API from EntityRuntimeDescriptor schema holds")
       response.status.code shouldBe 200
       response.contentType.map(_.mediaType) shouldBe Some(org.http4s.MediaType.application.json)
       json.hcursor.downField("selector").as[String].toOption shouldBe Some("notice-board.entity.notice")
@@ -7176,6 +7749,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "serve admin entity update form definition API from detail view fields" in {
+      Given("the prerequisites for serve admin entity update form definition API from detail view fields")
       val subsystem = _management_console_fixture_subsystem(
         schema = _schema("id", "title", "author"),
         viewfields = Map(
@@ -7195,8 +7769,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         )
         .unsafeRunSync()
       val json = parse(response.as[String].unsafeRunSync()).getOrElse(fail("entity update form definition JSON is invalid"))
+      When("serve admin entity update form definition API from detail view fields is exercised")
       val fields = json.hcursor.downField("fields")
 
+      Then("the observable contract for serve admin entity update form definition API from detail view fields holds")
       response.status.code shouldBe 200
       response.contentType.map(_.mediaType) shouldBe Some(org.http4s.MediaType.application.json)
       json.hcursor.downField("selector").as[String].toOption shouldBe Some("notice-board.entity.notice")
@@ -7209,9 +7785,11 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "allow anonymous admin form API by the develop anonymous admin default" in {
+      Given("the prerequisites for allow anonymous admin form API by the develop anonymous admin default")
       val subsystem = _management_console_fixture_subsystem()
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
 
+      When("allow anonymous admin form API by the develop anonymous admin default is exercised")
       val response = server
         ._component_admin_entity_form_api_definition(
           _get_request("/form-api/notice-board/admin/entities/notice"),
@@ -7220,10 +7798,12 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         )
         .unsafeRunSync()
 
+      Then("the observable contract for allow anonymous admin form API by the develop anonymous admin default holds")
       response.status.code shouldBe 200
     }
 
     "deny anonymous admin form API when develop anonymous admin is disabled" in {
+      Given("the prerequisites for deny anonymous admin form API when develop anonymous admin is disabled")
       val subsystem = _management_console_fixture_subsystem(
         configuration = Configuration(Map(
           RuntimeConfig.WebDevelopAnonymousAdminKey -> ConfigurationValue.StringValue("false")
@@ -7239,8 +7819,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         )
         .unsafeRunSync()
       val body = response.as[String].unsafeRunSync()
+      When("deny anonymous admin form API when develop anonymous admin is disabled is exercised")
       val json = parse(body).getOrElse(fail(body)).hcursor
 
+      Then("the observable contract for deny anonymous admin form API when develop anonymous admin is disabled holds")
       response.status.code shouldBe 403
       response.contentType.map(_.mediaType) shouldBe Some(org.http4s.MediaType.application.json)
       json.downField("error").get[String]("message") shouldBe Right("Forbidden")
@@ -7249,6 +7831,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "include status and detail code in plain-text structured API errors" in {
+      Given("the prerequisites for include status and detail code in plain-text structured API errors")
       val subsystem = _management_console_fixture_subsystem(
         configuration = Configuration(Map(
           RuntimeConfig.WebDevelopAnonymousAdminKey -> ConfigurationValue.StringValue("false")
@@ -7265,8 +7848,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           "notice"
         )
         .unsafeRunSync()
+      When("include status and detail code in plain-text structured API errors is exercised")
       val body = response.as[String].unsafeRunSync()
 
+      Then("the observable contract for include status and detail code in plain-text structured API errors holds")
       response.status.code shouldBe 403
       response.contentType.map(_.mediaType) shouldBe Some(org.http4s.MediaType.text.plain)
       body should include ("Forbidden")
@@ -7276,6 +7861,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "deny anonymous admin form API in production operation mode" in {
+      Given("the prerequisites for deny anonymous admin form API in production operation mode")
       val subsystem = _management_console_fixture_subsystem(
         configuration = Configuration(Map(
           RuntimeConfig.OperationModeKey -> ConfigurationValue.StringValue("production")
@@ -7283,6 +7869,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       )
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
 
+      When("deny anonymous admin form API in production operation mode is exercised")
       val response = server
         ._component_admin_entity_form_api_definition(
           _get_request("/form-api/notice-board/admin/entities/notice"),
@@ -7291,10 +7878,12 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         )
         .unsafeRunSync()
 
+      Then("the observable contract for deny anonymous admin form API in production operation mode holds")
       response.status.code shouldBe 403
     }
 
     "deny anonymous component admin HTML route in production operation mode" in {
+      Given("the prerequisites for deny anonymous component admin HTML route in production operation mode")
       val subsystem = _management_console_fixture_subsystem(
         configuration = Configuration(Map(
           RuntimeConfig.OperationModeKey -> ConfigurationValue.StringValue("production")
@@ -7307,8 +7896,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         .orNotFound
         .run(_get_request("/web/notice-board/admin/entities/notice"))
         .unsafeRunSync()
+      When("deny anonymous component admin HTML route in production operation mode is exercised")
       val body = response.as[String].unsafeRunSync()
 
+      Then("the observable contract for deny anonymous component admin HTML route in production operation mode holds")
       response.status.code shouldBe 403
       response.contentType.map(_.mediaType) shouldBe Some(org.http4s.MediaType.text.html)
       body should include ("Request failed")
@@ -7321,6 +7912,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "deny forged query/header admin identity in production operation mode" in {
+      Given("the prerequisites for deny forged query/header admin identity in production operation mode")
       val subsystem = _management_console_fixture_subsystem(
         configuration = Configuration(Map(
           RuntimeConfig.OperationModeKey -> ConfigurationValue.StringValue("production"),
@@ -7329,16 +7921,19 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       )
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
 
+      When("deny forged query/header admin identity in production operation mode is exercised")
       val response = server
         .routes(null)
         .orNotFound
         .run(_get_request("/web/notice-board/admin/entities/notice?principalId=admin-test&role=component_operator&privilege=operator"))
         .unsafeRunSync()
 
+      Then("the observable contract for deny forged query/header admin identity in production operation mode holds")
       response.status.code shouldBe 403
     }
 
     "strip forged authorization fields before resolving the production admin session" in {
+      Given("the prerequisites for strip forged authorization fields before resolving the production admin session")
       val subsystem = _management_console_fixture_subsystem(
         configuration = Configuration(Map(
           RuntimeConfig.OperationModeKey -> ConfigurationValue.StringValue("production"),
@@ -7358,6 +7953,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       )
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
 
+      When("strip forged authorization fields before resolving the production admin session is exercised")
       val response = server
         .routes(null)
         .orNotFound
@@ -7369,10 +7965,12 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         )
         .unsafeRunSync()
 
+      Then("the observable contract for strip forged authorization fields before resolving the production admin session holds")
       response.status.code shouldBe 403
     }
 
     "allow component operator session to use component admin in production when explicitly enabled" in {
+      Given("the prerequisites for allow component operator session to use component admin in production when explicitly enabled")
       val subsystem = _management_console_fixture_subsystem(
         configuration = Configuration(Map(
           RuntimeConfig.OperationModeKey -> ConfigurationValue.StringValue("production"),
@@ -7392,16 +7990,19 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       )
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
 
+      When("allow component operator session to use component admin in production when explicitly enabled is exercised")
       val response = server
         .routes(null)
         .orNotFound
         .run(_with_session(_get_request("/web/notice-board/admin/entities/notice"), "component-admin-session"))
         .unsafeRunSync()
 
+      Then("the observable contract for allow component operator session to use component admin in production when explicitly enabled holds")
       response.status.code shouldBe 200
     }
 
     "deny system admin role when production privilege ceiling is only user" in {
+      Given("the prerequisites for deny system admin role when production privilege ceiling is only user")
       val subsystem = _management_console_fixture_subsystem(
         configuration = Configuration(Map(
           RuntimeConfig.OperationModeKey -> ConfigurationValue.StringValue("production"),
@@ -7421,16 +8022,19 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       )
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
 
+      When("deny system admin role when production privilege ceiling is only user is exercised")
       val response = server
         .routes(null)
         .orNotFound
         .run(_with_session(_get_request("/web/system/admin"), "weak-system-admin-session"))
         .unsafeRunSync()
 
+      Then("the observable contract for deny system admin role when production privilege ceiling is only user holds")
       response.status.code shouldBe 403
     }
 
     "allow system admin session to use system admin in production when explicitly enabled" in {
+      Given("the prerequisites for allow system admin session to use system admin in production when explicitly enabled")
       val subsystem = _management_console_fixture_subsystem(
         configuration = Configuration(Map(
           RuntimeConfig.OperationModeKey -> ConfigurationValue.StringValue("production"),
@@ -7460,18 +8064,21 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         .orNotFound
         .run(_with_session(_get_request("/web/system/performance"), "system-admin-session"))
         .unsafeRunSync()
+      When("allow system admin session to use system admin in production when explicitly enabled is exercised")
       val assembly = server
         .routes(null)
         .orNotFound
         .run(_with_session(_get_request("/web/system/admin/assembly/report"), "system-admin-session"))
         .unsafeRunSync()
 
+      Then("the observable contract for allow system admin session to use system admin in production when explicitly enabled holds")
       response.status.code shouldBe 200
       performance.status.code shouldBe 200
       assembly.status.code shouldBe 200
     }
 
     "allow audit viewer session to read production admin jobs but not system admin home" in {
+      Given("the prerequisites for allow audit viewer session to read production admin jobs but not system admin home")
       val subsystem = _management_console_fixture_subsystem(
         configuration = Configuration(Map(
           RuntimeConfig.OperationModeKey -> ConfigurationValue.StringValue("production"),
@@ -7501,18 +8108,21 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         .orNotFound
         .run(_with_session(_get_request("/web/system/admin"), "audit-viewer-session"))
         .unsafeRunSync()
+      When("allow audit viewer session to read production admin jobs but not system admin home is exercised")
       val performance = server
         .routes(null)
         .orNotFound
         .run(_with_session(_get_request("/web/system/performance"), "audit-viewer-session"))
         .unsafeRunSync()
 
+      Then("the observable contract for allow audit viewer session to read production admin jobs but not system admin home holds")
       jobs.status.code shouldBe 200
       home.status.code shouldBe 403
       performance.status.code shouldBe 403
     }
 
     "allow authenticated admin form API when develop anonymous admin is disabled" in {
+      Given("the prerequisites for allow authenticated admin form API when develop anonymous admin is disabled")
       val subsystem = _management_console_fixture_subsystem(
         configuration = Configuration(Map(
           RuntimeConfig.WebDevelopAnonymousAdminKey -> ConfigurationValue.StringValue("false")
@@ -7520,6 +8130,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       )
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
 
+      When("allow authenticated admin form API when develop anonymous admin is disabled is exercised")
       val response = server
         ._component_admin_entity_form_api_definition(
           _get_request("/form-api/notice-board/admin/entities/notice?principalId=admin-test"),
@@ -7528,10 +8139,12 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         )
         .unsafeRunSync()
 
+      Then("the observable contract for allow authenticated admin form API when develop anonymous admin is disabled holds")
       response.status.code shouldBe 200
     }
 
     "deny anonymous admin entity create POST in production operation mode before dispatch" in {
+      Given("the prerequisites for deny anonymous admin entity create POST in production operation mode before dispatch")
       val subsystem = _management_console_fixture_subsystem(
         configuration = Configuration(Map(
           RuntimeConfig.OperationModeKey -> ConfigurationValue.StringValue("production")
@@ -7541,6 +8154,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val dispatcher = new RecordingWebOperationDispatcher(WebOperationDispatcher.Local(engine))
       val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
 
+      When("deny anonymous admin entity create POST in production operation mode before dispatch is exercised")
       val response = server
         ._submit_component_admin_entity_create(
           _post_form_request(
@@ -7552,11 +8166,13 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         )
         .unsafeRunSync()
 
+      Then("the observable contract for deny anonymous admin entity create POST in production operation mode before dispatch holds")
       response.status.code shouldBe 403
       dispatcher.paths should not contain ("/admin/entity/create")
     }
 
     "allow component operator admin entity create POST in production operation mode" in {
+      Given("the prerequisites for allow component operator admin entity create POST in production operation mode")
       val subsystem = _management_console_fixture_subsystem(
         configuration = Configuration(Map(
           RuntimeConfig.OperationModeKey -> ConfigurationValue.StringValue("production"),
@@ -7578,6 +8194,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val dispatcher = new RecordingWebOperationDispatcher(WebOperationDispatcher.Local(engine))
       val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
 
+      When("allow component operator admin entity create POST in production operation mode is exercised")
       val response = server
         ._submit_component_admin_entity_create(
           _with_session(
@@ -7592,11 +8209,13 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         )
         .unsafeRunSync()
 
+      Then("the observable contract for allow component operator admin entity create POST in production operation mode holds")
       response.status.code shouldBe 200
       dispatcher.paths should contain ("/admin/entity/create")
     }
 
     "serve admin entity form definition API from generated companion schema" in {
+      Given("the prerequisites for serve admin entity form definition API from generated companion schema")
       val component = TestComponentFactory
         .create("generated_schema_component", Protocol.empty)
         .withComponentDescriptors(Vector(ComponentDescriptor(
@@ -7622,8 +8241,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         .unsafeRunSync()
       val json = parse(response.as[String].unsafeRunSync()).getOrElse(fail("entity form definition JSON is invalid"))
       val fields = json.hcursor.downField("fields").as[Vector[Json]].toOption.getOrElse(Vector.empty)
+      When("serve admin entity form definition API from generated companion schema is exercised")
       val names = fields.flatMap(_.hcursor.downField("name").as[String].toOption)
 
+      Then("the observable contract for serve admin entity form definition API from generated companion schema holds")
       response.status.code shouldBe 200
       json.hcursor.downField("source").as[String].toOption shouldBe Some("Schema")
       names shouldBe Vector("id", "shortid", "name", "status")
@@ -7638,6 +8259,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "serve admin entity form definition API from merged Schema and WebDescriptor controls" in {
+      Given("the prerequisites for serve admin entity form definition API from merged Schema and WebDescriptor controls")
       val (subsystem, descriptor) = _entity_schema_web_descriptor_fixture()
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem, Some(descriptor)))
 
@@ -7652,8 +8274,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val fields = _json_fields(json)
       val names = _json_field_names(fields)
       val body = _json_field(fields, "body")
+      When("serve admin entity form definition API from merged Schema and WebDescriptor controls is exercised")
       val status = _json_field(fields, "status")
 
+      Then("the observable contract for serve admin entity form definition API from merged Schema and WebDescriptor controls holds")
       response.status.code shouldBe 200
       response.contentType.map(_.mediaType) shouldBe Some(org.http4s.MediaType.application.json)
       json.hcursor.downField("selector").as[String].toOption shouldBe Some("notice-board.entity.notice")
@@ -7669,8 +8293,12 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "serve admin data form definition API from inferred data fields" in {
+      Given("the prerequisites for serve admin data form definition API from inferred data fields")
       val fixture = _data_fixture()
-      _with_global_runtime(fixture.runtime) {
+      When("the observable result for serve admin data form definition API from inferred data fields is inspected")
+      locally {
+        Then("the observable contract for serve admin data form definition API from inferred data fields holds")
+        _with_global_runtime(fixture.runtime) {
         val server = new Http4sHttpServer(new HttpExecutionEngine(fixture.subsystem))
 
         val response = server
@@ -7692,11 +8320,16 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         json.hcursor.downField("htmlPath").as[String].toOption shouldBe Some("/web/notice-board/admin/data/audit/new")
         fieldnames shouldBe Vector("id", "action", "actor")
       }
+      }
     }
 
     "serve admin data update form definition API from inferred data fields" in {
+      Given("the prerequisites for serve admin data update form definition API from inferred data fields")
       val fixture = _data_fixture()
-      _with_global_runtime(fixture.runtime) {
+      When("the observable result for serve admin data update form definition API from inferred data fields is inspected")
+      locally {
+        Then("the observable contract for serve admin data update form definition API from inferred data fields holds")
+        _with_global_runtime(fixture.runtime) {
         val server = new Http4sHttpServer(new HttpExecutionEngine(fixture.subsystem))
 
         val response = server
@@ -7721,11 +8354,15 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         json.hcursor.downField("actions").downN(3).downField("path").as[String].toOption shouldBe Some("/form/notice-board/admin/data/audit/audit_1/update")
         fieldnames shouldBe Vector("id", "action", "actor")
       }
+      }
     }
 
     "serve admin data form definition API from merged inferred data fields and WebDescriptor controls" in {
+      Given("the prerequisites for serve admin data form definition API from merged inferred data fields and WebDescriptor controls")
       val fixture = _data_fixture()
+      When("serve admin data form definition API from merged inferred data fields and WebDescriptor controls is exercised")
       val descriptor = _data_schema_web_descriptor(includenote = false)
+      Then("the observable contract for serve admin data form definition API from merged inferred data fields and WebDescriptor controls holds")
       _with_global_runtime(fixture.runtime) {
         val server = new Http4sHttpServer(new HttpExecutionEngine(fixture.subsystem, Some(descriptor)))
 
@@ -7755,6 +8392,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "serve admin view form definition API from entity schema when the view name carries the view suffix" in {
+      Given("the prerequisites for serve admin view form definition API from entity schema when the view name carries the view suffix")
       val subsystem = _view_fixture_subsystem()
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
 
@@ -7766,14 +8404,17 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         )
         .unsafeRunSync()
       val json = parse(response.as[String].unsafeRunSync()).getOrElse(fail("view form definition JSON is invalid"))
+      When("serve admin view form definition API from entity schema when the view name carries the view suffix is exercised")
       val fields = _json_fields(json)
 
+      Then("the observable contract for serve admin view form definition API from entity schema when the view name carries the view suffix holds")
       response.status.code shouldBe 200
       json.hcursor.downField("source").as[String].toOption shouldBe Some("Schema")
       _json_field_names(fields) shouldBe Vector("id", "shortid", "label", "note")
     }
 
     "serve admin view form definition API from resolved view schema" in {
+      Given("the prerequisites for serve admin view form definition API from resolved view schema")
       val subsystem = _view_fixture_subsystem()
       val descriptor = WebDescriptor(
         admin = Map(
@@ -7796,8 +8437,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         )
         .unsafeRunSync()
       val json = parse(response.as[String].unsafeRunSync()).getOrElse(fail("view form definition JSON is invalid"))
+      When("serve admin view form definition API from resolved view schema is exercised")
       val fields = json.hcursor.downField("fields")
 
+      Then("the observable contract for serve admin view form definition API from resolved view schema holds")
       response.status.code shouldBe 200
       response.contentType.map(_.mediaType) shouldBe Some(org.http4s.MediaType.application.json)
       json.hcursor.downField("selector").as[String].toOption shouldBe Some("notice-board.view.notice-view")
@@ -7816,6 +8459,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "serve admin aggregate form definition API from entity schema when the aggregate name carries the aggregate suffix" in {
+      Given("the prerequisites for serve admin aggregate form definition API from entity schema when the aggregate name carries the aggregate suffix")
       val subsystem = _aggregate_fixture_subsystem()
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
 
@@ -7827,14 +8471,17 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         )
         .unsafeRunSync()
       val json = parse(response.as[String].unsafeRunSync()).getOrElse(fail("aggregate form definition JSON is invalid"))
+      When("serve admin aggregate form definition API from entity schema when the aggregate name carries the aggregate suffix is exercised")
       val fields = _json_fields(json)
 
+      Then("the observable contract for serve admin aggregate form definition API from entity schema when the aggregate name carries the aggregate suffix holds")
       response.status.code shouldBe 200
       json.hcursor.downField("source").as[String].toOption shouldBe Some("Schema")
       _json_field_names(fields) shouldBe Vector("id", "shortid", "label", "status")
     }
 
     "serve admin aggregate form definition API from resolved aggregate schema" in {
+      Given("the prerequisites for serve admin aggregate form definition API from resolved aggregate schema")
       val subsystem = _aggregate_fixture_subsystem()
       val descriptor = WebDescriptor(
         admin = Map(
@@ -7857,8 +8504,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         )
         .unsafeRunSync()
       val json = parse(response.as[String].unsafeRunSync()).getOrElse(fail("aggregate form definition JSON is invalid"))
+      When("serve admin aggregate form definition API from resolved aggregate schema is exercised")
       val fields = json.hcursor.downField("fields")
 
+      Then("the observable contract for serve admin aggregate form definition API from resolved aggregate schema holds")
       response.status.code shouldBe 200
       response.contentType.map(_.mediaType) shouldBe Some(org.http4s.MediaType.application.json)
       json.hcursor.downField("selector").as[String].toOption shouldBe Some("notice-board.aggregate.notice-aggregate")
@@ -7879,6 +8528,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "validate operation form API input without executing the operation" in {
+      Given("the prerequisites for validate operation form API input without executing the operation")
       val subsystem = _form_type_fixture_subsystem()
       val selector = "notice-board.notice.post-secret-notice"
       val descriptor = WebDescriptor(
@@ -7894,8 +8544,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           "post-secret-notice"
         )
         .unsafeRunSync()
+      When("validate operation form API input without executing the operation is exercised")
       val invalidjson = parse(invalid.as[String].unsafeRunSync()).getOrElse(fail("validation JSON is invalid"))
 
+      Then("the observable contract for validate operation form API input without executing the operation holds")
       invalid.status.code shouldBe 200
       invalid.contentType.map(_.mediaType) shouldBe Some(org.http4s.MediaType.application.json)
       invalidjson.hcursor.downField("selector").as[String].toOption shouldBe Some(selector)
@@ -7924,6 +8576,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "validate operation form API datatype values and multiplicity" in {
+      Given("the prerequisites for validate operation form API datatype values and multiplicity")
       val component = new org.goldenport.cncf.component.Component() {}
       val protocol = Protocol(
         services = spec.ServiceDefinitionGroup(
@@ -7967,8 +8620,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val invalidjson = parse(invalid.as[String].unsafeRunSync()).getOrElse(fail("validation JSON is invalid"))
       val errors = invalidjson.hcursor.downField("errors").as[Vector[Json]].toOption.getOrElse(Vector.empty)
       val errorfields = errors.flatMap(_.hcursor.downField("field").as[String].toOption)
+      When("validate operation form API datatype values and multiplicity is exercised")
       val errorcodes = errors.flatMap(_.hcursor.downField("code").as[String].toOption)
 
+      Then("the observable contract for validate operation form API datatype values and multiplicity holds")
       invalidjson.hcursor.downField("valid").as[Boolean].toOption shouldBe Some(false)
       errorfields should contain allOf ("count", "published", "publishedAt", "status", "tags")
       errorcodes should contain ("datatype")
@@ -7993,6 +8648,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "serve and validate operation form validation hints" in {
+      Given("the prerequisites for serve and validate operation form validation hints")
       val (subsystem, descriptor) = _validation_hints_fixture()
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem, Some(descriptor)))
 
@@ -8006,8 +8662,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         .unsafeRunSync()
       val definitionjson = parse(definition.as[String].unsafeRunSync()).getOrElse(fail("hint definition JSON is invalid"))
       val codefield = definitionjson.hcursor.downField("fields").downN(0)
+      When("serve and validate operation form validation hints is exercised")
       val countfield = definitionjson.hcursor.downField("fields").downN(1)
 
+      Then("the observable contract for serve and validate operation form validation hints holds")
       codefield.downField("validation").downField("minLength").as[Int].toOption shouldBe Some(2)
       codefield.downField("validation").downField("maxLength").as[Int].toOption shouldBe Some(4)
       codefield.downField("validation").downField("pattern").as[String].toOption shouldBe Some("^[A-Z0-9]+$")
@@ -8048,6 +8706,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "keep Schema validation constraints when WebDescriptor attempts to relax them" in {
+      Given("the prerequisites for keep Schema validation constraints when WebDescriptor attempts to relax them")
       val (subsystem, descriptor) = _validation_hints_fixture()
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem, Some(descriptor)))
 
@@ -8064,6 +8723,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         .unsafeRunSync()
       val invalidjson = parse(invalid.as[String].unsafeRunSync()).getOrElse(fail("relax validation JSON is invalid"))
       val errors = invalidjson.hcursor.downField("errors").as[Vector[Json]].toOption.getOrElse(Vector.empty)
+      When("keep Schema validation constraints when WebDescriptor attempts to relax them is exercised")
       val errorpairs = errors.flatMap { json =>
         for {
           field <- json.hcursor.downField("field").as[String].toOption
@@ -8071,12 +8731,14 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         } yield field -> code
       }
 
+      Then("the observable contract for keep Schema validation constraints when WebDescriptor attempts to relax them holds")
       invalidjson.hcursor.downField("valid").as[Boolean].toOption shouldBe Some(false)
       errorpairs should contain ("code" -> "min-length")
       errorpairs should contain ("count" -> "min")
     }
 
     "redisplay operation form validation hint errors before HTML dispatch" in {
+      Given("the prerequisites for redisplay operation form validation hint errors before HTML dispatch")
       val (subsystem, descriptor) = _validation_hints_fixture()
       val dispatcher = new StaticWebOperationDispatcher(
         HttpResponse.Text(
@@ -8101,8 +8763,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           "validate-hints"
         )
         .unsafeRunSync()
+      When("redisplay operation form validation hint errors before HTML dispatch is exercised")
       val html = response.as[String].unsafeRunSync()
 
+      Then("the observable contract for redisplay operation form validation hint errors before HTML dispatch holds")
       response.status.code shouldBe 400
       html should include ("Validation failed.")
       html should include ("code must be at most 4 characters.")
@@ -8117,6 +8781,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render aggregate operation form with admin descriptor field controls" in {
+      Given("the prerequisites for render aggregate operation form with admin descriptor field controls")
       val subsystem = _aggregate_fixture_subsystem()
       val descriptor = WebDescriptor(
         expose = Map("notice-board.notice-aggregate.approve-notice-aggregate" -> WebDescriptor.Exposure.Protected),
@@ -8130,6 +8795,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         )
       )
 
+      When("render aggregate operation form with admin descriptor field controls is exercised")
       val html = _renderer.renderOperationForm(
         subsystem,
         "notice_board",
@@ -8139,6 +8805,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         values = Map("id" -> "notice_1", "approved" -> "true")
       ).map(_.body).getOrElse(fail("aggregate operation form is missing"))
 
+      Then("the observable contract for render aggregate operation form with admin descriptor field controls holds")
       html should include ("type=\"hidden\"")
       html should include ("name=\"id\"")
       html should include ("value=\"notice_1\"")
@@ -8149,6 +8816,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "redirect HTML form submissions by descriptor transition while form-api returns operation response" in {
+      Given("the prerequisites for redirect HTML form submissions by descriptor transition while form-api returns operation response")
       val subsystem = _aggregate_http_fixture_subsystem()
       val descriptor = WebDescriptor(
         expose = Map(
@@ -8172,6 +8840,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           "approve-notice-aggregate"
         )
         .unsafeRunSync()
+      When("redirect HTML form submissions by descriptor transition while form-api returns operation response is exercised")
       val api = server
         ._submit_operation_form_api(
           _post_form_request("/form-api/notice-board/notice-aggregate/approve-notice-aggregate", "id=notice_1"),
@@ -8181,6 +8850,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         )
         .unsafeRunSync()
 
+      Then("the observable contract for redirect HTML form submissions by descriptor transition while form-api returns operation response holds")
       redirected.status.code shouldBe 303
       redirected.headers.get[org.http4s.headers.Location].map(_.uri.renderString) shouldBe
         Some("/web/notice-board/admin/aggregates/notice-aggregate/notice_1")
@@ -8189,6 +8859,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render operation form result through descriptor result template" in {
+      Given("the prerequisites for render operation form result through descriptor result template")
       val subsystem = _aggregate_http_fixture_subsystem()
       val descriptor = WebDescriptor(
         expose = Map(
@@ -8210,6 +8881,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val engine = new HttpExecutionEngine(subsystem, Some(descriptor))
       val server = new Http4sHttpServer(engine)
 
+      When("render operation form result through descriptor result template is exercised")
       val html = server
         ._submit_operation_form(
           _post_form_request("/form/notice-board/notice-aggregate/approve-notice-aggregate", "id=notice_1"),
@@ -8220,6 +8892,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         .flatMap(_.as[String])
         .unsafeRunSync()
 
+      Then("the observable contract for render operation form result through descriptor result template holds")
       html should include ("notice-board.notice-aggregate.approve-notice-aggregate Custom Result")
       html should include ("Submitted notice_1")
       html should include ("aggregate-updated:notice_1")
@@ -8230,6 +8903,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render operation form result route through descriptor result template when static template is absent" in {
+      Given("the prerequisites for render operation form result route through descriptor result template when static template is absent")
       val subsystem = _aggregate_http_fixture_subsystem()
       val descriptor = WebDescriptor(
         expose = Map(
@@ -8258,6 +8932,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       )
       val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
 
+      When("render operation form result route through descriptor result template when static template is absent is exercised")
       val html = server
         ._operation_form_result(
           _get_request("/form/notice-board/notice-aggregate/approve-notice-aggregate/result?id=notice_1"),
@@ -8268,6 +8943,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         .flatMap(_.as[String])
         .unsafeRunSync()
 
+      Then("the observable contract for render operation form result route through descriptor result template when static template is absent holds")
       html should include ("Descriptor Result Route")
       html should include ("notice_1")
       html should include ("created:notice_1")
@@ -8277,6 +8953,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "resolve Static Form template properties across camel, snake, and kebab names" in {
+      Given("the prerequisites for resolve Static Form template properties across camel, snake, and kebab names")
       val properties = StaticFormAppRenderer.FormResultProperties(
         StaticFormAppRenderer.FormPageProperties(
           "notice-board",
@@ -8289,6 +8966,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         """{"data":{"current":{"workTitle":"源氏物語","textualWorkInformationId":"info-1","rdfUri":"https://example.test/book/1","isbn13":"9784003510179"}}}"""
       )
 
+      When("resolve Static Form template properties across camel, snake, and kebab names is exercised")
       val html = _renderer.renderFormResult(
         properties,
         """<article>
@@ -8300,6 +8978,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           |</article>""".stripMargin
       ).body
 
+      Then("the observable contract for resolve Static Form template properties across camel, snake, and kebab names holds")
       html should include ("源氏物語")
       html should include ("info-1")
       html should include ("https://example.test/book/1")
@@ -8309,6 +8988,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render operation result UX profile metadata" in {
+      Given("the prerequisites for render operation result UX profile metadata")
       val properties = StaticFormAppRenderer.FormResultProperties(
         StaticFormAppRenderer.FormPageProperties("notice-board", "notice", "approve-notice"),
         200,
@@ -8317,12 +8997,15 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         uxProfile = WebUxProfile.Material
       )
 
+      When("render operation result UX profile metadata is exercised")
       val html = _renderer.renderFormResult(properties).body
 
+      Then("the observable contract for render operation result UX profile metadata holds")
       html should include ("data-textus-ux-profile=\"material\"")
     }
 
     "render static template UX profile metadata" in {
+      Given("the prerequisites for render static template UX profile metadata")
       val descriptor = WebDescriptor(
         profile = Some(WebUxProfile.Bootstrap),
         profileRaw = Some("bootstrap"),
@@ -8345,6 +9028,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         """<article data-textus-page="static">${textus.uxProfile}</article>""",
         webdescriptor = descriptor
       ).body
+      When("render static template UX profile metadata is exercised")
       val pagehtml = _renderer.renderStaticTemplate(
         "console",
         Vector("detail"),
@@ -8352,6 +9036,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         webdescriptor = descriptor
       ).body
 
+      Then("the observable contract for render static template UX profile metadata holds")
       apphtml should include ("compact")
       pagehtml should include ("data-textus-ux-profile=\"material\"")
       pagehtml should include (">material</article>")
@@ -8807,6 +9492,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "carry a declared failure flash without exposing the operation response" in {
+      Given("the prerequisites for carry a declared failure flash without exposing the operation response")
       val subsystem = _aggregate_http_fixture_subsystem()
       val selector = "notice-board.notice-aggregate.approve-notice-aggregate"
       val descriptor = WebDescriptor(
@@ -8841,15 +9527,18 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         .find(_.name.toString.equalsIgnoreCase("Set-Cookie"))
         .map(_.value)
         .getOrElse(fail("failure flash cookie is missing"))
+      When("carry a declared failure flash without exposing the operation response is exercised")
       val encoded = setcookie.takeWhile(_ != ';').split("=", 2).lift(1)
         .getOrElse(fail("failure flash cookie value is missing"))
 
+      Then("the observable contract for carry a declared failure flash without exposing the operation response holds")
       response.status.code shouldBe 303
       WebFlash.decode(encoded) shouldBe Some(WebFlash.Value("danger", "notice.approval-failed"))
       setcookie should not include ("sensitive operation failure detail")
     }
 
     "resolve legacy result.body.data paths against unwrapped JSON response bodies" in {
+      Given("the prerequisites for resolve legacy result.body.data paths against unwrapped JSON response bodies")
       val properties = StaticFormAppRenderer.FormResultProperties(
         StaticFormAppRenderer.FormPageProperties(
           "book-editor",
@@ -8861,6 +9550,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         """{"current":{"title":"源氏物語"},"counts":{"information_count":2},"information":[{"title":"Book A"}]}"""
       )
 
+      When("resolve legacy result.body.data paths against unwrapped JSON response bodies is exercised")
       val html = _renderer.renderFormResult(
         properties,
         """<article>
@@ -8870,6 +9560,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           |</article>""".stripMargin
       ).body
 
+      Then("the observable contract for resolve legacy result.body.data paths against unwrapped JSON response bodies holds")
       html should include ("源氏物語")
       html should include ("<strong class=\"display-6 text-primary\">2</strong>")
       html should include ("Book A")
@@ -8877,6 +9568,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render operation form result through static success template convention before descriptor template" in {
+      Given("the prerequisites for render operation form result through static success template convention before descriptor template")
       val subsystem = _aggregate_http_fixture_subsystem(
         Configuration(Map(
           RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(_web_template_fixture_root(
@@ -8905,6 +9597,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val engine = new HttpExecutionEngine(subsystem, Some(descriptor))
       val server = new Http4sHttpServer(engine)
 
+      When("render operation form result through static success template convention before descriptor template is exercised")
       val html = server
         ._submit_operation_form(
           _post_form_request("/form/notice-board/notice-aggregate/approve-notice-aggregate", "id=notice_1"),
@@ -8915,6 +9608,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         .flatMap(_.as[String])
         .unsafeRunSync()
 
+      Then("the observable contract for render operation form result through static success template convention before descriptor template holds")
       html should include ("notice-board.notice-aggregate.approve-notice-aggregate Static Success")
       html should include ("Submitted notice_1")
       html should include ("aggregate-updated:notice_1")
@@ -8924,6 +9618,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "prefer page-local static result template when textus form page is submitted" in {
+      Given("the prerequisites for prefer page-local static result template when textus form page is submitted")
       val subsystem = _aggregate_http_fixture_subsystem(
         Configuration(Map(
           RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(_web_template_fixture_root(
@@ -8952,6 +9647,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val dispatcher = new RecordingWebOperationDispatcher(WebOperationDispatcher.Local(engine))
       val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
 
+      When("prefer page-local static result template when textus form page is submitted is exercised")
       val html = server
         ._submit_operation_form(
           _post_form_request(
@@ -8965,6 +9661,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         .flatMap(_.as[String])
         .unsafeRunSync()
 
+      Then("the observable contract for prefer page-local static result template when textus form page is submitted holds")
       html should include ("New Page Success")
       html should include ("aggregate-updated:notice_1")
       html should not include ("Descriptor Result")
@@ -8986,6 +9683,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "expand result body JSON paths in static result templates" in {
+      Given("the prerequisites for expand result body JSON paths in static result templates")
       val properties = StaticFormAppRenderer.FormResultProperties(
         StaticFormAppRenderer.FormPageProperties("blog", "blog", "get-my-post"),
         200,
@@ -8993,6 +9691,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         """{"entity_id":"major-post-1","title":"Hello <Blog>","content":"<article><p>Body</p></article>"}"""
       )
 
+      When("expand result body JSON paths in static result templates is exercised")
       val html = _renderer.renderFormResult(
         properties,
         """<form action="/form/blog-component/blog/save-editor-post" method="post">
@@ -9002,12 +9701,14 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           |</form>""".stripMargin
       ).body
 
+      Then("the observable contract for expand result body JSON paths in static result templates holds")
       html should include ("value=\"major-post-1\"")
       html should include ("value=\"Hello &lt;Blog&gt;\"")
       html should include ("&lt;article&gt;&lt;p&gt;Body&lt;/p&gt;&lt;/article&gt;")
     }
 
     "prefer exact static status result template over static success template" in {
+      Given("the prerequisites for prefer exact static status result template over static success template")
       val root = Files.createTempDirectory("cncf-web-template-")
       Files.writeString(root.resolve("web.yaml"), "form: {}\n", StandardCharsets.UTF_8)
       Files.writeString(
@@ -9036,6 +9737,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val engine = new HttpExecutionEngine(subsystem, Some(descriptor))
       val server = new Http4sHttpServer(engine)
 
+      When("prefer exact static status result template over static success template is exercised")
       val html = server
         ._submit_operation_form(
           _post_form_request("/form/notice-board/notice-aggregate/approve-notice-aggregate", "id=notice_1"),
@@ -9046,6 +9748,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         .flatMap(_.as[String])
         .unsafeRunSync()
 
+      Then("the observable contract for prefer exact static status result template over static success template holds")
       html should include ("notice-board.notice-aggregate.approve-notice-aggregate Static 200 Exact")
       html should include ("aggregate-updated:notice_1")
       html should not include ("Static Success Alias")
@@ -9053,6 +9756,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render operation form result through static status template convention" in {
+      Given("the prerequisites for render operation form result through static status template convention")
       val subsystem = _aggregate_http_fixture_subsystem(
         Configuration(Map(
           RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(_web_template_fixture_root(
@@ -9072,6 +9776,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val engine = new HttpExecutionEngine(subsystem, Some(descriptor))
       val server = new Http4sHttpServer(engine)
 
+      When("render operation form result through static status template convention is exercised")
       val html = server
         ._submit_operation_form(
           _post_form_request("/form/notice-board/notice-aggregate/approve-notice-aggregate", "id=notice_1"),
@@ -9082,6 +9787,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         .flatMap(_.as[String])
         .unsafeRunSync()
 
+      Then("the observable contract for render operation form result through static status template convention holds")
       html should include ("notice-board.notice-aggregate.approve-notice-aggregate Static 200")
       html should include ("result.status")
       html should not include ("Submitted Values")
@@ -9089,6 +9795,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render operation form result through common static status template convention" in {
+      Given("the prerequisites for render operation form result through common static status template convention")
       val subsystem = _aggregate_http_fixture_subsystem(
         Configuration(Map(
           RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(_web_template_fixture_root(
@@ -9109,6 +9816,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val engine = new HttpExecutionEngine(subsystem, Some(descriptor))
       val server = new Http4sHttpServer(engine)
 
+      When("render operation form result through common static status template convention is exercised")
       val html = server
         ._submit_operation_form(
           _post_form_request("/form/notice-board/notice-aggregate/approve-notice-aggregate", "id=notice_1"),
@@ -9119,6 +9827,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         .flatMap(_.as[String])
         .unsafeRunSync()
 
+      Then("the observable contract for render operation form result through common static status template convention holds")
       html should include ("Common Static 200")
       html should include ("notice-board.notice-aggregate.approve-notice-aggregate")
       html should include ("aggregate-updated:notice_1")
@@ -9127,6 +9836,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render form continuation through static status template convention" in {
+      Given("the prerequisites for render form continuation through static status template convention")
       val rows = (1 to 21).map { i =>
         f"""{"title":"Paging Notice $i%02d","recipient_name":"PagingBob"}"""
       }.mkString("[", ",", "]")
@@ -9170,6 +9880,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         .findFirstMatchIn(page1)
         .map(_.group(1).replace("&amp;", "&"))
         .getOrElse(fail("continuation link is missing"))
+      When("render form continuation through static status template convention is exercised")
       val page2 = server
         ._operation_form_continue(
           _get_request(continuehref),
@@ -9181,6 +9892,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         .flatMap(_.as[String])
         .unsafeRunSync()
 
+      Then("the observable contract for render form continuation through static status template convention holds")
       page1 should include ("Matching notices")
       page1 should include ("Paging Notice 01")
       page1 should include ("Page 1")
@@ -9193,6 +9905,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "preserve page-local result template on form continuation" in {
+      Given("the prerequisites for preserve page-local result template on form continuation")
       val rows = (1 to 21).map { i =>
         f"""{"title":"Page Local Notice $i%02d","recipient_name":"PagingBob"}"""
       }.mkString("[", ",", "]")
@@ -9243,6 +9956,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         .findFirstMatchIn(page1)
         .map(_.group(1).replace("&amp;", "&"))
         .getOrElse(fail("page-local continuation link is missing"))
+      When("preserve page-local result template on form continuation is exercised")
       val page2 = server
         ._operation_form_continue(
           _get_request(continuehref),
@@ -9254,6 +9968,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         .flatMap(_.as[String])
         .unsafeRunSync()
 
+      Then("the observable contract for preserve page-local result template on form continuation holds")
       page1 should include ("Page Local Search")
       page1 should include ("Page Local Notice 01")
       page2 should include ("Page Local Search")
@@ -9262,6 +9977,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render form continuation with explicit total-count paging" in {
+      Given("the prerequisites for render form continuation with explicit total-count paging")
       val rows = (1 to 21).map { i =>
         f"""{"title":"Total Paging Notice $i%02d","recipient_name":"PagingBob"}"""
       }.mkString("[", ",", "]")
@@ -9308,6 +10024,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         .findFirstMatchIn(page1)
         .map(_.group(1).replace("&amp;", "&"))
         .getOrElse(fail("total-count continuation link is missing"))
+      When("render form continuation with explicit total-count paging is exercised")
       val page2 = server
         ._operation_form_continue(
           _get_request(continuehref),
@@ -9319,6 +10036,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         .flatMap(_.as[String])
         .unsafeRunSync()
 
+      Then("the observable contract for render form continuation with explicit total-count paging holds")
       page1 should include ("Matching notices")
       page1 should include ("Total Paging Notice 01")
       page1 should include ("includeTotal=true")
@@ -9332,6 +10050,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render operation failure through exact static status template before error template" in {
+      Given("the prerequisites for render operation failure through exact static status template before error template")
       val root = Files.createTempDirectory("cncf-web-template-")
       Files.writeString(root.resolve("web.yaml"), "form: {}\n", StandardCharsets.UTF_8)
       Files.writeString(
@@ -9374,6 +10093,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       )
       val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
 
+      When("render operation failure through exact static status template before error template is exercised")
       val html = server
         ._submit_operation_form(
           _post_form_request(
@@ -9387,6 +10107,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         .flatMap(_.as[String])
         .unsafeRunSync()
 
+      Then("the observable contract for render operation failure through exact static status template before error template holds")
       html should include ("notice-board.notice-aggregate.approve-notice-aggregate Static 400 Exact")
       html should include ("invalid approval")
       html should include ("/web/notice-board/admin/aggregates/notice-aggregate")
@@ -9401,6 +10122,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render operation failure through common static error template when status template is absent" in {
+      Given("the prerequisites for render operation failure through common static error template when status template is absent")
       val subsystem = _aggregate_http_fixture_subsystem(
         Configuration(Map(
           RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(_web_template_fixture_root(
@@ -9430,6 +10152,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       )
       val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
 
+      When("render operation failure through common static error template when status template is absent is exercised")
       val html = server
         ._submit_operation_form(
           _post_form_request(
@@ -9443,6 +10166,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         .flatMap(_.as[String])
         .unsafeRunSync()
 
+      Then("the observable contract for render operation failure through common static error template when status template is absent holds")
       html should include ("Common Static Error")
       html should include ("/web/notice-board/admin/aggregates/notice-aggregate")
       html should include ("notice_1")
@@ -9456,6 +10180,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render Web HTML errors through app-specific static status template convention" in {
+      Given("the prerequisites for render Web HTML errors through app-specific static status template convention")
       val root = Files.createTempDirectory("cncf-web-error-template-")
       val approot = root.resolve("notice-board")
       Files.createDirectories(approot)
@@ -9480,8 +10205,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val response = server
         ._static_form_app("notice-board", Vector("missing"))
         .unsafeRunSync()
+      When("render Web HTML errors through app-specific static status template convention is exercised")
       val html = response.as[String].unsafeRunSync()
 
+      Then("the observable contract for render Web HTML errors through app-specific static status template convention holds")
       response.status.code shouldBe 404
       html should include ("Notice Board Missing")
       html should include ("404")
@@ -9490,6 +10217,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render Web HTML errors through global static error template convention" in {
+      Given("the prerequisites for render Web HTML errors through global static error template convention")
       val subsystem = _aggregate_http_fixture_subsystem(
         Configuration(Map(
           RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(_web_template_fixture_root(
@@ -9508,8 +10236,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val response = server
         ._static_form_app("notice-board", Vector("missing"))
         .unsafeRunSync()
+      When("render Web HTML errors through global static error template convention is exercised")
       val html = response.as[String].unsafeRunSync()
 
+      Then("the observable contract for render Web HTML errors through global static error template convention holds")
       response.status.code shouldBe 404
       html should include ("Global Web Error")
       html should include ("notice-board")
@@ -9522,6 +10252,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render non-production structured error debug YAML at the bottom of Web error pages" in {
+      Given("the prerequisites for render non-production structured error debug YAML at the bottom of Web error pages")
       val conclusion = _structured_conclusion()
       val detailcode = conclusion.status.detailCode.map(_.code).getOrElse(fail("detailcode is missing"))
       val error = StructuredHttpError.fromConclusion(
@@ -9532,8 +10263,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         component = Some("notice-board")
       )
 
+      When("render non-production structured error debug YAML at the bottom of Web error pages is exercised")
       val html = _renderer.renderStructuredErrorPage(Some("notice-board"), error).body
 
+      Then("the observable contract for render non-production structured error debug YAML at the bottom of Web error pages holds")
       html should include ("Request failed")
       html should include (detailcode.toString)
       html should include ("structured-error-debug")
@@ -9543,6 +10276,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "hide structured debug YAML in production Web error pages while keeping the Conclusion detail code" in {
+      Given("the prerequisites for hide structured debug YAML in production Web error pages while keeping the Conclusion detail code")
       val conclusion = _structured_conclusion()
       val detailcode = conclusion.status.detailCode.map(_.code).getOrElse(fail("detailcode is missing"))
       val error = StructuredHttpError.fromConclusion(
@@ -9553,8 +10287,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         component = Some("notice-board")
       )
 
+      When("hide structured debug YAML in production Web error pages while keeping the Conclusion detail code is exercised")
       val html = _renderer.renderStructuredErrorPage(Some("notice-board"), error).body
 
+      Then("the observable contract for hide structured debug YAML in production Web error pages while keeping the Conclusion detail code holds")
       html should include (detailcode.toString)
       html should not include ("structured-error-debug")
       html should not include ("Debug error details")
@@ -9562,8 +10298,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "include structured Conclusion detail code in response error records" in {
+      Given("the prerequisites for include structured Conclusion detail code in response error records")
       val conclusion = _structured_conclusion()
       val detailcode = conclusion.status.detailCode.map(_.code).getOrElse(fail("detailcode is missing"))
+      When("include structured Conclusion detail code in response error records is exercised")
       val error = StructuredHttpError.fromConclusion(
         conclusion,
         "/web/notice-board/missing",
@@ -9572,6 +10310,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         component = Some("notice-board")
       )
 
+      Then("the observable contract for include structured Conclusion detail code in response error records holds")
       error.publicRecord.asMap.get("detailCode") shouldBe Some(detailcode)
       error.envelopeJson should include (s""""detailCode":${detailcode}""")
       error.envelopeJson should not include ("codeSource")
@@ -9579,6 +10318,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "redisplay the operation form with submitted values when stayOnError is enabled" in {
+      Given("the prerequisites for redisplay the operation form with submitted values when stayOnError is enabled")
       val subsystem = _aggregate_http_fixture_subsystem()
       val descriptor = WebDescriptor(
         expose = Map(
@@ -9600,6 +10340,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       )
       val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
 
+      When("redisplay the operation form with submitted values when stayOnError is enabled is exercised")
       val html = server
         ._submit_operation_form(
           _post_form_request("/form/notice-board/notice-aggregate/approve-notice-aggregate", "id=notice_1"),
@@ -9610,6 +10351,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         .flatMap(_.as[String])
         .unsafeRunSync()
 
+      Then("the observable contract for redisplay the operation form with submitted values when stayOnError is enabled holds")
       html should include ("HTML form operation")
       html should include ("error.status")
       html should include ("400")
@@ -9618,6 +10360,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "redisplay operation form validation errors before dispatching HTML submit" in {
+      Given("the prerequisites for redisplay operation form validation errors before dispatching HTML submit")
       val subsystem = _form_type_fixture_subsystem()
       val selector = "notice-board.notice.post-secret-notice"
       val descriptor = WebDescriptor(
@@ -9643,8 +10386,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           "post-secret-notice"
         )
         .unsafeRunSync()
+      When("redisplay operation form validation errors before dispatching HTML submit is exercised")
       val html = response.as[String].unsafeRunSync()
 
+      Then("the observable contract for redisplay operation form validation errors before dispatching HTML submit holds")
       response.status.code shouldBe 400
       html should include ("HTML form operation")
       html should include ("Validation failed.")
@@ -9660,11 +10405,13 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "merge schema-driven form fields with additional fields on submit" in {
+      Given("the prerequisites for merge schema-driven form fields with additional fields on submit")
       val subsystem = _aggregate_http_fixture_subsystem()
       val engine = new HttpExecutionEngine(subsystem)
       val dispatcher = new RecordingWebOperationDispatcher(WebOperationDispatcher.Local(engine))
       val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
 
+      When("merge schema-driven form fields with additional fields on submit is exercised")
       val html = server._submit_operation_form(
         _post_form_request(
           "/form/notice-board/notice-aggregate/approve-notice-aggregate",
@@ -9675,11 +10422,13 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         "approve-notice-aggregate"
       ).flatMap(_.as[String]).unsafeRunSync()
 
+      Then("the observable contract for merge schema-driven form fields with additional fields on submit holds")
       html should include ("aggregate-updated:notice_1")
       dispatcher.forms.lastOption.map(_.getString("approved")) shouldBe Some(Some("true"))
     }
 
     "render textus result widgets with paging links" in {
+      Given("the prerequisites for render textus result widgets with paging links")
       val properties = StaticFormAppRenderer.FormResultProperties(
         StaticFormAppRenderer.FormPageProperties(
           "notice-board",
@@ -9697,8 +10446,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         """[{"title":"Hello","author":"Taro"},{"title":"World","author":"Hanako"}]"""
       )
 
+      When("render textus result widgets with paging links is exercised")
       val html = _renderer.renderFormResult(properties).body
 
+      Then("the observable contract for render textus result widgets with paging links holds")
       html should include ("<table")
       html should include ("Hanako")
       html should not include ("<td>Hello</td>")
@@ -9710,6 +10461,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render capability gated HTML controls" in {
+      Given("the prerequisites for render capability gated HTML controls")
       val template =
         """<main>
           |  <a href="/edit" data-textus-capability="information:edit" data-textus-capability-mode="hide">Edit</a>
@@ -9725,6 +10477,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         template,
         pageContext = WebPageContext(Map("pageContext.security.capabilities" -> "information:read"))
       ).body
+      When("render capability gated HTML controls is exercised")
       val allowed = _renderer.renderStaticTemplate(
         "notice-board",
         Vector("detail"),
@@ -9732,6 +10485,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         pageContext = WebPageContext(Map("pageContext.security.capabilities" -> "information:edit"))
       ).body
 
+      Then("the observable contract for render capability gated HTML controls holds")
       denied should not include ("href=\"/edit\"")
       denied should include ("textus-capability-disabled")
       denied should include ("data-textus-capability-state=\"denied\"")
@@ -9744,6 +10498,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render capability controls with authenticated policy" in {
+      Given("the prerequisites for render capability controls with authenticated policy")
       val template =
         """<main>
           |  <a href="/import" data-textus-capability="information:import" data-textus-capability-policy="authenticated">Import</a>
@@ -9755,6 +10510,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         template,
         pageContext = WebPageContext(Map("pageContext.session.authenticated" -> "false"))
       ).body
+      When("render capability controls with authenticated policy is exercised")
       val authenticated = _renderer.renderStaticTemplate(
         "notice-board",
         Vector("detail"),
@@ -9762,11 +10518,13 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         pageContext = WebPageContext(Map("pageContext.session.authenticated" -> "true"))
       ).body
 
+      Then("the observable contract for render capability controls with authenticated policy holds")
       anonymous should not include ("Import")
       authenticated should include ("Import")
     }
 
     "render capability controls around nested same-name elements" in {
+      Given("the prerequisites for render capability controls around nested same-name elements")
       val template =
         """<main>
           |  <div data-textus-capability="information:edit" data-textus-capability-mode="hide">
@@ -9776,6 +10534,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           |  <p>Visible</p>
           |</main>""".stripMargin
 
+      When("render capability controls around nested same-name elements is exercised")
       val html = _renderer.renderStaticTemplate(
         "notice-board",
         Vector("detail"),
@@ -9783,12 +10542,14 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         pageContext = WebPageContext(Map("pageContext.security.capabilities" -> "information:read"))
       ).body
 
+      Then("the observable contract for render capability controls around nested same-name elements holds")
       html should not include ("Secret")
       html should not include ("Tail")
       html should include ("Visible")
     }
 
     "render conditional HTML controls from page properties" in {
+      Given("the prerequisites for render conditional HTML controls from page properties")
       val template =
         """<main>
           |  <section data-textus-render-if-any="noticeKind,noticeStatus">
@@ -9812,6 +10573,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         template,
         pageContext = WebPageContext(Map("noticeKind" -> "import"))
       ).body
+      When("render conditional HTML controls from page properties is exercised")
       val complete = _renderer.renderStaticTemplate(
         "notice-board",
         Vector("detail"),
@@ -9819,6 +10581,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         pageContext = WebPageContext(Map("noticeKind" -> "import", "noticeStatus" -> "seeded"))
       ).body
 
+      Then("the observable contract for render conditional HTML controls from page properties holds")
       empty should not include ("Activity notice")
       empty should include ("Visible")
       partial should include ("Activity notice")
@@ -9829,6 +10592,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render capability message only when access is missing" in {
+      Given("the prerequisites for render capability message only when access is missing")
       val template =
         """<main>
           |  <textus:capability-message capability="information:publish" policy="authenticated" login="true" login-href="/login">Log in to publish.</textus:capability-message>
@@ -9840,6 +10604,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         template,
         pageContext = WebPageContext(Map("pageContext.session.authenticated" -> "false"))
       ).body
+      When("render capability message only when access is missing is exercised")
       val authenticated = _renderer.renderStaticTemplate(
         "notice-board",
         Vector("detail"),
@@ -9847,6 +10612,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         pageContext = WebPageContext(Map("pageContext.session.authenticated" -> "true"))
       ).body
 
+      Then("the observable contract for render capability message only when access is missing holds")
       anonymous should include ("Log in to publish.")
       anonymous should include ("href=\"/login\"")
       anonymous should include ("data-textus-widget=\"textus:capability-message\"")
@@ -9857,6 +10623,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render form result properties from operation response and submitted values" in {
+      Given("the prerequisites for render form result properties from operation response and submitted values")
       val properties = StaticFormAppRenderer.FormResultProperties(
         StaticFormAppRenderer.FormPageProperties(
           "notice-board",
@@ -9872,8 +10639,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         """{"id":"notice_1","outcome":"created","message":"created","actions":[{"name":"detail","href":"/web/notice-board/admin/entities/notice/notice_1","method":"GET"}]}"""
       )
 
+      When("render form result properties from operation response and submitted values is exercised")
       val html = _renderer.renderFormResult(properties).body
 
+      Then("the observable contract for render form result properties from operation response and submitted values holds")
       html should include ("notice-board.notice.post-notice Result")
       html should include ("result.id")
       html should include ("notice_1")
@@ -9893,6 +10662,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "expose execution CallTree metadata as result template values" in {
+      Given("the prerequisites for expose execution CallTree metadata as result template values")
       val metadata = RuntimeContext.ExecutionMetadata(
         traceId = Some("trace-1"),
         executionId = Some("execution-1"),
@@ -9917,8 +10687,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         ))
       )
 
+      When("expose execution CallTree metadata as result template values is exercised")
       val values = FormResultMetadata.executionTemplateValues(metadata)
 
+      Then("the observable contract for expose execution CallTree metadata as result template values holds")
       values("result.execution.trace.id") shouldBe "trace-1"
       values("result.execution.id") shouldBe "execution-1"
       values("result.execution.failure") shouldBe "openlibrary.org"
@@ -9929,6 +10701,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render textus action link from operation result actions" in {
+      Given("the prerequisites for render textus action link from operation result actions")
       val properties = StaticFormAppRenderer.FormResultProperties(
         StaticFormAppRenderer.FormPageProperties(
           "notice-board",
@@ -9940,6 +10713,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         """{"outcome":"created","actions":[{"name":"detail","label":"Open detail","href":"/web/notice-board/admin/entities/notice/notice_1","method":"GET"},{"name":"approve","label":"Approve","href":"/form/notice-board/notice/approve","method":"POST"}]}"""
       )
 
+      When("render textus action link from operation result actions is exercised")
       val html = _renderer.renderFormResult(
         properties,
         """<article>
@@ -9949,6 +10723,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           |</article>""".stripMargin
       ).body
 
+      Then("the observable contract for render textus action link from operation result actions holds")
       html should include ("""<a class="btn btn-primary" href="/web/notice-board/admin/entities/notice/notice_1">Open detail</a>""")
       html should include ("""<form method="post" action="/form/notice-board/notice/approve" class="d-inline">""")
       html should include ("type=\"hidden\" name=\"paging.page\" value=\"1\"")
@@ -9959,6 +10734,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render action widgets with hidden page context for post actions" in {
+      Given("the prerequisites for render action widgets with hidden page context for post actions")
       val properties = StaticFormAppRenderer.FormResultProperties(
         StaticFormAppRenderer.FormPageProperties(
           "notice-board",
@@ -9977,6 +10753,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         """{"actions":[{"name":"approve","label":"Approve","href":"/form/notice-board/notice/approve","method":"POST"},{"name":"detail","label":"Open detail","href":"/web/notice-board/admin/entities/notice/notice_1","method":"GET"}]}"""
       )
 
+      When("render action widgets with hidden page context for post actions is exercised")
       val html = _renderer.renderFormResult(
         properties,
         """<article>
@@ -9986,6 +10763,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           |</article>""".stripMargin
       ).body
 
+      Then("the observable contract for render action widgets with hidden page context for post actions holds")
       html should include ("""<form method="post" action="/form/notice-board/notice/approve" class="d-inline"><input type="hidden" name="crud.origin.href" value="/web/notice-board/admin/entities/notice?page=2">""")
       html should include ("""<input type="hidden" name="paging.page" value="2">""")
       html should include ("""<input type="hidden" name="paging.pageSize" value="20">""")
@@ -10000,6 +10778,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render confirm-action widgets with Bootstrap modal and no-JS fallback" in {
+      Given("the prerequisites for render confirm-action widgets with Bootstrap modal and no-JS fallback")
       val properties = StaticFormAppRenderer.FormResultProperties(
         StaticFormAppRenderer.FormPageProperties(
           "notice-board",
@@ -10017,6 +10796,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         """{"actions":[{"name":"detail","label":"Open detail","href":"/web/notice-board/admin/entities/notice/notice_1","method":"GET"},{"name":"delete","label":"Delete","href":"/form/notice-board/notice/delete","method":"POST"}]}"""
       )
 
+      When("render confirm-action widgets with Bootstrap modal and no-JS fallback is exercised")
       val html = _renderer.renderFormResult(
         properties,
         """<article>
@@ -10026,6 +10806,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           |</article>""".stripMargin
       ).body
 
+      Then("the observable contract for render confirm-action widgets with Bootstrap modal and no-JS fallback holds")
       html should include ("""class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#open-confirm">Open</button>""")
       html should include ("""class="modal fade" id="open-confirm"""")
       html should include ("""class="modal-header border-secondary"""")
@@ -10047,6 +10828,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render confirm-action widgets without hidden context when disabled" in {
+      Given("the prerequisites for render confirm-action widgets without hidden context when disabled")
       val properties = StaticFormAppRenderer.FormResultProperties(
         StaticFormAppRenderer.FormPageProperties(
           "notice-board",
@@ -10062,11 +10844,13 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         """{"actions":[{"name":"delete","label":"Delete","href":"/form/notice-board/notice/delete","method":"POST"}]}"""
       )
 
+      When("render confirm-action widgets without hidden context when disabled is exercised")
       val html = _renderer.renderFormResult(
         properties,
         """<article><textus:confirm-action source="result.action.delete" context="false"></textus:confirm-action></article>"""
       ).body
 
+      Then("the observable contract for render confirm-action widgets without hidden context when disabled holds")
       html should include ("""method="post" action="/form/notice-board/notice/delete" class="d-inline"><button type="submit" class="btn btn-outline-danger">Delete</button></form>""")
       html should not include ("""name="paging.page"""")
       html should not include ("""name="csrf"""")
@@ -10074,6 +10858,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render textus hidden context inputs from page context without operation values" in {
+      Given("the prerequisites for render textus hidden context inputs from page context without operation values")
       val properties = StaticFormAppRenderer.FormResultProperties(
         StaticFormAppRenderer.FormPageProperties(
           "notice-board",
@@ -10097,6 +10882,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         """{"data":[]}"""
       )
 
+      When("render textus hidden context inputs from page context without operation values is exercised")
       val html = _renderer.renderFormResult(
         properties,
         """<form method="post" action="/form/notice-board/notice/search-notices">
@@ -10105,6 +10891,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           |</form>""".stripMargin
       ).body
 
+      Then("the observable contract for render textus hidden context inputs from page context without operation values holds")
       html should include ("""<input type="hidden" name="crud.origin.href" value="/web/notice-board/admin/entities/notice?page=2">""")
       html should include ("""<input type="hidden" name="paging.page" value="2">""")
       html should include ("""<input type="hidden" name="paging.pageSize" value="20">""")
@@ -10120,6 +10907,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render await action link from asynchronous command job result" in {
+      Given("the prerequisites for render await action link from asynchronous command job result")
       val properties = StaticFormAppRenderer.FormResultProperties(
         StaticFormAppRenderer.FormPageProperties(
           "notice-board",
@@ -10131,6 +10919,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         "cncf-job-job-1776566553930-2NnWI1ze2dLoQU4t6hALAa"
       )
 
+      When("render await action link from asynchronous command job result is exercised")
       val html = _renderer.renderFormResult(
         properties,
         """<article>
@@ -10140,6 +10929,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           |</article>""".stripMargin
       ).body
 
+      Then("the observable contract for render await action link from asynchronous command job result holds")
       html should include ("cncf-job-job-1776566553930-2NnWI1ze2dLoQU4t6hALAa")
       html should include ("""<form method="post" action="/form/notice-board/notice/post-notice/jobs/cncf-job-job-1776566553930-2NnWI1ze2dLoQU4t6hALAa/await" class="d-inline">""")
       html should include ("type=\"hidden\" name=\"paging.page\" value=\"1\"")
@@ -10150,6 +10940,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "preserve componentlet alias in framework generated await action links" in {
+      Given("the prerequisites for preserve componentlet alias in framework generated await action links")
       val properties = StaticFormAppRenderer.FormResultProperties(
         StaticFormAppRenderer.FormPageProperties(
           "notice-admin",
@@ -10161,16 +10952,19 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         """{"jobId":"cncf-job-job-1","jobStatus":"accepted"}"""
       )
 
+      When("preserve componentlet alias in framework generated await action links is exercised")
       val html = _renderer.renderFormResult(
         properties,
         """<article><textus:job-actions actions="await"></textus:job-actions></article>"""
       ).body
 
+      Then("the observable contract for preserve componentlet alias in framework generated await action links holds")
       html should include ("/form/notice-admin/notice/post-notice/jobs/cncf-job-job-1/await")
       html should not include ("/form/notice-board/notice/post-notice/jobs/cncf-job-job-1/await")
     }
 
     "render job ticket and job actions for application job result UX" in {
+      Given("the prerequisites for render job ticket and job actions for application job result UX")
       val properties = StaticFormAppRenderer.FormResultProperties(
         StaticFormAppRenderer.FormPageProperties(
           "notice-board",
@@ -10182,6 +10976,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         """{"jobId":"cncf-job-job-1","jobStatus":"running","message":"Queued"}"""
       )
 
+      When("render job ticket and job actions for application job result UX is exercised")
       val html = _renderer.renderFormResult(
         properties,
         """<article>
@@ -10190,6 +10985,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           |</article>""".stripMargin
       ).body
 
+      Then("the observable contract for render job ticket and job actions for application job result UX holds")
       html should include ("textus-job-ticket")
       html should include ("cncf-job-job-1")
       html should include ("running")
@@ -10201,6 +10997,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render application job panel with local and system job actions" in {
+      Given("the prerequisites for render application job panel with local and system job actions")
       val properties = StaticFormAppRenderer.FormResultProperties(
         StaticFormAppRenderer.FormPageProperties(
           "notice-board",
@@ -10212,6 +11009,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         """{"jobId":"cncf-job-job-1","jobStatus":"accepted","message":"Queued"}"""
       )
 
+      When("render application job panel with local and system job actions is exercised")
       val html = _renderer.renderFormResult(
         properties,
         """<article>
@@ -10219,6 +11017,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           |</article>""".stripMargin
       ).body
 
+      Then("the observable contract for render application job panel with local and system job actions holds")
       html should include ("textus-job-panel")
       html should include ("Notice command")
       html should include ("Queued")
@@ -10231,6 +11030,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "append standard application job panel when a result template omits job widgets" in {
+      Given("the prerequisites for append standard application job panel when a result template omits job widgets")
       val properties = StaticFormAppRenderer.FormResultProperties(
         StaticFormAppRenderer.FormPageProperties(
           "notice-board",
@@ -10242,11 +11042,13 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         """{"jobId":"cncf-job-job-1","jobStatus":"accepted","message":"Queued"}"""
       )
 
+      When("append standard application job panel when a result template omits job widgets is exercised")
       val html = _renderer.renderFormResult(
         properties,
         """<article><h2>Custom result</h2></article>"""
       ).body
 
+      Then("the observable contract for append standard application job panel when a result template omits job widgets holds")
       html should include ("Custom result")
       html should include ("textus-job-panel")
       html should include ("/web/notice-board/jobs/cncf-job-job-1")
@@ -10255,6 +11057,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render development execution debug panel with inline calltree" in {
+      Given("the prerequisites for render development execution debug panel with inline calltree")
       val calltree = Record.data(
         "calltree" -> Vector(
           Record.data(
@@ -10300,11 +11103,13 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         operationMode = OperationMode.Develop
       )
 
+      When("render development execution debug panel with inline calltree is exercised")
       val html = _renderer.renderFormResult(
         properties,
         """<article><h2>Custom result</h2></article>"""
       ).body
 
+      Then("the observable contract for render development execution debug panel with inline calltree holds")
       html should include ("textus-execution-debug-panel")
       html should include ("Development execution diagnostics")
       html should include ("bg-success-subtle")
@@ -10357,6 +11162,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "append development execution debug panel to full HTML result templates" in {
+      Given("the prerequisites for append development execution debug panel to full HTML result templates")
       val properties = StaticFormAppRenderer.FormResultProperties(
         StaticFormAppRenderer.FormPageProperties(
           "notice-board",
@@ -10372,11 +11178,13 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         operationMode = OperationMode.Develop
       )
 
+      When("append development execution debug panel to full HTML result templates is exercised")
       val html = _renderer.renderFormResult(
         properties,
         """<!doctype html><html><head><title>Result</title></head><body><main>Custom result</main></body></html>"""
       ).body
 
+      Then("the observable contract for append development execution debug panel to full HTML result templates holds")
       html should include ("Custom result")
       html should include ("textus-execution-debug-panel")
       html should include ("Development execution diagnostics")
@@ -10387,6 +11195,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render development execution debug panel even when calltree metadata is absent" in {
+      Given("the prerequisites for render development execution debug panel even when calltree metadata is absent")
       val properties = StaticFormAppRenderer.FormResultProperties(
         StaticFormAppRenderer.FormPageProperties(
           "notice-board",
@@ -10405,11 +11214,13 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         fieldConfidentiality = Map("credentialValue" -> org.goldenport.schema.DataConfidentiality.Secret)
       )
 
+      When("render development execution debug panel even when calltree metadata is absent is exercised")
       val html = _renderer.renderFormResult(
         properties,
         """<article><h2>Custom result</h2></article>"""
       ).body
 
+      Then("the observable contract for render development execution debug panel even when calltree metadata is absent holds")
       html should include ("textus-execution-debug-panel")
       html should include ("Operation arguments")
       html should include ("bg-success-subtle")
@@ -10423,6 +11234,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "hide development execution debug panel in production mode" in {
+      Given("the prerequisites for hide development execution debug panel in production mode")
       val properties = StaticFormAppRenderer.FormResultProperties(
         StaticFormAppRenderer.FormPageProperties(
           "notice-board",
@@ -10438,71 +11250,84 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         operationMode = OperationMode.Production
       )
 
+      When("hide development execution debug panel in production mode is exercised")
       val html = _renderer.renderFormResult(
         properties,
         """<article><h2>Custom result</h2></article>"""
       ).body
 
+      Then("the observable contract for hide development execution debug panel in production mode holds")
       html should not include ("textus-execution-debug-panel")
       html should not include ("/web/assets/textus-calltree.js")
     }
 
     "ship progressive CallTree enhancement asset for development diagnostics" in {
+      Given("the prerequisites for ship progressive CallTree enhancement asset for development diagnostics")
       val js = StaticFormAppAssets.textusCalltreeJs
 
-      js should include ("data-calltree-enhanced")
-      js should include ("Expand all")
-      js should include ("Collapse all")
-      js should include ("data-calltree-search")
-      js should include ("data-calltree-clear")
-      js should include ("data-calltree-show-io")
-      js should include ("data-calltree-show-real-io")
-      js should include ("data-calltree-toggle")
-      js should include ("setupNodeExpansion")
-      js should include ("refreshExpansion")
-      js should include ("directChildContainer")
-      js should include ("data-calltree-long-attribute")
-      js should include ("compactDurationAttributes")
-      js should include ("duration_millis")
-      js should include ("duration_micros")
-      js should include ("duration_nanos")
-      js should include ("data-calltree-pair")
-      js should include ("textus-calltree-row-highlight")
-      js should include ("bindPairHighlight")
-      js should include ("openAncestors")
-      js should include ("enhancePayloadAttributes")
-      js should include ("Show \" + key")
-      js should include ("Open external \" + key")
-      js should include ("window.TextusCallTree")
-      js should include ("enhanceAll")
+      When("the observable result for ship progressive CallTree enhancement asset for development diagnostics is inspected")
+      locally {
+        Then("the observable contract for ship progressive CallTree enhancement asset for development diagnostics holds")
+        js should include ("data-calltree-enhanced")
+        js should include ("Expand all")
+        js should include ("Collapse all")
+        js should include ("data-calltree-search")
+        js should include ("data-calltree-clear")
+        js should include ("data-calltree-show-io")
+        js should include ("data-calltree-show-real-io")
+        js should include ("data-calltree-toggle")
+        js should include ("setupNodeExpansion")
+        js should include ("refreshExpansion")
+        js should include ("directChildContainer")
+        js should include ("data-calltree-long-attribute")
+        js should include ("compactDurationAttributes")
+        js should include ("duration_millis")
+        js should include ("duration_micros")
+        js should include ("duration_nanos")
+        js should include ("data-calltree-pair")
+        js should include ("textus-calltree-row-highlight")
+        js should include ("bindPairHighlight")
+        js should include ("openAncestors")
+        js should include ("enhancePayloadAttributes")
+        js should include ("Show \" + key")
+        js should include ("Open external \" + key")
+        js should include ("window.TextusCallTree")
+        js should include ("enhanceAll")
+      }
     }
 
     "ship form API diagnostics CallTree extraction asset" in {
+      Given("the prerequisites for ship form API diagnostics CallTree extraction asset")
       val js = StaticFormAppAssets.textusFormDebugJs
 
-      js should include ("extractCallTree")
-      js should include ("[shown in CallTree panel]")
-      js should include ("data-textus-calltree")
-      js should include ("isCallTreeObservation")
-      js should include ("callTreeObservations")
-      js should include ("data-calltree-children")
-      js should include ("Step observations")
-      js should include ("const attributeOrder = { component: 0, service: 1, operation: 2 }")
-      js should include ("callTreePayloadHtml")
-      js should include ("Show ' + escapeHtml(key)")
-      js should include ("Open external ' + escapeHtml(key)")
-      js should include ("function debugRecordKey")
-      js should include ("function shouldReplaceRecord")
-      js should include ("data-debug-event-key")
-      js should include ("""kind === "page-render"""")
-      js should include ("function ensureEventSlot")
-      js should include ("data-debug-slot")
-      js should include ("Operation origin slot")
-      js should not include ("UoW</span>")
-      js should include ("window.TextusCallTree.enhanceAll")
+      When("the observable result for ship form API diagnostics CallTree extraction asset is inspected")
+      locally {
+        Then("the observable contract for ship form API diagnostics CallTree extraction asset holds")
+        js should include ("extractCallTree")
+        js should include ("[shown in CallTree panel]")
+        js should include ("data-textus-calltree")
+        js should include ("isCallTreeObservation")
+        js should include ("callTreeObservations")
+        js should include ("data-calltree-children")
+        js should include ("Step observations")
+        js should include ("const attributeOrder = { component: 0, service: 1, operation: 2 }")
+        js should include ("callTreePayloadHtml")
+        js should include ("Show ' + escapeHtml(key)")
+        js should include ("Open external ' + escapeHtml(key)")
+        js should include ("function debugRecordKey")
+        js should include ("function shouldReplaceRecord")
+        js should include ("data-debug-event-key")
+        js should include ("""kind === "page-render"""")
+        js should include ("function ensureEventSlot")
+        js should include ("data-debug-slot")
+        js should include ("Operation origin slot")
+        js should not include ("UoW</span>")
+        js should include ("window.TextusCallTree.enhanceAll")
+      }
     }
 
     "render application user job list and detail pages" in {
+      Given("the prerequisites for render application user job list and detail pages")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       val action = _RendererJobAction(GRequest.of(
         component = "notice-board",
@@ -10523,8 +11348,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       val model = subsystem.jobEngine.query(jobid).getOrElse(fail("job read model missing"))
 
       val list = _renderer.renderApplicationJobs("notice-board", Vector(model)).body
+      When("render application user job list and detail pages is exercised")
       val detail = _renderer.renderApplicationJob("notice-board", model).body
 
+      Then("the observable contract for render application user job list and detail pages holds")
       list should include ("My jobs")
       list should include (jobid.value)
       list should include (s"/web/notice-board/jobs/${jobid.value}")
@@ -10535,16 +11362,22 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render system job ticket page with fixed system await link" in {
+      Given("the prerequisites for render system job ticket page with fixed system await link")
       val html = _renderer.renderSystemJobTicket("cncf-job-job-1").body
 
-      html should include ("textus-job-ticket")
-      html should include ("cncf-job-job-1")
-      html should include ("/web/system/jobs/cncf-job-job-1/await")
-      html should include ("Check result")
-      html should not include ("<textus:job-ticket")
+      When("the observable result for render system job ticket page with fixed system await link is inspected")
+      locally {
+        Then("the observable contract for render system job ticket page with fixed system await link holds")
+        html should include ("textus-job-ticket")
+        html should include ("cncf-job-job-1")
+        html should include ("/web/system/jobs/cncf-job-job-1/await")
+        html should include ("Check result")
+        html should not include ("<textus:job-ticket")
+      }
     }
 
     "render detail action link from command result id" in {
+      Given("the prerequisites for render detail action link from command result id")
       val properties = StaticFormAppRenderer.FormResultProperties(
         StaticFormAppRenderer.FormPageProperties(
           "notice-board",
@@ -10556,6 +11389,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         """{"id":"notice_1"}"""
       )
 
+      When("render detail action link from command result id is exercised")
       val html = _renderer.renderFormResult(
         properties,
         """<article>
@@ -10564,6 +11398,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           |</article>""".stripMargin
       ).body
 
+      Then("the observable contract for render detail action link from command result id holds")
       html should include ("""<a class="btn btn-primary" href="/form/notice-board/notice/get-notice/result?id=notice_1">Open detail</a>""")
       html should include ("""<a class="btn btn-outline-primary" href="/form/notice-board/notice/get-notice/result?id=notice_1">Open detail</a>""")
       html should not include ("<textus:action-link")
@@ -10571,6 +11406,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "preserve componentlet alias in framework generated detail action links" in {
+      Given("the prerequisites for preserve componentlet alias in framework generated detail action links")
       val properties = StaticFormAppRenderer.FormResultProperties(
         StaticFormAppRenderer.FormPageProperties(
           "notice-admin",
@@ -10582,16 +11418,19 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         """{"id":"notice_1"}"""
       )
 
+      When("preserve componentlet alias in framework generated detail action links is exercised")
       val html = _renderer.renderFormResult(
         properties,
         """<article><textus:action-link source="result.action.detail" class="btn btn-outline-primary"></textus:action-link></article>"""
       ).body
 
+      Then("the observable contract for preserve componentlet alias in framework generated detail action links holds")
       html should include ("""href="/form/notice-admin/notice/get-notice/result?id=notice_1"""")
       html should not include ("""href="/form/notice-board/notice/get-notice/result?id=notice_1"""")
     }
 
     "render action-group widgets from operation result actions" in {
+      Given("the prerequisites for render action-group widgets from operation result actions")
       val properties = StaticFormAppRenderer.FormResultProperties(
         StaticFormAppRenderer.FormPageProperties(
           "notice-board",
@@ -10612,6 +11451,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         """{}"""
       )
 
+      When("render action-group widgets from operation result actions is exercised")
       val html = _renderer.renderFormResult(
         properties,
         """<article>
@@ -10619,6 +11459,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           |</article>""".stripMargin
       ).body
 
+      Then("the observable contract for render action-group widgets from operation result actions holds")
       html should include ("textus-action-group")
       html should include ("""<form method="post" action="/form/notice-board/notice/post-notice/jobs/job-1/await" class="d-inline">""")
       html should include ("""<input type="hidden" name="paging.page" value="1">""")
@@ -10628,6 +11469,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render action-group widgets directly from JSON action arrays" in {
+      Given("the prerequisites for render action-group widgets directly from JSON action arrays")
       val properties = StaticFormAppRenderer.FormResultProperties(
         StaticFormAppRenderer.FormPageProperties(
           "notice-board",
@@ -10640,6 +11482,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         """{"actions":[{"name":"approve","label":"Approve","href":"/form/notice-board/notice/approve","method":"POST"},{"name":"detail","label":"Open detail","href":"/form/notice-board/notice/get-notice/result?id=notice_1","method":"GET"}]}"""
       )
 
+      When("render action-group widgets directly from JSON action arrays is exercised")
       val html = _renderer.renderFormResult(
         properties,
         """<article>
@@ -10647,6 +11490,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           |</article>""".stripMargin
       ).body
 
+      Then("the observable contract for render action-group widgets directly from JSON action arrays holds")
       html should include ("textus-action-group")
       html should include ("""<form method="post" action="/form/notice-board/notice/approve" class="d-inline">""")
       html should include ("""<button type="submit" class="btn btn-outline-primary">Approve</button>""")
@@ -10655,6 +11499,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "let JSON action metadata override framework generated action defaults" in {
+      Given("the prerequisites for let JSON action metadata override framework generated action defaults")
       val properties = StaticFormAppRenderer.FormResultProperties(
         StaticFormAppRenderer.FormPageProperties(
           "notice-board",
@@ -10666,6 +11511,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         """{"jobId":"job-1","actions":[{"name":"await","label":"Wait now","href":"/custom/jobs/job-1/await","method":"POST"}]}"""
       )
 
+      When("let JSON action metadata override framework generated action defaults is exercised")
       val html = _renderer.renderFormResult(
         properties,
         """<article>
@@ -10673,12 +11519,14 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           |</article>""".stripMargin
       ).body
 
+      Then("the observable contract for let JSON action metadata override framework generated action defaults holds")
       html should include ("action=\"/custom/jobs/job-1/await\"")
       html should include ("""<button type="submit" class="btn btn-primary">Wait now</button>""")
       html should not include ("action=\"/form/notice-board/notice/post-notice/jobs/job-1/await\"")
     }
 
     "render return action for detail pages from return href context" in {
+      Given("the prerequisites for render return action for detail pages from return href context")
       val properties = StaticFormAppRenderer.FormResultProperties(
         StaticFormAppRenderer.FormPageProperties(
           "notice-board",
@@ -10693,6 +11541,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         """{"id":"notice_1","title":"Phase12"}"""
       )
 
+      When("render return action for detail pages from return href context is exercised")
       val html = _renderer.renderFormResult(
         properties,
         """<article>
@@ -10701,6 +11550,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           |</article>""".stripMargin
       ).body
 
+      Then("the observable contract for render return action for detail pages from return href context holds")
       html should include ("""<a class="btn btn-outline-primary" href="/form/notice-board/notice/search-notices">Back</a>""")
       html should include ("""<input type="hidden" name="return.href" value="/form/notice-board/notice/search-notices">""")
       html should not include ("<textus:action-group")
@@ -10708,6 +11558,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render textus table without total count" in {
+      Given("the prerequisites for render textus table without total count")
       val properties = StaticFormAppRenderer.FormResultProperties(
         StaticFormAppRenderer.FormPageProperties(
           "notice-board",
@@ -10724,8 +11575,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         """[{"title":"Hello"}]"""
       )
 
+      When("render textus table without total count is exercised")
       val html = _renderer.renderFormResult(properties).body
 
+      Then("the observable contract for render textus table without total count holds")
       html should include ("Page 2")
       html should include ("Previous")
       html should include ("Next")
@@ -10734,6 +11587,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render textus table from operation response body fields" in {
+      Given("the prerequisites for render textus table from operation response body fields")
       val properties = StaticFormAppRenderer.FormResultProperties(
         StaticFormAppRenderer.FormPageProperties(
           "notice-board",
@@ -10748,6 +11602,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         """{"data":[{"subject":"Hello","sender_name":"alice"},{"subject":"World","sender_name":"bob"}],"total_count":2}"""
       )
 
+      When("render textus table from operation response body fields is exercised")
       val html = _renderer.renderFormResult(
         properties,
         """<article>
@@ -10757,6 +11612,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           |</article>""".stripMargin
       ).body
 
+      Then("the observable contract for render textus table from operation response body fields holds")
       html should include ("<table")
       html should include ("subject")
       html should include ("sender_name")
@@ -10771,6 +11627,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render textus table download links independent of display columns" in {
+      Given("the prerequisites for render textus table download links independent of display columns")
       val properties = StaticFormAppRenderer.FormResultProperties(
         StaticFormAppRenderer.FormPageProperties(
           "notice-board",
@@ -10790,11 +11647,13 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         """{"data":[{"subject":"Hello","sender_name":"alice","body":"full text"}]}"""
       )
 
+      When("render textus table download links independent of display columns is exercised")
       val html = _renderer.renderFormResult(
         properties,
         """<article><textus:table source="result.body.data" columns="subject:Subject" download-source="result.body.data" download-formats="csv,json,xlsx" download-name="notices"></textus:table></article>"""
       ).body
 
+      Then("the observable contract for render textus table download links independent of display columns holds")
       html should include ("textus-table-download")
       html should include ("textus.download.source=result.body.data")
       html should include ("textus.download.format=csv")
@@ -10813,6 +11672,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render textus table without pagination when disabled" in {
+      Given("the prerequisites for render textus table without pagination when disabled")
       val properties = StaticFormAppRenderer.FormResultProperties(
         StaticFormAppRenderer.FormPageProperties(
           "notice-board",
@@ -10827,6 +11687,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         """{"data":[{"subject":"Hello","sender_name":"alice"},{"subject":"World","sender_name":"bob"}],"total_count":2}"""
       )
 
+      When("render textus table without pagination when disabled is exercised")
       val html = _renderer.renderFormResult(
         properties,
         """<article>
@@ -10834,6 +11695,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           |</article>""".stripMargin
       ).body
 
+      Then("the observable contract for render textus table without pagination when disabled holds")
       html should include ("<table")
       html should include ("Hello")
       html should not include ("bob")
@@ -10844,6 +11706,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render textus table with clickable rows" in {
+      Given("the prerequisites for render textus table with clickable rows")
       val properties = StaticFormAppRenderer.FormResultProperties(
         StaticFormAppRenderer.FormPageProperties(
           "notice-board",
@@ -10855,6 +11718,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         """{"data":[{"id":"notice-1","subject":"Hello"}]}"""
       )
 
+      When("render textus table with clickable rows is exercised")
       val html = _renderer.renderFormResult(
         properties,
         """<article>
@@ -10867,6 +11731,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           |</article>""".stripMargin
       ).body
 
+      Then("the observable contract for render textus table with clickable rows holds")
       html should include ("textus-clickable-row")
       html should include ("data-textus-row-href=\"/web/notices/detail?id=notice-1\"")
       html should include ("role=\"link\"")
@@ -10876,6 +11741,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render textus table from result body shorthand" in {
+      Given("the prerequisites for render textus table from result body shorthand")
       val properties = StaticFormAppRenderer.FormResultProperties(
         StaticFormAppRenderer.FormPageProperties(
           "notice-board",
@@ -10887,16 +11753,19 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         """{"data":[{"subject":"Hello"}]}"""
       )
 
+      When("render textus table from result body shorthand is exercised")
       val html = _renderer.renderFormResult(
         properties,
         """<article><textus:table source="result.data"></textus:table></article>"""
       ).body
 
+      Then("the observable contract for render textus table from result body shorthand holds")
       html should include ("<td>Hello</td>")
       html should not include ("<textus:table")
     }
 
     "render standalone textus pagination from shared paging metadata" in {
+      Given("the prerequisites for render standalone textus pagination from shared paging metadata")
       val properties = StaticFormAppRenderer.FormResultProperties(
         StaticFormAppRenderer.FormPageProperties(
           "notice-board",
@@ -10915,6 +11784,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         """{"data":[]}"""
       )
 
+      When("render standalone textus pagination from shared paging metadata is exercised")
       val html = _renderer.renderFormResult(
         properties,
         """<article>
@@ -10923,6 +11793,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           |</article>""".stripMargin
       ).body
 
+      Then("the observable contract for render standalone textus pagination from shared paging metadata holds")
       html should include ("""<nav aria-label="Result pages">""")
       html should include ("""page=1&amp;pageSize=20""")
       html should include ("""page=3&amp;pageSize=20""")
@@ -10932,6 +11803,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render standalone textus pagination without total count" in {
+      Given("the prerequisites for render standalone textus pagination without total count")
       val properties = StaticFormAppRenderer.FormResultProperties(
         StaticFormAppRenderer.FormPageProperties(
           "notice-board",
@@ -10949,17 +11821,20 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         """{"data":[]}"""
       )
 
+      When("render standalone textus pagination without total count is exercised")
       val html = _renderer.renderFormResult(
         properties,
         """<article><textus:pagination></textus:pagination></article>"""
       ).body
 
+      Then("the observable contract for render standalone textus pagination without total count holds")
       html should include ("Page 1")
       html should include ("""<li class="page-item disabled"><a class="page-link" href="/form/notice-board/notice/search-notices/result?page=2&amp;pageSize=20">Next</a></li>""")
       html should not include ("<textus:pagination")
     }
 
     "preserve componentlet alias in default paging href" in {
+      Given("the prerequisites for preserve componentlet alias in default paging href")
       val properties = StaticFormAppRenderer.FormResultProperties(
         StaticFormAppRenderer.FormPageProperties(
           "notice-admin",
@@ -10976,16 +11851,19 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         """{"data":[]}"""
       )
 
+      When("preserve componentlet alias in default paging href is exercised")
       val html = _renderer.renderFormResult(
         properties,
         """<article><textus:pagination></textus:pagination></article>"""
       ).body
 
+      Then("the observable contract for preserve componentlet alias in default paging href holds")
       html should include ("/form/notice-admin/notice/search-notices/result?page=2&amp;pageSize=20")
       html should not include ("/form/notice-board/notice/search-notices/result?page=2&amp;pageSize=20")
     }
 
     "preserve form result context in default paging href" in {
+      Given("the prerequisites for preserve form result context in default paging href")
       val properties = StaticFormAppRenderer.FormResultProperties(
         StaticFormAppRenderer.FormPageProperties(
           "textus-user-notification",
@@ -11005,11 +11883,13 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         """{"data":{"total_count":0,"offset":0,"limit":100,"fetched_count":0}}"""
       )
 
+      When("preserve form result context in default paging href is exercised")
       val html = _renderer.renderFormResult(
         properties,
         """<article><textus:card-list source="result.body" title="title"></textus:card-list></article>"""
       ).body
 
+      Then("the observable contract for preserve form result context in default paging href holds")
       html should include ("textus.form.page=notifications")
       html should include ("limit=100")
       html should include ("unreadOnly=true")
@@ -11079,6 +11959,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render textus record card with CML summary columns" in {
+      Given("the prerequisites for render textus record card with CML summary columns")
       val columns = Vector(
         StaticFormAppRenderer.TableColumn("title", "Title"),
         StaticFormAppRenderer.TableColumn("recipient_name", "Recipient")
@@ -11095,11 +11976,13 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         Map(StaticFormAppRenderer.tableColumnKey("result.body", "notice", "summary") -> columns)
       )
 
+      When("render textus record card with CML summary columns is exercised")
       val html = _renderer.renderFormResult(
         properties,
         """<article><textus:record-card source="result.body" entity="notice" view="summary"></textus:record-card></article>"""
       ).body
 
+      Then("the observable contract for render textus record card with CML summary columns holds")
       html should include ("class=\"card h-100 textus-record-card\"")
       html should include ("<h3 class=\"h5 card-title\">Phase12</h3>")
       html should include ("<dt class=\"col-sm-4\">Title</dt><dd class=\"col-sm-8\">Phase12</dd>")
@@ -11109,6 +11992,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render textus description list with CML detail columns" in {
+      Given("the prerequisites for render textus description list with CML detail columns")
       val columns = Vector(
         StaticFormAppRenderer.TableColumn("title", "Title"),
         StaticFormAppRenderer.TableColumn("content", "Content"),
@@ -11126,11 +12010,13 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         Map(StaticFormAppRenderer.tableColumnKey("result.body", "notice", "detail") -> columns)
       )
 
+      When("render textus description list with CML detail columns is exercised")
       val html = _renderer.renderFormResult(
         properties,
         """<article><textus:description-list source="result.body" entity="notice" view="detail"></textus:description-list></article>"""
       ).body
 
+      Then("the observable contract for render textus description list with CML detail columns holds")
       html should include ("textus-description-list")
       html should include ("<dt class=\"col-sm-4\">Title</dt><dd class=\"col-sm-8\">Phase12</dd>")
       html should include ("<dt class=\"col-sm-4\">Content</dt><dd class=\"col-sm-8\">Static form detail</dd>")
@@ -11140,6 +12026,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render textus card list with shared paging metadata" in {
+      Given("the prerequisites for render textus card list with shared paging metadata")
       val columns = Vector(
         StaticFormAppRenderer.TableColumn("title", "Title"),
         StaticFormAppRenderer.TableColumn("recipient_name", "Recipient")
@@ -11162,11 +12049,13 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         Map(StaticFormAppRenderer.tableColumnKey("result.body.data", "notice", "summary") -> columns)
       )
 
+      When("render textus card list with shared paging metadata is exercised")
       val html = _renderer.renderFormResult(
         properties,
         """<article><textus:card-list source="result.body" entity="notice" view="summary"></textus:card-list></article>"""
       ).body
 
+      Then("the observable contract for render textus card list with shared paging metadata holds")
       html should include ("row row-cols-1 row-cols-md-2 g-3 mt-3")
       html should include ("<h3 class=\"h5 card-title\">Phase12</h3>")
       html should include ("<dt class=\"col-sm-4\">Recipient</dt><dd class=\"col-sm-8\">Bob</dd>")
@@ -11178,6 +12067,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render textus card list with explicit responsive layout attributes" in {
+      Given("the prerequisites for render textus card list with explicit responsive layout attributes")
       val properties = StaticFormAppRenderer.FormResultProperties(
         StaticFormAppRenderer.FormPageProperties(
           "notice-board",
@@ -11194,11 +12084,13 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         """{"data":[{"id":"notice_1","title":"Phase12","content":"hidden","recipient_name":"Bob"}]}"""
       )
 
+      When("render textus card list with explicit responsive layout attributes is exercised")
       val html = _renderer.renderFormResult(
         properties,
         """<article><textus:card-list source="result.body" columns="title,recipient_name" cols="1" md="3" lg="4"></textus:card-list></article>"""
       ).body
 
+      Then("the observable contract for render textus card list with explicit responsive layout attributes holds")
       html should include ("row row-cols-1 row-cols-md-3 row-cols-lg-4 g-3 mt-3")
       html should include ("<dt class=\"col-sm-4\">title</dt><dd class=\"col-sm-8\">Phase12</dd>")
       html should include ("<dt class=\"col-sm-4\">recipient_name</dt><dd class=\"col-sm-8\">Bob</dd>")
@@ -11208,6 +12100,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render textus line-list from result rows" in {
+      Given("the prerequisites for render textus line-list from result rows")
       val properties = StaticFormAppRenderer.FormResultProperties(
         StaticFormAppRenderer.FormPageProperties(
           "notice-board",
@@ -11219,11 +12112,13 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         """{"data":[{"id":"notice_1","title":"Phase12","summary":"Static form validation","recipient_name":"Bob","state":"stable"},{"id":"notice_2","title":"Second","summary":"Follow up","recipient_name":"Alice","state":"editing"}]}"""
       )
 
+      When("render textus line-list from result rows is exercised")
       val html = _renderer.renderFormResult(
         properties,
         """<article><textus:line-list source="result.body.data" title="title" subtitle="summary" columns="recipient_name:Recipient,state:State" badge="state" detail-href="/notice/{id}" detail-label="Open" click-row="true"></textus:line-list></article>"""
       ).body
 
+      Then("the observable contract for render textus line-list from result rows holds")
       html should include ("textus-line-list")
       html should include ("data-textus-widget=\"textus:line-list\"")
       html should include ("textus-line-list-item")
@@ -11256,6 +12151,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render textus editable-line-list from result row template" in {
+      Given("the prerequisites for render textus editable-line-list from result row template")
       val properties = StaticFormAppRenderer.FormResultProperties(
         StaticFormAppRenderer.FormPageProperties(
           "notice-board",
@@ -11267,6 +12163,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         """{"data":{"rows":[{"id":"row_1","label":"First","enabled":true,"mergeOptions":[{"value":"","label":"Keep as entry","selected":false},{"value":"row_2","label":"Second","selected":true}]},{"id":"row_2","label":"Second","enabled":false,"mergeOptions":[{"value":"","label":"Keep as entry","selected":true}]}],"rowsJson":"[{\"id\":\"json_1\",\"label\":\"JSON source\",\"enabled\":true,\"mergeOptions\":[{\"value\":\"\",\"label\":\"Keep as entry\",\"selected\":true}]}]"}}"""
       )
 
+      When("render textus editable-line-list from result row template is exercised")
       val html = _renderer.renderFormResult(
         properties,
         """<table><tbody><textus:editable-line-list name="noticeRows" source="result.body.data.rows" key="id" empty="No rows" colspan="3">
@@ -11274,6 +12171,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           |</textus:editable-line-list></tbody></table>""".stripMargin
       ).body
 
+      Then("the observable contract for render textus editable-line-list from result row template holds")
       html should include ("data-textus-widget=\"textus:editable-line-list\"")
       html should include ("data-textus-list=\"noticeRows\"")
       html should include ("data-textus-row=\"row_1\"")
@@ -11313,6 +12211,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render table and card detail actions from record fields" in {
+      Given("the prerequisites for render table and card detail actions from record fields")
       val columns = Vector(
         StaticFormAppRenderer.TableColumn("title", "Title"),
         StaticFormAppRenderer.TableColumn("recipient_name", "Recipient")
@@ -11329,6 +12228,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         Map(StaticFormAppRenderer.tableColumnKey("result.body.data", "notice", "summary") -> columns)
       )
 
+      When("render table and card detail actions from record fields is exercised")
       val html = _renderer.renderFormResult(
         properties,
         """<article>
@@ -11337,6 +12237,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           |</article>""".stripMargin
       ).body
 
+      Then("the observable contract for render table and card detail actions from record fields holds")
       html should include ("<th>Actions</th>")
       html should include ("href=\"/form/notice-board/notice/get-notice/result?id=notice_1&amp;return.href=%2Fform%2Fnotice-board%2Fnotice%2Fsearch-notices%3FrecipientName%3DBob%20Smith\"")
       html should include ("""Read</a>""")
@@ -11347,6 +12248,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render summary card and feedback widgets" in {
+      Given("the prerequisites for render summary card and feedback widgets")
       val properties = StaticFormAppRenderer.FormResultProperties(
         StaticFormAppRenderer.FormPageProperties(
           "notice-board",
@@ -11363,6 +12265,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         """{"data":[{"title":"Phase12"}]}"""
       )
 
+      When("render summary card and feedback widgets is exercised")
       val html = _renderer.renderFormResult(
         properties,
         """<article>
@@ -11376,6 +12279,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           |</article>""".stripMargin
       ).body
 
+      Then("the observable contract for render summary card and feedback widgets holds")
       html should include ("class=\"card h-100 textus-summary-card border-success\"")
       html should include ("data-textus-widget=\"textus:summary-card\"")
       html should include ("data-textus-widget=\"textus:alert\"")
@@ -11398,6 +12302,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render namespace and HTML-compatible widget notation through the same contract" in {
+      Given("the prerequisites for render namespace and HTML-compatible widget notation through the same contract")
       val properties = StaticFormAppRenderer.FormResultProperties(
         StaticFormAppRenderer.FormPageProperties(
           "notice-board",
@@ -11416,6 +12321,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         """{"data":[{"title":"Phase12","recipient_name":"Bob"}]}"""
       )
 
+      When("render namespace and HTML-compatible widget notation through the same contract is exercised")
       val html = _renderer.renderFormResult(
         properties,
         """<article>
@@ -11429,6 +12335,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           |</article>""".stripMargin
       ).body
 
+      Then("the observable contract for render namespace and HTML-compatible widget notation through the same contract holds")
       html should include ("textus-record-card")
       html should include ("row row-cols-1 row-cols-md-2")
       html should include ("textus-card")
@@ -11447,6 +12354,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render html field widgets for trusted HTML fragments" in {
+      Given("the prerequisites for render html field widgets for trusted HTML fragments")
       val properties = StaticFormAppRenderer.FormResultProperties(
         StaticFormAppRenderer.FormPageProperties("blog", "blog", "get-post"),
         200,
@@ -11454,6 +12362,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         """{"title":"Blog","content":"<article><p>Hello <strong>HTML</strong></p></article>"}"""
       )
 
+      When("render html field widgets for trusted HTML fragments is exercised")
       val html = _renderer.renderFormResult(
         properties,
         """<article>
@@ -11461,12 +12370,14 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           |</article>""".stripMargin
       ).body
 
+      Then("the observable contract for render html field widgets for trusted HTML fragments holds")
       html should include ("class=\"article-body\"")
       html should include ("<article><p>Hello <strong>HTML</strong></p></article>")
       html should not include ("<textus:html-field")
     }
 
     "render nav-list widgets in button and list-group styles" in {
+      Given("the prerequisites for render nav-list widgets in button and list-group styles")
       val properties = StaticFormAppRenderer.FormResultProperties(
         StaticFormAppRenderer.FormPageProperties(
           "notice-board",
@@ -11482,6 +12393,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         """{"data":[]}"""
       )
 
+      When("render nav-list widgets in button and list-group styles is exercised")
       val html = _renderer.renderFormResult(
         properties,
         """<article>
@@ -11490,6 +12402,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           |</article>""".stripMargin
       ).body
 
+      Then("the observable contract for render nav-list widgets in button and list-group styles holds")
       html should include ("textus-nav-list")
       html should include ("""class="btn btn-primary" href="/form/notice-board/notice/search-notices">Search</a>""")
       html should include ("""class="btn btn-outline-secondary" href="/form/notice-board/notice/post-notice">Post</a>""")
@@ -11500,6 +12413,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render nav-list widgets from JSON source links and actions" in {
+      Given("the prerequisites for render nav-list widgets from JSON source links and actions")
       val properties = StaticFormAppRenderer.FormResultProperties(
         StaticFormAppRenderer.FormPageProperties(
           "notice-board",
@@ -11518,6 +12432,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         """{"data":[]}"""
       )
 
+      When("render nav-list widgets from JSON source links and actions is exercised")
       val html = _renderer.renderFormResult(
         properties,
         """<article>
@@ -11526,6 +12441,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           |</article>""".stripMargin
       ).body
 
+      Then("the observable contract for render nav-list widgets from JSON source links and actions holds")
       html should include ("""class="btn btn-primary" href="/form/notice-board/notice/search-notices">Search</a>""")
       html should include ("""method="post" action="/form/notice-board/notice/search-notices"""")
       html should include ("""<button type="submit" class="btn btn-warning">Refresh</button>""")
@@ -11536,6 +12452,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "parse widget attributes with single quotes and URL colons" in {
+      Given("the prerequisites for parse widget attributes with single quotes and URL colons")
       val properties = StaticFormAppRenderer.FormResultProperties(
         StaticFormAppRenderer.FormPageProperties(
           "notice-board",
@@ -11547,6 +12464,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         """{"data":[]}"""
       )
 
+      When("parse widget attributes with single quotes and URL colons is exercised")
       val html = _renderer.renderFormResult(
         properties,
         """<article>
@@ -11554,12 +12472,14 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           |</article>""".stripMargin
       ).body
 
+      Then("the observable contract for parse widget attributes with single quotes and URL colons holds")
       html should include ("""class="btn btn-primary" href="https://example.org:8443/docs">Docs</a>""")
       html should include ("""class="btn btn-outline-secondary" href="/form/notice-board">Forms</a>""")
       html should not include ("<textus:nav-list")
     }
 
     "render action-card widgets from operation result actions" in {
+      Given("the prerequisites for render action-card widgets from operation result actions")
       val properties = StaticFormAppRenderer.FormResultProperties(
         StaticFormAppRenderer.FormPageProperties(
           "notice-board",
@@ -11577,6 +12497,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         """{"jobId":"job-1"}"""
       )
 
+      When("render action-card widgets from operation result actions is exercised")
       val html = _renderer.renderFormResult(
         properties,
         """<article>
@@ -11584,6 +12505,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           |</article>""".stripMargin
       ).body
 
+      Then("the observable contract for render action-card widgets from operation result actions holds")
       html should include ("textus-action-card")
       html should include ("Command result")
       html should include ("Job accepted")
@@ -11593,6 +12515,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "complete local widget assets for HTML document templates that use Textus widgets" in {
+      Given("the prerequisites for complete local widget assets for HTML document templates that use Textus widgets")
       val properties = StaticFormAppRenderer.FormResultProperties(
         StaticFormAppRenderer.FormPageProperties(
           "notice-board",
@@ -11604,6 +12527,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         """{"data":[{"title":"Phase12","recipient_name":"Bob"}]}"""
       )
 
+      When("complete local widget assets for HTML document templates that use Textus widgets is exercised")
       val html = _renderer.renderFormResult(
         properties,
         """<!doctype html>
@@ -11618,6 +12542,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           |</html>""".stripMargin
       ).body
 
+      Then("the observable contract for complete local widget assets for HTML document templates that use Textus widgets holds")
       html should include ("/web/assets/bootstrap.min.css")
       html should include ("/web/assets/bootstrap.bundle.min.js")
       html should include ("/web/assets/textus-widgets.css")
@@ -11633,6 +12558,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "not duplicate existing local widget assets in HTML document templates" in {
+      Given("the prerequisites for not duplicate existing local widget assets in HTML document templates")
       val properties = StaticFormAppRenderer.FormResultProperties(
         StaticFormAppRenderer.FormPageProperties(
           "notice-board",
@@ -11644,6 +12570,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         """{"data":[{"title":"Phase12","recipient_name":"Bob"}]}"""
       )
 
+      When("not duplicate existing local widget assets in HTML document templates is exercised")
       val html = _renderer.renderFormResult(
         properties,
         """<!doctype html>
@@ -11660,6 +12587,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           |</html>""".stripMargin
       ).body
 
+      Then("the observable contract for not duplicate existing local widget assets in HTML document templates holds")
       _count_occurrences(html, "/web/assets/bootstrap.min.css") shouldBe 1
       _count_occurrences(html, "/web/assets/bootstrap.bundle.min.js") shouldBe 1
       _count_occurrences(html, "/web/assets/textus-widgets.css") shouldBe 1
@@ -11668,6 +12596,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "leave HTML document templates without Textus widgets unchanged by asset completion" in {
+      Given("the prerequisites for leave HTML document templates without Textus widgets unchanged by asset completion")
       val properties = StaticFormAppRenderer.FormResultProperties(
         StaticFormAppRenderer.FormPageProperties(
           "notice-board",
@@ -11685,8 +12614,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           |<body><p>No widgets</p></body>
           |</html>""".stripMargin
 
+      When("leave HTML document templates without Textus widgets unchanged by asset completion is exercised")
       val html = _renderer.renderFormResult(properties, template).body
 
+      Then("the observable contract for leave HTML document templates without Textus widgets unchanged by asset completion holds")
       html shouldBe template
       html should not include ("/web/assets/bootstrap.min.css")
       html should not include ("/web/assets/bootstrap.bundle.min.js")
@@ -11695,6 +12626,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "honor descriptor-disabled result asset auto-completion" in {
+      Given("the prerequisites for honor descriptor-disabled result asset auto-completion")
       val properties = StaticFormAppRenderer.FormResultProperties(
         StaticFormAppRenderer.FormPageProperties(
           "notice-board",
@@ -11707,6 +12639,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         assetCompletion = StaticFormAppLayout.AssetCompletionOptions(autoComplete = false)
       )
 
+      When("honor descriptor-disabled result asset auto-completion is exercised")
       val html = _renderer.renderFormResult(
         properties,
         """<!doctype html>
@@ -11718,6 +12651,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           |</html>""".stripMargin
       ).body
 
+      Then("the observable contract for honor descriptor-disabled result asset auto-completion holds")
       html should include ("row row-cols-1 row-cols-md-2")
       html should not include ("<textus:card-list")
       html should not include ("/web/assets/bootstrap.min.css")
@@ -11727,6 +12661,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "insert descriptor-declared result assets without duplicating framework assets" in {
+      Given("the prerequisites for insert descriptor-declared result assets without duplicating framework assets")
       val properties = StaticFormAppRenderer.FormResultProperties(
         StaticFormAppRenderer.FormPageProperties(
           "notice-board",
@@ -11748,6 +12683,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         )
       )
 
+      When("insert descriptor-declared result assets without duplicating framework assets is exercised")
       val html = _renderer.renderFormResult(
         properties,
         """<!doctype html>
@@ -11759,6 +12695,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           |</html>""".stripMargin
       ).body
 
+      Then("the observable contract for insert descriptor-declared result assets without duplicating framework assets holds")
       html should include ("<table")
       html should not include ("<textus:table")
       _count_occurrences(html, "/web/assets/bootstrap.min.css") shouldBe 1
@@ -11768,6 +12705,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "insert bootstrap-material profile assets after Bootstrap and Textus CSS" in {
+      Given("the prerequisites for insert bootstrap-material profile assets after Bootstrap and Textus CSS")
       val html = StaticFormAppLayout.completeWidgetAssets(
         """<!doctype html>
           |<html lang="en">
@@ -11783,18 +12721,23 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         )
       )
 
-      html should include ("/web/assets/bootstrap.min.css")
-      html should include ("/web/assets/textus-widgets.css")
-      html should include ("/web/assets/textus-bootstrap-material.css")
-      html should include ("/web/assets/textus-material-icons.css")
-      html.indexOf("/web/assets/bootstrap.min.css") should be < html.indexOf("/web/assets/textus-widgets.css")
-      html.indexOf("/web/assets/textus-widgets.css") should be < html.indexOf("/web/assets/textus-bootstrap-material.css")
-      html.indexOf("/web/assets/textus-bootstrap-material.css") should be < html.indexOf("/web/assets/textus-material-icons.css")
-      _count_occurrences(html, "/web/assets/textus-bootstrap-material.css") shouldBe 1
-      _count_occurrences(html, "/web/assets/textus-material-icons.css") shouldBe 1
+      When("the observable result for insert bootstrap-material profile assets after Bootstrap and Textus CSS is inspected")
+      locally {
+        Then("the observable contract for insert bootstrap-material profile assets after Bootstrap and Textus CSS holds")
+        html should include ("/web/assets/bootstrap.min.css")
+        html should include ("/web/assets/textus-widgets.css")
+        html should include ("/web/assets/textus-bootstrap-material.css")
+        html should include ("/web/assets/textus-material-icons.css")
+        html.indexOf("/web/assets/bootstrap.min.css") should be < html.indexOf("/web/assets/textus-widgets.css")
+        html.indexOf("/web/assets/textus-widgets.css") should be < html.indexOf("/web/assets/textus-bootstrap-material.css")
+        html.indexOf("/web/assets/textus-bootstrap-material.css") should be < html.indexOf("/web/assets/textus-material-icons.css")
+        _count_occurrences(html, "/web/assets/textus-bootstrap-material.css") shouldBe 1
+        _count_occurrences(html, "/web/assets/textus-material-icons.css") shouldBe 1
+      }
     }
 
     "insert descriptor app assets after framework assets in full HTML result pages" in {
+      Given("the prerequisites for insert descriptor app assets after framework assets in full HTML result pages")
       val properties = StaticFormAppRenderer.FormResultProperties(
         StaticFormAppRenderer.FormPageProperties(
           "notice-board",
@@ -11810,6 +12753,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         )
       )
 
+      When("insert descriptor app assets after framework assets in full HTML result pages is exercised")
       val html = _renderer.renderFormResult(
         properties,
         """<!doctype html>
@@ -11821,6 +12765,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           |</html>""".stripMargin
       ).body
 
+      Then("the observable contract for insert descriptor app assets after framework assets in full HTML result pages holds")
       html should include ("row row-cols-1 row-cols-md-2")
       html.indexOf("/web/assets/bootstrap.min.css") should be < html.indexOf("/web/assets/textus-widgets.css")
       html.indexOf("/web/assets/textus-widgets.css") should be < html.indexOf("/web/notice-board/notice-board/assets/app.css")
@@ -11829,6 +12774,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "insert descriptor app assets even when framework auto-completion is disabled" in {
+      Given("the prerequisites for insert descriptor app assets even when framework auto-completion is disabled")
       val properties = StaticFormAppRenderer.FormResultProperties(
         StaticFormAppRenderer.FormPageProperties(
           "notice-board",
@@ -11845,6 +12791,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         )
       )
 
+      When("insert descriptor app assets even when framework auto-completion is disabled is exercised")
       val html = _renderer.renderFormResult(
         properties,
         """<!doctype html>
@@ -11856,6 +12803,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           |</html>""".stripMargin
       ).body
 
+      Then("the observable contract for insert descriptor app assets even when framework auto-completion is disabled holds")
       html should include ("<table")
       html should include ("/web/notice-board/notice-board/assets/app.css")
       html should include ("/web/notice-board/notice-board/assets/app.js")
@@ -11866,6 +12814,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "insert descriptor app assets into fragment result pages" in {
+      Given("the prerequisites for insert descriptor app assets into fragment result pages")
       val properties = StaticFormAppRenderer.FormResultProperties(
         StaticFormAppRenderer.FormPageProperties(
           "notice-board",
@@ -11881,6 +12830,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         )
       )
 
+      When("insert descriptor app assets into fragment result pages is exercised")
       val html = _renderer.renderFormResult(
         properties,
         """<article>
@@ -11889,6 +12839,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           |</article>""".stripMargin
       ).body
 
+      Then("the observable contract for insert descriptor app assets into fragment result pages holds")
       html should include ("/web/assets/bootstrap.min.css")
       html should include ("/web/assets/textus-widgets.css")
       html should include ("/web/notice-board/notice-board/assets/app.css")
@@ -11899,6 +12850,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "insert descriptor-declared widget assets once during completion" in {
+      Given("the prerequisites for insert descriptor-declared widget assets once during completion")
       val html = StaticFormAppLayout.completeWidgetAssets(
         """<!doctype html>
           |<html lang="en">
@@ -11919,13 +12871,18 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         )
       )
 
-      _count_occurrences(html, "/web/assets/bootstrap.min.css") shouldBe 1
-      _count_occurrences(html, "/web/assets/bootstrap.bundle.min.js") shouldBe 1
-      _count_occurrences(html, "/web/assets/textus-widgets.css") shouldBe 1
-      _count_occurrences(html, "/web/assets/textus-widgets.js") shouldBe 1
+      When("the observable result for insert descriptor-declared widget assets once during completion is inspected")
+      locally {
+        Then("the observable contract for insert descriptor-declared widget assets once during completion holds")
+        _count_occurrences(html, "/web/assets/bootstrap.min.css") shouldBe 1
+        _count_occurrences(html, "/web/assets/bootstrap.bundle.min.js") shouldBe 1
+        _count_occurrences(html, "/web/assets/textus-widgets.css") shouldBe 1
+        _count_occurrences(html, "/web/assets/textus-widgets.js") shouldBe 1
+      }
     }
 
     "insert descriptor-declared favicon once during completion" in {
+      Given("the prerequisites for insert descriptor-declared favicon once during completion")
       val html = StaticFormAppLayout.completeDeclaredAssets(
         """<!doctype html>
           |<html lang="en">
@@ -11937,6 +12894,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           favicon = Some("/web/assets/favicon.svg")
         )
       )
+      When("insert descriptor-declared favicon once during completion is exercised")
       val existing = StaticFormAppLayout.completeDeclaredAssets(
         html,
         StaticFormAppLayout.AssetCompletionOptions(
@@ -11944,6 +12902,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         )
       )
 
+      Then("the observable contract for insert descriptor-declared favicon once during completion holds")
       html should include ("""<link rel="icon" href="/web/assets/favicon.svg">""")
       html should include ("""<link href="/web/assets/site.css" rel="stylesheet">""")
       _count_occurrences(html, """rel="icon"""") shouldBe 1
@@ -11952,14 +12911,23 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "load packaged Textus widget assets" in {
-      StaticFormAppAssets.textusWidgetsCss should include ("textus-widget")
-      StaticFormAppAssets.textusWidgetsCss should include ("textus-clickable-row")
-      StaticFormAppAssets.textusWidgetsJs should include ("textusWidgets")
-      StaticFormAppAssets.textusWidgetsJs should include ("data-textus-row-href")
-      StaticFormAppAssets.textusWidgetsJs should include ("data-textus-add-row")
+      Given("the packaged Static Form asset bundle")
+      val assets = StaticFormAppAssets
+
+      When("the Textus widget stylesheet and script are loaded")
+      val css = assets.textusWidgetsCss
+      val javascript = assets.textusWidgetsJs
+
+      Then("the packaged assets contain the widget runtime contract")
+      css should include ("textus-widget")
+      css should include ("textus-clickable-row")
+      javascript should include ("textusWidgets")
+      javascript should include ("data-textus-row-href")
+      javascript should include ("data-textus-add-row")
     }
 
     "render textus table from result body object data" in {
+      Given("the prerequisites for render textus table from result body object data")
       val properties = StaticFormAppRenderer.FormResultProperties(
         StaticFormAppRenderer.FormPageProperties(
           "notice-board",
@@ -11971,11 +12939,13 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         """{"query":{"condition":{"recipient_name":"Bob"},"include_total":false},"data":[{"title":"Phase12","content":"Static form validation","recipient_name":"Bob"}],"fetched_count":1}"""
       )
 
+      When("render textus table from result body object data is exercised")
       val html = _renderer.renderFormResult(
         properties,
         """<article><textus:table source="result.body"></textus:table></article>"""
       ).body
 
+      Then("the observable contract for render textus table from result body object data holds")
       html should include ("<table")
       html should include ("<th>title</th>")
       html should include ("<th>content</th>")
@@ -11986,6 +12956,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render textus table with explicit columns" in {
+      Given("the prerequisites for render textus table with explicit columns")
       val properties = StaticFormAppRenderer.FormResultProperties(
         StaticFormAppRenderer.FormPageProperties(
           "notice-board",
@@ -11997,11 +12968,13 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         """{"data":[{"id":"notice_1","subject":"Hello","sender_name":"alice","rights":{"owner":{"read":true}}}]}"""
       )
 
+      When("render textus table with explicit columns is exercised")
       val html = _renderer.renderFormResult(
         properties,
         """<article><textus:table source="result.data" columns="sender_name,subject"></textus:table></article>"""
       ).body
 
+      Then("the observable contract for render textus table with explicit columns holds")
       html should include ("<th>sender_name</th><th>subject</th>")
       html should include ("<td>alice</td>")
       html should include ("<td>Hello</td>")
@@ -12011,6 +12984,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render textus description list with explicit columns" in {
+      Given("the prerequisites for render textus description list with explicit columns")
       val properties = StaticFormAppRenderer.FormResultProperties(
         StaticFormAppRenderer.FormPageProperties(
           "notice-board",
@@ -12022,11 +12996,13 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         """{"id":"notice_1","title":"Phase12","content":"Static form detail","recipient_name":"Bob"}"""
       )
 
+      When("render textus description list with explicit columns is exercised")
       val html = _renderer.renderFormResult(
         properties,
         """<article><textus:description-list source="result.body" columns="title:Title,recipient_name:Recipient"></textus:description-list></article>"""
       ).body
 
+      Then("the observable contract for render textus description list with explicit columns holds")
       html should include ("textus-description-list")
       html should include ("<dt class=\"col-sm-4\">Title</dt><dd class=\"col-sm-8\">Phase12</dd>")
       html should include ("<dt class=\"col-sm-4\">Recipient</dt><dd class=\"col-sm-8\">Bob</dd>")
@@ -12036,6 +13012,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render textus table from result body with CML summary columns" in {
+      Given("the prerequisites for render textus table from result body with CML summary columns")
       val columns = Vector(
         StaticFormAppRenderer.TableColumn("title", "Title"),
         StaticFormAppRenderer.TableColumn("recipient_name", "Recipient")
@@ -12052,11 +13029,13 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         Map(StaticFormAppRenderer.tableColumnKey("result.body.data", "notice", "summary") -> columns)
       )
 
+      When("render textus table from result body with CML summary columns is exercised")
       val html = _renderer.renderFormResult(
         properties,
         """<article><textus:table source="result.body" entity="notice" view="summary"></textus:table></article>"""
       ).body
 
+      Then("the observable contract for render textus table from result body with CML summary columns holds")
       html should include ("<th>Title</th><th>Recipient</th>")
       html should include ("<td>Phase12</td>")
       html should include ("<td>Bob</td>")
@@ -12066,6 +13045,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render textus table with resolved CML table columns" in {
+      Given("the prerequisites for render textus table with resolved CML table columns")
       val columns = Vector(
         StaticFormAppRenderer.TableColumn("sender_name", "Sender"),
         StaticFormAppRenderer.TableColumn("subject", "Subject")
@@ -12082,11 +13062,13 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         Map("result.data" -> columns)
       )
 
+      When("render textus table with resolved CML table columns is exercised")
       val html = _renderer.renderFormResult(
         properties,
         """<article><textus:table source="result.data"></textus:table></article>"""
       ).body
 
+      Then("the observable contract for render textus table with resolved CML table columns holds")
       html should include ("<th>Sender</th><th>Subject</th>")
       html should include ("<td>alice</td>")
       html should include ("<td>Hello</td>")
@@ -12096,6 +13078,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render textus table with explicit entity and view columns" in {
+      Given("the prerequisites for render textus table with explicit entity and view columns")
       val columns = Vector(
         StaticFormAppRenderer.TableColumn("sender_name", "Sender"),
         StaticFormAppRenderer.TableColumn("subject", "Subject")
@@ -12112,11 +13095,13 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         Map(StaticFormAppRenderer.tableColumnKey("result.data", "notice", "summary") -> columns)
       )
 
+      When("render textus table with explicit entity and view columns is exercised")
       val html = _renderer.renderFormResult(
         properties,
         """<article><textus:table source="result.data" entity="notice" view="summary"></textus:table></article>"""
       ).body
 
+      Then("the observable contract for render textus table with explicit entity and view columns holds")
       html should include ("<th>Sender</th><th>Subject</th>")
       html should include ("<td>alice</td>")
       html should include ("<td>Hello</td>")
@@ -12126,6 +13111,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render textus table with descriptor default view columns" in {
+      Given("the prerequisites for render textus table with descriptor default view columns")
       val columns = Vector(
         StaticFormAppRenderer.TableColumn("subject", "Subject")
       )
@@ -12142,11 +13128,13 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         defaultTableView = "card"
       )
 
+      When("render textus table with descriptor default view columns is exercised")
       val html = _renderer.renderFormResult(
         properties,
         """<article><textus:table source="result.data" entity="notice"></textus:table></article>"""
       ).body
 
+      Then("the observable contract for render textus table with descriptor default view columns holds")
       html should include ("<th>Subject</th>")
       html should include ("<td>Hello</td>")
       html should not include ("alice")
@@ -12154,6 +13142,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "let textus table view attribute override descriptor default view" in {
+      Given("the prerequisites for let textus table view attribute override descriptor default view")
       val summarycolumns = Vector(
         StaticFormAppRenderer.TableColumn("sender_name", "Sender")
       )
@@ -12176,11 +13165,13 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         defaultTableView = "card"
       )
 
+      When("let textus table view attribute override descriptor default view is exercised")
       val html = _renderer.renderFormResult(
         properties,
         """<article><textus:table source="result.data" entity="notice" view="summary"></textus:table></article>"""
       ).body
 
+      Then("the observable contract for let textus table view attribute override descriptor default view holds")
       html should include ("<th>Sender</th>")
       html should include ("<td>alice</td>")
       html should not include ("Hello")
@@ -12188,6 +13179,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render form result properties with error panel" in {
+      Given("the prerequisites for render form result properties with error panel")
       val properties = StaticFormAppRenderer.FormResultProperties(
         StaticFormAppRenderer.FormPageProperties(
           "notice-board",
@@ -12199,8 +13191,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         "boom"
       )
 
+      When("render form result properties with error panel is exercised")
       val html = _renderer.renderFormResult(properties).body
 
+      Then("the observable contract for render form result properties with error panel holds")
       html should include ("error.status")
       html should include ("500")
       html should include ("boom")
@@ -12210,22 +13204,32 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "provide local Bootstrap 5 assets" in {
-      StaticFormAppAssets.bootstrapVersion shouldBe "5.3.3"
-      StaticFormAppAssets.bootstrapCss should include ("Bootstrap")
-      StaticFormAppAssets.bootstrapCss should include ("v5.3.3")
-      StaticFormAppAssets.bootstrapCss should include (".card")
-      StaticFormAppAssets.bootstrapCss should include (".row")
-      StaticFormAppAssets.bootstrapCss should include (".form-control")
-      StaticFormAppAssets.bootstrapCss should include (".table-responsive")
-      StaticFormAppAssets.bootstrapCss should not include ("cdn.jsdelivr")
-      StaticFormAppAssets.bootstrapBundleJs should include ("Bootstrap")
-      StaticFormAppAssets.bootstrapBundleJs should include ("v5.3.3")
-      StaticFormAppAssets.bootstrapBundleJs should include ("bootstrap=e()")
-      StaticFormAppAssets.bootstrapBundleJs should include ("Dropdown")
-      StaticFormAppAssets.bootstrapBundleJs should not include ("cdn.jsdelivr")
+      Given("the packaged Static Form asset bundle")
+      val assets = StaticFormAppAssets
+
+      When("the local Bootstrap version, stylesheet, and bundle are loaded")
+      val version = assets.bootstrapVersion
+      val css = assets.bootstrapCss
+      val javascript = assets.bootstrapBundleJs
+
+      Then("the complete Bootstrap 5.3.3 contract is available without a CDN")
+      version shouldBe "5.3.3"
+      css should include ("Bootstrap")
+      css should include ("v5.3.3")
+      css should include (".card")
+      css should include (".row")
+      css should include (".form-control")
+      css should include (".table-responsive")
+      css should not include ("cdn.jsdelivr")
+      javascript should include ("Bootstrap")
+      javascript should include ("v5.3.3")
+      javascript should include ("bootstrap=e()")
+      javascript should include ("Dropdown")
+      javascript should not include ("cdn.jsdelivr")
     }
 
     "render descriptor-declared component admin pages on component admin home" in {
+      Given("the prerequisites for render descriptor-declared component admin pages on component admin home")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
       val componentpath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)
@@ -12242,8 +13246,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         ))
       )
 
+      When("render descriptor-declared component admin pages on component admin home is exercised")
       val html = _renderer.renderComponentAdmin(subsystem, componentpath, descriptor).map(_.body).getOrElse(fail("component admin is missing"))
 
+      Then("the observable contract for render descriptor-declared component admin pages on component admin home holds")
       html should include ("Component Admin Pages")
       html should include ("Notification Admin")
       html should include (s"""href="/web/${componentpath}/admin/notifications"""")
@@ -12254,6 +13260,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render Application Admin separately from System Admin diagnostics" in {
+      Given("the prerequisites for render Application Admin separately from System Admin diagnostics")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
       val componentpath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)
@@ -12283,8 +13290,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       )
 
       val apphtml = _renderer.renderApplicationAdmin(subsystem, descriptor).body
+      When("render Application Admin separately from System Admin diagnostics is exercised")
       val systemhtml = _renderer.renderSystemAdmin(subsystem, descriptor).body
 
+      Then("the observable contract for render Application Admin separately from System Admin diagnostics holds")
       apphtml should include ("Application Admin")
       apphtml should include ("Notification Admin")
       apphtml should include (s"""/web/${componentpath}/admin""")
@@ -12301,22 +13310,29 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "provide Bootstrap 5 by default in the Static Form App layout" in {
+      Given("the prerequisites for provide Bootstrap 5 by default in the Static Form App layout")
       val html = StaticFormAppLayout.bootstrapPage(StaticFormAppLayout.Options(
         title = "Sample Form App",
         subtitle = "Sample",
         body = """<form><input class="form-control"></form>"""
       ))
 
-      html should include ("/web/assets/bootstrap.min.css")
-      html should include ("/web/assets/bootstrap.bundle.min.js")
-      html should include ("<form><input class=\"form-control\"></form>")
-      html should not include ("cdn.jsdelivr")
+      When("the observable result for provide Bootstrap 5 by default in the Static Form App layout is inspected")
+      locally {
+        Then("the observable contract for provide Bootstrap 5 by default in the Static Form App layout holds")
+        html should include ("/web/assets/bootstrap.min.css")
+        html should include ("/web/assets/bootstrap.bundle.min.js")
+        html should include ("<form><input class=\"form-control\"></form>")
+        html should not include ("cdn.jsdelivr")
+      }
     }
 
     "keep WEB-10 built-in pages offline-ready and responsive" in {
+      Given("the prerequisites for keep WEB-10 built-in pages offline-ready and responsive")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
       val componentpath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)
+      When("keep WEB-10 built-in pages offline-ready and responsive is exercised")
       val pages = Vector(
         _renderer.renderSubsystemDashboard(subsystem).body,
         _renderer.renderSystemAdmin(subsystem).body,
@@ -12326,6 +13342,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         _renderer.renderComponentAdmin(subsystem, componentpath).map(_.body).getOrElse(fail("component admin is missing"))
       )
 
+      Then("the observable contract for keep WEB-10 built-in pages offline-ready and responsive holds")
       pages.foreach { html =>
         html should include ("""<meta name="viewport" content="width=device-width, initial-scale=1">""")
         html should include ("/web/assets/bootstrap.min.css")
@@ -12909,10 +13926,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
 
   private def _aggregate_http_fixture_subsystem(
     configuration: Configuration = Configuration.empty,
-    messageCatalogs: Vector[WebMessageCatalog] = Vector.empty
+    messagecatalogs: Vector[WebMessageCatalog] = Vector.empty
   ): Subsystem = {
     val component = new org.goldenport.cncf.component.Component() {
-      override def webMessageCatalogs: Vector[WebMessageCatalog] = messageCatalogs
+      override def webMessageCatalogs: Vector[WebMessageCatalog] = messagecatalogs
 
       override def aggregateDefinitions: Vector[AggregateDefinition] =
         Vector(
@@ -13112,12 +14129,12 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     component.withComponentDescriptors(Vector(descriptor))
     val notices = Vector(
       _NoticeEntity(
-        EntityId("sample", "notice_1", cid),
+        _new_notice_entity_id(),
         "board update",
         "alice"
       ),
       _NoticeEntity(
-        EntityId("sample", "notice_2", cid),
+        _new_notice_entity_id(),
         "board followup",
         "bob"
       )
@@ -13131,11 +14148,33 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       Some(org.goldenport.cncf.cli.RunMode.Server),
       resolvedconfiguration
     ).add(Vector(component))
-    given ExecutionContext = component.logic.executionContext()
+    given ExecutionContext =
+      subsystem.findComponent("admin")
+        .getOrElse(fail("admin component is missing"))
+        .logic.executionContext()
+    val noticecollection =
+      component.entitySpace.entity[_NoticeEntity]("notice")
     notices.foreach { notice =>
-      summon[ExecutionContext].entityStoreSpace.save(
-        org.goldenport.cncf.unitofwork.UnitOfWorkOp.EntityStoreSave(notice, summon[EntityPersistent[_NoticeEntity]])
+      val authorization =
+        org.goldenport.cncf.unitofwork.UnitOfWorkAuthorization(
+          resourceFamily = "domain",
+          resourceType = Some("notice"),
+          collectionName = Some(cid.name),
+          targetId = Some(notice.id),
+          accessKind = "update",
+          accessMode = org.goldenport.cncf.security.EntityAccessMode.System
+        )
+      new org.goldenport.cncf.unitofwork.UnitOfWorkInterpreter(
+        new org.goldenport.cncf.unitofwork.UnitOfWork(summon[ExecutionContext])
+      ).interpret(
+        org.goldenport.cncf.unitofwork.UnitOfWorkOp.EntityStoreSaveUnversioned(
+          notice,
+          org.goldenport.cncf.entity.EntityUnversionedMutationPurpose.SeedImport,
+          _notice_persistent,
+          Some(authorization)
+        )
       ).getOrElse(fail(s"notice fixture seed failed: ${notice.id.print}"))
+      noticecollection.put(notice)
     }
     subsystem
   }
@@ -13290,15 +14329,29 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       def fromRecord(r: Record): Consequence[_NoticeEntity] =
         Consequence.success(
           _NoticeEntity(
-            _notice_entity_id(r.getString("id").getOrElse("notice_1")),
+            _notice_entity_id(r.getAny("id")),
             r.getString("title").getOrElse(""),
             r.getString("author").getOrElse("")
           )
         )
     }
 
-  private def _notice_entity_id(value: String): EntityId =
-    EntityId.parse(value).toOption.getOrElse(EntityId("sample", value, _NoticeEntity.collectionid))
+  private def _notice_entity_id(value: Option[Any]): EntityId =
+    value match {
+      case Some(id: EntityId) => id
+      case Some(text: String) =>
+        EntityId.parse(text).toOption.getOrElse(_new_notice_entity_id())
+      case Some(other) =>
+        EntityId.parse(other.toString).toOption.getOrElse(_new_notice_entity_id())
+      case None =>
+        _new_notice_entity_id()
+    }
+
+  private def _new_notice_entity_id(): EntityId = {
+    val collection = _NoticeEntity.collectionid
+    val generated = EntityId(collection.major, collection.minor, collection)
+    EntityId.parse(generated.value).getOrElse(fail("notice entity id generation failed"))
+  }
 
   private def _load_notice_store_record(
     subsystem: Subsystem,
@@ -13312,6 +14365,21 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       record <- ds.load(collectionid, entryid)
     } yield record
     loaded.toOption.flatten.getOrElse(fail(s"notice store record is missing: ${id.print}"))
+  }
+
+  private def _notice_entity_version(
+      subsystem: Subsystem,
+      id: String
+  ): String = {
+    val collection =
+      _notice_fixture_component(subsystem).entitySpace.entity[_NoticeEntity]("notice")
+    val entityid =
+      collection.resolveEntityId(id).getOrElse(fail(s"notice entity id is missing: ${id}"))
+    _success(
+      EntityConcurrencyMetadata.token(
+        _load_notice_store_record(subsystem, entityid)
+      )
+    ).print
   }
 
   private def _blob_request(

@@ -28,11 +28,7 @@ import org.goldenport.cncf.entity.runtime.{
   PartitionStrategy,
   PartitionedMemoryRealm
 }
-import org.goldenport.cncf.unitofwork.{
-  UnitOfWork,
-  UnitOfWorkInterpreter,
-  UnitOfWorkOp
-}
+import org.goldenport.cncf.unitofwork.{UnitOfWork, UnitOfWorkInterpreter, UnitOfWorkOp}
 import org.goldenport.observation.{Cause, Descriptor}
 import org.goldenport.record.Record
 import org.scalacheck.{Gen, Prop, Test}
@@ -48,9 +44,9 @@ import org.simplemodeling.model.directive.Update
  * @author  ASAMI, Tomoharu
  */
 final class EntityConcurrencyTokenSpec
-  extends AnyWordSpec
-  with Matchers
-  with GivenWhenThen {
+    extends AnyWordSpec
+    with Matchers
+    with GivenWhenThen {
 
   private val _e1_metadata =
     afterWord(
@@ -71,9 +67,9 @@ final class EntityConcurrencyTokenSpec
           Gen.chooseNum(0L, Long.MaxValue - 1L)
         ) { number =>
           val token = EntityConcurrencyTokenSupport._create(number)
-          val next = token.flatMap(EntityConcurrencyTokenSupport._advance)
+          val next  = token.flatMap(EntityConcurrencyTokenSupport._advance)
           token.toOption.exists(_.print == number.toString) &&
-            next.toOption.exists(_.print == (number + 1L).toString)
+          next.toOption.exists(_.print == (number + 1L).toString)
         }
 
         When("the token constructor and advancement are interpreted")
@@ -86,6 +82,12 @@ final class EntityConcurrencyTokenSpec
         Then("all admitted values remain exact and advance once")
         checked.passed shouldBe true
         EntityConcurrencyToken.INITIAL.print shouldBe "1"
+        EntityMutationExpectation.parse("1").map(_.token) shouldBe
+          Consequence.success(EntityConcurrencyToken.INITIAL)
+        EntityMutationExpectation.parse("1.0") shouldBe
+          a[Consequence.Failure[?]]
+        EntityMutationExpectation.parse("-1") shouldBe
+          a[Consequence.Failure[?]]
         EntityConcurrencyTokenSupport._create(-1L) shouldBe
           a[Consequence.Failure[?]]
         classOf[EntityConcurrencyToken].getConstructors shouldBe empty
@@ -111,10 +113,10 @@ final class EntityConcurrencyTokenSpec
         val cause = conclusion.observation.cause
 
         cause.kind shouldBe Some(Cause.Kind.Limit)
-        cause.descriptor.facets should contain (
+        cause.descriptor.facets should contain(
           Descriptor.Facet.Limit(Long.MaxValue - 1L)
         )
-        cause.descriptor.facets should contain (
+        cause.descriptor.facets should contain(
           Descriptor.Facet.Actual(Long.MaxValue)
         )
       }
@@ -130,7 +132,7 @@ final class EntityConcurrencyTokenSpec
 
         When("the snapshot is inspected")
         val entity = snapshot.entity
-        val token = snapshot.token
+        val token  = snapshot.token
 
         Then("the domain value and framework token remain separate")
         entity shouldBe "entity-value"
@@ -144,8 +146,8 @@ final class EntityConcurrencyTokenSpec
           "Spec: docs/spec/entity-conflict-and-conditional-transition.md; Rules: R1,R2; Example: E1; a create record containing caller revision aliases"
         )
         val source = Record.dataAuto(
-          "name" -> "entity",
-          "cncfRevision" -> 91L,
+          "name"          -> "entity",
+          "cncfRevision"  -> 91L,
           "cncf_revision" -> 92L
         )
 
@@ -159,7 +161,7 @@ final class EntityConcurrencyTokenSpec
             SimpleEntityStorageShapePolicy.CONCURRENCY_REVISION_LOGICAL_FIELD
           ) shouldBe
           SimpleEntityStorageShapePolicy.CONCURRENCY_REVISION_STORAGE_FIELD
-        SimpleEntityStorageShapePolicy.managementLogicalFields should contain (
+        SimpleEntityStorageShapePolicy.managementLogicalFields should contain(
           SimpleEntityStorageShapePolicy.CONCURRENCY_REVISION_LOGICAL_FIELD
         )
         initialized.getString("name") shouldBe Some("entity")
@@ -175,10 +177,10 @@ final class EntityConcurrencyTokenSpec
         Given(
           "Spec: docs/spec/entity-conflict-and-conditional-transition.md; Rules: R2,R14,R17; Example: E1; a component-scoped EntitySpace whose domain codec rejects framework metadata"
         )
-        val fixture = _component_fixture()
+        val fixture            = _component_fixture()
         given ExecutionContext = fixture.context
-        val id = EntityId("test", "uow_create", _collection_id)
-        val entity = TestEntity(id, "unit-of-work", Some(71L))
+        val id                 = EntityId("test", "uow_create", _collection_id)
+        val entity             = TestEntity(id, "unit-of-work", Some(71L))
         val interpreter =
           new UnitOfWorkInterpreter(new UnitOfWork(fixture.context))
 
@@ -192,7 +194,9 @@ final class EntityConcurrencyTokenSpec
             .resolve(id)
         val stored = _raw_record(fixture.datastorespace, id)
 
-        Then("the store keeps revision metadata while EntitySpace receives only the decoded domain Entity")
+        Then(
+          "the store keeps revision metadata while EntitySpace receives only the decoded domain Entity"
+        )
         created.map(_.id) shouldBe Consequence.success(id)
         admitted shouldBe
           Consequence.success(entity.copy(attempted = None))
@@ -210,7 +214,7 @@ final class EntityConcurrencyTokenSpec
         val property = Prop.forAll(
           Gen.chooseNum(2L, Long.MaxValue)
         ) { attempted =>
-          val fixture = _fixture()
+          val fixture            = _fixture()
           given ExecutionContext = fixture.context
           val id = EntityId(
             "test",
@@ -235,14 +239,14 @@ final class EntityConcurrencyTokenSpec
           stored.toOption.flatten
             .flatMap(_.getAny(EntityConcurrencyMetadata.STORAGE_FIELD_NAME))
             .contains(1L) &&
-            stored.toOption.flatten
-              .flatMap(_.getAny(EntityConcurrencyMetadata.LOGICAL_FIELD_NAME))
-              .isEmpty &&
-            loaded.toOption.flatten.contains(entity.copy(attempted = None)) &&
-            snapshot.toOption.flatten.exists(value =>
-              value.entity == entity.copy(attempted = None) &&
-                value.token == EntityConcurrencyToken.INITIAL
-            )
+          stored.toOption.flatten
+            .flatMap(_.getAny(EntityConcurrencyMetadata.LOGICAL_FIELD_NAME))
+            .isEmpty &&
+          loaded.toOption.flatten.contains(entity.copy(attempted = None)) &&
+          snapshot.toOption.flatten.exists(value =>
+            value.entity == entity.copy(attempted = None) &&
+              value.token == EntityConcurrencyToken.INITIAL
+          )
         }
 
         When("the canonical Entity create and read boundaries are exercised")
@@ -251,7 +255,9 @@ final class EntityConcurrencyTokenSpec
           property
         )
 
-        Then("storage owns token one while business decoding and snapshot projection remain separate")
+        Then(
+          "storage owns token one while business decoding and snapshot projection remain separate"
+        )
         checked.passed shouldBe true
       }
     }
@@ -261,11 +267,11 @@ final class EntityConcurrencyTokenSpec
         Given(
           "Spec: docs/spec/entity-conflict-and-conditional-transition.md; Rules: R1-R4; Example: E1; one created Entity and one imported Entity carrying caller revisions"
         )
-        val fixture = _fixture()
+        val fixture            = _fixture()
         given ExecutionContext = fixture.context
-        val createdid = EntityId("test", "created", _collection_id)
-        val importedid = EntityId("test", "imported", _collection_id)
-        val reimportedid = EntityId("test", "reimported", _collection_id)
+        val createdid          = EntityId("test", "created", _collection_id)
+        val importedid         = EntityId("test", "imported", _collection_id)
+        val reimportedid       = EntityId("test", "reimported", _collection_id)
         val created = fixture.entitystorespace.create(
           UnitOfWorkOp.EntityStoreCreate(
             TestEntity(createdid, "before", Some(41L)),
@@ -279,8 +285,8 @@ final class EntityConcurrencyTokenSpec
                 DataStoreSpace.SeedEntry(
                   DataStore.CollectionId.EntityStore(_collection_id),
                   Record.dataAuto(
-                    "id" -> reimportedid,
-                    "name" -> "before-import",
+                    "id"                                         -> reimportedid,
+                    "name"                                       -> "before-import",
                     EntityConcurrencyMetadata.STORAGE_FIELD_NAME -> 7L
                   )
                 )
@@ -290,19 +296,28 @@ final class EntityConcurrencyTokenSpec
         )
 
         When("full save patch update and seed import attempt to replace framework metadata")
-        val saved = seeded.flatMap(_ =>
-          fixture.entitystorespace.save(
-            UnitOfWorkOp.EntityStoreSave(
-              TestEntity(createdid, "after", Some(42L)),
-              _entity_persistent
+        val saved = seeded.flatMap { _ =>
+          fixture.entitystorespace
+            .loadSnapshot(createdid, _entity_persistent)
+            .flatMap(snapshot =>
+              Consequence.successOrEntityNotFound(snapshot)(createdid)
             )
-          )
-        )
-        val patched = saved.flatMap(_ =>
+            .flatMap(snapshot =>
+              fixture.entitystorespace.save(
+                UnitOfWorkOp.EntityStoreSave(
+                  TestEntity(createdid, "after", Some(42L)),
+                  EntityMutationExpectation(snapshot.token),
+                  _entity_persistent
+                )
+              )
+            )
+        }
+        val patched = saved.flatMap(snapshot =>
           fixture.entitystorespace.updateById(
             UnitOfWorkOp.EntityStoreUpdateById(
               createdid,
               TestPatch(Update.set("patched"), Update.set(44L)),
+              EntityMutationExpectation(snapshot.token),
               _entity_update
             )
           )
@@ -331,10 +346,12 @@ final class EntityConcurrencyTokenSpec
           _raw_record(fixture.datastorespace, reimportedid)
         )
 
-        Then("existing tokens are preserved while newly imported storage receives canonical token one")
+        Then(
+          "versioned mutations advance the existing token while newly imported storage receives canonical token one"
+        )
         createdrecord
           .map(_.flatMap(_.getAny(EntityConcurrencyMetadata.STORAGE_FIELD_NAME))) shouldBe
-          Consequence.success(Some(1L))
+          Consequence.success(Some(3L))
         createdrecord
           .map(_.flatMap(_.getString("name"))) shouldBe
           Consequence.success(Some("patched"))
@@ -370,7 +387,9 @@ final class EntityConcurrencyTokenSpec
             property
           )
 
-        Then("absence maps to zero without persisting a replacement and integral values remain exact")
+        Then(
+          "absence maps to zero without persisting a replacement and integral values remain exact"
+        )
         legacy shouldBe Consequence.success(EntityConcurrencyToken.LEGACY)
         checked.passed shouldBe true
       }
@@ -407,17 +426,17 @@ final class EntityConcurrencyTokenSpec
         Given(
           "Spec: docs/spec/entity-conflict-and-conditional-transition.md; Rules: R2-R4; Example: E2; one authoritative legacy storage record"
         )
-        val fixture = _fixture()
+        val fixture            = _fixture()
         given ExecutionContext = fixture.context
-        val id = EntityId("test", "legacy", _collection_id)
+        val id                 = EntityId("test", "legacy", _collection_id)
         val seeded = fixture.datastorespace.inject(
           DataStoreSpace.Seed(
             Vector(
               DataStoreSpace.SeedEntry(
                 DataStore.CollectionId.EntityStore(_collection_id),
                 Record.dataAuto(
-                  "id" -> id,
-                  "name" -> "legacy",
+                  "id"                                         -> id,
+                  "name"                                       -> "legacy",
                   EntityConcurrencyMetadata.LOGICAL_FIELD_NAME -> 99L
                 )
               )
@@ -438,7 +457,9 @@ final class EntityConcurrencyTokenSpec
           _raw_record(fixture.datastorespace, id)
         )
 
-        Then("the business Entity loads, snapshot reports virtual zero, and physical storage remains absent")
+        Then(
+          "the business Entity loads, snapshot reports virtual zero, and physical storage remains absent"
+        )
         loaded shouldBe
           Consequence.success(Some(TestEntity(id, "legacy", None)))
         snapshot.map(_.map(_.token)) shouldBe
@@ -457,18 +478,18 @@ final class EntityConcurrencyTokenSpec
     EntityCollectionId("test", "a", "entity_concurrency")
 
   private final case class TestEntity(
-    id: EntityId,
-    name: String,
-    attempted: Option[Long]
+      id: EntityId,
+      name: String,
+      attempted: Option[Long]
   )
 
   private final case class TestPatch(
-    name: Update[String],
-    attempted: Update[Long]
+      name: Update[String],
+      attempted: Update[Long]
   ) extends EntityPersistableUpdate {
     def toRecord(): Record =
       Record.dataAuto(
-        "name" -> name,
+        "name"                                       -> name,
         EntityConcurrencyMetadata.LOGICAL_FIELD_NAME -> attempted
       )
   }
@@ -494,7 +515,7 @@ final class EntityConcurrencyTokenSpec
       def fromRecord(record: Record): Consequence[TestEntity] =
         _decode_entity(record)
       override def fromStoreRecord(
-        record: Record
+          record: Record
       ): Consequence[TestEntity] =
         _decode_entity(record)
     }
@@ -506,16 +527,16 @@ final class EntityConcurrencyTokenSpec
     )
 
   private final case class Fixture(
-    datastorespace: DataStoreSpace,
-    entitystorespace: EntityStoreSpace,
-    context: ExecutionContext
+      datastorespace: DataStoreSpace,
+      entitystorespace: EntityStoreSpace,
+      context: ExecutionContext
   )
 
   private final case class ComponentFixture(
-    datastorespace: DataStoreSpace,
-    entitystorespace: EntityStoreSpace,
-    component: Component,
-    context: ExecutionContext
+      datastorespace: DataStoreSpace,
+      entitystorespace: EntityStoreSpace,
+      component: Component,
+      context: ExecutionContext
   )
 
   private def _fixture(): Fixture = {
@@ -565,7 +586,7 @@ final class EntityConcurrencyTokenSpec
       spanId = None,
       correlationId = None
     )
-    val component = new Component() {}
+    val component                      = new Component() {}
     given EntityPersistent[TestEntity] = _entity_persistent
     val storerealm = new EntityRealm[TestEntity](
       entityName = _collection_id.name,
@@ -642,7 +663,7 @@ final class EntityConcurrencyTokenSpec
 
   private def _entity_record(entity: TestEntity): Record = {
     val base = Record.dataAuto(
-      "id" -> entity.id,
+      "id"   -> entity.id,
       "name" -> entity.name
     )
     entity.attempted match {
@@ -657,7 +678,7 @@ final class EntityConcurrencyTokenSpec
   }
 
   private def _decode_entity(
-    record: Record
+      record: Record
   ): Consequence[TestEntity] =
     if (
       record.fields.exists(field =>
@@ -685,8 +706,8 @@ final class EntityConcurrencyTokenSpec
       }
 
   private def _raw_record(
-    datastorespace: DataStoreSpace,
-    id: EntityId
+      datastorespace: DataStoreSpace,
+      id: EntityId
   )(using ExecutionContext): Consequence[Option[Record]] =
     for {
       datastore <- datastorespace.dataStore(
@@ -699,7 +720,7 @@ final class EntityConcurrencyTokenSpec
     } yield record
 
   private final class IdRef[A](
-    initial: A
+      initial: A
   ) extends Ref[cats.Id, A] {
     private var _value: A = initial
 
@@ -719,14 +740,15 @@ final class EntityConcurrencyTokenSpec
 
     def access: (A, A => Boolean) = synchronized {
       val snapshot = _value
-      val setter: A => Boolean = (next: A) => synchronized {
-        if (_value == snapshot) {
-          _value = next
-          true
-        } else {
-          false
+      val setter: A => Boolean = (next: A) =>
+        synchronized {
+          if (_value == snapshot) {
+            _value = next
+            true
+          } else {
+            false
+          }
         }
-      }
       (snapshot, setter)
     }
 
@@ -758,7 +780,7 @@ final class EntityConcurrencyTokenSpec
     }
 
     override def tryModifyState[B](
-      state: State[A, B]
+        state: State[A, B]
     ): Option[B] = synchronized {
       val (next, result) = state.run(_value).value
       _value = next

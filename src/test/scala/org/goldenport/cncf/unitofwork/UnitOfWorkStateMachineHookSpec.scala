@@ -2,10 +2,26 @@ package org.goldenport.cncf.unitofwork
 
 import cats.~>
 import org.goldenport.Consequence
-import org.goldenport.cncf.context.{CorrelationId, DataStoreContext, EntityStoreContext, ExecutionContext, ObservabilityContext, RuntimeContext, ScopeContext, ScopeKind, TraceId}
+import org.goldenport.cncf.context.{
+  CorrelationId,
+  DataStoreContext,
+  EntityStoreContext,
+  ExecutionContext,
+  ObservabilityContext,
+  RuntimeContext,
+  ScopeContext,
+  ScopeKind,
+  TraceId
+}
 import org.goldenport.cncf.datastore.{DataStore, DataStoreSpace}
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
-import org.goldenport.cncf.entity.{EntityPersistent, EntityStore, EntityStoreSpace}
+import org.goldenport.cncf.entity.{
+  EntityConcurrencyToken,
+  EntityMutationExpectation,
+  EntityPersistent,
+  EntityStore,
+  EntityStoreSpace
+}
 import org.goldenport.cncf.event.EventEngine
 import org.goldenport.cncf.http.FakeHttpDriver
 import org.goldenport.cncf.statemachine.TransitionValidationHook
@@ -17,27 +33,28 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Mar. 19, 2026
  *  version Mar. 24, 2026
- * @version Apr. 14, 2026
+ *  version Apr. 14, 2026
+ * @version Jul. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkStateMachineHookSpec
-  extends AnyWordSpec
-  with Matchers
-  with GivenWhenThen {
+    extends AnyWordSpec
+    with Matchers
+    with GivenWhenThen {
 
   private val _cid = EntityCollectionId("test", "sm", "person")
 
   "UnitOfWork transition validation hook" should {
     "invoke pre-check before update" in {
       Given("runtime context with a counting transition hook")
-      val datastorespace = DataStoreSpace.default()
-      val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
-      val hook = new _CountingHook
-      val context = _execution_context(datastorespace, entitystorespace, hook)
+      val datastorespace     = DataStoreSpace.default()
+      val entitystorespace   = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+      val hook               = new _CountingHook
+      val context            = _execution_context(datastorespace, entitystorespace, hook)
       given ExecutionContext = context
       given EntityPersistent[PersonEntity] = _person_persistent
       val uow = new UnitOfWork(context, EventEngine.noop(DataStore.noop()))
-      val id = EntityId("test", "sm_1", _cid)
+      val id  = EntityId("test", "sm_1", _cid)
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
           Vector(
@@ -52,23 +69,27 @@ final class UnitOfWorkStateMachineHookSpec
 
       When("updating entity through UnitOfWork interpreter")
       val result = new UnitOfWorkInterpreter(uow).execute(
-        UnitOfWorkOp.EntityStoreUpdate(entity, summon[EntityPersistent[PersonEntity]])
+        UnitOfWorkOp.EntityStoreUpdate(
+          entity,
+          EntityMutationExpectation(EntityConcurrencyToken.LEGACY),
+          summon[EntityPersistent[PersonEntity]]
+        )
       )
 
-      Then("pre-check is invoked once and update succeeds")
-      result shouldBe ()
+      Then("pre-check is invoked once and update returns the authoritative snapshot")
+      result.entity shouldBe entity
       hook.beforeUpdateCount shouldBe 1
     }
 
     "block update when pre-check fails" in {
       Given("runtime context with a rejecting transition hook")
-      val datastorespace = DataStoreSpace.default()
-      val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
-      val hook = new _RejectingUpdateHook
-      val context = _execution_context(datastorespace, entitystorespace, hook)
+      val datastorespace     = DataStoreSpace.default()
+      val entitystorespace   = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+      val hook               = new _RejectingUpdateHook
+      val context            = _execution_context(datastorespace, entitystorespace, hook)
       given ExecutionContext = context
       given EntityPersistent[PersonEntity] = _person_persistent
-      val id = EntityId("test", "sm_2", _cid)
+      val id                               = EntityId("test", "sm_2", _cid)
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
           Vector(
@@ -84,9 +105,10 @@ final class UnitOfWorkStateMachineHookSpec
       When("updating entity through UnitOfWork interpreter")
       val result = new UnitOfWorkInterpreter(uow).run(
         org.goldenport.ConsequenceT.liftF(
-          cats.free.Free.liftF[UnitOfWorkOp, Unit](
+          cats.free.Free.liftF(
             UnitOfWorkOp.EntityStoreUpdate(
               PersonEntity(id, "hanako", 31),
+              EntityMutationExpectation(EntityConcurrencyToken.LEGACY),
               summon[EntityPersistent[PersonEntity]]
             )
           )
@@ -96,30 +118,31 @@ final class UnitOfWorkStateMachineHookSpec
       Then("update fails before mutation and existing record stays unchanged")
       result shouldBe a[Consequence.Failure[_]]
 
-      val loadedAge = for {
-        cid <- context.entityStoreSpace.dataStoreCollection(id)
-        dsid <- context.entityStoreSpace.dataStoreEntryId(id)
-        ds <- context.dataStoreSpace.dataStore(cid)
-        rec <- ds.load(cid, dsid)
-      } yield rec.flatMap(_.asMap.get("age").collect {
-        case n: Int => n
-      })
+      val loadedage =
+        for {
+          cid  <- context.entityStoreSpace.dataStoreCollection(id)
+          dsid <- context.entityStoreSpace.dataStoreEntryId(id)
+          ds   <- context.dataStoreSpace.dataStore(cid)
+          rec  <- ds.load(cid, dsid)
+        } yield rec.flatMap(_.asMap.get("age").collect {
+          case n: Int => n
+        })
 
-      loadedAge shouldBe Consequence.success(Some(30))
+      loadedage shouldBe Consequence.success(Some(30))
     }
   }
 
   private def _execution_context(
-    datastorespace: DataStoreSpace,
-    entitystorespace: EntityStoreSpace,
-    hook: TransitionValidationHook
+      datastorespace: DataStoreSpace,
+      entitystorespace: EntityStoreSpace,
+      hook: TransitionValidationHook
   ): ExecutionContext = {
     val observability = ObservabilityContext(
       traceId = TraceId("test", "runtime"),
       spanId = None,
       correlationId = Some(CorrelationId("test", "runtime"))
     )
-    val driver = FakeHttpDriver.okText("nop")
+    val driver                         = FakeHttpDriver.okText("nop")
     lazy val context: ExecutionContext = ExecutionContext.create(runtime)
     lazy val runtime: RuntimeContext = new RuntimeContext(
       core = ScopeContext.Core(
@@ -134,7 +157,9 @@ final class UnitOfWorkStateMachineHookSpec
       unitOfWorkSupplier = () => new UnitOfWork(context),
       unitOfWorkInterpreterFn = new (UnitOfWorkOp ~> Consequence) {
         def apply[A](fa: UnitOfWorkOp[A]): Consequence[A] =
-          throw new UnsupportedOperationException("unitOfWorkInterpreter is not used in test context")
+          throw new UnsupportedOperationException(
+            "unitOfWorkInterpreter is not used in test context"
+          )
       },
       commitAction = uow => {
         val _ = uow.commit()
@@ -152,47 +177,48 @@ final class UnitOfWorkStateMachineHookSpec
   }
 
   private final case class PersonEntity(
-    id: EntityId,
-    name: String,
-    age: Int
+      id: EntityId,
+      name: String,
+      age: Int
   ) {
     def toRecord(): Record =
       Record.dataAuto(
-        "id" -> id,
+        "id"   -> id,
         "name" -> name,
-        "age" -> age
+        "age"  -> age
       )
   }
 
-  private val _person_persistent: EntityPersistent[PersonEntity] = new EntityPersistent[PersonEntity] {
-    def id(e: PersonEntity): EntityId = e.id
-    def toRecord(e: PersonEntity): Record = e.toRecord()
-    def fromRecord(r: Record): Consequence[PersonEntity] = {
-      val m = r.asMap
-      (m.get("id"), m.get("name"), m.get("age")) match {
-        case (Some(id: EntityId), Some(name: String), Some(age: Int)) =>
-          Consequence.success(PersonEntity(id, name, age))
-        case _ =>
-          Consequence.argumentInvalid("invalid person record")
+  private val _person_persistent: EntityPersistent[PersonEntity] =
+    new EntityPersistent[PersonEntity] {
+      def id(e: PersonEntity): EntityId     = e.id
+      def toRecord(e: PersonEntity): Record = e.toRecord()
+      def fromRecord(r: Record): Consequence[PersonEntity] = {
+        val m = r.asMap
+        (m.get("id"), m.get("name"), m.get("age")) match {
+          case (Some(id: EntityId), Some(name: String), Some(age: Int)) =>
+            Consequence.success(PersonEntity(id, name, age))
+          case _ =>
+            Consequence.argumentInvalid("invalid person record")
+        }
       }
     }
-  }
 
   private final class _CountingHook extends TransitionValidationHook {
     private var _before_update_count = 0
-    def beforeUpdateCount: Int = _before_update_count
+    def beforeUpdateCount: Int       = _before_update_count
 
     def beforeSave[T](
-      entity: T,
-      tc: org.goldenport.cncf.entity.EntityPersistent[T]
+        entity: T,
+        tc: org.goldenport.cncf.entity.EntityPersistent[T]
     )(using ExecutionContext): Consequence[Unit] = {
       val _ = (entity, tc)
       Consequence.unit
     }
 
     def beforeUpdate[T](
-      entity: T,
-      tc: org.goldenport.cncf.entity.EntityPersistent[T]
+        entity: T,
+        tc: org.goldenport.cncf.entity.EntityPersistent[T]
     )(using ExecutionContext): Consequence[Unit] = {
       val _ = (entity, tc)
       _before_update_count = _before_update_count + 1
@@ -200,9 +226,9 @@ final class UnitOfWorkStateMachineHookSpec
     }
 
     def beforeUpdateById[P](
-      id: EntityId,
-      patch: P,
-      tc: org.goldenport.cncf.entity.EntityPersistentUpdate[P]
+        id: EntityId,
+        patch: P,
+        tc: org.goldenport.cncf.entity.EntityPersistentUpdate[P]
     )(using ExecutionContext): Consequence[Unit] = {
       val _ = (id, patch, tc)
       Consequence.unit
@@ -211,25 +237,25 @@ final class UnitOfWorkStateMachineHookSpec
 
   private final class _RejectingUpdateHook extends TransitionValidationHook {
     def beforeSave[T](
-      entity: T,
-      tc: org.goldenport.cncf.entity.EntityPersistent[T]
+        entity: T,
+        tc: org.goldenport.cncf.entity.EntityPersistent[T]
     )(using ExecutionContext): Consequence[Unit] = {
       val _ = (entity, tc)
       Consequence.unit
     }
 
     def beforeUpdate[T](
-      entity: T,
-      tc: org.goldenport.cncf.entity.EntityPersistent[T]
+        entity: T,
+        tc: org.goldenport.cncf.entity.EntityPersistent[T]
     )(using ExecutionContext): Consequence[Unit] = {
       val _ = (entity, tc)
       Consequence.stateConflict("transition pre-check failed")
     }
 
     def beforeUpdateById[P](
-      id: EntityId,
-      patch: P,
-      tc: org.goldenport.cncf.entity.EntityPersistentUpdate[P]
+        id: EntityId,
+        patch: P,
+        tc: org.goldenport.cncf.entity.EntityPersistentUpdate[P]
     )(using ExecutionContext): Consequence[Unit] = {
       val _ = (id, patch, tc)
       Consequence.unit

@@ -32,7 +32,7 @@ import io.circe.parser.parse
 /*
  * @since   May. 18, 2026
  *  version Jun. 19, 2026
- * @version Jul. 14, 2026
+ * @version Jul. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 trait StaticFormAppRendererComponentAdminPart {
@@ -576,7 +576,8 @@ trait StaticFormAppRendererComponentAdminPart {
     id: String,
     values: Map[String, String] = Map.empty,
     webDescriptor: WebDescriptor = WebDescriptor.empty,
-    validation: Option[FormValidationResult] = None
+    validation: Option[FormValidationResult] = None,
+    submittedVersion: Option[String] = None
   ): Option[Page] =
     find_component(subsystem, componentName).map { component =>
       val componentPath = NamingConventions.toNormalizedSegment(componentName)
@@ -596,11 +597,26 @@ trait StaticFormAppRendererComponentAdminPart {
       val displayFields = admin_entity_display_fields(component, entityPath, "detail", webSchema.fieldNames)
       val displaySchema = webSchema.copy(fields = admin_display_web_fields(webSchema.fields, displayFields))
       val effectiveValidation = validation.filter(_.webSchema.selector == displaySchema.selector)
-      val hiddenContext = hidden_form_context_inputs(values)
+      val readRecord = admin_entity_read_record(
+        subsystem,
+        componentPath,
+        entityPath,
+        id
+      )
+      val version = submittedVersion
+        .map(_.trim)
+        .filter(_.nonEmpty)
+        .orElse(readRecord.flatMap(_.getString("version")))
+      val effectiveValues =
+        values.removed("version") ++ version.map("version" -> _)
+      val hiddenContext = hidden_form_context_inputs(effectiveValues)
       val controls = admin_record_controls(
         displaySchema.fields,
-        admin_entity_record_fields(subsystem, componentPath, entityPath, id, "detail").getOrElse(Vector("id" -> id)),
-        values,
+        readRecord
+          .flatMap(_.getString("fields"))
+          .map(field_lines)
+          .getOrElse(Vector("id" -> id)),
+        effectiveValues,
         "field",
         effectiveValidation,
         includeExtensionFields = false

@@ -4,11 +4,36 @@ import cats.~>
 import cats.data.State
 import cats.effect.Ref
 import org.goldenport.Consequence
-import org.goldenport.cncf.context.{Capability, CorrelationId, DataStoreContext, EntityStoreContext, ExecutionContext, ObservabilityContext, Principal, PrincipalId, RuntimeContext, ScopeContext, ScopeKind, SecurityContext, SecurityLevel, TraceId}
+import org.goldenport.cncf.context.{
+  Capability,
+  CorrelationId,
+  DataStoreContext,
+  EntityStoreContext,
+  ExecutionContext,
+  ObservabilityContext,
+  Principal,
+  PrincipalId,
+  RuntimeContext,
+  ScopeContext,
+  ScopeKind,
+  SecurityContext,
+  SecurityLevel,
+  TraceId
+}
 import org.goldenport.cncf.datastore.{DataStore, DataStoreSpace}
 import org.goldenport.cncf.directive.{Query, SearchResult}
 import org.goldenport.cncf.entity.runtime.*
-import org.goldenport.cncf.entity.{EntityPersistent, EntityPersistentCreate, EntityQuery, EntitySearchScope, EntityStore, EntityStoreSpace, SimpleEntityStorageShapePolicy}
+import org.goldenport.cncf.entity.{
+  EntityConcurrencyToken,
+  EntityMutationExpectation,
+  EntityPersistent,
+  EntityPersistentCreate,
+  EntityQuery,
+  EntitySearchScope,
+  EntityStore,
+  EntityStoreSpace,
+  SimpleEntityStorageShapePolicy
+}
 import org.goldenport.cncf.http.FakeHttpDriver
 import org.goldenport.cncf.metrics.EntityAccessMetricsRegistry
 import org.goldenport.cncf.component.ComponentDescriptor
@@ -31,700 +56,889 @@ import org.simplemodeling.model.directive.Condition
  * @author  ASAMI, Tomoharu
  */
 final class ActionCallEntityAccessMetricsSpec
-  extends AnyWordSpec
-  with Matchers
-  with GivenWhenThen {
+    extends AnyWordSpec
+    with Matchers
+    with GivenWhenThen {
   private def _cid(name: String) = EntityCollectionId("test", "a", name)
 
   "read-side API metrics" should {
-    "claim one stable entity and load it without an upsert on a repeated claim" in {
-      Given("one stable create record and its persisted Entity type")
-      given EntityPersistentCreate[ClaimPersonCreate] = _claim_create_persistent
-      given EntityPersistent[ClaimPerson] = _claim_persistent
-      val cid = _cid("person_claim_or_load")
-      val id = EntityId("test", "claim_or_load", cid)
-      val component = TestComponentFactory.create("claim_or_load", Protocol.empty)
-      val ctx = _execution_context(DataStoreSpace.default(), new EntityStoreSpace().addEntityStore(EntityStore.standard()))
-      val probe = _probe(component, ctx)
-      val candidate = ClaimPersonCreate(id, "first-owner")
-
-      When("two internal DSL calls claim the same stable identity")
-      val first = probe.claim[ClaimPersonCreate, ClaimPerson](candidate)
-      val second = probe.claim[ClaimPersonCreate, ClaimPerson](candidate.copy(name = "must-not-overwrite"))
-
-      Then("only the first call owns creation and the stored Entity is preserved")
-      first.map(_.id) shouldBe Consequence.success(id)
-      first.map(_.isInstanceOf[EntityStore.EntityClaimResult.Claimed[?]]) shouldBe Consequence.success(true)
-      second.map(_.id) shouldBe Consequence.success(id)
-      second.map(_.isInstanceOf[EntityStore.EntityClaimResult.Loaded[?]]) shouldBe Consequence.success(true)
-      second.map {
-        case EntityStore.EntityClaimResult.Loaded(entity) => entity.name
-        case _ => "unexpected"
-      } shouldBe Consequence.success("first-owner")
-    }
-
-    "claim a server-owned entity internally without requiring user ACL fields on the loaded record" in {
-      given EntityPersistentCreate[ClaimPersonCreate] = _claim_create_persistent
-      given EntityPersistent[ClaimPerson] = _claim_persistent
-      val cid = _cid("person_claim_or_load_internal")
-      val id = EntityId("test", "claim_or_load_internal", cid)
-      val component = TestComponentFactory.create("claim_or_load_internal", Protocol.empty)
-      val ctx = _execution_context(DataStoreSpace.default(), new EntityStoreSpace().addEntityStore(EntityStore.standard()))
-      val probe = _probe(component, ctx)
-      val candidate = ClaimPersonCreate(id, "server-owner")
-
-      val first = probe.claimInternal[ClaimPersonCreate, ClaimPerson](candidate)
-      val second = probe.claimInternal[ClaimPersonCreate, ClaimPerson](candidate.copy(name = "must-not-overwrite"))
-
-      first.map(_.isInstanceOf[EntityStore.EntityClaimResult.Claimed[?]]) shouldBe Consequence.success(true)
-      second.map {
-        case EntityStore.EntityClaimResult.Loaded(entity) => entity.name
-        case _ => "unexpected"
-      } shouldBe Consequence.success("server-owner")
-    }
-
-    "save a server-owned Entity internally after its stable identity is claimed" in {
-      given EntityPersistentCreate[ClaimPersonCreate] = _claim_create_persistent
-      given EntityPersistent[ClaimPerson] = _claim_persistent
-      val cid = _cid("person_internal_save")
-      val id = EntityId("test", "internal_save", cid)
-      val component = TestComponentFactory.create("internal_save", Protocol.empty)
-      val ctx = _execution_context(DataStoreSpace.default(), new EntityStoreSpace().addEntityStore(EntityStore.standard()))
-      val probe = _probe(component, ctx)
-
-      probe.claimInternal[ClaimPersonCreate, ClaimPerson](ClaimPersonCreate(id, "first-owner")) shouldBe a[Consequence.Success[_]]
-      probe.saveInternal(ClaimPerson(id, "retained-owner")) shouldBe Consequence.unit
-      probe.claimInternal[ClaimPersonCreate, ClaimPerson](ClaimPersonCreate(id, "must-not-overwrite")).map {
-        case EntityStore.EntityClaimResult.Loaded(entity) => entity.name
-        case _ => "unexpected"
-      } shouldBe Consequence.success("retained-owner")
-    }
-
-    "upsert a server-owned stable Entity internally after its identity is claimed" in {
-      given EntityPersistentCreate[ClaimPersonCreate] = _claim_create_persistent
-      given EntityPersistent[ClaimPerson] = _claim_persistent
-      val cid = _cid("person_internal_upsert")
-      val id = EntityId("test", "internal_upsert", cid)
-      val component = TestComponentFactory.create("internal_upsert", Protocol.empty)
-      val ctx = _execution_context(DataStoreSpace.default(), new EntityStoreSpace().addEntityStore(EntityStore.standard()))
-      val probe = _probe(component, ctx)
-
-      probe.claimInternal[ClaimPersonCreate, ClaimPerson](ClaimPersonCreate(id, "first-owner")) shouldBe a[Consequence.Success[_]]
-      probe.upsertInternal(ClaimPersonCreate(id, "retained-owner")) shouldBe a[Consequence.Success[_]]
-      probe.claimInternal[ClaimPersonCreate, ClaimPerson](ClaimPersonCreate(id, "must-not-overwrite")).map {
-        case EntityStore.EntityClaimResult.Loaded(entity) => entity.name
-        case _ => "unexpected"
-      } shouldBe Consequence.success("retained-owner")
-    }
-
-    "record entity-space hit for load when the cache already has the entity" in {
-      EntityAccessMetricsRegistry.shared.synchronized {
-        Given("a component entity space with a resident entity")
-        EntityAccessMetricsRegistry.shared.clear()
-        given EntityPersistent[TestPerson] = _persistent
-
-        val cid = _cid("person_metrics_cache_load")
-        val id = EntityId("test", "cache_load", cid)
-        val entity = TestPerson(id, "taro", 20)
-        val component = TestComponentFactory.create("metrics_cache_load", Protocol.empty)
-        component.entitySpace.registerEntity(cid.name, _resident_collection(cid, entity))
-        val ctx = _execution_context(DataStoreSpace.default(), new EntityStoreSpace().addEntityStore(EntityStore.standard()))
-
-        When("loading through ActionCallEntityStorePart")
-        val result = _probe(component, ctx).load[TestPerson](id)
-
-        Then("the result comes from entity-space and metrics reflect the cache hit")
-        result.map(_.map(_.id)) shouldBe Consequence.success(Some(id))
-        _metric_count("entity.load.try.entity-space", "entity-space") shouldBe 1L
-        _metric_count("entity.load.hit.entity-space", "entity-space") shouldBe 1L
-        _metric_count("entity.load.hit.data-store", "data-store") shouldBe 0L
-      }
-    }
-
-    "enforce authorization when entity-space load hits the resident cache" in {
-      EntityAccessMetricsRegistry.shared.synchronized {
-        Given("a non-owner principal and a resident private entity owned by another subject")
-        EntityAccessMetricsRegistry.shared.clear()
-        given EntityPersistent[TestPerson] = _persistent
-
-        val cid = _cid("person_metrics_authz_cache_load")
-        val id = EntityId("test", "authz_cache_load", cid)
-        val entity = TestPerson.privateOwnedBy(id, "private-cache-load", 30, "other-owner")
-        val component = TestComponentFactory.create("metrics_authz_cache_load", Protocol.empty)
-        component.entitySpace.registerEntity(cid.name, _resident_collection(cid, entity))
-        val ctx = _execution_context(DataStoreSpace.default(), new EntityStoreSpace().addEntityStore(EntityStore.standard()), manager = false)
-
-        When("loading through the normal ActionCall entity API")
-        val result = _probe(component, ctx).load[TestPerson](id)
-
-        Then("the entity-space hit is still denied by UnitOfWork authorization")
-        result shouldBe a[Consequence.Failure[_]]
-        _metric_count("entity.load.try.entity-space", "entity-space") shouldBe 1L
-        _metric_count("entity.load.hit.entity-space", "entity-space") shouldBe 1L
-        _metric_count("entity.load.hit.data-store", "data-store") shouldBe 0L
-      }
-    }
-
-    "prefer typed resident security over stale datastore security when entity-space load hits" in {
-      EntityAccessMetricsRegistry.shared.synchronized {
-        Given("a resident entity has typed owner security and the datastore row still has stale security")
-        EntityAccessMetricsRegistry.shared.clear()
-        given EntityPersistent[TestPerson] = _typed_security_persistent("typed-owner")
-
-        val datastorespace = DataStoreSpace.default()
-        val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
-        val ctx = _execution_context(datastorespace, entitystorespace, manager = false, principalId = "typed-owner")
-        given ExecutionContext = ctx
-        val cid = _cid("person_metrics_typed_security_cache_load")
-        val id = EntityId("test", "typed_security_cache_load", cid)
-        val resident = TestPerson.privateOwnedBy(id, "typed-resident", 33, "stale-store-owner")
-        val staleStore = TestPerson.privateOwnedBy(id, "typed-resident", 33, "stale-store-owner")
-        val _ = datastorespace.inject(
-          DataStoreSpace.Seed(
-            Vector(DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(cid), staleStore.toRecord()))
-          )
+    "claim and update stable framework-owned Entities" which {
+      "claim one stable entity and load it without an upsert on a repeated claim" in {
+        Given("one stable create record and its persisted Entity type")
+        given EntityPersistentCreate[ClaimPersonCreate] = _claim_create_persistent
+        given EntityPersistent[ClaimPerson]             = _claim_persistent
+        val cid                                         = _cid("person_claim_or_load")
+        val id                                          = EntityId("test", "claim_or_load", cid)
+        val component = TestComponentFactory.create("claim_or_load", Protocol.empty)
+        val ctx = _execution_context(
+          DataStoreSpace.default(),
+          new EntityStoreSpace().addEntityStore(EntityStore.standard())
         )
-        val component = TestComponentFactory.create("metrics_typed_security_cache_load", Protocol.empty)
-        component.entitySpace.registerEntity(cid.name, _resident_collection(cid, resident))
+        val probe     = _probe(component, ctx)
+        val candidate = ClaimPersonCreate(id, "first-owner")
 
-        When("loading through the normal ActionCall entity API")
-        val result = _probe(component, ctx).load[TestPerson](id)
+        When("two internal DSL calls claim the same stable identity")
+        val first = probe.claim[ClaimPersonCreate, ClaimPerson](candidate)
+        val second =
+          probe.claim[ClaimPersonCreate, ClaimPerson](candidate.copy(name = "must-not-overwrite"))
 
-        Then("typed entity security is used instead of stale datastore security")
-        result.map(_.map(_.id)) shouldBe Consequence.success(Some(id))
-        _metric_count("entity.load.hit.entity-space", "entity-space") shouldBe 1L
+        Then("only the first call owns creation and the stored Entity is preserved")
+        first.map(_.id) shouldBe Consequence.success(id)
+        first.map(_.isInstanceOf[EntityStore.EntityClaimResult.Claimed[?]]) shouldBe Consequence
+          .success(true)
+        second.map(_.id) shouldBe Consequence.success(id)
+        second.map(_.isInstanceOf[EntityStore.EntityClaimResult.Loaded[?]]) shouldBe Consequence
+          .success(true)
+        second.map {
+          case EntityStore.EntityClaimResult.Loaded(entity) => entity.name
+          case _                                            => "unexpected"
+        } shouldBe Consequence.success("first-owner")
       }
-    }
 
-    "reject stale datastore owner when typed resident security differs on entity-space load hit" in {
-      EntityAccessMetricsRegistry.shared.synchronized {
-        Given("a resident entity has typed owner security and the caller matches only stale datastore security")
-        EntityAccessMetricsRegistry.shared.clear()
-        given EntityPersistent[TestPerson] = _typed_security_persistent("typed-owner")
-
-        val datastorespace = DataStoreSpace.default()
-        val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
-        val ctx = _execution_context(datastorespace, entitystorespace, manager = false, principalId = "stale-store-owner")
-        given ExecutionContext = ctx
-        val cid = _cid("person_metrics_typed_security_cache_load_denied")
-        val id = EntityId("test", "typed_security_cache_load_denied", cid)
-        val resident = TestPerson.privateOwnedBy(id, "typed-resident-denied", 34, "stale-store-owner")
-        val staleStore = TestPerson.privateOwnedBy(id, "typed-resident-denied", 34, "stale-store-owner")
-        val _ = datastorespace.inject(
-          DataStoreSpace.Seed(
-            Vector(DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(cid), staleStore.toRecord()))
-          )
+      "claim a server-owned entity internally without requiring user ACL fields on the loaded record" in {
+        Given("one server-owned stable Entity without user ACL fields")
+        given EntityPersistentCreate[ClaimPersonCreate] = _claim_create_persistent
+        given EntityPersistent[ClaimPerson]             = _claim_persistent
+        val cid                                         = _cid("person_claim_or_load_internal")
+        val id        = EntityId("test", "claim_or_load_internal", cid)
+        val component = TestComponentFactory.create("claim_or_load_internal", Protocol.empty)
+        val ctx = _execution_context(
+          DataStoreSpace.default(),
+          new EntityStoreSpace().addEntityStore(EntityStore.standard())
         )
-        val component = TestComponentFactory.create("metrics_typed_security_cache_load_denied", Protocol.empty)
-        component.entitySpace.registerEntity(cid.name, _resident_collection(cid, resident))
+        val probe     = _probe(component, ctx)
+        val candidate = ClaimPersonCreate(id, "server-owner")
 
-        When("loading through the normal ActionCall entity API")
-        val result = _probe(component, ctx).load[TestPerson](id)
+        When("the internal DSL claims the same identity twice")
+        val first = probe.claimInternal[ClaimPersonCreate, ClaimPerson](candidate)
+        val second = probe.claimInternal[ClaimPersonCreate, ClaimPerson](candidate.copy(name =
+          "must-not-overwrite"
+        ))
 
-        Then("stale datastore security is not allowed to override typed entity security")
-        result shouldBe a[Consequence.Failure[_]]
-        _metric_count("entity.load.hit.entity-space", "entity-space") shouldBe 1L
+        Then("the second claim loads the original server-owned Entity")
+        first.map(_.isInstanceOf[EntityStore.EntityClaimResult.Claimed[?]]) shouldBe Consequence
+          .success(true)
+        second.map {
+          case EntityStore.EntityClaimResult.Loaded(entity) => entity.name
+          case _                                            => "unexpected"
+        } shouldBe Consequence.success("server-owner")
       }
-    }
 
-    "record data-store hit for load when entity-space misses and store fallback is used" in {
-      EntityAccessMetricsRegistry.shared.synchronized {
-        Given("a datastore-backed entity store without a resident entity collection")
-        EntityAccessMetricsRegistry.shared.clear()
-        given EntityPersistent[TestPerson] = _persistent
-
-        val datastorespace = DataStoreSpace.default()
-        val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
-        val ctx = _execution_context(datastorespace, entitystorespace, manager = false)
-        given ExecutionContext = ctx
-        val cid = _cid("person_metrics_store_load")
-        val id = EntityId("test", "store_load", cid)
-        val entity = TestPerson.privateOwnedBy(id, "hanako", 30, "test-principal")
-        val _ = datastorespace.inject(
-          DataStoreSpace.Seed(
-            Vector(DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(cid), entity.toRecord()))
-          )
+      "save a server-owned Entity internally after its stable identity is claimed" in {
+        Given("one internally claimed server-owned Entity")
+        given EntityPersistentCreate[ClaimPersonCreate] = _claim_create_persistent
+        given EntityPersistent[ClaimPerson]             = _claim_persistent
+        val cid                                         = _cid("person_internal_save")
+        val id                                          = EntityId("test", "internal_save", cid)
+        val component = TestComponentFactory.create("internal_save", Protocol.empty)
+        val ctx = _execution_context(
+          DataStoreSpace.default(),
+          new EntityStoreSpace().addEntityStore(EntityStore.standard())
         )
-        val component = TestComponentFactory.create("metrics_store_load", Protocol.empty)
+        val probe = _probe(component, ctx)
 
-        When("loading through ActionCallEntityStorePart")
-        val result = _probe(component, ctx).load[TestPerson](id)
-
-        Then("the result falls back to datastore and metrics reflect that path")
-        result.map(_.map(_.id)) shouldBe Consequence.success(Some(id))
-        _metric_count("entity.load.fallback.entity-store", "entity-store") shouldBe 1L
-        _metric_count("entity.load.hit.data-store", "data-store") shouldBe 1L
-        _metric_count("entity.load.hit.entity-space", "entity-space") shouldBe 0L
+        When("the internal DSL saves it with the admitted revision")
+        probe.claimInternal[ClaimPersonCreate, ClaimPerson](
+          ClaimPersonCreate(id, "first-owner")
+        ) shouldBe a[Consequence.Success[_]]
+        probe.saveInternal(
+          ClaimPerson(id, "retained-owner"),
+          EntityMutationExpectation(EntityConcurrencyToken.INITIAL)
+        ) shouldBe a[Consequence.Success[_]]
+        Then("a later claim observes the saved value")
+        probe.claimInternal[ClaimPersonCreate, ClaimPerson](ClaimPersonCreate(
+          id,
+          "must-not-overwrite"
+        )).map {
+          case EntityStore.EntityClaimResult.Loaded(entity) => entity.name
+          case _                                            => "unexpected"
+        } shouldBe Consequence.success("retained-owner")
       }
+
+      "keep a server-owned stable Entity unchanged when its identity is claimed again" in {
+        Given("one internally claimed stable Entity")
+        given EntityPersistentCreate[ClaimPersonCreate] = _claim_create_persistent
+        given EntityPersistent[ClaimPerson]             = _claim_persistent
+        val cid                                         = _cid("person_internal_upsert")
+        val id                                          = EntityId("test", "internal_upsert", cid)
+        val component = TestComponentFactory.create("internal_upsert", Protocol.empty)
+        val ctx = _execution_context(
+          DataStoreSpace.default(),
+          new EntityStoreSpace().addEntityStore(EntityStore.standard())
+        )
+        val probe = _probe(component, ctx)
+
+        When("later claims propose different values for the same identity")
+        probe.claimInternal[ClaimPersonCreate, ClaimPerson](
+          ClaimPersonCreate(id, "first-owner")
+        ) shouldBe a[Consequence.Success[_]]
+        probe.claimInternal[ClaimPersonCreate, ClaimPerson](
+          ClaimPersonCreate(id, "retained-owner")
+        ) shouldBe a[Consequence.Success[_]]
+        Then("claim semantics preserve the first stored value")
+        probe.claimInternal[ClaimPersonCreate, ClaimPerson](ClaimPersonCreate(
+          id,
+          "must-not-overwrite"
+        )).map {
+          case EntityStore.EntityClaimResult.Loaded(entity) => entity.name
+          case _                                            => "unexpected"
+        } shouldBe Consequence.success("first-owner")
+      }
+
     }
 
-    "record data-store hit for search when resident cache is empty" in {
-      EntityAccessMetricsRegistry.shared.synchronized {
-        Given("an entity collection registered in entity space but with no resident values")
-        EntityAccessMetricsRegistry.shared.clear()
-        given EntityPersistent[TestPerson] = _persistent
+    "observe and authorize resident Entity access" which {
+      "record entity-space hit for load when the cache already has the entity" in {
+        EntityAccessMetricsRegistry.shared.synchronized {
+          Given("a component entity space with a resident entity")
+          EntityAccessMetricsRegistry.shared.clear()
+          given EntityPersistent[TestPerson] = _persistent
 
-        val datastorespace = DataStoreSpace.default()
-        val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
-        val ctx = _execution_context(datastorespace, entitystorespace)
-        given ExecutionContext = ctx
-        val cid = _cid("person_metrics_search")
-        val p1 = TestPerson.privateOwnedBy(EntityId("test", "search_1", cid), "alpha", 20, "test-principal")
-        val p2 = TestPerson.privateOwnedBy(EntityId("test", "search_2", cid), "beta", 30, "test-principal")
-        val _ = datastorespace.inject(
-          DataStoreSpace.Seed(
-            Vector(
-              DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(cid), p1.toRecord()),
-              DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(cid), p2.toRecord())
+          val cid       = _cid("person_metrics_cache_load")
+          val id        = EntityId("test", "cache_load", cid)
+          val entity    = TestPerson(id, "taro", 20)
+          val component = TestComponentFactory.create("metrics_cache_load", Protocol.empty)
+          component.entitySpace.registerEntity(cid.name, _resident_collection(cid, entity))
+          val ctx = _execution_context(
+            DataStoreSpace.default(),
+            new EntityStoreSpace().addEntityStore(EntityStore.standard())
+          )
+
+          When("loading through ActionCallEntityStorePart")
+          val result = _probe(component, ctx).load[TestPerson](id)
+
+          Then("the result comes from entity-space and metrics reflect the cache hit")
+          result.map(_.map(_.id)) shouldBe Consequence.success(Some(id))
+          _metric_count("entity.load.try.entity-space", "entity-space") shouldBe 1L
+          _metric_count("entity.load.hit.entity-space", "entity-space") shouldBe 1L
+          _metric_count("entity.load.hit.data-store", "data-store") shouldBe 0L
+        }
+      }
+
+      "enforce authorization when entity-space load hits the resident cache" in {
+        EntityAccessMetricsRegistry.shared.synchronized {
+          Given("a non-owner principal and a resident private entity owned by another subject")
+          EntityAccessMetricsRegistry.shared.clear()
+          given EntityPersistent[TestPerson] = _persistent
+
+          val cid       = _cid("person_metrics_authz_cache_load")
+          val id        = EntityId("test", "authz_cache_load", cid)
+          val entity    = TestPerson.privateOwnedBy(id, "private-cache-load", 30, "other-owner")
+          val component = TestComponentFactory.create("metrics_authz_cache_load", Protocol.empty)
+          component.entitySpace.registerEntity(cid.name, _resident_collection(cid, entity))
+          val ctx = _execution_context(
+            DataStoreSpace.default(),
+            new EntityStoreSpace().addEntityStore(EntityStore.standard()),
+            manager = false
+          )
+
+          When("loading through the normal ActionCall entity API")
+          val result = _probe(component, ctx).load[TestPerson](id)
+
+          Then("the entity-space hit is still denied by UnitOfWork authorization")
+          result shouldBe a[Consequence.Failure[_]]
+          _metric_count("entity.load.try.entity-space", "entity-space") shouldBe 1L
+          _metric_count("entity.load.hit.entity-space", "entity-space") shouldBe 1L
+          _metric_count("entity.load.hit.data-store", "data-store") shouldBe 0L
+        }
+      }
+
+      "prefer typed resident security over stale datastore security when entity-space load hits" in {
+        EntityAccessMetricsRegistry.shared.synchronized {
+          Given(
+            "a resident entity has typed owner security and the datastore row still has stale security"
+          )
+          EntityAccessMetricsRegistry.shared.clear()
+          given EntityPersistent[TestPerson] = _typed_security_persistent("typed-owner")
+
+          val datastorespace   = DataStoreSpace.default()
+          val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+          val ctx = _execution_context(
+            datastorespace,
+            entitystorespace,
+            manager = false,
+            principalid = "typed-owner"
+          )
+          given ExecutionContext = ctx
+          val cid                = _cid("person_metrics_typed_security_cache_load")
+          val id                 = EntityId("test", "typed_security_cache_load", cid)
+          val resident   = TestPerson.privateOwnedBy(id, "typed-resident", 33, "stale-store-owner")
+          val stalestore = TestPerson.privateOwnedBy(id, "typed-resident", 33, "stale-store-owner")
+          val _ = datastorespace.inject(
+            DataStoreSpace.Seed(
+              Vector(DataStoreSpace.SeedEntry(
+                DataStore.CollectionId.EntityStore(cid),
+                stalestore.toRecord()
+              ))
             )
           )
-        )
-        val component = TestComponentFactory.create("metrics_search", Protocol.empty)
-        component.entitySpace.registerEntity(cid.name, _empty_collection(cid))
-        val query: EntityQuery[TestPerson] = EntityQuery(cid, Query(TestPersonQuery(
-          id = Condition.any[EntityId],
-          name = Condition.is("alpha"),
-          age = Condition.any[Int]
-        )))
+          val component =
+            TestComponentFactory.create("metrics_typed_security_cache_load", Protocol.empty)
+          component.entitySpace.registerEntity(cid.name, _resident_collection(cid, resident))
 
-        When("searching through ActionCallEntityStorePart")
-        val result = _probe(component, ctx).search[TestPerson](query)
+          When("loading through the normal ActionCall entity API")
+          val result = _probe(component, ctx).load[TestPerson](id)
 
-        Then("the result comes from datastore fallback and metrics reflect the search route")
-        result.map(_.data.map(_.id)) shouldBe Consequence.success(Vector(p1.id))
-        _metric_count("entity.search.try.entity-space", "entity-space") shouldBe 1L
-        _metric_count("entity.search.fallback.entity-store", "entity-store") shouldBe 1L
-        _metric_count("entity.search.hit.data-store", "data-store") shouldBe 1L
-        _metric_count("entity.search.hit.entity-space", "entity-space") shouldBe 0L
-      }
-    }
-
-    "enforce authorization when entity-space load falls back to datastore" in {
-      EntityAccessMetricsRegistry.shared.synchronized {
-        Given("a non-owner principal and an empty resident collection with a datastore-backed private entity")
-        EntityAccessMetricsRegistry.shared.clear()
-        given EntityPersistent[TestPerson] = _persistent
-
-        val datastorespace = DataStoreSpace.default()
-        val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
-        val ctx = _execution_context(datastorespace, entitystorespace, manager = false)
-        given ExecutionContext = ctx
-        val cid = _cid("person_metrics_authz_load_fallback")
-        val id = EntityId("test", "authz_load_fallback", cid)
-        val entity = TestPerson.privateOwnedBy(id, "private-load", 31, "other-owner")
-        val _ = datastorespace.inject(
-          DataStoreSpace.Seed(
-            Vector(DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(cid), entity.toRecord()))
-          )
-        )
-        val component = TestComponentFactory.create("metrics_authz_load", Protocol.empty)
-        component.entitySpace.registerEntity(cid.name, _empty_collection(cid))
-
-        When("loading through the normal ActionCall entity API")
-        val result = _probe(component, ctx).load[TestPerson](id)
-
-        Then("the fallback path is still denied by UnitOfWork authorization")
-        result shouldBe a[Consequence.Failure[_]]
-        _metric_count("entity.load.fallback.entity-store", "entity-store") shouldBe 1L
-        _metric_count("entity.load.hit.data-store", "data-store") shouldBe 0L
-      }
-    }
-
-    "enforce authorization when entity-space search falls back to datastore" in {
-      EntityAccessMetricsRegistry.shared.synchronized {
-        Given("a non-owner principal and an empty resident collection with datastore-backed private entities")
-        EntityAccessMetricsRegistry.shared.clear()
-        given EntityPersistent[TestPerson] = _persistent
-
-        val datastorespace = DataStoreSpace.default()
-        val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
-        val ctx = _execution_context(datastorespace, entitystorespace, manager = false)
-        given ExecutionContext = ctx
-        val cid = _cid("person_metrics_authz_search_fallback")
-        val p1 = TestPerson.privateOwnedBy(EntityId("test", "authz_search_1", cid), "private-search", 32, "other-owner")
-        val _ = datastorespace.inject(
-          DataStoreSpace.Seed(
-            Vector(DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(cid), p1.toRecord()))
-          )
-        )
-        val component = TestComponentFactory.create("metrics_authz_search", Protocol.empty)
-        component.entitySpace.registerEntity(cid.name, _empty_collection(cid))
-        val query: EntityQuery[TestPerson] = EntityQuery(cid, Query(TestPersonQuery(
-          id = Condition.any[EntityId],
-          name = Condition.is("private-search"),
-          age = Condition.any[Int]
-        )))
-
-        When("searching through the normal ActionCall entity API")
-        val result = _probe(component, ctx).search[TestPerson](query)
-
-        Then("the fallback path still applies UnitOfWork visibility filtering")
-        result.map(_.data) shouldBe Consequence.success(Vector.empty)
-        _metric_count("entity.search.fallback.entity-store", "entity-store") shouldBe 1L
-        _metric_count("entity.search.hit.data-store", "data-store") shouldBe 1L
-        component.entitySpace.entity[TestPerson](cid.name).storage.storeRealm.values shouldBe empty
-      }
-    }
-
-    "bypass resident entity-space search when configured" in {
-      EntityAccessMetricsRegistry.shared.synchronized {
-        Given("a resident entity and a different datastore-backed entity")
-        EntityAccessMetricsRegistry.shared.clear()
-        given EntityPersistent[TestPerson] = _persistent
-
-        val datastorespace = DataStoreSpace.default()
-        val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
-        val ctx = _execution_context(datastorespace, entitystorespace)
-        given ExecutionContext = ctx
-        val cid = _cid("person_metrics_search_bypass")
-        val resident = TestPerson(EntityId("test", "resident", cid), "resident", 20)
-        val stored = TestPerson.privateOwnedBy(EntityId("test", "stored", cid), "stored", 30, "test-principal")
-        val _ = datastorespace.inject(
-          DataStoreSpace.Seed(
-            Vector(DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(cid), stored.toRecord()))
-          )
-        )
-        val subsystem = TestComponentFactory.subsystemWithConfig(
-          Map("textus.entity.search.bypass-entity-space-resident" -> ConfigurationValue.StringValue("true"))
-        )
-        val component = TestComponentFactory.create("metrics_search_bypass", Protocol.empty, subsystem = subsystem)
-        component.entitySpace.registerEntity(cid.name, _resident_collection(cid, resident))
-        val query: EntityQuery[TestPerson] = EntityQuery(cid, Query(TestPersonQuery(
-          id = Condition.any[EntityId],
-          name = Condition.any[String],
-          age = Condition.any[Int]
-        )))
-
-        When("searching through ActionCallEntityStorePart with bypass enabled")
-        val result = _probe(component, ctx).search[TestPerson](query)
-
-        Then("the resident entity-space path is bypassed and datastore results are returned")
-        result.map(_.data.map(_.id)) shouldBe Consequence.success(Vector(stored.id))
-        _metric_count("entity.search.bypass.entity-space", "entity-space") shouldBe 1L
-        _metric_count("entity.search.hit.entity-space", "entity-space") shouldBe 0L
-        _metric_count("entity.search.hit.data-store", "data-store") shouldBe 1L
-      }
-    }
-
-    "fallback to datastore while a working set is still loading" in {
-      EntityAccessMetricsRegistry.shared.synchronized {
-        Given("an entity has a working-set policy but the resident set is still boot-loading")
-        EntityAccessMetricsRegistry.shared.clear()
-        given EntityPersistent[TestPerson] = _persistent
-
-        val datastorespace = DataStoreSpace.default()
-        val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
-        val ctx = _execution_context(datastorespace, entitystorespace)
-        given ExecutionContext = ctx
-        val cid = _cid("person_metrics_working_set_loading")
-        val stored = TestPerson.privateOwnedBy(EntityId("test", "loading_store", cid), "loading-store", 30, "test-principal")
-        val _ = datastorespace.inject(
-          DataStoreSpace.Seed(
-            Vector(DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(cid), stored.toRecord()))
-          )
-        )
-        val component = TestComponentFactory.create("metrics_working_set_loading", Protocol.empty)
-        val collection = _empty_resident_collection(cid)
-        collection.storage.workingSetStatus.markLoading()
-        component.entitySpace.registerEntity(cid.name, collection)
-        val query: EntityQuery[TestPerson] = EntityQuery(
-          cid,
-          Query(TestPersonQuery(
-            id = Condition.any[EntityId],
-            name = Condition.any[String],
-            age = Condition.any[Int]
-          )),
-          EntitySearchScope.WorkingSet
-        )
-
-        When("searching the working-set scope before async loading has completed")
-        val result = _probe(component, ctx).search[TestPerson](query)
-
-        Then("the query is served directly from the datastore and the boot fallback is counted")
-        result.map(_.data.map(_.id)) shouldBe Consequence.success(Vector(stored.id))
-        _metric_count("entity.search.fallback.entity-store", "entity-store") shouldBe 1L
-        _metric_count(
-          "entity.search.fallback.working-set-loading",
-          "entity-store",
-          reason = Some("working-set-loading"),
-          workingSetState = Some("loading")
-        ) shouldBe 1L
-        _metric_count("entity.search.hit.data-store", "data-store") shouldBe 1L
-        _metric_count("entity.search.hit.entity-space", "entity-space") shouldBe 0L
-      }
-    }
-
-    "bypass working set search when framework working sets are disabled" in {
-      EntityAccessMetricsRegistry.shared.synchronized {
-        Given("a resident entity and a datastore-backed entity under disabled framework working sets")
-        EntityAccessMetricsRegistry.shared.clear()
-        given EntityPersistent[TestPerson] = _persistent
-
-        val datastorespace = DataStoreSpace.default()
-        val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
-        val basectx = _execution_context(datastorespace, entitystorespace)
-        val ctx = ExecutionContext.withFrameworkWorkingSetEnabled(basectx, enabled = false)
-        given ExecutionContext = ctx
-        val cid = _cid("person_metrics_working_set_disabled")
-        val resident = TestPerson(EntityId("test", "resident_disabled", cid), "resident-disabled", 20)
-        val stored = TestPerson.privateOwnedBy(EntityId("test", "stored_disabled", cid), "stored-disabled", 30, "test-principal")
-        val _ = datastorespace.inject(
-          DataStoreSpace.Seed(
-            Vector(DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(cid), stored.toRecord()))
-          )
-        )
-        val component = TestComponentFactory.create("metrics_working_set_disabled", Protocol.empty)
-        component.entitySpace.registerEntity(cid.name, _resident_collection(cid, resident, Some(WorkingSetPolicy.ResidentAll)))
-        val query: EntityQuery[TestPerson] = EntityQuery(
-          cid,
-          Query(TestPersonQuery(
-            id = Condition.any[EntityId],
-            name = Condition.any[String],
-            age = Condition.any[Int]
-          )),
-          EntitySearchScope.WorkingSet
-        )
-
-        When("searching through ActionCallEntityStorePart with framework working sets disabled")
-        val result = _probe(component, ctx).search[TestPerson](query)
-
-        Then("the resident set is bypassed and the datastore remains the source of truth")
-        result.map(_.data.map(_.id)) shouldBe Consequence.success(Vector(stored.id))
-        _metric_count("entity.search.bypass.entity-space", "entity-space") shouldBe 1L
-        _metric_count("entity.search.hit.data-store", "data-store") shouldBe 1L
-        _metric_count("entity.search.hit.entity-space", "entity-space") shouldBe 0L
-      }
-    }
-
-    "keep read authorization when framework working sets are disabled" in {
-      EntityAccessMetricsRegistry.shared.synchronized {
-        Given("a disabled working-set context and a private datastore entity owned by another subject")
-        EntityAccessMetricsRegistry.shared.clear()
-        given EntityPersistent[TestPerson] = _persistent
-
-        val datastorespace = DataStoreSpace.default()
-        val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
-        val basectx = _execution_context(datastorespace, entitystorespace, manager = false)
-        val ctx = ExecutionContext.withFrameworkWorkingSetEnabled(basectx, enabled = false)
-        given ExecutionContext = ctx
-        val cid = _cid("person_metrics_working_set_disabled_load_auth")
-        val id = EntityId("test", "disabled_load_auth", cid)
-        val stored = TestPerson.privateOwnedBy(id, "disabled-load-auth", 30, "other-owner")
-        val _ = datastorespace.inject(
-          DataStoreSpace.Seed(
-            Vector(DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(cid), stored.toRecord()))
-          )
-        )
-        val component = TestComponentFactory.create("metrics_working_set_disabled_load_auth", Protocol.empty)
-
-        When("loading through ActionCallEntityStorePart with framework working sets disabled")
-        val result = _probe(component, ctx).load[TestPerson](id)
-
-        Then("the direct-store path still enforces read authorization")
-        result shouldBe a[Consequence.Failure[_]]
-        _metric_count("entity.load.bypass.entity-space", "entity-space") shouldBe 1L
-        _metric_count("entity.load.hit.data-store", "data-store") shouldBe 0L
-      }
-    }
-
-    "make a created entity visible to the next entity-space search" in {
-      EntityAccessMetricsRegistry.shared.synchronized {
-        Given("an empty resident entity collection and a create DTO distinct from the read entity")
-        EntityAccessMetricsRegistry.shared.clear()
-        given EntityPersistent[TestPerson] = _persistent
-        given EntityPersistentCreate[TestPersonCreate] = _create_persistent
-
-        val datastorespace = DataStoreSpace.default()
-        val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
-        val ctx = _execution_context(datastorespace, entitystorespace)
-        val cid = _cid("person_metrics_create_search")
-        val component = TestComponentFactory.create("create_search", Protocol.empty)
-        component.entitySpace.registerEntity(cid.name, _empty_resident_collection(cid))
-        val probe = _component_scoped_probe(component, ctx)
-
-        When("creating through the unit-of-work entity-store path")
-        val created = probe.createPublic[TestPersonCreate](TestPersonCreate("created-from-dto", 42, cid))
-
-        Then("the stored record is decoded into the entity-space working set")
-        val createdid = created match {
-          case Consequence.Success(result) => result.id
-          case other => fail(s"create failed: $other")
+          Then("typed entity security is used instead of stale datastore security")
+          result.map(_.map(_.id)) shouldBe Consequence.success(Some(id))
+          _metric_count("entity.load.hit.entity-space", "entity-space") shouldBe 1L
         }
-        val workingset = component.entitySpace.entity[TestPerson](cid.name).storage.storeRealm.values
-        workingset.map(_.id) should contain(createdid)
-        val createdentity = workingset.find(_.id == createdid).get
-        createdentity.postStatus.map(_.toLowerCase(java.util.Locale.ROOT).contains("published")) should contain(true)
-        createdentity.aliveness.map(_.toLowerCase(java.util.Locale.ROOT).contains("alive")) should contain(true)
-        createdentity.securityAttributes
-          .flatMap(_.getRecord("rights"))
-          .flatMap(_.getRecord("other"))
-          .flatMap(_.getBoolean("read")) should contain(false)
-
-        And("a following search can find the entity without falling back to the datastore")
-        EntityAccessMetricsRegistry.shared.clear()
-        val query: EntityQuery[TestPerson] = EntityQuery(cid, Query(TestPersonQuery(
-          id = Condition.any[EntityId],
-          name = Condition.any[String],
-          age = Condition.any[Int]
-        )))
-        val result = probe.search[TestPerson](query)
-        result.map(_.data.map(_.id)) shouldBe Consequence.success(Vector(createdid))
-        _metric_count("entity.search.hit.entity-space", "entity-space") shouldBe 1L
-        _metric_count("entity.search.fallback.entity-store", "entity-store") shouldBe 0L
       }
+
+      "reject stale datastore owner when typed resident security differs on entity-space load hit" in {
+        EntityAccessMetricsRegistry.shared.synchronized {
+          Given(
+            "a resident entity has typed owner security and the caller matches only stale datastore security"
+          )
+          EntityAccessMetricsRegistry.shared.clear()
+          given EntityPersistent[TestPerson] = _typed_security_persistent("typed-owner")
+
+          val datastorespace   = DataStoreSpace.default()
+          val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+          val ctx = _execution_context(
+            datastorespace,
+            entitystorespace,
+            manager = false,
+            principalid = "stale-store-owner"
+          )
+          given ExecutionContext = ctx
+          val cid                = _cid("person_metrics_typed_security_cache_load_denied")
+          val id                 = EntityId("test", "typed_security_cache_load_denied", cid)
+          val resident =
+            TestPerson.privateOwnedBy(id, "typed-resident-denied", 34, "stale-store-owner")
+          val stalestore =
+            TestPerson.privateOwnedBy(id, "typed-resident-denied", 34, "stale-store-owner")
+          val _ = datastorespace.inject(
+            DataStoreSpace.Seed(
+              Vector(DataStoreSpace.SeedEntry(
+                DataStore.CollectionId.EntityStore(cid),
+                stalestore.toRecord()
+              ))
+            )
+          )
+          val component =
+            TestComponentFactory.create("metrics_typed_security_cache_load_denied", Protocol.empty)
+          component.entitySpace.registerEntity(cid.name, _resident_collection(cid, resident))
+
+          When("loading through the normal ActionCall entity API")
+          val result = _probe(component, ctx).load[TestPerson](id)
+
+          Then("stale datastore security is not allowed to override typed entity security")
+          result shouldBe a[Consequence.Failure[_]]
+          _metric_count("entity.load.hit.entity-space", "entity-space") shouldBe 1L
+        }
+      }
+
     }
 
-    "derive create defaults from component descriptor entity classification" in {
-      EntityAccessMetricsRegistry.shared.synchronized {
-        Given("a component descriptor declares the entity as CMS public content")
-        EntityAccessMetricsRegistry.shared.clear()
-        given EntityPersistent[TestPerson] = _persistent
-        given EntityPersistentCreate[TestPersonCreate] = _create_persistent
+    "observe and authorize datastore fallback" which {
+      "record data-store hit for load when entity-space misses and store fallback is used" in {
+        EntityAccessMetricsRegistry.shared.synchronized {
+          Given("a datastore-backed entity store without a resident entity collection")
+          EntityAccessMetricsRegistry.shared.clear()
+          given EntityPersistent[TestPerson] = _persistent
 
-        val datastorespace = DataStoreSpace.default()
-        val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
-        val ctx = _execution_context(datastorespace, entitystorespace)
-        val cid = _cid("person_metrics_descriptor_cms_create")
-        val component = TestComponentFactory.create("descriptor_cms_create", Protocol.empty)
-          .withComponentDescriptors(Vector(ComponentDescriptor(
-            name = Some("descriptor-cms-create"),
-            componentName = Some("descriptor-cms-create"),
-            entityRuntimeDescriptors = Vector(EntityRuntimeDescriptor(
-              entityName = "TestPerson",
-              collectionId = cid,
-              memoryPolicy = EntityMemoryPolicy.LoadToMemory,
-              partitionStrategy = PartitionStrategy.byOrganizationMonthUTC,
-              maxPartitions = 4,
-              maxEntitiesPerPartition = 16,
-              usageKind = EntityUsageKind.PublicContent,
-              operationKind = EntityOperationKind.Resource,
-              applicationDomain = EntityApplicationDomain.Cms
+          val datastorespace   = DataStoreSpace.default()
+          val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+          val ctx = _execution_context(datastorespace, entitystorespace, manager = false)
+          given ExecutionContext = ctx
+          val cid                = _cid("person_metrics_store_load")
+          val id                 = EntityId("test", "store_load", cid)
+          val entity             = TestPerson.privateOwnedBy(id, "hanako", 30, "test-principal")
+          val _ = datastorespace.inject(
+            DataStoreSpace.Seed(
+              Vector(DataStoreSpace.SeedEntry(
+                DataStore.CollectionId.EntityStore(cid),
+                entity.toRecord()
+              ))
+            )
+          )
+          val component = TestComponentFactory.create("metrics_store_load", Protocol.empty)
+
+          When("loading through ActionCallEntityStorePart")
+          val result = _probe(component, ctx).load[TestPerson](id)
+
+          Then("the result falls back to datastore and metrics reflect that path")
+          result.map(_.map(_.id)) shouldBe Consequence.success(Some(id))
+          _metric_count("entity.load.fallback.entity-store", "entity-store") shouldBe 1L
+          _metric_count("entity.load.hit.data-store", "data-store") shouldBe 1L
+          _metric_count("entity.load.hit.entity-space", "entity-space") shouldBe 0L
+        }
+      }
+
+      "record data-store hit for search when resident cache is empty" in {
+        EntityAccessMetricsRegistry.shared.synchronized {
+          Given("an entity collection registered in entity space but with no resident values")
+          EntityAccessMetricsRegistry.shared.clear()
+          given EntityPersistent[TestPerson] = _persistent
+
+          val datastorespace     = DataStoreSpace.default()
+          val entitystorespace   = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+          val ctx                = _execution_context(datastorespace, entitystorespace)
+          given ExecutionContext = ctx
+          val cid                = _cid("person_metrics_search")
+          val p1 = TestPerson.privateOwnedBy(
+            EntityId("test", "search_1", cid),
+            "alpha",
+            20,
+            "test-principal"
+          )
+          val p2 = TestPerson.privateOwnedBy(
+            EntityId("test", "search_2", cid),
+            "beta",
+            30,
+            "test-principal"
+          )
+          val _ = datastorespace.inject(
+            DataStoreSpace.Seed(
+              Vector(
+                DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(cid), p1.toRecord()),
+                DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(cid), p2.toRecord())
+              )
+            )
+          )
+          val component = TestComponentFactory.create("metrics_search", Protocol.empty)
+          component.entitySpace.registerEntity(cid.name, _empty_collection(cid))
+          val query: EntityQuery[TestPerson] = EntityQuery(
+            cid,
+            Query(TestPersonQuery(
+              id = Condition.any[EntityId],
+              name = Condition.is("alpha"),
+              age = Condition.any[Int]
             ))
-          )))
-        component.entitySpace.registerEntity(cid.name, _empty_collection(cid))
-        val probe = _component_scoped_probe(component, ctx)
+          )
 
-        When("creating through ActionCallEntityStorePart without operation-level ACCESS")
-        val created = probe.create[TestPersonCreate](TestPersonCreate("descriptor-cms-default", 41, cid))
+          When("searching through ActionCallEntityStorePart")
+          val result = _probe(component, ctx).search[TestPerson](query)
 
-        Then("the descriptor classification activates CMS/public-read defaults")
-        val createdid = created match {
-          case Consequence.Success(result) => result.id
-          case other => fail(s"create failed: $other")
+          Then("the result comes from datastore fallback and metrics reflect the search route")
+          result.map(_.data.map(_.id)) shouldBe Consequence.success(Vector(p1.id))
+          _metric_count("entity.search.try.entity-space", "entity-space") shouldBe 1L
+          _metric_count("entity.search.fallback.entity-store", "entity-store") shouldBe 1L
+          _metric_count("entity.search.hit.data-store", "data-store") shouldBe 1L
+          _metric_count("entity.search.hit.entity-space", "entity-space") shouldBe 0L
         }
-        val createdentity = component.entitySpace.entity[TestPerson](cid.name).storage.storeRealm.values.find(_.id == createdid).get
-        createdentity.securityAttributes
-          .flatMap(_.getRecord("rights"))
-          .flatMap(_.getRecord("other"))
-          .flatMap(_.getBoolean("read")) should contain(true)
-        createdentity.publishAt should not be empty
-        createdentity.publicAt should not be empty
-        createdentity.publishedBy should not be empty
       }
+
+      "enforce authorization when entity-space load falls back to datastore" in {
+        EntityAccessMetricsRegistry.shared.synchronized {
+          Given(
+            "a non-owner principal and an empty resident collection with a datastore-backed private entity"
+          )
+          EntityAccessMetricsRegistry.shared.clear()
+          given EntityPersistent[TestPerson] = _persistent
+
+          val datastorespace   = DataStoreSpace.default()
+          val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+          val ctx = _execution_context(datastorespace, entitystorespace, manager = false)
+          given ExecutionContext = ctx
+          val cid                = _cid("person_metrics_authz_load_fallback")
+          val id                 = EntityId("test", "authz_load_fallback", cid)
+          val entity             = TestPerson.privateOwnedBy(id, "private-load", 31, "other-owner")
+          val _ = datastorespace.inject(
+            DataStoreSpace.Seed(
+              Vector(DataStoreSpace.SeedEntry(
+                DataStore.CollectionId.EntityStore(cid),
+                entity.toRecord()
+              ))
+            )
+          )
+          val component = TestComponentFactory.create("metrics_authz_load", Protocol.empty)
+          component.entitySpace.registerEntity(cid.name, _empty_collection(cid))
+
+          When("loading through the normal ActionCall entity API")
+          val result = _probe(component, ctx).load[TestPerson](id)
+
+          Then("the fallback path is still denied by UnitOfWork authorization")
+          result shouldBe a[Consequence.Failure[_]]
+          _metric_count("entity.load.fallback.entity-store", "entity-store") shouldBe 1L
+          _metric_count("entity.load.hit.data-store", "data-store") shouldBe 0L
+        }
+      }
+
+      "enforce authorization when entity-space search falls back to datastore" in {
+        EntityAccessMetricsRegistry.shared.synchronized {
+          Given(
+            "a non-owner principal and an empty resident collection with datastore-backed private entities"
+          )
+          EntityAccessMetricsRegistry.shared.clear()
+          given EntityPersistent[TestPerson] = _persistent
+
+          val datastorespace   = DataStoreSpace.default()
+          val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+          val ctx = _execution_context(datastorespace, entitystorespace, manager = false)
+          given ExecutionContext = ctx
+          val cid                = _cid("person_metrics_authz_search_fallback")
+          val p1 = TestPerson.privateOwnedBy(
+            EntityId("test", "authz_search_1", cid),
+            "private-search",
+            32,
+            "other-owner"
+          )
+          val _ = datastorespace.inject(
+            DataStoreSpace.Seed(
+              Vector(DataStoreSpace.SeedEntry(
+                DataStore.CollectionId.EntityStore(cid),
+                p1.toRecord()
+              ))
+            )
+          )
+          val component = TestComponentFactory.create("metrics_authz_search", Protocol.empty)
+          component.entitySpace.registerEntity(cid.name, _empty_collection(cid))
+          val query: EntityQuery[TestPerson] = EntityQuery(
+            cid,
+            Query(TestPersonQuery(
+              id = Condition.any[EntityId],
+              name = Condition.is("private-search"),
+              age = Condition.any[Int]
+            ))
+          )
+
+          When("searching through the normal ActionCall entity API")
+          val result = _probe(component, ctx).search[TestPerson](query)
+
+          Then("the fallback path still applies UnitOfWork visibility filtering")
+          result.map(_.data) shouldBe Consequence.success(Vector.empty)
+          _metric_count("entity.search.fallback.entity-store", "entity-store") shouldBe 1L
+          _metric_count("entity.search.hit.data-store", "data-store") shouldBe 1L
+          component.entitySpace.entity[TestPerson](cid.name).storage.storeRealm.values shouldBe empty
+        }
+      }
+
+      "bypass resident entity-space search when configured" in {
+        EntityAccessMetricsRegistry.shared.synchronized {
+          Given("a resident entity and a different datastore-backed entity")
+          EntityAccessMetricsRegistry.shared.clear()
+          given EntityPersistent[TestPerson] = _persistent
+
+          val datastorespace     = DataStoreSpace.default()
+          val entitystorespace   = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+          val ctx                = _execution_context(datastorespace, entitystorespace)
+          given ExecutionContext = ctx
+          val cid                = _cid("person_metrics_search_bypass")
+          val resident           = TestPerson(EntityId("test", "resident", cid), "resident", 20)
+          val stored = TestPerson.privateOwnedBy(
+            EntityId("test", "stored", cid),
+            "stored",
+            30,
+            "test-principal"
+          )
+          val _ = datastorespace.inject(
+            DataStoreSpace.Seed(
+              Vector(DataStoreSpace.SeedEntry(
+                DataStore.CollectionId.EntityStore(cid),
+                stored.toRecord()
+              ))
+            )
+          )
+          val subsystem = TestComponentFactory.subsystemWithConfig(
+            Map(
+              "textus.entity.search.bypass-entity-space-resident" -> ConfigurationValue.StringValue(
+                "true"
+              )
+            )
+          )
+          val component = TestComponentFactory.create(
+            "metrics_search_bypass",
+            Protocol.empty,
+            subsystem = subsystem
+          )
+          component.entitySpace.registerEntity(cid.name, _resident_collection(cid, resident))
+          val query: EntityQuery[TestPerson] = EntityQuery(
+            cid,
+            Query(TestPersonQuery(
+              id = Condition.any[EntityId],
+              name = Condition.any[String],
+              age = Condition.any[Int]
+            ))
+          )
+
+          When("searching through ActionCallEntityStorePart with bypass enabled")
+          val result = _probe(component, ctx).search[TestPerson](query)
+
+          Then("the resident entity-space path is bypassed and datastore results are returned")
+          result.map(_.data.map(_.id)) shouldBe Consequence.success(Vector(stored.id))
+          _metric_count("entity.search.bypass.entity-space", "entity-space") shouldBe 1L
+          _metric_count("entity.search.hit.entity-space", "entity-space") shouldBe 0L
+          _metric_count("entity.search.hit.data-store", "data-store") shouldBe 1L
+        }
+      }
+
+      "fallback to datastore while a working set is still loading" in {
+        EntityAccessMetricsRegistry.shared.synchronized {
+          Given("an entity has a working-set policy but the resident set is still boot-loading")
+          EntityAccessMetricsRegistry.shared.clear()
+          given EntityPersistent[TestPerson] = _persistent
+
+          val datastorespace     = DataStoreSpace.default()
+          val entitystorespace   = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+          val ctx                = _execution_context(datastorespace, entitystorespace)
+          given ExecutionContext = ctx
+          val cid                = _cid("person_metrics_working_set_loading")
+          val stored = TestPerson.privateOwnedBy(
+            EntityId("test", "loading_store", cid),
+            "loading-store",
+            30,
+            "test-principal"
+          )
+          val _ = datastorespace.inject(
+            DataStoreSpace.Seed(
+              Vector(DataStoreSpace.SeedEntry(
+                DataStore.CollectionId.EntityStore(cid),
+                stored.toRecord()
+              ))
+            )
+          )
+          val component = TestComponentFactory.create("metrics_working_set_loading", Protocol.empty)
+          val collection = _empty_resident_collection(cid)
+          collection.storage.workingSetStatus.markLoading()
+          component.entitySpace.registerEntity(cid.name, collection)
+          val query: EntityQuery[TestPerson] = EntityQuery(
+            cid,
+            Query(TestPersonQuery(
+              id = Condition.any[EntityId],
+              name = Condition.any[String],
+              age = Condition.any[Int]
+            )),
+            EntitySearchScope.WorkingSet
+          )
+
+          When("searching the working-set scope before async loading has completed")
+          val result = _probe(component, ctx).search[TestPerson](query)
+
+          Then("the query is served directly from the datastore and the boot fallback is counted")
+          result.map(_.data.map(_.id)) shouldBe Consequence.success(Vector(stored.id))
+          _metric_count("entity.search.fallback.entity-store", "entity-store") shouldBe 1L
+          _metric_count(
+            "entity.search.fallback.working-set-loading",
+            "entity-store",
+            reason = Some("working-set-loading"),
+            workingsetstate = Some("loading")
+          ) shouldBe 1L
+          _metric_count("entity.search.hit.data-store", "data-store") shouldBe 1L
+          _metric_count("entity.search.hit.entity-space", "entity-space") shouldBe 0L
+        }
+      }
+
+      "bypass working set search when framework working sets are disabled" in {
+        EntityAccessMetricsRegistry.shared.synchronized {
+          Given(
+            "a resident entity and a datastore-backed entity under disabled framework working sets"
+          )
+          EntityAccessMetricsRegistry.shared.clear()
+          given EntityPersistent[TestPerson] = _persistent
+
+          val datastorespace   = DataStoreSpace.default()
+          val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+          val basectx          = _execution_context(datastorespace, entitystorespace)
+          val ctx = ExecutionContext.withFrameworkWorkingSetEnabled(basectx, enabled = false)
+          given ExecutionContext = ctx
+          val cid                = _cid("person_metrics_working_set_disabled")
+          val resident =
+            TestPerson(EntityId("test", "resident_disabled", cid), "resident-disabled", 20)
+          val stored = TestPerson.privateOwnedBy(
+            EntityId("test", "stored_disabled", cid),
+            "stored-disabled",
+            30,
+            "test-principal"
+          )
+          val _ = datastorespace.inject(
+            DataStoreSpace.Seed(
+              Vector(DataStoreSpace.SeedEntry(
+                DataStore.CollectionId.EntityStore(cid),
+                stored.toRecord()
+              ))
+            )
+          )
+          val component =
+            TestComponentFactory.create("metrics_working_set_disabled", Protocol.empty)
+          component.entitySpace.registerEntity(
+            cid.name,
+            _resident_collection(cid, resident, Some(WorkingSetPolicy.ResidentAll))
+          )
+          val query: EntityQuery[TestPerson] = EntityQuery(
+            cid,
+            Query(TestPersonQuery(
+              id = Condition.any[EntityId],
+              name = Condition.any[String],
+              age = Condition.any[Int]
+            )),
+            EntitySearchScope.WorkingSet
+          )
+
+          When("searching through ActionCallEntityStorePart with framework working sets disabled")
+          val result = _probe(component, ctx).search[TestPerson](query)
+
+          Then("the resident set is bypassed and the datastore remains the source of truth")
+          result.map(_.data.map(_.id)) shouldBe Consequence.success(Vector(stored.id))
+          _metric_count("entity.search.bypass.entity-space", "entity-space") shouldBe 1L
+          _metric_count("entity.search.hit.data-store", "data-store") shouldBe 1L
+          _metric_count("entity.search.hit.entity-space", "entity-space") shouldBe 0L
+        }
+      }
+
+      "keep read authorization when framework working sets are disabled" in {
+        EntityAccessMetricsRegistry.shared.synchronized {
+          Given(
+            "a disabled working-set context and a private datastore entity owned by another subject"
+          )
+          EntityAccessMetricsRegistry.shared.clear()
+          given EntityPersistent[TestPerson] = _persistent
+
+          val datastorespace   = DataStoreSpace.default()
+          val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+          val basectx = _execution_context(datastorespace, entitystorespace, manager = false)
+          val ctx     = ExecutionContext.withFrameworkWorkingSetEnabled(basectx, enabled = false)
+          given ExecutionContext = ctx
+          val cid                = _cid("person_metrics_working_set_disabled_load_auth")
+          val id                 = EntityId("test", "disabled_load_auth", cid)
+          val stored = TestPerson.privateOwnedBy(id, "disabled-load-auth", 30, "other-owner")
+          val _ = datastorespace.inject(
+            DataStoreSpace.Seed(
+              Vector(DataStoreSpace.SeedEntry(
+                DataStore.CollectionId.EntityStore(cid),
+                stored.toRecord()
+              ))
+            )
+          )
+          val component =
+            TestComponentFactory.create("metrics_working_set_disabled_load_auth", Protocol.empty)
+
+          When("loading through ActionCallEntityStorePart with framework working sets disabled")
+          val result = _probe(component, ctx).load[TestPerson](id)
+
+          Then("the direct-store path still enforces read authorization")
+          result shouldBe a[Consequence.Failure[_]]
+          _metric_count("entity.load.bypass.entity-space", "entity-space") shouldBe 1L
+          _metric_count("entity.load.hit.data-store", "data-store") shouldBe 0L
+        }
+      }
+
     }
 
-    "derive shared read defaults without CMS publication fields" in {
-      EntityAccessMetricsRegistry.shared.synchronized {
-        Given("a component descriptor declares a shared business record")
-        EntityAccessMetricsRegistry.shared.clear()
-        given EntityPersistent[TestPerson] = _persistent
-        given EntityPersistentCreate[TestPersonCreate] = _create_persistent
+    "apply descriptor defaults to created Entities" which {
+      "make a created entity visible to the next entity-space search" in {
+        EntityAccessMetricsRegistry.shared.synchronized {
+          Given(
+            "an empty resident entity collection and a create DTO distinct from the read entity"
+          )
+          EntityAccessMetricsRegistry.shared.clear()
+          given EntityPersistent[TestPerson]             = _persistent
+          given EntityPersistentCreate[TestPersonCreate] = _create_persistent
 
-        val datastorespace = DataStoreSpace.default()
-        val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
-        val ctx = _execution_context(datastorespace, entitystorespace)
-        val cid = _cid("person_metrics_descriptor_shared_create")
-        val component = TestComponentFactory.create("descriptor_shared_create", Protocol.empty)
-          .withComponentDescriptors(Vector(ComponentDescriptor(
-            name = Some("descriptor-shared-create"),
-            componentName = Some("descriptor-shared-create"),
-            entityRuntimeDescriptors = Vector(EntityRuntimeDescriptor(
-              entityName = "TestPerson",
-              collectionId = cid,
-              memoryPolicy = EntityMemoryPolicy.LoadToMemory,
-              partitionStrategy = PartitionStrategy.byOrganizationMonthUTC,
-              maxPartitions = 4,
-              maxEntitiesPerPartition = 16,
-              usageKind = EntityUsageKind.SharedRecord,
-              operationKind = EntityOperationKind.Resource,
-              applicationDomain = EntityApplicationDomain.Business
+          val datastorespace   = DataStoreSpace.default()
+          val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+          val ctx              = _execution_context(datastorespace, entitystorespace)
+          val cid              = _cid("person_metrics_create_search")
+          val component        = TestComponentFactory.create("create_search", Protocol.empty)
+          component.entitySpace.registerEntity(cid.name, _empty_resident_collection(cid))
+          val probe = _component_scoped_probe(component, ctx)
+
+          When("creating through the unit-of-work entity-store path")
+          val created =
+            probe.createPublic[TestPersonCreate](TestPersonCreate("created-from-dto", 42, cid))
+
+          Then("the stored record is decoded into the entity-space working set")
+          val createdid = created match {
+            case Consequence.Success(result) => result.id
+            case other                       => fail(s"create failed: $other")
+          }
+          val workingset =
+            component.entitySpace.entity[TestPerson](cid.name).storage.storeRealm.values
+          workingset.map(_.id) should contain(createdid)
+          val createdentity = workingset.find(_.id == createdid).get
+          createdentity.postStatus.map(
+            _.toLowerCase(java.util.Locale.ROOT).contains("published")
+          ) should contain(true)
+          createdentity.aliveness.map(
+            _.toLowerCase(java.util.Locale.ROOT).contains("alive")
+          ) should contain(true)
+          createdentity.securityAttributes
+            .flatMap(_.getRecord("rights"))
+            .flatMap(_.getRecord("other"))
+            .flatMap(_.getBoolean("read")) should contain(false)
+
+          And("a following search can find the entity without falling back to the datastore")
+          EntityAccessMetricsRegistry.shared.clear()
+          val query: EntityQuery[TestPerson] = EntityQuery(
+            cid,
+            Query(TestPersonQuery(
+              id = Condition.any[EntityId],
+              name = Condition.any[String],
+              age = Condition.any[Int]
             ))
-          )))
-        component.entitySpace.registerEntity(cid.name, _empty_collection(cid))
-        val probe = _component_scoped_probe(component, ctx)
-
-        When("creating through ActionCallEntityStorePart without operation-level ACCESS")
-        val created = probe.create[TestPersonCreate](TestPersonCreate("descriptor-shared-default", 43, cid))
-
-        Then("the shared record is readable by other subjects without CMS lifecycle metadata")
-        val createdid = created match {
-          case Consequence.Success(result) => result.id
-          case other => fail(s"create failed: $other")
+          )
+          val result = probe.search[TestPerson](query)
+          result.map(_.data.map(_.id)) shouldBe Consequence.success(Vector(createdid))
+          _metric_count("entity.search.hit.entity-space", "entity-space") shouldBe 1L
+          _metric_count("entity.search.fallback.entity-store", "entity-store") shouldBe 0L
         }
-        val createdentity = component.entitySpace.entity[TestPerson](cid.name).storage.storeRealm.values.find(_.id == createdid).get
-        createdentity.securityAttributes
-          .flatMap(_.getRecord("rights"))
-          .flatMap(_.getRecord("other"))
-          .flatMap(_.getBoolean("read")) should contain(true)
-        createdentity.publishAt shouldBe empty
-        createdentity.publicAt shouldBe empty
-        createdentity.publishedBy shouldBe empty
       }
-    }
 
-    "derive private create defaults from business component descriptor entity classification" in {
-      EntityAccessMetricsRegistry.shared.synchronized {
-        Given("a component descriptor declares the entity as a business resource")
-        EntityAccessMetricsRegistry.shared.clear()
-        given EntityPersistent[TestPerson] = _persistent
-        given EntityPersistentCreate[TestPersonCreate] = _create_persistent
+      "derive create defaults from component descriptor entity classification" in {
+        EntityAccessMetricsRegistry.shared.synchronized {
+          Given("a component descriptor declares the entity as CMS public content")
+          EntityAccessMetricsRegistry.shared.clear()
+          given EntityPersistent[TestPerson]             = _persistent
+          given EntityPersistentCreate[TestPersonCreate] = _create_persistent
 
-        val datastorespace = DataStoreSpace.default()
-        val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
-        val ctx = _execution_context(datastorespace, entitystorespace)
-        val cid = _cid("person_metrics_descriptor_business_create")
-        val component = TestComponentFactory.create("descriptor_business_create", Protocol.empty)
-          .withComponentDescriptors(Vector(ComponentDescriptor(
-            name = Some("descriptor-business-create"),
-            componentName = Some("descriptor-business-create"),
-            entityRuntimeDescriptors = Vector(EntityRuntimeDescriptor(
-              entityName = "TestPerson",
-              collectionId = cid,
-              memoryPolicy = EntityMemoryPolicy.LoadToMemory,
-              partitionStrategy = PartitionStrategy.byOrganizationMonthUTC,
-              maxPartitions = 4,
-              maxEntitiesPerPartition = 16,
-              usageKind = EntityUsageKind.BusinessRecord,
-              operationKind = EntityOperationKind.Resource,
-              applicationDomain = EntityApplicationDomain.Business
-            ))
-          )))
-        component.entitySpace.registerEntity(cid.name, _empty_collection(cid))
-        val probe = _component_scoped_probe(component, ctx)
+          val datastorespace   = DataStoreSpace.default()
+          val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+          val ctx              = _execution_context(datastorespace, entitystorespace)
+          val cid              = _cid("person_metrics_descriptor_cms_create")
+          val component = TestComponentFactory.create("descriptor_cms_create", Protocol.empty)
+            .withComponentDescriptors(Vector(ComponentDescriptor(
+              name = Some("descriptor-cms-create"),
+              componentName = Some("descriptor-cms-create"),
+              entityRuntimeDescriptors = Vector(EntityRuntimeDescriptor(
+                entityName = "TestPerson",
+                collectionId = cid,
+                memoryPolicy = EntityMemoryPolicy.LoadToMemory,
+                partitionStrategy = PartitionStrategy.byOrganizationMonthUTC,
+                maxPartitions = 4,
+                maxEntitiesPerPartition = 16,
+                usageKind = EntityUsageKind.PublicContent,
+                operationKind = EntityOperationKind.Resource,
+                applicationDomain = EntityApplicationDomain.Cms
+              ))
+            )))
+          component.entitySpace.registerEntity(cid.name, _empty_collection(cid))
+          val probe = _component_scoped_probe(component, ctx)
 
-        When("creating through ActionCallEntityStorePart without operation-level ACCESS")
-        val created = probe.create[TestPersonCreate](TestPersonCreate("descriptor-business-default", 42, cid))
+          When("creating through ActionCallEntityStorePart without operation-level ACCESS")
+          val created =
+            probe.create[TestPersonCreate](TestPersonCreate("descriptor-cms-default", 41, cid))
 
-        Then("the descriptor classification keeps business/private defaults")
-        val createdid = created match {
-          case Consequence.Success(result) => result.id
-          case other => fail(s"create failed: $other")
+          Then("the descriptor classification activates CMS/public-read defaults")
+          val createdid = created match {
+            case Consequence.Success(result) => result.id
+            case other                       => fail(s"create failed: $other")
+          }
+          val createdentity =
+            component.entitySpace.entity[TestPerson](cid.name).storage.storeRealm.values.find(
+              _.id == createdid
+            ).get
+          createdentity.securityAttributes
+            .flatMap(_.getRecord("rights"))
+            .flatMap(_.getRecord("other"))
+            .flatMap(_.getBoolean("read")) should contain(true)
+          createdentity.publishAt should not be empty
+          createdentity.publicAt should not be empty
+          createdentity.publishedBy should not be empty
         }
-        val createdentity = component.entitySpace.entity[TestPerson](cid.name).storage.storeRealm.values.find(_.id == createdid).get
-        createdentity.securityAttributes
-          .flatMap(_.getRecord("rights"))
-          .flatMap(_.getRecord("other"))
-          .flatMap(_.getBoolean("read")) should contain(false)
-        createdentity.publishAt shouldBe empty
-        createdentity.publicAt shouldBe empty
-        createdentity.publishedBy shouldBe empty
+      }
+
+      "derive shared read defaults without CMS publication fields" in {
+        EntityAccessMetricsRegistry.shared.synchronized {
+          Given("a component descriptor declares a shared business record")
+          EntityAccessMetricsRegistry.shared.clear()
+          given EntityPersistent[TestPerson]             = _persistent
+          given EntityPersistentCreate[TestPersonCreate] = _create_persistent
+
+          val datastorespace   = DataStoreSpace.default()
+          val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+          val ctx              = _execution_context(datastorespace, entitystorespace)
+          val cid              = _cid("person_metrics_descriptor_shared_create")
+          val component = TestComponentFactory.create("descriptor_shared_create", Protocol.empty)
+            .withComponentDescriptors(Vector(ComponentDescriptor(
+              name = Some("descriptor-shared-create"),
+              componentName = Some("descriptor-shared-create"),
+              entityRuntimeDescriptors = Vector(EntityRuntimeDescriptor(
+                entityName = "TestPerson",
+                collectionId = cid,
+                memoryPolicy = EntityMemoryPolicy.LoadToMemory,
+                partitionStrategy = PartitionStrategy.byOrganizationMonthUTC,
+                maxPartitions = 4,
+                maxEntitiesPerPartition = 16,
+                usageKind = EntityUsageKind.SharedRecord,
+                operationKind = EntityOperationKind.Resource,
+                applicationDomain = EntityApplicationDomain.Business
+              ))
+            )))
+          component.entitySpace.registerEntity(cid.name, _empty_collection(cid))
+          val probe = _component_scoped_probe(component, ctx)
+
+          When("creating through ActionCallEntityStorePart without operation-level ACCESS")
+          val created =
+            probe.create[TestPersonCreate](TestPersonCreate("descriptor-shared-default", 43, cid))
+
+          Then("the shared record is readable by other subjects without CMS lifecycle metadata")
+          val createdid = created match {
+            case Consequence.Success(result) => result.id
+            case other                       => fail(s"create failed: $other")
+          }
+          val createdentity =
+            component.entitySpace.entity[TestPerson](cid.name).storage.storeRealm.values.find(
+              _.id == createdid
+            ).get
+          createdentity.securityAttributes
+            .flatMap(_.getRecord("rights"))
+            .flatMap(_.getRecord("other"))
+            .flatMap(_.getBoolean("read")) should contain(true)
+          createdentity.publishAt shouldBe empty
+          createdentity.publicAt shouldBe empty
+          createdentity.publishedBy shouldBe empty
+        }
+      }
+
+      "derive private create defaults from business component descriptor entity classification" in {
+        EntityAccessMetricsRegistry.shared.synchronized {
+          Given("a component descriptor declares the entity as a business resource")
+          EntityAccessMetricsRegistry.shared.clear()
+          given EntityPersistent[TestPerson]             = _persistent
+          given EntityPersistentCreate[TestPersonCreate] = _create_persistent
+
+          val datastorespace   = DataStoreSpace.default()
+          val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+          val ctx              = _execution_context(datastorespace, entitystorespace)
+          val cid              = _cid("person_metrics_descriptor_business_create")
+          val component = TestComponentFactory.create("descriptor_business_create", Protocol.empty)
+            .withComponentDescriptors(Vector(ComponentDescriptor(
+              name = Some("descriptor-business-create"),
+              componentName = Some("descriptor-business-create"),
+              entityRuntimeDescriptors = Vector(EntityRuntimeDescriptor(
+                entityName = "TestPerson",
+                collectionId = cid,
+                memoryPolicy = EntityMemoryPolicy.LoadToMemory,
+                partitionStrategy = PartitionStrategy.byOrganizationMonthUTC,
+                maxPartitions = 4,
+                maxEntitiesPerPartition = 16,
+                usageKind = EntityUsageKind.BusinessRecord,
+                operationKind = EntityOperationKind.Resource,
+                applicationDomain = EntityApplicationDomain.Business
+              ))
+            )))
+          component.entitySpace.registerEntity(cid.name, _empty_collection(cid))
+          val probe = _component_scoped_probe(component, ctx)
+
+          When("creating through ActionCallEntityStorePart without operation-level ACCESS")
+          val created =
+            probe.create[TestPersonCreate](TestPersonCreate("descriptor-business-default", 42, cid))
+
+          Then("the descriptor classification keeps business/private defaults")
+          val createdid = created match {
+            case Consequence.Success(result) => result.id
+            case other                       => fail(s"create failed: $other")
+          }
+          val createdentity =
+            component.entitySpace.entity[TestPerson](cid.name).storage.storeRealm.values.find(
+              _.id == createdid
+            ).get
+          createdentity.securityAttributes
+            .flatMap(_.getRecord("rights"))
+            .flatMap(_.getRecord("other"))
+            .flatMap(_.getBoolean("read")) should contain(false)
+          createdentity.publishAt shouldBe empty
+          createdentity.publicAt shouldBe empty
+          createdentity.publishedBy shouldBe empty
+        }
       }
     }
   }
 
   private def _probe(
-    component: org.goldenport.cncf.component.Component,
-    ctx: ExecutionContext
+      component: org.goldenport.cncf.component.Component,
+      ctx: ExecutionContext
   ): _EntityAccessProbe = {
     component.withScopeContext(ctx.cncfCore.scope)
     new _EntityAccessProbe(
@@ -738,8 +952,8 @@ final class ActionCallEntityAccessMetricsSpec
   }
 
   private def _component_scoped_probe(
-    component: org.goldenport.cncf.component.Component,
-    ctx: ExecutionContext
+      component: org.goldenport.cncf.component.Component,
+      ctx: ExecutionContext
   ): _EntityAccessProbe = {
     component.withScopeContext(ctx.cncfCore.scope)
     new _EntityAccessProbe(
@@ -753,17 +967,17 @@ final class ActionCallEntityAccessMetricsSpec
   }
 
   private def _execution_context(
-    datastorespace: DataStoreSpace,
-    entitystorespace: EntityStoreSpace,
-    manager: Boolean = true,
-    principalId: String = "test-principal"
+      datastorespace: DataStoreSpace,
+      entitystorespace: EntityStoreSpace,
+      manager: Boolean = true,
+      principalid: String = "test-principal"
   ): ExecutionContext = {
     val observability = ObservabilityContext(
       traceId = TraceId("test", "entity_access_metrics"),
       spanId = None,
       correlationId = Some(CorrelationId("test", "entity_access_metrics"))
     )
-    val driver = FakeHttpDriver.okText("nop")
+    val driver                         = FakeHttpDriver.okText("nop")
     lazy val context: ExecutionContext = ExecutionContext.create(runtime)
     lazy val runtime: RuntimeContext = new RuntimeContext(
       core = ScopeContext.Core(
@@ -779,7 +993,9 @@ final class ActionCallEntityAccessMetricsSpec
       unitOfWorkInterpreterFn = new (UnitOfWorkOp ~> Consequence) {
         def apply[A](fa: UnitOfWorkOp[A]): Consequence[A] = {
           val _ = fa
-          throw new UnsupportedOperationException("unitOfWorkInterpreter is not used directly in this spec")
+          throw new UnsupportedOperationException(
+            "unitOfWorkInterpreter is not used directly in this spec"
+          )
         }
       },
       commitAction = uow => {
@@ -796,7 +1012,7 @@ final class ActionCallEntityAccessMetricsSpec
     context match {
       case i: ExecutionContext.Instance =>
         val principal = new Principal {
-          def id: PrincipalId = PrincipalId(principalId)
+          def id: PrincipalId = PrincipalId(principalid)
           def attributes: Map[String, String] =
             if (manager) Map("role" -> "content_manager") else Map.empty
         }
@@ -815,25 +1031,25 @@ final class ActionCallEntityAccessMetricsSpec
   }
 
   private def _metric_count(
-    name: String,
-    source: String,
-    reason: Option[String] = None,
-    workingSetState: Option[String] = None
+      name: String,
+      source: String,
+      reason: Option[String] = None,
+      workingsetstate: Option[String] = None
   ): Long =
     EntityAccessMetricsRegistry.shared.snapshot()
       .find(x =>
         x.name == name &&
           x.source.contains(source) &&
           reason.forall(x.reason.contains) &&
-          workingSetState.forall(x.workingSetState.contains)
+          workingsetstate.forall(x.workingSetState.contains)
       )
       .map(_.count)
       .getOrElse(0L)
 
   private def _resident_collection(
-    cid: EntityCollectionId,
-    entity: TestPerson,
-    workingsetpolicy: Option[WorkingSetPolicy] = None
+      cid: EntityCollectionId,
+      entity: TestPerson,
+      workingsetpolicy: Option[WorkingSetPolicy] = None
   )(using EntityPersistent[TestPerson]): EntityCollection[TestPerson] = {
     val storerealm = new EntityRealm[TestPerson](
       entityName = cid.name,
@@ -864,25 +1080,24 @@ final class ActionCallEntityAccessMetricsSpec
     )
     workingsetpolicy match {
       case Some(_) => collection.storage.workingSetStatus.markReady()
-      case None => collection.storage.workingSetStatus.markDisabled()
+      case None    => collection.storage.workingSetStatus.markDisabled()
     }
     collection
   }
 
   private def _empty_collection(
-    cid: EntityCollectionId
-  )(using EntityPersistent[TestPerson]): EntityCollection[TestPerson] = {
+      cid: EntityCollectionId
+  )(using EntityPersistent[TestPerson]): EntityCollection[TestPerson] =
     _empty_collection(cid, None)
-  }
 
   private def _empty_resident_collection(
-    cid: EntityCollectionId
+      cid: EntityCollectionId
   )(using EntityPersistent[TestPerson]): EntityCollection[TestPerson] =
     _empty_collection(cid, Some(WorkingSetPolicy.ResidentAll))
 
   private def _empty_collection(
-    cid: EntityCollectionId,
-    workingsetpolicy: Option[WorkingSetPolicy]
+      cid: EntityCollectionId,
+      workingsetpolicy: Option[WorkingSetPolicy]
   )(using EntityPersistent[TestPerson]): EntityCollection[TestPerson] = {
     val storerealm = new EntityRealm[TestPerson](
       entityName = cid.name,
@@ -912,153 +1127,164 @@ final class ActionCallEntityAccessMetricsSpec
     )
     workingsetpolicy match {
       case Some(_) => collection.storage.workingSetStatus.markReady()
-      case None => collection.storage.workingSetStatus.markDisabled()
+      case None    => collection.storage.workingSetStatus.markDisabled()
     }
     collection
   }
 
   private def _persistent: EntityPersistent[TestPerson] =
     new EntityPersistent[TestPerson] {
-      def id(e: TestPerson): EntityId = e.id
+      def id(e: TestPerson): EntityId     = e.id
       def toRecord(e: TestPerson): Record = e.toRecord()
       def fromRecord(r: Record): Consequence[TestPerson] = {
         val m = r.asMap
         val pid = m.get("id") match {
-          case Some(id: EntityId) => Consequence.success(id)
+          case Some(id: EntityId)   => Consequence.success(id)
           case Some(idText: String) => EntityId.parse(idText)
-          case Some(other) => EntityId.parse(other.toString)
-          case None => Consequence.argumentMissing("id")
+          case Some(other)          => EntityId.parse(other.toString)
+          case None                 => Consequence.argumentMissing("id")
         }
         val pname = m.get("name").map(_.toString).filter(_.nonEmpty) match {
           case Some(v) => Consequence.success(v)
-          case None => Consequence.argumentMissing("name")
+          case None    => Consequence.argumentMissing("name")
         }
         val page = m.get("age") match {
-          case Some(v: Int) => Consequence.success(v)
+          case Some(v: Int)  => Consequence.success(v)
           case Some(v: Long) => Consequence.success(v.toInt)
           case Some(v: String) =>
             scala.util.Try(v.toInt).toOption match {
               case Some(n) => Consequence.success(n)
-              case None => Consequence.argumentInvalid("invalid age")
+              case None    => Consequence.argumentInvalid("invalid age")
             }
           case Some(other) =>
             scala.util.Try(other.toString.toInt).toOption match {
               case Some(n) => Consequence.success(n)
-              case None => Consequence.argumentInvalid("invalid age")
+              case None    => Consequence.argumentInvalid("invalid age")
             }
           case None => Consequence.argumentMissing("age")
         }
-        val poststatus = r.getString("postStatus").orElse(r.getString("post_status"))
-        val aliveness = r.getString("aliveness")
-        val publishat = r.getString("publishAt").orElse(r.getString("publish_at"))
-        val publicat = r.getString("publicAt").orElse(r.getString("public_at"))
+        val poststatus  = r.getString("postStatus").orElse(r.getString("post_status"))
+        val aliveness   = r.getString("aliveness")
+        val publishat   = r.getString("publishAt").orElse(r.getString("publish_at"))
+        val publicat    = r.getString("publicAt").orElse(r.getString("public_at"))
         val publishedby = r.getString("publishedBy").orElse(r.getString("published_by"))
         val securityattributes = r.getRecord("securityAttributes")
           .orElse(r.getRecord("security_attributes"))
           .orElse(r.getRecord("rights").map(_ => r))
           .orElse(_compact_security_record(r))
         for {
-          id <- pid
+          id   <- pid
           name <- pname
-          age <- page
-        } yield TestPerson(id, name, age, poststatus, aliveness, publishat, publicat, publishedby, securityattributes)
+          age  <- page
+        } yield TestPerson(
+          id,
+          name,
+          age,
+          poststatus,
+          aliveness,
+          publishat,
+          publicat,
+          publishedby,
+          securityattributes
+        )
       }
     }
 
   private def _compact_security_record(record: Record): Option[Record] =
     SimpleEntityStorageShapePolicy.securityAttributesFromRecord(record).map(_.toRecord)
 
-  private def _typed_security_persistent(ownerId: String): EntityPersistent[TestPerson] =
+  private def _typed_security_persistent(ownerid: String): EntityPersistent[TestPerson] =
     new EntityPersistent[TestPerson] {
       private val _base = _persistent
 
-      def id(e: TestPerson): EntityId = e.id
-      def toRecord(e: TestPerson): Record = e.toRecord()
+      def id(e: TestPerson): EntityId                    = e.id
+      def toRecord(e: TestPerson): Record                = e.toRecord()
       def fromRecord(r: Record): Consequence[TestPerson] = _base.fromRecord(r)
-      override def securityAttributes(e: TestPerson): Option[org.simplemodeling.model.value.SecurityAttributes] =
-        Some(org.simplemodeling.model.value.SecurityAttributes.ownedBy(ownerId))
+      override def securityAttributes(e: TestPerson)
+          : Option[org.simplemodeling.model.value.SecurityAttributes] =
+        Some(org.simplemodeling.model.value.SecurityAttributes.ownedBy(ownerid))
     }
 
   private def _create_persistent: EntityPersistentCreate[TestPersonCreate] =
     new EntityPersistentCreate[TestPersonCreate] {
-      def id(e: TestPersonCreate): Option[EntityId] = None
+      def id(e: TestPersonCreate): Option[EntityId]           = None
       def collection(e: TestPersonCreate): EntityCollectionId = e.collectionId
-      def toRecord(e: TestPersonCreate): Record = e.toRecord()
+      def toRecord(e: TestPersonCreate): Record               = e.toRecord()
     }
 
   private def _claim_create_persistent: EntityPersistentCreate[ClaimPersonCreate] =
     new EntityPersistentCreate[ClaimPersonCreate] {
-      def id(e: ClaimPersonCreate): Option[EntityId] = Some(e.id)
+      def id(e: ClaimPersonCreate): Option[EntityId]           = Some(e.id)
       def collection(e: ClaimPersonCreate): EntityCollectionId = e.id.collection
-      def toRecord(e: ClaimPersonCreate): Record = e.toRecord()
+      def toRecord(e: ClaimPersonCreate): Record               = e.toRecord()
     }
 
   private def _claim_persistent: EntityPersistent[ClaimPerson] =
     new EntityPersistent[ClaimPerson] {
-      def id(e: ClaimPerson): EntityId = e.id
+      def id(e: ClaimPerson): EntityId     = e.id
       def toRecord(e: ClaimPerson): Record = e.toRecord()
       def fromRecord(r: Record): Consequence[ClaimPerson] =
         for {
-          id <- Consequence.successOrRecordNotFound[EntityId]("id", r)
+          id   <- Consequence.successOrRecordNotFound[EntityId]("id", r)
           name <- Consequence.successOrRecordNotFound[String]("name", r)
         } yield ClaimPerson(id, name)
     }
 }
 
 private final case class TestPerson(
-  id: EntityId,
-  name: String,
-  age: Int,
-  postStatus: Option[String] = None,
-  aliveness: Option[String] = None,
-  publishAt: Option[String] = None,
-  publicAt: Option[String] = None,
-  publishedBy: Option[String] = None,
-  securityAttributes: Option[Record] = None
+    id: EntityId,
+    name: String,
+    age: Int,
+    postStatus: Option[String] = None,
+    aliveness: Option[String] = None,
+    publishAt: Option[String] = None,
+    publicAt: Option[String] = None,
+    publishedBy: Option[String] = None,
+    securityAttributes: Option[Record] = None
 ) extends org.goldenport.cncf.entity.EntityPersistable {
   def toRecord(): Record =
     securityAttributes.map { security =>
       Record.dataAuto(
-        "id" -> id,
-        "name" -> name,
-        "age" -> age,
-        "postStatus" -> postStatus,
-        "aliveness" -> aliveness,
-        "publishAt" -> publishAt,
-        "publicAt" -> publicAt,
-        "publishedBy" -> publishedBy,
-        "owner_id" -> security.getString("owner_id"),
-        "group_id" -> security.getString("group_id"),
+        "id"           -> id,
+        "name"         -> name,
+        "age"          -> age,
+        "postStatus"   -> postStatus,
+        "aliveness"    -> aliveness,
+        "publishAt"    -> publishAt,
+        "publicAt"     -> publicAt,
+        "publishedBy"  -> publishedBy,
+        "owner_id"     -> security.getString("owner_id"),
+        "group_id"     -> security.getString("group_id"),
         "privilege_id" -> security.getString("privilege_id"),
-        "rights" -> security.getRecord("rights")
+        "rights"       -> security.getRecord("rights")
       )
     }.getOrElse(Record.dataAuto(
-      "id" -> id,
-      "name" -> name,
-      "age" -> age,
-      "postStatus" -> postStatus,
-      "aliveness" -> aliveness,
-      "publishAt" -> publishAt,
-      "publicAt" -> publicAt,
-      "publishedBy" -> publishedBy,
+      "id"                 -> id,
+      "name"               -> name,
+      "age"                -> age,
+      "postStatus"         -> postStatus,
+      "aliveness"          -> aliveness,
+      "publishAt"          -> publishAt,
+      "publicAt"           -> publicAt,
+      "publishedBy"        -> publishedBy,
       "securityAttributes" -> securityAttributes
     ))
 }
 
 private object TestPerson {
   def privateOwnedBy(
-    id: EntityId,
-    name: String,
-    age: Int,
-    ownerId: String
+      id: EntityId,
+      name: String,
+      age: Int,
+      ownerId: String
   ): TestPerson =
     TestPerson(
       id,
       name,
       age,
       securityAttributes = Some(Record.dataAuto(
-        "owner_id" -> ownerId,
-        "group_id" -> ownerId,
+        "owner_id"     -> ownerId,
+        "group_id"     -> ownerId,
         "privilege_id" -> ownerId,
         "rights" -> Record.dataAuto(
           "owner" -> Record.dataAuto("read" -> true, "write" -> true, "execute" -> false),
@@ -1070,14 +1296,14 @@ private object TestPerson {
 }
 
 private final case class TestPersonCreate(
-  name: String,
-  age: Int,
-  collectionId: EntityCollectionId
+    name: String,
+    age: Int,
+    collectionId: EntityCollectionId
 ) {
   def toRecord(): Record =
     Record.dataAuto(
       "name" -> name,
-      "age" -> age
+      "age"  -> age
     )
 }
 
@@ -1090,9 +1316,9 @@ private final case class ClaimPerson(id: EntityId, name: String) {
 }
 
 private final case class TestPersonQuery(
-  id: Condition[EntityId],
-  name: Condition[String],
-  age: Condition[Int]
+    id: Condition[EntityId],
+    name: Condition[String],
+    age: Condition[Int]
 ) extends Query.ConditionShape
 
 private final case class _TestQueryAction() extends QueryAction {
@@ -1102,24 +1328,40 @@ private final case class _TestQueryAction() extends QueryAction {
 }
 
 private final class _EntityAccessProbe(
-  val core: ActionCall.Core
+    val core: ActionCall.Core
 ) extends ActionCall.Core.Holder with ActionCallEntityStorePart {
-  def create[T](entity: T)(using tc: EntityPersistentCreate[T]): Consequence[org.goldenport.cncf.entity.CreateResult[T]] =
+  def create[T](entity: T)(using
+      tc: EntityPersistentCreate[T]
+  ): Consequence[org.goldenport.cncf.entity.CreateResult[T]] =
     new UnitOfWorkInterpreter(new UnitOfWork(executionContext)).run(entity_create[T](entity))
 
-  def claim[C, P](entity: C)(using create: EntityPersistentCreate[C], persisted: EntityPersistent[P]): Consequence[EntityStore.EntityClaimResult[C, P]] =
-    new UnitOfWorkInterpreter(new UnitOfWork(executionContext)).run(entity_claim_or_load[C, P](entity))
+  def claim[C, P](entity: C)(using
+      create: EntityPersistentCreate[C],
+      persisted: EntityPersistent[P]
+  ): Consequence[EntityStore.EntityClaimResult[C, P]] =
+    new UnitOfWorkInterpreter(new UnitOfWork(executionContext)).run(
+      entity_claim_or_load[C, P](entity)
+    )
 
-  def claimInternal[C, P](entity: C)(using create: EntityPersistentCreate[C], persisted: EntityPersistent[P]): Consequence[EntityStore.EntityClaimResult[C, P]] =
-    new UnitOfWorkInterpreter(new UnitOfWork(executionContext)).run(entity_claim_or_load_internal[C, P](entity))
+  def claimInternal[C, P](entity: C)(using
+      create: EntityPersistentCreate[C],
+      persisted: EntityPersistent[P]
+  ): Consequence[EntityStore.EntityClaimResult[C, P]] =
+    new UnitOfWorkInterpreter(new UnitOfWork(executionContext)).run(entity_claim_or_load_internal[
+      C,
+      P
+    ](entity))
 
-  def saveInternal[T](entity: T)(using tc: EntityPersistent[T]): Consequence[Unit] =
-    new UnitOfWorkInterpreter(new UnitOfWork(executionContext)).run(entity_save_internal(entity))
+  def saveInternal[T](
+      entity: T,
+      expectation: EntityMutationExpectation
+  )(using tc: EntityPersistent[T]): Consequence[org.goldenport.cncf.entity.EntitySnapshot[T]] =
+    new UnitOfWorkInterpreter(new UnitOfWork(executionContext))
+      .run(entity_save_internal(entity, expectation))
 
-  def upsertInternal[T](entity: T)(using tc: EntityPersistentCreate[T]): Consequence[org.goldenport.cncf.entity.CreateResult[T]] =
-    new UnitOfWorkInterpreter(new UnitOfWork(executionContext)).run(entity_upsert_internal(entity))
-
-  def createPublic[T](entity: T)(using tc: EntityPersistentCreate[T]): Consequence[org.goldenport.cncf.entity.CreateResult[T]] =
+  def createPublic[T](entity: T)(using
+      tc: EntityPersistentCreate[T]
+  ): Consequence[org.goldenport.cncf.entity.CreateResult[T]] =
     new UnitOfWorkInterpreter(new UnitOfWork(executionContext)).run(
       org.goldenport.ConsequenceT.liftF(
         cats.free.Free.liftF[UnitOfWorkOp, org.goldenport.cncf.entity.CreateResult[T]](
@@ -1143,14 +1385,16 @@ private final class _EntityAccessProbe(
   def load[T](id: EntityId)(using tc: EntityPersistent[T]): Consequence[Option[T]] =
     new UnitOfWorkInterpreter(new UnitOfWork(executionContext)).run(entity_load_option[T](id))
 
-  def search[T](query: EntityQuery[T])(using tc: EntityPersistent[T]): Consequence[SearchResult[T]] =
+  def search[T](query: EntityQuery[T])(using
+      tc: EntityPersistent[T]
+  ): Consequence[SearchResult[T]] =
     new UnitOfWorkInterpreter(new UnitOfWork(executionContext)).run(entity_search[T](query))
 }
 
 private final class _IdRef[A](initial: A) extends Ref[cats.Id, A] {
   private var _value: A = initial
 
-  def get: A = synchronized { _value }
+  def get: A          = synchronized(_value)
   def set(a: A): Unit = synchronized { _value = a }
 
   override def getAndSet(a: A): A = synchronized {
@@ -1161,14 +1405,15 @@ private final class _IdRef[A](initial: A) extends Ref[cats.Id, A] {
 
   def access: (A, A => Boolean) = synchronized {
     val snapshot = _value
-    val setter: A => Boolean = (next: A) => synchronized {
-      if (_value == snapshot) {
-        _value = next
-        true
-      } else {
-        false
+    val setter: A => Boolean = (next: A) =>
+      synchronized {
+        if (_value == snapshot) {
+          _value = next
+          true
+        } else {
+          false
+        }
       }
-    }
     (snapshot, setter)
   }
 

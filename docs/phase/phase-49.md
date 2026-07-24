@@ -104,7 +104,7 @@ They are recorded together in strategy completed history rather than leaving
 | --- | --- | --- | --- |
 | EC-01 | Normative contract | Design/spec fix token, conflict, transition, atomicity, provider, and result semantics. | done |
 | EC-02 | Concurrency model and storage shape | Managed revision metadata and typed concurrency values have deterministic persistence and migration behavior. | done |
-| EC-03 | Version-aware mutation | Required Entity/Aggregate mutation paths compare the caller token atomically and return structured stale conflicts. | active |
+| EC-03 | Version-aware mutation | Required Entity/Aggregate mutation paths compare the caller token atomically and return structured stale conflicts. | done |
 | EC-04 | Atomic datastore capability | A closed provider-neutral plan executes guard, successor, root update, and token advance in one transaction without fallback. | planned |
 | EC-05 | EntityStore, UnitOfWork, and DSL | Protected typed conditional transition preserves authorization, lifecycle, transaction, and normal effect boundaries. | planned |
 | EC-06 | Coherence and diagnostics | EntitySpace, Working Set, View, audit, CallTree, metrics, and structured failures reflect only authoritative outcomes. | planned |
@@ -196,10 +196,10 @@ carrier, and isolated framework metadata codec with property-based evidence.
 The slice passed focused validation, clean read-only re-review, and the full
 CNCF suite.
 
-EC-02B integrates that codec into canonical Entity persistence. Create,
-upsert-create, save-create, and new seed import initialize token `1`; existing
-save, update, upsert, soft-delete, patch-by-id, and seed-import paths preserve
-the authoritative stored token while removing caller-owned aliases. Plain
+EC-02B integrates that codec into canonical Entity persistence. Create and
+new seed import initialize token `1`; existing legacy save, update,
+soft-delete, patch-by-id, and seed-import paths preserve the authoritative
+stored token while removing caller-owned aliases. Plain
 Entity decoding excludes framework metadata, concurrency-aware load returns an
 `EntitySnapshot`, and legacy records expose virtual token `0` without physical
 backfill. The initial review findings were fixed by making
@@ -222,8 +222,14 @@ suites, including generated 2-to-12-caller legacy-record races. Clean
 re-review found no actionable finding, and the full CNCF suite passed 2377
 tests across 337 suites.
 
-EC-02 is therefore complete and EC-03 is active. EC-03B still has to migrate
-normal UnitOfWork/ActionCall/Aggregate mutation routes onto the required
-expectation API and close temporary unversioned-mutation policy. Phase 50
-documents a later simplification toward `SimpleEntity.revision`; it does not
-replace or reopen this Phase 49 slice.
+EC-03B migrates the normal UnitOfWork and protected ActionCall Entity mutation
+routes to explicit expectations and authoritative snapshots. Aggregate create
+is create-only, Aggregate update requires an expectation, and Aggregate
+command uses the root snapshot admitted during resolve. Working Set state is
+installed only from provider success and evicted on stale conflict. Implicit
+upsert overwrite is removed from the protected DSL; explicitly classified
+unversioned framework operations require System admission.
+
+EC-03 is complete. The focused 458-test matrix, full 2380-test CNCF suite,
+whole-file naming and executable-specification audit, review-fix, and clean
+re-review all passed. EC-04 is the next planned implementation slice.

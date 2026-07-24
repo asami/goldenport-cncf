@@ -2894,3 +2894,44 @@ after 9.12 and 9.39 move to completed history.
     exposing any mutation route; and
   - use one operator-facing application as the first driver rather than
     inventing a generic merge UI without evidence.
+
+### 9.40 Entity Conflict Resolution and Repair
+Future Entity/operator-UX development item. This item is defined now so the
+scope deferred from the Phase 49 version-conflict baseline remains visible
+after 9.12 and 9.39 move to completed history.
+
+- Dependency:
+  - Phase 49 must first provide the canonical store-backed concurrency token,
+    structured stale-conflict result, and protected conditional-transition
+    primitive.
+- Goal:
+  - provide explicit, authorized, and auditable ways to inspect and resolve an
+    Entity/Aggregate conflict without weakening ordinary optimistic locking.
+- Initial scope:
+  - explicit force/repair command semantics separated from ordinary
+    save/update;
+  - bounded conflict inspection and comparison projection;
+  - application-declared merge policy and operator-selected resolution;
+  - preview/dry-run before a destructive repair;
+  - structured Web/API conflict presentation and operator workflow;
+  - dedicated capabilities for inspect, merge, force, and repair;
+  - complete audit, provenance, reason, actor, before/after revision, and
+    observability evidence; and
+  - repair-safe Working Set/View reconciliation after authoritative commit.
+- Boundary:
+  - ordinary Entity save/update never silently becomes force or last-write-wins;
+  - no raw DataStore, SQL/JDBC, provider transaction, or direct cache mutation
+    is exposed to application/operator code;
+  - no universal automatic field merge is inferred by CNCF;
+  - repair remains explicit and more privileged than ordinary update;
+  - this item does not own distributed consensus, leases, fencing, or
+    multi-region conflict resolution; and
+  - application-specific business reconciliation remains application policy
+    executed through the CNCF conflict/repair boundary.
+- First implementation direction:
+  - begin only after Phase 49 closes and real application conflicts justify
+    the exact resolution vocabulary;
+  - promote the accepted force/repair and merge contract to design/spec before
+    exposing any mutation route; and
+  - use one operator-facing application as the first driver rather than
+    inventing a generic merge UI without evidence.

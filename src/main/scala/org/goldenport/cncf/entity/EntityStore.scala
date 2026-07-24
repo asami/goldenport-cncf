@@ -50,23 +50,29 @@ abstract class EntityStore {
     options: EntityCreateOptions = EntityCreateOptions.default
   )(using tc: EntityPersistentCreate[T], ctx: ExecutionContext): Consequence[CreateResult[T]]
 
-  /**
-   * Atomically creates a stable-id entity or returns the entity already stored
-   * under that id.  Components reach this only through the protected internal
-   * Entity DSL; it is not an upsert and never changes an existing record.
+  /** Atomically creates a stable-id entity or returns the entity already stored under that id.
+    * Components reach this only through the protected internal Entity DSL; it is not an upsert and
+    * never changes an existing record.
    */
   def claimOrLoad[C, P](
     entity: C,
     options: EntityCreateOptions = EntityCreateOptions.default
-  )(using createTc: EntityPersistentCreate[C], persisted: EntityPersistent[P], ctx: ExecutionContext): Consequence[EntityStore.EntityClaimResult[C, P]] =
+  )(using
+      createTc: EntityPersistentCreate[C],
+      persisted: EntityPersistent[P],
+      ctx: ExecutionContext
+  ): Consequence[EntityStore.EntityClaimResult[C, P]] =
     createTc.id(entity) match {
       case Some(id) =>
         create(entity, options)
           .map(EntityStore.EntityClaimResult.Claimed.apply)
           .recoverWith { conclusion =>
-            if (conclusion.observation.taxonomy == org.goldenport.observation.Taxonomy.dataStoreDuplicate)
+            if (
+              conclusion.observation.taxonomy == org.goldenport.observation.Taxonomy.dataStoreDuplicate
+            )
               load[P](id).flatMap {
-                case Some(existing) => Consequence.success(EntityStore.EntityClaimResult.Loaded(existing))
+                case Some(existing) =>
+                  Consequence.success(EntityStore.EntityClaimResult.Loaded(existing))
                 case None => Consequence.Failure(conclusion)
               }
             else
@@ -76,7 +82,7 @@ abstract class EntityStore {
         Consequence.argumentInvalid("entity_claim_or_load requires a stable entity id")
     }
 
-  def upsert[T](
+  private[cncf] def upsert[T](
     entity: T,
     id: EntityId,
     options: EntityCreateOptions = EntityCreateOptions.default
@@ -85,7 +91,7 @@ abstract class EntityStore {
   )(using tc: EntityPersistentCreate[T], ctx: ExecutionContext): Consequence[CreateResult[T]] =
     upsert(entity, id, options)(authorize, (_: CreateResult[T]) => Consequence.unit)
 
-  def upsert[T](
+  private[cncf] def upsert[T](
     entity: T,
     id: EntityId,
     options: EntityCreateOptions
@@ -102,7 +108,7 @@ abstract class EntityStore {
   def loadSnapshot[T](
     id: EntityId
   )(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[Option[EntitySnapshot[T]]]
-  def save[T](
+  private[cncf] def save[T](
     entity: T
   )(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[Unit]
 
@@ -114,7 +120,7 @@ abstract class EntityStore {
     ctx: ExecutionContext
   ): Consequence[EntitySnapshot[T]]
 
-  def update[T](
+  private[cncf] def update[T](
     changes: T
   )(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[Unit]
 
@@ -190,7 +196,8 @@ object EntityStore {
       def id: EntityId = created.id
     }
 
-    final case class Loaded[P](entity: P)(using persisted: EntityPersistent[P]) extends EntityClaimResult[Nothing, P] {
+    final case class Loaded[P](entity: P)(using persisted: EntityPersistent[P])
+        extends EntityClaimResult[Nothing, P] {
       def id: EntityId = persisted.id(entity)
     }
   }
@@ -255,21 +262,67 @@ case class DeleteResult[T]()
 
 class NoopEntityStore() extends EntityStore {
   def name: String = "noop"
-  def create[T](entity: T, options: EntityCreateOptions = EntityCreateOptions.default)(using tc: EntityPersistentCreate[T], ctx: ExecutionContext): Consequence[CreateResult[T]] = ???
-  def upsert[T](entity: T, id: EntityId, options: EntityCreateOptions)(authorize: Option[Record] => Consequence[Unit], @deprecatedName("onSaved", "0.5.1") onsaved: CreateResult[T] => Consequence[Unit])(using tc: EntityPersistentCreate[T], ctx: ExecutionContext): Consequence[CreateResult[T]] = ???
-  def load[T](id: EntityId)(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[Option[T]] = ???
-  def loadSnapshot[T](id: EntityId)(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[Option[EntitySnapshot[T]]] = ???
-  def save[T](entity: T)(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[Unit] = ???
-  def save[T](entity: T, expectation: EntityMutationExpectation)(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[EntitySnapshot[T]] = ???
-  def update[T](changes: T)(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[Unit] = ???
-  def update[T](changes: T, expectation: EntityMutationExpectation)(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[EntitySnapshot[T]] = ???
-  def updateById[P](id: EntityId, patch: P, expectation: EntityMutationExpectation)(using tc: EntityPersistentUpdate[P], ctx: ExecutionContext): Consequence[EntityRecordSnapshot] = ???
+  def create[T](entity: T, options: EntityCreateOptions = EntityCreateOptions.default)(using
+      tc: EntityPersistentCreate[T],
+      ctx: ExecutionContext
+  ): Consequence[CreateResult[T]] = ???
+  private[cncf] def upsert[T](entity: T, id: EntityId, options: EntityCreateOptions)(
+      authorize: Option[Record] => Consequence[Unit],
+      @deprecatedName("onSaved", "0.5.1") onsaved: CreateResult[T] => Consequence[Unit]
+  )(using tc: EntityPersistentCreate[T], ctx: ExecutionContext): Consequence[CreateResult[T]] = ???
+  def load[T](id: EntityId)(using
+      tc: EntityPersistent[T],
+      ctx: ExecutionContext
+  ): Consequence[Option[T]] = ???
+  def loadSnapshot[T](id: EntityId)(using
+      tc: EntityPersistent[T],
+      ctx: ExecutionContext
+  ): Consequence[Option[EntitySnapshot[T]]] = ???
+  private[cncf] def save[T](entity: T)(using
+      tc: EntityPersistent[T],
+      ctx: ExecutionContext
+  ): Consequence[Unit] = ???
+  def save[T](entity: T, expectation: EntityMutationExpectation)(using
+      tc: EntityPersistent[T],
+      ctx: ExecutionContext
+  ): Consequence[EntitySnapshot[T]] = ???
+  private[cncf] def update[T](changes: T)(using
+      tc: EntityPersistent[T],
+      ctx: ExecutionContext
+  ): Consequence[Unit] = ???
+  def update[T](changes: T, expectation: EntityMutationExpectation)(using
+      tc: EntityPersistent[T],
+      ctx: ExecutionContext
+  ): Consequence[EntitySnapshot[T]] = ???
+  def updateById[P](id: EntityId, patch: P, expectation: EntityMutationExpectation)(using
+      tc: EntityPersistentUpdate[P],
+      ctx: ExecutionContext
+  ): Consequence[EntityRecordSnapshot] = ???
   def delete(id: EntityId)(using ctx: ExecutionContext): Consequence[Unit] = ???
   def deleteHard(id: EntityId)(using ctx: ExecutionContext): Consequence[Unit] = ???
-  def search[T](query: EntityQuery[T])(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[SearchResult[T]] = ???
-  def searchInternal[T](query: EntityQuery[T])(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[SearchResult[T]] = ???
-  def uniqueValueExists[T](collection: EntityCollectionId, @deprecatedName("fieldName", "0.5.1") fieldname: String, value: String, @deprecatedName("excludeId", "0.5.1") excludeid: Option[EntityId], scope: EntityIdentityScope, @deprecatedName("includeEntityIdEntropy", "0.5.1") includeentityidentropy: Boolean)(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[Boolean] = ???
-  def resolveIdentity[T](collection: EntityCollectionId, value: String, @deprecatedName("fieldNames", "0.5.1") fieldnames: Vector[String], @deprecatedName("includeEntityIdEntropy", "0.5.1") includeentityidentropy: Boolean, scope: EntityIdentityScope)(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[Option[EntityId]] = ???
+  def search[T](query: EntityQuery[T])(using
+      tc: EntityPersistent[T],
+      ctx: ExecutionContext
+  ): Consequence[SearchResult[T]] = ???
+  def searchInternal[T](query: EntityQuery[T])(using
+      tc: EntityPersistent[T],
+      ctx: ExecutionContext
+  ): Consequence[SearchResult[T]] = ???
+  def uniqueValueExists[T](
+      collection: EntityCollectionId,
+      @deprecatedName("fieldName", "0.5.1") fieldName: String,
+      value: String,
+      @deprecatedName("excludeId", "0.5.1") excludeId: Option[EntityId],
+      scope: EntityIdentityScope,
+      @deprecatedName("includeEntityIdEntropy", "0.5.1") includeEntityIdEntropy: Boolean
+  )(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[Boolean] = ???
+  def resolveIdentity[T](
+      collection: EntityCollectionId,
+      value: String,
+      @deprecatedName("fieldNames", "0.5.1") fieldNames: Vector[String],
+      @deprecatedName("includeEntityIdEntropy", "0.5.1") includeEntityIdEntropy: Boolean,
+      scope: EntityIdentityScope
+  )(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[Option[EntityId]] = ???
 }
 
 class StandardEntityStore(
@@ -280,8 +333,10 @@ class StandardEntityStore(
 
   def name: String = "standard"
 
-  def createId[T](entity: T)(using tc: EntityPersistentCreate[T], ctx: ExecutionContext): EntityId =
-    {
+  def createId[T](entity: T)(using
+      tc: EntityPersistentCreate[T],
+      ctx: ExecutionContext
+  ): EntityId = {
       val collection = tc.collection(entity)
       ctx.idGeneration.entityId(collection)
     }
@@ -305,7 +360,7 @@ class StandardEntityStore(
     } yield CreateResult(id, Some(rec))
   }
 
-  override def upsert[T](
+  private[cncf] override def upsert[T](
     entity: T,
     id: EntityId,
     options: EntityCreateOptions
@@ -371,7 +426,7 @@ class StandardEntityStore(
 
   private def _load_record(
     id: EntityId
-  )(using ctx: ExecutionContext): Consequence[Option[Record]] = {
+  )(using ctx: ExecutionContext): Consequence[Option[Record]] =
     for {
       cid <- ctx.entityStoreSpace.dataStoreCollection(id)
       dsid <- ctx.entityStoreSpace.dataStoreEntryId(id)
@@ -395,9 +450,8 @@ class StandardEntityStore(
       )
       hydrated <- visible.traverse(ContentBodyStoragePolicy.hydrate(id, _))
     } yield hydrated
-  }
 
-  def save[T](
+  private[cncf] def save[T](
     entity: T
   )(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[Unit] = {
     val id = tc.id(entity)
@@ -455,7 +509,7 @@ class StandardEntityStore(
     } yield snapshot
   }
 
-  def update[T](
+  private[cncf] def update[T](
     changes: T
   )(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[Unit] = {
     val id = tc.id(changes)
@@ -531,7 +585,7 @@ class StandardEntityStore(
   )(using
     tc: EntityPersistentUpdate[P],
     ctx: ExecutionContext
-  ): Consequence[EntityRecordSnapshot] = {
+  ): Consequence[EntityRecordSnapshot] =
     for {
       cid <- ctx.entityStoreSpace.dataStoreCollection(id)
       dsid <- ctx.entityStoreSpace.dataStoreEntryId(id)
@@ -559,11 +613,10 @@ class StandardEntityStore(
       )
       snapshot <- _record_snapshot(id, result, expectation)
     } yield snapshot
-  }
 
   def delete(
     id: EntityId
-  )(using ctx: ExecutionContext): Consequence[Unit] = {
+  )(using ctx: ExecutionContext): Consequence[Unit] =
     for {
       cid <- ctx.entityStoreSpace.dataStoreCollection(id)
       dsid <- ctx.entityStoreSpace.dataStoreEntryId(id)
@@ -590,11 +643,10 @@ class StandardEntityStore(
           Consequence.unit
       }
     } yield r
-  }
 
   def deleteHard(
     id: EntityId
-  )(using ctx: ExecutionContext): Consequence[Unit] = {
+  )(using ctx: ExecutionContext): Consequence[Unit] =
     for {
       cid <- ctx.entityStoreSpace.dataStoreCollection(id.collection)
       dsid <- ctx.entityStoreSpace.dataStoreEntryId(id)
@@ -604,7 +656,6 @@ class StandardEntityStore(
         ds.delete(cid, dsid)
       }
     } yield r
-  }
 
   def search[T](
     query: EntityQuery[T]
@@ -634,7 +685,11 @@ class StandardEntityStore(
       // for logical delete and for future ExecutionContext tenant scoping.
       scoped = EntityAccessScopePolicy.filterNormalRecords(query.collection, raw.records.toVector)
       accessscoped = scoped.filter(record =>
-        EntityAccessScopePolicy.visibilityRecordVisible(query.collection, record, query.visibilityScope)
+        EntityAccessScopePolicy.visibilityRecordVisible(
+          query.collection,
+          record,
+          query.visibilityScope
+        )
       )
       visible = query.visibilityScope match {
         case Some(EntityVisibilityScope.Owner) | Some(EntityVisibilityScope.Admin) =>
@@ -715,21 +770,21 @@ class StandardEntityStore(
   def uniqueValueExists[T](
     collection: EntityCollectionId,
     @deprecatedName("fieldName", "0.5.1")
-    fieldname: String,
+      fieldName: String,
     value: String,
     @deprecatedName("excludeId", "0.5.1")
-    excludeid: Option[EntityId],
+      excludeId: Option[EntityId],
     scope: EntityIdentityScope,
     @deprecatedName("includeEntityIdEntropy", "0.5.1")
-    includeentityidentropy: Boolean
+      includeEntityIdEntropy: Boolean
   )(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[Boolean] =
     _identity_records(collection).map { candidates =>
       candidates.exists { case (record, id) =>
-        !excludeid.exists(_.value == id.value) &&
+        !excludeId.exists(_.value == id.value) &&
           scope.matches(record) &&
           (
-            SimpleEntityStorageShapePolicy.stringValue(record, fieldname).contains(value) ||
-              (includeentityidentropy && id.parts.entropy == value)
+          SimpleEntityStorageShapePolicy.stringValue(record, fieldName).contains(value) ||
+            (includeEntityIdEntropy && id.parts.entropy == value)
           )
       }
     }
@@ -738,14 +793,21 @@ class StandardEntityStore(
     collection: EntityCollectionId,
     value: String,
     @deprecatedName("fieldNames", "0.5.1")
-    fieldnames: Vector[String],
+      fieldNames: Vector[String],
     @deprecatedName("includeEntityIdEntropy", "0.5.1")
-    includeentityidentropy: Boolean,
+      includeEntityIdEntropy: Boolean,
     scope: EntityIdentityScope
   )(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[Option[EntityId]] =
     _identity_records(collection).map { candidates =>
       candidates.collectFirst {
-        case (record, id) if scope.matches(record) && _identity_matches(id, record, value, fieldnames, includeentityidentropy) =>
+        case (record, id)
+            if scope.matches(record) && _identity_matches(
+              id,
+              record,
+              value,
+              fieldNames,
+              includeEntityIdEntropy
+            ) =>
           id
     }
   }
@@ -760,7 +822,8 @@ class StandardEntityStore(
         QueryDirective(DataStoreQuery.Empty)
       )
       notdeleted = EntityLifecycleRecordPolicy.filterNotLogicallyDeleted(raw.records.toVector)
-      decoded <- notdeleted.foldLeft(Consequence.success(Vector.empty[(Record, EntityId)])) { (z, record) =>
+      decoded <-
+        notdeleted.foldLeft(Consequence.success(Vector.empty[(Record, EntityId)])) { (z, record) =>
         z.flatMap { xs =>
           EntityConcurrencyMetadata.decodeEntity(record)(tc.fromStoreRecord).map { entity =>
             xs :+ (record -> tc.id(entity))
@@ -778,7 +841,9 @@ class StandardEntityStore(
   ): Boolean =
     id.value == value ||
       id.print == value ||
-      fieldnames.exists(name => SimpleEntityStorageShapePolicy.stringValue(record, name).contains(value)) ||
+      fieldnames.exists(name =>
+        SimpleEntityStorageShapePolicy.stringValue(record, name).contains(value)
+      ) ||
       (includeentityidentropy && id.parts.entropy == value)
 
   private def _to_datastore_limit(
@@ -837,8 +902,10 @@ class StandardEntityStore(
     val expr = EntityDirectiveQuery.whereOf(query)
     val raw = _query_condition(query)
     LifecycleConstraint(
-      poststatusexplicit = _mentions_path(expr, Set("poststatus")) || _mentions_condition_key(raw, Set("poststatus")),
-      alivenessexplicit = _mentions_path(expr, Set("aliveness")) || _mentions_condition_key(raw, Set("aliveness"))
+      poststatusexplicit =
+        _mentions_path(expr, Set("poststatus")) || _mentions_condition_key(raw, Set("poststatus")),
+      alivenessexplicit =
+        _mentions_path(expr, Set("aliveness")) || _mentions_condition_key(raw, Set("aliveness"))
     )
   }
 
@@ -885,7 +952,9 @@ class StandardEntityStore(
       case r: Record =>
         r.asMap.keys.exists(k => names.contains(_normalize_path(k)))
       case m: Map[?, ?] =>
-        m.keysIterator.collect { case k: String => k }.exists(k => names.contains(_normalize_path(k)))
+        m.keysIterator.collect { case k: String => k }.exists(k =>
+          names.contains(_normalize_path(k))
+        )
       case p: Product =>
         p.productElementNames.exists(k => names.contains(_normalize_path(k)))
       case _ =>
@@ -947,12 +1016,14 @@ class StandardEntityStore(
   }
 
   private def _post_statuses_for_manager()(using ctx: ExecutionContext): Set[String] = {
-    val configured = _attribute_tokens("search_poststatus", "search.poststatus", "poststatus", "post_status")
+    val configured =
+      _attribute_tokens("search_poststatus", "search.poststatus", "poststatus", "post_status")
       .flatMap(EntityLifecycleRecordPolicy.postStatusToken)
     if (configured.nonEmpty)
       configured
     else {
-      val frompurpose = _attribute_tokens("purpose").flatMap(EntityLifecycleRecordPolicy.postStatusToken)
+      val frompurpose =
+        _attribute_tokens("purpose").flatMap(EntityLifecycleRecordPolicy.postStatusToken)
       if (frompurpose.nonEmpty)
         frompurpose
       else
@@ -968,7 +1039,8 @@ class StandardEntityStore(
     if (configured.nonEmpty)
       configured
     else {
-      val frompurpose = _attribute_tokens("purpose").flatMap(EntityLifecycleRecordPolicy.alivenessToken)
+      val frompurpose =
+        _attribute_tokens("purpose").flatMap(EntityLifecycleRecordPolicy.alivenessToken)
       if (frompurpose.nonEmpty)
         frompurpose
       else if (poststatuses.contains("archived"))
@@ -1058,8 +1130,13 @@ class StandardEntityStore(
   ): Consequence[Record] = {
     val sanitized = EntityConcurrencyMetadata.withoutManagedField(changes)
     val changedkeys = sanitized.keySet
-    val retained = Record(_retained_existing_managed_record(existing).fields.filterNot(f => changedkeys.contains(f.key)))
-    val domain = Record(SimpleEntityStorageShapePolicy.withoutManagedFields(existing).fields.filterNot(f => changedkeys.contains(f.key)))
+    val retained = Record(_retained_existing_managed_record(existing).fields.filterNot(f =>
+      changedkeys.contains(f.key)
+    ))
+    val domain =
+      Record(SimpleEntityStorageShapePolicy.withoutManagedFields(existing).fields.filterNot(f =>
+        changedkeys.contains(f.key)
+      ))
     EntityConcurrencyMetadata.preserveForMutation(
       sanitized ++ retained ++ domain,
       existing
@@ -1069,7 +1146,7 @@ class StandardEntityStore(
   private def _retained_existing_managed_record(
     existing: Record
   ): Record = {
-    val fields = Vector(
+    val generalfields = Vector(
       "id",
       "shortid",
       "name",
@@ -1077,10 +1154,6 @@ class StandardEntityStore(
       "createdBy",
       "postStatus",
       "aliveness",
-      "ownerId",
-      "groupId",
-      "privilegeId",
-      "permission",
       "tenantId",
       "organizationId",
       "publishAt",
@@ -1090,7 +1163,25 @@ class StandardEntityStore(
       SimpleEntityStorageShapePolicy.value(existing, name)
         .map(SimpleEntityStorageShapePolicy.targetName(name) -> _)
     }
-    Record.dataAuto(fields*)
+    val securityfields =
+      SimpleEntityStorageShapePolicy.securityAttributesFromRecord(existing)
+        .toVector
+        .flatMap { attributes =>
+          Vector(
+            Some("owner_id" -> attributes.ownerId.id.value),
+            Option(attributes.groupId.id.value)
+              .filter(_.nonEmpty)
+              .map("group_id" -> _),
+            Option(attributes.privilegeId.id.value)
+              .filter(_.nonEmpty)
+              .map("privilege_id" -> _),
+            Some(
+              "permission" ->
+                SimpleEntityStorageShapePolicy.permissionJson(attributes.rights)
+            )
+          ).flatten
+        }
+    Record.dataAuto((generalfields ++ securityfields)*)
   }
 
   private def _reject_logically_deleted_existing(
@@ -1133,7 +1224,9 @@ class StandardEntityStore(
         case Some(current) =>
           defaults += (SimpleEntityStorageShapePolicy.targetName(canonical) -> current)
         case None =>
-          value.foreach(v => defaults += (SimpleEntityStorageShapePolicy.targetName(canonical) -> v))
+          value.foreach(v =>
+            defaults += (SimpleEntityStorageShapePolicy.targetName(canonical) -> v)
+          )
       }
 
     def _add_or_replace_(canonical: String, value: => Option[Any]): Unit =
@@ -1153,7 +1246,10 @@ class StandardEntityStore(
     _add_or_replace_("updatedAt", Some(now))
     _add_or_replace_("updatedBy", Some(principal))
     if (includesstatedefaults) {
-      _add_if_missing_("postStatus", _existing_value_("postStatus").orElse(Some(_default_post_status(createoptions))))
+      _add_if_missing_(
+        "postStatus",
+        _existing_value_("postStatus").orElse(Some(_default_post_status(createoptions)))
+      )
       _add_if_missing_("aliveness", _existing_value_("aliveness").orElse(Some(Aliveness.default)))
     }
     if (includescreationdefaults) {
@@ -1162,10 +1258,22 @@ class StandardEntityStore(
           org.simplemodeling.model.value.SecurityAttributes.publicOwnedBy(principal)
         else
           org.simplemodeling.model.value.SecurityAttributes.privateOwnedBy(principal)
-      _add_if_missing_("ownerId", _existing_value_("ownerId").orElse(Some(security.ownerId.id.value)))
-      _add_if_missing_("groupId", _existing_value_("groupId").orElse(Some(security.groupId.id.value)))
-      _add_if_missing_("privilegeId", _existing_value_("privilegeId").orElse(Some(security.privilegeId.id.value)))
-      _add_if_missing_("permission", Some(SimpleEntityStorageShapePolicy.permissionJson(security.rights)))
+      _add_if_missing_(
+        "ownerId",
+        _existing_value_("ownerId").orElse(Some(security.ownerId.id.value))
+      )
+      _add_if_missing_(
+        "groupId",
+        _existing_value_("groupId").orElse(Some(security.groupId.id.value))
+      )
+      _add_if_missing_(
+        "privilegeId",
+        _existing_value_("privilegeId").orElse(Some(security.privilegeId.id.value))
+      )
+      _add_if_missing_(
+        "permission",
+        Some(SimpleEntityStorageShapePolicy.permissionJson(security.rights))
+      )
     }
     if (includescreationdefaults && createoptions.hasDefaultProfile("publication")) {
       _add_if_missing_("publishAt", _existing_value_("publishAt").orElse(Some(zonednow)))
@@ -1288,6 +1396,7 @@ class StandardEntityStore(
         ContentBodyStoragePolicy
           .hydrate(id, record)
           .flatMap(EntityConcurrencyMetadata.snapshot(_)(persistent.fromStoreRecord))
+          .recoverWith(EntityConcurrencyMetadata.committedProjectionFailure)
       case EntityVersionedMutationResult.Stale(actual) =>
         EntityConcurrencyMetadata.staleMutation(expectation, actual)
     }
@@ -1304,6 +1413,7 @@ class StandardEntityStore(
         ContentBodyStoragePolicy
           .hydrate(id, record)
           .flatMap(EntityConcurrencyMetadata.recordSnapshot)
+          .recoverWith(EntityConcurrencyMetadata.committedProjectionFailure)
       case EntityVersionedMutationResult.Stale(actual) =>
         EntityConcurrencyMetadata.staleMutation(expectation, actual)
     }
@@ -1325,7 +1435,9 @@ class StandardEntityStore(
         val result = body
         result match {
           case success: Consequence.Success[?] =>
-            calltree.leave(Map("outcome" -> "success") ++ CallTreeValueSummary.resultAttributes(success.result))
+            calltree.leave(
+              Map("outcome" -> "success") ++ CallTreeValueSummary.resultAttributes(success.result)
+            )
           case failure: Consequence.Failure[?] =>
             calltree.leave(Map(
               "outcome" -> "failure",
@@ -1333,7 +1445,9 @@ class StandardEntityStore(
               "error" -> failure.conclusion.display
             ))
           case other =>
-            calltree.leave(Map("outcome" -> "success") ++ CallTreeValueSummary.resultAttributes(other))
+            calltree.leave(
+              Map("outcome" -> "success") ++ CallTreeValueSummary.resultAttributes(other)
+            )
         }
         result
       } catch {
@@ -1374,7 +1488,10 @@ class StandardEntityStore(
       attributes.asMap.toVector
         .sortBy(_._1)
         .map { case (key, value) =>
-          key -> _truncate_calltree_metric_text(_sanitize_calltree_metric_value(key, value).toString, 1000)
+          key -> _truncate_calltree_metric_text(
+            _sanitize_calltree_metric_value(key, value).toString,
+            1000
+          )
         }).toMap
 
   private def _sanitize_calltree_metric_value(

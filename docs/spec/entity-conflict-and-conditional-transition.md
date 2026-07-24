@@ -89,6 +89,11 @@ overwrite. Create, seed import, and explicitly classified physical migration
 are separate operations. Force or repair behavior MUST NOT be represented by
 an absent token.
 
+An explicitly unversioned framework mutation MUST declare one closed
+framework purpose and MUST be admitted with System access. It MUST NOT be
+available through the protected application Entity DSL. Stable-id ownership
+MUST use claim-or-load and MUST NOT overwrite an existing Entity.
+
 ## Transition Field Admission (R6)
 
 An `EntityTransitionDefinition[R]` MUST own every field admitted to a

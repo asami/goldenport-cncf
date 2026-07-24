@@ -7,7 +7,11 @@ import scala.util.control.NonFatal
 import org.goldenport.{Consequence, Conclusion, ConsequenceT}
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.component.Component
-import org.goldenport.cncf.blob.{BlobInlineImageWorkflow, ContentReferenceWorkflow, ContentRenderWorkflow}
+import org.goldenport.cncf.blob.{
+  BlobInlineImageWorkflow,
+  ContentReferenceWorkflow,
+  ContentRenderWorkflow
+}
 import org.goldenport.cncf.config.ConfigurationAccess
 import org.goldenport.cncf.http.{HttpDriver, RuntimeDashboardMetrics}
 import org.goldenport.cncf.datastore.*
@@ -15,12 +19,22 @@ import org.goldenport.cncf.embedded.{EmbeddedDataStore, EmbeddedDataStoreRunner}
 import org.goldenport.cncf.entity.*
 import org.simplemodeling.model.datatype.EntityId
 import org.goldenport.cncf.directive.SearchResult
-import org.goldenport.cncf.observability.{CallTreeContext, CallTreeValueSummary, ConclusionDiagnostics}
+import org.goldenport.cncf.observability.{
+  CallTreeContext,
+  CallTreeValueSummary,
+  ConclusionDiagnostics
+}
 import org.goldenport.process.ShellCommandExecutor
 import org.goldenport.cncf.statemachine.TransitionValidationHook
-import org.goldenport.cncf.security.OperationAccessPolicy
+import org.goldenport.cncf.security.{EntityAccessMode, OperationAccessPolicy}
 import org.goldenport.cncf.metrics.EntityAccessMetricsRegistry
-import org.goldenport.cncf.processexecution.{ProcessExecutionDriver, ProcessExecutionHandle, ProcessExecutionResult, ProcessExecutionWorkArea, ResolvedProcessExecution}
+import org.goldenport.cncf.processexecution.{
+  ProcessExecutionDriver,
+  ProcessExecutionHandle,
+  ProcessExecutionResult,
+  ProcessExecutionWorkArea,
+  ResolvedProcessExecution
+}
 import org.goldenport.configuration.ConfigurationValue
 import org.goldenport.record.Record
 import org.goldenport.record.io.RecordEncoder
@@ -51,9 +65,9 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
 
   def run[R](program: ExecUowM[R]): Consequence[R] = {
     val result =
-      try {
+      try
         program.value.foldMap(_step)
-      } catch {
+      catch {
         case e: Throwable =>
           return _abort_failure_c(Conclusion.from(e))
       }
@@ -143,22 +157,38 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
       }
 
     case UnitOfWorkOp.EmbeddedDataStoreOpen(componentname, name, path) =>
-      _with_calltree("uow:embedded-datastore:open", Map("component" -> componentname, "name" -> name)) {
+      _with_calltree(
+        "uow:embedded-datastore:open",
+        Map("component" -> componentname, "name" -> name)
+      ) {
         _embedded_datastore(componentname, name, path)
       }
 
     case UnitOfWorkOp.EmbeddedDataStoreRead(store, statement) =>
-      _with_calltree("uow:embedded-datastore:read", Map("component" -> store.componentName, "name" -> store.name)) {
+      _with_calltree(
+        "uow:embedded-datastore:read",
+        Map("component" -> store.componentName, "name" -> store.name)
+      ) {
         EmbeddedDataStoreRunner.read(store, statement)
       }
 
     case UnitOfWorkOp.EmbeddedDataStoreUpdate(store, statement) =>
-      _with_calltree("uow:embedded-datastore:update", Map("component" -> store.componentName, "name" -> store.name)) {
+      _with_calltree(
+        "uow:embedded-datastore:update",
+        Map("component" -> store.componentName, "name" -> store.name)
+      ) {
         EmbeddedDataStoreRunner.update(store, statement)
       }
 
     case UnitOfWorkOp.EmbeddedDataStoreMigrate(store, statements) =>
-      _with_calltree("uow:embedded-datastore:migrate", Map("component" -> store.componentName, "name" -> store.name, "statements" -> statements.size.toString)) {
+      _with_calltree(
+        "uow:embedded-datastore:migrate",
+        Map(
+          "component"  -> store.componentName,
+          "name"       -> store.name,
+          "statements" -> statements.size.toString
+        )
+      ) {
         EmbeddedDataStoreRunner.migrate(store, statements)
       }
 
@@ -178,13 +208,18 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
       _with_calltree("uow:entitystore:claim-or-load") {
         _authorize(m.createAuthorization).flatMap { _ =>
           _entity_store_space.claimOrLoad(m).flatMap {
-            case claimed: org.goldenport.cncf.entity.EntityStore.EntityClaimResult.Claimed[c] @unchecked =>
+            case claimed: org.goldenport.cncf.entity.EntityStore.EntityClaimResult.Claimed[
+                  c
+                ] @unchecked =>
               _entity_space_put_record(claimed.id, claimed.created.record).map { _ =>
                 _view_space_invalidate_all()
                 claimed
               }
-            case loaded: org.goldenport.cncf.entity.EntityStore.EntityClaimResult.Loaded[p] @unchecked =>
-              val loadrecord = () => Consequence.success(Some(m.persisted.authorizationRecord(loaded.entity)))
+            case loaded: org.goldenport.cncf.entity.EntityStore.EntityClaimResult.Loaded[
+                  p
+                ] @unchecked =>
+              val loadrecord =
+                () => Consequence.success(Some(m.persisted.authorizationRecord(loaded.entity)))
               _authorize(m.loadAuthorization, Some(loadrecord)).map(_ => loaded)
           }
         }
@@ -192,7 +227,10 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
 
     case m: (UnitOfWorkOp.EntityStoreLoad[t] @unchecked) =>
       val op = _canonical_load_op(m)
-      _with_calltree("uow:entityspace:load", _entity_calltree_attributes(op.id, "entity-space", realio = !_working_set_enabled)) {
+      _with_calltree(
+        "uow:entityspace:load",
+        _entity_calltree_attributes(op.id, "entity-space", realio = !_working_set_enabled)
+      ) {
         _authorize(op.authorization, Some(() => _load_record(op.id))).flatMap { _ =>
           val loaded =
             if (_working_set_enabled)
@@ -211,34 +249,75 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
 
     case m: (UnitOfWorkOp.EntityStoreLoadDirect[t] @unchecked) =>
       val id = _canonical_entity_id(m.id)
-      _with_calltree("uow:entitystore:load:direct", _entity_calltree_attributes(id, "entity-store", realio = true)) {
+      _with_calltree(
+        "uow:entitystore:load:direct",
+        _entity_calltree_attributes(id, "entity-store", realio = true)
+      ) {
         _entity_store_space.load(UnitOfWorkOp.EntityStoreLoad(id, m.tc))
       }
 
+    case m: (UnitOfWorkOp.EntityStoreLoadSnapshot[t] @unchecked) =>
+      val id = _canonical_entity_id(m.id)
+      _with_calltree(
+        "uow:entitystore:load-snapshot",
+        _entity_calltree_attributes(id, "entity-store", realio = true)
+      ) {
+        _authorize(m.authorization, Some(() => _load_record(id))).flatMap { _ =>
+          _entity_store_space.loadSnapshot(id, m.tc).map { result =>
+            result.foreach(snapshot => _entity_space_put(snapshot.entity, m.tc))
+            result
+          }
+        }
+      }
+
     case m: (UnitOfWorkOp.EntityStoreSave[t] @unchecked) =>
-      _with_calltree("uow:entitystore:save") {
+      val id = m.tc.id(m.entity)
+      _with_calltree(
+        "uow:entitystore:save-versioned",
+        _entity_calltree_attributes(id, "entity-store", realio = true)
+      ) {
         val loadrecord = () =>
-          _load_record(m.tc.id(m.entity)).map(_.orElse(Some(m.tc.authorizationRecord(m.entity))))
-        _authorize(m.authorization, Some(loadrecord)).flatMap(_ =>
+          _load_record(id).map { existing =>
+            Some(
+              existing
+                .map(record => m.tc.authorizationRecord(m.entity, record))
+                .getOrElse(m.tc.authorizationRecord(m.entity))
+            )
+          }
+        val result = _authorize(m.authorization, Some(loadrecord)).flatMap(_ =>
           _transition_validation_hook
             .beforeSave[t](m.entity, m.tc)
             .flatMap(_ => _entity_store_space.save(m))
-            .map { r =>
-              _entity_space_evict(m.tc.id(m.entity))
+            .map { snapshot =>
+              _entity_space_evict(id)
+              _entity_space_put(snapshot.entity, m.tc)
               _view_space_invalidate_all()
-              r
+              snapshot
             }
         )
+        _reconcile_versioned_failure(id, result)
       }
 
-    case m: (UnitOfWorkOp.EntityStoreUpsert[t] @unchecked) =>
-      _with_calltree("uow:entitystore:upsert") {
+    case m: (UnitOfWorkOp.EntityStoreSaveUnversioned[t] @unchecked) =>
+      _with_calltree("uow:entitystore:save-unversioned") {
+        _authorize_unversioned(m.authorization, m.purpose).flatMap { _ =>
+          _entity_store_space.saveUnversioned(m).map { result =>
+            _entity_space_evict(m.tc.id(m.entity))
+            _view_space_invalidate_all()
+            result
+          }
+        }
+      }
+
+    case m: (UnitOfWorkOp.EntityStoreUpsertUnversioned[t] @unchecked) =>
+      _with_calltree("uow:entitystore:upsert-unversioned") {
+        _authorize_unversioned_pair(
+          m.createAuthorization,
+          m.updateAuthorization,
+          m.purpose
+        ).flatMap { _ =>
         _entity_store_space.upsert(m)(
-          authorize = { existing =>
-            val authorization = if (existing.isDefined) m.updateAuthorization else m.createAuthorization
-            val loadrecord = existing.map(_ => () => Consequence.success(existing))
-            _authorize(authorization, loadrecord)
-          },
+            authorize = _ => Consequence.unit,
           onsaved = { result =>
             _entity_space_put_record(result.id, result.record).map { _ =>
               _view_space_invalidate_all()
@@ -247,32 +326,53 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
           }
         )
       }
+      }
 
     case m: (UnitOfWorkOp.EntityStoreUpdate[t] @unchecked) =>
-      _with_calltree("uow:entitystore:update") {
-        val id = m.tc.id(m.entity)
+      val id = m.tc.id(m.entity)
+      val result = _with_calltree(
+        "uow:entitystore:update-versioned",
+        _entity_calltree_attributes(id, "entity-store", realio = true)
+      ) {
         for {
           current <- _load_record(id)
-          loadrecord = () => Consequence.success(current.orElse(Some(m.tc.authorizationRecord(m.entity))))
+          loadrecord = () =>
+            Consequence.success(
+              Some(
+                current
+                  .map(record => m.tc.authorizationRecord(m.entity, record))
+                  .getOrElse(m.tc.authorizationRecord(m.entity))
+              )
+            )
           _ <- _authorize(m.authorization, Some(loadrecord))
           _ <- current match {
             case Some(record) =>
-              _transition_validation_hook.beforeUpdate[t](m.entity, m.tc, record, m.tc.toStoreRecord(m.entity))
+              _transition_validation_hook.beforeUpdate[t](
+                m.entity,
+                m.tc,
+                record,
+                m.tc.toStoreRecord(m.entity)
+              )
             case None =>
               _transition_validation_hook.beforeUpdate[t](m.entity, m.tc)
           }
           r <- _entity_store_space.update(m)
         } yield {
           _entity_space_evict(id)
+          _entity_space_put(r.entity, m.tc)
           _view_space_invalidate_all()
           r
         }
       }
+      _reconcile_versioned_failure(id, result)
 
     case m: (UnitOfWorkOp.EntityStoreUpdateById[t] @unchecked) =>
-      _with_calltree("uow:entitystore:update:patch") {
-        val id = _canonical_entity_id(m.id)
-        val op = m.copy(id = id)
+      val id = _canonical_entity_id(m.id)
+      val op = m.copy(id = id)
+      val result = _with_calltree(
+        "uow:entitystore:update-versioned:patch",
+        _entity_calltree_attributes(id, "entity-store", realio = true)
+      ) {
         for {
           current <- _load_record(op.id)
           _ <- _authorize(op.authorization, Some(() => Consequence.success(current)))
@@ -280,15 +380,47 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
             case Some(record) =>
               val changes = Update.toChangesRecord(op.tc.toStoreRecord(op.patch))
               val proposed = _overlay_record(record, changes)
-              _transition_validation_hook.beforeUpdateById[t](op.id, op.patch, op.tc, record, proposed)
+              _transition_validation_hook.beforeUpdateById[t](
+                op.id,
+                op.patch,
+                op.tc,
+                record,
+                proposed
+              )
             case None =>
               _transition_validation_hook.beforeUpdateById[t](op.id, op.patch, op.tc)
           }
           r <- _entity_store_space.updateById(op)
+          _ = _entity_space_evict(op.id)
+          _ <- _entity_space_put_record(op.id, Some(r.record))
         } yield {
-          _entity_space_evict(op.id)
           _view_space_invalidate_all()
           r
+        }
+      }
+      _reconcile_versioned_failure(id, result)
+
+    case m: (UnitOfWorkOp.EntityStoreUpdateUnversioned[t] @unchecked) =>
+      _with_calltree("uow:entitystore:update-unversioned") {
+        _authorize_unversioned(m.authorization, m.purpose).flatMap { _ =>
+          _entity_store_space.updateUnversioned(m).map { result =>
+            _entity_space_evict(m.tc.id(m.entity))
+            _view_space_invalidate_all()
+            result
+          }
+        }
+      }
+
+    case m: (UnitOfWorkOp.EntityStoreUpdateByIdUnversioned[t] @unchecked) =>
+      val id = _canonical_entity_id(m.id)
+      val op = m.copy(id = id)
+      _with_calltree("uow:entitystore:update-unversioned:patch") {
+        _authorize_unversioned(m.authorization, m.purpose).flatMap { _ =>
+          _entity_store_space.updateByIdUnversioned(op).map { result =>
+            _entity_space_evict(id)
+            _view_space_invalidate_all()
+            result
+          }
         }
       }
 
@@ -317,7 +449,10 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
       }
 
     case m: (UnitOfWorkOp.EntityStoreSearch[t] @unchecked) =>
-      _with_calltree("uow:entityspace:search", _entity_search_calltree_attributes(m.query, "entity-space", realio = !_working_set_enabled)) {
+      _with_calltree(
+        "uow:entityspace:search",
+        _entity_search_calltree_attributes(m.query, "entity-space", realio = !_working_set_enabled)
+      ) {
         _authorize(m.authorization).flatMap { _ =>
           if (_working_set_enabled)
             _entity_space_search(m)
@@ -327,15 +462,23 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
       }
 
     case m: (UnitOfWorkOp.EntityStoreSearchDirect[t] @unchecked) =>
-      _with_calltree("uow:entitystore:search:direct", _entity_search_calltree_attributes(m.query, "entity-store", realio = true)) {
+      _with_calltree(
+        "uow:entitystore:search:direct",
+        _entity_search_calltree_attributes(m.query, "entity-store", realio = true)
+      ) {
         val op = UnitOfWorkOp.EntityStoreSearch(m.query, m.tc, m.authorization)
         _authorize(m.authorization).flatMap { _ =>
-          _entity_store_space.search(UnitOfWorkOp.EntityStoreSearch(m.query, m.tc)).flatMap(_filter_search_result(op, _))
+          _entity_store_space.search(UnitOfWorkOp.EntityStoreSearch(m.query, m.tc)).flatMap(
+            _filter_search_result(op, _)
+          )
         }
       }
 
     case m: (UnitOfWorkOp.EntityStoreSearchInternal[t] @unchecked) =>
-      _with_calltree("uow:entitystore:search:internal", _entity_search_calltree_attributes(m.query, "entity-store", realio = true)) {
+      _with_calltree(
+        "uow:entitystore:search:internal",
+        _entity_search_calltree_attributes(m.query, "entity-store", realio = true)
+      ) {
         _entity_store_space.searchInternal(m)
       }
 
@@ -399,7 +542,8 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
     case UnitOfWorkOp.ContentSyncInlineReferences(source, references) =>
       _with_calltree("uow:content:references:sync-inline") {
         _component_required.flatMap { component =>
-          ContentReferenceWorkflow(component).syncInlineReferences(source, references).map { result =>
+          ContentReferenceWorkflow(component).syncInlineReferences(source, references).map {
+            result =>
             _view_space_invalidate_all()
             result
           }
@@ -576,18 +720,26 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
     _component_option
       .flatMap(_.entitySpace.entityOption[T](name)) match {
       case Some(collection) =>
-        if (op.query.scope == EntitySearchScope.WorkingSet && !collection.hasEffectiveWorkingSetPolicy) {
+        if (
+          op.query.scope == EntitySearchScope.WorkingSet && !collection.hasEffectiveWorkingSetPolicy
+        ) {
           _emit_entity_search_fallback(op.query.collection.name)
           return _entity_store_space.search(op).flatMap(_filter_search_result(op, _))
         }
         if (collection.shouldFallbackToStoreForWorkingSet(op.query)) {
           _emit_entity_search_fallback(op.query.collection.name)
           if (collection.workingSetStatus.isInitializing)
-            _emit_working_set_loading_fallback(op.query.collection.name, collection.workingSetStatus.state.label)
+            _emit_working_set_loading_fallback(
+              op.query.collection.name,
+              collection.workingSetStatus.state.label
+            )
           return _entity_store_space.search(op).flatMap(_filter_search_result(op, _))
         }
         collection.search(op.query).flatMap { result =>
-          if (result.data.nonEmpty || collection.storage.storeRealm.values.nonEmpty || collection.storage.memoryRealm.exists(_.values.nonEmpty))
+          if (
+            result.data.nonEmpty || collection.storage.storeRealm.values
+              .nonEmpty || collection.storage.memoryRealm.exists(_.values.nonEmpty)
+          )
             _filter_search_result(op, result)
           else
             _entity_store_space.search(op).flatMap { loaded =>
@@ -644,10 +796,13 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
     collection: org.goldenport.cncf.entity.runtime.EntityCollection[T],
     entity: T
   ): Unit =
-    try {
+    try
       collection.putScoped(entity)(using uow.executionContext)
-    } catch {
-      case e: IllegalStateException if e.getMessage != null && e.getMessage.contains("Entity must implement EntityPersistable") =>
+    catch {
+      case e: IllegalStateException
+          if e.getMessage != null && e.getMessage.contains(
+            "Entity must implement EntityPersistable"
+          ) =>
         ()
     }
 
@@ -685,7 +840,9 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
     _component_option
       .flatMap { component =>
         component.entitySpace.entityOption[Any](name).orElse(
-          component.entitySpace.entityOption(id.collection).map(_.asInstanceOf[org.goldenport.cncf.entity.runtime.EntityCollection[Any]])
+          component.entitySpace.entityOption(id.collection).map(
+            _.asInstanceOf[org.goldenport.cncf.entity.runtime.EntityCollection[Any]]
+          )
         )
       }
       .foreach(_.evict(id))
@@ -700,7 +857,9 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
     _component_option
       .flatMap { component =>
         component.entitySpace.entityOption[T](name).orElse(
-          component.entitySpace.entityOption(id.collection).map(_.asInstanceOf[org.goldenport.cncf.entity.runtime.EntityCollection[T]])
+          component.entitySpace.entityOption(id.collection).map(
+            _.asInstanceOf[org.goldenport.cncf.entity.runtime.EntityCollection[T]]
+          )
         )
       }
       .foreach(_.putScoped(entity)(using uow.executionContext))
@@ -715,7 +874,9 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
       r <- record
       collection <- _component_option.flatMap { component =>
         component.entitySpace.entityOption[Any](name).orElse(
-          component.entitySpace.entityOption(id.collection).map(_.asInstanceOf[org.goldenport.cncf.entity.runtime.EntityCollection[Any]])
+          component.entitySpace.entityOption(id.collection).map(
+            _.asInstanceOf[org.goldenport.cncf.entity.runtime.EntityCollection[Any]]
+          )
         )
       }
       if collection.storage.memoryRealm.isDefined
@@ -750,6 +911,50 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
           .getOrElse(Consequence.unit)
       }
     }
+
+  private def _authorize_unversioned(
+      authorization: Option[UnitOfWorkAuthorization],
+      purpose: EntityUnversionedMutationPurpose
+  ): Consequence[Unit] =
+    authorization match {
+      case Some(value) if value.accessMode == EntityAccessMode.System =>
+        _authorize(Some(value))
+      case _ =>
+        Consequence.operationInvalid(
+          s"Unversioned Entity mutation purpose ${purpose} requires explicit System access"
+        )
+    }
+
+  private def _authorize_unversioned_pair(
+      createauthorization: Option[UnitOfWorkAuthorization],
+      updateauthorization: Option[UnitOfWorkAuthorization],
+      purpose: EntityUnversionedMutationPurpose
+  ): Consequence[Unit] =
+    for {
+      _ <- _authorize_unversioned(createauthorization, purpose)
+      _ <- _authorize_unversioned(updateauthorization, purpose)
+    } yield ()
+
+  private def _reconcile_versioned_failure[A](
+      id: EntityId,
+      result: Consequence[A]
+  ): Consequence[A] = {
+    result match {
+      case failure: Consequence.Failure[A] =>
+        ConclusionDiagnostics.classify(failure.conclusion).reason match {
+          case Some("stale-entity-revision") =>
+            _entity_space_evict(id)
+          case Some("committed-entity-projection-failure") =>
+            _entity_space_evict(id)
+            _view_space_invalidate_all()
+          case _ =>
+            ()
+        }
+      case _ =>
+        ()
+    }
+    result
+  }
 
   private def _load_record(
     id: EntityId
@@ -806,7 +1011,9 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
   private def _component_required: Consequence[Component] =
     _component_option
       .map(Consequence.success)
-      .getOrElse(Consequence.serviceUnavailable("component context is required for blob inline image operations"))
+      .getOrElse(Consequence.serviceUnavailable(
+        "component context is required for blob inline image operations"
+      ))
 
   private def _is_entity_not_found(
     conclusion: org.goldenport.Conclusion
@@ -859,12 +1066,18 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
   private def _calltree_entity_query_json(
     query: EntityQuery[?]
   ): String =
-    _truncate_calltree_text(RecordEncoder.json(CallTreeValueSummary.recordSummary(Record.dataAuto(
+    _truncate_calltree_text(
+      RecordEncoder.json(CallTreeValueSummary.recordSummary(
+        Record.dataAuto(
       "collection" -> query.collection.name,
       "scope" -> query.scope.toString,
       "visibility_scope" -> query.visibilityScope.map(_.toString),
       "query" -> query.query.toRecord()
-    ), includeInline = true)), 4000)
+        ),
+        includeInline = true
+      )),
+      4000
+    )
 
   private def _truncate_calltree_text(
     value: String,
@@ -878,14 +1091,19 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
   )(body: => Consequence[A]): Consequence[A] = {
     val ctx = _calltree_context
     if (ctx.isEnabled) {
-      ctx.enter(label, attributes ++ Map(
+      ctx.enter(
+        label,
+        attributes ++ Map(
         "calltree_kind" -> "uow"
-      ))
+        )
+      )
       try {
         val result = body
         result match {
           case success: Consequence.Success[A] =>
-            ctx.leave(Map("outcome" -> "success") ++ CallTreeValueSummary.resultAttributes(success.result))
+            ctx.leave(
+              Map("outcome" -> "success") ++ CallTreeValueSummary.resultAttributes(success.result)
+            )
             success
           case failure: Consequence.Failure[A] =>
             ctx.leave(Map(
@@ -912,16 +1130,21 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
   ): Consequence[ProcessExecutionResult] = {
     val ctx = _calltree_context
     if (ctx.isEnabled) {
-      ctx.enter("uow:process-exec", Map(
+      ctx.enter(
+        "uow:process-exec",
+        Map(
         "calltree_kind" -> "uow",
         "process.capability" -> execution.request.capability.print,
         "process.program" -> execution.definition.safeProgramIdentity
-      ))
+        )
+      )
       try {
         val result = body
         result match {
           case success: Consequence.Success[ProcessExecutionResult] =>
-            ctx.leave(_process_execution_result_attributes(success.result) + ("outcome" -> "success"))
+            ctx.leave(
+              _process_execution_result_attributes(success.result) + ("outcome" -> "success")
+            )
             success
           case failure: Consequence.Failure[ProcessExecutionResult] =>
             ctx.leave(Map(
@@ -958,7 +1181,7 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
     workspace: ProcessExecutionWorkArea
   ): Consequence[ProcessExecutionResult] = {
     var registration = Option.empty[UnitOfWorkResourceRegistration]
-    try {
+    try
       for {
         _ <- workspace.materializeInputsC(execution)
         _ <- workspace.prepareOutputsC(execution)
@@ -967,7 +1190,7 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
         val jobregistration = uow.executionContext.jobContext.cancellationScope.map(
           _.register(handle.cancelC)
         )
-        try {
+          try
           uow.registerResourceC(_process_execution_resource(handle, workspace)).flatMap { value =>
             registration = Some(value)
             handle.awaitC.flatMap { result =>
@@ -981,16 +1204,14 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
               }
             }
           }
-        } finally {
+          finally
           jobregistration.foreach(_.close())
         }
-        }
       } yield result
-    } finally {
+    finally
       if (registration.isEmpty)
         workspace.close()
     }
-  }
 
   private def _process_execution_resource(
     handle: ProcessExecutionHandle,
@@ -1012,9 +1233,9 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
   private def _attempt_cleanup_c(
     cleanup: => Consequence[Unit]
   ): Consequence[Unit] =
-    try {
+    try
       cleanup
-    } catch {
+    catch {
       case NonFatal(e) => Consequence.Failure(Conclusion.from(e))
     }
 
@@ -1030,14 +1251,15 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
   ): Consequence[ProcessExecutionResult] = {
     val startednanos = System.nanoTime()
     var driver = Option.empty[ProcessExecutionDriver]
-    val result = try {
+    val result =
+      try
       ProcessExecutionDriver.resolveC(uow.executionContext.cncfCore.scope).flatMap { resolved =>
         driver = Some(resolved)
         ProcessExecutionWorkArea.allocateC(uow.executionContext.cncfCore.scope.workAreaSpace).flatMap(
           _execute_process_in_workspace_c(resolved, execution, _)
         )
       }
-    } catch {
+      catch {
       case NonFatal(e) => Consequence.Failure(Conclusion.from(e))
     }
     _record_process_execution(execution, driver, result, startednanos)

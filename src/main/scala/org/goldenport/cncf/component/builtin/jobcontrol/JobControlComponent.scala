@@ -4,11 +4,59 @@ import java.time.Duration
 import scala.collection.concurrent.TrieMap
 import cats.data.NonEmptyVector
 import org.goldenport.Consequence
-import org.goldenport.cncf.action.{Action, ActionCall, ActionEngine, CommandAction, ProcedureActionCall, QueryAction}
-import org.goldenport.cncf.component.{Component, ComponentCreate, ComponentDescriptor, ComponentId, ComponentInstanceId}
-import org.goldenport.cncf.entity.EntityStore
-import org.goldenport.cncf.entity.runtime.{EntityKind, EntityMemoryPolicy, EntityRuntimeDescriptor, PartitionStrategy, WorkingSetPolicy, WorkingSetPolicyEvaluator, WorkingSetPolicySource}
-import org.goldenport.cncf.job.{ActionId, ActionTask, JobBatchDefinition, JobBatchSubmissionResult, JobControlCommand, JobControlRequest, JobDefinition, JobDefinitionEntity, JobDefinitionSnapshot, JobDefinitionStatus, JobFailureHook, JobId, JobPersistencePolicy, JobProfileComparison, JobProfileReconstructor, JobResult, JobSubmitOption, JobTask, JobTaskDetail, JobTraceTree, TaskId}
+import org.goldenport.cncf.action.{
+  Action,
+  ActionCall,
+  ActionEngine,
+  CommandAction,
+  ProcedureActionCall,
+  QueryAction
+}
+import org.goldenport.cncf.component.{
+  Component,
+  ComponentCreate,
+  ComponentDescriptor,
+  ComponentId,
+  ComponentInstanceId
+}
+import org.goldenport.cncf.entity.{
+  EntityMutationExpectation,
+  EntityPersistentCreate,
+  EntitySnapshot,
+  EntityStore
+}
+import org.goldenport.cncf.entity.runtime.{
+  EntityKind,
+  EntityMemoryPolicy,
+  EntityRuntimeDescriptor,
+  PartitionStrategy,
+  WorkingSetPolicy,
+  WorkingSetPolicyEvaluator,
+  WorkingSetPolicySource
+}
+import org.goldenport.cncf.job.{
+  ActionId,
+  ActionTask,
+  JobBatchDefinition,
+  JobBatchSubmissionResult,
+  JobControlCommand,
+  JobControlRequest,
+  JobDefinition,
+  JobDefinitionEntity,
+  JobDefinitionSnapshot,
+  JobDefinitionStatus,
+  JobFailureHook,
+  JobId,
+  JobPersistencePolicy,
+  JobProfileComparison,
+  JobProfileReconstructor,
+  JobResult,
+  JobSubmitOption,
+  JobTask,
+  JobTaskDetail,
+  JobTraceTree,
+  TaskId
+}
 import org.goldenport.cncf.job.{JobEntityCollections, JobQueryReadModel, JobTimelinePage}
 import org.goldenport.cncf.event.ReceptionDomainEvent
 import org.goldenport.cncf.subsystem.resolver.OperationResolver
@@ -29,7 +77,7 @@ import org.goldenport.value.BaseContent
  *  version Mar. 29, 2026
  *  version Apr. 22, 2026
  *  version May. 31, 2026
- * @version Jul. 23, 2026
+ * @version Jul. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 final class JobControlComponent() extends Component {
@@ -39,30 +87,76 @@ final class JobControlComponent() extends Component {
 
 object JobControlComponent {
   trait JobService {
-    def getJobStatus(jobId: JobId)(using org.goldenport.cncf.context.ExecutionContext): Consequence[JobQueryReadModel]
-    def loadJobHistory(jobId: JobId)(using org.goldenport.cncf.context.ExecutionContext): Consequence[JobTimelinePage]
-    def getJobCalltree(jobId: JobId)(using org.goldenport.cncf.context.ExecutionContext): Consequence[Record]
-    def getTaskExecutionTree(jobId: JobId)(using org.goldenport.cncf.context.ExecutionContext): Consequence[JobTraceTree]
-    def getTaskDetail(jobId: JobId, taskId: TaskId)(using org.goldenport.cncf.context.ExecutionContext): Consequence[JobTaskDetail]
-    def getJobResult(jobId: JobId)(using org.goldenport.cncf.context.ExecutionContext): Consequence[JobResult]
-    def awaitJobResult(jobId: JobId)(using org.goldenport.cncf.context.ExecutionContext): Consequence[OperationResponse]
+    def getJobStatus(jobId: JobId)(using
+        org.goldenport.cncf.context.ExecutionContext
+    ): Consequence[JobQueryReadModel]
+    def loadJobHistory(jobId: JobId)(using
+        org.goldenport.cncf.context.ExecutionContext
+    ): Consequence[JobTimelinePage]
+    def getJobCalltree(jobId: JobId)(using
+        org.goldenport.cncf.context.ExecutionContext
+    ): Consequence[Record]
+    def getTaskExecutionTree(jobId: JobId)(using
+        org.goldenport.cncf.context.ExecutionContext
+    ): Consequence[JobTraceTree]
+    def getTaskDetail(jobId: JobId, taskId: TaskId)(using
+        org.goldenport.cncf.context.ExecutionContext
+    ): Consequence[JobTaskDetail]
+    def getJobResult(jobId: JobId)(using
+        org.goldenport.cncf.context.ExecutionContext
+    ): Consequence[JobResult]
+    def awaitJobResult(jobId: JobId)(using
+        org.goldenport.cncf.context.ExecutionContext
+    ): Consequence[OperationResponse]
     def describeJobDefinition(body: String, format: RecordFormat): Consequence[JobBatchDefinition]
-    def submitJobDefinition(body: String, format: RecordFormat)(using org.goldenport.cncf.context.ExecutionContext): Consequence[JobBatchSubmissionResult]
-    def submitJobBatch(body: String, format: RecordFormat)(using org.goldenport.cncf.context.ExecutionContext): Consequence[JobBatchSubmissionResult]
-    def compareJobProfile(jobId: JobId)(using org.goldenport.cncf.context.ExecutionContext): Consequence[Record]
-    def reconstructJobProfile(jobId: JobId)(using org.goldenport.cncf.context.ExecutionContext): Consequence[Record]
-    def createJobDefinition(key: String, body: String, format: RecordFormat, status: Option[String])(using org.goldenport.cncf.context.ExecutionContext): Consequence[Record]
-    def updateJobDefinition(key: String, body: String, format: RecordFormat, status: Option[String])(using org.goldenport.cncf.context.ExecutionContext): Consequence[Record]
-    def activateJobDefinition(key: String)(using org.goldenport.cncf.context.ExecutionContext): Consequence[Record]
-    def retireJobDefinition(key: String)(using org.goldenport.cncf.context.ExecutionContext): Consequence[Record]
-    def getJobDefinition(key: String)(using org.goldenport.cncf.context.ExecutionContext): Consequence[Record]
-    def searchJobDefinitions()(using org.goldenport.cncf.context.ExecutionContext): Consequence[Record]
+    def submitJobDefinition(body: String, format: RecordFormat)(using
+        org.goldenport.cncf.context.ExecutionContext
+    ): Consequence[JobBatchSubmissionResult]
+    def submitJobBatch(body: String, format: RecordFormat)(using
+        org.goldenport.cncf.context.ExecutionContext
+    ): Consequence[JobBatchSubmissionResult]
+    def compareJobProfile(jobId: JobId)(using
+        org.goldenport.cncf.context.ExecutionContext
+    ): Consequence[Record]
+    def reconstructJobProfile(jobId: JobId)(using
+        org.goldenport.cncf.context.ExecutionContext
+    ): Consequence[Record]
+    def createJobDefinition(
+        key: String,
+        body: String,
+        format: RecordFormat,
+        status: Option[String]
+    )(using org.goldenport.cncf.context.ExecutionContext): Consequence[Record]
+    def updateJobDefinition(
+        key: String,
+        body: String,
+        format: RecordFormat,
+        status: Option[String]
+    )(using org.goldenport.cncf.context.ExecutionContext): Consequence[Record]
+    def activateJobDefinition(key: String)(using
+        org.goldenport.cncf.context.ExecutionContext
+    ): Consequence[Record]
+    def retireJobDefinition(key: String)(using
+        org.goldenport.cncf.context.ExecutionContext
+    ): Consequence[Record]
+    def getJobDefinition(key: String)(using
+        org.goldenport.cncf.context.ExecutionContext
+    ): Consequence[Record]
+    def searchJobDefinitions()(using
+        org.goldenport.cncf.context.ExecutionContext
+    ): Consequence[Record]
   }
 
   trait JobAdminService {
-    def cancelJob(jobId: JobId)(using org.goldenport.cncf.context.ExecutionContext): Consequence[org.goldenport.cncf.job.JobControlResponse]
-    def suspendJob(jobId: JobId)(using org.goldenport.cncf.context.ExecutionContext): Consequence[org.goldenport.cncf.job.JobControlResponse]
-    def resumeJob(jobId: JobId)(using org.goldenport.cncf.context.ExecutionContext): Consequence[org.goldenport.cncf.job.JobControlResponse]
+    def cancelJob(jobId: JobId)(using
+        org.goldenport.cncf.context.ExecutionContext
+    ): Consequence[org.goldenport.cncf.job.JobControlResponse]
+    def suspendJob(jobId: JobId)(using
+        org.goldenport.cncf.context.ExecutionContext
+    ): Consequence[org.goldenport.cncf.job.JobControlResponse]
+    def resumeJob(jobId: JobId)(using
+        org.goldenport.cncf.context.ExecutionContext
+    ): Consequence[org.goldenport.cncf.job.JobControlResponse]
     def loadJobEvents(jobId: JobId): Consequence[Vector[Record]]
   }
 
@@ -94,7 +188,10 @@ object JobControlComponent {
           maxEntitiesPerPartition = 10000,
           entityKind = EntityKind.System,
           entityKindExplicit = true,
-          workingSetPolicy = Some(WorkingSetPolicy.Custom("active-job-definition", _ActiveJobDefinitionWorkingSetPolicy)),
+          workingSetPolicy = Some(WorkingSetPolicy.Custom(
+            "active-job-definition",
+            _ActiveJobDefinitionWorkingSetPolicy
+          )),
           workingSetPolicySource = Some(WorkingSetPolicySource.Code)
         )
       )
@@ -120,27 +217,81 @@ object JobControlComponent {
     ): Component.Core = {
       val request = spec.RequestDefinition()
       val idrequest = _job_id_request
-      val getjobstatus = new GetJobStatusOperationDefinition(request = idrequest, response = spec.ResponseDefinition(result = List(DataType.Named("JobQueryReadModel"))))
-      val loadjobhistory = new LoadJobHistoryOperationDefinition(request = idrequest, response = spec.ResponseDefinition(result = List(DataType.Named("JobTimelinePage"))))
-      val getjobcalltree = new GetJobCalltreeOperationDefinition(request = idrequest, response = spec.ResponseDefinition(result = List(DataType.Named("Record"))))
-      val gettaskexecutiontree = new GetTaskExecutionTreeOperationDefinition(request = idrequest, response = spec.ResponseDefinition(result = List(DataType.Named("Record"))))
-      val gettaskdetail = new GetTaskDetailOperationDefinition(request = _job_task_request, response = spec.ResponseDefinition(result = List(DataType.Named("Record"))))
-      val getjobresult = new GetJobResultOperationDefinition(request = idrequest, response = spec.ResponseDefinition(result = List(DataType.Named("JobResult"))))
-      val awaitjobresult = new AwaitJobResultOperationDefinition(request = idrequest, response = spec.ResponseDefinition(result = List(DataType.Named("OperationResponse"))))
+      val getjobstatus = new GetJobStatusOperationDefinition(
+        request = idrequest,
+        response = spec.ResponseDefinition(result = List(DataType.Named("JobQueryReadModel")))
+      )
+      val loadjobhistory = new LoadJobHistoryOperationDefinition(
+        request = idrequest,
+        response = spec.ResponseDefinition(result = List(DataType.Named("JobTimelinePage")))
+      )
+      val getjobcalltree = new GetJobCalltreeOperationDefinition(
+        request = idrequest,
+        response = spec.ResponseDefinition(result = List(DataType.Named("Record")))
+      )
+      val gettaskexecutiontree = new GetTaskExecutionTreeOperationDefinition(
+        request = idrequest,
+        response = spec.ResponseDefinition(result = List(DataType.Named("Record")))
+      )
+      val gettaskdetail = new GetTaskDetailOperationDefinition(
+        request = _job_task_request,
+        response = spec.ResponseDefinition(result = List(DataType.Named("Record")))
+      )
+      val getjobresult = new GetJobResultOperationDefinition(
+        request = idrequest,
+        response = spec.ResponseDefinition(result = List(DataType.Named("JobResult")))
+      )
+      val awaitjobresult = new AwaitJobResultOperationDefinition(
+        request = idrequest,
+        response = spec.ResponseDefinition(result = List(DataType.Named("OperationResponse")))
+      )
       val bodyrequest = _body_request
-      val describejobdefinition = new DescribeJobDefinitionOperationDefinition(bodyrequest, spec.ResponseDefinition(result = List(DataType.Named("Record"))))
-      val submitjobdefinition = new SubmitJobDefinitionOperationDefinition(bodyrequest, spec.ResponseDefinition(result = List(DataType.Named("Record"))))
-      val submitjobbatch = new SubmitJobBatchOperationDefinition(bodyrequest, spec.ResponseDefinition(result = List(DataType.Named("Record"))))
-      val comparejobprofile = new CompareJobProfileOperationDefinition(idrequest, spec.ResponseDefinition(result = List(DataType.Named("Record"))))
-      val reconstructjobprofile = new ReconstructJobProfileOperationDefinition(idrequest, spec.ResponseDefinition(result = List(DataType.Named("Record"))))
+      val describejobdefinition = new DescribeJobDefinitionOperationDefinition(
+        bodyrequest,
+        spec.ResponseDefinition(result = List(DataType.Named("Record")))
+      )
+      val submitjobdefinition = new SubmitJobDefinitionOperationDefinition(
+        bodyrequest,
+        spec.ResponseDefinition(result = List(DataType.Named("Record")))
+      )
+      val submitjobbatch = new SubmitJobBatchOperationDefinition(
+        bodyrequest,
+        spec.ResponseDefinition(result = List(DataType.Named("Record")))
+      )
+      val comparejobprofile = new CompareJobProfileOperationDefinition(
+        idrequest,
+        spec.ResponseDefinition(result = List(DataType.Named("Record")))
+      )
+      val reconstructjobprofile = new ReconstructJobProfileOperationDefinition(
+        idrequest,
+        spec.ResponseDefinition(result = List(DataType.Named("Record")))
+      )
       val definitionrequest = _job_definition_request
       val definitionkeyrequest = _job_definition_key_request
-      val createjobdefinition = new CreateJobDefinitionOperationDefinition(definitionrequest, spec.ResponseDefinition(result = List(DataType.Named("Record"))))
-      val updatejobdefinition = new UpdateJobDefinitionOperationDefinition(definitionrequest, spec.ResponseDefinition(result = List(DataType.Named("Record"))))
-      val activatejobdefinition = new ActivateJobDefinitionOperationDefinition(definitionkeyrequest, spec.ResponseDefinition(result = List(DataType.Named("Record"))))
-      val retirejobdefinition = new RetireJobDefinitionOperationDefinition(definitionkeyrequest, spec.ResponseDefinition(result = List(DataType.Named("Record"))))
-      val getjobdefinition = new GetJobDefinitionOperationDefinition(definitionkeyrequest, spec.ResponseDefinition(result = List(DataType.Named("Record"))))
-      val searchjobdefinitions = new SearchJobDefinitionsOperationDefinition(request, spec.ResponseDefinition(result = List(DataType.Named("Record"))))
+      val createjobdefinition = new CreateJobDefinitionOperationDefinition(
+        definitionrequest,
+        spec.ResponseDefinition(result = List(DataType.Named("Record")))
+      )
+      val updatejobdefinition = new UpdateJobDefinitionOperationDefinition(
+        definitionrequest,
+        spec.ResponseDefinition(result = List(DataType.Named("Record")))
+      )
+      val activatejobdefinition = new ActivateJobDefinitionOperationDefinition(
+        definitionkeyrequest,
+        spec.ResponseDefinition(result = List(DataType.Named("Record")))
+      )
+      val retirejobdefinition = new RetireJobDefinitionOperationDefinition(
+        definitionkeyrequest,
+        spec.ResponseDefinition(result = List(DataType.Named("Record")))
+      )
+      val getjobdefinition = new GetJobDefinitionOperationDefinition(
+        definitionkeyrequest,
+        spec.ResponseDefinition(result = List(DataType.Named("Record")))
+      )
+      val searchjobdefinitions = new SearchJobDefinitionsOperationDefinition(
+        request,
+        spec.ResponseDefinition(result = List(DataType.Named("Record")))
+      )
       val canceljob = new ControlJobOperationDefinition(
         name = "cancel_job",
         command = JobControlCommand.Cancel,
@@ -159,7 +310,10 @@ object JobControlComponent {
         request = idrequest,
         response = spec.ResponseDefinition(result = List(DataType.Named("JobControlResponse")))
       )
-      val loadjobevents = new LoadJobEventsOperationDefinition(request = idrequest, response = spec.ResponseDefinition(result = List(DataType.Named("RecordList"))))
+      val loadjobevents = new LoadJobEventsOperationDefinition(
+        request = idrequest,
+        response = spec.ResponseDefinition(result = List(DataType.Named("RecordList")))
+      )
       val jobservice = spec.ServiceDefinition(
         name = "job",
         operations = spec.OperationDefinitionGroup(
@@ -211,38 +365,68 @@ object JobControlComponent {
 
     private def _job_id_request: spec.RequestDefinition =
       spec.RequestDefinition(
-        parameters = List(spec.ParameterDefinition(content = BaseContent.simple("id"), kind = spec.ParameterDefinition.Kind.Argument))
+        parameters = List(spec.ParameterDefinition(
+          content = BaseContent.simple("id"),
+          kind = spec.ParameterDefinition.Kind.Argument
+        ))
       )
 
     private def _body_request: spec.RequestDefinition =
       spec.RequestDefinition(
         parameters = List(
-          spec.ParameterDefinition(content = BaseContent.simple("body"), kind = spec.ParameterDefinition.Kind.Argument),
-          spec.ParameterDefinition(content = BaseContent.simple("jclFormat"), kind = spec.ParameterDefinition.Kind.Argument)
+          spec.ParameterDefinition(
+            content = BaseContent.simple("body"),
+            kind = spec.ParameterDefinition.Kind.Argument
+          ),
+          spec.ParameterDefinition(
+            content = BaseContent.simple("jclFormat"),
+            kind = spec.ParameterDefinition.Kind.Argument
+          )
         )
       )
 
     private def _job_task_request: spec.RequestDefinition =
       spec.RequestDefinition(
         parameters = List(
-          spec.ParameterDefinition(content = BaseContent.simple("id"), kind = spec.ParameterDefinition.Kind.Argument),
-          spec.ParameterDefinition(content = BaseContent.simple("taskId"), kind = spec.ParameterDefinition.Kind.Argument)
+          spec.ParameterDefinition(
+            content = BaseContent.simple("id"),
+            kind = spec.ParameterDefinition.Kind.Argument
+          ),
+          spec.ParameterDefinition(
+            content = BaseContent.simple("taskId"),
+            kind = spec.ParameterDefinition.Kind.Argument
+          )
         )
       )
 
     private def _job_definition_request: spec.RequestDefinition =
       spec.RequestDefinition(
         parameters = List(
-          spec.ParameterDefinition(content = BaseContent.simple("key"), kind = spec.ParameterDefinition.Kind.Argument),
-          spec.ParameterDefinition(content = BaseContent.simple("body"), kind = spec.ParameterDefinition.Kind.Argument),
-          spec.ParameterDefinition(content = BaseContent.simple("jclFormat"), kind = spec.ParameterDefinition.Kind.Argument),
-          spec.ParameterDefinition(content = BaseContent.simple("status"), kind = spec.ParameterDefinition.Kind.Argument)
+          spec.ParameterDefinition(
+            content = BaseContent.simple("key"),
+            kind = spec.ParameterDefinition.Kind.Argument
+          ),
+          spec.ParameterDefinition(
+            content = BaseContent.simple("body"),
+            kind = spec.ParameterDefinition.Kind.Argument
+          ),
+          spec.ParameterDefinition(
+            content = BaseContent.simple("jclFormat"),
+            kind = spec.ParameterDefinition.Kind.Argument
+          ),
+          spec.ParameterDefinition(
+            content = BaseContent.simple("status"),
+            kind = spec.ParameterDefinition.Kind.Argument
+          )
         )
       )
 
     private def _job_definition_key_request: spec.RequestDefinition =
       spec.RequestDefinition(
-        parameters = List(spec.ParameterDefinition(content = BaseContent.simple("key"), kind = spec.ParameterDefinition.Kind.Argument))
+        parameters = List(spec.ParameterDefinition(
+          content = BaseContent.simple("key"),
+          kind = spec.ParameterDefinition.Kind.Argument
+        ))
       )
   }
 
@@ -255,13 +439,17 @@ object JobControlComponent {
       response: Consequence[OperationResponse]
     )
 
-    def getJobStatus(jobId: JobId)(using org.goldenport.cncf.context.ExecutionContext): Consequence[JobQueryReadModel] =
+    def getJobStatus(jobId: JobId)(using
+        org.goldenport.cncf.context.ExecutionContext
+    ): Consequence[JobQueryReadModel] =
       component.jobEngine.queryVisible(jobId).flatMap {
         case Some(model) => Consequence.success(model)
         case None => Consequence.operationNotFound(s"job:${jobId.value}")
       }
 
-    def loadJobHistory(jobId: JobId)(using org.goldenport.cncf.context.ExecutionContext): Consequence[JobTimelinePage] =
+    def loadJobHistory(jobId: JobId)(using
+        org.goldenport.cncf.context.ExecutionContext
+    ): Consequence[JobTimelinePage] =
       component.jobEngine.queryVisible(jobId).flatMap {
         case Some(_) =>
           component.jobEngine.queryTimeline(jobId) match {
@@ -271,7 +459,9 @@ object JobControlComponent {
         case None => Consequence.operationNotFound(s"job:${jobId.value}")
       }
 
-    def getJobCalltree(jobId: JobId)(using org.goldenport.cncf.context.ExecutionContext): Consequence[Record] =
+    def getJobCalltree(jobId: JobId)(using
+        org.goldenport.cncf.context.ExecutionContext
+    ): Consequence[Record] =
       component.jobEngine.queryVisible(jobId).map {
         case Some(model) =>
           _job_calltree_record(model)
@@ -279,7 +469,9 @@ object JobControlComponent {
           _job_calltree_not_found_record(jobId)
       }
 
-    def getTaskExecutionTree(jobId: JobId)(using org.goldenport.cncf.context.ExecutionContext): Consequence[JobTraceTree] =
+    def getTaskExecutionTree(jobId: JobId)(using
+        org.goldenport.cncf.context.ExecutionContext
+    ): Consequence[JobTraceTree] =
       component.jobEngine.queryVisible(jobId).flatMap {
         case Some(_) =>
           component.jobEngine.queryTaskExecutionTree(jobId) match {
@@ -289,7 +481,9 @@ object JobControlComponent {
         case None => Consequence.operationNotFound(s"job:${jobId.value}")
       }
 
-    def getTaskDetail(jobId: JobId, taskId: TaskId)(using org.goldenport.cncf.context.ExecutionContext): Consequence[JobTaskDetail] =
+    def getTaskDetail(jobId: JobId, taskId: TaskId)(using
+        org.goldenport.cncf.context.ExecutionContext
+    ): Consequence[JobTaskDetail] =
       component.jobEngine.queryVisible(jobId).flatMap {
         case Some(_) =>
           component.jobEngine.queryTaskDetail(jobId, taskId) match {
@@ -299,7 +493,9 @@ object JobControlComponent {
         case None => Consequence.operationNotFound(s"job:${jobId.value}")
       }
 
-    def getJobResult(jobId: JobId)(using org.goldenport.cncf.context.ExecutionContext): Consequence[JobResult] =
+    def getJobResult(jobId: JobId)(using
+        org.goldenport.cncf.context.ExecutionContext
+    ): Consequence[JobResult] =
       component.jobEngine.queryVisible(jobId).flatMap {
         case Some(_) =>
           component.logic.getJobResult(jobId) match {
@@ -309,7 +505,9 @@ object JobControlComponent {
         case None => Consequence.operationNotFound(s"job:${jobId.value}")
       }
 
-    def awaitJobResult(jobId: JobId)(using org.goldenport.cncf.context.ExecutionContext): Consequence[OperationResponse] =
+    def awaitJobResult(jobId: JobId)(using
+        org.goldenport.cncf.context.ExecutionContext
+    ): Consequence[OperationResponse] =
       component.jobEngine.queryVisible(jobId).flatMap {
         case Some(_) => component.logic.awaitJobResult(jobId)
         case None => Consequence.operationNotFound(s"job:${jobId.value}")
@@ -318,7 +516,9 @@ object JobControlComponent {
     def describeJobDefinition(body: String, format: RecordFormat): Consequence[JobBatchDefinition] =
       JobBatchDefinition.parse(body, format)
 
-    def submitJobDefinition(body: String, format: RecordFormat)(using org.goldenport.cncf.context.ExecutionContext): Consequence[JobBatchSubmissionResult] =
+    def submitJobDefinition(body: String, format: RecordFormat)(using
+        org.goldenport.cncf.context.ExecutionContext
+    ): Consequence[JobBatchSubmissionResult] =
       _submit_definition_ref(body) match {
         case Some(ref) =>
           _definition_by_ref(ref).flatMap { definition =>
@@ -327,22 +527,30 @@ object JobControlComponent {
         case None =>
           JobBatchDefinition.parse(body, format).flatMap { batch =>
             if (batch.jobs.size != 1)
-              Consequence.argumentInvalid("submit_job_definition requires exactly one job in jobs[]")
+              Consequence.argumentInvalid(
+                "submit_job_definition requires exactly one job in jobs[]"
+              )
             else
               _submit_batch(batch, None)
           }
       }
 
-    def submitJobBatch(body: String, format: RecordFormat)(using org.goldenport.cncf.context.ExecutionContext): Consequence[JobBatchSubmissionResult] =
+    def submitJobBatch(body: String, format: RecordFormat)(using
+        org.goldenport.cncf.context.ExecutionContext
+    ): Consequence[JobBatchSubmissionResult] =
       JobBatchDefinition.parse(body, format).flatMap(_submit_batch(_, None))
 
-    def compareJobProfile(jobId: JobId)(using org.goldenport.cncf.context.ExecutionContext): Consequence[Record] =
+    def compareJobProfile(jobId: JobId)(using
+        org.goldenport.cncf.context.ExecutionContext
+    ): Consequence[Record] =
       component.jobEngine.queryVisible(jobId).flatMap {
         case Some(model) => Consequence.success(JobProfileComparison.compare(model).toRecord)
         case None => Consequence.operationNotFound(s"job:${jobId.value}")
       }
 
-    def reconstructJobProfile(jobId: JobId)(using org.goldenport.cncf.context.ExecutionContext): Consequence[Record] =
+    def reconstructJobProfile(jobId: JobId)(using
+        org.goldenport.cncf.context.ExecutionContext
+    ): Consequence[Record] =
       component.jobEngine.queryVisible(jobId).flatMap {
         case Some(model) =>
           Consequence.success(JobBatchDefinition(
@@ -363,7 +571,7 @@ object JobControlComponent {
         Consequence.stateConflict(s"JobDefinition already exists: $key")
       else
         _definition_entity(key, body, format, status.getOrElse("draft")).flatMap { entity =>
-          _save_definition(entity).map(_.toRecord())
+          _create_definition(entity).map(_.toRecord())
         }
 
     def updateJobDefinition(
@@ -372,7 +580,8 @@ object JobControlComponent {
       format: RecordFormat,
       status: Option[String]
     )(using org.goldenport.cncf.context.ExecutionContext): Consequence[Record] =
-      _definition_by_ref(key).flatMap { current =>
+      _definition_snapshot_by_ref(key).flatMap { snapshot =>
+        val current = snapshot.entity
         for {
           parsed <- _definition_payload(key, body, format, status)
           updated = JobDefinitionEntity.updated(
@@ -387,20 +596,31 @@ object JobControlComponent {
             targetAction = parsed._1.target.action,
             now = summon[org.goldenport.cncf.context.ExecutionContext].clock.instant()
           )
-          saved <- _save_definition(updated)
+          saved <- _save_definition(
+            updated,
+            EntityMutationExpectation(snapshot.token)
+          )
         } yield saved.toRecord()
       }
 
-    def activateJobDefinition(key: String)(using org.goldenport.cncf.context.ExecutionContext): Consequence[Record] =
+    def activateJobDefinition(key: String)(using
+        org.goldenport.cncf.context.ExecutionContext
+    ): Consequence[Record] =
       _change_definition_status(key, JobDefinitionStatus.Active)
 
-    def retireJobDefinition(key: String)(using org.goldenport.cncf.context.ExecutionContext): Consequence[Record] =
+    def retireJobDefinition(key: String)(using
+        org.goldenport.cncf.context.ExecutionContext
+    ): Consequence[Record] =
       _change_definition_status(key, JobDefinitionStatus.Retired)
 
-    def getJobDefinition(key: String)(using org.goldenport.cncf.context.ExecutionContext): Consequence[Record] =
+    def getJobDefinition(key: String)(using
+        org.goldenport.cncf.context.ExecutionContext
+    ): Consequence[Record] =
       _definition_by_ref(key).map(_.toRecord())
 
-    def searchJobDefinitions()(using org.goldenport.cncf.context.ExecutionContext): Consequence[Record] =
+    def searchJobDefinitions()(using
+        org.goldenport.cncf.context.ExecutionContext
+    ): Consequence[Record] =
       Consequence.success(
         Record.data(
           "jobDefinitions" -> _definitions.values.toVector.sortBy(_.key).map(_.toRecord())
@@ -446,16 +666,18 @@ object JobControlComponent {
 
     private def _run_failure_hook(
       hook: Option[JobFailureHook]
-    )(using org.goldenport.cncf.context.ExecutionContext): Consequence[(Option[JobId], Option[String])] =
+    )(using
+        org.goldenport.cncf.context.ExecutionContext
+    ): Consequence[(Option[JobId], Option[String])] =
       hook match {
         case None => Consequence.success((None, None))
         case Some(h) =>
           _submit_action(
             selector = h.action,
             parameters = h.parameters,
-            requestSummary = Some(s"jcl.failure-hook:${h.action}"),
+            requestsummary = Some(s"jcl.failure-hook:${h.action}"),
             persistence = JobPersistencePolicy.Persistent,
-            declaredProfile = None
+            declaredprofile = None
           ).map { case (jobid, response) =>
             response match {
               case Consequence.Success(_) => (Some(jobid), None)
@@ -473,10 +695,10 @@ object JobControlComponent {
           _submit_action(
             selector = x.action.get,
             parameters = job.parameters,
-            requestSummary = job.submit.requestSummary.orElse(Some(job.name)),
+            requestsummary = job.submit.requestSummary.orElse(Some(job.name)),
             persistence = job.submit.persistence,
-            declaredProfile = job.profile,
-            definitionSnapshot = snapshot,
+            declaredprofile = job.profile,
+            definitionsnapshot = snapshot,
             compensation = job.compensation
           ).map { case (jobid, response) =>
             _Submission(Vector(jobid), response)
@@ -485,9 +707,9 @@ object JobControlComponent {
           _submit_workflow(
             entry = x.workflow.get,
             parameters = job.parameters,
-            requestSummary = job.submit.requestSummary.orElse(Some(job.name)),
-            declaredProfile = job.profile,
-            definitionSnapshot = snapshot
+            requestsummary = job.submit.requestSummary.orElse(Some(job.name)),
+            declaredprofile = job.profile,
+            definitionsnapshot = snapshot
           )
         case _ =>
           Consequence.argumentInvalid("JCL target must contain action or workflow")
@@ -496,12 +718,14 @@ object JobControlComponent {
     private def _submit_action(
       selector: String,
       parameters: Map[String, String],
-      requestSummary: Option[String],
+        requestsummary: Option[String],
       persistence: JobPersistencePolicy,
-      declaredProfile: Option[org.goldenport.cncf.job.JobDeclaredProfile],
-      definitionSnapshot: Option[JobDefinitionSnapshot] = None,
+        declaredprofile: Option[org.goldenport.cncf.job.JobDeclaredProfile],
+        definitionsnapshot: Option[JobDefinitionSnapshot] = None,
       compensation: Option[JobFailureHook] = None
-    )(using ctx: org.goldenport.cncf.context.ExecutionContext): Consequence[(JobId, Consequence[OperationResponse])] =
+    )(using
+        ctx: org.goldenport.cncf.context.ExecutionContext
+    ): Consequence[(JobId, Consequence[OperationResponse])] =
       _resolve_target_action(selector, parameters).flatMap { case (target, action) =>
         _resolve_compensation_task(compensation, parameters).flatMap { comp =>
           val task = ActionTask(
@@ -514,13 +738,16 @@ object JobControlComponent {
           )
           val option = JobSubmitOption(
             persistence = persistence,
-            requestSummary = requestSummary,
-            parameters = parameters ++ Map("jcl.target.action" -> selector) ++ compensation.map(h => "jcl.compensation.action" -> h.action),
+            requestSummary = requestsummary,
+            parameters = parameters ++ Map("jcl.target.action" -> selector) ++ compensation.map(h =>
+              "jcl.compensation.action" -> h.action
+            ),
             executionNotes = Vector("jcl submission"),
-            declaredProfile = declaredProfile,
-            jobDefinitionSnapshot = definitionSnapshot
+            declaredProfile = declaredprofile,
+            jobDefinitionSnapshot = definitionsnapshot
           )
-          _prepare_operation_task(action, task, ctx).flatMap { case (preparedtask, preparedcontext) =>
+          _prepare_operation_task(action, task, ctx).flatMap {
+            case (preparedtask, preparedcontext) =>
             component.jobEngine.submit(List(preparedtask), preparedcontext, option).map { jobid =>
               (jobid, component.logic.awaitJobResult(jobid))
             }
@@ -545,7 +772,8 @@ object JobControlComponent {
       compensation match {
         case None => Consequence.success(None)
         case Some(hook) =>
-          _resolve_target_action(hook.action, parameters ++ hook.parameters).flatMap { case (target, action) =>
+          _resolve_target_action(hook.action, parameters ++ hook.parameters).flatMap {
+            case (target, action) =>
             val task = ActionTask(
               ActionId.create("jcl.compensation", ctx.clock.instant(), ctx.idGeneration),
               action,
@@ -559,9 +787,9 @@ object JobControlComponent {
     private def _submit_workflow(
       entry: org.goldenport.cncf.job.JobWorkflowTarget,
       parameters: Map[String, String],
-      requestSummary: Option[String],
-      declaredProfile: Option[org.goldenport.cncf.job.JobDeclaredProfile],
-      definitionSnapshot: Option[JobDefinitionSnapshot] = None
+        requestsummary: Option[String],
+        declaredprofile: Option[org.goldenport.cncf.job.JobDeclaredProfile],
+        definitionsnapshot: Option[JobDefinitionSnapshot] = None
     )(using org.goldenport.cncf.context.ExecutionContext): Consequence[_Submission] =
       _resolve_workflow_entrypoint(entry).flatMap { endpoint =>
         val event = _workflow_start_event(endpoint, parameters)
@@ -571,7 +799,7 @@ object JobControlComponent {
               if (decision.progressed)
                 decision.relatedJobId match {
                   case Some(jobid) =>
-                    declaredProfile.foreach { profile =>
+                    declaredprofile.foreach { profile =>
                       component.jobEngine.annotateJob(
                         jobid,
                         Map(
@@ -582,7 +810,7 @@ object JobControlComponent {
                       )
                       component.jobEngine.annotateJobProfile(jobid, profile)
                     }
-                    definitionSnapshot.foreach { snapshot =>
+                    definitionsnapshot.foreach { snapshot =>
                       component.jobEngine.annotateJob(
                         jobid,
                         snapshot.toParameters,
@@ -592,11 +820,15 @@ object JobControlComponent {
                     Consequence.success(
                       _Submission(
                         Vector(jobid),
-                        Consequence.success(OperationResponse.Scalar(requestSummary.getOrElse("workflow-started")))
+                        Consequence.success(
+                          OperationResponse.Scalar(requestsummary.getOrElse("workflow-started"))
+                        )
                       )
                     )
                   case None =>
-                    Consequence.stateConflict(s"workflow progressed without managed job: ${entry.definition}/${entry.registration}")
+                    Consequence.stateConflict(
+                      s"workflow progressed without managed job: ${entry.definition}/${entry.registration}"
+                    )
                 }
               else
                 Consequence.success(
@@ -621,7 +853,9 @@ object JobControlComponent {
       else
         JobBatchDefinition.parse(entity.jclSource, _entity_format(entity)).flatMap { batch =>
           if (batch.jobs.size != 1)
-            Consequence.argumentInvalid(s"JobDefinition must contain exactly one job: ${entity.key}")
+            Consequence.argumentInvalid(
+              s"JobDefinition must contain exactly one job: ${entity.key}"
+            )
           else
             _submit_batch(batch, Some(JobDefinitionSnapshot.from(entity)))
         }
@@ -632,7 +866,7 @@ object JobControlComponent {
       format: RecordFormat,
       status: String
     )(using org.goldenport.cncf.context.ExecutionContext): Consequence[JobDefinitionEntity] =
-      _definition_payload(key, body, format, Some(status)).map { case (job, parsedStatus) =>
+      _definition_payload(key, body, format, Some(status)).map { case (job, parsedstatus) =>
         JobDefinitionEntity.create(
           key = key,
           jclSource = body,
@@ -641,7 +875,7 @@ object JobControlComponent {
           flowSource = job.flow.map(_.show),
           eventsSource = job.events.map(_.show),
           onEventSource = job.onEvent.map(_.show),
-          status = parsedStatus.getOrElse(JobDefinitionStatus.Draft),
+          status = parsedstatus.getOrElse(JobDefinitionStatus.Draft),
           targetAction = job.target.action,
           now = summon[org.goldenport.cncf.context.ExecutionContext].clock.instant()
         )
@@ -652,28 +886,85 @@ object JobControlComponent {
       body: String,
       format: RecordFormat,
       status: Option[String]
-    )(using org.goldenport.cncf.context.ExecutionContext): Consequence[(JobDefinition, Option[JobDefinitionStatus])] =
+    )(using
+        org.goldenport.cncf.context.ExecutionContext
+    ): Consequence[(JobDefinition, Option[JobDefinitionStatus])] =
       for {
-        parsedStatus <- status.map(s => JobDefinitionStatus.parse(s).map(Some(_))).getOrElse(Consequence.success(None))
+        parsedstatus <- status.map(s => JobDefinitionStatus.parse(s).map(Some(_))).getOrElse(
+          Consequence.success(None)
+        )
         batch <- JobBatchDefinition.parse(body, format)
-        _ <- if (batch.jobs.size == 1) Consequence.unit else Consequence.argumentInvalid(s"JobDefinition must contain exactly one job: $key")
-      } yield (batch.jobs.head, parsedStatus)
+        _ <- if (batch.jobs.size == 1) Consequence.unit
+        else Consequence.argumentInvalid(s"JobDefinition must contain exactly one job: $key")
+      } yield (batch.jobs.head, parsedstatus)
 
-    private def _save_definition(
+    private def _create_definition(
       entity: JobDefinitionEntity
-    )(using org.goldenport.cncf.context.ExecutionContext): Consequence[JobDefinitionEntity] =
-      EntityStore.standard().save(entity)(using JobDefinitionEntity.entityPersistent, summon[org.goldenport.cncf.context.ExecutionContext]).map { _ =>
+    )(using org.goldenport.cncf.context.ExecutionContext): Consequence[JobDefinitionEntity] = {
+      val store      = EntityStore.standard()
+      val persistent = JobDefinitionEntity.entityPersistent
+      store.create(
+        entity
+      )(using
+        EntityPersistentCreate.fromPersistent(persistent),
+        summon[org.goldenport.cncf.context.ExecutionContext]
+      )
+        .map { _ =>
         _definitions.put(entity.key, entity)
         entity
       }
+    }
+
+    private def _save_definition(
+        entity: JobDefinitionEntity,
+        expectation: EntityMutationExpectation
+    )(using org.goldenport.cncf.context.ExecutionContext): Consequence[JobDefinitionEntity] = {
+      val store      = EntityStore.standard()
+      val persistent = JobDefinitionEntity.entityPersistent
+      store.save(
+        entity,
+        expectation
+      )(using persistent, summon[org.goldenport.cncf.context.ExecutionContext])
+        .map { snapshot =>
+          val saved = snapshot.entity
+          _definitions.put(saved.key, saved)
+          saved
+        }
+    }
 
     private def _change_definition_status(
       key: String,
       status: JobDefinitionStatus
     )(using ctx: org.goldenport.cncf.context.ExecutionContext): Consequence[Record] =
-      _definition_by_ref(key).flatMap { current =>
-        val updated = current.copy(status = status, revision = current.revision + 1, updatedAt = ctx.clock.instant())
-        _save_definition(updated).map(_.toRecord())
+      _definition_snapshot_by_ref(key).flatMap { snapshot =>
+        val current = snapshot.entity
+        val updated = current.copy(
+          status = status,
+          revision = current.revision + 1,
+          updatedAt = ctx.clock.instant()
+        )
+        _save_definition(
+          updated,
+          EntityMutationExpectation(snapshot.token)
+        ).map(_.toRecord())
+      }
+
+    private def _definition_snapshot_by_ref(
+        ref: String
+    )(using
+        org.goldenport.cncf.context.ExecutionContext
+    ): Consequence[EntitySnapshot[JobDefinitionEntity]] = {
+      val id = JobDefinitionEntity.entityId(ref)
+      EntityStore.standard().loadSnapshot[JobDefinitionEntity](id)(
+        using
+        JobDefinitionEntity.entityPersistent,
+        summon[org.goldenport.cncf.context.ExecutionContext]
+      ).flatMap { result =>
+        Consequence.successOrEntityNotFound(result)(id)
+      }.map { snapshot =>
+        _definitions.put(snapshot.entity.key, snapshot.entity)
+        snapshot
+      }
       }
 
     private def _definition_by_ref(
@@ -682,7 +973,10 @@ object JobControlComponent {
       _definitions.get(_normalize_definition_key(ref)) match {
         case Some(entity) => Consequence.success(entity)
         case None =>
-          EntityStore.standard().load[JobDefinitionEntity](JobDefinitionEntity.entityId(ref))(using JobDefinitionEntity.entityPersistent, summon[org.goldenport.cncf.context.ExecutionContext]).flatMap {
+          EntityStore.standard().load[JobDefinitionEntity](JobDefinitionEntity.entityId(ref))(using
+            JobDefinitionEntity.entityPersistent,
+            summon[org.goldenport.cncf.context.ExecutionContext]
+          ).flatMap {
             case Some(entity) =>
               _definitions.put(entity.key, entity)
               Consequence.success(entity)
@@ -709,9 +1003,13 @@ object JobControlComponent {
             case None =>
               subsystem.workflowEngine.findDefinition(entry.definition) match {
                 case None =>
-                  Consequence.argumentInvalid(s"unknown JCL workflow definition: ${entry.definition}")
+                  Consequence.argumentInvalid(
+                    s"unknown JCL workflow definition: ${entry.definition}"
+                  )
                 case Some(_) =>
-                  Consequence.argumentInvalid(s"unknown JCL workflow registration: ${entry.definition}/${entry.registration}")
+                  Consequence.argumentInvalid(
+                    s"unknown JCL workflow registration: ${entry.definition}/${entry.registration}"
+                  )
               }
           }
         case None =>
@@ -742,19 +1040,29 @@ object JobControlComponent {
       selector: String,
       parameters: Map[String, String]
     ): Consequence[(Component, Action)] =
-      component.subsystem.map(_.operationResolver.resolve(selector)).getOrElse(OperationResolver.ResolutionResult.Invalid("subsystem is not available")) match {
-        case OperationResolver.ResolutionResult.Resolved(_, componentName, serviceName, operationName) =>
+      component.subsystem.map(_.operationResolver.resolve(selector)).getOrElse(
+        OperationResolver.ResolutionResult.Invalid("subsystem is not available")
+      ) match {
+        case OperationResolver.ResolutionResult.Resolved(
+              _,
+              componentName,
+              serviceName,
+              operationName
+            ) =>
           component.subsystem.flatMap(_.findComponent(componentName)) match {
             case Some(target) =>
               val request = Request.of(
                 component = componentName,
                 service = serviceName,
                 operation = operationName,
-                arguments = parameters.toVector.sortBy(_._1).map { case (k, v) => org.goldenport.protocol.Argument(k, v) }.toList
+                arguments = parameters.toVector.sortBy(_._1).map { case (k, v) =>
+                  org.goldenport.protocol.Argument(k, v)
+                }.toList
               )
               target.logic.makeOperationRequest(request).flatMap {
                 case action: Action => Consequence.success((target, action))
-                case _: OperationRequest => Consequence.argumentInvalid(s"JCL target is not action: $selector")
+                case _: OperationRequest =>
+                  Consequence.argumentInvalid(s"JCL target is not action: $selector")
               }
             case None =>
               Consequence.operationNotFound(s"JCL target component: $componentName")
@@ -762,20 +1070,28 @@ object JobControlComponent {
         case OperationResolver.ResolutionResult.NotFound(_, s) =>
           Consequence.operationNotFound(s"JCL target action: $s")
         case OperationResolver.ResolutionResult.Ambiguous(s, candidates) =>
-          Consequence.argumentInvalid(s"ambiguous JCL target action: $s => ${candidates.mkString(",")}")
+          Consequence.argumentInvalid(
+            s"ambiguous JCL target action: $s => ${candidates.mkString(",")}"
+          )
         case OperationResolver.ResolutionResult.Invalid(message) =>
           Consequence.argumentInvalid(message)
       }
   }
 
   private final class DefaultJobAdminService(component: Component) extends JobAdminService {
-    def cancelJob(jobId: JobId)(using org.goldenport.cncf.context.ExecutionContext): Consequence[org.goldenport.cncf.job.JobControlResponse] =
+    def cancelJob(jobId: JobId)(using
+        org.goldenport.cncf.context.ExecutionContext
+    ): Consequence[org.goldenport.cncf.job.JobControlResponse] =
       component.logic.controlJob(jobId, JobControlRequest(JobControlCommand.Cancel))
 
-    def suspendJob(jobId: JobId)(using org.goldenport.cncf.context.ExecutionContext): Consequence[org.goldenport.cncf.job.JobControlResponse] =
+    def suspendJob(jobId: JobId)(using
+        org.goldenport.cncf.context.ExecutionContext
+    ): Consequence[org.goldenport.cncf.job.JobControlResponse] =
       component.logic.controlJob(jobId, JobControlRequest(JobControlCommand.Suspend))
 
-    def resumeJob(jobId: JobId)(using org.goldenport.cncf.context.ExecutionContext): Consequence[org.goldenport.cncf.job.JobControlResponse] =
+    def resumeJob(jobId: JobId)(using
+        org.goldenport.cncf.context.ExecutionContext
+    ): Consequence[org.goldenport.cncf.job.JobControlResponse] =
       component.logic.controlJob(jobId, JobControlRequest(JobControlCommand.Resume))
 
     def loadJobEvents(jobId: JobId): Consequence[Vector[Record]] =
@@ -1312,8 +1628,11 @@ object JobControlComponent {
     def execute(): Consequence[OperationResponse] =
       core.component match {
         case Some(component) =>
-          component.port.get[JobService].map(_.getJobStatus(jobId)(using core.executionContext)) match {
-            case Some(result) => result.map(model => OperationResponse.RecordResponse(_job_record(model)))
+          component.port.get[JobService].map(
+            _.getJobStatus(jobId)(using core.executionContext)
+          ) match {
+            case Some(result) =>
+              result.map(model => OperationResponse.RecordResponse(_job_record(model)))
             case None => Consequence.serviceUnavailable("job service is not available")
           }
         case None =>
@@ -1328,8 +1647,11 @@ object JobControlComponent {
     def execute(): Consequence[OperationResponse] =
       core.component match {
         case Some(component) =>
-          component.port.get[JobService].map(_.loadJobHistory(jobId)(using core.executionContext)) match {
-            case Some(result) => result.map(page => OperationResponse.RecordResponse(_timeline_record(jobId, page)))
+          component.port.get[JobService].map(
+            _.loadJobHistory(jobId)(using core.executionContext)
+          ) match {
+            case Some(result) =>
+              result.map(page => OperationResponse.RecordResponse(_timeline_record(jobId, page)))
             case None => Consequence.serviceUnavailable("job service is not available")
           }
         case None =>
@@ -1344,7 +1666,9 @@ object JobControlComponent {
     def execute(): Consequence[OperationResponse] =
       core.component match {
         case Some(component) =>
-          component.port.get[JobService].map(_.getJobCalltree(jobId)(using core.executionContext)) match {
+          component.port.get[JobService].map(
+            _.getJobCalltree(jobId)(using core.executionContext)
+          ) match {
             case Some(result) => result.map(OperationResponse.RecordResponse.apply)
             case None => Consequence.serviceUnavailable("job service is not available")
           }
@@ -1360,8 +1684,10 @@ object JobControlComponent {
     def execute(): Consequence[OperationResponse] =
       core.component match {
         case Some(component) =>
-          component.port.get[JobService].map(_.getTaskExecutionTree(jobId)(using core.executionContext)) match {
-            case Some(result) => result.map(tree => OperationResponse.RecordResponse(_task_tree_record(tree)))
+          component.port.get[JobService].map(_.getTaskExecutionTree(jobId)(using
+          core.executionContext)) match {
+            case Some(result) =>
+              result.map(tree => OperationResponse.RecordResponse(_task_tree_record(tree)))
             case None => Consequence.serviceUnavailable("job service is not available")
           }
         case None =>
@@ -1377,8 +1703,10 @@ object JobControlComponent {
     def execute(): Consequence[OperationResponse] =
       core.component match {
         case Some(component) =>
-          component.port.get[JobService].map(_.getTaskDetail(jobId, taskId)(using core.executionContext)) match {
-            case Some(result) => result.map(detail => OperationResponse.RecordResponse(_task_detail_record(detail)))
+          component.port.get[JobService].map(_.getTaskDetail(jobId, taskId)(using
+          core.executionContext)) match {
+            case Some(result) =>
+              result.map(detail => OperationResponse.RecordResponse(_task_detail_record(detail)))
             case None => Consequence.serviceUnavailable("job service is not available")
           }
         case None =>
@@ -1401,7 +1729,9 @@ object JobControlComponent {
     def execute(): Consequence[OperationResponse] =
       core.component match {
         case Some(component) =>
-          component.port.get[JobService].map(_.awaitJobResult(jobId)(using core.executionContext)) match {
+          component.port.get[JobService].map(
+            _.awaitJobResult(jobId)(using core.executionContext)
+          ) match {
             case Some(result) => result
             case None => Consequence.serviceUnavailable("job service is not available")
           }
@@ -1419,7 +1749,8 @@ object JobControlComponent {
       core.component match {
         case Some(component) =>
           component.port.get[JobService].map(_.describeJobDefinition(body, format)) match {
-            case Some(result) => result.map(model => OperationResponse.RecordResponse(model.toRecord))
+            case Some(result) =>
+              result.map(model => OperationResponse.RecordResponse(model.toRecord))
             case None => Consequence.serviceUnavailable("job service is not available")
           }
         case None =>
@@ -1433,7 +1764,10 @@ object JobControlComponent {
     format: RecordFormat
   ) extends ProcedureActionCall {
     def execute(): Consequence[OperationResponse] =
-      _jcl_submission_response(core, _.submitJobDefinition(body, format)(using core.executionContext))
+      _jcl_submission_response(
+        core,
+        _.submitJobDefinition(body, format)(using core.executionContext)
+      )
   }
 
   private final case class SubmitJobBatchCall(
@@ -1469,7 +1803,10 @@ object JobControlComponent {
     status: Option[String]
   ) extends ProcedureActionCall {
     def execute(): Consequence[OperationResponse] =
-      _job_profile_response(core, _.createJobDefinition(key, body, format, status)(using core.executionContext))
+      _job_profile_response(
+        core,
+        _.createJobDefinition(key, body, format, status)(using core.executionContext)
+      )
   }
 
   private final case class UpdateJobDefinitionCall(
@@ -1480,7 +1817,10 @@ object JobControlComponent {
     status: Option[String]
   ) extends ProcedureActionCall {
     def execute(): Consequence[OperationResponse] =
-      _job_profile_response(core, _.updateJobDefinition(key, body, format, status)(using core.executionContext))
+      _job_profile_response(
+        core,
+        _.updateJobDefinition(key, body, format, status)(using core.executionContext)
+      )
   }
 
   private final case class ActivateJobDefinitionCall(
@@ -1544,7 +1884,7 @@ object JobControlComponent {
 
   private def _job_result_response(
     core: ActionCall.Core,
-    jobId: JobId,
+      jobid: JobId,
     f: JobService => Consequence[JobResult]
   ): Consequence[OperationResponse] =
     core.component match {
@@ -1578,7 +1918,8 @@ object JobControlComponent {
                 case JobControlCommand.Cancel => jobAdmin.cancelJob(jobId)
                 case JobControlCommand.Suspend => jobAdmin.suspendJob(jobId)
                 case JobControlCommand.Resume => jobAdmin.resumeJob(jobId)
-                case JobControlCommand.Retry => component.logic.controlJob(jobId, JobControlRequest(command))
+                case JobControlCommand.Retry =>
+                  component.logic.controlJob(jobId, JobControlRequest(command))
               }
               response.map { response =>
                 OperationResponse.RecordResponse(
@@ -1643,7 +1984,9 @@ object JobControlComponent {
   private def _body(req: Request): Consequence[String] =
     req.arguments.find(_.name == "body").map(_.value.toString).filter(_.trim.nonEmpty)
       .orElse(req.properties.find(_.name == "body").map(_.value.toString).filter(_.trim.nonEmpty))
-      .orElse(req.properties.find(_.name == "http.body").map(_.value.toString).filter(_.trim.nonEmpty)) match {
+      .orElse(
+        req.properties.find(_.name == "http.body").map(_.value.toString).filter(_.trim.nonEmpty)
+      ) match {
       case Some(body) => Consequence.success(body)
       case None => Consequence.argumentMissing("body")
     }
@@ -1666,7 +2009,9 @@ object JobControlComponent {
     )
 
   private def _entity_format(entity: JobDefinitionEntity): RecordFormat =
-    JobBatchDefinition.parseFormat(entity.jclFormat).toOption.getOrElse(JobBatchDefinition.DefaultFormat)
+    JobBatchDefinition.parseFormat(entity.jclFormat).toOption.getOrElse(
+      JobBatchDefinition.DefaultFormat
+    )
 
   private def _string_argument(req: Request, name: String): Option[String] =
     req.arguments.find(_.name == name).map(_.value.toString).filter(_.trim.nonEmpty)
@@ -1675,10 +2020,10 @@ object JobControlComponent {
 
   private def _job_matches(
     record: org.goldenport.cncf.event.EventRecord,
-    jobId: JobId
+      jobid: JobId
   ): Boolean =
-    record.payload.get("job-id").exists(_.toString == jobId.value) ||
-      record.attributes.get("job-id").exists(_ == jobId.value)
+    record.payload.get("job-id").exists(_.toString == jobid.value) ||
+      record.attributes.get("job-id").exists(_ == jobid.value)
 
   private def _job_record(model: JobQueryReadModel): Record =
     Record.data(
@@ -1756,11 +2101,11 @@ object JobControlComponent {
     )
 
   private def _timeline_record(
-    jobId: JobId,
+      jobid: JobId,
     page: JobTimelinePage
   ): Record =
     Record.data(
-      "job-id" -> jobId.value,
+      "job-id"        -> jobid.value,
       "offset" -> page.offset,
       "limit" -> page.limit,
       "total-count" -> page.totalCount,
@@ -1782,10 +2127,10 @@ object JobControlComponent {
     )
 
   private def _job_calltree_not_found_record(
-    jobId: JobId
+      jobid: JobId
   ): Record =
     Record.data(
-      "job-id" -> jobId.value,
+      "job-id"               -> jobid.value,
       "calltree-saved" -> false,
       "calltree-drop-reason" -> "job_not_found",
       "calltree" -> Record.empty
