@@ -119,6 +119,13 @@ regular expressions, functions, scripts, SQL, and general query expressions.
 The expectation MUST be conjunction-only. An empty expected-field set MAY use
 the token as its complete guard.
 
+The normalized provider plan MUST contain at most 32 exact expected fields.
+Every canonical field identity MUST be non-blank, free of control characters,
+and no longer than 128 characters. Text, admitted identifier, and admitted
+Entity-id expectation values MUST be no longer than 4096 characters in their
+canonical encoded form. Values exceeding these bounds MUST fail before provider
+mutation.
+
 ## Successor Intent (R8)
 
 A conditional transition MUST use exactly one closed successor intent:
@@ -192,16 +199,55 @@ operation time when protected DSL usage is dynamic.
 
 ## Provider Plan Boundary (R12)
 
-The normalized provider plan MAY contain only bounded record-level mutation
-data, safe logical correlation metadata, provider-neutral collection and entry
-identities, the expected token for a bound successor, and bounded
-framework-owned side-record save/delete effects required by the canonical
-Entity storage shape.
+The normalized provider plan MAY contain only explicit framework-owned
+component ownership, bounded record-level mutation data, safe logical
+correlation metadata, provider-neutral collection and entry identities, the
+expected token for a bound successor, and bounded framework-owned side-record
+save/delete effects required by the canonical Entity storage shape.
+
+An admitted plan MUST carry a non-optional expected root revision and the exact
+next revision. Its root patch MUST be non-empty and MUST NOT contain the managed
+revision field. Expected fields MUST NOT contain the managed revision field.
+The plan MUST contain at most 64 side-record effects. Each correlation value
+MUST be non-blank, free of control characters, and no longer than 256
+characters.
+
+Each provider-bound record MUST contain at most 256 fields. Each ordered
+provider-bound sequence MUST contain at most 1024 values. Nested records and
+sequences MUST be at most 16 levels deep.
+
+Sequence admission MUST inspect at most the first 1025 values to distinguish
+an admitted sequence from an over-limit sequence. It MUST NOT traverse an
+entire lazy or otherwise unbounded sequence before returning the deterministic
+limit failure.
+
+Provider-bound record values MUST be normalized strings, booleans, numeric
+storage scalars, `Instant`, nested `Record`, or ordered `Seq` values. Raw null,
+unordered collections, arbitrary objects, domain values, persistence
+typeclasses, and callbacks MUST fail before provider execution. The canonical
+`SetNull` marker MAY occur only in the root patch.
+
+The guarded root, successor, and side-record primary targets MUST be pairwise
+distinct. Side-record targets MUST be unique. A create successor record MUST
+carry the canonical initial revision. A bind successor MUST carry the revision
+observed and authorized by the upper Entity boundary.
 
 Every side-record effect MUST resolve to the same datastore provider instance
 and native transaction domain as the guarded root. Side-record effects MUST be
 closed provider-neutral values; the plan MUST NOT contain effect callbacks or
 pre-executed datastore results.
+
+Root and successor collections MUST be Entity collections whose typed
+`DataStoreComponentOwner` values are equal. The trusted Entity normalization
+boundary MUST supply each owner. Neither plan construction nor
+`DataStoreSpace` MAY infer component ownership from `EntityId.major`,
+`EntityId.minor`, collection naming, or another parsed identifier.
+`DataStoreSpace` MUST resolve the root, successor, and every side-record
+collection before provider invocation. All collections MUST resolve to the
+same `DataStore` instance, which is the transaction-domain owner for this
+capability. A provider that internally spans more than one native transaction
+domain MUST reject the plan or expose those domains as distinct datastore
+instances.
 
 It MUST NOT contain domain objects, persistence typeclasses, authorization
 policy, EntitySpace values, Working Set values, SQL, provider expressions,

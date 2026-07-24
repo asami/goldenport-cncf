@@ -105,7 +105,7 @@ They are recorded together in strategy completed history rather than leaving
 | EC-01 | Normative contract | Design/spec fix token, conflict, transition, atomicity, provider, and result semantics. | done |
 | EC-02 | Concurrency model and storage shape | Managed revision metadata and typed concurrency values have deterministic persistence and migration behavior. | done |
 | EC-03 | Version-aware mutation | Required Entity/Aggregate mutation paths compare the caller token atomically and return structured stale conflicts. | done |
-| EC-04 | Atomic datastore capability | A closed provider-neutral plan executes guard, successor, root update, and token advance in one transaction without fallback. | planned |
+| EC-04 | Atomic datastore capability | A closed provider-neutral plan executes guard, successor, root update, and token advance in one transaction without fallback. | done |
 | EC-05 | EntityStore, UnitOfWork, and DSL | Protected typed conditional transition preserves authorization, lifecycle, transaction, and normal effect boundaries. | planned |
 | EC-06 | Coherence and diagnostics | EntitySpace, Working Set, View, audit, CallTree, metrics, and structured failures reflect only authoritative outcomes. | planned |
 | EC-07 | Provider and concurrency evidence | In-memory, SQLite, and one shared profile prove one winner, rollback safety, restart visibility, and provider parity. | planned |
@@ -232,4 +232,46 @@ unversioned framework operations require System admission.
 
 EC-03 is complete. The focused 458-test matrix, full 2380-test CNCF suite,
 whole-file naming and executable-specification audit, review-fix, and clean
-re-review all passed. EC-04 is the next planned implementation slice.
+re-review all passed.
+
+EC-04 planning fixes the provider-level boundary before implementation:
+`DataStoreConditionalTransitionPlan`, a supplementary provider capability,
+strict same-component/same-provider admission in `DataStoreSpace`, pure staged
+in-memory publication, deterministic rollback checkpoints, and bounded
+ScalaCheck concurrency evidence. Typed Entity/UnitOfWork/DSL integration
+remains EC-05; coherence and diagnostics remain EC-06; SQLite/MySQL provider
+evidence remains EC-07.
+
+EC-04 implementation now provides the closed bounded datastore plan/result,
+explicit capability routing without CRUD fallback, and the deterministic
+in-memory reference provider. The read-only review found four boundary debts:
+component admission derived from Entity ID text, insufficient provider-record
+closure, a concurrency specification without a ready barrier, and constant
+naming debt. REVIEW_FIX replaces the textual ownership inference with
+`DataStoreComponentOwner`, validates every provider-bound record against a
+closed bounded value algebra, proves simultaneous race readiness, and corrects
+the constant names. Focused validation passes 22 tests, including exact safety
+limits, malformed provider records, explicit cross-owner rejection,
+create/bind result distinctions, four rollback checkpoints, ordinary-read
+isolation, and generated 2-to-12-caller one-winner races.
+
+The first clean re-review additionally found that provider-side defensive
+validation did not independently require Entity collections for the root and
+successor, plus three local naming debts. REVIEW_FIX now applies the same
+Entity-collection admission at construction, `DataStoreSpace`, and provider
+boundaries, proves through public construction paths that invalid plans cannot
+reach the provider, and removes the naming debts. A clean rebuild and focused
+validation pass all 22 tests, independent `Test/compile` passes, and
+whole-file naming/executable-specification scans plus `git diff --check` pass.
+
+The next clean re-review found that sequence admission used full `Seq.size`
+traversal, the structural limits lacked complete executable boundary evidence,
+and the provider-result spec checked only the `Transitioned` subtype. REVIEW_FIX
+now probes at most 1025 sequence values, tests exact and first-over record,
+sequence, and nesting limits plus bounded lazy evaluation, and proves returned
+create/bind records equal committed authoritative records. The focused
+four-suite matrix again passes all 22 tests and `Test/compile` passes. EC-04
+then passed a clean read-only re-review with no actionable findings. The full
+CNCF suite completed 341 suites with all 2397 executed tests successful,
+followed by a clean `git diff --check`. EC-04 is complete; EC-05 is the next
+Phase 49 slice.

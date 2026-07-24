@@ -280,27 +280,110 @@ finding in the EC-03A scope.
 ## EC-04: Atomic Datastore Capability
 
 Stage Status:
-- Current status: PLANNED
+- Current status: DONE
 - Owner: CNCF datastore maintainers
 - Update rule: Mark IN_PROGRESS only after EC-03 closes. Mark DONE only when
   the closed record-level plan/result and deterministic unsupported behavior
   are implemented without a load-then-save fallback.
 
-- [ ] Add a supplementary atomic conditional-mutation datastore capability.
-- [ ] Add bounded root guard, successor mutation, root change, and provider
+- [x] Add a supplementary atomic conditional-mutation datastore capability.
+- [x] Add bounded root guard, successor mutation, root change, and provider
   result models.
-- [ ] Require all collections to belong to one component and resolve to one
-  transaction domain.
-- [ ] Reject reserved-field mutation, duplicate expected fields, unsupported
+- [x] Require root and successor collections to belong to one component, and
+  require every affected collection to resolve to one transaction domain.
+- [x] Reject reserved-field mutation, duplicate expected fields, unsupported
   values, missing token, and empty effective root mutation.
-- [ ] Return authoritative root/successor records from the provider result.
-- [ ] Roll back successor and root changes together on every failure.
-- [ ] Reject unsupported providers deterministically.
-- [ ] Implement deterministic in-memory reference behavior.
-- [ ] Add property-based one-winner and rollback specifications.
+- [x] Return authoritative root/successor records from the provider result.
+- [x] Roll back successor and root changes together on every failure.
+- [x] Reject unsupported providers deterministically.
+- [x] Implement deterministic in-memory reference behavior.
+- [x] Add property-based one-winner and rollback specifications.
 
 Evidence:
-- Pending.
+- EC-04 implementation plan:
+  - `docs/notes/entity-conflict-conditional-transition-implementation.md`,
+    section `EC-04 Atomic Datastore Capability Plan`.
+- The plan fixes:
+  - one closed provider-level plan/result and exact-value algebra;
+  - constructor and provider-side defensive validation;
+  - same Entity component and same `DataStore` transaction-domain owner;
+  - no CRUD fallback for unsupported providers;
+  - one immutable staged-state publish in the in-memory reference provider;
+  - deterministic rollback checkpoints; and
+  - ScalaCheck-generated 2-to-12-caller one-winner evidence.
+- EC-04 implementation:
+  - `EntityConditionalTransition.scala` defines the closed exact-value,
+    root/successor/correlation, plan/result, checkpoint, and supplementary
+    provider capability models;
+  - `DataStoreComponentOwner` carries explicit typed component ownership, so
+    admission does not infer ownership from Entity ID or collection-name text;
+  - root changes, successor records, and side-effect save records are
+    defensively checked against one closed bounded provider value algebra;
+  - `DataStoreSpace.conditionalTransition` rejects non-Entity,
+    cross-component, cross-provider, and unsupported plans before provider
+    invocation and has no CRUD fallback;
+  - the in-memory provider verifies the authoritative root, prepares
+    successor/root/side-record replacements in immutable maps, and performs
+    one top-level state replacement only after all checkpoints succeed;
+  - create collision, missing bind, changed bind revision, incompatible stored
+    value, and provider/admission failures remain structured failures rather
+    than `NotMatched`; and
+  - ordinary CRUD remains serialized with the datastore-owned atomic boundary.
+- EC-04 executable evidence:
+  - `DataStoreConditionalTransitionSpec` covers the closed exact-value algebra,
+    exact declared limits, malformed and open provider-record rejection,
+    explicit component-owner and same-provider admission, unsupported
+    providers, and successful `DataStoreSpace` routing;
+  - `InMemoryConditionalTransitionSpec` covers create and bind success,
+    mismatch, successor failure distinctions, all four rollback checkpoints,
+    publish-before-visibility, and ready/start-barrier-backed generated
+    2-to-12-caller races;
+  - focused validation passed 22 tests across the two EC-04 specs plus
+    `EntityVersionedMutationDataStoreSpec` and
+    `ContentBodyVersionedMutationSpec`;
+  - `sbt --batch Test/compile` passed; and
+  - `git diff --check` passed.
+- EC-04 REVIEW found component-owner inference, provider-record closure,
+  concurrency-barrier, and constant-naming debts. REVIEW_FIX resolves all four
+  debts.
+- The first clean re-review then found that provider-side defensive validation
+  did not independently require Entity collections for the root and successor,
+  plus three local naming debts. REVIEW_FIX:
+  - applies one shared Entity-collection admission to construction,
+    `DataStoreSpace`, and provider boundaries;
+  - proves through public construction paths that invalid root, successor,
+    cross-owner, and null-route inputs do not invoke the provider;
+  - removes the remaining local naming debts; and
+  - confirms the model's private constructors and `copy` methods do not expose
+    a public validation bypass.
+- Post-fix evidence:
+  - a clean rebuild and the focused four-suite matrix passed all 22 tests;
+  - an independent `sbt --batch Test/compile` passed;
+  - whole-file naming and executable-specification scans passed; and
+  - `git diff --check` passed.
+- The next clean re-review found:
+  - full traversal of lazy or unbounded sequences before applying the
+    1024-value limit;
+  - missing exact/first-over executable evidence for record-field, sequence,
+    and nesting limits; and
+  - result checks that proved only the `Transitioned` subtype rather than the
+    authoritative returned payloads.
+- REVIEW_FIX:
+  - materializes only `MAX_COLLECTION_VALUES + 1` values before deciding
+    sequence admission;
+  - exercises exact and first-over structural limits and proves lazy input
+    evaluation stops at 1025 values;
+  - proves create and bind results contain the records committed by the
+    provider; and
+  - passes the focused four-suite 22-test matrix and `Test/compile`.
+- The separate clean RE_REVIEW_COMMIT review found no actionable findings.
+- Release validation completed 341 suites with all 2397 executed tests
+  successful, 0 failed, and 0 aborted. The suite retained 2 canceled,
+  1 ignored, and 59 pending specifications.
+- `git diff --check` passed after the release-status update.
+- EC-04 is complete. EC-05 is the next Phase 49 implementation slice.
+- EC-05 typed Entity/UnitOfWork/DSL work, EC-06 coherence/diagnostics, and
+  EC-07 SQLite/MySQL provider evidence remain outside this slice.
 
 ## EC-05: EntityStore, UnitOfWork, and Protected DSL
 

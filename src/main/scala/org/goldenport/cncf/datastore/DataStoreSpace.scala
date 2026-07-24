@@ -17,7 +17,6 @@ import org.goldenport.record.io.RecordEncoder
  * @since   Feb. 25, 2026
  *  version Apr. 15, 2026
  *  version May. 11, 2026
- *  version Jul. 12, 2026
  * @version Jul. 24, 2026
  * @author  ASAMI, Tomoharu
  */
@@ -156,6 +155,55 @@ class DataStoreSpace {
       } yield result
     }
 
+  def conditionalTransition(
+    plan: DataStoreConditionalTransitionPlan
+  )(using
+    ctx: ExecutionContext
+  ): Consequence[DataStoreConditionalTransitionResult] =
+    EntityConditionalTransitionSupport.validate(plan).flatMap { admitted =>
+      _with_calltree_c(
+        "space:datastore:entity-conditional-transition",
+        _datastore_space_attributes(
+          "entity-conditional-transition",
+          admitted.root.collection
+        ),
+        "space"
+      ) {
+        for {
+          _ <- _ensure_conditional_component(admitted)
+          providers <- _resolve_conditional_providers(admitted)
+          rootprovider <- providers.headOption
+            .map(Consequence.success)
+            .getOrElse(
+              Consequence.operationInvalid(
+                "entity-conditional-transition",
+                Vector(
+                  Descriptor.Facet.Reason("missing-provider-domain"),
+                  Descriptor.Facet.Capability(
+                    "datastore.entity-conditional-transition"
+                  )
+                )
+              )
+            )
+          _ <- _ensure_conditional_provider_domain(rootprovider, providers)
+          result <- rootprovider match {
+            case provider: EntityConditionalTransitionDataStore =>
+              provider.conditionalTransition(admitted)
+            case _ =>
+              Consequence.operationInvalid(
+                "entity-conditional-transition",
+                Vector(
+                  Descriptor.Facet.Reason("unsupported-capability"),
+                  Descriptor.Facet.Capability(
+                    "datastore.entity-conditional-transition"
+                  )
+                )
+              )
+          }
+        } yield result
+      }
+    }
+
   def inject(
     cid: DataStore.CollectionId,
     record: Record
@@ -227,13 +275,13 @@ class DataStoreSpace {
   private def _with_calltree_c[A](
     label: String,
     attributes: Map[String, String],
-    calltreeKind: String = "space"
+    calltreekind: String = "space"
   )(
     body: => Consequence[A]
   )(using ctx: ExecutionContext): Consequence[A] = {
     val calltree = ctx.observability.callTreeContext
     if (calltree.isEnabled) {
-      calltree.enter(label, attributes ++ Map("calltree_kind" -> calltreeKind))
+      calltree.enter(label, attributes ++ Map("calltree_kind" -> calltreekind))
       try {
         val result = body
         result match {
@@ -293,6 +341,64 @@ class DataStoreSpace {
           }
         }
       }
+
+  private def _ensure_conditional_component(
+    plan: DataStoreConditionalTransitionPlan
+  ): Consequence[Unit] =
+    (plan.root.collection, plan.successor.collection) match {
+      case (
+          DataStore.CollectionId.EntityStore(_),
+          DataStore.CollectionId.EntityStore(_)
+          ) if plan.root.componentOwner == plan.successor.componentOwner =>
+        Consequence.unit
+      case (
+          DataStore.CollectionId.EntityStore(_),
+          DataStore.CollectionId.EntityStore(_)
+          ) =>
+        _conditional_admission_failure("component-owner-mismatch")
+      case _ =>
+        _conditional_admission_failure("entity-collection-required")
+    }
+
+  private def _resolve_conditional_providers(
+    plan: DataStoreConditionalTransitionPlan
+  ): Consequence[Vector[DataStore]] = {
+    val collections =
+      plan.sideEffects
+        .map(_.collection)
+        .appended(plan.successor.collection)
+        .prepended(plan.root.collection)
+        .distinct
+    collections.foldLeft(Consequence.success(Vector.empty[DataStore])) {
+      (result, collection) =>
+        for {
+          providers <- result
+          provider <- dataStore(collection)
+        } yield providers :+ provider
+    }
+  }
+
+  private def _ensure_conditional_provider_domain(
+    rootprovider: DataStore,
+    providers: Vector[DataStore]
+  ): Consequence[Unit] =
+    if (providers.forall(_ eq rootprovider))
+      Consequence.unit
+    else
+      _conditional_admission_failure("provider-domain-mismatch")
+
+  private def _conditional_admission_failure(
+    reason: String
+  ): Consequence[Unit] =
+    Consequence.operationInvalid(
+      "entity-conditional-transition",
+      Vector(
+        Descriptor.Facet.Reason(reason),
+        Descriptor.Facet.Capability(
+          "datastore.entity-conditional-transition"
+        )
+      )
+    )
 
   private def _entry_id(
     record: Record,

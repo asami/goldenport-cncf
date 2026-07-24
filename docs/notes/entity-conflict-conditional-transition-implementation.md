@@ -490,6 +490,207 @@ A stale ordinary mutation returns a structured conflict `Conclusion`. It should
 use existing conflict taxonomy and structured expected/actual facets where
 available. It must not use application-owned `Status.detailCodes`.
 
+## EC-04 Atomic Datastore Capability Plan
+
+status = accepted for implementation
+planned_at = 2026-07-24
+phase_stage = EC-04
+
+EC-04 implements only the provider-neutral record boundary and deterministic
+in-memory reference behavior. Component-facing typed transition definitions,
+EntityStore hydration, UnitOfWork operations, authorization, and protected DSL
+belong to EC-05 and EC-06. SQLite and MySQL implementations belong to EC-07.
+
+### Model and capability
+
+Add `EntityConditionalTransition.scala` under the datastore package with these
+closed model trunks:
+
+- `DataStoreConditionalValue` for text, boolean, integral, canonical decimal,
+  instant, admitted identifier, and admitted Entity-id values;
+- `DataStoreComponentOwner` for explicit component ownership supplied by the
+  trusted Entity normalization boundary;
+- `DataStoreConditionalExpectedField` for one canonical storage field and one
+  exact expected value;
+- `DataStoreConditionalRoot` for root collection/id, revision field, required
+  expected revision, unique exact fields, non-empty patch, and next revision;
+- `DataStoreConditionalSuccessor` with only `Create` and `Bind`;
+- `DataStoreConditionalTransitionPlan` for root, successor, storage-shape side
+  effects, and closed bounded correlation metadata;
+- `DataStoreConditionalTransitionResult` with only `Transitioned` and
+  `NotMatched`; and
+- supplementary mix-in capability `EntityConditionalTransitionDataStore`.
+
+The plan constructor is validated. Missing expected revision is rejected by
+the constructor rather than represented inside an admitted plan. Provider
+implementations defensively validate every admitted plan again before reading
+or mutating storage.
+
+The provider model contains only collection/entry identities, exact storage
+values, normalized records, revision state, closed side effects, and bounded
+logical correlation data. It contains no Entity/domain object, persistence
+codec, authorization policy, callback, SQL, provider transaction, EntitySpace,
+Working Set, or caller UnitOfWork.
+
+### Admission and boundedness
+
+The first implementation fixes explicit safety limits and tests their boundary
+values:
+
+- at most 32 exact expected fields;
+- at most 64 framework side-record effects;
+- at most 128 characters for a canonical field identity;
+- at most 4096 characters for a canonical encoded text, identifier, or
+  Entity-id expectation value; and
+- at most 256 characters for each correlation value;
+- at most 256 fields in each provider-bound record;
+- at most 1024 values in each ordered provider-bound sequence; and
+- at most 16 nested record/sequence levels.
+
+The sequence validator materializes at most `MAX_COLLECTION_VALUES + 1`
+elements. The bounded prefix both supplies the values for recursive validation
+and detects an over-limit lazy sequence without a complete traversal.
+
+Names must be non-blank and free of control characters. Expected field names
+must be unique and cannot be the revision field. Root changes must be
+non-empty and cannot contain the revision field. Root, successor, and
+side-record primary targets must be distinct, and side-record targets must be
+unique.
+
+Root changes, successor create records, and side-record saves pass the same
+closed-record validator. It admits normalized string, boolean, numeric,
+`Instant`, nested `Record`, and ordered `Seq` storage values. It rejects null
+records/values, unordered collections, arbitrary objects, domain values,
+callbacks, and `SetNull` outside the root patch.
+
+`Create` carries a normalized successor record with its canonical initial
+revision. `Bind` carries successor collection/id, revision field, and the
+expected revision admitted by the upper Entity boundary. A create collision is
+a structured conflict. A missing bound successor is not found. A changed bound
+successor revision is a structured conflict without a successor payload.
+
+### DataStoreSpace boundary
+
+Add `DataStoreSpace.conditionalTransition(plan)`.
+
+Before invoking a provider, `DataStoreSpace`:
+
+1. requires root and successor collections to be Entity collections;
+2. requires their typed `DataStoreComponentOwner` values to match without
+   parsing `EntityId.major`, `EntityId.minor`, or collection names;
+3. resolves root, successor, and every side-record collection;
+4. requires every collection to resolve to the same `DataStore` instance; and
+5. requires that instance to implement
+   `EntityConditionalTransitionDataStore`.
+
+One `DataStore` instance is the current datastore transaction-domain owner.
+The capability contract forbids an implementation from routing an admitted
+plan across multiple native transaction domains. A future provider with
+internal sharding must reject a cross-domain plan or expose separate datastore
+instances; EC-04 does not add a caller-selectable transaction-domain id.
+
+Unsupported capability, component mismatch, provider mismatch, and malformed
+plan all fail before the first provider read or mutation. There is no ordinary
+CRUD fallback.
+
+### In-memory reference algorithm
+
+`InMemoryDataStore` implements the supplementary capability under one
+datastore-owned synchronized boundary:
+
+1. validate the complete plan;
+2. snapshot every affected collection into immutable staged state;
+3. load the authoritative root and compare revision plus exact fields;
+4. return `NotMatched(authoritativeRoot)` without changing staged state when
+   the guard differs;
+5. stage successor create or verify the bound successor and its revision;
+6. stage the root patch and next revision;
+7. stage every side-record save/delete;
+8. project authoritative root and successor records from staged state; and
+9. replace the datastore collection map once, then return `Transitioned`.
+
+No mutable collection is published before every step succeeds. A protected
+sealed checkpoint hook supports deterministic test injection after guard
+admission, after successor work, after root work, and immediately before the
+single publish. The default implementation is inert. Every injected failure
+must leave root, successor, and side records byte-for-byte unchanged.
+
+The in-memory provider has no indeterminate commit acknowledgment: its
+single-state replacement either occurs or does not occur. Transaction-
+indeterminate behavior remains part of the provider contract and is exercised
+with native providers in EC-07.
+
+### Result and failure rules
+
+`NotMatched` is returned only when the authoritative root exists and its
+revision or an exact expected field differs. It contains the authoritative
+root record and performs no mutation.
+
+All other outcomes remain structured failures:
+
+- missing root or bound successor: not found;
+- successor create collision: conflict;
+- bound successor revision mismatch: conflict;
+- malformed plan or unsupported exact value: argument/policy failure;
+- unsupported capability or domain mismatch: operation/capability failure; and
+- provider/checkpoint failure: original structured failure.
+
+`Transitioned` returns provider-authoritative root and successor records after
+the single in-memory publish. EC-05 is responsible for typed hydration and the
+committed-projection failure boundary.
+
+### Executable specifications
+
+Add two behavior-oriented executable specifications:
+
+- `DataStoreConditionalTransitionSpec`
+  - validates exact-value admission and plan limits;
+  - rejects missing revision, duplicate fields, reserved-field mutation,
+    empty root patch, open/malformed provider records, overlapping targets,
+    typed component-owner mismatch, provider mismatch, and unsupported
+    providers before provider execution; and
+  - verifies create/bind result and structured failure distinctions.
+- `InMemoryConditionalTransitionSpec`
+  - proves successful create and bind transitions;
+  - proves ordinary mismatch changes no state;
+  - injects failure at every staged checkpoint and proves complete rollback;
+  - uses a ready/start barrier with ScalaCheck-generated caller counts from 2
+    through 12 to prove exactly one `Transitioned`, all admitted losers
+    `NotMatched`, one successor, one root successor reference, one token
+    advancement, and no orphan side record; and
+  - verifies ordinary CRUD cannot observe staged intermediate state.
+
+Focused EC-04 validation is:
+
+```text
+sbt -J-Xmx4G --batch "testOnly
+  org.goldenport.cncf.datastore.DataStoreConditionalTransitionSpec
+  org.goldenport.cncf.datastore.InMemoryConditionalTransitionSpec
+  org.goldenport.cncf.datastore.EntityVersionedMutationDataStoreSpec
+  org.goldenport.cncf.entity.ContentBodyVersionedMutationSpec"
+sbt -J-Xmx4G --batch Test/compile
+git diff --check
+```
+
+EC-04 is complete only after implementation, focused validation, independent
+review, review-fix where required, clean re-review, full CNCF validation, and a
+release checkpoint commit. EC-05 starts only after that evidence is recorded.
+
+### Implementation order
+
+The EC-04 implementation turn follows repository authority order:
+
+1. add the selected fixed limits and provider-plan details to the static
+   specification;
+2. align the normative design with those accepted details;
+3. add the executable specification structure and failing behaviors;
+4. implement the closed model and validation;
+5. implement `DataStoreSpace` capability/domain admission;
+6. implement the in-memory staged-state algorithm and rollback checkpoints;
+7. run the focused validation matrix; and
+8. update the phase evidence without marking EC-04 done before review and
+   release validation.
+
 ## Authorization and Information Safety
 
 - Root update authorization is checked against the authoritative Entity
@@ -655,68 +856,61 @@ Two concurrent terminal Review Run successor attempts must:
 - invoke expensive successor work once; and
 - contain no SQL, JDBC, raw DataStore, or process-local locking in CBD Support.
 
-## Proposed Work Stack
+## Authoritative Phase Ledger Mapping
 
-### EC-01: Normative contract
+The original proposal used a provisional seven-stage numbering. The
+authoritative Phase 49 dashboard and checklist supersede that numbering:
 
-- Promote token, conflict, transition, result, atomicity, and boundary semantics
-  to design/spec.
-- Fix the exact storage field and migration behavior.
+- EC-01: normative contract;
+- EC-02: concurrency model and storage shape;
+- EC-03: version-aware ordinary mutation;
+- EC-04: provider-neutral atomic datastore capability and in-memory reference;
+- EC-05: typed EntityStore, UnitOfWork, and protected DSL;
+- EC-06: coherence, authorization, audit, and diagnostics;
+- EC-07: SQLite and shared-provider concurrency evidence;
+- EC-08: CBD Support downstream acceptance; and
+- EC-09: verification and closure.
 
-### EC-02: Concurrency token foundation
+EC-01 through EC-04 are complete. EC-04 REVIEW_FIX applies Entity-collection
+admission consistently at model,
+`DataStoreSpace`, and provider boundaries, while retaining private constructors
+and private `copy` methods for the admitted plan algebra. A clean focused
+four-suite run passes all 22 tests, and independent `Test/compile`, whole-file
+naming/executable-specification scans, and `git diff --check` pass. EC-04
+re-review then found unbounded sequence traversal and two executable-evidence
+gaps. The subsequent REVIEW_FIX uses a 1025-value bounded prefix, exercises
+every structural limit including lazy evaluation, and proves that create and
+bind return the records committed by the provider. The focused four-suite
+matrix again passes all 22 tests and `Test/compile` passes. The final clean
+re-review found no actionable findings, and the full CNCF suite completed 341
+suites with all 2397 executed tests successful. EC-05 is the next implementation
+slice. Later work must use the dashboard/checklist numbering and must not revive
+the provisional mapping.
 
-- Add framework-managed revision metadata.
-- Add expected-token Entity mutation forms.
-- Add structured stale-write conflict behavior.
+## Resolved and Remaining Decisions
 
-### EC-03: Atomic datastore capability
+Resolved by the normative contract and completed stages:
 
-- Add closed record-level plan/result.
-- Implement deterministic in-memory behavior.
-- Reject unsupported providers without fallback.
+- concurrency uses the framework-owned `EntityConcurrencyToken`;
+- physical storage uses the canonical managed revision field;
+- new records start at token one and legacy records admit virtual token zero;
+- ordinary protected mutation requires an explicit expectation;
+- explicitly unversioned framework mutation requires a closed purpose plus
+  System admission;
+- conditional mismatch returns the authoritative typed root after read
+  authorization;
+- capability resolution is operation-time and never falls back to ordinary
+  CRUD;
+- SQLite and MySQL are the Phase 49 native-provider profiles; and
+- initial View invalidation is component-local and conservative.
 
-### EC-04: EntityStore, UnitOfWork, and DSL
+Remaining implementation choices are local to their assigned stages:
 
-- Add typed Entity transition models.
-- Integrate authorization, transition hooks, CallTree, audit, caches, and View
-  invalidation.
-
-### EC-05: SQL provider evidence
-
-- Implement SQLite native transaction behavior.
-- Implement or select one shared-datastore provider profile.
-- Add simultaneous-attempt and rollback specs.
-
-### EC-06: CBD Support driver
-
-- Replace application-side successor ownership logic with the protected DSL.
-- Prove one successor owner and retained predecessor.
-
-### EC-07: Verification and closure
-
-- Run focused and full CNCF tests.
-- Run downstream CBD Support acceptance.
-- Record both 9.12 baseline and 9.39 as completed.
-- Add one combined strategy section 8 history item and remove both active
-  section 9 entries.
-- Preserve 9.40 as the separate future conflict-resolution/repair item.
-- Update strategy/phase status and implementation annotations.
-
-## Decisions Required During Normative Promotion
-
-- Final concurrency-token type and reserved storage field name.
-- Initial token value and migration behavior for records without a token.
-- Whether unversioned save/update remains admitted, deprecated, or restricted
-  to explicit repair paths.
-- Exact typed mechanism used to admit immutable expected fields.
-- Whether `NotMatched` returns the whole typed root or a bounded transition
-  projection.
-- Provider capability declaration and activation-time validation mechanism.
-- Shared-datastore profile used for Phase 49 acceptance.
-- Exact View invalidation targeting available in the first implementation.
-
-These questions do not change the selected phase boundary. They must be settled
-before the corresponding implementation stage is marked complete.
+- EC-05 fixes the typed transition-field admission API and exact Entity result
+  carrier;
+- EC-06 fixes bounded audit/metric projection details; and
+- EC-07 fixes native dialect statements and provider-specific fault
+  injection.
 
 ## References
 

@@ -333,6 +333,7 @@ may add startup preflight without changing this operation-time contract.
 
 The provider plan contains only bounded record-level values:
 
+- explicit framework-owned component ownership for the root and successor;
 - root collection and entry id;
 - expected physical revision state;
 - unique admitted exact-match fields;
@@ -343,6 +344,39 @@ The provider plan contains only bounded record-level values:
 - bounded framework-owned side-record save/delete effects required by the
   canonical Entity storage shape; and
 - bounded logical correlation metadata.
+
+The admitted record plan is closed and bounded:
+
+- at most 32 exact expected fields;
+- at most 64 framework-owned side-record effects;
+- at most 128 characters per canonical field identity;
+- at most 4096 characters per canonical encoded text, identifier, or Entity-id
+  expectation value;
+- at most 256 characters per correlation value;
+- at most 256 fields in each provider-bound record;
+- at most 1024 values in each ordered provider-bound sequence; and
+- at most 16 nested record/sequence levels.
+
+Sequence admission materializes only a bounded prefix of at most 1025 values.
+The extra value distinguishes an admitted sequence from an over-limit one
+without traversing the complete input, so lazy or unbounded sequences fail
+deterministically rather than stalling plan construction.
+
+Names and correlation values are non-blank and contain no control characters.
+The expected root revision is mandatory. Root changes are a non-empty patch and
+cannot contain the managed revision field. Exact expected fields cannot contain
+the managed revision field. The guarded root, successor, and side-record
+primary targets are pairwise distinct, and side-record targets are unique.
+
+Provider-bound root, successor, and side-effect records admit only normalized
+storage scalars, `Instant`, nested `Record`, and ordered `Seq` values. Raw null,
+unordered collections, arbitrary objects, domain values, callbacks, and
+non-canonical `SetNull` markers are rejected before datastore execution.
+`SetNull` is admitted only as the canonical root-patch clear marker.
+
+`Create` carries the normalized successor record with its canonical initial
+revision. `Bind` carries the successor identity, managed revision field, and
+the revision observed by the upper Entity boundary.
 
 The provider plan does not contain:
 
@@ -357,6 +391,16 @@ The plan is rejected before provider mutation when collections resolve to
 different components, providers, or transaction domains.
 The guarded root and every framework-owned side record must resolve to the
 same datastore provider instance and native transaction domain.
+
+The root and successor collections are Entity collections and carry equal
+`DataStoreComponentOwner` values supplied by the trusted Entity normalization
+boundary. This ownership value is not derived from `EntityId.major`,
+`EntityId.minor`, collection naming, or another parsed identifier. The root,
+successor, and every side-record collection are resolved before provider
+invocation. In this capability, one `DataStore` instance is the
+transaction-domain owner. An internally sharded provider either rejects a plan
+spanning native transaction domains or exposes those domains as distinct
+datastore instances.
 
 ### Provider transaction
 

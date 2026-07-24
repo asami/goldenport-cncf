@@ -202,7 +202,9 @@ object DataStore {
 
   class InMemoryDataStore(
     recorder: CommitRecorder
-  ) extends DataStore with EntityVersionedMutationDataStore {
+  ) extends DataStore
+      with EntityVersionedMutationDataStore
+      with EntityConditionalTransitionDataStore {
     def isAccept(cid: CollectionId): Boolean = true
 
     private var _collections: VectorMap[String, InMemoryDataStore.Collection] = VectorMap.empty
@@ -313,6 +315,47 @@ object DataStore {
         } yield result
       }
 
+    def conditionalTransition(
+      plan: DataStoreConditionalTransitionPlan
+    )(using
+      ctx: ExecutionContext
+    ): Consequence[DataStoreConditionalTransitionResult] =
+      synchronized {
+        for {
+          admitted <- EntityConditionalTransitionSupport.validate(plan)
+          rootcollection <- take_collection(admitted.root.collection)
+          rootkey <- rootcollection._entry_key(admitted.root.entryId)
+          existing <- rootcollection
+            ._entries_snapshot
+            .get(rootkey)
+            .map(Consequence.success)
+            .getOrElse(
+              Consequence.DataStoreNotFound(admitted.root.entryId.print)
+            )
+          matches <-
+            EntityConditionalTransitionSupport.rootMatches(
+              existing,
+              admitted.root
+            )
+          result <-
+            if (!matches)
+              Consequence.success(
+                DataStoreConditionalTransitionResult.NotMatched(existing)
+              )
+            else
+              _apply_conditional_transition(
+                admitted,
+                rootkey,
+                existing
+              )
+        } yield result
+      }
+
+    protected def conditional_transition_checkpoint(
+      checkpoint: DataStoreConditionalTransitionCheckpoint
+    ): Consequence[Unit] =
+      Consequence.unit
+
     def prepare(tx: TransactionContext): PrepareResult =
       record_prepare(recorder)
 
@@ -398,6 +441,132 @@ object DataStore {
           }
         }
       }
+
+    private def _apply_conditional_transition(
+      plan: DataStoreConditionalTransitionPlan,
+      rootkey: String,
+      existingroot: Record
+    ): Consequence[DataStoreConditionalTransitionResult] = {
+      val collections =
+        plan.sideEffects
+          .map(_.collection)
+          .appended(plan.successor.collection)
+          .prepended(plan.root.collection)
+          .distinct
+      val collectionids =
+        collections.map(collection_key).zip(collections).toMap
+      val initialstates =
+        collections.map { collection =>
+          val key = collection_key(collection)
+          val entries =
+            _collections
+              .get(key)
+              .map(_._entries_snapshot)
+              .getOrElse(VectorMap.empty)
+          key -> entries
+        }.toMap
+      for {
+        _ <- conditional_transition_checkpoint(
+          DataStoreConditionalTransitionCheckpoint.GuardAdmitted
+        )
+        successorprepared <-
+          _prepare_conditional_successor(plan.successor, initialstates)
+        (successorstates, successorrecord) = successorprepared
+        _ <- conditional_transition_checkpoint(
+          DataStoreConditionalTransitionCheckpoint.SuccessorPrepared
+        )
+        rootrecord =
+          EntityConditionalTransitionSupport.applyRootChanges(
+            existingroot,
+            plan.root
+          )
+        rooted = {
+          val collectionkey = collection_key(plan.root.collection)
+          successorstates.updated(
+            collectionkey,
+            successorstates(collectionkey).updated(rootkey, rootrecord)
+          )
+        }
+        _ <- conditional_transition_checkpoint(
+          DataStoreConditionalTransitionCheckpoint.RootPrepared
+        )
+        prepared <- _apply_side_effects(plan.sideEffects, rooted)
+        _ <- conditional_transition_checkpoint(
+          DataStoreConditionalTransitionCheckpoint.BeforePublish
+        )
+      } yield {
+        val nextcollections =
+          prepared.foldLeft(_collections) {
+            case (result, (collectionkey, entries)) =>
+              val collection =
+                new InMemoryDataStore.Collection(
+                  collectionids(collectionkey)
+                )
+              collection._replace_entries(entries)
+              result.updated(collectionkey, collection)
+          }
+        _collections = nextcollections
+        DataStoreConditionalTransitionResult.Transitioned(
+          rootrecord,
+          successorrecord
+        )
+      }
+    }
+
+    private def _prepare_conditional_successor(
+      successor: DataStoreConditionalSuccessor,
+      initial: Map[String, VectorMap[String, Record]]
+    ): Consequence[(Map[String, VectorMap[String, Record]], Record)] = {
+      val collectionkey = collection_key(successor.collection)
+      val entries = initial(collectionkey)
+      val entrykey = successor.entryId.print
+      successor match {
+        case create: DataStoreConditionalSuccessor.Create =>
+          if (entries.contains(entrykey))
+            Consequence.operationConflict(
+              "entity-conditional-transition",
+              Vector(
+                org.goldenport.observation.Descriptor.Facet.Reason(
+                  "successor-collision"
+                ),
+                org.goldenport.observation.Descriptor.Facet.Policy(
+                  "entity.conditional-transition.successor-create"
+                )
+              )
+            )
+          else
+            Consequence.success(
+              initial.updated(
+                collectionkey,
+                entries.updated(entrykey, create.record)
+              ) -> create.record
+            )
+        case bind: DataStoreConditionalSuccessor.Bind =>
+          entries.get(entrykey) match {
+            case None =>
+              Consequence.DataStoreNotFound(bind.entryId.print)
+            case Some(record) =>
+              EntityVersionedMutationSupport
+                .revisionState(record, bind.revisionField)
+                .flatMap { actual =>
+                  if (actual == bind.expectedRevision)
+                    Consequence.success(initial -> record)
+                  else
+                    Consequence.operationConflict(
+                      "entity-conditional-transition",
+                      Vector(
+                        org.goldenport.observation.Descriptor.Facet.Reason(
+                          "bound-successor-revision-conflict"
+                        ),
+                        org.goldenport.observation.Descriptor.Facet.Policy(
+                          "entity.conditional-transition.successor-bind"
+                        )
+                      )
+                    )
+                }
+          }
+      }
+    }
   }
   object InMemoryDataStore {
     class Collection(val id: CollectionId) {
