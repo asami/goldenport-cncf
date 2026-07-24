@@ -330,6 +330,90 @@ The direction is accepted, while the Phase 50 plan still needs to fix:
 These details must be decided before implementation rather than hidden behind
 compatibility behavior.
 
+## Decision Update: Managed Revision and Write Semantics (2026-07-25)
+
+The Phase 50 goal workflow raised the question of whether making
+`Optimistic` the default would force ordinary application logic to load and
+pass a revision before every update.
+
+The accepted answer is that revision is framework-managed execution metadata,
+not a normal application-domain parameter. CNCF obtains and propagates the
+revision through Entity load, UnitOfWork, EntityStore, and datastore execution.
+Strict Web or REST routes may carry a previously observed revision through a
+framework transport channel, but generated business operation parameters do
+not gain `expectedRevision`.
+
+The accepted policy model has three independent dimensions:
+
+| Dimension | Values | Accepted default/use |
+| --- | --- | --- |
+| Entity concurrency | `None`, `Optimistic` | `Optimistic` default; `None` explicit |
+| Entity write | `AlwaysWrite`, `WriteIfChanged` | `AlwaysWrite` core default; generated Web/Form and idempotent REST routes select `WriteIfChanged` |
+| Revision precondition | `Managed`, `ObservedRequired` | `Managed` normal application path; `ObservedRequired` strict edit path |
+
+`AlwaysWrite` treats every admitted write as a persistent mutation. It advances
+revision and lifecycle metadata even when normalized business state is equal.
+
+`WriteIfChanged` compares canonical persisted business state after directives,
+datatype normalization, defaults, and domain mutation. Revision, lifecycle
+timestamps, audit fields, and other managed metadata do not participate in
+equality. Equal state returns the current Entity without changing revision,
+`updatedAt`, or mutation audit state.
+
+`ObservedRequired` checks the observed revision before content equality. A
+stale strict edit therefore remains a conflict even when its requested final
+state is already present.
+
+The policy combination resolution is:
+
+- `Optimistic + Managed`: managed comparison, with authoritative no-op
+  detection first for `WriteIfChanged`;
+- `Optimistic + ObservedRequired`: observed comparison before no-op detection;
+- `None + Managed`: last-write-wins without revision comparison; and
+- `None + ObservedRequired`: invalid at operation/route assembly.
+
+`WriteIfChanged` is decided inside the authoritative provider mutation
+boundary. Concurrent identical requests therefore produce at most one write;
+later attempts that find the desired business state return the authoritative
+Entity as no-op successes. This is not a retry of the write and does not
+replace a base revision after an ambiguous provider result.
+
+Policy metadata resolves from explicit route binding, operation declaration,
+adapter profile default, then the framework `AlwaysWrite + Managed` fallback.
+Generated Web/Form updates default to
+`WriteIfChanged + ObservedRequired`; idempotent REST update adapters default to
+`WriteIfChanged + Managed`, while a strict REST validator selects
+`ObservedRequired`.
+
+Revision is bounded by `1` and `Long.MaxValue`. A mutation requiring
+advancement beyond the upper bound fails structurally without changing
+business state or managed metadata.
+
+This state-deduplication contract is limited to one authoritative Entity
+mutation. General REST request replay, idempotency keys, external side effects,
+and multi-resource idempotency remain separate concerns. REST adapters own
+protocol-level idempotency semantics.
+
+The accepted details also fix:
+
+- `EntityRevision` under the `simplemodeling-model` datatype boundary;
+- initial revision `1`;
+- explicit collection concurrency override over Entity declaration, then the
+  `Optimistic` default;
+- deterministic admission failure for persisted schema or data without
+  required revision until explicit migration or recreation;
+- `EntityRevisionCarrier[A]` for explicitly admitted non-`SimpleEntity`
+  values;
+- `cncf_revision` as the detached physical managed field;
+- embedded revision as read-only managed metadata on mutation-capable standard
+  projections; and
+- hidden Web/Form metadata or REST validators for strict observed revision.
+
+This update supersedes the earlier working assumption that an optimistic
+application operation must expose `expectedRevision` as a business parameter.
+It does not alter the accepted rule that Conditional Transition always uses an
+authoritative expected revision.
+
 ## Deferred Work
 
 Force overwrite, merge workflows, repair operations, and conflict-resolution

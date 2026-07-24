@@ -1,6 +1,6 @@
 # Phase 50 Checklist - SimpleEntity Revision and OCC Simplification
 
-status=planned
+status=active
 phase=[Phase 50 - SimpleEntity Revision and OCC Simplification](phase-50.md)
 
 This checklist is the authoritative Phase 50 state ledger after Phase 50
@@ -10,38 +10,103 @@ Phase 49 closes.
 ## SE-01: Contract Decisions and Executable Acceptance
 
 Stage Status:
-- Current status: PLANNED
+- Current status: DONE
 - Owner: SimpleEntity, CNCF Entity, and datastore maintainers
 - Entry rule: Phase 49 is closed.
 - Completion rule: Every unresolved contract choice is explicit and represented
   by an exact Executable Specification expectation before implementation.
 
-- [ ] Confirm `EntityRevision` ownership in `simplemodeling-model`.
-- [ ] Inventory existing `simplemodeling-lib` generic datatype/schema/decoder
+- [x] Confirm `EntityRevision` ownership in `simplemodeling-model`.
+- [x] Inventory existing `simplemodeling-lib` generic datatype/schema/decoder
   support and identify whether any independently reusable primitive is
   actually missing.
-- [ ] Fix the canonical initial revision.
-- [ ] Fix successful mutation and no-op mutation advancement semantics.
-- [ ] Fix Entity-level and collection-level policy declaration and precedence.
-- [ ] Fix the deterministic ordinary concurrency-policy default.
-- [ ] Fix missing-revision schema/data migration or admission behavior.
-- [ ] Fix revision visibility for read/search/View/Aggregate projections.
-- [ ] Fix REST/Form/Web/generated-client expected-revision transport.
-- [ ] Fix the representation matrix: `SimpleEntity` uses embedded revision;
+- [x] Fix the canonical initial revision as `1`.
+- [x] Fix successful mutation and no-op mutation advancement semantics using
+  `AlwaysWrite` and `WriteIfChanged`.
+- [x] Fix authoritative `WriteIfChanged` ordering so concurrent identical
+  managed mutations produce at most one write and later no-op successes.
+- [x] Fix the concurrency/precondition combination matrix and reject
+  `None + ObservedRequired`.
+- [x] Fix write/precondition declaration surfaces and precedence from route,
+  operation, adapter profile, and framework fallback.
+- [x] Fix revision exhaustion as a structured no-mutation failure at
+  `Long.MaxValue`.
+- [x] Fix Entity-level and collection-level concurrency-policy declaration and
+  precedence: explicit collection override, then Entity declaration, then the
+  `Optimistic` default.
+- [x] Fix the deterministic ordinary concurrency-policy default as
+  `Optimistic`, with CNCF-managed revision propagation.
+- [x] Fix missing-revision schema/data behavior as deterministic admission
+  failure until explicit migration or recreation.
+- [x] Fix revision visibility for read/search/View/Aggregate projections as
+  read-only managed metadata on mutation-capable standard surfaces.
+- [x] Fix REST/Form/Web/generated-client revision transport as framework
+  metadata rather than a business operation parameter.
+- [x] Fix the representation matrix: `SimpleEntity` uses embedded revision;
   only an explicitly admitted non-`SimpleEntity` model may use detached
   revision.
-- [ ] Fix where Entity/collection revision representation is declared and how
-  conflicting declarations fail.
-- [ ] Fix the detached carrier API and its physical managed-field contract.
-- [ ] Inventory Phase 49 implementation assets and classify each as common
+- [x] Fix where Entity/collection revision representation is declared and how
+  conflicting declarations fail: generated Entity metadata and
+  `EntityRuntimeDescriptor.revisionRepresentation` bind at assembly, and
+  conflicts fail without precedence fallback.
+- [x] Fix the detached carrier API as `EntityRevisionCarrier[A]` and its
+  physical managed field as `cncf_revision`.
+- [x] Inventory Phase 49 implementation assets and classify each as common
   kernel reuse, detached-extension refactoring, or provisional token removal.
-- [ ] Prohibit dual representation, mirroring, per-request selection, and
+- [x] Prohibit dual representation, mirroring, per-request selection, and
   implicit embedded/detached fallback.
-- [ ] Add failing-first Executable Specification identities for all Phase 50
+- [x] Add failing-first Executable Specification identities for all Phase 50
   acceptance groups.
 
 Evidence:
-- Pending.
+- Human decision `P50-SE01-SEMANTICS-01` was resolved on 2026-07-25 with the
+  framework-managed revision, `AlwaysWrite` core default, `WriteIfChanged`
+  route policy, and `ObservedRequired` strict transport direction.
+- The accepted decision is recorded in:
+  - `docs/journal/2026/07/2026-07-24-simpleentity-revision-occ-consideration.md`;
+  - `docs/notes/simpleentity-revision-occ-simplification-proposal.md`; and
+  - `docs/phase/phase-50.md`.
+- The generic-core inventory found no Phase 50-specific gap:
+  `ValueReader[Long]`, positive-integer datatype/schema support, and structured
+  `Consequence`/`Conclusion` facilities are sufficient. SE-02 must not modify
+  `simplemodeling-lib` unless a failing Executable Specification proves an
+  independently reusable missing primitive.
+- The Phase 49 asset disposition table in the implementation proposal fixes
+  common-kernel reuse, detached-extension refactoring, and provisional-token
+  removal explicitly.
+- SE-01 fixes transport ownership and separation from business parameters.
+  Exact hidden-field and HTTP validator encoding belongs to the executable
+  adapter contract in SE-07.
+- Review findings `P50-SE01-R1-01` through `P50-SE01-R1-06` were resolved by
+  defining separate `None`/`Optimistic` provider paths, authoritative
+  concurrent no-op detection, the complete policy matrix and declaration
+  precedence, revision exhaustion, and repository-qualified Executable
+  Specification identities.
+- Independent review identified findings `P50-SE01-R1-01` through
+  `P50-SE01-R1-06`; all were fixed and the clean re-review found no remaining
+  actionable finding.
+- Documentation-only validation passed with `git diff --check`. The commit
+  containing this checklist update is the SE-01 release evidence.
+
+### Executable Specification Identities
+
+Paths are repository-relative to the repository named in the second column.
+
+| ID | Repository | Executable Specification path | Required behavior |
+| --- | --- | --- | --- |
+| ER-01 | `simplemodeling-model` | `src/test/scala/org/simplemodeling/model/datatype/EntityRevisionSpec.scala` | Accept revisions from `1` through `Long.MaxValue`, fix initial revision `1`, reject invalid values structurally, and fail advancement at the upper bound without overflow. |
+| ER-02 | `simplemodeling-model` | `src/test/scala/org/simplemodeling/model/SimpleEntityRevisionSpec.scala` | Expose exactly one framework-managed embedded revision while preserving existing lifecycle attributes. |
+| ER-03 | `cloud-native-component-framework` | `src/test/scala/org/goldenport/cncf/entity/EntityRevisionRepresentationSpec.scala` | Admit embedded `SimpleEntity` and explicit detached non-`SimpleEntity` representations, and reject every conflicting, dual, mirrored, implicit, or per-request selection. |
+| ER-04 | `cloud-native-component-framework` | `src/test/scala/org/goldenport/cncf/entity/EntityConcurrencyPolicySpec.scala` | Resolve collection override, Entity declaration, and `Optimistic` default deterministically; keep `None` explicit. |
+| ER-05 | `cloud-native-component-framework` | `src/test/scala/org/goldenport/cncf/entity/EntityWritePolicySpec.scala` | Prove `AlwaysWrite` advancement, authoritative `WriteIfChanged` equality, concurrent identical no-op convergence, unchanged no-op metadata, and stale observed-precondition ordering. |
+| ER-06 | `cloud-native-component-framework` | `src/test/scala/org/goldenport/cncf/entity/EntityRevisionPreconditionSpec.scala` | Prove the valid policy matrix, reject `None + ObservedRequired`, resolve route/operation/adapter defaults, keep revision out of business parameters, and preserve one mutation attempt's base revision. |
+| ER-07 | `cloud-native-component-framework` | `src/test/scala/org/goldenport/cncf/entity/EntityManagedMutationSpec.scala` | Initialize, compare, advance, return, reject managed input, reject revision exhaustion without mutation, and preserve revision across failure, rollback, soft delete, and restore. |
+| ER-08 | `cloud-native-component-framework` | `src/test/scala/org/goldenport/cncf/entity/EntityRevisionMigrationSpec.scala` | Reject missing schema/record revision deterministically until explicit migration or recreation. |
+| ER-09 | `cloud-native-component-framework` | `src/test/scala/org/goldenport/cncf/projection/EntityRevisionProjectionSpec.scala` | Expose read-only revision on admitted Entity, search, View, and Aggregate surfaces without making it writable. |
+| ER-10 | `cloud-native-component-framework` | `src/test/scala/org/goldenport/cncf/http/StaticFormEntityRevisionSpec.scala` | Use `WriteIfChanged + ObservedRequired`, retain observed revision as hidden framework metadata, and preserve strict stale-edit conflict without domain parameters. |
+| ER-11 | `cloud-native-component-framework` | `src/test/scala/org/goldenport/cncf/http/RestEntityRevisionSpec.scala` | Apply `WriteIfChanged + Managed` to idempotent routes, select `ObservedRequired` for strict validators, and leave general request replay/idempotency-key semantics to REST. |
+| ER-12 | `cloud-native-component-framework` | `src/test/scala/org/goldenport/cncf/datastore/EntityRevisionProviderParitySpec.scala` | Prove equivalent atomic, concurrent no-op, rollback, restart, exhaustion, and admission results for in-memory, SQLite, and the selected shared provider. |
+| ER-13 | `cloud-native-component-framework` | `src/test/scala/org/goldenport/cncf/entity/EntityConditionalTransitionRevisionSpec.scala` | Require authoritative expected revision under every ordinary policy and retain exactly-one-winner behavior for both revision representations. |
 
 ## SE-02: SimpleEntity Revision Model
 

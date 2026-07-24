@@ -1,7 +1,8 @@
 # Phase 50 - SimpleEntity Revision and OCC Simplification
 
-status=planned
+status=active
 planned_at=2026-07-24
+started_at=2026-07-25
 depends_on=[Phase 49](phase-49.md)
 strategy=[CNCF Development Strategy](../strategy/cncf-development-strategy.md)
 checklist=[Phase 50 Checklist](phase-50-checklist.md)
@@ -45,12 +46,37 @@ implementation assets.
 - CNCF assigns the initial revision and advances it exactly once with every
   successful persistent mutation.
 - CNCF maintains revision when ordinary OCC is disabled.
-- Application code can read revision but cannot create, patch, reset,
-  decrement, or increment it.
+- Application code may read revision for diagnostics, but normal application
+  logic neither receives nor supplies revision as a business parameter.
+- CNCF acquires and propagates the revision through the Entity load,
+  UnitOfWork, EntityStore, and datastore boundaries.
 - Ordinary OCC is selected by a declarative Entity or collection concurrency
   policy.
-- An optimistic policy requires `expectedRevision` on every admitted ordinary
-  mutation and cannot be bypassed per request.
+- `EntityConcurrencyPolicy.Optimistic` is the deterministic default.
+  `EntityConcurrencyPolicy.None` is an explicit last-write-wins selection.
+- An optimistic mutation always reaches the datastore with an expected
+  revision, but CNCF normally obtains that revision as managed metadata rather
+  than requiring application logic to pass it.
+- `RevisionPreconditionPolicy.Managed` uses the CNCF-managed current revision.
+  `RevisionPreconditionPolicy.ObservedRequired` uses a revision observed by an
+  ingress adapter and rejects a missing or stale observation.
+- `EntityWritePolicy.AlwaysWrite` is the core mutation default and advances
+  revision even when normalized business state is unchanged.
+- `EntityWritePolicy.WriteIfChanged` is selected by generated Web/Form updates
+  and idempotent REST routes. Equal normalized business state is a successful
+  no-op that does not change revision, `updatedAt`, or mutation audit state.
+- An observed revision is checked before `WriteIfChanged` equality, so a stale
+  strict edit does not become a no-op success.
+- `Managed + WriteIfChanged` checks authoritative business-state equality
+  before managed revision conflict, so concurrent duplicate writes converge to
+  one write and later no-op successes.
+- `None + ObservedRequired` is invalid because required revision comparison
+  contradicts explicit last-write-wins semantics.
+- Write and precondition policies resolve from explicit route binding,
+  operation declaration, adapter profile default, then the framework
+  `AlwaysWrite + Managed` fallback.
+- Revision values range from `1` through `Long.MaxValue`; an advancing mutation
+  at the upper bound fails structurally without changing state.
 - Conditional Transition requires `expectedRevision` under every ordinary
   concurrency policy.
 - `createdAt` and `updatedAt` retain their current lifecycle roles.
@@ -64,6 +90,10 @@ implementation assets.
   beside the domain value.
 - Revision representation is fixed at Entity or collection registration. It
   cannot be selected per request.
+- Generated Entity metadata and `EntityRuntimeDescriptor` use
+  `revisionRepresentation`. `SimpleEntity` is forced to `Embedded`; only a
+  non-`SimpleEntity` may explicitly select `Detached`. Conflicting declarations
+  fail assembly instead of using precedence.
 - One Entity has exactly one authoritative revision representation:
   `Embedded` for `SimpleEntity`, or explicit `Detached` for a
   non-`SimpleEntity` model.
@@ -89,7 +119,16 @@ implementation assets.
 - Reject application attempts to write the managed revision.
 - Define the ordinary Entity/collection concurrency-policy model, declaration,
   precedence, and deterministic default.
-- Add expected-revision forms to admitted Entity and Aggregate mutation paths.
+- Bind `concurrencyPolicy` from generated Entity metadata and explicit
+  collection runtime override into `EntityRuntimePlan`; collection override
+  wins over Entity declaration, then `Optimistic` is the default.
+- Define the operation/route-level write policy and revision-precondition
+  policy independently from Entity concurrency policy, including declaration
+  surfaces, precedence, adapter defaults, and invalid combinations.
+- Keep expected revision out of normal application operation parameters.
+  Transport adapters carry an observed revision only for strict edit routes.
+- Define canonical business-state equality for `WriteIfChanged`, excluding
+  revision, lifecycle timestamps, audit fields, and other managed metadata.
 - Compare and advance revision atomically in the authoritative datastore
   mutation.
 - Ensure EntitySpace and Working Set values cannot bypass the datastore
@@ -99,8 +138,11 @@ implementation assets.
   the common `EntityRevision`.
 - Refactor the Phase 49 snapshot behavior into an explicitly named detached
   revision carrier available only through the non-`SimpleEntity` extension.
-- Project revision and transport expected revision through the REST, Form, Web,
+- Project revision as read-only managed metadata through the REST, Form, Web,
   View, Aggregate, and generated-client surfaces that support later mutation.
+- Let generated Web/Form updates retain observed revision as hidden framework
+  metadata, and let strict REST routes use transport validators rather than a
+  domain operation parameter.
 - Add in-memory, SQLite, and one shared-provider profile with equivalent
   concurrency, rollback, restart, and admission behavior for both admitted
   representations.
@@ -123,7 +165,20 @@ implementation assets.
   back to one another for one Entity.
 - Policy `None` means no expected-revision comparison for ordinary mutation;
   it does not stop revision maintenance.
-- Policy `Optimistic` has no request-level opt-out.
+- Policy `Optimistic` has no application-request opt-out. The framework chooses
+  the admitted revision source from declared route/operation semantics.
+- Core mutation defaults to `AlwaysWrite`; `WriteIfChanged` is an explicit
+  route/operation policy and is the generated Web/Form and idempotent REST
+  adapter selection.
+- `WriteIfChanged` is state deduplication for one Entity mutation. General REST
+  request replay, idempotency keys, external side effects, and multi-resource
+  idempotency are not part of Phase 50.
+- `WriteIfChanged` equality and write admission are decided inside the
+  authoritative provider mutation boundary. A preloaded in-memory comparison
+  alone is insufficient.
+- `None + ObservedRequired` is rejected during operation/route assembly.
+- Revision exhaustion never wraps or saturates; an advancing mutation at
+  `Long.MaxValue` fails before changing state.
 - Conditional Transition is never weakened by ordinary policy `None`.
 - Missing revision is not silently interpreted as zero and is not derived from
   timestamps or resident state.
@@ -139,7 +194,7 @@ implementation assets.
 
 | ID | Stage | Outcome | Status |
 | --- | --- | --- | --- |
-| SE-01 | Contract decisions and executable acceptance | Datatype ownership, embedded/detached representation matrix, policy declaration/default, initial revision, no-op behavior, migration/admission, projection, and API replacement decisions are fixed as executable expectations before implementation. | planned |
+| SE-01 | Contract decisions and executable acceptance | Datatype ownership, embedded/detached representation matrix, policy declaration/default, initial revision, no-op behavior, migration/admission, projection, and API replacement decisions are fixed as executable expectations before implementation. | done |
 | SE-02 | SimpleEntity revision model | `simplemodeling-model` provides `EntityRevision` and one standard revision attribute; `simplemodeling-lib` changes only for independently reusable missing primitives. | planned |
 | SE-03 | Common revision kernel and binding | Phase 49's atomic provider kernel is generalized around `EntityRevision`, and one deterministic embedded/detached binding is selected per Entity model. | planned |
 | SE-04 | Embedded SimpleEntity lifecycle and OCC | CNCF initializes, loads, advances, returns, and protects embedded revision; declarative policy controls ordinary expected-revision enforcement. | planned |
@@ -157,6 +212,15 @@ implementation assets.
   revision.
 - Every successful persistent mutation advances revision exactly once in the
   same atomic operation as the state change.
+- `AlwaysWrite` advances revision for every admitted persistent mutation,
+  including one whose normalized business state is unchanged.
+- `WriteIfChanged` returns the current Entity without a datastore write when
+  normalized business state is unchanged.
+- A `WriteIfChanged` no-op does not advance revision, `updatedAt`, or mutation
+  audit state.
+- Concurrent identical `Managed + WriteIfChanged` mutations produce at most
+  one write; later attempts return the authoritative equal Entity as no-op
+  successes.
 - Failed, rejected, conflicted, and rolled-back mutations do not advance
   revision.
 - Reads do not advance revision.
@@ -165,8 +229,15 @@ implementation assets.
 - No code uses timestamps as the authoritative OCC token.
 - Ordinary policy `None` records revisions without requiring
   `expectedRevision`.
-- Ordinary policy `Optimistic` rejects missing or stale expected revisions
-  with structured `Consequence`/`Conclusion` failures.
+- Ordinary policy `Optimistic` uses CNCF-managed expected revision without
+  exposing it to normal application logic.
+- `ObservedRequired` rejects missing or stale transport revision with
+  structured `Consequence`/`Conclusion` failures before no-op detection.
+- `None + ObservedRequired` fails deterministic assembly rather than silently
+  ignoring the observed revision or strengthening the declared concurrency
+  policy.
+- A mutation that would advance `Long.MaxValue` fails structurally without
+  changing business state, lifecycle metadata, revision, or audit state.
 - Two or more simultaneous optimistic mutations using one expected revision
   produce at most one winner.
 - Working Set or EntitySpace state cannot bypass the authoritative datastore
@@ -183,8 +254,9 @@ implementation assets.
 - Detached revision uses `EntityRevision`, the same atomic datastore kernel,
   and the same authorization, UnitOfWork, diagnostics, and observability
   boundaries as embedded revision.
-- Required generated and transport surfaces round-trip expected revision
-  without admitting direct revision mutation.
+- Required generated and transport surfaces round-trip observed revision as
+  framework metadata without adding it to business operation parameters or
+  admitting direct revision mutation.
 - The runtime contains no separate concurrency-token type, implicit snapshot
   compatibility API, or duplicate managed revision field.
 - Persisted data without revision follows one explicit verified migration or
@@ -263,9 +335,9 @@ An Entity-specific datatype belongs to `simplemodeling-model`.
 
 ## Current Resume Point
 
-Phase 50 is planned and Phase 49 is closed. Begin SE-01 by resolving the
-remaining decisions listed in
-the consideration record and expressing them as Executable Specification
-expectations. Preserve the Phase 49 atomic kernel and detached-domain
+Phase 50 is active and Phase 49 is closed. SE-01 is done after independent
+review, review-fix, and clean re-review. Begin SE-02 with failing-first
+`EntityRevision` and `SimpleEntity` model specifications in
+`simplemodeling-model`. Preserve the Phase 49 atomic kernel and detached-domain
 capability, but do not preserve its provisional token names or expose the
 detached representation on the standard `SimpleEntity` path.

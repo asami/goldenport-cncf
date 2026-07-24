@@ -860,7 +860,7 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Phase 47: closed (`docs/phase/phase-47.md`)
 - Phase 48: closed (`docs/phase/phase-48.md`)
 - Phase 49: closed (`docs/phase/phase-49.md`)
-- Phase 50: planned (`docs/phase/phase-50.md`)
+- Phase 50: active (`docs/phase/phase-50.md`)
 
 ## 8. Completed Development Item History
 
@@ -1600,8 +1600,8 @@ Completed work areas are recorded in section 8. When a development item closes,
 remove its completion record from this section and add or update the
 corresponding completed-history entry.
 
-Phase 50, `SimpleEntity Revision and OCC Simplification`, is the next planned
-phase. It makes framework-managed `SimpleEntity.revision` the standard
+Phase 50, `SimpleEntity Revision and OCC Simplification`, is the active phase.
+It makes framework-managed `SimpleEntity.revision` the standard
 representation, retains detached revision as an explicit extension for Entity
 models that do not extend `SimpleEntity`, and adds an application-selected
 ordinary OCC policy.
@@ -2833,7 +2833,7 @@ after 9.12 and 9.39 move to completed history.
     inventing a generic merge UI without evidence.
 
 ### 9.41 SimpleEntity Revision and OCC Simplification
-Planned for Phase 50 after Phase 49 closes.
+Active in Phase 50 after Phase 49 closure.
 
 - Goal:
   - make revision maintenance a standard framework-managed `SimpleEntity`
@@ -2849,6 +2849,13 @@ Planned for Phase 50 after Phase 49 closes.
   - `createdAt` and `updatedAt` retain their existing lifecycle meaning and no
     OCC-specific timestamp is introduced;
   - ordinary OCC is selected declaratively at Entity or collection scope;
+  - `Optimistic` is the ordinary concurrency default and `None` is explicit
+    last-write-wins;
+  - `AlwaysWrite` is the core write default, while generated Web/Form and
+    idempotent REST updates use authoritative `WriteIfChanged` state
+    deduplication;
+  - normal application logic uses CNCF-managed revision metadata, while strict
+    routes may require an observed transport revision;
   - conditional transition always requires authoritative revision comparison;
   - `SimpleEntity` always uses embedded revision;
   - a model that does not extend `SimpleEntity` may explicitly select detached
@@ -2866,8 +2873,9 @@ Planned for Phase 50 after Phase 49 closes.
     representation binding;
   - explicit detached revision carrier support for non-`SimpleEntity` models;
   - deterministic ordinary concurrency-policy declaration and precedence;
-  - expected-revision mutation through EntityStore, UnitOfWork, protected DSL,
-    generated operation, and datastore paths;
+  - managed or observed revision preconditions through EntityStore,
+    UnitOfWork, protected DSL, generated adapters, and datastore paths without
+    adding revision to business operation parameters;
   - Conditional Transition integration using `SimpleEntity.revision`;
   - revision projection and expected-revision transport for admitted REST,
     Form, Web, View, and Aggregate surfaces;
