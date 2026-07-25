@@ -17,6 +17,8 @@ import org.goldenport.cncf.datastore.{DataStore, DataStoreSpace}
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId, EntityRevision}
 import org.goldenport.cncf.entity.{
   EntityPersistent,
+  EntityRevisionRepresentation,
+  EntityRevisionSpecSupport,
   EntityStore,
   EntityStoreSpace
 }
@@ -52,6 +54,12 @@ final class UnitOfWorkStateMachineHookSpec
       val context            = _execution_context(datastorespace, entitystorespace, hook)
       given ExecutionContext = context
       given EntityPersistent[PersonEntity] = _person_persistent
+      EntityRevisionSpecSupport.registerRevisionBinding(
+        context,
+        _cid,
+        _person_persistent,
+        EntityRevisionRepresentation.Detached
+      )
       val uow = new UnitOfWork(context, EventEngine.noop(DataStore.noop()))
       val id  = EntityId("test", "sm_1", _cid)
       val _ = datastorespace.inject(
@@ -68,9 +76,9 @@ final class UnitOfWorkStateMachineHookSpec
 
       When("updating entity through UnitOfWork interpreter")
       val result = new UnitOfWorkInterpreter(uow).execute(
-        UnitOfWorkOp.EntityStoreUpdate(
+        UnitOfWorkOp.EntityStoreUpdateDetached(
           entity,
-          EntityRevision.INITIAL,
+          Some(EntityRevision.INITIAL),
           summon[EntityPersistent[PersonEntity]]
         )
       )
@@ -88,6 +96,12 @@ final class UnitOfWorkStateMachineHookSpec
       val context            = _execution_context(datastorespace, entitystorespace, hook)
       given ExecutionContext = context
       given EntityPersistent[PersonEntity] = _person_persistent
+      EntityRevisionSpecSupport.registerRevisionBinding(
+        context,
+        _cid,
+        _person_persistent,
+        EntityRevisionRepresentation.Detached
+      )
       val id                               = EntityId("test", "sm_2", _cid)
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
@@ -105,9 +119,9 @@ final class UnitOfWorkStateMachineHookSpec
       val result = new UnitOfWorkInterpreter(uow).run(
         org.goldenport.ConsequenceT.liftF(
           cats.free.Free.liftF(
-            UnitOfWorkOp.EntityStoreUpdate(
+            UnitOfWorkOp.EntityStoreUpdateDetached(
               PersonEntity(id, "hanako", 31),
-              EntityRevision.INITIAL,
+              Some(EntityRevision.INITIAL),
               summon[EntityPersistent[PersonEntity]]
             )
           )

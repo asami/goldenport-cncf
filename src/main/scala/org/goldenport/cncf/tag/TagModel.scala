@@ -15,11 +15,12 @@ import org.goldenport.cncf.association.{
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.directive.Query
 import org.goldenport.cncf.entity.{
+  EntityMutationExecutionPolicy,
   EntityPersistent,
   EntityPersistentCreate,
   EntityQuery,
+  EntityRevisionCarrier,
   EntitySearchScope,
-  EntitySnapshot,
   EntityStore,
   EntityVisibilityScope
 }
@@ -159,7 +160,7 @@ final class EntityStoreTagRepository extends TagRepository {
   def update(ref: String, update: TagUpdate)(using ctx: ExecutionContext): Consequence[Tag] =
     for {
       tag <- resolve(ref)
-      snapshot <- EntityStore.standard().loadSnapshot[Tag](tag.id)
+      snapshot <- EntityStore.standard().loadDetached[Tag](tag.id)
         .flatMap(value =>
           Consequence.successOrEntityNotFound(value)(tag.id)
         )
@@ -172,9 +173,10 @@ final class EntityStoreTagRepository extends TagRepository {
         updatedAt = ctx.clock.instant(),
         attributes = update.attributes.getOrElse(source.attributes)
       )
-      _ <- EntityStore.standard().save(
+      _ <- EntityStore.standard().saveDetached(
         changed,
-        snapshot.revision
+        Some(snapshot.revision),
+        EntityMutationExecutionPolicy.default
       )
       loaded <- load(tag.id)
       result <- loaded.map(Consequence.success).getOrElse(
@@ -220,9 +222,10 @@ final class EntityStoreTagRepository extends TagRepository {
         z.flatMap { _ =>
           snapshots.find(_.entity.id == value.id) match {
             case Some(snapshot) =>
-              EntityStore.standard().save(
+              EntityStore.standard().saveDetached(
                 value,
-                snapshot.revision
+                Some(snapshot.revision),
+                EntityMutationExecutionPolicy.default
               ).map(_ => ())
             case None =>
               Consequence.operationNotFound(s"tag:${value.id.value}")
@@ -239,12 +242,16 @@ final class EntityStoreTagRepository extends TagRepository {
 
   private def _load_snapshots(
       values: Vector[Tag]
-  )(using ctx: ExecutionContext): Consequence[Vector[EntitySnapshot[Tag]]] =
-    values.foldLeft(Consequence.success(Vector.empty[EntitySnapshot[Tag]])) {
+  )(using
+    ctx: ExecutionContext
+  ): Consequence[Vector[EntityRevisionCarrier[Tag]]] =
+    values.foldLeft(
+      Consequence.success(Vector.empty[EntityRevisionCarrier[Tag]])
+    ) {
       (z, value) =>
         for {
           snapshots <- z
-          snapshot <- EntityStore.standard().loadSnapshot[Tag](value.id)
+          snapshot <- EntityStore.standard().loadDetached[Tag](value.id)
             .flatMap(result =>
               Consequence.successOrEntityNotFound(result)(value.id)
             )

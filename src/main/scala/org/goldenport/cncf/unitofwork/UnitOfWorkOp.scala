@@ -174,6 +174,12 @@ object UnitOfWorkOp {
       authorization: Option[UnitOfWorkAuthorization] = None
   ) extends UnitOfWorkOp[Option[EntitySnapshot[T]]]
 
+  final case class EntityStoreLoadDetached[T](
+    id: EntityId,
+    tc: EntityPersistent[T],
+    authorization: Option[UnitOfWorkAuthorization] = None
+  ) extends UnitOfWorkOp[Option[EntityRevisionCarrier[T]]]
+
   // Special-use direct path to EntityStoreSpace (bypasses EntitySpace/MemoryRealm).
   final case class EntityStoreLoadDirect[T](
     id: EntityId,
@@ -213,6 +219,15 @@ object UnitOfWorkOp {
         authorization
       )
   }
+
+  final case class EntityStoreSaveDetached[T](
+    entity: T,
+    expectedRevision: Option[EntityRevision],
+    tc: EntityPersistent[T],
+    authorization: Option[UnitOfWorkAuthorization] = None,
+    executionPolicy: EntityMutationExecutionPolicy =
+      EntityMutationExecutionPolicy.default
+  ) extends UnitOfWorkOp[EntityRevisionCarrier[T]]
 
   final case class EntityStoreSaveUnversioned[T](
       entity: T,
@@ -265,6 +280,15 @@ object UnitOfWorkOp {
       )
   }
 
+  final case class EntityStoreUpdateDetached[T](
+    entity: T,
+    expectedRevision: Option[EntityRevision],
+    tc: EntityPersistent[T],
+    authorization: Option[UnitOfWorkAuthorization] = None,
+    executionPolicy: EntityMutationExecutionPolicy =
+      EntityMutationExecutionPolicy.default
+  ) extends UnitOfWorkOp[EntityRevisionCarrier[T]]
+
   // Patch-oriented update route for cozy-generated update shapes (no id field in patch).
   final case class EntityStoreUpdateById[P](
     id: EntityId,
@@ -304,6 +328,16 @@ object UnitOfWorkOp {
         authorization
       )
   }
+
+  final case class EntityStoreUpdateByIdDetached[P](
+    id: EntityId,
+    patch: P,
+    expectedRevision: Option[EntityRevision],
+    tc: EntityPersistentUpdate[P],
+    authorization: Option[UnitOfWorkAuthorization] = None,
+    executionPolicy: EntityMutationExecutionPolicy =
+      EntityMutationExecutionPolicy.default
+  ) extends UnitOfWorkOp[EntityRevisionCarrier[Record]]
 
   private[cncf] final case class EntityStoreConditionalTransition[R, P, S](
     request: EntityConditionalTransition[R, P, S],

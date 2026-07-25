@@ -207,6 +207,23 @@ class EntityStoreSpace {
     }
   }
 
+  def loadDetached[T](
+    id: EntityId,
+    tc: EntityPersistent[T]
+  )(using ctx: ExecutionContext): Consequence[Option[EntityRevisionCarrier[T]]] = {
+    given EntityPersistent[T] = tc
+    _with_calltree(
+      "space:entitystore:load-detached",
+      _entitystore_space_attributes("load-detached", id.collection) +
+        ("entity_id" -> id.print)
+    ) {
+      for {
+        entitystore <- _by_collection(id.collection)
+        carrier <- entitystore.loadDetached(id)
+      } yield carrier
+    }
+  }
+
   def save[T](
       op: EntityStoreSave[T]
   )(using ctx: ExecutionContext): Consequence[EntitySnapshot[T]] =
@@ -273,6 +290,29 @@ class EntityStoreSpace {
     }
   }
 
+  def saveDetached[T](
+    op: EntityStoreSaveDetached[T]
+  )(using
+    ctx: ExecutionContext
+  ): Consequence[EntityRevisionCarrier[T]] = {
+    given EntityPersistent[T] = op.tc
+    val id = op.tc.id(op.entity)
+    _with_calltree(
+      "space:entitystore:save-detached",
+      _entitystore_space_attributes("save-detached", id.collection) +
+        ("entity_id" -> id.print)
+    ) {
+      for {
+        entitystore <- _by_collection(id.collection)
+        carrier <- entitystore.saveDetached(
+          op.entity,
+          op.expectedRevision,
+          op.executionPolicy
+        )
+      } yield carrier
+    }
+  }
+
   def update[T](
       op: EntityStoreUpdate[T]
   )(using ctx: ExecutionContext): Consequence[EntitySnapshot[T]] =
@@ -336,6 +376,29 @@ class EntityStoreSpace {
           executionPolicy
         )
       } yield snapshot
+    }
+  }
+
+  def updateDetached[T](
+    op: EntityStoreUpdateDetached[T]
+  )(using
+    ctx: ExecutionContext
+  ): Consequence[EntityRevisionCarrier[T]] = {
+    given EntityPersistent[T] = op.tc
+    val id = op.tc.id(op.entity)
+    _with_calltree(
+      "space:entitystore:update-detached",
+      _entitystore_space_attributes("update-detached", id.collection) +
+        ("entity_id" -> id.print)
+    ) {
+      for {
+        entitystore <- _by_collection(id.collection)
+        carrier <- entitystore.updateDetached(
+          op.entity,
+          op.expectedRevision,
+          op.executionPolicy
+        )
+      } yield carrier
     }
   }
 
@@ -410,6 +473,31 @@ class EntityStoreSpace {
           executionPolicy
         )
       } yield snapshot
+    }
+  }
+
+  def updateByIdDetached[P](
+    op: EntityStoreUpdateByIdDetached[P]
+  )(using
+    ctx: ExecutionContext
+  ): Consequence[EntityRevisionCarrier[Record]] = {
+    given EntityPersistentUpdate[P] = op.tc
+    _with_calltree(
+      "space:entitystore:update-by-id-detached",
+      _entitystore_space_attributes(
+        "update-by-id-detached",
+        op.id.collection
+      ) + ("entity_id" -> op.id.print)
+    ) {
+      for {
+        entitystore <- _by_collection(op.id.collection)
+        carrier <- entitystore.updateByIdDetached(
+          op.id,
+          op.patch,
+          op.expectedRevision,
+          op.executionPolicy
+        )
+      } yield carrier
     }
   }
 

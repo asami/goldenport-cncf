@@ -22,7 +22,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Jan.  4, 2026
  *  version Apr. 22, 2026
- * @version May. 24, 2026
+ * @version Jul. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 class InMemoryJobEngineSpec extends AnyWordSpec with Matchers with GivenWhenThen with JobEngineTestFixture {
@@ -65,7 +65,7 @@ class InMemoryJobEngineSpec extends AnyWordSpec with Matchers with GivenWhenThen
       import JobEntity.given
 
       val jobengine = createJobEngine()
-      given ExecutionContext = ExecutionContext.test()
+      given ExecutionContext = createJobEntityContext()
       val jobid = _jobid(jobengine.submit(List(_ValueTask("managed")), summon[ExecutionContext], JobSubmitOption(runMode = JobRunMode.Sync)))
 
       val entity = EntityStore.standard().load[JobEntity](JobEntity.entityId(jobid)).toOption.flatten

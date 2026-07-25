@@ -24,6 +24,11 @@ import org.goldenport.cncf.datastore.{
   DataStoreConditionalTransitionResult,
   EntityConditionalTransitionDataStore,
   EntityConditionalTransitionSupport,
+  EntityVersionedMutationCheckpoint,
+  EntityVersionedMutationDataStore,
+  EntityVersionedMutationFailure,
+  EntityVersionedMutationPlan,
+  EntityVersionedMutationResult,
   EntityVersionedMutationSupport,
   EntityVersionedSideEffect,
   OrderDirection,
@@ -37,9 +42,15 @@ import org.goldenport.cncf.datastore.{
   SearchableDataStore,
   TotalCountCapability
 }
+import org.goldenport.cncf.entity.{
+  EntityConcurrencyPolicy,
+  EntityWritePolicy,
+  RevisionPreconditionPolicy
+}
 import org.goldenport.cncf.unitofwork.{CommitRecorder, PrepareResult, TransactionContext}
 import org.goldenport.cncf.directive.{Query as EntityQuery}
 import org.goldenport.observation.Descriptor
+import org.simplemodeling.model.datatype.EntityRevision
 
 /*
  * @since   Mar. 12, 2026
@@ -57,6 +68,7 @@ class SqlDataStore(
   config: SqlDataStore.Config = SqlDataStore.Config()
 ) extends DataStore
     with SearchableDataStore
+    with EntityVersionedMutationDataStore
     with EntityConditionalTransitionDataStore {
   import DataStore.*
   private val _record_decoder = new RecordDecoder()
@@ -162,6 +174,25 @@ class SqlDataStore(
   override def totalCountCapability(collection: CollectionId): TotalCountCapability =
     TotalCountCapability.Supported
 
+  def mutateVersionedEntity(
+    plan: EntityVersionedMutationPlan
+  )(using
+    ctx: ExecutionContext
+  ): Consequence[EntityVersionedMutationResult] =
+    EntityVersionedMutationSupport
+      .validate(plan)
+      .flatMap { _ =>
+        (for {
+          _ <- _prepare_versioned_mutation_schema(plan)
+          result <-
+            _with_versioned_mutation { connection =>
+              _versioned_mutation(connection, plan)
+            }
+        } yield result).recoverWith(
+          EntityVersionedMutationFailure.normalizeProvider
+        )
+      }
+
   def conditionalTransition(
     plan: DataStoreConditionalTransitionPlan
   )(using
@@ -206,6 +237,24 @@ class SqlDataStore(
     checkpoint: DataStoreConditionalTransitionCheckpoint
   ): Consequence[Unit] =
     Consequence.unit
+
+  protected def versioned_mutation_checkpoint(
+    checkpoint: EntityVersionedMutationCheckpoint
+  ): Consequence[Unit] =
+    Consequence.unit
+
+  protected def versioned_mutation_commit(
+    connection: Connection
+  ): Consequence[Unit] =
+    try {
+      connection.commit()
+      Consequence.unit
+    } catch {
+      case e: Throwable =>
+        EntityVersionedMutationFailure.transactionIndeterminate(
+          s"Versioned mutation commit outcome is indeterminate: ${e.getClass.getName}"
+        )
+    }
 
   protected def conditional_transition_commit(
     connection: Connection
@@ -264,6 +313,67 @@ class SqlDataStore(
       case e: Throwable =>
         DataStoreConditionalTransitionFailure.providerFailure(
           s"Conditional transition transaction could not start: ${e.getClass.getName}"
+        )
+    }
+
+  private def _with_versioned_mutation[A](
+    body: Connection => Consequence[A]
+  ): Consequence[A] =
+    try {
+      val connection = datasource.getConnection()
+      try {
+        val autocommit = connection.getAutoCommit
+        try {
+          connection.setAutoCommit(false)
+          val result =
+            try body(connection)
+            catch {
+              case e: Throwable =>
+                EntityVersionedMutationFailure.providerFailure(
+                  s"Versioned mutation provider failed: ${e.getClass.getName}"
+                )
+            }
+          result match {
+            case success: Consequence.Success[A] =>
+              versioned_mutation_commit(connection) match {
+                case _: Consequence.Success[?] =>
+                  success
+                case Consequence.Failure(conclusion) =>
+                  _rollback_versioned_mutation(connection, conclusion)
+              }
+            case Consequence.Failure(conclusion) =>
+              val normalized =
+                EntityVersionedMutationFailure
+                  .normalizeProvider[A](conclusion)
+              _rollback_versioned_mutation(
+                connection,
+                normalized.conclusion
+              )
+          }
+        } finally {
+          _restore_conditional_connection(connection, autocommit)
+        }
+      } finally {
+        _close_conditional_connection(connection)
+      }
+    } catch {
+      case e: Throwable =>
+        EntityVersionedMutationFailure.providerFailure(
+          s"Versioned mutation transaction could not start: ${e.getClass.getName}"
+        )
+    }
+
+  private def _rollback_versioned_mutation[A](
+    connection: Connection,
+    conclusion: Conclusion
+  ): Consequence[A] =
+    try {
+      connection.rollback()
+      Consequence.Failure(conclusion)
+    } catch {
+      case e: Throwable =>
+        EntityVersionedMutationFailure.transactionIndeterminate(
+          s"Versioned mutation rollback outcome is indeterminate: ${e.getClass.getName}"
         )
     }
 
@@ -343,6 +453,55 @@ class SqlDataStore(
     else
       Consequence.unit
 
+  private def _prepare_versioned_mutation_schema(
+    plan: EntityVersionedMutationPlan
+  ): Consequence[Unit] =
+    if (_requires_conditional_schema_preparation)
+      _with_connection { connection =>
+        for {
+          existing <-
+            _required_record(
+              connection,
+              plan.collection,
+              plan.entryId
+            )
+          revision <- EntityVersionedMutationSupport
+            .revision(existing, plan.revisionField)
+          rootrecord =
+            EntityVersionedMutationSupport.applyRootMutation(
+              existing,
+              plan,
+              revision
+            )
+          _ <- _ensure_existing_table_columns(
+            connection,
+            plan.collection,
+            _record_columns(rootrecord)
+          )
+          _ <- plan.sideEffects.foldLeft(Consequence.unit) {
+            case (
+                  result,
+                  EntityVersionedSideEffect.Save(
+                    collection,
+                    _,
+                    record
+                  )
+                ) =>
+              result.flatMap(_ =>
+                _ensure_table(
+                  connection,
+                  collection,
+                  _record_columns(record)
+                )
+              )
+            case (result, _: EntityVersionedSideEffect.Delete) =>
+              result
+          }
+        } yield ()
+      }
+    else
+      Consequence.unit
+
   private def _requires_conditional_schema_preparation: Boolean =
     dialect.name == MySqlDialectDriver.name
 
@@ -396,6 +555,145 @@ class SqlDataStore(
             DataStoreConditionalTransitionResult.NotMatched(existing)
           )
     } yield result
+
+  private def _versioned_mutation(
+    connection: Connection,
+    plan: EntityVersionedMutationPlan
+  ): Consequence[EntityVersionedMutationResult] =
+    for {
+      existingoption <-
+        _select_conditional_root(
+          connection,
+          plan.collection,
+          plan.entryId
+        )
+      existing <-
+        existingoption
+          .map(Consequence.success)
+          .getOrElse(
+            Consequence.DataStoreNotFound(plan.entryId.print)
+          )
+      actual <-
+        EntityVersionedMutationSupport.revision(
+          existing,
+          plan.revisionField
+        )
+      desired =
+        EntityVersionedMutationSupport.desiredRecord(existing, plan)
+      result <-
+        if (
+          plan.preconditionPolicy ==
+            RevisionPreconditionPolicy.ObservedRequired &&
+          plan.expectedRevision.exists(_ != actual)
+        )
+          _stale_versioned_mutation(plan.expectedRevision, actual)
+        else if (
+          plan.writePolicy == EntityWritePolicy.WriteIfChanged &&
+          EntityVersionedMutationSupport.businessStateEquals(
+            existing,
+            desired,
+            plan
+          )
+        )
+          Consequence.success(
+            EntityVersionedMutationResult.NoOp(existing)
+          )
+        else if (
+          plan.concurrencyPolicy == EntityConcurrencyPolicy.Optimistic &&
+          plan.expectedRevision.exists(_ != actual)
+        )
+          _stale_versioned_mutation(plan.expectedRevision, actual)
+        else
+          actual.nextC.flatMap { nextrevision =>
+            _apply_versioned_mutation(
+              connection,
+              plan,
+              existing,
+              nextrevision
+            )
+          }
+    } yield result
+
+  private def _apply_versioned_mutation(
+    connection: Connection,
+    plan: EntityVersionedMutationPlan,
+    existing: Record,
+    nextrevision: EntityRevision
+  ): Consequence[EntityVersionedMutationResult] = {
+    val rootrecord =
+      EntityVersionedMutationSupport.applyRootMutation(
+        existing,
+        plan,
+        nextrevision
+      )
+    for {
+      _ <- versioned_mutation_checkpoint(
+        EntityVersionedMutationCheckpoint.RootPrepared
+      )
+      _ <- _update_versioned_root_record(
+        connection,
+        plan.collection,
+        plan.entryId,
+        rootrecord
+      )
+      _ <- _apply_conditional_side_effects(connection, plan.sideEffects)
+      _ <- versioned_mutation_checkpoint(
+        EntityVersionedMutationCheckpoint.SideEffectsPrepared
+      )
+      _ <- versioned_mutation_checkpoint(
+        EntityVersionedMutationCheckpoint.BeforePublish
+      )
+      authoritative <-
+        _required_record(
+          connection,
+          plan.collection,
+          plan.entryId
+        )
+    } yield EntityVersionedMutationResult.Applied(authoritative)
+  }
+
+  private def _stale_versioned_mutation(
+    expectedrevision: Option[EntityRevision],
+    actualrevision: EntityRevision
+  ): Consequence[EntityVersionedMutationResult] =
+    expectedrevision
+      .map(expected =>
+        Consequence.success(
+          EntityVersionedMutationResult.Stale(
+            expected,
+            actualrevision
+          )
+        )
+      )
+      .getOrElse(
+        Consequence.configurationInvalid(
+          "stale Entity mutation requires an expected revision"
+        )
+      )
+
+  private def _update_versioned_root_record(
+    connection: Connection,
+    collection: CollectionId,
+    entryid: EntryId,
+    record: Record
+  ): Consequence[Unit] = {
+    val columns = _record_columns(record)
+    for {
+      _ <- _ensure_table(connection, collection, columns)
+      updated <-
+        _update_count(
+          connection,
+          collection,
+          entryid,
+          columns
+        )
+      _ <-
+        if (updated == 1)
+          Consequence.unit
+        else
+          Consequence.DataStoreNotFound(entryid.print)
+    } yield ()
+  }
 
   private def _apply_conditional_transition(
     connection: Connection,

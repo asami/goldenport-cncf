@@ -163,6 +163,18 @@ final case class EntityMutationPolicySelection(
 }
 
 object EntityMutationAdapterDefaults {
+  val profilePropertyName: String =
+    "textus.entity.mutation.adapter"
+
+  val webFormProfile: String =
+    "web-form-update"
+
+  val idempotentRestProfile: String =
+    "rest-idempotent-update"
+
+  val strictRestProfile: String =
+    "rest-strict-update"
+
   val core: EntityMutationPolicyDeclaration =
     EntityMutationPolicyDeclaration(
       writePolicy = Some(EntityWritePolicy.AlwaysWrite),
@@ -188,6 +200,18 @@ object EntityMutationAdapterDefaults {
       preconditionPolicy =
         Some(RevisionPreconditionPolicy.ObservedRequired)
     )
+
+  def forProfile(profile: Option[String]): EntityMutationPolicyDeclaration =
+    profile.map(_.trim.toLowerCase(Locale.ROOT)) match {
+      case Some(value) if value == webFormProfile =>
+        webFormUpdate
+      case Some(value) if value == idempotentRestProfile =>
+        idempotentRestUpdate
+      case Some(value) if value == strictRestProfile =>
+        strictRestUpdate
+      case _ =>
+        core
+    }
 }
 
 object EntityMutationPolicyResolver {

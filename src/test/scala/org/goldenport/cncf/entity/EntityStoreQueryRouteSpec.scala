@@ -23,7 +23,7 @@ import org.goldenport.cncf.context.{
 }
 import org.goldenport.cncf.datastore.{DataStore, DataStoreSpace}
 import org.goldenport.cncf.datastore.sql.SqlDataStore
-import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId, EntityRevision}
+import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 import org.goldenport.cncf.directive.Query
 import org.simplemodeling.model.directive.{Condition, Update}
 import org.goldenport.cncf.http.FakeHttpDriver
@@ -47,8 +47,6 @@ final class EntityStoreQueryRouteSpec
     with GivenWhenThen {
 
   private val _cid = EntityCollectionId("test", "a", "person")
-  private val _initialrevision =
-    EntityRevision.INITIAL
 
   "EntityPersistent store record contract" should {
     "delegate default store APIs to RecordCodex compatibility methods" in {
@@ -529,16 +527,17 @@ final class EntityStoreQueryRouteSpec
       )
 
       When("updating by id with Update patch shape")
-      val op = UnitOfWorkOp.EntityStoreUpdateById(
+      val op = UnitOfWorkOp.EntityStoreUpdateByIdUnversioned(
         id = id,
         patch = PersonPatch(
           name = Update.set("hanako"),
           age = Update.noop[Int]
         ),
-        expectedRevision = _initialrevision,
-        tc = summon[EntityPersistentUpdate[PersonPatch]]
+        purpose = EntityUnversionedMutationPurpose.FrameworkBootstrap,
+        tc = summon[EntityPersistentUpdate[PersonPatch]],
+        authorization = None
       )
-      val updated = entitystorespace.updateById(op)
+      val updated = entitystorespace.updateByIdUnversioned(op)
 
       Then("only set fields are reflected")
       updated shouldBe a[Consequence.Success[_]]
@@ -573,12 +572,13 @@ final class EntityStoreQueryRouteSpec
       )
 
       When("updating by id with a store-aware patch")
-      val updated = entitystorespace.updateById(
-        UnitOfWorkOp.EntityStoreUpdateById(
+      val updated = entitystorespace.updateByIdUnversioned(
+        UnitOfWorkOp.EntityStoreUpdateByIdUnversioned(
           id = id,
           patch = StorePatchCandidate(Update.set("after")),
-          expectedRevision = _initialrevision,
-          tc = summon[EntityPersistentUpdate[StorePatchCandidate]]
+          purpose = EntityUnversionedMutationPurpose.FrameworkBootstrap,
+          tc = summon[EntityPersistentUpdate[StorePatchCandidate]],
+          authorization = None
         )
       )
       val loaded = for {
@@ -613,6 +613,7 @@ final class EntityStoreQueryRouteSpec
 
       When("creating entity through EntityStoreSpace")
       val created = entitystorespace.create(createop)
+      val createdid = created.map(_.id)
       val loaded = for {
         result <- created
         cid    <- summon[ExecutionContext].entityStoreSpace.dataStoreCollection(result.id)
@@ -622,13 +623,12 @@ final class EntityStoreQueryRouteSpec
       } yield rec
 
       Then("id/name and context-derived metadata are complemented")
-      created.map(_.id) shouldBe Consequence.success(created.TAKE.id)
-      created.map(_.id.major) shouldBe Consequence.success("single")
-      created.map(_.id.minor) shouldBe Consequence.success("global")
-      created.map(_.id.parts.entropy.matches("[0-9a-f]{32}")) shouldBe Consequence.success(true)
-      loaded.map(_.flatMap(_.getString("id"))) shouldBe Consequence.success(
-        Some(created.TAKE.id.print)
-      )
+      createdid shouldBe a[Consequence.Success[?]]
+      createdid.map(_.major) shouldBe Consequence.success("single")
+      createdid.map(_.minor) shouldBe Consequence.success("global")
+      createdid.map(_.parts.entropy.matches("[0-9a-f]{32}")) shouldBe Consequence.success(true)
+      loaded.map(_.flatMap(_.getString("id"))) shouldBe
+        createdid.map(id => Some(id.print))
       loaded.map(_.flatMap(_.getString("short_id"))) shouldBe created.map(result =>
         Some(result.id.parts.entropy)
       )
@@ -686,15 +686,16 @@ final class EntityStoreQueryRouteSpec
       )
 
       When("saving without name/createdBy")
-      val saved = entitystorespace.save(
-        UnitOfWorkOp.EntityStoreSave(
+      val saved = entitystorespace.saveUnversioned(
+        UnitOfWorkOp.EntityStoreSaveUnversioned(
           entity = SaveCandidate(
             id = id,
             name = None,
             age = Some(21)
           ),
-          expectedRevision = _initialrevision,
-          tc = summon[EntityPersistent[SaveCandidate]]
+          purpose = EntityUnversionedMutationPurpose.FrameworkBootstrap,
+          tc = summon[EntityPersistent[SaveCandidate]],
+          authorization = None
         )
       )
       val loaded = for {
@@ -756,15 +757,16 @@ final class EntityStoreQueryRouteSpec
       )
 
       When("saving through the normal EntityStore route")
-      val saved = entitystorespace.save(
-        UnitOfWorkOp.EntityStoreSave(
+      val saved = entitystorespace.saveUnversioned(
+        UnitOfWorkOp.EntityStoreSaveUnversioned(
           entity = SaveCandidate(
             id = id,
             name = Some("resurrected"),
             age = Some(21)
           ),
-          expectedRevision = _initialrevision,
-          tc = summon[EntityPersistent[SaveCandidate]]
+          purpose = EntityUnversionedMutationPurpose.FrameworkBootstrap,
+          tc = summon[EntityPersistent[SaveCandidate]],
+          authorization = None
         )
       )
       val loaded = entitystorespace.load(UnitOfWorkOp.EntityStoreLoad(
@@ -809,15 +811,16 @@ final class EntityStoreQueryRouteSpec
       )
 
       When("saving a replacement entity without content")
-      val saved = entitystorespace.save(
-        UnitOfWorkOp.EntityStoreSave(
+      val saved = entitystorespace.saveUnversioned(
+        UnitOfWorkOp.EntityStoreSaveUnversioned(
           entity = SaveCandidate(
             id = id,
             name = Some("saved"),
             age = Some(21)
           ),
-          expectedRevision = _initialrevision,
-          tc = summon[EntityPersistent[SaveCandidate]]
+          purpose = EntityUnversionedMutationPurpose.FrameworkBootstrap,
+          tc = summon[EntityPersistent[SaveCandidate]],
+          authorization = None
         )
       )
       val hydrated = for {
@@ -909,14 +912,15 @@ final class EntityStoreQueryRouteSpec
       )
 
       When("updating without name/createdBy")
-      val updated = entitystorespace.update(
-        UnitOfWorkOp.EntityStoreUpdate(
+      val updated = entitystorespace.updateUnversioned(
+        UnitOfWorkOp.EntityStoreUpdateUnversioned(
           entity = UpdateCandidate(
             id = id,
             age = Some(31)
           ),
-          expectedRevision = _initialrevision,
-          tc = summon[EntityPersistent[UpdateCandidate]]
+          purpose = EntityUnversionedMutationPurpose.FrameworkBootstrap,
+          tc = summon[EntityPersistent[UpdateCandidate]],
+          authorization = None
         )
       )
       val loaded = for {
@@ -977,14 +981,15 @@ final class EntityStoreQueryRouteSpec
       )
 
       When("updating through the normal EntityStore route")
-      val updated = entitystorespace.update(
-        UnitOfWorkOp.EntityStoreUpdate(
+      val updated = entitystorespace.updateUnversioned(
+        UnitOfWorkOp.EntityStoreUpdateUnversioned(
           entity = UpdateCandidate(
             id = id,
             age = Some(31)
           ),
-          expectedRevision = _initialrevision,
-          tc = summon[EntityPersistent[UpdateCandidate]]
+          purpose = EntityUnversionedMutationPurpose.FrameworkBootstrap,
+          tc = summon[EntityPersistent[UpdateCandidate]],
+          authorization = None
         )
       )
       val loaded = entitystorespace.load(UnitOfWorkOp.EntityStoreLoad(
@@ -1029,14 +1034,15 @@ final class EntityStoreQueryRouteSpec
       )
 
       When("updating another field without content")
-      val updated = entitystorespace.update(
-        UnitOfWorkOp.EntityStoreUpdate(
+      val updated = entitystorespace.updateUnversioned(
+        UnitOfWorkOp.EntityStoreUpdateUnversioned(
           entity = UpdateCandidate(
             id = id,
             age = Some(31)
           ),
-          expectedRevision = _initialrevision,
-          tc = summon[EntityPersistent[UpdateCandidate]]
+          purpose = EntityUnversionedMutationPurpose.FrameworkBootstrap,
+          tc = summon[EntityPersistent[UpdateCandidate]],
+          authorization = None
         )
       )
       val hydrated = for {
@@ -1055,6 +1061,80 @@ final class EntityStoreQueryRouteSpec
       hydrated.map(_.getString("content")) shouldBe Consequence.success(Some("日本語"))
       hydrated.map(_.getString("content_storage")) shouldBe Consequence.success(Some("overflow"))
       hydrated.map(_.getInt("age")) shouldBe Consequence.success(Some(31))
+    }
+
+    "preserve overflow content when an unmanaged upsert omits content" in {
+      Given("an unmanaged existing record whose content is stored in overflow")
+      val datastorespace     = DataStoreSpace.default()
+      val entitystorespace   = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+      given ExecutionContext = _execution_context(datastorespace, entitystorespace)
+      given EntityPersistentCreate[CreateCandidate] = _create_candidate_persistent
+
+      val collectionid = EntityCollectionId(
+        "test",
+        "a",
+        "create_candidate"
+      )
+      val id = EntityId("test", "overflow_upsert", collectionid)
+      val stored = _success(ContentBodyStoragePolicy.prepareForSave(
+        id,
+        Record.dataAuto(
+          "id" -> id,
+          "name" -> "before",
+          "age" -> 30,
+          "content" -> "日本語",
+          "content_charset" -> "UTF-8"
+        ),
+        ContentBodyStoragePolicy.Config(inlineByteThreshold = 5)
+      ))
+      val seeded = datastorespace.inject(
+        DataStoreSpace.Seed(
+          Vector(
+            DataStoreSpace.SeedEntry(
+              DataStore.CollectionId.EntityStore(collectionid),
+              stored
+            )
+          )
+        )
+      )
+
+      When("the unversioned upsert changes another field without content")
+      val updated = seeded.flatMap(_ =>
+        entitystorespace.upsert(
+          UnitOfWorkOp.EntityStoreUpsertUnversioned(
+            entity = CreateCandidate(
+              Some(id),
+              Some("updated"),
+              Some(31)
+            ),
+            id = id,
+            purpose =
+              EntityUnversionedMutationPurpose.FrameworkBootstrap,
+            tc = summon[EntityPersistentCreate[CreateCandidate]]
+          )
+        )(_ => Consequence.unit)
+      )
+      val hydrated = for {
+        _ <- updated
+        cid <- summon[ExecutionContext].entityStoreSpace
+          .dataStoreCollection(id)
+        dsid <- summon[ExecutionContext].entityStoreSpace
+          .dataStoreEntryId(id)
+        ds <- summon[ExecutionContext].dataStoreSpace.dataStore(cid)
+        record <- ds.load(cid, dsid)
+        result <- record
+          .map(ContentBodyStoragePolicy.hydrate(id, _))
+          .getOrElse(Consequence.success(Record.empty))
+      } yield result
+
+      Then("the partial upsert retains both overflow metadata and payload")
+      updated shouldBe a[Consequence.Success[?]]
+      hydrated.map(_.getString("name")) shouldBe
+        Consequence.success(Some("updated"))
+      hydrated.map(_.getString("content")) shouldBe
+        Consequence.success(Some("日本語"))
+      hydrated.map(_.getString("content_storage")) shouldBe
+        Consequence.success(Some("overflow"))
     }
 
     "overwrite caller-supplied update audit fields on entity-store route" in {
@@ -1082,15 +1162,16 @@ final class EntityStoreQueryRouteSpec
       )
 
       When("updating through EntityStoreSpace")
-      val updated = entitystorespace.update(
-        UnitOfWorkOp.EntityStoreUpdate(
+      val updated = entitystorespace.updateUnversioned(
+        UnitOfWorkOp.EntityStoreUpdateUnversioned(
           entity = AuditSpoofUpdateCandidate(
             id = id,
             updatedAt = Instant.EPOCH,
             updatedBy = "attacker"
           ),
-          expectedRevision = _initialrevision,
-          tc = summon[EntityPersistent[AuditSpoofUpdateCandidate]]
+          purpose = EntityUnversionedMutationPurpose.FrameworkBootstrap,
+          tc = summon[EntityPersistent[AuditSpoofUpdateCandidate]],
+          authorization = None
         )
       )
       val loaded = for {

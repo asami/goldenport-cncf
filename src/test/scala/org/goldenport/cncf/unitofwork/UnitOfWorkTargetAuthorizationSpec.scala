@@ -27,6 +27,8 @@ import org.goldenport.cncf.datastore.{DataStore, DataStoreSpace}
 import org.goldenport.cncf.entity.{
   EntityPersistent,
   EntityPersistentUpdate,
+  EntityRevisionRepresentation,
+  EntityRevisionSpecSupport,
   EntityStore,
   EntityStoreSpace,
   SimpleEntityStorageShapePolicy
@@ -317,9 +319,9 @@ final class UnitOfWorkTargetAuthorizationSpec
         val result = new UnitOfWorkInterpreter(uow).run(
           org.goldenport.ConsequenceT.liftF(
             cats.free.Free.liftF(
-              UnitOfWorkOp.EntityStoreSave(
+              UnitOfWorkOp.EntityStoreSaveDetached(
                 entity = PersonEntity(id, "taro-2", "owner-x", groupid = Some("team-a")),
-                expectedRevision = _initialrevision,
+                expectedRevision = Some(_initialrevision),
                 tc = summon[EntityPersistent[PersonEntity]],
                 authorization = Some(
                   UnitOfWorkAuthorization(
@@ -365,9 +367,9 @@ final class UnitOfWorkTargetAuthorizationSpec
         val result = new UnitOfWorkInterpreter(uow).run(
           org.goldenport.ConsequenceT.liftF(
             cats.free.Free.liftF(
-              UnitOfWorkOp.EntityStoreSave(
+              UnitOfWorkOp.EntityStoreSaveDetached(
                 entity = TypedSecurityTargetEntity(id, "typed-after", "typed-owner"),
-                expectedRevision = _initialrevision,
+                expectedRevision = Some(_initialrevision),
                 tc = summon[EntityPersistent[TypedSecurityTargetEntity]],
                 authorization = Some(
                   UnitOfWorkAuthorization(
@@ -422,14 +424,14 @@ final class UnitOfWorkTargetAuthorizationSpec
         val result = new UnitOfWorkInterpreter(uow).run(
           org.goldenport.ConsequenceT.liftF(
             cats.free.Free.liftF(
-              UnitOfWorkOp.EntityStoreSave(
+              UnitOfWorkOp.EntityStoreSaveDetached(
                 entity = TypedSecurityTargetEntity(
                   id,
                   "typed-stale-denied",
                   "typed-owner",
                   stalesecurity = true
                 ),
-                expectedRevision = _initialrevision,
+                expectedRevision = Some(_initialrevision),
                 tc = summon[EntityPersistent[TypedSecurityTargetEntity]],
                 authorization = Some(
                   UnitOfWorkAuthorization(
@@ -463,9 +465,9 @@ final class UnitOfWorkTargetAuthorizationSpec
         val result = new UnitOfWorkInterpreter(uow).run(
           org.goldenport.ConsequenceT.liftF(
             cats.free.Free.liftF(
-              UnitOfWorkOp.EntityStoreSave(
+              UnitOfWorkOp.EntityStoreSaveDetached(
                 entity = TypedSecurityTargetEntity(id, "typed-denied", "typed-owner"),
-                expectedRevision = _initialrevision,
+                expectedRevision = Some(_initialrevision),
                 tc = summon[EntityPersistent[TypedSecurityTargetEntity]],
                 authorization = Some(
                   UnitOfWorkAuthorization(
@@ -500,9 +502,9 @@ final class UnitOfWorkTargetAuthorizationSpec
         val result = new UnitOfWorkInterpreter(uow).run(
           org.goldenport.ConsequenceT.liftF(
             cats.free.Free.liftF(
-              UnitOfWorkOp.EntityStoreUpdate(
+              UnitOfWorkOp.EntityStoreUpdateDetached(
                 entity = PersonEntity(id, "shiro-2", "owner-x"),
-                expectedRevision = _initialrevision,
+                expectedRevision = Some(_initialrevision),
                 tc = summon[EntityPersistent[PersonEntity]],
                 authorization = Some(
                   UnitOfWorkAuthorization(
@@ -539,10 +541,10 @@ final class UnitOfWorkTargetAuthorizationSpec
         val result = new UnitOfWorkInterpreter(uow).run(
           org.goldenport.ConsequenceT.liftF(
             cats.free.Free.liftF(
-              UnitOfWorkOp.EntityStoreUpdateById(
+              UnitOfWorkOp.EntityStoreUpdateByIdDetached(
                 id = id,
                 patch = PersonPatch(name = Some("hanako-2")),
-                expectedRevision = _initialrevision,
+                expectedRevision = Some(_initialrevision),
                 tc = summon[EntityPersistentUpdate[PersonPatch]],
                 authorization = Some(
                   UnitOfWorkAuthorization(
@@ -612,9 +614,9 @@ final class UnitOfWorkTargetAuthorizationSpec
         val result = new UnitOfWorkInterpreter(uow).run(
           org.goldenport.ConsequenceT.liftF(
             cats.free.Free.liftF(
-              UnitOfWorkOp.EntityStoreUpdate(
+              UnitOfWorkOp.EntityStoreUpdateDetached(
                 entity = PersonEntity(id, "order-2", "sales-org"),
-                expectedRevision = _initialrevision,
+                expectedRevision = Some(_initialrevision),
                 tc = summon[EntityPersistent[PersonEntity]],
                 authorization = Some(
                   UnitOfWorkAuthorization(
@@ -650,9 +652,9 @@ final class UnitOfWorkTargetAuthorizationSpec
         val result = new UnitOfWorkInterpreter(uow).run(
           org.goldenport.ConsequenceT.liftF(
             cats.free.Free.liftF(
-              UnitOfWorkOp.EntityStoreUpdate(
+              UnitOfWorkOp.EntityStoreUpdateDetached(
                 entity = PersonEntity(id, "projection-2", "business-owner"),
-                expectedRevision = _initialrevision,
+                expectedRevision = Some(_initialrevision),
                 tc = summon[EntityPersistent[PersonEntity]],
                 authorization = Some(
                   UnitOfWorkAuthorization(
@@ -692,9 +694,9 @@ final class UnitOfWorkTargetAuthorizationSpec
           val result = new UnitOfWorkInterpreter(uow).run(
             org.goldenport.ConsequenceT.liftF(
               cats.free.Free.liftF(
-                UnitOfWorkOp.EntityStoreUpdate(
+                UnitOfWorkOp.EntityStoreUpdateDetached(
                   entity = PersonEntity(id, "order-2", "sales-org"),
-                  expectedRevision = _initialrevision,
+                  expectedRevision = Some(_initialrevision),
                   tc = summon[EntityPersistent[PersonEntity]],
                   authorization = Some(
                     UnitOfWorkAuthorization(
@@ -737,9 +739,9 @@ final class UnitOfWorkTargetAuthorizationSpec
           val result = new UnitOfWorkInterpreter(uow).run(
             org.goldenport.ConsequenceT.liftF(
               cats.free.Free.liftF(
-                UnitOfWorkOp.EntityStoreUpdate(
+                UnitOfWorkOp.EntityStoreUpdateDetached(
                   entity = PersonEntity(id, "projection-2", "business-owner"),
-                  expectedRevision = _initialrevision,
+                  expectedRevision = Some(_initialrevision),
                   tc = summon[EntityPersistent[PersonEntity]],
                   authorization = Some(
                     UnitOfWorkAuthorization(
@@ -777,9 +779,9 @@ final class UnitOfWorkTargetAuthorizationSpec
         val result = new UnitOfWorkInterpreter(uow).run(
           org.goldenport.ConsequenceT.liftF(
             cats.free.Free.liftF(
-              UnitOfWorkOp.EntityStoreUpdate(
+              UnitOfWorkOp.EntityStoreUpdateDetached(
                 entity = PersonEntity(id, "order-2", "sales-org"),
-                expectedRevision = _initialrevision,
+                expectedRevision = Some(_initialrevision),
                 tc = summon[EntityPersistent[PersonEntity]],
                 authorization = Some(
                   UnitOfWorkAuthorization(
@@ -821,9 +823,9 @@ final class UnitOfWorkTargetAuthorizationSpec
           val result = new UnitOfWorkInterpreter(uow).run(
             org.goldenport.ConsequenceT.liftF(
               cats.free.Free.liftF(
-                UnitOfWorkOp.EntityStoreUpdate(
+                UnitOfWorkOp.EntityStoreUpdateDetached(
                   entity = PersonEntity(id, "stock-2", "inventory-org"),
-                  expectedRevision = _initialrevision,
+                  expectedRevision = Some(_initialrevision),
                   tc = summon[EntityPersistent[PersonEntity]],
                   authorization = Some(
                     UnitOfWorkAuthorization(
@@ -865,9 +867,9 @@ final class UnitOfWorkTargetAuthorizationSpec
         val result = new UnitOfWorkInterpreter(uow).run(
           org.goldenport.ConsequenceT.liftF(
             cats.free.Free.liftF(
-              UnitOfWorkOp.EntityStoreUpdate(
+              UnitOfWorkOp.EntityStoreUpdateDetached(
                 entity = PersonEntity(id, "stock-2", "inventory-org"),
-                expectedRevision = _initialrevision,
+                expectedRevision = Some(_initialrevision),
                 tc = summon[EntityPersistent[PersonEntity]],
                 authorization = Some(
                   UnitOfWorkAuthorization(
@@ -952,14 +954,14 @@ final class UnitOfWorkTargetAuthorizationSpec
         val result = new UnitOfWorkInterpreter(uow).run(
           org.goldenport.ConsequenceT.liftF(
             cats.free.Free.liftF(
-              UnitOfWorkOp.EntityStoreUpdate(
+              UnitOfWorkOp.EntityStoreUpdateDetached(
                 entity = PersonEntity(
                   id,
                   "order-4-updated",
                   "sales-org",
                   customerid = Some("customer-123")
                 ),
-                expectedRevision = _initialrevision,
+                expectedRevision = Some(_initialrevision),
                 tc = summon[EntityPersistent[PersonEntity]],
                 authorization = Some(
                   UnitOfWorkAuthorization(
@@ -1000,14 +1002,14 @@ final class UnitOfWorkTargetAuthorizationSpec
         val result = new UnitOfWorkInterpreter(uow).run(
           org.goldenport.ConsequenceT.liftF(
             cats.free.Free.liftF(
-              UnitOfWorkOp.EntityStoreUpdate(
+              UnitOfWorkOp.EntityStoreUpdateDetached(
                 entity = PersonEntity(
                   id,
                   "order-5-updated",
                   "sales-org",
                   customerid = Some("customer-123")
                 ),
-                expectedRevision = _initialrevision,
+                expectedRevision = Some(_initialrevision),
                 tc = summon[EntityPersistent[PersonEntity]],
                 authorization = Some(
                   UnitOfWorkAuthorization(
@@ -1424,7 +1426,7 @@ final class UnitOfWorkTargetAuthorizationSpec
       disposeAction = _ => (),
       token = "uow-target-authorization-spec-runtime"
     )
-    context match {
+    val secured = context match {
       case i: ExecutionContext.Instance =>
         val principal = new Principal {
           def id: PrincipalId                 = PrincipalId(principalid)
@@ -1442,6 +1444,13 @@ final class UnitOfWorkTargetAuthorizationSpec
       case _ =>
         context
     }
+    EntityRevisionSpecSupport.registerRevisionBinding(
+      secured,
+      _cid,
+      _person_persistent,
+      EntityRevisionRepresentation.Detached
+    )
+    secured
   }
 
   private def _seed(entity: PersonEntity)(using ctx: ExecutionContext): Unit = {

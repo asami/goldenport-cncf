@@ -5,7 +5,11 @@ import cats.data.NonEmptyVector
 import org.goldenport.Consequence
 import org.goldenport.cncf.action.{Action, ActionCall, ProcedureActionCall, QueryAction}
 import org.goldenport.cncf.component.{Component, ComponentCreate, ComponentId, ComponentInstanceId}
-import org.goldenport.cncf.entity.EntityStore
+import org.goldenport.cncf.entity.{
+  EntityRevisionModelKind,
+  EntityRevisionRepresentation,
+  EntityStore
+}
 import org.goldenport.cncf.entity.runtime.EntityCollection
 import org.goldenport.cncf.entity.runtime.{EntityKind, EntityMemoryPolicy, EntityRuntimeDescriptor, PartitionStrategy, WorkingSetPolicy, WorkingSetPolicySource}
 import org.goldenport.cncf.security.{AdminAuthorizationPolicy, OperationAuthorizationProvider, OperationAuthorizationRule}
@@ -25,7 +29,7 @@ import org.simplemodeling.model.datatype.EntityId
  * Built-in Tag management and Entity-to-Tag workflow component.
  *
  * @since   May.  5, 2026
- * @version May.  5, 2026
+ * @version Jul. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 final class TagComponent() extends Component {
@@ -50,6 +54,9 @@ object TagComponent {
           maxEntitiesPerPartition = 10000,
           entityKind = EntityKind.Master,
           entityKindExplicit = true,
+          revisionModelKind = Some(EntityRevisionModelKind.NonSimpleEntity),
+          revisionRepresentation =
+            Some(EntityRevisionRepresentation.Detached),
           workingSetPolicy = Some(WorkingSetPolicy.Disabled),
           workingSetPolicySource = Some(WorkingSetPolicySource.Code)
         )

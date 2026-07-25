@@ -860,7 +860,7 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Phase 47: closed (`docs/phase/phase-47.md`)
 - Phase 48: closed (`docs/phase/phase-48.md`)
 - Phase 49: closed (`docs/phase/phase-49.md`)
-- Phase 50: active (`docs/phase/phase-50.md`)
+- Phase 50: closed (`docs/phase/phase-50.md`)
 
 ## 8. Completed Development Item History
 
@@ -1593,25 +1593,35 @@ Completed in Phase 49.
   conflict-resolution UI remain future item
   `9.40 Entity Conflict Resolution and Repair`.
 
+### 8.29 SimpleEntity Revision and OCC Simplification
+Completed in Phase 50.
+
+- Closed dashboard: `docs/phase/phase-50.md`
+- Closed checklist: `docs/phase/phase-50-checklist.md`
+- Decided designs:
+  - `docs/design/simpleentity-storage-shape-policy.md`
+  - `docs/design/entity-conflict-and-conditional-transition.md`
+  - `docs/spec/entity-conflict-and-conditional-transition.md`
+- Completed scope:
+  - one framework-managed `SimpleEntity.revision` with canonical initialization
+    and atomic advancement;
+  - explicit detached revision support for admitted non-`SimpleEntity` models
+    using the same revision kernel;
+  - declarative optimistic concurrency and write policies with authoritative
+    `AlwaysWrite` and `WriteIfChanged` behavior;
+  - revision-aware EntityStore, UnitOfWork, internal DSL, Conditional
+    Transition, Form, REST, View, Aggregate, and administration surfaces;
+  - equivalent in-memory, SQLite, and live MySQL provider behavior; and
+  - removal of the provisional token/snapshot compatibility API.
+- Deferred force, merge, repair, overwrite policy, and conflict-resolution UX
+  remain future item `9.40 Entity Conflict Resolution and Repair`.
+
 ## 9. Development Item Status
 
 This final section lists planned active and future development areas only.
 Completed work areas are recorded in section 8. When a development item closes,
 remove its completion record from this section and add or update the
 corresponding completed-history entry.
-
-Phase 50, `SimpleEntity Revision and OCC Simplification`, is the active phase.
-It makes framework-managed `SimpleEntity.revision` the standard
-representation, retains detached revision as an explicit extension for Entity
-models that do not extend `SimpleEntity`, and adds an application-selected
-ordinary OCC policy.
-
-- Planned dashboard: `docs/phase/phase-50.md`
-- Planned checklist: `docs/phase/phase-50-checklist.md`
-- Consideration record:
-  - `docs/journal/2026/07/2026-07-24-simpleentity-revision-occ-consideration.md`
-- Implementation proposal:
-  - `docs/notes/simpleentity-revision-occ-simplification-proposal.md`
 
 Other 9.x items remain future development candidates until explicitly
 selected.
@@ -2831,74 +2841,6 @@ after 9.12 and 9.39 move to completed history.
     exposing any mutation route; and
   - use one operator-facing application as the first driver rather than
     inventing a generic merge UI without evidence.
-
-### 9.41 SimpleEntity Revision and OCC Simplification
-Active in Phase 50 after Phase 49 closure.
-
-- Goal:
-  - make revision maintenance a standard framework-managed `SimpleEntity`
-    facility;
-  - let applications select whether ordinary Entity mutations enforce
-    optimistic revision comparison; and
-  - retain Phase 49's detached-domain capability for non-`SimpleEntity` models
-    without retaining its provisional token API as a compatibility surface.
-- Selected direction:
-  - `revision` is the only new standard `SimpleEntity` attribute;
-  - CNCF initializes and advances revision for every persisted
-    `SimpleEntity`, regardless of OCC policy;
-  - `createdAt` and `updatedAt` retain their existing lifecycle meaning and no
-    OCC-specific timestamp is introduced;
-  - ordinary OCC is selected declaratively at Entity or collection scope;
-  - `Optimistic` is the ordinary concurrency default and `None` is explicit
-    last-write-wins;
-  - `AlwaysWrite` is the core write default, while generated Web/Form and
-    idempotent REST updates use authoritative `WriteIfChanged` state
-    deduplication;
-  - normal application logic uses CNCF-managed revision metadata, while strict
-    routes may require an observed transport revision;
-  - conditional transition always requires authoritative revision comparison;
-  - `SimpleEntity` always uses embedded revision;
-  - a model that does not extend `SimpleEntity` may explicitly select detached
-    revision using the same `EntityRevision` and atomic mutation kernel; and
-  - compatibility aliases, duplicate storage fields, virtual legacy
-    revisions, implicit representation fallback, and token adapters are not
-    provided.
-- Initial scope:
-  - `EntityRevision` and `SimpleEntity.revision` owned by
-    `simplemodeling-model`;
-  - `simplemodeling-lib` support only for independently reusable missing
-    datatype/schema/decoding primitives, without Entity or OCC semantics;
-  - managed create/load/update/delete/restore persistence behavior;
-  - one common revision kernel and deterministic embedded/detached
-    representation binding;
-  - explicit detached revision carrier support for non-`SimpleEntity` models;
-  - deterministic ordinary concurrency-policy declaration and precedence;
-  - managed or observed revision preconditions through EntityStore,
-    UnitOfWork, protected DSL, generated adapters, and datastore paths without
-    adding revision to business operation parameters;
-  - Conditional Transition integration using `SimpleEntity.revision`;
-  - revision projection and expected-revision transport for admitted REST,
-    Form, Web, View, and Aggregate surfaces;
-  - in-memory, SQLite, and shared-provider concurrency evidence; and
-  - final replacement of the provisional Phase 49 token contract in canonical
-    design and static specification after implementation behavior is verified.
-- Boundary:
-  - revision remains framework-managed and application read-only;
-  - detached revision is not selectable for an ordinary `SimpleEntity`;
-  - one Entity cannot use embedded and detached revision simultaneously;
-  - policy `None` does not disable revision maintenance;
-  - policy `Optimistic` cannot be bypassed per request;
-  - no OCC comparison is derived from `updatedAt`, JVM time, or resident cache
-    state;
-  - force, merge, repair, and conflict-resolution UI remain in 9.40; and
-  - distributed consensus, leases, fencing, and cross-provider atomic mutation
-    remain outside this item.
-- Planning references:
-  - `docs/phase/phase-50.md`;
-  - `docs/phase/phase-50-checklist.md`;
-  - `docs/journal/2026/07/2026-07-24-simpleentity-revision-occ-consideration.md`;
-    and
-  - `docs/notes/simpleentity-revision-occ-simplification-proposal.md`.
 
 ### 9.43 REST and Web Form Transport Idempotency
 Future development item after Phase 50 establishes the Entity revision and

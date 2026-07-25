@@ -130,11 +130,11 @@ final class UnitOfWorkConditionalTransitionSpec
 
         And("both records are visible through the EntityStore")
         fixture.entitystorespace
-          .loadSnapshot(rootid, _root_persistent)
+          .loadDetached(rootid, _root_persistent)
           .map(_.map(_.entity.status)) shouldBe
           Consequence.success(Some("claimed"))
         fixture.entitystorespace
-          .loadSnapshot(successorid, _successor_persistent)
+          .loadDetached(successorid, _successor_persistent)
           .map(_.map(_.entity.label)) shouldBe
           Consequence.success(Some("created"))
       }
@@ -288,11 +288,11 @@ final class UnitOfWorkConditionalTransitionSpec
 
         And("the root mutation and existing successor are visible through the EntityStore")
         fixture.entitystorespace
-          .loadSnapshot(rootid, _root_persistent)
+          .loadDetached(rootid, _root_persistent)
           .map(_.map(_.entity.status)) shouldBe
           Consequence.success(Some("bound"))
         fixture.entitystorespace
-          .loadSnapshot(successorid, _successor_persistent)
+          .loadDetached(successorid, _successor_persistent)
           .map(_.map(_.entity.label)) shouldBe
           Consequence.success(Some("existing"))
       }
@@ -347,7 +347,7 @@ final class UnitOfWorkConditionalTransitionSpec
             fail("expected not-matched result")
         } shouldBe Consequence.success("closed")
         fixture.entitystorespace
-          .loadSnapshot(successorid, _successor_persistent) shouldBe
+          .loadDetached(successorid, _successor_persistent) shouldBe
           Consequence.success(None)
       }
     }
@@ -826,8 +826,20 @@ final class UnitOfWorkConditionalTransitionSpec
             )
           case _ =>
             context
-        }
+          }
       }
+    EntityRevisionSpecSupport.registerRevisionBinding(
+      effectivecontext,
+      _rootcollection,
+      _root_persistent,
+      EntityRevisionRepresentation.Detached
+    )
+    EntityRevisionSpecSupport.registerRevisionBinding(
+      effectivecontext,
+      _successorcollection,
+      _successor_persistent,
+      EntityRevisionRepresentation.Detached
+    )
     Fixture(datastorespace, entitystorespace, effectivecontext)
   }
 

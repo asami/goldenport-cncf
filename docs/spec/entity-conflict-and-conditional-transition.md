@@ -7,7 +7,8 @@ Architectural context is defined by
 
 ## Scope
 
-This specification defines the concurrency token, version-aware Entity
+This specification defines the framework-managed `EntityRevision`,
+version-aware Entity
 mutation, protected conditional transition, atomic datastore capability,
 authorization, coherence, diagnostics, and provider-equivalence contracts.
 
@@ -15,73 +16,77 @@ Required executable evidence is assigned in the evidence matrix below. A named
 specification is evidence only after that file exists and its relevant
 examples pass.
 
-> **Phase 50 supersession annotation (2026-07-25):** R1's provisional
-> non-negative token range, R3's virtual token `0`, and R4's detached snapshot
-> describe the Phase 49 API. They do not govern a provider path after that path
-> is migrated to the Phase 50 `EntityRevision` kernel. For a migrated path,
-> revision starts at `1`, a physically missing revision is an admission failure
-> under Phase 50 acceptance item ER-08, and no virtual-zero compatibility is
-> synthesized. The historical text remains below for Phase 49 traceability
-> until Phase 50 SE-09 replaces the complete provisional token contract.
+## Entity Revision (R1)
 
-## Concurrency Token (R1)
+Every newly persisted revision-managed Entity MUST have one framework-owned
+`EntityRevision` with canonical persisted value `1`. Every `SimpleEntity` is
+revision-managed. A non-`SimpleEntity` is revision-managed only after explicit
+Detached admission.
 
-Every newly persisted Entity MUST have one framework-owned
-`EntityConcurrencyToken` with canonical persisted value `1`.
-
-The token MUST be a non-negative opaque `Long`. A successful admitted mutation
-MUST advance the token exactly once. A failed, rejected, stale, mismatched, or
+The revision MUST be a positive `Long` through `Long.MaxValue`. A successful admitted mutation
+MUST advance the revision exactly once. A failed, rejected, stale, mismatched, or
 rolled-back mutation MUST NOT advance it.
 
-Token advancement from `Long.MaxValue` MUST fail before storage mutation.
-Component code MUST NOT calculate a token or derive it from time, `updatedAt`,
+Revision advancement from `Long.MaxValue` MUST fail before storage mutation.
+Component code MUST NOT calculate a revision or derive it from time, `updatedAt`,
 resident state, or an object version.
 
-## Managed Storage Field (R2)
+## Revision Representation (R2)
 
-The logical token field MUST be `cncfRevision`. Its canonical datastore name
-MUST be `cncf_revision`.
+A revision-managed collection MUST resolve exactly one representation before
+registration:
 
-The field MUST be part of the framework-managed Entity storage shape.
-Application create records, domain Entity codecs, patches, import values, and
-caller root mutations MUST NOT set or clear it.
+- standard `SimpleEntity` MUST use Embedded representation and the read-only
+  domain/storage field `revision`;
+- only an explicitly admitted non-`SimpleEntity` model MAY use Detached
+  representation and physical managed field `cncf_revision`; and
+- an undeclared non-`SimpleEntity` model MUST remain unversioned.
 
-Ordinary business-data projections MUST omit the field. A
-concurrency-aware persistence or transport contract MAY expose it only as an
-`EntityConcurrencyToken`.
+`SimpleEntity + Detached`, dual managed representation, mirroring, conflicting
+declarations, and per-request representation selection MUST fail
+deterministically. An application-owned field named `revision` on a Detached
+non-`SimpleEntity` remains ordinary domain data and MUST NOT be interpreted as
+the managed Embedded representation. Application create/update inputs,
+patches, import values, and root mutations MUST NOT set or clear the admitted
+managed field.
 
-## Legacy Record Admission (R3)
+## Existing Record Admission (R3)
 
-A stored Entity record without `cncf_revision` MUST have virtual token `0`.
+A revision-managed record with an absent, invalid, or exhausted admitted
+revision MUST fail structurally. The runtime MUST NOT synthesize revision zero,
+derive revision from timestamps or resident state, or fall back to
+last-write-wins.
 
-A concurrency-aware load of that record MUST return token `0`. Its first
-version-aware mutation MUST compare expected token `0` against physical field
-absence inside the atomic provider operation. One successful mutation MUST
-persist token `1`.
+An existing record MUST undergo explicit migration or recreation before
+revision-managed admission. Migration MUST NOT be emulated by an unlocked read
+followed by ordinary overwrite.
 
-Competing first mutations of a legacy record MUST admit exactly one winner.
-The runtime MUST NOT backfill the field through an unlocked load followed by an
-unconditional write.
+## Runtime Revision Values (R4)
 
-## Snapshot Carrier (R4)
+An Embedded load MUST return a typed `SimpleEntity` containing its authoritative
+revision. Framework mutation APIs MAY additionally use `EntitySnapshot[A]` to
+retain one attempt's admitted revision.
 
-A concurrency-aware Entity read MUST return an `EntitySnapshot[A]` containing
-the typed Entity and its admitted token.
+A Detached mutation-aware load MUST return `EntityRevisionCarrier[A]`; its
+domain Entity MUST remain free of framework revision. Conditional Transition
+MUST expose `EntityConditionalTransitionValue.Embedded` or
+`EntityConditionalTransitionValue.Detached` and MUST preserve the
+authoritative revision in either representation.
 
-The token MUST NOT be added to every domain Entity type. A path that forms an
-update from loaded state MUST carry the token from `EntitySnapshot[A]` or an
-equivalent framework-owned value without reloading it from a Working Set.
-
-Read-only operations MAY continue to return the plain Entity.
+Read/search/View/Aggregate projection MUST expose Embedded `revision` as
+read-only data. Detached revision MUST appear only on an explicitly
+revision-aware extension surface. It MAY be projected as response metadata
+named `version`, but MUST NOT be inserted into the domain record or become a
+`SimpleEntity` `version` or `cncf_revision` alias.
 
 ## Version-Aware Ordinary Mutation (R5)
 
 Normal Entity full save, typed Entity update, patch update by Entity id,
-Aggregate-root mutation, and framework state-transition mutation MUST carry an
-`EntityMutationExpectation`.
+Aggregate-root mutation, and framework state-transition mutation MUST resolve
+one authoritative base `EntityRevision` through the framework boundary.
 
-The datastore provider MUST compare the expected token and persist the change
-plus next token in one native atomic operation.
+The datastore provider MUST compare the expected revision and persist the change
+plus next revision in one native atomic operation.
 
 Framework-owned side records required by the Entity storage shape, including
 ContentBody overflow records, MUST be prepared without an early datastore
@@ -89,19 +94,32 @@ effect and included in the same provider atomic operation as the guarded root.
 A stale or failed mutation MUST change neither the root nor any such side
 record.
 
-A stale expected token MUST return a structured conflict
-`Consequence.Failure(Conclusion)`. It MUST change no stored Entity, token,
+A stale expected revision MUST return a structured conflict
+`Consequence.Failure(Conclusion)`. It MUST change no stored Entity, revision,
 EntitySpace value, Working Set value, or View.
 
 A normal ActionCall/UnitOfWork mutation MUST NOT perform an unversioned
 overwrite. Create, seed import, and explicitly classified physical migration
 are separate operations. Force or repair behavior MUST NOT be represented by
-an absent token.
+an absent revision.
 
 An explicitly unversioned framework mutation MUST declare one closed
 framework purpose and MUST be admitted with System access. It MUST NOT be
 available through the protected application Entity DSL. Stable-id ownership
 MUST use claim-or-load and MUST NOT overwrite an existing Entity.
+
+Core mutation MUST default to `AlwaysWrite`. An explicit
+`WriteIfChanged` mutation MUST compare normalized authoritative business state
+inside the provider boundary and return a no-op success without advancing
+revision, `updatedAt`, or mutation audit state. An observed stale precondition
+MUST take precedence over equality.
+
+`Managed` precondition MAY obtain the base revision inside CNCF.
+`ObservedRequired` MUST require framework transport metadata. Web Form update
+MUST use `WriteIfChanged + ObservedRequired`; idempotent REST PUT MUST use
+`WriteIfChanged + Managed`; strong `If-Match: "revision-N"` MUST select
+`ObservedRequired`. Revision transport MUST NOT become a business operation
+parameter. Create MUST NOT require an observed revision.
 
 ## Transition Field Admission (R6)
 
@@ -126,7 +144,7 @@ approximations, arbitrary objects, null, missing-field predicates, ranges,
 regular expressions, functions, scripts, SQL, and general query expressions.
 
 The expectation MUST be conjunction-only. An empty expected-field set MAY use
-the token as its complete guard.
+the revision as its complete guard.
 
 The normalized provider plan MUST contain at most 32 exact expected fields.
 Every canonical field identity MUST be non-blank, free of control characters,
@@ -153,13 +171,13 @@ preparation MUST NOT reevaluate either identity. When no candidate id exists,
 the framework MUST generate it in the retained collection.
 
 `Bind(id)` MUST remain a component-facing intent. Before provider-plan
-submission, the framework MUST load and authorize an `EntitySnapshot` for the
-bound successor and normalize the bind into successor id plus expected
-successor token.
+submission, the framework MUST load and authorize the authoritative Embedded
+snapshot or Detached carrier for the bound successor and normalize the bind
+into successor id plus expected successor revision.
 
-The provider MUST verify the bound successor token inside the same transaction
+The provider MUST verify the bound successor revision inside the same transaction
 as the root guard. A missing bound successor MUST be a structured not-found
-failure. A changed successor token MUST be a structured conflict without a
+failure. A changed successor revision MUST be a structured conflict without a
 successor payload. Neither result may mutate the root.
 
 Root and successor collections MUST belong to one component, one datastore
@@ -172,7 +190,7 @@ The root mutation MUST use an admitted typed patch or persistence update codec.
 
 The framework MUST normalize update directives, reject framework-managed
 fields, apply Entity storage-shape and lifecycle policy, and supply the next
-token. An empty effective root mutation MUST fail before provider mutation.
+revision. An empty effective root mutation MUST fail before provider mutation.
 
 The provider MUST NOT infer an application successor relationship. The
 admitted root mutation MUST contain the successor reference or ownership
@@ -182,21 +200,23 @@ change.
 
 Conditional transition MUST return one of these successful typed outcomes:
 
-- `Transitioned(rootSnapshot, successorSnapshot)`; or
-- `NotMatched(existingSnapshot)`.
+- `Transitioned(rootValue, successorValue)`; or
+- `NotMatched(existingValue)`.
 
-`Transitioned` MUST contain provider-authoritative committed records and their
-tokens.
+Each value MUST be an `EntityConditionalTransitionValue.Embedded` or
+`EntityConditionalTransitionValue.Detached` matching the collection's admitted
+representation. `Transitioned` MUST contain provider-authoritative committed
+records and their revisions.
 
-`NotMatched` MUST mean that the root exists and its authoritative token or at
+`NotMatched` MUST mean that the root exists and its authoritative revision or at
 least one admitted expected value differs. It MUST NOT represent not-found,
 authorization denial, malformed intent, unsupported provider, provider
 failure, conversion failure, or transaction failure.
 
-Returning `NotMatched(existingSnapshot)` MUST require read authorization for
+Returning `NotMatched(existingValue)` MUST require read authorization for
 the authoritative returned root after provider execution. The earlier
 authorization decision MUST NOT be reused when mismatch proves that the root
-changed. A denied caller MUST receive no root payload or actual token.
+changed. A denied caller MUST receive no root payload or actual revision.
 
 ## Supplementary Datastore Capability (R11)
 
@@ -217,7 +237,7 @@ operation time when protected DSL usage is dynamic.
 The normalized provider plan MAY contain only explicit framework-owned
 component ownership, bounded record-level mutation data, safe logical
 correlation metadata, provider-neutral collection and entry identities, the
-expected token for a bound successor, and bounded framework-owned side-record
+expected revision for a bound successor, and bounded framework-owned side-record
 save/delete effects required by the canonical Entity storage shape.
 
 An admitted plan MUST carry a non-optional expected root revision and the exact
@@ -274,7 +294,7 @@ resident record MUST NOT be accepted as comparison authority.
 ## Atomicity and Rollback (R13)
 
 The provider MUST execute root verification, successor create or verification,
-root mutation, framework-owned side-record effects, token advancement, and
+root mutation, framework-owned side-record effects, revision advancement, and
 authoritative result loading in one native atomic transaction.
 
 If verification does not match, no successor, side-record, or root change may
@@ -282,7 +302,7 @@ be made.
 
 Failure before commit during successor work, root mutation, or provider-level
 record conversion MUST roll back and leave no externally visible successor,
-side-record change, root change, or token advance.
+side-record change, root change, or revision advance.
 
 A provider-reported commit rejection MUST leave no committed change. An
 indeterminate commit acknowledgment MUST return a structured
@@ -338,16 +358,16 @@ Conditional transition MUST authorize:
 Authorization denial MUST occur before unauthorized mutation.
 
 An authorization load MAY inspect the current record for object-side policy,
-but MUST NOT replace the authoritative token/value comparison inside the
+but MUST NOT replace the authoritative revision/value comparison inside the
 provider transaction.
 
-The normalized bind plan MUST verify the same successor token that was used for
-successor authorization. A bound-successor token mismatch MUST fail without
+The normalized bind plan MUST verify the same successor revision that was used for
+successor authorization. A bound-successor revision mismatch MUST fail without
 root mutation.
 
 An authoritative root returned for `NotMatched` MUST be read-authorized again
 before it is exposed or installed. A post-result denial MUST evict any stale
-resident value and MUST return no root payload or actual token.
+resident value and MUST return no root payload or actual revision.
 
 Unauthorized callers MUST NOT receive root data, successor data, expected
 values, confidential fields, or provider details.
@@ -357,7 +377,7 @@ values, confidential fields, or provider details.
 Applicable Entity and state-transition validation hooks MUST run before the
 provider mutation.
 
-The provider token predicate MUST still detect a race after validation. A
+The provider revision predicate MUST still detect a race after validation. A
 validation hook MUST NOT own the concurrency check.
 
 A hook failure MUST invoke no provider mutation. Post-mutation lifecycle or
@@ -377,7 +397,7 @@ record.
 If post-result read authorization fails, the stale resident root MUST be
 evicted and the authoritative record MUST NOT be installed or returned.
 
-A resident token or record MUST NOT bypass the datastore predicate.
+A resident revision or record MUST NOT bypass the datastore predicate.
 
 ## View Coherence (R18)
 
@@ -434,36 +454,38 @@ datastore-owned atomic boundary and MUST publish its replacement state only
 after every step succeeds.
 
 For any bounded caller count greater than one, simultaneous valid attempts
-against one root token MUST produce:
+against one root revision MUST produce:
 
 - exactly one `Transitioned`;
 - `NotMatched` for every admitted losing attempt;
 - exactly one successor;
 - one root reference to that successor;
-- exactly one token advance; and
+- exactly one revision advance; and
 - no orphan successor.
 
 Application or component-local locking MUST NOT be used as the evidence.
 
 ## SQLite Provider (R22)
 
-SQLite MUST execute the compound transition using one connection and one
-explicit native transaction.
+SQLite MUST execute ordinary versioned mutation and compound transition using
+one connection and one explicit native transaction.
 
 Concurrency evidence MUST use independent callers and independent
-connections. It MUST prove one-winner semantics, rollback safety, and
-visibility after a new datastore instance opens the same database.
+connections. It MUST prove the ordinary apply/no-op/stale/exhaustion/admission
+matrix, one-winner semantics, rollback safety, and visibility after a new
+datastore instance opens the same database.
 
 A single-threaded sequence or one reused connection is insufficient evidence.
 
 ## Shared MySQL Provider (R23)
 
 The initial shared-datastore acceptance profile MUST use MySQL through the
-provider-neutral JDBC and `SqlDataStore.Mysql` boundary.
+provider-neutral JDBC and `SqlDataStore.Mysql` boundary for ordinary versioned
+mutation and conditional transition.
 
 Evidence MUST use independently executing callers against one physical
-database. It MUST prove the same result and rollback matrix as the in-memory
-and SQLite providers.
+database. It MUST prove the same ordinary result matrix and conditional
+transition rollback/concurrency matrix as the in-memory and SQLite providers.
 
 Component code and EntityStore MUST contain no MySQL SQL, driver handle,
 connection, credential, or dialect branch.
@@ -486,44 +508,47 @@ The version-conflict baseline MUST NOT add force/repair commands, automatic
 merge, conflict-resolution UI, or application overwrite policy.
 
 Those capabilities remain separately owned and MUST NOT weaken the
-expected-token requirement of ordinary mutation.
+expected-revision requirement of ordinary mutation.
 
 ## Executable Examples
 
-### E1: New Entity token
+### E1: New Entity revision
 
-Given a newly created Entity, when it is loaded through a concurrency-aware
-read, then its snapshot token is `1` and its business record does not expose
-`cncf_revision`.
+Given a newly created Embedded `SimpleEntity`, when it is loaded, then its
+read-only `revision` is `1`. Given a newly created explicitly Detached Entity,
+when it is loaded through the detached extension, then its
+`EntityRevisionCarrier` contains revision `1` and the domain Entity does not
+contain `cncf_revision`.
 
-### E2: Legacy lazy admission
+### E2: Missing revision admission
 
-Given a record without `cncf_revision` and concurrent mutations expecting
-token `0`, when the provider executes them, then one mutation persists token
-`1` and every other mutation observes a mismatch.
+Given an Embedded or Detached revision-managed record without its admitted
+physical revision, when it is loaded or mutated, then admission fails
+structurally and no virtual revision or fallback write is produced.
 
 ### E3: Successful ordinary mutation
 
-Given a snapshot with token `n`, when an ordinary mutation expects `n`, then
-the authoritative record is updated and returned with token `n + 1`.
+Given an admitted Entity with revision `n`, when an ordinary mutation resolves
+base revision `n`, then the authoritative record is updated and returned with
+revision `n + 1`.
 
 ### E4: Stale ordinary mutation
 
-Given a stored token different from the mutation expectation, when the
+Given a stored revision different from the mutation expectation, when the
 ordinary mutation executes, then it returns a structured conflict and changes
 no stored or resident state.
 
 ### E5: Successful conditional transition
 
-Given an authorized root whose token and admitted exact values match, when a
+Given an authorized root whose revision and admitted exact values match, when a
 successor transition executes, then the provider commits one successor and one
 root mutation and returns `Transitioned`.
 
 ### E6: Normal mismatch
 
-Given an authorized root whose token or admitted exact value differs, when a
+Given an authorized root whose revision or admitted exact value differs, when a
 conditional transition executes, then it returns
-`NotMatched(existingSnapshot)` without mutation.
+`NotMatched(existingValue)` without mutation.
 
 ### E7: Unauthorized mismatch
 
@@ -565,7 +590,7 @@ committed mutation is not retried.
 
 ### E13: Bound successor changes after authorization
 
-Given an authorized bound-successor snapshot whose token changes before the
+Given an authorized bound-successor snapshot whose revision changes before the
 provider guard, when the conditional transition executes, then it returns a
 structured bound-successor conflict without mutating the root or exposing the
 successor.
@@ -585,7 +610,7 @@ the first datastore effect.
 ### E16: Resident stale root
 
 Given a stale root in the Working Set and a newer authoritative datastore
-token, when a transition is attempted, then the provider result wins and the
+revision, when a transition is attempted, then the provider result wins and the
 resident root cannot admit a stale mutation.
 
 ### E17: Provider parity
@@ -615,17 +640,18 @@ constructed, then construction fails before ActionCall or provider admission.
 
 | Rules | Examples | Executable specification |
 | --- | --- | --- |
-| R1-R4 | E1-E2 | `EntityConcurrencyTokenSpec` |
-| R5, R19 | E3-E4 | `EntityVersionedMutationSpec`, `ContentBodyVersionedMutationSpec` |
-| R6-R10 | E5-E6, E13-E14 | `EntityConditionalTransitionModelSpec` |
+| R1-R3 | E1-E2 | `EntityRevisionKernelSpec`, `EntityRevisionRepresentationSpec`, `EntityDetachedRevisionSpec`, `EntityRevisionMigrationSpec` |
+| R4 | E1-E2 | `EntityDetachedRevisionSpec`, `EntityRevisionProjectionSpec` |
+| R5, R19 | E3-E4 | `EntityVersionedMutationSpec`, `ContentBodyVersionedMutationSpec`, `StaticFormEntityRevisionSpec`, `RestEntityRevisionSpec` |
+| R6-R10 | E5-E6, E13-E14 | `EntityConditionalTransitionModelSpec`, `EntityConditionalTransitionRevisionSpec` |
 | R8, R14-R15 | E19 | `EntityConditionalTransitionModelSpec`, `UnitOfWorkConditionalTransitionSpec`, `ActionCallConditionalTransitionDslSpec` |
 | R11-R13 | E3-E4, E8-E11, E13, E15 | `EntityVersionedMutationDataStoreSpec`, `ContentBodyVersionedMutationSpec`, `DataStoreConditionalTransitionSpec` |
 | R14-R16 | E5, E7, E13-E14 | `UnitOfWorkConditionalTransitionSpec` |
 | R17-R18 | E6, E12, E14, E16 | `EntityConditionalTransitionCoherenceSpec` |
 | R19-R20 | E4, E7-E15 | `EntityConditionalTransitionDiagnosticsSpec` |
 | R21 | E2-E6, E8-E11 | `EntityVersionedMutationDataStoreSpec`, `ContentBodyVersionedMutationSpec`, `InMemoryConditionalTransitionSpec` |
-| R22 | E5-E6, E8-E11, E17 | `SqliteConditionalTransitionSpec` |
-| R23 | E5-E6, E8-E11, E17 | `MysqlConditionalTransitionAcceptanceSpec` |
+| R22 | E3-E6, E8-E11, E17 | `EntityRevisionProviderParitySpec`, `SqliteConditionalTransitionSpec`, `SqliteDataStoreSpec` |
+| R23 | E3-E6, E8-E11, E17 | `MysqlConditionalTransitionAcceptanceSpec` |
 | R24 | E18 | CBD Support `ReviewDiagnosisPersistenceSpec` |
 | R25 | E4 | Entity conflict API-surface regression specification |
 

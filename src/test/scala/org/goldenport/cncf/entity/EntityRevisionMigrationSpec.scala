@@ -41,9 +41,9 @@ final class EntityRevisionMigrationSpec
       detachedresult.toOption shouldBe None
     }
 
-    "reject dual embedded and detached revision representations" in {
+    "treat revision as application data in detached representation" in {
       Given(
-        "Phase 50 ER-08; one persisted record containing both managed revision fields"
+        "Phase 50 SE-05; one persisted record containing an application revision and detached CNCF revision"
       )
       val embedded = EntityRevisionBinding(
         EntityRevisionRepresentation.Embedded
@@ -57,13 +57,13 @@ final class EntityRevisionMigrationSpec
         "cncf_revision" -> 3L
       )
 
-      When("either representation binding admits the persisted record")
+      When("each representation binding admits the persisted record")
       val embeddedresult = embedded.revision(record)
       val detachedresult = detached.revision(record)
 
-      Then("neither chooses a precedence winner")
+      Then("embedded rejects detached metadata while detached reads only its managed field")
       embeddedresult.toOption shouldBe None
-      detachedresult.toOption shouldBe None
+      detachedresult.toOption.map(_.value) shouldBe Some(3L)
     }
 
     "reject every non-positive persisted revision" in {

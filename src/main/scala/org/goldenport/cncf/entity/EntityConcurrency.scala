@@ -18,6 +18,11 @@ final case class EntitySnapshot[A](
   revision: EntityRevision
 )
 
+final case class EntityRevisionCarrier[A](
+  entity: A,
+  revision: EntityRevision
+)
+
 final case class EntityRecordSnapshot(
   record: Record,
   revision: EntityRevision

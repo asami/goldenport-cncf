@@ -1,6 +1,8 @@
 package org.goldenport.cncf.datastore
 
 import org.goldenport.Consequence
+import org.goldenport.Conclusion
+import org.goldenport.datatype.Identifier
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.entity.{
   EntityConcurrencyPolicy,
@@ -8,8 +10,10 @@ import org.goldenport.cncf.entity.{
   RevisionPreconditionPolicy
 }
 import org.goldenport.record.{Field, Record}
+import org.goldenport.observation.{Cause, Descriptor, Taxonomy}
 import org.simplemodeling.model.datatype.EntityRevision
 import org.simplemodeling.model.directive.Update
+import org.simplemodeling.model.value.NominalScalar
 
 /*
  * @since   Jul. 24, 2026
@@ -78,6 +82,87 @@ trait EntityVersionedMutationDataStore { self: DataStore =>
   )(using ctx: ExecutionContext): Consequence[EntityVersionedMutationResult]
 }
 
+object EntityVersionedMutationFailure {
+  val POLICY = "entity.versioned-mutation.provider"
+
+  def providerFailure[A](
+    message: String
+  ): Consequence.Failure[A] =
+    _service_unavailable(message, "provider-failure", Cause.Kind.Unknown)
+
+  def transactionFailure[A](
+    message: String
+  ): Consequence.Failure[A] =
+    _service_unavailable(
+      message,
+      "transaction-failure",
+      Cause.Kind.Inconsistency
+    )
+
+  def transactionIndeterminate[A](
+    message: String
+  ): Consequence.Failure[A] =
+    _service_unavailable(
+      message,
+      "transaction-indeterminate",
+      Cause.Kind.Inconsistency
+    )
+
+  private[cncf] def normalizeProvider[A](
+    conclusion: Conclusion
+  ): Consequence.Failure[A] = {
+    val reasons = conclusion.observation.cause.descriptor.facets.collect {
+      case Descriptor.Facet.Reason(name) => name
+    }.toSet
+    val symptom = conclusion.observation.taxonomy.symptom
+    if (
+      reasons.exists(_recognized_reasons.contains) ||
+      symptom == Taxonomy.Symptom.NotFound ||
+      symptom == Taxonomy.Symptom.Conflict ||
+      symptom == Taxonomy.Symptom.Unsupported ||
+      symptom == Taxonomy.Symptom.PermissionDenied ||
+      symptom == Taxonomy.Symptom.Invalid
+    )
+      Consequence.Failure(conclusion)
+    else
+      Consequence.Failure(_annotate(conclusion, "provider-failure"))
+  }
+
+  private val _recognized_reasons = Set(
+    "provider-failure",
+    "datastore-failure",
+    "transaction-failure",
+    "transaction-indeterminate",
+    "transaction-rollback"
+  )
+
+  private def _service_unavailable[A](
+    message: String,
+    reason: String,
+    kind: Cause.Kind
+  ): Consequence.Failure[A] =
+    Consequence.serviceUnavailable(
+      message,
+      kind,
+      Vector(
+        Descriptor.Facet.Reason(reason),
+        Descriptor.Facet.Policy(POLICY)
+      )
+    )
+
+  private def _annotate(
+    conclusion: Conclusion,
+    reason: String
+  ): Conclusion = {
+    val cause = conclusion.observation.cause
+      .addFacet(Descriptor.Facet.Reason(reason))
+      .addFacet(Descriptor.Facet.Policy(POLICY))
+    conclusion.copy(
+      observation = conclusion.observation.copy(cause = cause)
+    )
+  }
+}
+
 private[datastore] object EntityVersionedMutationSupport {
   def validate(
     plan: EntityVersionedMutationPlan
@@ -143,9 +228,30 @@ private[datastore] object EntityVersionedMutationSupport {
     plan: EntityVersionedMutationPlan
   ): Boolean = {
     val excluded = plan.comparisonExcludedFields + plan.revisionField
-    _without_fields(existing, excluded).asMap ==
-      _without_fields(desired, excluded).asMap
+    _comparison_record(_without_fields(existing, excluded)) ==
+      _comparison_record(_without_fields(desired, excluded))
   }
+
+  private def _comparison_record(record: Record): Map[String, Any] =
+    record.asMap.view.mapValues(_comparison_value).toMap
+
+  private def _comparison_value(value: Any): Any =
+    value match {
+      case identifier: Identifier =>
+        identifier.value
+      case scalar: NominalScalar =>
+        _comparison_value(scalar.value)
+      case record: Record =>
+        _comparison_record(record)
+      case values: Seq[?] =>
+        values.map(_comparison_value)
+      case Some(content) =>
+        _comparison_value(content)
+      case None =>
+        None
+      case other =>
+        other
+    }
 
   private def _validate_revision_field(
     plan: EntityVersionedMutationPlan

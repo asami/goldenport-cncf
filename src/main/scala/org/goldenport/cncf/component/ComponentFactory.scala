@@ -1796,10 +1796,22 @@ final class ComponentFactory(
   private def _runtime_descriptors_for(
     component: Component
   ): Vector[EntityRuntimeDescriptor] = {
-    val entities = _entity_collection_names(component).map(_.toLowerCase).toSet
-    _runtime_entity_descriptors.filter { d =>
-      val entity = d.entityName.trim.toLowerCase
-      val collection = d.collectionId.name.trim.toLowerCase
+    val entities =
+      (
+        _entity_collection_names(component) ++
+          _programmatic_entity_runtime_plans(component).map(_.entityName)
+      ).map(_normalize_entity_name).toSet
+    val owned =
+      (
+        _runtime_component_descriptors_for(component)
+          .flatMap(_.entityRuntimeDescriptors) ++
+          component.componentDescriptors.flatMap(_.entityRuntimeDescriptors)
+      ).distinct
+    val descriptors =
+      if (owned.nonEmpty) owned else _runtime_entity_descriptors
+    descriptors.filter { d =>
+      val entity = _normalize_entity_name(d.entityName)
+      val collection = _normalize_entity_name(d.collectionId.name)
       entities.contains(entity) || entities.contains(collection)
     }
   }

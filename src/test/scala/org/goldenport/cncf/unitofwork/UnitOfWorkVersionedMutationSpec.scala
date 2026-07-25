@@ -41,6 +41,33 @@ final class UnitOfWorkVersionedMutationSpec
     EntityCollectionId("test", "phase49", "versioned_person")
 
   "UnitOfWork Entity versioned mutation" should {
+    "decode an embedded create result before installing it in the working set" in {
+      Given(
+        "an Embedded Entity collection with a memory realm and a create payload without managed revision"
+      )
+      val fixture            = _fixture()
+      given ExecutionContext = fixture.context
+      val id                 = EntityId("test", "created", _collectionid)
+      val interpreter =
+        new UnitOfWorkInterpreter(new UnitOfWork(fixture.context))
+
+      When("the create result crosses the UnitOfWork working-set boundary")
+      val created = interpreter.interpret(
+        UnitOfWorkOp.EntityStoreCreate(
+          VersionedPersonCreate(id, "created"),
+          _create_persistent
+        )
+      )
+
+      Then(
+        "the persisted Embedded revision is decoded and the domain Entity becomes resident"
+      )
+      created.map(_.record.flatMap(_.getAny("revision"))) shouldBe
+        Consequence.success(Some(1L))
+      fixture.collection.resolve(id) shouldBe
+        Consequence.success(VersionedPerson(id, "created"))
+    }
+
     "return and install the authoritative snapshot only after provider success" in {
       Given("one persisted Entity and its component-scoped working set")
       val fixture            = _fixture()
@@ -49,9 +76,7 @@ final class UnitOfWorkVersionedMutationSpec
       val initial            = VersionedPerson(id, "before")
       val _ = fixture.datastorespace.inject(
         DataStore.CollectionId.EntityStore(_collectionid),
-        EntityConcurrencyMetadata.initializeForCreate(
-          _persistent.toStoreRecord(initial)
-        )
+        _persistent.toStoreRecord(initial)
       )
       fixture.collection.put(initial)
       val interpreter =
@@ -88,9 +113,7 @@ final class UnitOfWorkVersionedMutationSpec
       val initial            = VersionedPerson(id, "before")
       val _ = fixture.datastorespace.inject(
         DataStore.CollectionId.EntityStore(_collectionid),
-        EntityConcurrencyMetadata.initializeForCreate(
-          _persistent.toStoreRecord(initial)
-        )
+        _persistent.toStoreRecord(initial)
       )
       fixture.collection.put(initial)
       val interpreter =
@@ -140,9 +163,7 @@ final class UnitOfWorkVersionedMutationSpec
       val initial            = VersionedPerson(id, "before")
       val _ = fixture.datastorespace.inject(
         DataStore.CollectionId.EntityStore(_collectionid),
-        EntityConcurrencyMetadata.initializeForCreate(
-          _persistent.toStoreRecord(initial)
-        )
+        _persistent.toStoreRecord(initial)
       )
       fixture.collection.put(initial)
       var projectedname = "before"
@@ -167,9 +188,10 @@ final class UnitOfWorkVersionedMutationSpec
           }
         )
       )
-      fixture.component.viewSpace
+      val primed = fixture.component.viewSpace
         .browser[Record](_collectionid.name)
-        .query(Query(Record.empty)).TAKE
+        .query(Query(Record.empty))
+      primed shouldBe a[Consequence.Success[?]]
       querycount shouldBe 1
       val interpreter =
         new UnitOfWorkInterpreter(new UnitOfWork(fixture.context))
@@ -208,10 +230,11 @@ final class UnitOfWorkVersionedMutationSpec
           fail("expected committed projection failure")
       }
       fixture.collection.resolve(id) shouldBe a[Consequence.Failure[_]]
-      fixture.component.viewSpace
+      val refreshed = fixture.component.viewSpace
         .browser[Record](_collectionid.name)
-        .query(Query(Record.empty)).TAKE
-        .head.getString("name") shouldBe Some("committed")
+        .query(Query(Record.empty))
+      refreshed.map(_.headOption.flatMap(_.getString("name"))) shouldBe
+        Consequence.success(Some("committed"))
       querycount shouldBe 2
 
       And("the committed datastore value remains authoritative and is not retried")
@@ -299,7 +322,10 @@ final class UnitOfWorkVersionedMutationSpec
           maxPartitions = 4,
           maxEntitiesPerPartition = 16
         ),
-        _persistent
+        _persistent,
+        revisionBinding = Some(
+          EntityRevisionBinding(EntityRevisionRepresentation.Embedded)
+        )
       ),
       EntityStorage(storerealm, Some(memoryrealm))
     )
@@ -362,26 +388,53 @@ final class UnitOfWorkVersionedMutationSpec
     } yield record
 
   private final case class VersionedPerson(
-      id: EntityId,
-      name: String
+    id: EntityId,
+    name: String,
+    revision: EntityRevision = EntityRevision.INITIAL
   )
+
+  private final case class VersionedPersonCreate(
+    id: EntityId,
+    name: String
+  )
+
+  private val _create_persistent: EntityPersistentCreate[VersionedPersonCreate] =
+    new EntityPersistentCreate[VersionedPersonCreate] {
+      def id(entity: VersionedPersonCreate): Option[EntityId] =
+        Some(entity.id)
+      def collection(entity: VersionedPersonCreate): EntityCollectionId =
+        entity.id.collection
+      def toRecord(entity: VersionedPersonCreate): Record =
+        Record.dataAuto(
+          "id" -> entity.id,
+          "name" -> entity.name
+        )
+    }
 
   private val _persistent: EntityPersistent[VersionedPerson] =
     new EntityPersistent[VersionedPerson] {
       def id(entity: VersionedPerson): EntityId = entity.id
       def toRecord(entity: VersionedPerson): Record =
-        Record.dataAuto("id" -> entity.id, "name" -> entity.name)
+        Record.dataAuto(
+          "id" -> entity.id,
+          "name" -> entity.name,
+          "revision" -> entity.revision.value
+        )
       def fromRecord(record: Record): Consequence[VersionedPerson] =
-        (record.getAs[EntityId]("id"), record.getString("name")) match {
-          case (Some(id), Some(name)) =>
-            Consequence.success(VersionedPerson(id, name))
-          case _ =>
-            Consequence.argumentInvalid(
-              "versionedPerson",
-              "id and name",
-              record
-            )
-        }
+        for {
+          id <- record
+            .getAs[EntityId]("id")
+            .map(Consequence.success)
+            .getOrElse(Consequence.argumentMissing("id"))
+          name <- record
+            .getString("name")
+            .map(Consequence.success)
+            .getOrElse(Consequence.argumentMissing("name"))
+          revision <- record
+            .getAny("revision")
+            .map(EntityRevision.createC)
+            .getOrElse(Consequence.argumentMissing("revision"))
+        } yield VersionedPerson(id, name, revision)
     }
 
   private final class IdRef[A](

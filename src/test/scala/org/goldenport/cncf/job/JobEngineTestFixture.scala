@@ -2,11 +2,16 @@ package org.goldenport.cncf.job
 
 import java.time.{Duration, Instant}
 import scala.collection.mutable.ListBuffer
+import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.cncf.entity.{
+  EntityRevisionRepresentation,
+  EntityRevisionSpecSupport
+}
 import org.scalatest.{BeforeAndAfterEach, Suite}
 
 /*
  * @since   May.  4, 2026
- * @version May.  4, 2026
+ * @version Jul. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 trait JobEngineTestFixture extends BeforeAndAfterEach { this: Suite =>
@@ -25,6 +30,17 @@ trait JobEngineTestFixture extends BeforeAndAfterEach { this: Suite =>
     schedulerConfig: InMemoryJobEngine.SchedulerConfig = InMemoryJobEngine.SchedulerConfig.default
   ): InMemoryJobEngine =
     registerJobEngine(InMemoryJobEngine.create(schedulerConfig))
+
+  protected def createJobEntityContext(): ExecutionContext = {
+    val context = ExecutionContext.test()
+    EntityRevisionSpecSupport.registerRevisionBinding(
+      context,
+      JobEntityCollections.Job,
+      JobEntity.entityPersistent,
+      EntityRevisionRepresentation.Detached
+    )
+    context
+  }
 
   protected def createInMemoryJobEngine(
     runtimeState: InMemoryJobEngine.State = InMemoryJobEngine.State(),

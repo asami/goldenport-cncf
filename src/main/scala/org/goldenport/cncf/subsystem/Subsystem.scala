@@ -25,7 +25,12 @@ import org.goldenport.cncf.component.builtin.debug.DebugComponent
 import org.goldenport.cncf.association.{AssociationBindingAttachResult, AssociationBindingWorkflow, AssociationDomain, AssociationRepository, AssociationStoragePolicy}
 import org.goldenport.cncf.blob.{BlobAttachmentWorkflow, BlobPayloadSupport, BlobRepository}
 import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, RuntimeContext, ScopeContext, ScopeKind}
-import org.goldenport.cncf.entity.{ChildEntityBindingSummary, ChildEntityBindingWorkflow}
+import org.goldenport.cncf.entity.{
+  ChildEntityBindingSummary,
+  ChildEntityBindingWorkflow,
+  EntityMutationAdapterDefaults,
+  EntityRevisionTransport
+}
 import org.goldenport.cncf.http.{HttpDriver, HttpExecutionResult}
 import org.goldenport.cncf.job.{InMemoryJobEngine, JobEngine}
 import org.goldenport.cncf.datastore.DataStore
@@ -59,7 +64,7 @@ import org.goldenport.cncf.observability.ServiceContainerRuntimeObservation
  *  version Jan. 31, 2026
  *  version Feb.  4, 2026
  *  version Apr. 30, 2026
- * @version Jul. 23, 2026
+ * @version Jul. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Subsystem(
@@ -1509,6 +1514,18 @@ final class Subsystem(
       false
     else if (_is_operation_origin_slot_property(name))
       false
+    else if (
+      name.equalsIgnoreCase(
+        EntityMutationAdapterDefaults.profilePropertyName
+      )
+    )
+      false
+    else if (
+      name.equalsIgnoreCase(
+        EntityRevisionTransport.observedRevisionPropertyName
+      )
+    )
+      false
     else {
       val lower = name.toLowerCase(java.util.Locale.ROOT)
       name.startsWith("textus.") ||
@@ -1824,6 +1841,26 @@ final class Subsystem(
         Property("x-textus-session", value.toString, None)
       case (name, value) if _http_name_matches(name, "x-cncf-session") =>
         Property("x-cncf-session", value.toString, None)
+      case (name, value)
+          if _http_name_matches(
+            name,
+            EntityMutationAdapterDefaults.profilePropertyName
+          ) =>
+        Property(
+          EntityMutationAdapterDefaults.profilePropertyName,
+          value.toString,
+          None
+        )
+      case (name, value)
+          if _http_name_matches(
+            name,
+            EntityRevisionTransport.observedRevisionPropertyName
+          ) =>
+        Property(
+          EntityRevisionTransport.observedRevisionPropertyName,
+          value.toString,
+          None
+        )
     }
     (query ++ form ++ header).toList
   }

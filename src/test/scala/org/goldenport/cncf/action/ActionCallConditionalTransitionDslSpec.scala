@@ -315,7 +315,7 @@ final class ActionCallConditionalTransitionDslSpec
         Option[UnitOfWorkOp.EntityStoreConditionalTransition[?, ?, ?]] =
       None
     private var _snapshotload:
-        Option[UnitOfWorkOp.EntityStoreLoadSnapshot[?]] =
+        Option[UnitOfWorkOp.EntityStoreLoadDetached[?]] =
       None
 
     def transition:
@@ -323,7 +323,7 @@ final class ActionCallConditionalTransitionDslSpec
       _transition
 
     def snapshotLoad:
-        Option[UnitOfWorkOp.EntityStoreLoadSnapshot[?]] =
+        Option[UnitOfWorkOp.EntityStoreLoadDetached[?]] =
       _snapshotload
 
     def interpreter(
@@ -335,7 +335,7 @@ final class ActionCallConditionalTransitionDslSpec
             case transition:
                 UnitOfWorkOp.EntityStoreConditionalTransition[?, ?, ?] =>
               _transition = Some(transition)
-            case snapshotload: UnitOfWorkOp.EntityStoreLoadSnapshot[?] =>
+            case snapshotload: UnitOfWorkOp.EntityStoreLoadDetached[?] =>
               _snapshotload = Some(snapshotload)
             case _ =>
               ()
@@ -375,8 +375,8 @@ final class ActionCallConditionalTransitionDslSpec
       _loadedrevision
 
     protected def build_Program: ExecUowM[OperationResponse] =
-      entity_load_snapshot_internal[Root](id)(using _root_persistent).map { snapshot =>
-        _loadedrevision = Some(snapshot.revision)
+      entity_load_detached_internal[Root](id)(using _root_persistent).map { carrier =>
+        _loadedrevision = Some(carrier.revision)
         OperationResponse.Void()
       }
   }
@@ -459,6 +459,18 @@ final class ActionCallConditionalTransitionDslSpec
           properties = Nil
         )
     }
+    EntityRevisionSpecSupport.registerRevisionBinding(
+      context,
+      _rootcollection,
+      _root_persistent,
+      EntityRevisionRepresentation.Detached
+    )
+    EntityRevisionSpecSupport.registerRevisionBinding(
+      context,
+      _successorcollection,
+      _successor_persistent,
+      EntityRevisionRepresentation.Detached
+    )
     ActionCall.Core(action, context, Some(component), None)
   }
 
@@ -558,7 +570,10 @@ final class ActionCallConditionalTransitionDslSpec
         maxPartitions = 1,
         maxEntitiesPerPartition = 1
       ),
-      persistent = persistent
+      persistent = persistent,
+      revisionBinding = Some(
+        EntityRevisionBinding(EntityRevisionRepresentation.Detached)
+      )
     )
     new EntityCollection(
       descriptor,

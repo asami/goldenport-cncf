@@ -511,7 +511,10 @@ final class EntityConditionalTransitionCoherenceSpec
           maxPartitions = 4,
           maxEntitiesPerPartition = 16
         ),
-        persistent
+        persistent,
+        revisionBinding = Some(
+          EntityRevisionBinding(EntityRevisionRepresentation.Detached)
+        )
       ),
       EntityStorage(storerealm, Some(memoryrealm))
     )

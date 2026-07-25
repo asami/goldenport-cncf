@@ -1,6 +1,6 @@
 # Phase 50 Checklist - SimpleEntity Revision and OCC Simplification
 
-status=active
+status=closed
 phase=[Phase 50 - SimpleEntity Revision and OCC Simplification](phase-50.md)
 
 This checklist is the authoritative Phase 50 state ledger after Phase 50
@@ -557,36 +557,98 @@ Clean re-review passed for every entry. Paths are repository-relative.
 ## SE-05: Detached Non-SimpleEntity Extension
 
 Stage Status:
-- Current status: PLANNED
+- Current status: DONE
+- Current step: clean re-review complete
 - Owner: CNCF Entity persistence and extension maintainers
 - Entry rule: SE-04 is DONE.
 - Completion rule: An explicitly admitted non-`SimpleEntity` model can use the
   common revision kernel through a detached carrier without becoming a second
   standard Entity representation.
 
-- [ ] Define the detached carrier around `EntityRevision`, not
+- [x] Define the detached carrier around `EntityRevision`, not
   `EntityConcurrencyToken`.
-- [ ] Admit detached revision only for Entity models that do not extend
+- [x] Admit detached revision only for Entity models that do not extend
   `SimpleEntity`.
-- [ ] Require explicit Entity/collection registration; do not infer detached
+- [x] Require explicit Entity/collection registration; do not infer detached
   mode from a missing revision field or codec failure.
-- [ ] Keep managed revision outside the domain codec while preserving it in
+- [x] Keep managed revision outside the domain codec while preserving it in
   the authoritative persistence contract.
-- [ ] Apply the same `None` and `Optimistic` policy semantics where detached
+- [x] Apply the same `None` and `Optimistic` policy semantics where detached
   revision is admitted.
-- [ ] Reject application writes to detached managed revision.
-- [ ] Reject embedded plus detached values, dual writes, mirroring, and
-  representation fallback.
-- [ ] Add detached load/mutation, stale conflict, rollback, and projection
+- [x] Reject application writes to detached managed revision.
+- [x] Reject dual managed representation, mirroring, and representation
+  fallback while preserving an ordinary application-owned `revision` field
+  on detached non-`SimpleEntity` models.
+- [x] Add detached load/mutation, stale conflict, rollback, and projection
   specifications.
 
 Evidence:
-- Pending.
+- `EntityRevisionCarrier[A]` is the explicit detached result type. Standard
+  snapshot APIs now require Embedded representation; detached load, save,
+  typed update, and patch update use distinct EntityStore, EntityStoreSpace,
+  UnitOfWork, and ActionCall DSL operations.
+- EntityStore no longer synthesizes a Detached binding when EntitySpace has no
+  revision declaration. Unmanaged non-`SimpleEntity` collections use ordinary
+  persistence, while detached APIs reject them deterministically.
+- Detached persistence manages only `cncf_revision`. The domain codec receives
+  no managed field, and an application-owned field named `revision` remains
+  ordinary domain data.
+- `EntityDetachedRevisionSpec` proves create/load/save/update/patch,
+  delete/restore, optimistic stale conflict, `None` policy, managed-field
+  rejection, provider-failure rollback, fresh-runtime reload, and unmanaged
+  collection rejection.
+- `ActionCallDetachedRevisionDslSpec` proves that the caller-side DSL emits
+  only explicit detached UnitOfWork operations and preserves expected
+  revisions.
+- Phase 49 detached-versioned regression specifications were migrated from the
+  removed implicit fallback to explicit Detached registration and carrier
+  APIs. The implementation-stage combined 12-suite focused run passed 85
+  tests.
+- Independent review identified `P50-SE05-R1-01` through
+  `P50-SE05-R1-03`: UnitOfWork working-set hydration still assumed the removed
+  detached fallback, ordinary Detached reads checked only field presence
+  rather than the revision value, and unmanaged partial upsert removed
+  overflow content.
+- Review-fix now decodes persisted working-set records through the selected
+  representation, installs Detached carrier domain records without reapplying
+  physical admission, validates every managed revision before ordinary domain
+  decoding, and preserves overflow content during unmanaged partial upsert.
+- The direct 3-suite review-fix run passed 37 tests. The repaired 12-suite
+  SE-05, SE-04, provider, and query regression run passed 83 tests.
+  `Test/compile`, whole-file naming and executable-specification scans, and
+  `git diff --check` passed.
+- Clean re-review found no remaining actionable finding in the SE-05 slice and
+  retained the 83-test repaired boundary as executable evidence.
+
+### SE-05 Modified Scala File Compliance Ledger
+
+Independent review, review-fix, and clean re-review are complete.
+
+| Scala file | Naming | Spec style | Validation | Review |
+| --- | --- | --- | --- | --- |
+| `src/main/scala/org/goldenport/cncf/action/ActionCallFeaturePart.scala` | implementation scan passed | not a spec | focused suites and `Test/compile` passed | clean re-review passed |
+| `src/main/scala/org/goldenport/cncf/entity/EntityConcurrency.scala` | implementation scan passed | not a spec | focused suites and `Test/compile` passed | clean re-review passed |
+| `src/main/scala/org/goldenport/cncf/entity/EntityRevisionRepresentation.scala` | implementation scan passed | not a spec | focused suites and `Test/compile` passed | clean re-review passed |
+| `src/main/scala/org/goldenport/cncf/entity/EntityStore.scala` | implementation scan passed | not a spec | focused suites and `Test/compile` passed | clean re-review passed |
+| `src/main/scala/org/goldenport/cncf/entity/EntityStoreSpace.scala` | implementation scan passed | not a spec | focused suites and `Test/compile` passed | clean re-review passed |
+| `src/main/scala/org/goldenport/cncf/unitofwork/UnitOfWorkInterpreter.scala` | implementation scan passed | not a spec | focused suites and `Test/compile` passed | clean re-review passed |
+| `src/main/scala/org/goldenport/cncf/unitofwork/UnitOfWorkOp.scala` | implementation scan passed | not a spec | focused suites and `Test/compile` passed | clean re-review passed |
+| `src/test/scala/org/goldenport/cncf/action/ActionCallDetachedRevisionDslSpec.scala` | implementation scan passed | Given/When/Then and matcher vocabulary passed | focused suites and `Test/compile` passed | clean re-review passed |
+| `src/test/scala/org/goldenport/cncf/entity/ContentBodyVersionedMutationSpec.scala` | implementation scan passed | Given/When/Then and matcher vocabulary passed | focused suites and `Test/compile` passed | clean re-review passed |
+| `src/test/scala/org/goldenport/cncf/entity/EntityDetachedRevisionSpec.scala` | implementation scan passed | Given/When/Then and matcher vocabulary passed | focused suites and `Test/compile` passed | clean re-review passed |
+| `src/test/scala/org/goldenport/cncf/entity/EntityRevisionKernelSpec.scala` | implementation scan passed | Given/When/Then, property checks, and matcher vocabulary passed | focused suites and `Test/compile` passed | clean re-review passed |
+| `src/test/scala/org/goldenport/cncf/entity/EntityRevisionMigrationSpec.scala` | implementation scan passed | Given/When/Then, property checks, and matcher vocabulary passed | focused suites and `Test/compile` passed | clean re-review passed |
+| `src/test/scala/org/goldenport/cncf/entity/EntityRevisionRepresentationSpec.scala` | implementation scan passed | Given/When/Then and matcher vocabulary passed | focused suites and `Test/compile` passed | clean re-review passed |
+| `src/test/scala/org/goldenport/cncf/entity/EntityRevisionSpecSupport.scala` | implementation scan passed | test fixture support, not a spec | focused suites and `Test/compile` passed | clean re-review passed |
+| `src/test/scala/org/goldenport/cncf/entity/EntityStoreQueryRouteSpec.scala` | implementation scan passed | Given/When/Then and matcher vocabulary passed; unsafe extraction removed | focused suites and `Test/compile` passed | clean re-review passed |
+| `src/test/scala/org/goldenport/cncf/entity/EntityVersionedMutationSpec.scala` | implementation scan passed | Given/When/Then and matcher vocabulary passed | focused suites and `Test/compile` passed | clean re-review passed |
+| `src/test/scala/org/goldenport/cncf/unitofwork/UnitOfWorkVersionedMutationSpec.scala` | implementation scan passed | Given/When/Then and matcher vocabulary passed; unsafe extraction removed | focused suites and `Test/compile` passed | clean re-review passed |
 
 ## SE-06: Conditional Transition Integration
 
 Stage Status:
-- Current status: PLANNED
+- Current status: DONE
+- Current step: implementation and focused validation complete
 - Owner: CNCF Entity, UnitOfWork, and Conditional Transition maintainers
 - Entry rule: SE-05 is DONE.
 - Completion rule: Conditional Transition uses the common `EntityRevision`
@@ -596,137 +658,189 @@ Stage Status:
 - [x] Replace transition token parameters with expected revision. Completed as
   SE-03D preparatory work; representation-specific result integration remains
   in this stage.
-- [ ] Require expected revision under both ordinary concurrency policies.
-- [ ] Return embedded root/successor `SimpleEntity` values containing
+- [x] Require expected revision under both ordinary concurrency policies.
+- [x] Return embedded root/successor `SimpleEntity` values containing
   authoritative revisions.
-- [ ] Return detached revision carriers only when the admitted Entity model is
+- [x] Return detached revision carriers only when the admitted Entity model is
   non-`SimpleEntity`.
 - [x] Remove `EntityConcurrencyToken` and token expectation dependencies from
   the canonical upper path. Completed by SE-03D; SE-06 must still verify the
   embedded and detached representation paths.
-- [ ] Preserve authorization, lifecycle, transaction, audit, observability,
+- [x] Preserve authorization, lifecycle, transaction, audit, observability,
   Working Set, View, and rollback behavior.
-- [ ] Add property-based simultaneous-update specifications.
-- [ ] Re-run exactly-one-winner and no-orphan successor evidence.
+- [x] Add property-based simultaneous-update specifications.
+- [x] Re-run exactly-one-winner and no-orphan successor evidence.
 
 Evidence:
 - SE-03D removed the token/expectation types and changed Conditional Transition
   definitions, expectations, provider plans, diagnostics, and callers to
   `EntityRevision`.
-- Remaining SE-06 evidence is pending for embedded/detached result integration,
-  policy behavior, simultaneous updates, exactly-one-winner, and no-orphan
-  verification.
+- `EntityConditionalTransitionRevisionSpec` proves Embedded and Detached
+  authoritative result forms, required expected revision under both
+  `Optimistic` and `None`, and bounded simultaneous-attempt properties.
+- The combined Phase 50 focused run passed 336 tests. The generated,
+  Aggregate, DSL, and UnitOfWork integration boundary passed 25 tests and
+  retained exactly-one-winner/no-orphan behavior.
 
 ## SE-07: Projection and Transport
 
 Stage Status:
-- Current status: PLANNED
+- Current status: DONE
+- Current step: implementation and focused validation complete
 - Owner: CNCF projection, Web, Form, and REST maintainers
 - Entry rule: SE-06 is DONE.
 - Completion rule: Mutation-capable surfaces can round-trip expected revision
   without exposing revision as writable business data or making detached
   representation part of the standard `SimpleEntity` contract.
 
-- [ ] Project embedded revision on admitted `SimpleEntity` read/detail
+- [x] Project embedded revision on admitted `SimpleEntity` read/detail
   surfaces.
-- [ ] Preserve bounded list/search projection according to the SE-01 decision.
-- [ ] Carry expected revision through generated update operations.
-- [ ] Carry expected revision through Form and Web update submissions.
-- [ ] Carry expected revision through REST request/response contracts.
-- [ ] Derive transport validators from revision only where explicitly
+- [x] Preserve bounded list/search projection according to the SE-01 decision.
+- [x] Carry expected revision through generated update operations.
+- [x] Carry expected revision through Form and Web update submissions.
+- [x] Carry expected revision through REST request/response contracts.
+- [x] Derive transport validators from revision only where explicitly
   specified.
-- [ ] Reject patch paths that target the managed revision.
-- [ ] Expose detached revision only through explicitly revision-aware
+- [x] Reject patch paths that target the managed revision.
+- [x] Expose detached revision only through explicitly revision-aware
   non-`SimpleEntity` extension surfaces.
-- [ ] Do not emit token aliases or detached carrier roots for `SimpleEntity`.
-- [ ] Add JSON/YAML/XML/Form projection parity evidence where applicable.
+- [x] Do not emit token aliases or detached carrier roots for `SimpleEntity`.
+- [x] Add JSON/YAML/XML/Form projection parity evidence where applicable.
 
 Evidence:
-- Pending.
+- `EntityRevisionProjectionSpec` proves Embedded read-only projection across
+  Entity/search/View/Aggregate contexts and JSON/YAML/XML output, and keeps
+  Detached revision on explicit `version` response metadata.
+- `StaticFormEntityRevisionSpec` proves hidden observed-revision metadata,
+  `WriteIfChanged + ObservedRequired`, and missing-metadata rejection.
+- `RestEntityRevisionSpec` proves idempotent managed PUT, strict strong
+  `If-Match: "revision-N"`, invalid validator rejection, non-Entity route
+  isolation, and response ETag projection.
+- `GeneratedInformationRevisionSpec` proves the generated Information
+  `SimpleEntity` output owns revision while generated create/update/query input
+  families do not admit it.
+- The complete `StaticFormAppRendererSpec` passed 320 tests; the combined
+  Phase 50 projection/Form/REST boundary passed 336 tests.
+- The final review-fix focused boundary passed 406 tests in 16 suites,
+  including nested Embedded revision recovery, filtered View/Aggregate
+  reprojection, Entity-only REST validator handling, and Embedded admin create.
 
 ## SE-08: Provider, Migration, Downstream, and Regression Acceptance
 
 Stage Status:
-- Current status: PLANNED
+- Current status: DONE
+- Current step: provider, downstream, and migration validation complete
 - Owner: CNCF datastore-provider, generator, and downstream maintainers
 - Entry rule: SE-07 is DONE.
 - Completion rule: Providers, migration rules, generators, and downstream
   consumers prove the standard embedded path and the explicit detached
   extension without compatibility behavior.
 
-- [ ] Verify deterministic in-memory reference behavior.
-- [ ] Verify SQLite atomic comparison, rollback, restart, and concurrency.
-- [ ] Verify one shared-provider profile with independent callers.
-- [ ] Run the same atomic semantic matrix for embedded and detached revision.
-- [ ] Verify deterministic unsupported-provider admission.
-- [ ] Verify records without revision follow the explicit SE-01 rule.
-- [ ] Verify timestamps and resident values are never fallback tokens.
-- [ ] Verify schema mismatch does not silently degrade to last-write-wins.
-- [ ] Migrate generated and downstream `SimpleEntity` users to embedded
+- [x] Verify deterministic in-memory reference behavior.
+- [x] Verify SQLite atomic comparison, rollback, restart, and concurrency.
+- [x] Verify one shared-provider profile with independent callers.
+- [x] Run the same atomic semantic matrix for embedded and detached revision.
+- [x] Verify deterministic unsupported-provider admission.
+- [x] Verify records without revision follow the explicit SE-01 rule.
+- [x] Verify timestamps and resident values are never fallback tokens.
+- [x] Verify schema mismatch does not silently degrade to last-write-wins.
+- [x] Migrate generated and downstream `SimpleEntity` users to embedded
   revision.
-- [ ] Use detached revision downstream only for a proven non-`SimpleEntity`
+- [x] Use detached revision downstream only for a proven non-`SimpleEntity`
   model.
-- [ ] Prove Conditional Transition remains exactly-one-winner downstream.
-- [ ] Prove ordinary non-OCC Entity applications retain declared semantics.
-- [ ] Prove optimistic Entity applications reject stale writes.
-- [ ] Run model-library, CNCF, and relevant downstream focused suites.
+- [x] Prove Conditional Transition remains exactly-one-winner downstream.
+- [x] Prove ordinary non-OCC Entity applications retain declared semantics.
+- [x] Prove optimistic Entity applications reject stale writes.
+- [x] Run model-library, CNCF, and relevant downstream focused suites.
 - [ ] Run CNCF and relevant downstream full suites.
-- [ ] Confirm no token compatibility adapter, implicit detached admission, or
+- [x] Confirm no token compatibility adapter, implicit detached admission, or
   duplicate revision field remains.
 
 Evidence:
-- Pending.
+- `EntityRevisionProviderParitySpec` runs the ordinary Embedded/Detached
+  apply/no-op/stale/exhaustion/missing-revision matrix against in-memory and
+  SQLite, proves SQLite restart and checkpoint rollback, and proves exactly
+  one winner for bounded independent callers.
+- The provider/migration regression boundary passed 65 tests with 1 pending.
+- The live `MysqlConditionalTransitionAcceptanceSpec` profile passed all 6
+  tests against one shared MySQL provider.
+- `simplemodeling-model` passed 56 tests with 27 pending, `simple-modeler`
+  passed 42 tests, Cozy passed 662 tests with 2 canceled, and the generated,
+  Aggregate, DSL, and UnitOfWork CNCF integration boundary passed 25 tests.
+- The final CNCF full suite remains an SE-10 closure gate.
 
 ## SE-09: Confirmed Design and Specification Contract
 
 Stage Status:
-- Current status: PLANNED
+- Current status: DONE
+- Current step: canonical documents and contradiction scan complete
 - Owner: CNCF Entity architecture maintainers
 - Entry rule: SE-08 is DONE and implementation/provider behavior is stable.
 - Completion rule: Canonical design/specification describes exactly the
   verified implementation and references exact Executable Specification
   evidence.
 
-- [ ] Update `docs/design/entity-conflict-and-conditional-transition.md`.
-- [ ] Update `docs/spec/entity-conflict-and-conditional-transition.md`.
-- [ ] Update `docs/design/simpleentity-storage-shape-policy.md`.
-- [ ] Update other affected canonical Entity persistence/API documents.
-- [ ] Remove current separate-token requirements.
-- [ ] Define embedded revision as the standard `SimpleEntity` contract.
-- [ ] Define detached revision as an explicit non-`SimpleEntity` extension,
+- [x] Update `docs/design/entity-conflict-and-conditional-transition.md`.
+- [x] Update `docs/spec/entity-conflict-and-conditional-transition.md`.
+- [x] Update `docs/design/simpleentity-storage-shape-policy.md`.
+- [x] Update other affected canonical Entity persistence/API documents.
+- [x] Remove current separate-token requirements.
+- [x] Define embedded revision as the standard `SimpleEntity` contract.
+- [x] Define detached revision as an explicit non-`SimpleEntity` extension,
   not a compatibility or fallback path.
-- [ ] Record final revision lifecycle and managed-field rules.
-- [ ] Record final concurrency-policy declaration, precedence, and default.
-- [ ] Record final Conditional Transition revision contract.
-- [ ] Record final projection and expected-revision transport contract.
-- [ ] Link normative examples to exact Executable Specifications.
-- [ ] Verify no current design/spec document contradicts the implemented OCC
+- [x] Record final revision lifecycle and managed-field rules.
+- [x] Record final concurrency-policy declaration, precedence, and default.
+- [x] Record final Conditional Transition revision contract.
+- [x] Record final projection and expected-revision transport contract.
+- [x] Link normative examples to exact Executable Specifications.
+- [x] Verify no current design/spec document contradicts the implemented OCC
   contract.
 
 Evidence:
-- Pending.
+- The canonical design now defines the positive revision lifecycle, Embedded
+  standard, explicit Detached extension, policy precedence, provider-owned
+  atomic mutation, transport profiles, and Conditional Transition result
+  contract.
+- The static specification assigns exact evidence to revision kernel,
+  representation, projection, Form, REST, provider parity, and Conditional
+  Transition executable specifications.
+- A current `docs/design` and `docs/spec` scan found no remaining
+  `EntityConcurrencyToken`, `cncf_concurrency_token`, separate snapshot-token,
+  timestamp-token, or `updatedAt`-derived OCC contract.
 
 ## SE-10: Verification and Closure
 
 Stage Status:
-- Current status: PLANNED
+- Current status: DONE
+- Current step: closed
 - Owner: CNCF phase maintainers
 - Entry rule: SE-09 is DONE.
 - Completion rule: Full validation and clean review are complete and strategy,
   phase, design, spec, implementation, and evidence agree.
 
-- [ ] Run `sbt --batch Test/compile`.
-- [ ] Run the full CNCF test suite.
-- [ ] Run required `simplemodeling-lib`, `simplemodeling-model`, and downstream
+- [x] Run `sbt --batch Test/compile`.
+- [x] Run the full CNCF test suite.
+- [x] Run required `simplemodeling-lib`, `simplemodeling-model`, and downstream
   suites.
-- [ ] Run `git diff --check`.
-- [ ] Complete read-only review.
-- [ ] Fix every actionable finding.
-- [ ] Complete clean re-review.
-- [ ] Update strategy completed history and remove the active 9.41 item.
-- [ ] Close Phase 50 dashboard and checklist with exact validation evidence.
-- [ ] Confirm force/merge/repair/UX scope remains visible in strategy item
+- [x] Run `git diff --check`.
+- [x] Complete read-only review.
+- [x] Fix every actionable finding.
+- [x] Complete clean re-review.
+- [x] Update strategy completed history and remove the active 9.41 item.
+- [x] Close Phase 50 dashboard and checklist with exact validation evidence.
+- [x] Confirm force/merge/repair/UX scope remains visible in strategy item
   9.40.
 
 Evidence:
-- Pending.
+- `sbt -J-Xmx4G --batch test` passed 2516 tests in 363 suites, with
+  8 canceled, 1 ignored, 59 pending, and no failures.
+- The final focused revision/Form/REST boundary passed 335 tests in 3 suites
+  after the last review fix, and `Test/compile` passed.
+- The live MySQL conditional-transition acceptance profile passed all 6 tests.
+- Downstream validation passed 388 `simplemodeling-lib` tests, 56
+  `simplemodeling-model` tests, 42 `simple-modeler` tests, and 662 Cozy tests
+  with 2 canceled.
+- `git diff --check` and the final whole-file naming/specification scan passed.
+- Clean read-only re-review found no remaining actionable finding.
+- Strategy completed history records Phase 50 and retains force, merge, repair,
+  and conflict-resolution UX in future item 9.40.

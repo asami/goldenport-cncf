@@ -89,37 +89,37 @@ final case class EntityRevisionBinding(
 
   def validatePersistedRecord(
     record: Record
-  ): Consequence[Unit] = {
-    val hasembedded = _has_field(record, EntityRevisionRepresentation.Embedded.storageFieldName)
-    val hasdetached = _has_field(record, EntityRevisionRepresentation.Detached.storageFieldName)
-    if (hasembedded && hasdetached)
-      Consequence.stateConflict(
-        "persisted Entity record contains both embedded revision and detached cncf_revision"
-      )
-    else
-      representation match {
-        case EntityRevisionRepresentation.Embedded if hasembedded =>
-          Consequence.unit
-        case EntityRevisionRepresentation.Detached if hasdetached =>
-          Consequence.unit
-        case EntityRevisionRepresentation.Embedded if hasdetached =>
-          Consequence.stateConflict(
-            "embedded Entity revision cannot use detached cncf_revision"
-          )
-        case EntityRevisionRepresentation.Detached if hasembedded =>
-          Consequence.stateConflict(
-            "detached Entity revision cannot use embedded revision"
-          )
-        case EntityRevisionRepresentation.Embedded =>
-          Consequence.stateConflict(
-            "persisted embedded Entity record is missing revision"
-          )
-        case EntityRevisionRepresentation.Detached =>
-          Consequence.stateConflict(
-            "persisted detached Entity record is missing cncf_revision"
-          )
-      }
-  }
+  ): Consequence[Unit] =
+    representation match {
+      case EntityRevisionRepresentation.Embedded
+          if _has_field(
+            record,
+            EntityRevisionRepresentation.Detached.storageFieldName
+          ) =>
+        Consequence.stateConflict(
+          "embedded Entity revision cannot use detached cncf_revision"
+        )
+      case EntityRevisionRepresentation.Embedded
+          if _has_field(
+            record,
+            EntityRevisionRepresentation.Embedded.storageFieldName
+          ) =>
+        Consequence.unit
+      case EntityRevisionRepresentation.Embedded =>
+        Consequence.stateConflict(
+          "persisted embedded Entity record is missing revision"
+        )
+      case EntityRevisionRepresentation.Detached
+          if _has_field(
+            record,
+            EntityRevisionRepresentation.Detached.storageFieldName
+          ) =>
+        Consequence.unit
+      case EntityRevisionRepresentation.Detached =>
+        Consequence.stateConflict(
+          "persisted detached Entity record is missing cncf_revision"
+        )
+    }
 
   def revision(
     record: Record
@@ -152,15 +152,8 @@ final case class EntityRevisionBinding(
   )(
     decode: Record => Consequence[A]
   ): Consequence[A] =
-    snapshot(record)(decode).map(_.entity)
-
-  def snapshot[A](
-    record: Record
-  )(
-    decode: Record => Consequence[A]
-  ): Consequence[EntitySnapshot[A]] =
     for {
-      current <- revision(record)
+      _ <- revision(record)
       entity <- decode(
         representation match {
           case EntityRevisionRepresentation.Embedded =>
@@ -169,22 +162,68 @@ final case class EntityRevisionBinding(
             withoutManagedRevision(record)
         }
       )
+    } yield entity
+
+  def snapshot[A](
+    record: Record
+  )(
+    decode: Record => Consequence[A]
+  ): Consequence[EntitySnapshot[A]] =
+    for {
+      _ <- requireRepresentation(EntityRevisionRepresentation.Embedded)
+      current <- revision(record)
+      entity <- decode(record)
     } yield EntitySnapshot(entity, current)
 
   def recordSnapshot(
     record: Record
   ): Consequence[EntityRecordSnapshot] =
-    revision(record).map { current =>
+    for {
+      _ <- requireRepresentation(EntityRevisionRepresentation.Embedded)
+      current <- revision(record)
+    } yield
       EntityRecordSnapshot(
-        representation match {
-          case EntityRevisionRepresentation.Embedded =>
-            record
-          case EntityRevisionRepresentation.Detached =>
-            withoutManagedRevision(record)
-        },
+        record,
         current
       )
-    }
+
+  def detachedCarrier[A](
+    record: Record
+  )(
+    decode: Record => Consequence[A]
+  ): Consequence[EntityRevisionCarrier[A]] =
+    for {
+      _ <- requireRepresentation(EntityRevisionRepresentation.Detached)
+      current <- revision(record)
+      entity <- decode(withoutManagedRevision(record))
+    } yield EntityRevisionCarrier(entity, current)
+
+  def detachedRecordCarrier(
+    record: Record
+  ): Consequence[EntityRevisionCarrier[Record]] =
+    for {
+      _ <- requireRepresentation(EntityRevisionRepresentation.Detached)
+      current <- revision(record)
+    } yield EntityRevisionCarrier(withoutManagedRevision(record), current)
+
+  def requireRepresentation(
+    expected: EntityRevisionRepresentation
+  ): Consequence[Unit] =
+    if (representation == expected)
+      Consequence.unit
+    else
+      Consequence.operationInvalid(
+        "entity-revision-representation",
+        Vector(
+          org.goldenport.observation.Descriptor.Facet.Policy(
+            "entity.revision.representation"
+          ),
+          org.goldenport.observation.Descriptor.Facet.Expected(expected.label),
+          org.goldenport.observation.Descriptor.Facet.Actual(
+            representation.label
+          )
+        )
+      )
 
   def rejectManagedPatch(
     record: Record,

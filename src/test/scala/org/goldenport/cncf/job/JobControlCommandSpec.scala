@@ -16,7 +16,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Mar. 21, 2026
  *  version Apr. 22, 2026
- * @version Jul. 17, 2026
+ * @version Jul. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 final class JobControlCommandSpec
@@ -173,8 +173,8 @@ final class JobControlCommandSpec
       val entered = new CountDownLatch(1)
       val release = new CountDownLatch(1)
       val task = BlockingTask(ActionId.generate(), entered, release)
-      val submittedCtx = ExecutionContext.test()
-      val jobid = _jobid(engine.submit(List(task), submittedCtx))
+      val submittedctx = createJobEntityContext()
+      val jobid = _jobid(engine.submit(List(task), submittedctx))
       entered.await(DefaultAwaitTimeoutMillis, TimeUnit.MILLISECONDS) shouldBe true
 
       given ExecutionContext = ExecutionContext.test(SecurityContext.Privilege.ApplicationContentManager)
@@ -187,7 +187,7 @@ final class JobControlCommandSpec
         awaitStatus(engine, jobid, Set(JobStatus.Cancelled)) shouldBe Some(JobStatus.Cancelled)
 
         Then("the Job Entity status is updated")
-        val loaded = EntityStore.standard().load[JobEntity](JobEntity.entityId(jobid))(using JobEntity.entityPersistent, submittedCtx).toOption.flatten
+        val loaded = EntityStore.standard().load[JobEntity](JobEntity.entityId(jobid))(using JobEntity.entityPersistent, submittedctx).toOption.flatten
         loaded.flatMap(_.record.getString("status")) shouldBe Some("Cancelled")
       } finally {
         release.countDown()
@@ -231,11 +231,11 @@ final class JobControlCommandSpec
     retryEntered: CountDownLatch,
     retryRelease: CountDownLatch
   ) extends JobTask {
-    private val attempt = new AtomicInteger(0)
+    private val _attempt = new AtomicInteger(0)
 
     def run(ctx: ExecutionContext): TaskOutcome = {
       val _ = ctx
-      if (attempt.getAndIncrement() == 0)
+      if (_attempt.getAndIncrement() == 0)
         TaskFailed(Consequence.stateInvalid[Nothing]("initial attempt failed").conclusion)
       else {
         retryEntered.countDown()

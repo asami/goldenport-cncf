@@ -27,6 +27,8 @@ import org.goldenport.cncf.entity.{
   EntityPersistent,
   EntityPersistentCreate,
   EntityQuery,
+  EntityRevisionRepresentation,
+  EntityRevisionSpecSupport,
   EntitySearchScope,
   EntityStore,
   EntityStoreSpace,
@@ -132,6 +134,12 @@ final class ActionCallEntityAccessMetricsSpec
         val ctx = _execution_context(
           DataStoreSpace.default(),
           new EntityStoreSpace().addEntityStore(EntityStore.standard())
+        )
+        EntityRevisionSpecSupport.registerRevisionBinding(
+          ctx,
+          cid,
+          _claim_persistent,
+          EntityRevisionRepresentation.Detached
         )
         val probe = _probe(component, ctx)
 
@@ -1353,9 +1361,11 @@ private final class _EntityAccessProbe(
   def saveInternal[T](
       entity: T,
       expectedRevision: EntityRevision
-  )(using tc: EntityPersistent[T]): Consequence[org.goldenport.cncf.entity.EntitySnapshot[T]] =
+  )(using
+    tc: EntityPersistent[T]
+  ): Consequence[org.goldenport.cncf.entity.EntityRevisionCarrier[T]] =
     new UnitOfWorkInterpreter(new UnitOfWork(executionContext))
-      .run(entity_save_internal(entity, expectedRevision))
+      .run(entity_save_detached_internal(entity, expectedRevision))
 
   def createPublic[T](entity: T)(using
       tc: EntityPersistentCreate[T]

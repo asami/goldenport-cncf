@@ -4,7 +4,7 @@ package org.goldenport.cncf.http
  * @since   May. 18, 2026
  *  version May. 30, 2026
  *  version Jun. 19, 2026
- * @version Jul. 24, 2026
+ * @version Jul. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 import cats.effect.IO
@@ -46,6 +46,10 @@ import org.goldenport.cncf.component.builtin.auth.AuthComponent
 import org.goldenport.cncf.context.{ExecutionContext, RuntimeContext, ScopeContext, ScopeKind}
 import org.goldenport.cncf.config.{OperationMode, RuntimeConfig}
 import org.goldenport.cncf.blob.{BlobKind, BlobPayloadSupport, BlobRepository, BlobStoreFactory, BlobStorageRef}
+import org.goldenport.cncf.entity.{
+  EntityMutationAdapterDefaults,
+  EntityRevisionTransport
+}
 import org.goldenport.cncf.naming.{NamingConventions, PropertyValueResolver}
 import org.goldenport.cncf.job.{JobId, JobInput, JobInputRetentionPolicy, JobQueryReadModel, JobStatus}
 import org.goldenport.cncf.observability.{ConclusionDiagnostics, DiagnosticPayloadReferenceCodec, DslChokepointContext, DslChokepointPhase, DslChokepointRunner}
@@ -56,6 +60,7 @@ import org.goldenport.protocol.spec.OperationDefinition
 import org.goldenport.bag.{Bag, BinaryBag}
 import org.goldenport.datatype.{ContentType, MimeBody, MimeType}
 import org.goldenport.observation.{Cause, Descriptor}
+import org.simplemodeling.model.datatype.EntityRevision
 
 /*
  * @since   Jan.  7, 2026
@@ -64,7 +69,7 @@ import org.goldenport.observation.{Cause, Descriptor}
  *  version Apr. 30, 2026
  *  version May. 25, 2026
  *  version Jun. 19, 2026
- * @version Jul. 24, 2026
+ * @version Jul. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Http4sHttpServer(
@@ -497,8 +502,21 @@ final class Http4sHttpServer(
         try {
           val started = System.nanoTime()
           for {
-            core <- _to_http_request(req, Some(_rest_execution_path(req)))
-            res <- _to_http_execution_response(executeWithMetadata(core), Some(req))
+            raw <- _to_http_request(req, Some(_rest_execution_path(req)))
+            res <- _rest_mutation_request(req, raw) match {
+              case Consequence.Success(core) =>
+                _to_http_execution_response(
+                  executeWithMetadata(core),
+                  Some(req)
+                )
+              case Consequence.Failure(conclusion) =>
+                _web_error_response(
+                  None,
+                  conclusion,
+                  req.uri.path.renderString,
+                  req.method.name
+                )
+            }
           } yield {
             RuntimeDashboardMetrics.recordHtmlRequest(
               req.method.name,
@@ -3014,7 +3032,11 @@ final class Http4sHttpServer(
         path = s"/admin/entity/${operation}",
         form = record
           .upsertSingle("component", app)
-          .upsertSingle("entity", entity)
+          .upsertSingle("entity", entity),
+        header = Record.data(
+          EntityMutationAdapterDefaults.profilePropertyName ->
+            EntityMutationAdapterDefaults.webFormProfile
+        )
       )
     )
     _AdminFormDispatchResult(response, "Entity record was applied.")
@@ -5489,6 +5511,42 @@ final class Http4sHttpServer(
     if (stripped.isEmpty) "/" else stripped
   }
 
+  private[http] def _rest_mutation_request(
+    req: org.http4s.Request[IO],
+    request: HttpRequest
+  ): Consequence[HttpRequest] =
+    if (
+      req.method != Method.PUT ||
+      !_is_entity_revision_rest_request(req)
+    )
+      Consequence.success(request)
+    else
+      _header_value(req, EntityRevisionTransport.ifMatchHeaderName) match {
+        case Some(value) =>
+          EntityRevisionTransport.parseEntityTagC(value).map { revision =>
+            request.copy(
+              header = request.header
+                .upsertSingle(
+                  EntityMutationAdapterDefaults.profilePropertyName,
+                  EntityMutationAdapterDefaults.strictRestProfile
+                )
+                .upsertSingle(
+                  EntityRevisionTransport.observedRevisionPropertyName,
+                  revision.value
+                )
+            )
+          }
+        case None =>
+          Consequence.success(
+            request.copy(
+              header = request.header.upsertSingle(
+                EntityMutationAdapterDefaults.profilePropertyName,
+                EntityMutationAdapterDefaults.idempotentRestProfile
+              )
+            )
+          )
+      }
+
   private def _rest_latest_stable_target(req: org.http4s.Request[IO]): String = {
     val path = req.uri.path.renderString
     val redirectedpath =
@@ -7269,11 +7327,74 @@ final class Http4sHttpServer(
       else
         _error_json_response(error)
     } else {
-      IO.pure(
-        _with_response_headers(_with_job_id_header(HResponse[IO](status), metadata), res)
+      val response =
+        _with_response_headers(
+          _with_job_id_header(HResponse[IO](status), metadata),
+          res
+        )
           .withEntity(body)
           .withContentType(contenttype)
+      IO.pure(
+        _with_entity_revision_validator(response, req, body)
       )
+    }
+  }
+
+  private[http] def _with_entity_revision_validator(
+    response: HResponse[IO],
+    request: Option[org.http4s.Request[IO]],
+    body: String
+  ): HResponse[IO] =
+    if (!request.exists(_is_entity_revision_rest_request))
+      response
+    else
+      _entity_revision_from_json(body) match {
+        case Some(revision) =>
+          response.putHeaders(
+            Header.Raw(
+              CIString("ETag"),
+              EntityRevisionTransport.entityTag(revision)
+            )
+          )
+        case None =>
+          response
+      }
+
+  private[http] def _entity_revision_from_json(
+    body: String
+  ): Option[EntityRevision] =
+    parse(body).toOption.flatMap { json =>
+      val data = json.hcursor.downField("data").focus
+      Vector(
+        _json_entity_revision(json, Vector("version")),
+        data.flatMap(_json_entity_revision(_, Vector("version"))),
+        _json_entity_revision(json, Vector("record", "revision")),
+        data.flatMap(
+          _json_entity_revision(_, Vector("record", "revision"))
+        ),
+        _json_entity_revision(json, Vector("revision")),
+        data.flatMap(_json_entity_revision(_, Vector("revision")))
+      ).flatten.headOption
+    }
+
+  private def _is_entity_revision_rest_request(
+    req: org.http4s.Request[IO]
+  ): Boolean = {
+    val path = _rest_execution_path(req)
+    path == "/admin/entity" || path.startsWith("/admin/entity/")
+  }
+
+  private def _json_entity_revision(
+    root: io.circe.Json,
+    path: Vector[String]
+  ): Option[EntityRevision] = {
+    val value = path.foldLeft(Option(root)) { (z, name) =>
+      z.flatMap(_.hcursor.downField(name).focus)
+    }
+    value.flatMap { candidate =>
+      candidate.asNumber.flatMap(_.toLong)
+        .orElse(candidate.asString)
+        .flatMap(EntityRevision.createC(_).toOption)
     }
   }
 

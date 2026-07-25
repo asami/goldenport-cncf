@@ -197,7 +197,7 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
       _with_calltree("uow:entitystore:create") {
         _authorize(m.authorization).flatMap(_ =>
           _entity_store_space.create(m).flatMap { r =>
-            _entity_space_put_record(r.id, r.record).map { _ =>
+            _entity_space_put_persisted_record(r.id, r.record).map { _ =>
               _view_space_invalidate_all()
               r
             }
@@ -212,7 +212,10 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
             case claimed: org.goldenport.cncf.entity.EntityStore.EntityClaimResult.Claimed[
                   c
                 ] @unchecked =>
-              _entity_space_put_record(claimed.id, claimed.created.record).map { _ =>
+              _entity_space_put_persisted_record(
+                claimed.id,
+                claimed.created.record
+              ).map { _ =>
                 _view_space_invalidate_all()
                 claimed
               }
@@ -271,6 +274,22 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
         }
       }
 
+    case m: (UnitOfWorkOp.EntityStoreLoadDetached[t] @unchecked) =>
+      val id = _canonical_entity_id(m.id)
+      _with_calltree(
+        "uow:entitystore:load-detached",
+        _entity_calltree_attributes(id, "entity-store", realio = true)
+      ) {
+        _authorize(m.authorization, Some(() => _load_record(id))).flatMap { _ =>
+          _entity_store_space.loadDetached(id, m.tc).map { result =>
+            result.foreach(carrier =>
+              _entity_space_put(carrier.entity, m.tc)
+            )
+            result
+          }
+        }
+      }
+
     case m: (UnitOfWorkOp.EntityStoreSave[t] @unchecked) =>
       val id = m.tc.id(m.entity)
       _with_calltree(
@@ -299,6 +318,35 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
         _reconcile_versioned_failure(id, result)
       }
 
+    case m: (UnitOfWorkOp.EntityStoreSaveDetached[t] @unchecked) =>
+      val id = m.tc.id(m.entity)
+      _with_calltree(
+        "uow:entitystore:save-detached",
+        _entity_calltree_attributes(id, "entity-store", realio = true)
+      ) {
+        val loadrecord = () =>
+          _load_record(id).map { existing =>
+            Some(
+              existing
+                .map(record => m.tc.authorizationRecord(m.entity, record))
+                .getOrElse(m.tc.authorizationRecord(m.entity))
+            )
+          }
+        val result =
+          _authorize(m.authorization, Some(loadrecord)).flatMap(_ =>
+            _transition_validation_hook
+              .beforeSave[t](m.entity, m.tc)
+              .flatMap(_ => _entity_store_space.saveDetached(m))
+              .map { carrier =>
+                _entity_space_evict(id)
+                _entity_space_put(carrier.entity, m.tc)
+                _view_space_invalidate_all()
+                carrier
+              }
+          )
+        _reconcile_versioned_failure(id, result)
+      }
+
     case m: (UnitOfWorkOp.EntityStoreSaveUnversioned[t] @unchecked) =>
       _with_calltree("uow:entitystore:save-unversioned") {
         _authorize_unversioned(m.authorization, m.purpose).flatMap { _ =>
@@ -320,7 +368,10 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
         _entity_store_space.upsert(m)(
             authorize = _ => Consequence.unit,
           onsaved = { result =>
-            _entity_space_put_record(result.id, result.record).map { _ =>
+            _entity_space_put_persisted_record(
+              result.id,
+              result.record
+            ).map { _ =>
               _view_space_invalidate_all()
               ()
             }
@@ -367,6 +418,46 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
       }
       _reconcile_versioned_failure(id, result)
 
+    case m: (UnitOfWorkOp.EntityStoreUpdateDetached[t] @unchecked) =>
+      val id = m.tc.id(m.entity)
+      val result = _with_calltree(
+        "uow:entitystore:update-detached",
+        _entity_calltree_attributes(id, "entity-store", realio = true)
+      ) {
+        for {
+          current <- _load_record(id)
+          loadrecord = () =>
+            Consequence.success(
+              Some(
+                current
+                  .map(record =>
+                    m.tc.authorizationRecord(m.entity, record)
+                  )
+                  .getOrElse(m.tc.authorizationRecord(m.entity))
+              )
+            )
+          _ <- _authorize(m.authorization, Some(loadrecord))
+          _ <- current match {
+            case Some(record) =>
+              _transition_validation_hook.beforeUpdate[t](
+                m.entity,
+                m.tc,
+                record,
+                m.tc.toStoreRecord(m.entity)
+              )
+            case None =>
+              _transition_validation_hook.beforeUpdate[t](m.entity, m.tc)
+          }
+          carrier <- _entity_store_space.updateDetached(m)
+        } yield {
+          _entity_space_evict(id)
+          _entity_space_put(carrier.entity, m.tc)
+          _view_space_invalidate_all()
+          carrier
+        }
+      }
+      _reconcile_versioned_failure(id, result)
+
     case m: (UnitOfWorkOp.EntityStoreUpdateById[t] @unchecked) =>
       val id = _canonical_entity_id(m.id)
       val op = m.copy(id = id)
@@ -393,10 +484,52 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
           }
           r <- _entity_store_space.updateById(op)
           _ = _entity_space_evict(op.id)
-          _ <- _entity_space_put_record(op.id, Some(r.record))
+          _ <- _entity_space_put_persisted_record(op.id, Some(r.record))
         } yield {
           _view_space_invalidate_all()
           r
+        }
+      }
+      _reconcile_versioned_failure(id, result)
+
+    case m: (UnitOfWorkOp.EntityStoreUpdateByIdDetached[t] @unchecked) =>
+      val id = _canonical_entity_id(m.id)
+      val op = m.copy(id = id)
+      val result = _with_calltree(
+        "uow:entitystore:update-by-id-detached",
+        _entity_calltree_attributes(id, "entity-store", realio = true)
+      ) {
+        for {
+          current <- _load_record(op.id)
+          _ <- _authorize(
+            op.authorization,
+            Some(() => Consequence.success(current))
+          )
+          _ <- current match {
+            case Some(record) =>
+              val changes =
+                Update.toChangesRecord(op.tc.toStoreRecord(op.patch))
+              val proposed = _overlay_record(record, changes)
+              _transition_validation_hook.beforeUpdateById[t](
+                op.id,
+                op.patch,
+                op.tc,
+                record,
+                proposed
+              )
+            case None =>
+              _transition_validation_hook.beforeUpdateById[t](
+                op.id,
+                op.patch,
+                op.tc
+              )
+          }
+          carrier <- _entity_store_space.updateByIdDetached(op)
+          _ = _entity_space_evict(op.id)
+          _ <- _entity_space_put_domain_record(op.id, Some(carrier.entity))
+        } yield {
+          _view_space_invalidate_all()
+          carrier
         }
       }
       _reconcile_versioned_failure(id, result)
@@ -992,9 +1125,22 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
       .foreach(_.putScoped(entity)(using uow.executionContext))
   }
 
-  private def _entity_space_put_record(
+  private def _entity_space_put_persisted_record(
     id: EntityId,
     record: Option[org.goldenport.record.Record]
+  ): Consequence[Unit] =
+    _entity_space_put_record(id, record, persistedrecord = true)
+
+  private def _entity_space_put_domain_record(
+    id: EntityId,
+    record: Option[org.goldenport.record.Record]
+  ): Consequence[Unit] =
+    _entity_space_put_record(id, record, persistedrecord = false)
+
+  private def _entity_space_put_record(
+    id: EntityId,
+    record: Option[org.goldenport.record.Record],
+    persistedrecord: Boolean
   ): Consequence[Unit] = {
     val name = id.collection.name
     (for {
@@ -1007,15 +1153,25 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
         )
       }
       if collection.storage.memoryRealm.isDefined
-    } yield EntityConcurrencyMetadata
-      .decodeEntity(r)(
-        collection.descriptor.persistent.fromStoreRecord
-      )
+    } yield {
+      val persistent = collection.descriptor.persistent
+      val decoded =
+        if (persistedrecord)
+          collection.descriptor.revisionBinding match {
+            case Some(binding) =>
+              binding.decodeEntity(r)(persistent.fromStoreRecord)
+            case None =>
+              persistent.fromStoreRecord(r)
+          }
+        else
+          persistent.fromStoreRecord(r)
+      decoded
       .map(collection.putScoped(_)(using uow.executionContext))
       .recoverWith {
         case c if _is_not_implemented(c) => Consequence.unit
         case c => Consequence.Failure[Unit](c)
-      }).getOrElse(Consequence.unit)
+      }
+    }).getOrElse(Consequence.unit)
   }
 
   private def _view_space_invalidate_all(): Unit =
@@ -1078,9 +1234,32 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
             authorization,
             Some(() => Consequence.success(Some(record)))
           )
-          revision <- EntityConcurrencyMetadata.revision(record)
+          binding <- _conditional_revision_binding(bind.id.collection)
+          revision <- binding.revision(record)
         } yield Some(EntityBoundSuccessorEvidence(bind.id, revision))
     }
+
+  private def _conditional_revision_binding(
+    collection: org.simplemodeling.model.datatype.EntityCollectionId
+  ): Consequence[EntityRevisionBinding] =
+    uow.executionContext.entitySpace
+      .entityOption(collection)
+      .flatMap(_.descriptor.revisionBinding)
+      .map(Consequence.success)
+      .getOrElse(
+        Consequence.operationInvalid(
+          "entity-revision-representation",
+          Vector(
+            org.goldenport.observation.Descriptor.Facet.Policy(
+              "entity.revision.representation"
+            ),
+            org.goldenport.observation.Descriptor.Facet.Expected(
+              "embedded-or-detached"
+            ),
+            org.goldenport.observation.Descriptor.Facet.Actual("unmanaged")
+          )
+        )
+      )
 
   private def _reconcile_conditional_transition_failure[R, P, S](
     rootid: EntityId,

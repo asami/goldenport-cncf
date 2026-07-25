@@ -57,10 +57,17 @@ import org.goldenport.cncf.datastore.{
 import org.goldenport.cncf.directive.Query as EntityQuery
 import org.goldenport.cncf.entity.{
   EntityConcurrencyMetadata,
+  EntityMutationAdapterDefaults,
+  EntityMutationExecutionPolicy,
+  EntityMutationPolicySelection,
+  EntityMutationPolicyResolver,
   EntityPersistable,
   EntityPersistent,
   EntityQuery as StoreEntityQuery,
-  EntitySearchScope
+  EntityRevisionRepresentation,
+  EntityRevisionTransport,
+  EntitySearchScope,
+  RevisionPreconditionPolicy
 }
 import org.goldenport.cncf.entity.runtime.{EntityCollection, EntityQueryFieldResolver}
 import org.goldenport.cncf.naming.NamingConventions
@@ -70,6 +77,7 @@ import org.goldenport.cncf.operation.{
   CmlOperationAssociationBinding
 }
 import org.goldenport.cncf.projection.{
+  EntityRevisionProjection,
   SecurityDeploymentMarkdownProjection,
   SecurityDeploymentProjection
 }
@@ -2011,16 +2019,41 @@ object AdminComponent {
         _entity_collection(component, entityname),
         s"Entity collection not found: ${entityname}"
       )
-      entityexecutioncontext = core.executionContext
+      entityexecutioncontext = _admin_entity_execution_context(
+        component,
+        core.executionContext
+      )
       attachmentrequest <- BlobAttachmentWorkflow.extract(_admin_entity_blob_attachment_request(
         operation,
         componentname,
         entityname,
         core
       ))
-      expectedrevision <- _admin_entity_expected_revision(operation, args)
+      policyselection <- _admin_entity_policy_selection(
+        collection,
+        args
+      )
+      expectedrevision <- _admin_entity_expected_revision(
+        operation,
+        args,
+        collection.descriptor.revisionBinding.nonEmpty,
+        policyselection.preconditionPolicy ==
+          RevisionPreconditionPolicy.ObservedRequired
+      )
+      executionpolicy <- _admin_entity_execution_policy(
+        operation,
+        collection,
+        policyselection,
+        expectedrevision
+      )
       inputrecord = _admin_entity_record(collection, _action_record(core))
-      record   <- _canonical_admin_entity_record(collection, inputrecord)
+      record <- _canonical_admin_entity_record(
+        operation,
+        entityexecutioncontext,
+        collection,
+        inputrecord,
+        expectedrevision
+      )
       entityid <- Consequence.fromOption(record.getString("id"), "entity id is required")
       _ <-
         if (attachmentrequest.isEmpty)
@@ -2029,7 +2062,8 @@ object AdminComponent {
             entityexecutioncontext,
             collection,
             record,
-            expectedrevision
+            expectedrevision,
+            executionpolicy
           )
         else
           _admin_entity_put_with_blob_attachments(
@@ -2039,9 +2073,21 @@ object AdminComponent {
             collection,
             record,
             entityid,
-            expectedrevision
+            expectedrevision,
+            executionpolicy
           )
     } yield OperationResponse.Scalar("Entity record was applied.")
+  }
+
+  private def _admin_entity_execution_context(
+    component: Component,
+    caller: ExecutionContext
+  ): ExecutionContext = {
+    val target = component.logic.executionContext()
+    val secured = ExecutionContext.withSecurityContext(target, caller.security)
+    val observed =
+      ExecutionContext.withObservabilityContext(secured, caller.observability)
+    ExecutionContext.withJobContext(observed, caller.jobContext)
   }
 
   private def _admin_entity_put_with_blob_attachments(
@@ -2051,7 +2097,8 @@ object AdminComponent {
     collection: EntityCollection[?],
     record: Record,
     entityid: String,
-    expectedrevision: Option[EntityRevision]
+    expectedrevision: Option[EntityRevision],
+    executionpolicy: EntityMutationExecutionPolicy
   ): Consequence[Unit] =
     for {
       workflow <- _blob_attachment_workflow(core)
@@ -2075,7 +2122,8 @@ object AdminComponent {
             entityexecutioncontext,
             collection,
             record,
-            expectedrevision
+            expectedrevision,
+            executionpolicy
           ) match {
             case Consequence.Success(_) =>
               workflow.attachToEntity(
@@ -2093,35 +2141,112 @@ object AdminComponent {
       executioncontext: ExecutionContext,
       collection: EntityCollection[?],
       record: Record,
-      expectedrevision: Option[EntityRevision]
+      expectedrevision: Option[EntityRevision],
+      executionpolicy: EntityMutationExecutionPolicy
   ): Consequence[Unit] =
     if (operation == "create")
       collection.createRecordSynced(record)(using executioncontext)
     else
-      for {
-        expected <- Consequence.fromOption(
-          expectedrevision,
-          "Entity mutation version is required"
+      collection.descriptor.revisionBinding match {
+        case Some(binding) =>
+          binding.representation match {
+              case EntityRevisionRepresentation.Embedded =>
+                collection.saveRecordVersioned(
+                  record,
+                  expectedrevision,
+                  executionpolicy
+                )(using executioncontext).map(_ => ())
+              case EntityRevisionRepresentation.Detached =>
+                collection.saveRecordDetached(
+                  record,
+                  expectedrevision,
+                  executionpolicy
+                )(using executioncontext).map(_ => ())
+          }
+        case None =>
+          Consequence.operationInvalid(
+            "admin-entity-update",
+            "Entity collection has no managed revision representation"
+          )
+      }
+
+  private def _admin_entity_policy_selection(
+    collection: EntityCollection[?],
+    args: Map[String, Any]
+  ): Consequence[EntityMutationPolicySelection] = {
+    val profile = args
+      .get(EntityMutationAdapterDefaults.profilePropertyName)
+      .map(_.toString)
+    EntityMutationPolicyResolver
+      .resolveC(
+        collection.descriptor.plan.concurrencyPolicy,
+        adapterDefault = EntityMutationAdapterDefaults.forProfile(profile)
+      )
+  }
+
+  private def _admin_entity_execution_policy(
+    operation: String,
+    collection: EntityCollection[?],
+    selection: EntityMutationPolicySelection,
+    expectedrevision: Option[EntityRevision]
+  ): Consequence[EntityMutationExecutionPolicy] = {
+    val effective =
+      if (operation == "create")
+        selection.copy(
+          preconditionPolicy = RevisionPreconditionPolicy.Managed
         )
-        _ <- collection.saveRecordVersioned(
-          record,
-          expected
-        )(using executioncontext)
-      } yield ()
+      else
+        selection
+    effective.executionPolicyC(
+      collection.descriptor.plan.concurrencyPolicy,
+      expectedrevision
+    )
+  }
 
   private def _admin_entity_expected_revision(
       operation: String,
-      args: Map[String, Any]
-  ): Consequence[Option[EntityRevision]] =
-    if (operation == "create")
+      args: Map[String, Any],
+      revisionmanaged: Boolean,
+      observedrequired: Boolean
+  ): Consequence[Option[EntityRevision]] = {
+    val profile = args
+      .get(EntityMutationAdapterDefaults.profilePropertyName)
+      .map(_.toString.trim.toLowerCase(java.util.Locale.ROOT))
+    if (operation == "create" || !revisionmanaged)
       Consequence.success(None)
-    else
-      args.get("version") match {
+    else if (
+      profile.contains(EntityMutationAdapterDefaults.idempotentRestProfile)
+    )
+      Consequence.success(None)
+    else {
+      val candidate =
+        if (profile.contains(EntityMutationAdapterDefaults.strictRestProfile))
+          args.get(EntityRevisionTransport.observedRevisionPropertyName)
+        else
+          args
+            .get("version")
+            .orElse(
+              args.get(EntityRevisionTransport.observedRevisionPropertyName)
+            )
+      candidate match {
         case Some(value) =>
           EntityConcurrencyMetadata.transportRevision(value).map(Some(_))
+        case None if observedrequired =>
+          Consequence.argumentMissing(
+            if (
+              profile.contains(
+                EntityMutationAdapterDefaults.strictRestProfile
+              )
+            )
+              EntityRevisionTransport.ifMatchHeaderName
+            else
+              "version"
+          )
         case None =>
-          Consequence.argumentMissing("version")
+          Consequence.success(None)
       }
+    }
+  }
 
   private def _blob_attachment_workflow(
     core: ActionCall.Core
@@ -2150,14 +2275,96 @@ object AdminComponent {
     )
 
   private def _canonical_admin_entity_record[E](
+    operation: String,
+    executioncontext: ExecutionContext,
     collection: EntityCollection[E],
-    record: Record
+    record: Record,
+    expectedrevision: Option[EntityRevision]
   ): Consequence[Record] =
-    collection.descriptor.persistent.fromRecord(record).map { entity =>
-      val persistent = collection.descriptor.persistent
-      val canonical = persistent.toRecord(entity)
-      Record.create((canonical.asMap + ("id" -> persistent.id(entity).value)).toVector)
+    {
+      val admitted = collection.descriptor.revisionBinding match {
+        case Some(binding) =>
+          binding.rejectManagedPatch(record, "entity").flatMap { value =>
+            binding.representation match {
+              case EntityRevisionRepresentation.Embedded
+                  if operation == "create" =>
+                Consequence.success(value)
+              case EntityRevisionRepresentation.Embedded =>
+                _admin_entity_domain_revision(
+                  operation,
+                  executioncontext,
+                  collection,
+                  value,
+                  expectedrevision
+                ).map(revision =>
+                  value.upsertSingle(
+                    binding.storageFieldName,
+                    revision.value
+                  )
+                )
+              case EntityRevisionRepresentation.Detached =>
+                Consequence.success(value)
+            }
+          }
+        case None =>
+          Consequence.success(record)
+      }
+      val deferdecode =
+        collection.descriptor.revisionBinding.exists { binding =>
+          binding.representation ==
+            EntityRevisionRepresentation.Embedded
+        } && operation == "create"
+      if (deferdecode)
+        admitted
+      else
+        admitted
+          .flatMap(collection.descriptor.persistent.fromRecord)
+          .map { entity =>
+            val persistent = collection.descriptor.persistent
+            val canonical = persistent.toRecord(entity)
+            Record.create(
+              (
+                canonical.asMap +
+                  ("id" -> persistent.id(entity).value)
+              ).toVector
+            )
+          }
     }
+
+  private def _admin_entity_domain_revision[E](
+    operation: String,
+    executioncontext: ExecutionContext,
+    collection: EntityCollection[E],
+    record: Record,
+    expectedrevision: Option[EntityRevision]
+  ): Consequence[EntityRevision] =
+    if (operation == "create")
+      Consequence.success(EntityRevision.INITIAL)
+    else
+      expectedrevision match {
+        case Some(revision) =>
+          Consequence.success(revision)
+        case None =>
+          for {
+            idtext <- Consequence.fromOption(
+              record.getString("id"),
+              "entity id is required"
+            )
+            entityid <- Consequence.fromOption(
+              collection.resolveEntityId(idtext),
+              s"Entity record not found: ${idtext}"
+            )
+            value <- _admin_entity_revision_value(
+              executioncontext,
+              collection,
+              entityid
+            )
+            revision <- Consequence.fromOption(
+              value.revision,
+              "Entity revision is required"
+            )
+          } yield revision
+      }
 
   private def _delete_admin_entity_record(
     collection: EntityCollection[?],
@@ -2189,10 +2396,22 @@ object AdminComponent {
         _entity_collection(component, entityname),
         s"Entity collection not found: ${entityname}"
       )
+      entityexecutioncontext = _admin_entity_execution_context(
+        component,
+        core.executionContext
+      )
       view = args.get("view").map(_.toString).getOrElse("summary")
       fields = _entity_view_fields(component, entityname, view)
       result <-
-        _admin_entity_search(core, collection, component, entityname, view, effectivepaging, args)
+        _admin_entity_search(
+          entityexecutioncontext,
+          collection,
+          component,
+          entityname,
+          view,
+          effectivepaging,
+          args
+        )
     } yield OperationResponse.RecordResponse(
       _list_response_record(
         "entity",
@@ -2205,7 +2424,7 @@ object AdminComponent {
   }
 
   private def _admin_entity_search[A](
-    core: ActionCall.Core,
+    executioncontext: ExecutionContext,
     collection: EntityCollection[A],
     component: Component,
       entityname: String,
@@ -2213,7 +2432,7 @@ object AdminComponent {
     paging: _Paging,
     args: Map[String, Any]
   ): Consequence[org.goldenport.cncf.directive.SearchResult[A]] = {
-    given org.goldenport.cncf.context.ExecutionContext = core.executionContext
+    given org.goldenport.cncf.context.ExecutionContext = executioncontext
     val resolver = EntityQueryFieldResolver(component, entityname)
     val searchinput = Record.create(
       args.toVector.map { case (key, value) => key -> value } ++
@@ -2229,7 +2448,7 @@ object AdminComponent {
       sortableFields = resolver.sortableFields(view)
     )
     WebSearchQueryPlanner.plan(searchinput, profile).flatMap { planned =>
-      core.executionContext.entityStoreSpace.search(
+      executioncontext.entityStoreSpace.search(
         org.goldenport.cncf.unitofwork.UnitOfWorkOp.EntityStoreSearch(
           query = org.goldenport.cncf.entity.EntityQuery(
             collection.descriptor.collectionId,
@@ -2259,40 +2478,109 @@ object AdminComponent {
         _entity_collection(component, entityname),
         s"Entity collection not found: ${entityname}"
       )
+      entityexecutioncontext = _admin_entity_execution_context(
+        component,
+        core.executionContext
+      )
       view = args.get("view").map(_.toString).getOrElse("detail")
       fields = _entity_view_fields(component, entityname, view)
       entityid <- Consequence.fromOption(
         collection.resolveEntityId(id),
         s"Entity record not found: ${id}"
       )
-      snapshot <- core.executionContext.entityStoreSpace
-        .loadSnapshot(
-          entityid,
-          collection.descriptor.persistent
-        )(using core.executionContext)
-        .flatMap(value =>
-          Consequence.successOrEntityNotFound(value)(entityid)
-        )
+      revisionvalue <- _admin_entity_revision_value(
+        entityexecutioncontext,
+        collection,
+        entityid
+      )
       record = collection.descriptor.persistent.toViewRecord(
-        snapshot.entity,
+        revisionvalue.entity,
         view,
         fields
       )
-      sourceentityid = record.getAny("id").map(_id_text).filter(_.nonEmpty).getOrElse(id)
+      projectedrecord = EntityRevisionProjection.projectRecord(
+        collection.descriptor.revisionBinding,
+        record,
+        revisionvalue.revision
+      )
+      sourceentityid = projectedrecord.getAny("id").map(_id_text).filter(_.nonEmpty).getOrElse(id)
       base = _read_response_record(
         "entity",
         componentname,
         entityname,
         id,
-        record
-      ).upsertSingle("version", snapshot.revision.value.toString)
+        projectedrecord
+      )
+      versioned = EntityRevisionProjection.projectResponse(
+        collection.descriptor.revisionBinding,
+        base,
+        revisionvalue.revision
+      )
       projection <- {
         _blob_projection_record(core, sourceentityid)
       }
     } yield OperationResponse.RecordResponse(
-      _with_blob_projection(base, projection, sourceentityid)
+      _with_blob_projection(versioned, projection, sourceentityid)
     )
   }
+
+  private final case class AdminEntityRevisionValue[A](
+    entity: A,
+    revision: Option[EntityRevision]
+  )
+
+  private def _admin_entity_revision_value[A](
+      executioncontext: ExecutionContext,
+      collection: EntityCollection[A],
+      entityid: EntityId
+  ): Consequence[AdminEntityRevisionValue[A]] =
+    collection.descriptor.revisionBinding match {
+      case Some(binding) =>
+        binding.representation match {
+          case EntityRevisionRepresentation.Embedded =>
+            executioncontext.entityStoreSpace
+              .loadSnapshot(
+                entityid,
+                collection.descriptor.persistent
+              )(using executioncontext)
+              .flatMap(value =>
+                Consequence.successOrEntityNotFound(value)(entityid)
+              )
+              .map(snapshot =>
+                AdminEntityRevisionValue(
+                  snapshot.entity,
+                  Some(snapshot.revision)
+                )
+              )
+          case EntityRevisionRepresentation.Detached =>
+            executioncontext.entityStoreSpace
+              .loadDetached(
+                entityid,
+                collection.descriptor.persistent
+              )(using executioncontext)
+              .flatMap(value =>
+                Consequence.successOrEntityNotFound(value)(entityid)
+              )
+              .map(carrier =>
+                AdminEntityRevisionValue(
+                  carrier.entity,
+                  Some(carrier.revision)
+                )
+              )
+        }
+      case None =>
+        executioncontext.entityStoreSpace
+          .load(
+            UnitOfWorkOp.EntityStoreLoad(
+              entityid,
+              collection.descriptor.persistent
+            )
+          )(using executioncontext)
+          .flatMap(value =>
+            Consequence.successOrEntityNotFound(value)(entityid)
+          )
+          .map(entity => AdminEntityRevisionValue(entity, None))
+    }
 
   private def _admin_association_list(
     core: ActionCall.Core,
@@ -2679,7 +2967,7 @@ object AdminComponent {
     _aggregate_entity_collection(component, aggregatename) match {
       case Some((_, collection)) =>
         _admin_entity_search(
-          core,
+          _admin_entity_execution_context(component, core.executionContext),
           collection,
           component,
           aggregatename,
@@ -2692,7 +2980,7 @@ object AdminComponent {
               result.data
             else
               _entity_values(collection).drop(paging.offset).take(paging.fetchPageSize)
-          values.map(x => collection.descriptor.persistent.toViewRecord(x, "admin", Vector.empty))
+          values.map(_entity_view_record(collection, _, Vector.empty))
             .asInstanceOf[Vector[Any]]
         }
       case None =>
@@ -2983,6 +3271,8 @@ object AdminComponent {
     val data = args.filterFields { field =>
       field.key != "component" &&
         field.key != "entity" &&
+        field.key != "version" &&
+        field.key != EntityMutationAdapterDefaults.profilePropertyName &&
         !_is_blob_attachment_form_key(field.key)
     }
     val withid =
@@ -3026,7 +3316,7 @@ object AdminComponent {
       _entity_values(collection)
         .find(x => collection.descriptor.persistent.id(x) == canonicalid)
     }
-      .map(x => collection.descriptor.persistent.toViewRecord(x, "admin", fields))
+      .map(_entity_view_record(collection, _, fields))
 
   private def _entity_view_fields(
     component: Component,
@@ -3100,7 +3390,7 @@ object AdminComponent {
     val items = result.data.map { x =>
       val entityid = collection.descriptor.persistent.id(x)
       val id       = entityid.value
-      val record = collection.descriptor.persistent.toViewRecord(x, "admin", fields)
+      val record = _entity_view_record(collection, x, fields)
       val label = _record_label(record).getOrElse(id)
       _AdminReadItem(
         id,
@@ -3132,7 +3422,7 @@ object AdminComponent {
         _entity_values(collection).map { x =>
           val entityid = collection.descriptor.persistent.id(x)
           val id       = entityid.value
-          val record = collection.descriptor.persistent.toViewRecord(x, "admin", fields)
+          val record = _entity_view_record(collection, x, fields)
           _AdminReadItem(
             id,
             _record_label(record).getOrElse(id),
@@ -3143,6 +3433,21 @@ object AdminComponent {
         paging,
         decision
       )
+
+  private def _entity_view_record[A](
+    collection: EntityCollection[A],
+    entity: A,
+    fields: Vector[String]
+  ): Record = {
+    val source = collection.descriptor.persistent.toRecord(entity)
+    val view =
+      collection.descriptor.persistent.toViewRecord(entity, "admin", fields)
+    EntityRevisionProjection.projectViewRecord(
+      collection.descriptor.revisionBinding,
+      source,
+      view
+    )
+  }
 
   private def _prefetched_page_values[A](
     values: Vector[A],

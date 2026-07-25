@@ -38,6 +38,12 @@ final class ContentBodyVersionedMutationSpec
         val context = ExecutionContext.create()
         context.dataStoreSpace.useDataStore(datastore)
         given ExecutionContext = context
+        EntityRevisionSpecSupport.registerRevisionBinding(
+          context,
+          _collection_id,
+          summon[EntityPersistent[TestEntity]],
+          EntityRevisionRepresentation.Detached
+        )
         val entitystore = EntityStore.standard()
         val id = _id("stale-overflow")
         val initialcontent = _large_content("initial")
@@ -46,23 +52,25 @@ final class ContentBodyVersionedMutationSpec
         val initial =
           entitystore
             .create(TestEntity(id, initialcontent))
-            .flatMap(_ => entitystore.loadSnapshot[TestEntity](id))
+            .flatMap(_ => entitystore.loadDetached[TestEntity](id))
         val expectation = initial.toOption.flatten
           .map(snapshot => snapshot.revision)
           .getOrElse(fail("initial snapshot is required"))
 
         When("the first save commits and the second reaches the same provider plan stale")
-        val winner = entitystore.save(
+        val winner = entitystore.saveDetached(
           TestEntity(id, winnercontent),
-          expectation
+          Some(expectation),
+          EntityMutationExecutionPolicy.default
         )
         val stale = winner.flatMap(_ =>
-          entitystore.save(
+          entitystore.saveDetached(
             TestEntity(id, stalecontent),
-            expectation
+            Some(expectation),
+            EntityMutationExecutionPolicy.default
           )
         )
-        val loaded = entitystore.loadSnapshot[TestEntity](id)
+        val loaded = entitystore.loadDetached[TestEntity](id)
         val overflow = datastore.load(
           _overflow_collection,
           DataStore.StringEntryId(s"${id.value}:content")

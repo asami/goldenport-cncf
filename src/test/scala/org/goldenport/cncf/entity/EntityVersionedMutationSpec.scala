@@ -43,23 +43,25 @@ final class EntityVersionedMutationSpec
           TestEntity(id, "created")
         )
         val initial = created.flatMap(_ =>
-          fixture.entitystore.loadSnapshot[TestEntity](id)
+          fixture.entitystore.loadDetached[TestEntity](id)
         )
 
         When("full save and typed update use successive admitted expectations")
         val saved = initial.flatMap {
           case Some(snapshot) =>
-            fixture.entitystore.save(
+            fixture.entitystore.saveDetached(
               snapshot.entity.copy(name = "saved"),
-              snapshot.revision
+              Some(snapshot.revision),
+              EntityMutationExecutionPolicy.default
             )
           case None =>
             Consequence.entityNotFound(id.print)
         }
         val updated = saved.flatMap { snapshot =>
-          fixture.entitystore.update(
+          fixture.entitystore.updateDetached(
             snapshot.entity.copy(name = "updated"),
-            snapshot.revision
+            Some(snapshot.revision),
+            EntityMutationExecutionPolicy.default
           )
         }
 
@@ -86,25 +88,26 @@ final class EntityVersionedMutationSpec
         val initial =
           fixture.entitystore
             .create(TestEntity(id, "created"))
-            .flatMap(_ => fixture.entitystore.loadSnapshot[TestEntity](id))
+            .flatMap(_ => fixture.entitystore.loadDetached[TestEntity](id))
 
         When("the patch-by-id entry point executes")
         val patched = initial.flatMap {
           case Some(snapshot) =>
-            fixture.entitystore.updateById(
+            fixture.entitystore.updateByIdDetached(
               id,
               TestPatch(Update.set("patched")),
-              snapshot.revision
+              Some(snapshot.revision),
+              EntityMutationExecutionPolicy.default
             )
           case None =>
             Consequence.entityNotFound(id.print)
         }
         val loaded = patched.flatMap(_ =>
-          fixture.entitystore.loadSnapshot[TestEntity](id)
+          fixture.entitystore.loadDetached[TestEntity](id)
         )
 
         Then("the patch result and subsequent typed load expose revision two")
-        patched.map(_.record.getString("name")) shouldBe
+        patched.map(_.entity.getString("name")) shouldBe
           Consequence.success(Some("patched"))
         patched.map(_.revision.value) shouldBe Consequence.success(2L)
         loaded.map(_.map(_.entity.name)) shouldBe
@@ -125,23 +128,25 @@ final class EntityVersionedMutationSpec
         val initial =
           fixture.entitystore
             .create(TestEntity(id, "created"))
-            .flatMap(_ => fixture.entitystore.loadSnapshot[TestEntity](id))
+            .flatMap(_ => fixture.entitystore.loadDetached[TestEntity](id))
         val expectation = initial.toOption.flatten
           .map(snapshot => snapshot.revision)
           .getOrElse(fail("initial snapshot is required"))
-        val first = fixture.entitystore.save(
+        val first = fixture.entitystore.saveDetached(
           TestEntity(id, "winner"),
-          expectation
+          Some(expectation),
+          EntityMutationExecutionPolicy.default
         )
 
         When("the stale candidate reaches the provider boundary")
         val stale = first.flatMap(_ =>
-          fixture.entitystore.save(
+          fixture.entitystore.saveDetached(
             TestEntity(id, "stale-candidate"),
-            expectation
+            Some(expectation),
+            EntityMutationExecutionPolicy.default
           )
         )
-        val authoritative = fixture.entitystore.loadSnapshot[TestEntity](id)
+        val authoritative = fixture.entitystore.loadDetached[TestEntity](id)
         val conclusion = stale match {
           case Consequence.Failure(value) => value
           case other => fail(s"expected stale conflict but got $other")
@@ -214,6 +219,12 @@ final class EntityVersionedMutationSpec
     val datastore = DataStore.inMemorySearchable()
     val context = ExecutionContext.create()
     context.dataStoreSpace.useDataStore(datastore)
+    EntityRevisionSpecSupport.registerRevisionBinding(
+      context,
+      _collection_id,
+      summon[EntityPersistent[TestEntity]],
+      EntityRevisionRepresentation.Detached
+    )
     Fixture(datastore, EntityStore.standard(), context)
   }
 

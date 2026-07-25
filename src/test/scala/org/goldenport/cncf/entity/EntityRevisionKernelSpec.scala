@@ -7,6 +7,7 @@ import org.goldenport.Consequence
 import org.goldenport.cncf.component.{Component, ComponentOrigin}
 import org.goldenport.cncf.context.{
   DataStoreContext,
+  EntitySpaceContext,
   EntityStoreContext,
   ExecutionContext,
   ObservabilityContext,
@@ -24,6 +25,7 @@ import org.goldenport.cncf.entity.runtime.{
   EntityRealm,
   EntityRealmState,
   EntityRuntimePlan,
+  EntitySpace,
   EntityStorage,
   PartitionStrategy,
   PartitionedMemoryRealm
@@ -120,19 +122,19 @@ final class EntityRevisionKernelSpec
       }
     }
 
-    "E1 carry a typed Entity beside its admitted revision" must _e1_metadata {
-      "when a framework snapshot is constructed" in {
+    "E1 carry a typed non-SimpleEntity beside its admitted revision" must _e1_metadata {
+      "when a detached revision carrier is constructed" in {
         Given(
           "Spec: docs/spec/entity-conflict-and-conditional-transition.md; Rules: R4; Example: E1; one typed Entity and its revision"
         )
-        val snapshot =
-          EntitySnapshot("entity-value", EntityRevision.INITIAL)
+        val carrier =
+          EntityRevisionCarrier("entity-value", EntityRevision.INITIAL)
 
-        When("the snapshot is inspected")
-        val entity = snapshot.entity
-        val revision = snapshot.revision
+        When("the carrier is inspected")
+        val entity = carrier.entity
+        val revision = carrier.revision
 
-        Then("the domain value and framework revision remain separate")
+        Then("the domain value and detached framework revision remain separate")
         entity shouldBe "entity-value"
         revision shouldBe EntityRevision.INITIAL
       }
@@ -229,7 +231,7 @@ final class EntityRevisionKernelSpec
           val loaded = fixture.entitystorespace.load(
             UnitOfWorkOp.EntityStoreLoad(id, _entity_persistent)
           )
-          val snapshot = fixture.entitystorespace.loadSnapshot(
+          val carrier = fixture.entitystorespace.loadDetached(
             id,
             _entity_persistent
           )
@@ -241,7 +243,7 @@ final class EntityRevisionKernelSpec
             .flatMap(_.getAny(EntityConcurrencyMetadata.LOGICAL_FIELD_NAME))
             .isEmpty &&
           loaded.toOption.flatten.contains(entity.copy(attempted = None)) &&
-          snapshot.toOption.flatten.exists(value =>
+          carrier.toOption.flatten.exists(value =>
             value.entity == entity.copy(attempted = None) &&
               value.revision == EntityRevision.INITIAL
           )
@@ -296,16 +298,17 @@ final class EntityRevisionKernelSpec
         When("a full save attempts a managed write while seed import runs through its admitted framework route")
         val saved = seeded.flatMap { _ =>
           fixture.entitystorespace
-            .loadSnapshot(createdid, _entity_persistent)
-            .flatMap(snapshot =>
-              Consequence.successOrEntityNotFound(snapshot)(createdid)
+            .loadDetached(createdid, _entity_persistent)
+            .flatMap(carrier =>
+              Consequence.successOrEntityNotFound(carrier)(createdid)
             )
-            .flatMap(snapshot =>
-              fixture.entitystorespace.save(
-                UnitOfWorkOp.EntityStoreSave(
-                  TestEntity(createdid, "after", Some(42L)),
-                  snapshot.revision,
-                  _entity_persistent
+            .flatMap(carrier =>
+              fixture.entitystorespace.saveDetached(
+                UnitOfWorkOp.EntityStoreSaveDetached(
+                  entity = TestEntity(createdid, "after", Some(42L)),
+                  expectedRevision = Some(carrier.revision),
+                  tc = _entity_persistent,
+                  executionPolicy = EntityMutationExecutionPolicy.default
                 )
               )
             )
@@ -440,8 +443,8 @@ final class EntityRevisionKernelSpec
             UnitOfWorkOp.EntityStoreLoad(id, _entity_persistent)
           )
         )
-        val snapshot = seeded.flatMap(_ =>
-          fixture.entitystorespace.loadSnapshot(id, _entity_persistent)
+        val carrier = seeded.flatMap(_ =>
+          fixture.entitystorespace.loadDetached(id, _entity_persistent)
         )
         val stored = seeded.flatMap(_ =>
           _raw_record(fixture.datastorespace, id)
@@ -449,7 +452,7 @@ final class EntityRevisionKernelSpec
 
         Then("both read surfaces reject admission and physical storage remains absent")
         loaded shouldBe a[Consequence.Failure[?]]
-        snapshot shouldBe a[Consequence.Failure[?]]
+        carrier shouldBe a[Consequence.Failure[?]]
         stored
           .map(_.flatMap(_.getAny(EntityConcurrencyMetadata.STORAGE_FIELD_NAME))) shouldBe
           Consequence.success(None)
@@ -529,6 +532,7 @@ final class EntityRevisionKernelSpec
     val datastorespace = DataStoreSpace.default()
     val entitystorespace =
       new EntityStoreSpace().addEntityStore(EntityStore.standard())
+    val entityspace = new EntitySpace()
     val observability = ObservabilityContext(
       traceId = TraceId("test", "entity_concurrency"),
       spanId = None,
@@ -543,7 +547,8 @@ final class EntityRevisionKernelSpec
         observabilityContext = observability,
         httpDriverOption = None,
         datastore = Some(DataStoreContext(datastorespace)),
-        entitystore = Some(EntityStoreContext(entitystorespace))
+        entitystore = Some(EntityStoreContext(entitystorespace)),
+        entityspace = Some(EntitySpaceContext(entityspace))
       ),
       unitOfWorkSupplier = () => new UnitOfWork(context),
       unitOfWorkInterpreterFn = new (UnitOfWorkOp ~> Consequence) {
@@ -560,6 +565,12 @@ final class EntityRevisionKernelSpec
       token = "entity-concurrency-runtime-context"
     )
     val _ = context
+    EntityRevisionSpecSupport.registerRevisionBinding(
+      context,
+      _collection_id,
+      _entity_persistent,
+      EntityRevisionRepresentation.Detached
+    )
     Fixture(datastorespace, entitystorespace, context)
   }
 
@@ -595,7 +606,10 @@ final class EntityRevisionKernelSpec
         maxPartitions = 4,
         maxEntitiesPerPartition = 16
       ),
-      persistent = _entity_persistent
+      persistent = _entity_persistent,
+      revisionBinding = Some(
+        EntityRevisionBinding(EntityRevisionRepresentation.Detached)
+      )
     )
     component.entitySpace.registerEntity(
       _collection_id.name,

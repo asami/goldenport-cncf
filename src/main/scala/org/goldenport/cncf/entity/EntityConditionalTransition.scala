@@ -368,16 +368,38 @@ object EntityConditionalTransition {
     }
 }
 
+sealed abstract class EntityConditionalTransitionValue[+A] {
+  def entity: A
+  def revision: EntityRevision
+}
+
+object EntityConditionalTransitionValue {
+  final case class Embedded[A](
+    entity: A,
+    revision: EntityRevision
+  ) extends EntityConditionalTransitionValue[A]
+
+  final case class Detached[A](
+    carrier: EntityRevisionCarrier[A]
+  ) extends EntityConditionalTransitionValue[A] {
+    def entity: A =
+      carrier.entity
+
+    def revision: EntityRevision =
+      carrier.revision
+  }
+}
+
 sealed abstract class EntityConditionalTransitionResult[+R, +S]
 
 object EntityConditionalTransitionResult {
   final case class Transitioned[R, S](
-    root: EntitySnapshot[R],
-    successor: EntitySnapshot[S]
+    root: EntityConditionalTransitionValue[R],
+    successor: EntityConditionalTransitionValue[S]
   ) extends EntityConditionalTransitionResult[R, S]
 
   final case class NotMatched[R](
-    existing: EntitySnapshot[R]
+    existing: EntityConditionalTransitionValue[R]
   ) extends EntityConditionalTransitionResult[R, Nothing]
 }
 

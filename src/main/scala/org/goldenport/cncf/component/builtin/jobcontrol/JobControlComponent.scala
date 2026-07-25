@@ -21,6 +21,8 @@ import org.goldenport.cncf.component.{
 }
 import org.goldenport.cncf.entity.{
   EntityPersistentCreate,
+  EntityRevisionModelKind,
+  EntityRevisionRepresentation,
   EntitySnapshot,
   EntityStore
 }
@@ -176,6 +178,9 @@ object JobControlComponent {
           maxEntitiesPerPartition = 10000,
           entityKind = EntityKind.System,
           entityKindExplicit = true,
+          revisionModelKind = Some(EntityRevisionModelKind.NonSimpleEntity),
+          revisionRepresentation =
+            Some(EntityRevisionRepresentation.Detached),
           workingSetPolicy = Some(WorkingSetPolicy.Recent(Duration.ofDays(1), "updatedAt")),
           workingSetPolicySource = Some(WorkingSetPolicySource.Code)
         ),

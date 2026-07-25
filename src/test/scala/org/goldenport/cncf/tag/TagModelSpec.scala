@@ -5,7 +5,12 @@ import org.goldenport.Consequence
 import org.goldenport.cncf.association.{AssociationDomain, AssociationFilter, AssociationRepository, AssociationStoragePolicy}
 import org.goldenport.cncf.component.builtin.tag.TagComponent
 import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.cncf.entity.{
+  EntityRevisionRepresentation,
+  EntityRevisionSpecSupport
+}
 import org.goldenport.cncf.entity.runtime.{WorkingSetPolicy, WorkingSetPolicySource}
+import org.goldenport.cncf.security.IngressSecurityResolver
 import org.goldenport.cncf.subsystem.DefaultSubsystemFactory
 import org.goldenport.protocol.{Argument, Request}
 import org.goldenport.protocol.operation.OperationResponse
@@ -19,8 +24,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * Executable specification for hierarchical Tag master and TagAttachment.
  *
  * @since   May.  5, 2026
- *  version May.  5, 2026
- * @version Jul. 15, 2026
+ * @version Jul. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 final class TagModelSpec
@@ -30,7 +34,7 @@ final class TagModelSpec
   "TagRepository" should {
     "create a tag tree per tag space and expand descendants" in {
       Given("a repository with tags in two tag spaces")
-      given ExecutionContext = ExecutionContext.test()
+      given ExecutionContext = _execution_context()
       val repository = TagRepository.entityStore()
 
       When("a hierarchy is created and the blog tree is loaded")
@@ -50,7 +54,7 @@ final class TagModelSpec
 
     "reject duplicate sibling keys and invalid keys" in {
       Given("one existing child under a valid parent")
-      given ExecutionContext = ExecutionContext.test()
+      given ExecutionContext = _execution_context()
       val repository = TagRepository.entityStore()
       val root = _success(repository.create(TagCreate(None, "dup-root", None, tagSpace = "dup-space")))
       _success(repository.create(TagCreate(None, "child", Some(root.id), tagSpace = "dup-space")))
@@ -66,7 +70,7 @@ final class TagModelSpec
 
     "update mutable metadata without changing path" in {
       Given("an existing nested Tag")
-      given ExecutionContext = ExecutionContext.test()
+      given ExecutionContext = _execution_context()
       val repository = TagRepository.entityStore()
       val root = _success(repository.create(TagCreate(None, "update-root", None, tagSpace = "update-space")))
       val tag = _success(repository.create(TagCreate(None, "target", Some(root.id), tagSpace = "update-space", usageKind = TagUsageKind.General)))
@@ -99,7 +103,8 @@ final class TagModelSpec
       val property = Prop.forAll(Gen.chooseNum(Int.MinValue, Int.MaxValue)) { epochoffset =>
         val epoch = 1_700_000_000L + Math.floorMod(epochoffset.toLong, 1_000_000L)
         val instant = Instant.ofEpochSecond(epoch)
-        given ExecutionContext = ExecutionContext.create(Clock.fixed(instant, ZoneOffset.UTC))
+        given ExecutionContext =
+          _execution_context(Clock.fixed(instant, ZoneOffset.UTC))
         val repository = TagRepository.entityStore()
         val space = s"clock$epoch"
         val root = _success(repository.create(TagCreate(None, "root", None, tagSpace = space)))
@@ -121,7 +126,7 @@ final class TagModelSpec
 
     "move a tag and recompute descendant paths" in {
       Given("a Tag hierarchy with a child and grandchild")
-      given ExecutionContext = ExecutionContext.test()
+      given ExecutionContext = _execution_context()
       val repository = TagRepository.entityStore()
       val root = _success(repository.create(TagCreate(None, "move-root", None, tagSpace = "move-space")))
       val next = _success(repository.create(TagCreate(None, "next-root", None, tagSpace = "move-space")))
@@ -143,7 +148,7 @@ final class TagModelSpec
 
     "reject invalid tag moves" in {
       Given("Tag trees containing a descendant, another tag space, and a duplicate key")
-      given ExecutionContext = ExecutionContext.test()
+      given ExecutionContext = _execution_context()
       val repository = TagRepository.entityStore()
       val root = _success(repository.create(TagCreate(None, "invalid-move-root", None, tagSpace = "invalid-move-space")))
       val other = _success(repository.create(TagCreate(None, "other-root", None, tagSpace = "invalid-move-space")))
@@ -176,13 +181,19 @@ final class TagModelSpec
       descriptor.entityKind.label shouldBe "master"
       descriptor.effectiveWorkingSetPolicy shouldBe Some(WorkingSetPolicy.Disabled)
       descriptor.effectiveWorkingSetPolicySource shouldBe Some(WorkingSetPolicySource.Code)
+      tag
+        .entity[Tag]("tag")
+        .descriptor
+        .revisionBinding
+        .map(_.representation) shouldBe
+        Some(EntityRevisionRepresentation.Detached)
     }
   }
 
   "TaggingWorkflow" should {
     "attach tags idempotently and search descendants through TagAttachment" in {
       Given("an Entity, a Tag hierarchy, and a TaggingWorkflow")
-      given ExecutionContext = ExecutionContext.test()
+      given ExecutionContext = _execution_context()
       val repository = TagRepository.entityStore()
       val root = _success(repository.create(TagCreate(None, "search-root", None, tagSpace = "search-space")))
       val child = _success(repository.create(TagCreate(None, "child", Some(root.id), tagSpace = "search-space")))
@@ -212,7 +223,7 @@ final class TagModelSpec
 
     "merge explicit workflow tag space with execution context tag spaces" in {
       Given("explicit and execution-context Tag spaces")
-      val base = ExecutionContext.test()
+      val base = _execution_context()
       val ctx = ExecutionContext.withTagSpaces(
         base,
         ExecutionContext.TagSpaceContext(
@@ -295,6 +306,40 @@ final class TagModelSpec
     "scope tag_update and tag_move by requested tagSpace" in {
       Given("ambiguous Tag paths in blog and operational spaces")
       val subsystem = DefaultSubsystemFactory.default(Some("command"))
+      val tagcomponent =
+        subsystem
+          .findComponent(TagComponent.name)
+          .getOrElse(fail("Tag component is missing"))
+      val probe = _tag_request(
+        "tag_create",
+        Argument("key", "probe"),
+        Argument("tagSpace", "probe")
+      )
+      (tagcomponent.logic.component eq tagcomponent) shouldBe true
+      tagcomponent
+        .entity[Tag]("tag")
+        .descriptor
+        .collectionId shouldBe TagEntityCollections.Tag
+      val resolvedcontext =
+        _success(
+          IngressSecurityResolver.resolve(
+            tagcomponent.logic.executionContext(),
+            probe
+          )
+        ).executionContext
+      tagcomponent
+        .logic
+        .executionContext()
+        .entitySpace
+        .entityOption(TagEntityCollections.Tag)
+        .flatMap(_.descriptor.revisionBinding)
+        .map(_.representation) shouldBe
+        Some(EntityRevisionRepresentation.Detached)
+      resolvedcontext.entitySpace
+        .entityOption(TagEntityCollections.Tag)
+        .flatMap(_.descriptor.revisionBinding)
+        .map(_.representation) shouldBe
+        Some(EntityRevisionRepresentation.Detached)
       _record(_success(subsystem.executeOperationResponse(_tag_request(
         "tag_create",
         Argument("key", "same"),
@@ -340,6 +385,21 @@ final class TagModelSpec
       operation = operation,
       arguments = arguments.toList
     )
+
+  private def _execution_context(
+    clock: Clock = Clock.systemUTC()
+  ): ExecutionContext = {
+    import TagRepository.given
+
+    val context = ExecutionContext.create(clock)
+    EntityRevisionSpecSupport.registerRevisionBinding(
+      context,
+      TagEntityCollections.Tag,
+      summon[org.goldenport.cncf.entity.EntityPersistent[Tag]],
+      EntityRevisionRepresentation.Detached
+    )
+    context
+  }
 
   private def _success[A](result: Consequence[A]): A =
     result match {

@@ -68,6 +68,8 @@ import org.goldenport.cncf.entity.EntityPersistent
 import org.goldenport.cncf.entity.EntityPersistentCreate
 import org.goldenport.cncf.entity.EntityPersistentUpdate
 import org.goldenport.cncf.entity.EntityRecordSnapshot
+import org.goldenport.cncf.entity.EntityRevisionCarrier
+import org.goldenport.cncf.entity.EntityRevisionRepresentation
 import org.goldenport.cncf.entity.EntitySnapshot
 import org.goldenport.cncf.entity.EntityQuery
 import org.goldenport.cncf.entity.EntitySearchScope
@@ -1189,15 +1191,40 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
       entityname: String,
       record: Record,
       expectedrevision: EntityRevision
-  ): Consequence[EntityRecordSnapshot] =
+  ): Consequence[EntityRevision] =
     component.flatMap(_.entitySpace.entityOption[Any](entityname)) match {
       case Some(collection) =>
-        collection.saveRecordVersioned(
-          _aggregate_canonical_root_record(collection, record),
-          expectedrevision
-        )(using execution_context).map { snapshot =>
+        val canonicalrecord =
+          _aggregate_canonical_root_record(collection, record)
+        val saved = collection.descriptor.revisionBinding match {
+          case Some(binding)
+              if binding.representation ==
+                EntityRevisionRepresentation.Embedded =>
+            collection.saveRecordVersioned(
+              canonicalrecord,
+              expectedrevision
+            )(using execution_context).map(_.revision)
+          case Some(binding)
+              if binding.representation ==
+                EntityRevisionRepresentation.Detached =>
+            collection.saveRecordDetached(
+              canonicalrecord,
+              expectedrevision
+            )(using execution_context).map(_.revision)
+          case Some(_) =>
+            Consequence.operationInvalid(
+              "aggregate-command-revision-representation",
+              "unsupported aggregate root revision representation"
+            )
+          case None =>
+            Consequence.operationInvalid(
+              "aggregate-command-revision-representation",
+              "aggregate root has no managed revision representation"
+            )
+        }
+        saved.map { revision =>
           component.foreach(_.viewSpace.invalidate(entityname))
-          snapshot
+          revision
         }.recoverWith { conclusion =>
           if (
             ConclusionDiagnostics.classify(conclusion).reason
@@ -1212,20 +1239,59 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
         )
     }
 
-  private def _aggregate_root_snapshot_c(
+  private final case class AggregateRootRevision[A](
+    entity: A,
+    revision: EntityRevision
+  )
+
+  private def _aggregate_root_revision_c(
       entityname: String,
       targetid: EntityId
-  ): Consequence[EntitySnapshot[Any]] =
+  ): Consequence[AggregateRootRevision[Any]] =
     component.flatMap(_.entitySpace.entityOption[Any](entityname)) match {
       case Some(collection) =>
-        execution_context.entityStoreSpace
-          .loadSnapshot(
-            _canonical_aggregate_entity_id(collection, targetid),
-            collection.descriptor.persistent
-          )(using execution_context)
-          .flatMap(snapshot =>
-            Consequence.successOrEntityNotFound(snapshot)(targetid)
-          )
+        val canonicalid =
+          _canonical_aggregate_entity_id(collection, targetid)
+        collection.descriptor.revisionBinding match {
+          case Some(binding)
+              if binding.representation ==
+                EntityRevisionRepresentation.Embedded =>
+            execution_context.entityStoreSpace
+              .loadSnapshot(
+                canonicalid,
+                collection.descriptor.persistent
+              )(using execution_context)
+              .flatMap(snapshot =>
+                Consequence.successOrEntityNotFound(snapshot)(targetid)
+              )
+              .map(snapshot =>
+                AggregateRootRevision(snapshot.entity, snapshot.revision)
+              )
+          case Some(binding)
+              if binding.representation ==
+                EntityRevisionRepresentation.Detached =>
+            execution_context.entityStoreSpace
+              .loadDetached(
+                canonicalid,
+                collection.descriptor.persistent
+              )(using execution_context)
+              .flatMap(carrier =>
+                Consequence.successOrEntityNotFound(carrier)(targetid)
+              )
+              .map(carrier =>
+                AggregateRootRevision(carrier.entity, carrier.revision)
+              )
+          case Some(_) =>
+            Consequence.operationInvalid(
+              "aggregate-command-revision-representation",
+              "unsupported aggregate root revision representation"
+            )
+          case None =>
+            Consequence.operationInvalid(
+              "aggregate-command-revision-representation",
+              "aggregate root has no managed revision representation"
+            )
+        }
       case None =>
         Consequence.argumentInvalid(
           s"$entityname entity collection is not available"
@@ -1237,28 +1303,28 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
   ](
       entityname: String,
       targetid: EntityId
-  ): Consequence[(A, EntitySnapshot[Any])] =
+  ): Consequence[(A, AggregateRootRevision[Any])] =
     for {
-      snapshot <- _aggregate_root_snapshot_c(entityname, targetid)
+      rootrevision <- _aggregate_root_revision_c(entityname, targetid)
       aggregate <- component
         .map(_.aggregateSpace)
         .getOrElse(Consequence.uninitializedState.RAISE)
         .resolve_with_context[A](targetid)(using execution_context)
-      _ <- _validate_aggregate_root_snapshot(
+      _ <- _validate_aggregate_root_revision(
         entityname,
         targetid,
         aggregate,
-        snapshot
+        rootrevision
       )
-    } yield aggregate -> snapshot
+    } yield aggregate -> rootrevision
 
-  private def _validate_aggregate_root_snapshot[
+  private def _validate_aggregate_root_revision[
       A <: org.goldenport.record.RecordPresentable
   ](
       entityname: String,
       targetid: EntityId,
       aggregate: A,
-      snapshot: EntitySnapshot[Any]
+      rootrevision: AggregateRootRevision[Any]
   ): Consequence[Unit] =
     component.flatMap(_.entitySpace.entityOption[Any](entityname)) match {
       case Some(collection) =>
@@ -1266,7 +1332,7 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
           SimpleEntityStorageShapePolicy.withoutManagedFields(
             _aggregate_canonical_root_record(
               collection,
-              collection.descriptor.persistent.toRecord(snapshot.entity)
+              collection.descriptor.persistent.toRecord(rootrevision.entity)
             )
           )
         val aggregaterecord =
@@ -1426,7 +1492,7 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
         resolved <- _aggregate_phase(ctx, DslChokepointPhase.Resolve) {
           _aggregate_command_target_c[A](aggregateName, targetId)
         }
-        (aggregate, snapshot) = resolved
+        (aggregate, rootrevision) = resolved
         updated <- _aggregate_phase(ctx, DslChokepointPhase.Method) {
           command(aggregate)
         }
@@ -1437,7 +1503,7 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
             _aggregate_save_record_authorized_c(
               aggregateName,
               updated.toRecord(),
-              snapshot.revision
+              rootrevision.revision
             ).map(_ => ())
         }
       } yield updated
@@ -2560,6 +2626,59 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
     }
   }
 
+  protected final def entity_load_detached[T](
+    id: EntityId
+  )(using tc: EntityPersistent[T]): ExecUowM[EntityRevisionCarrier[T]] =
+    _entity_load_detached(id, serviceinternal = false)
+
+  protected final def entity_load_detached_internal[T](
+    id: EntityId
+  )(using tc: EntityPersistent[T]): ExecUowM[EntityRevisionCarrier[T]] =
+    _entity_load_detached(id, serviceinternal = true)
+
+  private def _entity_load_detached[T](
+    id: EntityId,
+    serviceinternal: Boolean
+  )(using tc: EntityPersistent[T]): ExecUowM[EntityRevisionCarrier[T]] = {
+    ensure_component_application_datastore()
+    val effectiveid = _canonical_entity_id(id)
+    val ownership =
+      if (serviceinternal)
+        _component_entity_owner(Vector(effectiveid.collection)).map(_ => ())
+      else
+        Consequence.unit
+    exec_from(ownership).flatMap { _ =>
+      val effectivetc =
+        _effective_entity_persistent(effectiveid.collection, tc)
+      val authorization =
+        _entity_uow_authorization(
+          Some(effectiveid.collection.name),
+          Some(effectiveid),
+          "read"
+        ).map { value =>
+          if (serviceinternal)
+            value.copy(accessMode = EntityAccessMode.ServiceInternal)
+          else
+            value
+        }
+      val operation = UnitOfWorkOp.EntityStoreLoadDetached(
+        effectiveid,
+        effectivetc,
+        authorization
+      )
+      val loaded: ExecUowM[Option[EntityRevisionCarrier[T]]] =
+        ConsequenceT.liftF(
+          Free.liftF[
+            UnitOfWorkOp,
+            Option[EntityRevisionCarrier[T]]
+          ](operation)
+        )
+      loaded.flatMap { carrier =>
+        exec_from(Consequence.successOrEntityNotFound(carrier)(effectiveid))
+      }
+    }
+  }
+
   protected final def entity_load_internal[T](
     id: EntityId
   )(using tc: EntityPersistent[T]): ExecUowM[T] =
@@ -2657,6 +2776,65 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
     ConsequenceT.liftF(Free.liftF(op))
   }
 
+  protected final def entity_save_detached[T](
+    entity: T
+  )(using tc: EntityPersistent[T]): ExecUowM[EntityRevisionCarrier[T]] =
+    _entity_save_detached(entity, None, serviceinternal = false)
+
+  protected final def entity_save_detached[T](
+    entity: T,
+    expectedRevision: EntityRevision
+  )(using tc: EntityPersistent[T]): ExecUowM[EntityRevisionCarrier[T]] =
+    _entity_save_detached(
+      entity,
+      Some(expectedRevision),
+      serviceinternal = false
+    )
+
+  protected final def entity_save_detached_internal[T](
+    entity: T
+  )(using tc: EntityPersistent[T]): ExecUowM[EntityRevisionCarrier[T]] =
+    _entity_save_detached(entity, None, serviceinternal = true)
+
+  protected final def entity_save_detached_internal[T](
+    entity: T,
+    expectedRevision: EntityRevision
+  )(using tc: EntityPersistent[T]): ExecUowM[EntityRevisionCarrier[T]] =
+    _entity_save_detached(
+      entity,
+      Some(expectedRevision),
+      serviceinternal = true
+    )
+
+  private def _entity_save_detached[T](
+    entity: T,
+    expectedrevision: Option[EntityRevision],
+    serviceinternal: Boolean
+  )(using tc: EntityPersistent[T]): ExecUowM[EntityRevisionCarrier[T]] = {
+    ensure_component_application_datastore()
+    val effectivetc =
+      _effective_entity_persistent(tc.id(entity).collection, tc)
+    val id = effectivetc.id(entity)
+    val authorization =
+      _entity_uow_authorization(
+        Some(id.collection.name),
+        Some(id),
+        "update"
+      ).map { value =>
+        if (serviceinternal)
+          value.copy(accessMode = EntityAccessMode.ServiceInternal)
+        else
+          value
+      }
+    val operation = UnitOfWorkOp.EntityStoreSaveDetached(
+      entity,
+      expectedrevision,
+      effectivetc,
+      authorization
+    )
+    ConsequenceT.liftF(Free.liftF(operation))
+  }
+
   protected final def entity_update[T](
     changes: T
   )(using tc: EntityPersistent[T]): ExecUowM[EntitySnapshot[T]] = {
@@ -2733,6 +2911,65 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
       authorization
     )
     ConsequenceT.liftF(Free.liftF(op))
+  }
+
+  protected final def entity_update_detached[T](
+    changes: T
+  )(using tc: EntityPersistent[T]): ExecUowM[EntityRevisionCarrier[T]] =
+    _entity_update_detached(changes, None, serviceinternal = false)
+
+  protected final def entity_update_detached[T](
+    changes: T,
+    expectedRevision: EntityRevision
+  )(using tc: EntityPersistent[T]): ExecUowM[EntityRevisionCarrier[T]] =
+    _entity_update_detached(
+      changes,
+      Some(expectedRevision),
+      serviceinternal = false
+    )
+
+  protected final def entity_update_detached_internal[T](
+    changes: T
+  )(using tc: EntityPersistent[T]): ExecUowM[EntityRevisionCarrier[T]] =
+    _entity_update_detached(changes, None, serviceinternal = true)
+
+  protected final def entity_update_detached_internal[T](
+    changes: T,
+    expectedRevision: EntityRevision
+  )(using tc: EntityPersistent[T]): ExecUowM[EntityRevisionCarrier[T]] =
+    _entity_update_detached(
+      changes,
+      Some(expectedRevision),
+      serviceinternal = true
+    )
+
+  private def _entity_update_detached[T](
+    changes: T,
+    expectedrevision: Option[EntityRevision],
+    serviceinternal: Boolean
+  )(using tc: EntityPersistent[T]): ExecUowM[EntityRevisionCarrier[T]] = {
+    ensure_component_application_datastore()
+    val effectivetc =
+      _effective_entity_persistent(tc.id(changes).collection, tc)
+    val id = effectivetc.id(changes)
+    val authorization =
+      _entity_uow_authorization(
+        Some(id.collection.name),
+        Some(id),
+        "update"
+      ).map { value =>
+        if (serviceinternal)
+          value.copy(accessMode = EntityAccessMode.ServiceInternal)
+        else
+          value
+      }
+    val operation = UnitOfWorkOp.EntityStoreUpdateDetached(
+      changes,
+      expectedrevision,
+      effectivetc,
+      authorization
+    )
+    ConsequenceT.liftF(Free.liftF(operation))
   }
 
   // Patch update with explicit target id.
@@ -2823,6 +3060,91 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
       authorization
     )
     ConsequenceT.liftF(Free.liftF(op))
+  }
+
+  protected final def entity_update_detached[T](
+    id: EntityId,
+    patch: T
+  )(using
+    tc: EntityPersistentUpdate[T]
+  ): ExecUowM[EntityRevisionCarrier[Record]] =
+    _entity_update_detached(
+      id,
+      patch,
+      None,
+      serviceinternal = false
+    )
+
+  protected final def entity_update_detached[T](
+    id: EntityId,
+    patch: T,
+    expectedRevision: EntityRevision
+  )(using
+    tc: EntityPersistentUpdate[T]
+  ): ExecUowM[EntityRevisionCarrier[Record]] =
+    _entity_update_detached(
+      id,
+      patch,
+      Some(expectedRevision),
+      serviceinternal = false
+    )
+
+  protected final def entity_update_detached_internal[T](
+    id: EntityId,
+    patch: T
+  )(using
+    tc: EntityPersistentUpdate[T]
+  ): ExecUowM[EntityRevisionCarrier[Record]] =
+    _entity_update_detached(
+      id,
+      patch,
+      None,
+      serviceinternal = true
+    )
+
+  protected final def entity_update_detached_internal[T](
+    id: EntityId,
+    patch: T,
+    expectedRevision: EntityRevision
+  )(using
+    tc: EntityPersistentUpdate[T]
+  ): ExecUowM[EntityRevisionCarrier[Record]] =
+    _entity_update_detached(
+      id,
+      patch,
+      Some(expectedRevision),
+      serviceinternal = true
+    )
+
+  private def _entity_update_detached[T](
+    id: EntityId,
+    patch: T,
+    expectedrevision: Option[EntityRevision],
+    serviceinternal: Boolean
+  )(using
+    tc: EntityPersistentUpdate[T]
+  ): ExecUowM[EntityRevisionCarrier[Record]] = {
+    ensure_component_application_datastore()
+    val effectiveid = _canonical_entity_id(id)
+    val authorization =
+      _entity_uow_authorization(
+        Some(effectiveid.collection.name),
+        Some(effectiveid),
+        "update"
+      ).map { value =>
+        if (serviceinternal)
+          value.copy(accessMode = EntityAccessMode.ServiceInternal)
+        else
+          value
+      }
+    val operation = UnitOfWorkOp.EntityStoreUpdateByIdDetached(
+      effectiveid,
+      patch,
+      expectedrevision,
+      tc,
+      authorization
+    )
+    ConsequenceT.liftF(Free.liftF(operation))
   }
 
   protected final def entity_conditional_transition[R, P, S](

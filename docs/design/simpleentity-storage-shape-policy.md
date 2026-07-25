@@ -18,7 +18,7 @@ SimpleEntity storage is policy-driven. The default shape is:
 | Model value | Default DB storage | Reason |
 | --- | --- | --- |
 | scalar attribute | column | ordinary filtering, sorting, update, and display support |
-| management field | expanded column | framework filtering, lifecycle handling, admin, and diagnostics |
+| management field | expanded column | framework filtering, lifecycle handling, revision concurrency, admin, and diagnostics |
 | security identity | expanded column | owner/group/privilege checks and operational inspection |
 | permission rights | compact JSON text in `permission` | permission is a policy object, not a set of stable physical columns |
 | independent value object | encoded JSON text | preserves domain boundary and avoids accidental query semantics |
@@ -68,11 +68,24 @@ The initial built-in management expansion set is:
 | --- | --- | --- |
 | identity | `id`, `shortId` | `id`, `short_id` |
 | lifecycle/audit | `createdAt`, `updatedAt`, `createdBy`, `updatedBy` | `created_at`, `updated_at`, `created_by`, `updated_by` |
+| concurrency | `revision` | `revision` |
 | logical state | `aliveness`, `postStatus`, `deletedAt`, `deletedBy` | `aliveness`, `post_status`, `deleted_at`, `deleted_by` |
 | security identity | `ownerId`, `groupId`, `privilegeId` | `owner_id`, `group_id`, `privilege_id` |
 
 These fields stay queryable because CNCF runtime behavior, admin surfaces, and
 operational diagnostics need them without decoding unrelated domain payloads.
+
+`revision` is the standard `SimpleEntity` optimistic-concurrency value. It is
+an `EntityRevision` initialized to `1`, advanced atomically with an admitted
+mutation, and exposed read-only on Entity/search/View/Aggregate projections.
+Application create/update inputs and patches cannot write or clear it.
+
+An explicitly admitted non-`SimpleEntity` model may instead use Detached
+revision storage in `cncf_revision`. Detached representation is an extension
+surface, not a fallback SimpleEntity shape. Missing managed revision, dual
+managed representation, and implicit Detached admission fail deterministically.
+An application-owned `revision` field on a Detached domain model remains
+ordinary data and is not interpreted as Embedded revision.
 
 This list is intentionally limited. Domain-specific classification fields are
 ordinary scalar attributes unless the component declares a more specific storage

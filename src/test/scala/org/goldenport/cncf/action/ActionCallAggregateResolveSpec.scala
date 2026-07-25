@@ -10,7 +10,10 @@ import org.goldenport.cncf.directive.Query
 import org.goldenport.cncf.datastore.DataStore
 import org.goldenport.cncf.entity.{
   EntityConcurrencyMetadata,
-  EntityPersistent
+  EntityPersistent,
+  EntityRevisionBinding,
+  EntityRevisionRepresentation,
+  EntityRevisionSpecSupport
 }
 import org.goldenport.cncf.entity.aggregate.{
   AggregateBuilder,
@@ -420,6 +423,12 @@ final class ActionCallAggregateResolveSpec
           })
         )
         val base = ActionCallSupport.componentPair(component)
+        EntityRevisionSpecSupport.registerRevisionBinding(
+          base.executioncontext,
+          cid,
+          NoticeProbeAggregate.persistent,
+          EntityRevisionRepresentation.Detached
+        )
         base.executioncontext.dataStoreSpace.inject(
           DataStore.CollectionId.EntityStore(cid),
           EntityConcurrencyMetadata.initializeForCreate(
@@ -482,6 +491,12 @@ final class ActionCallAggregateResolveSpec
           })
         )
         val base = ActionCallSupport.componentPair(component)
+        EntityRevisionSpecSupport.registerRevisionBinding(
+          base.executioncontext,
+          cid,
+          NoticeProbeAggregate.persistent,
+          EntityRevisionRepresentation.Detached
+        )
         base.executioncontext.dataStoreSpace.inject(
           DataStore.CollectionId.EntityStore(cid),
           EntityConcurrencyMetadata.initializeForCreate(
@@ -511,7 +526,7 @@ final class ActionCallAggregateResolveSpec
         result shouldBe a[Consequence.Failure[_]]
         call.asInstanceOf[CommandNoticeProbeAggregateCall].commandRan shouldBe false
         base.executioncontext.entityStoreSpace
-          .loadSnapshot(id, NoticeProbeAggregate.persistent)(using pair.executioncontext)
+          .loadDetached(id, NoticeProbeAggregate.persistent)(using pair.executioncontext)
           .map(_.map(_.entity.name)) shouldBe
           Consequence.success(Some("authoritative"))
       }
@@ -568,6 +583,12 @@ final class ActionCallAggregateResolveSpec
         ) shouldBe Some("before")
         querycount shouldBe 1
         val base = ActionCallSupport.componentPair(component)
+        EntityRevisionSpecSupport.registerRevisionBinding(
+          base.executioncontext,
+          cid,
+          NoticeProbeAggregate.persistent,
+          EntityRevisionRepresentation.Detached
+        )
         base.executioncontext.dataStoreSpace.inject(
           DataStore.CollectionId.EntityStore(cid),
           EntityConcurrencyMetadata.initializeForCreate(
@@ -850,7 +871,10 @@ private object NoticeProbeAggregate {
         maxPartitions = 4,
         maxEntitiesPerPartition = 16
       ),
-      persistent = summon[EntityPersistent[NoticeProbeAggregate]]
+      persistent = summon[EntityPersistent[NoticeProbeAggregate]],
+      revisionBinding = Some(
+        EntityRevisionBinding(EntityRevisionRepresentation.Detached)
+      )
     )
     new EntityCollection[NoticeProbeAggregate](
       descriptor = descriptor,

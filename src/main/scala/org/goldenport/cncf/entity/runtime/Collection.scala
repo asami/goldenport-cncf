@@ -10,9 +10,11 @@ import org.goldenport.cncf.entity.{
   EntityAccessScopePolicy,
   EntityIdentityScope,
   EntityLifecycleRecordPolicy,
+  EntityMutationExecutionPolicy,
   EntityPersistentCreate,
   EntityQuery,
   EntityRecordSnapshot,
+  EntityRevisionCarrier,
   EntitySearchScope,
   EntityVisibilityScope,
   SimpleEntityStorageShapePolicy
@@ -119,14 +121,37 @@ final class EntityCollection[E](
   )(using ctx: ExecutionContext): Consequence[Unit] = {
     val evaluationinstant = ctx.clock.instant()
     for {
-      entity <- descriptor.persistent.fromRecord(record)
+      admitted <- descriptor.revisionBinding match {
+        case Some(binding)
+            if binding.representation ==
+              org.goldenport.cncf.entity.EntityRevisionRepresentation.Embedded =>
+          binding
+            .rejectManagedPatch(record, "entity")
+            .map(
+              _.upsertSingle(
+                binding.storageFieldName,
+                EntityRevision.INITIAL.value
+              )
+            )
+        case Some(binding) =>
+          binding.rejectManagedPatch(record, "entity")
+        case None =>
+          Consequence.success(record)
+      }
+      entity <- descriptor.persistent.fromRecord(admitted)
       create = new EntityPersistentCreate[E] {
         def id(value: E): Option[EntityId] =
           Some(descriptor.persistent.id(value))
         def toRecord(value: E): Record =
           descriptor.persistent.toRecord(value)
         override def toStoreRecord(value: E): Record =
-          descriptor.persistent.toStoreRecord(value)
+          descriptor.revisionBinding
+            .map(
+              _.withoutManagedRevision(
+                descriptor.persistent.toStoreRecord(value)
+              )
+            )
+            .getOrElse(descriptor.persistent.toStoreRecord(value))
         def collection(value: E) =
           descriptor.persistent.id(value).collection
       }
@@ -140,6 +165,17 @@ final class EntityCollection[E](
   def saveRecordVersioned(
       record: Record,
       expectedRevision: EntityRevision
+  )(using ctx: ExecutionContext): Consequence[EntityRecordSnapshot] =
+    saveRecordVersioned(
+      record,
+      Some(expectedRevision),
+      EntityMutationExecutionPolicy.default
+    )
+
+  def saveRecordVersioned(
+      record: Record,
+      expectedRevision: Option[EntityRevision],
+      executionPolicy: EntityMutationExecutionPolicy
   )(using ctx: ExecutionContext): Consequence[EntityRecordSnapshot] = {
     val evaluationinstant = ctx.clock.instant()
     descriptor.persistent.fromRecord(record).flatMap { entity =>
@@ -147,12 +183,56 @@ final class EntityCollection[E](
       ctx.entityStoreSpace.saveVersioned(
         entity,
         descriptor.persistent,
-        expectedRevision
+        expectedRevision,
+        executionPolicy
       ).map { snapshot =>
         _put(snapshot.entity, evaluationinstant)
         EntityRecordSnapshot(
           descriptor.persistent.toRecord(snapshot.entity),
           snapshot.revision
+        )
+      }.recoverWith { conclusion =>
+        val reason = ConclusionDiagnostics.classify(conclusion).reason
+        if (
+          reason.contains("stale-entity-revision") ||
+          reason.contains("committed-entity-projection-failure")
+        )
+          evict(entityid)
+        Consequence.Failure(conclusion)
+      }
+    }
+  }
+
+  def saveRecordDetached(
+      record: Record,
+      expectedRevision: EntityRevision
+  )(using ctx: ExecutionContext): Consequence[EntityRevisionCarrier[Record]] =
+    saveRecordDetached(
+      record,
+      Some(expectedRevision),
+      EntityMutationExecutionPolicy.default
+    )
+
+  def saveRecordDetached(
+      record: Record,
+      expectedRevision: Option[EntityRevision],
+      executionPolicy: EntityMutationExecutionPolicy
+  )(using ctx: ExecutionContext): Consequence[EntityRevisionCarrier[Record]] = {
+    val evaluationinstant = ctx.clock.instant()
+    descriptor.persistent.fromRecord(record).flatMap { entity =>
+      val entityid = descriptor.persistent.id(entity)
+      ctx.entityStoreSpace.saveDetached(
+        UnitOfWorkOp.EntityStoreSaveDetached(
+          entity,
+          expectedRevision,
+          descriptor.persistent,
+          executionPolicy = executionPolicy
+        )
+      ).map { carrier =>
+        _put(carrier.entity, evaluationinstant)
+        EntityRevisionCarrier(
+          descriptor.persistent.toRecord(carrier.entity),
+          carrier.revision
         )
       }.recoverWith { conclusion =>
         val reason = ConclusionDiagnostics.classify(conclusion).reason

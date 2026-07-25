@@ -13,6 +13,11 @@ import org.goldenport.cncf.datastore.sql.{
   MySqlDialectDriver,
   SqlDataStore
 }
+import org.goldenport.cncf.entity.{
+  EntityConcurrencyPolicy,
+  EntityWritePolicy,
+  RevisionPreconditionPolicy
+}
 import org.goldenport.observation.{Descriptor, Taxonomy}
 import org.goldenport.record.Record
 import org.scalacheck.{Gen, Prop, Test}
@@ -537,6 +542,121 @@ final class MysqlConditionalTransitionAcceptanceSpec
       }
   }
 
+  "MySQL Entity revision provider" should {
+    "preserve the ordinary mutation matrix through the shared provider" in {
+      _with_live_mysql { database =>
+        Given(
+          "independent shared-provider roots for apply, no-op, stale, exhaustion, and missing-revision admission"
+        )
+        val store = _store(database)
+        val context = _context(store)
+        val collection = _collection("mysql_revision_provider")
+        val appliedentry = DataStore.StringEntryId("applied")
+        val exhaustedentry = DataStore.StringEntryId("exhausted")
+        val missingentry = DataStore.StringEntryId("missing")
+        val setup =
+          Vector(
+            appliedentry -> _versioned_record(
+              appliedentry,
+              "before",
+              1L
+            ),
+            exhaustedentry -> _versioned_record(
+              exhaustedentry,
+              "before",
+              Long.MaxValue
+            ),
+            missingentry -> Record.dataAuto(
+              "id" -> missingentry.print,
+              "name" -> "legacy"
+            )
+          ).foldLeft(Consequence.unit) { case (result, (entry, record)) =>
+            result.flatMap(_ =>
+              store.create(collection, entry, record)(using context)
+            )
+          }
+
+        When("the shared provider executes the common revision kernel")
+        val applied = setup.flatMap(_ =>
+          store.mutateVersionedEntity(
+            _versioned_plan(
+              collection,
+              appliedentry,
+              _revision(1L),
+              "after"
+            )
+          )(using context)
+        )
+        val duplicate = applied.flatMap(_ =>
+          store.mutateVersionedEntity(
+            _versioned_plan(
+              collection,
+              appliedentry,
+              _revision(2L),
+              "after"
+            ).copy(
+              writePolicy = EntityWritePolicy.WriteIfChanged
+            )
+          )(using context)
+        )
+        val stale = duplicate.flatMap(_ =>
+          store.mutateVersionedEntity(
+            _versioned_plan(
+              collection,
+              appliedentry,
+              _revision(1L),
+              "after"
+            ).copy(
+              writePolicy = EntityWritePolicy.WriteIfChanged,
+              preconditionPolicy =
+                RevisionPreconditionPolicy.ObservedRequired
+            )
+          )(using context)
+        )
+        val exhausted =
+          store.mutateVersionedEntity(
+            _versioned_plan(
+              collection,
+              exhaustedentry,
+              _revision(Long.MaxValue),
+              "candidate"
+            )
+          )(using context)
+        val missing =
+          store.mutateVersionedEntity(
+            _versioned_plan(
+              collection,
+              missingentry,
+              _revision(1L),
+              "candidate"
+            )
+          )(using context)
+
+        Then("MySQL matches the local provider outcomes without fallback writes")
+        applied.toOption.exists(
+          _.isInstanceOf[EntityVersionedMutationResult.Applied]
+        ) shouldBe true
+        duplicate.toOption.exists(
+          _.isInstanceOf[EntityVersionedMutationResult.NoOp]
+        ) shouldBe true
+        stale.toOption shouldBe Some(
+          EntityVersionedMutationResult.Stale(
+            _revision(1L),
+            _revision(2L)
+          )
+        )
+        exhausted.toOption shouldBe None
+        missing.toOption shouldBe None
+        store
+          .load(collection, exhaustedentry)(using context)
+          .toOption
+          .flatten
+          .flatMap(_.getLong(_revision_field)) shouldBe
+          Some(Long.MaxValue)
+      }
+    }
+  }
+
   private def _with_live_mysql[A](
     body: LiveDatabase => A
   ): A =
@@ -554,6 +674,39 @@ final class MysqlConditionalTransitionAcceptanceSpec
           s"Set $LIVE_ENV=true to run the MySQL shared-provider acceptance specification."
         )
     }
+
+  private def _versioned_plan(
+    collection: DataStore.CollectionId,
+    entry: DataStore.EntryId,
+    expectedrevision: EntityRevision,
+    name: String
+  ): EntityVersionedMutationPlan =
+    EntityVersionedMutationPlan(
+      collection = collection,
+      entryId = entry,
+      revisionField = _revision_field,
+      concurrencyPolicy = EntityConcurrencyPolicy.Optimistic,
+      writePolicy = EntityWritePolicy.AlwaysWrite,
+      preconditionPolicy = RevisionPreconditionPolicy.Managed,
+      expectedRevision = Some(expectedrevision),
+      rootMutation = EntityVersionedRootMutation.Replace(
+        Record.dataAuto(
+          "id" -> entry.print,
+          "name" -> name
+        )
+      )
+    )
+
+  private def _versioned_record(
+    entry: DataStore.EntryId,
+    name: String,
+    revision: Long
+  ): Record =
+    Record.dataAuto(
+      "id" -> entry.print,
+      "name" -> name,
+      _revision_field -> revision
+    )
 }
 
 object MysqlConditionalTransitionAcceptanceSpec {

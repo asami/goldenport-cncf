@@ -147,7 +147,7 @@ final class EntityRevisionRepresentationSpec
       result shouldBe Some(None)
     }
 
-    "reject missing, mirrored, and wrong physical revision fields" in {
+    "distinguish managed revision storage from detached domain fields" in {
       Given("one embedded binding and one detached binding")
       val embedded = EntityRevisionBinding(EntityRevisionRepresentation.Embedded)
       val detached = EntityRevisionBinding(EntityRevisionRepresentation.Detached)
@@ -158,6 +158,14 @@ final class EntityRevisionRepresentationSpec
         .toOption
       val detachedvalid = detached
         .validatePersistedRecord(Record.data("cncf_revision" -> 1L))
+        .toOption
+      val detachedwithdomainrevision = detached
+        .validatePersistedRecord(
+          Record.data(
+            "revision" -> "application-owned",
+            "cncf_revision" -> 1L
+          )
+        )
         .toOption
 
       val embeddedmissing = embedded.validatePersistedRecord(Record.empty).toOption
@@ -177,11 +185,14 @@ final class EntityRevisionRepresentationSpec
         )
         .toOption
 
-      Then("each binding accepts only its one field")
+      Then("each binding requires its one managed physical field")
       embeddedvalid shouldBe Some(())
       detachedvalid shouldBe Some(())
+      detachedwithdomainrevision shouldBe Some(())
 
-      And("missing, wrong, and dual fields are rejected")
+      And(
+        "missing and wrong fields are rejected while only Embedded treats both physical names as dual"
+      )
       embeddedmissing shouldBe None
       detachedmissing shouldBe None
       embeddedwrong shouldBe None

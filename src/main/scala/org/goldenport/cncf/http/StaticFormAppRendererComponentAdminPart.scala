@@ -16,7 +16,7 @@ import org.goldenport.cncf.CncfVersion
 import org.goldenport.cncf.config.{OperationMode, RuntimeConfig}
 import org.goldenport.cncf.observability.{DiagnosticPayloadExternalizationConfig, DiagnosticPayloadReference}
 import org.goldenport.cncf.operation.{AssociationBindingOperationDefinition, CmlEntityRelationshipDefinition, CmlOperationAssociationBinding, CmlOperationImageBinding, ImageBindingOperationDefinition}
-import org.goldenport.cncf.projection.{AuthorizationPolicyProjection, DescribeProjection, HelpProjection, SchemaProjection}
+import org.goldenport.cncf.projection.{AuthorizationPolicyProjection, DescribeProjection, EntityRevisionProjection, HelpProjection, SchemaProjection}
 import org.goldenport.cncf.search.{SearchMode, SearchPlanningProfile, WebSearchQueryPlanner}
 import org.goldenport.configuration.{ConfigurationValue, ResolvedConfiguration}
 import org.goldenport.protocol.{Argument, Property, Request as ProtocolRequest}
@@ -32,7 +32,7 @@ import io.circe.parser.parse
 /*
  * @since   May. 18, 2026
  *  version Jun. 19, 2026
- * @version Jul. 24, 2026
+ * @version Jul. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 trait StaticFormAppRendererComponentAdminPart {
@@ -606,7 +606,11 @@ trait StaticFormAppRendererComponentAdminPart {
       val version = submittedVersion
         .map(_.trim)
         .filter(_.nonEmpty)
-        .orElse(readRecord.flatMap(_.getString("version")))
+        .orElse(
+          readRecord
+            .flatMap(EntityRevisionProjection.responseRevision)
+            .map(_.value.toString)
+        )
       val effectiveValues =
         values.removed("version") ++ version.map("version" -> _)
       val hiddenContext = hidden_form_context_inputs(effectiveValues)

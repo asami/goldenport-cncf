@@ -38,7 +38,7 @@ import org.goldenport.record.Record
 import org.goldenport.record.io.RecordEncoder
 import org.goldenport.observation.{Cause, Descriptor, Taxonomy}
 import org.goldenport.schema.{Column, Multiplicity, Schema, ValueDomain, WebColumn, WebValidationHints, XBoolean, XDateTime, XInt, XString}
-import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
+import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId, EntityRevision}
 import org.goldenport.cncf.action.{Action, ActionCall, ActionEngine, ProcedureActionCall, QueryAction}
 import org.goldenport.cncf.association.{AssociationDomain, AssociationFilter, AssociationRepository, AssociationStoragePolicy}
 import org.goldenport.cncf.blob.*
@@ -50,7 +50,13 @@ import org.goldenport.cncf.security.AuthenticationRequest
 import org.goldenport.cncf.datastore.{DataStore, DataStoreSpace, QueryDirective, SearchResult, SearchableDataStore, TotalCountCapability}
 import org.goldenport.cncf.entity.{
   EntityConcurrencyMetadata,
+  EntityMutationAdapterDefaults,
   EntityPersistent,
+  EntityRevisionBinding,
+  EntityRevisionModelKind,
+  EntityRevisionRepresentation,
+  EntityRevisionSpecSupport,
+  EntityRevisionTransport,
   EntityStoreSpace
 }
 import org.goldenport.cncf.entity.aggregate.{AggregateBuilder, AggregateCollection, AggregateCommandDefinition, AggregateCreateDefinition, AggregateDefinition, AggregateMemberDefinition}
@@ -2149,6 +2155,48 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       _notice_entity_version(subsystem, entityid.value) should not be version
     }
 
+    "treat an unchanged component entity update form as a successful revision-preserving no-op" in {
+      Given("an admin form carrying the current detached Entity revision and unchanged business values")
+      val subsystem = _management_console_fixture_subsystem()
+      val engine = new HttpExecutionEngine(subsystem)
+      val dispatcher =
+        new RecordingWebOperationDispatcher(WebOperationDispatcher.Local(engine))
+      val server =
+        new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
+      val collection =
+        _notice_fixture_component(subsystem).entitySpace.entity[_NoticeEntity]("notice")
+      val entity = collection.storage.storeRealm.values.head
+      val version = _notice_entity_version(subsystem, entity.id.value)
+      val before = _load_notice_store_record(subsystem, entity.id)
+
+      When("the generated Web form submits the unchanged Entity state")
+      val response = server
+        ._submit_component_admin_entity_update(
+          _post_form_request(
+            s"/form/notice-board/admin/entities/notice/${entity.id.value}/update",
+            s"title=board+update&author=alice&version=${version}"
+          ),
+          "notice-board",
+          "notice",
+          entity.id.value
+        )
+        .unsafeRunSync()
+      val html = response.as[String].unsafeRunSync()
+
+      Then("WriteIfChanged reports success without advancing the authoritative revision")
+      response.status.code shouldBe 200
+      html should include ("Applied</th><td>true")
+      dispatcher.headers.last.getString(
+        EntityMutationAdapterDefaults.profilePropertyName
+      ) shouldBe Some(EntityMutationAdapterDefaults.webFormProfile)
+      val stored = _load_notice_store_record(subsystem, entity.id)
+      stored.asMap.filterNot(_._1 == "cncf_revision") shouldBe
+        before.asMap.filterNot(_._1 == "cncf_revision")
+      _notice_entity_version(subsystem, entity.id.value) shouldBe version
+      stored.getString("title") shouldBe Some("board update")
+      stored.getString("author") shouldBe Some("alice")
+    }
+
     "redirect component entity update by admin form descriptor transition" in {
       Given("the prerequisites for redirect component entity update by admin form descriptor transition")
       val subsystem = _management_console_fixture_subsystem()
@@ -2366,6 +2414,179 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       stored.getString("title") shouldBe Some("new notice")
       stored.getString("author") shouldBe Some("bob")
       dispatcher.paths should contain ("/admin/entity/create")
+    }
+
+    "create an Embedded SimpleEntity through the admin operation without accepting managed revision input" in {
+      Given("an Embedded revision collection and a create request containing only application fields")
+      val subsystem = _embedded_revision_fixture_subsystem()
+      val component = subsystem
+        .findComponent("embedded_notice_board")
+        .getOrElse(fail("embedded fixture component is missing"))
+      val collection =
+        component.entitySpace.entity[_EmbeddedNoticeEntity]("notice")
+
+      When("the admin operation creates the Entity")
+      val response = _success(
+        subsystem.executeOperationResponse(
+          GRequest.of(
+            component = "admin",
+            service = "entity",
+            operation = "create",
+            arguments = List(
+              Argument("component", "embedded-notice-board", None),
+              Argument("entity", "notice", None),
+              Argument("title", "embedded create", None)
+            )
+          )
+        )
+      )
+
+      Then("the collection boundary initializes one managed revision and persists the Entity")
+      response shouldBe
+        OperationResponse.Scalar("Entity record was applied.")
+      val created = collection.storage.storeRealm.values
+        .find(_.title == "embedded create")
+        .getOrElse(fail("embedded Entity was not created"))
+      created.revision shouldBe EntityRevision.INITIAL
+    }
+
+    "read and list an Embedded SimpleEntity through its owning component context" in {
+      Given("an Embedded Entity whose revision binding belongs to a non-Admin component")
+      val subsystem = _embedded_revision_fixture_subsystem()
+      val component = subsystem
+        .findComponent("embedded_notice_board")
+        .getOrElse(fail("embedded fixture component is missing"))
+      val collection =
+        component.entitySpace.entity[_EmbeddedNoticeEntity]("notice")
+      _success(
+        subsystem.executeOperationResponse(
+          GRequest.of(
+            component = "admin",
+            service = "entity",
+            operation = "create",
+            arguments = List(
+              Argument("component", "embedded-notice-board", None),
+              Argument("entity", "notice", None),
+              Argument("title", "embedded read", None)
+            )
+          )
+        )
+      )
+      val created = collection.storage.storeRealm.values
+        .find(_.title == "embedded read")
+        .getOrElse(fail("embedded Entity was not created"))
+
+      When("the Admin component reads and searches the owning component collection")
+      val read = _admin_record_response(
+        subsystem,
+        "entity",
+        "read",
+        "component" -> "embedded-notice-board",
+        "entity" -> "notice",
+        "id" -> created.id.value
+      )
+      val listed = _admin_record_response(
+        subsystem,
+        "entity",
+        "list",
+        "component" -> "embedded-notice-board",
+        "entity" -> "notice"
+      )
+
+      Then("both surfaces resolve the owning revision binding and expose its managed revision")
+      val record = read
+        .getAny("record")
+        .collect { case value: Record => value }
+        .getOrElse(fail("embedded read record is missing"))
+      record.getLong("revision") shouldBe Some(EntityRevision.INITIAL.value)
+      listed.getAny("items").map(_.toString).getOrElse("") should include (
+        s"revision=${EntityRevision.INITIAL.value}"
+      )
+    }
+
+    "keep REST adapter revision semantics independent from body version metadata" in {
+      Given("an Embedded Entity and REST adapter profiles paired with conflicting body versions")
+      val subsystem = _embedded_revision_fixture_subsystem()
+      val component = subsystem
+        .findComponent("embedded_notice_board")
+        .getOrElse(fail("embedded fixture component is missing"))
+      val collection =
+        component.entitySpace.entity[_EmbeddedNoticeEntity]("notice")
+      _success(
+        subsystem.executeOperationResponse(
+          GRequest.of(
+            component = "admin",
+            service = "entity",
+            operation = "create",
+            arguments = List(
+              Argument("component", "embedded-notice-board", None),
+              Argument("entity", "notice", None),
+              Argument("title", "before REST updates", None)
+            )
+          )
+        )
+      )
+      val created = collection.storage.storeRealm.values
+        .find(_.title == "before REST updates")
+        .getOrElse(fail("embedded Entity was not created"))
+
+      When("idempotent and strict REST profiles update through their framework-owned revision sources")
+      val idempotent = subsystem.executeOperationResponse(
+        GRequest.of(
+          component = "admin",
+          service = "entity",
+          operation = "update",
+          arguments = List(
+            Argument("component", "embedded-notice-board", None),
+            Argument("entity", "notice", None),
+            Argument("id", created.id.value, None),
+            Argument("title", "idempotent REST update", None),
+            Argument("version", "999", None)
+          ),
+          properties = List(
+            Property(
+              EntityMutationAdapterDefaults.profilePropertyName,
+              EntityMutationAdapterDefaults.idempotentRestProfile,
+              None
+            )
+          )
+        )
+      )
+      val strict = subsystem.executeOperationResponse(
+        GRequest.of(
+          component = "admin",
+          service = "entity",
+          operation = "update",
+          arguments = List(
+            Argument("component", "embedded-notice-board", None),
+            Argument("entity", "notice", None),
+            Argument("id", created.id.value, None),
+            Argument("title", "strict REST update", None),
+            Argument("version", "999", None)
+          ),
+          properties = List(
+            Property(
+              EntityMutationAdapterDefaults.profilePropertyName,
+              EntityMutationAdapterDefaults.strictRestProfile,
+              None
+            ),
+            Property(
+              EntityRevisionTransport.observedRevisionPropertyName,
+              "2",
+              None
+            )
+          )
+        )
+      )
+
+      Then("managed REST ignores body version and strict REST honors only the observed validator")
+      idempotent shouldBe a[Consequence.Success[?]]
+      strict shouldBe a[Consequence.Success[?]]
+      val updated = collection.storage.storeRealm.values
+        .find(_.id == created.id)
+        .getOrElse(fail("updated Embedded Entity is missing"))
+      updated.title shouldBe "strict REST update"
+      updated.revision.value shouldBe 3L
     }
 
     "attach uploaded and existing Blob images during admin entity create" in {
@@ -14103,7 +14324,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
           partitionStrategy = PartitionStrategy.byOrganizationMonthUTC,
           maxPartitions = 4,
           maxEntitiesPerPartition = 100,
-          schema = Some(schema)
+          schema = Some(schema),
+          revisionModelKind = Some(EntityRevisionModelKind.NonSimpleEntity),
+          revisionRepresentation =
+            Some(EntityRevisionRepresentation.Detached)
         )
       )
     )
@@ -14152,6 +14376,12 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       subsystem.findComponent("admin")
         .getOrElse(fail("admin component is missing"))
         .logic.executionContext()
+    EntityRevisionSpecSupport.registerRevisionBinding(
+      summon[ExecutionContext],
+      cid,
+      _notice_persistent,
+      EntityRevisionRepresentation.Detached
+    )
     val noticecollection =
       component.entitySpace.entity[_NoticeEntity]("notice")
     notices.foreach { notice =>
@@ -14177,6 +14407,94 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       noticecollection.put(notice)
     }
     subsystem
+  }
+
+  private def _embedded_revision_fixture_subsystem(): Subsystem = {
+    val resolvedconfiguration =
+      ResolvedConfiguration(
+        Configuration.empty,
+        ConfigurationTrace.empty
+      )
+    val runtimeconfig = RuntimeConfig.default.copy(
+      dataStoreSpace = DataStoreSpace.default(),
+      entityStoreSpace =
+        EntityStoreSpace.create(resolvedconfiguration)
+    )
+    val runtime = GlobalRuntimeContext.create(
+      "embedded-revision-admin-spec",
+      runtimeconfig,
+      resolvedconfiguration,
+      ExecutionContext.create().observability,
+      AliasResolver.empty
+    )
+    val component =
+      TestComponentFactory.create(
+        "embedded_notice_board",
+        Protocol.empty
+      )
+    val persistent = _embedded_notice_persistent
+    val cid = _EmbeddedNoticeEntity.collectionid
+    val descriptor = ComponentDescriptor(
+      componentName = Some("embedded_notice_board"),
+      entityRuntimeDescriptors = Vector(
+        EntityRuntimeDescriptor(
+          entityName = "notice",
+          collectionId = cid,
+          memoryPolicy = EntityMemoryPolicy.LoadToMemory,
+          partitionStrategy =
+            PartitionStrategy.byOrganizationMonthUTC,
+          maxPartitions = 4,
+          maxEntitiesPerPartition = 100,
+          schema = Some(_schema("id", "title")),
+          revisionModelKind =
+            Some(EntityRevisionModelKind.SimpleEntity),
+          revisionRepresentation =
+            Some(EntityRevisionRepresentation.Embedded)
+        )
+      )
+    )
+    component.withComponentDescriptors(Vector(descriptor))
+    given EntityPersistent[_EmbeddedNoticeEntity] = persistent
+    val store = new EntityRealm[_EmbeddedNoticeEntity](
+      entityName = "notice",
+      loader = EntityLoader[_EmbeddedNoticeEntity](_ => None),
+      state = new _IdRef(EntityRealmState(Map.empty))
+    )
+    val memory = new PartitionedMemoryRealm[_EmbeddedNoticeEntity](
+      strategy = PartitionStrategy.byOrganizationMonthUTC,
+      idOf = _.id
+    )
+    component.entitySpace.registerEntity(
+      "notice",
+      new EntityCollection(
+        EntityDescriptor(
+          collectionId = cid,
+          plan = EntityRuntimePlan(
+            entityName = "notice",
+            memoryPolicy = EntityMemoryPolicy.LoadToMemory,
+            workingSet = None,
+            partitionStrategy =
+              PartitionStrategy.byOrganizationMonthUTC,
+            maxPartitions = 4,
+            maxEntitiesPerPartition = 100
+          ),
+          persistent = persistent,
+          revisionBinding = Some(
+            EntityRevisionBinding(
+              EntityRevisionRepresentation.Embedded
+            )
+          )
+        ),
+        EntityStorage(store, Some(memory))
+      )
+    )
+    DefaultSubsystemFactory
+      .defaultWithScope(
+        runtime,
+        Some(org.goldenport.cncf.cli.RunMode.Server),
+        resolvedconfiguration
+      )
+      .add(Vector(component))
   }
 
   private def _entity_schema_web_descriptor_fixture(): (Subsystem, WebDescriptor) = {
@@ -14312,7 +14630,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
         maxPartitions = 4,
         maxEntitiesPerPartition = 100
       ),
-      persistent = summon[EntityPersistent[_NoticeEntity]]
+      persistent = summon[EntityPersistent[_NoticeEntity]],
+      revisionBinding = Some(
+        EntityRevisionBinding(EntityRevisionRepresentation.Detached)
+      )
     )
     val collection = new EntityCollection[_NoticeEntity](
       descriptor = descriptor,
@@ -14334,6 +14655,40 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
             r.getString("author").getOrElse("")
           )
         )
+    }
+
+  private def _embedded_notice_persistent
+      : EntityPersistent[_EmbeddedNoticeEntity] =
+    new EntityPersistent[_EmbeddedNoticeEntity] {
+      def id(e: _EmbeddedNoticeEntity): EntityId =
+        e.id
+
+      def toRecord(e: _EmbeddedNoticeEntity): Record =
+        Record.dataAuto(
+          "id" -> e.id,
+          "revision" -> e.revision.value,
+          "title" -> e.title
+        )
+
+      def fromRecord(
+        r: Record
+      ): Consequence[_EmbeddedNoticeEntity] =
+        for {
+          idoption <- r.getAsC[EntityId]("id")
+          id <- Consequence.fromOption(
+            idoption,
+            "id is required"
+          )
+          revisionvalue <- Consequence.fromOption(
+            r.getLong("revision"),
+            "revision is required"
+          )
+          revision <- EntityRevision.createC(revisionvalue)
+          title <- Consequence.fromOption(
+            r.getString("title"),
+            "title is required"
+          )
+        } yield _EmbeddedNoticeEntity(id, revision, title)
     }
 
   private def _notice_entity_id(value: Option[Any]): EntityId =
@@ -14375,11 +14730,11 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       _notice_fixture_component(subsystem).entitySpace.entity[_NoticeEntity]("notice")
     val entityid =
       collection.resolveEntityId(id).getOrElse(fail(s"notice entity id is missing: ${id}"))
-    _success(
-      EntityConcurrencyMetadata.revision(
-        _load_notice_store_record(subsystem, entityid)
-      )
-    ).value.toString
+    val binding = collection.descriptor.revisionBinding
+      .getOrElse(fail("notice revision binding is missing"))
+    _success(binding.revision(_load_notice_store_record(subsystem, entityid)))
+      .value
+      .toString
   }
 
   private def _blob_request(
@@ -14496,6 +14851,17 @@ private final case class _NoticeEntity(
 private object _NoticeEntity {
   val collectionid: EntityCollectionId =
     EntityCollectionId("sample", "web", "notice")
+}
+
+private final case class _EmbeddedNoticeEntity(
+  id: EntityId,
+  revision: EntityRevision,
+  title: String
+)
+
+private object _EmbeddedNoticeEntity {
+  val collectionid: EntityCollectionId =
+    EntityCollectionId("sample", "web", "embedded_notice")
 }
 
 private final case class _NoticeAggregate(id: String, summary: String)

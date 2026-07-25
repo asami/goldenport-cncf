@@ -1,6 +1,6 @@
 # Phase 50 - SimpleEntity Revision and OCC Simplification
 
-status=active
+status=closed
 planned_at=2026-07-24
 started_at=2026-07-25
 depends_on=[Phase 49](phase-49.md)
@@ -206,12 +206,12 @@ implementation assets.
 | SE-02 | SimpleEntity revision model | `simplemodeling-model` provides `EntityRevision` and one standard revision attribute; generated Entity outputs consume it as managed metadata while application input variants omit it. | done |
 | SE-03 | Common revision kernel and binding | Phase 49's atomic provider kernel is generalized around `EntityRevision`, and one deterministic embedded/detached binding is selected per Entity model. Registration-time binding, provider-kernel typing, and upper concurrency API replacement passed clean re-review and full release validation. | done |
 | SE-04 | Embedded SimpleEntity lifecycle and OCC | CNCF initializes, loads, advances, returns, and protects embedded revision; declarative policy controls ordinary expected-revision enforcement. Clean re-review and full release validation passed. | done |
-| SE-05 | Detached non-SimpleEntity extension | Explicitly admitted non-`SimpleEntity` models can use a detached revision carrier without token compatibility, dual representation, or implicit fallback. | planned |
-| SE-06 | Conditional Transition integration | Both admitted representations use the common revision kernel and retain Phase 49 exactly-one-winner semantics. | planned |
-| SE-07 | Projection and transport | Standard surfaces expose embedded `SimpleEntity.revision`; detached revision appears only on explicitly revision-aware extension surfaces. | planned |
-| SE-08 | Provider, migration, downstream, and regression acceptance | In-memory, SQLite, one shared provider, migration rules, and downstream consumers prove both representations and the standard-path simplification. | planned |
-| SE-09 | Confirmed design/specification contract | Verified behavior is reflected in canonical design/spec; provisional token/snapshot rules are replaced by the embedded standard and detached extension, and executable evidence references are exact. | planned |
-| SE-10 | Verification and closure | Full validation, clean review, strategy/history alignment, and closure evidence complete Phase 50. | planned |
+| SE-05 | Detached non-SimpleEntity extension | Explicitly admitted non-`SimpleEntity` models can use a detached revision carrier without token compatibility, dual managed representation, or implicit fallback. Clean re-review passed. | done |
+| SE-06 | Conditional Transition integration | Both admitted representations use the common revision kernel and retain Phase 49 exactly-one-winner semantics. | done |
+| SE-07 | Projection and transport | Standard surfaces expose embedded `SimpleEntity.revision`; detached revision appears only on explicitly revision-aware extension surfaces. | done |
+| SE-08 | Provider, migration, downstream, and regression acceptance | In-memory, SQLite, MySQL, migration rules, and downstream consumers prove both representations and the standard-path simplification. | done |
+| SE-09 | Confirmed design/specification contract | Verified behavior is reflected in canonical design/spec; provisional token/snapshot rules are replaced by the embedded standard and detached extension, and executable evidence references are exact. | done |
+| SE-10 | Verification and closure | Full validation, clean review, strategy/history alignment, and closure evidence complete Phase 50. | done |
 
 ## Acceptance
 
@@ -343,9 +343,9 @@ An Entity-specific datatype belongs to `simplemodeling-model`.
 - `docs/spec/entity-conflict-and-conditional-transition.md`
 - `docs/design/simpleentity-storage-shape-policy.md`
 
-## Current Resume Point
+## Closure Record
 
-Phase 50 is active and Phase 49 is closed. SE-01 and SE-02 are done. The model
+Phase 50 is closed and Phase 49 remains closed. SE-01 and SE-02 established the model
 and generator slices provide one validated embedded revision on generated
 Entity output variants while Create, Update, and Query inputs omit revision.
 Cozy defaults generated projects to
@@ -404,5 +404,47 @@ to update-only. The review-fix now initializes revision one through provider
 create when no Entity exists and retains managed revision advancement for
 replacement. Focused SE-04, related subsystem, and complete Static Form
 renderer suites pass. The final full suite passed 2478 tests in 356 suites,
-with 7 canceled, 1 ignored, and 59 pending. SE-05 detached non-`SimpleEntity`
-extension is the next stage.
+with 7 canceled, 1 ignored, and 59 pending.
+
+SE-05 detached non-`SimpleEntity` implementation, review-fix, and clean
+re-review are complete.
+Independent review found representation-blind UnitOfWork working-set hydration,
+incomplete detached persisted-revision admission, and overflow loss in
+unmanaged partial upsert. Review-fix separates persisted and domain working-set
+records, validates detached revision values on ordinary reads, and preserves
+overflow content on partial upsert. The repaired 12-suite boundary passed 83
+tests and `Test/compile`; clean re-review found no remaining actionable
+finding.
+
+SE-06 and SE-07 are complete. Conditional Transition returns the admitted
+Embedded or Detached value shape, requires one expected revision under both
+ordinary concurrency policies, and retains bounded simultaneous-attempt
+exactly-one-winner/no-orphan behavior. Read/search/View/Aggregate projection,
+Static Form metadata, idempotent REST PUT, strong `If-Match`, response ETag,
+and JSON/YAML/XML projection are covered by dedicated executable
+specifications. The combined Phase 50 focused run passed 336 tests, including
+the complete 320-test Static Form renderer suite.
+
+SE-08 is complete. The ordinary mutation matrix passes for Embedded and
+Detached representations against in-memory and SQLite, including restart,
+rollback, missing revision, exhaustion, and independent-caller concurrency.
+The live MySQL acceptance profile passed all 6 tests. The local
+provider/migration regression boundary passed 65 tests with 1 pending;
+`simplemodeling-model` passed 56 tests, `simple-modeler` passed 42, Cozy passed
+662 with 2 canceled, and the generated/Aggregate/DSL/UnitOfWork CNCF boundary
+passed 25 tests.
+
+SE-09 is complete. Canonical design and static specification describe the
+verified Embedded standard, explicit Detached extension, mutation policy,
+projection/transport, provider boundary, and exact executable evidence. A
+current design/spec contradiction scan found no remaining separate-token,
+timestamp-token, or `updatedAt`-derived OCC contract.
+
+SE-10 is complete. The final CNCF full suite ran with a 4 GB heap and passed
+2516 tests in 363 suites, with 8 canceled, 1 ignored, and 59 pending.
+`Test/compile`, `git diff --check`, the live MySQL conditional-transition
+profile, downstream `simplemodeling-lib`, `simplemodeling-model`,
+`simple-modeler`, and Cozy validation all passed. Clean read-only re-review
+found no remaining actionable implementation, naming, or executable
+specification finding. Force, merge, repair, and conflict-resolution UI remain
+visible as future strategy item 9.40.

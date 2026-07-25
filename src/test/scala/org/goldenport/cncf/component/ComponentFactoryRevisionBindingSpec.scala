@@ -114,11 +114,17 @@ final class ComponentFactoryRevisionBindingSpec
         "shared",
         Some(EntityRevisionModelKind.SimpleEntity),
         Some(EntityRevisionRepresentation.Embedded)
+      ).copy(
+        collectionId =
+          EntityCollectionId("test", "alpha", "shared")
       )
       val betaentity = _descriptor(
         "shared",
         Some(EntityRevisionModelKind.NonSimpleEntity),
         Some(EntityRevisionRepresentation.Detached)
+      ).copy(
+        collectionId =
+          EntityCollectionId("test", "beta", "shared")
       )
       val alpha = _component(
         Vector("shared"),
@@ -168,6 +174,12 @@ final class ComponentFactoryRevisionBindingSpec
         .revisionBinding
         .map(_.representation) shouldBe
         Some(EntityRevisionRepresentation.Detached)
+
+      And("runtime plan discovery preserves each component-owned collection")
+      alpha.entity[Any]("shared").descriptor.collectionId shouldBe
+        alphaentity.collectionId
+      beta.entity[Any]("shared").descriptor.collectionId shouldBe
+        betaentity.collectionId
     }
 
     "apply assembly revision declarations owned through a componentlet" in {

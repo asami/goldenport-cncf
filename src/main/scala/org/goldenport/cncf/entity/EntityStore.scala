@@ -119,6 +119,15 @@ abstract class EntityStore {
   def loadSnapshot[T](
     id: EntityId
   )(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[Option[EntitySnapshot[T]]]
+
+  def loadDetached[T](
+    id: EntityId
+  )(using
+    tc: EntityPersistent[T],
+    ctx: ExecutionContext
+  ): Consequence[Option[EntityRevisionCarrier[T]]] =
+    _unsupported_detached_revision[Option[EntityRevisionCarrier[T]]]
+
   private[cncf] def save[T](
     entity: T
   )(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[Unit]
@@ -144,6 +153,16 @@ abstract class EntityStore {
     tc: EntityPersistent[T],
     ctx: ExecutionContext
   ): Consequence[EntitySnapshot[T]]
+
+  def saveDetached[T](
+    entity: T,
+    expectedRevision: Option[EntityRevision],
+    executionPolicy: EntityMutationExecutionPolicy
+  )(using
+    tc: EntityPersistent[T],
+    ctx: ExecutionContext
+  ): Consequence[EntityRevisionCarrier[T]] =
+    _unsupported_detached_revision[EntityRevisionCarrier[T]]
 
   private[cncf] def update[T](
     changes: T
@@ -171,6 +190,16 @@ abstract class EntityStore {
     ctx: ExecutionContext
   ): Consequence[EntitySnapshot[T]]
 
+  def updateDetached[T](
+    changes: T,
+    expectedRevision: Option[EntityRevision],
+    executionPolicy: EntityMutationExecutionPolicy
+  )(using
+    tc: EntityPersistent[T],
+    ctx: ExecutionContext
+  ): Consequence[EntityRevisionCarrier[T]] =
+    _unsupported_detached_revision[EntityRevisionCarrier[T]]
+
   def updateById[P](
     id: EntityId,
     patch: P,
@@ -195,6 +224,17 @@ abstract class EntityStore {
     tc: EntityPersistentUpdate[P],
     ctx: ExecutionContext
   ): Consequence[EntityRecordSnapshot]
+
+  def updateByIdDetached[P](
+    id: EntityId,
+    patch: P,
+    expectedRevision: Option[EntityRevision],
+    executionPolicy: EntityMutationExecutionPolicy
+  )(using
+    tc: EntityPersistentUpdate[P],
+    ctx: ExecutionContext
+  ): Consequence[EntityRevisionCarrier[Record]] =
+    _unsupported_detached_revision[EntityRevisionCarrier[Record]]
 
   private[cncf] def updateByIdUnversioned[P](
     id: EntityId,
@@ -262,6 +302,19 @@ abstract class EntityStore {
     includeentityidentropy: Boolean,
     scope: EntityIdentityScope
   )(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[Option[EntityId]]
+
+  private def _unsupported_detached_revision[A]: Consequence[A] =
+    Consequence.operationInvalid(
+      "entity-detached-revision",
+      Vector(
+        org.goldenport.observation.Descriptor.Facet.Reason(
+          "unsupported-capability"
+        ),
+        org.goldenport.observation.Descriptor.Facet.Capability(
+          "entitystore.detached-revision"
+        )
+      )
+    )
 }
 
 object EntityStore {
@@ -463,18 +516,28 @@ class StandardEntityStore(
     options: EntityCreateOptions = EntityCreateOptions.default
   )(using tc: EntityPersistentCreate[T], ctx: ExecutionContext): Consequence[CreateResult[T]] = {
     val id = tc.id(entity) getOrElse createId(entity)
-    val revisionbinding = _revision_binding(id.collection)
+    val revisionbinding = _revision_binding_option(id.collection)
     for {
       cid <- ctx.entityStoreSpace.dataStoreCollection(id)
       dsid <- ctx.entityStoreSpace.dataStoreEntryId(id)
       ds <- ctx.dataStoreSpace.dataStore(cid)
-      admitted <- revisionbinding.rejectManagedPatch(
-        tc.toStoreRecord(entity),
-        "entity"
-      )
-      initialized <- revisionbinding.initializeForCreate(
-        _complement_create_record(admitted, id, options)
-      )
+      initialized <- revisionbinding match {
+        case Some(binding) =>
+          for {
+            admitted <- binding.rejectManagedPatch(
+              tc.toStoreRecord(entity),
+              "entity"
+            )
+            initialized <- binding.initializeForCreate(
+              _complement_create_record(admitted, id, options)
+            )
+          } yield initialized
+        case None =>
+          _reject_detached_managed_field(
+            tc.toStoreRecord(entity),
+            "entity"
+          ).map(_complement_create_record(_, id, options))
+      }
       rec <- ContentBodyStoragePolicy.prepareForSave(id, initialized)
       _ <- _with_datastore_calltree("create", cid, Some(dsid)) {
         ds.create(cid, dsid, rec)
@@ -492,7 +555,7 @@ class StandardEntityStore(
     onsaved: CreateResult[T] => Consequence[Unit]
   )(using tc: EntityPersistentCreate[T], ctx: ExecutionContext): Consequence[CreateResult[T]] =
     _with_upsert_lock(id) {
-      val revisionbinding = _revision_binding(id.collection)
+      val revisionbinding = _revision_binding_option(id.collection)
       for {
         cid <- ctx.entityStoreSpace.dataStoreCollection(id)
         dsid <- ctx.entityStoreSpace.dataStoreEntryId(id)
@@ -503,12 +566,14 @@ class StandardEntityStore(
         _ <- authorize(existing)
         _ <- _reject_logically_deleted_existing(id, existing)
         source = tc.toStoreRecord(entity)
-        admittedsource <- revisionbinding.rejectManagedPatch(
-          source,
-          "entity"
-        )
-        rec <- existing match {
-          case Some(current) =>
+        admittedsource <- revisionbinding match {
+          case Some(binding) =>
+            binding.rejectManagedPatch(source, "entity")
+          case None =>
+            _reject_detached_managed_field(source, "entity")
+        }
+        rec <- (existing, revisionbinding) match {
+          case (Some(current), Some(binding)) =>
             val admitted =
               SimpleEntityStorageShapePolicy.withoutManagedFields(
                 admittedsource
@@ -517,38 +582,63 @@ class StandardEntityStore(
               candidate <- _merge_versioned_update_record(
                 current,
                 _complement_update_record(admitted, id),
-                revisionbinding
+                binding
               )
               preparation <-
                 ContentBodyStoragePolicy.planForVersionedSave(
                   id,
-                  revisionbinding.withoutManagedRevision(candidate),
+                  binding.withoutManagedRevision(candidate),
                   preserveExistingOverflowOnMissingContent = true
                 )
               mutation <- _mutate_versioned(
                 cid,
                 dsid,
                 preparation,
-                revisionbinding,
+                binding,
                 None,
                 EntityMutationExecutionPolicy(
                   concurrencyPolicy = EntityConcurrencyPolicy.None
                 )
               )
-              snapshot <- _record_snapshot(
+              record <- _managed_record(
                 id,
                 mutation,
-                revisionbinding
+                binding
               )
-            } yield snapshot.record
-          case None =>
+            } yield record
+          case (Some(current), None) =>
             for {
-              initialized <- revisionbinding.initializeForCreate(
+              candidate <- _merge_plain_update_record(
+                current,
+                _complement_update_record(admittedsource, id)
+              )
+              prepared <- ContentBodyStoragePolicy.prepareForSave(
+                id,
+                candidate,
+                preserveExistingOverflowOnMissingContent = true
+              )
+              _ <- _with_datastore_calltree("upsert", cid, Some(dsid)) {
+                ds.save(cid, dsid, prepared)
+              }
+            } yield prepared
+          case (None, Some(binding)) =>
+            for {
+              initialized <- binding.initializeForCreate(
                 _complement_create_record(admittedsource, id, options)
               )
               prepared <- ContentBodyStoragePolicy.prepareForSave(
                 id,
                 initialized
+              )
+              _ <- _with_datastore_calltree("upsert", cid, Some(dsid)) {
+                ds.save(cid, dsid, prepared)
+              }
+            } yield prepared
+          case (None, None) =>
+            for {
+              prepared <- ContentBodyStoragePolicy.prepareForSave(
+                id,
+                _complement_create_record(admittedsource, id, options)
               )
               _ <- _with_datastore_calltree("upsert", cid, Some(dsid)) {
                 ds.save(cid, dsid, prepared)
@@ -565,18 +655,38 @@ class StandardEntityStore(
   )(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[Option[T]] =
     _load_record(id).flatMap(
       _.traverse(
-        _revision_binding(id.collection).decodeEntity(_)(tc.fromStoreRecord)
+        _decode_entity(id.collection, _, tc)
       )
     )
 
   def loadSnapshot[T](
     id: EntityId
   )(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[Option[EntitySnapshot[T]]] =
-    _load_record(id).flatMap(
-      _.traverse(
-        _revision_binding(id.collection).snapshot(_)(tc.fromStoreRecord)
+    for {
+      binding <- _required_revision_binding(
+        id.collection,
+        EntityRevisionRepresentation.Embedded
       )
-    )
+      record <- _load_record(id)
+      snapshot <- record.traverse(binding.snapshot(_)(tc.fromStoreRecord))
+    } yield snapshot
+
+  override def loadDetached[T](
+    id: EntityId
+  )(using
+    tc: EntityPersistent[T],
+    ctx: ExecutionContext
+  ): Consequence[Option[EntityRevisionCarrier[T]]] =
+    for {
+      binding <- _required_revision_binding(
+        id.collection,
+        EntityRevisionRepresentation.Detached
+      )
+      record <- _load_record(id)
+      carrier <- record.traverse(
+        binding.detachedCarrier(_)(tc.fromStoreRecord)
+      )
+    } yield carrier
 
   private def _load_record(
     id: EntityId
@@ -609,41 +719,53 @@ class StandardEntityStore(
     entity: T
   )(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[Unit] = {
     val id = tc.id(entity)
-    val revisionbinding = _revision_binding(id.collection)
+    val revisionbinding = _revision_binding_option(id.collection)
     for {
       cid <- ctx.entityStoreSpace.dataStoreCollection(id)
       dsid <- ctx.entityStoreSpace.dataStoreEntryId(id)
       existing <- _raw_record(cid, dsid)
+      _ <- _reject_logically_deleted_existing(id, existing)
       _ <- existing match {
         case Some(_) =>
-          _save_versioned(
-            entity,
-            None,
-            EntityMutationExecutionPolicy.default,
-            Some(EntityConcurrencyPolicy.None)
-          ).map(_ => ())
+          revisionbinding match {
+            case Some(binding) =>
+              _save_managed_result(
+                entity,
+                binding,
+                None,
+                EntityMutationExecutionPolicy.default,
+                Some(EntityConcurrencyPolicy.None)
+              ).map(_ => ())
+            case None =>
+              _save_plain(entity, id, cid, dsid, existing)
+          }
         case None =>
-          for {
-            datastore <- ctx.dataStoreSpace.dataStore(cid)
-            admitted <- revisionbinding.rejectManagedPatch(
-              tc.toStoreRecord(entity),
-              "entity"
-            )
-            initialized <- revisionbinding.initializeForCreate(
-              _complement_save_record(
-                admitted,
-                id,
-                None
-              )
-            )
-            prepared <- ContentBodyStoragePolicy.prepareForSave(
-              id,
-              initialized
-            )
-            _ <- _with_datastore_calltree("create", cid, Some(dsid)) {
-              datastore.create(cid, dsid, prepared)
-            }
-          } yield ()
+          revisionbinding match {
+            case Some(binding) =>
+              for {
+                datastore <- ctx.dataStoreSpace.dataStore(cid)
+                admitted <- binding.rejectManagedPatch(
+                  tc.toStoreRecord(entity),
+                  "entity"
+                )
+                initialized <- binding.initializeForCreate(
+                  _complement_save_record(
+                    admitted,
+                    id,
+                    None
+                  )
+                )
+                prepared <- ContentBodyStoragePolicy.prepareForSave(
+                  id,
+                  initialized
+                )
+                _ <- _with_datastore_calltree("create", cid, Some(dsid)) {
+                  datastore.create(cid, dsid, prepared)
+                }
+              } yield ()
+            case None =>
+              _save_plain(entity, id, cid, dsid, None)
+          }
       }
     } yield ()
   }
@@ -663,6 +785,31 @@ class StandardEntityStore(
       None
     )
 
+  override def saveDetached[T](
+    entity: T,
+    expectedRevision: Option[EntityRevision],
+    executionPolicy: EntityMutationExecutionPolicy
+  )(using
+    tc: EntityPersistent[T],
+    ctx: ExecutionContext
+  ): Consequence[EntityRevisionCarrier[T]] = {
+    val id = tc.id(entity)
+    for {
+      binding <- _required_revision_binding(
+        id.collection,
+        EntityRevisionRepresentation.Detached
+      )
+      result <- _save_managed_result(
+        entity,
+        binding,
+        expectedRevision,
+        executionPolicy,
+        None
+      )
+      carrier <- _typed_detached_carrier(id, result, binding, tc)
+    } yield carrier
+  }
+
   private def _save_versioned[T](
     entity: T,
     expectedrevision: Option[EntityRevision],
@@ -673,7 +820,38 @@ class StandardEntityStore(
     ctx: ExecutionContext
   ): Consequence[EntitySnapshot[T]] = {
     val id = tc.id(entity)
-    val revisionbinding = _revision_binding(id.collection)
+    for {
+      binding <- _required_revision_binding(
+        id.collection,
+        EntityRevisionRepresentation.Embedded
+      )
+      result <- _save_managed_result(
+        entity,
+        binding,
+        expectedrevision,
+        executionpolicy,
+        concurrencyoverride
+      )
+      snapshot <- _typed_snapshot(
+        id,
+        result,
+        binding,
+        tc
+      )
+    } yield snapshot
+  }
+
+  private def _save_managed_result[T](
+    entity: T,
+    revisionbinding: EntityRevisionBinding,
+    expectedrevision: Option[EntityRevision],
+    executionpolicy: EntityMutationExecutionPolicy,
+    concurrencyoverride: Option[EntityConcurrencyPolicy]
+  )(using
+    tc: EntityPersistent[T],
+    ctx: ExecutionContext
+  ): Consequence[EntityVersionedMutationResult] = {
+    val id = tc.id(entity)
     val policy =
       executionpolicy.copy(
         concurrencyPolicy =
@@ -707,24 +885,24 @@ class StandardEntityStore(
         effectiveexpected,
         policy
       )
-      snapshot <- _typed_snapshot(
-        id,
-        result,
-        revisionbinding,
-        tc
-      )
-    } yield snapshot
+    } yield result
   }
 
   private[cncf] def update[T](
     changes: T
   )(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[Unit] =
-    _update_versioned(
-      changes,
-      None,
-      EntityMutationExecutionPolicy.default,
-      Some(EntityConcurrencyPolicy.None)
-    ).map(_ => ())
+    _revision_binding_option(tc.id(changes).collection) match {
+      case Some(binding) =>
+        _update_managed_result(
+          changes,
+          binding,
+          None,
+          EntityMutationExecutionPolicy.default,
+          Some(EntityConcurrencyPolicy.None)
+        ).map(_ => ())
+      case None =>
+        _update_plain(changes)
+    }
 
   def update[T](
     changes: T,
@@ -741,6 +919,31 @@ class StandardEntityStore(
       None
     )
 
+  override def updateDetached[T](
+    changes: T,
+    expectedRevision: Option[EntityRevision],
+    executionPolicy: EntityMutationExecutionPolicy
+  )(using
+    tc: EntityPersistent[T],
+    ctx: ExecutionContext
+  ): Consequence[EntityRevisionCarrier[T]] = {
+    val id = tc.id(changes)
+    for {
+      binding <- _required_revision_binding(
+        id.collection,
+        EntityRevisionRepresentation.Detached
+      )
+      result <- _update_managed_result(
+        changes,
+        binding,
+        expectedRevision,
+        executionPolicy,
+        None
+      )
+      carrier <- _typed_detached_carrier(id, result, binding, tc)
+    } yield carrier
+  }
+
   private def _update_versioned[T](
     changes: T,
     expectedrevision: Option[EntityRevision],
@@ -751,7 +954,38 @@ class StandardEntityStore(
     ctx: ExecutionContext
   ): Consequence[EntitySnapshot[T]] = {
     val id = tc.id(changes)
-    val revisionbinding = _revision_binding(id.collection)
+    for {
+      binding <- _required_revision_binding(
+        id.collection,
+        EntityRevisionRepresentation.Embedded
+      )
+      result <- _update_managed_result(
+        changes,
+        binding,
+        expectedrevision,
+        executionpolicy,
+        concurrencyoverride
+      )
+      snapshot <- _typed_snapshot(
+        id,
+        result,
+        binding,
+        tc
+      )
+    } yield snapshot
+  }
+
+  private def _update_managed_result[T](
+    changes: T,
+    revisionbinding: EntityRevisionBinding,
+    expectedrevision: Option[EntityRevision],
+    executionpolicy: EntityMutationExecutionPolicy,
+    concurrencyoverride: Option[EntityConcurrencyPolicy]
+  )(using
+    tc: EntityPersistent[T],
+    ctx: ExecutionContext
+  ): Consequence[EntityVersionedMutationResult] = {
+    val id = tc.id(changes)
     val policy =
       executionpolicy.copy(
         concurrencyPolicy =
@@ -790,13 +1024,7 @@ class StandardEntityStore(
         effectiveexpected,
         policy
       )
-      snapshot <- _typed_snapshot(
-        id,
-        result,
-        revisionbinding,
-        tc
-      )
-    } yield snapshot
+    } yield result
   }
 
   def updateById[P](
@@ -816,6 +1044,31 @@ class StandardEntityStore(
       None
     )
 
+  override def updateByIdDetached[P](
+    id: EntityId,
+    patch: P,
+    expectedRevision: Option[EntityRevision],
+    executionPolicy: EntityMutationExecutionPolicy
+  )(using
+    tc: EntityPersistentUpdate[P],
+    ctx: ExecutionContext
+  ): Consequence[EntityRevisionCarrier[Record]] =
+    for {
+      binding <- _required_revision_binding(
+        id.collection,
+        EntityRevisionRepresentation.Detached
+      )
+      result <- _update_by_id_managed_result(
+        id,
+        patch,
+        binding,
+        expectedRevision,
+        executionPolicy,
+        None
+      )
+      carrier <- _record_detached_carrier(id, result, binding)
+    } yield carrier
+
   private[cncf] def updateByIdUnversioned[P](
     id: EntityId,
     patch: P
@@ -823,13 +1076,19 @@ class StandardEntityStore(
     tc: EntityPersistentUpdate[P],
     ctx: ExecutionContext
   ): Consequence[Unit] =
-    _update_by_id_versioned(
-      id,
-      patch,
-      None,
-      EntityMutationExecutionPolicy.default,
-      Some(EntityConcurrencyPolicy.None)
-    ).map(_ => ())
+    _revision_binding_option(id.collection) match {
+      case Some(binding) =>
+        _update_by_id_managed_result(
+          id,
+          patch,
+          binding,
+          None,
+          EntityMutationExecutionPolicy.default,
+          Some(EntityConcurrencyPolicy.None)
+        ).map(_ => ())
+      case None =>
+        _update_by_id_plain(id, patch)
+    }
 
   private def _update_by_id_versioned[P](
     id: EntityId,
@@ -841,7 +1100,34 @@ class StandardEntityStore(
     tc: EntityPersistentUpdate[P],
     ctx: ExecutionContext
   ): Consequence[EntityRecordSnapshot] = {
-    val revisionbinding = _revision_binding(id.collection)
+    for {
+      binding <- _required_revision_binding(
+        id.collection,
+        EntityRevisionRepresentation.Embedded
+      )
+      result <- _update_by_id_managed_result(
+        id,
+        patch,
+        binding,
+        expectedrevision,
+        executionpolicy,
+        concurrencyoverride
+      )
+      snapshot <- _record_snapshot(id, result, binding)
+    } yield snapshot
+  }
+
+  private def _update_by_id_managed_result[P](
+    id: EntityId,
+    patch: P,
+    revisionbinding: EntityRevisionBinding,
+    expectedrevision: Option[EntityRevision],
+    executionpolicy: EntityMutationExecutionPolicy,
+    concurrencyoverride: Option[EntityConcurrencyPolicy]
+  )(using
+    tc: EntityPersistentUpdate[P],
+    ctx: ExecutionContext
+  ): Consequence[EntityVersionedMutationResult] = {
     val policy =
       executionpolicy.copy(
         concurrencyPolicy =
@@ -881,12 +1167,7 @@ class StandardEntityStore(
         effectiveexpected,
         policy
       )
-      snapshot <- _record_snapshot(
-        id,
-        result,
-        revisionbinding
-      )
-    } yield snapshot
+    } yield result
   }
 
   private[cncf] override def conditionalTransition[R, P, S](
@@ -897,6 +1178,9 @@ class StandardEntityStore(
     val request = command.request
     val rootid = request.rootId
     for {
+      rootbinding <- _required_revision_binding(rootid.collection)
+      successorbinding <-
+        _required_revision_binding(request.successor.collection)
       rootcollection <- ctx.entityStoreSpace.dataStoreCollection(rootid)
       rootentry <- ctx.entityStoreSpace.dataStoreEntryId(rootid)
       revision <- EntityConcurrencyMetadata.mutationRevision(
@@ -911,9 +1195,10 @@ class StandardEntityStore(
           request.patchPersistent.toStoreRecord(request.rootPatch)
         )
       )
-      rootcandidate <- _merge_update_record(
+      rootcandidate <- _merge_versioned_update_record(
         command.currentRootRecord,
-        _complement_update_record(rootchanges, rootid)
+        _complement_update_record(rootchanges, rootid),
+        rootbinding
       )
       _ <- _require_conditional_domain_change(
         command.currentRootRecord,
@@ -921,18 +1206,18 @@ class StandardEntityStore(
       )
       rootpreparation <- ContentBodyStoragePolicy.planForVersionedSave(
         rootid,
-        EntityConcurrencyMetadata.withoutManagedField(rootcandidate),
+        rootbinding.withoutManagedRevision(rootcandidate),
         preserveExistingOverflowOnMissingContent = true
       )
       providerchanges =
         _conditional_record_delta(
           _conditional_storage_record(
-            EntityConcurrencyMetadata.withoutManagedField(
+            rootbinding.withoutManagedRevision(
               command.currentRootRecord
             )
           ),
           _conditional_storage_record(
-            EntityConcurrencyMetadata.withoutManagedField(
+            rootbinding.withoutManagedRevision(
               rootpreparation.record
             )
           )
@@ -941,7 +1226,7 @@ class StandardEntityStore(
         componentOwner = command.componentOwner,
         collection = rootcollection,
         entryId = rootentry,
-        revisionField = EntityConcurrencyMetadata.STORAGE_FIELD_NAME,
+        revisionField = rootbinding.storageFieldName,
         expectedRevision = Some(revision._1),
         expectedFields = request.expectation.values.map { expected =>
           DataStoreConditionalExpectedField(
@@ -955,7 +1240,8 @@ class StandardEntityStore(
       preparedsuccessor <- _prepare_conditional_successor(
         request.successor,
         command.componentOwner,
-        command.boundSuccessor
+        command.boundSuccessor,
+        successorbinding
       )
       plan <- DataStoreConditionalTransitionPlan.create(
         root,
@@ -974,7 +1260,9 @@ class StandardEntityStore(
       result <- _conditional_transition_result(
         request,
         preparedsuccessor._3,
-        providerresult
+        providerresult,
+        rootbinding,
+        successorbinding
       )
     } yield result
   }
@@ -982,7 +1270,7 @@ class StandardEntityStore(
   def delete(
     id: EntityId
   )(using ctx: ExecutionContext): Consequence[Unit] = {
-    val revisionbinding = _revision_binding(id.collection)
+    val revisionbinding = _revision_binding_option(id.collection)
     val policy = EntityMutationExecutionPolicy(
       concurrencyPolicy = _concurrency_policy(id.collection)
     )
@@ -993,33 +1281,44 @@ class StandardEntityStore(
       r <- current match {
         case Some(rec) =>
           if (_is_soft_delete_target(rec))
-            for {
-              expected <- _effective_expected_revision(
-                revisionbinding,
-                rec,
-                None,
-                policy
-              )
-              updated <- _merge_versioned_update_record(
-                rec,
-                _soft_delete_record(rec),
-                revisionbinding
-              )
-              preparation <- ContentBodyStoragePolicy.planForVersionedSave(
-                id,
-                revisionbinding.withoutManagedRevision(updated),
-                preserveExistingOverflowOnMissingContent = true
-              )
-              result <- _mutate_versioned(
-                cid,
-                dsid,
-                preparation,
-                revisionbinding,
-                expected,
-                policy
-              )
-              _ <- _mutation_unit(result)
-            } yield ()
+            revisionbinding match {
+              case Some(binding) =>
+                for {
+                  expected <- _effective_expected_revision(
+                    binding,
+                    rec,
+                    None,
+                    policy
+                  )
+                  updated <- _merge_versioned_update_record(
+                    rec,
+                    _soft_delete_record(rec),
+                    binding
+                  )
+                  preparation <- ContentBodyStoragePolicy.planForVersionedSave(
+                    id,
+                    binding.withoutManagedRevision(updated),
+                    preserveExistingOverflowOnMissingContent = true
+                  )
+                  result <- _mutate_versioned(
+                    cid,
+                    dsid,
+                    preparation,
+                    binding,
+                    expected,
+                    policy
+                  )
+                  _ <- _mutation_unit(result)
+                } yield ()
+              case None =>
+                _save_plain_lifecycle(
+                  id,
+                  cid,
+                  dsid,
+                  rec,
+                  _soft_delete_record(rec)
+                )
+            }
           else
             ContentBodyStoragePolicy.deleteOverflow(id).flatMap { _ =>
               _with_datastore_calltree("delete", cid, Some(dsid)) {
@@ -1037,7 +1336,7 @@ class StandardEntityStore(
   def restore(
     id: EntityId
   )(using ctx: ExecutionContext): Consequence[Unit] = {
-    val revisionbinding = _revision_binding(id.collection)
+    val revisionbinding = _revision_binding_option(id.collection)
     val policy = EntityMutationExecutionPolicy(
       concurrencyPolicy = _concurrency_policy(id.collection)
     )
@@ -1053,31 +1352,44 @@ class StandardEntityStore(
           Consequence.stateConflict(
             s"Entity is not logically deleted: ${id.print}"
           )
-      expected <- _effective_expected_revision(
-        revisionbinding,
-        base,
-        None,
-        policy
-      )
-      restored <- _merge_versioned_update_record(
-        base,
-        _restore_record(base),
-        revisionbinding
-      )
-      preparation <- ContentBodyStoragePolicy.planForVersionedSave(
-        id,
-        revisionbinding.withoutManagedRevision(restored),
-        preserveExistingOverflowOnMissingContent = true
-      )
-      result <- _mutate_versioned(
-        cid,
-        dsid,
-        preparation,
-        revisionbinding,
-        expected,
-        policy
-      )
-      _ <- _mutation_unit(result)
+      _ <- revisionbinding match {
+        case Some(binding) =>
+          for {
+            expected <- _effective_expected_revision(
+              binding,
+              base,
+              None,
+              policy
+            )
+            restored <- _merge_versioned_update_record(
+              base,
+              _restore_record(base),
+              binding
+            )
+            preparation <- ContentBodyStoragePolicy.planForVersionedSave(
+              id,
+              binding.withoutManagedRevision(restored),
+              preserveExistingOverflowOnMissingContent = true
+            )
+            result <- _mutate_versioned(
+              cid,
+              dsid,
+              preparation,
+              binding,
+              expected,
+              policy
+            )
+            _ <- _mutation_unit(result)
+          } yield ()
+        case None =>
+          _save_plain_lifecycle(
+            id,
+            cid,
+            dsid,
+            base,
+            _restore_record(base)
+          )
+      }
     } yield ()
   }
 
@@ -1159,7 +1471,7 @@ class StandardEntityStore(
       recordmatched = visible.filter(record => EntityDirectiveQuery.matches(storequery, record))
       hydrated <- ContentBodyStoragePolicy.hydrateAll(query.collection, recordmatched)
       decoded <- hydrated.traverse(
-        _revision_binding(query.collection).decodeEntity(_)(tc.fromStoreRecord)
+        _decode_entity(query.collection, _, tc)
       )
       sorted = EntityDirectiveQuery.sortValues(decoded, query.query.sort)
       values = EntityDirectiveQuery.sliceValues(sorted, query.query.offset, query.query.limit)
@@ -1187,8 +1499,7 @@ class StandardEntityStore(
       hydrated <- ContentBodyStoragePolicy.hydrateAll(query.collection, scoped)
       decoded <- hydrated.foldLeft(Consequence.success(Vector.empty[T])) { (z, record) =>
         z.flatMap(xs =>
-          EntityConcurrencyMetadata
-            .decodeEntity(record)(tc.fromStoreRecord)
+          _decode_entity(query.collection, record, tc)
             .map(xs :+ _)
         )
       }
@@ -1262,8 +1573,7 @@ class StandardEntityStore(
       decoded <-
         notdeleted.foldLeft(Consequence.success(Vector.empty[(Record, EntityId)])) { (z, record) =>
         z.flatMap { xs =>
-          _revision_binding(collection)
-            .decodeEntity(record)(tc.fromStoreRecord)
+          _decode_entity(collection, record, tc)
             .map { entity =>
             xs :+ (record -> tc.id(entity))
           }
@@ -1609,6 +1919,165 @@ class StandardEntityStore(
     )
   }
 
+  private def _merge_plain_update_record(
+    existing: Record,
+    changes: Record
+  ): Consequence[Record] = {
+    val changedkeys = changes.keySet
+    val retained =
+      Record(
+        _retained_existing_managed_record(existing).fields.filterNot(field =>
+          changedkeys.contains(field.key)
+        )
+      )
+    val domain =
+      Record(
+        SimpleEntityStorageShapePolicy
+          .withoutManagedFields(existing)
+          .fields
+          .filterNot(field => changedkeys.contains(field.key))
+      )
+    Consequence.success(changes ++ retained ++ domain)
+  }
+
+  private def _save_plain[T](
+    entity: T,
+    id: EntityId,
+    collection: DataStore.CollectionId,
+    entryid: DataStore.EntryId,
+    existing: Option[Record]
+  )(using
+    persistent: EntityPersistent[T],
+    ctx: ExecutionContext
+  ): Consequence[Unit] =
+    for {
+      admitted <- _reject_detached_managed_field(
+        persistent.toStoreRecord(entity),
+        "entity"
+      )
+      candidate = _complement_save_record(admitted, id, existing)
+      prepared <- ContentBodyStoragePolicy.prepareForSave(id, candidate)
+      datastore <- ctx.dataStoreSpace.dataStore(collection)
+      _ <- _with_datastore_calltree(
+        if (existing.isDefined) "save" else "create",
+        collection,
+        Some(entryid)
+      ) {
+        existing match {
+          case Some(_) =>
+            datastore.save(collection, entryid, prepared)
+          case None =>
+            datastore.create(collection, entryid, prepared)
+        }
+      }
+    } yield ()
+
+  private def _update_plain[T](
+    changes: T
+  )(using
+    persistent: EntityPersistent[T],
+    ctx: ExecutionContext
+  ): Consequence[Unit] = {
+    val id = persistent.id(changes)
+    for {
+      collection <- ctx.entityStoreSpace.dataStoreCollection(id)
+      entryid <- ctx.entityStoreSpace.dataStoreEntryId(id)
+      existing <- _raw_record(collection, entryid)
+      base <- _required_record(entryid, existing)
+      _ <- _reject_logically_deleted_existing(id, Some(base))
+      admitted <- _reject_detached_managed_field(
+        persistent.toStoreRecord(changes),
+        "entity"
+      )
+      candidate <- _merge_plain_update_record(
+        base,
+        _complement_update_record(admitted, id)
+      )
+      prepared <- ContentBodyStoragePolicy.prepareForSave(
+        id,
+        candidate,
+        preserveExistingOverflowOnMissingContent = true
+      )
+      datastore <- ctx.dataStoreSpace.dataStore(collection)
+      _ <- _with_datastore_calltree(
+        "save",
+        collection,
+        Some(entryid)
+      ) {
+        datastore.save(collection, entryid, prepared)
+      }
+    } yield ()
+  }
+
+  private def _update_by_id_plain[P](
+    id: EntityId,
+    patch: P
+  )(using
+    persistent: EntityPersistentUpdate[P],
+    ctx: ExecutionContext
+  ): Consequence[Unit] =
+    for {
+      collection <- ctx.entityStoreSpace.dataStoreCollection(id)
+      entryid <- ctx.entityStoreSpace.dataStoreEntryId(id)
+      existing <- _raw_record(collection, entryid)
+      base <- _required_record(entryid, existing)
+      _ <- _reject_logically_deleted_existing(id, Some(base))
+      admitted <- _reject_detached_managed_field(
+        Update.toChangesRecord(persistent.toStoreRecord(patch)),
+        "patch"
+      )
+      candidate <- _merge_plain_update_record(
+        base,
+        _complement_update_record(admitted, id)
+      )
+      prepared <- ContentBodyStoragePolicy.prepareForSave(
+        id,
+        candidate,
+        preserveExistingOverflowOnMissingContent = true
+      )
+      datastore <- ctx.dataStoreSpace.dataStore(collection)
+      _ <- _with_datastore_calltree(
+        "save",
+        collection,
+        Some(entryid)
+      ) {
+        datastore.save(collection, entryid, prepared)
+      }
+    } yield ()
+
+  private def _save_plain_lifecycle(
+    id: EntityId,
+    collection: DataStore.CollectionId,
+    entryid: DataStore.EntryId,
+    existing: Record,
+    changes: Record
+  )(using
+    ctx: ExecutionContext
+  ): Consequence[Unit] =
+    for {
+      candidate <- _merge_plain_update_record(existing, changes)
+      prepared <- ContentBodyStoragePolicy.prepareForSave(
+        id,
+        candidate,
+        preserveExistingOverflowOnMissingContent = true
+      )
+      datastore <- ctx.dataStoreSpace.dataStore(collection)
+      _ <- _with_datastore_calltree(
+        "save",
+        collection,
+        Some(entryid)
+      ) {
+        datastore.save(collection, entryid, prepared)
+      }
+    } yield ()
+
+  private def _reject_detached_managed_field(
+    record: Record,
+    parameter: String
+  ): Consequence[Record] =
+    EntityRevisionBinding(EntityRevisionRepresentation.Detached)
+      .rejectManagedPatch(record, parameter)
+
   private def _retained_existing_managed_record(
     existing: Record
   ): Record = {
@@ -1821,7 +2290,8 @@ class StandardEntityStore(
   private def _prepare_conditional_successor[S](
     successor: EntitySuccessorIntent[S],
     owner: org.goldenport.cncf.datastore.DataStoreComponentOwner,
-    boundevidence: Option[EntityBoundSuccessorEvidence]
+    boundevidence: Option[EntityBoundSuccessorEvidence],
+    revisionbinding: EntityRevisionBinding
   )(using
     ctx: ExecutionContext
   ): Consequence[
@@ -1840,8 +2310,7 @@ class StandardEntityStore(
         for {
           collection <- ctx.entityStoreSpace.dataStoreCollection(id)
           entry <- ctx.entityStoreSpace.dataStoreEntryId(id)
-          initialized =
-            EntityConcurrencyMetadata.initializeForCreate(
+          initialized <- revisionbinding.initializeForCreate(
               _complement_create_record(
                 createintent.create.toStoreRecord(createintent.candidate),
                 id,
@@ -1857,7 +2326,7 @@ class StandardEntityStore(
             owner,
             collection,
             entry,
-            EntityConcurrencyMetadata.STORAGE_FIELD_NAME,
+            revisionbinding.storageFieldName,
             _conditional_storage_record(preparation.record)
           ),
           preparation.sideEffects,
@@ -1879,7 +2348,7 @@ class StandardEntityStore(
                 owner,
                 collection,
                 entry,
-                EntityConcurrencyMetadata.STORAGE_FIELD_NAME,
+                revisionbinding.storageFieldName,
                 revision
               ),
               Vector.empty,
@@ -1944,7 +2413,9 @@ class StandardEntityStore(
   private def _conditional_transition_result[R, P, S](
     request: EntityConditionalTransition[R, P, S],
     successorid: EntityId,
-    providerresult: DataStoreConditionalTransitionResult
+    providerresult: DataStoreConditionalTransitionResult,
+    rootbinding: EntityRevisionBinding,
+    successorbinding: EntityRevisionBinding
   )(using
     ctx: ExecutionContext
   ): Consequence[EntityConditionalTransitionExecutionResult[R, S]] =
@@ -1956,18 +2427,22 @@ class StandardEntityStore(
         (for {
           hydratedroot <-
             ContentBodyStoragePolicy.hydrate(request.rootId, rootrecord)
-          rootsnapshot <- EntityConcurrencyMetadata.snapshot(hydratedroot)(
+          rootvalue <- _conditional_transition_value(
+            rootbinding,
+            hydratedroot
+          )(
             request.rootPersistent.fromStoreRecord
           )
           hydratedsuccessor <-
             ContentBodyStoragePolicy.hydrate(successorid, successorrecord)
-          successorsnapshot <- EntityConcurrencyMetadata.snapshot(
+          successorvalue <- _conditional_transition_value(
+            successorbinding,
             hydratedsuccessor
           )(request.successor.persisted.fromStoreRecord)
         } yield EntityConditionalTransitionExecutionResult.Transitioned(
           EntityConditionalTransitionResult.Transitioned(
-            rootsnapshot,
-            successorsnapshot
+            rootvalue,
+            successorvalue
           ),
           hydratedroot,
           hydratedsuccessor
@@ -1976,13 +2451,34 @@ class StandardEntityStore(
         for {
           hydratedroot <-
             ContentBodyStoragePolicy.hydrate(request.rootId, existingroot)
-          rootsnapshot <- EntityConcurrencyMetadata.snapshot(hydratedroot)(
+          rootvalue <- _conditional_transition_value(
+            rootbinding,
+            hydratedroot
+          )(
             request.rootPersistent.fromStoreRecord
           )
         } yield EntityConditionalTransitionExecutionResult.NotMatched(
-          EntityConditionalTransitionResult.NotMatched(rootsnapshot),
+          EntityConditionalTransitionResult.NotMatched(rootvalue),
           hydratedroot
         )
+    }
+
+  private def _conditional_transition_value[A](
+    binding: EntityRevisionBinding,
+    record: Record
+  )(
+    decode: Record => Consequence[A]
+  ): Consequence[EntityConditionalTransitionValue[A]] =
+    binding.representation match {
+      case EntityRevisionRepresentation.Embedded =>
+        for {
+          revision <- binding.revision(record)
+          entity <- binding.decodeEntity(record)(decode)
+        } yield EntityConditionalTransitionValue.Embedded(entity, revision)
+      case EntityRevisionRepresentation.Detached =>
+        binding
+          .detachedCarrier(record)(decode)
+          .map(EntityConditionalTransitionValue.Detached(_))
     }
 
   private def _conditional_storage_side_effects(
@@ -2049,17 +2545,61 @@ class StandardEntityStore(
   ): Boolean =
     EntityLifecycleRecordPolicy.isLogicallyDeleted(record)
 
-  private def _revision_binding(
+  private def _revision_binding_option(
     collection: EntityCollectionId
   )(using
     ctx: ExecutionContext
-  ): EntityRevisionBinding =
+  ): Option[EntityRevisionBinding] =
     ctx.entitySpace
       .entityOption(collection)
       .flatMap(_.descriptor.revisionBinding)
-      .getOrElse(
-        EntityRevisionBinding(EntityRevisionRepresentation.Detached)
-      )
+
+  private def _required_revision_binding(
+    collection: EntityCollectionId
+  )(using
+    ctx: ExecutionContext
+  ): Consequence[EntityRevisionBinding] =
+    _revision_binding_option(collection) match {
+      case Some(binding) =>
+        Consequence.success(binding)
+      case None =>
+        Consequence.operationInvalid(
+          "entity-revision-representation",
+          Vector(
+            org.goldenport.observation.Descriptor.Facet.Policy(
+              "entity.revision.representation"
+            ),
+            org.goldenport.observation.Descriptor.Facet.Expected(
+              "embedded-or-detached"
+            ),
+            org.goldenport.observation.Descriptor.Facet.Actual("unmanaged")
+          )
+        )
+    }
+
+  private def _required_revision_binding(
+    collection: EntityCollectionId,
+    representation: EntityRevisionRepresentation
+  )(using
+    ctx: ExecutionContext
+  ): Consequence[EntityRevisionBinding] =
+    _required_revision_binding(collection).flatMap { binding =>
+        binding.requireRepresentation(representation).map(_ => binding)
+    }
+
+  private def _decode_entity[T](
+    collection: EntityCollectionId,
+    record: Record,
+    persistent: EntityPersistent[T]
+  )(using
+    ctx: ExecutionContext
+  ): Consequence[T] =
+    _revision_binding_option(collection) match {
+      case Some(binding) =>
+        binding.decodeEntity(record)(persistent.fromStoreRecord)
+      case None =>
+        persistent.fromStoreRecord(record)
+    }
 
   private def _concurrency_policy(
     collection: EntityCollectionId
@@ -2204,6 +2744,32 @@ class StandardEntityStore(
         _stale_mutation(expected, actual)
     }
 
+  private def _typed_detached_carrier[T](
+    id: EntityId,
+    result: EntityVersionedMutationResult,
+    revisionbinding: EntityRevisionBinding,
+    persistent: EntityPersistent[T]
+  )(using
+    ctx: ExecutionContext
+  ): Consequence[EntityRevisionCarrier[T]] =
+    result match {
+      case EntityVersionedMutationResult.Applied(record) =>
+        ContentBodyStoragePolicy
+          .hydrate(id, record)
+          .flatMap(
+            revisionbinding.detachedCarrier(_)(persistent.fromStoreRecord)
+          )
+          .recoverWith(EntityConcurrencyMetadata.committedProjectionFailure)
+      case EntityVersionedMutationResult.NoOp(record) =>
+        ContentBodyStoragePolicy
+          .hydrate(id, record)
+          .flatMap(
+            revisionbinding.detachedCarrier(_)(persistent.fromStoreRecord)
+          )
+      case EntityVersionedMutationResult.Stale(expected, actual) =>
+        _stale_mutation(expected, actual)
+    }
+
   private def _record_snapshot(
     id: EntityId,
     result: EntityVersionedMutationResult,
@@ -2221,6 +2787,61 @@ class StandardEntityStore(
         ContentBodyStoragePolicy
           .hydrate(id, record)
           .flatMap(revisionbinding.recordSnapshot)
+      case EntityVersionedMutationResult.Stale(expected, actual) =>
+        _stale_mutation(expected, actual)
+    }
+
+  private def _record_detached_carrier(
+    id: EntityId,
+    result: EntityVersionedMutationResult,
+    revisionbinding: EntityRevisionBinding
+  )(using
+    ctx: ExecutionContext
+  ): Consequence[EntityRevisionCarrier[Record]] =
+    result match {
+      case EntityVersionedMutationResult.Applied(record) =>
+        ContentBodyStoragePolicy
+          .hydrate(id, record)
+          .flatMap(revisionbinding.detachedRecordCarrier)
+          .recoverWith(EntityConcurrencyMetadata.committedProjectionFailure)
+      case EntityVersionedMutationResult.NoOp(record) =>
+        ContentBodyStoragePolicy
+          .hydrate(id, record)
+          .flatMap(revisionbinding.detachedRecordCarrier)
+      case EntityVersionedMutationResult.Stale(expected, actual) =>
+        _stale_mutation(expected, actual)
+    }
+
+  private def _managed_record(
+    id: EntityId,
+    result: EntityVersionedMutationResult,
+    revisionbinding: EntityRevisionBinding
+  )(using
+    ctx: ExecutionContext
+  ): Consequence[Record] =
+    result match {
+      case EntityVersionedMutationResult.Applied(record) =>
+        ContentBodyStoragePolicy
+          .hydrate(id, record)
+          .map { hydrated =>
+            revisionbinding.representation match {
+              case EntityRevisionRepresentation.Embedded =>
+                hydrated
+              case EntityRevisionRepresentation.Detached =>
+                revisionbinding.withoutManagedRevision(hydrated)
+            }
+          }
+      case EntityVersionedMutationResult.NoOp(record) =>
+        ContentBodyStoragePolicy
+          .hydrate(id, record)
+          .map { hydrated =>
+            revisionbinding.representation match {
+              case EntityRevisionRepresentation.Embedded =>
+                hydrated
+              case EntityRevisionRepresentation.Detached =>
+                revisionbinding.withoutManagedRevision(hydrated)
+            }
+          }
       case EntityVersionedMutationResult.Stale(expected, actual) =>
         _stale_mutation(expected, actual)
     }

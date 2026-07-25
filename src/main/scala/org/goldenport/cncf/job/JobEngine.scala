@@ -33,7 +33,11 @@ import org.goldenport.cncf.context.{
   ExecutionSchedulingRegistration,
   IdGenerationContext
 }
-import org.goldenport.cncf.entity.{EntityPersistentCreate, EntityStore}
+import org.goldenport.cncf.entity.{
+  EntityMutationExecutionPolicy,
+  EntityPersistentCreate,
+  EntityStore
+}
 import org.simplemodeling.model.datatype.EntityRevision
 import org.goldenport.cncf.event.{
   EventBus,
@@ -2771,12 +2775,13 @@ final class InMemoryJobEngine(
     val entity = JobEntity.from(_read_model(record))
     val store              = EntityStore.standard()
     val persistent         = JobEntity.entityPersistent
-    val result = store.loadSnapshot(entity.id)(using persistent, summon[ExecutionContext])
+    val result = store.loadDetached(entity.id)(using persistent, summon[ExecutionContext])
       .flatMap {
         case Some(snapshot) =>
-          store.save(
+          store.saveDetached(
             entity,
-            snapshot.revision
+            Some(snapshot.revision),
+            EntityMutationExecutionPolicy.default
           )(using persistent, summon[ExecutionContext])
         case None =>
           store.create(

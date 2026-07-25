@@ -47,14 +47,14 @@ final class EntityConditionalTransitionDiagnosticsSpec
       val transitioned =
         Consequence.success(
           EntityConditionalTransitionResult.Transitioned(
-            EntitySnapshot("private-root-payload", revision),
-            EntitySnapshot("private-successor-payload", revision)
+            EntityConditionalTransitionValue.Embedded("private-root-payload", revision),
+            EntityConditionalTransitionValue.Embedded("private-successor-payload", revision)
           )
         )
       val notmatched =
         Consequence.success(
           EntityConditionalTransitionResult.NotMatched(
-            EntitySnapshot("private-existing-payload", revision)
+            EntityConditionalTransitionValue.Embedded("private-existing-payload", revision)
           )
         )
       val conflict = _failure(
@@ -148,8 +148,8 @@ final class EntityConditionalTransitionDiagnosticsSpec
       val result =
         Consequence.success(
           EntityConditionalTransitionResult.Transitioned(
-            EntitySnapshot("sentinel-root-payload", revision),
-            EntitySnapshot("sentinel-successor-payload", revision)
+            EntityConditionalTransitionValue.Embedded("sentinel-root-payload", revision),
+            EntityConditionalTransitionValue.Embedded("sentinel-successor-payload", revision)
           )
         )
       val context = EntityConditionalTransitionObservation.Context(
@@ -224,7 +224,7 @@ final class EntityConditionalTransitionDiagnosticsSpec
       val results = Vector(
         Consequence.success(
           EntityConditionalTransitionResult.NotMatched(
-            EntitySnapshot("sentinel-not-matched-payload", revision)
+            EntityConditionalTransitionValue.Embedded("sentinel-not-matched-payload", revision)
           )
         ),
         _failure(
