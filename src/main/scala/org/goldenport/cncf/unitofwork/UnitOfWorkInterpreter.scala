@@ -548,6 +548,19 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
         )
       }
 
+    case m: UnitOfWorkOp.EntityStoreRestore =>
+      _with_calltree("uow:entitystore:restore") {
+        val id = _canonical_entity_id(m.id)
+        val op = m.copy(id = id)
+        _authorize(op.authorization, Some(() => _load_record(op.id))).flatMap(_ =>
+          _entity_store_space.restore(op).map { result =>
+            _entity_space_evict(op.id)
+            _view_space_invalidate_all()
+            result
+          }
+        )
+      }
+
     case m: UnitOfWorkOp.EntityStoreDeleteHard =>
       _with_calltree("uow:entitystore:delete:hard") {
         val id = _canonical_entity_id(m.id)
@@ -948,14 +961,17 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
     id: EntityId
   ): Unit = {
     val name = id.collection.name
-    _component_option
-      .flatMap { component =>
-        component.entitySpace.entityOption[Any](name).orElse(
-          component.entitySpace.entityOption(id.collection).map(
-            _.asInstanceOf[org.goldenport.cncf.entity.runtime.EntityCollection[Any]]
-          )
+    val entityspace =
+      _component_option
+        .map(_.entitySpace)
+        .getOrElse(uow.executionContext.entitySpace)
+    entityspace
+      .entityOption[Any](name)
+      .orElse(
+        entityspace.entityOption(id.collection).map(
+          _.asInstanceOf[org.goldenport.cncf.entity.runtime.EntityCollection[Any]]
         )
-      }
+      )
       .foreach(_.evict(id))
   }
 

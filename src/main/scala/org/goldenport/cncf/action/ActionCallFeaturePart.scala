@@ -2579,6 +2579,24 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
   }
 
   protected final def entity_save[T](
+    entity: T
+  )(using tc: EntityPersistent[T]): ExecUowM[EntitySnapshot[T]] = {
+    ensure_component_application_datastore()
+    val effectivetc = _effective_entity_persistent(tc.id(entity).collection, tc)
+    val op = new UnitOfWorkOp.EntityStoreSave(
+      entity,
+      None,
+      effectivetc,
+      _entity_uow_authorization(
+        Some(effectivetc.id(entity).collection.name),
+        Some(effectivetc.id(entity)),
+        "update"
+      )
+    )
+    ConsequenceT.liftF(Free.liftF(op))
+  }
+
+  protected final def entity_save[T](
       entity: T,
       expectedRevision: EntityRevision
   )(using tc: EntityPersistent[T]): ExecUowM[EntitySnapshot[T]] = {
@@ -2598,6 +2616,26 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
   }
 
   /** Saves a server-owned Entity through the authorized UnitOfWork boundary. */
+  protected final def entity_save_internal[T](
+    entity: T
+  )(using tc: EntityPersistent[T]): ExecUowM[EntitySnapshot[T]] = {
+    ensure_component_application_datastore()
+    val effectivetc = _effective_entity_persistent(tc.id(entity).collection, tc)
+    val authorization =
+      _entity_uow_authorization(
+        Some(effectivetc.id(entity).collection.name),
+        Some(effectivetc.id(entity)),
+        "update"
+      ).map(_.copy(accessMode = EntityAccessMode.ServiceInternal))
+    val op = new UnitOfWorkOp.EntityStoreSave(
+      entity,
+      None,
+      effectivetc,
+      authorization
+    )
+    ConsequenceT.liftF(Free.liftF(op))
+  }
+
   protected final def entity_save_internal[T](
       entity: T,
       expectedRevision: EntityRevision
@@ -2620,6 +2658,24 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
   }
 
   protected final def entity_update[T](
+    changes: T
+  )(using tc: EntityPersistent[T]): ExecUowM[EntitySnapshot[T]] = {
+    ensure_component_application_datastore()
+    val effectivetc = _effective_entity_persistent(tc.id(changes).collection, tc)
+    val op = new UnitOfWorkOp.EntityStoreUpdate(
+      changes,
+      None,
+      effectivetc,
+      _entity_uow_authorization(
+        Some(effectivetc.id(changes).collection.name),
+        Some(effectivetc.id(changes)),
+        "update"
+      )
+    )
+    ConsequenceT.liftF(Free.liftF(op))
+  }
+
+  protected final def entity_update[T](
       changes: T,
       expectedRevision: EntityRevision
   )(using tc: EntityPersistent[T]): ExecUowM[EntitySnapshot[T]] = {
@@ -2634,6 +2690,26 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
         Some(effectivetc.id(changes)),
         "update"
       )
+    )
+    ConsequenceT.liftF(Free.liftF(op))
+  }
+
+  protected final def entity_update_internal[T](
+    changes: T
+  )(using tc: EntityPersistent[T]): ExecUowM[EntitySnapshot[T]] = {
+    ensure_component_application_datastore()
+    val effectivetc = _effective_entity_persistent(tc.id(changes).collection, tc)
+    val authorization =
+      _entity_uow_authorization(
+        Some(effectivetc.id(changes).collection.name),
+        Some(effectivetc.id(changes)),
+        "update"
+      ).map(_.copy(accessMode = EntityAccessMode.ServiceInternal))
+    val op = new UnitOfWorkOp.EntityStoreUpdate(
+      changes,
+      None,
+      effectivetc,
+      authorization
     )
     ConsequenceT.liftF(Free.liftF(op))
   }
@@ -2663,6 +2739,26 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
   // This is intended for Update.PatchShape where id is excluded from patch object.
   protected final def entity_update[T](
     id: EntityId,
+    patch: T
+  )(using tc: EntityPersistentUpdate[T]): ExecUowM[EntityRecordSnapshot] = {
+    ensure_component_application_datastore()
+    val effectiveid = _canonical_entity_id(id)
+    val op = new UnitOfWorkOp.EntityStoreUpdateById(
+      effectiveid,
+      patch,
+      None,
+      tc,
+      _entity_uow_authorization(
+        Some(effectiveid.collection.name),
+        Some(effectiveid),
+        "update"
+      )
+    )
+    ConsequenceT.liftF(Free.liftF(op))
+  }
+
+  protected final def entity_update[T](
+    id: EntityId,
       patch: T,
       expectedRevision: EntityRevision
   )(using tc: EntityPersistentUpdate[T]): ExecUowM[EntityRecordSnapshot] = {
@@ -2684,6 +2780,28 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
     * handling and authorization construction here prevents components from assembling UnitOfWork
     * operations or security metadata.
    */
+  protected final def entity_update_internal[T](
+    id: EntityId,
+    patch: T
+  )(using tc: EntityPersistentUpdate[T]): ExecUowM[EntityRecordSnapshot] = {
+    ensure_component_application_datastore()
+    val effectiveid = _canonical_entity_id(id)
+    val authorization =
+      _entity_uow_authorization(
+        Some(effectiveid.collection.name),
+        Some(effectiveid),
+        "update"
+      ).map(_.copy(accessMode = EntityAccessMode.ServiceInternal))
+    val op = new UnitOfWorkOp.EntityStoreUpdateById(
+      effectiveid,
+      patch,
+      None,
+      tc,
+      authorization
+    )
+    ConsequenceT.liftF(Free.liftF(op))
+  }
+
   protected final def entity_update_internal[T](
     id: EntityId,
       patch: T,
@@ -2846,6 +2964,20 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
     val op = UnitOfWorkOp.EntityStoreDelete(
       effectiveid,
       _entity_uow_authorization(Some(effectiveid.collection.name), Some(effectiveid), "delete")
+    )
+    ConsequenceT.liftF(Free.liftF(op))
+  }
+
+  protected final def entity_restore(id: EntityId): ExecUowM[Unit] = {
+    ensure_component_application_datastore()
+    val effectiveid = _canonical_entity_id(id)
+    val op = UnitOfWorkOp.EntityStoreRestore(
+      effectiveid,
+      _entity_uow_authorization(
+        Some(effectiveid.collection.name),
+        Some(effectiveid),
+        "update"
+      )
     )
     ConsequenceT.liftF(Free.liftF(op))
   }
@@ -3229,6 +3361,34 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
     val op = UnitOfWorkOp.EntityStoreDelete(
       id,
       _entity_uow_authorization(Some(id.collection.name), Some(id), "delete")
+    )
+    exec_or_throw(op)
+  }
+
+  protected final def entity_restore_c(
+    id: EntityId
+  )(using uow: UnitOfWork): Consequence[Unit] = {
+    val op = UnitOfWorkOp.EntityStoreRestore(
+      id,
+      _entity_uow_authorization(
+        Some(id.collection.name),
+        Some(id),
+        "update"
+      )
+    )
+    exec_c(op)
+  }
+
+  protected final def entity_restore_or_throw(
+    id: EntityId
+  )(using uow: UnitOfWork): Unit = {
+    val op = UnitOfWorkOp.EntityStoreRestore(
+      id,
+      _entity_uow_authorization(
+        Some(id.collection.name),
+        Some(id),
+        "update"
+      )
     )
     exec_or_throw(op)
   }

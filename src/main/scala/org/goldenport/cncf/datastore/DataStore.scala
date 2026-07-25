@@ -8,7 +8,7 @@ import org.goldenport.id.UniversalId
 import org.goldenport.record.{Field, Record}
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.unitofwork.{CommitParticipant, CommitRecorder, PrepareResult, TransactionContext}
-import org.simplemodeling.model.datatype.EntityCollectionId
+import org.simplemodeling.model.datatype.{EntityCollectionId, EntityRevision}
 import scala.util.control.NonFatal
 
 /*
@@ -301,17 +301,42 @@ object DataStore {
               existing,
               plan.revisionField
             )
+          desired =
+            EntityVersionedMutationSupport.desiredRecord(existing, plan)
           result <-
-            if (actual != plan.expectedRevision)
+            if (
+              plan.preconditionPolicy ==
+                org.goldenport.cncf.entity.RevisionPreconditionPolicy.ObservedRequired &&
+              plan.expectedRevision.exists(_ != actual)
+            )
+              _stale_versioned_mutation(plan.expectedRevision, actual)
+            else if (
+              plan.writePolicy ==
+                org.goldenport.cncf.entity.EntityWritePolicy.WriteIfChanged &&
+              EntityVersionedMutationSupport.businessStateEquals(
+                existing,
+                desired,
+                plan
+              )
+            )
               Consequence.success(
-                EntityVersionedMutationResult.Stale(actual)
+                EntityVersionedMutationResult.NoOp(existing)
               )
+            else if (
+              plan.concurrencyPolicy ==
+                org.goldenport.cncf.entity.EntityConcurrencyPolicy.Optimistic &&
+              plan.expectedRevision.exists(_ != actual)
+            )
+              _stale_versioned_mutation(plan.expectedRevision, actual)
             else
-              _apply_versioned_mutation(
-                plan,
-                rootkey,
-                existing
-              )
+              actual.nextC.flatMap { nextrevision =>
+                _apply_versioned_mutation(
+                  plan,
+                  rootkey,
+                  existing,
+                  nextrevision
+                )
+              }
         } yield result
       }
 
@@ -356,6 +381,11 @@ object DataStore {
     ): Consequence[Unit] =
       Consequence.unit
 
+    protected def versioned_mutation_checkpoint(
+      checkpoint: EntityVersionedMutationCheckpoint
+    ): Consequence[Unit] =
+      Consequence.unit
+
     def prepare(tx: TransactionContext): PrepareResult =
       record_prepare(recorder)
 
@@ -368,7 +398,8 @@ object DataStore {
     private def _apply_versioned_mutation(
       plan: EntityVersionedMutationPlan,
       rootkey: String,
-      existing: Record
+      existing: Record,
+      nextrevision: EntityRevision
     ): Consequence[EntityVersionedMutationResult] = {
       val rootcollectionkey = collection_key(plan.collection)
       val initialstates =
@@ -387,13 +418,28 @@ object DataStore {
           }
           .toMap
       val rootrecord =
-        EntityVersionedMutationSupport.applyRootMutation(existing, plan)
+        EntityVersionedMutationSupport.applyRootMutation(
+          existing,
+          plan,
+          nextrevision
+        )
       val rooted =
         initialstates.updated(
           rootcollectionkey,
           initialstates(rootcollectionkey).updated(rootkey, rootrecord)
         )
-      _apply_side_effects(plan.sideEffects, rooted).map { prepared =>
+      for {
+        _ <- versioned_mutation_checkpoint(
+          EntityVersionedMutationCheckpoint.RootPrepared
+        )
+        prepared <- _apply_side_effects(plan.sideEffects, rooted)
+        _ <- versioned_mutation_checkpoint(
+          EntityVersionedMutationCheckpoint.SideEffectsPrepared
+        )
+        _ <- versioned_mutation_checkpoint(
+          EntityVersionedMutationCheckpoint.BeforePublish
+        )
+      } yield {
         val collectionids =
           plan.sideEffects
             .map(_.collection)
@@ -414,6 +460,22 @@ object DataStore {
         EntityVersionedMutationResult.Applied(rootrecord)
       }
     }
+
+    private def _stale_versioned_mutation(
+      expectedrevision: Option[EntityRevision],
+      actualrevision: EntityRevision
+    ): Consequence[EntityVersionedMutationResult] =
+      expectedrevision
+        .map(expected =>
+          Consequence.success(
+            EntityVersionedMutationResult.Stale(expected, actualrevision)
+          )
+        )
+        .getOrElse(
+          Consequence.configurationInvalid(
+            "stale Entity mutation requires an expected revision"
+          )
+        )
 
     private def _apply_side_effects(
       effects: Vector[EntityVersionedSideEffect],

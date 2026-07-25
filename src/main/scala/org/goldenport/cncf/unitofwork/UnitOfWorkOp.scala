@@ -182,10 +182,37 @@ object UnitOfWorkOp {
 
   final case class EntityStoreSave[T](
     entity: T,
-    expectedRevision: EntityRevision,
+    expectedRevision: Option[EntityRevision],
     tc: EntityPersistent[T],
-    authorization: Option[UnitOfWorkAuthorization] = None
+    authorization: Option[UnitOfWorkAuthorization] = None,
+    executionPolicy: EntityMutationExecutionPolicy =
+      EntityMutationExecutionPolicy.default
   ) extends UnitOfWorkOp[EntitySnapshot[T]]
+  object EntityStoreSave {
+    def apply[T](
+      entity: T,
+      expectedRevision: EntityRevision,
+      tc: EntityPersistent[T]
+    ): EntityStoreSave[T] =
+      new EntityStoreSave(
+        entity,
+        Some(expectedRevision),
+        tc
+      )
+
+    def apply[T](
+      entity: T,
+      expectedRevision: EntityRevision,
+      tc: EntityPersistent[T],
+      authorization: Option[UnitOfWorkAuthorization]
+    ): EntityStoreSave[T] =
+      new EntityStoreSave(
+        entity,
+        Some(expectedRevision),
+        tc,
+        authorization
+      )
+  }
 
   final case class EntityStoreSaveUnversioned[T](
       entity: T,
@@ -206,19 +233,77 @@ object UnitOfWorkOp {
 
   final case class EntityStoreUpdate[T](
     entity: T,
-    expectedRevision: EntityRevision,
+    expectedRevision: Option[EntityRevision],
     tc: EntityPersistent[T],
-    authorization: Option[UnitOfWorkAuthorization] = None
+    authorization: Option[UnitOfWorkAuthorization] = None,
+    executionPolicy: EntityMutationExecutionPolicy =
+      EntityMutationExecutionPolicy.default
   ) extends UnitOfWorkOp[EntitySnapshot[T]]
+  object EntityStoreUpdate {
+    def apply[T](
+      entity: T,
+      expectedRevision: EntityRevision,
+      tc: EntityPersistent[T]
+    ): EntityStoreUpdate[T] =
+      new EntityStoreUpdate(
+        entity,
+        Some(expectedRevision),
+        tc
+      )
+
+    def apply[T](
+      entity: T,
+      expectedRevision: EntityRevision,
+      tc: EntityPersistent[T],
+      authorization: Option[UnitOfWorkAuthorization]
+    ): EntityStoreUpdate[T] =
+      new EntityStoreUpdate(
+        entity,
+        Some(expectedRevision),
+        tc,
+        authorization
+      )
+  }
 
   // Patch-oriented update route for cozy-generated update shapes (no id field in patch).
   final case class EntityStoreUpdateById[P](
     id: EntityId,
     patch: P,
-    expectedRevision: EntityRevision,
+    expectedRevision: Option[EntityRevision],
     tc: EntityPersistentUpdate[P],
-    authorization: Option[UnitOfWorkAuthorization] = None
+    authorization: Option[UnitOfWorkAuthorization] = None,
+    executionPolicy: EntityMutationExecutionPolicy =
+      EntityMutationExecutionPolicy.default
   ) extends UnitOfWorkOp[EntityRecordSnapshot]
+  object EntityStoreUpdateById {
+    def apply[P](
+      id: EntityId,
+      patch: P,
+      expectedRevision: EntityRevision,
+      tc: EntityPersistentUpdate[P]
+    ): EntityStoreUpdateById[P] =
+      new EntityStoreUpdateById(
+        id,
+        patch,
+        Some(expectedRevision),
+        tc
+      )
+
+    def apply[P](
+      id: EntityId,
+      patch: P,
+      expectedRevision: EntityRevision,
+      tc: EntityPersistentUpdate[P],
+      authorization: Option[UnitOfWorkAuthorization]
+    ): EntityStoreUpdateById[P] =
+      new EntityStoreUpdateById(
+        id,
+        patch,
+        Some(expectedRevision),
+        tc,
+        authorization
+      )
+  }
 
   private[cncf] final case class EntityStoreConditionalTransition[R, P, S](
     request: EntityConditionalTransition[R, P, S],
@@ -244,6 +329,11 @@ object UnitOfWorkOp {
   ) extends UnitOfWorkOp[Unit]
 
   final case class EntityStoreDelete(
+    id: EntityId,
+    authorization: Option[UnitOfWorkAuthorization] = None
+  ) extends UnitOfWorkOp[Unit]
+
+  final case class EntityStoreRestore(
     id: EntityId,
     authorization: Option[UnitOfWorkAuthorization] = None
   ) extends UnitOfWorkOp[Unit]

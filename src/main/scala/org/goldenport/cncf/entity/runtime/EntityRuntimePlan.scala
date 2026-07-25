@@ -1,5 +1,7 @@
 package org.goldenport.cncf.entity.runtime
 
+import org.goldenport.cncf.entity.EntityConcurrencyPolicy
+
 /*
  * Runtime configuration for an entity.
  *
@@ -7,7 +9,7 @@ package org.goldenport.cncf.entity.runtime
  * by the CNCF runtime (memory policy, working set, partitioning).
  *
  * @since   Mar. 16, 2026
- * @version Apr. 24, 2026
+ * @version Jul. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class EntityRuntimePlan[E](
@@ -18,5 +20,7 @@ final case class EntityRuntimePlan[E](
   workingSetPolicySource: Option[WorkingSetPolicySource] = None,
   partitionStrategy: PartitionStrategy,
   maxPartitions: Int,
-  maxEntitiesPerPartition: Int
+  maxEntitiesPerPartition: Int,
+  concurrencyPolicy: EntityConcurrencyPolicy =
+    EntityConcurrencyPolicy.default
 )

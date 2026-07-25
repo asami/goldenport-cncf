@@ -1,14 +1,24 @@
 package org.goldenport.cncf.datastore
 
-import java.util.concurrent.{CountDownLatch, TimeUnit}
+import java.util.concurrent.{
+  ConcurrentLinkedQueue,
+  CountDownLatch,
+  TimeUnit
+}
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.cncf.entity.{
+  EntityConcurrencyPolicy,
+  EntityWritePolicy,
+  RevisionPreconditionPolicy
+}
 import org.goldenport.record.Record
 import org.simplemodeling.model.datatype.EntityRevision
 import org.scalatest.GivenWhenThen
 import org.scalatest.concurrent.Eventually
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
+import org.scalacheck.{Gen, Prop, Test}
 
 /*
  * @since   Jul. 24, 2026
@@ -53,7 +63,6 @@ final class EntityVersionedMutationDataStoreSpec
         )
         val plan = _plan(
           EntityRevision.INITIAL,
-          _revision(2L),
           "after",
           Vector(
             EntityVersionedSideEffect.Save(
@@ -113,7 +122,6 @@ final class EntityVersionedMutationDataStoreSpec
             )
         val plan = _plan(
           EntityRevision.INITIAL,
-          _revision(2L),
           "stale-candidate",
           Vector(
             EntityVersionedSideEffect.Save(
@@ -137,6 +145,7 @@ final class EntityVersionedMutationDataStoreSpec
         Then("it reports stale and publishes neither candidate")
         result shouldBe Consequence.success(
           EntityVersionedMutationResult.Stale(
+            EntityRevision.INITIAL,
             _revision(2L)
           )
         )
@@ -163,7 +172,6 @@ final class EntityVersionedMutationDataStoreSpec
         )
         val plan = _plan(
           EntityRevision.INITIAL,
-          _revision(2L),
           "candidate",
           Vector.empty
         )
@@ -284,7 +292,6 @@ final class EntityVersionedMutationDataStoreSpec
         val unsupported = unsupportedspace.mutateVersionedEntity(
           _plan(
             EntityRevision.INITIAL,
-            _revision(2L),
             "candidate",
             Vector.empty
           )
@@ -315,7 +322,6 @@ final class EntityVersionedMutationDataStoreSpec
             splitspace.mutateVersionedEntity(
               _plan(
                 EntityRevision.INITIAL,
-                _revision(2L),
                 "candidate",
                 Vector(
                   EntityVersionedSideEffect.Save(
@@ -342,6 +348,232 @@ final class EntityVersionedMutationDataStoreSpec
           Consequence.success(Some(1L))
       }
     }
+
+    "apply ordinary mutation policy inside the authoritative provider boundary" in {
+      Given(
+        "Phase 50 ER-05 and ER-07; independent roots for None, duplicate, observed, and exhausted mutations"
+      )
+      val store = DataStore.inMemorySearchable()
+      given ExecutionContext = _context(store)
+      val noneentry = DataStore.StringEntryId("none")
+      val duplicateentry = DataStore.StringEntryId("duplicate")
+      val observedentry = DataStore.StringEntryId("observed")
+      val exhaustedentry = DataStore.StringEntryId("exhausted")
+      val setup =
+        Vector(
+          noneentry -> _root_record_for(noneentry, "before", 4L),
+          duplicateentry -> _root_record_for(duplicateentry, "same", 7L),
+          observedentry -> _root_record_for(observedentry, "same", 9L),
+          exhaustedentry ->
+            _root_record_for(exhaustedentry, "before", Long.MaxValue)
+        ).foldLeft(Consequence.unit) { case (result, (entry, record)) =>
+          result.flatMap(_ =>
+            store.create(_root_collection, entry, record)
+          )
+        }
+
+      When("the four policies execute against their persisted revisions")
+      val none = setup.flatMap(_ =>
+        _provider(store).mutateVersionedEntity(
+          _plan_for(noneentry, EntityRevision.INITIAL, "after").copy(
+            concurrencyPolicy = EntityConcurrencyPolicy.None,
+            expectedRevision = None
+          )
+        )
+      )
+      val duplicate = setup.flatMap(_ =>
+        _provider(store).mutateVersionedEntity(
+          _plan_for(duplicateentry, _revision(7L), "same").copy(
+            writePolicy = EntityWritePolicy.WriteIfChanged
+          )
+        )
+      )
+      val observed = setup.flatMap(_ =>
+        _provider(store).mutateVersionedEntity(
+          _plan_for(observedentry, _revision(8L), "same").copy(
+            writePolicy = EntityWritePolicy.WriteIfChanged,
+            preconditionPolicy =
+              RevisionPreconditionPolicy.ObservedRequired
+          )
+        )
+      )
+      val exhausted = setup.flatMap(_ =>
+        _provider(store).mutateVersionedEntity(
+          _plan_for(exhaustedentry, _revision(Long.MaxValue), "after")
+        )
+      )
+
+      Then("None advances, duplicate no-ops, stale observed wins over equality, and exhaustion writes nothing")
+      none.map {
+        case EntityVersionedMutationResult.Applied(record) =>
+          record.getAny(_revision_field)
+        case other =>
+          fail(s"expected applied None result but got $other")
+      } shouldBe Consequence.success(Some(5L))
+      duplicate shouldBe Consequence.success(
+        EntityVersionedMutationResult.NoOp(
+          _root_record_for(duplicateentry, "same", 7L)
+        )
+      )
+      observed shouldBe Consequence.success(
+        EntityVersionedMutationResult.Stale(
+          _revision(8L),
+          _revision(9L)
+        )
+      )
+      exhausted shouldBe a[Consequence.Failure[?]]
+      store
+        .load(_root_collection, exhaustedentry)
+        .map(_.flatMap(_.getAny(_revision_field))) shouldBe
+        Consequence.success(Some(Long.MaxValue))
+      store
+        .load(_root_collection, exhaustedentry)
+        .map(_.flatMap(_.getString("name"))) shouldBe
+        Consequence.success(Some("before"))
+    }
+
+    "publish no root or side state when the provider fails before publication" in {
+      Given(
+        "Phase 50 ER-07; a root and side record plus a provider failure at the atomic publication checkpoint"
+      )
+      val store = new FailingVersionedMutationDataStore()
+      given ExecutionContext = _context(store)
+      val setup =
+        store
+          .create(
+            _root_collection,
+            _root_entry,
+            _root_record("before", Some(1L))
+          )
+          .flatMap(_ =>
+            store.create(
+              _side_collection,
+              _side_entry,
+              Record.dataAuto(
+                "id" -> _side_entry.print,
+                "body" -> "before"
+              )
+            )
+          )
+      val plan = _plan(
+        EntityRevision.INITIAL,
+        "candidate",
+        Vector(
+          EntityVersionedSideEffect.Save(
+            _side_collection,
+            _side_entry,
+            Record.dataAuto(
+              "id" -> _side_entry.print,
+              "body" -> "candidate"
+            )
+          )
+        )
+      )
+
+      When("the provider prepares every value but fails before publishing")
+      val result = setup.flatMap(_ =>
+        _provider(store).mutateVersionedEntity(plan)
+      )
+      val root = store.load(_root_collection, _root_entry)
+      val side = store.load(_side_collection, _side_entry)
+
+      Then("the failure preserves the prior business state, side state, and revision")
+      result shouldBe a[Consequence.Failure[?]]
+      root.map(_.flatMap(_.getString("name"))) shouldBe
+        Consequence.success(Some("before"))
+      root.map(_.flatMap(_.getAny(_revision_field))) shouldBe
+        Consequence.success(Some(1L))
+      side.map(_.flatMap(_.getString("body"))) shouldBe
+        Consequence.success(Some("before"))
+    }
+
+    "admit at most one simultaneous optimistic mutation for one revision" in {
+      Given(
+        "Phase 50 ER-07; generated contender counts sharing one authoritative revision"
+      )
+      val property = Prop.forAll(Gen.chooseNum(2, 8)) { count =>
+        val store = DataStore.inMemorySearchable()
+        given ExecutionContext = _context(store)
+        val entry = DataStore.StringEntryId(s"simultaneous-$count")
+        val setup = store.create(
+          _root_collection,
+          entry,
+          _root_record_for(entry, "before", 1L)
+        )
+        val ready = new CountDownLatch(count)
+        val start = new CountDownLatch(1)
+        val done = new CountDownLatch(count)
+        val results =
+          new ConcurrentLinkedQueue[
+            Consequence[EntityVersionedMutationResult]
+          ]()
+        val workers = (1 to count).map { number =>
+          new Thread(
+            () => {
+              ready.countDown()
+              try {
+                val started = start.await(5L, TimeUnit.SECONDS)
+                if (started)
+                  results.add(
+                    setup.flatMap(_ =>
+                      _provider(store).mutateVersionedEntity(
+                        _plan_for(
+                          entry,
+                          EntityRevision.INITIAL,
+                          s"candidate-$number"
+                        )
+                      )
+                    )
+                  )
+              } finally {
+                done.countDown()
+              }
+            },
+            s"entity-occ-$count-$number"
+          )
+        }
+        workers.foreach(_.start())
+        val prepared = ready.await(5L, TimeUnit.SECONDS)
+        start.countDown()
+        val completed = done.await(10L, TimeUnit.SECONDS)
+        workers.foreach(_.join(5000L))
+        val outcomes =
+          results.toArray.toVector.map(
+            _.asInstanceOf[Consequence[EntityVersionedMutationResult]]
+          )
+        val applied = outcomes.count(
+          _.toOption.exists(
+            _.isInstanceOf[EntityVersionedMutationResult.Applied]
+          )
+        )
+        val stale = outcomes.count(
+          _.toOption.exists(
+            _.isInstanceOf[EntityVersionedMutationResult.Stale]
+          )
+        )
+        val revision =
+          store
+            .load(_root_collection, entry)
+            .toOption
+            .flatten
+            .flatMap(_.getAny(_revision_field))
+        prepared &&
+        completed &&
+        outcomes.size == count &&
+        applied == 1 &&
+        stale == count - 1 &&
+        revision.contains(2L)
+      }
+
+      When("the property runner schedules each contender set")
+      val checked = Test.check(
+        Test.Parameters.default.withMinSuccessfulTests(20),
+        property
+      )
+
+      Then("one provider winner advances once and every other contender is stale")
+      checked.passed shouldBe true
+    }
   }
 
   private val _root_collection =
@@ -356,7 +588,6 @@ final class EntityVersionedMutationDataStoreSpec
 
   private def _plan(
     expectedrevision: EntityRevision,
-    nextrevision: EntityRevision,
     name: String,
     effects: Vector[EntityVersionedSideEffect]
   ): EntityVersionedMutationPlan =
@@ -364,8 +595,10 @@ final class EntityVersionedMutationDataStoreSpec
       collection = _root_collection,
       entryId = _root_entry,
       revisionField = _revision_field,
-      expectedRevision = expectedrevision,
-      nextRevision = nextrevision,
+      concurrencyPolicy = EntityConcurrencyPolicy.Optimistic,
+      writePolicy = EntityWritePolicy.AlwaysWrite,
+      preconditionPolicy = RevisionPreconditionPolicy.Managed,
+      expectedRevision = Some(expectedrevision),
       rootMutation = EntityVersionedRootMutation.Replace(
         Record.dataAuto(
           "id" -> _root_entry.print,
@@ -382,6 +615,21 @@ final class EntityVersionedMutationDataStoreSpec
       .createC(value)
       .toOption
       .getOrElse(fail(s"valid EntityRevision expected: $value"))
+
+  private def _plan_for(
+    entry: DataStore.EntryId,
+    expectedrevision: EntityRevision,
+    name: String
+  ): EntityVersionedMutationPlan =
+    _plan(expectedrevision, name, Vector.empty).copy(
+      entryId = entry,
+      rootMutation = EntityVersionedRootMutation.Replace(
+        Record.dataAuto(
+          "id" -> entry.print,
+          "name" -> name
+        )
+      )
+    )
 
   private def _root_record(
     name: String,
@@ -401,6 +649,17 @@ final class EntityVersionedMutationDataStoreSpec
           "name" -> name
         )
       )
+
+  private def _root_record_for(
+    entry: DataStore.EntryId,
+    name: String,
+    revision: Long
+  ): Record =
+    Record.dataAuto(
+      "id" -> entry.print,
+      "name" -> name,
+      _revision_field -> revision
+    )
 
   private def _provider(
     store: DataStore
@@ -424,5 +683,22 @@ final class EntityVersionedMutationDataStoreSpec
       collection: DataStore.CollectionId
     ): Boolean =
       collection.collectionName == collectionname
+  }
+
+  private final class FailingVersionedMutationDataStore
+      extends DataStore.InMemoryDataStore(
+        org.goldenport.cncf.unitofwork.CommitRecorder.noop
+      ) {
+    override protected def versioned_mutation_checkpoint(
+      checkpoint: EntityVersionedMutationCheckpoint
+    ): Consequence[Unit] =
+      checkpoint match {
+        case EntityVersionedMutationCheckpoint.BeforePublish =>
+          Consequence.dataStoreUnavailable(
+            "injected versioned mutation publication failure"
+          )
+        case _ =>
+          Consequence.unit
+      }
   }
 }

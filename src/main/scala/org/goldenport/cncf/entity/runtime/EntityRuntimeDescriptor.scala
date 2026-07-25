@@ -2,6 +2,7 @@ package org.goldenport.cncf.entity.runtime
 
 import org.simplemodeling.model.datatype.EntityCollectionId
 import org.goldenport.cncf.entity.{
+  EntityConcurrencyPolicy,
   EntityRevisionModelKind,
   EntityRevisionRepresentation
 }
@@ -42,7 +43,8 @@ final case class EntityRuntimeDescriptor(
   entityKindExplicit: Boolean = false,
   operationKindExplicit: Boolean = false,
   revisionModelKind: Option[EntityRevisionModelKind] = None,
-  revisionRepresentation: Option[EntityRevisionRepresentation] = None
+  revisionRepresentation: Option[EntityRevisionRepresentation] = None,
+  concurrencyPolicy: Option[EntityConcurrencyPolicy] = None
 ) {
   def withSchema(p: Schema): EntityRuntimeDescriptor =
     copy(schema = Some(p))
@@ -77,7 +79,9 @@ final case class EntityRuntimeDescriptor(
       workingSetPolicySource = effectiveWorkingSetPolicySource,
       partitionStrategy = partitionStrategy,
       maxPartitions = maxPartitions,
-      maxEntitiesPerPartition = maxEntitiesPerPartition
+      maxEntitiesPerPartition = maxEntitiesPerPartition,
+      concurrencyPolicy =
+        concurrencyPolicy.getOrElse(EntityConcurrencyPolicy.default)
     )
 }
 

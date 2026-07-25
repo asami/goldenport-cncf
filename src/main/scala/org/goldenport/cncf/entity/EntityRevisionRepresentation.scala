@@ -3,6 +3,7 @@ package org.goldenport.cncf.entity
 import java.util.Locale
 import org.goldenport.Consequence
 import org.goldenport.record.Record
+import org.simplemodeling.model.datatype.EntityRevision
 
 /*
  * Authoritative physical representation of one Entity revision.
@@ -119,6 +120,113 @@ final case class EntityRevisionBinding(
           )
       }
   }
+
+  def revision(
+    record: Record
+  ): Consequence[EntityRevision] =
+    validatePersistedRecord(record).flatMap { _ =>
+      record
+        .getAny(storageFieldName)
+        .map(_single_value)
+        .map(EntityRevision.createC)
+        .getOrElse(Consequence.argumentMissing(storageFieldName))
+    }
+
+  def initializeForCreate(
+    record: Record
+  ): Consequence[Record] =
+    rejectManagedPatch(record, "create").map { admitted =>
+      admitted ++
+        Record.dataAuto(
+          storageFieldName -> EntityRevision.INITIAL.value
+        )
+    }
+
+  def withoutManagedRevision(
+    record: Record
+  ): Record =
+    Record(record.fields.filterNot(_.key == storageFieldName))
+
+  def decodeEntity[A](
+    record: Record
+  )(
+    decode: Record => Consequence[A]
+  ): Consequence[A] =
+    snapshot(record)(decode).map(_.entity)
+
+  def snapshot[A](
+    record: Record
+  )(
+    decode: Record => Consequence[A]
+  ): Consequence[EntitySnapshot[A]] =
+    for {
+      current <- revision(record)
+      entity <- decode(
+        representation match {
+          case EntityRevisionRepresentation.Embedded =>
+            record
+          case EntityRevisionRepresentation.Detached =>
+            withoutManagedRevision(record)
+        }
+      )
+    } yield EntitySnapshot(entity, current)
+
+  def recordSnapshot(
+    record: Record
+  ): Consequence[EntityRecordSnapshot] =
+    revision(record).map { current =>
+      EntityRecordSnapshot(
+        representation match {
+          case EntityRevisionRepresentation.Embedded =>
+            record
+          case EntityRevisionRepresentation.Detached =>
+            withoutManagedRevision(record)
+        },
+        current
+      )
+    }
+
+  def rejectManagedPatch(
+    record: Record,
+    parameter: String
+  ): Consequence[Record] =
+    _prohibited_managed_field(record)
+      .map { fieldname =>
+        Consequence.argumentPolicyViolation(
+          parameter,
+          "framework-managed-revision",
+          s"record without $fieldname",
+          fieldname
+        )
+      }
+      .getOrElse(Consequence.success(record))
+
+  private def _prohibited_managed_field(
+    record: Record
+  ): Option[String] = {
+    val fields = representation match {
+      case EntityRevisionRepresentation.Embedded =>
+        Vector(
+          EntityRevisionRepresentation.Embedded.storageFieldName,
+          EntityRevisionRepresentation.Detached.storageFieldName
+        )
+      case EntityRevisionRepresentation.Detached =>
+        Vector(EntityRevisionRepresentation.Detached.storageFieldName)
+    }
+    fields.find(_has_field(record, _))
+  }
+
+  private def _single_value(
+    value: Any
+  ): Any =
+    value match {
+      case Some(content) =>
+        _single_value(content)
+      case None =>
+        None
+      case content =>
+        content
+    }
 
   private def _has_field(
     record: Record,

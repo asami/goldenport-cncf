@@ -210,7 +210,12 @@ class EntityStoreSpace {
   def save[T](
       op: EntityStoreSave[T]
   )(using ctx: ExecutionContext): Consequence[EntitySnapshot[T]] =
-    saveVersioned(op.entity, op.tc, op.expectedRevision)
+    saveVersioned(
+      op.entity,
+      op.tc,
+      op.expectedRevision,
+      op.executionPolicy
+    )
 
   private[cncf] def saveUnversioned[T](
       op: EntityStoreSaveUnversioned[T]
@@ -234,6 +239,21 @@ class EntityStoreSpace {
     expectedRevision: EntityRevision
   )(using
     ctx: ExecutionContext
+  ): Consequence[EntitySnapshot[T]] =
+    saveVersioned(
+      entity,
+      persistent,
+      Some(expectedRevision),
+      EntityMutationExecutionPolicy.default
+    )
+
+  def saveVersioned[T](
+    entity: T,
+    persistent: EntityPersistent[T],
+    expectedRevision: Option[EntityRevision],
+    executionPolicy: EntityMutationExecutionPolicy
+  )(using
+    ctx: ExecutionContext
   ): Consequence[EntitySnapshot[T]] = {
     given EntityPersistent[T] = persistent
     val id = persistent.id(entity)
@@ -244,7 +264,11 @@ class EntityStoreSpace {
     ) {
       for {
         entitystore <- _by_collection(id.collection)
-        snapshot <- entitystore.save(entity, expectedRevision)
+        snapshot <- entitystore.save(
+          entity,
+          expectedRevision,
+          executionPolicy
+        )
       } yield snapshot
     }
   }
@@ -252,7 +276,12 @@ class EntityStoreSpace {
   def update[T](
       op: EntityStoreUpdate[T]
   )(using ctx: ExecutionContext): Consequence[EntitySnapshot[T]] =
-    updateVersioned(op.entity, op.tc, op.expectedRevision)
+    updateVersioned(
+      op.entity,
+      op.tc,
+      op.expectedRevision,
+      op.executionPolicy
+    )
 
   private[cncf] def updateUnversioned[T](
       op: EntityStoreUpdateUnversioned[T]
@@ -276,6 +305,21 @@ class EntityStoreSpace {
     expectedRevision: EntityRevision
   )(using
     ctx: ExecutionContext
+  ): Consequence[EntitySnapshot[T]] =
+    updateVersioned(
+      entity,
+      persistent,
+      Some(expectedRevision),
+      EntityMutationExecutionPolicy.default
+    )
+
+  def updateVersioned[T](
+    entity: T,
+    persistent: EntityPersistent[T],
+    expectedRevision: Option[EntityRevision],
+    executionPolicy: EntityMutationExecutionPolicy
+  )(using
+    ctx: ExecutionContext
   ): Consequence[EntitySnapshot[T]] = {
     given EntityPersistent[T] = persistent
     val id = persistent.id(entity)
@@ -286,7 +330,11 @@ class EntityStoreSpace {
     ) {
       for {
         entitystore <- _by_collection(id.collection)
-        snapshot <- entitystore.update(entity, expectedRevision)
+        snapshot <- entitystore.update(
+          entity,
+          expectedRevision,
+          executionPolicy
+        )
       } yield snapshot
     }
   }
@@ -294,11 +342,18 @@ class EntityStoreSpace {
   def updateById[P](
       op: EntityStoreUpdateById[P]
   )(using ctx: ExecutionContext): Consequence[EntityRecordSnapshot] =
-    updateByIdVersioned(op.id, op.patch, op.tc, op.expectedRevision)
+    updateByIdVersioned(
+      op.id,
+      op.patch,
+      op.tc,
+      op.expectedRevision,
+      op.executionPolicy
+    )
 
   private[cncf] def updateByIdUnversioned[P](
       op: EntityStoreUpdateByIdUnversioned[P]
-  )(using ctx: ExecutionContext): Consequence[Unit] =
+  )(using ctx: ExecutionContext): Consequence[Unit] = {
+    given EntityPersistentUpdate[P] = op.tc
     _with_calltree(
       "space:entitystore:update-by-id-unversioned",
       _entitystore_space_attributes(
@@ -306,35 +361,35 @@ class EntityStoreSpace {
         op.id.collection
       ) + ("entity_id" -> op.id.print)
     ) {
-      val changes = EntityConcurrencyMetadata.withoutManagedField(
-        Update.toChangesRecord(op.tc.toStoreRecord(op.patch))
-      )
-      if (changes.isEmpty)
-        Consequence.unit
-      else
-        for {
-          cid <- dataStoreCollection(op.id)
-          dsid <- dataStoreEntryId(op.id)
-          ds <- ctx.dataStoreSpace.dataStore(cid)
-          r <- _with_calltree(
-            "space:datastore:update",
-            Map(
-              "space"      -> "datastore",
-              "operation"  -> "update",
-              "collection" -> cid.print,
-              "entry_id"   -> dsid.print
-            )
-          ) {
-            ds.update(cid, dsid, changes)
-          }
-        } yield r
+      for {
+        entitystore <- _by_collection(op.id.collection)
+        result <- entitystore.updateByIdUnversioned(op.id, op.patch)
+      } yield result
     }
+  }
 
   def updateByIdVersioned[P](
     id: EntityId,
     patch: P,
     persistent: EntityPersistentUpdate[P],
     expectedRevision: EntityRevision
+  )(using
+    ctx: ExecutionContext
+  ): Consequence[EntityRecordSnapshot] =
+    updateByIdVersioned(
+      id,
+      patch,
+      persistent,
+      Some(expectedRevision),
+      EntityMutationExecutionPolicy.default
+    )
+
+  def updateByIdVersioned[P](
+    id: EntityId,
+    patch: P,
+    persistent: EntityPersistentUpdate[P],
+    expectedRevision: Option[EntityRevision],
+    executionPolicy: EntityMutationExecutionPolicy
   )(using
     ctx: ExecutionContext
   ): Consequence[EntityRecordSnapshot] = {
@@ -348,7 +403,12 @@ class EntityStoreSpace {
     ) {
       for {
         entitystore <- _by_collection(id.collection)
-        snapshot <- entitystore.updateById(id, patch, expectedRevision)
+        snapshot <- entitystore.updateById(
+          id,
+          patch,
+          expectedRevision,
+          executionPolicy
+        )
       } yield snapshot
     }
   }
@@ -378,6 +438,18 @@ class EntityStoreSpace {
         entitystore <- _by_collection(op.id.collection)
         r <- entitystore.delete(op.id)
       } yield r
+    }
+
+  def restore(op: EntityStoreRestore)(using ctx: ExecutionContext): Consequence[Unit] =
+    _with_calltree(
+      "space:entitystore:restore",
+      _entitystore_space_attributes("restore", op.id.collection) +
+        ("entity_id" -> op.id.print)
+    ) {
+      for {
+        entitystore <- _by_collection(op.id.collection)
+        result <- entitystore.restore(op.id)
+      } yield result
     }
 
   def deleteHard(op: EntityStoreDeleteHard)(using ctx: ExecutionContext): Consequence[Unit] =

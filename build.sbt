@@ -2,6 +2,7 @@ import sbt.TestFrameworks
 import sbt.Tests
 
 val scala3version = "3.3.8"
+val cozyGeneratorVersion = "0.3.0-SNAPSHOT"
 
 Compile / javacOptions ++= Seq("--release", "8")
 Test / javacOptions := Seq("--release", "14")
@@ -434,7 +435,14 @@ lazy val root = project
       val outputdir = target.value / "cncf-information-cml"
       IO.delete(outputdir)
       IO.createDirectory(outputdir)
-      val command = Seq("cozy", "modeler-scala-value", input.getAbsolutePath, s"--save=${outputdir.getAbsolutePath}")
+      val command = Seq(
+        "cozy",
+        "--runtime",
+        cozyGeneratorVersion,
+        "modeler-scala-value",
+        input.getAbsolutePath,
+        s"--save=${outputdir.getAbsolutePath}"
+      )
       val exitcode = scala.sys.process.Process(command, baseDirectory.value).!(streams.value.log)
       if (exitcode != 0)
         sys.error(s"failed to generate CNCF Information model from CML: ${input.getAbsolutePath}")

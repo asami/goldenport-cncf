@@ -178,7 +178,7 @@ final class EntityRevisionKernelSpec
         val fixture            = _component_fixture()
         given ExecutionContext = fixture.context
         val id                 = EntityId("test", "uow_create", _collection_id)
-        val entity             = TestEntity(id, "unit-of-work", Some(71L))
+        val entity             = TestEntity(id, "unit-of-work", None)
         val interpreter =
           new UnitOfWorkInterpreter(new UnitOfWork(fixture.context))
 
@@ -205,7 +205,7 @@ final class EntityRevisionKernelSpec
     }
 
     "E1 integrate the initial revision with canonical Entity persistence" must _e1_metadata {
-      "when generated caller revision values pass through create and load" in {
+      "when generated Entity values pass through create and load" in {
         Given(
           "Spec: docs/spec/entity-conflict-and-conditional-transition.md; Rules: R1-R4; Example: E1; generated create records and isolated EntityStore runtimes"
         )
@@ -219,7 +219,7 @@ final class EntityRevisionKernelSpec
             s"revision_$attempted",
             _collection_id
           )
-          val entity = TestEntity(id, s"entity-$attempted", Some(attempted))
+          val entity = TestEntity(id, s"entity-$attempted", None)
           val created = fixture.entitystorespace.create(
             UnitOfWorkOp.EntityStoreCreate(entity, _entity_create)
           )
@@ -260,10 +260,10 @@ final class EntityRevisionKernelSpec
       }
     }
 
-    "E1 protect the stored revision from save and import input" must _e1_metadata {
-      "when callers submit managed aliases through mutation and import records" in {
+    "E1 reject managed revision writes while preserving framework seed semantics" must _e1_metadata {
+      "when a caller submits a managed alias through full mutation and framework seed import" in {
         Given(
-          "Spec: docs/spec/entity-conflict-and-conditional-transition.md; Rules: R1-R4; Example: E1; one created Entity and one imported Entity carrying caller revisions"
+          "Phase 50 supersedes Phase 49 input normalization; one managed Entity plus an explicit framework seed import"
         )
         val fixture            = _fixture()
         given ExecutionContext = fixture.context
@@ -272,7 +272,7 @@ final class EntityRevisionKernelSpec
         val reimportedid       = EntityId("test", "reimported", _collection_id)
         val created = fixture.entitystorespace.create(
           UnitOfWorkOp.EntityStoreCreate(
-            TestEntity(createdid, "before", Some(41L)),
+            TestEntity(createdid, "before", None),
             _entity_create
           )
         )
@@ -293,7 +293,7 @@ final class EntityRevisionKernelSpec
           )
         )
 
-        When("full save patch update and seed import attempt to replace framework metadata")
+        When("a full save attempts a managed write while seed import runs through its admitted framework route")
         val saved = seeded.flatMap { _ =>
           fixture.entitystorespace
             .loadSnapshot(createdid, _entity_persistent)
@@ -310,17 +310,7 @@ final class EntityRevisionKernelSpec
               )
             )
         }
-        val patched = saved.flatMap(snapshot =>
-          fixture.entitystorespace.updateById(
-            UnitOfWorkOp.EntityStoreUpdateById(
-              createdid,
-              TestPatch(Update.set("patched"), Update.set(44L)),
-              snapshot.revision,
-              _entity_update
-            )
-          )
-        )
-        val imported = patched.flatMap(_ =>
+        val imported = seeded.flatMap(_ =>
           fixture.entitystorespace.importSeed(
             EntityStoreSeed(
               Vector(
@@ -334,7 +324,7 @@ final class EntityRevisionKernelSpec
             )
           )(using fixture.context, _entity_persistent)
         )
-        val createdrecord = imported.flatMap(_ =>
+        val createdrecord = seeded.flatMap(_ =>
           _raw_record(fixture.datastorespace, createdid)
         )
         val importedrecord = imported.flatMap(_ =>
@@ -345,14 +335,15 @@ final class EntityRevisionKernelSpec
         )
 
         Then(
-          "versioned mutations advance the existing revision while newly imported storage receives canonical revision one"
+          "the application save fails unchanged while framework import initializes new revision and preserves admitted existing revision"
         )
+        saved shouldBe a[Consequence.Failure[?]]
         createdrecord
           .map(_.flatMap(_.getAny(EntityConcurrencyMetadata.STORAGE_FIELD_NAME))) shouldBe
-          Consequence.success(Some(3L))
+          Consequence.success(Some(1L))
         createdrecord
           .map(_.flatMap(_.getString("name"))) shouldBe
-          Consequence.success(Some("patched"))
+          Consequence.success(Some("before"))
         importedrecord
           .map(_.flatMap(_.getAny(EntityConcurrencyMetadata.STORAGE_FIELD_NAME))) shouldBe
           Consequence.success(Some(1L))

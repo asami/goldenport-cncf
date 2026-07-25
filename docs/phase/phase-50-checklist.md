@@ -459,36 +459,100 @@ re-review. All paths are repository-relative.
 ## SE-04: Embedded SimpleEntity Lifecycle and OCC
 
 Stage Status:
-- Current status: PLANNED
+- Current status: DONE
+- Current step: release validation and clean re-review complete
 - Owner: CNCF SimpleEntity, EntityStore, UnitOfWork, and datastore maintainers
 - Entry rule: SE-03 is DONE.
 - Completion rule: Every admitted `SimpleEntity` persistence path manages
   embedded revision automatically, while policy controls only expected
   revision enforcement.
 
-- [ ] Initialize embedded revision on `SimpleEntity` creation.
-- [ ] Decode and return authoritative embedded revision on load.
-- [ ] Advance revision exactly once with successful update, soft delete, and
+- [x] Initialize embedded revision on `SimpleEntity` creation.
+- [x] Decode and return authoritative embedded revision on load.
+- [x] Advance revision exactly once with successful update, soft delete, and
   restore.
-- [ ] Leave no revision advancement after rejection, conflict, rollback, or
+- [x] Leave no revision advancement after rejection, conflict, rollback, or
   provider failure.
-- [ ] Reject create and mutation input that writes managed `revision`.
-- [ ] Implement declarative `None` and `Optimistic` policy semantics.
-- [ ] Apply selected Entity/collection precedence deterministically.
-- [ ] Require `expectedRevision` for every optimistic ordinary mutation.
-- [ ] Reject request-level optimistic-policy bypass.
-- [ ] Compare and advance revision in one provider-native atomic mutation.
-- [ ] Return a structured conflict for missing/stale optimistic revision.
-- [ ] Ensure policy `None` performs no expected-revision comparison.
-- [ ] Ensure policy `None` still advances managed revision.
-- [ ] Prevent resident EntitySpace/Working Set values from bypassing the
+- [x] Reject create and mutation input that writes managed `revision`.
+- [x] Implement declarative `None` and `Optimistic` policy semantics.
+- [x] Apply selected Entity/collection precedence deterministically.
+- [x] Require `expectedRevision` for every optimistic ordinary mutation.
+- [x] Reject request-level optimistic-policy bypass.
+- [x] Compare and advance revision in one provider-native atomic mutation.
+- [x] Return a structured conflict for missing/stale optimistic revision.
+- [x] Ensure policy `None` performs no expected-revision comparison.
+- [x] Ensure policy `None` still advances managed revision.
+- [x] Prevent resident EntitySpace/Working Set values from bypassing the
   datastore comparison.
-- [ ] Keep lifecycle, audit, content-body, and storage-shape behavior coherent.
-- [ ] Add persistence round-trip, rollback, restart, managed-field, and
+- [x] Keep lifecycle, audit, content-body, and storage-shape behavior coherent.
+- [x] Add persistence round-trip, rollback, restart, managed-field, and
   property-based simultaneous-update specifications.
+- [x] Pass independent read-only review, clean re-review, and release
+  validation.
 
 Evidence:
-- Pending.
+- `EntityManagedMutationSpec` proves embedded create/load/update/delete/restore
+  revision lifecycle, managed-field rejection, `None`/`Optimistic`, Working Set
+  eviction, request-policy bypass rejection, fresh-runtime round trip, and
+  provider-failure plus UnitOfWork rollback behavior.
+- `EntityVersionedMutationDataStoreSpec` proves provider-native atomic
+  compare/advance, root plus side-state publication, failure-before-publication
+  rollback, policy behavior, and property-based simultaneous optimistic
+  contenders.
+- `EntityConcurrencyPolicySpec`, `EntityWritePolicySpec`,
+  `EntityRevisionPreconditionSpec`, and `EntityRevisionMigrationSpec` prove
+  declarative precedence, write/no-op behavior, revision preconditions, and
+  persisted-revision admission.
+- Independent review found three defects: the alternate detached storage alias
+  could bypass Embedded managed-field admission, System-admitted unversioned
+  save/update/upsert/update-by-id paths could bypass managed revision
+  advancement, and `ObservedRequired` stale diagnostics could report an
+  unrelated expected revision. The review-fix closes all three with direct
+  Executable Specifications.
+- The first release-validation full run exposed 80 failures in
+  `StaticFormAppRendererSpec`: its common System-admitted fixture used
+  `EntityStoreSaveUnversioned` to create missing records, while the first
+  managed-save implementation had accidentally made save update-only.
+  `StandardEntityStore.save` now preserves create-or-replace semantics while
+  initializing revision one on create and advancing the authoritative revision
+  on replace.
+- The review-fix 10-suite SE-04 run passed 53 tests. Content-body,
+  authorization, and component bootstrap regression suites passed 41 tests.
+  The managed-mutation plus complete Static Form renderer run passed 329 tests.
+  `Test/compile`, naming/spec scans, and `git diff --check` passed.
+- Clean independent re-review found no actionable finding. Full release
+  validation passed 2478 tests in 356 suites, with 7 canceled, 1 ignored, and
+  59 pending.
+- Whole-file implementation naming scans found no private/protected or
+  changed-line parameter/local violations, and modified executable
+  specifications contain no bare `assert`.
+
+### SE-04 Modified Scala File Compliance Ledger
+
+Clean re-review passed for every entry. Paths are repository-relative.
+
+| Scala file | Naming | Spec style | Validation | Review |
+| --- | --- | --- | --- | --- |
+| `src/main/scala/org/goldenport/cncf/action/ActionCallFeaturePart.scala` | implementation scan passed | not a spec | focused suites, `Test/compile`, and full suite passed | clean re-review passed |
+| `src/main/scala/org/goldenport/cncf/component/ComponentDescriptor.scala` | implementation scan passed | not a spec | focused suites, `Test/compile`, and full suite passed | clean re-review passed |
+| `src/main/scala/org/goldenport/cncf/component/ComponentFactory.scala` | implementation scan passed | not a spec | focused suites, `Test/compile`, and full suite passed | clean re-review passed |
+| `src/main/scala/org/goldenport/cncf/datastore/DataStore.scala` | implementation scan passed | not a spec | focused suites, `Test/compile`, and full suite passed | clean re-review passed |
+| `src/main/scala/org/goldenport/cncf/datastore/EntityVersionedMutation.scala` | implementation scan passed | not a spec | focused suites, `Test/compile`, and full suite passed | clean re-review passed |
+| `src/main/scala/org/goldenport/cncf/entity/EntityMutationPolicy.scala` | implementation scan passed | not a spec | focused suites, `Test/compile`, and full suite passed | clean re-review passed |
+| `src/main/scala/org/goldenport/cncf/entity/EntityRevisionRepresentation.scala` | implementation scan passed | not a spec | focused suites, `Test/compile`, and full suite passed | clean re-review passed |
+| `src/main/scala/org/goldenport/cncf/entity/EntityStore.scala` | implementation scan passed | not a spec | focused suites, `Test/compile`, and full suite passed | clean re-review passed |
+| `src/main/scala/org/goldenport/cncf/entity/EntityStoreSpace.scala` | implementation scan passed | not a spec | focused suites, `Test/compile`, and full suite passed | clean re-review passed |
+| `src/main/scala/org/goldenport/cncf/entity/runtime/EntityRuntimeDescriptor.scala` | implementation scan passed | not a spec | focused suites, `Test/compile`, and full suite passed | clean re-review passed |
+| `src/main/scala/org/goldenport/cncf/entity/runtime/EntityRuntimePlan.scala` | implementation scan passed | not a spec | focused suites, `Test/compile`, and full suite passed | clean re-review passed |
+| `src/main/scala/org/goldenport/cncf/unitofwork/UnitOfWorkInterpreter.scala` | implementation scan passed | not a spec | focused suites, `Test/compile`, and full suite passed | clean re-review passed |
+| `src/main/scala/org/goldenport/cncf/unitofwork/UnitOfWorkOp.scala` | implementation scan passed | not a spec | focused suites, `Test/compile`, and full suite passed | clean re-review passed |
+| `src/test/scala/org/goldenport/cncf/datastore/EntityVersionedMutationDataStoreSpec.scala` | implementation scan passed | Given/When/Then, property checks, and matcher vocabulary passed | focused and full suites passed | clean re-review passed |
+| `src/test/scala/org/goldenport/cncf/entity/EntityConcurrencyPolicySpec.scala` | implementation scan passed | Given/When/Then and matcher vocabulary passed | focused and full suites passed | clean re-review passed |
+| `src/test/scala/org/goldenport/cncf/entity/EntityManagedMutationSpec.scala` | implementation scan passed | Given/When/Then and matcher vocabulary passed | focused and full suites passed | clean re-review passed |
+| `src/test/scala/org/goldenport/cncf/entity/EntityRevisionKernelSpec.scala` | implementation scan passed | Given/When/Then, property checks, and matcher vocabulary passed | focused and full suites passed | clean re-review passed |
+| `src/test/scala/org/goldenport/cncf/entity/EntityRevisionMigrationSpec.scala` | implementation scan passed | Given/When/Then, property checks, and matcher vocabulary passed | focused and full suites passed | clean re-review passed |
+| `src/test/scala/org/goldenport/cncf/entity/EntityRevisionPreconditionSpec.scala` | implementation scan passed | Given/When/Then and matcher vocabulary passed | focused and full suites passed | clean re-review passed |
+| `src/test/scala/org/goldenport/cncf/entity/EntityWritePolicySpec.scala` | implementation scan passed | Given/When/Then, property checks, and matcher vocabulary passed | focused and full suites passed | clean re-review passed |
 
 ## SE-05: Detached Non-SimpleEntity Extension
 

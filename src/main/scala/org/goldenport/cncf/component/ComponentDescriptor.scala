@@ -3,7 +3,10 @@ package org.goldenport.cncf.component
 import org.goldenport.Consequence
 import org.goldenport.record.Record
 import org.goldenport.record.RecordDecoder
-import org.goldenport.cncf.entity.EntityRevisionRepresentation
+import org.goldenport.cncf.entity.{
+  EntityConcurrencyPolicy,
+  EntityRevisionRepresentation
+}
 import org.goldenport.cncf.entity.runtime.EntityRuntimeDescriptor
 import org.goldenport.cncf.entity.runtime.{EntityKind, EntityMemoryPolicy, PartitionStrategy, WorkingSetPolicy, WorkingSetPolicySource}
 import org.goldenport.cncf.security.{EntityApplicationDomain, EntityOperationKind, EntityUsageKind}
@@ -89,6 +92,7 @@ object ComponentDescriptor {
           .getOrElse(EntityApplicationDomain.default)
         workingsetpolicy <- _working_set_policy(rec)
         revisionrepresentation <- _optional_revision_representation(rec)
+        concurrencypolicy <- _optional_concurrency_policy(rec)
       } yield EntityRuntimeDescriptor(
         entityName = entityname,
         collectionId = EntityCollectionId(major, minor, name),
@@ -104,7 +108,8 @@ object ComponentDescriptor {
         applicationDomain = applicationdomain,
         entityKindExplicit = entitykindtext.nonEmpty,
         operationKindExplicit = operationkindtext.nonEmpty,
-        revisionRepresentation = revisionrepresentation
+        revisionRepresentation = revisionrepresentation,
+        concurrencyPolicy = concurrencypolicy
       )
 
   given RecordDecoder[ComponentletDescriptor] with
@@ -226,6 +231,20 @@ object ComponentDescriptor {
       .getOrElse(Consequence.success(None))
   }
 
+  private def _optional_concurrency_policy(
+    rec: Record
+  ): Consequence[Option[EntityConcurrencyPolicy]] = {
+    val keys = Vector("concurrencyPolicy", "concurrency_policy")
+    keys.iterator
+      .flatMap(key => rec.getAny(key).map(key -> _))
+      .toVector
+      .headOption
+      .map { case (_, value) =>
+        EntityConcurrencyPolicy.parseC(value.toString).map(Some(_))
+      }
+      .getOrElse(Consequence.success(None))
+  }
+
   private def _working_set_policy(
     rec: Record
   ): Consequence[Option[WorkingSetPolicy]] = {
@@ -275,6 +294,8 @@ object ComponentDescriptor {
       "entityName",
       "revisionRepresentation",
       "revision_representation",
+      "concurrencyPolicy",
+      "concurrency_policy",
       "extension",
       "extensions",
       "extension_bindings",

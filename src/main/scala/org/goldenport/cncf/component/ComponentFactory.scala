@@ -19,7 +19,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 import org.simplemodeling.model.value.NominalScalar
 import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext}
 import org.goldenport.cncf.directive.Query
-import org.goldenport.cncf.entity.{EntityPersistable, EntityPersistent, EntityQuery, EntityRevisionBinding, EntityRevisionModelKind, EntityRevisionModelMetadata, EntityRevisionRepresentation, EntityStore}
+import org.goldenport.cncf.entity.{EntityConcurrencyPolicy, EntityPersistable, EntityPersistent, EntityQuery, EntityRevisionBinding, EntityRevisionModelKind, EntityRevisionModelMetadata, EntityRevisionRepresentation, EntityStore}
 import org.goldenport.cncf.entity.aggregate.{AggregateAssembler, AggregateBuilder, AggregateCollection, AggregateSpace, AggregateDefinition, ContextualAggregateBuilder, ContextualAggregateCount, ContextualAggregateQuery}
 import org.goldenport.cncf.event.{ActionCallDispatcher, EventBus, EventReception, EventStore, EntitySubscriptionLimit}
 import org.goldenport.cncf.entity.runtime.{EntityCollection, EntityDescriptor, EntityLoader, EntityMemoryPolicy, EntityRealm, EntityRealmState, EntityRuntimeDescriptor, EntityRuntimePlan, EntitySpace, EntityStorage, PartitionedMemoryRealm, PartitionStrategy, WorkingSetDefinition, WorkingSetDescriptor, WorkingSetInitializer, WorkingSetPolicy, WorkingSetPolicySource}
@@ -133,14 +133,28 @@ final class ComponentFactory(
     val entitynames =
       if (plans.nonEmpty) plans.map(_.entityName)
       else _entity_collection_names(component)
-    _resolve_revision_bindings_c(component, entitynames).map { revisionbindings =>
-      _enrich_component_descriptors(component, plans)
-      val workingsetentities = _resolve_working_set_entity_names(component, plans)
+    for {
+      revisionbindings <- _resolve_revision_bindings_c(component, entitynames)
+      concurrencypolicies <-
+        _resolve_concurrency_policies_c(component, entitynames)
+    } yield {
+      val effectiveplans = plans.map { plan =>
+        plan.copy(
+          concurrencyPolicy =
+            concurrencypolicies.getOrElse(
+              _normalize_entity_name(plan.entityName),
+              EntityConcurrencyPolicy.default
+            )
+        )
+      }
+      _enrich_component_descriptors(component, effectiveplans)
+      val workingsetentities =
+        _resolve_working_set_entity_names(component, effectiveplans)
       val _ = component.withWorkingSetEntityNames(workingsetentities)
-      if (plans.nonEmpty)
+      if (effectiveplans.nonEmpty)
         _bootstrap_entities_with_plan(
           component,
-          plans,
+          effectiveplans,
           revisionbindings,
           entityspace,
           storesnapshot
@@ -155,17 +169,70 @@ final class ComponentFactory(
       _bootstrap_aggregates(component, aggregatespace, entityspace)
       _bootstrap_views(component, viewspace, entityspace)
       if (_working_set_enabled_for_runtime) {
-        if (plans.nonEmpty)
-          _initialize_working_sets_from_plan(plans, entityspace, storesnapshot)
+        if (effectiveplans.nonEmpty)
+          _initialize_working_sets_from_plan(
+            effectiveplans,
+            entityspace,
+            storesnapshot
+          )
         else
           _initialize_working_sets(component, entityspace, storesnapshot)
       } else {
         _disable_working_sets(entityspace)
       }
-      _bootstrap_state_machine_planners(component, plans)
+      _bootstrap_state_machine_planners(component, effectiveplans)
       _bootstrap_event_reception(component)
       component.withCollectionsBootstrapped()
     }
+  }
+
+  private def _resolve_concurrency_policies_c(
+    component: Component,
+    entitynames: Vector[String]
+  ): Consequence[Map[String, EntityConcurrencyPolicy]] = {
+    val descriptors = (
+      component.componentDescriptors.flatMap(_.entityRuntimeDescriptors) ++
+      _runtime_component_descriptors_for(component)
+        .flatMap(_.entityRuntimeDescriptors)
+    ).distinct
+    entitynames.distinct.foldLeft(
+      Consequence.success(Map.empty[String, EntityConcurrencyPolicy])
+    ) { (z, entityname) =>
+      for {
+        policies <- z
+        policy <- _resolve_concurrency_policy_c(entityname, descriptors)
+      } yield policies.updated(_normalize_entity_name(entityname), policy)
+    }
+  }
+
+  private def _resolve_concurrency_policy_c(
+    entityname: String,
+    descriptors: Vector[EntityRuntimeDescriptor]
+  ): Consequence[EntityConcurrencyPolicy] = {
+    val matching =
+      descriptors.filter(_matches_entity_descriptor(_, entityname))
+    val entitypolicies = matching
+      .filter(_.revisionModelKind.nonEmpty)
+      .flatMap(_.concurrencyPolicy)
+      .distinct
+    val collectionpolicies = matching
+      .filter(_.revisionModelKind.isEmpty)
+      .flatMap(_.concurrencyPolicy)
+      .distinct
+    if (entitypolicies.size > 1)
+      Consequence.configurationInvalid(
+        s"conflicting Entity concurrency policies for '$entityname'"
+      )
+    else if (collectionpolicies.size > 1)
+      Consequence.configurationInvalid(
+        s"conflicting Entity collection concurrency policies for '$entityname'"
+      )
+    else
+      Consequence.success(
+        collectionpolicies.headOption
+          .orElse(entitypolicies.headOption)
+          .getOrElse(EntityConcurrencyPolicy.default)
+      )
   }
 
   private def _resolve_revision_bindings_c(
@@ -307,7 +374,8 @@ final class ComponentFactory(
         )
       ),
       workingSetPolicy = plan.workingSetPolicy,
-      workingSetPolicySource = plan.workingSetPolicySource
+      workingSetPolicySource = plan.workingSetPolicySource,
+      concurrencyPolicy = Some(plan.concurrencyPolicy)
     )
 
   private def _enrich_entity_runtime_descriptor(

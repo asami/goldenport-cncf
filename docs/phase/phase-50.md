@@ -205,7 +205,7 @@ implementation assets.
 | SE-01 | Contract decisions and executable acceptance | Datatype ownership, embedded/detached representation matrix, policy declaration/default, initial revision, no-op behavior, migration/admission, projection, and API replacement decisions are fixed as executable expectations before implementation. | done |
 | SE-02 | SimpleEntity revision model | `simplemodeling-model` provides `EntityRevision` and one standard revision attribute; generated Entity outputs consume it as managed metadata while application input variants omit it. | done |
 | SE-03 | Common revision kernel and binding | Phase 49's atomic provider kernel is generalized around `EntityRevision`, and one deterministic embedded/detached binding is selected per Entity model. Registration-time binding, provider-kernel typing, and upper concurrency API replacement passed clean re-review and full release validation. | done |
-| SE-04 | Embedded SimpleEntity lifecycle and OCC | CNCF initializes, loads, advances, returns, and protects embedded revision; declarative policy controls ordinary expected-revision enforcement. | planned |
+| SE-04 | Embedded SimpleEntity lifecycle and OCC | CNCF initializes, loads, advances, returns, and protects embedded revision; declarative policy controls ordinary expected-revision enforcement. Clean re-review and full release validation passed. | done |
 | SE-05 | Detached non-SimpleEntity extension | Explicitly admitted non-`SimpleEntity` models can use a detached revision carrier without token compatibility, dual representation, or implicit fallback. | planned |
 | SE-06 | Conditional Transition integration | Both admitted representations use the common revision kernel and retain Phase 49 exactly-one-winner semantics. | planned |
 | SE-07 | Projection and transport | Standard surfaces expose embedded `SimpleEntity.revision`; detached revision appears only on explicitly revision-aware extension surfaces. | planned |
@@ -393,5 +393,16 @@ the same 144 focused tests, and passed the affected Static Form stale-update
 specification. Full release validation passed 2452 tests in 351 suites, with
 7 canceled, 1 ignored, and 59 pending.
 
-SE-03 is complete. The next implementation slice is SE-04 embedded
-`SimpleEntity` lifecycle and declarative OCC.
+SE-03 and SE-04 are complete. SE-04 embedded `SimpleEntity` lifecycle and
+declarative OCC passed implementation, review-fix, clean re-review, and full
+release validation. Independent review found and the review-fix closed
+managed-field alias admission, System-admitted mutation revision maintenance,
+and stale expected/actual diagnostic defects. The first release-validation
+full run then exposed a missing-Entity regression in System-admitted save:
+managed-save composition had accidentally changed save from create-or-replace
+to update-only. The review-fix now initializes revision one through provider
+create when no Entity exists and retains managed revision advancement for
+replacement. Focused SE-04, related subsystem, and complete Static Form
+renderer suites pass. The final full suite passed 2478 tests in 356 suites,
+with 7 canceled, 1 ignored, and 59 pending. SE-05 detached non-`SimpleEntity`
+extension is the next stage.

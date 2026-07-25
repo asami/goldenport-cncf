@@ -2,6 +2,11 @@ package org.goldenport.cncf.datastore
 
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.cncf.entity.{
+  EntityConcurrencyPolicy,
+  EntityWritePolicy,
+  RevisionPreconditionPolicy
+}
 import org.goldenport.record.{Field, Record}
 import org.simplemodeling.model.datatype.EntityRevision
 import org.simplemodeling.model.directive.Update
@@ -40,9 +45,12 @@ final case class EntityVersionedMutationPlan(
   collection: DataStore.CollectionId,
   entryId: DataStore.EntryId,
   revisionField: String,
-  expectedRevision: EntityRevision,
-  nextRevision: EntityRevision,
+  concurrencyPolicy: EntityConcurrencyPolicy,
+  writePolicy: EntityWritePolicy,
+  preconditionPolicy: RevisionPreconditionPolicy,
+  expectedRevision: Option[EntityRevision],
   rootMutation: EntityVersionedRootMutation,
+  comparisonExcludedFields: Set[String] = Set.empty,
   sideEffects: Vector[EntityVersionedSideEffect] = Vector.empty
 )
 
@@ -50,8 +58,18 @@ sealed abstract class EntityVersionedMutationResult
 
 object EntityVersionedMutationResult {
   final case class Applied(record: Record) extends EntityVersionedMutationResult
-  final case class Stale(actualRevision: EntityRevision)
+  final case class NoOp(record: Record) extends EntityVersionedMutationResult
+  final case class Stale(
+    expectedRevision: EntityRevision,
+    actualRevision: EntityRevision
+  )
       extends EntityVersionedMutationResult
+}
+
+enum EntityVersionedMutationCheckpoint {
+  case RootPrepared
+  case SideEffectsPrepared
+  case BeforePublish
 }
 
 trait EntityVersionedMutationDataStore { self: DataStore =>
@@ -66,7 +84,7 @@ private[datastore] object EntityVersionedMutationSupport {
   ): Consequence[Unit] =
     for {
       _ <- _validate_revision_field(plan)
-      _ <- _validate_revision_progression(plan)
+      _ <- _validate_policy(plan)
       _ <- _validate_root_mutation(plan)
       _ <- _validate_side_effects(plan)
     } yield ()
@@ -95,7 +113,8 @@ private[datastore] object EntityVersionedMutationSupport {
 
   def applyRootMutation(
     existing: Record,
-    plan: EntityVersionedMutationPlan
+    plan: EntityVersionedMutationPlan,
+    nextRevision: EntityRevision
   ): Record = {
     val changed = plan.rootMutation match {
       case EntityVersionedRootMutation.Replace(record) =>
@@ -104,7 +123,28 @@ private[datastore] object EntityVersionedMutationSupport {
         _merge(existing, changes)
     }
     _without_field(changed, plan.revisionField) ++
-      Record.dataAuto(plan.revisionField -> plan.nextRevision.value)
+      Record.dataAuto(plan.revisionField -> nextRevision.value)
+  }
+
+  def desiredRecord(
+    existing: Record,
+    plan: EntityVersionedMutationPlan
+  ): Record =
+    plan.rootMutation match {
+      case EntityVersionedRootMutation.Replace(record) =>
+        record
+      case EntityVersionedRootMutation.Patch(changes) =>
+        _merge(existing, changes)
+    }
+
+  def businessStateEquals(
+    existing: Record,
+    desired: Record,
+    plan: EntityVersionedMutationPlan
+  ): Boolean = {
+    val excluded = plan.comparisonExcludedFields + plan.revisionField
+    _without_fields(existing, excluded).asMap ==
+      _without_fields(desired, excluded).asMap
   }
 
   private def _validate_revision_field(
@@ -115,24 +155,28 @@ private[datastore] object EntityVersionedMutationSupport {
     else
       Consequence.argumentMissing("revisionField")
 
-  private def _validate_revision_progression(
+  private def _validate_policy(
     plan: EntityVersionedMutationPlan
   ): Consequence[Unit] =
-    Option(plan.expectedRevision) match {
-      case None =>
-        Consequence.argumentMissing("expectedRevision")
-      case Some(expected) =>
-        expected.nextC.flatMap { expectednext =>
-          if (expectednext == plan.nextRevision)
-            Consequence.unit
-          else
-            Consequence.argumentExpectedActualMismatch(
-              "nextRevision",
-              expectednext,
-              plan.nextRevision
-            )
-        }
-    }
+    if (
+      plan.concurrencyPolicy == EntityConcurrencyPolicy.None &&
+      plan.preconditionPolicy == RevisionPreconditionPolicy.ObservedRequired
+    )
+      Consequence.configurationInvalid(
+        "Entity concurrency policy None cannot require an observed revision"
+      )
+    else if (
+      plan.concurrencyPolicy == EntityConcurrencyPolicy.Optimistic &&
+      plan.expectedRevision.isEmpty
+    )
+      Consequence.argumentMissing("expectedRevision")
+    else if (
+      plan.preconditionPolicy == RevisionPreconditionPolicy.ObservedRequired &&
+      plan.expectedRevision.isEmpty
+    )
+      Consequence.argumentMissing("expectedRevision")
+    else
+      Consequence.unit
 
   private def _validate_root_mutation(
     plan: EntityVersionedMutationPlan
@@ -195,6 +239,12 @@ private[datastore] object EntityVersionedMutationSupport {
     name: String
   ): Record =
     Record(record.fields.filterNot(_.key == name))
+
+  private def _without_fields(
+    record: Record,
+    names: Set[String]
+  ): Record =
+    Record(record.fields.filterNot(field => names.contains(field.key)))
 
   private def _is_set_null_marker(
     field: Field
