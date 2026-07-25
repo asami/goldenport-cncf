@@ -11,7 +11,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 21, 2026
- * @version Mar. 24, 2026
+ *  version Mar. 24, 2026
+ * @version Jul. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactoryLegacyPlanConsistencySpec
@@ -26,29 +27,24 @@ final class ComponentFactoryLegacyPlanConsistencySpec
       val component = _component()
 
       When("legacy bootstrap runs")
-      val bootstrapped = _bootstrap_collections(factory, component)
+      val bootstrapped =
+        factory
+          .bootstrapC(component)
+          .toOption
+          .getOrElse(fail("component bootstrap should succeed"))
       val collection = bootstrapped.entity[Any]("default")
       val memory = collection.storage.memoryRealm
         .getOrElse(fail("legacy bootstrap should create memory realm"))
       val cid = EntityCollectionId("sys", "sys", "default")
 
-      memory.put(_Entity(EntityId("tokyo", "sales", cid), "taro"))
-      memory.put(_Entity(EntityId("tokyo", "sales", cid), "jiro"))
+      memory.put(SpecEntity(EntityId("tokyo", "sales", cid), "taro"))
+      memory.put(SpecEntity(EntityId("tokyo", "sales", cid), "jiro"))
 
       Then("descriptor plan and runtime defaults are aligned")
       collection.descriptor.plan.maxPartitions shouldBe 64
       collection.descriptor.plan.maxEntitiesPerPartition shouldBe 10000
       memory.cachedEntityCount shouldBe 2
     }
-  }
-
-  private def _bootstrap_collections(
-    factory: ComponentFactory,
-    component: Component
-  ): Component = {
-    val method = classOf[ComponentFactory].getDeclaredMethod("_bootstrap_collections", classOf[Component])
-    method.setAccessible(true)
-    method.invoke(factory, component).asInstanceOf[Component]
   }
 
   private def _component(): Component = {
@@ -67,7 +63,7 @@ final class ComponentFactoryLegacyPlanConsistencySpec
     component.initialize(params)
   }
 
-  private final case class _Entity(
+  private final case class SpecEntity(
     id: EntityId,
     name: String
   ) extends EntityPersistable {
@@ -78,4 +74,3 @@ final class ComponentFactoryLegacyPlanConsistencySpec
       )
   }
 }
-

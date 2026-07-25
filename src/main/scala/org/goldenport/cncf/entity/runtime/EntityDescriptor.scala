@@ -3,19 +3,20 @@ package org.goldenport.cncf.entity.runtime
 import java.time.Instant
 import java.util.concurrent.atomic.AtomicReference
 import org.simplemodeling.model.datatype.EntityCollectionId
-import org.goldenport.cncf.entity.EntityPersistent
+import org.goldenport.cncf.entity.{EntityPersistent, EntityRevisionBinding}
 
 /*
  * @since   Mar. 15, 2026
  *  version Mar. 24, 2026
  *  version Apr. 25, 2026
- * @version Jul. 16, 2026
+ * @version Jul. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class EntityDescriptor[E](
   collectionId: EntityCollectionId,
   plan: EntityRuntimePlan[E],
-  persistent: EntityPersistent[E]
+  persistent: EntityPersistent[E],
+  revisionBinding: Option[EntityRevisionBinding] = None
 )
 
 final case class EntityStorage[E](

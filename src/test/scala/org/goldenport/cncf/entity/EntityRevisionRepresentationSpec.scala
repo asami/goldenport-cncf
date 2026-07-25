@@ -71,6 +71,7 @@ final class EntityRevisionRepresentationSpec
         EntityRevisionBinding
           .resolve(model, collection)
           .toOption
+          .flatten
           .map(_.representation) -> expected
       }
 
@@ -80,8 +81,8 @@ final class EntityRevisionRepresentationSpec
       }
     }
 
-    "reject conflicts, missing model evidence, and implicit detached representation" in {
-      Given("SimpleEntity, non-SimpleEntity, and unknown model declaration failures")
+    "reject conflicting model and collection representations" in {
+      Given("SimpleEntity and non-SimpleEntity declaration failures")
       val examples = Table(
         ("model", "collection"),
         (
@@ -118,13 +119,6 @@ final class EntityRevisionRepresentationSpec
             None
           ),
           Some(EntityRevisionRepresentation.Embedded)
-        ),
-        (
-          EntityRevisionModelMetadata(
-            EntityRevisionModelKind.NonSimpleEntity,
-            None
-          ),
-          Option.empty[EntityRevisionRepresentation]
         )
       )
 
@@ -137,6 +131,20 @@ final class EntityRevisionRepresentationSpec
       results.foreach { actual =>
         actual shouldBe None
       }
+    }
+
+    "leave an undeclared non-SimpleEntity outside revision management" in {
+      Given("a non-SimpleEntity model with no revision representation declaration")
+      val model = EntityRevisionModelMetadata(
+        EntityRevisionModelKind.NonSimpleEntity,
+        None
+      )
+
+      When("the model and collection declarations are resolved")
+      val result = EntityRevisionBinding.resolve(model, None).toOption
+
+      Then("the Entity remains valid and has no revision binding")
+      result shouldBe Some(None)
     }
 
     "reject missing, mirrored, and wrong physical revision fields" in {

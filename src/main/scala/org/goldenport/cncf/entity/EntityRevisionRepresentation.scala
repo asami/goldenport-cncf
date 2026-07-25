@@ -131,7 +131,7 @@ object EntityRevisionBinding {
   def resolve(
     model: EntityRevisionModelMetadata,
     collectionRepresentation: Option[EntityRevisionRepresentation]
-  ): Consequence[EntityRevisionBinding] =
+  ): Consequence[Option[EntityRevisionBinding]] =
     model.kind match {
       case EntityRevisionModelKind.SimpleEntity =>
         _resolve_simple_entity(model.revisionRepresentation, collectionRepresentation)
@@ -142,7 +142,7 @@ object EntityRevisionBinding {
   private def _resolve_simple_entity(
     modelrepresentation: Option[EntityRevisionRepresentation],
     collectionrepresentation: Option[EntityRevisionRepresentation]
-  ): Consequence[EntityRevisionBinding] =
+  ): Consequence[Option[EntityRevisionBinding]] =
     (modelrepresentation, collectionrepresentation) match {
       case (Some(EntityRevisionRepresentation.Embedded), None) |
           (
@@ -150,7 +150,7 @@ object EntityRevisionBinding {
             Some(EntityRevisionRepresentation.Embedded)
           ) =>
         Consequence.success(
-          EntityRevisionBinding(EntityRevisionRepresentation.Embedded)
+          Some(EntityRevisionBinding(EntityRevisionRepresentation.Embedded))
         )
       case (Some(EntityRevisionRepresentation.Embedded), Some(EntityRevisionRepresentation.Detached)) |
           (Some(EntityRevisionRepresentation.Detached), _) =>
@@ -166,7 +166,7 @@ object EntityRevisionBinding {
   private def _resolve_non_simple_entity(
     modelrepresentation: Option[EntityRevisionRepresentation],
     collectionrepresentation: Option[EntityRevisionRepresentation]
-  ): Consequence[EntityRevisionBinding] =
+  ): Consequence[Option[EntityRevisionBinding]] =
     (modelrepresentation, collectionrepresentation) match {
       case (Some(EntityRevisionRepresentation.Embedded), _) |
           (None, Some(EntityRevisionRepresentation.Embedded)) =>
@@ -183,11 +183,9 @@ object EntityRevisionBinding {
       case (Some(EntityRevisionRepresentation.Detached), _) |
           (None, Some(EntityRevisionRepresentation.Detached)) =>
         Consequence.success(
-          EntityRevisionBinding(EntityRevisionRepresentation.Detached)
+          Some(EntityRevisionBinding(EntityRevisionRepresentation.Detached))
         )
       case (None, None) =>
-        Consequence.configurationInvalid(
-          "non-SimpleEntity revision requires an explicit Detached declaration"
-        )
+        Consequence.success(None)
     }
 }

@@ -225,8 +225,10 @@ Stage Status:
 - [ ] Retain and generalize the Phase 49 revision-field-independent atomic
   compare-and-advance provider operation.
 - [ ] Define Entity/collection revision representation metadata.
-- [ ] Resolve exactly one representation before persistence execution.
-- [ ] Reject `SimpleEntity + Detached`, non-`SimpleEntity + implicit
+- [x] Resolve exactly one optional revision binding before Entity collection
+  registration. An undeclared non-`SimpleEntity` remains outside revision
+  management.
+- [x] Reject `SimpleEntity + Detached`, non-`SimpleEntity + implicit
   Detached`, dual fields, and conflicting declarations.
 - [ ] Keep authorization, UnitOfWork, transaction, audit, diagnostics, and
   observability common across representations.
@@ -250,7 +252,7 @@ Evidence:
   before binding, so a missing model declaration cannot admit Detached.
   The contract validator rejects conflicts, implicit detached fallback, missing
   persisted revision, wrong physical fields, and mirrored/dual fields when
-  invoked; registration-time enforcement remains part of SE-03B.
+  invoked. SE-03B now enforces the declaration contract during registration.
 - `EntityRuntimeDescriptor` and component descriptor decoding expose the
   collection declaration without inventing a default or accepting an unknown
   value.
@@ -263,8 +265,57 @@ Evidence:
 - Full Cozy suite passed: 662 tests, 2 canceled.
 - Full CNCF suite passed with the development Cozy launcher selected
   explicitly: 2442 tests, 7 canceled, 1 ignored, and 59 pending.
-- Remaining SE-03 work is registration-time binding and replacement of the
-  Phase 49 token vocabulary/provider kernel with common `EntityRevision`.
+- `SE-03B Registration-time Revision Representation Binding` is implemented
+  and passed independent review, review-fix, clean re-review, and full release
+  validation. Its first release-validation run found four
+  stale reflective fixtures in three existing ComponentFactory
+  specifications; review-fix migrated them to `bootstrapC`.
+- `ComponentFactory.bootstrapC` preflights every Entity declaration before
+  registering any `EntityCollection`. A failure in a later declaration leaves
+  the component EntitySpace empty, does not mutate component descriptor
+  metadata, and does not set `collectionsBootstrapped`.
+- Runtime assembly descriptors retain component ownership through binding;
+  same-named Entities in different components cannot consume or conflict with
+  each other's revision declarations. Bundle descriptors owned through
+  `componentlets` use the same ownership semantics and remain visible to the
+  generated componentlet.
+- Generated `SimpleEntity + Embedded` installs
+  `EntityDescriptor.revisionBinding = Some(Embedded)`.
+- A proven non-`SimpleEntity` installs `Some(Detached)` only through an
+  explicit detached declaration. A non-`SimpleEntity` without a revision
+  declaration installs `None`.
+- Missing model-kind evidence, conflicting model or collection declarations,
+  incomplete `SimpleEntity` model metadata, and `SimpleEntity + Detached` fail
+  with structured configuration failure. A complete duplicate declaration
+  cannot mask missing generated representation metadata.
+- Focused SE-03B and representation specifications passed: 15 tests in 2
+  suites.
+- ComponentFactory generated-schema and runtime-plan regression
+  specifications passed together with SE-03B: 25 tests in 4 suites.
+- Review-fix validation passed all affected bootstrap, SE-03B,
+  generated-schema, and runtime-plan specifications: 29 tests in 7 suites,
+  followed by successful `Test/compile`.
+- Clean re-review reran the same 7 focused suites and passed all 29 tests.
+- Isolated staged-slice full release validation passed 2450 tests in 350
+  suites, with 7 canceled, 1 ignored, and 59 pending.
+- Remaining SE-03 work after SE-03B review is replacement of the Phase 49
+  token vocabulary/provider kernel with common `EntityRevision`.
+
+### SE-03B Modified Scala File Compliance Ledger
+
+This implementation evidence passed read-only review, review-fix, clean
+re-review, and isolated staged-slice full release validation.
+
+| Repository | Scala file | Naming | Spec style | Validation | Review |
+| --- | --- | --- | --- | --- | --- |
+| `cloud-native-component-framework` | `src/main/scala/org/goldenport/cncf/component/ComponentFactory.scala` | whole-file scan passed; existing local naming debt removed | not a spec | focused, regression, and full suites passed | clean re-review passed |
+| `cloud-native-component-framework` | `src/main/scala/org/goldenport/cncf/entity/EntityRevisionRepresentation.scala` | whole-file scan passed | not a spec | focused and full suites passed | clean re-review passed |
+| `cloud-native-component-framework` | `src/main/scala/org/goldenport/cncf/entity/runtime/EntityDescriptor.scala` | whole-file scan passed | not a spec | focused, regression, and full suites passed | clean re-review passed |
+| `cloud-native-component-framework` | `src/test/scala/org/goldenport/cncf/component/ComponentFactoryRevisionBindingSpec.scala` | whole-file scan passed | Given/When/Then structure and matcher vocabulary passed | 9 focused specifications and full suite passed | clean re-review passed |
+| `cloud-native-component-framework` | `src/test/scala/org/goldenport/cncf/entity/EntityRevisionRepresentationSpec.scala` | whole-file scan passed | Given/When/Then structure and matcher vocabulary passed | 6 focused specifications and full suite passed | clean re-review passed |
+| `cloud-native-component-framework` | `src/test/scala/org/goldenport/cncf/component/ComponentFactoryStateMachineBootstrapSpec.scala` | whole-file scan passed; fixture type naming corrected | Given/When/Then structure and matcher vocabulary passed | affected, regression, and full suites passed | clean re-review passed |
+| `cloud-native-component-framework` | `src/test/scala/org/goldenport/cncf/component/ComponentFactoryWorkingSetPolicySpec.scala` | whole-file scan passed; private parameter naming corrected | Given/When/Then structure and matcher vocabulary passed | affected, regression, and full suites passed | clean re-review passed |
+| `cloud-native-component-framework` | `src/test/scala/org/goldenport/cncf/component/ComponentFactoryLegacyPlanConsistencySpec.scala` | whole-file scan passed; fixture type naming corrected | Given/When/Then structure and matcher vocabulary passed | affected, regression, and full suites passed | clean re-review passed |
 
 ### SE-03A Modified Scala File Compliance Ledger
 

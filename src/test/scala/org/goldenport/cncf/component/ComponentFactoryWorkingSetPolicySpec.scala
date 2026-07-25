@@ -14,7 +14,7 @@ import org.simplemodeling.model.datatype.EntityCollectionId
 
 /*
  * @since   Apr. 24, 2026
- * @version Apr. 24, 2026
+ * @version Jul. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactoryWorkingSetPolicySpec
@@ -27,8 +27,8 @@ final class ComponentFactoryWorkingSetPolicySpec
       Given("a component with descriptor, config, and programmatic working-set policies")
       val cid = EntityCollectionId("sys", "sys", "default")
       val component = _component_with_policy(
-        descriptorPolicy = Some(WorkingSetPolicy.Disabled),
-        codePolicy = Some(WorkingSetPolicy.ResidentAll)
+        descriptorpolicy = Some(WorkingSetPolicy.Disabled),
+        codepolicy = Some(WorkingSetPolicy.ResidentAll)
       )
       val configuration = ResolvedConfiguration(
         Configuration(Map(
@@ -52,10 +52,15 @@ final class ComponentFactoryWorkingSetPolicySpec
       ConfigurationAccess.getString(configuration, "cncf.entity.default.working_set_policy.timestamp_field") shouldBe Some("postedAt")
 
       When("bootstrap selects the effective entity runtime plan")
-      val bootstrapped = _bootstrap_collections(factory, component)
+      val bootstrapped =
+        factory
+          .bootstrapC(component)
+          .toOption
+          .getOrElse(fail("component bootstrap should succeed"))
       val plan = bootstrapped.entity[Any](cid.name).descriptor.plan
       val descriptor = bootstrapped.componentDescriptors.flatMap(_.entityRuntimeDescriptors)
-        .find(_.entityName == "default").get
+        .find(_.entityName == "default")
+        .getOrElse(fail("default Entity runtime descriptor should exist"))
 
       Then("the code policy wins and is marked as code-sourced")
       plan.workingSetPolicy shouldBe Some(WorkingSetPolicy.ResidentAll)
@@ -68,8 +73,8 @@ final class ComponentFactoryWorkingSetPolicySpec
       Given("a component with declarative descriptor and config override")
       val cid = EntityCollectionId("sys", "sys", "default")
       val component = _component_with_policy(
-        descriptorPolicy = Some(WorkingSetPolicy.Disabled),
-        codePolicy = None
+        descriptorpolicy = Some(WorkingSetPolicy.Disabled),
+        codepolicy = None
       )
       val configuration = ResolvedConfiguration(
         Configuration(Map(
@@ -90,10 +95,15 @@ final class ComponentFactoryWorkingSetPolicySpec
       val factory = new ComponentFactory(ComponentRepositorySpace(), CollaboratorFactory.empty, Vector.empty, Some(configuration))
 
       When("bootstrap selects the effective entity runtime plan")
-      val bootstrapped = _bootstrap_collections(factory, component)
+      val bootstrapped =
+        factory
+          .bootstrapC(component)
+          .toOption
+          .getOrElse(fail("component bootstrap should succeed"))
       val plan = bootstrapped.entity[Any](cid.name).descriptor.plan
       val descriptor = bootstrapped.componentDescriptors.flatMap(_.entityRuntimeDescriptors)
-        .find(_.entityName == "default").get
+        .find(_.entityName == "default")
+        .getOrElse(fail("default Entity runtime descriptor should exist"))
 
       Then("the config policy overrides the declarative descriptor")
       plan.workingSetPolicy shouldBe Some(WorkingSetPolicy.Recent(java.time.Duration.ofHours(24), "postedAt"))
@@ -103,18 +113,9 @@ final class ComponentFactoryWorkingSetPolicySpec
     }
   }
 
-  private def _bootstrap_collections(
-    factory: ComponentFactory,
-    component: Component
-  ): Component = {
-    val method = classOf[ComponentFactory].getDeclaredMethod("_bootstrap_collections", classOf[Component])
-    method.setAccessible(true)
-    method.invoke(factory, component).asInstanceOf[Component]
-  }
-
   private def _component_with_policy(
-    descriptorPolicy: Option[WorkingSetPolicy],
-    codePolicy: Option[WorkingSetPolicy]
+    descriptorpolicy: Option[WorkingSetPolicy],
+    codepolicy: Option[WorkingSetPolicy]
   ): Component = {
     val descriptors = Vector(
       ComponentDescriptor(
@@ -127,15 +128,15 @@ final class ComponentFactoryWorkingSetPolicySpec
             partitionStrategy = PartitionStrategy.byOrganizationMonthUTC,
             maxPartitions = 64,
             maxEntitiesPerPartition = 10000,
-            workingSetPolicy = descriptorPolicy,
-            workingSetPolicySource = descriptorPolicy.map(_ => WorkingSetPolicySource.Cml)
+            workingSetPolicy = descriptorpolicy,
+            workingSetPolicySource = descriptorpolicy.map(_ => WorkingSetPolicySource.Cml)
           )
         )
       )
     )
     val component = new Component() with EntityRuntimePlanProvider {
       override def entityRuntimePlans: Vector[EntityRuntimePlan[Any]] =
-        codePolicy.toVector.map { policy =>
+        codepolicy.toVector.map { policy =>
           EntityRuntimePlan[Any](
             entityName = "default",
             memoryPolicy = EntityMemoryPolicy.LoadToMemory,
