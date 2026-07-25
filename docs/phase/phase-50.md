@@ -48,6 +48,11 @@ implementation assets.
 - CNCF maintains revision when ordinary OCC is disabled.
 - Application code may read revision for diagnostics, but normal application
   logic neither receives nor supplies revision as a business parameter.
+- Generated Create, Save, Update, and Query operation requests use application
+  input models and never flatten the managed `SimpleEntity.revision` into
+  request schema or decoder parameters.
+- The omission is inheritance-aware: a non-`SimpleEntity` domain attribute
+  independently named `revision` remains ordinary application data.
 - CNCF acquires and propagates the revision through the Entity load,
   UnitOfWork, EntityStore, and datastore boundaries.
 - Ordinary OCC is selected by a declarative Entity or collection concurrency
@@ -197,7 +202,7 @@ implementation assets.
 | ID | Stage | Outcome | Status |
 | --- | --- | --- | --- |
 | SE-01 | Contract decisions and executable acceptance | Datatype ownership, embedded/detached representation matrix, policy declaration/default, initial revision, no-op behavior, migration/admission, projection, and API replacement decisions are fixed as executable expectations before implementation. | done |
-| SE-02 | SimpleEntity revision model | `simplemodeling-model` provides `EntityRevision` and one standard revision attribute; `simplemodeling-lib` changes only for independently reusable missing primitives. | in progress |
+| SE-02 | SimpleEntity revision model | `simplemodeling-model` provides `EntityRevision` and one standard revision attribute; generated Entity outputs consume it as managed metadata while application input variants omit it. | done |
 | SE-03 | Common revision kernel and binding | Phase 49's atomic provider kernel is generalized around `EntityRevision`, and one deterministic embedded/detached binding is selected per Entity model. | planned |
 | SE-04 | Embedded SimpleEntity lifecycle and OCC | CNCF initializes, loads, advances, returns, and protects embedded revision; declarative policy controls ordinary expected-revision enforcement. | planned |
 | SE-05 | Detached non-SimpleEntity extension | Explicitly admitted non-`SimpleEntity` models can use a detached revision carrier without token compatibility, dual representation, or implicit fallback. | planned |
@@ -320,6 +325,8 @@ Phase 50 spans these repositories:
 | --- | --- |
 | `/Users/asami/src/dev2025/simplemodeling-lib` | Generic reusable datatype/schema/decoding support only when existing core facilities are insufficient |
 | `/Users/asami/src/dev2026/simplemodeling-model` | `EntityRevision`, `SimpleEntity.revision`, model shape, and model serialization |
+| `/Users/asami/src/dev2025/simple-modeler` | Generated Entity output/input family projection for the managed revision contract |
+| `/Users/asami/src/dev2025/cozy` | CML generation defaults and generated-contract integration evidence |
 | `/Users/asami/src/dev2025/cloud-native-component-framework` | Revision lifecycle, OCC policy, atomic persistence, DSL, projection, transport, and provider evidence |
 
 `simplemodeling-lib` must remain independent of `SimpleEntity`, CNCF, and OCC.
@@ -337,15 +344,16 @@ An Entity-specific datatype belongs to `simplemodeling-model`.
 
 ## Current Resume Point
 
-Phase 50 is active and Phase 49 is closed. SE-01 is done. The SE-02A model
-slice is complete after independent review, review-fix, clean re-review,
-property-based model/datatype specifications, full `simplemodeling-model`
-validation, and local publication of `simplemodeling-model_3:0.2.0-SNAPSHOT`.
-No `simplemodeling-lib` extension was required.
+Phase 50 is active and Phase 49 is closed. SE-01 and SE-02 are done. The model
+and generator slices provide one validated embedded revision on generated
+Entity output variants while Create, Update, and Query inputs omit revision.
+Cozy defaults generated projects to
+`simplemodeling-model_3:0.2.0-SNAPSHOT`, and CNCF's generated Information
+family compiles and consumes the same contract. No `simplemodeling-lib`
+extension was required.
 
-Continue SE-02 with the SE-02B generator/downstream-consumption slice:
-generated `SimpleEntity` implementations must carry the validated embedded
-revision and CNCF must consume the updated model without introducing revision
-as an application mutation parameter. Preserve the Phase 49 atomic kernel and
-detached-domain capability, but do not preserve its provisional token names or
-expose the detached representation on the standard `SimpleEntity` path.
+Continue with SE-03 common revision kernel and binding. Generalize the retained
+Phase 49 provider-native atomic mutation around `EntityRevision`, resolve one
+embedded or detached representation before persistence, and preserve the
+authorization, UnitOfWork, transaction, diagnostics, and observability
+chokepoints.

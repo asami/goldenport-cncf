@@ -111,7 +111,7 @@ Paths are repository-relative to the repository named in the second column.
 ## SE-02: SimpleEntity Revision Model
 
 Stage Status:
-- Current status: IN_PROGRESS
+- Current status: DONE
 - Owner: `simplemodeling-model` maintainers, with `simplemodeling-lib`
   maintainers only for proven generic gaps
 - Entry rule: SE-01 is DONE.
@@ -132,7 +132,7 @@ Stage Status:
 - [x] Publish the required `simplemodeling-lib` snapshot first when changed.
   No core change was required, so publication was not applicable.
 - [x] Publish the `simplemodeling-model` snapshot for downstream integration.
-- [ ] Consume the updated model from generated Entities and CNCF.
+- [x] Consume the updated model from generated Entities and CNCF.
 
 Evidence:
 - `simplemodeling-model/src/main/scala/org/simplemodeling/model/datatype/EntityRevision.scala`
@@ -145,6 +145,72 @@ Evidence:
 - `simplemodeling-model` commit: `fc6d618` (`Add SimpleEntity revision model`).
 - Local development artifact:
   `org.simplemodeling:simplemodeling-model_3:0.2.0-SNAPSHOT`.
+- `simple-modeler` centralizes generated `SimpleEntity` output normalization,
+  projects one system/read-only `EntityRevision` after `id`, and excludes the
+  managed field from Create, Update, and Query inputs only when the generated
+  input implements the corresponding `SimpleEntity` input contract. An
+  ordinary non-`SimpleEntity` business attribute named `revision` remains
+  present on Create, Update, and Query inputs.
+- `SimpleEntityRevisionGenerationSpec`: 2 passed.
+- `EntityUpdateOperationContractProjectionSpec`: 1 passed.
+- Full `simple-modeler` suite: 40 passed.
+- Local generator artifact:
+  `org.simplemodeling:simplemodeler_2.12:1.1.24-SNAPSHOT`.
+- Cozy defaults generated model dependencies to
+  `org.simplemodeling:simplemodeling-model_3:0.2.0-SNAPSHOT`.
+- Cozy aggregate Create, Save, and Update operations consume generated
+  application input models instead of output Aggregate models. Their request
+  schemas therefore omit managed `revision`; aggregate Update resolves the
+  required Entity id from the request before loading and mutating the
+  Aggregate.
+- `ModelerSimpleEntityRevisionGenerationSpec`: 2 passed and verifies generated
+  operation metadata and decoders do not accept managed `revision`.
+- `ModelerEntityVersionedMutationGenerationSpec`: 1 passed and preserves the
+  provisional Phase 49 `cncfRevision` path for later kernel migration.
+- `ModelerScalaGenerationSpec`: 27 passed and verifies the generated Aggregate
+  Update action uses the request-resolved Entity id.
+- Full Cozy suite: 662 passed, 2 canceled.
+- Local Cozy artifact: `org.simplemodeling:cozy_2.12:0.3.0-SNAPSHOT`.
+- `GeneratedInformationRevisionSpec`: 1 passed from a cold CNCF build and
+  verifies embedded revision on seven generated Information output variants
+  with no revision member on Create, Update, or Query input variants.
+- Full CNCF suite: 2437 passed, 7 canceled, 1 ignored, and 59 pending
+  against `simplemodeling-model_3:0.2.0-SNAPSHOT`.
+
+### SE-02B Modified Scala File Compliance Ledger
+
+All paths are repository-relative. Dependency repository rows identify their
+validated commits; the CNCF row is part of this SE-02B release commit.
+
+| Repository | Scala file | Naming | Spec style | Validation | Commit |
+| --- | --- | --- | --- | --- | --- |
+| `simple-modeler` | `src/main/scala/org/simplemodeling/SimpleModeler/generator/scala/Scala3ClassGeneratorBase.scala` | whole-file scan passed | not a spec | focused and full generator suites passed | `57fcbc8` |
+| `simple-modeler` | `src/main/scala/org/simplemodeling/SimpleModeler/transformers/scala/EntityValueAggregateScalaModelTransformer.scala` | whole-file scan passed | not a spec | focused and full generator suites passed | `57fcbc8` |
+| `simple-modeler` | `src/main/scala/org/simplemodeling/SimpleModeler/transformers/scala/EntityValueCreateScalaModelTransformer.scala` | whole-file scan passed | not a spec | focused and full generator suites passed | `57fcbc8` |
+| `simple-modeler` | `src/main/scala/org/simplemodeling/SimpleModeler/transformers/scala/EntityValueOperationScalaModelTransformer.scala` | whole-file scan passed | not a spec | focused and full generator suites passed | `57fcbc8` |
+| `simple-modeler` | `src/main/scala/org/simplemodeling/SimpleModeler/transformers/scala/EntityValueProjectionScalaModelTransformer.scala` | whole-file scan passed | not a spec | focused and full generator suites passed | `57fcbc8` |
+| `simple-modeler` | `src/main/scala/org/simplemodeling/SimpleModeler/transformers/scala/EntityValueQueryScalaModelTransformer.scala` | whole-file scan passed | not a spec | focused and full generator suites passed | `57fcbc8` |
+| `simple-modeler` | `src/main/scala/org/simplemodeling/SimpleModeler/transformers/scala/EntityValueReadScalaModelTransformer.scala` | whole-file scan passed | not a spec | focused and full generator suites passed | `57fcbc8` |
+| `simple-modeler` | `src/main/scala/org/simplemodeling/SimpleModeler/transformers/scala/EntityValueScalaModelTransformer.scala` | whole-file scan passed | not a spec | focused and full generator suites passed | `57fcbc8` |
+| `simple-modeler` | `src/main/scala/org/simplemodeling/SimpleModeler/transformers/scala/EntityValueUpdateScalaModelTransformer.scala` | whole-file scan passed | not a spec | focused and full generator suites passed | `57fcbc8` |
+| `simple-modeler` | `src/main/scala/org/simplemodeling/SimpleModeler/transformers/scala/SimpleEntityScalaModelSupport.scala` | whole-file scan passed | not a spec | focused and full generator suites passed | `57fcbc8` |
+| `simple-modeler` | `src/test/scala/org/simplemodeling/SimpleModeler/transformers/scala/SimpleEntityRevisionGenerationSpec.scala` | whole-file scan passed | Given/When/Then structure and matcher vocabulary passed | 2 focused specifications passed | `57fcbc8` |
+| `cozy` | `src/main/scala/cozy/modeler/Modeler.scala` | whole-file scan passed | not a spec | focused Aggregate generation and full Cozy suites passed | `59afa95` |
+| `cozy` | `src/test/scala/cozy/modeler/ModelerScalaGenerationSpec.scala` | whole-file scan passed | Given/When/Then structure and matcher vocabulary passed | 27 focused specifications and full Cozy suite passed | `59afa95` |
+| `cozy` | `src/test/scala/cozy/modeler/ModelerSimpleEntityRevisionGenerationSpec.scala` | whole-file scan passed | Given/When/Then structure and matcher vocabulary passed | 2 focused specifications and full Cozy suite passed | `59afa95` |
+| `cloud-native-component-framework` | `src/test/scala/org/goldenport/cncf/information/GeneratedInformationRevisionSpec.scala` | whole-file scan passed | Given/When/Then structure and matcher vocabulary passed | 1 cold-build focused specification and full CNCF suite passed | this SE-02B release commit |
+
+Review-fix evidence:
+- Generated operation request schemas no longer require embedded managed
+  `revision`.
+- Revision filtering is bound to generated `SimpleEntityCreate`,
+  `SimpleEntityUpdate`, and `SimpleEntityQuery` inheritance rather than the
+  attribute name alone.
+- The non-`SimpleEntity` regression specification proves an application-owned
+  `revision` field is preserved.
+- Whole-file naming cleanup covers all modified generator files, including
+  method-local helpers, local helper parameters, and private internal model
+  fields.
 
 ## SE-03: Common Revision Kernel and Binding
 
