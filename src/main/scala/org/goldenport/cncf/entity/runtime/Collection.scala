@@ -5,12 +5,11 @@ import org.goldenport.Consequence
 import org.goldenport.datatype.Identifier
 import org.goldenport.record.Record
 import org.goldenport.cncf.context.ExecutionContext
-import org.simplemodeling.model.datatype.EntityId
+import org.simplemodeling.model.datatype.{EntityId, EntityRevision}
 import org.goldenport.cncf.entity.{
   EntityAccessScopePolicy,
   EntityIdentityScope,
   EntityLifecycleRecordPolicy,
-  EntityMutationExpectation,
   EntityPersistentCreate,
   EntityQuery,
   EntityRecordSnapshot,
@@ -26,7 +25,7 @@ import org.goldenport.cncf.unitofwork.UnitOfWorkOp
  * @since   Mar. 14, 2026
  *  version Mar. 30, 2026
  *  version May. 10, 2026
- * @version Jul. 24, 2026
+ * @version Jul. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 trait Collection[A] {
@@ -140,7 +139,7 @@ final class EntityCollection[E](
 
   def saveRecordVersioned(
       record: Record,
-      expectation: EntityMutationExpectation
+      expectedRevision: EntityRevision
   )(using ctx: ExecutionContext): Consequence[EntityRecordSnapshot] = {
     val evaluationinstant = ctx.clock.instant()
     descriptor.persistent.fromRecord(record).flatMap { entity =>
@@ -148,12 +147,12 @@ final class EntityCollection[E](
       ctx.entityStoreSpace.saveVersioned(
         entity,
         descriptor.persistent,
-        expectation
+        expectedRevision
       ).map { snapshot =>
         _put(snapshot.entity, evaluationinstant)
         EntityRecordSnapshot(
           descriptor.persistent.toRecord(snapshot.entity),
-          snapshot.token
+          snapshot.revision
         )
       }.recoverWith { conclusion =>
         val reason = ConclusionDiagnostics.classify(conclusion).reason

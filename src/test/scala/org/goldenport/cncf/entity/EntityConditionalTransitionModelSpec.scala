@@ -7,11 +7,11 @@ import org.scalacheck.{Gen, Prop, Test}
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
-import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
+import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId, EntityRevision}
 
 /*
  * @since   Jul. 24, 2026
- * @version Jul. 24, 2026
+ * @version Jul. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EntityConditionalTransitionModelSpec
@@ -54,7 +54,7 @@ final class EntityConditionalTransitionModelSpec
         val foreignresult =
           foreignfield.expected("open").flatMap(value =>
             definition.expectation(
-              EntityConcurrencyToken.LEGACY,
+              EntityRevision.INITIAL,
               value
             )
           )
@@ -62,7 +62,7 @@ final class EntityConditionalTransitionModelSpec
           val expected = admittedfield.expected(value)
           val duplicate = expected.flatMap(item =>
             definition.expectation(
-              EntityConcurrencyToken.LEGACY,
+              EntityRevision.INITIAL,
               item,
               item
             )

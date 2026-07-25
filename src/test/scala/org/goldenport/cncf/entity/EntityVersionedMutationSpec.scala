@@ -8,12 +8,12 @@ import org.goldenport.record.Record
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
-import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
+import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId, EntityRevision}
 import org.simplemodeling.model.directive.Update
 
 /*
  * @since   Jul. 24, 2026
- * @version Jul. 24, 2026
+ * @version Jul. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EntityVersionedMutationSpec
@@ -32,7 +32,7 @@ final class EntityVersionedMutationSpec
 
   "EntityStore versioned mutation" should {
     "E3 advance full-save and typed-update revisions exactly once" must _e3_metadata {
-      "when each mutation carries the current snapshot token" in {
+      "when each mutation carries the current snapshot revision" in {
         Given(
           "Spec: docs/spec/entity-conflict-and-conditional-transition.md; Rules: R1-R5,R11-R14,R17; Example: E3; one newly created Entity"
         )
@@ -51,7 +51,7 @@ final class EntityVersionedMutationSpec
           case Some(snapshot) =>
             fixture.entitystore.save(
               snapshot.entity.copy(name = "saved"),
-              EntityMutationExpectation(snapshot.token)
+              snapshot.revision
             )
           case None =>
             Consequence.entityNotFound(id.print)
@@ -59,15 +59,15 @@ final class EntityVersionedMutationSpec
         val updated = saved.flatMap { snapshot =>
           fixture.entitystore.update(
             snapshot.entity.copy(name = "updated"),
-            EntityMutationExpectation(snapshot.token)
+            snapshot.revision
           )
         }
 
         Then("each authoritative result advances one revision and storage contains the final value")
-        initial.map(_.map(_.token)) shouldBe
-          Consequence.success(Some(EntityConcurrencyToken.INITIAL))
-        saved.map(_.token.print) shouldBe Consequence.success("2")
-        updated.map(_.token.print) shouldBe Consequence.success("3")
+        initial.map(_.map(_.revision)) shouldBe
+          Consequence.success(Some(EntityRevision.INITIAL))
+        saved.map(_.revision.value) shouldBe Consequence.success(2L)
+        updated.map(_.revision.value) shouldBe Consequence.success(3L)
         updated.map(_.entity.name) shouldBe Consequence.success("updated")
         _raw_record(fixture, id)
           .map(_.flatMap(_.getAny(EntityConcurrencyMetadata.STORAGE_FIELD_NAME))) shouldBe
@@ -76,7 +76,7 @@ final class EntityVersionedMutationSpec
     }
 
     "E3 apply patch-by-id with the same authoritative revision contract" must _e3_metadata {
-      "when a generated patch carries the current token" in {
+      "when a generated patch carries the current revision" in {
         Given(
           "Spec: docs/spec/entity-conflict-and-conditional-transition.md; Rules: R1-R5,R11-R14,R17; Example: E3; one Entity snapshot and a typed patch"
         )
@@ -94,7 +94,7 @@ final class EntityVersionedMutationSpec
             fixture.entitystore.updateById(
               id,
               TestPatch(Update.set("patched")),
-              EntityMutationExpectation(snapshot.token)
+              snapshot.revision
             )
           case None =>
             Consequence.entityNotFound(id.print)
@@ -106,16 +106,16 @@ final class EntityVersionedMutationSpec
         Then("the patch result and subsequent typed load expose revision two")
         patched.map(_.record.getString("name")) shouldBe
           Consequence.success(Some("patched"))
-        patched.map(_.token.print) shouldBe Consequence.success("2")
+        patched.map(_.revision.value) shouldBe Consequence.success(2L)
         loaded.map(_.map(_.entity.name)) shouldBe
           Consequence.success(Some("patched"))
-        loaded.map(_.map(_.token.print)) shouldBe
-          Consequence.success(Some("2"))
+        loaded.map(_.map(_.revision.value)) shouldBe
+          Consequence.success(Some(2L))
       }
     }
 
     "E4 reject stale mutations with structured revision diagnostics" must _e4_metadata {
-      "when two mutations reuse one admitted token" in {
+      "when two mutations reuse one admitted revision" in {
         Given(
           "Spec: docs/spec/entity-conflict-and-conditional-transition.md; Rules: R5,R11-R14,R17,R19; Example: E4; two full saves derived from one snapshot"
         )
@@ -127,7 +127,7 @@ final class EntityVersionedMutationSpec
             .create(TestEntity(id, "created"))
             .flatMap(_ => fixture.entitystore.loadSnapshot[TestEntity](id))
         val expectation = initial.toOption.flatten
-          .map(snapshot => EntityMutationExpectation(snapshot.token))
+          .map(snapshot => snapshot.revision)
           .getOrElse(fail("initial snapshot is required"))
         val first = fixture.entitystore.save(
           TestEntity(id, "winner"),
@@ -150,8 +150,8 @@ final class EntityVersionedMutationSpec
         Then("the candidate changes no state and the conflict carries safe expected and actual facets")
         authoritative.map(_.map(_.entity.name)) shouldBe
           Consequence.success(Some("winner"))
-        authoritative.map(_.map(_.token.print)) shouldBe
-          Consequence.success(Some("2"))
+        authoritative.map(_.map(_.revision.value)) shouldBe
+          Consequence.success(Some(2L))
         conclusion.observation.cause.descriptor.facets should contain (
           Descriptor.Facet.Reason("stale-entity-revision")
         )

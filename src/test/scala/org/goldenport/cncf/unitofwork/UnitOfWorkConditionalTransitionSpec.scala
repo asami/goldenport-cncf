@@ -37,12 +37,12 @@ import org.goldenport.cncf.unitofwork.CommitRecorder
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
-import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
+import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId, EntityRevision}
 import org.simplemodeling.model.value.SecurityAttributes
 
 /*
  * @since   Jul. 24, 2026
- * @version Jul. 24, 2026
+ * @version Jul. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkConditionalTransitionSpec
@@ -876,7 +876,7 @@ final class UnitOfWorkConditionalTransitionSpec
     val expectation =
       definition
         .expectation(
-          EntityConcurrencyToken.INITIAL,
+          EntityRevision.INITIAL,
           field.expected(status).TAKE
         )
         .TAKE
@@ -901,7 +901,7 @@ final class UnitOfWorkConditionalTransitionSpec
     val expectation =
       definition
         .expectation(
-          EntityConcurrencyToken.INITIAL,
+          EntityRevision.INITIAL,
           field.expected("open").TAKE
         )
         .TAKE

@@ -215,24 +215,26 @@ Review-fix evidence:
 ## SE-03: Common Revision Kernel and Binding
 
 Stage Status:
-- Current status: IN PROGRESS
+- Current status: DONE
 - Owner: CNCF EntityStore, UnitOfWork, and datastore maintainers
 - Entry rule: SE-02 is DONE.
 - Completion rule: Embedded and detached paths use one `EntityRevision`,
   one atomic provider kernel, and one deterministic representation binding.
 
-- [ ] Replace `EntityConcurrencyToken` with common `EntityRevision`.
+- [x] Replace `EntityConcurrencyToken` and `EntityMutationExpectation` with
+  common `EntityRevision` throughout EntityStore, UnitOfWork, protected DSL,
+  Conditional Transition, diagnostics, and callers.
 - [x] Retain and generalize the Phase 49 revision-field-independent atomic
   compare-and-advance provider operation.
-- [ ] Define Entity/collection revision representation metadata.
+- [x] Define Entity/collection revision representation metadata.
 - [x] Resolve exactly one optional revision binding before Entity collection
   registration. An undeclared non-`SimpleEntity` remains outside revision
   management.
 - [x] Reject `SimpleEntity + Detached`, non-`SimpleEntity + implicit
   Detached`, dual fields, and conflicting declarations.
-- [ ] Keep authorization, UnitOfWork, transaction, audit, diagnostics, and
+- [x] Keep authorization, UnitOfWork, transaction, audit, diagnostics, and
   observability common across representations.
-- [ ] Add representation-selection and common-kernel Executable
+- [x] Add representation-selection and common-kernel Executable
   Specifications.
 
 Evidence:
@@ -298,8 +300,9 @@ Evidence:
 - Clean re-review reran the same 7 focused suites and passed all 29 tests.
 - Isolated staged-slice full release validation passed 2450 tests in 350
   suites, with 7 canceled, 1 ignored, and 59 pending.
-- Remaining SE-03 work after SE-03B review is replacement of the Phase 49
-  token vocabulary/provider kernel with common `EntityRevision`.
+- SE-03D replaces the remaining Phase 49 upper concurrency API with common
+  `EntityRevision` directly. No compatibility alias, adapter, or duplicate
+  expectation wrapper remains.
 - `SE-03C Provider Revision Kernel Typing` is implemented and passed
   independent read-only review and clean re-review.
   `EntityVersionedMutationPlan`, `DataStoreConditionalRoot`, and
@@ -322,8 +325,75 @@ Evidence:
   passed. The development runtime is required because the published Cozy
   0.2.25 generator predates the already-completed SimpleEntity revision
   generation contract.
+- `SE-03D Upper Concurrency API Replacement` is implemented and passed
+  independent read-only review, review-fix, and clean re-review.
+  `EntitySnapshot` and
+  `EntityRecordSnapshot` now carry `revision: EntityRevision`, while
+  EntityStore, UnitOfWork operations, ActionCall helpers, admin/job callers,
+  Conditional Transition, and observability consume the revision directly.
+- The obsolete Java `EntityConcurrencyToken` and Scala
+  `EntityMutationExpectation` types are deleted. Source and test searches find
+  no remaining reference to either compatibility vocabulary.
+- `EntityRevisionKernelSpec` replaces the former token-named specification and
+  verifies positive construction, exact advancement, upper-bound structured
+  failure, physical storage admission, metadata isolation, and persistence
+  behavior against the model-owned datatype.
+- Focused SE-03D EntityStore, ActionCall, UnitOfWork, Conditional Transition,
+  authorization, and diagnostics specifications passed: 144 tests in 14
+  suites.
+- The affected Static Form stale-version specification passed separately:
+  1 test in 1 suite.
+- `COZY_RUNTIME_DEV_DIR=/Users/asami/src/dev2025/cozy sbt --batch Test/compile`
+  passed after the upper API replacement.
+- Independent read-only review found eight private-helper parameter naming
+  violations across five modified source files, an overstated compliance
+  ledger, and two SE-06 checklist items already completed by SE-03D.
+- Review-fix changed only private-helper names, retained the canonical
+  public/protected `expectedRevision` API, and passed all 144 tests in the 14
+  focused suites followed by `Test/compile`.
+- Clean re-review found no remaining actionable finding. It reran all 14
+  focused suites and passed 144 tests, then reran the affected Static Form
+  stale-update specification and passed 1 test.
+- Full release validation passed 2452 tests in 351 suites, with 7 canceled,
+  1 ignored, and 59 pending. This SE-03D release checkpoint completes SE-03.
 
-### SE-03B Modified Scala File Compliance Ledger
+### SE-03D Modified Scala File Compliance Ledger
+
+All paths are repository-relative; every listed file was checked as a whole
+file during clean re-review.
+
+| Scala file | Naming | Spec style | Validation | Review |
+| --- | --- | --- | --- | --- |
+| `src/main/scala/org/goldenport/cncf/action/ActionCallFeaturePart.scala` | private-parameter finding fixed; whole-file scan passed | not a spec | focused suites and `Test/compile` passed | review-fix and clean re-review passed |
+| `src/main/scala/org/goldenport/cncf/component/builtin/admin/AdminComponent.scala` | private-parameter finding fixed; whole-file scan passed | not a spec | focused suites and `Test/compile` passed | review-fix and clean re-review passed |
+| `src/main/scala/org/goldenport/cncf/component/builtin/jobcontrol/JobControlComponent.scala` | private-parameter finding fixed; whole-file scan passed | not a spec | focused suites and `Test/compile` passed | review-fix and clean re-review passed |
+| `src/main/scala/org/goldenport/cncf/entity/EntityConcurrency.scala` | whole-file scan passed | not a spec | focused suites and `Test/compile` passed | clean re-review passed |
+| `src/main/scala/org/goldenport/cncf/entity/EntityConditionalTransition.scala` | whole-file scan passed | not a spec | focused suites and `Test/compile` passed | clean re-review passed |
+| `src/main/scala/org/goldenport/cncf/entity/EntityStore.scala` | private-parameter finding fixed; whole-file scan passed | not a spec | focused suites and `Test/compile` passed | review-fix and clean re-review passed |
+| `src/main/scala/org/goldenport/cncf/entity/EntityStoreSpace.scala` | whole-file scan passed | not a spec | focused suites and `Test/compile` passed | clean re-review passed |
+| `src/main/scala/org/goldenport/cncf/entity/runtime/Collection.scala` | whole-file scan passed | not a spec | focused suites and `Test/compile` passed | clean re-review passed |
+| `src/main/scala/org/goldenport/cncf/job/JobEngine.scala` | whole-file scan passed | not a spec | focused suites and `Test/compile` passed | clean re-review passed |
+| `src/main/scala/org/goldenport/cncf/observability/EntityConditionalTransitionObservation.scala` | private-parameter finding fixed; whole-file scan passed | not a spec | focused suites and `Test/compile` passed | review-fix and clean re-review passed |
+| `src/main/scala/org/goldenport/cncf/tag/TagModel.scala` | whole-file scan passed | not a spec | focused suites and `Test/compile` passed | clean re-review passed |
+| `src/main/scala/org/goldenport/cncf/unitofwork/UnitOfWorkInterpreter.scala` | whole-file scan passed | not a spec | focused suites and `Test/compile` passed | clean re-review passed |
+| `src/main/scala/org/goldenport/cncf/unitofwork/UnitOfWorkOp.scala` | whole-file scan passed | not a spec | focused suites and `Test/compile` passed | clean re-review passed |
+| `src/test/scala/org/goldenport/cncf/action/ActionCallAggregateResolveSpec.scala` | whole-file scan passed | Given/When/Then grouping and matcher vocabulary passed | focused suite passed | clean re-review passed |
+| `src/test/scala/org/goldenport/cncf/action/ActionCallConditionalTransitionDslSpec.scala` | whole-file scan passed | Given/When/Then grouping and matcher vocabulary passed | focused suite passed | clean re-review passed |
+| `src/test/scala/org/goldenport/cncf/action/ActionCallEntityAccessMetricsSpec.scala` | whole-file scan passed | Given/When/Then grouping and matcher vocabulary passed | focused suite passed | clean re-review passed |
+| `src/test/scala/org/goldenport/cncf/entity/ContentBodyVersionedMutationSpec.scala` | whole-file scan passed | Given/When/Then grouping and matcher vocabulary passed | focused suite passed | clean re-review passed |
+| `src/test/scala/org/goldenport/cncf/entity/EntityConditionalTransitionCoherenceSpec.scala` | whole-file scan passed | Given/When/Then grouping and matcher vocabulary passed | focused suite passed | clean re-review passed |
+| `src/test/scala/org/goldenport/cncf/entity/EntityConditionalTransitionDiagnosticsSpec.scala` | whole-file scan passed | Given/When/Then grouping and matcher vocabulary passed | focused suite passed | clean re-review passed |
+| `src/test/scala/org/goldenport/cncf/entity/EntityConditionalTransitionModelSpec.scala` | whole-file scan passed | Given/When/Then grouping, property checks, and matcher vocabulary passed | focused suite passed | clean re-review passed |
+| `src/test/scala/org/goldenport/cncf/entity/EntityRevisionKernelSpec.scala` | whole-file scan passed | Given/When/Then grouping, property checks, and matcher vocabulary passed | focused suite passed | clean re-review passed |
+| `src/test/scala/org/goldenport/cncf/entity/EntityStoreQueryRouteSpec.scala` | whole-file scan passed | Given/When/Then grouping and matcher vocabulary passed | focused suite passed | clean re-review passed |
+| `src/test/scala/org/goldenport/cncf/entity/EntityVersionedMutationSpec.scala` | whole-file scan passed | Given/When/Then grouping and matcher vocabulary passed | focused suite passed | clean re-review passed |
+| `src/test/scala/org/goldenport/cncf/http/StaticFormAppRendererSpec.scala` | whole-file scan passed | Given/When/Then grouping and matcher vocabulary passed | focused stale-version specification and `Test/compile` passed | clean re-review passed |
+| `src/test/scala/org/goldenport/cncf/unitofwork/UnitOfWorkConditionalTransitionSpec.scala` | whole-file scan passed | Given/When/Then grouping and matcher vocabulary passed | focused suite passed | clean re-review passed |
+| `src/test/scala/org/goldenport/cncf/unitofwork/UnitOfWorkStateMachineHookSpec.scala` | whole-file scan passed | Given/When/Then grouping and matcher vocabulary passed | focused suite passed | clean re-review passed |
+| `src/test/scala/org/goldenport/cncf/unitofwork/UnitOfWorkTargetAuthorizationSpec.scala` | whole-file scan passed | Given/When/Then grouping and matcher vocabulary passed | focused suite passed | clean re-review passed |
+| `src/test/scala/org/goldenport/cncf/unitofwork/UnitOfWorkVersionedMutationSpec.scala` | whole-file scan passed | Given/When/Then grouping and matcher vocabulary passed | focused suite passed | clean re-review passed |
+
+
 
 This implementation evidence passed read-only review, review-fix, clean
 re-review, and isolated staged-slice full release validation.
@@ -459,21 +529,29 @@ Stage Status:
   kernel and preserves Phase 49 atomic outcomes for both admitted
   representations.
 
-- [ ] Replace transition token parameters with expected revision.
+- [x] Replace transition token parameters with expected revision. Completed as
+  SE-03D preparatory work; representation-specific result integration remains
+  in this stage.
 - [ ] Require expected revision under both ordinary concurrency policies.
 - [ ] Return embedded root/successor `SimpleEntity` values containing
   authoritative revisions.
 - [ ] Return detached revision carriers only when the admitted Entity model is
   non-`SimpleEntity`.
-- [ ] Remove `EntityConcurrencyToken` and token expectation dependencies from
-  the canonical and extension paths.
+- [x] Remove `EntityConcurrencyToken` and token expectation dependencies from
+  the canonical upper path. Completed by SE-03D; SE-06 must still verify the
+  embedded and detached representation paths.
 - [ ] Preserve authorization, lifecycle, transaction, audit, observability,
   Working Set, View, and rollback behavior.
 - [ ] Add property-based simultaneous-update specifications.
 - [ ] Re-run exactly-one-winner and no-orphan successor evidence.
 
 Evidence:
-- Pending.
+- SE-03D removed the token/expectation types and changed Conditional Transition
+  definitions, expectations, provider plans, diagnostics, and callers to
+  `EntityRevision`.
+- Remaining SE-06 evidence is pending for embedded/detached result integration,
+  policy behavior, simultaneous updates, exactly-one-winner, and no-orphan
+  verification.
 
 ## SE-07: Projection and Transport
 

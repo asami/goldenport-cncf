@@ -14,7 +14,7 @@ import scala.util.control.NonFatal
 
 /*
  * @since   Jul. 24, 2026
- * @version Jul. 24, 2026
+ * @version Jul. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 private[cncf] object EntityConditionalTransitionObservation {
@@ -149,7 +149,7 @@ private[cncf] object EntityConditionalTransitionObservation {
     result: Consequence[EntityConditionalTransitionResult[R, S]],
     classification: Classification
   )(using
-    executionContext: ExecutionContext
+    executioncontext: ExecutionContext
   ): Record = {
     val revisions =
       result match {
@@ -158,14 +158,14 @@ private[cncf] object EntityConditionalTransitionObservation {
                 EntityConditionalTransitionResult.Transitioned[?, ?]
             ) =>
           Record.dataAuto(
-            "root-revision" -> transitioned.root.token.print,
-            "successor-revision" -> transitioned.successor.token.print
+            "root-revision" -> transitioned.root.revision.value,
+            "successor-revision" -> transitioned.successor.revision.value
           )
         case Consequence.Success(
               notmatched: EntityConditionalTransitionResult.NotMatched[?]
             ) =>
           Record.dataAuto(
-            "root-revision" -> notmatched.existing.token.print
+            "root-revision" -> notmatched.existing.revision.value
           )
         case _ =>
           Record.empty
@@ -180,11 +180,11 @@ private[cncf] object EntityConditionalTransitionObservation {
       "successor-id" -> context.successorid.map(_.print),
       "outcome" -> classification.outcome.name,
       "diagnostic" -> classification.diagnostic.map(_.toBoundedRecord),
-      "trace-id" -> executionContext.observability.traceId.value,
+      "trace-id" -> executioncontext.observability.traceId.value,
       "correlation-id" ->
-        executionContext.observability.correlationId.map(_.value),
-      "saga-id" -> executionContext.observability.sagaId,
-      "principal-id" -> executionContext.security.principal.id.value
+        executioncontext.observability.correlationId.map(_.value),
+      "saga-id" -> executioncontext.observability.sagaId,
+      "principal-id" -> executioncontext.security.principal.id.value
     ) ++ revisions
   }
 

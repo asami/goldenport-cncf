@@ -56,7 +56,7 @@ import org.goldenport.cncf.datastore.{
 }
 import org.goldenport.cncf.directive.Query as EntityQuery
 import org.goldenport.cncf.entity.{
-  EntityMutationExpectation,
+  EntityConcurrencyMetadata,
   EntityPersistable,
   EntityPersistent,
   EntityQuery as StoreEntityQuery,
@@ -94,7 +94,11 @@ import org.goldenport.protocol.spec as spec
 import org.goldenport.record.{Record, RecordPresentable}
 import org.goldenport.value.BaseContent
 import org.goldenport.schema.{DataType, XString}
-import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
+import org.simplemodeling.model.datatype.{
+  EntityCollectionId,
+  EntityId,
+  EntityRevision
+}
 
 /*
  * @since   Jan.  7, 2026
@@ -102,7 +106,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
  *  version Feb. 19, 2026
  *  version May. 31, 2026
  *  version Jun. 18, 2026
- * @version Jul. 24, 2026
+ * @version Jul. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 class AdminComponent() extends Component {}
@@ -2014,7 +2018,7 @@ object AdminComponent {
         entityname,
         core
       ))
-      expectation <- _admin_entity_mutation_expectation(operation, args)
+      expectedrevision <- _admin_entity_expected_revision(operation, args)
       inputrecord = _admin_entity_record(collection, _action_record(core))
       record   <- _canonical_admin_entity_record(collection, inputrecord)
       entityid <- Consequence.fromOption(record.getString("id"), "entity id is required")
@@ -2025,7 +2029,7 @@ object AdminComponent {
             entityexecutioncontext,
             collection,
             record,
-            expectation
+            expectedrevision
           )
         else
           _admin_entity_put_with_blob_attachments(
@@ -2035,7 +2039,7 @@ object AdminComponent {
             collection,
             record,
             entityid,
-            expectation
+            expectedrevision
           )
     } yield OperationResponse.Scalar("Entity record was applied.")
   }
@@ -2043,11 +2047,11 @@ object AdminComponent {
   private def _admin_entity_put_with_blob_attachments(
     operation: String,
     core: ActionCall.Core,
-      entityexecutioncontext: ExecutionContext,
+    entityexecutioncontext: ExecutionContext,
     collection: EntityCollection[?],
     record: Record,
-      entityid: String,
-      expectation: Option[EntityMutationExpectation]
+    entityid: String,
+    expectedrevision: Option[EntityRevision]
   ): Consequence[Unit] =
     for {
       workflow <- _blob_attachment_workflow(core)
@@ -2071,7 +2075,7 @@ object AdminComponent {
             entityexecutioncontext,
             collection,
             record,
-            expectation
+            expectedrevision
           ) match {
             case Consequence.Success(_) =>
               workflow.attachToEntity(
@@ -2089,14 +2093,14 @@ object AdminComponent {
       executioncontext: ExecutionContext,
       collection: EntityCollection[?],
       record: Record,
-      expectation: Option[EntityMutationExpectation]
+      expectedrevision: Option[EntityRevision]
   ): Consequence[Unit] =
     if (operation == "create")
       collection.createRecordSynced(record)(using executioncontext)
     else
       for {
         expected <- Consequence.fromOption(
-          expectation,
+          expectedrevision,
           "Entity mutation version is required"
         )
         _ <- collection.saveRecordVersioned(
@@ -2105,16 +2109,16 @@ object AdminComponent {
         )(using executioncontext)
       } yield ()
 
-  private def _admin_entity_mutation_expectation(
+  private def _admin_entity_expected_revision(
       operation: String,
       args: Map[String, Any]
-  ): Consequence[Option[EntityMutationExpectation]] =
+  ): Consequence[Option[EntityRevision]] =
     if (operation == "create")
       Consequence.success(None)
     else
       args.get("version") match {
         case Some(value) =>
-          EntityMutationExpectation.parse(value).map(Some(_))
+          EntityConcurrencyMetadata.transportRevision(value).map(Some(_))
         case None =>
           Consequence.argumentMissing("version")
       }
@@ -2281,7 +2285,7 @@ object AdminComponent {
         entityname,
         id,
         record
-      ).upsertSingle("version", snapshot.token.print)
+      ).upsertSingle("version", snapshot.revision.value.toString)
       projection <- {
         _blob_projection_record(core, sourceentityid)
       }

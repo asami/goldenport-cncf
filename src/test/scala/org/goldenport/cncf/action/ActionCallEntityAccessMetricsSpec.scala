@@ -24,8 +24,6 @@ import org.goldenport.cncf.datastore.{DataStore, DataStoreSpace}
 import org.goldenport.cncf.directive.{Query, SearchResult}
 import org.goldenport.cncf.entity.runtime.*
 import org.goldenport.cncf.entity.{
-  EntityConcurrencyToken,
-  EntityMutationExpectation,
   EntityPersistent,
   EntityPersistentCreate,
   EntityQuery,
@@ -46,7 +44,7 @@ import org.goldenport.protocol.Protocol
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
-import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
+import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId, EntityRevision}
 import org.simplemodeling.model.directive.Condition
 
 /*
@@ -143,7 +141,7 @@ final class ActionCallEntityAccessMetricsSpec
         ) shouldBe a[Consequence.Success[_]]
         probe.saveInternal(
           ClaimPerson(id, "retained-owner"),
-          EntityMutationExpectation(EntityConcurrencyToken.INITIAL)
+          EntityRevision.INITIAL
         ) shouldBe a[Consequence.Success[_]]
         Then("a later claim observes the saved value")
         probe.claimInternal[ClaimPersonCreate, ClaimPerson](ClaimPersonCreate(
@@ -1354,10 +1352,10 @@ private final class _EntityAccessProbe(
 
   def saveInternal[T](
       entity: T,
-      expectation: EntityMutationExpectation
+      expectedRevision: EntityRevision
   )(using tc: EntityPersistent[T]): Consequence[org.goldenport.cncf.entity.EntitySnapshot[T]] =
     new UnitOfWorkInterpreter(new UnitOfWork(executionContext))
-      .run(entity_save_internal(entity, expectation))
+      .run(entity_save_internal(entity, expectedRevision))
 
   def createPublic[T](entity: T)(using
       tc: EntityPersistentCreate[T]

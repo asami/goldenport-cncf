@@ -4,7 +4,7 @@ package org.goldenport.cncf.http
  * @since   May. 18, 2026
  *  version May. 27, 2026
  *  version Jun. 19, 2026
- * @version Jul. 24, 2026
+ * @version Jul. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 import scala.collection.mutable.ListBuffer
@@ -74,7 +74,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Apr. 12, 2026
  *  version May. 27, 2026
  *  version Jun. 19, 2026
- * @version Jul. 24, 2026
+ * @version Jul. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -14376,10 +14376,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     val entityid =
       collection.resolveEntityId(id).getOrElse(fail(s"notice entity id is missing: ${id}"))
     _success(
-      EntityConcurrencyMetadata.token(
+      EntityConcurrencyMetadata.revision(
         _load_notice_store_record(subsystem, entityid)
       )
-    ).print
+    ).value.toString
   }
 
   private def _blob_request(

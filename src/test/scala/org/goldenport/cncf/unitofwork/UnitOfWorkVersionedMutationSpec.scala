@@ -26,7 +26,7 @@ import org.goldenport.record.Record
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
-import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
+import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId, EntityRevision}
 
 /*
  * @since   Jul. 24, 2026
@@ -67,7 +67,7 @@ final class UnitOfWorkVersionedMutationSpec
         interpreter.interpret(
           UnitOfWorkOp.EntityStoreSave(
             VersionedPerson(id, "after"),
-            EntityMutationExpectation(snapshot.token),
+            snapshot.revision,
             _persistent
           )
         )
@@ -75,7 +75,7 @@ final class UnitOfWorkVersionedMutationSpec
 
       Then("the provider result advances once and becomes the resident value")
       saved.map(_.entity.name) shouldBe Consequence.success("after")
-      saved.map(_.token) should not be admitted.map(_.token)
+      saved.map(_.revision) should not be admitted.map(_.revision)
       fixture.collection.resolve(id).map(_.name) shouldBe
         Consequence.success("after")
     }
@@ -104,7 +104,7 @@ final class UnitOfWorkVersionedMutationSpec
         interpreter.interpret(
           UnitOfWorkOp.EntityStoreUpdate(
             VersionedPerson(id, "first"),
-            EntityMutationExpectation(snapshot.token),
+            snapshot.revision,
             _persistent
           )
         )
@@ -116,7 +116,7 @@ final class UnitOfWorkVersionedMutationSpec
           interpreter.interpret(
             UnitOfWorkOp.EntityStoreUpdate(
               VersionedPerson(id, "stale"),
-              EntityMutationExpectation(snapshot.token),
+              snapshot.revision,
               _persistent
             )
           )
@@ -192,7 +192,7 @@ final class UnitOfWorkVersionedMutationSpec
         interpreter.interpret(
           UnitOfWorkOp.EntityStoreSave(
             VersionedPerson(id, "committed"),
-            EntityMutationExpectation(snapshot.token),
+            snapshot.revision,
             failingpersistent
           )
         )

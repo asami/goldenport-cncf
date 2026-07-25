@@ -12,43 +12,15 @@ import org.simplemodeling.model.datatype.EntityRevision
  * @version Jul. 25, 2026
  * @author  ASAMI, Tomoharu
  */
-private[cncf] object EntityConcurrencyTokenSupport {
-  private[cncf] def _create(value: Long): Consequence[EntityConcurrencyToken] =
-    EntityRevision
-      .createC(value)
-      .map(revision => EntityConcurrencyToken.createInternal(revision.value))
-
-  private[cncf] def _advance(
-    token: EntityConcurrencyToken
-  ): Consequence[EntityConcurrencyToken] =
-    EntityRevision
-      .createC(_storage_value(token))
-      .flatMap(_.nextC)
-      .map(revision => EntityConcurrencyToken.createInternal(revision.value))
-
-  private[cncf] def _storage_value(token: EntityConcurrencyToken): Long =
-    EntityConcurrencyToken.storageValueInternal(token)
-}
 
 final case class EntitySnapshot[A](
   entity: A,
-  token: EntityConcurrencyToken
+  revision: EntityRevision
 )
-
-final case class EntityMutationExpectation(
-  token: EntityConcurrencyToken
-)
-
-object EntityMutationExpectation {
-  def parse(value: Any): Consequence[EntityMutationExpectation] =
-    EntityConcurrencyMetadata
-      .transportToken(value)
-      .map(EntityMutationExpectation(_))
-}
 
 final case class EntityRecordSnapshot(
   record: Record,
-  token: EntityConcurrencyToken
+  revision: EntityRevision
 )
 
 enum EntityUnversionedMutationPurpose {
@@ -61,7 +33,7 @@ object EntityConcurrencyMetadata {
   val STORAGE_FIELD_NAME =
     SimpleEntityStorageShapePolicy.CONCURRENCY_REVISION_STORAGE_FIELD
 
-  def token(record: Record): Consequence[EntityConcurrencyToken] = {
+  def revision(record: Record): Consequence[EntityRevision] = {
     val values = record.fields.collect {
       case field
           if SimpleEntityStorageShapePolicy
@@ -72,18 +44,18 @@ object EntityConcurrencyMetadata {
       case Vector() =>
         Consequence.argumentMissing(STORAGE_FIELD_NAME)
       case Vector(value) =>
-        _token_value(value)
+        _revision_value(value)
       case _ =>
         Consequence.argumentInvalid(
           STORAGE_FIELD_NAME,
-          "one framework-managed concurrency token",
+          "one framework-managed Entity revision",
           s"${values.size} values"
         )
     }
   }
 
-  def transportToken(value: Any): Consequence[EntityConcurrencyToken] =
-    _token_value(value, "version")
+  def transportRevision(value: Any): Consequence[EntityRevision] =
+    _revision_value(value, "version")
 
   def initializeForCreate(record: Record): Record =
     withoutManagedField(record) ++
@@ -93,10 +65,10 @@ object EntityConcurrencyMetadata {
     record: Record,
     existing: Record
   ): Consequence[Record] =
-    token(existing).map { token =>
+    revision(existing).map { revision =>
       val sanitized = withoutManagedField(record)
       if (_has_managed_field(existing))
-        sanitized ++ _storage_record(token)
+        sanitized ++ _storage_record(revision)
       else
         sanitized
     }
@@ -114,29 +86,29 @@ object EntityConcurrencyMetadata {
     decode: Record => Consequence[A]
   ): Consequence[EntitySnapshot[A]] =
     for {
-      token <- token(record)
+      revision <- revision(record)
       entity <- decode(withoutManagedField(record))
-    } yield EntitySnapshot(entity, token)
+    } yield EntitySnapshot(entity, revision)
 
   def recordSnapshot(
     record: Record
   ): Consequence[EntityRecordSnapshot] =
-    token(record).map(value =>
+    revision(record).map(value =>
       EntityRecordSnapshot(withoutManagedField(record), value)
     )
 
   def mutationRevision(
-    expectation: EntityMutationExpectation
+    expectedRevision: EntityRevision
   ): Consequence[(EntityRevision, EntityRevision)] =
-    for {
-      expected <- EntityRevision.createC(
-        EntityConcurrencyTokenSupport._storage_value(expectation.token)
-      )
-      next <- expected.nextC
-    } yield expected -> next
+    Option(expectedRevision) match {
+      case Some(expected) =>
+        expected.nextC.map(next => expected -> next)
+      case None =>
+        Consequence.argumentMissing("expectedRevision")
+    }
 
   def staleMutation[A](
-    expectation: EntityMutationExpectation,
+    expectedRevision: EntityRevision,
     actual: EntityRevision
   ): Consequence.Failure[A] =
     Consequence.operationConflict(
@@ -145,9 +117,7 @@ object EntityConcurrencyMetadata {
         Descriptor.Facet.Reason("stale-entity-revision"),
         Descriptor.Facet.Policy("entity.optimistic-concurrency"),
         Descriptor.Facet.FieldPath(STORAGE_FIELD_NAME),
-        Descriptor.Facet.Expected(
-          EntityConcurrencyTokenSupport._storage_value(expectation.token)
-        ),
+        Descriptor.Facet.Expected(expectedRevision.value),
         Descriptor.Facet.Actual(actual.value)
       )
     )
@@ -175,27 +145,19 @@ object EntityConcurrencyMetadata {
     )
 
   private def _storage_record(
-    token: EntityConcurrencyToken
-  ): Record =
-    Record.dataAuto(
-      STORAGE_FIELD_NAME ->
-        EntityConcurrencyTokenSupport._storage_value(token)
-    )
-
-  private def _storage_record(
     revision: EntityRevision
   ): Record =
     Record.dataAuto(
       STORAGE_FIELD_NAME -> revision.value
     )
 
-  private def _token_value(
+  private def _revision_value(
       value: Any,
       fieldname: String = STORAGE_FIELD_NAME
-  ): Consequence[EntityConcurrencyToken] =
+  ): Consequence[EntityRevision] =
     _exact_long(value) match {
       case Some(number) =>
-        EntityConcurrencyTokenSupport._create(number)
+        EntityRevision.createC(number)
       case None =>
         Consequence.argumentFormatError(
           fieldname,

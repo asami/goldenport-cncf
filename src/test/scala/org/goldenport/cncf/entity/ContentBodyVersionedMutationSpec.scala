@@ -7,11 +7,11 @@ import org.goldenport.record.Record
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
-import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
+import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId, EntityRevision}
 
 /*
  * @since   Jul. 24, 2026
- * @version Jul. 24, 2026
+ * @version Jul. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ContentBodyVersionedMutationSpec
@@ -30,7 +30,7 @@ final class ContentBodyVersionedMutationSpec
 
   "ContentBody versioned mutation" should {
     "E4 keep the authoritative overflow body when a stale save loses" must _e4_metadata {
-      "when two large-content saves reuse one Entity snapshot token" in {
+      "when two large-content saves reuse one Entity snapshot revision" in {
         Given(
           "Spec: docs/spec/entity-conflict-and-conditional-transition.md; Rules: R5,R11-R14,R17,R21; Example: E4; one overflow-backed Entity and two candidates"
         )
@@ -48,7 +48,7 @@ final class ContentBodyVersionedMutationSpec
             .create(TestEntity(id, initialcontent))
             .flatMap(_ => entitystore.loadSnapshot[TestEntity](id))
         val expectation = initial.toOption.flatten
-          .map(snapshot => EntityMutationExpectation(snapshot.token))
+          .map(snapshot => snapshot.revision)
           .getOrElse(fail("initial snapshot is required"))
 
         When("the first save commits and the second reaches the same provider plan stale")
@@ -69,10 +69,10 @@ final class ContentBodyVersionedMutationSpec
         )
 
         Then("the stale root and overflow side-record candidates are both discarded")
-        winner.map(_.token.print) shouldBe Consequence.success("2")
+        winner.map(_.revision.value) shouldBe Consequence.success(2L)
         stale shouldBe a[Consequence.Failure[?]]
-        loaded.map(_.map(_.token.print)) shouldBe
-          Consequence.success(Some("2"))
+        loaded.map(_.map(_.revision.value)) shouldBe
+          Consequence.success(Some(2L))
         loaded.map(_.map(_.entity.content)) shouldBe
           Consequence.success(Some(winnercontent))
         overflow.map(_.flatMap(_.getString("content"))) shouldBe

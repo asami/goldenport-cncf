@@ -9,8 +9,11 @@ import org.goldenport.datatype.Identifier
 import org.goldenport.record.Record
 import org.goldenport.cncf.*
 import org.goldenport.cncf.context.ExecutionContext
-import org.simplemodeling.model.datatype.EntityId
-import org.simplemodeling.model.datatype.EntityCollectionId
+import org.simplemodeling.model.datatype.{
+  EntityCollectionId,
+  EntityId,
+  EntityRevision
+}
 import org.goldenport.cncf.directive.{Query as EntityDirectiveQuery, SearchResult}
 import org.goldenport.cncf.datastore.{
   DataStore,
@@ -44,7 +47,7 @@ import org.simplemodeling.model.value.NominalScalar
  *  version Mar. 30, 2026
  *  version Apr. 26, 2026
  *  version May. 17, 2026
- * @version Jul. 24, 2026
+ * @version Jul. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class EntityStore {
@@ -122,7 +125,7 @@ abstract class EntityStore {
 
   def save[T](
     entity: T,
-    expectation: EntityMutationExpectation
+    expectedRevision: EntityRevision
   )(using
     tc: EntityPersistent[T],
     ctx: ExecutionContext
@@ -134,7 +137,7 @@ abstract class EntityStore {
 
   def update[T](
     changes: T,
-    expectation: EntityMutationExpectation
+    expectedRevision: EntityRevision
   )(using
     tc: EntityPersistent[T],
     ctx: ExecutionContext
@@ -143,7 +146,7 @@ abstract class EntityStore {
   def updateById[P](
     id: EntityId,
     patch: P,
-    expectation: EntityMutationExpectation
+    expectedRevision: EntityRevision
   )(using
     tc: EntityPersistentUpdate[P],
     ctx: ExecutionContext
@@ -307,7 +310,7 @@ class NoopEntityStore() extends EntityStore {
       tc: EntityPersistent[T],
       ctx: ExecutionContext
   ): Consequence[Unit] = ???
-  def save[T](entity: T, expectation: EntityMutationExpectation)(using
+  def save[T](entity: T, expectedRevision: EntityRevision)(using
       tc: EntityPersistent[T],
       ctx: ExecutionContext
   ): Consequence[EntitySnapshot[T]] = ???
@@ -315,11 +318,11 @@ class NoopEntityStore() extends EntityStore {
       tc: EntityPersistent[T],
       ctx: ExecutionContext
   ): Consequence[Unit] = ???
-  def update[T](changes: T, expectation: EntityMutationExpectation)(using
+  def update[T](changes: T, expectedRevision: EntityRevision)(using
       tc: EntityPersistent[T],
       ctx: ExecutionContext
   ): Consequence[EntitySnapshot[T]] = ???
-  def updateById[P](id: EntityId, patch: P, expectation: EntityMutationExpectation)(using
+  def updateById[P](id: EntityId, patch: P, expectedRevision: EntityRevision)(using
       tc: EntityPersistentUpdate[P],
       ctx: ExecutionContext
   ): Consequence[EntityRecordSnapshot] = ???
@@ -506,7 +509,7 @@ class StandardEntityStore(
 
   def save[T](
     entity: T,
-    expectation: EntityMutationExpectation
+    expectedRevision: EntityRevision
   )(using
     tc: EntityPersistent[T],
     ctx: ExecutionContext
@@ -528,9 +531,9 @@ class StandardEntityStore(
         cid,
         dsid,
         preparation,
-        expectation
+        expectedRevision
       )
-      snapshot <- _typed_snapshot(id, result, expectation, tc)
+      snapshot <- _typed_snapshot(id, result, expectedRevision, tc)
     } yield snapshot
   }
 
@@ -567,7 +570,7 @@ class StandardEntityStore(
 
   def update[T](
     changes: T,
-    expectation: EntityMutationExpectation
+    expectedRevision: EntityRevision
   )(using
     tc: EntityPersistent[T],
     ctx: ExecutionContext
@@ -597,16 +600,16 @@ class StandardEntityStore(
         cid,
         dsid,
         preparation,
-        expectation
+        expectedRevision
       )
-      snapshot <- _typed_snapshot(id, result, expectation, tc)
+      snapshot <- _typed_snapshot(id, result, expectedRevision, tc)
     } yield snapshot
   }
 
   def updateById[P](
     id: EntityId,
     patch: P,
-    expectation: EntityMutationExpectation
+    expectedRevision: EntityRevision
   )(using
     tc: EntityPersistentUpdate[P],
     ctx: ExecutionContext
@@ -634,9 +637,9 @@ class StandardEntityStore(
         cid,
         dsid,
         preparation,
-        expectation
+        expectedRevision
       )
-      snapshot <- _record_snapshot(id, result, expectation)
+      snapshot <- _record_snapshot(id, result, expectedRevision)
     } yield snapshot
 
   private[cncf] override def conditionalTransition[R, P, S](
@@ -650,7 +653,7 @@ class StandardEntityStore(
       rootcollection <- ctx.entityStoreSpace.dataStoreCollection(rootid)
       rootentry <- ctx.entityStoreSpace.dataStoreEntryId(rootid)
       revision <- EntityConcurrencyMetadata.mutationRevision(
-        EntityMutationExpectation(request.expectation.token)
+        request.expectation.expectedRevision
       )
       _ <- _reject_logically_deleted_existing(
         rootid,
@@ -1492,7 +1495,7 @@ class StandardEntityStore(
               entry <-
                 ctx.entityStoreSpace.dataStoreEntryId(bindintent.id)
               revision <- EntityConcurrencyMetadata
-                .mutationRevision(EntityMutationExpectation(evidence.token))
+                .mutationRevision(evidence.revision)
                 .map(_._1)
             } yield (
               DataStoreConditionalSuccessor.Bind(
@@ -1698,12 +1701,12 @@ class StandardEntityStore(
     collection: DataStore.CollectionId,
     entryid: DataStore.EntryId,
     preparation: ContentBodyStoragePolicy.VersionedPreparation,
-    expectation: EntityMutationExpectation
+    expectedrevision: EntityRevision
   )(using
     ctx: ExecutionContext
   ): Consequence[EntityVersionedMutationResult] =
     for {
-      revision <- EntityConcurrencyMetadata.mutationRevision(expectation)
+      revision <- EntityConcurrencyMetadata.mutationRevision(expectedrevision)
       plan = EntityVersionedMutationPlan(
         collection = collection,
         entryId = entryid,
@@ -1727,7 +1730,7 @@ class StandardEntityStore(
   private def _typed_snapshot[T](
     id: EntityId,
     result: EntityVersionedMutationResult,
-    expectation: EntityMutationExpectation,
+    expectedrevision: EntityRevision,
     persistent: EntityPersistent[T]
   )(using
     ctx: ExecutionContext
@@ -1739,13 +1742,13 @@ class StandardEntityStore(
           .flatMap(EntityConcurrencyMetadata.snapshot(_)(persistent.fromStoreRecord))
           .recoverWith(EntityConcurrencyMetadata.committedProjectionFailure)
       case EntityVersionedMutationResult.Stale(actual) =>
-        EntityConcurrencyMetadata.staleMutation(expectation, actual)
+        EntityConcurrencyMetadata.staleMutation(expectedrevision, actual)
     }
 
   private def _record_snapshot(
     id: EntityId,
     result: EntityVersionedMutationResult,
-    expectation: EntityMutationExpectation
+    expectedrevision: EntityRevision
   )(using
     ctx: ExecutionContext
   ): Consequence[EntityRecordSnapshot] =
@@ -1756,7 +1759,7 @@ class StandardEntityStore(
           .flatMap(EntityConcurrencyMetadata.recordSnapshot)
           .recoverWith(EntityConcurrencyMetadata.committedProjectionFailure)
       case EntityVersionedMutationResult.Stale(actual) =>
-        EntityConcurrencyMetadata.staleMutation(expectation, actual)
+        EntityConcurrencyMetadata.staleMutation(expectedrevision, actual)
     }
 
   private def _with_datastore_calltree[A](

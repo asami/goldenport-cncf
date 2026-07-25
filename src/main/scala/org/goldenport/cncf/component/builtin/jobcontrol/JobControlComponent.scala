@@ -20,11 +20,11 @@ import org.goldenport.cncf.component.{
   ComponentInstanceId
 }
 import org.goldenport.cncf.entity.{
-  EntityMutationExpectation,
   EntityPersistentCreate,
   EntitySnapshot,
   EntityStore
 }
+import org.simplemodeling.model.datatype.EntityRevision
 import org.goldenport.cncf.entity.runtime.{
   EntityKind,
   EntityMemoryPolicy,
@@ -77,7 +77,7 @@ import org.goldenport.value.BaseContent
  *  version Mar. 29, 2026
  *  version Apr. 22, 2026
  *  version May. 31, 2026
- * @version Jul. 24, 2026
+ * @version Jul. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 final class JobControlComponent() extends Component {
@@ -598,7 +598,7 @@ object JobControlComponent {
           )
           saved <- _save_definition(
             updated,
-            EntityMutationExpectation(snapshot.token)
+            snapshot.revision
           )
         } yield saved.toRecord()
       }
@@ -917,13 +917,13 @@ object JobControlComponent {
 
     private def _save_definition(
         entity: JobDefinitionEntity,
-        expectation: EntityMutationExpectation
+        expectedrevision: EntityRevision
     )(using org.goldenport.cncf.context.ExecutionContext): Consequence[JobDefinitionEntity] = {
       val store      = EntityStore.standard()
       val persistent = JobDefinitionEntity.entityPersistent
       store.save(
         entity,
-        expectation
+        expectedrevision
       )(using persistent, summon[org.goldenport.cncf.context.ExecutionContext])
         .map { snapshot =>
           val saved = snapshot.entity
@@ -945,7 +945,7 @@ object JobControlComponent {
         )
         _save_definition(
           updated,
-          EntityMutationExpectation(snapshot.token)
+          snapshot.revision
         ).map(_.toRecord())
       }
 

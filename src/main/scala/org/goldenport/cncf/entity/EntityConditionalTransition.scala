@@ -6,12 +6,16 @@ import org.goldenport.cncf.datastore.{
   DataStoreConditionalValue
 }
 import org.goldenport.record.Record
-import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
+import org.simplemodeling.model.datatype.{
+  EntityCollectionId,
+  EntityId,
+  EntityRevision
+}
 import scala.util.control.NonFatal
 
 /*
  * @since   Jul. 24, 2026
- * @version Jul. 24, 2026
+ * @version Jul. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EntityTransitionField[R, A] private (
@@ -116,12 +120,12 @@ final class EntityTransitionDefinition[R] private (
   val fields: Vector[EntityTransitionField[R, ?]]
 ) {
   def expectation(
-    token: EntityConcurrencyToken,
+    expectedRevision: EntityRevision,
     values: EntityExpectedValue[R]*
   ): Consequence[EntityTransitionExpectation[R]] =
     EntityTransitionExpectation.create(
       this,
-      token,
+      expectedRevision,
       values.toVector
     )
 }
@@ -174,7 +178,7 @@ object EntityExpectedValue {
 
 final class EntityTransitionExpectation[R] private (
   val definition: EntityTransitionDefinition[R],
-  val token: EntityConcurrencyToken,
+  val expectedRevision: EntityRevision,
   val values: Vector[EntityExpectedValue[R]]
 )
 
@@ -183,13 +187,13 @@ object EntityTransitionExpectation {
 
   def create[R](
     definition: EntityTransitionDefinition[R],
-    token: EntityConcurrencyToken,
+    expectedRevision: EntityRevision,
     values: Vector[EntityExpectedValue[R]]
   ): Consequence[EntityTransitionExpectation[R]] =
     if (definition == null)
       Consequence.argumentMissing("definition")
-    else if (token == null)
-      Consequence.argumentMissing("token")
+    else if (expectedRevision == null)
+      Consequence.argumentMissing("expectedRevision")
     else if (values == null)
       Consequence.argumentMissing("values")
     else if (values.exists(_ == null))
@@ -221,7 +225,7 @@ object EntityTransitionExpectation {
         Consequence.success(
           new EntityTransitionExpectation(
             definition,
-            token,
+            expectedRevision,
             values
           )
         )
@@ -379,7 +383,7 @@ object EntityConditionalTransitionResult {
 
 private[cncf] final case class EntityBoundSuccessorEvidence(
   id: EntityId,
-  token: EntityConcurrencyToken
+  revision: EntityRevision
 )
 
 private[cncf] sealed abstract class EntityConditionalTransitionExecutionResult[

@@ -60,12 +60,12 @@ import org.goldenport.record.Record
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
-import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
+import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId, EntityRevision}
 import org.simplemodeling.model.value.SecurityAttributes
 
 /*
  * @since   Jul. 24, 2026
- * @version Jul. 24, 2026
+ * @version Jul. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EntityConditionalTransitionCoherenceSpec
@@ -580,7 +580,7 @@ final class EntityConditionalTransitionCoherenceSpec
     val expectation =
       definition
         .expectation(
-          EntityConcurrencyToken.INITIAL,
+          EntityRevision.INITIAL,
           field.expected(expectedstatus).TAKE
         )
         .TAKE

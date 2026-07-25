@@ -49,8 +49,11 @@ import org.goldenport.cncf.security.{
   ServiceOperationModel
 }
 import org.goldenport.cncf.Program
-import org.simplemodeling.model.datatype.EntityId
-import org.simplemodeling.model.datatype.EntityCollectionId
+import org.simplemodeling.model.datatype.{
+  EntityCollectionId,
+  EntityId,
+  EntityRevision
+}
 import org.goldenport.cncf.datastore.{
   ComponentDataStore,
   DataStore,
@@ -64,7 +67,6 @@ import org.goldenport.cncf.entity.{
 import org.goldenport.cncf.entity.EntityPersistent
 import org.goldenport.cncf.entity.EntityPersistentCreate
 import org.goldenport.cncf.entity.EntityPersistentUpdate
-import org.goldenport.cncf.entity.EntityMutationExpectation
 import org.goldenport.cncf.entity.EntityRecordSnapshot
 import org.goldenport.cncf.entity.EntitySnapshot
 import org.goldenport.cncf.entity.EntityQuery
@@ -1186,13 +1188,13 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
   private def _aggregate_save_record_authorized_c(
       entityname: String,
       record: Record,
-      expectation: EntityMutationExpectation
+      expectedrevision: EntityRevision
   ): Consequence[EntityRecordSnapshot] =
     component.flatMap(_.entitySpace.entityOption[Any](entityname)) match {
       case Some(collection) =>
         collection.saveRecordVersioned(
           _aggregate_canonical_root_record(collection, record),
-          expectation
+          expectedrevision
         )(using execution_context).map { snapshot =>
           component.foreach(_.viewSpace.invalidate(entityname))
           snapshot
@@ -1344,7 +1346,7 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
     entityName: String,
     targetId: EntityId,
     commandName: String,
-      expectation: EntityMutationExpectation,
+      expectedRevision: EntityRevision,
     action: => Consequence[A]
   ): ExecUowM[A] =
     exec_from_calltree(
@@ -1354,14 +1356,14 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
         "entity_id" -> targetId.print
       )
     ) {
-      aggregate_update_c(entityName, targetId, commandName, expectation, action)
+      aggregate_update_c(entityName, targetId, commandName, expectedRevision, action)
     }
 
   protected final def aggregate_update_c[A <: org.goldenport.record.RecordPresentable](
     entityName: String,
     targetId: EntityId,
     commandName: String,
-      expectation: EntityMutationExpectation,
+      expectedRevision: EntityRevision,
     action: => Consequence[A]
   ): Consequence[A] =
     _aggregate_chokepoint[A](
@@ -1381,7 +1383,7 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
           _aggregate_save_record_authorized_c(
             entityName,
             aggregate.toRecord(),
-            expectation
+            expectedRevision
           )
         }
       } yield aggregate
@@ -1435,7 +1437,7 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
             _aggregate_save_record_authorized_c(
               aggregateName,
               updated.toRecord(),
-              EntityMutationExpectation(snapshot.token)
+              snapshot.revision
             ).map(_ => ())
         }
       } yield updated
@@ -2524,7 +2526,7 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
   /** Loads an authoritative server-owned Entity snapshot through the UnitOfWork boundary.
    *
    * This is the ServiceInternal counterpart of `entity_load_snapshot`. Component workflows use
-   * the returned concurrency token to construct protected conditional transitions without
+   * the returned Entity revision to construct protected conditional transitions without
    * imposing caller-owned Entity permissions or bypassing EntityStore authorization.
    */
   protected final def entity_load_snapshot_internal[T](
@@ -2578,13 +2580,13 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
 
   protected final def entity_save[T](
       entity: T,
-      expectation: EntityMutationExpectation
+      expectedRevision: EntityRevision
   )(using tc: EntityPersistent[T]): ExecUowM[EntitySnapshot[T]] = {
     ensure_component_application_datastore()
     val effectivetc = _effective_entity_persistent(tc.id(entity).collection, tc)
     val op = UnitOfWorkOp.EntityStoreSave(
       entity,
-      expectation,
+      expectedRevision,
       effectivetc,
       _entity_uow_authorization(
         Some(effectivetc.id(entity).collection.name),
@@ -2598,7 +2600,7 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
   /** Saves a server-owned Entity through the authorized UnitOfWork boundary. */
   protected final def entity_save_internal[T](
       entity: T,
-      expectation: EntityMutationExpectation
+      expectedRevision: EntityRevision
   )(using tc: EntityPersistent[T]): ExecUowM[EntitySnapshot[T]] = {
     ensure_component_application_datastore()
     val effectivetc = _effective_entity_persistent(tc.id(entity).collection, tc)
@@ -2610,7 +2612,7 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
       ).map(_.copy(accessMode = EntityAccessMode.ServiceInternal))
     val op = UnitOfWorkOp.EntityStoreSave(
       entity,
-      expectation,
+      expectedRevision,
       effectivetc,
       authorization
     )
@@ -2619,13 +2621,13 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
 
   protected final def entity_update[T](
       changes: T,
-      expectation: EntityMutationExpectation
+      expectedRevision: EntityRevision
   )(using tc: EntityPersistent[T]): ExecUowM[EntitySnapshot[T]] = {
     ensure_component_application_datastore()
     val effectivetc = _effective_entity_persistent(tc.id(changes).collection, tc)
     val op = UnitOfWorkOp.EntityStoreUpdate(
       changes,
-      expectation,
+      expectedRevision,
       effectivetc,
       _entity_uow_authorization(
         Some(effectivetc.id(changes).collection.name),
@@ -2638,7 +2640,7 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
 
   protected final def entity_update_internal[T](
       changes: T,
-      expectation: EntityMutationExpectation
+      expectedRevision: EntityRevision
   )(using tc: EntityPersistent[T]): ExecUowM[EntitySnapshot[T]] = {
     ensure_component_application_datastore()
     val effectivetc = _effective_entity_persistent(tc.id(changes).collection, tc)
@@ -2650,7 +2652,7 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
       ).map(_.copy(accessMode = EntityAccessMode.ServiceInternal))
     val op = UnitOfWorkOp.EntityStoreUpdate(
       changes,
-      expectation,
+      expectedRevision,
       effectivetc,
       authorization
     )
@@ -2662,14 +2664,14 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
   protected final def entity_update[T](
     id: EntityId,
       patch: T,
-      expectation: EntityMutationExpectation
+      expectedRevision: EntityRevision
   )(using tc: EntityPersistentUpdate[T]): ExecUowM[EntityRecordSnapshot] = {
     ensure_component_application_datastore()
     val effectiveid = _canonical_entity_id(id)
     val op = UnitOfWorkOp.EntityStoreUpdateById(
       effectiveid,
       patch,
-      expectation,
+      expectedRevision,
       tc,
       _entity_uow_authorization(Some(effectiveid.collection.name), Some(effectiveid), "update")
     )
@@ -2685,7 +2687,7 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
   protected final def entity_update_internal[T](
     id: EntityId,
       patch: T,
-      expectation: EntityMutationExpectation
+      expectedRevision: EntityRevision
   )(using tc: EntityPersistentUpdate[T]): ExecUowM[EntityRecordSnapshot] = {
     ensure_component_application_datastore()
     val effectiveid = _canonical_entity_id(id)
@@ -2698,7 +2700,7 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
     val op = UnitOfWorkOp.EntityStoreUpdateById(
       effectiveid,
       patch,
-      expectation,
+      expectedRevision,
       tc,
       authorization
     )
@@ -3123,11 +3125,11 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
 
   protected final def entity_save_c[T](
       entity: T,
-      expectation: EntityMutationExpectation
+      expectedRevision: EntityRevision
   )(using uow: UnitOfWork, tc: EntityPersistent[T]): Consequence[EntitySnapshot[T]] = {
     val op = UnitOfWorkOp.EntityStoreSave(
       entity,
-      expectation,
+      expectedRevision,
       tc,
       _entity_uow_authorization(Some(tc.id(entity).collection.name), Some(tc.id(entity)), "update")
     )
@@ -3136,11 +3138,11 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
 
   protected final def entity_save_or_throw[T](
       entity: T,
-      expectation: EntityMutationExpectation
+      expectedRevision: EntityRevision
   )(using uow: UnitOfWork, tc: EntityPersistent[T]): EntitySnapshot[T] = {
     val op = UnitOfWorkOp.EntityStoreSave(
       entity,
-      expectation,
+      expectedRevision,
       tc,
       _entity_uow_authorization(Some(tc.id(entity).collection.name), Some(tc.id(entity)), "update")
     )
@@ -3149,11 +3151,11 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
 
   protected final def entity_update_c[T](
       changes: T,
-      expectation: EntityMutationExpectation
+      expectedRevision: EntityRevision
   )(using uow: UnitOfWork, tc: EntityPersistent[T]): Consequence[EntitySnapshot[T]] = {
     val op = UnitOfWorkOp.EntityStoreUpdate(
       changes,
-      expectation,
+      expectedRevision,
       tc,
       _entity_uow_authorization(
         Some(tc.id(changes).collection.name),
@@ -3166,11 +3168,11 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
 
   protected final def entity_update_or_throw[T](
       changes: T,
-      expectation: EntityMutationExpectation
+      expectedRevision: EntityRevision
   )(using uow: UnitOfWork, tc: EntityPersistent[T]): EntitySnapshot[T] = {
     val op = UnitOfWorkOp.EntityStoreUpdate(
       changes,
-      expectation,
+      expectedRevision,
       tc,
       _entity_uow_authorization(
         Some(tc.id(changes).collection.name),
@@ -3184,12 +3186,12 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
   protected final def entity_update_c[T](
     id: EntityId,
       patch: T,
-      expectation: EntityMutationExpectation
+      expectedRevision: EntityRevision
   )(using uow: UnitOfWork, tc: EntityPersistentUpdate[T]): Consequence[EntityRecordSnapshot] = {
     val op = UnitOfWorkOp.EntityStoreUpdateById(
       id,
       patch,
-      expectation,
+      expectedRevision,
       tc,
       _entity_uow_authorization(Some(id.collection.name), Some(id), "update")
     )
@@ -3199,12 +3201,12 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
   protected final def entity_update_or_throw[T](
     id: EntityId,
       patch: T,
-      expectation: EntityMutationExpectation
+      expectedRevision: EntityRevision
   )(using uow: UnitOfWork, tc: EntityPersistentUpdate[T]): EntityRecordSnapshot = {
     val op = UnitOfWorkOp.EntityStoreUpdateById(
       id,
       patch,
-      expectation,
+      expectedRevision,
       tc,
       _entity_uow_authorization(Some(id.collection.name), Some(id), "update")
     )

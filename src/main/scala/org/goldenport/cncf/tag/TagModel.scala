@@ -15,7 +15,6 @@ import org.goldenport.cncf.association.{
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.directive.Query
 import org.goldenport.cncf.entity.{
-  EntityMutationExpectation,
   EntityPersistent,
   EntityPersistentCreate,
   EntityQuery,
@@ -25,13 +24,17 @@ import org.goldenport.cncf.entity.{
   EntityVisibilityScope
 }
 import org.goldenport.record.Record
-import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
+import org.simplemodeling.model.datatype.{
+  EntityCollectionId,
+  EntityId,
+  EntityRevision
+}
 
 /*
  * Built-in hierarchical Tag master and Entity-to-Tag association workflow.
  *
  * @since   May.  5, 2026
- * @version Jul. 24, 2026
+ * @version Jul. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 enum TagUsageKind(val value: String) {
@@ -171,7 +174,7 @@ final class EntityStoreTagRepository extends TagRepository {
       )
       _ <- EntityStore.standard().save(
         changed,
-        EntityMutationExpectation(snapshot.token)
+        snapshot.revision
       )
       loaded <- load(tag.id)
       result <- loaded.map(Consequence.success).getOrElse(
@@ -219,7 +222,7 @@ final class EntityStoreTagRepository extends TagRepository {
             case Some(snapshot) =>
               EntityStore.standard().save(
                 value,
-                EntityMutationExpectation(snapshot.token)
+                snapshot.revision
               ).map(_ => ())
             case None =>
               Consequence.operationNotFound(s"tag:${value.id.value}")

@@ -18,11 +18,11 @@ import org.goldenport.observation.{Cause, Descriptor}
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
-import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
+import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId, EntityRevision}
 
 /*
  * @since   Jul. 24, 2026
- * @version Jul. 24, 2026
+ * @version Jul. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EntityConditionalTransitionDiagnosticsSpec
@@ -43,18 +43,18 @@ final class EntityConditionalTransitionDiagnosticsSpec
       Given(
         "Spec: docs/spec/entity-conflict-and-conditional-transition.md; Rules: R19-R20; Examples: E5-E15; typed results and structured Conclusions"
       )
-      val token = EntityMutationExpectation.parse(1L).TAKE.token
+      val revision = EntityRevision.createC(1L).TAKE
       val transitioned =
         Consequence.success(
           EntityConditionalTransitionResult.Transitioned(
-            EntitySnapshot("private-root-payload", token),
-            EntitySnapshot("private-successor-payload", token)
+            EntitySnapshot("private-root-payload", revision),
+            EntitySnapshot("private-successor-payload", revision)
           )
         )
       val notmatched =
         Consequence.success(
           EntityConditionalTransitionResult.NotMatched(
-            EntitySnapshot("private-existing-payload", token)
+            EntitySnapshot("private-existing-payload", revision)
           )
         )
       val conflict = _failure(
@@ -144,12 +144,12 @@ final class EntityConditionalTransitionDiagnosticsSpec
       val backend = new StructuredMemoryBackend
       LogBackendHolder.install(backend)
       given ExecutionContext = ExecutionContext.create()
-      val token = EntityMutationExpectation.parse(2L).TAKE.token
+      val revision = EntityRevision.createC(2L).TAKE
       val result =
         Consequence.success(
           EntityConditionalTransitionResult.Transitioned(
-            EntitySnapshot("sentinel-root-payload", token),
-            EntitySnapshot("sentinel-successor-payload", token)
+            EntitySnapshot("sentinel-root-payload", revision),
+            EntitySnapshot("sentinel-successor-payload", revision)
           )
         )
       val context = EntityConditionalTransitionObservation.Context(
@@ -213,7 +213,7 @@ final class EntityConditionalTransitionDiagnosticsSpec
       val backend = new StructuredMemoryBackend
       LogBackendHolder.install(backend)
       given ExecutionContext = ExecutionContext.create()
-      val token = EntityMutationExpectation.parse(3L).TAKE.token
+      val revision = EntityRevision.createC(3L).TAKE
       val context = EntityConditionalTransitionObservation.Context(
         "entity-conditional-transition",
         Some("phase49-test"),
@@ -224,7 +224,7 @@ final class EntityConditionalTransitionDiagnosticsSpec
       val results = Vector(
         Consequence.success(
           EntityConditionalTransitionResult.NotMatched(
-            EntitySnapshot("sentinel-not-matched-payload", token)
+            EntitySnapshot("sentinel-not-matched-payload", revision)
           )
         ),
         _failure(

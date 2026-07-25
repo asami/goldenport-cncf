@@ -56,7 +56,7 @@ import org.goldenport.record.Record
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
-import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
+import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId, EntityRevision}
 
 /*
  * @since   Jul. 24, 2026
@@ -129,7 +129,7 @@ final class ActionCallConditionalTransitionDslSpec
 
     "load an authoritative ServiceInternal transition snapshot" must
       _internal_snapshot_metadata {
-      "when a server-owned workflow needs the persisted concurrency token" in {
+      "when a server-owned workflow needs the persisted Entity revision" in {
         Given(
           "Spec: docs/spec/entity-conflict-and-conditional-transition.md; Rules: R14-R15; one persisted component-owned root"
         )
@@ -150,9 +150,9 @@ final class ActionCallConditionalTransitionDslSpec
         When("the protected internal snapshot helper executes")
         val result = call.execute()
 
-        Then("the helper returns the datastore token through an authorized UnitOfWork read")
+        Then("the helper returns the datastore revision through an authorized UnitOfWork read")
         result shouldBe a[Consequence.Success[?]]
-        call.loadedToken shouldBe Some(EntityConcurrencyToken.INITIAL)
+        call.loadedRevision shouldBe Some(EntityRevision.INITIAL)
         capture.snapshotLoad
           .flatMap(_.authorization)
           .map(_.accessMode) shouldBe
@@ -368,15 +368,15 @@ final class ActionCallConditionalTransitionDslSpec
     id: EntityId
   ) extends FunctionalActionCall
       with ActionCall.Core.Holder {
-    private var _loadedtoken: Option[EntityConcurrencyToken] =
+    private var _loadedrevision: Option[EntityRevision] =
       None
 
-    def loadedToken: Option[EntityConcurrencyToken] =
-      _loadedtoken
+    def loadedRevision: Option[EntityRevision] =
+      _loadedrevision
 
     protected def build_Program: ExecUowM[OperationResponse] =
       entity_load_snapshot_internal[Root](id)(using _root_persistent).map { snapshot =>
-        _loadedtoken = Some(snapshot.token)
+        _loadedrevision = Some(snapshot.revision)
         OperationResponse.Void()
       }
   }
@@ -518,7 +518,7 @@ final class ActionCallConditionalTransitionDslSpec
       EntityTransitionDefinition
         .create(_root_persistent, Vector(field))
         .flatMap(_.expectation(
-          EntityConcurrencyToken.INITIAL,
+          EntityRevision.INITIAL,
           field.expected("open").TAKE
         ))
         .TAKE

@@ -23,7 +23,7 @@ import org.goldenport.cncf.context.{
 }
 import org.goldenport.cncf.datastore.{DataStore, DataStoreSpace}
 import org.goldenport.cncf.datastore.sql.SqlDataStore
-import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
+import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId, EntityRevision}
 import org.goldenport.cncf.directive.Query
 import org.simplemodeling.model.directive.{Condition, Update}
 import org.goldenport.cncf.http.FakeHttpDriver
@@ -47,8 +47,8 @@ final class EntityStoreQueryRouteSpec
     with GivenWhenThen {
 
   private val _cid = EntityCollectionId("test", "a", "person")
-  private val _initialexpectation =
-    EntityMutationExpectation(EntityConcurrencyToken.INITIAL)
+  private val _initialrevision =
+    EntityRevision.INITIAL
 
   "EntityPersistent store record contract" should {
     "delegate default store APIs to RecordCodex compatibility methods" in {
@@ -535,7 +535,7 @@ final class EntityStoreQueryRouteSpec
           name = Update.set("hanako"),
           age = Update.noop[Int]
         ),
-        expectation = _initialexpectation,
+        expectedRevision = _initialrevision,
         tc = summon[EntityPersistentUpdate[PersonPatch]]
       )
       val updated = entitystorespace.updateById(op)
@@ -577,7 +577,7 @@ final class EntityStoreQueryRouteSpec
         UnitOfWorkOp.EntityStoreUpdateById(
           id = id,
           patch = StorePatchCandidate(Update.set("after")),
-          expectation = _initialexpectation,
+          expectedRevision = _initialrevision,
           tc = summon[EntityPersistentUpdate[StorePatchCandidate]]
         )
       )
@@ -693,7 +693,7 @@ final class EntityStoreQueryRouteSpec
             name = None,
             age = Some(21)
           ),
-          expectation = _initialexpectation,
+          expectedRevision = _initialrevision,
           tc = summon[EntityPersistent[SaveCandidate]]
         )
       )
@@ -763,7 +763,7 @@ final class EntityStoreQueryRouteSpec
             name = Some("resurrected"),
             age = Some(21)
           ),
-          expectation = _initialexpectation,
+          expectedRevision = _initialrevision,
           tc = summon[EntityPersistent[SaveCandidate]]
         )
       )
@@ -816,7 +816,7 @@ final class EntityStoreQueryRouteSpec
             name = Some("saved"),
             age = Some(21)
           ),
-          expectation = _initialexpectation,
+          expectedRevision = _initialrevision,
           tc = summon[EntityPersistent[SaveCandidate]]
         )
       )
@@ -915,7 +915,7 @@ final class EntityStoreQueryRouteSpec
             id = id,
             age = Some(31)
           ),
-          expectation = _initialexpectation,
+          expectedRevision = _initialrevision,
           tc = summon[EntityPersistent[UpdateCandidate]]
         )
       )
@@ -983,7 +983,7 @@ final class EntityStoreQueryRouteSpec
             id = id,
             age = Some(31)
           ),
-          expectation = _initialexpectation,
+          expectedRevision = _initialrevision,
           tc = summon[EntityPersistent[UpdateCandidate]]
         )
       )
@@ -1035,7 +1035,7 @@ final class EntityStoreQueryRouteSpec
             id = id,
             age = Some(31)
           ),
-          expectation = _initialexpectation,
+          expectedRevision = _initialrevision,
           tc = summon[EntityPersistent[UpdateCandidate]]
         )
       )
@@ -1089,7 +1089,7 @@ final class EntityStoreQueryRouteSpec
             updatedAt = Instant.EPOCH,
             updatedBy = "attacker"
           ),
-          expectation = _initialexpectation,
+          expectedRevision = _initialrevision,
           tc = summon[EntityPersistent[AuditSpoofUpdateCandidate]]
         )
       )

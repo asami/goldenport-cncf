@@ -14,10 +14,8 @@ import org.goldenport.cncf.context.{
   TraceId
 }
 import org.goldenport.cncf.datastore.{DataStore, DataStoreSpace}
-import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
+import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId, EntityRevision}
 import org.goldenport.cncf.entity.{
-  EntityConcurrencyToken,
-  EntityMutationExpectation,
   EntityPersistent,
   EntityStore,
   EntityStoreSpace
@@ -72,7 +70,7 @@ final class UnitOfWorkStateMachineHookSpec
       val result = new UnitOfWorkInterpreter(uow).execute(
         UnitOfWorkOp.EntityStoreUpdate(
           entity,
-          EntityMutationExpectation(EntityConcurrencyToken.INITIAL),
+          EntityRevision.INITIAL,
           summon[EntityPersistent[PersonEntity]]
         )
       )
@@ -109,7 +107,7 @@ final class UnitOfWorkStateMachineHookSpec
           cats.free.Free.liftF(
             UnitOfWorkOp.EntityStoreUpdate(
               PersonEntity(id, "hanako", 31),
-              EntityMutationExpectation(EntityConcurrencyToken.INITIAL),
+              EntityRevision.INITIAL,
               summon[EntityPersistent[PersonEntity]]
             )
           )

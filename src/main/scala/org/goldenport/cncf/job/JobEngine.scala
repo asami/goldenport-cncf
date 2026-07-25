@@ -33,7 +33,8 @@ import org.goldenport.cncf.context.{
   ExecutionSchedulingRegistration,
   IdGenerationContext
 }
-import org.goldenport.cncf.entity.{EntityMutationExpectation, EntityPersistentCreate, EntityStore}
+import org.goldenport.cncf.entity.{EntityPersistentCreate, EntityStore}
+import org.simplemodeling.model.datatype.EntityRevision
 import org.goldenport.cncf.event.{
   EventBus,
   EventLane,
@@ -49,7 +50,7 @@ import org.goldenport.cncf.observability.{DiagnosticPayloadExternalizer, Observa
  * @since   Jan.  4, 2026
  *  version Mar. 30, 2026
  *  version May. 31, 2026
- * @version Jul. 24, 2026
+ * @version Jul. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class JobId(
@@ -2756,8 +2757,8 @@ final class InMemoryJobEngine(
     record.persistence match {
       case JobPersistencePolicy.Persistent =>
         _durable_jobs.put(record.id, record)
-          // Serialize the source JobRecord projection with its Entity token.
-          // Otherwise an older projection can load and reuse a newer token.
+          // Serialize the source JobRecord projection with its Entity revision.
+          // Otherwise an older projection can load and reuse a newer revision.
         _sync_job_entity(record)
       case JobPersistencePolicy.Ephemeral =>
         _runtime_jobs.put(record.id, record)
@@ -2775,7 +2776,7 @@ final class InMemoryJobEngine(
         case Some(snapshot) =>
           store.save(
             entity,
-            EntityMutationExpectation(snapshot.token)
+            snapshot.revision
           )(using persistent, summon[ExecutionContext])
         case None =>
           store.create(

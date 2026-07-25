@@ -52,7 +52,7 @@ import org.simplemodeling.model.directive.Update
  *  version Mar. 29, 2026
  *  version Apr. 29, 2026
  *  version May. 11, 2026
- * @version Jul. 24, 2026
+ * @version Jul. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkInterpreter(uow: UnitOfWork) {
@@ -1062,8 +1062,8 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
             authorization,
             Some(() => Consequence.success(Some(record)))
           )
-          token <- EntityConcurrencyMetadata.token(record)
-        } yield Some(EntityBoundSuccessorEvidence(bind.id, token))
+          revision <- EntityConcurrencyMetadata.revision(record)
+        } yield Some(EntityBoundSuccessorEvidence(bind.id, revision))
     }
 
   private def _reconcile_conditional_transition_failure[R, P, S](

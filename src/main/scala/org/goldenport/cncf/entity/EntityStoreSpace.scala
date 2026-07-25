@@ -5,8 +5,11 @@ import org.goldenport.Consequence
 import org.goldenport.observation.Observation
 import org.goldenport.configuration.ResolvedConfiguration
 import org.goldenport.cncf.context.ExecutionContext
-import org.simplemodeling.model.datatype.EntityId
-import org.simplemodeling.model.datatype.EntityCollectionId
+import org.simplemodeling.model.datatype.{
+  EntityCollectionId,
+  EntityId,
+  EntityRevision
+}
 import org.goldenport.cncf.datastore.DataStore
 import org.goldenport.cncf.directive.*
 import org.goldenport.cncf.observability.CallTreeValueSummary
@@ -21,7 +24,7 @@ import org.goldenport.cncf.unitofwork.UnitOfWorkOp.*
  *  version Apr. 13, 2026
  *  version Apr. 14, 2026
  *  version May. 11, 2026
- * @version Jul. 24, 2026
+ * @version Jul. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 class EntityStoreSpace {
@@ -207,7 +210,7 @@ class EntityStoreSpace {
   def save[T](
       op: EntityStoreSave[T]
   )(using ctx: ExecutionContext): Consequence[EntitySnapshot[T]] =
-    saveVersioned(op.entity, op.tc, op.expectation)
+    saveVersioned(op.entity, op.tc, op.expectedRevision)
 
   private[cncf] def saveUnversioned[T](
       op: EntityStoreSaveUnversioned[T]
@@ -228,7 +231,7 @@ class EntityStoreSpace {
   def saveVersioned[T](
     entity: T,
     persistent: EntityPersistent[T],
-    expectation: EntityMutationExpectation
+    expectedRevision: EntityRevision
   )(using
     ctx: ExecutionContext
   ): Consequence[EntitySnapshot[T]] = {
@@ -241,7 +244,7 @@ class EntityStoreSpace {
     ) {
       for {
         entitystore <- _by_collection(id.collection)
-        snapshot <- entitystore.save(entity, expectation)
+        snapshot <- entitystore.save(entity, expectedRevision)
       } yield snapshot
     }
   }
@@ -249,7 +252,7 @@ class EntityStoreSpace {
   def update[T](
       op: EntityStoreUpdate[T]
   )(using ctx: ExecutionContext): Consequence[EntitySnapshot[T]] =
-    updateVersioned(op.entity, op.tc, op.expectation)
+    updateVersioned(op.entity, op.tc, op.expectedRevision)
 
   private[cncf] def updateUnversioned[T](
       op: EntityStoreUpdateUnversioned[T]
@@ -270,7 +273,7 @@ class EntityStoreSpace {
   def updateVersioned[T](
     entity: T,
     persistent: EntityPersistent[T],
-    expectation: EntityMutationExpectation
+    expectedRevision: EntityRevision
   )(using
     ctx: ExecutionContext
   ): Consequence[EntitySnapshot[T]] = {
@@ -283,7 +286,7 @@ class EntityStoreSpace {
     ) {
       for {
         entitystore <- _by_collection(id.collection)
-        snapshot <- entitystore.update(entity, expectation)
+        snapshot <- entitystore.update(entity, expectedRevision)
       } yield snapshot
     }
   }
@@ -291,7 +294,7 @@ class EntityStoreSpace {
   def updateById[P](
       op: EntityStoreUpdateById[P]
   )(using ctx: ExecutionContext): Consequence[EntityRecordSnapshot] =
-    updateByIdVersioned(op.id, op.patch, op.tc, op.expectation)
+    updateByIdVersioned(op.id, op.patch, op.tc, op.expectedRevision)
 
   private[cncf] def updateByIdUnversioned[P](
       op: EntityStoreUpdateByIdUnversioned[P]
@@ -331,7 +334,7 @@ class EntityStoreSpace {
     id: EntityId,
     patch: P,
     persistent: EntityPersistentUpdate[P],
-    expectation: EntityMutationExpectation
+    expectedRevision: EntityRevision
   )(using
     ctx: ExecutionContext
   ): Consequence[EntityRecordSnapshot] = {
@@ -345,7 +348,7 @@ class EntityStoreSpace {
     ) {
       for {
         entitystore <- _by_collection(id.collection)
-        snapshot <- entitystore.updateById(id, patch, expectation)
+        snapshot <- entitystore.updateById(id, patch, expectedRevision)
       } yield snapshot
     }
   }

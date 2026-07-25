@@ -35,7 +35,7 @@ import org.scalacheck.{Gen, Prop, Test}
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
-import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
+import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId, EntityRevision}
 import org.simplemodeling.model.directive.Update
 
 /*
@@ -43,7 +43,7 @@ import org.simplemodeling.model.directive.Update
  * @version Jul. 25, 2026
  * @author  ASAMI, Tomoharu
  */
-final class EntityConcurrencyTokenSpec
+final class EntityRevisionKernelSpec
     extends AnyWordSpec
     with Matchers
     with GivenWhenThen {
@@ -52,18 +52,18 @@ final class EntityConcurrencyTokenSpec
     afterWord(
       "in spec:entity-conflict-and-conditional-transition, example:E1, rules:R1,R2,R4, phase:49"
     )
-  private val _se_03c_metadata =
+  private val _se_03d_metadata =
     afterWord(
-      "in phase:50, slice:SE-03C, using the common positive EntityRevision kernel"
+      "in phase:50, slice:SE-03D, using the common positive EntityRevision kernel"
     )
   private val _er_08_metadata =
     afterWord(
-      "in phase:50, slice:SE-03C, acceptance:ER-08, superseding phase:49 rule:R3 for the migrated EntityRevision path"
+      "in phase:50, slice:SE-03D, acceptance:ER-08, superseding phase:49 rule:R3 for the migrated EntityRevision path"
     )
 
-  "Entity concurrency token" should {
-    "SE-03C bridge the provisional token API to positive revision semantics" must
-      _se_03c_metadata {
+  "Entity revision kernel" should {
+    "SE-03D use the common positive revision semantics directly" must
+      _se_03d_metadata {
       "when generated admitted values advance" in {
         Given(
           "Contract: docs/phase/phase-50.md selected direction and the Phase 50 supersession annotation; generated positive revision values"
@@ -71,13 +71,13 @@ final class EntityConcurrencyTokenSpec
         val property = Prop.forAll(
           Gen.chooseNum(1L, Long.MaxValue - 1L)
         ) { number =>
-          val token = EntityConcurrencyTokenSupport._create(number)
-          val next  = token.flatMap(EntityConcurrencyTokenSupport._advance)
-          token.toOption.exists(_.print == number.toString) &&
-          next.toOption.exists(_.print == (number + 1L).toString)
+          val revision = EntityRevision.createC(number)
+          val next     = revision.flatMap(_.nextC)
+          revision.toOption.exists(_.value == number) &&
+          next.toOption.exists(_.value == number + 1L)
         }
 
-        When("the token constructor and advancement are interpreted")
+        When("the revision constructor and advancement are interpreted")
         val checked =
           Test.check(
             Test.Parameters.default.withMinSuccessfulTests(100),
@@ -86,36 +86,27 @@ final class EntityConcurrencyTokenSpec
 
         Then("all admitted values remain exact and advance once")
         checked.passed shouldBe true
-        EntityConcurrencyToken.INITIAL.print shouldBe "1"
-        EntityMutationExpectation.parse("1").map(_.token) shouldBe
-          Consequence.success(EntityConcurrencyToken.INITIAL)
-        EntityMutationExpectation.parse("1.0") shouldBe
+        EntityRevision.INITIAL.value shouldBe 1L
+        EntityRevision.parseC("1") shouldBe
+          Consequence.success(EntityRevision.INITIAL)
+        EntityRevision.parseC("1.0") shouldBe
           a[Consequence.Failure[?]]
-        EntityMutationExpectation.parse("-1") shouldBe
+        EntityRevision.parseC("-1") shouldBe
           a[Consequence.Failure[?]]
-        EntityConcurrencyTokenSupport._create(-1L) shouldBe
+        EntityRevision.createC(-1L) shouldBe
           a[Consequence.Failure[?]]
-        EntityConcurrencyTokenSupport._create(0L) shouldBe
+        EntityRevision.createC(0L) shouldBe
           a[Consequence.Failure[?]]
-        classOf[EntityConcurrencyToken].getConstructors shouldBe empty
-        classOf[EntityConcurrencyToken].getDeclaredConstructors
-          .forall(constructor =>
-            java.lang.reflect.Modifier.isPrivate(constructor.getModifiers)
-          ) shouldBe true
-        classOf[EntityConcurrencyToken].getMethods
-          .map(_.getName) should not contain "value"
-        classOf[EntityConcurrencyToken].getMethods
-          .map(_.getName) should not contain "next"
 
         val overflow =
-          EntityConcurrencyTokenSupport
-            ._create(Long.MaxValue)
-            .flatMap(EntityConcurrencyTokenSupport._advance)
+          EntityRevision
+            .createC(Long.MaxValue)
+            .flatMap(_.nextC)
         val conclusion = overflow match {
           case Consequence.Failure(conclusion) =>
             conclusion
           case _ =>
-            fail("maximum token advancement must fail")
+            fail("maximum revision advancement must fail")
         }
         val cause = conclusion.observation.cause
 
@@ -129,21 +120,21 @@ final class EntityConcurrencyTokenSpec
       }
     }
 
-    "E1 carry a typed Entity beside its admitted token" must _e1_metadata {
+    "E1 carry a typed Entity beside its admitted revision" must _e1_metadata {
       "when a framework snapshot is constructed" in {
         Given(
-          "Spec: docs/spec/entity-conflict-and-conditional-transition.md; Rules: R4; Example: E1; one typed Entity and its token"
+          "Spec: docs/spec/entity-conflict-and-conditional-transition.md; Rules: R4; Example: E1; one typed Entity and its revision"
         )
         val snapshot =
-          EntitySnapshot("entity-value", EntityConcurrencyToken.INITIAL)
+          EntitySnapshot("entity-value", EntityRevision.INITIAL)
 
         When("the snapshot is inspected")
         val entity = snapshot.entity
-        val token  = snapshot.token
+        val revision = snapshot.revision
 
-        Then("the domain value and framework token remain separate")
+        Then("the domain value and framework revision remain separate")
         entity shouldBe "entity-value"
-        token shouldBe EntityConcurrencyToken.INITIAL
+        revision shouldBe EntityRevision.INITIAL
       }
     }
 
@@ -162,7 +153,7 @@ final class EntityConcurrencyTokenSpec
         val initialized =
           EntityConcurrencyMetadata.initializeForCreate(source)
 
-        Then("caller values are removed and canonical initial token one is stored")
+        Then("caller values are removed and canonical initial revision one is stored")
         SimpleEntityStorageShapePolicy
           .targetName(
             SimpleEntityStorageShapePolicy.CONCURRENCY_REVISION_LOGICAL_FIELD
@@ -174,8 +165,8 @@ final class EntityConcurrencyTokenSpec
         initialized.getString("name") shouldBe Some("entity")
         initialized.getAny("cncfRevision") shouldBe None
         initialized.getAny("cncf_revision") shouldBe Some(1L)
-        EntityConcurrencyMetadata.token(initialized) shouldBe
-          Consequence.success(EntityConcurrencyToken.INITIAL)
+        EntityConcurrencyMetadata.revision(initialized) shouldBe
+          Consequence.success(EntityRevision.INITIAL)
       }
     }
 
@@ -213,7 +204,7 @@ final class EntityConcurrencyTokenSpec
       }
     }
 
-    "E1 integrate the initial token with canonical Entity persistence" must _e1_metadata {
+    "E1 integrate the initial revision with canonical Entity persistence" must _e1_metadata {
       "when generated caller revision values pass through create and load" in {
         Given(
           "Spec: docs/spec/entity-conflict-and-conditional-transition.md; Rules: R1-R4; Example: E1; generated create records and isolated EntityStore runtimes"
@@ -252,7 +243,7 @@ final class EntityConcurrencyTokenSpec
           loaded.toOption.flatten.contains(entity.copy(attempted = None)) &&
           snapshot.toOption.flatten.exists(value =>
             value.entity == entity.copy(attempted = None) &&
-              value.token == EntityConcurrencyToken.INITIAL
+              value.revision == EntityRevision.INITIAL
           )
         }
 
@@ -263,13 +254,13 @@ final class EntityConcurrencyTokenSpec
         )
 
         Then(
-          "storage owns token one while business decoding and snapshot projection remain separate"
+          "storage owns revision one while business decoding and snapshot projection remain separate"
         )
         checked.passed shouldBe true
       }
     }
 
-    "E1 protect the stored token from save and import input" must _e1_metadata {
+    "E1 protect the stored revision from save and import input" must _e1_metadata {
       "when callers submit managed aliases through mutation and import records" in {
         Given(
           "Spec: docs/spec/entity-conflict-and-conditional-transition.md; Rules: R1-R4; Example: E1; one created Entity and one imported Entity carrying caller revisions"
@@ -313,7 +304,7 @@ final class EntityConcurrencyTokenSpec
               fixture.entitystorespace.save(
                 UnitOfWorkOp.EntityStoreSave(
                   TestEntity(createdid, "after", Some(42L)),
-                  EntityMutationExpectation(snapshot.token),
+                  snapshot.revision,
                   _entity_persistent
                 )
               )
@@ -324,7 +315,7 @@ final class EntityConcurrencyTokenSpec
             UnitOfWorkOp.EntityStoreUpdateById(
               createdid,
               TestPatch(Update.set("patched"), Update.set(44L)),
-              EntityMutationExpectation(snapshot.token),
+              snapshot.revision,
               _entity_update
             )
           )
@@ -354,7 +345,7 @@ final class EntityConcurrencyTokenSpec
         )
 
         Then(
-          "versioned mutations advance the existing token while newly imported storage receives canonical token one"
+          "versioned mutations advance the existing revision while newly imported storage receives canonical revision one"
         )
         createdrecord
           .map(_.flatMap(_.getAny(EntityConcurrencyMetadata.STORAGE_FIELD_NAME))) shouldBe
@@ -380,14 +371,14 @@ final class EntityConcurrencyTokenSpec
           Gen.chooseNum(1L, Long.MaxValue)
         ) { number =>
           EntityConcurrencyMetadata
-            .token(Record.dataAuto("cncf_revision" -> BigInt(number)))
+            .revision(Record.dataAuto("cncf_revision" -> BigInt(number)))
             .toOption
-            .exists(_.print == number.toString)
+            .exists(_.value == number)
         }
 
         When("the metadata codec reads the records")
         val absent =
-          EntityConcurrencyMetadata.token(Record.dataAuto("name" -> "absent"))
+          EntityConcurrencyMetadata.revision(Record.dataAuto("name" -> "absent"))
         val checked =
           Test.check(
             Test.Parameters.default.withMinSuccessfulTests(100),
@@ -421,7 +412,7 @@ final class EntityConcurrencyTokenSpec
 
         When("the metadata codec reads each record")
         val results =
-          records.map(EntityConcurrencyMetadata.token)
+          records.map(EntityConcurrencyMetadata.revision)
 
         Then("every malformed value returns a structured failure")
         all(results) shouldBe a[Consequence.Failure[?]]

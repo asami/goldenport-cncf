@@ -5,13 +5,11 @@ import scala.collection.mutable.ListBuffer
 import org.goldenport.Consequence
 import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.context.ExecutionContext
-import org.simplemodeling.model.datatype.EntityId
+import org.simplemodeling.model.datatype.{EntityId, EntityRevision}
 import org.goldenport.cncf.directive.Query
 import org.goldenport.cncf.datastore.DataStore
 import org.goldenport.cncf.entity.{
   EntityConcurrencyMetadata,
-  EntityConcurrencyToken,
-  EntityMutationExpectation,
   EntityPersistent
 }
 import org.goldenport.cncf.entity.aggregate.{
@@ -50,7 +48,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Mar. 16, 2026
  *  version Mar. 24, 2026
  *  version Apr. 15, 2026
- * @version Jul. 24, 2026
+ * @version Jul. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ActionCallAggregateResolveSpec
@@ -340,7 +338,7 @@ final class ActionCallAggregateResolveSpec
               core,
               id,
               NoticeProbeAggregate(id, "updated"),
-              EntityMutationExpectation(EntityConcurrencyToken.INITIAL)
+              EntityRevision.INITIAL
             )
           }
           val result = call.execute()
@@ -382,7 +380,7 @@ final class ActionCallAggregateResolveSpec
             core,
             id,
             NoticeProbeAggregate(id, "updated"),
-            EntityMutationExpectation(EntityConcurrencyToken.INITIAL)
+            EntityRevision.INITIAL
           )
         }
         val result = call.execute()
@@ -736,7 +734,7 @@ private final case class UpdateNoticeProbeAggregateCall(
     core: ActionCall.Core,
     targetid: EntityId,
     updated: NoticeProbeAggregate,
-    expectation: EntityMutationExpectation
+    expectedrevision: EntityRevision
 ) extends ProcedureActionCall {
   private var _actionran: Boolean = false
 
@@ -747,7 +745,7 @@ private final case class UpdateNoticeProbeAggregateCall(
       "notice",
       targetid,
       "updateNotice",
-      expectation, {
+      expectedrevision, {
         _actionran = true
         Consequence.success(updated)
       }
